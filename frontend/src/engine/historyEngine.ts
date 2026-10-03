@@ -143,6 +143,15 @@ function fieldValue(series:CandleSeries,stock:SnapshotStock,field:string):number
   return n((stock as unknown as Record<string,unknown>)[key],NaN);
 }
 
+function financialRecords(context:AdvancedContext,parameters:Record<string,unknown>){
+  const eligible=(context.earnings??[]).filter(row=>String(row.filing_date??row.filedAt??'').slice(0,10)<=context.session),requested=str(parameters.reportType,'PREFER_CONSOLIDATED').toUpperCase(),types=requested==='PREFER_CONSOLIDATED'?['CONSOLIDATED','STANDALONE']:[requested],selectedType=types.find(type=>eligible.some(row=>str(row.report_type??row.reportType).toUpperCase()===type));
+  if(!selectedType)return [];
+  const byQuarter=new Map<string,Record<string,unknown>>();
+  eligible.filter(row=>str(row.report_type??row.reportType).toUpperCase()===selectedType).sort((a,b)=>String(a.filing_date??a.filedAt??'').localeCompare(String(b.filing_date??b.filedAt??''))).forEach(row=>byQuarter.set(str(row.quarter_end??row.period_end??row.periodEnd),row));
+  return [...byQuarter.values()].sort((a,b)=>str(b.quarter_end??b.period_end??b.periodEnd).localeCompare(str(a.quarter_end??a.period_end??a.periodEnd)));
+}
+function quarterIndex(row:Record<string,unknown>){const [year,month]=str(row.quarter_end??row.period_end??row.periodEnd).split('-').map(Number);return year*4+Math.floor((month-1)/3);}
+
 const scalarIds=new Set(['PRICE_VS_SMA','PRICE_VS_EMA','PRICE_CHANGE_PCT','GAP_UP','GAP_DOWN','VOLUME_VS_AVG','NEW_HIGH','NEW_LOW','PCT_FROM_52W_HIGH','PCT_FROM_52W_LOW','PCT_FROM_ATH','ATR_PCT','RS_RATING','MARKETCAP','FF_MARKETCAP','PE_RATIO','FUNDAMENTAL_METRIC','EPS_LAST_YEAR_HIGHER','SECTOR','INDUSTRY','PRICE_BAND','CIRCUIT_BAND_MIN','SERIES','INDEX_MEMBERSHIP','FNO_BAN','EXCLUDE_SURVEILLANCE','ABSOLUTE_VOLUME','ABSOLUTE_EPS','DIVIDEND_YIELD','PRICE_RANGE','ADR_PCT','AVG_TURNOVER']);
 const historyIds=new Set(['FIELD_COMPARISON','PERSISTENT_MOMENTUM','PRICE_VS_EMA','PRICE_VS_SMA','EMA_SHAKEOUT','ADX','PCT_DAYS_ABOVE_MA','MA_STACK','MA_SLOPE','PRICE_CHANGE_PCT','CONSECUTIVE_UP_DAYS','GAP_UP','GAP_DOWN','VOLUME_VS_AVG','AVG_VOLUME_RATIO','HIGHEST_VOLUME_IN_N_DAYS','DELIVERY_PCT_SPIKE','DELIVERY_PERCENT','NEW_HIGH','NEW_LOW','PCT_FROM_52W_HIGH','PCT_FROM_52W_LOW','CONSOLIDATION_RANGE','ATR_PCT','RANGE_CONTRACTION','INSIDE_BAR','UNFILLED_GAP','VCP_LEGS','HORIZONTAL_RESISTANCE_LINE','MA_CONVERGENCE','SUPERTREND','INDICATOR_COMPARE','DIVERGENCE','RELATIVE_STRENGTH','RS_NEW_HIGH','AVG_TURNOVER','ADR_PCT','DAYS_SINCE_EARNINGS','LISTING_AGE_DAYS','EARNINGS_GROWTH','MARKET_BREADTH']);
 
@@ -157,6 +166,10 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
   if(scalarIds.has(id)){const value=evaluateSnapshotCondition(context.stock,{...condition,isNegated:false},context.session);if(value!==null)return condition.isNegated?negate(value):value;}
   let result:Truth=null;
   if(id==='FIELD_COMPARISON'){const left=fieldValue(series,context.stock,str(p.field)),target=typeof p.value==='object'&&p.value!==null?fieldValue(series,context.stock,str((p.value as {field?:unknown}).field)):n(p.value,NaN);result=compare(left,p.comparison,target);}
+  else if(id==='PE_RATIO'){
+    const records=financialRecords(context,p).slice(0,4),quarters=records.map(quarterIndex),profits=records.map(row=>n(row.net_profit??row.netProfit,NaN)),total=profits.reduce((sum,value)=>sum+value,0),marketCap=n(context.stock.marketCapCrore,NaN),consecutive=records.length===4&&quarters.every((value,index)=>index===0||quarters[index-1]-value===1);
+    result=consecutive&&profits.every(Number.isFinite)&&total>0&&Number.isFinite(marketCap)?compare(marketCap/total,p.comparison,p.value):null;
+  }
   else if(id==='PERSISTENT_MOMENTUM'){const tests=[[10,n(p.ema10Days,20)],[20,n(p.ema20Days,30)],[50,n(p.ema50Days,50)]].map(([period,days])=>persisted(series,ema(series.close,period), 'above',days,'reclaim_by_extreme'));result=tests.includes(true)?true:tests.includes(null)?null:false;}
   else if(id==='PRICE_VS_EMA'||id==='PRICE_VS_SMA'){result=persisted(series,moving(series,id.endsWith('EMA')?'EMA':'SMA',n(p.period)),str(p.comparison).toLowerCase(),n(p.persistDays,1),id.endsWith('EMA')?'extreme_reset':'every_close');}
   else if(id==='EMA_SHAKEOUT'){const averages=ema(series.close,n(p.period,21)),within=n(p.withinDays,3),start=Math.max(0,series.close.length-within);result=series.close.length<n(p.period)+within?null:Array.from({length:within},(_,j)=>start+j).some(i=>series.low[i]<averages[i]&&last(series.close)>last(averages));}
@@ -170,7 +183,11 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
   else if(id==='VOLUME_VS_AVG'){const period=n(p.avgDays,20),flags=Array.from({length:series.volume.length},(_,i)=>i<period?null:series.volume[i]/mean(slice(series.volume,i-period,i))>=n(p.multiple));result=event(flags,n(p.withinDays,1));}
   else if(id==='AVG_VOLUME_RATIO'){const recent=n(p.recentDays),base=n(p.baseDays);result=series.volume.length<Math.max(recent,base)?null:compare(mean(slice(series.volume,-recent))/mean(slice(series.volume,-base)),p.comparison,p.ratio);}
   else if(id==='HIGHEST_VOLUME_IN_N_DAYS'){const look=n(p.lookbackDays),flags=Array.from({length:series.volume.length},(_,i)=>i+1<look?null:series.volume[i]>=max(slice(series.volume,i+1-look,i+1))&&(!p.positiveClose||series.close[i]>series.close[i-1]));result=event(flags,n(p.withinDays,1));}
-  else if(id==='DELIVERY_PCT_SPIKE'||id==='DELIVERY_PERCENT'){const item=context.delivery?.find(row=>row.date===context.session),value=n(item?.delivery_percent,NaN);result=Number.isFinite(value)?compare(value,p.comparison??'ABOVE',p.minDeliverablePct??p.value):null;}
+  else if(id==='DELIVERY_PCT_SPIKE'){
+    const byDate=new Map((context.delivery??[]).map(row=>[String(row.date),n(row.delivery_percent,NaN)])),within=n(p.withinDays,1),values=slice(series.dates,-within).map(day=>byDate.get(new Date(day*86400000).toISOString().slice(0,10))).filter((value):value is number=>value!==undefined&&Number.isFinite(value));
+    result=values.length?values.some(value=>value>=n(p.minDeliverablePct)):null;
+  }
+  else if(id==='DELIVERY_PERCENT'){const item=context.delivery?.find(row=>row.date===context.session),value=n(item?.delivery_percent,NaN);result=Number.isFinite(value)?compare(value,p.comparison,p.value):null;}
   else if(id==='NEW_HIGH'||id==='NEW_LOW'){const look=n(p.lookbackDays),source=id==='NEW_HIGH'?series.high:series.low,flags=Array.from({length:source.length},(_,i)=>i+1<look?null:id==='NEW_HIGH'?source[i]>=max(slice(source,i+1-look,i+1)):source[i]<=min(slice(source,i+1-look,i+1)));result=event(flags,n(p.withinDays,1));}
   else if(id==='PCT_FROM_52W_HIGH'||id==='PCT_FROM_52W_LOW'){const source=id.endsWith('HIGH')?series.high:series.low,extreme=id.endsWith('HIGH')?max(slice(source,-252)):min(slice(source,-252)),distance=id.endsWith('HIGH')?(extreme-last(series.close))/extreme*100:(last(series.close)-extreme)/extreme*100;result=compare(distance,p.comparison,p.pct);}
   else if(id==='CONSOLIDATION_RANGE'){const end=series.close.length-n(p.excludeLatest),start=end-n(p.lookbackDays);result=start<0?null:(max(slice(series.high,start,end))-min(slice(series.low,start,end)))/series.close[end-1]*100<=n(p.maxRangePct);}
@@ -196,7 +213,14 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
   else if(id==='AVG_TURNOVER'){const days=n(p.lookbackDays,20);result=series.close.length<days?null:compare(mean(Array.from({length:days},(_,j)=>{const i=series.close.length-days+j;return series.close[i]*series.volume[i]/1e7;})),p.comparison,p.valueCr);}
   else if(id==='ADR_PCT'){const days=n(p.lookbackDays,14);result=series.close.length<days?null:compare(mean(Array.from({length:days},(_,j)=>{const i=series.close.length-days+j;return (series.high[i]-series.low[i])/series.close[i]*100;})),p.comparison,p.pct);}
   else if(id==='DAYS_SINCE_EARNINGS'||id==='LISTING_AGE_DAYS'){const marker=id==='DAYS_SINCE_EARNINGS'?context.stock.earningsDate:context.stock.listingDate;if(!marker)result=null;else{const day=Math.floor(Date.parse(marker+'T00:00:00Z')/86400000),sessions=Array.from(series.dates).filter(value=>value>day).length;result=compare(sessions,p.comparison,p.days);}}
-  else if(id==='EARNINGS_GROWTH'){const records=[...(context.earnings??[])].sort((a,b)=>String(b.period_end??b.periodEnd??'').localeCompare(String(a.period_end??a.periodEnd??''))),metric=str(p.metric,'NET_PROFIT').toLowerCase(),field:Record<string,string[]>= {net_profit:['net_profit','netProfit'],revenue:['revenue','totalIncome'],pbt:['pbt','profitBeforeTax'],eps:['basic_eps','basicEps'],opm:['opm','operatingMarginPercent']},keys=field[metric]??[metric],pick=(row:Record<string,unknown>)=>{for(const key of keys){const value=n(row[key],NaN);if(Number.isFinite(value))return value;}return NaN;},gap=str(p.basis,'YOY').toUpperCase()==='YOY'?4:1;if(records.length<=gap)result=null;else{const current=pick(records[0]),prior=pick(records[gap]),growth=metric==='opm'?current-prior:prior!==0?(current/prior-1)*100:NaN;result=Number.isFinite(growth)?compare(growth,p.comparison,p.pct):null;}}
+  else if(id==='EARNINGS_GROWTH'){
+    const records=financialRecords(context,p),latest=records[0];
+    if(!latest)result=null;
+    else {
+      const gap=str(p.basis,'YOY').toUpperCase()==='YOY'?4:1,prior=records.find(row=>quarterIndex(row)===quarterIndex(latest)-gap),metric=str(p.metric,'NET_PROFIT').toLowerCase(),field:Record<string,string[]>= {net_profit:['net_profit','netProfit'],revenue:['revenue','totalIncome'],pbt:['pbt','profit_before_tax','profitBeforeTax'],eps:['eps','basic_eps','basicEps'],opm:['opm','operatingMarginPercent']},keys=field[metric]??[metric],pick=(row:Record<string,unknown>|undefined)=>{for(const key of keys){const value=n(row?.[key],NaN);if(Number.isFinite(value))return value;}return NaN;},current=pick(latest),base=pick(prior),filingDate=str(latest.filing_date??latest.filedAt).slice(0,10),age=(Date.parse(`${context.session}T00:00:00Z`)-Date.parse(`${filingDate}T00:00:00Z`))/86400000,growth=base!==0?(current-base)/Math.abs(base)*100:NaN;
+      result=age>n(p.maxAgeDays,200)||!Number.isFinite(growth)?null:compare(growth,p.comparison,p.pct);
+    }
+  }
   else if(id==='MARKET_BREADTH'){const universe=str(p.universe,'ALL_ACTIVE').toLowerCase().replace('niftymidsmall400','niftymidsmall400').replace('nifty50','nifty50'),metric=str(p.metric).replace(/[A-Z]/g,m=>'_'+m.toLowerCase()),value=context.breadth?.[universe]?.[metric];result=value==null?null:compare(value,p.comparison,p.value);}
   return condition.isNegated?negate(result):result;
 }

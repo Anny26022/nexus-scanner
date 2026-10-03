@@ -54,6 +54,22 @@ describe('shared history engine',()=>{
     expect(evaluateHistoryCondition(series,condition,context)).toBe(true);
     expect(evaluateHistoryCondition(series,{...condition,isNegated:true},context)).toBe(false);
   });
+  it('uses the published delivery and quarterly-ledger shapes',()=>{
+    const dates=Array.from(series.dates.slice(-3),day=>new Date(day*86400000).toISOString().slice(0,10));
+    const enriched={...context,
+      delivery:[{date:dates[0],delivery_percent:20},{date:dates[1],delivery_percent:65}],
+      earnings:[
+        {quarter_end:'2026-06-30',net_profit:150,eps:7,opm:20},
+        {quarter_end:'2026-03-31',net_profit:120,eps:6,opm:19},
+        {quarter_end:'2025-12-31',net_profit:110,eps:5,opm:18},
+        {quarter_end:'2025-09-30',net_profit:105,eps:4,opm:17},
+        {quarter_end:'2025-06-30',net_profit:100,eps:3,opm:15},
+      ].map(row=>({...row,filing_date:'2026-09-01',report_type:'CONSOLIDATED'})),
+    };
+    expect(evaluateHistoryCondition(series,leaf('DELIVERY_PCT_SPIKE',{minDeliverablePct:50,withinDays:3}),enriched)).toBe(true);
+    expect(evaluateHistoryCondition(series,leaf('EARNINGS_GROWTH',{metric:'NET_PROFIT',basis:'YOY',comparison:'GREATER',pct:25,reportType:'PREFER_CONSOLIDATED',maxAgeDays:200}),enriched)).toBe(true);
+    expect(evaluateHistoryCondition(series,leaf('EARNINGS_GROWTH',{metric:'EPS',basis:'YOY',comparison:'GREATER',pct:100,reportType:'PREFER_CONSOLIDATED',maxAgeDays:200}),enriched)).toBe(true);
+  });
   it('routes every native contract condition and Nexus advanced addition through a known evaluator',()=>{
     const definitions=[...nativeConditions,...NEXUS_CONDITION_CATALOG.filter(item=>['INDICATOR_COMPARE','MA_CONVERGENCE','DIVERGENCE','SUPERTREND'].includes(item.id))];
     expect(definitions.length).toBeGreaterThanOrEqual(58);

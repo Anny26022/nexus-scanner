@@ -115,11 +115,15 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
     # Dated auxiliary history is sharded with OHLCV.  Loading the complete
     # filings ledger at once would consume most of a 128 MB Worker isolate.
     financial_history = context.get("financial_history", {})
+    def available_filings(symbol):
+        return [record for record in financial_history.get(symbol, [])
+                if str(record.get("filing_date") or record.get("filedAt") or "")[:10] <= session]
     for index, entries in enumerate(grouped):
         shard_symbols = {symbol for symbol, _frame in entries}
         aux = {
             "delivery": {symbol: delivery[symbol] for symbol in shard_symbols if symbol in delivery},
-            "earnings": {symbol: financial_history[symbol] for symbol in shard_symbols if symbol in financial_history},
+            "earnings": {symbol: available_filings(symbol) for symbol in sorted(shard_symbols)
+                         if available_filings(symbol)},
             "breadth": context.get("breadth", {}),
         }
         aux_data = gzip.compress(_json_bytes(aux), compresslevel=6, mtime=0)
@@ -153,7 +157,7 @@ class PrivateR2Store:
         missing = [key for key in R2_KEYS if not os.environ.get(key, "").strip()]
         if missing:
             raise RuntimeError("Private scanner R2 publication requires: " + ", ".join(missing))
-        self.bucket = os.environ.get("SCANNER_R2_BUCKET", "nexus-screener-private-data")
+        self.bucket = "nexus-screener-private-data"
         self.env = dict(
             os.environ,
             RCLONE_CONFIG_SCANNER_TYPE="s3",
@@ -179,12 +183,18 @@ class PrivateR2Store:
             manifest = stage / "manifest.json"
             manifest_data = manifest.read_bytes()
             manifest.unlink()
-            self.run("copy", str(stage), self.remote(prefix), "--immutable", "--checksum", "--transfers", "8")
-            self.run("check", str(stage), self.remote(prefix), "--one-way", "--download")
-            local_manifest = Path(folder) / "manifest.json"
-            local_manifest.write_bytes(manifest_data)
-            # The manifest is the private pack's commit marker and is uploaded last.
-            self.run("copyto", str(local_manifest), self.remote(prefix + "/manifest.json"), "--immutable", "--checksum")
+            try:
+                self.run("copy", str(stage), self.remote(prefix), "--immutable", "--checksum", "--transfers", "8")
+                self.run("check", str(stage), self.remote(prefix), "--one-way", "--download")
+                local_manifest = Path(folder) / "manifest.json"
+                local_manifest.write_bytes(manifest_data)
+                # The manifest is the private pack's commit marker and is uploaded last.
+                self.run("copyto", str(local_manifest), self.remote(prefix + "/manifest.json"), "--immutable", "--checksum")
+            except Exception:
+                marker = self.run("lsf", self.remote(prefix + "/manifest.json"), capture=True)
+                if not marker.stdout.strip():
+                    self.run("purge", self.remote(prefix))
+                raise
 
     def retain_latest(self, keep=7):
         listing = self.run("lsjson", self.remote("scanner/v1/revisions"), "--recursive", "--files-only", capture=True)
@@ -203,6 +213,13 @@ def publish_private_pack(source, revision):
     if mode not in {"local", "r2"}:
         raise RuntimeError('EDL_SCANNER_STORAGE must be "local" or "r2"')
     if mode == "r2":
+        missing = [key for key in R2_KEYS if not os.environ.get(key, "").strip()]
+        if missing:
+            print("WARNING: private scanner R2 configuration missing (" + ", ".join(missing) +
+                  "); publishing the public scanner snapshot without advanced history packs.", flush=True)
+            return False
         store = PrivateR2Store()
         store.publish(source, revision)
         store.retain_latest(7)
+        return True
+    return False

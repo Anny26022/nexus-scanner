@@ -37,7 +37,8 @@ export function createSnapshotEngine(loader = readSnapshot) {
   const snapshots = new Map<string, Promise<Snapshot>>();
   async function load(source: SnapshotSource, names: PublicPackName[]) {
     if (!/^[a-f0-9]{64}$/.test(source.revision)) throw new Error('Invalid dataset revision');
-    const key = source.packs ? `${source.revision}:${names.join(',')}` : source.revision;
+    const packIdentity = source.packs ? names.map(name => `${name}:${source.packs![name].sha256}`).join(',') : '';
+    const key = `${source.revision}:${source.sessionDate ?? ''}:${packIdentity}`;
     let promise = snapshots.get(key);
     if (!promise) {
       promise = (source.packs ? mergePacks(source.revision,source.packs,names) : loader(source)).then(data => {
@@ -53,7 +54,7 @@ export function createSnapshotEngine(loader = readSnapshot) {
     return promise;
   }
   return async (task: SnapshotTask): Promise<SnapshotResult> => {
-    const names:PublicPackName[] = task.type === 'compare' ? ['core','technical']
+    const names:PublicPackName[] = task.type === 'compare' ? ['core','technical','fundamentals']
       : expressionPlan(task.request.expressionTree,Boolean(task.request.textQuery?.trim())).dependencies
           .filter((name):name is PublicPackName => name !== 'advanced');
     const data = await load(task.source,names);

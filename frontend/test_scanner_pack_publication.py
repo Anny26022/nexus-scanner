@@ -35,6 +35,10 @@ class ScannerPackTests(unittest.TestCase):
             auxiliary={item['key'] for item in manifest['objects'] if item['key'].startswith('auxiliary/')}
             self.assertEqual(len(auxiliary),SHARD_COUNT)
             self.assertEqual({item['key'] for item in manifest['objects'] if not item['key'].startswith(('shards/','auxiliary/'))},{'benchmarks.json.gz','metadata.json.gz'})
+            second, second_manifest=build_private_scanner_pack(root,root/'packs-2','a'*64,'2026-10-01',Cache(frame),context,{},[])
+            self.assertEqual(manifest,second_manifest)
+            for descriptor in manifest['objects']:
+                self.assertEqual((target/descriptor['key']).read_bytes(),(second/descriptor['key']).read_bytes())
 
 
 if __name__=='__main__': unittest.main()

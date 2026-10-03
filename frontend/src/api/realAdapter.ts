@@ -93,7 +93,9 @@ function validateManifest(value: unknown): Manifest {
   const validPacks = manifest?.schemaVersion !== 7 || (manifest.packs && packNames.every(name => {
     const pack = manifest.packs![name];
     return pack?.schemaVersion === 7 && pack.encoding === 'gzip' && validUrl(pack.url)
-      && Number.isInteger(pack.bytes) && pack.bytes > 0 && /^[a-f0-9]{64}$/.test(pack.sha256);
+      && Number.isInteger(pack.bytes) && pack.bytes > 0 && /^[a-f0-9]{64}$/.test(pack.sha256)
+      && (pack.uncompressedBytes === undefined || (Number.isInteger(pack.uncompressedBytes) && pack.uncompressedBytes > 0
+          && /^[a-f0-9]{64}$/.test(pack.uncompressedSha256 ?? '')));
   }));
   if (!manifest || !/^[a-f0-9]{64}$/.test(manifest.revision) || ![4, 5, 6, 7].includes(manifest.schemaVersion)
       || (manifest.datasetGzipUrl !== undefined && (!validUrl(manifest.datasetGzipUrl) || !manifest.datasetGzipUrl.endsWith('.json.gz')))
@@ -101,7 +103,7 @@ function validateManifest(value: unknown): Manifest {
       || !validDate(manifest.sessionDate) || !validUrl(manifest.datasetUrl) || !validUrl(manifest.iposUrl)
       || !Number.isInteger(manifest.totalStocks) || manifest.totalStocks < 0
       || (manifest.chartRevision !== undefined && !/^[a-f0-9]{64}$/.test(manifest.chartRevision))
-      || !validPacks || (manifest.schemaVersion === 7 && (!manifest.advanced || manifest.advanced.revision !== manifest.revision
+      || !validPacks || (manifest.advanced !== undefined && (manifest.advanced.revision !== manifest.revision
           || manifest.advanced.session !== manifest.sessionDate || manifest.advanced.shards !== 32))
       || (manifest.schemaVersion === 6 && !manifest.chartUrlTemplate)
       || (manifest.chartUrlTemplate !== undefined && (!validUrl(manifest.chartUrlTemplate)
@@ -126,7 +128,7 @@ async function snapshotSource(revision?: string): Promise<SnapshotSource> {
     url:selected === manifest.revision ? (typeof DecompressionStream !== 'undefined' ? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
       : `/data/revisions/${selected}/stocks.json`,
     sessionDate:selected === manifest.revision ? manifest.sessionDate : undefined,
-    packs:selected === manifest.revision && manifest.schemaVersion === 7 ? manifest.packs : undefined };
+    packs:selected === manifest.revision && manifest.schemaVersion === 7 && typeof DecompressionStream !== 'undefined' ? manifest.packs : undefined };
 }
 
 class RealDataAdapter {
@@ -142,12 +144,13 @@ class RealDataAdapter {
     if (plan.browser) {
       const snapshot = await runSnapshotTask({type:'screen',source,request:req});
       if (snapshot.type !== 'screen') throw new Error('Unexpected scanner response');
-      if (!snapshot.result) throw new Error('This condition needs the advanced scanner service.');
-      return snapshot.result;
+      if (snapshot.result) return snapshot.result;
     }
     const base = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+    const manifest = current ?? await refreshManifest();
+    if (!manifest.advanced && base !== '/api') throw new Error('This screen needs the advanced scanner data service.');
     const response = await fetch(`${base}/screens/run`, { method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({...req,asOfDate:source.sessionDate,datasetRevision:source.revision}) });
+      body:JSON.stringify({...req,asOfDate:source.sessionDate ?? req.asOfDate,datasetRevision:source.revision}) });
     const payload = await response.json().catch(() => null);
     if (!response.ok || payload?.error) throw new Error(payload?.error || `Scanner request failed (HTTP ${response.status})`);
     if (payload?.immutableRevision !== source.revision || !Array.isArray(payload.rows)) throw new Error('Scanner returned a different dataset revision');

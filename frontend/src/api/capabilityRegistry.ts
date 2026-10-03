@@ -1,4 +1,5 @@
 import type { ActiveCondition, ExpressionNode } from '../types/screener';
+import presetDefinitions from '../data/presetDefinitions.json';
 
 export type PackDependency = 'core' | 'technical' | 'fundamentals' | 'advanced';
 export interface ConditionCapability { dependencies: PackDependency[]; browser: (condition: ActiveCondition) => boolean }
@@ -8,6 +9,7 @@ const never = () => false;
 const technical = (browser: ConditionCapability['browser'] = always): ConditionCapability => ({dependencies:['core','technical'],browser});
 const fundamental = (browser: ConditionCapability['browser'] = always): ConditionCapability => ({dependencies:['core','fundamentals'],browser});
 const advanced = (): ConditionCapability => ({dependencies:['core','advanced'],browser:never});
+const presetIds = new Set(presetDefinitions.map(item => item.id));
 
 const scalarTechnical = new Set([
   'PRICE_VS_SMA','PRICE_VS_EMA','PRICE_CHANGE_PCT','GAP_UP','GAP_DOWN','VOLUME_VS_AVG','NEW_HIGH','NEW_LOW','PCT_FROM_52W_HIGH',
@@ -41,7 +43,8 @@ function parameterCompatible(condition: ActiveCondition): boolean {
 }
 
 export function conditionCapability(condition: ActiveCondition): ConditionCapability {
-  if (condition.conditionId.startsWith('lib-')) return technical();
+  if (condition.conditionId.startsWith('lib-')) return presetIds.has(condition.conditionId) ? technical() : advanced();
+  if (condition.conditionId === 'FUNDAMENTAL_METRIC' && ['ALL_TIME_HIGH','ALL_TIME_LOW','RETURN_5Y'].includes(String(condition.parameters.metric))) return technical();
   if (scalarTechnical.has(condition.conditionId)) return technical(parameterCompatible);
   if (scalarFundamental.has(condition.conditionId)) return fundamental(parameterCompatible);
   return advanced();

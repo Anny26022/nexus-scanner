@@ -45,7 +45,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'mom_rvol': fn = s => between(s.rvol, p.minRvol, p.maxRvol); break;
     case 'VOLUME_VS_AVG':
       if (p.avgDays !== 20 || p.withinDays !== 1) return null;
-      fn = s => compare(s.rvol, 'ABOVE', p.multiple); break;
+      fn = s => compare(s.rvol, String(p.comparison ?? 'ABOVE'), p.multiple); break;
     case 'trend_price_vs_ma': {
       if (p.maType !== 'SMA' || ![10,20,50,200].includes(Number(p.maPeriod))) return null;
       fn = s => {
@@ -88,7 +88,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       if (![14,20].includes(Number(p.lookbackDays))) return null;
       fn = s => compare(s.metrics[`adr${p.lookbackDays}`],p.comparison,p.pct); break;
     case 'RS_RATING': fn = s => {
-      const ratings:Record<string,number|null|undefined>={FRONT_WEIGHTED:s.rsRating,ONE_MONTH:s.rsRating1m,THREE_MONTH:s.rsRating3m,TWELVE_MONTH:s.rsRating12m};
+      const ratings:Record<string,number|null|undefined>={FRONT_WEIGHTED:s.rsRating,ONE_MONTH:s.rsRating1m,THREE_MONTH:s.rsRating3m,SIX_MONTH:s.rsRating6m,TWELVE_MONTH:s.rsRating12m};
       return compare(ratings[String(p.window||'FRONT_WEIGHTED').toUpperCase()],p.comparison,p.value);
     }; break;
     case 'mom_return': {
@@ -139,21 +139,21 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       metadata = true;
       const values = String(p.values ?? '').split(',').map((value:string)=>value.trim().toLowerCase()).filter(Boolean);
       const key = c.conditionId === 'SECTOR' ? 'sector' : 'industry';
-      fn = s => values.length ? values.includes(String(key === 'sector' ? s.sector : s.industry).toLowerCase()) : true; break;
+      fn = s => values.length ? values.includes(String(key === 'sector' ? s.sector : s.industry).toLowerCase()) : false; break;
     }
     case 'PRICE_BAND': {
       metadata = true; const values=String(p.values ?? '').split(',').map((value:string)=>value.trim().replace('%','')).filter(Boolean);
       fn=s=>s.circuitLimit ? values.includes(String(s.circuitLimit).replace('%','')) : null; break;
     }
     case 'CIRCUIT_BAND_MIN': metadata=true; fn=s=>{
-      if (!s.circuitLimit) return null; if (/no band/i.test(s.circuitLimit)) return true;
+      if (!s.circuitLimit) return null; if (/^(?:-|none|no\s*band)$/i.test(s.circuitLimit.trim())) return true;
       const value=Number(String(s.circuitLimit).replace('%','')); return Number.isFinite(value) ? value>=Number(p.minBandPct) : null;
     }; break;
     case 'SERIES': {
       metadata=true; const values=String(p.values ?? '').split(',').map((value:string)=>value.trim().toUpperCase()).filter(Boolean);
-      fn=s=>values.length ? values.includes(String(s.series).toUpperCase()) : true; break;
+      fn=s=>values.length ? values.includes(String(s.series).toUpperCase()) : false; break;
     }
-    case 'INDEX_MEMBERSHIP': metadata=true; fn=s=>s.indexMemberships.map(value=>value.toUpperCase()).includes(String(p.indexName).toUpperCase()); break;
+    case 'INDEX_MEMBERSHIP': metadata=true; fn=s=>String(p.indexName ?? '').trim() ? s.indexMemberships.map(value=>value.toUpperCase()).includes(String(p.indexName).toUpperCase()) : null; break;
     case 'FNO_BAN': metadata=true; fn=s=>s.fnoBan == null ? null : String(p.mode).toUpperCase()==='ONLY' ? s.fnoBan : !s.fnoBan; break;
     case 'EXCLUDE_SURVEILLANCE':
       metadata = true;
@@ -212,7 +212,8 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
     const field = (request.sort?.field ?? 'symbol') as keyof SnapshotStock;
     rows.sort((a,b) => {
       const x = a[field], y = b[field];
-      const order = x == null ? y == null ? 0 : -1 : y == null ? 1 : x < y ? -1 : x > y ? 1 : 0;
+      if (x == null || y == null) return x == null && y == null ? 0 : x == null ? 1 : -1;
+      const order = x < y ? -1 : x > y ? 1 : 0;
       return request.sort?.direction === 'desc' ? -order : order;
     });
     matches = {rows,universeCount:universe.length};

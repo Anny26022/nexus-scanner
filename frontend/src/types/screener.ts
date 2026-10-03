@@ -154,6 +154,7 @@ export interface StockRow {
   rsRating: number | null;
   rsRating1m?: number | null;
   rsRating3m?: number | null;
+  rsRating6m?: number | null;
   rsRating12m?: number | null;
   dataCompleteness: number; // 0 to 100
 }

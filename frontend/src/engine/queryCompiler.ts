@@ -134,13 +134,17 @@ function functionCondition(name: string, args: string[], operator?: string, rawV
   const key = name.replace(/\s+/g, ' ').trim().toLowerCase();
   const comparison = OPERATORS[operator ?? '>='];
   const target = rawValue == null ? undefined : number(rawValue, name.trim());
+  const arity = (minimum:number, maximum=minimum) => {
+    if (args.length < minimum || args.length > maximum) throw new Error(`${name.trim()} requires ${minimum === maximum ? minimum : `${minimum}-${maximum}`} arguments.`);
+  };
   if (INDICATOR_FUNCTIONS.has(key)) {
+    arity(0,1);
     if (target == null) throw new Error(`${name.trim()} requires a comparison and number.`);
     return leaf('INDICATOR_COMPARE', { leftIndicator:key.replaceAll(' ', '_').toUpperCase(), leftPeriod:number(args[0] || '14', name), leftOffset:0, op:comparison, rightIndicator:'', rightValue:target, rightPeriod:20, rightOffset:0, withinDays:1 });
   }
-  if (key === 'adx') return leaf('ADX', { period:number(args[0] || '14', name), comparison, value:target });
-  if (key === 'rvol') return leaf('VOLUME_VS_AVG', { avgDays:number(args[0] || '20', name), multiple:target, comparison, withinDays:1 });
-  if (key === 'adr') return leaf('ADR_PCT', { lookbackDays:number(args[0] || '14', name), comparison, pct:target });
+  if (key === 'adx') { arity(0,1); return leaf('ADX', { period:number(args[0] || '14', name), comparison, value:target }); }
+  if (key === 'rvol') { arity(0,1); return leaf('VOLUME_VS_AVG', { avgDays:number(args[0] || '20', name), multiple:target, comparison, withinDays:1 }); }
+  if (key === 'adr') { arity(0,1); return leaf('ADR_PCT', { lookbackDays:number(args[0] || '14', name), comparison, pct:target }); }
   if (key === 'volume trend') return leaf('AVG_VOLUME_RATIO', { recentDays:number(args[0], name), baseDays:number(args[1], name), comparison, ratio:target });
   if (key === 'earnings growth') return leaf('EARNINGS_GROWTH', { metric:args[0], basis:args[1], comparison, pct:target });
   if (key === 'days since earnings') {
@@ -167,14 +171,15 @@ function functionCondition(name: string, args: string[], operator?: string, rawV
   if (key === 'ma convergence') {
     if (target == null) throw new Error('MA Convergence requires a maximum spread comparison.');
     const periods = (args[0] ?? '').split(',').map(value => value.trim()).filter(Boolean);
-    if (periods.length < 2 || periods.some(value => !/^\d+$/.test(value))) throw new Error('MA Convergence requires at least two positive integer periods.');
+    if (periods.length < 2 || new Set(periods).size !== periods.length || periods.some(value => !/^[1-9]\d*$/.test(value))) throw new Error('MA Convergence requires at least two distinct positive integer periods.');
     return leaf('MA_CONVERGENCE', { periods:periods.join(','), maType:args[1] || 'EMA', comparison, maxSpreadPct:target, withinDays:args[2] ? number(args[2], name) : 1 });
   }
   if (key === 'supertrend') return leaf('SUPERTREND', { period:number(args[0] || '10', name), multiplier:number(args[1] || '3', name), direction:args[2] || 'BULLISH', signal:args[3] || 'STATE', withinDays:args[4] ? number(args[4], name) : 1 });
   if (key === 'indicator compare') {
     if (args.length < 5) throw new Error('Indicator Compare requires left indicator, period, offset, operation and target.');
-    const rightIndicator = args[4];
-    return leaf('INDICATOR_COMPARE', { leftIndicator:args[0], leftPeriod:number(args[1], name), leftOffset:number(args[2], name), op:args[3], rightIndicator, rightValue:rightIndicator ? 0 : number(args[5], name), rightPeriod:rightIndicator && args[5] ? number(args[5], name) : 20, rightOffset:rightIndicator && args[6] ? number(args[6], name) : 0, withinDays:number(rightIndicator ? args[7] || '1' : args[6] || '1', name) });
+    const numericTarget = Number(args[4]);
+    const rightIndicator = Number.isFinite(numericTarget) ? '' : args[4];
+    return leaf('INDICATOR_COMPARE', { leftIndicator:args[0], leftPeriod:number(args[1], name), leftOffset:number(args[2], name), op:args[3], rightIndicator, rightValue:rightIndicator ? 0 : numericTarget, rightPeriod:rightIndicator && args[5] ? number(args[5], name) : 20, rightOffset:rightIndicator && args[6] ? number(args[6], name) : 0, withinDays:number(rightIndicator ? args[7] || '1' : args[5] || '1', name) });
   }
   if (key === 'divergence') {
     if (args.length < 9) throw new Error('Divergence requires oscillator, period, direction, type, pivot settings, lookback and recency.');

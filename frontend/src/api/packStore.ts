@@ -4,6 +4,8 @@ export interface PackDescriptor {
   url: string;
   bytes: number;
   sha256: string;
+  uncompressedBytes?: number;
+  uncompressedSha256?: string;
   encoding: 'gzip';
   schemaVersion: 7;
 }
@@ -16,11 +18,11 @@ const DB = 'nexus-scanner-packs-v1', STORE = 'packs';
 
 function openDatabase(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === 'undefined') return Promise.resolve(null);
-  return new Promise((resolve, reject) => {
+  return new Promise(resolve => {
     const request = indexedDB.open(DB, 1);
     request.onupgradeneeded = () => request.result.createObjectStore(STORE);
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => resolve(null);
   });
 }
 
@@ -86,6 +88,10 @@ async function decode(bytes: Uint8Array): Promise<PartialSnapshot> {
   return JSON.parse(await new Response(stream).text());
 }
 
+function decodePlain(bytes: Uint8Array): PartialSnapshot {
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
 export async function loadPack(revision: string, name: PublicPackName, descriptor: PackDescriptor): Promise<PartialSnapshot> {
   const key = `${revision}:${name}:${descriptor.sha256}`;
   let promise = memory.get(key);
@@ -97,13 +103,19 @@ export async function loadPack(revision: string, name: PublicPackName, descripto
         if (!response.ok) throw new Error(`Scanner ${name} pack failed (HTTP ${response.status})`);
         bytes = new Uint8Array(await response.arrayBuffer());
       }
-      if (bytes.byteLength !== descriptor.bytes || await sha256(bytes) !== descriptor.sha256) throw new Error(`Scanner ${name} pack checksum mismatch`);
-      const pack = await decode(bytes);
+      const compressed = bytes[0] === 0x1f && bytes[1] === 0x8b;
+      const expectedBytes = compressed ? descriptor.bytes : descriptor.uncompressedBytes;
+      const expectedHash = compressed ? descriptor.sha256 : descriptor.uncompressedSha256;
+      if (expectedBytes == null || expectedHash == null) {
+        if (compressed) throw new Error(`Scanner ${name} pack checksum metadata is incomplete`);
+      } else if (bytes.byteLength !== expectedBytes || await sha256(bytes) !== expectedHash) throw new Error(`Scanner ${name} pack checksum mismatch`);
+      const pack = compressed ? await decode(bytes) : decodePlain(bytes);
       if (pack.schemaVersion !== 7 || pack.revision !== revision || pack.totalStocks !== pack.stocks.length) throw new Error(`Scanner ${name} pack revision mismatch`);
       void store(key, bytes, revision);
       return pack;
     })().catch(error => { memory.delete(key); throw error; });
     memory.set(key, promise);
+    for (const existing of [...memory.keys()]) if (!existing.startsWith(`${revision}:`)) memory.delete(existing);
   }
   return promise;
 }
@@ -113,6 +125,14 @@ export async function mergePacks(revision: string, descriptors: PublicPacks, nam
   const base = packs[0];
   if (packs.some(pack => pack.asOfDate !== base.asOfDate || pack.totalStocks !== base.totalStocks)) throw new Error('Scanner packs are not aligned');
   const rows = new Map<string,Record<string,unknown>>();
-  for (const pack of packs) for (const row of pack.stocks) rows.set(row.symbol, {...rows.get(row.symbol),...row});
+  for (const pack of packs) {
+    const symbols = new Set<string>();
+    for (const row of pack.stocks) {
+      if (symbols.has(row.symbol)) throw new Error('Scanner pack contains duplicate symbols');
+      symbols.add(row.symbol);
+      rows.set(row.symbol, {...rows.get(row.symbol),...row});
+    }
+  }
+  if (rows.size !== base.totalStocks) throw new Error('Scanner packs have different symbol sets');
   return {revision,asOfDate:base.asOfDate,totalStocks:base.totalStocks,stocks:[...rows.values()] as unknown as Snapshot['stocks']};
 }

@@ -315,7 +315,8 @@ def stock_row(s, ratings):
     symbol_ratings = ratings.get(s["symbol"], {})
     row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7,
                rsRating=symbol_ratings.get("front_weighted"), rsRating1m=symbol_ratings.get("one_month"),
-               rsRating3m=symbol_ratings.get("three_month"), rsRating12m=symbol_ratings.get("twelve_month"),
+               rsRating3m=symbol_ratings.get("three_month"), rsRating6m=symbol_ratings.get("six_month"),
+               rsRating12m=symbol_ratings.get("twelve_month"),
                daysSinceEarnings=None, fnoBan=False)
     for ma in ("sma20","sma50","sma200","ema20","ema50","ema200"):
         row[ma]=s.get(ma)
@@ -410,6 +411,11 @@ def run(request, root=ROOT, cache=None):
                         "epsTwoYearsBack","totalRevenueLakh","nonCurrentAssetsLakh",
                         "totalLiabilitiesLakh","interestCoverage","dividendPerShare",
                         "vwap","vwapAsOfDate","allTimeHigh","allTimeLow","return5yPct",
+                        "promoterHoldingPct","publicHoldingPct","numberOfShareholders","faceValue",
+                        "totalIncomeLakh","totalExpenseLakh","profitBeforeTaxLakh","totalTaxExpensesLakh",
+                        "netProfitLakh","totalEquityLakh","totalAssetsLakh","currentAssetsLakh",
+                        "currentLiabilitiesLakh","nonCurrentLiabilitiesLakh","operatingCashFlowLakh",
+                        "investingCashFlowLakh","netCashFlowLakh","epsTtm","dividendYieldPct",
                     ):
                         row[field]=None
             # stock_row starts from the current snapshot. Recalculate after

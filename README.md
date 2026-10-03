@@ -478,10 +478,9 @@ R2_ACCESS_KEY_ID
 R2_SECRET_ACCESS_KEY
 R2_PUBLIC_BASE_URL
 R2_BUCKET=nexus-screener-chart-data
-SCANNER_R2_BUCKET=nexus-screener-private-data
 ```
 
-When one of the required R2 settings is absent, the scanner release still publishes without chart URLs and logs the missing settings. When all settings are present, an upload, verification, retention, or archive failure stops publication and preserves the previous active release.
+When chart settings are absent, the public scanner release still publishes without chart URLs. When the private scanner R2 credentials are absent, it publishes without an `advanced` manifest entry, so arbitrary-history scans report that the advanced service is unavailable. Once either remote publisher is configured, an upload, verification, retention, or archive failure stops publication and preserves the previous active release.
 
 R2 retention is:
 
@@ -569,7 +568,7 @@ VITE_API_BASE_URL=/api
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Required server-side S3-compatible credentials. Never place them in frontend variables or public artifacts. |
 | `R2_PUBLIC_BASE_URL` | Required public chart origin; browser access and CORS must work from the frontend origin. |
 | `R2_BUCKET` | `nexus-screener-chart-data` unless overridden. |
-| `SCANNER_R2_BUCKET` | `nexus-screener-private-data` unless overridden. |
+| Private scanner bucket | Fixed to `nexus-screener-private-data` so publication and the Worker binding cannot drift. |
 | `VITE_USE_MOCK` | False unless exactly `true`; selects fabricated UI-development data when enabled. |
 | `VITE_API_BASE_URL` | `/api` when absent; adapter appends `/screens/run`. Build-time frontend setting. |
 

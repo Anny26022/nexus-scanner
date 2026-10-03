@@ -13,6 +13,13 @@ from scanner_cache import ScannerCache
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def setUp(self):
+        self.storage = patch.dict('os.environ', {'EDL_SCANNER_STORAGE':'local'}, clear=False)
+        self.storage.start()
+
+    def tearDown(self):
+        self.storage.stop()
+
     def fixture(self, root, cap=5000):
         stocks=[{'symbol':'TEST','name':'Test','close':100,'open':99,'high':101,'low':98,'volume':200,'as_of_date':'2026-09-30',
                  'market_cap_crore':cap,'daily_rupee_turnover_50_cr':10,'circuit_limit':'20','listing_series':'EQ','index_memberships':[]}]
@@ -51,6 +58,9 @@ class SnapshotPublicationTests(unittest.TestCase):
                 packed=(output/descriptor['url'].removeprefix('/data/')).read_bytes()
                 self.assertEqual(descriptor['bytes'],len(packed),name)
                 self.assertEqual(descriptor['sha256'],hashlib.sha256(packed).hexdigest(),name)
+                raw=gzip.decompress(packed)
+                self.assertEqual(descriptor['uncompressedBytes'],len(raw),name)
+                self.assertEqual(descriptor['uncompressedSha256'],hashlib.sha256(raw).hexdigest(),name)
             self.assertNotEqual(first['revision'],second['revision'])
             self.assertEqual(json.loads((output/'current.json').read_text())['revision'],second['revision'])
             request={'asOfDate':'2026-09-30','universe':'mainboard','expressionTree':{'type':'group','operator':'all','children':[]},'datasetRevision':first['revision']}
@@ -86,6 +96,13 @@ class SnapshotPublicationTests(unittest.TestCase):
             with patch('publish_snapshot.publish_private_pack',side_effect=RuntimeError('R2 failed')):
                 with self.assertRaisesRegex(RuntimeError,'R2 failed'): publish(root,output)
             self.assertEqual((output/'current.json').read_bytes(),original)
+
+    def test_optional_private_pack_is_not_advertised(self):
+        with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
+            with patch('publish_snapshot.publish_private_pack',return_value=False):
+                manifest=publish(root,output)
+            self.assertNotIn('advanced',manifest)
 
     def test_scanner_only_and_chart_release_have_distinct_revisions(self):
         import os

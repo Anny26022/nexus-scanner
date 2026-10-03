@@ -84,20 +84,18 @@ Repository variables:
 - `CLOUDFLARE_ACCOUNT_ID`
 - `ALLOWED_FRONTEND_ORIGINS`
 - `SCANNER_RELEASE_URL`
-- `SCANNER_API_BASE_URL`
 
 Pipeline environment:
 
 - `EDL_SCANNER_STORAGE=r2`
-- `SCANNER_R2_BUCKET=nexus-screener-private-data`
 
 Frontend production environment:
 
-- `VITE_API_BASE_URL=<SCANNER_API_BASE_URL>/v1`
+- `VITE_API_BASE_URL=https://<deployed-worker-host>/v1`
 
 Until a static frontend host is configured, the Worker reads the immutable release pointer from the repository's raw `main` URL. Set `SCANNER_RELEASE_URL` to the deployed frontend's same-origin `data/current.json` when that host is introduced.
 
-The local Vite server continues to use the Python bridge when `VITE_API_BASE_URL` is omitted.
+The local Vite server continues to use the Python bridge when `VITE_API_BASE_URL` is omitted. A public release without an `advanced` block remains usable for browser-compatible screens and explicitly reports advanced history as unavailable.
 
 ## Deployment and rollback
 

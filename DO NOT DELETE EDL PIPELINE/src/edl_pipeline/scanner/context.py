@@ -149,12 +149,17 @@ def _published_field_value(frame, stock, field, as_of_date):
     latest = {
         "close": "Close", "open": "Open", "high": "High", "low": "Low",
     }
+    def latest_number(column):
+        value = float(frame[column].iloc[-1])
+        return (value, None) if np.isfinite(value) else (None, "snapshot_value_unavailable")
+
     if field in latest:
-        return float(frame[latest[field]].iloc[-1]), None
+        return latest_number(latest[field])
     if field == "volume_lakh":
-        return float(frame["Volume"].iloc[-1] / 100_000), None
+        value = float(frame["Volume"].iloc[-1] / 100_000)
+        return (value, None) if np.isfinite(value) else (None, "snapshot_value_unavailable")
     if field == "volume":
-        return float(frame["Volume"].iloc[-1]), None
+        return latest_number("Volume")
     if field in {"sma_20", "sma_50", "sma_200"}:
         period = int(field.rsplit("_", 1)[1])
         if len(frame) < period:

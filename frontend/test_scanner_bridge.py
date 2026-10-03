@@ -114,6 +114,11 @@ class BridgeTests(unittest.TestCase):
         self.assertTrue(bridge.evaluate(bridge.translate("ABSOLUTE_EPS",{"comparison":"GREATER","value":20}),stock,frame,{},"2026-09-30",set(),[]))
         self.assertTrue(bridge.evaluate(bridge.translate("DIVIDEND_YIELD",{"comparison":"GREATER","value":2}),stock,frame,{},"2026-09-30",set(),[]))
 
+    def test_delivery_spike_loads_history_for_the_contract_kind(self):
+        expression = {"type":"condition","kind":"DELIVERY_PCT_SPIKE","params":{"minDeliverablePct":60,"withinDays":1}}
+        self.assertTrue(bridge._needs_delivery(expression))
+        self.assertTrue(bridge._needs_delivery({"type":"condition","kind":"DELIVERY_PERCENT","params":{}}))
+
     def test_snapshot_field_query_without_history_has_stable_diagnostics(self):
         node=bridge.compile_query("Earning Per Share (EPS) > 20")
         stock={**self.stock(),"eps_ttm":25}

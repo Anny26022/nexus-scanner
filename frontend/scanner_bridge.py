@@ -183,6 +183,12 @@ def combine(values, op):
     return True if True in values else None if None in values else False
 
 
+def _needs_delivery(expression):
+    """Whether an expression needs the dated delivery-history side input."""
+    serialized = json.dumps(expression).lower()
+    return any(marker in serialized for marker in ("delivery_pct_spike", "delivery_percent"))
+
+
 def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
     if node["type"] == "group":
         if not node["children"]:
@@ -347,9 +353,11 @@ def run(request, root=ROOT, cache=None):
     stocks = [s for symbol,s in context["stocks"].items() if (wanted is None or symbol in wanted) and s.get("default_screener_eligible",True)]
     text_query = str(request.get("textQuery") or "").strip()
     expression = compile_query(text_query) if text_query else frontend_expression(request["expressionTree"])
-    # Only collect delivery if a translated condition asks for it.
-    serialized_expression = json.dumps(expression).lower()
-    delivery = _load_delivery_history(root/"delivery_history_data", selected, root/"eod2_delivery_history_data") if "delivery_percent" in serialized_expression else {}
+    # Both public delivery conditions need dated history.  The spike condition
+    # is named ``DELIVERY_PCT_SPIKE`` while the latest-session condition uses
+    # ``DELIVERY_PERCENT``; checking only the latter quietly made spike
+    # screens unavailable.
+    delivery = _load_delivery_history(root/"delivery_history_data", selected, root/"eod2_delivery_history_data") if _needs_delivery(expression) else {}
     matched, counts, unresolved = [], Counter(), 0
     for s in stocks:
         path = root/"ohlcv_data"/f"{s['symbol']}.csv"

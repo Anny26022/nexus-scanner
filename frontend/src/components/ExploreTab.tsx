@@ -113,12 +113,15 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
 
   const handleRun = async () => {
     const nextQuery = queryText.trim();
+    // Refresh before changing query state.  Otherwise the render caused by a
+    // new query can submit the revision captured before this button press.
+    const refreshedRevision = await onRefreshRevision();
     if (nextQuery !== activeQuery) {
       setActiveQuery(nextQuery);
       setPage(1);
       return;
     }
-    if (await onRefreshRevision() === datasetRevision) await refetch();
+    if (refreshedRevision === datasetRevision) await refetch();
   };
 
   const filterCount = activeConditionsArray.length;

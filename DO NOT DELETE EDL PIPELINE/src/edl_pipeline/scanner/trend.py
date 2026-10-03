@@ -356,9 +356,12 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
     if condition == "indicator_compare":
         left_name = str(spec.get("left_indicator", "RSI")).upper()
         right_name = str(spec.get("right_indicator", "")).upper()
-        left = indicator_series(frame, left_name, int(spec.get("left_period", 14)), float(spec.get("multiplier", 3))).shift(int(spec.get("left_offset", 0)))
+        left_offset, right_offset = int(spec.get("left_offset", 0)), int(spec.get("right_offset", 0))
+        if left_offset < 0 or right_offset < 0:
+            raise ValueError("Indicator offsets must be zero or positive.")
+        left = indicator_series(frame, left_name, int(spec.get("left_period", 14)), float(spec.get("multiplier", 3))).shift(left_offset)
         if right_name:
-            right = indicator_series(frame, right_name, int(spec.get("right_period", 20)), float(spec.get("right_multiplier", 3))).shift(int(spec.get("right_offset", 0)))
+            right = indicator_series(frame, right_name, int(spec.get("right_period", 20)), float(spec.get("right_multiplier", 3))).shift(right_offset)
         else:
             right = pd.Series(float(spec.get("right_value", 0)), index=frame.index)
         operation = str(spec.get("op", "ABOVE")).upper()
@@ -411,12 +414,17 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
     if condition == "supertrend":
         period, multiplier = int(spec.get("period", 10)), float(spec.get("multiplier", 3))
         line, direction = supertrend(frame, period, multiplier)
-        wanted = 1 if str(spec.get("direction", "bullish")).lower() == "bullish" else -1
+        requested_direction = str(spec.get("direction", "bullish")).lower()
+        if requested_direction not in {"bullish", "bearish"}:
+            raise ValueError("Supertrend direction must be bullish or bearish.")
+        wanted = 1 if requested_direction == "bullish" else -1
         state = direction.eq(wanted).where(direction.notna())
         signal = str(spec.get("signal", "state")).lower()
-        flags = state if signal == "state" else (state & ~state.shift(1, fill_value=False)).where(direction.notna())
         if signal not in {"state", "turn"}:
             raise ValueError("Supertrend signal must be state or turn.")
+        flags = state if signal == "state" else (
+            state.fillna(False) & ~state.shift(1).fillna(False)
+        ).where(direction.notna() & direction.shift(1).notna())
         return _event_result(condition, flags, spec.get("fired_within", 1), line, frame=frame,
                              period=period, multiplier=multiplier, direction="bullish" if wanted == 1 else "bearish", signal=signal)
 
@@ -425,6 +433,8 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         if oscillator_name not in OSCILLATORS:
             raise ValueError(f"Unsupported divergence oscillator: {oscillator_name}")
         oscillator = indicator_series(frame, oscillator_name, int(spec.get("oscillator_period", 14)))
+        if oscillator.notna().sum() == 0:
+            return _unavailable(condition, "insufficient_history")
         flags, metadata = _divergence_events(frame, oscillator, spec)
         outcome = _event_result(condition, flags, spec.get("fired_within", 8), oscillator, frame=frame,
                                 oscillator=oscillator_name, oscillator_period=int(spec.get("oscillator_period", 14)),

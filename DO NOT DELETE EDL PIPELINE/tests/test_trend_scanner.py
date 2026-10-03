@@ -300,7 +300,7 @@ class TrendScannerTests(unittest.TestCase):
         self.assertEqual(result["status"], "match")
         self.assertEqual(result["conditions"][0]["details"]["days_since_signal"], 0)
 
-    def test_divergence_waits_for_right_hand_confirmation(self):
+    def test_divergence_does_not_expose_an_unconfirmed_future_pivot(self):
         close = [100] * 30 + [105, 100, 103, 98, 104, 101, 105, 102, 106]
         dates = pd.date_range("2025-01-01", periods=len(close), freq="B")
         frame = pd.DataFrame({"Date":dates,"Open":close,"High":[v + 1 for v in close],
@@ -312,10 +312,16 @@ class TrendScannerTests(unittest.TestCase):
                 "invalidateOnBreak":True}}
         without_confirmation = evaluate_history(frame.iloc[:-2], [spec])
         with_confirmation = evaluate_history(frame, [spec])
-        # The important invariant is that adding confirmation bars can create
-        # a signal, but truncating them cannot expose a future pivot.
+        # A pending right-hand confirmation must never become a signal merely
+        # because the frame ends at that candidate pivot.
         self.assertNotEqual(without_confirmation["status"], "match")
-        self.assertIn(with_confirmation["status"], {"match", "no_match"})
+        self.assertEqual(with_confirmation["status"], "no_match")
+
+    def test_indicator_offsets_and_supertrend_direction_are_validated(self):
+        with self.assertRaisesRegex(ValueError, "offsets"):
+            evaluate_history(rising_history(), [{"kind":"INDICATOR_COMPARE","params":{"leftOffset":-1}}])
+        with self.assertRaisesRegex(ValueError, "direction"):
+            evaluate_history(rising_history(), [{"kind":"SUPERTREND","params":{"direction":"sideways"}}])
 
     def test_divergence_event_is_emitted_only_after_both_pivots_are_confirmed(self):
         lows = [13, 12, 10, 12, 11, 8, 11, 12]

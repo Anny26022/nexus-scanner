@@ -147,7 +147,18 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const handleReset = () => setLocalMap({});
 
   const handleApply = () => {
-    onApply(localMap, localMode);
+    // MA convergence is the only structured list entered as text. Preserve a
+    // safe default instead of sending a malformed list to the evaluator.
+    const validated = Object.fromEntries(Object.entries(localMap).map(([id, condition]) => {
+      if (condition.conditionId !== 'MA_CONVERGENCE') return [id, condition];
+      const values = String(condition.parameters.periods ?? '').split(',').map(value => value.trim());
+      const valid = values.length >= 2 && values.every(value => /^\d+$/.test(value) && Number(value) > 0)
+        && new Set(values).size === values.length;
+      return [id, valid ? condition : {
+        ...condition, parameters: { ...condition.parameters, periods: '9,20,50,200' },
+      }];
+    }));
+    onApply(validated, localMode);
     onClose();
   };
 

@@ -48,7 +48,9 @@ jobs:
 
       - name: Select weekly EOD2 cache key
         id: eod2-cache-key
-        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+        # Sunday belongs to the ISO week that is ending.  The EOD2 refresh is
+        # the baseline for Monday through Friday, so key it to next Monday.
+        run: echo "week=$(date -u -d tomorrow +%G-%V)" >> "$GITHUB_OUTPUT"
 
       - name: Restore EOD2 data checkout
         uses: actions/cache@v4

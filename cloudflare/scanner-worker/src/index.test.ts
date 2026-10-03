@@ -1,5 +1,5 @@
 import { afterEach,describe,expect,it,vi } from 'vitest';
-import worker,{validateExpression} from './index';
+import worker,{executionWarnings,validateExpression} from './index';
 
 const execution={waitUntil:vi.fn()} as unknown as ExecutionContext;
 function environment(marker=true){const manifest={schemaVersion:7,revision:'a'.repeat(64),session:'2026-10-01'};return {ALLOWED_ORIGINS:'https://app.example,http://localhost:8080',SCANNER_RELEASE_URL:'https://app.example/data/current.json',SCANNER_DATA:{get:vi.fn(async()=>marker?{json:async()=>manifest}:null)} as unknown as R2Bucket};}
@@ -41,5 +41,9 @@ describe('scanner worker boundary',()=>{
     expect(()=>validateExpression({type:'condition',condition:{conditionId:'MADE_UP',parameters:{}}})).toThrow('Unsupported condition');
     expect(()=>validateExpression({type:'condition',condition:{conditionId:'ADX',parameters:{period:14,comparison:'SIDEWAYS',value:25}}})).toThrow('is unsupported');
     expect(()=>validateExpression({type:'condition',condition:{conditionId:'FIELD_COMPARISON',parameters:{field:'close',comparison:'GREATER',value:100}}})).not.toThrow();
+  });
+  it('marks current weekly inside bars as provisional in the response metadata',()=>{
+    expect(executionWarnings([{conditionId:'INSIDE_BAR',parameters:{timeframe:'WEEKLY',weeklyMode:'CURRENT'}}] as any,0)).toEqual(['Weekly inside-bar current mode includes a provisional week.']);
+    expect(executionWarnings([{conditionId:'INSIDE_BAR',parameters:{timeframe:'WEEKLY',weeklyMode:'COMPLETED'}}] as any,2)).toEqual(['2 equities have no aligned history in this revision.']);
   });
 });

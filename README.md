@@ -288,7 +288,7 @@ The default EMA persistence mode is `extreme_reset`. A contrary close arms its l
 
 A daily inside bar has `high ≤ preceding high` and `low ≥ preceding low`. For a consecutive run, each bar is compared with the immediately preceding bar; N inside bars require N+1 bars.
 
-Weekly bars group daily sessions by ISO year/week: first open, maximum high, minimum low, last close, summed volume, and last session date. The same containment comparison runs on those aggregates. The default `completed` mode excludes the current ISO week. The explicit `current` mode includes it and marks the result provisional because it can change before that week finishes. Weekly means aggregated daily input, not a separately fetched weekly candle feed.
+Weekly bars group daily sessions by ISO year/week: first open, maximum high, minimum low, last close, summed volume, and last session date. The same containment comparison runs on those aggregates. The default `completed` mode includes a Friday-close week and excludes only a developing Monday–Thursday week. The explicit `current` mode includes the developing week and is labelled provisional because it can change before that week finishes. Weekly means aggregated daily input, not a separately fetched weekly candle feed.
 
 ### Signal timing, rankings, and unavailable inputs
 

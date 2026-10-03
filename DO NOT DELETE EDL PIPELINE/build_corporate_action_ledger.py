@@ -17,7 +17,7 @@ def dividend_amount(details):
     text = str(details or "")
     currency = r"(?:rs\.?|re\.?|inr|₹|rupees)"
     # A malformed double marker ("Rs Re 1") is not an unambiguous amount.
-    if re.search(rf"(?<![a-z]){currency}\s+{currency}\b", text, re.I):
+    if re.search(rf"(?<![a-z]){currency}\s+{currency}(?![a-z])", text, re.I):
         return None
     amounts = re.findall(rf"(?<![a-z]){currency}\s*-?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:/-)?\s*(?:per|each)\s*(?:equity\s+)?share", text, re.I)
     if len(amounts) != 1:

@@ -76,7 +76,6 @@ Python remains the publication and preset authority. The shared TypeScript runti
 Repository secrets:
 
 - `CLOUDFLARE_API_TOKEN` scoped to Workers deployment and the scanner bucket
-- `R2_ACCOUNT_ID`
 - `R2_ACCESS_KEY_ID`
 - `R2_SECRET_ACCESS_KEY`
 

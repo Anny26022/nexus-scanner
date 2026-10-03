@@ -49,6 +49,18 @@ class ScannerQueryTests(unittest.TestCase):
         result = evaluate_history(history(), tree)
         self.assertEqual(result["status"], "match")
 
+    def test_function_defaults_and_indicator_compare_fixed_target_are_safe(self):
+        supertrend = compile_query("Supertrend()")
+        self.assertEqual((supertrend["params"]["period"], supertrend["params"]["multiplier"]), (10, 3))
+        fixed = compile_query("Indicator Compare(RSI, 14, 0, ABOVE, 60)")
+        self.assertEqual((fixed["params"]["rightIndicator"], fixed["params"]["rightValue"]), ("", 60))
+        underscored = compile_query("MACD_SIGNAL(26) > 0")
+        self.assertEqual(underscored["params"]["leftIndicator"], "MACD_SIGNAL")
+        with self.assertRaisesRegex(ValueError, "offsets"):
+            compile_query("Indicator Compare(RSI, 14, -1, ABOVE, 60)")
+        with self.assertRaisesRegex(ValueError, "Divergence requires"):
+            compile_query("Divergence(RSI, 14)")
+
     def test_ma_convergence_preserves_operator_and_requires_quoted_periods(self):
         tree = compile_query('MA Convergence("9,20,50", EMA) > 2')
         self.assertEqual(tree["params"]["comparison"], "greater")

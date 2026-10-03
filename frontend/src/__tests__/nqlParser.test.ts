@@ -44,8 +44,10 @@ describe('Nexus Query Language (NQL) & Expression Serialization', () => {
       ],
     };
 
-    const exp = explainExpressionTree(tree, '2023-11-15');
-    expect(exp.compiledExplanations[0].isDataAvailableForSession).toBe(true);
-    expect(exp.warnings).toEqual([]);
+    for (const session of ['2023-11-15', '2026-10-02']) {
+      const exp = explainExpressionTree(tree, session);
+      expect(exp.compiledExplanations[0].isDataAvailableForSession).toBe(true);
+      expect(exp.warnings).toEqual([]);
+    }
   });
 });

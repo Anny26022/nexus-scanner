@@ -134,7 +134,7 @@ def _requires_delivery(expression):
     if not isinstance(expression, dict):
         return False
     try:
-        if normalize_condition_spec(expression).get("condition") == "delivery_percent_spike":
+        if normalize_condition_spec(expression).get("condition") in {"delivery_percent_spike", "delivery_percent"}:
             return True
     except (TypeError, ValueError):
         pass

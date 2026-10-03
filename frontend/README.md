@@ -44,9 +44,9 @@ Nexus supports research and candidate discovery. It does not execute orders, man
 | Mainboard screener | Visual filters, presets, universe selection, active chips, sorting, and paginated results. |
 | IPO catalogue | Listing windows, symbol/company search, sorting, pagination, and screening of selected listings. |
 | Boolean expressions | Match All (`AND`) and Match Any (`OR`) in the UI; the underlying contract supports nested groups. |
-| Query input | The deterministic TypeScript compiler runs at the Cloudflare boundary and mirrors the Python contract. It rejects unsupported clauses without guessed conditions or fallback filters. |
+| Query input | The deterministic compiler runs at the Cloudflare boundary and mirrors the Python contract. In mock mode, entered query text is not evaluated; the adapter uses the expression tree. Unsupported clauses are rejected without guessed conditions or fallback filters. |
 | Symbol lists | Comparison support and a symbol-list component exist; app navigation currently exposes screener and IPO tabs. |
-| Workspace persistence | Current preferences and conditions persist in browser local storage. |
+| Workspace persistence | Current preferences, conditions, sorting, universe, IPO controls, and pending text query persist in browser local storage. |
 | Named saved screens | A named-screen library is not implemented. |
 | Copy TradingView symbols | Copies the displayed equity-results page using `NSE:<symbol>` format. |
 | Watchlist | Displays a confirmation toast; no watchlist persistence or external integration exists. |
@@ -152,7 +152,7 @@ Descriptions summarize intent; the declarative expression and parameters determi
 - SMA50 needs 50 recorded closes.
 - Average turnover is mean `close × volume`, divided by 10,000,000 for ₹Cr.
 - EMA persistence defaults to the engine's extreme-based reset rule, rather than requiring every close to remain above the EMA.
-- Weekly inside bars use ISO-week aggregates of daily OHLCV. The current partial week participates and can change before week end.
+- Weekly inside bars use ISO-week aggregates of daily OHLCV. Completed-week mode excludes a developing Monday–Thursday week; current-week mode includes it and marks the result provisional.
 
 See the [calculation guide](../README.md#calculation-conventions-and-formulas) and [condition engine documentation](../DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/TREND_CONDITION_ENGINE.md) for exact definitions and missing-data rules.
 

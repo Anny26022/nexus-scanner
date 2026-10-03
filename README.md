@@ -480,7 +480,7 @@ R2_PUBLIC_BASE_URL
 R2_BUCKET=nexus-screener-chart-data
 ```
 
-When chart settings are absent, the public scanner release still publishes without chart URLs. When the private scanner R2 credentials are absent, it publishes without an `advanced` manifest entry, so arbitrary-history scans report that the advanced service is unavailable. Once either remote publisher is configured, an upload, verification, retention, or archive failure stops publication and preserves the previous active release.
+When `EDL_CHART_STORAGE=r2` and its R2 settings are incomplete, the public scanner release publishes without chart URLs. Local chart storage remains available in the default local mode. When the private scanner R2 credentials are absent, it publishes without an `advanced` manifest entry, so arbitrary-history scans report that the advanced service is unavailable. Once either remote publisher is configured, an upload, verification, retention, or archive failure stops publication and preserves the previous active release.
 
 R2 retention is:
 

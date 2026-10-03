@@ -95,7 +95,7 @@ Frontend production environment:
 
 Until a static frontend host is configured, the Worker reads the immutable release pointer from the repository's raw `main` URL. Set `SCANNER_RELEASE_URL` to the deployed frontend's same-origin `data/current.json` when that host is introduced.
 
-The local Vite server continues to use the Python bridge when `VITE_API_BASE_URL` is omitted. A public release without an `advanced` block remains usable for browser-compatible screens and explicitly reports advanced history as unavailable.
+The local Vite server continues to use the Python bridge when `VITE_API_BASE_URL` is omitted. In a deployed frontend, a public release without an `advanced` block remains usable for browser-compatible screens and explicitly reports advanced history as unavailable.
 
 ## Deployment and rollback
 

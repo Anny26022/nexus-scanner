@@ -104,6 +104,15 @@ class SnapshotPublicationTests(unittest.TestCase):
                 manifest=publish(root,output)
             self.assertNotIn('advanced',manifest)
 
+    def test_private_pack_is_advertised_only_after_successful_publish(self):
+        with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
+            with patch('publish_snapshot.publish_private_pack',return_value=True):
+                manifest=publish(root,output)
+            self.assertEqual(manifest['advanced'],{
+                'revision':manifest['revision'],'session':'2026-09-30','shards':32,'maxSessions':1500,
+            })
+
     def test_scanner_only_and_chart_release_have_distinct_revisions(self):
         import os
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):

@@ -18,11 +18,19 @@ describe('scanner worker boundary',()=>{
     const response=await worker.fetch(new Request('https://worker.example/v1/health',{headers:{origin:'https://evil.example'}}),environment(),execution);
     expect(response.headers.has('Access-Control-Allow-Origin')).toBe(false);
   });
-  it('does not report ready for a malformed commit marker',async()=>{
+  it('does not report ready when the R2 marker revision differs from the active release',async()=>{
     vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({revision:'a'.repeat(64),sessionDate:'2026-10-01',schemaVersion:7}))));
     const env=environment() as any;env.SCANNER_DATA.get=vi.fn(async()=>({json:async()=>({schemaVersion:7,revision:'b'.repeat(64),session:'2026-10-01'})}));
     const response=await worker.fetch(new Request('https://worker.example/v1/health'),env,execution);
     expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ok:false,ready:false});
+  });
+  it('does not report ready for an unreadable R2 marker',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({revision:'a'.repeat(64),sessionDate:'2026-10-01',schemaVersion:7}))));
+    const env=environment() as any;env.SCANNER_DATA.get=vi.fn(async()=>({json:async()=>{throw new Error('invalid JSON')}}));
+    const response=await worker.fetch(new Request('https://worker.example/v1/health'),env,execution);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ok:false});
   });
   it('rejects oversized requests before reading the body',async()=>{
     const request=new Request('https://worker.example/v1/screens/run',{method:'POST',headers:{'content-length':'100001'},body:'{}'});

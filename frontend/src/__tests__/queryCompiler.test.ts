@@ -25,5 +25,6 @@ describe('deterministic text compiler',()=>{
   it('rejects unsupported or partial clauses instead of reducing the query',()=>{
     expect(()=>compileTextQuery('Market Cap > 1000 AND magic stocks')).toThrow('Unsupported query clause');
     expect(()=>compileTextQuery('Unknown Metric > 2')).toThrow('Unsupported query field');
+    expect(()=>compileTextQuery('MA Stack(abc, SMA, false)')).toThrow('MA Stack periods must be positive integers');
   });
 });

@@ -165,7 +165,9 @@ function functionCondition(name: string, args: string[], operator?: string, rawV
   }
   if (key === 'ma stack') {
     if (args.length < 3) throw new Error('MA Stack requires periods, average type and price-above flag.');
-    return leaf('MA_STACK', { periods:args[0], maType:args[1], priceAbove:args[2].toLowerCase() === 'true' });
+    const periods = args[0].split(',').map(value => value.trim()).filter(Boolean);
+    if (!periods.length || periods.some(value => !/^[1-9]\d*$/.test(value))) throw new Error('MA Stack periods must be positive integers.');
+    return leaf('MA_STACK', { periods:periods.join(','), maType:args[1], priceAbove:args[2].toLowerCase() === 'true' });
   }
   if (key === 'ma slope') return leaf('MA_SLOPE', { period:number(args[0], name), maType:args[1], overDays:number(args[2], name), comparison, minChangePct:target });
   if (key === 'ma convergence') {

@@ -103,7 +103,7 @@ function validateManifest(value: unknown): Manifest {
       || !validDate(manifest.sessionDate) || !validUrl(manifest.datasetUrl) || !validUrl(manifest.iposUrl)
       || !Number.isInteger(manifest.totalStocks) || manifest.totalStocks < 0
       || (manifest.chartRevision !== undefined && !/^[a-f0-9]{64}$/.test(manifest.chartRevision))
-      || !validPacks || (manifest.advanced !== undefined && (manifest.advanced.revision !== manifest.revision
+      || !validPacks || (manifest.advanced !== undefined && (!manifest.advanced || manifest.advanced.revision !== manifest.revision
           || manifest.advanced.session !== manifest.sessionDate || manifest.advanced.shards !== 32))
       || (manifest.schemaVersion === 6 && !manifest.chartUrlTemplate)
       || (manifest.chartUrlTemplate !== undefined && (!validUrl(manifest.chartUrlTemplate)

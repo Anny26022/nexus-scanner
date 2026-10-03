@@ -491,10 +491,6 @@
         "defaultValue": "BELOW",
         "options": [
           {
-            "value": "FRONT_WEIGHTED",
-            "label": "Front weighted"
-          },
-          {
             "label": "Above",
             "value": "ABOVE"
           },

@@ -184,7 +184,7 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
   else if(id==='AVG_VOLUME_RATIO'){const recent=n(p.recentDays),base=n(p.baseDays);result=series.volume.length<recent+base?null:compare(mean(slice(series.volume,-recent))/mean(slice(series.volume,-recent-base,-recent)),p.comparison,p.ratio);}
   else if(id==='HIGHEST_VOLUME_IN_N_DAYS'){const look=n(p.lookbackDays),flags=Array.from({length:series.volume.length},(_,i)=>i+1<look?null:series.volume[i]>=max(slice(series.volume,i+1-look,i+1))&&(!p.positiveClose||series.close[i]>series.close[i-1]));result=event(flags,n(p.withinDays,1));}
   else if(id==='DELIVERY_PCT_SPIKE'){
-    const byDate=new Map((context.delivery??[]).map(row=>[String(row.date),n(row.delivery_percent,NaN)])),within=n(p.withinDays,1),values=slice(series.dates,-within).map(day=>byDate.get(new Date(day*86400000).toISOString().slice(0,10))).filter((value):value is number=>value!==undefined&&Number.isFinite(value));
+    const byDate=new Map((context.delivery??[]).map(row=>[String(row.date),n(row.delivery_percent,NaN)])),within=Math.max(1,n(p.withinDays,1)),values=slice(series.dates,-within).map(day=>byDate.get(new Date(day*86400000).toISOString().slice(0,10))).filter((value):value is number=>value!==undefined&&Number.isFinite(value));
     result=values.length?values.some(value=>value>=n(p.minDeliverablePct)):null;
   }
   else if(id==='DELIVERY_PERCENT'){const item=context.delivery?.find(row=>row.date===context.session),value=n(item?.delivery_percent,NaN);result=Number.isFinite(value)?compare(value,p.comparison,p.value):null;}

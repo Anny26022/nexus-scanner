@@ -21,6 +21,7 @@ export function validateExpression(expression:EngineExpression){
     const definition=conditionDefinitions.get(condition.conditionId);
     if(!definition)throw new Error(`Unsupported condition: ${condition.conditionId}`);
     const specifications=new Map(definition.parameters.map(parameter=>[parameter.id,parameter]));
+    if(condition.conditionId==='MARKET_BREADTH' && String(condition.parameters.universe ?? 'ALL_ACTIVE').toUpperCase()!=='ALL_ACTIVE') throw new Error('Only ALL_ACTIVE market breadth is published in this release.');
     for(const [key,value] of Object.entries(condition.parameters)){
       const specification=specifications.get(key);
       if(!specification)throw new Error(`Unsupported parameter ${key} for ${condition.conditionId}`);

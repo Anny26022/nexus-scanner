@@ -44,7 +44,7 @@ Nexus is deliberately split into a data plane and an interaction plane.
 | Browser UI | React 19, TypeScript, Vite, Tailwind, TanStack Query | Renders the screener, IPO catalogue, tables, and forms; restores workspace preferences. |
 | Browser screen engine | Module Web Worker, TypeScript | Decompresses immutable snapshots, evaluates supported rules, sorts, and paginates without blocking the UI. |
 | Condition contract | Typed TypeScript catalogue and Python registries | Keeps field names, inputs, presets, labels, and availability rules aligned across the UI and evaluator. |
-| Shared scanner engine | TypeScript in the browser and Cloudflare Worker, with Python as the publication authority | Evaluates scalar and historical rules against one versioned condition contract and verifies formula parity during CI. |
+| Shared scanner engine | TypeScript in the browser and Cloudflare Worker, with Python as the publication authority | Evaluates scalar and historical rules against one versioned condition contract. Golden parity fixtures remain the release gate to extend. |
 | Data pipeline | Python, requests, BeautifulSoup, CSV/JSON/Gzip | Fetches, standardizes, validates, and promotes market artifacts. |
 | Release store | Git-hosted immutable JSON and gzip files | Publishes compact scanner releases and a small active-release pointer. |
 | Chart store | Cloudflare R2 | Supplies per-symbol compressed payloads through the chart client; an integrated chart viewer is not yet wired into the UI. |
@@ -413,7 +413,7 @@ The full refresh runs in an isolated temporary stage. It validates schema, requi
 
 It writes immutable revision files first, verifies the release, and writes `current.json` last. A same-session correction therefore gets a new immutable revision rather than overwriting an earlier result.
 
-Each schema 7 browser revision contains three checksum-addressed public packs, `stocks.json(.gz)` compatibility files, `ipos.json`, and `release.json`. Publication also creates 32 stable private history shards capped at 1,500 sessions per stock and 32 matching delivery/earnings shards. All private objects are uploaded and verified before their manifest commit marker and before `current.json` advances. Condition and preset catalogues live in `frontend/src/data/` and ship with the application build.
+Each schema 7 browser revision contains three checksum-addressed public packs, `stocks.json(.gz)` compatibility files, `ipos.json`, and `release.json`. Publication also creates 32 stable private history shards capped at 1,500 sessions per stock and 32 matching delivery/earnings shards. With `EDL_SCANNER_STORAGE=r2`, private objects are uploaded and verified before their manifest commit marker and before `current.json` advances. Local mode retains the same packs in `scanner_artifacts/` and does not advertise an advanced release. Condition and preset catalogues live in `frontend/src/data/` and ship with the application build.
 
 ### 6. Chart generation and R2 upload
 
@@ -546,7 +546,7 @@ For local custom history conditions, Vite uses the Python bridge. Production bui
 
 ```env
 VITE_USE_MOCK=false
-VITE_API_BASE_URL=/api
+VITE_API_BASE_URL=/api # local Vite bridge only
 ```
 
 `VITE_USE_MOCK=true` is only for UI development. It is not live market data.

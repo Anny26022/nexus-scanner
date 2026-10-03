@@ -10,9 +10,13 @@ describe('condition capabilities',()=>{
     for(const definition of NEXUS_CONDITION_CATALOG){
       const parameters=Object.fromEntries(definition.parameters.map(parameter=>[parameter.id,parameter.defaultValue]));
       const capability=conditionCapability({conditionId:definition.id,instanceId:definition.id,parameters});
-      expect(capability.dependencies[0]).toBe('core');
-      expect(capability.dependencies.length).toBeGreaterThan(1);
+      expect(capability.dependencies).toContain('core');
+      expect(typeof capability.browser({conditionId:definition.id,instanceId:definition.id,parameters})).toBe('boolean');
     }
+  });
+  it('assigns scalar price and valuation conditions to their exact packs',()=>{
+    expect(conditionCapability({conditionId:'PRICE_CHANGE_PCT',instanceId:'price',parameters:{overDays:21}}).dependencies).toEqual(['core','technical']);
+    expect(conditionCapability({conditionId:'MARKETCAP',instanceId:'cap',parameters:{}}).dependencies).toEqual(['core','fundamentals']);
   });
   it('keeps complete nested expressions on the advanced path',()=>{
     const expression:ExpressionNode={type:'group',operator:'any',children:[condition('MARKETCAP',{comparison:'ABOVE',valueCr:1000}),{type:'group',operator:'all',children:[condition('VCP_LEGS'),condition('PE_RATIO',{comparison:'LESS',value:20,reportType:'PREFER_CONSOLIDATED'})]}]};

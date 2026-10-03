@@ -24,9 +24,9 @@ Every immutable frontend revision contains:
 | `stocks.json` / `stocks.json.gz` | One-cycle compatibility snapshot for clients older than schema 7. |
 | `ipos.json` | IPO catalogue. |
 
-`current.json` includes the URL, compressed byte count, SHA-256, encoding, and schema version of each pack. The publisher stops if the core pack exceeds 1.25 MB or all public packs exceed 4 MB compressed. The client validates the byte count, digest, revision, session, and row count before using a pack.
+`current.json` includes the URL, compressed byte count, SHA-256, encoding, and schema version of each pack. The publisher stops if the core pack exceeds 1.25 MB or the three public packs together exceed 4 MB compressed. The client validates the byte count, digest, revision, session, and row count before using a pack.
 
-The newest two validated revisions are retained in IndexedDB. The Web Worker also keeps its existing small in-memory cache. Both caches use the immutable revision and content digest in their key.
+The newest two validated revisions are retained in IndexedDB. The Web Worker in-memory cache keys releases by immutable revision, asserted session, requested packs, and their digest; IndexedDB keys each pack by revision and digest.
 
 ## Private R2 scan packs
 

@@ -73,7 +73,7 @@ it('loads only the public packs required by the expression',async()=>{
  const localRequest={...request,datasetRevision:revision,expressionTree:{type:'condition' as const,condition:{instanceId:'cap',conditionId:'MARKETCAP',parameters:{comparison:'ABOVE',valueCr:1000,reportType:'PREFER_CONSOLIDATED'}}}};
  const result=await createSnapshotEngine()({type:'screen',source:{revision,sessionDate:snapshot.asOfDate,packs:descriptors},request:localRequest});
  expect(result.type==='screen'&&result.result?.matchCount).toBe(1);
- expect(fetcher.mock.calls.map(call=>call[0])).toEqual(['/core.json.gz','/fundamentals.json.gz']);
+ expect(fetcher.mock.calls.map(call=>call[0]).sort()).toEqual(['/core.json.gz','/fundamentals.json.gz']);
 });
 it('rejects snapshot session mismatches',async()=>{
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot))));

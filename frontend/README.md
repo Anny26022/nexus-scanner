@@ -242,7 +242,7 @@ Responses can carry session metadata, match/universe counts, warnings, and unava
 | `getIpos()` | Fetches and maps the active immutable IPO URL. |
 | `compareSymbols(request)` | Runs a symbol comparison task against the browser snapshot. |
 | `getChart(symbol, revision?)` | Loads a chart using the release URL template. |
-| `explainScreen(request)` | Builder labels are local; advanced responses may include runtime availability diagnostics. |
+| `explainScreen(request)` | Placeholder-only local response; runtime availability diagnostics come from `runScreen`. |
 
 Do not assume `/v1/catalog`, `/v1/ipos`, or `/v1/screens/explain` exist because related facade methods exist. UI explanation utilities are separate from the placeholder explain method.
 
@@ -250,7 +250,7 @@ Do not assume `/v1/catalog`, `/v1/ipos`, or `/v1/screens/explain` exist because 
 
 Vite handles `POST /api/screens/run`, starts a persistent `python3` worker, and exchanges request/response messages through standard streams. Python retains numeric history caches for reuse. The development server restarts the worker when watched Python sources change; preview does not watch those sources. Local server requests have a 120-second timeout.
 
-This development/preview middleware is not a separately packaged production backend. External deployment must supply a service process and the matching evaluation inputs.
+This development middleware is not a separately packaged production backend. Production builds set `VITE_API_BASE_URL=https://<worker-host>/v1`; the Cloudflare Worker then evaluates advanced expressions against private R2 packs.
 
 ## Charts and event data
 
@@ -406,7 +406,8 @@ Tests verify contracts against fixtures. They do not establish complete live ups
 | --- | --- |
 | Port 8080 unavailable | Another process owning the port. |
 | Real-data app fails to load | Pointer, immutable files, schema/revision metadata, deployment completeness. |
-| Presets work but custom history rules fail | Worker health, API base, private R2 binding, active revision, history coverage, and allowed origin. |
+| Local custom history rules fail | Python 3, pipeline dependencies, the Vite bridge, and local history files. |
+| Production custom history rules fail | Worker health, API base, private R2 binding, active revision, history coverage, and allowed origin. |
 | Insufficient history | Recorded sessions and warmup, especially for recent IPOs. |
 | History not aligned | Last cached date versus published screen session. |
 | Missing delivery spike results | Historical delivery observations, not just current percentage. |

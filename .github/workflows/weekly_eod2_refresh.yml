@@ -89,6 +89,8 @@ jobs:
         env:
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
           EDL_CHART_STORAGE: r2
+          EDL_SCANNER_STORAGE: r2
+          SCANNER_R2_BUCKET: nexus-screener-private-data
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

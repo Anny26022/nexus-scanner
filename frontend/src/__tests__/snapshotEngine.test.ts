@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { gzipSync } from 'node:zlib';
+import { createHash } from 'node:crypto';
 import { createSnapshotEngine } from '../api/snapshotEngine';
 import type { Snapshot } from '../api/snapshotScreen';
 import type { ScreenerRunRequest } from '../types/screener';
@@ -62,6 +63,17 @@ it('fetches and decodes advertised gzip snapshots',async()=>{
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(compressed)));
  const result=await createSnapshotEngine()({type:'screen',source:{...source,url:'/stocks.json.gz'},request});
  expect(result.type==='screen'&&result.result?.matchCount).toBe(snapshot.totalStocks);
+});
+it('loads only the public packs required by the expression',async()=>{
+ const revision='d'.repeat(64),row=snapshot.stocks[0],pack=(stocks:Record<string,unknown>[])=>gzipSync(JSON.stringify({schemaVersion:7,revision,asOfDate:snapshot.asOfDate,totalStocks:1,stocks}));
+ const bytes={core:pack([{...row,marketCapCrore:undefined}]),technical:pack([{symbol:row.symbol,rvol:2}]),fundamentals:pack([{symbol:row.symbol,marketCapCrore:5000}])};
+ const descriptors=Object.fromEntries(Object.entries(bytes).map(([name,data])=>[name,{url:`/${name}.json.gz`,bytes:data.byteLength,sha256:createHash('sha256').update(data).digest('hex'),encoding:'gzip',schemaVersion:7}])) as any;
+ vi.stubGlobal('DecompressionStream',(await import('node:stream/web')).DecompressionStream);
+ const fetcher=vi.fn(async(url:string)=>new Response(bytes[url.slice(1,-8) as keyof typeof bytes]));vi.stubGlobal('fetch',fetcher);
+ const localRequest={...request,datasetRevision:revision,expressionTree:{type:'condition' as const,condition:{instanceId:'cap',conditionId:'MARKETCAP',parameters:{comparison:'ABOVE',valueCr:1000,reportType:'PREFER_CONSOLIDATED'}}}};
+ const result=await createSnapshotEngine()({type:'screen',source:{revision,sessionDate:snapshot.asOfDate,packs:descriptors},request:localRequest});
+ expect(result.type==='screen'&&result.result?.matchCount).toBe(1);
+ expect(fetcher.mock.calls.map(call=>call[0])).toEqual(['/core.json.gz','/fundamentals.json.gz']);
 });
 it('rejects snapshot session mismatches',async()=>{
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot))));

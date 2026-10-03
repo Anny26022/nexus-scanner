@@ -6,7 +6,7 @@ export interface SnapshotStock extends StockRow {
   metadataAsOfDate: string | null;
   historyAligned: boolean;
   indexMemberships: string[];
-  metrics: Record<string, number | null>;
+  metrics: Record<string, number | boolean | null>;
   presetMatches: Record<string, Truth>;
   roePct: number | null;
   freeFloatPct: number | null;
@@ -61,6 +61,36 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
         const ma = number(s.metrics[`sma${p.period}`]);
         return ma == null || number(s.close) == null ? null : p.comparison === 'ABOVE' ? s.close > ma : s.close < ma;
       }; break;
+    case 'PRICE_VS_EMA':
+      if (p.persistDays !== 1 || ![20,50,200].includes(Number(p.period))) return null;
+      fn = s => {
+        const ma = number(s[`ema${p.period}` as keyof SnapshotStock]);
+        return ma == null || number(s.close) == null ? null : p.comparison === 'ABOVE' ? s.close > ma : s.close < ma;
+      }; break;
+    case 'PRICE_CHANGE_PCT': {
+      const period = Number(p.overDays);
+      if (![1,5,21,63,126,252].includes(period)) return null;
+      fn = s => compare(period === 1 ? s.changePct : s.metrics[`return${period}`],p.comparison,p.comparison === 'BELOW' ? -Math.abs(p.pct) : p.pct); break;
+    }
+    case 'GAP_UP': case 'GAP_DOWN':
+      if (Number(p.withinDays) !== 1) return null;
+      fn = s => compare(s.metrics.gapPct,c.conditionId === 'GAP_UP' ? 'ABOVE' : 'BELOW',c.conditionId === 'GAP_UP' ? p.minGapPct : -p.minGapPct); break;
+    case 'NEW_HIGH': case 'NEW_LOW':
+      if (Number(p.withinDays) !== 1 || ![20,50,252].includes(Number(p.lookbackDays))) return null;
+      fn = s => typeof s.metrics[`${c.conditionId === 'NEW_HIGH' ? 'newHigh' : 'newLow'}${p.lookbackDays}`] === 'boolean'
+        ? Boolean(s.metrics[`${c.conditionId === 'NEW_HIGH' ? 'newHigh' : 'newLow'}${p.lookbackDays}`]) : null; break;
+    case 'PCT_FROM_52W_HIGH': fn = s => compare(Math.abs(s.dist52wHighPct ?? NaN),p.comparison,p.pct); break;
+    case 'PCT_FROM_52W_LOW': fn = s => compare(Math.abs(s.dist52wLowPct ?? NaN),p.comparison,p.pct); break;
+    case 'ATR_PCT':
+      if (Number(p.period) !== 14) return null;
+      fn = s => compare(s.metrics.atrPct14,p.comparison,p.pct); break;
+    case 'ADR_PCT':
+      if (![14,20].includes(Number(p.lookbackDays))) return null;
+      fn = s => compare(s.metrics[`adr${p.lookbackDays}`],p.comparison,p.pct); break;
+    case 'RS_RATING': fn = s => {
+      const ratings:Record<string,number|null|undefined>={FRONT_WEIGHTED:s.rsRating,ONE_MONTH:s.rsRating1m,THREE_MONTH:s.rsRating3m,TWELVE_MONTH:s.rsRating12m};
+      return compare(ratings[String(p.window||'FRONT_WEIGHTED').toUpperCase()],p.comparison,p.value);
+    }; break;
     case 'mom_return': {
       const period = Number(String(p.period).replace('D',''));
       if (![1,5,21,63,126,252].includes(period)) return null;
@@ -77,6 +107,10 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'PE_RATIO':
       if (p.reportType !== 'PREFER_CONSOLIDATED') return null;
       metadata = true; fn = s => compare(s.peRatio,p.comparison,p.value); break;
+    case 'FF_MARKETCAP': metadata = true; fn = s => {
+      const cap=number(s.marketCapCrore), float=number(s.freeFloatPct);
+      return cap == null || float == null ? null : compare(cap*float/100,p.comparison,p.valueCr);
+    }; break;
     case 'ABSOLUTE_VOLUME': fn = s => compare(s.volume,p.comparison,p.value); break;
     case 'ABSOLUTE_EPS': metadata = true; fn = s => compare(s.epsTtm,p.comparison,p.value); break;
     case 'DIVIDEND_YIELD': metadata = true; fn = s => compare(s.dividendYieldPct,p.comparison,p.value); break;
@@ -101,6 +135,26 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
         const latest = number(s.epsLastYear), prior = number(s.epsTwoYearsBack);
         return latest == null || prior == null ? null : latest > prior;
       }; break;
+    case 'SECTOR': case 'INDUSTRY': {
+      metadata = true;
+      const values = String(p.values ?? '').split(',').map((value:string)=>value.trim().toLowerCase()).filter(Boolean);
+      const key = c.conditionId === 'SECTOR' ? 'sector' : 'industry';
+      fn = s => values.length ? values.includes(String(key === 'sector' ? s.sector : s.industry).toLowerCase()) : true; break;
+    }
+    case 'PRICE_BAND': {
+      metadata = true; const values=String(p.values ?? '').split(',').map((value:string)=>value.trim().replace('%','')).filter(Boolean);
+      fn=s=>s.circuitLimit ? values.includes(String(s.circuitLimit).replace('%','')) : null; break;
+    }
+    case 'CIRCUIT_BAND_MIN': metadata=true; fn=s=>{
+      if (!s.circuitLimit) return null; if (/no band/i.test(s.circuitLimit)) return true;
+      const value=Number(String(s.circuitLimit).replace('%','')); return Number.isFinite(value) ? value>=Number(p.minBandPct) : null;
+    }; break;
+    case 'SERIES': {
+      metadata=true; const values=String(p.values ?? '').split(',').map((value:string)=>value.trim().toUpperCase()).filter(Boolean);
+      fn=s=>values.length ? values.includes(String(s.series).toUpperCase()) : true; break;
+    }
+    case 'INDEX_MEMBERSHIP': metadata=true; fn=s=>s.indexMemberships.map(value=>value.toUpperCase()).includes(String(p.indexName).toUpperCase()); break;
+    case 'FNO_BAN': metadata=true; fn=s=>s.fnoBan == null ? null : String(p.mode).toUpperCase()==='ONLY' ? s.fnoBan : !s.fnoBan; break;
     case 'EXCLUDE_SURVEILLANCE':
       metadata = true;
       fn = s => s.surveillanceAvailable !== true || s.surveillanceAsOfDate !== session
@@ -118,6 +172,13 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     ? s.metadataAsOfDate === session ? fn(s) : null
     : s.historyAligned && s.asOfDate === session ? fn(s) : null;
   return c.isNegated ? s => { const v = checked(s); return v == null ? null : !v; } : checked;
+}
+
+export function evaluateSnapshotCondition(stock: SnapshotStock, condition: ActiveCondition, session: string): Truth {
+  const plain = {...condition,isNegated:false};
+  const predicate = leaf(plain,session);
+  const value = predicate ? predicate(stock) : null;
+  return condition.isNegated && value != null ? !value : value;
 }
 
 function compile(node: ExpressionNode, session: string): Predicate | null {

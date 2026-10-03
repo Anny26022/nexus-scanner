@@ -1,5 +1,7 @@
 # Nexus Scanner
 
+> **Schema 7 architecture:** common latest-session scans run in the browser Web Worker from checksum-validated lazy packs; arbitrary history expressions run in a Cloudflare Worker over private R2 shards. See [Browser-first scanner and Cloudflare advanced engine](docs/browser-cloudflare-scanner.md).
+
 Nexus Scanner is an NSE equity research and screening system. It contains a React browser application, a Python market-data pipeline, immutable scanner releases, and optional Cloudflare R2 chart delivery.
 
 Every result is tied to one published trading session and one immutable revision. The system does not silently combine a new stock snapshot with an old IPO catalogue, chart file, or filter result.
@@ -42,7 +44,7 @@ Nexus is deliberately split into a data plane and an interaction plane.
 | Browser UI | React 19, TypeScript, Vite, Tailwind, TanStack Query | Renders the screener, IPO catalogue, tables, and forms; restores workspace preferences. |
 | Browser screen engine | Module Web Worker, TypeScript | Decompresses immutable snapshots, evaluates supported rules, sorts, and paginates without blocking the UI. |
 | Condition contract | Typed TypeScript catalogue and Python registries | Keeps field names, inputs, presets, labels, and availability rules aligned across the UI and evaluator. |
-| Python evaluator | Python, pandas, NumPy | Evaluates historical OHLCV, multi-session, delivery, pattern, earnings, and cross-series rules. |
+| Shared scanner engine | TypeScript in the browser and Cloudflare Worker, with Python as the publication authority | Evaluates scalar and historical rules against one versioned condition contract and verifies formula parity during CI. |
 | Data pipeline | Python, requests, BeautifulSoup, CSV/JSON/Gzip | Fetches, standardizes, validates, and promotes market artifacts. |
 | Release store | Git-hosted immutable JSON and gzip files | Publishes compact scanner releases and a small active-release pointer. |
 | Chart store | Cloudflare R2 | Supplies per-symbol compressed payloads through the chart client; an integrated chart viewer is not yet wired into the UI. |
@@ -129,7 +131,7 @@ After the run, inspect `data_quality.json`, `pipeline_report.json`, and the gene
 3. Define missing-data and session-alignment behavior explicitly.
 4. Add unit tests for match, no-match, and unavailable outcomes.
 5. If the rule belongs in a built-in scan, add or update its declarative preset definition.
-6. Regenerate a snapshot and verify browser-worker support. Keep a Python fallback for rules that require unbundled historical data.
+6. Regenerate schema 7 packs and verify both browser and Cloudflare execution. Keep the Python bridge for local development and cross-language parity testing.
 
 ### 6. Data platform operator: run charts at scale
 
@@ -174,7 +176,7 @@ The active tab, screener universe, conditions, match mode, and sort order are st
 
 ## Every scanner form and filter family
 
-The filter catalog is a typed contract. A condition has a name, documented inputs, evaluation rules, and availability requirement. The client renders its form from this contract, and the Python evaluator uses the same condition identifiers.
+The filter catalog is a typed contract. A condition has a name, documented inputs, evaluation rules, and availability requirement. The client renders its form from this contract; the shared TypeScript engine and Python publication authority use the same identifiers.
 
 ### Trend and moving-average filters
 
@@ -306,8 +308,8 @@ sequenceDiagram
   participant UI as Nexus UI
   participant M as current.json
   participant W as Snapshot Worker
-  participant API as Python Screen API
-  participant R2 as Chart Storage
+  participant API as Cloudflare Scanner Worker
+  participant R2 as Private Scanner and Chart Storage
 
   U->>UI: Open or run a screen
   UI->>M: Check active release
@@ -315,19 +317,21 @@ sequenceDiagram
   UI->>W: Run supported expression
   W->>W: Fetch, decompress, parse, filter, sort, paginate
   W-->>UI: Result page and diagnostics
-  UI->>API: Use only if history-dependent expression is unsupported in worker
-  API-->>UI: Authoritative evaluated result
+  UI->>API: Send complete expression when any leaf needs advanced history
+  API->>R2: Read immutable manifest and required shards
+  R2-->>API: OHLCV and matching auxiliary shards
+  API-->>UI: Authoritative evaluated result and diagnostics
   Note over UI,R2: Chart client exists, viewer integration is pending
 ```
 
 ### Browser release loading
 
 1. The app loads `frontend/public/data/current.json` and validates its revision and session metadata.
-2. It resolves the immutable `stocks.json.gz` URL when browser decompression is available, otherwise the JSON URL.
-3. A persistent module worker fetches the snapshot with cache reuse, decompresses it, validates its revision/session/row count, and retains at most a small number of revisions.
-4. The worker evaluates supported conditions against precomputed values, then returns only the requested result page rather than all matching rows.
+2. Schema 7 clients load `core.json.gz`, then fetch `technical.json.gz` or `fundamentals.json.gz` only when the expression needs them. `stocks.json(.gz)` remains for one compatibility cycle.
+3. A persistent module worker validates compressed byte counts, SHA-256 digests, revision, session, and row count. Validated packs from the latest two revisions are retained in IndexedDB.
+4. The worker evaluates scalar and common-window conditions, then returns only the requested result page rather than all matching rows.
 5. Changing pagination reuses the matching and sorted set. Changing filters, universe, symbols, or sort recalculates the set.
-6. An unsupported custom expression falls back to the Python `/screens/run` service, pinned to the same revision and session.
+6. If any leaf needs arbitrary history, the complete expression is sent to the Cloudflare advanced engine. It reads private R2 shards for the same revision and session. Local Vite development retains the Python bridge for parity work.
 
 The main UI never claims a browser-only approximation is a result for a rule that needs the Python history engine.
 
@@ -345,21 +349,25 @@ The chart client requests one immutable compressed payload using the chart URL t
 | Chart candles and volume/event groups | Chart generation before cleanup. |
 | Snapshot decompression, parsing, and validation | First use of a revision in the worker. |
 | Supported custom comparisons, Boolean groups, universe selection | Browser screen execution against published metrics. |
-| Historical/pattern expressions absent from the browser contract | Python fallback at request time. |
+| Arbitrary history, pivots, divergence, VCP, and uncommon parameter combinations | Cloudflare Worker over private R2 shards. |
 | Sorting and pagination | Worker; later pages reuse the cached matching set. |
 
-Not every possible custom calculation is precomputed. Preset membership and selected metrics are; arbitrary historical conditions can still require the Python engine. The worker retains at most two loaded revisions and up to four compiled result sets per snapshot. The app checks the current release every 60 seconds and when focus returns. No WebAssembly runtime is required. If workers are unavailable, the same snapshot engine runs on the main thread.
+Not every possible custom calculation is precomputed. Preset membership and common metrics are; arbitrary historical conditions run from immutable history at the edge. The browser worker retains at most two loaded revisions and up to four compiled result sets per snapshot. The app checks the current release every 60 seconds and when focus returns. No WebAssembly runtime is required. If browser workers are unavailable, the scalar snapshot engine can run on the main thread.
 
 ### Runtime files
 
 | File or path | Runtime use |
 | --- | --- |
 | `frontend/public/data/current.json` | Small active-release pointer. Revalidate frequently. |
+| `frontend/public/data/revisions/<revision>/core.json.gz` | Identity, table, search, current price, and universe fields. |
+| `frontend/public/data/revisions/<revision>/technical.json.gz` | Common technical metrics and precomputed preset matches. |
+| `frontend/public/data/revisions/<revision>/fundamentals.json.gz` | Fundamental, delivery, surveillance, membership, and regulatory fields. |
 | `frontend/public/data/revisions/<revision>/stocks.json.gz` | Compressed stock snapshot used by the worker. |
 | `frontend/public/data/revisions/<revision>/stocks.json` | Compatibility snapshot for clients without compressed loading. |
 | `frontend/public/data/revisions/<revision>/ipos.json` | Immutable IPO catalogue for that release. |
 | `frontend/public/data/revisions/<revision>/release.json` | Revision metadata retained for an open historical release. |
 | `daily/<session>/<chart-revision>/charts/<symbol>.json.gz` in R2 | One on-demand chart payload per symbol. |
+| `scanner/v1/revisions/<revision>/` in private R2 | 32 OHLCV shards, 32 matching auxiliary shards, benchmark arrays, metadata, and commit manifest. |
 
 ## How every published file is generated
 
@@ -405,7 +413,7 @@ The full refresh runs in an isolated temporary stage. It validates schema, requi
 
 It writes immutable revision files first, verifies the release, and writes `current.json` last. A same-session correction therefore gets a new immutable revision rather than overwriting an earlier result.
 
-Each browser revision contains `stocks.json`, `stocks.json.gz`, `ipos.json`, and `release.json`. Condition and preset catalogues live in `frontend/src/data/` and ship with the application build. Frozen Python evaluation inputs live under `DO NOT DELETE EDL PIPELINE/.scanner_cache/revisions/<revision>/`; serving a frontend revision does not automatically make those private backend files available on another server.
+Each schema 7 browser revision contains three checksum-addressed public packs, `stocks.json(.gz)` compatibility files, `ipos.json`, and `release.json`. Publication also creates 32 stable private history shards capped at 1,500 sessions per stock and 32 matching delivery/earnings shards. All private objects are uploaded and verified before their manifest commit marker and before `current.json` advances. Condition and preset catalogues live in `frontend/src/data/` and ship with the application build.
 
 ### 6. Chart generation and R2 upload
 
@@ -452,6 +460,7 @@ The builder does not truncate candles to four years. A four-year chart means its
 | Current browser pointer | Git/static host | Small release authority for the frontend. |
 | Per-symbol chart payloads | Cloudflare R2 | On-demand delivery without growing Git history by every chart revision. |
 | Raw OHLCV, delivery, and filing caches | Local workspace and GitHub Actions cache | Fast incremental pipeline runs. |
+| Advanced scanner history packs | Private Cloudflare R2 | Bounded edge evaluation without exposing history objects or credentials. |
 | Long-term raw-history backup | Private R2 backup, planned | Recovery when an Actions cache is evicted. |
 | Current workspace preferences | Browser local storage | User-local state without a server account or named-screen library. |
 
@@ -463,11 +472,13 @@ R2 configuration is controlled by:
 
 ```text
 EDL_CHART_STORAGE=r2
+EDL_SCANNER_STORAGE=r2
 R2_ACCOUNT_ID
 R2_ACCESS_KEY_ID
 R2_SECRET_ACCESS_KEY
 R2_PUBLIC_BASE_URL
 R2_BUCKET=nexus-screener-chart-data
+SCANNER_R2_BUCKET=nexus-screener-private-data
 ```
 
 When one of the required R2 settings is absent, the scanner release still publishes without chart URLs and logs the missing settings. When all settings are present, an upload, verification, retention, or archive failure stops publication and preserves the previous active release.
@@ -532,7 +543,7 @@ npm run dev -- --host localhost --port 8080 --strictPort
 
 Open [http://localhost:8080](http://localhost:8080).
 
-For local custom history conditions, Vite uses the Python bridge. A static production deployment must supply a backend for `POST /screens/run` or proxy `/api/screens/run` to that backend.
+For local custom history conditions, Vite uses the Python bridge. Production builds set `VITE_API_BASE_URL` to the Cloudflare Worker `/v1` base; the adapter appends `/screens/run`.
 
 ```env
 VITE_USE_MOCK=false
@@ -553,10 +564,12 @@ VITE_API_BASE_URL=/api
 | `EDL_CLEANUP_INTERMEDIATE` | True; temporary fetch directories are removed after their consumers run. |
 | `EDL_EOD2_DATA_DIR` | Existing EOD2 history checkout used for the adjusted-history overlay. |
 | `EDL_CHART_STORAGE` | `local` by default; `r2` selects remote chart publication. Other values are rejected. |
+| `EDL_SCANNER_STORAGE` | `local` by default; `r2` requires and verifies private advanced scan packs before release promotion. |
 | `R2_ACCOUNT_ID` | Required for configured R2 publication; account containing the bucket. |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Required server-side S3-compatible credentials. Never place them in frontend variables or public artifacts. |
 | `R2_PUBLIC_BASE_URL` | Required public chart origin; browser access and CORS must work from the frontend origin. |
 | `R2_BUCKET` | `nexus-screener-chart-data` unless overridden. |
+| `SCANNER_R2_BUCKET` | `nexus-screener-private-data` unless overridden. |
 | `VITE_USE_MOCK` | False unless exactly `true`; selects fabricated UI-development data when enabled. |
 | `VITE_API_BASE_URL` | `/api` when absent; adapter appends `/screens/run`. Build-time frontend setting. |
 
@@ -566,11 +579,11 @@ Pipeline Boolean settings accept familiar true/false forms (`1/0`, `yes/no`, `on
 
 1. **Static application:** serve `frontend/dist` from a host supporting the app's assets and public data files. Deploy the application/catalogue version compatible with the published snapshot.
 2. **Release authority:** deploy immutable revision directories before updating `data/current.json`. Revalidate the pointer; cache immutable revision URLs for reuse. Keep the JSON fallback available alongside gzip.
-3. **Historical screen service:** provide `POST <VITE_API_BASE_URL>/screens/run` for unsupported worker expressions. The response must use the requested immutable revision. Preserve the corresponding frozen evaluation inputs and history on the server.
+3. **Advanced screen service:** deploy `cloudflare/scanner-worker` on Workers Paid, bind the private scanner bucket, and provide `POST <VITE_API_BASE_URL>/screens/run`. Only the latest complete immutable revision is accepted.
 4. **Chart origin:** when charts are enabled, expose the R2 URL template with suitable browser CORS and gzip delivery. A scanner-only release legitimately has no chart URLs.
 5. **Operator monitoring:** watch failed workflows, stale session pointers, missing history, archive failures, and object expiry. Scheduled time is not a completion guarantee.
 
-Vite's local middleware handles `POST /api/screens/run` by managing a persistent Python worker. `npm run build` produces static files and does **not** package that middleware as a production Python service. A production process manager, reverse proxy, request limits, and server deployment must be supplied separately. Static hosting alone supports worker-evaluable scans, not every historical custom condition.
+Vite's local middleware handles `POST /api/screens/run` by managing a persistent Python worker. `npm run build` produces static files and does **not** package that middleware. The production advanced path is the Cloudflare Worker, with 100 KB requests, 32 leaves, expression depth 8, page size 100, four-shard batches, and revision-scoped edge caching.
 
 The adapter's catalogue comes from compiled frontend data; IPO rows come from the immutable static release. The explain method is currently a placeholder. Do not create an assumed server route for every method in `screenerApi`.
 
@@ -617,7 +630,7 @@ The complete pipeline normally handles this ordering. Do not regenerate a newer 
 | Symptom | Check |
 | --- | --- |
 | Snapshot cannot load | Pointer and immutable URLs exist; JSON/gzip content, revision, session, and row count agree. |
-| Presets work but custom history rules fail | Python fallback is running and has the requested frozen revision/history. |
+| Presets work but custom history rules fail | Cloudflare Worker health, paid CPU configuration, private R2 binding, active revision, and allowed origin. |
 | Insufficient history | Required full lookback and warmup exist for that symbol. Newly listed securities may legitimately lack them. |
 | History not aligned | Latest cached trading session agrees with the released screen date. |
 | Chart unavailable | Release includes chart URLs; object exists; browser CORS/decompression works; symbol/session validation passes. |

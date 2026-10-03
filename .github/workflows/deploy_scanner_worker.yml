@@ -1,0 +1,37 @@
+name: Deploy Scanner Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/scanner-worker/**'
+      - 'frontend/src/engine/**'
+      - 'frontend/src/api/snapshotScreen.ts'
+      - '.github/workflows/deploy_scanner_worker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: cloudflare/scanner-worker/package-lock.json
+      - name: Install and verify
+        working-directory: cloudflare/scanner-worker
+        run: npm ci && npm test && npm run typecheck && npm run build
+      - name: Deploy
+        working-directory: cloudflare/scanner-worker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npx wrangler deploy
+          --var ALLOWED_ORIGINS:${{ vars.ALLOWED_FRONTEND_ORIGINS }}
+          --var SCANNER_RELEASE_URL:${{ vars.SCANNER_RELEASE_URL }}

@@ -3,6 +3,8 @@ import type { ScreenerRunRequest, ScreenerRunResponse, IPORow, ExplainRequest, E
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { runSnapshotTask } from './snapshotClient';
 import type { SnapshotSource } from './snapshotEngine';
+import { expressionPlan } from './capabilityRegistry';
+import type { PublicPacks } from './packStore';
 
 interface Manifest {
   revision: string;
@@ -14,6 +16,10 @@ interface Manifest {
   schemaVersion: number;
   chartUrlTemplate?: string;
   chartRevision?: string;
+  earningsCalendarUrl?: string;
+  engineVersion?: string;
+  packs?: PublicPacks;
+  advanced?: { revision:string; session:string; shards:number; maxSessions:number };
 }
 let current: Manifest | undefined;
 const ipoSnapshots = new Map<string, Promise<IPORow[]>>();
@@ -83,11 +89,20 @@ function validateManifest(value: unknown): Manifest {
     && (/^\/(?!\/).+/.test(url) || /^https:\/\/[^/]+\/.+/.test(url));
   const validDate = (date: unknown) => typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
     && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
-  if (!manifest || !/^[a-f0-9]{64}$/.test(manifest.revision) || ![4, 5, 6].includes(manifest.schemaVersion)
+  const packNames = ['core','technical','fundamentals'] as const;
+  const validPacks = manifest?.schemaVersion !== 7 || (manifest.packs && packNames.every(name => {
+    const pack = manifest.packs![name];
+    return pack?.schemaVersion === 7 && pack.encoding === 'gzip' && validUrl(pack.url)
+      && Number.isInteger(pack.bytes) && pack.bytes > 0 && /^[a-f0-9]{64}$/.test(pack.sha256);
+  }));
+  if (!manifest || !/^[a-f0-9]{64}$/.test(manifest.revision) || ![4, 5, 6, 7].includes(manifest.schemaVersion)
       || (manifest.datasetGzipUrl !== undefined && (!validUrl(manifest.datasetGzipUrl) || !manifest.datasetGzipUrl.endsWith('.json.gz')))
+      || (manifest.earningsCalendarUrl !== undefined && (!validUrl(manifest.earningsCalendarUrl) || !manifest.earningsCalendarUrl.endsWith('.json.gz')))
       || !validDate(manifest.sessionDate) || !validUrl(manifest.datasetUrl) || !validUrl(manifest.iposUrl)
       || !Number.isInteger(manifest.totalStocks) || manifest.totalStocks < 0
       || (manifest.chartRevision !== undefined && !/^[a-f0-9]{64}$/.test(manifest.chartRevision))
+      || !validPacks || (manifest.schemaVersion === 7 && (!manifest.advanced || manifest.advanced.revision !== manifest.revision
+          || manifest.advanced.session !== manifest.sessionDate || manifest.advanced.shards !== 32))
       || (manifest.schemaVersion === 6 && !manifest.chartUrlTemplate)
       || (manifest.chartUrlTemplate !== undefined && (!validUrl(manifest.chartUrlTemplate)
           || manifest.chartUrlTemplate.split('{symbol}').length !== 2))) {
@@ -110,7 +125,8 @@ async function snapshotSource(revision?: string): Promise<SnapshotSource> {
   return { revision:selected,
     url:selected === manifest.revision ? (typeof DecompressionStream !== 'undefined' ? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
       : `/data/revisions/${selected}/stocks.json`,
-    sessionDate:selected === manifest.revision ? manifest.sessionDate : undefined };
+    sessionDate:selected === manifest.revision ? manifest.sessionDate : undefined,
+    packs:selected === manifest.revision && manifest.schemaVersion === 7 ? manifest.packs : undefined };
 }
 
 class RealDataAdapter {
@@ -122,17 +138,19 @@ class RealDataAdapter {
 
   async runScreen(req: ScreenerRunRequest): Promise<ScreenerRunResponse> {
     const source = await snapshotSource(req.datasetRevision);
-    const snapshot = req.textQuery?.trim()
-      ? {type:'screen' as const, source, revision:source.revision, sessionDate:source.sessionDate ?? '', result:null}
-      : await runSnapshotTask({type:'screen',source,request:req});
-    if (snapshot.type !== 'screen') throw new Error('Unexpected scanner response');
-    if (snapshot.result) return snapshot.result;
+    const plan = expressionPlan(req.expressionTree,Boolean(req.textQuery?.trim()));
+    if (plan.browser) {
+      const snapshot = await runSnapshotTask({type:'screen',source,request:req});
+      if (snapshot.type !== 'screen') throw new Error('Unexpected scanner response');
+      if (!snapshot.result) throw new Error('This condition needs the advanced scanner service.');
+      return snapshot.result;
+    }
     const base = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
     const response = await fetch(`${base}/screens/run`, { method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({...req,asOfDate:snapshot.sessionDate,datasetRevision:snapshot.revision}) });
+      body:JSON.stringify({...req,asOfDate:source.sessionDate,datasetRevision:source.revision}) });
     const payload = await response.json().catch(() => null);
     if (!response.ok || payload?.error) throw new Error(payload?.error || `Scanner request failed (HTTP ${response.status})`);
-    if (payload?.immutableRevision !== snapshot.revision || !Array.isArray(payload.rows)) throw new Error('Scanner returned a different dataset revision');
+    if (payload?.immutableRevision !== source.revision || !Array.isArray(payload.rows)) throw new Error('Scanner returned a different dataset revision');
     return payload;
   }
 

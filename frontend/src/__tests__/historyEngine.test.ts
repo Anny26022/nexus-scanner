@@ -1,0 +1,66 @@
+import { describe,expect,it } from 'vitest';
+import { evaluateHistoryCondition,type CandleSeries } from '../engine/historyEngine';
+import { evaluateExpression } from '../engine/expression';
+import type { ActiveCondition } from '../types/screener';
+import type { SnapshotStock } from '../api/snapshotScreen';
+import nativeConditions from '../data/nativeConditions.json';
+import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+
+const length=320;
+const series:CandleSeries={
+  dates:Int32Array.from({length},(_,i)=>20000+i),
+  open:Float64Array.from({length},(_,i)=>100+i*.25),
+  high:Float64Array.from({length},(_,i)=>102+i*.25),
+  low:Float64Array.from({length},(_,i)=>98+i*.25),
+  close:Float64Array.from({length},(_,i)=>101+i*.25),
+  volume:Float64Array.from({length},(_,i)=>100000+i*100),
+};
+const stock={symbol:'TEST',name:'Test',close:series.close[length-1],metadataAsOfDate:'2026-10-01',asOfDate:'2026-10-01',historyAligned:true,indexMemberships:[],metrics:{},presetMatches:{}} as unknown as SnapshotStock;
+const context={stock,session:'2026-10-01'};
+const leaf=(conditionId:string,parameters:Record<string,unknown>={}):ActiveCondition=>({instanceId:conditionId,conditionId,parameters});
+
+describe('shared history engine',()=>{
+  it('keeps strict and inclusive comparisons distinct',()=>{
+    expect(evaluateHistoryCondition(series,leaf('INDICATOR_COMPARE',{leftIndicator:'CLOSE',leftPeriod:1,op:'GREATER',rightValue:series.close[length-1],rightIndicator:'',withinDays:1}),context)).toBe(false);
+    expect(evaluateHistoryCondition(series,leaf('INDICATOR_COMPARE',{leftIndicator:'CLOSE',leftPeriod:1,op:'ABOVE',rightValue:series.close[length-1],rightIndicator:'',withinDays:1}),context)).toBe(true);
+  });
+  it('matches the Python indicator authority for smoothing, units, and selectable periods',()=>{
+    const above=(leftIndicator:string,leftPeriod:number,rightValue:number)=>leaf('INDICATOR_COMPARE',{leftIndicator,leftPeriod,op:'GREATER',rightValue,rightIndicator:'',withinDays:1});
+    expect(evaluateHistoryCondition(series,above('EMA',20,178.37),context)).toBe(true);
+    expect(evaluateHistoryCondition(series,above('WMA',20,179.16),context)).toBe(true);
+    expect(evaluateHistoryCondition(series,above('MACD',26,1.74),context)).toBe(true);
+    expect(evaluateHistoryCondition(series,above('BB_PCTB',20,91.18),context)).toBe(true);
+    expect(evaluateHistoryCondition(series,above('ADX',14,99.9),context)).toBe(true);
+  });
+  it('calculates convergence against close and supports negation',()=>{
+    const condition=leaf('MA_CONVERGENCE',{periods:'9,20,50',maType:'EMA',maxSpreadPct:10,withinDays:1});
+    expect(evaluateHistoryCondition(series,condition,context)).toBe(true);
+    expect(evaluateHistoryCondition(series,{...condition,isNegated:true},context)).toBe(false);
+  });
+  it('returns unavailable for insufficient warmup and preserves three-valued boolean logic',()=>{
+    const short={...series,open:series.open.slice(0,5),high:series.high.slice(0,5),low:series.low.slice(0,5),close:series.close.slice(0,5),volume:series.volume.slice(0,5),dates:series.dates.slice(0,5)};
+    const unavailable=leaf('ADX',{period:14,comparison:'ABOVE',value:25});
+    expect(evaluateHistoryCondition(short,unavailable,context)).toBe(null);
+    const expression={type:'group' as const,operator:'all' as const,children:[{type:'condition' as const,condition:unavailable},{type:'condition' as const,condition:leaf('PRICE_CHANGE_PCT',{overDays:1,comparison:'GREATER',pct:100})}]};
+    expect(evaluateExpression(expression,c=>evaluateHistoryCondition(short,c as ActiveCondition,context))).toBe(false);
+  });
+  it('evaluates numeric and field-to-field query operands from the same immutable series',()=>{
+    expect(evaluateHistoryCondition(series,leaf('FIELD_COMPARISON',{field:'close',comparison:'GREATER',value:150}),context)).toBe(true);
+    expect(evaluateHistoryCondition(series,leaf('FIELD_COMPARISON',{field:'sma_20',comparison:'GREATER',value:{field:'sma_50'}}),context)).toBe(true);
+    expect(evaluateHistoryCondition(series,leaf('FIELD_COMPARISON',{field:'return_5y',comparison:'GREATER',value:0}),context)).toBe(null);
+  });
+  it('applies scalar negation exactly once',()=>{
+    const condition=leaf('PRICE_RANGE',{minPrice:1,maxPrice:1000});
+    expect(evaluateHistoryCondition(series,condition,context)).toBe(true);
+    expect(evaluateHistoryCondition(series,{...condition,isNegated:true},context)).toBe(false);
+  });
+  it('routes every native contract condition and Nexus advanced addition through a known evaluator',()=>{
+    const definitions=[...nativeConditions,...NEXUS_CONDITION_CATALOG.filter(item=>['INDICATOR_COMPARE','MA_CONVERGENCE','DIVERGENCE','SUPERTREND'].includes(item.id))];
+    expect(definitions.length).toBeGreaterThanOrEqual(58);
+    for(const definition of definitions){
+      const parameters=Object.fromEntries(definition.parameters.map(parameter=>[parameter.id,parameter.defaultValue]));
+      expect(()=>evaluateHistoryCondition(series,leaf(definition.id,parameters),context),definition.id).not.toThrow();
+    }
+    expect(()=>evaluateHistoryCondition(series,leaf('UNKNOWN_CONDITION'),context)).toThrow('Unsupported condition');
+  });
+});

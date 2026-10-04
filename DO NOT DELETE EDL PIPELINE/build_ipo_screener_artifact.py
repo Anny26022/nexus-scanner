@@ -1,7 +1,7 @@
 """Publish an NSE mainboard IPO catalogue with permitted provider enrichment.
 
-NSE listing dates and canonical stock identity remain authoritative.  IPO
-Decode fills issue and subscription facts only when its matching record is
+NSE listing dates and canonical stock identity remain authoritative. The provider
+fills issue and subscription facts only when its matching record is
 available; unavailable inputs remain null rather than being inferred.
 """
 
@@ -43,10 +43,7 @@ def _reference_session(root: Path):
     return max((item for item in dates if item), default=None)
 
 
-def _provider_by_symbol(root: Path):
-    payload = _provider_payload(root)
-    if not payload.get("available"):
-        return {}
+def _provider_by_symbol(payload):
     by_symbol = {}
     rows = sorted(payload.get("records", []), key=lambda row: str(row.get("listing_date_iso") or ""), reverse=True)
     for row in rows:
@@ -56,9 +53,8 @@ def _provider_by_symbol(root: Path):
     return by_symbol
 
 
-def _provider_details_by_symbol(root: Path):
-    payload = _provider_payload(root)
-    details = payload.get("details", {}) if payload.get("available") else {}
+def _provider_details_by_symbol(payload):
+    details = payload.get("details", {})
     by_symbol = {}
     rows = sorted(payload.get("records", []), key=lambda row: str(row.get("listing_date_iso") or ""), reverse=True)
     for row in rows:
@@ -134,8 +130,8 @@ def build_ipo_catalog(stocks, equity_rows, as_of_date, provider=None, provider_d
             if _listing_date(item.get("listing_date")) == listed
         ]
         upcoming_unlock_dates = sorted(
-            str(item["unlock_date"]) for item in lockin_calendar
-            if item.get("unlock_date") and str(item["unlock_date"]) >= as_of_date.isoformat()
+            unlock.isoformat() for item in lockin_calendar
+            if as_of_date and (unlock := _listing_date(item.get("unlock_date"))) and unlock >= as_of_date
         )
         records.append({
             "symbol": symbol, "name": stock.get("name"), "isin": stock.get("isin"),
@@ -187,9 +183,9 @@ def main():
     if as_of is None:
         print("NIFTY reference session is unavailable.")
         return 1
-    provider = _provider_by_symbol(root)
-    provider_details = _provider_details_by_symbol(root)
     provider_payload = _provider_payload(root)
+    provider = _provider_by_symbol(provider_payload)
+    provider_details = _provider_details_by_symbol(provider_payload)
     anchor_lockins = _anchor_lockins_by_symbol(provider_payload)
     with listing_path.open(newline="", encoding="utf-8-sig") as handle:
         records, pending = build_ipo_catalog(stocks, csv.DictReader(handle), as_of, provider, provider_details, anchor_lockins)
@@ -206,7 +202,7 @@ def main():
             "issue_terms": bool(provider),
             "subscription_multiples": bool(provider),
             "anchor_lock_in": bool(anchor_lockins),
-            "provider_issue_details": bool(provider_details),
+            "provider_issue_details": any(provider_details.values()),
         },
     }, ensure_ascii=False)
     print(f"Published {len(records)} canonical EQ listings; {len(pending)} await enrichment.")

@@ -212,18 +212,23 @@ def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT) -> dict:
         candidates = _detail_candidates(feeds)
         ordered = sorted(candidates, key=lambda identifier: (0 if identifier in active else 1,
                          _age_hours(details.get(identifier, {}), now), identifier))
-        refreshed = 0
+        attempted = 0
         for identifier in ordered:
-            if refreshed >= detail_limit:
+            if attempted >= detail_limit:
                 break
             current = details.get(identifier, {})
             max_age = 24 if identifier in active else 24 * 7
             if _age_hours(current, now) < max_age:
                 continue
             values, detail_errors = _refresh_detail(client, identifier)
-            details[identifier] = {"fetched_at": now.isoformat(), "data": values, "errors": detail_errors}
+            # Preserve previous successful endpoints on partial or total failure.
+            # Only successful refreshes advance the freshness timestamp; failures
+            # remain eligible next run without exceeding this run's request budget.
+            details[identifier] = {**current, "data": {**current.get("data", {}), **values}, "errors": detail_errors}
+            if values:
+                details[identifier]["fetched_at"] = now.isoformat()
             errors.extend(f"{identifier} {error}" for error in detail_errors)
-            refreshed += 1
+            attempted += 1
     records = _merge_listed_archive(root, _records(feeds.get("listed_60d")))
     _write_details_archive(root, details, now.isoformat())
     return {"schema_version": 2, "source": "Permitted IPO provider catalogue API", "available": bool(feeds),

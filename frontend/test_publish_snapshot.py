@@ -16,7 +16,7 @@ class SnapshotPublicationTests(unittest.TestCase):
         stocks=[{'symbol':'TEST','name':'Test','close':100,'open':99,'high':101,'low':98,'volume':200,'as_of_date':'2026-09-30',
                  'market_cap_crore':cap,'daily_rupee_turnover_50_cr':10,'circuit_limit':'20','listing_series':'EQ','index_memberships':[]}]
         files={'all_stocks_fundamental_analysis.json.gz':stocks,'market_breadth_v2.json.gz':{'records':[{'date':'2026-09-30'}]},
-               'quarterly_financial_history.json.gz':{'records':[]},'ipo_screener.json.gz':{'records':[]}}
+               'quarterly_financial_history.json.gz':{'records':[]},'ipo_screener.json.gz':{'records':[], 'provider_data':{'analytics':{'year_summary':{'year':'2026'}}}}}
         for name,value in files.items():
             with gzip.open(root/name,'wt') as handle: json.dump(value,handle)
         (root/'ohlcv_data').mkdir(exist_ok=True)
@@ -31,6 +31,8 @@ class SnapshotPublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
             first=publish(root,output)
+            with gzip.open(output/'revisions'/first['revision']/'ipos.json.gz','rt') as handle:
+                self.assertEqual(json.load(handle)['provider_data']['analytics']['year_summary']['year'], '2026')
             self.fixture(root,cap=6000)
             second=publish(root,output)
             self.assertNotEqual(first['revision'],second['revision'])

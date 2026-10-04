@@ -21,6 +21,15 @@ async function getJson<T>(url: string, fresh = false): Promise<T> {
   return response.json();
 }
 
+async function getGzipJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Dataset request failed (HTTP ${response.status})`);
+  if (!('DecompressionStream' in window)) throw new Error('This browser cannot read compressed IPO data');
+  const stream = response.body?.pipeThrough(new DecompressionStream('gzip'));
+  if (!stream) throw new Error('IPO dataset response has no body');
+  return JSON.parse(await new Response(stream).text()) as T;
+}
+
 export async function refreshManifest(): Promise<Manifest> {
   const manifest = await getJson<Manifest>('/data/current.json', true);
   if (!/^[a-f0-9]{64}$/.test(manifest.revision) || manifest.schemaVersion !== 4) throw new Error('Invalid scanner dataset manifest');
@@ -67,12 +76,15 @@ class RealDataAdapter {
     const manifest = current ?? await refreshManifest();
     if (!ipoSnapshots.has(manifest.revision)) {
       const revision = manifest.revision;
-      const promise = getJson<Record<string, any>[]>(manifest.iposUrl).then(rows => rows.map(r => ({
+      const promise = getGzipJson<Record<string, any> | {records:Record<string, any>[]}>(manifest.iposUrl).then(payload => {
+        const rows = Array.isArray(payload) ? payload : payload.records;
+        return rows.map(r => ({
         symbol:r.symbol, name:r.name || r.company_name || '', listingDate:r.listing_date || '',
         currentPrice:r.close ?? 0, turnoverCrore:r.rupee_volume == null ? 0 : r.rupee_volume / 10_000_000,
         deliveryPct:r.delivery_percent ?? null,
         sector:r.sector || 'Unclassified', industry:r.industry || 'Unclassified', marketCapCrore:r.market_cap_crore ?? 0,
-      }))).catch(error => { ipoSnapshots.delete(revision); throw error; });
+      }));
+      }).catch(error => { ipoSnapshots.delete(revision); throw error; });
       ipoSnapshots.set(revision,promise);
       if (ipoSnapshots.size > 3) ipoSnapshots.delete(ipoSnapshots.keys().next().value!);
     }

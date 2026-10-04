@@ -11,6 +11,7 @@ DO NOT DELETE EDL PIPELINE/delivery_history_data/
 DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data/
 DO NOT DELETE EDL PIPELINE/scanner_history_data/
 DO NOT DELETE EDL PIPELINE/filing_history_data/
+DO NOT DELETE EDL PIPELINE/ipo_provider_history_data/
 
 # The full disclosure archive is regenerated from the cached ScanX filing
 # history. At over GitHub's 100 MB blob limit, it cannot be committed by the

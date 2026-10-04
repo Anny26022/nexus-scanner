@@ -55,7 +55,7 @@ def main():
         print("EDL_FETCH_OHLCV=0: diagnostic run; published files will not change.")
     with TemporaryDirectory(prefix=".edl-refresh-", dir=destination) as temporary:
         stage = Path(temporary)
-        for name in ("ohlcv_data", "indices_ohlcv_data", "delivery_history_data", "eod2_delivery_history_data", "scanner_history_data", "filing_history_data"):
+        for name in ("ohlcv_data", "indices_ohlcv_data", "delivery_history_data", "eod2_delivery_history_data", "scanner_history_data", "filing_history_data", "ipo_provider_history_data"):
             cache = destination / name
             cache.mkdir(exist_ok=True)
             (stage / name).symlink_to(cache, target_is_directory=True)
@@ -63,6 +63,12 @@ def main():
         if not methodology.exists():
             methodology = source / "breadth_methodology.json"
         shutil.copy2(methodology, stage / methodology.name)
+        listed_archive = destination / "ipo_provider_listed_archive.json.gz"
+        if listed_archive.exists():
+            shutil.copy2(listed_archive, stage / listed_archive.name)
+        details_archive = destination / "ipo_provider_details_archive.json.gz"
+        if details_archive.exists():
+            shutil.copy2(details_archive, stage / details_archive.name)
         env = dict(os.environ, EDL_BASE_DIR=str(stage), EDL_CLEANUP_INTERMEDIATE="0")
         env["PYTHONPATH"] = os.pathsep.join([str(source), str(source / "src"), env.get("PYTHONPATH", "")])
         result = subprocess.run(

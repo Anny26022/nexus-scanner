@@ -37,6 +37,8 @@ class SnapshotPublicationTests(unittest.TestCase):
             with gzip.open(output/'revisions'/first['revision']/'ipos.json.gz','rt') as handle:
                 self.assertEqual(json.load(handle)['provider_data']['analytics']['year_summary']['year'], '2026')
             self.assertTrue((output/'revisions'/first['revision']/'earnings-calendar.json.gz').exists())
+            with gzip.open(output/'revisions'/first['revision']/'earnings-calendar.json.gz','rt') as handle:
+                self.assertEqual(json.load(handle),{'source':'BSE forthcoming results calendar','fetched_at':'2026-10-01T00:00:00+00:00','events':[],'available':True})
             self.assertEqual(first['earningsCalendarUrl'], f"/data/revisions/{first['revision']}/earnings-calendar.json.gz")
             self.fixture(root,cap=6000)
             second=publish(root,output)
@@ -59,6 +61,16 @@ class SnapshotPublicationTests(unittest.TestCase):
             (root/'ipo_screener.json.gz').write_bytes(b'not gzip')
             with self.assertRaises(OSError): publish(root,output)
             self.assertEqual((output/'current.json').read_bytes(),original)
+
+    def test_manual_publication_without_calendar_omits_calendar_url(self):
+        with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl';root.mkdir();output=Path(folder)/'public';self.fixture(root)
+            (root/'earnings_calendar.json.gz').unlink()
+            first=publish(root,output)
+            self.assertNotIn('earningsCalendarUrl',first)
+            self.assertFalse((output/'revisions'/first['revision']/'earnings-calendar.json.gz').exists())
+            self.assertEqual((output/'current.json').read_bytes(),(output/'revisions'/first['revision']/'release.json').read_bytes())
+            self.assertEqual(publish(root,output),first)
 
     def test_scanner_only_and_chart_release_have_distinct_revisions(self):
         import os

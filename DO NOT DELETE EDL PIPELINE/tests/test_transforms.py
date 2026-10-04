@@ -624,17 +624,14 @@ class TransformTests(unittest.TestCase):
         self.assertEqual(rows[-1], "Nifty 50,100,101")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 class BseEarningsCalendarTests(unittest.TestCase):
     def test_normalizes_only_canonical_eq_symbols(self):
         from fetch_bse_earnings_calendar import build_calendar
-        payload = build_calendar([
+        payload = build_calendar({"Table": [
             {"scrip_Code": "544915", "short_name": "rentomojo", "Long_Name": "Rentomojo Ltd", "meeting_date": "05 Oct 2026", "URL": "https://example.test/rentomojo"},
             {"scrip_Code": "1", "short_name": "BSEONLY", "meeting_date": "05 Oct 2026"},
             {"scrip_Code": "2", "short_name": "BROKEN", "meeting_date": "not a date"},
-        ], {"RENTOMOJO"}, "2026-10-04T00:00:00+00:00")
+        ]}, {"RENTOMOJO"}, "2026-10-04T00:00:00+00:00")
         self.assertEqual(payload["events"], [{
             "symbol": "RENTOMOJO", "bse_security_code": "544915", "company_name": "Rentomojo Ltd",
             "scheduled_date": "2026-10-05", "event_type": "RESULTS_BOARD_MEETING", "source": "BSE",
@@ -685,3 +682,34 @@ class BseEarningsCalendarTests(unittest.TestCase):
             payload = json.loads((root / "earnings_calendar.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["events"][0]["symbol"], "FALLBACK")
             self.assertEqual(payload["events"][0]["source"], "ScanX")
+
+    def test_missing_nse_list_retains_previous_calendar(self):
+        from fetch_bse_earnings_calendar import main
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previous = {"source": "BSE", "fetched_at": "2099-10-01T00:00:00+00:00", "available": True,
+                        "events": [{"symbol": "EXISTING", "scheduled_date": "2099-10-05",
+                                    "event_type": "RESULTS_BOARD_MEETING", "source": "BSE"}]}
+            (root / "earnings_calendar.json").write_text(json.dumps(previous), encoding="utf-8")
+            with mock.patch("fetch_bse_earnings_calendar.fetch_calendar") as fetch:
+                self.assertTrue(main(root))
+            fetch.assert_not_called()
+            payload = json.loads((root / "earnings_calendar.json").read_text(encoding="utf-8"))
+            self.assertFalse(payload["available"])
+            self.assertEqual(payload["events"][0]["symbol"], "EXISTING")
+
+    def test_bse_fetch_retries_transient_error(self):
+        import requests
+        from fetch_bse_earnings_calendar import fetch_calendar
+        response = mock.Mock()
+        response.json.return_value = {"Table": []}
+        session = mock.Mock()
+        session.get.side_effect = [requests.ConnectionError("temporary"), response]
+        with mock.patch("fetch_bse_earnings_calendar.time.sleep") as sleep:
+            self.assertEqual(fetch_calendar(session), {"Table": []})
+        self.assertEqual(session.get.call_count, 2)
+        sleep.assert_called_once()
+
+
+if __name__ == "__main__":
+    unittest.main()

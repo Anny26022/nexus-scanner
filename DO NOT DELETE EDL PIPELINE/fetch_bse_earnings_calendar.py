@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import gzip
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -48,8 +49,10 @@ def parse_date(value: object) -> str | None:
 
 
 def normalize(rows: object, symbols: set[str]) -> list[dict]:
+    if isinstance(rows, dict):
+        rows = rows.get("Table")
     if not isinstance(rows, list):
-        raise ValueError("BSE results response must be a JSON list.")
+        raise ValueError("BSE results response must contain a Table list.")
     records = []
     for row in rows:
         if not isinstance(row, dict):
@@ -135,15 +138,23 @@ def merge_upcoming_results(calendar: dict, scanx_rows: object, symbols: set[str]
 
 
 def fetch_calendar(session=requests) -> object:
-    response = session.get(ENDPOINT, headers=HEADERS, timeout=30)
-    response.raise_for_status()
-    return response.json()
+    for attempt in range(3):
+        try:
+            response = session.get(ENDPOINT, headers=HEADERS, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException:
+            if attempt == 2:
+                raise
+            time.sleep(0.5 * (2 ** attempt))
 
 
 def main(root: Path = Path(BASE_DIR)) -> bool:
     fetched_at = datetime.now(timezone.utc).isoformat()
     symbols = nse_symbols(root / "nse_equity_list.csv")
     try:
+        if not symbols:
+            raise ValueError("NSE EQ symbol list unavailable.")
         payload = build_calendar(fetch_calendar(), symbols, fetched_at)
     except (requests.RequestException, ValueError, json.JSONDecodeError) as error:
         payload = previous_calendar(root)

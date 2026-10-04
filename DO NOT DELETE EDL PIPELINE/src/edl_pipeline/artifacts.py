@@ -13,6 +13,7 @@ INTERMEDIATE_FILES = [
     "nse_corporate_actions.json",
     "nse_corporate_action_adjustments.json",
     "upcoming_earnings_events.json",
+    "earnings_calendar.json",
     "history_earnings_events.json",
     "nse_asm_list.json",
     "nse_gsm_list.json",

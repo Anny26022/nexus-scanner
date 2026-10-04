@@ -76,8 +76,8 @@
     },
     "rs_ratings": {
         "as_of_date": "2026-10-01",
-        "universe_count": 1938,
-        "ratings": 1938,
+        "universe_count": 1935,
+        "ratings": 1935,
         "methodology": {
             "version": "nexus_front_weighted_v2",
             "benchmark": "NIFTY 500",
@@ -109,8 +109,8 @@
     },
     "delivery_history": {
         "minimum_required_sessions": 252,
-        "cached_sessions": 263,
-        "oldest_session": "2025-09-10",
+        "cached_sessions": 260,
+        "oldest_session": "2025-09-15",
         "latest_session": "2026-10-01",
         "reference_session_present": true,
         "benchmark_session_present": true,
@@ -135,19 +135,19 @@
         "peg_ratio": 1466,
         "percent_from_ath": 659,
         "sales_growth_5_years_percent": 905,
-        "breakout_above_52w_high": 432,
+        "breakout_above_52w_high": 433,
         "close_above_sma200": 357,
-        "distance_from_52w_high_percent": 432,
-        "distance_from_52w_low_percent": 431,
+        "distance_from_52w_high_percent": 433,
+        "distance_from_52w_low_percent": 433,
         "distance_from_sma200_percent": 358,
-        "near_52w_high": 432,
+        "near_52w_high": 433,
         "percent_from_52w_high_200_days_ema_volume": 559,
-        "percent_from_52w_low": 431,
-        "return_5y": 983,
+        "percent_from_52w_low": 433,
+        "return_5y": 989,
         "sma200": 357,
         "sma50_above_sma200": 357,
-        "sma50_crossed_above_sma200_today": 377,
-        "volume_ema_200": 374,
+        "sma50_crossed_above_sma200_today": 378,
+        "volume_ema_200": 377,
         "deliverable_quantity": 283,
         "delivery_as_of_date": 283,
         "delivery_percent": 283,
@@ -214,33 +214,36 @@
         "latest_earnings_date": 172,
         "max_returns_since_earnings_percent": 174,
         "returns_since_earnings_percent": 174,
-        "daily_rupee_turnover_100_cr": 229,
+        "daily_rupee_turnover_100_cr": 232,
         "industry": 86,
         "sector": 86,
         "close_near_day_high": 48,
-        "breakout_above_50d_high": 202,
+        "breakout_above_50d_high": 204,
         "close_above_sma50": 193,
-        "daily_rupee_turnover_50_cr": 201,
+        "daily_rupee_turnover_50_cr": 204,
         "distance_from_sma50_percent": 194,
         "sma20_above_sma50": 193,
         "sma50": 193,
-        "adr20": 32,
+        "adr_percent_30": 79,
+        "avg_rupee_volume_30_crore": 79,
+        "adr20": 39,
         "adr_percent_14": 27,
-        "adr_percent_20": 32,
-        "adr_percent_30": 55,
-        "adr_percent_5": 11,
+        "adr_percent_20": 39,
+        "adr_percent_5": 15,
         "atr14": 27,
         "atr_percent_14": 27,
-        "avg_rupee_volume_20": 34,
-        "avg_rupee_volume_30_crore": 55,
-        "avg_volume_20": 34,
-        "breakout_above_20d_high": 34,
+        "avg_rupee_volume_20": 40,
+        "avg_volume_20": 40,
+        "breakout_above_20d_high": 40,
         "close_above_sma10": 17,
         "close_above_sma20": 33,
-        "daily_rupee_turnover_20_cr": 32,
+        "daily_rupee_turnover_20_cr": 39,
         "distance_from_sma20_percent": 34,
-        "is_nr7": 12,
-        "relative_volume_20": 34,
+        "gap_percent": 8,
+        "is_bullish_engulfing": 8,
+        "is_inside_day": 8,
+        "is_nr7": 16,
+        "relative_volume_20": 40,
         "rsi14": 28,
         "sma10": 17,
         "sma10_above_sma20": 33,
@@ -253,9 +256,6 @@
         "vwap_source": 12,
         "dii_percent_change_qoq": 8,
         "fii_percent_change_qoq": 8,
-        "gap_percent": 3,
-        "is_bullish_engulfing": 3,
-        "is_inside_day": 3,
         "float_shares": 4,
         "free_float_percent": 4,
         "listing_date": 11,
@@ -1969,7 +1969,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -2155,8 +2157,11 @@
                 "fno_lot_size",
                 "fno_next_expiry",
                 "forward_pe_ratio",
+                "gap_percent",
                 "gsm_stage",
                 "industry",
+                "is_bullish_engulfing",
+                "is_inside_day",
                 "is_nr7",
                 "latest_earnings_date",
                 "latest_quarter",
@@ -2593,7 +2598,8 @@
                 "pivot_point",
                 "return_5y",
                 "sales_growth_5_years_percent",
-                "sma50_crossed_above_sma200_today"
+                "sma50_crossed_above_sma200_today",
+                "volume_ema_200"
             ]
         },
         {
@@ -4326,9 +4332,11 @@
             "history_current": true,
             "missing_fields": [
                 "asm_stage",
+                "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
                 "daily_rupee_turnover_100_cr",
+                "daily_rupee_turnover_50_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
                 "distance_from_52w_low_percent",
@@ -5293,14 +5301,20 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr20",
+                "adr_percent_20",
                 "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_20",
                 "avg_rupee_volume_30_crore",
+                "avg_volume_20",
+                "breakout_above_20d_high",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
                 "close_above_sma50",
                 "daily_rupee_turnover_100_cr",
+                "daily_rupee_turnover_20_cr",
                 "daily_rupee_turnover_50_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
@@ -5342,6 +5356,7 @@
                 "qoq_percent_opm_latest",
                 "qoq_percent_pbt_latest",
                 "qoq_percent_sales_latest",
+                "relative_volume_20",
                 "return_5y",
                 "sales_2_quarters_back",
                 "sales_3_quarters_back",
@@ -5398,7 +5413,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -6066,14 +6083,20 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr20",
+                "adr_percent_20",
                 "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_20",
                 "avg_rupee_volume_30_crore",
+                "avg_volume_20",
+                "breakout_above_20d_high",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
                 "close_above_sma50",
                 "daily_rupee_turnover_100_cr",
+                "daily_rupee_turnover_20_cr",
                 "daily_rupee_turnover_50_cr",
                 "debt_to_equity",
                 "deliverable_quantity",
@@ -6100,6 +6123,7 @@
                 "percent_from_52w_low",
                 "pivot_point",
                 "qoq_percent_pbt_latest",
+                "relative_volume_20",
                 "return_5y",
                 "sma200",
                 "sma20_above_sma50",
@@ -6138,7 +6162,8 @@
                 "fno_lot_size",
                 "fno_next_expiry",
                 "gsm_stage",
-                "pivot_point"
+                "pivot_point",
+                "return_5y"
             ]
         },
         {
@@ -6753,8 +6778,11 @@
                 "fno_lot_size",
                 "fno_next_expiry",
                 "forward_pe_ratio",
+                "gap_percent",
                 "gsm_stage",
                 "industry",
+                "is_bullish_engulfing",
+                "is_inside_day",
                 "is_nr7",
                 "latest_earnings_date",
                 "latest_quarter",
@@ -7670,6 +7698,8 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr20",
+                "adr_percent_20",
                 "adr_percent_30",
                 "avg_rupee_volume_20",
                 "avg_rupee_volume_30_crore",
@@ -7680,6 +7710,7 @@
                 "close_above_sma200",
                 "close_above_sma50",
                 "daily_rupee_turnover_100_cr",
+                "daily_rupee_turnover_20_cr",
                 "daily_rupee_turnover_50_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
@@ -7718,6 +7749,7 @@
                 "asm_stage",
                 "breakout_above_52w_high",
                 "close_above_sma200",
+                "daily_rupee_turnover_100_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
                 "distance_from_52w_low_percent",
@@ -8356,7 +8388,10 @@
             "missing_fields": [
                 "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_20",
                 "avg_rupee_volume_30_crore",
+                "avg_volume_20",
+                "breakout_above_20d_high",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -8389,6 +8424,7 @@
                 "percent_from_52w_high_200_days_ema_volume",
                 "percent_from_52w_low",
                 "pivot_point",
+                "relative_volume_20",
                 "return_5y",
                 "sales_3_quarters_back",
                 "sales_last_year_quarter",
@@ -12513,7 +12549,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -13894,7 +13932,8 @@
                 "fno_next_expiry",
                 "gsm_stage",
                 "percent_from_ath",
-                "pivot_point"
+                "pivot_point",
+                "return_5y"
             ]
         },
         {
@@ -14754,7 +14793,8 @@
                 "fno_lot_size",
                 "fno_next_expiry",
                 "gsm_stage",
-                "pivot_point"
+                "pivot_point",
+                "return_5y"
             ]
         },
         {
@@ -15649,7 +15689,8 @@
                 "forward_pe_ratio",
                 "gsm_stage",
                 "peg_ratio",
-                "pivot_point"
+                "pivot_point",
+                "return_5y"
             ]
         },
         {
@@ -17053,6 +17094,7 @@
                 "breakout_above_52w_high",
                 "close_above_sma200",
                 "daily_rupee_turnover_100_cr",
+                "daily_rupee_turnover_50_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
                 "distance_from_52w_low_percent",
@@ -22411,8 +22453,11 @@
                 "fno_lot_size",
                 "fno_next_expiry",
                 "forward_pe_ratio",
+                "gap_percent",
                 "gsm_stage",
                 "industry",
+                "is_bullish_engulfing",
+                "is_inside_day",
                 "is_nr7",
                 "latest_earnings_date",
                 "latest_quarter",
@@ -23928,11 +23973,16 @@
             "history_current": true,
             "missing_fields": [
                 "asm_stage",
+                "breakout_above_52w_high",
                 "debt_to_equity",
+                "distance_from_52w_high_percent",
+                "distance_from_52w_low_percent",
                 "fno_lot_size",
                 "fno_next_expiry",
                 "gsm_stage",
+                "near_52w_high",
                 "percent_from_52w_high_200_days_ema_volume",
+                "percent_from_52w_low",
                 "pivot_point",
                 "return_5y",
                 "sales_growth_5_years_percent"
@@ -26795,7 +26845,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "daily_rupee_turnover_100_cr",
@@ -28378,6 +28430,7 @@
                 "breakout_above_52w_high",
                 "close_above_sma200",
                 "close_near_day_high",
+                "daily_rupee_turnover_100_cr",
                 "debt_to_equity",
                 "deliverable_quantity",
                 "delivery_as_of_date",
@@ -29052,10 +29105,13 @@
                 "fno_lot_size",
                 "fno_next_expiry",
                 "forward_pe_ratio",
+                "gap_percent",
                 "gsm_stage",
                 "industry",
                 "interest_coverage",
                 "investing_cash_flow_in_lakhs",
+                "is_bullish_engulfing",
+                "is_inside_day",
                 "is_nr7",
                 "latest_earnings_date",
                 "latest_quarter",
@@ -30930,6 +30986,7 @@
                 "adr_percent_14",
                 "adr_percent_20",
                 "adr_percent_30",
+                "adr_percent_5",
                 "asm_stage",
                 "atr14",
                 "atr_percent_14",
@@ -30966,6 +31023,7 @@
                 "forward_pe_ratio",
                 "gsm_stage",
                 "industry",
+                "is_nr7",
                 "latest_earnings_date",
                 "latest_quarter",
                 "max_returns_since_earnings_percent",
@@ -32302,14 +32360,20 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr20",
+                "adr_percent_20",
                 "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_20",
                 "avg_rupee_volume_30_crore",
+                "avg_volume_20",
+                "breakout_above_20d_high",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
                 "close_above_sma50",
                 "daily_rupee_turnover_100_cr",
+                "daily_rupee_turnover_20_cr",
                 "daily_rupee_turnover_50_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
@@ -32358,6 +32422,7 @@
                 "qoq_percent_opm_latest",
                 "qoq_percent_pbt_latest",
                 "qoq_percent_sales_latest",
+                "relative_volume_20",
                 "return_5y",
                 "sales_2_quarters_back",
                 "sales_3_quarters_back",
@@ -37205,6 +37270,7 @@
                 "adr_percent_14",
                 "adr_percent_20",
                 "adr_percent_30",
+                "adr_percent_5",
                 "asm_stage",
                 "atr14",
                 "atr_percent_14",
@@ -37252,6 +37318,7 @@
                 "industry",
                 "interest_coverage",
                 "investing_cash_flow_in_lakhs",
+                "is_nr7",
                 "latest_earnings_date",
                 "latest_quarter",
                 "max_returns_since_earnings_percent",
@@ -38178,6 +38245,8 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -39701,6 +39770,7 @@
                 "asm_stage",
                 "breakout_above_52w_high",
                 "close_above_sma200",
+                "daily_rupee_turnover_100_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
                 "distance_from_52w_low_percent",
@@ -41961,7 +42031,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "current_assets_in_lakhs",
@@ -44218,6 +44290,8 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr20",
+                "adr_percent_20",
                 "adr_percent_30",
                 "asm_stage",
                 "avg_rupee_volume_20",
@@ -44229,6 +44303,7 @@
                 "close_above_sma200",
                 "close_above_sma50",
                 "daily_rupee_turnover_100_cr",
+                "daily_rupee_turnover_20_cr",
                 "daily_rupee_turnover_50_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
@@ -45606,6 +45681,7 @@
                 "forward_pe_ratio",
                 "gsm_stage",
                 "industry",
+                "is_nr7",
                 "latest_earnings_date",
                 "latest_quarter",
                 "max_returns_since_earnings_percent",
@@ -47008,7 +47084,8 @@
                 "pivot_point",
                 "return_5y",
                 "sales_growth_5_years_percent",
-                "sma50_crossed_above_sma200_today"
+                "sma50_crossed_above_sma200_today",
+                "volume_ema_200"
             ]
         },
         {
@@ -47544,7 +47621,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -48888,7 +48967,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -49094,7 +49175,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -49925,7 +50008,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -51340,6 +51425,7 @@
                 "qoq_percent_opm_latest",
                 "qoq_percent_pbt_latest",
                 "qoq_percent_sales_latest",
+                "return_5y",
                 "sales_2_quarters_back",
                 "sales_3_quarters_back",
                 "sales_growth_5_years_percent",
@@ -51474,6 +51560,8 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -52781,7 +52869,8 @@
                 "fno_lot_size",
                 "fno_next_expiry",
                 "gsm_stage",
-                "pivot_point"
+                "pivot_point",
+                "return_5y"
             ]
         },
         {
@@ -57750,7 +57839,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -63384,7 +63475,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -64593,7 +64686,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -65005,6 +65100,8 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "daily_rupee_turnover_100_cr",
@@ -65879,9 +65976,11 @@
             "history_current": true,
             "missing_fields": [
                 "asm_stage",
+                "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
                 "daily_rupee_turnover_100_cr",
+                "daily_rupee_turnover_50_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
                 "distance_from_52w_low_percent",
@@ -68128,7 +68227,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -69322,6 +69423,8 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -69752,7 +69855,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -70187,6 +70292,7 @@
                 "sales_latest_quarter",
                 "sales_previous_quarter",
                 "sector",
+                "sma50_crossed_above_sma200_today",
                 "total_assets_in_lakhs",
                 "total_equity_in_lakhs",
                 "total_expense_in_lakhs",
@@ -70257,14 +70363,20 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr20",
+                "adr_percent_20",
                 "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_20",
                 "avg_rupee_volume_30_crore",
+                "avg_volume_20",
+                "breakout_above_20d_high",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
                 "close_above_sma50",
                 "daily_rupee_turnover_100_cr",
+                "daily_rupee_turnover_20_cr",
                 "daily_rupee_turnover_50_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
@@ -70279,6 +70391,7 @@
                 "percent_from_52w_high_200_days_ema_volume",
                 "percent_from_52w_low",
                 "pivot_point",
+                "relative_volume_20",
                 "return_5y",
                 "sales_growth_5_years_percent",
                 "sector",
@@ -70825,6 +70938,7 @@
                 "adr_percent_14",
                 "adr_percent_20",
                 "adr_percent_30",
+                "adr_percent_5",
                 "asm_stage",
                 "atr14",
                 "atr_percent_14",
@@ -71743,7 +71857,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -71959,6 +72075,7 @@
                 "adr_percent_14",
                 "adr_percent_20",
                 "adr_percent_30",
+                "adr_percent_5",
                 "asm_stage",
                 "atr14",
                 "atr_percent_14",
@@ -71996,6 +72113,7 @@
                 "forward_pe_ratio",
                 "gsm_stage",
                 "industry",
+                "is_nr7",
                 "latest_earnings_date",
                 "latest_quarter",
                 "max_returns_since_earnings_percent",
@@ -72725,6 +72843,8 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -73400,7 +73520,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -74799,10 +74921,13 @@
                 "fno_lot_size",
                 "fno_next_expiry",
                 "forward_pe_ratio",
+                "gap_percent",
                 "gsm_stage",
                 "industry",
                 "interest_coverage",
                 "investing_cash_flow_in_lakhs",
+                "is_bullish_engulfing",
+                "is_inside_day",
                 "is_nr7",
                 "latest_earnings_date",
                 "latest_quarter",
@@ -74975,14 +75100,20 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr20",
+                "adr_percent_20",
                 "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_20",
                 "avg_rupee_volume_30_crore",
+                "avg_volume_20",
+                "breakout_above_20d_high",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
                 "close_above_sma50",
                 "daily_rupee_turnover_100_cr",
+                "daily_rupee_turnover_20_cr",
                 "daily_rupee_turnover_50_cr",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
@@ -75010,6 +75141,7 @@
                 "percent_from_52w_high_200_days_ema_volume",
                 "percent_from_52w_low",
                 "pivot_point",
+                "relative_volume_20",
                 "return_5y",
                 "sales_3_quarters_back",
                 "sales_last_year_quarter",
@@ -80894,7 +81026,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma10",
@@ -82369,7 +82503,8 @@
                 "pivot_point",
                 "return_5y",
                 "sales_growth_5_years_percent",
-                "sma50_crossed_above_sma200_today"
+                "sma50_crossed_above_sma200_today",
+                "volume_ema_200"
             ]
         },
         {
@@ -82421,7 +82556,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -83753,6 +83890,7 @@
                 "current_liabilities_in_lakhs",
                 "debt_to_equity",
                 "distance_from_52w_high_percent",
+                "distance_from_52w_low_percent",
                 "dividend_basis",
                 "dividend_ex_date",
                 "dividend_per_share_latest",
@@ -83794,6 +83932,7 @@
                 "pbt_previous_quarter",
                 "peg_ratio",
                 "percent_from_52w_high_200_days_ema_volume",
+                "percent_from_52w_low",
                 "pivot_point",
                 "profit_before_tax_in_lakhs",
                 "qoq_percent_eps_latest",
@@ -85915,7 +86054,9 @@
             "as_of_date": "2026-10-01",
             "history_current": true,
             "missing_fields": [
+                "adr_percent_30",
                 "asm_stage",
+                "avg_rupee_volume_30_crore",
                 "breakout_above_50d_high",
                 "breakout_above_52w_high",
                 "close_above_sma200",
@@ -86407,14 +86548,9 @@
     ],
     "indices": [
         {
-            "symbol": "200EQW",
-            "index_id": 842,
-            "as_of_date": "2026-10-01"
-        },
-        {
             "symbol": "ALLCAP",
             "index_id": 84,
-            "as_of_date": "2026-10-01"
+            "as_of_date": "2024-11-05"
         },
         {
             "symbol": "AUTO",
@@ -86432,18 +86568,8 @@
             "as_of_date": "2026-10-01"
         },
         {
-            "symbol": "BBGEFS",
-            "index_id": 843,
-            "as_of_date": "2026-10-01"
-        },
-        {
             "symbol": "BHRT22",
             "index_id": 301,
-            "as_of_date": "2026-10-01"
-        },
-        {
-            "symbol": "BS1000",
-            "index_id": 844,
             "as_of_date": "2026-10-01"
         },
         {
@@ -86539,7 +86665,7 @@
         {
             "symbol": "CARBON",
             "index_id": 305,
-            "as_of_date": "2026-10-01"
+            "as_of_date": "2024-08-29"
         },
         {
             "symbol": "COMDTY",
@@ -86614,7 +86740,7 @@
         {
             "symbol": "GREENX",
             "index_id": 302,
-            "as_of_date": "2026-10-01"
+            "as_of_date": "2024-08-29"
         },
         {
             "symbol": "IND150",
@@ -86634,21 +86760,6 @@
         {
             "symbol": "INFRA",
             "index_id": 85,
-            "as_of_date": "2026-10-01"
-        },
-        {
-            "symbol": "INSLDR",
-            "index_id": 853,
-            "as_of_date": "2026-10-01"
-        },
-        {
-            "symbol": "INTECO",
-            "index_id": 854,
-            "as_of_date": "2026-10-01"
-        },
-        {
-            "symbol": "LCTMCI",
-            "index_id": 54,
             "as_of_date": "2026-10-01"
         },
         {
@@ -87062,16 +87173,6 @@
             "as_of_date": "2026-10-01"
         },
         {
-            "symbol": "Nifty AQL 30",
-            "index_id": 801,
-            "as_of_date": "2026-10-01"
-        },
-        {
-            "symbol": "Nifty AQLV 30",
-            "index_id": 802,
-            "as_of_date": "2026-10-01"
-        },
-        {
             "symbol": "Nifty Capital Mkt",
             "index_id": 803,
             "as_of_date": "2026-10-01"
@@ -87092,16 +87193,6 @@
             "as_of_date": "2026-10-01"
         },
         {
-            "symbol": "Nifty GS 10Yr",
-            "index_id": 806,
-            "as_of_date": "2026-10-01"
-        },
-        {
-            "symbol": "Nifty GS 10Yr Cln",
-            "index_id": 807,
-            "as_of_date": "2026-10-01"
-        },
-        {
             "symbol": "Nifty GS 11 15Yr",
             "index_id": 808,
             "as_of_date": "2026-10-01"
@@ -87117,18 +87208,8 @@
             "as_of_date": "2026-10-01"
         },
         {
-            "symbol": "Nifty GS 8 13Yr",
-            "index_id": 811,
-            "as_of_date": "2026-10-01"
-        },
-        {
             "symbol": "Nifty GS Compsite",
             "index_id": 812,
-            "as_of_date": "2026-10-01"
-        },
-        {
-            "symbol": "Nifty HighBeta 50",
-            "index_id": 813,
             "as_of_date": "2026-10-01"
         },
         {
@@ -87262,33 +87343,13 @@
             "as_of_date": "2026-10-01"
         },
         {
-            "symbol": "NiftyMS400 MQ 100",
-            "index_id": 841,
-            "as_of_date": "2026-10-01"
-        },
-        {
             "symbol": "OILGAS",
             "index_id": 76,
             "as_of_date": "2026-10-01"
         },
         {
-            "symbol": "POWENE",
-            "index_id": 855,
-            "as_of_date": "2026-10-01"
-        },
-        {
             "symbol": "POWER",
             "index_id": 77,
-            "as_of_date": "2026-10-01"
-        },
-        {
-            "symbol": "PRECON",
-            "index_id": 856,
-            "as_of_date": "2026-10-01"
-        },
-        {
-            "symbol": "PSUBNK",
-            "index_id": 857,
             "as_of_date": "2026-10-01"
         },
         {
@@ -87299,11 +87360,6 @@
         {
             "symbol": "SELIPO",
             "index_id": 858,
-            "as_of_date": "2026-10-01"
-        },
-        {
-            "symbol": "SENEQW",
-            "index_id": 859,
             "as_of_date": "2026-10-01"
         },
         {

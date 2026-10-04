@@ -71,15 +71,22 @@ class SnapshotPublicationTests(unittest.TestCase):
 
     def test_local_bridge_validates_identity_before_loading_data(self):
         request = {'asOfDate':'2026-09-30','universe':'mainboard','expressionTree':{'type':'group','operator':'all','children':[]},
-                   'page':1,'pageSize':50}
-        for key in ('engineVersion', 'conditionContractHash'):
-            with patch('scanner_bridge._load_context') as load:
-                with self.assertRaisesRegex(ValueError, 'incompatible'):
-                    bridge.run({**request, **checked_identity(), key: 'old'})
-                load.assert_not_called()
+                   'page':1,'pageSize':50,'datasetRevision':'a' * 64}
+        # A valid-looking request targets a missing cached revision. Identity
+        # rejection must win, proving the bridge does not attempt data access.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for key in ('engineVersion', 'conditionContractHash'):
+                with patch('scanner_bridge._load_context') as load:
+                    with self.assertRaisesRegex(ValueError, 'incompatible'):
+                        bridge.run({**request, **checked_identity(), key: 'old'}, root=root)
+                    load.assert_not_called()
+            with self.assertRaisesRegex(ValueError, 'revision is unavailable'):
+                bridge.run({**request, **checked_identity()}, root=root)
+        compatible_request = {key: value for key, value in request.items() if key != 'datasetRevision'}
         with patch('scanner_bridge._load_context', side_effect=RuntimeError('data loaded')):
             with self.assertRaisesRegex(RuntimeError, 'data loaded'):
-                bridge.run({**request, **checked_identity()})
+                bridge.run({**compatible_request, **checked_identity()})
 
     def test_failure_does_not_replace_current_manifest(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):

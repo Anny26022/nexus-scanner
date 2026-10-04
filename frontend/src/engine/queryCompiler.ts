@@ -131,7 +131,7 @@ function operand(value: string): number | { field: string } {
 }
 
 function functionCondition(name: string, args: string[], operator?: string, rawValue?: string): EngineExpression {
-  const key = name.replace(/\s+/g, ' ').trim().toLowerCase();
+  const key = name.replace(/[_\s]+/g, ' ').trim().toLowerCase();
   const comparison = OPERATORS[operator ?? '>='];
   const target = rawValue == null ? undefined : number(rawValue, name.trim());
   const arity = (minimum:number, maximum=minimum) => {

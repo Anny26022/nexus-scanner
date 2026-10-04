@@ -118,6 +118,7 @@ class BridgeTests(unittest.TestCase):
         expression = {"type":"condition","kind":"DELIVERY_PCT_SPIKE","params":{"minDeliverablePct":60,"withinDays":1}}
         self.assertTrue(bridge._needs_delivery(expression))
         self.assertTrue(bridge._needs_delivery({"type":"condition","kind":"DELIVERY_PERCENT","params":{}}))
+        self.assertFalse(bridge._needs_delivery({"type":"condition","kind":"PE_RATIO","params":{}}))
 
     def test_snapshot_field_query_without_history_has_stable_diagnostics(self):
         node=bridge.compile_query("Earning Per Share (EPS) > 20")

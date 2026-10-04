@@ -31,6 +31,18 @@ describe('shared history engine',()=>{
     expect(evaluateHistoryCondition(series,above('MACD',26,1.74),context)).toBe(true);
     expect(evaluateHistoryCondition(series,above('BB_PCTB',20,91.18),context)).toBe(true);
     expect(evaluateHistoryCondition(series,above('ADX',14,99.9),context)).toBe(true);
+    expect(evaluateHistoryCondition(series,above('SUPERTREND_DIRECTION',10,0),context)).toBe(true);
+  });
+  it('rejects look-ahead indicator offsets and returns unavailable when an oscillator never warms up',()=>{
+    expect(()=>evaluateHistoryCondition(series,leaf('INDICATOR_COMPARE',{leftIndicator:'CLOSE',leftPeriod:1,leftOffset:-1,rightValue:0,rightIndicator:'',rightPeriod:1,rightOffset:0,op:'ABOVE',withinDays:1}),context)).toThrow('offsets');
+    const short={...series,open:series.open.slice(0,10),high:series.high.slice(0,10),low:series.low.slice(0,10),close:series.close.slice(0,10),volume:series.volume.slice(0,10),dates:series.dates.slice(0,10)};
+    expect(evaluateHistoryCondition(short,leaf('DIVERGENCE',{oscillator:'RSI',oscPeriod:14,direction:'BULLISH',variant:'REGULAR',pivotLeft:1,pivotRight:1,maxBarDifference:1,lookbackDays:10,withinDays:1}),context)).toBe(null);
+  });
+  it('keeps a Friday weekly bar in completed-week mode',()=>{
+    const days=['2026-09-21','2026-09-22','2026-09-23','2026-09-24','2026-09-25','2026-09-28','2026-09-29','2026-09-30','2026-10-01','2026-10-02'];
+    const epochDays=Int32Array.from(days.map(day=>Date.parse(`${day}T00:00:00Z`)/86400000));
+    const weekly:CandleSeries={dates:epochDays,open:Float64Array.from({length:10},()=>100),high:Float64Array.from([...Array(5).fill(200),...Array(5).fill(190)]),low:Float64Array.from([...Array(5).fill(0),...Array(5).fill(10)]),close:Float64Array.from({length:10},()=>100),volume:Float64Array.from({length:10},()=>100)};
+    expect(evaluateHistoryCondition(weekly,leaf('INSIDE_BAR',{timeframe:'WEEKLY',weeklyMode:'COMPLETED',consecutive:1}),context)).toBe(true);
   });
   it('calculates convergence against close and supports negation',()=>{
     const condition=leaf('MA_CONVERGENCE',{periods:'9,20,50',maType:'EMA',maxSpreadPct:10,withinDays:1});

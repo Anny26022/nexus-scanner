@@ -5,7 +5,8 @@
 - `market_breadth_v2.json.gz`: the all-active series plus Nifty 50, Nifty 500 and Nifty MidSmall 400 series.
 - `sector_breadth_v2.json.gz`: matching history for each classified sector.
 - `market_breadth_contributions_v2.json.gz`: per-date, per-metric symbol lists for audit and explanation.
-- `all_indices_history_v2.json.gz`: benchmark panels for the named Nifty indices.
+- `breadth_universe_snapshot.json.gz`: the date-aligned membership snapshot used to build each breadth universe.
+- `all_indices_history_v2.json.gz`: normalized history for every available index. The named Nifty panel subset is embedded in `market_breadth_v2.json.gz`.
 
 Each percentage uses its own valid population. A 200-day SMA percentage therefore divides by securities with 200 valid sessions, while advance/decline and thrust percentages divide by securities with a valid prior close. Raw valid counts remain in every record.
 

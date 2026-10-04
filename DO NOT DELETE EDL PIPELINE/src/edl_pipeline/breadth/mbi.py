@@ -68,10 +68,10 @@ def enrich_records(records, methodology, index_closes=None):
             above = row[f"above_{ma_prefix}_{period}"]
             valid = row[f"valid_{ma_prefix}_{period}"]
             not_above = max(valid - above, 0)
-            # A stock without enough MA history is explicitly not above that MA.
-            # This preserves a calculable MBI/XP series while the raw valid count
-            # still exposes the coverage limit to consumers.
-            row[f"above_{period}_pct"] = percentage(above, valid) if valid else 0.0
+            # A missing MA population remains unavailable in the published record.
+            # XP handles its own neutral fallback below; it must not redefine the
+            # public percentage as zero.
+            row[f"above_{period}_pct"] = percentage(above, valid)
             row[f"ratio_{period}"] = scaled_ratio(above, not_above)
 
         row["change_4"] = percentage_change(
@@ -161,8 +161,10 @@ def enrich_records(records, methodology, index_closes=None):
         row["mbi_state"] = state
         row["warning_day"] = red_count >= 3 and state != "red"
 
-        p10 = row["above_10_pct"]
-        p20 = row["above_20_pct"]
+        # XP's historical formula treats insufficient MA coverage as neutral,
+        # while the published breadth fields remain unavailable (None).
+        p10 = row["above_10_pct"] if row["above_10_pct"] is not None else 0.0
+        p20 = row["above_20_pct"] if row["above_20_pct"] is not None else 0.0
         up_4_5_count = row["up_4_5"]
         down_4_5_count = row["down_4_5"]
         current_z = None
@@ -178,7 +180,7 @@ def enrich_records(records, methodology, index_closes=None):
         row["xp_smoothed_advances"] = current_z
         if current_z is not None:
             previous_z = current_z
-        if p10 is None or p20 is None or current_z is None or down_4_5_count is None:
+        if current_z is None or down_4_5_count is None:
             row["xp_raw"] = None
             row["xp"] = None
         else:

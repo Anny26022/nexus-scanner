@@ -264,8 +264,8 @@ class BreadthV2Tests(unittest.TestCase):
         output = enrich_records([first, second], self.methodology)
 
         self.assertTrue(math.isfinite(output[0]["xp"]))
-        self.assertEqual(output[0]["above_10_pct"], 0)
-        self.assertEqual(output[0]["above_20_pct"], 0)
+        self.assertIsNone(output[0]["above_10_pct"])
+        self.assertIsNone(output[0]["above_20_pct"])
         self.assertEqual(output[0]["xp_smoothed_advances"], 10)
         self.assertAlmostEqual(output[1]["xp_smoothed_advances"], 8.38)
         self.assertTrue(math.isfinite(output[1]["xp"]))
@@ -311,7 +311,11 @@ class BreadthV2Tests(unittest.TestCase):
             self.assertIn("xp", artifact["records"][-1])
             self.assertIn("nifty50", artifact["universes"])
             self.assertTrue(artifact["universes"]["nifty50"]["available"])
+            self.assertTrue(artifact["universes"]["nifty500"]["available"])
+            self.assertTrue(artifact["universes"]["niftymidsmall400"]["available"])
             self.assertTrue(sector_path.exists())
+            sectors = json.loads(sector_path.read_text(encoding="utf-8"))["sectors"]
+            self.assertEqual({item["sector"] for item in sectors}, {"Financials", "Technology"})
             self.assertTrue(contributions_path.exists())
             audit = json.loads(contributions_path.read_text(encoding="utf-8"))
             self.assertIn("AAA", audit["universes"]["all_active"]["records"][-1]["metrics"]["eligible_with_candle"])

@@ -1,34 +1,15 @@
 name: Daily Data Refresh
-
 on:
-  schedule:
-    - cron: '30 10 * * 1-5' # Runs at 4:00 PM IST (10:30 UTC) Mon-Fri
-  workflow_dispatch: # Allows manual trigger from GitHub UI
-
+  workflow_dispatch:
 permissions:
-  contents: write
-
-concurrency:
-  group: daily-data-refresh
-  cancel-in-progress: false
-
+  contents: read
 jobs:
-  refresh-data:
+  recover:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-          cache: 'pip'
-          cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
-
-      - name: Cache OHLCV Data  
-        uses: actions/cache@v4
+      - uses: actions/checkout@v4
+      - name: Restore scanner history
+        uses: actions/cache/restore@v4
         with:
           path: |
             DO NOT DELETE EDL PIPELINE/ohlcv_data
@@ -38,113 +19,20 @@ jobs:
             DO NOT DELETE EDL PIPELINE/scanner_history_data
             DO NOT DELETE EDL PIPELINE/filing_history_data
             DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
-            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
-          key: scanner-history-v1-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: |
-            scanner-history-v1-${{ runner.os }}-
-
-      - name: Select weekly EOD2 cache key
-        id: eod2-cache-key
-        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore EOD2 data checkout
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/eod2_data
-          key: eod2-data-v1-${{ runner.os }}-${{ steps.eod2-cache-key.outputs.week }}
-          restore-keys: |
-            eod2-data-v1-${{ runner.os }}-
-
-      - name: Update EOD2 adjusted-history data
-        continue-on-error: true
-        env:
-          EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
-        run: |
-          if [ -d "$EOD2_DATA_DIR/.git" ]; then
-            git -C "$EOD2_DATA_DIR" pull --ff-only origin main
-          else
-            git clone --depth 1 https://github.com/BennyThadikaran/eod2_data.git "$EOD2_DATA_DIR"
-          fi
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
-
-      - name: Verify Pipeline Code
-        run: |
-          cd "DO NOT DELETE EDL PIPELINE"
-          python -m unittest discover -s tests -v
-          python -m compileall -q .
-
-      - name: Verify scanner publication
-        run: python -m unittest discover -s frontend -p 'test_*.py' -v
-
-      - name: Install R2 uploader
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
-
-      - name: Run Pipeline
-        env:
-          EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
-          EDL_CHART_STORAGE: r2
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
-          R2_BUCKET: nexus-screener-chart-data
-        run: |
-          cd "DO NOT DELETE EDL PIPELINE"
-          python run_full_pipeline.py
-
-      - name: Commit and Push Results
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          # A refresh can run long enough for main to receive a merge.  Start
-          # the generated-data commit from that latest tip rather than
-          # rebasing binary artifacts after they have been committed.
-          git fetch origin main
-          # Mixed reset retains the generated working files while refreshing
-          # the index too, so unrelated code merged during this run is kept.
-          git reset --mixed origin/main
-          git add "DO NOT DELETE EDL PIPELINE/all_stocks_fundamental_analysis.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/sector_analytics.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/market_breadth.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/market_breadth_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/sector_breadth_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/market_breadth_contributions_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/breadth_universe_snapshot.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/all_indices_history_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/all_indices_list.json"
-          git add "DO NOT DELETE EDL PIPELINE/corporate_action_ledger.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/nse_corporate_actions.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/nse_corporate_action_adjustments.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/data_quality.json"
-          git add "DO NOT DELETE EDL PIPELINE/pipeline_report.json"
-          git add "DO NOT DELETE EDL PIPELINE/nse_universe_reconciliation.json"
-          git add "DO NOT DELETE EDL PIPELINE/mainboard_universe_report.json"
-          git add "DO NOT DELETE EDL PIPELINE/sme_market_data.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/nse_fno_ban.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/rs_rating_daily.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/ipo_screener.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/ipo_provider_listed_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/ipo_provider_details_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_listed_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_details_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/shareholding_history.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/quarterly_financial_history.json.gz"
-          git add frontend/public/data/current.json frontend/public/data/revisions
-          git commit -m "Automated Daily Data Refresh [skip ci]" || echo "No changes to commit"
-          git push
-
-      - name: Upload Refresh Diagnostics
-        if: always()
+          key: scanner-history-v1-${{ runner.os }}-recovery-${{ github.run_id }}
+          restore-keys: scanner-history-v1-${{ runner.os }}-
+      - name: Confirm latest session
+        run: tail -1 'DO NOT DELETE EDL PIPELINE/ohlcv_data/RELIANCE.csv'
+      - name: Upload recovered history
         uses: actions/upload-artifact@v4
         with:
-          name: pipeline-diagnostics
-          if-no-files-found: ignore
+          name: recovered-scanner-history
           path: |
-            DO NOT DELETE EDL PIPELINE/pipeline_report.json
-            DO NOT DELETE EDL PIPELINE/pipeline_failure_report.json
-            DO NOT DELETE EDL PIPELINE/data_quality.json
-            DO NOT DELETE EDL PIPELINE/data_quality_failure.json
+            DO NOT DELETE EDL PIPELINE/ohlcv_data
+            DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
+            DO NOT DELETE EDL PIPELINE/delivery_history_data
+            DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
+            DO NOT DELETE EDL PIPELINE/scanner_history_data
+            DO NOT DELETE EDL PIPELINE/filing_history_data
+            DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
+          retention-days: 1

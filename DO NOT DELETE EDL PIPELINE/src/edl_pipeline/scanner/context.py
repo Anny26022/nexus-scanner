@@ -33,7 +33,7 @@ CONTEXT_CONDITION_REGISTRY = {
     "series": {"inputs": {"values": "string[]"}, "definition": "NSE listing series."},
     "listing_age_days": {"inputs": {"comparison": "comparison", "days": "integer"}, "definition": "Trading sessions since NSE listing date."},
     "index_membership": {"inputs": {"index_name": "string"}, "definition": "Current canonical index membership."},
-    "market_breadth": {"inputs": {"universe": "all_active|nifty50|niftymidsmall400", "metric": "pct_above_sma10|pct_above_sma20|pct_above_sma50|pct_above_sma200|ad_ratio_sma10|volume_ratio20", "comparison": "comparison", "value": "number"}, "definition": "Date-aligned market breadth for a named universe."},
+    "market_breadth": {"inputs": {"universe": "all_active|nifty50|nifty500|niftymidsmall400", "metric": "published breadth metric", "comparison": "comparison", "value": "number"}, "definition": "Date-aligned published breadth metric for a named universe."},
     "fno_ban": {"inputs": {"mode": "exclude|only"}, "definition": "Current official NSE F&O security-ban report."},
     "exclude_surveillance": {"inputs": {}, "definition": "Excludes stocks in the latest ASM or GSM surveillance lists. Both lists must be available for the screen session."},
     "absolute_volume": {"inputs": {"comparison": "comparison", "value": "number"}, "definition": "Latest session traded volume in shares."},
@@ -94,7 +94,7 @@ def normalize_condition_spec(raw: dict[str, Any]) -> dict[str, Any]:
     metric_aliases = {
         "pctabovesma10": "pct_above_sma10", "pctabovesma20": "pct_above_sma20",
         "pctabovesma50": "pct_above_sma50", "pctabovesma200": "pct_above_sma200",
-        "adratiosma10": "ad_ratio_sma10", "volratio20": "volume_ratio20",
+        "adratiosma10": "ad_ratio_sma10", "volratio20": "volume_ratio_20", "volume_ratio20": "volume_ratio_20",
     }
     if condition == "market_breadth":
         spec["metric"] = metric_aliases.get(spec.get("metric"), spec.get("metric"))

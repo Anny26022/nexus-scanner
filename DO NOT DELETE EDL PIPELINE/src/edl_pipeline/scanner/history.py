@@ -50,6 +50,10 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
     """Persist only fields that influence scanner conditions for one session."""
     session = date.fromisoformat(as_of_date).isoformat()
     record = next((item for item in breadth.get("records", []) if item.get("date") == session), None)
+    breadth_universes = {}
+    for key, payload in (breadth.get("universes") or {}).items():
+        candidate = next((item for item in payload.get("records", []) if item.get("date") == session), None)
+        if candidate: breadth_universes[key] = candidate
     snapshot_stocks = []
     for stock in stocks:
         if not stock.get("symbol"):
@@ -72,10 +76,11 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
             item["shareholding_observed_on"] = holding["observed_on"]
         snapshot_stocks.append(item)
     payload = {
-        "schema_version": 3,
+        "schema_version": 4,
         "as_of_date": session,
         "stocks": snapshot_stocks,
         "breadth": record,
+        "breadth_universes": breadth_universes,
         "fno_ban": {
             "available": bool(fno_ban.get("available")),
             "trade_date": fno_ban.get("trade_date"),

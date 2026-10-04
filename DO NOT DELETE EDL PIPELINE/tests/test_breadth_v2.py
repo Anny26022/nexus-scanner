@@ -17,6 +17,8 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from edl_pipeline.breadth.aggregates import BreadthAccumulator
+from edl_pipeline.breadth.gates import gate_metrics
+from edl_pipeline.breadth.pipeline import _metadata_by_symbol
 from edl_pipeline.breadth.config import BreadthMethodology, load_methodology
 from edl_pipeline.breadth.indicators import prepare_history
 from edl_pipeline.breadth.indices import (
@@ -543,6 +545,36 @@ class BreadthV2Tests(unittest.TestCase):
                 for row in artifact["indices"]
             }
             self.assertEqual(closes, {99: 101, 846: 202})
+
+    def test_breakout_uses_close_and_requires_complete_current_candle(self):
+        frame = make_ohlcv([100 + index for index in range(25)])
+        frame.loc[24, ["Close", "High", "Low"]] = [120, 140, 119]
+        prepared = prepare_history(frame, self.methodology)
+        self.assertFalse(prepared.loc[24, "Breakout_20d"])
+        incomplete = make_ohlcv([100 + index for index in range(25)])
+        incomplete.loc[24, "High"] = math.nan
+        prepared = prepare_history(incomplete, self.methodology)
+        self.assertTrue(pd.isna(prepared.loc[24, "Prior_20_High"]))
+
+    def test_volume_contributions_and_gate_namespace_are_auditable(self):
+        accumulator = BreadthAccumulator(self.methodology, include_contributions=True)
+        accumulator.update(prepare_history(make_ohlcv([100, 101]), self.methodology), "TEST")
+        first, second = accumulator.records()
+        self.assertEqual(first["total_volume"], 1000)
+        self.assertIn("TEST", accumulator.contribution_records()[0]["metrics"]["total_volume"])
+        self.assertIn("TEST", accumulator.contribution_records()[1]["metrics"]["advance_volume"])
+        metrics = gate_metrics({"date": "2026-01-01", "mbi_state": "green", "mbi_cells": {}, "xp": 3.0})
+        self.assertEqual(metrics["xp"], 3.0)
+        self.assertNotIn("date", metrics)
+        self.assertNotIn("mbi_state", metrics)
+
+    def test_metadata_duplicate_selection_matches_highest_market_cap(self):
+        metadata = _metadata_by_symbol([
+            {"Sym": "TEST", "Mcap": 100, "Sector": "Old", "Index": "NIFTY 50"},
+            {"Sym": "TEST", "Mcap": 200, "Sector": "New", "Index": "NIFTY 500"},
+        ])
+        self.assertEqual(metadata["TEST"]["sector"], "New")
+        self.assertEqual(metadata["TEST"]["memberships"], {"NIFTY500"})
 
     def test_normalized_index_collisions_are_disambiguated_safely(self):
         value = safe_index_symbol("A-B", "../13", disambiguate=True)

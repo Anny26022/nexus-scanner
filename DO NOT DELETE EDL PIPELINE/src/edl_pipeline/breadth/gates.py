@@ -1,9 +1,13 @@
 """Public numeric fields available to the Market Breadth scanner gate."""
+import math
 from .aggregates import scaled_ratio
 
 def gate_metrics(row):
     """Return stable scanner names without exposing methodology internals."""
-    result = dict(row)
+    result = {
+        key: value for key, value in row.items()
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    }
     result.update({
         "net_breadth": row.get("advances", 0) - row.get("declines", 0),
         "thrust_4_ratio": scaled_ratio(row.get("up_4", 0), row.get("down_4", 0)),

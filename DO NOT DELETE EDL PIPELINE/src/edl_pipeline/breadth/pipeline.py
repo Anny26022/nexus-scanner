@@ -97,13 +97,25 @@ def _round_value(value, digits):
 
 
 def _metadata_by_symbol(rows):
+    """Use the same highest-market-cap duplicate selection as the universe snapshot."""
     result = {}
     for row in rows:
         symbol = str(row.get("Sym") or row.get("Symbol") or row.get("symbol") or "").strip()
-        if not symbol: continue
+        if not symbol:
+            continue
+        try:
+            market_cap = float(row.get("Mcap", row.get("Market Cap(Cr.)", float("-inf"))))
+        except (TypeError, ValueError):
+            market_cap = float("-inf")
+        previous = result.get(symbol)
+        if previous is not None and market_cap <= previous["_market_cap"]:
+            continue
         memberships = (row.get("index_memberships") or row.get("indexMemberships") or row.get("index_membership") or row.get("Index Memberships") or row.get("Index") or row.get("indices") or [])
-        if isinstance(memberships, str): memberships = [item.strip() for item in memberships.split(",") if item.strip()]
-        result[symbol] = {"sector": str(row.get("Sector") or row.get("sector") or "Unclassified"), "memberships": {str(item).upper().replace(" ", "") for item in memberships}}
+        if isinstance(memberships, str):
+            memberships = [item.strip() for item in memberships.split(",") if item.strip()]
+        result[symbol] = {"sector": str(row.get("Sector") or row.get("sector") or "Unclassified"), "memberships": {str(item).upper().replace(" ", "") for item in memberships}, "_market_cap": market_cap}
+    for metadata in result.values():
+        metadata.pop("_market_cap", None)
     return result
 
 UNIVERSE_MEMBERSHIPS = {

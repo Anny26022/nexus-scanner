@@ -69,7 +69,7 @@ def main():
         output_path=ALL_INDICES_OUTPUT_FILE, output_sessions=methodology.output_sessions,
         rounding_digits=methodology.rounding_digits, generated_at=generated_at,
     )
-    panels = {item["symbol"]: item["records"] for item in index_artifact.get("indices", []) if item["symbol"] in {"NIFTY 50", "NIFTY 500", "NIFTY MIDSMALLCAP 400"}}
+    panels = {item["symbol"]: item["records"] for item in index_artifact.get("indices", []) if item["symbol"] in {"NIFTY", "NIFTY 50", "NIFTY 500", "NIFTY MIDSMALLCAP 400"}}
     artifact, snapshot = generate_market_breadth(
         universe_rows=universe_rows,
         ohlcv_dir=OHLCV_DIR,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Search, Sliders, RotateCcw, Check, Play, Info } from 'lucide-react';
 import { ConditionDef, ConditionCategory, ActiveCondition, MatchMode } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 
 interface ConditionCatalogModalProps {
   isOpen: boolean;
@@ -78,6 +79,9 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
           defaultParams[p.id] = p.defaultValue;
         });
         defaultParams[paramId] = value;
+        if (conditionId === 'MARKET_BREADTH' && paramId === 'metric') {
+          defaultParams.value = breadthMetricDefault(value);
+        }
         return {
           ...prev,
           [conditionId]: {
@@ -88,14 +92,15 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
         };
       }
       if (!existing) return prev;
+      const parameters = { ...existing.parameters, [paramId]: value };
+      if (conditionId === 'MARKET_BREADTH' && paramId === 'metric') {
+        parameters.value = breadthMetricDefault(value);
+      }
       return {
         ...prev,
         [conditionId]: {
           ...existing,
-          parameters: {
-            ...existing.parameters,
-            [paramId]: value,
-          },
+          parameters,
         },
       };
     });

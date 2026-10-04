@@ -47,6 +47,10 @@ class BreadthAccumulator:
             record = self._record(row.Date)
             self._add(record, "eligible_with_candle", symbol)
             daily_return = row.Daily_Return
+            if _present(row.Volume):
+                record["total_volume"] += float(row.Volume)
+                if self._contributions is not None and symbol:
+                    self._contributions[record["date"]]["total_volume"].append(symbol)
             if _present(daily_return):
                 self._add(record, "valid_return", symbol)
                 if daily_return > 0: self._add(record, "advances", symbol)
@@ -57,9 +61,14 @@ class BreadthAccumulator:
                 if daily_return >= self.methodology.extreme_advance_threshold: self._add(record, "up_4_5", symbol)
                 if daily_return < -self.methodology.extreme_advance_threshold: self._add(record, "down_4_5", symbol)
                 if _present(row.Volume):
-                    record["total_volume"] += float(row.Volume)
-                    if daily_return > 0: record["advance_volume"] += float(row.Volume)
-                    elif daily_return < 0: record["decline_volume"] += float(row.Volume)
+                    if daily_return > 0:
+                        record["advance_volume"] += float(row.Volume)
+                        if self._contributions is not None and symbol:
+                            self._contributions[record["date"]]["advance_volume"].append(symbol)
+                    elif daily_return < 0:
+                        record["decline_volume"] += float(row.Volume)
+                        if self._contributions is not None and symbol:
+                            self._contributions[record["date"]]["decline_volume"].append(symbol)
             for ma_type in ("SMA", "EMA"):
                 for period in self.methodology.ma_periods:
                     value = getattr(row, f"{ma_type}_{period}")

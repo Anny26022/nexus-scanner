@@ -1742,6 +1742,10 @@
             "label": "5-day A/D ratio"
           },
           {
+            "value": "adRatioSma10",
+            "label": "10-SMA above/below ratio"
+          },
+          {
             "value": "advance_decline_ratio_10d",
             "label": "10-day A/D ratio"
           },
@@ -1782,12 +1786,24 @@
             "label": "21-day momentum breadth"
           },
           {
+            "value": "down_25_month",
+            "label": "21-day momentum declines"
+          },
+          {
             "value": "up_13_34d",
             "label": "34-day momentum breadth"
           },
           {
+            "value": "down_13_34d",
+            "label": "34-day momentum declines"
+          },
+          {
             "value": "up_25_quarter",
             "label": "63-day momentum breadth"
+          },
+          {
+            "value": "down_25_quarter",
+            "label": "63-day momentum declines"
           },
           {
             "value": "volume_above_20",

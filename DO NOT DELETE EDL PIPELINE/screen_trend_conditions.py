@@ -69,9 +69,17 @@ def _load_context(root, as_of_date=None, stock_path=None, index_path=None, bread
         rows = payload.get("records", []) if isinstance(payload, dict) else []
         if rows:
             breadth[key] = gate_metrics(rows[-1])
-    if saved and saved.get("breadth_universes"):
-        breadth = {key: gate_metrics(row) for key, row in saved["breadth_universes"].items()}
-    if not saved:
+    if saved:
+        saved_universes = saved.get("breadth_universes") or {}
+        if saved_universes:
+            breadth = {key: gate_metrics(row) for key, row in saved_universes.items()}
+        elif saved.get("breadth"):
+            # Older snapshots predate named breadth universes. They remain
+            # point-in-time safe for their all-active breadth value.
+            breadth = {"all_active": gate_metrics(saved["breadth"])}
+        else:
+            breadth = {}
+    else:
         latest = [breadth_artifact.get("records", [])[-1]] if breadth_artifact.get("records") else latest
     ban = (saved or {}).get("fno_ban") or _read_json(root / "nse_fno_ban.json") or _read_json(root / "nse_fno_ban.json.gz") or {}
     fno_ban_symbols = {str(symbol).upper(): True for symbol in ban.get("symbols", [])}

@@ -127,6 +127,7 @@ jobs:
           git add "DO NOT DELETE EDL PIPELINE/mainboard_universe_report.json"
           git add "DO NOT DELETE EDL PIPELINE/sme_market_data.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/nse_fno_ban.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/earnings_calendar.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/rs_rating_daily.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/ipo_screener.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/ipo_provider_listed_archive.json.gz"

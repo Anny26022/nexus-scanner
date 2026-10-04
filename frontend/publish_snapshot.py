@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from datetime import datetime, timezone
 
 import numpy as np
 
@@ -150,7 +149,14 @@ def publish(root=bridge.ROOT, output=OUTPUT):
     ipo_payload=ipos if isinstance(ipos,dict) else {'records':ipos}
     ipo_bytes=json.dumps(ipo_payload,separators=(',', ':'),allow_nan=False).encode()
     (generation/'ipos.json.gz').write_bytes(gzip.compress(ipo_bytes,compresslevel=9,mtime=0))
-    manifest={'revision':revision,'sessionDate':session,'publishedAt':datetime.now(timezone.utc).isoformat(),'schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz','datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz'}
+    calendar_bytes=source_bytes.get('earnings_calendar.json.gz')
+    if calendar_bytes is not None:
+        calendar_path=generation/'earnings-calendar.json.gz'
+        temporary=calendar_path.with_name(calendar_path.name+'.tmp')
+        temporary.write_bytes(calendar_bytes); temporary.replace(calendar_path)
+    manifest={'revision':revision,'sessionDate':session,'publishedAt':f'{session}T00:00:00Z','schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz','datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz'}
+    if calendar_bytes is not None:
+        manifest['earningsCalendarUrl']=f'/data/revisions/{revision}/earnings-calendar.json.gz'
     manifest = complete_release(chart_root, output, manifest)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest

@@ -44,15 +44,16 @@ class IpoScreenerTests(unittest.TestCase):
         other = next(row for row in records if row["symbol"] == "OTHER")
         self.assertIsNone(other["issue_price"])
         self.assertIsNone(other["provider"])
-        records = [row for row in records if row["symbol"] == "NEW"]
-        self.assertEqual(records[0]["issue_price"], 120)
-        self.assertEqual(records[0]["retail_subscription_multiple"], 3.4)
-        self.assertEqual(records[0]["provider"]["listing_price"], 135)
+        matched = next(row for row in records if row["symbol"] == "NEW")
+        self.assertEqual(matched["issue_price"], 120)
+        self.assertEqual(matched["retail_subscription_multiple"], 3.4)
+        self.assertEqual(matched["provider"]["listing_price"], 135)
 
         decoded["NEW"]["listing_date_iso"] = "2005-09-25"
         records, _ = build_ipo_catalog(stocks, listings, date(2026, 9, 28), decoded)
-        self.assertIsNone(records[0]["issue_price"])
-        self.assertIsNone(records[0]["provider"])
+        mismatched = next(row for row in records if row["symbol"] == "NEW")
+        self.assertIsNone(mismatched["issue_price"])
+        self.assertIsNone(mismatched["provider"])
 
     def test_retains_all_fetched_provider_groups_in_catalogue_payload(self):
         provider = _provider_catalogue_data({

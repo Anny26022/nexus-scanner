@@ -10,11 +10,13 @@ from datetime import datetime, timezone
 import gzip
 import json
 from pathlib import Path
+import re
 import time
+import zlib
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from pipeline_utils import BASE_DIR, load_json, save_json
+from pipeline_utils import BASE_DIR, atomic_replace_bytes, load_json, save_json
 
 
 ORIGIN = "https://openweb-api.dhan.co"
@@ -63,7 +65,7 @@ def _records(payload) -> list[dict]:
 
 def _listed_key(row: dict) -> str:
     isin = str(row.get("ipo_isin") or "").strip().upper()
-    if isin:
+    if re.fullmatch(r"[A-Z]{2}[A-Z0-9]{9}[0-9]", isin):
         return f"ISIN:{isin}"
     symbol = str(row.get("ipo_symbol_name") or "").strip().upper()
     listed = str(row.get("ipo_listed_date") or "").strip()[:10]
@@ -83,7 +85,7 @@ def _read_gzip_payload(path: Path, key: str):
         with gzip.open(path, "rt", encoding="utf-8") as handle:
             payload = json.load(handle)
         return payload.get(key) if isinstance(payload, dict) else None
-    except (OSError, ValueError):
+    except (EOFError, OSError, ValueError, zlib.error):
         return None
 
 
@@ -111,7 +113,7 @@ def _write_gzip_payload(paths, payload) -> None:
     compressed = gzip.compress(raw, compresslevel=9, mtime=0)
     for path in paths:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(compressed)
+        atomic_replace_bytes(path, compressed)
 
 
 def _write_listed_archive(root: Path, rows: list[dict]) -> None:
@@ -157,6 +159,11 @@ def _fetch_listed(client: ScanxIpoClient, full_history: bool) -> tuple[list[dict
         if len(batch) < LISTED_PAGE_SIZE:
             break
         time.sleep(REQUEST_DELAY_SECONDS)
+    else:
+        if full_history and len(batch) == LISTED_PAGE_SIZE:
+            raise RuntimeError(
+                f"ScanX listed-history bootstrap exceeded {MAX_LISTED_PAGES} full pages; refusing truncated archive"
+            )
     return rows, errors
 
 
@@ -172,13 +179,18 @@ def _age_hours(item: dict, now: datetime) -> float:
         return float("inf")
 
 
+def _attempt_age_hours(item: dict, now: datetime) -> float:
+    marker = item.get("last_attempted_at") or item.get("fetched_at")
+    return _age_hours({"fetched_at": marker}, now)
+
+
 def _detail_candidates(feeds: dict, listed: list[dict], details: dict, now: datetime) -> list[tuple[str, bool]]:
     active = {_slug(row) for name in ("open", "upcoming") for row in _records(feeds.get(name)) if _slug(row)}
     candidates = set(active)
     candidates.update(_slug(row) for row in listed if _slug(row))
     return sorted(
         ((slug, slug in active) for slug in candidates),
-        key=lambda item: (0 if item[1] else 1, -_age_hours(details.get(item[0], {}), now), item[0]),
+        key=lambda item: (0 if item[1] else 1, -_attempt_age_hours(details.get(item[0], {}), now), item[0]),
     )
 
 
@@ -198,6 +210,9 @@ def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT) -> dict:
         if isinstance(item, dict) and item.get("data") == {}:
             item["data"] = None
             item["available"] = False
+            attempted_at = item.pop("fetched_at", None)
+            if attempted_at:
+                item["last_attempted_at"] = attempted_at
     client = ScanxIpoClient()
 
     for name, endpoint, body in (
@@ -218,20 +233,27 @@ def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT) -> dict:
         if attempted >= detail_limit:
             break
         max_age = 6 if active else 24 * 30
-        if _age_hours(details.get(slug, {}), now) < max_age:
+        current = details.get(slug, {})
+        if current.get("data") and _age_hours(current, now) < max_age:
             continue
         attempted += 1
         try:
             response = client.post_json("history", _detail_body(slug))
             rows = _records(response)
-            data = rows[0] if rows and rows[0] else None
+            if not rows or not rows[0]:
+                raise ValueError("ScanX history returned no records")
             details[slug] = {
-                "fetched_at": now.isoformat(), "available": data is not None,
-                "data": data, "errors": [],
+                "fetched_at": now.isoformat(), "last_attempted_at": now.isoformat(),
+                "available": True, "data": rows[0], "errors": [],
             }
         except (HTTPError, URLError, TimeoutError, ValueError, OSError) as error:
             current = details.get(slug, {})
-            details[slug] = {**current, "errors": [str(error)]}
+            details[slug] = {
+                **current,
+                "last_attempted_at": now.isoformat(),
+                "available": bool(current.get("data")),
+                "errors": [str(error)],
+            }
             errors.append(f"detail {slug}: {error}")
         time.sleep(REQUEST_DELAY_SECONDS)
 

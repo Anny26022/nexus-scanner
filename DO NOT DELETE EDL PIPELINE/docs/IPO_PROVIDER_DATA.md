@@ -30,7 +30,8 @@ the cache is absent, and a source outage retains the last successful values.
 
 NSE remains authoritative. ScanX enrichment joins a canonical row only when
 the NSE symbol and listing date match exactly; an available ISIN must also
-match. The existing provider retains precedence for normalized GMP,
-subscription, and issue-term fields. ScanX fills missing normalized values and
-its complete raw record remains available under each row's `scanx` field and
+match. The existing provider retains precedence. ScanX fills missing issue
+price, issue-size, and retail/QIB subscription values; GMP and the provider's
+other normalized fields continue to come from the existing provider. The
+complete raw ScanX record remains available under each row's `scanx` field and
 under `provider_data.scanx` in `ipos.json.gz`.

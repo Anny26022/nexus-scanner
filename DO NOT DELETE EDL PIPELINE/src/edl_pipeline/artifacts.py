@@ -314,7 +314,7 @@ SCRIPT_OUTPUT_SPECS = {
         ArtifactSpec("ipo_provider_details_archive.json.gz", "gzip_json", required_fields=("details",)),
     ],
     "fetch_scanx_ipo_data.py": [
-        ArtifactSpec("scanx_ipo_listed_archive.json.gz", "gzip_json", required_fields=("ipos",)),
+        ArtifactSpec("scanx_ipo_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),
         ArtifactSpec("scanx_ipo_details_archive.json.gz", "gzip_json", required_fields=("details",)),
     ],
     "build_ipo_screener_artifact.py": [
@@ -346,7 +346,7 @@ FINAL_ARTIFACT_SPECS = [
     ArtifactSpec("ipo_screener.json.gz", "gzip_json", required_fields=("schema_version", "source", "as_of_date", "records", "provider_data", "pending_canonical_enrichment", "capabilities")),
     ArtifactSpec("ipo_provider_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),
     ArtifactSpec("ipo_provider_details_archive.json.gz", "gzip_json", required_fields=("details",)),
-    ArtifactSpec("scanx_ipo_listed_archive.json.gz", "gzip_json", required_fields=("ipos",)),
+    ArtifactSpec("scanx_ipo_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),
     ArtifactSpec("scanx_ipo_details_archive.json.gz", "gzip_json", required_fields=("details",)),
     ArtifactSpec("shareholding_history.json.gz", "gzip_json", min_count=1, required_fields=("source", "as_of_date", "records")),
     ArtifactSpec("filing_history.json.gz", "gzip_json", min_count=1, required_fields=("source", "coverage", "records")),

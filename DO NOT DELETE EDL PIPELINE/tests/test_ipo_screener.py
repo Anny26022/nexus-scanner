@@ -111,7 +111,7 @@ class IpoScreenerTests(unittest.TestCase):
                 "ipo_issue_price": 100, "seo_symbol": "new-ltd",
             }],
             "details": {"new-ltd": {"data": {
-                "symbol": "NEW", "isin": "INE1", "listing_date": "2026-09-25 17:00:00",
+                "symbol": "OLD_TICKER", "isin": "INE1", "listing_date": "2026-09-25 17:00:00",
                 "issue_size": 500_000_000,
                 "catsubscription_data": {"retail_times": 3.2, "qib_times": 7.5},
             }}},
@@ -132,6 +132,29 @@ class IpoScreenerTests(unittest.TestCase):
         records, _ = build_ipo_catalog(stocks, listings, date(2026, 9, 28), scanx=_scanx_by_symbol(payload))
         self.assertIsNone(records[0]["scanx"])
         self.assertIsNone(records[0]["issue_price"])
+
+        payload["records"][0]["ipo_listed_date"] = "2026-09-25"
+        payload["records"][0]["ipo_isin"] = "INE_DIFFERENT"
+        records, _ = build_ipo_catalog(stocks, listings, date(2026, 9, 28), scanx=_scanx_by_symbol(payload))
+        self.assertIsNone(records[0]["scanx"])
+
+    def test_scanx_null_subscription_block_remains_unavailable(self):
+        stocks = [{"symbol": "NEW", "isin": "INE1", "default_screener_eligible": True}]
+        listings = [{"SYMBOL": "NEW", "SERIES": "EQ", "DATE OF LISTING": "25-SEP-2026"}]
+        payload = {
+            "records": [{
+                "ipo_symbol_name": "NEW", "ipo_isin": "INE1", "ipo_listed_date": "2026-09-25",
+                "custom_symbol": "new-custom", "seo_symbol": "different-slug",
+            }],
+            "details": {"new-custom": {"data": {
+                "symbol": "NEW", "isin": "INE1", "listing_date": "2026-09-25",
+                "catsubscription_data": None,
+            }}},
+        }
+        records, _ = build_ipo_catalog(stocks, listings, date(2026, 9, 28), scanx=_scanx_by_symbol(payload))
+        self.assertIsNotNone(records[0]["scanx"]["details"])
+        self.assertIsNone(records[0]["retail_subscription_multiple"])
+        self.assertIsNone(records[0]["institutional_subscription_multiple"])
 
     def test_catalogue_preserves_full_scanx_source_payload(self):
         scanx = {

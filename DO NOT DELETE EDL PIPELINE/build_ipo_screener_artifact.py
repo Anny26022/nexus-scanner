@@ -81,7 +81,7 @@ def _scanx_by_symbol(payload):
     rows = sorted(payload.get("records", []), key=lambda row: str(row.get("ipo_listed_date") or ""), reverse=True)
     for row in rows:
         symbol = str(row.get("ipo_symbol_name") or "").strip().upper()
-        slug = str(row.get("seo_symbol") or "").strip().lower()
+        slug = str(row.get("custom_symbol") or row.get("seo_symbol") or "").strip().lower()
         if symbol:
             by_symbol.setdefault(symbol, {
                 "listed": row,
@@ -169,7 +169,7 @@ def _scanx_match(enrichment, symbol, isin, listed):
         return None
     listed_row = enrichment.get("listed") or {}
     details = enrichment.get("details") or {}
-    scanx_symbol = str(details.get("symbol") or listed_row.get("ipo_symbol_name") or "").strip().upper()
+    scanx_symbol = str(listed_row.get("ipo_symbol_name") or details.get("symbol") or "").strip().upper()
     scanx_isin = str(details.get("isin") or listed_row.get("ipo_isin") or "").strip().upper()
     scanx_date = _listing_date(details.get("listing_date") or listed_row.get("ipo_listed_date"))
     if scanx_symbol != symbol or scanx_date != listed:
@@ -208,7 +208,11 @@ def build_ipo_catalog(stocks, equity_rows, as_of_date, provider=None, provider_d
         scanx_issue = _scanx_match((scanx or {}).get(symbol), symbol, stock.get("isin"), listed)
         scanx_listed = scanx_issue.get("listed", {}) if scanx_issue else {}
         scanx_details = (scanx_issue.get("details") or {}) if scanx_issue else {}
-        scanx_subscription = scanx_details.get("catsubscription_data", {}) if isinstance(scanx_details, dict) else {}
+        scanx_subscription = (
+            scanx_details.get("catsubscription_data")
+            if isinstance(scanx_details.get("catsubscription_data"), dict)
+            else {}
+        )
         scanx_issue_price = _number(scanx_listed.get("ipo_issue_price")) or _number(scanx_details.get("ceiling_price"))
         scanx_issue_size = _number(scanx_details.get("issue_size"))
         scanx_issue_size_crore = scanx_issue_size / 10_000_000 if scanx_issue_size is not None else None

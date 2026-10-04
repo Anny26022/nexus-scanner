@@ -1,20 +1,20 @@
 {
-    "generated_at": "2026-10-04T09:07:07.468922+00:00",
+    "generated_at": "2026-10-04T10:31:23.513047+00:00",
     "base_dir": ".",
     "config": {
         "fetch_ohlcv": true,
         "fetch_optional": false,
         "cleanup_intermediate": false
     },
-    "total_time_seconds": 1803.074,
-    "raw_size_bytes": 1149308374,
-    "gzip_size_bytes": 112446224,
+    "total_time_seconds": 1794.768,
+    "raw_size_bytes": 1151011513,
+    "gzip_size_bytes": 112637489,
     "exit_code": 0,
     "scripts": {
         "fetch_dhan_data.py": {
             "ok": true,
             "required": true,
-            "elapsed": 3.82275652885437,
+            "elapsed": 3.9250729084014893,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -39,7 +39,7 @@
         "fetch_sme_data.py": {
             "ok": true,
             "required": true,
-            "elapsed": 1.2667231559753418,
+            "elapsed": 2.3200225830078125,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -56,7 +56,7 @@
         "filter_mainboard_universe.py": {
             "ok": true,
             "required": true,
-            "elapsed": 0.5151820182800293,
+            "elapsed": 0.5650370121002197,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -73,7 +73,7 @@
         "fetch_fundamental_data.py": {
             "ok": true,
             "required": true,
-            "elapsed": 30.036211490631104,
+            "elapsed": 28.74594497680664,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -90,7 +90,7 @@
         "reconcile_nse_equity_universe.py": {
             "ok": true,
             "required": false,
-            "elapsed": 0.16406798362731934,
+            "elapsed": 0.16418743133544922,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -107,7 +107,7 @@
         "fetch_company_filings.py": {
             "ok": true,
             "required": false,
-            "elapsed": 234.477557182312,
+            "elapsed": 204.63756227493286,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -124,7 +124,7 @@
         "fetch_new_announcements.py": {
             "ok": true,
             "required": false,
-            "elapsed": 37.72427678108215,
+            "elapsed": 36.53087782859802,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -141,7 +141,7 @@
         "fetch_advanced_indicators.py": {
             "ok": true,
             "required": false,
-            "elapsed": 38.57169508934021,
+            "elapsed": 35.23763585090637,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -158,7 +158,7 @@
         "fetch_market_news.py": {
             "ok": true,
             "required": false,
-            "elapsed": 57.14922618865967,
+            "elapsed": 47.8638961315155,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -175,7 +175,7 @@
         "fetch_nse_corporate_actions.py": {
             "ok": true,
             "required": true,
-            "elapsed": 5.126378297805786,
+            "elapsed": 5.126167058944702,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -200,7 +200,7 @@
         "fetch_corporate_actions.py": {
             "ok": true,
             "required": false,
-            "elapsed": 8.581199169158936,
+            "elapsed": 8.533413648605347,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -225,7 +225,7 @@
         "fetch_surveillance_lists.py": {
             "ok": true,
             "required": false,
-            "elapsed": 1.9694347381591797,
+            "elapsed": 1.817723274230957,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -250,7 +250,7 @@
         "fetch_circuit_stocks.py": {
             "ok": true,
             "required": false,
-            "elapsed": 2.318986654281616,
+            "elapsed": 2.621410846710205,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -275,7 +275,7 @@
         "fetch_bulk_block_deals.py": {
             "ok": true,
             "required": false,
-            "elapsed": 35.089980125427246,
+            "elapsed": 36.256924867630005,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -292,7 +292,7 @@
         "fetch_incremental_price_bands.py": {
             "ok": true,
             "required": false,
-            "elapsed": 1.919783592224121,
+            "elapsed": 2.0702250003814697,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -309,7 +309,7 @@
         "fetch_complete_price_bands.py": {
             "ok": true,
             "required": false,
-            "elapsed": 2.0194342136383057,
+            "elapsed": 1.9711394309997559,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -326,7 +326,7 @@
         "fetch_nse_delivery_history.py": {
             "ok": true,
             "required": true,
-            "elapsed": 2.5689446926116943,
+            "elapsed": 2.7220940589904785,
             "returncode": 0,
             "error": "",
             "validations": []
@@ -334,7 +334,7 @@
         "fetch_nse_fno_ban.py": {
             "ok": true,
             "required": false,
-            "elapsed": 0.96575927734375,
+            "elapsed": 1.2172160148620605,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -351,7 +351,7 @@
         "fetch_all_indices.py": {
             "ok": true,
             "required": true,
-            "elapsed": 0.76552414894104,
+            "elapsed": 0.4649777412414551,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -368,7 +368,7 @@
         "import_eod2_ohlcv.py": {
             "ok": true,
             "required": true,
-            "elapsed": 199.85942840576172,
+            "elapsed": 249.1788215637207,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -385,7 +385,7 @@
         "fetch_nse_delivery_data.py": {
             "ok": true,
             "required": false,
-            "elapsed": 1.0685462951660156,
+            "elapsed": 3.1647121906280518,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -402,7 +402,7 @@
         "apply_nse_daily_ohlcv.py": {
             "ok": true,
             "required": true,
-            "elapsed": 43.866227865219116,
+            "elapsed": 70.57865309715271,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -419,7 +419,7 @@
         "fetch_all_ohlcv.py": {
             "ok": true,
             "required": true,
-            "elapsed": 497.60829496383667,
+            "elapsed": 483.1556179523468,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -436,7 +436,7 @@
         "fetch_indices_ohlcv.py": {
             "ok": true,
             "required": true,
-            "elapsed": 58.92806529998779,
+            "elapsed": 61.396504640579224,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -453,7 +453,7 @@
         "bulk_market_analyzer.py": {
             "ok": true,
             "required": true,
-            "elapsed": 1.3670754432678223,
+            "elapsed": 1.4180331230163574,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -470,7 +470,7 @@
         "advanced_metrics_processor.py": {
             "ok": true,
             "required": true,
-            "elapsed": 35.08692121505737,
+            "elapsed": 38.05552363395691,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -487,7 +487,7 @@
         "process_earnings_performance.py": {
             "ok": true,
             "required": true,
-            "elapsed": 14.598446607589722,
+            "elapsed": 15.657909393310547,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -504,7 +504,7 @@
         "enrich_fno_data.py": {
             "ok": true,
             "required": true,
-            "elapsed": 4.524938344955444,
+            "elapsed": 4.528043746948242,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -521,7 +521,7 @@
         "enrich_delivery_data.py": {
             "ok": true,
             "required": true,
-            "elapsed": 1.0664269924163818,
+            "elapsed": 1.166999340057373,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -538,7 +538,7 @@
         "enrich_surveillance_status.py": {
             "ok": true,
             "required": true,
-            "elapsed": 1.0162537097930908,
+            "elapsed": 1.0668621063232422,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -555,7 +555,7 @@
         "process_market_breadth.py": {
             "ok": true,
             "required": true,
-            "elapsed": 0.8166592121124268,
+            "elapsed": 0.8661229610443115,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -580,7 +580,7 @@
         "process_historical_market_breadth.py": {
             "ok": true,
             "required": true,
-            "elapsed": 70.86847424507141,
+            "elapsed": 74.37748980522156,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -597,7 +597,7 @@
         "process_mbi_market_breadth.py": {
             "ok": true,
             "required": true,
-            "elapsed": 214.70677495002747,
+            "elapsed": 228.33004450798035,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -630,7 +630,7 @@
         "build_rs_ratings.py": {
             "ok": true,
             "required": true,
-            "elapsed": 18.70785403251648,
+            "elapsed": 19.461937189102173,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -647,7 +647,7 @@
         "build_shareholding_history.py": {
             "ok": true,
             "required": true,
-            "elapsed": 2.0192718505859375,
+            "elapsed": 2.0188980102539062,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -664,7 +664,7 @@
         "add_corporate_events.py": {
             "ok": true,
             "required": true,
-            "elapsed": 4.9256432056427,
+            "elapsed": 4.926650762557983,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -673,7 +673,7 @@
                     "kind": "json",
                     "ok": true,
                     "message": "ok",
-                    "size_bytes": 27515453,
+                    "size_bytes": 27515512,
                     "count": 2603
                 }
             ]
@@ -681,7 +681,7 @@
         "build_corporate_action_ledger.py": {
             "ok": true,
             "required": true,
-            "elapsed": 0.5149338245391846,
+            "elapsed": 0.5656185150146484,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -698,7 +698,7 @@
         "enrich_published_fields.py": {
             "ok": true,
             "required": true,
-            "elapsed": 46.766352891922,
+            "elapsed": 51.51030349731445,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -707,7 +707,7 @@
                     "kind": "json",
                     "ok": true,
                     "message": "ok",
-                    "size_bytes": 30125615,
+                    "size_bytes": 30125674,
                     "count": 2603
                 }
             ]
@@ -715,7 +715,7 @@
         "standardize_stock_artifact.py": {
             "ok": true,
             "required": true,
-            "elapsed": 8.583580493927002,
+            "elapsed": 8.690972566604614,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -724,7 +724,7 @@
                     "kind": "json",
                     "ok": true,
                     "message": "ok",
-                    "size_bytes": 28297484,
+                    "size_bytes": 28297543,
                     "count": 2603
                 }
             ]
@@ -732,7 +732,7 @@
         "build_filing_history_artifact.py": {
             "ok": true,
             "required": true,
-            "elapsed": 26.87606143951416,
+            "elapsed": 27.847025871276855,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -741,7 +741,7 @@
                     "kind": "json",
                     "ok": true,
                     "message": "ok",
-                    "size_bytes": 1006500548,
+                    "size_bytes": 1006503010,
                     "count": 5
                 }
             ]
@@ -749,7 +749,7 @@
         "build_quarterly_financial_ledger.py": {
             "ok": true,
             "required": true,
-            "elapsed": 17.858638763427734,
+            "elapsed": 18.26912522315979,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -766,7 +766,7 @@
         "fetch_ipo_provider_data.py": {
             "ok": true,
             "required": true,
-            "elapsed": 216.4879035949707,
+            "elapsed": 108.83977699279785,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -783,7 +783,7 @@
                     "kind": "gzip_json",
                     "ok": true,
                     "message": "ok",
-                    "size_bytes": 74490,
+                    "size_bytes": 218092,
                     "count": 3
                 }
             ]
@@ -791,7 +791,7 @@
         "build_ipo_screener_artifact.py": {
             "ok": true,
             "required": true,
-            "elapsed": 0.9160783290863037,
+            "elapsed": 1.0168919563293457,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -800,7 +800,7 @@
                     "kind": "json",
                     "ok": true,
                     "message": "ok",
-                    "size_bytes": 11381372,
+                    "size_bytes": 13081990,
                     "count": 7
                 }
             ]
@@ -808,7 +808,7 @@
         "build_chart_artifacts.py": {
             "ok": true,
             "required": true,
-            "elapsed": 194.08154726028442,
+            "elapsed": 196.33352041244507,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -825,7 +825,7 @@
         "snapshot_screener_context.py": {
             "ok": true,
             "required": true,
-            "elapsed": 42.16275644302368,
+            "elapsed": 44.191070556640625,
             "returncode": 0,
             "error": "",
             "validations": [
@@ -846,7 +846,7 @@
             "kind": "gzip_json",
             "ok": true,
             "message": "ok",
-            "size_bytes": 3373599,
+            "size_bytes": 3373741,
             "count": 2603
         },
         {
@@ -878,7 +878,7 @@
             "kind": "gzip_json",
             "ok": true,
             "message": "ok",
-            "size_bytes": 107233,
+            "size_bytes": 107232,
             "count": 7
         },
         {
@@ -886,7 +886,7 @@
             "kind": "gzip_json",
             "ok": true,
             "message": "ok",
-            "size_bytes": 106814,
+            "size_bytes": 106815,
             "count": 10
         },
         {
@@ -894,7 +894,7 @@
             "kind": "gzip_json",
             "ok": true,
             "message": "ok",
-            "size_bytes": 1499347,
+            "size_bytes": 1499350,
             "count": 5
         },
         {
@@ -942,7 +942,7 @@
             "kind": "gzip_json",
             "ok": true,
             "message": "ok",
-            "size_bytes": 853891,
+            "size_bytes": 1046464,
             "count": 7
         },
         {
@@ -958,7 +958,7 @@
             "kind": "gzip_json",
             "ok": true,
             "message": "ok",
-            "size_bytes": 74490,
+            "size_bytes": 218092,
             "count": 3
         },
         {
@@ -974,7 +974,7 @@
             "kind": "gzip_json",
             "ok": true,
             "message": "ok",
-            "size_bytes": 100968843,
+            "size_bytes": 100967390,
             "count": 5
         },
         {

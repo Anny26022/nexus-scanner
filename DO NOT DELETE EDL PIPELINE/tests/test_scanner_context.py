@@ -31,7 +31,7 @@ class ScannerContextTests(unittest.TestCase):
         }], context={"stock": {"symbol": "TEST"}, "benchmarks": {"NIFTY_50": benchmark}})
         self.assertIn(result["status"], {"match", "no_match"})
 
-    def test_journaltoday_payload_is_normalized_for_existing_and_new_rules(self):
+    def test_legacy_payload_is_normalized_for_existing_and_new_rules(self):
         momentum = normalize_condition_spec({"kind": "PRICE_CHANGE_PCT", "params": {"overDays": 5, "comparison": "ABOVE", "pct": 4}})
         decline = normalize_condition_spec({"kind": "PRICE_CHANGE_PCT", "params": {"overDays": 5, "comparison": "BELOW", "pct": 20}})
         native_less = normalize_condition_spec({"condition": "price_change_percent", "window": 5, "comparison": "less_or_equal", "value": 20})
@@ -52,7 +52,7 @@ class ScannerContextTests(unittest.TestCase):
         self.assertEqual(shakeout["dip_within"], 10)
         self.assertEqual(rs_high["minimum_price_below_high_percent"], 2)
 
-    def test_journaltoday_price_change_below_requires_a_decline(self):
+    def test_legacy_price_change_below_requires_a_decline(self):
         falling = history(10)
         falling.loc[falling.index[-1], ["Open", "High", "Low", "Close"]] = [80, 82, 78, 80]
         rising = history(10)
@@ -73,6 +73,17 @@ class ScannerContextTests(unittest.TestCase):
             {"kind": "AVG_TURNOVER", "params": {"comparison": "ABOVE", "windowMinutes": "", "lookbackDays": 20, "valueCr": 1}},
             {"kind": "MARKET_BREADTH", "params": {"universe": "ALL_ACTIVE", "metric": "pct_above_sma50", "comparison": "ABOVE", "value": 50}},
             {"kind": "FNO_BAN", "params": {"mode": "ONLY"}},
+        ], context=context)
+        self.assertEqual(result["status"], "match")
+
+    def test_market_breadth_exposes_named_universe_and_new_metrics(self):
+        frame = history()
+        session = frame["Date"].iloc[-1].date().isoformat()
+        context = {"stock": {"symbol": "TEST"}, "breadth_as_of": session,
+                   "breadth": {"nifty500": {"net_breadth": 42, "volume_ratio_20": 125}}}
+        result = evaluate_history(frame, [
+            {"kind": "MARKET_BREADTH", "params": {"universe": "NIFTY500", "metric": "net_breadth", "comparison": "ABOVE", "value": 40}},
+            {"kind": "MARKET_BREADTH", "params": {"universe": "NIFTY500", "metric": "volume_ratio_20", "comparison": "ABOVE", "value": 100}},
         ], context=context)
         self.assertEqual(result["status"], "match")
 

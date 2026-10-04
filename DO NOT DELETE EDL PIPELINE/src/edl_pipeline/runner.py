@@ -227,7 +227,7 @@ def config_to_dict(config):
 def build_pipeline_report(results, total_time, raw_size, gz_size, final_checks, config, exit_code):
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "base_dir": BASE_DIR,
+        "base_dir": ".",
         "config": config_to_dict(config),
         "total_time_seconds": round(total_time, 3),
         "raw_size_bytes": raw_size,

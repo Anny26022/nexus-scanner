@@ -2,12 +2,24 @@
 
 import os
 import sys
+import re
+from decimal import Decimal
 
 from pipeline_utils import BASE_DIR, load_json, save_json
 
 
 NSE_ACTIONS_FILE = os.path.join(BASE_DIR, "nse_corporate_actions.json")
 OUTPUT_FILE = os.path.join(BASE_DIR, "corporate_action_ledger.json")
+
+
+def dividend_amount(details):
+    """Parse explicit rupees per share only. Ambiguous/percentage declarations stay null."""
+    text = str(details or "")
+    amounts = re.findall(r"(?:r[es]\.?|inr|₹|rupees)\s*-?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:/-)?\s*(?:per|each)\s*(?:equity\s+)?share", text, re.I)
+    if len(amounts) != 1:
+        return None
+    value = Decimal(amounts[0])
+    return float(value) if value > 0 else None
 
 
 def build_ledger(actions):
@@ -29,6 +41,7 @@ def build_ledger(actions):
         mode = adjustment.get("mode", "manual-review")
         price_factor = adjustment.get("priceFactor") if mode == "deterministic" else None
         share_factor = adjustment.get("shareFactor") if mode == "deterministic" else None
+        dividend = dividend_amount(details) if "DIVIDEND" in action_type else None
         records.append({
             "symbol": symbol,
             "name": action.get("company") or action.get("Name"),
@@ -36,6 +49,8 @@ def build_ledger(actions):
             "ex_date": ex_date,
             "record_date": record_date,
             "source_details": details,
+            "dividend_per_share": dividend,
+            "dividend_parse_status": "explicit_per_share" if dividend is not None else "unavailable",
             "isin": action.get("isin"),
             "adjustment_mode": mode,
             "affects_price": mode in {"deterministic", "manual-review"},

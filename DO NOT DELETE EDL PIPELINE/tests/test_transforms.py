@@ -138,6 +138,7 @@ class TransformTests(unittest.TestCase):
                 "EPS": "2|1|0.5|0.25|1",
                 "SALES": "100|80|70|60|50",
                 "PROFIT_BEFORE_TAX": "40|20|15|10|8",
+                "TAX": "25", "TAX_PAYMENT_ABSOLUTE": "10",
                 "OPM": "20|15|10|5|10",
             },
             "incomeStat_cy": {"EPS": "8|6", "SALES": "200|180|160|140|120|100"},
@@ -187,7 +188,9 @@ class TransformTests(unittest.TestCase):
         self.assertEqual(result["YoY % Net Profit Latest"], 400.0)
         self.assertEqual(result["QoQ % PBT Latest"], 100.0)
         self.assertAlmostEqual(result["Sales Growth 5 Years(%)"], 14.87, places=2)
-        self.assertEqual(result["D/E"], 0.5)
+        self.assertIsNone(result["D/E"])
+        self.assertEqual(result["Profit Before Tax(in Lakhs)"], 4000)
+        self.assertEqual(result["Total Tax Expenses(in Lakhs)"], 1000)
         self.assertEqual(result["PEG"], 0.2)
         self.assertEqual(result["Forward P/E"], 17.5)
         self.assertEqual(result["Free Float(%)"], 60.0)

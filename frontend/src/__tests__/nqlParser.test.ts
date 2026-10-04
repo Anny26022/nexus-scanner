@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { explainCondition, explainExpressionTree, parseNqlQuery } from '../utils/nqlParser';
+import { explainCondition, explainExpressionTree } from '../utils/nqlParser';
 import { ExpressionGroupNode, ActiveCondition } from '../types/screener';
 
 describe('Nexus Query Language (NQL) & Expression Serialization', () => {
@@ -28,7 +28,7 @@ describe('Nexus Query Language (NQL) & Expression Serialization', () => {
     expect(res.explanation).toContain('Relative Volume');
   });
 
-  it('should evaluate data availability warnings for historical session dates', () => {
+  it('does not guess availability from the calendar date', () => {
     const tree: ExpressionGroupNode = {
       type: 'group',
       operator: 'all',
@@ -37,30 +37,15 @@ describe('Nexus Query Language (NQL) & Expression Serialization', () => {
           type: 'condition',
           condition: {
             instanceId: 'c3',
-            conditionId: 'mom_delivery_pct',
+            conditionId: 'mom_delivery_vol',
             parameters: { minDeliveryPct: 50 },
           },
         },
       ],
     };
 
-    // Session date prior to 2024-01-01 should trigger data unavailable warning
     const exp = explainExpressionTree(tree, '2023-11-15');
-    expect(exp.compiledExplanations[0].isDataAvailableForSession).toBe(false);
-    expect(exp.warnings.length).toBeGreaterThan(0);
-    expect(exp.warnings[0]).toContain('relies on historical delivery data which is unavailable');
-  });
-
-  it('should parse NQL query string into ExpressionNode tree', () => {
-    const query = '(close > sma50 AND rvol >= 1.5) OR change_pct > 3.0';
-    const parsed = parseNqlQuery(query);
-
-    expect(parsed.error).toBeNull();
-    expect(parsed.tree).not.toBeNull();
-    expect(parsed.tree?.type).toBe('group');
-    if (parsed.tree?.type === 'group') {
-      expect(parsed.tree.operator).toBe('any'); // Contains OR
-      expect(parsed.tree.children.length).toBeGreaterThan(0);
-    }
+    expect(exp.compiledExplanations[0].isDataAvailableForSession).toBe(true);
+    expect(exp.warnings).toEqual([]);
   });
 });

@@ -19,6 +19,9 @@ class SnapshotPublicationTests(unittest.TestCase):
                'quarterly_financial_history.json.gz':{'records':[]},'earnings_calendar.json.gz':{'source':'BSE forthcoming results calendar','fetched_at':'2026-10-01T00:00:00+00:00','events':[],'available':True},'ipo_screener.json.gz':{'records':[], 'provider_data':{'analytics':{'year_summary':{'year':'2026'}}}}}
         for name,value in files.items():
             with gzip.open(root/name,'wt') as handle: json.dump(value,handle)
+        charts=root/'chart_artifacts';charts.mkdir(exist_ok=True)
+        (charts/'TEST.json.gz').write_bytes(gzip.compress(json.dumps({'symbol':'TEST','asOfDate':'2026-09-30'}).encode(),mtime=0))
+        (charts/'index.json').write_text(json.dumps({'symbols':1,'asOfDate':'2026-09-30'}))
         (root/'ohlcv_data').mkdir(exist_ok=True)
         delivery = root/'delivery_history_data'; delivery.mkdir(exist_ok=True)
         (delivery/'2026-09-30.json').write_text(json.dumps({'date':'2026-09-30','records':[
@@ -37,6 +40,9 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(first['earningsCalendarUrl'], f"/data/revisions/{first['revision']}/earnings-calendar.json.gz")
             self.fixture(root,cap=6000)
             second=publish(root,output)
+            compressed=(output/'revisions'/second['revision']/'stocks.json.gz').read_bytes()
+            self.assertEqual(gzip.decompress(compressed),(output/'revisions'/second['revision']/'stocks.json').read_bytes())
+            self.assertEqual(second['datasetGzipUrl'],f"/data/revisions/{second['revision']}/stocks.json.gz")
             self.assertNotEqual(first['revision'],second['revision'])
             self.assertEqual(json.loads((output/'current.json').read_text())['revision'],second['revision'])
             request={'asOfDate':'2026-09-30','universe':'mainboard','expressionTree':{'type':'group','operator':'all','children':[]},'datasetRevision':first['revision']}
@@ -53,3 +59,18 @@ class SnapshotPublicationTests(unittest.TestCase):
             (root/'ipo_screener.json.gz').write_bytes(b'not gzip')
             with self.assertRaises(OSError): publish(root,output)
             self.assertEqual((output/'current.json').read_bytes(),original)
+
+    def test_scanner_only_and_chart_release_have_distinct_revisions(self):
+        import os
+        with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl';root.mkdir();output=Path(folder)/'public';self.fixture(root)
+            with patch.dict(os.environ,{'EDL_CHART_STORAGE':'r2'},clear=True):
+                scanner=publish(root,output)
+            with patch.dict(os.environ,{'EDL_CHART_STORAGE':'local'},clear=True):
+                charts=publish(root,output)
+            self.assertEqual(scanner['schemaVersion'],4)
+            self.assertEqual(charts['schemaVersion'],6)
+            self.assertNotEqual(scanner['revision'],charts['revision'])
+            for key in ('chartUrlTemplate', 'chartRevision', 'chartObjectPrefix'):
+                self.assertNotIn(key, scanner)
+            self.assertEqual(json.loads((output/'current.json').read_text()), charts)

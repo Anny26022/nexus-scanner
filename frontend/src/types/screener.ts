@@ -85,6 +85,8 @@ export interface StockRow {
   rvol: number | null;
   marketCapCrore: number;
   peRatio: number | null;
+  epsTtm?: number | null;
+  dividendYieldPct?: number | null;
   rsi14: number | null;
   adr20Pct: number | null;
   atr14: number | null;
@@ -107,6 +109,20 @@ export interface StockRow {
   rocePct?: number | null;
   opmTtmPct?: number | null;
   debtToEquity?: number | null;
+  totalRevenueLakh?: number | null;
+  nonCurrentAssetsLakh?: number | null;
+  totalLiabilitiesLakh?: number | null;
+  interestCoverage?: number | null;
+  dividendPerShare?: number | null;
+  vwap?: number | null;
+  vwapAsOfDate?: string | null;
+  allTimeHigh?: number | null;
+  allTimeLow?: number | null;
+  return5yPct?: number | null;
+  historyMetadata?: Record<string, unknown> | null;
+  financialMetadata?: Record<string, unknown> | null;
+  dividendExDate?: string | null;
+
   pegRatio?: number | null;
   salesGrowth5yPct?: number | null;
   epsLastYear?: number | null;

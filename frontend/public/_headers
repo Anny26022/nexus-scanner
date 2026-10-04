@@ -1,0 +1,4 @@
+/data/current.json
+  Cache-Control: no-cache
+/data/revisions/*
+  Cache-Control: public, max-age=31536000, immutable

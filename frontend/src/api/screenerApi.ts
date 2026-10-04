@@ -9,7 +9,7 @@ import {
   RevisionCurrentResponse,
   ConditionDef,
 } from '../types/screener';
-import { realAdapter } from './realAdapter';
+import { realAdapter, type ChartSnapshot } from './realAdapter';
 import { mockAdapter } from './mockAdapter';
 
 // Use real data by default. Set VITE_USE_MOCK=true to fall back to mock data.
@@ -17,6 +17,11 @@ const USE_MOCK_API = import.meta.env.VITE_USE_MOCK === 'true';
 const adapter = USE_MOCK_API ? mockAdapter : realAdapter;
 
 export const screenerApi = {
+  async getChart(symbol: string, revision?: string): Promise<ChartSnapshot> {
+    if (USE_MOCK_API) throw new Error('Charts are unavailable in mock mode');
+    return realAdapter.getChart(symbol, revision);
+  },
+
   async getCatalog(): Promise<ConditionDef[]> {
     return adapter.getCatalog();
   },

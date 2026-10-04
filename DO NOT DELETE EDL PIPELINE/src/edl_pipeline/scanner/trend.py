@@ -17,6 +17,7 @@ import pandas as pd
 
 from .patterns import PATTERN_CONDITION_REGISTRY, evaluate_pattern
 from .context import CONTEXT_CONDITION_REGISTRY, evaluate_context_condition, normalize_condition_spec
+from .indicators import OSCILLATORS, indicator_series, supertrend
 
 
 REQUIRED_COLUMNS = ("Date", "Open", "High", "Low", "Close", "Volume")
@@ -31,6 +32,26 @@ COMPARISONS = {
 # This is intentionally data, rather than UI code, so a web client can render
 # the exact supported controls without duplicating the calculation contract.
 CONDITION_REGISTRY = {
+    "indicator_compare": {
+        "inputs": {"left_indicator": "indicator", "left_period": "integer", "left_offset": "integer", "op": "greater|above|equal|below|less|crosses_above|crosses_below", "right_indicator": "indicator|empty", "right_value": "number", "right_period": "integer", "right_offset": "integer", "fired_within": "integer"},
+        "definition": "Compare an indicator with a number or another indicator, including crossover events and trading-session offsets.",
+    },
+    "ma_convergence": {
+        "inputs": {"periods": "integer[]", "ma_type": "sma|ema", "comparison": "comparison", "max_spread_percent": "number", "fired_within": "integer"},
+        "definition": "Compare 100 × (highest selected MA − lowest selected MA) / close with the configured spread threshold; the default is at or below the tolerance.",
+    },
+    "divergence": {
+        "inputs": {"oscillator": "oscillator", "oscillator_period": "integer", "direction": "bullish|bearish", "variant": "regular|hidden", "max_bar_difference": "integer", "pivot_left": "integer", "pivot_right": "integer", "lookback_days": "integer", "fired_within": "integer", "invalidate_on_break": "boolean"},
+        "definition": "Confirmed price and oscillator fractal pivots form regular or hidden bullish/bearish divergence without future-bar leakage.",
+    },
+    "supertrend": {
+        "inputs": {"period": "integer", "multiplier": "number", "direction": "bullish|bearish", "fired_within": "integer", "signal": "state|turn"},
+        "definition": "Wilder-ATR Supertrend direction is in the selected state or turned into it within the recent window.",
+    },
+    "delivery_percent": {
+        "inputs": {"comparison": "comparison", "value": "number"},
+        "definition": "Latest session delivery percentage from date-aligned official delivery history.",
+    },
     "persistent_momentum": {
         "inputs": {"periods": "integer[]", "persist_days": "integer | {period: integer}", "persistence_mode": "strict_close|reclaim_by_extreme"},
         "definition": "Any requested EMA period has stayed below the close for its required run; the default permits one reclaimed breach.",
@@ -177,6 +198,87 @@ def _adx(frame, period):
     return dx.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
 
 
+def _event_result(condition, flags, fired_within, values=None, **details):
+    frame = details.pop("frame")
+    fired_within = int(fired_within)
+    if fired_within <= 0:
+        raise ValueError("fired_within must be positive.")
+    recent = flags.tail(fired_within)
+    if len(recent) < fired_within or recent.isna().all():
+        return _unavailable(condition, "insufficient_history")
+    locations = np.flatnonzero(recent.to_numpy(dtype=bool, na_value=False))
+    if not len(locations):
+        return _result(condition, False, None, fired_within=fired_within, **details)
+    offset = int(locations[-1])
+    index = len(flags) - len(recent) + offset
+    value = None if values is None or pd.isna(values.iloc[index]) else round(float(values.iloc[index]), 6)
+    return _result(condition, True, value, fired_within=fired_within,
+                   days_since_signal=len(recent) - 1 - offset,
+                   signal_date=frame["Date"].iloc[index].strftime("%Y-%m-%d"), **details)
+
+
+def _confirmed_pivots(values, pivot_type, left, right):
+    output = []
+    for index in range(left, len(values) - right):
+        value = values.iloc[index]
+        if pd.isna(value):
+            continue
+        window = values.iloc[index - left:index + right + 1]
+        if window.isna().any():
+            continue
+        is_pivot = value <= window.min() if pivot_type == "low" else value >= window.max()
+        if is_pivot and (window == value).sum() == 1:
+            output.append((index, float(value), index + right))
+    return output
+
+
+def _divergence_events(frame, oscillator, spec):
+    direction = str(spec.get("direction", "bullish")).lower()
+    variant = str(spec.get("variant", "regular")).lower()
+    left, right = int(spec.get("pivot_left", 5)), int(spec.get("pivot_right", 3))
+    max_gap = int(spec.get("max_bar_difference", 1))
+    lookback = int(spec.get("lookback_days", 120))
+    if direction not in {"bullish", "bearish"} or variant not in {"regular", "hidden"}:
+        raise ValueError("Divergence direction/variant is invalid.")
+    if min(left, right, lookback) <= 0 or max_gap < 0:
+        raise ValueError("Divergence pivot and lookback settings are invalid.")
+    start = max(0, len(frame) - lookback - right - left)
+    price = frame["Low"] if direction == "bullish" else frame["High"]
+    pivot_type = "low" if direction == "bullish" else "high"
+    price_pivots = _confirmed_pivots(price.iloc[start:].reset_index(drop=True), pivot_type, left, right)
+    oscillator_pivots = _confirmed_pivots(oscillator.iloc[start:].reset_index(drop=True), pivot_type, left, right)
+    aligned = []
+    used_oscillator_pivots = set()
+    for price_index, price_value, confirmed in price_pivots:
+        options = [item for item in oscillator_pivots
+                   if item[0] not in used_oscillator_pivots and abs(item[0] - price_index) <= max_gap]
+        if options:
+            oscillator_pivot = min(options, key=lambda item: abs(item[0] - price_index))
+            used_oscillator_pivots.add(oscillator_pivot[0])
+            aligned.append((price_index + start, price_value, oscillator_pivot[1],
+                            max(confirmed, oscillator_pivot[2]) + start))
+    events = pd.Series(False, index=frame.index, dtype=bool)
+    metadata = {}
+    for first, second in zip(aligned, aligned[1:]):
+        if direction == "bullish":
+            price_regular, oscillator_regular = second[1] < first[1], second[2] > first[2]
+            price_hidden, oscillator_hidden = second[1] > first[1], second[2] < first[2]
+        else:
+            price_regular, oscillator_regular = second[1] > first[1], second[2] < first[2]
+            price_hidden, oscillator_hidden = second[1] < first[1], second[2] > first[2]
+        matched = price_regular and oscillator_regular if variant == "regular" else price_hidden and oscillator_hidden
+        signal = second[3]
+        if matched and signal < len(events):
+            if spec.get("invalidate_on_break", True):
+                after = price.iloc[second[0] + 1:signal + 1]
+                broken = bool((after < second[1]).any()) if direction == "bullish" else bool((after > second[1]).any())
+                if broken:
+                    continue
+            events.iloc[signal] = True
+            metadata[signal] = {"first_pivot": first, "second_pivot": second}
+    return events, metadata
+
+
 def _persisted(frame, average, comparison, days, mode):
     days = int(days)
     if days <= 0:
@@ -250,6 +352,98 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
     context_result = evaluate_context_condition(frame, spec, context, _result, _unavailable, _comparison)
     if context_result is not None:
         return context_result
+
+    if condition == "indicator_compare":
+        left_name = str(spec.get("left_indicator", "RSI")).upper()
+        right_name = str(spec.get("right_indicator", "")).upper()
+        left = indicator_series(frame, left_name, int(spec.get("left_period", 14)), float(spec.get("multiplier", 3))).shift(int(spec.get("left_offset", 0)))
+        if right_name:
+            right = indicator_series(frame, right_name, int(spec.get("right_period", 20)), float(spec.get("right_multiplier", 3))).shift(int(spec.get("right_offset", 0)))
+        else:
+            right = pd.Series(float(spec.get("right_value", 0)), index=frame.index)
+        operation = str(spec.get("op", "ABOVE")).upper()
+        valid = left.notna() & right.notna()
+        if operation == "GREATER":
+            flags = (left > right).where(valid)
+        elif operation == "ABOVE":
+            flags = (left >= right).where(valid)
+        elif operation == "LESS":
+            flags = (left < right).where(valid)
+        elif operation == "BELOW":
+            flags = (left <= right).where(valid)
+        elif operation == "EQUAL":
+            flags = left.eq(right).where(valid)
+        elif operation == "CROSSES_ABOVE":
+            flags = ((left > right) & (left.shift(1) <= right.shift(1))).where(valid & valid.shift(1, fill_value=False))
+        elif operation == "CROSSES_BELOW":
+            flags = ((left < right) & (left.shift(1) >= right.shift(1))).where(valid & valid.shift(1, fill_value=False))
+        else:
+            raise ValueError("Unsupported indicator comparison operation.")
+        return _event_result(condition, flags, spec.get("fired_within", 1), left, frame=frame,
+                             left_indicator=left_name, right_indicator=right_name or None,
+                             right_value=None if right_name else float(spec.get("right_value", 0)), operation=operation)
+
+    if condition == "ma_convergence":
+        periods = spec.get("periods", (9, 20, 50, 200))
+        if isinstance(periods, str):
+            periods = [part.strip() for part in periods.split(",") if part.strip()]
+        periods = [int(period) for period in periods]
+        if len(periods) < 2 or len(set(periods)) != len(periods):
+            raise ValueError("MA convergence needs at least two distinct periods.")
+        ma_type = str(spec.get("ma_type", "ema")).lower()
+        values = pd.concat([_ma(frame, ma_type, period) for period in periods], axis=1)
+        spread = (values.max(axis=1) - values.min(axis=1)) / frame["Close"].replace(0, np.nan) * 100
+        complete = values.notna().all(axis=1) & frame["Close"].gt(0)
+        threshold = float(spec.get("max_spread_percent", 1.5))
+        comparison = str(spec.get("comparison", "less_or_equal")).lower()
+        spread_comparisons = {
+            "greater": spread.gt, "greater_or_equal": spread.ge,
+            "less": spread.lt, "less_or_equal": spread.le, "equal": spread.eq,
+        }
+        if comparison not in spread_comparisons:
+            raise ValueError("Unsupported MA convergence comparison.")
+        flags = spread_comparisons[comparison](threshold).where(complete)
+        return _event_result(condition, flags, spec.get("fired_within", 1), spread, frame=frame,
+                             periods=periods, ma_type=ma_type,
+                             comparison=comparison, max_spread_percent=threshold,
+                             latest_averages=[round(float(value), 6) if not pd.isna(value) else None for value in values.iloc[-1]])
+
+    if condition == "supertrend":
+        period, multiplier = int(spec.get("period", 10)), float(spec.get("multiplier", 3))
+        line, direction = supertrend(frame, period, multiplier)
+        wanted = 1 if str(spec.get("direction", "bullish")).lower() == "bullish" else -1
+        state = direction.eq(wanted).where(direction.notna())
+        signal = str(spec.get("signal", "state")).lower()
+        flags = state if signal == "state" else (state & ~state.shift(1, fill_value=False)).where(direction.notna())
+        if signal not in {"state", "turn"}:
+            raise ValueError("Supertrend signal must be state or turn.")
+        return _event_result(condition, flags, spec.get("fired_within", 1), line, frame=frame,
+                             period=period, multiplier=multiplier, direction="bullish" if wanted == 1 else "bearish", signal=signal)
+
+    if condition == "divergence":
+        oscillator_name = str(spec.get("oscillator", "RSI")).upper()
+        if oscillator_name not in OSCILLATORS:
+            raise ValueError(f"Unsupported divergence oscillator: {oscillator_name}")
+        oscillator = indicator_series(frame, oscillator_name, int(spec.get("oscillator_period", 14)))
+        flags, metadata = _divergence_events(frame, oscillator, spec)
+        outcome = _event_result(condition, flags, spec.get("fired_within", 8), oscillator, frame=frame,
+                                oscillator=oscillator_name, oscillator_period=int(spec.get("oscillator_period", 14)),
+                                direction=str(spec.get("direction", "bullish")).lower(), variant=str(spec.get("variant", "regular")).lower())
+        if outcome.status == "match":
+            signal_index = len(frame) - 1 - int(outcome.details["days_since_signal"])
+            if signal_index in metadata:
+                outcome.details["pivots"] = metadata[signal_index]
+        return outcome
+
+    if condition == "delivery_percent":
+        target_date = frame["Date"].iloc[-1].strftime("%Y-%m-%d")
+        values = {str(item.get("date")): item.get("delivery_percent") for item in (delivery_history or [])}
+        raw = values.get(target_date)
+        if raw is None:
+            return _unavailable(condition, "dated_delivery_percent_unavailable")
+        value = float(raw); target = float(spec["value"])
+        return _result(condition, _comparison(value, spec["comparison"], target), round(value, 6),
+                       comparison=spec["comparison"], target=target, date=target_date)
 
     if condition == "persistent_momentum":
         periods = [int(period) for period in spec.get("periods", (10, 20, 50))]
@@ -366,12 +560,13 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         baseline = frame["Volume"].shift(1).rolling(average_window, min_periods=average_window).mean()
         ratios = frame["Volume"] / baseline
         values = ratios.tail(fired_within)
-        qualifying = values >= float(spec["multiple"])
+        comparison = spec.get("comparison", "greater_or_equal")
+        qualifying = values.map(lambda value: False if pd.isna(value) else _comparison(float(value), comparison, float(spec["multiple"])))
         locations = np.flatnonzero(qualifying.fillna(False).to_numpy())
         matched = len(locations) > 0
         offset = int(locations[-1]) if matched else None
         value = float(values.iloc[offset]) if matched else None
-        return _result(condition, matched, round(value, 6) if value is not None else None, average_window=average_window, multiple=float(spec["multiple"]), fired_within=fired_within, days_since_signal=(len(values) - 1 - offset) if offset is not None else None)
+        return _result(condition, matched, round(value, 6) if value is not None else None, average_window=average_window, multiple=float(spec["multiple"]), comparison=comparison, fired_within=fired_within, days_since_signal=(len(values) - 1 - offset) if offset is not None else None)
 
     if condition == "volume_trend":
         recent, base = int(spec["recent_window"]), int(spec["base_window"])
@@ -454,7 +649,7 @@ def _leaf_results(node):
 
 
 def evaluate_history(rows, conditions, as_of_date: str | None = None, delivery_history=None, context=None):
-    """Evaluate a flat legacy list or JournalToday-compatible expression tree."""
+    """Evaluate a flat legacy list or compatible expression tree."""
     frame = normalize_history(pd.DataFrame(rows), as_of_date)
     context = dict(context or {})
     context["delivery_history"] = delivery_history or []

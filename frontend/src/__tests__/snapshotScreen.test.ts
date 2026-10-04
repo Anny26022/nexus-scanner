@@ -49,14 +49,38 @@ describe('published snapshots', () => {
     expect(screenSnapshot({...snapshot,stocks:[stock]},{...request,expressionTree:condition('FUNDAMENTAL_METRIC',{metric:'ROE',comparison:'ABOVE',value:15})})?.matchCount).toBe(1);
     expect(screenSnapshot({...snapshot,stocks:[stock]},{...request,expressionTree:condition('EPS_LAST_YEAR_HIGHER')})?.matchCount).toBe(1);
   });
+  it('connects newly published values and leaves missing or stale data unknown', () => {
+    const stock = {...snapshot.stocks[0],metadataAsOfDate:snapshot.asOfDate,
+      interestCoverage:5,totalRevenueLakh:1200,dividendPerShare:2,
+      vwap:100,vwapAsOfDate:snapshot.asOfDate,allTimeHigh:null,return5yPct:null};
+    for (const metric of ['INTEREST_COVERAGE','TOTAL_REVENUE_IN_LAKHS','DIVIDEND_PER_SHARE_LATEST','VWAP']) {
+      expect(screenSnapshot({...snapshot,stocks:[stock]},{...request,expressionTree:condition('FUNDAMENTAL_METRIC',{metric,comparison:'ABOVE',value:1})})?.matchCount).toBe(1);
+    }
+    for (const metric of ['ALL_TIME_HIGH','RETURN_5Y']) {
+      expect(screenSnapshot({...snapshot,stocks:[stock]},{...request,expressionTree:condition('FUNDAMENTAL_METRIC',{metric,comparison:'ABOVE',value:1})})?.matchCount).toBe(0);
+    }
+    expect(screenSnapshot({...snapshot,stocks:[{...stock,vwapAsOfDate:'2000-01-01'}]},{...request,
+      expressionTree:condition('FUNDAMENTAL_METRIC',{metric:'VWAP',comparison:'ABOVE',value:1})})?.matchCount).toBe(0);
+    const stale = condition('FUNDAMENTAL_METRIC',{metric:'VWAP',comparison:'ABOVE',value:1});
+    expect(screenSnapshot({...snapshot,stocks:[{...stock,vwapAsOfDate:'2000-01-01'}]},{...request,
+      expressionTree:{...stale,condition:{...stale.condition,isNegated:true}}})?.matchCount).toBe(0);
+    const staleMetadata = {...stock,metadataAsOfDate:'2000-01-01'};
+    expect(screenSnapshot({...snapshot,stocks:[staleMetadata]},{...request,
+      expressionTree:condition('FUNDAMENTAL_METRIC',{metric:'DIVIDEND_PER_SHARE_LATEST',comparison:'ABOVE',value:1})})?.matchCount).toBe(1);
+    const staleFundamental = condition('FUNDAMENTAL_METRIC',{metric:'INTEREST_COVERAGE',comparison:'ABOVE',value:1});
+    expect(screenSnapshot({...snapshot,stocks:[staleMetadata]},{...request,
+      expressionTree:staleFundamental})?.matchCount).toBe(0);
+    expect(screenSnapshot({...snapshot,stocks:[staleMetadata]},{...request,
+      expressionTree:{...staleFundamental,condition:{...staleFundamental.condition,isNegated:true}}})?.matchCount).toBe(0);
+  });
   it('refreshes a same-session correction and pins Python fallback to that revision', async () => {
     vi.resetModules();
     const revision = 'a'.repeat(64), next = 'b'.repeat(64);
-    const data = {...snapshot,revision,stocks:[{...snapshot.stocks[0],rvol:2,metrics:{sma50:0}}]};
+    const data = {...snapshot,totalStocks:1,revision,stocks:[{...snapshot.stocks[0],rvol:2,metrics:{sma50:0}}]};
     const corrected = {...data,revision:next,stocks:[{...data.stocks[0],rvol:1}]};
     let current = revision;
     const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
-      if (url === '/data/current.json') return new Response(JSON.stringify({...manifest,revision:current}));
+      if (url === '/data/current.json') return new Response(JSON.stringify({...manifest,datasetGzipUrl:undefined,datasetUrl:`/data/revisions/${current}/stocks.json`,revision:current}));
       if (url.includes(`/revisions/${revision}/stocks.json`)) return new Response(JSON.stringify(data));
       if (url.includes(`/revisions/${next}/stocks.json`)) return new Response(JSON.stringify(corrected));
       const body = JSON.parse(options!.body as string);

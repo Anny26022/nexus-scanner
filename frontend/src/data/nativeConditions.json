@@ -796,7 +796,7 @@
     "id": "INSIDE_BAR",
     "label": "Inside Bar",
     "category": "momentum",
-    "description": "The latest bar traded entirely within the prior bar's high and low. Daily uses trading sessions; weekly rolls daily data into ISO weeks, so the current week is measured to date until it closes. Two daily inside bars in a row form a coil.",
+    "description": "The latest bar traded entirely within the prior bar's high and low. Weekly defaults to completed buckets; including the developing week is explicitly provisional.",
     "parameters": [
       {
         "id": "timeframe",
@@ -820,6 +820,16 @@
         "type": "number",
         "defaultValue": 1,
         "unit": "bars"
+      },
+      {
+        "id": "weeklyMode",
+        "label": "Weekly mode",
+        "type": "select",
+        "defaultValue": "COMPLETED",
+        "options": [
+          { "value": "COMPLETED", "label": "Completed weeks" },
+          { "value": "CURRENT", "label": "Include current (provisional)" }
+        ]
       }
     ]
   },
@@ -1343,7 +1353,16 @@
           { "value": "OPM_TTM", "label": "OPM (TTM, %)" },
           { "value": "DEBT_TO_EQUITY", "label": "Debt / equity" },
           { "value": "PEG_RATIO", "label": "PEG ratio" },
-          { "value": "SALES_GROWTH_5Y", "label": "Sales growth (5Y, %)" }
+          { "value": "SALES_GROWTH_5Y", "label": "Sales growth (5Y, %)" },
+          {"value": "TOTAL_REVENUE_IN_LAKHS", "label": "Revenue (quarter, ₹ lakh)"},
+          {"value": "NON_CURRENT_ASSETS_IN_LAKHS", "label": "Non-current assets (annual, ₹ lakh)"},
+          {"value": "TOTAL_LIABILITIES_IN_LAKHS", "label": "Liabilities (annual, ₹ lakh)"},
+          {"value": "INTEREST_COVERAGE", "label": "Interest coverage (annual)"},
+          {"value": "DIVIDEND_PER_SHARE_LATEST", "label": "DPS (latest declaration, ₹)"},
+          {"value": "VWAP", "label": "VWAP (latest session, ₹)"},
+          {"value": "ALL_TIME_HIGH", "label": "All-time high (verified coverage, ₹)"},
+          {"value": "ALL_TIME_LOW", "label": "All-time low (verified coverage, ₹)"},
+          {"value": "RETURN_5Y", "label": "Return (5 years, %)"}
         ]
       },
       {
@@ -1655,6 +1674,10 @@
             "label": "Nifty 50"
           },
           {
+            "value": "NIFTY500",
+            "label": "Nifty 500"
+          },
+          {
             "value": "NIFTYMIDSMALL400",
             "label": "Midsmall 400"
           }
@@ -1668,27 +1691,171 @@
         "options": [
           {
             "value": "pctAboveSma10",
-            "label": "% > 10 SMA"
+            "label": "% above 10 SMA"
           },
           {
             "value": "pctAboveSma20",
-            "label": "% > 20 SMA"
+            "label": "% above 20 SMA"
           },
           {
             "value": "pctAboveSma50",
-            "label": "% > 50 SMA"
+            "label": "% above 50 SMA"
           },
           {
             "value": "pctAboveSma200",
-            "label": "% > 200 SMA"
+            "label": "% above 200 SMA"
+          },
+          {
+            "value": "advances",
+            "label": "Advances"
+          },
+          {
+            "value": "declines",
+            "label": "Declines"
+          },
+          {
+            "value": "unchanged",
+            "label": "Unchanged"
+          },
+          {
+            "value": "net_breadth",
+            "label": "Net breadth"
+          },
+          {
+            "value": "up_4",
+            "label": "4% thrust advances"
+          },
+          {
+            "value": "down_4",
+            "label": "4% thrust declines"
+          },
+          {
+            "value": "up_4_5",
+            "label": "4.5% thrust advances"
+          },
+          {
+            "value": "down_4_5",
+            "label": "4.5% thrust declines"
+          },
+          {
+            "value": "advance_decline_ratio_5d",
+            "label": "5-day A/D ratio"
           },
           {
             "value": "adRatioSma10",
-            "label": "A/D ratio"
+            "label": "10-SMA above/below ratio"
           },
           {
-            "value": "volRatio20",
-            "label": "Vol ratio"
+            "value": "advance_decline_ratio_10d",
+            "label": "10-day A/D ratio"
+          },
+          {
+            "value": "new_monthly_high",
+            "label": "21-day new highs"
+          },
+          {
+            "value": "new_monthly_low",
+            "label": "21-day new lows"
+          },
+          {
+            "value": "new_quarterly_high",
+            "label": "63-day new highs"
+          },
+          {
+            "value": "new_quarterly_low",
+            "label": "63-day new lows"
+          },
+          {
+            "value": "new_52w_high",
+            "label": "252-day new highs"
+          },
+          {
+            "value": "new_52w_low",
+            "label": "252-day new lows"
+          },
+          {
+            "value": "new_52w_high_pct",
+            "label": "252-day new high %"
+          },
+          {
+            "value": "new_52w_low_pct",
+            "label": "252-day new low %"
+          },
+          {
+            "value": "up_25_month",
+            "label": "21-day momentum breadth"
+          },
+          {
+            "value": "down_25_month",
+            "label": "21-day momentum declines"
+          },
+          {
+            "value": "up_13_34d",
+            "label": "34-day momentum breadth"
+          },
+          {
+            "value": "down_13_34d",
+            "label": "34-day momentum declines"
+          },
+          {
+            "value": "up_25_quarter",
+            "label": "63-day momentum breadth"
+          },
+          {
+            "value": "down_25_quarter",
+            "label": "63-day momentum declines"
+          },
+          {
+            "value": "volume_above_20",
+            "label": "Volume above 20-day average"
+          },
+          {
+            "value": "volume_ratio_20",
+            "label": "Volume above/below ratio"
+          },
+          {
+            "value": "advance_volume",
+            "label": "Advance volume"
+          },
+          {
+            "value": "decline_volume",
+            "label": "Decline volume"
+          },
+          {
+            "value": "total_volume",
+            "label": "Total volume"
+          },
+          {
+            "value": "breakout_20d",
+            "label": "20-day breakouts"
+          },
+          {
+            "value": "breakdown_20d",
+            "label": "20-day breakdowns"
+          },
+          {
+            "value": "upper_half_52w",
+            "label": "Upper half of 52-week range"
+          },
+          {
+            "value": "lower_half_52w",
+            "label": "Lower half of 52-week range"
+          },
+          {
+            "value": "mbi_score",
+            "label": "MBI score"
+          },
+          {
+            "value": "warning_day",
+            "label": "MBI warning day (1/0)"
+          },
+          {
+            "value": "xp",
+            "label": "XP proxy"
+          },
+          {
+            "value": "index_change_pct",
+            "label": "Nifty daily return"
           }
         ]
       },
@@ -1714,6 +1881,45 @@
         "type": "number",
         "defaultValue": 50
       }
+    ]
+  },
+  {
+    "id": "ABSOLUTE_VOLUME",
+    "label": "Volume (shares)",
+    "category": "liquidity",
+    "description": "Latest session traded volume in shares. This is an absolute value, not RVOL.",
+    "parameters": [
+      {"id":"comparison","label":"Comparison","type":"select","defaultValue":"GREATER","options":[
+        {"label":"> Greater","value":"GREATER"},{"label":"≥ At least","value":"ABOVE"},
+        {"label":"< Less","value":"LESS"},{"label":"≤ At most","value":"BELOW"},{"label":"= Equal","value":"EQUAL"}
+      ]},
+      {"id":"value","label":"Shares","type":"number","defaultValue":1000000,"min":0,"step":1}
+    ]
+  },
+  {
+    "id": "ABSOLUTE_EPS",
+    "label": "EPS (TTM)",
+    "category": "fundamentals",
+    "description": "Published trailing-twelve-month earnings per share, aligned to the screen session.",
+    "parameters": [
+      {"id":"comparison","label":"Comparison","type":"select","defaultValue":"GREATER","options":[
+        {"label":"> Greater","value":"GREATER"},{"label":"≥ At least","value":"ABOVE"},
+        {"label":"< Less","value":"LESS"},{"label":"≤ At most","value":"BELOW"},{"label":"= Equal","value":"EQUAL"}
+      ]},
+      {"id":"value","label":"EPS","type":"number","defaultValue":20,"step":0.01,"unit":"₹"}
+    ]
+  },
+  {
+    "id": "DIVIDEND_YIELD",
+    "label": "Dividend Yield",
+    "category": "fundamentals",
+    "description": "Published dividend yield percentage, aligned to the screen session.",
+    "parameters": [
+      {"id":"comparison","label":"Comparison","type":"select","defaultValue":"GREATER","options":[
+        {"label":"> Greater","value":"GREATER"},{"label":"≥ At least","value":"ABOVE"},
+        {"label":"< Less","value":"LESS"},{"label":"≤ At most","value":"BELOW"},{"label":"= Equal","value":"EQUAL"}
+      ]},
+      {"id":"value","label":"Yield","type":"number","defaultValue":2,"min":0,"step":0.01,"unit":"%"}
     ]
   },
   {

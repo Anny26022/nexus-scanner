@@ -77,6 +77,9 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'PE_RATIO':
       if (p.reportType !== 'PREFER_CONSOLIDATED') return null;
       metadata = true; fn = s => compare(s.peRatio,p.comparison,p.value); break;
+    case 'ABSOLUTE_VOLUME': fn = s => compare(s.volume,p.comparison,p.value); break;
+    case 'ABSOLUTE_EPS': metadata = true; fn = s => compare(s.epsTtm,p.comparison,p.value); break;
+    case 'DIVIDEND_YIELD': metadata = true; fn = s => compare(s.dividendYieldPct,p.comparison,p.value); break;
     case 'fund_roe': metadata = true; fn = s => compare(s.roePct,'ABOVE',p.minRoe); break;
     case 'fund_free_float': metadata = true; fn = s => between(s.freeFloatPct,p.minFloat,p.maxFloat); break;
     case 'fund_stock_price': fn = s => compare(s.close,'GREATER',p.minPrice); break;
@@ -86,10 +89,12 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       const field: Record<string, keyof SnapshotStock> = {
         ROE:'roePct', ROCE:'rocePct', OPM_TTM:'opmTtmPct', DEBT_TO_EQUITY:'debtToEquity',
         PEG_RATIO:'pegRatio', SALES_GROWTH_5Y:'salesGrowth5yPct',
+        TOTAL_REVENUE_IN_LAKHS:'totalRevenueLakh', NON_CURRENT_ASSETS_IN_LAKHS:'nonCurrentAssetsLakh', TOTAL_LIABILITIES_IN_LAKHS:'totalLiabilitiesLakh', INTEREST_COVERAGE:'interestCoverage', DIVIDEND_PER_SHARE_LATEST:'dividendPerShare', VWAP:'vwap', ALL_TIME_HIGH:'allTimeHigh', ALL_TIME_LOW:'allTimeLow', RETURN_5Y:'return5yPct',
       };
       const key = field[String(p.metric).toUpperCase()];
       if (!key) return null;
-      metadata = true; fn = s => compare(s[key],p.comparison,p.value); break;
+      metadata = !['dividendPerShare','vwap','allTimeHigh','allTimeLow','return5yPct'].includes(key);
+      fn = s => key === "vwap" && s.vwapAsOfDate !== session ? null : compare(s[key],p.comparison,p.value); break;
     }
     case 'EPS_LAST_YEAR_HIGHER':
       metadata = true; fn = s => {
@@ -123,25 +128,39 @@ function compile(node: ExpressionNode, session: string): Predicate | null {
   return s => combine(children.map(fn => fn!(s)), node.operator === 'all');
 }
 
+interface Matches { rows: SnapshotStock[]; universeCount: number }
+const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
+
 export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): ScreenerRunResponse | null {
-  const predicate = compile(request.expressionTree, data.asOfDate);
-  if (!predicate) return null;
-  const labels: Record<string, string[]> = {
-    nifty50:['NIFTY 50','NIFTY50'], nifty500:['NIFTY 500','NIFTY500'],
-    midsmall400:['NIFTY MIDSMALLCAP 400','NIFTY MIDSMALL 400','MIDSMALL400'],
-  };
-  const symbols = new Set(request.customSymbols?.map(s => s.toUpperCase()));
-  const universe = data.stocks.filter(s => request.universe === 'custom' ? symbols.has(s.symbol)
-    : request.universe === 'mainboard' || s.indexMemberships.some(label => labels[request.universe]?.includes(label.toUpperCase())));
-  const rows = universe.filter(s => predicate(s) === true && number(s.close) != null);
-  const field = (request.sort?.field ?? 'symbol') as keyof SnapshotStock;
-  rows.sort((a,b) => {
-    const x = a[field], y = b[field];
-    const order = x == null ? y == null ? 0 : -1 : y == null ? 1 : x < y ? -1 : x > y ? 1 : 0;
-    return request.sort?.direction === 'desc' ? -order : order;
-  });
+  if (request.textQuery?.trim()) return null;
+  const key = JSON.stringify([request.expressionTree,request.universe,request.customSymbols,request.sort]);
+  let cache = matchCache.get(data);
+  if (!cache) { cache = new Map(); matchCache.set(data,cache); }
+  let matches = cache.get(key);
+  if (!matches) {
+    const predicate = compile(request.expressionTree, data.asOfDate);
+    if (!predicate) return null;
+    const labels: Record<string, string[]> = {
+      nifty50:['NIFTY 50','NIFTY50'], nifty500:['NIFTY 500','NIFTY500'],
+      midsmall400:['NIFTY MIDSMALLCAP 400','NIFTY MIDSMALL 400','MIDSMALL400'],
+    };
+    const symbols = new Set(request.customSymbols?.map(s => s.toUpperCase()));
+    const universe = data.stocks.filter(s => request.universe === 'custom' ? symbols.has(s.symbol)
+      : request.universe === 'mainboard' || s.indexMemberships.some(label => labels[request.universe]?.includes(label.toUpperCase())));
+    const rows = universe.filter(s => predicate(s) === true && number(s.close) != null);
+    const field = (request.sort?.field ?? 'symbol') as keyof SnapshotStock;
+    rows.sort((a,b) => {
+      const x = a[field], y = b[field];
+      const order = x == null ? y == null ? 0 : -1 : y == null ? 1 : x < y ? -1 : x > y ? 1 : 0;
+      return request.sort?.direction === 'desc' ? -order : order;
+    });
+    matches = {rows,universeCount:universe.length};
+    cache.set(key,matches);
+    if (cache.size > 4) cache.delete(cache.keys().next().value!);
+  }
+  const rows = matches.rows;
   const page = Math.max(1,request.page), size = Math.max(1,Math.min(100,request.pageSize));
   return { resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
-    immutableRevision:data.revision,rows:rows.slice((page-1)*size,page*size),matchCount:rows.length,totalUniverseCount:universe.length,
+    immutableRevision:data.revision,rows:rows.slice((page-1)*size,page*size),matchCount:rows.length,totalUniverseCount:matches.universeCount,
     page,pageSize:size,perConditionCoverage:{},unavailableDiagnostics:[],warnings:[] };
 }

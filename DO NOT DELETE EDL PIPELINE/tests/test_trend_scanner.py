@@ -11,8 +11,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from edl_pipeline.scanner.trend import CONDITION_REGISTRY, evaluate_history, evaluate_universe, _persisted
+from edl_pipeline.scanner.trend import CONDITION_REGISTRY, evaluate_history, evaluate_universe, _confirmed_pivots, _divergence_events, _persisted
 from edl_pipeline.scanner.context import KIND_ALIASES
+from edl_pipeline.scanner.indicators import SUPPORTED_INDICATORS, indicator_series
 from edl_pipeline.scanner.presets import get_preset, list_presets, load_preset_library, validate_preset_library
 
 
@@ -30,6 +31,19 @@ def rising_history(length=300):
 
 
 class TrendScannerTests(unittest.TestCase):
+    def test_macd_period_changes_the_series_and_standard_period_is_stable(self):
+        frame = rising_history(120)
+        standard = indicator_series(frame, "MACD", 26)
+        shorter = indicator_series(frame, "MACD", 20)
+        self.assertNotEqual(float(standard.dropna().iloc[-1]), float(shorter.dropna().iloc[-1]))
+        self.assertEqual(standard.first_valid_index(), 25)
+
+    def test_confirmed_pivots_require_a_fully_warmed_window(self):
+        values = pd.Series([float("nan"), 1.0, 3.0, 2.0, 4.0])
+        pivots = [index for index, _value, _confirmed in _confirmed_pivots(values, "low", 1, 1)]
+        self.assertNotIn(1, pivots)
+        self.assertIn(3, pivots)
+
     def test_momentum_shorter_qualifying_ema_does_not_require_longer_warmup(self):
         result = evaluate_history(rising_history(30), [{"condition":"persistent_momentum","periods":[10,50],"persist_days":5}])
         self.assertEqual(result["status"], "match")
@@ -53,6 +67,8 @@ class TrendScannerTests(unittest.TestCase):
 
     def test_registry_exposes_trend_momentum_and_volume_conditions(self):
         self.assertEqual(set(CONDITION_REGISTRY), {
+            "indicator_compare", "ma_convergence", "divergence", "supertrend", "delivery_percent",
+            "absolute_volume", "absolute_eps", "dividend_yield", "delivery_percent",
             "persistent_momentum", "price_vs_ema", "ema_shakeout_reclaim", "adx",
             "price_vs_sma", "percent_days_above_ma", "ma_stack", "ma_slope",
             "price_change_percent", "consecutive_up_days", "gap_up", "gap_down",
@@ -68,10 +84,11 @@ class TrendScannerTests(unittest.TestCase):
             "fundamental_metric", "eps_last_year_higher",
             "price_band", "circuit_band_minimum", "series", "listing_age_days",
             "index_membership", "market_breadth", "fno_ban",
+            "absolute_volume", "absolute_eps", "dividend_yield",
         })
 
     def test_live_bundle_condition_contract_remains_mapped(self):
-        fixture = json.loads((ROOT / "tests" / "fixtures" / "journaltoday_screener_contract.json").read_text())
+        fixture = json.loads((ROOT / "tests" / "fixtures" / "reference_screener_contract.json").read_text())
         self.assertEqual(len(fixture["condition_kinds"]), 47)
         # The local screener may add documented conditions beyond the frozen
         # public bundle, but every bundle condition must remain supported.
@@ -137,8 +154,11 @@ class TrendScannerTests(unittest.TestCase):
         weekly = rising_history(15)
         weekly.loc[weekly.index[-10:-5], ["High", "Low"]] = [160, 40]
         weekly.loc[weekly.index[-5:], ["High", "Low"]] = [150, 50]
-        weekly_result = evaluate_history(weekly, [{"condition": "inside_bar", "timeframe": "weekly", "consecutive": 1}])
+        weekly_result = evaluate_history(weekly, [{
+            "condition": "inside_bar", "timeframe": "weekly", "weekly_mode": "current", "consecutive": 1,
+        }])
         self.assertEqual(weekly_result["status"], "match")
+        self.assertTrue(weekly_result["conditions"][0]["details"]["provisional"])
 
     def test_gap_state_uses_prior_close_as_the_fill_level(self):
         frame = rising_history(30)
@@ -208,6 +228,14 @@ class TrendScannerTests(unittest.TestCase):
         self.assertEqual(matched["conditions"][0]["details"]["days_since_signal"], 1)
         self.assertEqual(missing["status"], "unavailable")
 
+    def test_delivery_percent_preserves_strict_and_inclusive_comparisons(self):
+        frame = rising_history(10)
+        records = [{"date": frame["Date"].iloc[-1], "delivery_percent": 60}]
+        strict = evaluate_history(frame, [{"kind":"DELIVERY_PERCENT","params":{"comparison":"GREATER","value":60}}], delivery_history=records)
+        inclusive = evaluate_history(frame, [{"kind":"DELIVERY_PERCENT","params":{"comparison":"ABOVE","value":60}}], delivery_history=records)
+        self.assertEqual(strict["status"], "no_match")
+        self.assertEqual(inclusive["status"], "match")
+
     def test_all_trend_conditions_match_a_clear_rising_series(self):
         frame = rising_history()
         # A genuine low-side dip, followed by a close above EMA, gives shakeout
@@ -226,6 +254,82 @@ class TrendScannerTests(unittest.TestCase):
         result = evaluate_history(frame, request)
         self.assertEqual(result["status"], "match")
         self.assertTrue(all(item["status"] == "match" for item in result["conditions"]))
+
+    def test_indicator_compare_convergence_and_supertrend_share_the_history_engine(self):
+        frame = rising_history(320)
+        result = evaluate_history(frame, [
+            {"kind": "INDICATOR_COMPARE", "params": {
+                "leftIndicator": "CLOSE", "leftPeriod": 14, "op": "ABOVE",
+                "rightIndicator": "EMA", "rightPeriod": 50, "rightOffset": 0,
+                "leftOffset": 0, "withinDays": 1,
+            }},
+            {"kind": "MA_CONVERGENCE", "params": {
+                "periods": [9, 20, 50, 200], "maType": "EMA",
+                "maxSpreadPct": 100, "withinDays": 1,
+            }},
+            {"kind": "SUPERTREND", "params": {
+                "period": 10, "multiplier": 3, "direction": "BULLISH",
+                "signal": "STATE", "withinDays": 1,
+            }},
+        ])
+        self.assertEqual(result["status"], "match")
+        convergence = result["conditions"][1]
+        self.assertEqual(convergence["details"]["periods"], [9, 20, 50, 200])
+        self.assertEqual(convergence["details"]["ma_type"], "ema")
+
+    def test_every_published_indicator_returns_an_aligned_numeric_series(self):
+        frame = rising_history(400)
+        for name in sorted(SUPPORTED_INDICATORS):
+            with self.subTest(indicator=name):
+                values = indicator_series(frame, name, 14)
+                self.assertEqual(len(values), len(frame))
+                self.assertTrue(pd.to_numeric(values, errors="coerce").notna().any())
+        flat = rising_history(40)
+        flat[["Open", "High", "Low", "Close"]] = [100, 100, 100, 100]
+        self.assertEqual(float(indicator_series(flat, "RSI", 14).iloc[-1]), 50.0)
+
+    def test_indicator_cross_uses_previous_session_and_recent_event_window(self):
+        frame = rising_history(80)
+        frame.loc[frame.index[-2], "Close"] = 100
+        frame.loc[frame.index[-1], "Close"] = 500
+        result = evaluate_history(frame, [{"kind": "INDICATOR_COMPARE", "params": {
+            "leftIndicator": "CLOSE", "leftPeriod": 14, "op": "CROSSES_ABOVE",
+            "rightIndicator": "SMA", "rightPeriod": 20, "rightOffset": 0,
+            "leftOffset": 0, "withinDays": 1,
+        }}])
+        self.assertEqual(result["status"], "match")
+        self.assertEqual(result["conditions"][0]["details"]["days_since_signal"], 0)
+
+    def test_divergence_waits_for_right_hand_confirmation(self):
+        close = [100] * 30 + [105, 100, 103, 98, 104, 101, 105, 102, 106]
+        dates = pd.date_range("2025-01-01", periods=len(close), freq="B")
+        frame = pd.DataFrame({"Date":dates,"Open":close,"High":[v + 1 for v in close],
+                              "Low":[v - 1 for v in close],"Close":close,
+                              "Volume":[100_000 + i * 1_000 for i in range(len(close))]})
+        spec = {"kind":"DIVERGENCE","params":{"oscillator":"OBV","oscPeriod":14,
+                "direction":"BULLISH","variant":"REGULAR","maxBarDifference":1,
+                "pivotLeft":1,"pivotRight":2,"lookbackDays":30,"withinDays":10,
+                "invalidateOnBreak":True}}
+        without_confirmation = evaluate_history(frame.iloc[:-2], [spec])
+        with_confirmation = evaluate_history(frame, [spec])
+        # The important invariant is that adding confirmation bars can create
+        # a signal, but truncating them cannot expose a future pivot.
+        self.assertNotEqual(without_confirmation["status"], "match")
+        self.assertIn(with_confirmation["status"], {"match", "no_match"})
+
+    def test_divergence_event_is_emitted_only_after_both_pivots_are_confirmed(self):
+        lows = [13, 12, 10, 12, 11, 8, 11, 12]
+        frame = pd.DataFrame({
+            "Date": pd.date_range("2026-01-01", periods=len(lows), freq="B"),
+            "Open": [value + 1 for value in lows], "High": [value + 2 for value in lows],
+            "Low": lows, "Close": [value + 1 for value in lows], "Volume": [100] * len(lows),
+        })
+        oscillator = pd.Series([40, 30, 20, 35, 34, 30, 40, 45], dtype=float)
+        spec = {"direction":"bullish", "variant":"regular", "pivot_left":1, "pivot_right":1,
+                "max_bar_difference":0, "lookback_days":20, "invalidate_on_break":True}
+        events, _ = _divergence_events(frame, oscillator, spec)
+        self.assertFalse(events.iloc[5])
+        self.assertTrue(events.iloc[6])
 
     def test_strict_persistence_fails_but_reclaim_mode_accepts_one_reclaimed_breach(self):
         frame = rising_history(40)

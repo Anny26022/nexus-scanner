@@ -17,23 +17,56 @@ from .config import PipelineConfig
 from .quality import inspect_publication
 
 
-def promote(stage, destination, names):
-    """Read the full candidate set before replacing any published file."""
+def promote(stage, destination, names, directories=(), after=None):
+    """Roll back files and chart directories together if publication fails."""
     candidate = {name: (stage / name).read_bytes() for name in names}
-    previous = {name: (destination / name).read_bytes()
-                if (destination / name).exists() else None for name in names}
-    replaced = []
+    previous_files = {name: (destination / name).read_bytes()
+                      if (destination / name).exists() else None for name in names}
+    replaced_files, replaced_directories = [], []
+    paths = [(destination / name, destination / f".{name}.incoming",
+              destination / f".{name}.previous") for name in directories]
+    # Recover the previous charts after an interrupted directory swap.
+    for target, incoming, previous in paths:
+        if previous.exists() and not target.exists():
+            previous.replace(target)
+        elif previous.exists():
+            shutil.rmtree(previous)
+        shutil.rmtree(incoming, ignore_errors=True)
     try:
+        for name, (_, incoming, _) in zip(directories, paths):
+            shutil.copytree(stage / name, incoming)
         for name, data in candidate.items():
-            replaced.append(name)
+            replaced_files.append(name)
             atomic_replace_bytes(destination / name, data)
+        for target, incoming, previous in paths:
+            replaced_directories.append((target, previous, target.exists()))
+            if target.exists():
+                target.replace(previous)
+            incoming.replace(target)
+        if after:
+            after()
     except Exception:
-        for name in reversed(replaced):
-            if previous[name] is None:
+        for target, previous, existed in reversed(replaced_directories):
+            if previous.exists():
+                shutil.rmtree(target, ignore_errors=True)
+                previous.replace(target)
+            elif not existed:
+                shutil.rmtree(target, ignore_errors=True)
+        for name in reversed(replaced_files):
+            if previous_files[name] is None:
                 (destination / name).unlink(missing_ok=True)
             else:
-                atomic_replace_bytes(destination / name, previous[name])
+                atomic_replace_bytes(destination / name, previous_files[name])
         raise
+    finally:
+        for _, incoming, _ in paths:
+            shutil.rmtree(incoming, ignore_errors=True)
+    for _, _, previous in paths:
+        shutil.rmtree(previous, ignore_errors=True)
+
+
+def promote_directory(stage, destination, name):
+    promote(stage, destination, [], directories=(name,))
 
 
 def publish_frontend(destination):
@@ -55,7 +88,7 @@ def main():
         print("EDL_FETCH_OHLCV=0: diagnostic run; published files will not change.")
     with TemporaryDirectory(prefix=".edl-refresh-", dir=destination) as temporary:
         stage = Path(temporary)
-        for name in ("ohlcv_data", "indices_ohlcv_data", "delivery_history_data", "eod2_delivery_history_data", "scanner_history_data", "filing_history_data", "ipo_provider_history_data"):
+        for name in ("ohlcv_data", "indices_ohlcv_data", "delivery_history_data", "eod2_delivery_history_data", "scanner_history_data", "filing_history_data", "ipo_provider_history_data", "scanx_ipo_history_data"):
             cache = destination / name
             cache.mkdir(exist_ok=True)
             (stage / name).symlink_to(cache, target_is_directory=True)
@@ -72,6 +105,10 @@ def main():
         details_archive = destination / "ipo_provider_details_archive.json.gz"
         if details_archive.exists():
             shutil.copy2(details_archive, stage / details_archive.name)
+        for name in ("scanx_ipo_listed_archive.json.gz", "scanx_ipo_details_archive.json.gz"):
+            archive = destination / name
+            if archive.exists():
+                shutil.copy2(archive, stage / archive.name)
         env = dict(os.environ, EDL_BASE_DIR=str(stage), EDL_CLEANUP_INTERMEDIATE="0")
         env["PYTHONPATH"] = os.pathsep.join([str(source), str(source / "src"), env.get("PYTHONPATH", "")])
         result = subprocess.run(
@@ -96,7 +133,7 @@ def main():
             return 1
         save_json(report_path, report)
         names = [spec.path for spec in FINAL_ARTIFACT_SPECS] + ["data_quality.json", "pipeline_report.json"]
-        promote(stage, destination, names)
-        publish_frontend(destination)
+        promote(stage, destination, names, directories=("chart_artifacts",),
+                after=lambda: publish_frontend(destination))
         print("Published validated dataset and per-symbol data_quality.json.")
         return 0

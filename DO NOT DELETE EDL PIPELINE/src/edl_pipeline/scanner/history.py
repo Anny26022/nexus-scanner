@@ -13,6 +13,8 @@ from .shareholding import SHAREHOLDING_FIELDS, select_observation as select_shar
 
 
 SCANNER_SNAPSHOT_FIELDS = (
+    "total_revenue_in_lakhs", "non_current_assets_in_lakhs", "total_liabilities_in_lakhs", "interest_coverage", "dividend_per_share_latest", "vwap", "all_time_high", "all_time_low", "return_5y",
+    "financial_metadata", "history_metadata", "vwap_as_of_date", "dividend_ex_date", "dividend_basis", "dividend_source_range", "percent_from_ath",
     "symbol", "as_of_date", "close", "market_cap_crore", "free_float_percent",
     "pe_ratio", "latest_earnings_date", "sector", "industry", "circuit_limit",
     "earnings_report_type",
@@ -48,6 +50,10 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
     """Persist only fields that influence scanner conditions for one session."""
     session = date.fromisoformat(as_of_date).isoformat()
     record = next((item for item in breadth.get("records", []) if item.get("date") == session), None)
+    breadth_universes = {}
+    for key, payload in (breadth.get("universes") or {}).items():
+        candidate = next((item for item in payload.get("records", []) if item.get("date") == session), None)
+        if candidate: breadth_universes[key] = candidate
     snapshot_stocks = []
     for stock in stocks:
         if not stock.get("symbol"):
@@ -70,10 +76,11 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
             item["shareholding_observed_on"] = holding["observed_on"]
         snapshot_stocks.append(item)
     payload = {
-        "schema_version": 3,
+        "schema_version": 4,
         "as_of_date": session,
         "stocks": snapshot_stocks,
         "breadth": record,
+        "breadth_universes": breadth_universes,
         "fno_ban": {
             "available": bool(fno_ban.get("available")),
             "trade_date": fno_ban.get("trade_date"),

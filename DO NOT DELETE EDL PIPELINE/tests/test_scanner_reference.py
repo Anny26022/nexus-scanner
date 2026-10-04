@@ -41,7 +41,7 @@ class ScannerReferenceTests(unittest.TestCase):
         self.assertIn("lib-persistent-momentum", preset_ids)
 
     def test_audit_accepts_human_facing_preset_names(self):
-        # JournalToday result captures use the visible preset name, while the
+        # Reference result captures use the visible preset name, while the
         # local library uses ``lib-*`` IDs. Completeness must resolve both.
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

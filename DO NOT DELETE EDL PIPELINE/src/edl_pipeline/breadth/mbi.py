@@ -51,11 +51,11 @@ def enrich_records(records, methodology, index_closes=None):
 
     for raw in records:
         row = dict(raw)
-        universe_denominator = row["eligible_with_candle"]
-        row["up_4_pct"] = percentage(row["up_4"], universe_denominator)
-        row["down_4_pct"] = percentage(row["down_4"], universe_denominator)
-        row["up_4_5_pct"] = percentage(row["up_4_5"], universe_denominator)
-        row["down_4_5_pct"] = percentage(row["down_4_5"], universe_denominator)
+        return_denominator = row["valid_return"]
+        row["up_4_pct"] = percentage(row["up_4"], return_denominator)
+        row["down_4_pct"] = percentage(row["down_4"], return_denominator)
+        row["up_4_5_pct"] = percentage(row["up_4_5"], return_denominator)
+        row["down_4_5_pct"] = percentage(row["down_4_5"], return_denominator)
         row["net_4_pct"] = (
             row["up_4_pct"] - row["down_4_pct"]
             if row["up_4_pct"] is not None and row["down_4_pct"] is not None
@@ -66,8 +66,12 @@ def enrich_records(records, methodology, index_closes=None):
 
         for period in methodology.ma_periods:
             above = row[f"above_{ma_prefix}_{period}"]
-            not_above = max(universe_denominator - above, 0)
-            row[f"above_{period}_pct"] = percentage(above, universe_denominator)
+            valid = row[f"valid_{ma_prefix}_{period}"]
+            not_above = max(valid - above, 0)
+            # A missing MA population remains unavailable in the published record.
+            # XP handles its own neutral fallback below; it must not redefine the
+            # public percentage as zero.
+            row[f"above_{period}_pct"] = percentage(above, valid)
             row[f"ratio_{period}"] = scaled_ratio(above, not_above)
 
         row["change_4"] = percentage_change(
@@ -91,22 +95,22 @@ def enrich_records(records, methodology, index_closes=None):
         row["quarterly_nnh"] = row["new_quarterly_high"] - row["new_quarterly_low"]
         row["nnh_52w"] = row["new_52w_high"] - row["new_52w_low"]
         row["new_monthly_high_pct"] = percentage(
-            row["new_monthly_high"], universe_denominator
+            row["new_monthly_high"], row["valid_monthly_extrema"]
         )
         row["new_monthly_low_pct"] = percentage(
-            row["new_monthly_low"], universe_denominator
+            row["new_monthly_low"], row["valid_monthly_extrema"]
         )
         row["new_quarterly_high_pct"] = percentage(
-            row["new_quarterly_high"], universe_denominator
+            row["new_quarterly_high"], row["valid_quarterly_extrema"]
         )
         row["new_quarterly_low_pct"] = percentage(
-            row["new_quarterly_low"], universe_denominator
+            row["new_quarterly_low"], row["valid_quarterly_extrema"]
         )
         row["new_52w_high_pct"] = percentage(
-            row["new_52w_high"], universe_denominator
+            row["new_52w_high"], row["valid_yearly_extrema"]
         )
         row["new_52w_low_pct"] = percentage(
-            row["new_52w_low"], universe_denominator
+            row["new_52w_low"], row["valid_yearly_extrema"]
         )
 
         rolling_advances.append(row["advances"])
@@ -119,6 +123,15 @@ def enrich_records(records, methodology, index_closes=None):
             )
 
         index_close = index_closes.get(row["date"])
+        row["net_breadth"] = row["advances"] - row["declines"]
+        row["volume_ratio_20"] = scaled_ratio(row["volume_above_20"], row["volume_below_or_equal_20"])
+        row["advance_volume_ratio"] = scaled_ratio(row.get("advance_volume", 0), row.get("decline_volume", 0))
+        row["breakout_ratio_20d"] = scaled_ratio(row.get("breakout_20d", 0), row.get("breakdown_20d", 0))
+        row["breakout_20d_pct"] = percentage(row.get("breakout_20d", 0), row.get("valid_breakout_20", 0))
+        row["breakdown_20d_pct"] = percentage(row.get("breakdown_20d", 0), row.get("valid_breakout_20", 0))
+        row["upper_half_52w_pct"] = percentage(row.get("upper_half_52w", 0), row.get("valid_yearly_range", 0))
+        row["lower_half_52w_pct"] = percentage(row.get("lower_half_52w", 0), row.get("valid_yearly_range", 0))
+
         row["index_close"] = index_close
         row["index_change_pct"] = (
             percentage_change(index_close, previous_index_close)
@@ -148,8 +161,10 @@ def enrich_records(records, methodology, index_closes=None):
         row["mbi_state"] = state
         row["warning_day"] = red_count >= 3 and state != "red"
 
-        p10 = row["above_10_pct"]
-        p20 = row["above_20_pct"]
+        # XP's historical formula treats insufficient MA coverage as neutral,
+        # while the published breadth fields remain unavailable (None).
+        p10 = row["above_10_pct"] if row["above_10_pct"] is not None else 0.0
+        p20 = row["above_20_pct"] if row["above_20_pct"] is not None else 0.0
         up_4_5_count = row["up_4_5"]
         down_4_5_count = row["down_4_5"]
         current_z = None
@@ -165,7 +180,7 @@ def enrich_records(records, methodology, index_closes=None):
         row["xp_smoothed_advances"] = current_z
         if current_z is not None:
             previous_z = current_z
-        if p10 is None or p20 is None or current_z is None or down_4_5_count is None:
+        if current_z is None or down_4_5_count is None:
             row["xp_raw"] = None
             row["xp"] = None
         else:

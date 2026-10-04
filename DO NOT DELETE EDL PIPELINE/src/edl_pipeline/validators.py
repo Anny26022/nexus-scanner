@@ -29,7 +29,12 @@ class ArtifactCheck:
     count: int = 0
 
     def to_dict(self):
-        return asdict(self)
+        # Reports are portable release records. Do not expose an absolute
+        # runner workspace path, which is environment-specific and can leak a
+        # repository directory name into published artifacts.
+        data = asdict(self)
+        data["path"] = Path(self.path).name
+        return data
 
 
 def _missing(path, kind):

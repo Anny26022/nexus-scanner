@@ -1,7 +1,5 @@
 import {
   ExpressionNode,
-  ExpressionGroupNode,
-  ExpressionConditionNode,
   ActiveCondition,
   ExplainResponse,
 } from '../types/screener';
@@ -33,6 +31,18 @@ export function explainCondition(condition: ActiveCondition): {
   let explanation = '';
 
   switch (condition.conditionId) {
+    case 'INDICATOR_COMPARE':
+      explanation = `${p.leftIndicator}(${p.leftPeriod}) ${String(p.op).replaceAll('_', ' ')} ${p.rightIndicator ? `${p.rightIndicator}(${p.rightPeriod})` : p.rightValue}${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
+      break;
+    case 'MA_CONVERGENCE':
+      explanation = `${p.maType} ${p.periods} are within ${p.maxSpreadPct}% of close${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
+      break;
+    case 'DIVERGENCE':
+      explanation = `${p.variant} ${p.direction} price / ${p.oscillator}(${p.oscPeriod}) divergence, confirmed with ${p.pivotRight} right bars`;
+      break;
+    case 'SUPERTREND':
+      explanation = `Supertrend(${p.period}, ${p.multiplier}) is ${p.direction}${p.signal === 'TURN' ? ` after turning within ${p.withinDays} sessions` : ''}`;
+      break;
     case 'trend_price_vs_ma':
       explanation = `Price is ${p.operator === 'above' ? 'ABOVE' : p.operator === 'below' ? 'BELOW' : 'WITHIN % RANGE OF'} ${p.maType} ${p.maPeriod}${p.thresholdPct ? ` (threshold: ${p.thresholdPct}%)` : ''}`;
       break;
@@ -71,6 +81,9 @@ export function explainCondition(condition: ActiveCondition): {
       break;
     case 'range_contraction_nr7':
       explanation = `Pattern setup detected: ${p.pattern === 'nr7' ? 'NR7 (Narrowest Range in 7 Days)' : p.pattern === 'inside_bar' ? 'Inside Bar' : 'VCP Contraction Leg'}`;
+      break;
+    case 'INSIDE_BAR':
+      explanation = `${p.timeframe === 'WEEKLY' ? `${p.weeklyMode === 'CURRENT' ? 'Current provisional' : 'Last completed'} weekly` : 'Daily'} inside bar${p.consecutive > 1 ? `, ${p.consecutive} consecutive` : ''}`;
       break;
     case 'range_atr_pct':
       explanation = `14-Day ATR Volatility % is BETWEEN ${p.minAtrPct}% and ${p.maxAtrPct}% of price`;
@@ -120,7 +133,7 @@ export function explainCondition(condition: ActiveCondition): {
  */
 export function explainExpressionTree(
   node: ExpressionNode,
-  asOfDate: string
+  _asOfDate: string
 ): ExplainResponse {
   const explanations: Array<{
     conditionId: string;
@@ -135,29 +148,12 @@ export function explainExpressionTree(
     if (n.type === 'condition') {
       const res = explainCondition(n.condition);
       
-      // Check if session date is legacy and condition requires delivery data
-      if (
-        asOfDate < '2024-01-01' &&
-        n.condition.conditionId === 'mom_delivery_pct'
-      ) {
-        explanations.push({
-          conditionId: n.condition.conditionId,
-          humanReadableText: res.explanation,
-          isDataAvailableForSession: false,
-          unavailableReason:
-            'Historical delivery history is unavailable for session dates prior to 2024-01-01.',
-        });
-        warnings.push(
-          `Condition "${res.explanation}" relies on historical delivery data which is unavailable for ${asOfDate}.`
-        );
-      } else {
-        explanations.push({
-          conditionId: n.condition.conditionId,
-          humanReadableText: res.explanation,
-          isDataAvailableForSession: res.isAvailable,
-          unavailableReason: res.unavailableReason,
-        });
-      }
+      explanations.push({
+        conditionId: n.condition.conditionId,
+        humanReadableText: res.explanation,
+        isDataAvailableForSession: res.isAvailable,
+        unavailableReason: res.unavailableReason,
+      });
     } else if (n.type === 'group') {
       if (!n.children || n.children.length === 0) {
         errors.push('Expression group contains no active conditions.');
@@ -175,79 +171,4 @@ export function explainExpressionTree(
     compiledExplanations: explanations,
     warnings,
   };
-}
-
-/**
- * Simple Nexus Query Language (NQL) text parser.
- * Converts textual query into an ExpressionNode structure.
- */
-export function parseNqlQuery(queryText: string): {
-  tree: ExpressionNode | null;
-  error: string | null;
-} {
-  const trimmed = queryText.trim();
-  if (!trimmed) {
-    return { tree: null, error: 'Query text is empty.' };
-  }
-
-  // Tokenize or parse basic NQL syntax
-  // Supported tokens: ( ) AND OR close rvol change_pct sma50 adr_20 > >= < <= ==
-  try {
-    const activeConditions: ActiveCondition[] = [];
-
-    if (trimmed.includes('rvol')) {
-      activeConditions.push({
-        instanceId: 'nql_rvol_' + Date.now(),
-        conditionId: 'mom_rvol',
-        parameters: { minRvol: 1.5, maxRvol: 20 },
-      });
-    }
-    if (trimmed.includes('sma50') || trimmed.includes('close > sma')) {
-      activeConditions.push({
-        instanceId: 'nql_sma_' + Date.now(),
-        conditionId: 'trend_price_vs_ma',
-        parameters: { maType: 'SMA', maPeriod: 50, operator: 'above', thresholdPct: 0 },
-      });
-    }
-    if (trimmed.includes('change_pct') || trimmed.includes('return')) {
-      activeConditions.push({
-        instanceId: 'nql_change_' + Date.now(),
-        conditionId: 'mom_price_change',
-        parameters: { period: '1d', minChangePct: 2.0, maxChangePct: 100 },
-      });
-    }
-    if (trimmed.includes('adr')) {
-      activeConditions.push({
-        instanceId: 'nql_adr_' + Date.now(),
-        conditionId: 'liq_adr_pct',
-        parameters: { minAdrPct: 3.0 },
-      });
-    }
-
-    if (activeConditions.length === 0) {
-      // Default fallback condition parsed from custom text
-      activeConditions.push({
-        instanceId: 'nql_fallback_' + Date.now(),
-        conditionId: 'mom_rvol',
-        parameters: { minRvol: 1.2, maxRvol: 50 },
-      });
-    }
-
-    const operator = trimmed.toUpperCase().includes(' OR ') ? 'any' : 'all';
-
-    const groupNode: ExpressionGroupNode = {
-      type: 'group',
-      operator,
-      children: activeConditions.map(
-        (c): ExpressionConditionNode => ({
-          type: 'condition',
-          condition: c,
-        })
-      ),
-    };
-
-    return { tree: groupNode, error: null };
-  } catch (err: any) {
-    return { tree: null, error: err.message || 'Syntax error parsing NQL query.' };
-  }
 }

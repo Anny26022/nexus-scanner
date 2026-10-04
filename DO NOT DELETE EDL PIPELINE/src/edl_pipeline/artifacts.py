@@ -35,6 +35,7 @@ INTERMEDIATE_FILES = [
     "nse_daily_ohlcv_report.json",
     "ipo_screener.json",
     "ipo_provider_data.json",
+    "scanx_ipo_data.json",
 ]
 
 INTERMEDIATE_DIRS = [
@@ -49,6 +50,8 @@ FILES_TO_COMPRESS = {
     "market_breadth_v2.json": "market_breadth_v2.json.gz",
     "breadth_universe_snapshot.json": "breadth_universe_snapshot.json.gz",
     "all_indices_history_v2.json": "all_indices_history_v2.json.gz",
+    "sector_breadth_v2.json": "sector_breadth_v2.json.gz",
+    "market_breadth_contributions_v2.json": "market_breadth_contributions_v2.json.gz",
     "corporate_action_ledger.json": "corporate_action_ledger.json.gz",
     "nse_corporate_actions.json": "nse_corporate_actions.json.gz",
     "nse_corporate_action_adjustments.json": "nse_corporate_action_adjustments.json.gz",
@@ -72,6 +75,8 @@ OHLCV_DERIVED_FILES = frozenset(
         "market_breadth_v2.json",
         "breadth_universe_snapshot.json",
         "all_indices_history_v2.json",
+        "sector_breadth_v2.json",
+        "market_breadth_contributions_v2.json",
     }
 )
 OHLCV_DERIVED_FINAL_PATHS = frozenset(
@@ -131,6 +136,7 @@ PHASE4_SCRIPTS = [
     "build_shareholding_history.py",
     "add_corporate_events.py",
     "build_corporate_action_ledger.py",
+    "enrich_published_fields.py",
     "standardize_stock_artifact.py",
 ]
 
@@ -140,7 +146,10 @@ POST_STANDARDIZATION_SCRIPTS = [
     "build_filing_history_artifact.py",
     "build_quarterly_financial_ledger.py",
     "fetch_ipo_provider_data.py",
+    "fetch_scanx_ipo_data.py",
     "build_ipo_screener_artifact.py",
+    # Capture temporary news/filings before compression and cleanup.
+    "build_chart_artifacts.py",
 ]
 
 # This runs after the canonical artifact is compressed, so standardisation
@@ -173,6 +182,9 @@ SCRIPT_OUTPUT_SPECS = {
     ],
     "build_quarterly_financial_ledger.py": [
         ArtifactSpec("quarterly_financial_history.json", "json", min_count=0, required_fields=("source", "coverage", "records")),
+    ],
+    "build_chart_artifacts.py": [
+        ArtifactSpec("chart_artifacts", "dir", min_count=1),
     ],
     "fetch_new_announcements.py": [
         ArtifactSpec("all_company_announcements.json", "json", min_count=0),
@@ -294,6 +306,10 @@ SCRIPT_OUTPUT_SPECS = {
     "build_shareholding_history.py": [
         ArtifactSpec("shareholding_history.json", "json", min_count=1, required_fields=("source", "as_of_date", "records")),
     ],
+    "enrich_published_fields.py": [
+        ArtifactSpec("all_stocks_fundamental_analysis.json", "json", min_count=1,
+                     required_fields=("Symbol", "vwap", "dividend_per_share_latest", "history_metadata", "all_time_high", "all_time_low", "return_5y")),
+    ],
     "standardize_stock_artifact.py": [
         ArtifactSpec(
             "all_stocks_fundamental_analysis.json",
@@ -305,6 +321,10 @@ SCRIPT_OUTPUT_SPECS = {
     "fetch_ipo_provider_data.py": [
         ArtifactSpec("ipo_provider_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),
         ArtifactSpec("ipo_provider_details_archive.json.gz", "gzip_json", required_fields=("details",)),
+    ],
+    "fetch_scanx_ipo_data.py": [
+        ArtifactSpec("scanx_ipo_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),
+        ArtifactSpec("scanx_ipo_details_archive.json.gz", "gzip_json", required_fields=("details",)),
     ],
     "build_ipo_screener_artifact.py": [
         ArtifactSpec("ipo_screener.json", "json", required_fields=("schema_version", "source", "as_of_date", "records", "provider_data", "pending_canonical_enrichment", "capabilities")),
@@ -327,6 +347,8 @@ FINAL_ARTIFACT_SPECS = [
     ArtifactSpec("market_breadth_v2.json.gz", "gzip_json", required_fields=("generated_at", "quality", "records"), nested_min_counts=(("records", 1),)),
     ArtifactSpec("breadth_universe_snapshot.json.gz", "gzip_json", required_fields=("generated_at", "eligible", "excluded")),
     ArtifactSpec("all_indices_history_v2.json.gz", "gzip_json", required_fields=("generated_at", "quality", "indices"), nested_min_counts=(("indices", 1),)),
+    ArtifactSpec("sector_breadth_v2.json.gz", "gzip_json", required_fields=("generated_at", "sectors")),
+    ArtifactSpec("market_breadth_contributions_v2.json.gz", "gzip_json", required_fields=("generated_at", "universes")),
     ArtifactSpec("corporate_action_ledger.json.gz", "gzip_json", required_fields=("source", "price_adjusted", "records")),
     ArtifactSpec("nse_corporate_actions.json.gz", "gzip_json", min_count=1, required_fields=("source", "range", "actions")),
     ArtifactSpec("nse_corporate_action_adjustments.json.gz", "gzip_json", min_count=1, required_fields=("source", "range", "revision", "actions")),
@@ -336,6 +358,8 @@ FINAL_ARTIFACT_SPECS = [
     ArtifactSpec("ipo_screener.json.gz", "gzip_json", required_fields=("schema_version", "source", "as_of_date", "records", "provider_data", "pending_canonical_enrichment", "capabilities")),
     ArtifactSpec("ipo_provider_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),
     ArtifactSpec("ipo_provider_details_archive.json.gz", "gzip_json", required_fields=("details",)),
+    ArtifactSpec("scanx_ipo_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),
+    ArtifactSpec("scanx_ipo_details_archive.json.gz", "gzip_json", required_fields=("details",)),
     ArtifactSpec("shareholding_history.json.gz", "gzip_json", min_count=1, required_fields=("source", "as_of_date", "records")),
     ArtifactSpec("filing_history.json.gz", "gzip_json", min_count=1, required_fields=("source", "coverage", "records")),
     ArtifactSpec("quarterly_financial_history.json.gz", "gzip_json", min_count=0, required_fields=("source", "coverage", "records")),

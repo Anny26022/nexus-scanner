@@ -58,3 +58,8 @@ DO NOT DELETE EDL PIPELINE/.edl-refresh-*/
 # Local scanner runtime and developer state
 DO NOT DELETE EDL PIPELINE/.scanner_cache/
 .wrangler/
+
+# Chart payloads are published through R2, never through Git.
+DO NOT DELETE EDL PIPELINE/chart_artifacts/
+frontend/public/data/charts/
+frontend/public/data/revisions/*/charts/

@@ -161,6 +161,7 @@ class RunnerTests(unittest.TestCase):
         )
 
         self.assertEqual(report["total_time_seconds"], 1.235)
+        self.assertEqual(report["base_dir"], ".")
         self.assertEqual(report["config"]["fetch_optional"], True)
         self.assertEqual(report["scripts"]["script.py"]["validations"][0]["path"], "artifact.json.gz")
         self.assertEqual(report["final_artifacts"][0]["count"], 3)

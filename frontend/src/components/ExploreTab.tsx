@@ -41,6 +41,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   const asOfDate = selectedAsOfDate;
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.screener.match-mode.v1', 'all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeQuery, setActiveQuery] = useLocalStorageState('nexus-scanner.screener.query.v1', '');
+  const [queryText, setQueryText] = useState(activeQuery);
   const [activeConditionsMap, setActiveConditionsMap] =
     useLocalStorageState<Record<string, ActiveCondition>>('nexus-scanner.screener.conditions.v1', DEFAULT_CONDITIONS);
   const [page, setPage] = useState(1);
@@ -68,6 +70,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   const runRequest: ScreenerRunRequest = useMemo(
     () => ({
       expressionTree,
+      textQuery: activeQuery || undefined,
       universe,
       asOfDate,
       datasetRevision,
@@ -75,7 +78,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       page,
       pageSize: 15,
     }),
-    [expressionTree, universe, asOfDate, datasetRevision, sort, page]
+    [expressionTree, activeQuery, universe, asOfDate, datasetRevision, sort, page]
   );
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -87,6 +90,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   const handleApply = (newMap: Record<string, ActiveCondition>, newMatchMode: MatchMode) => {
     setActiveConditionsMap(newMap);
     setMatchMode(newMatchMode);
+    setActiveQuery('');
+    setQueryText('');
     setPage(1);
   };
 
@@ -101,7 +106,19 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
 
   const handleReset = () => {
     setActiveConditionsMap({});
+    setActiveQuery('');
+    setQueryText('');
     setPage(1);
+  };
+
+  const handleRun = async () => {
+    const nextQuery = queryText.trim();
+    if (nextQuery !== activeQuery) {
+      setActiveQuery(nextQuery);
+      setPage(1);
+      return;
+    }
+    if (await onRefreshRevision() === datasetRevision) await refetch();
   };
 
   const filterCount = activeConditionsArray.length;
@@ -133,6 +150,14 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <input
+              aria-label="Scanner query"
+              value={queryText}
+              onChange={(event) => setQueryText(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter') void handleRun(); }}
+              placeholder="Query, e.g. P/E < 20 AND EPS > 10"
+              className="w-40 sm:w-56 lg:w-72 h-7 rounded-md border border-slate-200 bg-white px-2.5 text-[11px] text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400"
+            />
             {filterCount > 0 && (
               <button
                 onClick={handleReset}
@@ -158,7 +183,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
 
             {/* Run */}
             <button
-              onClick={async () => { if (await onRefreshRevision() === datasetRevision) await refetch(); }}
+              onClick={() => void handleRun()}
               disabled={!asOfDate}
               className="flex items-center gap-1 px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-medium rounded-md transition-all cursor-pointer disabled:opacity-40"
             >
@@ -169,7 +194,16 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
         </div>
 
         {/* Row 2: Active Filter Pills (only show when filters exist) */}
-        {filterCount > 0 && (
+        {activeQuery && (
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
+            <span className="text-teal-700 font-semibold">Query</span>
+            <span className="truncate">{activeQuery}</span>
+            <button onClick={() => { setActiveQuery(''); setQueryText(''); setPage(1); }}
+              aria-label="Clear query" className="text-slate-400 hover:text-slate-700"><X className="w-2.5 h-2.5" /></button>
+          </div>
+        )}
+
+        {!activeQuery && filterCount > 0 && (
           <div className="flex flex-wrap items-center gap-1.5">
             {activeConditionsArray.map((cond) => {
               const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === cond.conditionId) || 
@@ -199,7 +233,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
         )}
 
         {/* Row 3: Query summary (subtle mono readout) */}
-        {explanationResult.compiledExplanations.length > 0 && (
+        {!activeQuery && explanationResult.compiledExplanations.length > 0 && (
           <div className="text-[10px] text-slate-400 font-mono truncate px-0.5">
             {explanationResult.compiledExplanations
               .map((e) => e.humanReadableText)

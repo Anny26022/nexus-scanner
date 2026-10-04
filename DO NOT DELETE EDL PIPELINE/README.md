@@ -75,9 +75,11 @@ split-adjusted chart volume.
 The repository's **Weekly Adjusted OHLCV Refresh** GitHub Action runs each
 Sunday at 09:00 IST. It restores a cached EOD2 data checkout, fast-forwards it
 from upstream, and invokes this same pipeline with `EDL_EOD2_DATA_DIR` set.
-The weekday **Daily Data Refresh** intentionally does not use EOD2: it relies
-on the official NSE close for the latest completed session, so it remains
-independent if the optional upstream repository is unavailable.
+The weekday **Daily Data Refresh** also restores and updates EOD2 before it
+runs the pipeline, then relies on the official NSE close for the latest
+completed session. Its EOD2 update is best-effort: an upstream or network
+failure is reported but does not prevent publication from the available local
+history and official daily inputs.
 
 ### Mainboard universe and NSE reconciliation
 

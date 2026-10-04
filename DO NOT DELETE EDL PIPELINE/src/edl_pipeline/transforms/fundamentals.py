@@ -135,14 +135,45 @@ def select_quarterly_statement(consolidated):
     return {}, "UNAVAILABLE", "UNAVAILABLE"
 
 
+def lakhs(series):
+    """ScanX statement amounts are ₹ crore; scanner amount fields are ₹ lakh."""
+    value = get_value_from_pipe_string(series, 0)
+    return value * 100 if value is not None else None
+
+
+def published_financial_fields(quarterly, annual, balance):
+    assets = get_value_from_pipe_string(balance.get("TOTAL_ASSETS"), 0)
+    current = get_value_from_pipe_string(balance.get("CURRENT_ASSETS"), 0)
+    current_liab = get_value_from_pipe_string(balance.get("CURRENT_LIABILITIES"), 0)
+    non_current_liab = get_value_from_pipe_string(balance.get("NON_CURRENT_LIABILITIES"), 0)
+    pbt = get_value_from_pipe_string(annual.get("PROFIT_BEFORE_TAX"), 0)
+    interest = get_value_from_pipe_string(annual.get("INTEREST"), 0)
+    return {
+        "total_revenue_in_lakhs": lakhs(quarterly.get("REVENUE")),
+        "non_current_assets_in_lakhs": (assets - current) * 100 if assets is not None and current is not None and assets >= current else None,
+        "total_liabilities_in_lakhs": (current_liab + non_current_liab) * 100 if current_liab is not None and non_current_liab is not None else None,
+        "interest_coverage": (pbt + interest) / interest if pbt is not None and positive(interest) else None,
+        "financial_metadata": {
+            "source": "ScanX", "basis": "CONSOLIDATED", "amount_unit": "INR_LAKH",
+            "quarter": (quarterly.get("YEAR") or "").split("|")[0] or None,
+            "balance_sheet_year": (balance.get("YEAR") or "").split("|")[0] or None,
+            "interest_coverage_year": (annual.get("YEAR") or "").split("|")[0] or None,
+            "interest_coverage_formula": "(annual profit before tax + interest) / interest",
+            "non_current_assets_formula": "total assets - current assets",
+            "total_liabilities_formula": "current liabilities + non-current liabilities",
+            "debt_to_equity_formula": "reported total borrowings / total equity; unavailable without borrowings",
+        },
+    }
+
+
 def valuation_fields(cv, ttm_cy, roce_roe, bs_c, eps_latest, yoy_eps):
     roe = get_float(roce_roe.get("ROE"))
     roce = get_float(roce_roe.get("ROCE"))
     pe = get_float(cv.get("STOCK_PE"))
 
-    non_current_liab = get_value_from_pipe_string(bs_c.get("NON_CURRENT_LIABILITIES"), 0)
+    borrowings = get_value_from_pipe_string(bs_c.get("TOTAL_BORROWINGS"), 0)
     total_equity = get_value_from_pipe_string(bs_c.get("TOTAL_EQUITY"), 0)
-    de_ratio = non_current_liab / total_equity if non_current_liab is not None and total_equity not in (None, 0) else None
+    de_ratio = borrowings / total_equity if borrowings is not None and borrowings >= 0 and positive(total_equity) else None
 
     peg = pe / yoy_eps if positive(yoy_eps) and positive(pe) else None
 
@@ -295,25 +326,25 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
         **opm,
         **valuation_fields(cv, ttm_cy, roce_roe, bs_c, eps["EPS Latest Quarter"], eps["YoY % EPS Latest"]),
         **ownership,
-        # These values exist in the raw ScanX cache.  Publish their source
-        # units (₹ lakh, except EPS/percentage) rather than fabricating a
-        # missing financial ratio from an unrelated field.
+        **published_financial_fields(cq, cy, bs_c),
+        # ScanX statement amounts are ₹ crore. Convert them to the advertised
+        # ₹ lakh units; retain null when the source amount is missing.
         "EPS TTM": get_float(ttm_cy.get("EPS")),
         "Dividend Yield(%)": get_float(cv.get("DIVIDEND_YEILD")),
         "Face Value": get_float(cv.get("FACE_VALUE")),
-        "Total Income(in Lakhs)": get_value_from_pipe_string(cq.get("REVENUE"), 0),
-        "Total Expense(in Lakhs)": get_value_from_pipe_string(cq.get("EXPENSES"), 0),
-        "Profit Before Tax(in Lakhs)": get_value_from_pipe_string(cq.get("PROFIT_BEFORE_TAX"), 0),
-        "Total Tax Expenses(in Lakhs)": get_value_from_pipe_string(cq.get("TAX"), 0),
-        "Net Profit(in Lakhs)": get_value_from_pipe_string(cq.get("NET_PROFIT"), 0),
-        "Total Equity(in Lakhs)": get_value_from_pipe_string(bs_c.get("TOTAL_EQUITY"), 0),
-        "Total Assets(in Lakhs)": get_value_from_pipe_string(bs_c.get("TOTAL_ASSETS"), 0),
-        "Current Assets(in Lakhs)": get_value_from_pipe_string(bs_c.get("CURRENT_ASSETS"), 0),
-        "Current Liabilities(in Lakhs)": get_value_from_pipe_string(bs_c.get("CURRENT_LIABILITIES"), 0),
-        "Non-Current Liabilities(in Lakhs)": get_value_from_pipe_string(bs_c.get("NON_CURRENT_LIABILITIES"), 0),
-        "Operating Cash Flow(in Lakhs)": get_value_from_pipe_string(cf_c.get("OPERATING_ACTIVITIES"), 0),
-        "Investing Cash Flow(in Lakhs)": get_value_from_pipe_string(cf_c.get("INVESTING_ACTIVITIES"), 0),
-        "Net Cash Flow(in Lakhs)": get_value_from_pipe_string(cf_c.get("NET_CASH_FLOW"), 0),
+        "Total Income(in Lakhs)": lakhs(cq.get("REVENUE")),
+        "Total Expense(in Lakhs)": lakhs(cq.get("EXPENSES")),
+        "Profit Before Tax(in Lakhs)": lakhs(cq.get("PROFIT_BEFORE_TAX")),
+        "Total Tax Expenses(in Lakhs)": lakhs(cq.get("TAX_PAYMENT_ABSOLUTE")),
+        "Net Profit(in Lakhs)": lakhs(cq.get("NET_PROFIT")),
+        "Total Equity(in Lakhs)": lakhs(bs_c.get("TOTAL_EQUITY")),
+        "Total Assets(in Lakhs)": lakhs(bs_c.get("TOTAL_ASSETS")),
+        "Current Assets(in Lakhs)": lakhs(bs_c.get("CURRENT_ASSETS")),
+        "Current Liabilities(in Lakhs)": lakhs(bs_c.get("CURRENT_LIABILITIES")),
+        "Non-Current Liabilities(in Lakhs)": lakhs(bs_c.get("NON_CURRENT_LIABILITIES")),
+        "Operating Cash Flow(in Lakhs)": lakhs(cf_c.get("OPERATING_ACTIVITIES")),
+        "Investing Cash Flow(in Lakhs)": lakhs(cf_c.get("INVESTING_ACTIVITIES")),
+        "Net Cash Flow(in Lakhs)": lakhs(cf_c.get("NET_CASH_FLOW")),
         "% from 52W High": rounded(pct_from_52w_high),
     }
 

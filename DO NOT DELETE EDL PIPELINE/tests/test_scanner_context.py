@@ -31,7 +31,7 @@ class ScannerContextTests(unittest.TestCase):
         }], context={"stock": {"symbol": "TEST"}, "benchmarks": {"NIFTY_50": benchmark}})
         self.assertIn(result["status"], {"match", "no_match"})
 
-    def test_journaltoday_payload_is_normalized_for_existing_and_new_rules(self):
+    def test_legacy_payload_is_normalized_for_existing_and_new_rules(self):
         momentum = normalize_condition_spec({"kind": "PRICE_CHANGE_PCT", "params": {"overDays": 5, "comparison": "ABOVE", "pct": 4}})
         decline = normalize_condition_spec({"kind": "PRICE_CHANGE_PCT", "params": {"overDays": 5, "comparison": "BELOW", "pct": 20}})
         native_less = normalize_condition_spec({"condition": "price_change_percent", "window": 5, "comparison": "less_or_equal", "value": 20})
@@ -52,7 +52,7 @@ class ScannerContextTests(unittest.TestCase):
         self.assertEqual(shakeout["dip_within"], 10)
         self.assertEqual(rs_high["minimum_price_below_high_percent"], 2)
 
-    def test_journaltoday_price_change_below_requires_a_decline(self):
+    def test_legacy_price_change_below_requires_a_decline(self):
         falling = history(10)
         falling.loc[falling.index[-1], ["Open", "High", "Low", "Close"]] = [80, 82, 78, 80]
         rising = history(10)

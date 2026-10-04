@@ -331,6 +331,20 @@ class BreadthV2Tests(unittest.TestCase):
             self.assertEqual(json.loads(output_path.read_text(encoding="utf-8"))["methodology"]["version"], "mbi-xp-v2.2")
             self.assertEqual(json.loads(snapshot_path.read_text(encoding="utf-8"))["eligible_count"], 2)
 
+            # String paths must produce the same portable metadata and data.
+            string_artifact, string_snapshot = generate_market_breadth(
+                universe,
+                ohlcv,
+                str(root / "NIFTY.csv"),
+                self.methodology,
+                output_path,
+                snapshot_path,
+                generated_at="2026-01-01T00:00:00+00:00",
+            )
+            self.assertEqual(artifact["source"]["index_history"], "NIFTY.csv")
+            self.assertEqual(string_artifact, artifact)
+            self.assertEqual(string_snapshot, snapshot)
+
     def test_market_breadth_requires_valid_index_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(FileNotFoundError):

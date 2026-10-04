@@ -16,6 +16,7 @@ from screen_trend_conditions import _load_context, _load_delivery_history, _reso
 from edl_pipeline.scanner.context import normalize_condition_spec
 from edl_pipeline.scanner.context import CONTEXT_CONDITION_REGISTRY
 from edl_pipeline.scanner.presets import get_preset
+from edl_pipeline.scanner.query import compile_query
 from edl_pipeline.scanner.trend import evaluate_history, normalize_history, _comparison, _evaluate_expression, _leaf_results
 from edl_pipeline.scanner.financials import finite_number, financial_value
 
@@ -223,8 +224,21 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
                     value > node["strict_min"] if node.get("strict_min") is not None else True,
                     abs(value) <= node["abs_max"] if node.get("abs_max") is not None else True))
     spec = normalize_condition_spec(node)
-    if frame is not None and spec["condition"] not in CONTEXT_CONDITION_REGISTRY and (frame.empty or frame["Date"].iloc[-1].strftime("%Y-%m-%d") != as_of):
-        diagnostics.add((node["kind"], "stock_history_not_aligned_to_screen_date"))
+    diagnostic_kind = str(node.get("kind") or spec["condition"])
+    history_context_conditions = {"relative_strength", "rs_new_high", "average_turnover", "adr_percent",
+                                  "price_range", "listing_age_days", "days_since_earnings", "absolute_volume",
+                                  "market_cap", "free_float_market_cap", "pe_ratio"}
+    requires_aligned_history = spec["condition"] not in CONTEXT_CONDITION_REGISTRY or spec["condition"] in history_context_conditions
+    if spec["condition"] == "field_comparison":
+        history_fields = {"close", "open", "high", "low", "volume_lakh", "sma_20", "sma_50", "sma_200",
+                          "high_52w", "low_52w", "return_1m", "return_1y", "return_3y", "return_5y",
+                          "return_ytd", "daily_volatility", "annualized_volatility", "market_cap_crore"}
+        operands = {str(spec.get("field", "")).lower()}
+        if isinstance(spec.get("value"), dict):
+            operands.add(str(spec["value"].get("field", "")).lower())
+        requires_aligned_history = bool(operands & history_fields)
+    if frame is not None and requires_aligned_history and (frame.empty or frame["Date"].iloc[-1].strftime("%Y-%m-%d") != as_of):
+        diagnostics.add((diagnostic_kind, "stock_history_not_aligned_to_screen_date"))
         return None
     if frame is None:
         value = snapshot_rule(s, spec, as_of)
@@ -236,32 +250,49 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
             if s.get("as_of_date") == as_of and not pd.isna(marker) and benchmark is not None and not benchmark.empty and marker >= benchmark["Date"].min():
                 sessions = int(((benchmark["Date"] > marker) & (benchmark["Date"] <= pd.Timestamp(as_of))).sum())
                 return _comparison(sessions, spec["comparison"], spec["days"])
-            diagnostics.add((node["kind"], "session_calendar_or_dated_marker_unavailable"))
+            diagnostics.add((diagnostic_kind, "session_calendar_or_dated_marker_unavailable"))
             return None
-        if spec["condition"] not in CONTEXT_CONDITION_REGISTRY:
-            diagnostics.add((node["kind"], "stock_ohlcv_history_unavailable"))
+        if spec["condition"] not in CONTEXT_CONDITION_REGISTRY and spec["condition"] != "field_comparison":
+            diagnostics.add((diagnostic_kind, "stock_ohlcv_history_unavailable"))
             return None
         close = finite_number(s.get("close"))
-        if close is None or s.get("as_of_date") != as_of:
-            diagnostics.add((node["kind"], "stock_history_unavailable_for_date"))
+        if s.get("as_of_date") != as_of or (requires_aligned_history and close is None):
+            diagnostics.add((diagnostic_kind, "stock_history_unavailable_for_date"))
             return None
+        # Snapshot-only context fields (for example EPS or dividend yield) do
+        # not need a stock history file.  A valid one-row carrier lets the
+        # shared evaluator read the dated stock snapshot without inventing a
+        # market value; history-dependent operands are rejected above.
+        close = close if close is not None else 1.0
         rows = [{"Date":as_of,"Open":s.get("open") or close,"High":s.get("high") or close,"Low":s.get("low") or close,"Close":close,"Volume":s.get("volume") or 0}]
     else:
         rows = frame
     if frame is not None:
-        expression = _evaluate_expression(frame, node, delivery, {**context,"stock":s,"delivery_history":delivery})
+        expression = _evaluate_expression(frame, node, delivery, {**context,"stock":s,"delivery_history":delivery,"screen_date":as_of})
         outcome = {"status":expression["status"],"conditions":_leaf_results(expression)}
     else:
-        outcome = evaluate_history(rows,node,as_of,delivery,{**context,"stock":s})
+        outcome = evaluate_history(rows,node,as_of,delivery,{**context,"stock":s,"screen_date":as_of})
     if outcome["status"] == "unavailable":
         reason = outcome["conditions"][0]["details"]["reason"]
-        diagnostics.add((node["kind"], reason))
+        diagnostics.add((diagnostic_kind, reason))
         return None
     return outcome["status"] == "match"
 
 
 def stock_row(s, ratings):
-    fields = {"listingDate":"listing_date", "series":"listing_series", "changePct":"change_percent", "rvol":"relative_volume_20", "marketCapCrore":"market_cap_crore", "peRatio":"pe_ratio", "rsi14":"rsi14", "adr20Pct":"adr_percent_20", "atr14":"atr14", "dist52wHighPct":"distance_from_52w_high_percent", "dist52wLowPct":"distance_from_52w_low_percent", "distAthPct":"percent_from_ath", "earningsDate":"latest_earnings_date", "deliveryPct":"delivery_percent", "isFno":"fno_eligible", "circuitLimit":"circuit_limit", "roePct":"roe_percent", "rocePct":"roce_percent", "opmTtmPct":"operating_margin_ttm_percent", "debtToEquity":"debt_to_equity", "pegRatio":"peg_ratio", "salesGrowth5yPct":"sales_growth_5_years_percent", "epsLastYear":"eps_last_year", "epsTwoYearsBack":"eps_2_years_back", "surveillanceAvailable":"surveillance_available", "surveillanceAsOfDate":"surveillance_as_of_date", "surveillanceFetchedAt":"surveillance_fetched_at", "isAsm":"is_asm", "asmStage":"asm_stage", "isGsm":"is_gsm", "gsmStage":"gsm_stage"}
+    fields = {"listingDate":"listing_date", "series":"listing_series", "changePct":"change_percent", "rvol":"relative_volume_20", "marketCapCrore":"market_cap_crore", "peRatio":"pe_ratio", "epsTtm":"eps_ttm", "dividendYieldPct":"dividend_yield_percent", "rsi14":"rsi14", "adr20Pct":"adr_percent_20", "atr14":"atr14", "dist52wHighPct":"distance_from_52w_high_percent", "dist52wLowPct":"distance_from_52w_low_percent", "distAthPct":"percent_from_ath", "earningsDate":"latest_earnings_date", "deliveryPct":"delivery_percent", "isFno":"fno_eligible", "circuitLimit":"circuit_limit", "roePct":"roe_percent", "rocePct":"roce_percent", "opmTtmPct":"operating_margin_ttm_percent", "debtToEquity":"debt_to_equity", "pegRatio":"peg_ratio", "salesGrowth5yPct":"sales_growth_5_years_percent", "epsLastYear":"eps_last_year", "epsTwoYearsBack":"eps_2_years_back", "surveillanceAvailable":"surveillance_available", "surveillanceAsOfDate":"surveillance_as_of_date", "surveillanceFetchedAt":"surveillance_fetched_at", "isAsm":"is_asm", "asmStage":"asm_stage", "isGsm":"is_gsm", "gsmStage":"gsm_stage"}
+    fields["vwapAsOfDate"] = "vwap_as_of_date"
+    fields.update({
+        "totalRevenueLakh": "total_revenue_in_lakhs",
+        "nonCurrentAssetsLakh": "non_current_assets_in_lakhs",
+        "totalLiabilitiesLakh": "total_liabilities_in_lakhs",
+        "interestCoverage": "interest_coverage",
+        "dividendPerShare": "dividend_per_share_latest",
+        "vwap": "vwap",
+        "allTimeHigh": "all_time_high",
+        "allTimeLow": "all_time_low",
+        "return5yPct": "return_5y",
+    })
     row = {k:s.get(v) for k,v in fields.items()}
     row.update({k:s.get(k) for k in ("symbol","name","open","high","low","close","volume")})
     row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7, rsRating=ratings.get(s["symbol"],{}).get("front_weighted"), daysSinceEarnings=None, fnoBan=False)
@@ -314,9 +345,11 @@ def run(request, root=ROOT, cache=None):
     selected = _resolve_universe(context, universe, explicit)
     wanted = set(selected) if selected is not None else None
     stocks = [s for symbol,s in context["stocks"].items() if (wanted is None or symbol in wanted) and s.get("default_screener_eligible",True)]
-    expression = frontend_expression(request["expressionTree"])
+    text_query = str(request.get("textQuery") or "").strip()
+    expression = compile_query(text_query) if text_query else frontend_expression(request["expressionTree"])
     # Only collect delivery if a translated condition asks for it.
-    delivery = _load_delivery_history(root/"delivery_history_data", selected, root/"eod2_delivery_history_data") if "DELIVERY_PCT_SPIKE" in json.dumps(expression) else {}
+    serialized_expression = json.dumps(expression).lower()
+    delivery = _load_delivery_history(root/"delivery_history_data", selected, root/"eod2_delivery_history_data") if "delivery_percent" in serialized_expression else {}
     matched, counts, unresolved = [], Counter(), 0
     for s in stocks:
         path = root/"ohlcv_data"/f"{s['symbol']}.csv"
@@ -348,8 +381,21 @@ def run(request, root=ROOT, cache=None):
                 row["changePct"] = finite_number((last["Close"] / history["Close"].iloc[-2] - 1) * 100) if len(history) >= 2 else None
                 if s.get("as_of_date") != as_of:
                     # A current row must not be displayed as historical metrics.
-                    for field in ("marketCapCrore","peRatio","rvol","rsi14","adr20Pct","atr14","dist52wHighPct","dist52wLowPct","distAthPct","deliveryPct","sma20","sma50","sma200"):
+                    for field in (
+                        "marketCapCrore","peRatio","rvol","rsi14","adr20Pct","atr14",
+                        "dist52wHighPct","dist52wLowPct","distAthPct","deliveryPct",
+                        "sma20","sma50","sma200","roePct","rocePct","opmTtmPct",
+                        "debtToEquity","pegRatio","salesGrowth5yPct","epsLastYear",
+                        "epsTwoYearsBack","totalRevenueLakh","nonCurrentAssetsLakh",
+                        "totalLiabilitiesLakh","interestCoverage","dividendPerShare",
+                        "vwap","vwapAsOfDate","allTimeHigh","allTimeLow","return5yPct",
+                    ):
                         row[field]=None
+            # stock_row starts from the current snapshot. Recalculate after
+            # history substitution and current-only field sanitization so the
+            # percentage describes the row that is actually returned.
+            row.pop("dataCompleteness", None)
+            row["dataCompleteness"] = round(100 * sum(value is not None for value in row.values()) / len(row))
             matched.append(row)
     sort=request.get("sort") or {}
     field=sort.get("field","symbol")

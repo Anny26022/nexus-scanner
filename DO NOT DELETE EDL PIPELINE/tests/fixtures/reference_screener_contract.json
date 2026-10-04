@@ -1,5 +1,5 @@
 {
-  "source": "JournalToday StockScreenerPage v1.0.39 bundle audit",
+  "source": "Frozen screener condition contract v1.0.39",
   "condition_kinds": [
     "PERSISTENT_MOMENTUM", "PRICE_VS_EMA", "EMA_SHAKEOUT", "ADX", "PRICE_VS_SMA", "PCT_DAYS_ABOVE_MA", "MA_STACK", "MA_SLOPE",
     "PRICE_CHANGE_PCT", "CONSECUTIVE_UP_DAYS", "GAP_UP", "GAP_DOWN", "VOLUME_VS_AVG", "AVG_VOLUME_RATIO", "HIGHEST_VOLUME_IN_N_DAYS", "DELIVERY_PCT_SPIKE",

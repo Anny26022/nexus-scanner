@@ -128,7 +128,7 @@ def collect(symbols: list[str], output: Path, delay_seconds: float, checkpoint_e
     artifact["started_at"] = artifact.get("started_at") or datetime.now(timezone.utc).isoformat()
 
     session = requests.Session()
-    session.headers.update({"User-Agent": "ChartsMaze authorised data collector/1.0", "Accept": "text/html,application/xhtml+xml"})
+    session.headers.update({"User-Agent": "Nexus Scanner authorised data collector/1.0", "Accept": "text/html,application/xhtml+xml"})
     selected = symbols[:limit] if limit else symbols
     completed = 0
     for symbol in selected:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import math
 from datetime import date, datetime, timedelta
 from io import StringIO
 from urllib.parse import urljoin
@@ -70,6 +71,15 @@ def normalize_ohlcv_row(row: dict) -> dict | None:
         or not result["low"] <= min(result["open"], result["close"]) <= max(result["open"], result["close"]) <= result["high"]
     ):
         return None
+    try:
+        vwap = float(row.get("AVG_PRICE") or 0)
+        volume = result["volume"]
+        if not vwap and volume > 0:
+            vwap = float(row.get("TURNOVER_LACS") or 0) * 100_000 / volume
+        if volume > 0 and math.isfinite(vwap) and vwap > 0:
+            result["vwap"] = vwap
+    except (TypeError, ValueError):
+        pass
     return result
 
 

@@ -413,6 +413,8 @@ class IntegrityTests(unittest.TestCase):
                 for spec in FINAL_ARTIFACT_SPECS:
                     (stage/spec.path).write_bytes(b'new validated bytes')
                 self.write(stage,'pipeline_report.json',{'exit_code':0})
+                (stage/'chart_artifacts').mkdir()
+                (stage/'chart_artifacts/index.json').write_text('{}')
                 return mock.Mock(returncode=0)
             with mock.patch('edl_pipeline.publication.pipeline_utils.BASE_DIR',str(root)), \
                  mock.patch('edl_pipeline.publication.subprocess.run',side_effect=worker), \

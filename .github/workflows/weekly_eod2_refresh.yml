@@ -45,11 +45,15 @@ jobs:
           restore-keys: |
             scanner-history-v1-${{ runner.os }}-
 
+      - name: Select weekly EOD2 cache key
+        id: eod2-cache-key
+        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
       - name: Restore EOD2 data checkout
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/eod2_data
-          key: eod2-data-v1-${{ runner.os }}-${{ github.run_id }}
+          key: eod2-data-v1-${{ runner.os }}-${{ steps.eod2-cache-key.outputs.week }}
           restore-keys: |
             eod2-data-v1-${{ runner.os }}-
 
@@ -77,9 +81,18 @@ jobs:
       - name: Verify scanner publication
         run: python -m unittest discover -s frontend -p 'test_*.py' -v
 
+      - name: Install R2 uploader
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
       - name: Run Pipeline with adjusted-history bootstrap
         env:
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
+          EDL_CHART_STORAGE: r2
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
           python run_full_pipeline.py

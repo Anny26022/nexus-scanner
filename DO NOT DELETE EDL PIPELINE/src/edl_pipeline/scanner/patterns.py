@@ -1,6 +1,6 @@
 """Range and chart-pattern conditions over normalized daily OHLCV history.
 
-The public condition contract mirrors the JournalToday screener controls.  The
+The published condition contract defines the supported screener controls. The
 calculations are intentionally deterministic and include diagnostics so a
 consumer can explain *which* session, gap, leg, or resistance line matched.
 """
@@ -43,8 +43,8 @@ PATTERN_CONDITION_REGISTRY = {
         "definition": "Recent range divided by an enclosing or immediately preceding base range.",
     },
     "inside_bar": {
-        "inputs": {"timeframe": "daily|weekly", "consecutive": "integer"},
-        "definition": "The requested number of latest bars each fit inside the preceding bar's range.",
+        "inputs": {"timeframe": "daily|weekly", "consecutive": "integer", "weekly_mode": "completed|current"},
+        "definition": "The requested number of latest bars each fit inside the preceding bar's range. Weekly mode defaults to completed weeks; current-week results are provisional.",
     },
     "unfilled_gap": {
         "inputs": {"direction": "up|down", "minimum_gap_percent": "number", "within_days": "integer", "state": "unfilled|filled"},
@@ -62,7 +62,7 @@ PATTERN_CONDITION_REGISTRY = {
 
 
 def _pick(spec: dict[str, Any], snake: str, camel: str | None = None, default=None):
-    """Accept the pipeline's snake_case contract and JournalToday's field names."""
+    """Accept the pipeline's snake_case contract and legacy field names."""
     if snake in spec:
         return spec[snake]
     if camel and camel in spec:
@@ -239,11 +239,23 @@ def _evaluate_patterns(
         consecutive = int(spec.get("consecutive", 1))
         if timeframe not in {"daily", "weekly"}:
             raise ValueError("inside_bar timeframe must be daily or weekly.")
+        weekly_mode = str(_pick(spec, "weekly_mode", "weeklyMode", "completed")).lower()
+        if weekly_mode not in {"completed", "current"}:
+            raise ValueError("inside_bar weekly_mode must be completed or current.")
         bars = _weekly(frame) if timeframe == "weekly" else frame
+        if timeframe == "weekly" and weekly_mode == "completed":
+            # With daily bars alone we cannot prove that the final ISO week is
+            # exchange-complete (holiday weeks included), so the safe mode
+            # excludes the developing/latest bucket.  Current mode includes it
+            # and explicitly reports the result as provisional.
+            bars = bars.iloc[:-1]
         matched = _inside_run(bars, consecutive)
         if matched is None:
             return unavailable(condition, "insufficient_history")
-        return result(condition, matched, matched, timeframe=timeframe, consecutive=consecutive, signal_date=bars["Date"].iloc[-1].strftime("%Y-%m-%d"))
+        return result(condition, matched, matched, timeframe=timeframe, consecutive=consecutive,
+                      weekly_mode=weekly_mode if timeframe == "weekly" else None,
+                      provisional=timeframe == "weekly" and weekly_mode == "current",
+                      signal_date=bars["Date"].iloc[-1].strftime("%Y-%m-%d"))
 
     if condition == "unfilled_gap":
         direction = str(spec.get("direction", "up")).lower()

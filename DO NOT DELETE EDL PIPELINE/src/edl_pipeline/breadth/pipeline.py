@@ -158,7 +158,10 @@ def generate_market_breadth(
         "source": {
             "universe": "Dhan ScanX customscan/fetchdt snapshot",
             "equity_history": "Dhan openweb-ticks getDataH normalized OHLCV cache",
-            "index_history": str(index_csv),
+            # Publication metadata must be portable across runners. The
+            # artifact name identifies the selected index history without
+            # persisting an absolute workspace path.
+            "index_history": Path(index_csv).name,
         },
         "quality": {
             "eligible_symbols": snapshot["eligible_count"],

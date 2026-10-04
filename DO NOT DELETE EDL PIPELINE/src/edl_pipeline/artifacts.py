@@ -129,6 +129,7 @@ PHASE4_SCRIPTS = [
     "build_shareholding_history.py",
     "add_corporate_events.py",
     "build_corporate_action_ledger.py",
+    "enrich_published_fields.py",
     "standardize_stock_artifact.py",
 ]
 
@@ -139,6 +140,8 @@ POST_STANDARDIZATION_SCRIPTS = [
     "build_quarterly_financial_ledger.py",
     "fetch_ipo_provider_data.py",
     "build_ipo_screener_artifact.py",
+    # Capture temporary news/filings before compression and cleanup.
+    "build_chart_artifacts.py",
 ]
 
 # This runs after the canonical artifact is compressed, so standardisation
@@ -171,6 +174,9 @@ SCRIPT_OUTPUT_SPECS = {
     ],
     "build_quarterly_financial_ledger.py": [
         ArtifactSpec("quarterly_financial_history.json", "json", min_count=0, required_fields=("source", "coverage", "records")),
+    ],
+    "build_chart_artifacts.py": [
+        ArtifactSpec("chart_artifacts", "dir", min_count=1),
     ],
     "fetch_new_announcements.py": [
         ArtifactSpec("all_company_announcements.json", "json", min_count=0),
@@ -288,6 +294,10 @@ SCRIPT_OUTPUT_SPECS = {
     ],
     "build_shareholding_history.py": [
         ArtifactSpec("shareholding_history.json", "json", min_count=1, required_fields=("source", "as_of_date", "records")),
+    ],
+    "enrich_published_fields.py": [
+        ArtifactSpec("all_stocks_fundamental_analysis.json", "json", min_count=1,
+                     required_fields=("Symbol", "vwap", "dividend_per_share_latest", "history_metadata", "all_time_high", "all_time_low", "return_5y")),
     ],
     "standardize_stock_artifact.py": [
         ArtifactSpec(

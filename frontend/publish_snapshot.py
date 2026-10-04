@@ -10,6 +10,7 @@ import numpy as np
 
 import scanner_bridge as bridge
 from scanner_cache import ScannerCache
+from chart_publication import chart_preflight, charts_enabled, complete_release
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
 
@@ -40,6 +41,10 @@ def publish(root=bridge.ROOT, output=OUTPUT):
             delivery_bytes[str(p.relative_to(root))]=p.read_bytes()
     context=bridge._load_context(root)
     session=context['financial_history_as_of']
+    chart_root = root / 'chart_artifacts'
+    include_charts = charts_enabled()
+    if include_charts:
+        chart_preflight(chart_root, session)
     presets={p['id']:bridge.translate(p['id'],{}) for p in list_presets()}
     default=bridge.group('AND',bridge.translate('mom_rvol',{'minRvol':1.5,'maxRvol':20}),bridge.translate('trend_price_vs_ma',{'maType':'SMA','maPeriod':50,'operator':'above','thresholdPct':0}))
     delivery=bridge._load_delivery_history(root/'delivery_history_data',None,root/'eod2_delivery_history_data')
@@ -72,6 +77,10 @@ def publish(root=bridge.ROOT, output=OUTPUT):
             for period in (20,50,100):
                 metrics[f'turnover{period}']=float((frame['Close']*frame['Volume']).tail(period).mean()/1e7) if len(frame)>=period else None
         row['metrics']=metrics
+        row['historyMetadata']=stock.get('history_metadata')
+        row['financialMetadata']=stock.get('financial_metadata')
+        row['dividendExDate']=stock.get('dividend_ex_date')
+        row['vwapAsOfDate']=stock.get('vwap_as_of_date')
         row['peRatio']=financial_value(context,stock,{'condition':'pe_ratio'},bridge.date.fromisoformat(session),finite_number(stock.get('market_cap_crore')))[0]
         row['fnoBan']=bool(context['fno_ban_symbols'].get(symbol)) if context.get('fno_ban_available') and context.get('fno_ban_trade_date')==session else None
         row['roePct']=finite_number(stock.get('roe_percent'))
@@ -97,6 +106,9 @@ def publish(root=bridge.ROOT, output=OUTPUT):
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
     for file in code_files:
+        digest.update(file.name.encode()); digest.update(file.read_bytes())
+    digest.update(b'charts-enabled' if include_charts else b'scanner-only')
+    for file in sorted(chart_root.glob('*.json*')) if include_charts else []:
         digest.update(file.name.encode()); digest.update(file.read_bytes())
     packed=root/'.scanner_cache/history.npz'
     if packed.exists():
@@ -128,15 +140,18 @@ def publish(root=bridge.ROOT, output=OUTPUT):
     if not (backend/'scanner_revision.json').exists():
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'referenceCounts':{'rvol15Sma50':default_count}}
-    write_json(generation/'stocks.json',payload)
+    stock_bytes=write_json(generation/'stocks.json',payload)
+    compressed=gzip.compress(stock_bytes,compresslevel=6,mtime=0)
+    compressed_path=generation/'stocks.json.gz'
+    temporary=compressed_path.with_name(compressed_path.name+'.tmp')
+    temporary.write_bytes(compressed); temporary.replace(compressed_path)
     with gzip.open(root/'ipo_screener.json.gz','rt') as handle:
         ipos=json.load(handle)
     ipo_payload=ipos if isinstance(ipos,dict) else {'records':ipos}
     ipo_bytes=json.dumps(ipo_payload,separators=(',', ':'),allow_nan=False).encode()
     (generation/'ipos.json.gz').write_bytes(gzip.compress(ipo_bytes,compresslevel=9,mtime=0))
-    manifest={'revision':revision,'sessionDate':session,'publishedAt':datetime.now(timezone.utc).isoformat(),'schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz'}
-    write_json(generation/'release.json',manifest)
-    write_json(output/'current.json',manifest)
+    manifest={'revision':revision,'sessionDate':session,'publishedAt':datetime.now(timezone.utc).isoformat(),'schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz','datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz'}
+    manifest = complete_release(chart_root, output, manifest)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest
 

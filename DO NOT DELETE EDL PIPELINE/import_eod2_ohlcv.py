@@ -147,6 +147,7 @@ def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
         **FIELD_POLICIES,
         "source_last_update": None,
         "master_symbols": len(master),
+        "symbol_history": {},
         "imported_symbols": 0,
         "imported_rows": 0,
         "verified_symbol_history_symbols": 0,
@@ -181,6 +182,7 @@ def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
             *({field: row[field] for field in ("Date", "Open", "High", "Low", "Close", "Volume")} for row in imported),
         ])
         write_ohlcv_csv(destination, merged)
+        report["symbol_history"][symbol] = {"isin": isin, "start_date": imported[0]["Date"], "end_date": imported[-1]["Date"], "sessions": len(imported)}
         delivery = delivery_rows(imported)
         if delivery:
             write_delivery_csv(delivery_output_dir / f"{symbol}.csv", delivery)

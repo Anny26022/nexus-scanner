@@ -12,15 +12,17 @@ from typing import Any
 
 
 _OPERATORS = {">": "greater", ">=": "greater_or_equal", "<": "less", "<=": "less_or_equal", "=": "equal"}
+_INDICATOR_FUNCTIONS = {"rsi", "cci", "mfi", "roc", "obv", "adx", "atr", "stoch k", "stoch d",
+                        "williams r", "macd", "macd signal", "macd hist", "plus di", "minus di"}
 
 # Names deliberately mirror the public query gallery.  Values are the stable
 # internal field identifiers evaluated by ``field_comparison``.
 FIELD_ALIASES = {
     "market cap (in cr)": "market_cap_crore", "market cap": "market_cap_crore",
-    "price to earning (p/e)": "pe_ratio", "p/e": "pe_ratio", "pe ratio": "pe_ratio",
-    "debt to equity": "debt_to_equity", "earning per share (eps)": "eps_ttm",
+    "price to earning (p/e)": "pe_ratio", "price to earnings (p/e)": "pe_ratio", "p/e": "pe_ratio", "pe ratio": "pe_ratio",
+    "debt to equity": "debt_to_equity", "earning per share (eps)": "eps_ttm", "earnings per share (eps)": "eps_ttm", "eps": "eps_ttm",
     "close price": "close", "current market price": "close", "open price": "open",
-    "high price": "high", "low price": "low", "volume (in lakhs)": "volume_lakh",
+    "high price": "high", "low price": "low", "volume (in lakhs)": "volume_lakh", "volume": "volume_lakh",
     "20 dma": "sma_20", "50 dma": "sma_50", "200 dma": "sma_200",
     "52w high": "high_52w", "52w low": "low_52w",
     "return over % 1 month": "return_1m", "return over % 1 year": "return_1y",
@@ -28,7 +30,7 @@ FIELD_ALIASES = {
     "return over % year to date": "return_ytd", "daily volatility": "daily_volatility",
     "annualized volatility": "annualized_volatility", "promoter holding (%)": "promoter_holding_percent",
     "public holding": "public_holding_percent", "number of shareholders": "number_of_shareholders",
-    "dividend yield(%)": "dividend_yield_percent", "face value": "face_value",
+    "dividend yield(%)": "dividend_yield_percent", "dividend yield (%)": "dividend_yield_percent", "dividend yield": "dividend_yield_percent", "face value": "face_value",
     "total income (in lakhs)": "total_income_in_lakhs", "total expense (in lakhs)": "total_expense_in_lakhs",
     "profit before tax (in lakhs)": "profit_before_tax_in_lakhs", "total tax expenses (in lakhs)": "total_tax_expenses_in_lakhs",
     "net profit (in lakhs)": "net_profit_in_lakhs", "total equity (in lakhs)": "total_equity_in_lakhs",
@@ -36,6 +38,12 @@ FIELD_ALIASES = {
     "current liabilities (in lakhs)": "current_liabilities_in_lakhs", "non-current liabilities (in lakhs)": "non_current_liabilities_in_lakhs",
     "operating cash flow (in lakhs)": "operating_cash_flow_in_lakhs", "investing cash flow (in lakhs)": "investing_cash_flow_in_lakhs",
     "net cash flow (in lakhs)": "net_cash_flow_in_lakhs",
+    "total revenue (in lakhs)": "total_revenue_in_lakhs",
+    "non-current assets (in lakhs)": "non_current_assets_in_lakhs",
+    "total liabilities (in lakhs)": "total_liabilities_in_lakhs",
+    "interest coverage": "interest_coverage", "vwap": "vwap",
+    "dividend per share (dps)": "dividend_per_share_latest",
+    "all time high": "all_time_high", "all time low": "all_time_low",
 }
 
 
@@ -91,35 +99,118 @@ def _function_condition(name: str, arguments: list[str], operator: str | None = 
     key = re.sub(r"\s+", " ", name).strip().casefold()
     comparison = _OPERATORS.get(operator or ">=", "greater_or_equal")
     target = float(value.replace(",", "")) if value is not None else None
+    if key in _INDICATOR_FUNCTIONS and key != "adx":
+        if target is None:
+            raise ValueError(f"{name.strip()} requires a comparison and number.")
+        return {"type": "condition", "kind": "INDICATOR_COMPARE", "params": {
+            "leftIndicator": key.replace(" ", "_").upper(), "leftPeriod": int(arguments[0] or 14),
+            "leftOffset": 0, "op": {"greater":"GREATER", "greater_or_equal":"ABOVE",
+                                      "less":"LESS", "less_or_equal":"BELOW", "equal":"EQUAL"}[comparison],
+            "rightIndicator": "", "rightValue": target, "rightPeriod": 20, "rightOffset": 0, "withinDays": 1,
+        }}
     if key == "adx":
-        return {"type": "condition", "kind": "ADX", "params": {"period": int(arguments[0] or 14), "comparison": "ABOVE" if comparison.startswith("greater") else "BELOW", "value": target}}
+        return {"type": "condition", "kind": "ADX", "params": {"period": int(arguments[0] or 14), "comparison": comparison, "value": target}}
     if key == "rvol":
-        return {"type": "condition", "kind": "VOLUME_VS_AVG", "params": {"avgDays": int(arguments[0] or 20), "multiple": target, "withinDays": 1}}
+        return {"type": "condition", "kind": "VOLUME_VS_AVG", "params": {"avgDays": int(arguments[0] or 20), "multiple": target, "comparison": comparison, "withinDays": 1}}
     if key == "adr":
-        return {"type": "condition", "kind": "ADR_PCT", "params": {"lookbackDays": int(arguments[0] or 14), "comparison": "ABOVE" if comparison.startswith("greater") else "BELOW", "pct": target}}
+        return {"type": "condition", "kind": "ADR_PCT", "params": {"lookbackDays": int(arguments[0] or 14), "comparison": comparison, "pct": target}}
     if key == "volume trend":
-        return {"type": "condition", "kind": "AVG_VOLUME_RATIO", "params": {"recentDays": int(arguments[0]), "baseDays": int(arguments[1]), "comparison": "ABOVE" if comparison.startswith("greater") else "BELOW", "ratio": target}}
+        return {"type": "condition", "kind": "AVG_VOLUME_RATIO", "params": {"recentDays": int(arguments[0]), "baseDays": int(arguments[1]), "comparison": comparison, "ratio": target}}
     if key == "earnings growth":
-        return {"type": "condition", "kind": "EARNINGS_GROWTH", "params": {"metric": arguments[0], "basis": arguments[1], "comparison": "ABOVE" if comparison.startswith("greater") else "BELOW", "value": target}}
+        return {"type": "condition", "kind": "EARNINGS_GROWTH", "params": {"metric": arguments[0], "basis": arguments[1], "comparison": comparison, "value": target}}
     if key == "days since earnings":
-        return {"type": "condition", "kind": "DAYS_SINCE_EARNINGS", "params": {"comparison": "ABOVE" if comparison.startswith("greater") else "BELOW", "days": target}}
+        if target is None:
+            raise ValueError("Days Since Earnings requires a comparison and number.")
+        return {"type": "condition", "kind": "DAYS_SINCE_EARNINGS", "params": {"comparison": comparison, "days": target}}
+    if key == "rs rating":
+        if target is None:
+            raise ValueError("RS Rating requires a comparison and number.")
+        return {"type": "condition", "kind": "RS_RATING", "params": {
+            "window": arguments[0] if arguments else "FRONT_WEIGHTED",
+            "comparison": comparison, "value": target,
+        }}
+    if key == "vcp legs":
+        if len(arguments) < 3:
+            raise ValueError("VCP Legs requires minimum legs, lookback days and maximum final-leg percent.")
+        return {"type": "condition", "kind": "VCP_LEGS", "params": {
+            "minLegs": int(arguments[0]), "lookbackDays": int(arguments[1]),
+            "maxFinalLegPct": float(arguments[2]),
+            "maxLegRatio": float(arguments[3]) if len(arguments) > 3 else .8,
+            "minSwingPct": float(arguments[4]) if len(arguments) > 4 else 1.5,
+        }}
+    if key == "delivery pct":
+        if target is None:
+            raise ValueError("Delivery Pct requires a comparison and number.")
+        return {"type": "condition", "kind": "DELIVERY_PERCENT", "params": {
+            "comparison": comparison, "value": target,
+        }}
     if key == "ma stack":
         periods = [int(part.strip()) for part in arguments[0].split(",")]
         return {"type": "condition", "kind": "MA_STACK", "params": {"periods": periods, "maType": arguments[1], "priceAbove": arguments[2].lower() == "true"}}
     if key == "ma slope":
-        return {"type": "condition", "kind": "MA_SLOPE", "params": {"period": int(arguments[0]), "maType": arguments[1], "window": int(arguments[2]), "comparison": "ABOVE" if comparison.startswith("greater") else "BELOW", "minChangePct": target}}
+        return {"type": "condition", "kind": "MA_SLOPE", "params": {"period": int(arguments[0]), "maType": arguments[1], "window": int(arguments[2]), "comparison": comparison, "minChangePct": target}}
+    if key == "ma convergence":
+        if target is None:
+            raise ValueError("MA Convergence requires a maximum spread comparison.")
+        if not arguments or "," not in arguments[0]:
+            raise ValueError('MA Convergence periods must be a quoted comma-delimited list, for example "9,20,50,200".')
+        periods = [part.strip() for part in arguments[0].split(",") if part.strip()]
+        if len(periods) < 2 or not all(part.isdigit() for part in periods):
+            raise ValueError("MA Convergence requires at least two positive integer periods.")
+        return {"type": "condition", "kind": "MA_CONVERGENCE", "params": {
+            "periods": [int(part) for part in periods],
+            "maType": arguments[1] if len(arguments) > 1 else "EMA",
+            "comparison": comparison,
+            "maxSpreadPct": target,
+            "withinDays": int(arguments[2]) if len(arguments) > 2 else 1,
+        }}
+    if key == "supertrend":
+        return {"type": "condition", "kind": "SUPERTREND", "params": {
+            "period": int(arguments[0] or 10), "multiplier": float(arguments[1] or 3),
+            "direction": arguments[2] if len(arguments) > 2 else "BULLISH",
+            "signal": arguments[3] if len(arguments) > 3 else "STATE",
+            "withinDays": int(arguments[4]) if len(arguments) > 4 else 1,
+        }}
+    if key == "indicator compare":
+        if len(arguments) < 5:
+            raise ValueError("Indicator Compare requires left indicator, period, offset, operation and target.")
+        right_indicator = arguments[4] if len(arguments) > 4 else ""
+        fixed_value = float(arguments[5]) if not right_indicator else 0.0
+        return {"type": "condition", "kind": "INDICATOR_COMPARE", "params": {
+            "leftIndicator": arguments[0], "leftPeriod": int(arguments[1]), "leftOffset": int(arguments[2]),
+            "op": arguments[3], "rightIndicator": right_indicator, "rightValue": fixed_value,
+            "rightPeriod": int(arguments[5]) if right_indicator and len(arguments) > 5 else 20,
+            "rightOffset": int(arguments[6]) if right_indicator and len(arguments) > 6 else 0,
+            "withinDays": int(arguments[7] if right_indicator and len(arguments) > 7 else arguments[6] if not right_indicator and len(arguments) > 6 else 1),
+        }}
+    if key == "divergence":
+        return {"type": "condition", "kind": "DIVERGENCE", "params": {
+            "oscillator": arguments[0], "oscPeriod": int(arguments[1]), "direction": arguments[2],
+            "variant": arguments[3], "maxBarDifference": int(arguments[4]), "pivotLeft": int(arguments[5]),
+            "pivotRight": int(arguments[6]), "lookbackDays": int(arguments[7]), "withinDays": int(arguments[8]),
+            "invalidateOnBreak": arguments[9].casefold() == "true" if len(arguments) > 9 else True,
+        }}
     raise ValueError(f"Unsupported query function: {name!r}")
 
 
 def _leaf(text: str) -> dict:
     function = re.match(r"^(.+?)\((.*)\)\s*(>=|<=|>|<|=)\s*(.+)$", text.strip())
-    if function and function.group(1).strip().casefold() not in FIELD_ALIASES:
+    field_match = re.match(r"^(.+?)\s*(>=|<=|>|<|=)\s*(.+)$", text.strip())
+    known_field = field_match and field_match.group(1).strip().casefold() in FIELD_ALIASES
+    if function and not known_field:
         name, arguments, operator, value = function.groups()
         return _function_condition(name, _arguments(arguments), operator, value)
+    if field_match:
+        special = field_match.group(1).strip().casefold()
+        if special in {"days since earnings", "rs rating", "delivery pct"}:
+            return _function_condition(special, [], field_match.group(2), field_match.group(3))
     bare_function = re.match(r"^(.+?)\((.*)\)$", text.strip())
-    if bare_function:
+    # A parenthesized field alias may appear on the right side of an ordinary
+    # field comparison (for example ``Close Price > Non-current assets (in
+    # lakhs)``). Do not reinterpret that whole clause as a bare function.
+    if bare_function and not field_match:
         return _function_condition(bare_function.group(1), _arguments(bare_function.group(2)))
-    match = re.match(r"^(.+?)\s*(>=|<=|>|<|=)\s*(.+)$", text.strip())
+    match = field_match
     if not match: raise ValueError(f"Expected a comparison in query clause: {text!r}")
     left, operator, right = match.groups()
     left_value = _operand(left)

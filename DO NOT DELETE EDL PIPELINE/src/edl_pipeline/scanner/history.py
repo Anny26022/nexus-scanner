@@ -13,6 +13,8 @@ from .shareholding import SHAREHOLDING_FIELDS, select_observation as select_shar
 
 
 SCANNER_SNAPSHOT_FIELDS = (
+    "total_revenue_in_lakhs", "non_current_assets_in_lakhs", "total_liabilities_in_lakhs", "interest_coverage", "dividend_per_share_latest", "vwap", "all_time_high", "all_time_low", "return_5y",
+    "financial_metadata", "history_metadata", "vwap_as_of_date", "dividend_ex_date", "dividend_basis", "dividend_source_range", "percent_from_ath",
     "symbol", "as_of_date", "close", "market_cap_crore", "free_float_percent",
     "pe_ratio", "latest_earnings_date", "sector", "industry", "circuit_limit",
     "earnings_report_type",

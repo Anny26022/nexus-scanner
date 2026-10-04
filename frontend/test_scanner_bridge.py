@@ -107,9 +107,38 @@ class BridgeTests(unittest.TestCase):
         self.assertTrue(bridge.evaluate(bridge.translate("EPS_LAST_YEAR_HIGHER",{}),stock,None,{},"2026-09-30",set(),[]))
         self.assertFalse(bridge.evaluate(bridge.translate("EPS_LAST_YEAR_HIGHER",{}),{**stock,"eps_last_year":8},None,{},"2026-09-30",set(),[]))
 
+    def test_absolute_volume_eps_and_dividend_yield_use_their_native_units(self):
+        stock={**self.stock(),"eps_ttm":25,"dividend_yield_percent":2.5}
+        frame=self.history(); frame.loc[frame.index[-1],"Volume"]=1_000_000
+        self.assertTrue(bridge.evaluate(bridge.translate("ABSOLUTE_VOLUME",{"comparison":"ABOVE","value":1_000_000}),stock,frame,{},"2026-09-30",set(),[]))
+        self.assertTrue(bridge.evaluate(bridge.translate("ABSOLUTE_EPS",{"comparison":"GREATER","value":20}),stock,frame,{},"2026-09-30",set(),[]))
+        self.assertTrue(bridge.evaluate(bridge.translate("DIVIDEND_YIELD",{"comparison":"GREATER","value":2}),stock,frame,{},"2026-09-30",set(),[]))
+
+    def test_snapshot_field_query_without_history_has_stable_diagnostics(self):
+        node=bridge.compile_query("Earning Per Share (EPS) > 20")
+        stock={**self.stock(),"eps_ttm":25}
+        self.assertTrue(bridge.evaluate(node,stock,None,{},"2026-09-30",set(),[]))
+
+        diagnostics=set()
+        self.assertIsNone(bridge.evaluate(node,{**stock,"eps_ttm":None},None,{},"2026-09-30",diagnostics,[]))
+        self.assertIn(("field_comparison","snapshot_value_unavailable"),diagnostics)
+
+    def test_current_valuation_conditions_reject_stale_history_frames(self):
+        stale=self.history(latest="2026-09-29")
+        for kind,params in [
+            ("MARKETCAP",{"comparison":"ABOVE","valueCr":1_000}),
+            ("FF_MARKETCAP",{"comparison":"ABOVE","valueCr":1_000}),
+            ("PE_RATIO",{"comparison":"BELOW","value":25}),
+        ]:
+            with self.subTest(kind=kind):
+                diagnostics=set()
+                value=bridge.evaluate(bridge.translate(kind,params),self.stock(),stale,{},"2026-09-30",diagnostics,[])
+                self.assertIsNone(value)
+                self.assertIn((kind,"stock_history_not_aligned_to_screen_date"),diagnostics)
+
     def test_all_native_condition_defaults_execute(self):
         catalog=json.loads((Path(__file__).parent/"src/data/nativeConditions.json").read_text())
-        self.assertEqual(len(catalog),51)
+        self.assertEqual(len(catalog),54)
         for item in catalog:
             with self.subTest(condition=item["id"]):
                 params={p["id"]:p["defaultValue"] for p in item["parameters"]}
@@ -139,3 +168,36 @@ class BridgeTests(unittest.TestCase):
             response=bridge.run(request,Path(folder))
             self.assertEqual(response["matchCount"],1)
             with self.assertRaises(ValueError): bridge.run({**request,"asOfDate":"2026-09-29"},Path(folder))
+
+    def test_text_query_is_compiled_by_python_and_rejects_unsupported_clauses(self):
+        context={"stocks":{"TEST":self.stock()},"financial_history_as_of":"2026-09-30","rs_ratings":{},"fno_ban_symbols":{}}
+        request={"asOfDate":"2026-09-30","universe":"mainboard",
+                 "expressionTree":{"type":"group","operator":"all","children":[]},
+                 "textQuery":"(Close Price > 50 AND Close Price < 150) AND Volume (in Lakhs) >= 0.001"}
+        with tempfile.TemporaryDirectory() as folder, patch.object(bridge,"_load_context",return_value=context):
+            root=Path(folder); (root/'ohlcv_data').mkdir(); self.history().to_csv(root/'ohlcv_data/TEST.csv',index=False)
+            response=bridge.run(request,root)
+            self.assertEqual(response["matchCount"],1)
+            with self.assertRaisesRegex(ValueError,"Unsupported query field"):
+                bridge.run({**request,"textQuery":"Unknown Metric > 5"},root)
+
+    def test_historical_rows_do_not_reuse_current_snapshot_enrichments(self):
+        stock={**self.stock(),"as_of_date":"2026-09-30","total_revenue_in_lakhs":1000,
+               "non_current_assets_in_lakhs":2000,"total_liabilities_in_lakhs":800,
+               "interest_coverage":5,"dividend_per_share_latest":2,"vwap":100,
+               "vwap_as_of_date":"2026-09-30","all_time_high":150,"all_time_low":20,
+               "return_5y":80,"roe_percent":18,"eps_last_year":12}
+        context={"stocks":{"TEST":stock},"financial_history_as_of":"2026-09-30",
+                 "rs_ratings":{},"fno_ban_symbols":{}}
+        request={"asOfDate":"2026-09-29","universe":"mainboard",
+                 "expressionTree":{"type":"group","operator":"all","children":[]}}
+        with tempfile.TemporaryDirectory() as folder, patch.object(bridge,"_load_context",return_value=context):
+            root=Path(folder); (root/'ohlcv_data').mkdir()
+            self.history(latest="2026-09-29").to_csv(root/'ohlcv_data/TEST.csv',index=False)
+            row=bridge.run(request,root)["rows"][0]
+            for field in ("totalRevenueLakh","nonCurrentAssetsLakh","totalLiabilitiesLakh",
+                          "interestCoverage","dividendPerShare","vwap","vwapAsOfDate",
+                          "allTimeHigh","allTimeLow","return5yPct","roePct","epsLastYear"):
+                self.assertIsNone(row[field], field)
+            values = [value for field, value in row.items() if field != "dataCompleteness"]
+            self.assertEqual(row["dataCompleteness"], round(100 * sum(value is not None for value in values) / len(values)))

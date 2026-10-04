@@ -647,4 +647,41 @@ class BseEarningsCalendarTests(unittest.TestCase):
             {"symbol": "RENTOMOJO", "scheduled_date": "2026-10-05", "event_type": "RESULTS_BOARD_MEETING"},
             {"symbol": "LATER", "scheduled_date": "2026-10-25", "event_type": "RESULTS_BOARD_MEETING"},
         ]}, today=datetime(2026, 10, 4))
-        self.assertEqual(events, {"RENTOMOJO": ["⏰: Results (05-Oct)"]})
+        self.assertEqual(events, {"RENTOMOJO": ["⏰: Results board meeting (05-Oct)"]})
+
+    def test_calendar_uses_bse_first_and_scanx_for_missing_symbols(self):
+        from fetch_bse_earnings_calendar import merge_upcoming_results
+        from edl_pipeline.transforms.events import collect_upcoming_bse_results_events
+        calendar = {"events": [
+            {"symbol": "BOTH", "scheduled_date": "2026-10-05", "event_type": "RESULTS_BOARD_MEETING", "source": "BSE"},
+        ]}
+        merged = merge_upcoming_results(calendar, [
+            {"Symbol": "BOTH", "ExDate": "2026-10-06", "Type": "QUARTERLY RESULT ANNOUNCEMENT"},
+            {"Symbol": "FALLBACK", "ExDate": "2026-10-07", "Type": "QUARTERLY RESULT ANNOUNCEMENT"},
+            {"Symbol": "OTHER", "ExDate": "2026-10-08", "Type": "DIVIDEND"},
+            {"Symbol": "OLD", "ExDate": "2026-10-03", "Type": "QUARTERLY RESULT ANNOUNCEMENT"},
+        ], {"BOTH", "FALLBACK", "OTHER", "OLD"}, "2026-10-04")
+        by_symbol = {event["symbol"]: event for event in merged["events"]}
+        self.assertEqual(set(by_symbol), {"BOTH", "FALLBACK"})
+        self.assertEqual(by_symbol["BOTH"]["scheduled_date"], "2026-10-05")
+        self.assertEqual(by_symbol["BOTH"]["source_dates"], {"BSE": ["2026-10-05"], "ScanX": ["2026-10-06"]})
+        self.assertTrue(by_symbol["BOTH"]["date_conflict"])
+        self.assertEqual(by_symbol["FALLBACK"]["source"], "ScanX")
+        self.assertEqual(collect_upcoming_bse_results_events(merged, today=datetime(2026, 10, 4)), {
+            "BOTH": ["⏰: Results board meeting (05-Oct)"],
+            "FALLBACK": ["⏰: Results announcement (07-Oct)"],
+        })
+
+    def test_calendar_publication_reads_existing_scanx_feed(self):
+        from fetch_bse_earnings_calendar import main
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "nse_equity_list.csv").write_text("SYMBOL,SERIES\nFALLBACK,EQ\n", encoding="utf-8")
+            (root / "upcoming_earnings_events.json").write_text(json.dumps([{
+                "Symbol": "FALLBACK", "ExDate": "2099-10-07", "Type": "QUARTERLY RESULT ANNOUNCEMENT",
+            }]), encoding="utf-8")
+            with mock.patch("fetch_bse_earnings_calendar.fetch_calendar", return_value=[]):
+                self.assertTrue(main(root))
+            payload = json.loads((root / "earnings_calendar.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["events"][0]["symbol"], "FALLBACK")
+            self.assertEqual(payload["events"][0]["source"], "ScanX")

@@ -7,6 +7,7 @@ import gzip
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -87,10 +88,50 @@ def previous_calendar(root: Path) -> dict | None:
 
 def build_calendar(rows: object, symbols: set[str], fetched_at: str) -> dict:
     return {
-        "source": "BSE forthcoming results calendar",
+        "source": "BSE forthcoming results calendar with ScanX fallback",
         "fetched_at": fetched_at,
         "events": normalize(rows, symbols),
     }
+
+
+def merge_upcoming_results(calendar: dict, scanx_rows: object, symbols: set[str], today: str) -> dict:
+    """Select one forthcoming date per symbol, retaining both source observations."""
+    by_symbol: dict[str, list[dict]] = {}
+    for event in calendar.get("events", []):
+        if event.get("source") == "BSE" and event.get("scheduled_date", "") >= today:
+            by_symbol.setdefault(event["symbol"], []).append(event)
+    if isinstance(scanx_rows, list):
+        for row in scanx_rows:
+            if not isinstance(row, dict):
+                continue
+            symbol = str(row.get("Symbol") or "").strip().upper()
+            date = str(row.get("ExDate") or "")
+            if (symbol not in symbols or not date or date < today
+                    or "QUARTERLY RESULT ANNOUNCEMENT" not in str(row.get("Type") or "").upper()):
+                continue
+            by_symbol.setdefault(symbol, []).append({
+                "symbol": symbol,
+                "company_name": row.get("Name") or None,
+                "scheduled_date": date,
+                "event_type": "QUARTERLY_RESULT_ANNOUNCEMENT",
+                "source": "ScanX",
+                "source_url": None,
+            })
+
+    selected = []
+    for symbol, observations in by_symbol.items():
+        # BSE's scheduled board meeting is preferred; the other source fills gaps.
+        observations.sort(key=lambda event: (event["source"] != "BSE", event["scheduled_date"]))
+        chosen = observations[0].copy()
+        source_dates = {
+            source: sorted({event["scheduled_date"] for event in observations if event["source"] == source})
+            for source in ("BSE", "ScanX") if any(event["source"] == source for event in observations)
+        }
+        chosen["source_dates"] = source_dates
+        chosen["date_conflict"] = len({date for dates in source_dates.values() for date in dates}) > 1
+        selected.append(chosen)
+    calendar["events"] = sorted(selected, key=lambda event: (event["scheduled_date"], event["symbol"]))
+    return calendar
 
 
 def fetch_calendar(session=requests) -> object:
@@ -101,18 +142,25 @@ def fetch_calendar(session=requests) -> object:
 
 def main(root: Path = Path(BASE_DIR)) -> bool:
     fetched_at = datetime.now(timezone.utc).isoformat()
+    symbols = nse_symbols(root / "nse_equity_list.csv")
     try:
-        payload = build_calendar(fetch_calendar(), nse_symbols(root / "nse_equity_list.csv"), fetched_at)
+        payload = build_calendar(fetch_calendar(), symbols, fetched_at)
     except (requests.RequestException, ValueError, json.JSONDecodeError) as error:
         payload = previous_calendar(root)
         if payload is None:
-            payload = {"source": "BSE forthcoming results calendar", "fetched_at": fetched_at, "events": [], "available": False}
+            payload = {"source": "BSE forthcoming results calendar with ScanX fallback", "fetched_at": fetched_at, "events": [], "available": False}
         else:
             payload = {**payload, "available": False, "last_fetch_error": str(error)}
         print(f"BSE calendar unavailable; retaining prior calendar: {error}")
     else:
         payload["available"] = True
         print(f"Fetched {len(payload['events'])} mapped BSE forthcoming-results events.")
+    scanx_path = root / "upcoming_earnings_events.json"
+    try:
+        scanx_rows = json.loads(scanx_path.read_text(encoding="utf-8")) if scanx_path.exists() else []
+    except (OSError, ValueError):
+        scanx_rows = []
+    payload = merge_upcoming_results(payload, scanx_rows, symbols, datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat())
     save_json(root / OUTPUT, payload, ensure_ascii=False)
     return True
 

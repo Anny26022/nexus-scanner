@@ -64,13 +64,24 @@ def collect_upcoming_action_events(upcoming_items, today=None):
 
 
 def collect_upcoming_bse_results_events(calendar, today=None):
-    """Render scheduled BSE board meetings as short-lived result markers."""
-    translated = [
-        {"Symbol": event.get("symbol"), "Type": "QUARTERLY RESULT ANNOUNCEMENT", "ExDate": event.get("scheduled_date")}
-        for event in (calendar.get("events", []) if isinstance(calendar, dict) else [])
-        if event.get("event_type") == "RESULTS_BOARD_MEETING"
-    ]
-    return collect_upcoming_action_events(translated, today=today)
+    """Render the selected calendar date without changing its event meaning."""
+    event_map = {}
+    today = today or datetime.now()
+    limit = today + timedelta(days=14)
+    for event in (calendar.get("events", []) if isinstance(calendar, dict) else []):
+        symbol, date_text = event.get("symbol"), event.get("scheduled_date")
+        try:
+            event_date = datetime.strptime(date_text, "%Y-%m-%d")
+        except (TypeError, ValueError):
+            continue
+        if not symbol or not today.date() <= event_date.date() <= limit.date():
+            continue
+        label = ("Results board meeting" if event.get("event_type") == "RESULTS_BOARD_MEETING"
+                 else "Results announcement" if event.get("event_type") == "QUARTERLY_RESULT_ANNOUNCEMENT"
+                 else None)
+        if label:
+            add_unique_event(event_map, symbol, f"⏰: {label} ({event_date:%d-%b})")
+    return event_map
 
 
 def collect_upcoming_nse_action_events(ledger, today=None):
@@ -304,10 +315,12 @@ def map_refined_events(base_dir=BASE_DIR):
 
     print("Processing official NSE corporate actions (💸, ✂️, 🎁, 📈)...")
     action_events = collect_upcoming_nse_action_events(optional_json(nse_actions_file, {}))
-    print("Processing BSE scheduled-results calendar (⏰)...")
-    bse_earnings_events = collect_upcoming_bse_results_events(optional_json(bse_calendar_file, {}))
-    print("Processing fallback earnings events (⏰)...")
-    earnings_events = collect_upcoming_action_events(optional_json(earnings_events_file, []))
+    print("Processing merged upcoming-results calendar (⏰)...")
+    calendar = optional_json(bse_calendar_file, None)
+    bse_earnings_events = collect_upcoming_bse_results_events(calendar) if calendar is not None else {}
+    if calendar is None:
+        print("Processing legacy earnings-event fallback (⏰)...")
+    earnings_events = collect_upcoming_action_events(optional_json(earnings_events_file, [])) if calendar is None else {}
 
     print("Processing Circuit Revisions (#: -ve/ +ve Circuit Limit Revision)...")
     circuit_events = collect_circuit_revision_events(optional_json(circuit_revision_file, []))

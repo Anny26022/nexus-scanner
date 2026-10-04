@@ -76,6 +76,17 @@ class ScannerContextTests(unittest.TestCase):
         ], context=context)
         self.assertEqual(result["status"], "match")
 
+    def test_market_breadth_exposes_named_universe_and_new_metrics(self):
+        frame = history()
+        session = frame["Date"].iloc[-1].date().isoformat()
+        context = {"stock": {"symbol": "TEST"}, "breadth_as_of": session,
+                   "breadth": {"nifty500": {"net_breadth": 42, "volume_ratio_20": 125}}}
+        result = evaluate_history(frame, [
+            {"kind": "MARKET_BREADTH", "params": {"universe": "NIFTY500", "metric": "net_breadth", "comparison": "ABOVE", "value": 40}},
+            {"kind": "MARKET_BREADTH", "params": {"universe": "NIFTY500", "metric": "volume_ratio_20", "comparison": "ABOVE", "value": 100}},
+        ], context=context)
+        self.assertEqual(result["status"], "match")
+
     def test_point_in_time_rules_do_not_reuse_future_snapshots(self):
         frame = history()
         stock = {"symbol": "TEST", "as_of_date": "2026-02-24", "close": 399, "pe_ratio": 20, "sector": "IT", "latest_earnings_date": "2026-02-01", "qoq_percent_net_profit_latest": 25}

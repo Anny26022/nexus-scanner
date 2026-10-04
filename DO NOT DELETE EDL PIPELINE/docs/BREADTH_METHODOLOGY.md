@@ -66,17 +66,19 @@ The engine calculates 21-session monthly, 63-session quarterly, and 252-session
 
 ## Cross-sectional Calculations
 
-Displayed cross-sectional percentages use the complete eligible universe with
-a candle on that date. A newly listed stock without 200 bars therefore counts
-as not above the 200-day average. Metric-specific valid counts are retained for
-quality auditing but are not the published percentage denominator.
+Displayed percentages use each metric's valid population. A newly listed stock
+without 200 bars is excluded from the 200-day SMA percentage rather than
+counted as below the average. Raw valid counts remain in every row for audit.
 
 ```text
-percent_above_n = 100 * above_n / eligible_with_candle
+percent_above_n = 100 * above_n / valid_sma_n
+up_4_pct / down_4_pct       = 100 * up_4 or down_4 / valid_return
+up_4_5_pct / down_4_5_pct   = 100 * up_4_5 or down_4_5 / valid_return
+new-high/low pct = 100 * new_high_or_low / valid_extrema_window
 4R              = 100 * up_4 / down_4
 4.5R            = 100 * up_4_5 / down_4_5
-20R             = 100 * above_20 / (eligible_with_candle - above_20)
-50R             = 100 * above_50 / (eligible_with_candle - above_50)
+20R             = 100 * above_20 / (valid_sma_20 - above_20)
+50R             = 100 * above_50 / (valid_sma_50 - above_50)
 4.5 change       = 100 * (4.5R_today / 4.5R_previous - 1)
 NNH              = new_highs - new_lows
 ```

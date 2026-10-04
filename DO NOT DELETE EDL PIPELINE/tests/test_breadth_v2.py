@@ -17,6 +17,8 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from edl_pipeline.breadth.aggregates import BreadthAccumulator
+from edl_pipeline.breadth.gates import gate_metrics
+from edl_pipeline.breadth.pipeline import _metadata_by_symbol
 from edl_pipeline.breadth.config import BreadthMethodology, load_methodology
 from edl_pipeline.breadth.indicators import prepare_history
 from edl_pipeline.breadth.indices import (
@@ -162,7 +164,7 @@ class BreadthV2Tests(unittest.TestCase):
         self.assertEqual(latest["valid_sma_200"], 1)
 
         enriched = enrich_records([latest], self.methodology)[0]
-        expected_pct = 100 * latest["above_sma_200"] / latest["eligible_with_candle"]
+        expected_pct = 100 * latest["above_sma_200"] / latest["valid_sma_200"]
         self.assertAlmostEqual(enriched["above_200_pct"], expected_pct)
 
     def test_mbi_ratios_changes_scoring_and_xp_are_deterministic(self):
@@ -211,7 +213,7 @@ class BreadthV2Tests(unittest.TestCase):
         small = enrich_records([small_universe], self.methodology)[0]
         large = enrich_records([large_universe], self.methodology)[0]
 
-        self.assertNotEqual(small["up_4_5_pct"], large["up_4_5_pct"])
+        self.assertEqual(small["up_4_5_pct"], large["up_4_5_pct"])
         self.assertEqual(small["xp_advancer_count"], large["xp_advancer_count"])
         self.assertEqual(
             small["xp_smoothed_advances"],
@@ -262,16 +264,16 @@ class BreadthV2Tests(unittest.TestCase):
         output = enrich_records([first, second], self.methodology)
 
         self.assertTrue(math.isfinite(output[0]["xp"]))
-        self.assertEqual(output[0]["above_10_pct"], 0)
-        self.assertEqual(output[0]["above_20_pct"], 0)
+        self.assertIsNone(output[0]["above_10_pct"])
+        self.assertIsNone(output[0]["above_20_pct"])
         self.assertEqual(output[0]["xp_smoothed_advances"], 10)
         self.assertAlmostEqual(output[1]["xp_smoothed_advances"], 8.38)
         self.assertTrue(math.isfinite(output[1]["xp"]))
 
     def test_end_to_end_generator_writes_auditable_artifacts(self):
         universe = [
-            {"Sym": "AAA", "DispSym": "AAA Ltd", "Isin": "I1", "Sid": 1, "Ltp": 130, "Mcap": 1500},
-            {"Sym": "BBB", "DispSym": "BBB Ltd", "Isin": "I2", "Sid": 2, "Ltp": 80, "Mcap": 2000},
+            {"Sym": "AAA", "DispSym": "AAA Ltd", "Isin": "I1", "Sid": 1, "Ltp": 130, "Mcap": 1500, "Sector": "Technology", "index_memberships": ["NIFTY 50", "NIFTY 500"]},
+            {"Sym": "BBB", "DispSym": "BBB Ltd", "Isin": "I2", "Sid": 2, "Ltp": 80, "Mcap": 2000, "Sector": "Financials", "index_memberships": ["NIFTY MIDSMALLCAP 400"]},
             {"Sym": "SMALL", "DispSym": "Small Ltd", "Isin": "I3", "Sid": 3, "Ltp": 50, "Mcap": 100},
         ]
         dates = pd.bdate_range("2024-01-01", periods=270)
@@ -288,6 +290,8 @@ class BreadthV2Tests(unittest.TestCase):
 
             output_path = root / "breadth.json"
             snapshot_path = root / "snapshot.json"
+            sector_path = root / "sector.json"
+            contributions_path = root / "contributions.json"
             artifact, snapshot = generate_market_breadth(
                 universe,
                 ohlcv,
@@ -296,6 +300,8 @@ class BreadthV2Tests(unittest.TestCase):
                 output_path,
                 snapshot_path,
                 generated_at="2026-01-01T00:00:00+00:00",
+                sector_output_path=sector_path,
+                contribution_output_path=contributions_path,
             )
 
             self.assertEqual(snapshot["eligible_count"], 2)
@@ -303,6 +309,18 @@ class BreadthV2Tests(unittest.TestCase):
             self.assertEqual(artifact["quality"]["record_count"], 250)
             self.assertEqual(artifact["records"][-1]["valid_sma_200"], 2)
             self.assertIn("xp", artifact["records"][-1])
+            self.assertIn("nifty50", artifact["universes"])
+            self.assertTrue(artifact["universes"]["nifty50"]["available"])
+            self.assertTrue(artifact["universes"]["nifty500"]["available"])
+            self.assertTrue(artifact["universes"]["niftymidsmall400"]["available"])
+            self.assertTrue(sector_path.exists())
+            sectors = json.loads(sector_path.read_text(encoding="utf-8"))["sectors"]
+            self.assertEqual({item["sector"] for item in sectors}, {"Financials", "Technology"})
+            self.assertTrue(contributions_path.exists())
+            audit = json.loads(contributions_path.read_text(encoding="utf-8"))
+            self.assertIn("AAA", audit["universes"]["all_active"]["records"][-1]["metrics"]["eligible_with_candle"])
+            self.assertIn("breakout_20d", artifact["records"][-1])
+            self.assertIn("advance_volume", artifact["records"][-1])
             expected_table_fields = {
                 "date",
                 "ratio_4_5",
@@ -531,6 +549,36 @@ class BreadthV2Tests(unittest.TestCase):
                 for row in artifact["indices"]
             }
             self.assertEqual(closes, {99: 101, 846: 202})
+
+    def test_breakout_uses_close_and_requires_complete_current_candle(self):
+        frame = make_ohlcv([100 + index for index in range(25)])
+        frame.loc[24, ["Close", "High", "Low"]] = [120, 140, 119]
+        prepared = prepare_history(frame, self.methodology)
+        self.assertFalse(prepared.loc[24, "Breakout_20d"])
+        incomplete = make_ohlcv([100 + index for index in range(25)])
+        incomplete.loc[24, "High"] = math.nan
+        prepared = prepare_history(incomplete, self.methodology)
+        self.assertTrue(pd.isna(prepared.loc[24, "Prior_20_High"]))
+
+    def test_volume_contributions_and_gate_namespace_are_auditable(self):
+        accumulator = BreadthAccumulator(self.methodology, include_contributions=True)
+        accumulator.update(prepare_history(make_ohlcv([100, 101]), self.methodology), "TEST")
+        first, second = accumulator.records()
+        self.assertEqual(first["total_volume"], 1000)
+        self.assertIn("TEST", accumulator.contribution_records()[0]["metrics"]["total_volume"])
+        self.assertIn("TEST", accumulator.contribution_records()[1]["metrics"]["advance_volume"])
+        metrics = gate_metrics({"date": "2026-01-01", "mbi_state": "green", "mbi_cells": {}, "xp": 3.0})
+        self.assertEqual(metrics["xp"], 3.0)
+        self.assertNotIn("date", metrics)
+        self.assertNotIn("mbi_state", metrics)
+
+    def test_metadata_duplicate_selection_matches_highest_market_cap(self):
+        metadata = _metadata_by_symbol([
+            {"Sym": "TEST", "Mcap": 100, "Sector": "Old", "Index": "NIFTY 50"},
+            {"Sym": "TEST", "Mcap": 200, "Sector": "New", "Index": "NIFTY 500"},
+        ])
+        self.assertEqual(metadata["TEST"]["sector"], "New")
+        self.assertEqual(metadata["TEST"]["memberships"], {"NIFTY500"})
 
     def test_normalized_index_collisions_are_disambiguated_safely(self):
         value = safe_index_symbol("A-B", "../13", disambiguate=True)

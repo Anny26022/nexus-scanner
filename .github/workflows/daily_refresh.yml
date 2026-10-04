@@ -111,6 +111,8 @@ jobs:
           git add "DO NOT DELETE EDL PIPELINE/sector_analytics.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/market_breadth.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/market_breadth_v2.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/sector_breadth_v2.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/market_breadth_contributions_v2.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/breadth_universe_snapshot.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/all_indices_history_v2.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/all_indices_list.json"

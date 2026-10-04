@@ -50,6 +50,8 @@ FILES_TO_COMPRESS = {
     "market_breadth_v2.json": "market_breadth_v2.json.gz",
     "breadth_universe_snapshot.json": "breadth_universe_snapshot.json.gz",
     "all_indices_history_v2.json": "all_indices_history_v2.json.gz",
+    "sector_breadth_v2.json": "sector_breadth_v2.json.gz",
+    "market_breadth_contributions_v2.json": "market_breadth_contributions_v2.json.gz",
     "corporate_action_ledger.json": "corporate_action_ledger.json.gz",
     "nse_corporate_actions.json": "nse_corporate_actions.json.gz",
     "nse_corporate_action_adjustments.json": "nse_corporate_action_adjustments.json.gz",
@@ -72,6 +74,8 @@ OHLCV_DERIVED_FILES = frozenset(
         "market_breadth_v2.json",
         "breadth_universe_snapshot.json",
         "all_indices_history_v2.json",
+        "sector_breadth_v2.json",
+        "market_breadth_contributions_v2.json",
     }
 )
 OHLCV_DERIVED_FINAL_PATHS = frozenset(
@@ -338,6 +342,8 @@ FINAL_ARTIFACT_SPECS = [
     ArtifactSpec("market_breadth_v2.json.gz", "gzip_json", required_fields=("generated_at", "quality", "records"), nested_min_counts=(("records", 1),)),
     ArtifactSpec("breadth_universe_snapshot.json.gz", "gzip_json", required_fields=("generated_at", "eligible", "excluded")),
     ArtifactSpec("all_indices_history_v2.json.gz", "gzip_json", required_fields=("generated_at", "quality", "indices"), nested_min_counts=(("indices", 1),)),
+    ArtifactSpec("sector_breadth_v2.json.gz", "gzip_json", required_fields=("generated_at", "sectors")),
+    ArtifactSpec("market_breadth_contributions_v2.json.gz", "gzip_json", required_fields=("generated_at", "universes")),
     ArtifactSpec("corporate_action_ledger.json.gz", "gzip_json", required_fields=("source", "price_adjusted", "records")),
     ArtifactSpec("nse_corporate_actions.json.gz", "gzip_json", min_count=1, required_fields=("source", "range", "actions")),
     ArtifactSpec("nse_corporate_action_adjustments.json.gz", "gzip_json", min_count=1, required_fields=("source", "range", "revision", "actions")),

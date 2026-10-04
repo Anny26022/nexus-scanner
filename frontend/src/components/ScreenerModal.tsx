@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, SlidersHorizontal, Library } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 
 interface ScreenerModalProps {
@@ -123,15 +124,22 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         const params: Record<string, any> = {};
         def.parameters.forEach((p) => (params[p.id] = p.defaultValue));
         params[paramId] = value;
+        if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
+          params.value = breadthMetricDefault(value);
+        }
         return {
           ...prev,
           [condId]: { instanceId: `${condId}_${Date.now()}`, conditionId: condId, parameters: params },
         };
       }
       if (!existing) return prev;
+      const parameters = { ...existing.parameters, [paramId]: value };
+      if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
+        parameters.value = breadthMetricDefault(value);
+      }
       return {
         ...prev,
-        [condId]: { ...existing, parameters: { ...existing.parameters, [paramId]: value } },
+        [condId]: { ...existing, parameters },
       };
     });
   };

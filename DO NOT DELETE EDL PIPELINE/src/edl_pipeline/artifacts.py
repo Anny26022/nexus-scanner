@@ -34,6 +34,7 @@ INTERMEDIATE_FILES = [
     "eod2_ohlcv_import_report.json",
     "nse_daily_ohlcv_report.json",
     "ipo_screener.json",
+    "ipo_provider_data.json",
 ]
 
 INTERMEDIATE_DIRS = [
@@ -137,6 +138,7 @@ PHASE4_SCRIPTS = [
 POST_STANDARDIZATION_SCRIPTS = [
     "build_filing_history_artifact.py",
     "build_quarterly_financial_ledger.py",
+    "fetch_ipo_provider_data.py",
     "build_ipo_screener_artifact.py",
     # Capture temporary news/filings before compression and cleanup.
     "build_chart_artifacts.py",
@@ -305,8 +307,12 @@ SCRIPT_OUTPUT_SPECS = {
             required_fields=REQUIRED_FINAL_FIELDS,
         ),
     ],
+    "fetch_ipo_provider_data.py": [
+        ArtifactSpec("ipo_provider_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),
+        ArtifactSpec("ipo_provider_details_archive.json.gz", "gzip_json", required_fields=("details",)),
+    ],
     "build_ipo_screener_artifact.py": [
-        ArtifactSpec("ipo_screener.json", "json", required_fields=("schema_version", "source", "as_of_date", "records", "pending_canonical_enrichment", "capabilities")),
+        ArtifactSpec("ipo_screener.json", "json", required_fields=("schema_version", "source", "as_of_date", "records", "provider_data", "pending_canonical_enrichment", "capabilities")),
     ],
     "fetch_etf_data.py": [
         ArtifactSpec("etf_data_response.json", "json", min_count=0),
@@ -331,7 +337,9 @@ FINAL_ARTIFACT_SPECS = [
     ArtifactSpec("nse_corporate_action_adjustments.json.gz", "gzip_json", min_count=1, required_fields=("source", "range", "revision", "actions")),
     ArtifactSpec("nse_fno_ban.json.gz", "gzip_json", required_fields=("source", "available", "trade_date", "symbols")),
     ArtifactSpec("rs_rating_daily.json.gz", "gzip_json", required_fields=("source", "as_of_date", "ratings")),
-    ArtifactSpec("ipo_screener.json.gz", "gzip_json", required_fields=("schema_version", "source", "as_of_date", "records", "pending_canonical_enrichment", "capabilities")),
+    ArtifactSpec("ipo_screener.json.gz", "gzip_json", required_fields=("schema_version", "source", "as_of_date", "records", "provider_data", "pending_canonical_enrichment", "capabilities")),
+    ArtifactSpec("ipo_provider_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),
+    ArtifactSpec("ipo_provider_details_archive.json.gz", "gzip_json", required_fields=("details",)),
     ArtifactSpec("shareholding_history.json.gz", "gzip_json", min_count=1, required_fields=("source", "as_of_date", "records")),
     ArtifactSpec("filing_history.json.gz", "gzip_json", min_count=1, required_fields=("source", "coverage", "records")),
     ArtifactSpec("quarterly_financial_history.json.gz", "gzip_json", min_count=0, required_fields=("source", "coverage", "records")),

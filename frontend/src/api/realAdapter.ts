@@ -62,6 +62,21 @@ async function getChartJson<T>(url: string): Promise<T> {
   }
 }
 
+async function getIpoJson<T>(url: string): Promise<T> {
+  if (!url.endsWith('.gz')) return getJson<T>(url);
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (!bytes.length || bytes[0] !== 0x1f || bytes[1] !== 0x8b) throw new Error('Expected gzip');
+    if (typeof DecompressionStream === 'undefined') throw new Error('Gzip unsupported');
+    const stream = new Response(bytes).body!.pipeThrough(new DecompressionStream('gzip'));
+    return JSON.parse(await new Response(stream).text()) as T;
+  } catch {
+    throw new Error('IPO catalogue unavailable');
+  }
+}
+
 function validateManifest(value: unknown): Manifest {
   const manifest = value as Manifest | null;
   const validUrl = (url: unknown) => typeof url === 'string' && !/\s/.test(url)
@@ -125,12 +140,15 @@ class RealDataAdapter {
     const manifest = current ?? await refreshManifest();
     if (!ipoSnapshots.has(manifest.revision)) {
       const revision = manifest.revision;
-      const promise = getJson<Record<string, any>[]>(manifest.iposUrl).then(rows => rows.map(r => ({
+      const promise = getIpoJson<Record<string, any> | {records:Record<string, any>[]}>(manifest.iposUrl).then(payload => {
+        const rows: Record<string, any>[] = Array.isArray(payload) ? payload : payload.records;
+        return rows.map(r => ({
         symbol:r.symbol, name:r.name || r.company_name || '', listingDate:r.listing_date || '',
         currentPrice:r.close ?? 0, turnoverCrore:r.rupee_volume == null ? 0 : r.rupee_volume / 10_000_000,
         deliveryPct:r.delivery_percent ?? null,
         sector:r.sector || 'Unclassified', industry:r.industry || 'Unclassified', marketCapCrore:r.market_cap_crore ?? 0,
-      }))).catch(error => { ipoSnapshots.delete(revision); throw error; });
+        }));
+      }).catch(error => { ipoSnapshots.delete(revision); throw error; });
       ipoSnapshots.set(revision,promise);
       if (ipoSnapshots.size > 3) ipoSnapshots.delete(ipoSnapshots.keys().next().value!);
     }

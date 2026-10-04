@@ -63,6 +63,16 @@ def collect_upcoming_action_events(upcoming_items, today=None):
     return event_map
 
 
+def collect_upcoming_bse_results_events(calendar, today=None):
+    """Render scheduled BSE board meetings as short-lived result markers."""
+    translated = [
+        {"Symbol": event.get("symbol"), "Type": "QUARTERLY RESULT ANNOUNCEMENT", "ExDate": event.get("scheduled_date")}
+        for event in (calendar.get("events", []) if isinstance(calendar, dict) else [])
+        if event.get("event_type") == "RESULTS_BOARD_MEETING"
+    ]
+    return collect_upcoming_action_events(translated, today=today)
+
+
 def collect_upcoming_nse_action_events(ledger, today=None):
     """Render the official NSE ledger into the legacy event-marker vocabulary."""
     actions = ledger.get("actions", []) if isinstance(ledger, dict) else []
@@ -274,6 +284,7 @@ def map_refined_events(base_dir=BASE_DIR):
     master_file = os.path.join(base_dir, "all_stocks_fundamental_analysis.json")
     nse_actions_file = os.path.join(base_dir, "nse_corporate_actions.json")
     earnings_events_file = os.path.join(base_dir, "upcoming_earnings_events.json")
+    bse_calendar_file = os.path.join(base_dir, "earnings_calendar.json")
     filings_dir = os.path.join(base_dir, "company_filings")
     asm_file = os.path.join(base_dir, "nse_asm_list.json")
     deals_file = os.path.join(base_dir, "bulk_block_deals.json")
@@ -293,7 +304,9 @@ def map_refined_events(base_dir=BASE_DIR):
 
     print("Processing official NSE corporate actions (💸, ✂️, 🎁, 📈)...")
     action_events = collect_upcoming_nse_action_events(optional_json(nse_actions_file, {}))
-    print("Processing ScanX earnings-event fallback (⏰)...")
+    print("Processing BSE scheduled-results calendar (⏰)...")
+    bse_earnings_events = collect_upcoming_bse_results_events(optional_json(bse_calendar_file, {}))
+    print("Processing fallback earnings events (⏰)...")
     earnings_events = collect_upcoming_action_events(optional_json(earnings_events_file, []))
 
     print("Processing Circuit Revisions (#: -ve/ +ve Circuit Limit Revision)...")
@@ -306,7 +319,7 @@ def map_refined_events(base_dir=BASE_DIR):
     filing_files = glob.glob(os.path.join(filings_dir, "*_filings.json")) if os.path.exists(filings_dir) else []
     filing_events, news_map = collect_filing_events_and_headlines(filing_files)
 
-    event_map = merge_event_maps(surveillance_events, action_events, earnings_events, circuit_events, deal_events, filing_events)
+    event_map = merge_event_maps(surveillance_events, action_events, bse_earnings_events, earnings_events, circuit_events, deal_events, filing_events)
 
     print("Processing Recent Results & Live Headlines (📊)...")
     if os.path.exists(announcement_file):

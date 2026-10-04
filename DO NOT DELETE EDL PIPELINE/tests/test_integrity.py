@@ -481,6 +481,7 @@ class IntegrityTests(unittest.TestCase):
                 {'Symbol':'NIFTY 500','IndexID':19,'IndexName':'NIFTY 500'},
             ])
             self.write(root,'nse_fno_ban.json',{'source':'test','available':False,'trade_date':None,'symbols':[]})
+            self.write(root,'earnings_calendar.json',{'source':'BSE forthcoming results calendar','fetched_at':'2026-10-01T00:00:00+00:00','events':[],'available':True})
             (root/'filing_history_data').mkdir()
             self.write(root/'filing_history_data','filing_history.json',{
                 'symbols':{'ABC':{'isin':'INE000000001','lodr_backfill_complete':True,'filings':[{'news_id':'one'}]}},

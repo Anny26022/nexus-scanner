@@ -53,6 +53,7 @@ FILES_TO_COMPRESS = {
     "nse_corporate_actions.json": "nse_corporate_actions.json.gz",
     "nse_corporate_action_adjustments.json": "nse_corporate_action_adjustments.json.gz",
     "nse_fno_ban.json": "nse_fno_ban.json.gz",
+    "earnings_calendar.json": "earnings_calendar.json.gz",
     "rs_rating_daily.json": "rs_rating_daily.json.gz",
     "ipo_screener.json": "ipo_screener.json.gz",
     "shareholding_history.json": "shareholding_history.json.gz",
@@ -84,6 +85,7 @@ PHASE2_SCRIPTS = [
     "fetch_market_news.py",
     "fetch_nse_corporate_actions.py",
     "fetch_corporate_actions.py",
+    "fetch_bse_earnings_calendar.py",
     "fetch_surveillance_lists.py",
     "fetch_circuit_stocks.py",
     "fetch_bulk_block_deals.py",
@@ -188,6 +190,9 @@ SCRIPT_OUTPUT_SPECS = {
     "fetch_corporate_actions.py": [
         ArtifactSpec("upcoming_earnings_events.json", "json", min_count=0),
         ArtifactSpec("history_earnings_events.json", "json", min_count=0),
+    ],
+    "fetch_bse_earnings_calendar.py": [
+        ArtifactSpec("earnings_calendar.json", "json", min_count=1, required_fields=("source", "fetched_at", "events", "available")),
     ],
     "fetch_surveillance_lists.py": [
         ArtifactSpec("nse_asm_list.json", "json", min_count=0),
@@ -326,6 +331,7 @@ FINAL_ARTIFACT_SPECS = [
     ArtifactSpec("nse_corporate_actions.json.gz", "gzip_json", min_count=1, required_fields=("source", "range", "actions")),
     ArtifactSpec("nse_corporate_action_adjustments.json.gz", "gzip_json", min_count=1, required_fields=("source", "range", "revision", "actions")),
     ArtifactSpec("nse_fno_ban.json.gz", "gzip_json", required_fields=("source", "available", "trade_date", "symbols")),
+    ArtifactSpec("earnings_calendar.json.gz", "gzip_json", required_fields=("source", "fetched_at", "events", "available")),
     ArtifactSpec("rs_rating_daily.json.gz", "gzip_json", required_fields=("source", "as_of_date", "ratings")),
     ArtifactSpec("ipo_screener.json.gz", "gzip_json", required_fields=("schema_version", "source", "as_of_date", "records", "provider_data", "pending_canonical_enrichment", "capabilities")),
     ArtifactSpec("ipo_provider_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),

@@ -134,7 +134,9 @@ def publish(root=bridge.ROOT, output=OUTPUT):
     ipo_payload=ipos if isinstance(ipos,dict) else {'records':ipos}
     ipo_bytes=json.dumps(ipo_payload,separators=(',', ':'),allow_nan=False).encode()
     (generation/'ipos.json.gz').write_bytes(gzip.compress(ipo_bytes,compresslevel=9,mtime=0))
-    manifest={'revision':revision,'sessionDate':session,'publishedAt':datetime.now(timezone.utc).isoformat(),'schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz'}
+    calendar_bytes=(root/'earnings_calendar.json.gz').read_bytes()
+    (generation/'earnings-calendar.json.gz').write_bytes(calendar_bytes)
+    manifest={'revision':revision,'sessionDate':session,'publishedAt':datetime.now(timezone.utc).isoformat(),'schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz','earningsCalendarUrl':f'/data/revisions/{revision}/earnings-calendar.json.gz'}
     write_json(generation/'release.json',manifest)
     write_json(output/'current.json',manifest)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)

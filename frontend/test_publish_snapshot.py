@@ -16,7 +16,7 @@ class SnapshotPublicationTests(unittest.TestCase):
         stocks=[{'symbol':'TEST','name':'Test','close':100,'open':99,'high':101,'low':98,'volume':200,'as_of_date':'2026-09-30',
                  'market_cap_crore':cap,'daily_rupee_turnover_50_cr':10,'circuit_limit':'20','listing_series':'EQ','index_memberships':[]}]
         files={'all_stocks_fundamental_analysis.json.gz':stocks,'market_breadth_v2.json.gz':{'records':[{'date':'2026-09-30'}]},
-               'quarterly_financial_history.json.gz':{'records':[]},'ipo_screener.json.gz':{'records':[], 'provider_data':{'analytics':{'year_summary':{'year':'2026'}}}}}
+               'quarterly_financial_history.json.gz':{'records':[]},'earnings_calendar.json.gz':{'source':'BSE forthcoming results calendar','fetched_at':'2026-10-01T00:00:00+00:00','events':[],'available':True},'ipo_screener.json.gz':{'records':[], 'provider_data':{'analytics':{'year_summary':{'year':'2026'}}}}}
         for name,value in files.items():
             with gzip.open(root/name,'wt') as handle: json.dump(value,handle)
         (root/'ohlcv_data').mkdir(exist_ok=True)
@@ -33,6 +33,8 @@ class SnapshotPublicationTests(unittest.TestCase):
             first=publish(root,output)
             with gzip.open(output/'revisions'/first['revision']/'ipos.json.gz','rt') as handle:
                 self.assertEqual(json.load(handle)['provider_data']['analytics']['year_summary']['year'], '2026')
+            self.assertTrue((output/'revisions'/first['revision']/'earnings-calendar.json.gz').exists())
+            self.assertEqual(first['earningsCalendarUrl'], f"/data/revisions/{first['revision']}/earnings-calendar.json.gz")
             self.fixture(root,cap=6000)
             second=publish(root,output)
             self.assertNotEqual(first['revision'],second['revision'])

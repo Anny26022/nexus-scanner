@@ -623,3 +623,25 @@ class TransformTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class BseEarningsCalendarTests(unittest.TestCase):
+    def test_normalizes_only_canonical_eq_symbols(self):
+        from fetch_bse_earnings_calendar import build_calendar
+        payload = build_calendar([
+            {"scrip_Code": "544915", "short_name": "rentomojo", "Long_Name": "Rentomojo Ltd", "meeting_date": "05 Oct 2026", "URL": "https://example.test/rentomojo"},
+            {"scrip_Code": "1", "short_name": "BSEONLY", "meeting_date": "05 Oct 2026"},
+            {"scrip_Code": "2", "short_name": "BROKEN", "meeting_date": "not a date"},
+        ], {"RENTOMOJO"}, "2026-10-04T00:00:00+00:00")
+        self.assertEqual(payload["events"], [{
+            "symbol": "RENTOMOJO", "bse_security_code": "544915", "company_name": "Rentomojo Ltd",
+            "scheduled_date": "2026-10-05", "event_type": "RESULTS_BOARD_MEETING", "source": "BSE",
+            "source_url": "https://example.test/rentomojo",
+        }])
+
+    def test_bse_results_markers_are_limited_to_two_weeks(self):
+        from edl_pipeline.transforms.events import collect_upcoming_bse_results_events
+        events = collect_upcoming_bse_results_events({"events": [
+            {"symbol": "RENTOMOJO", "scheduled_date": "2026-10-05", "event_type": "RESULTS_BOARD_MEETING"},
+            {"symbol": "LATER", "scheduled_date": "2026-10-25", "event_type": "RESULTS_BOARD_MEETING"},
+        ]}, today=datetime(2026, 10, 4))
+        self.assertEqual(events, {"RENTOMOJO": ["⏰: Results (05-Oct)"]})

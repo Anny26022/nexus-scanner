@@ -38,6 +38,7 @@ jobs:
             DO NOT DELETE EDL PIPELINE/scanner_history_data
             DO NOT DELETE EDL PIPELINE/filing_history_data
             DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
+            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
           key: scanner-history-v1-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             scanner-history-v1-${{ runner.os }}-
@@ -126,6 +127,8 @@ jobs:
           git add "DO NOT DELETE EDL PIPELINE/ipo_screener.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/ipo_provider_listed_archive.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/ipo_provider_details_archive.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_listed_archive.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_details_archive.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/shareholding_history.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/quarterly_financial_history.json.gz"
           git add frontend/public/data/current.json frontend/public/data/revisions

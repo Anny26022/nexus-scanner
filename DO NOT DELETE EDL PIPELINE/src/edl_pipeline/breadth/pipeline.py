@@ -101,7 +101,7 @@ def _metadata_by_symbol(rows):
     for row in rows:
         symbol = str(row.get("Sym") or row.get("Symbol") or row.get("symbol") or "").strip()
         if not symbol: continue
-        memberships = row.get("index_memberships") or row.get("Index Memberships") or row.get("indices") or []
+        memberships = (row.get("index_memberships") or row.get("indexMemberships") or row.get("index_membership") or row.get("Index Memberships") or row.get("Index") or row.get("indices") or [])
         if isinstance(memberships, str): memberships = [item.strip() for item in memberships.split(",") if item.strip()]
         result[symbol] = {"sector": str(row.get("Sector") or row.get("sector") or "Unclassified"), "memberships": {str(item).upper().replace(" ", "") for item in memberships}}
     return result

@@ -18,6 +18,14 @@ class BasePublicationTests(unittest.TestCase):
         frames={name:candles([100+i*.1 for i in range(270)]+[110]*19+[140]+[150]*10) for name in ('A','B','C')}
         stocks={name:{'industry':'Peer Group'} for name in frames}
         complete=build_base_records(frames,stocks)
+        archived={}
+        streamed=build_base_records(frames,stocks,episode_sink=lambda symbol,episodes:archived.update({symbol:episodes}))
+        self.assertEqual(archived,complete)
+        for symbol in frames:
+            self.assertLessEqual(len(streamed[symbol]),4)
+            self.assertEqual(compact_base_records(streamed[symbol],include_parts=True),compact_base_records(complete[symbol],include_parts=True))
+        with self.assertRaisesRegex(ValueError,'Complete archives'):
+            build_base_records(frames,stocks,selected_only=True,episode_sink=lambda *_:None)
         chart_only=build_base_records(frames,stocks,selected_only=True)
         for symbol in frames:
             self.assertLessEqual(len(chart_only[symbol]),4)

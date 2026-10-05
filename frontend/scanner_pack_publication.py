@@ -31,6 +31,39 @@ MAGIC = b"NSPK0001"
 R2_KEYS = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
 
 
+class BaseHistoryArchive:
+    """Stream complete episodes into stable shards, retaining one symbol at a time."""
+    def __init__(self, root):
+        self.root = Path(root)
+        self.files = []
+        self.streams = []
+        self.counts = [0] * SHARD_COUNT
+
+    def __enter__(self):
+        self.root.mkdir(parents=True, exist_ok=True)
+        for index in range(SHARD_COUNT):
+            file = (self.root / f'{index:02d}.json.gz').open('wb')
+            stream = gzip.GzipFile(filename='', mode='wb', fileobj=file, compresslevel=6, mtime=0)
+            stream.write(b'{')
+            self.files.append(file)
+            self.streams.append(stream)
+        return self
+
+    def __call__(self, symbol, episodes):
+        index = _shard(symbol)
+        if self.counts[index]:
+            self.streams[index].write(b',')
+        self.streams[index].write(_json_bytes(symbol) + b':' + _json_bytes(episodes))
+        self.counts[index] += 1
+
+    def __exit__(self, exc_type, exc, traceback):
+        for stream in self.streams:
+            stream.write(b'}')
+            stream.close()
+        for file in self.files:
+            file.close()
+
+
 def _json_bytes(value):
     return json.dumps(value, separators=(",", ":"), sort_keys=True, allow_nan=False).encode()
 
@@ -166,8 +199,12 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
         if 'base_episodes' in context:
             # Historical archives are durable, but never decompressed by the
             # latest-session Worker. Runtime auxiliary packs carry selected IDs only.
-            archive={symbol:context['base_episodes'].get(symbol,[]) for symbol in sorted(shard_symbols)}
-            archive_data=gzip.compress(_json_bytes(archive),compresslevel=6,mtime=0)
+            archive_root=context.get('base_history_archive')
+            if archive_root is not None:
+                archive_data=(Path(archive_root)/f'{index:02d}.json.gz').read_bytes()
+            else:
+                archive={symbol:context['base_episodes'].get(symbol,[]) for symbol in sorted(shard_symbols)}
+                archive_data=gzip.compress(_json_bytes(archive),compresslevel=6,mtime=0)
             name=f'base-history/{index:02d}.json.gz'
             _write(target/name,archive_data)
             objects.append({'key':name,'bytes':len(archive_data),'sha256':_sha(archive_data),'encoding':'gzip'})

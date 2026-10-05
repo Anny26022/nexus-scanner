@@ -70,7 +70,9 @@ def trend_context(frame,index,ranks=None,listing_date=None):
     return {key:finite(value) for key,value in trend_series(frame,ranks,listing_date).iloc[index].items()}
 
 
-def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False):
+def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False, episode_sink=None):
+    if selected_only and episode_sink is not None:
+        raise ValueError('Complete archives require all episodes before stage selection.')
     frames=normalize_frames(frames)
     requested=set(frames) if symbols is None else set(symbols)
     missing=requested-set(frames)
@@ -103,7 +105,7 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
         date_key='Date' if 'Date' in benchmark else 'date'
         price_key='Close' if 'Close' in benchmark else 'close'
         benchmark_close=benchmark.set_index(date_key)[price_key].reindex(closes.index)
-    for symbol,frame in frames.items():
+    for symbol,frame in sorted(frames.items()):
         if symbol not in requested:continue
         rank=ranks[symbol].reindex(frame.Date).to_numpy(float)
         if rank_history is not None:
@@ -144,7 +146,13 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
             episode['selection']=selections[index]
             episode['current']=current
             episode['strengthUniverse']='CURRENT_NEXUS_ELIGIBLE'
-        output[symbol]=episodes
+        if episode_sink is not None:
+            # Archive one symbol before releasing its historical episodes. Runtime
+            # publication needs only the same deterministic stage selections.
+            episode_sink(symbol, episodes)
+            output[symbol]=list(selected_base_episodes(episodes).values())
+        else:
+            output[symbol]=episodes
     return output
 
 

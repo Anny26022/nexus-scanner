@@ -376,3 +376,27 @@ rows dated 30 September, 13 dated earlier, and one without a date. At the
 and six have no history at the cutoff. This independently confirms that these
 files cannot prove complete latest-session release alignment. Three focused tests
 cover future-candle exclusion, eligible-universe selection and mismatched metadata.
+
+
+### Bounded historical archive generation
+
+The former full-history benchmark was stopped after a macOS process sample
+reported a 25 GB physical memory footprint. Its final timing was not obtained;
+that run must not be reported as passing generation acceptance.
+
+Scanner publication now sends each symbol's complete episodes to 32 compressed
+archive streams before retaining only its selected runtime episodes. The
+archives preserve every episode, including invalidated formations; public and
+private runtime selections retain the same IDs and numerical facts. Temporary
+streams live outside source data and are removed on publication success or
+failure. Private pack construction copies the finished archives and includes
+their exact bytes and checksums in the upload manifest. Chart generation keeps
+its existing selected-only path. Replay still supports complete episodes.
+
+Regression tests compare complete episode objects with the sink output, compare
+all selected metrics against the non-streaming implementation and check that
+private packs contain the complete archived objects even when runtime episode
+lists are empty. All 230 pipeline, 47 publication/bridge, 74 frontend TypeScript
+and 15 Worker tests pass; frontend production build and Worker type/dry-build
+checks pass. The replacement full-generation benchmark is running with progress
+logging; its final peak memory, duration and archive size remain to be verified.

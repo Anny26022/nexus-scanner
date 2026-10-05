@@ -3,6 +3,7 @@ import gzip
 import hashlib
 import json
 import os
+import tempfile
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -11,7 +12,7 @@ import numpy as np
 import scanner_bridge as bridge
 from scanner_cache import ScannerCache
 from chart_publication import chart_preflight, charts_enabled, complete_release
-from scanner_pack_publication import build_private_scanner_pack, publish_private_pack
+from scanner_pack_publication import BaseHistoryArchive, build_private_scanner_pack, publish_private_pack
 from scanner_identity import checked_identity
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.base_publication import build_base_records, compact_base_records
@@ -57,6 +58,11 @@ def _write_pack(generation, name, payload):
 
 
 def publish(root=bridge.ROOT, output=OUTPUT):
+    with tempfile.TemporaryDirectory(prefix='nexus-base-history-') as archive_directory:
+        return _publish(root, output, Path(archive_directory))
+
+
+def _publish(root, output, archive_directory):
     cache=ScannerCache(); cache.refresh(root)
     starting_revision=cache.revision
     source_files=[p for p in sorted(root.glob('*.json.gz')) if p.name!='filing_history.json.gz']
@@ -85,7 +91,9 @@ def publish(root=bridge.ROOT, output=OUTPUT):
         if frame is not None and not frame.empty and frame.Date.iloc[-1].strftime('%Y-%m-%d')==session:
             base_frames[symbol]=frame
     context['base_rs_history']={}
-    context['base_episodes']=build_base_records(base_frames,context['stocks'],context.get('benchmarks'),context['base_rs_history'])
+    with BaseHistoryArchive(archive_directory) as archive:
+        context['base_episodes']=build_base_records(base_frames,context['stocks'],context.get('benchmarks'),context['base_rs_history'],episode_sink=archive)
+    context['base_history_archive']=archive_directory
     rows=[]; default_count=0
     for stock in context['stocks'].values():
         if not stock.get('default_screener_eligible',True):

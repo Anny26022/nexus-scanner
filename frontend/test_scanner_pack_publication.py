@@ -12,7 +12,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from scanner_identity import checked_identity
-from scanner_pack_publication import MAGIC,SHARD_COUNT,build_private_scanner_pack,PrivateR2Store
+from scanner_pack_publication import BaseHistoryArchive,MAGIC,SHARD_COUNT,build_private_scanner_pack,PrivateR2Store,_shard
 
 
 class Cache:
@@ -21,6 +21,23 @@ class Cache:
 
 
 class ScannerPackTests(unittest.TestCase):
+    def test_streamed_archives_preserve_complete_episodes_in_private_pack(self):
+        frame=pd.DataFrame({'Date':pd.to_datetime(['2026-10-01']),'Open':[1.],'High':[2.],'Low':[.5],'Close':[1.5],'Volume':[100.]})
+        episodes=[{'id':'old','value':1},{'id':'selected','value':2}]
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            with BaseHistoryArchive(root/'archive') as sink:
+                sink('TEST',episodes)
+            context={'stocks':{'TEST':{'symbol':'TEST'}},'base_episodes':{'TEST':[]},'base_history_archive':root/'archive'}
+            target,manifest=build_private_scanner_pack(root,root/'packs','a'*64,'2026-10-01',Cache(frame),context,{})
+            archive=target/f'base-history/{_shard("TEST"):02d}.json.gz'
+            self.assertEqual(json.loads(gzip.decompress(archive.read_bytes())),{'TEST':episodes})
+            for index in range(SHARD_COUNT):
+                source=root/f'archive/{index:02d}.json.gz'
+                self.assertEqual(source.read_bytes(),(target/f'base-history/{index:02d}.json.gz').read_bytes())
+            descriptor=next(item for item in manifest['objects'] if item['key']==str(archive.relative_to(target)))
+            self.assertEqual(descriptor['bytes'],archive.stat().st_size)
+
     def test_retention_preserves_active_release_after_repeated_failed_promotions(self):
         store=object.__new__(PrivateR2Store)
         store.bucket='nexus-screener-private-data'

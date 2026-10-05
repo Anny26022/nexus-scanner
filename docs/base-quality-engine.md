@@ -26,8 +26,10 @@ not claim result parity with another platform's undisclosed base detector.
 - [x] Existing filter UI, compact stage selection and explanation columns.
 - [x] Per-symbol chart base/pivot/breakout overlays.
 - [x] Historical replay, forward outcome measurement and costs.
-- [ ] Golden fixtures, prefix-invariance tests, integration and browser checks.
-- [ ] New reviewed PR with exact scope, dependency and validation evidence.
+- [x] Golden fixtures, prefix-invariance tests, integration and browser fixture checks.
+- [x] PR #26 with scope, dependencies and validation evidence; CI passes.
+- [ ] Independent code review (the automated review currently skips this PR).
+- [ ] Final full-generation measurement and complete aligned-data release check.
 
 ## Formula contracts
 
@@ -154,9 +156,12 @@ order of a session's high and low.
 
 ## Validation status
 
-73 frontend tests and 15 Worker tests passed, including base metric/arithmetic
+74 frontend TypeScript tests and 15 Worker tests passed, including base metric/arithmetic
 parity; Wrangler dry build and frontend production build passed. The pipeline
-suite passed 228 tests including the hierarchy and failed-poke fixtures. Final regression and performance acceptance remain required.
+suite passed 230 tests including hierarchy and failed-poke fixtures. Publication/bridge
+coverage passed 46 tests, including the three new release-coverage audit tests. The latest
+code and documentation CI checks pass. Final aligned-data and production performance
+acceptance remain required.
 
 The local stock artifact is dated 30 September 2026 while most OHLCV files
 end on 1 October and omit 30 September. A separate 1 October benchmark covers
@@ -344,3 +349,30 @@ boolean expression, with all leaves evaluated: 2,054 ms cold, 11.4 ms cached,
 89,278,788 bytes sampled memory across five cold scans. No full-history archive
 objects were read by these latest-session scans. These are observed local
 measurements, not production Cloudflare CPU or guaranteed peak memory values.
+
+
+### Reproducible release-data coverage audit
+
+Run this read-only check against a pipeline directory before claiming complete
+release-data coverage:
+
+```sh
+python3 scripts/check_base_data_alignment.py --root /path/to/pipeline --session 2026-09-30
+```
+
+It reports eligible-stock metadata dates, candle coverage at the requested
+cutoff and representative missing symbols. Future candles cannot substitute for
+a missing release session. Exit 0 means every eligible stock has metadata and a
+candle at that exact session; exit 1 reports incomplete coverage, and exit 2
+reports invalid inputs. Without `--session`, mixed metadata dates require an
+explicit cutoff. This strict coverage audit does not replace candle integrity,
+financial correctness or publication checksum tests. Suspended/new listings may
+legitimately be unavailable; the runtime still handles them as unavailable rather
+than inventing observations.
+
+The current original local files contain 2,605 eligible stocks: 2,591 metadata
+rows dated 30 September, 13 dated earlier, and one without a date. At the
+30 September cutoff, only eight histories have that session, 2,591 omit it
+and six have no history at the cutoff. This independently confirms that these
+files cannot prove complete latest-session release alignment. Three focused tests
+cover future-candle exclusion, eligible-universe selection and mismatched metadata.

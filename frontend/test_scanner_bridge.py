@@ -43,7 +43,9 @@ class BridgeTests(unittest.TestCase):
             self.assertEqual(first['matchCount'],1)
             self.assertEqual(second['matchCount'],1)
             self.assertEqual(first['rows'][0]['bases']['HOLDING']['id'],second['rows'][0]['bases']['HOLDING']['id'])
-            self.assertLessEqual(len(context['base_episodes']['TEST']),4)
+            from edl_pipeline.scanner.base_publication import selected_base_episodes
+            self.assertLessEqual(len(selected_base_episodes(context['base_episodes']['TEST'])),4)
+            self.assertTrue(any(e.get('setupCandidateOnly') for e in context['base_episodes']['TEST']))
 
     def test_cache_reuses_scan_for_pagination_and_invalidates_changed_history(self):
         context={"stocks":{"TEST":self.stock()},"financial_history_as_of":"2026-09-30","rs_ratings":{},"fno_ban_symbols":{}}
@@ -52,7 +54,9 @@ class BridgeTests(unittest.TestCase):
             root=Path(folder); (root/'ohlcv_data').mkdir(); path=root/'ohlcv_data/TEST.csv'
             self.history().to_csv(path,index=False)
             cache=ScannerCache()
+            context["setup_matches"]={"TEST":{"previous-request":{"id":"stale"}}}
             first=bridge.run(request,root,cache)
+            self.assertEqual(first["rows"][0]["setupMatches"],{})
             self.assertEqual(first,bridge.run(request,root))
             calls=load.call_count
             second=bridge.run({**request,"page":2,"pageSize":1},root,cache)

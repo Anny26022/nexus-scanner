@@ -15,7 +15,7 @@ import pandas as pd
 from .indicators import true_range, wilder_average
 from .base_execution import trade_facts, validate_costs
 
-ENGINE_VERSION = "nexus-bases-4"
+ENGINE_VERSION = "nexus-bases-5"
 
 
 @dataclass(frozen=True)
@@ -35,9 +35,13 @@ class BaseConfig:
     breakeven_gain_pct: float = 0.0
     risk_pct: float = 1.5
     max_position_pct: float = 100.0
+    candidate_policy: str = "LEGACY"
+    pivot_basis: str = "CLOSE"
 
     def validate(self):
         validate_costs(self.fee_bps, self.slippage_bps)
+        if self.candidate_policy not in ("LEGACY", "SETUP"):raise ValueError("Unsupported candidate policy")
+        if self.pivot_basis not in ("CLOSE", "HIGH"): raise ValueError("Unsupported pivot basis")
         for name in ('min_sessions', 'max_sessions', 'atr_period', 'trail_period', 'fresh_sessions'):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
@@ -80,7 +84,7 @@ def finite(value):
     return float(value) if pd.notna(value) and np.isfinite(value) else None
 
 
-def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1, _arrays=None):
+def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1, _arrays=None, fixed_pivot=None):
     """Measure inclusive base boundaries. Halves differ by at most one session."""
     arrays=_arrays or {'volume':frame.Volume.to_numpy(float),'close':frame.Close.to_numpy(float),
         'high':frame.High.to_numpy(float),'low':frame.Low.to_numpy(float),'change':frame.Close.diff().to_numpy(float),
@@ -88,7 +92,7 @@ def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1, _ar
         'turnover':pd.to_numeric(frame.get('Turnover',pd.Series(index=frame.index,dtype=float)),errors='coerce').to_numpy(float)}
     volume=arrays['volume'][start:end+1];close=arrays['close'][start:end+1]
     high=arrays['high'][start:end+1];low=arrays['low'][start:end+1]
-    size=end-start+1;pivot=float(close.max());midpoint=(size+1)//2
+    size=end-start+1;pivot=float(close.max()) if fixed_pivot is None else float(fixed_pivot);midpoint=(size+1)//2
     averages=arrays['atr'][start:end+1];simple=arrays['atrSimple'][start:end+1];raw=arrays['trPct'][start:end+1];change=arrays['change'][start:end+1]
     up, down = float(volume[change > 0].sum()), float(volume[change < 0].sum())
     quiet = int(np.argmin(volume))
@@ -126,6 +130,7 @@ def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1, _ar
             'overheadCloseVolume252Pct':overhead_share,
             'trueRangeContraction':ratio(avg(raw[midpoint:]),avg(raw[:midpoint])),
             'contractionLegCount':len(legs),'contractionLegDepths':legs,'contractionMaxRatio':max(leg_ratios) if leg_ratios else None,'contractionFinalDepthPct':legs[-1] if legs else None,'contractionNoisePct':arrays.get('contractionNoisePct',5),
+            'priorAdvance63Pct':float((arrays['close'][start]/arrays['close'][start-63]-1)*100) if start>=63 else None,
             'atrPeriod':arrays.get('atrPeriod',14), 'atrMethod':'WILDER_EWM_FIRST_TR', 'atrSimpleMethod':'ROLLING_MEAN_TR',
             'atrSimpleContraction':ratio(avg(simple[midpoint:]),avg(simple[:midpoint])),
             'atrContraction': ratio(avg(averages[midpoint:]), avg(averages[:midpoint])),
@@ -172,7 +177,8 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
     index = 0
     rows=list(frame.itertuples(index=False))
     closes=frame.Close.to_numpy(float)
-    highest_close=closes[0]
+    peaks=frame.High.to_numpy(float) if config.pivot_basis=="HIGH" else closes
+    highest_close=peaks[0]
     date_positions={str(day.date()):i for i,day in enumerate(frame.Date)}
     opens=frame.Open.to_numpy(float)
     for index,row in enumerate(rows[1:],1):
@@ -224,7 +230,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
             if row.Close > pivot:
                 if duration < config.min_sessions:
                     active.remove(episode); episodes.remove(episode); continue
-                episode['base'] = measure_base(frame,start,index-1,atr_pct,rs,config.touch_tolerance_pct,arrays)
+                episode['base'] = measure_base(frame,start,index-1,atr_pct,rs,config.touch_tolerance_pct,arrays,fixed_pivot=episode['pivot'])
                 episode['base']['nestedCount'] = episode['nestedCount']
                 episode['base']['level'] = episode['level']
                 episode['base']['overheadPct'] = episode['overheadPct']
@@ -242,18 +248,20 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
             depth = (pivot-episode['_floor'])/pivot*100
             if row.High > pivot and row.Close < pivot: episode['squatDates'].append(date)
             if abs(row.Close/pivot-1)*100 <= config.touch_tolerance_pct: episode['touchDates'].append(date)
+            if episode['structuralQualifiedDate'] is None and duration+1>=config.min_sessions and 2<=depth<=35:
+                episode['structuralQualifiedDate']=date
             if duration > config.max_sessions or depth > config.max_depth_pct:
                 episode['stage'] = 'INVALIDATED'; episode['exit'] = {'date':date,'reason':'BASE_LIMIT'}; active.remove(episode)
-        highest_close=max(highest_close,float(row.Close))
-        if row.Close >= closes[peak]: peak=index
-        elif (1-row.Close/closes[peak])*100 >= config.pullback_pct:
+        highest_close=max(highest_close,float(peaks[index]))
+        if peaks[index] >= peaks[peak]: peak=index
+        elif (1-row.Close/peaks[peak])*100 >= config.pullback_pct:
             if not any(e['_start']==peak for e in episodes):
-                pivot = float(closes[peak])
+                pivot = float(peaks[peak])
                 parents = [e for e in active if e['breakout'] is None and e['_start'] < peak and pivot <= e['pivot']]
                 parent = max(parents,key=lambda e:e['_start']) if parents else None
                 identity = f'{ENGINE_VERSION}:{symbol}:{frame.Date.iloc[peak].date()}:{json.dumps(asdict(config),sort_keys=True)}'
                 episode = {'id':hashlib.sha256(identity.encode()).hexdigest()[:24], 'symbol':symbol,
-                    'engineVersion':ENGINE_VERSION, 'config':asdict(config), '_start':peak,
+                    'engineVersion':ENGINE_VERSION, 'pivotBasis':config.pivot_basis, 'structuralQualifiedDate':date if index-peak+1>=config.min_sessions and 2<=(pivot-float(frame.Low.iloc[peak:index+1].min()))/pivot*100<=35 else None, 'config':asdict(config), '_start':peak,
                     '_parent':parent,'_nestedConfirmed':False,'parentInvalidationDate':None,'_floor':float(frame.Low.iloc[peak:index+1].min()),'parentId':parent['id'] if parent else None, 'nestedCount':0,
                     'level':min(4,parent['level']+1) if parent else (1 if pivot >= highest_close else 2),
                     'overheadPct':max(0,(highest_close/pivot-1)*100),
@@ -268,7 +276,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
     for episode in episodes:
         if episode['breakout'] is None:
             end = index if episode['exit'] is None else date_positions[episode['exit']['date']]
-            episode['base'] = measure_base(frame,episode['_start'],end,atr_pct,rs,config.touch_tolerance_pct,arrays)
+            episode['base'] = measure_base(frame,episode['_start'],end,atr_pct,rs,config.touch_tolerance_pct,arrays,fixed_pivot=episode['pivot'])
             episode['base'].update(level=episode['level'],overheadPct=episode['overheadPct'],overheadPriceDistancePct=episode['overheadPct'],nestedCount=episode['nestedCount'])
         if episode['breakout'] is not None:
             origin = episode['_breakout']
@@ -312,6 +320,6 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
         episode['breakoutFailed']=None if not episode['breakout'] else bool(episode['breakoutFailure'])
         episode['exitSignaled']=None if not episode['breakout'] else bool(episode['exit'])
         episode['tradeClosed']=None if not episode['breakout'] else episode['trade']['status']=='CLOSED'
-        episode['measurementPolicy']={'atrPeriod':config.atr_period,'atrMethod':'WILDER_EWM_FIRST_TR','feeBpsPerSide':config.fee_bps,'slippageBpsPerSide':config.slippage_bps,'breakevenGainPct':config.breakeven_gain_pct,'riskPct':config.risk_pct,'maxPositionPct':config.max_position_pct,'detectorMaxDepthPct':config.max_depth_pct,'contractionNoisePct':config.contraction_noise_pct,'stopPct':config.stop_pct,'trailPeriod':config.trail_period,'stopTrigger':'CLOSE_BELOW_PIVOT_STOP','trailTrigger':'CLOSE_BELOW_ARMED_SMA','execution':'NEXT_SESSION_OPEN','failureTrigger':'CLOSE_BACK_INSIDE','overheadVolume':'252_SESSION_CLOSE_CLASSIFIED_VOLUME_NOT_VOLUME_AT_PRICE'}
+        episode['measurementPolicy']={'pivotBasis':config.pivot_basis,'atrPeriod':config.atr_period,'atrMethod':'WILDER_EWM_FIRST_TR','feeBpsPerSide':config.fee_bps,'slippageBpsPerSide':config.slippage_bps,'breakevenGainPct':config.breakeven_gain_pct,'riskPct':config.risk_pct,'maxPositionPct':config.max_position_pct,'detectorMaxDepthPct':config.max_depth_pct,'contractionNoisePct':config.contraction_noise_pct,'stopPct':config.stop_pct,'trailPeriod':config.trail_period,'stopTrigger':'CLOSE_BELOW_PIVOT_STOP','trailTrigger':'CLOSE_BELOW_ARMED_SMA','execution':'NEXT_SESSION_OPEN','failureTrigger':'CLOSE_BACK_INSIDE','overheadVolume':'252_SESSION_CLOSE_CLASSIFIED_VOLUME_NOT_VOLUME_AT_PRICE'}
         episode.pop('_start',None); episode.pop('_breakout',None);episode.pop('_floor',None);episode.pop('_parent',None);episode.pop('_nestedConfirmed',None)
     return episodes

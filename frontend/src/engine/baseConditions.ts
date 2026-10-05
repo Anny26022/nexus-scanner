@@ -1,7 +1,8 @@
 import metrics from '../data/baseMetrics.json';
 import publicBaseKeys from '../data/basePublicKeys.json';
 import publicContextKeys from '../data/baseContextKeys.json';
-import { compare, type Truth, type EngineCondition } from './expression';
+import { materializeBasePreset, type BasePresetDefinition } from './basePresets';
+import { and, or, compare, type Truth, type EngineCondition } from './expression';
 import type { ActiveCondition } from '../types/screener';
 
 export type BaseRecord = Record<string,unknown>;
@@ -98,4 +99,26 @@ export function baseStageForCondition(condition:EngineCondition):keyof SelectedB
   if(condition.conditionId==='lib-nexus-holding-breakouts')return 'HOLDING';
   if(['lib-nexus-strong-bases','lib-nexus-vcp-base','lib-nexus-blue-sky','lib-nexus-multi-year-base','lib-nexus-ipo-base'].includes(condition.conditionId))return 'FORMING';
   return undefined;
+}
+
+
+/** Existential family qualification; all clauses bind to the same candidate. */
+export function selectSetupEpisode(episodes:BaseRecord[]|undefined,preset:BasePresetDefinition,p:Record<string,unknown>):{value:Truth;record?:BaseRecord}{
+  const leaves=materializeBasePreset(preset,p),stage=String(leaves[0].parameters.stage);
+  const basis=preset.setupFamily==='blue-sky'&&(p.athPolicy??'INTRADAY_AVAILABLE')!=='CLOSING_AVAILABLE'?'HIGH':'CLOSE';
+  if(episodes===undefined)return {value:null};
+  const familyRecords=episodes.filter(record=>record.setupCandidateOnly===true),source=familyRecords.length?familyRecords:episodes;
+  const evaluated=source.filter(record=>(record.pivotBasis??'CLOSE')===basis&&record.stage===stage).map(record=>({record,value:and(leaves.map(leaf=>evaluateBaseCondition({[stage]:record},leaf)))}));
+  const matches=evaluated.filter(item=>item.value===true).sort((a,b)=>{
+    const key=(record:BaseRecord)=>String((record.breakout as BaseRecord|undefined)?.date??(record.base as BaseRecord).startDate);
+    return key(a.record)<key(b.record)?1:key(a.record)>key(b.record)?-1:String(a.record.id)<String(b.record.id)?1:String(a.record.id)>String(b.record.id)?-1:0;
+  });
+  return {value:or(evaluated.map(item=>item.value)),record:matches[0]?.record};
+}
+
+export function publicSetupMatch(record:BaseRecord):BaseRecord {
+  const stage=String(record.stage) as keyof SelectedBases;
+  const result=publicSelectedBases({[stage]:record})![stage]!;
+  const {config:_config,...publicRecord}=result;
+  return publicRecord;
 }

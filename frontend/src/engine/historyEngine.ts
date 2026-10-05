@@ -1,4 +1,5 @@
-import { detailedSelectedBases,type BaseRecord } from './baseConditions';
+import definitions from '../data/presetDefinitions.json';
+import { selectSetupEpisode, detailedSelectedBases,type BaseRecord } from './baseConditions';
 import type { ActiveCondition } from '../types/screener';
 import type { SnapshotStock } from '../api/snapshotScreen';
 import { evaluateSnapshotCondition } from '../api/snapshotScreen';
@@ -8,6 +9,8 @@ export interface CandleSeries { dates:Int32Array; open:Float64Array; high:Float6
 export interface AdvancedContext {
   stock: SnapshotStock;
   bases?: BaseRecord[];
+  setupCandidates?: BaseRecord[];
+  setupMatches?: Record<string,BaseRecord>;
   session: string;
   turnover?: {dates:number[];values:(number|null)[]};
   benchmarks?: Record<string,{dates:number[];closes:number[]}>;
@@ -168,6 +171,13 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
   const legacy=translateLegacy(condition);
   if(legacy!==condition)return evaluateHistoryCondition(series,legacy,context);
   const id=condition.conditionId,p=condition.parameters;
+  const family=definitions.find(preset=>preset.id===id&&'setupFamily' in preset);
+  if(family){
+    if(!context.stock.historyAligned||context.stock.asOfDate!==context.session)return null;
+    const outcome=selectSetupEpisode(context.setupCandidates,family,p);
+    if(outcome.record&&context.setupMatches)context.setupMatches[condition.instanceId??id]=outcome.record;
+    return condition.isNegated?negate(outcome.value):outcome.value;
+  }
   if(['BASE_STAGE','BASE_METRIC','BASE_FORMULA'].includes(id)||id.startsWith('lib-nexus-'))return evaluateSnapshotCondition({...context.stock,bases:detailedSelectedBases(context.stock.bases,context.bases)},condition,context.session);
   if(id.startsWith('lib-'))return evaluateSnapshotCondition(context.stock,condition,context.session);
   if(!scalarIds.has(id)&&!historyIds.has(id))throw new Error(`Unsupported condition: ${id}`);

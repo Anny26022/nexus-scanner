@@ -38,7 +38,7 @@ This is not an independent review approval.
 
 The raw fact and slice extension is documented in
 [Precomputed base facts and arithmetic](base-facts-and-formulas.md). Detector
-version `nexus-bases-4` retains absolute current and prior-month SMA/EMA values,
+version `nexus-bases-5` retains absolute current and prior-month SMA/EMA values,
 official traded-value windows, independent share/turnover quiet-day facts and
 slice traded-value totals, counts and returns. Detailed context and parts stay
 in private packs. Bounded `Base Expression` arithmetic complements the existing
@@ -76,6 +76,13 @@ conditions would be incorrect. Python, browser and Worker evaluate the same sele
 arithmetic routes the complete expression to the Worker. Complete episodes
 and dated rank ledgers remain in separate private archive shards, verified
 with the manifest and excluded from latest-session scans.
+
+In v5 the four setup families evaluate all mature family candidates before
+choosing a qualifying witness. Their complete expression routes advanced, and
+`setupMatches` carries the witness ID per condition instance. They use separate
+CLOSE/HIGH policies; standalone filters continue using the legacy selection.
+See [setup-family contracts](setup-family-contracts.md) for the detailed policy
+and the limits of the three-symbol v5 integration measurement.
 
 The initial strength ledger uses weighted 63/126/189/252-session returns
 (40/20/20/20 percent), ranked among the currently eligible aligned Nexus peers.
@@ -420,7 +427,8 @@ This benchmark used the older local stock artifact with the 1 October candle
 cutoff; the newer 2,603-row recovered-data publication is a separate check.
 
 
-The local Python bridge also retains only selected stage episodes. Cached base
+The legacy local Python filters retain only selected stage episodes; v5
+family evaluation additionally retains mature family candidates. Cached base
 text queries preserve the same selected ID across different thresholds. The
 replay CLI consumes complete episodes one symbol at a time and retains the
 qualified trade reports, preserving all historical candidates. Its four-stock
@@ -634,7 +642,7 @@ Measurement families and modeled trade events are explicitly distinguished in
 
 ## Current setup-family extension
 
-The four `nexus-setups-2` families, raw TR% means, explicit age conventions,
+The four `nexus-setups-3` families, raw TR% means, explicit age conventions,
 optional confirmed legs and provenance, replay sizing/breakeven, and lean public
 projection are documented in [setup-family contracts](setup-family-contracts.md).
 Earlier performance and replay sections above describe their dated validation

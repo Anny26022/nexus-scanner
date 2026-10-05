@@ -50,6 +50,14 @@ class ScannerPackTests(unittest.TestCase):
             descriptor=next(item for item in manifest['objects'] if item['key']==str(archive.relative_to(target)))
             self.assertEqual(descriptor['bytes'],archive.stat().st_size)
 
+    def test_oversized_auxiliary_blocks_publication_instead_of_dropping_candidates(self):
+        frame=pd.DataFrame({'Date':pd.to_datetime(['2026-10-01']),'Open':[1.],'High':[2.],'Low':[.5],'Close':[1.5],'Volume':[100.]})
+        with tempfile.TemporaryDirectory() as folder,patch('scanner_pack_publication.MAX_AUXILIARY_BYTES',1):
+            root=Path(folder)
+            with self.assertRaisesRegex(ValueError,'decoded budget'):
+                build_private_scanner_pack(root,root/'packs','a'*64,'2026-10-01',Cache(frame),{'stocks':{'A':{'symbol':'A'}}},{})
+            self.assertFalse((root/'packs'/('a'*64)/'manifest.json').exists())
+
     def test_retention_preserves_active_release_after_repeated_failed_promotions(self):
         store=object.__new__(PrivateR2Store)
         store.bucket='nexus-screener-private-data'
@@ -107,7 +115,7 @@ class ScannerPackTests(unittest.TestCase):
             'High':[101]+[95]*19+[103]+[101]*49,'Low':[99]+[93]*19+[101]+[99]*49,'Close':[100]+[94]*19+[102]+[100]*49,'Volume':1000.})
         frame['Turnover']=20_000_000.
         stocks={'TEST':{'symbol':'TEST'}}
-        records=build_base_records({'TEST':frame},stocks)
+        records=build_base_records({'TEST':frame},stocks,setup_candidates=True)
         public_bases=compact_base_records(records['TEST'],public=True)
         context={'stocks':stocks,'base_episodes':records,'base_rs_history':{'TEST':{'dates':['2026-10-01'],'ratings':[92]}}}
         with tempfile.TemporaryDirectory() as folder:
@@ -133,6 +141,10 @@ class ScannerPackTests(unittest.TestCase):
             rank_key=archive['key'].replace('base-history/','base-ranks/')
             self.assertEqual(json.loads(gzip.decompress((target/rank_key).read_bytes()))['TEST']['ratings'],[92])
             runtime=json.loads(gzip.decompress((target/archive['key'].replace('base-history/','auxiliary/')).read_bytes()))['bases']['TEST']
+            candidates=json.loads(gzip.decompress((target/archive['key'].replace('base-history/','auxiliary/')).read_bytes()))['setupCandidates']['TEST']
+            self.assertTrue(any(record['pivotBasis']=='HIGH' for record in candidates))
+            self.assertTrue(all('parts' not in record['base'] for record in candidates))
+            self.assertEqual({record['id'] for record in candidates},{record['id'] for record in records['TEST'] if record.get('setupCandidateOnly') and record['stage'] in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT') and record['base']['ageSessions']>=15})
             for record in runtime:
                 self.assertEqual(record['base']['parts']['full']['turnoverCr'],2)
                 self.assertEqual(record['base']['quietTurnoverCr'],2)

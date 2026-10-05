@@ -49,6 +49,7 @@ function parameterCompatible(condition: ActiveCondition): boolean {
 export function conditionCapability(condition: ActiveCondition): ConditionCapability {
   if(condition.conditionId.startsWith('lib-nexus-')) {
     const preset=presetDefinitions.find(item=>item.id===condition.conditionId);
+    if(preset&&'setupFamily' in preset){materializeBasePreset(preset,condition.parameters);return advanced();}
     return preset && materializeBasePreset(preset,condition.parameters).every(parameterCompatible) ? technical() : advanced();
   }
   if (condition.conditionId.startsWith('lib-')) return presetIds.has(condition.conditionId) ? technical() : advanced();

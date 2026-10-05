@@ -58,7 +58,7 @@ def build_presets():
         ('vcp', 'VCP Setup', 'vcp-base'), ('blue-sky', 'Blue Sky Setup', 'blue-sky'),
         ('multi-year', 'Multi-year Setup', 'multi-year-base'), ('ipo', 'IPO First Base', 'ipo-base')):
         preset = deepcopy(next(item for item in output if item['id'] == 'lib-nexus-' + legacy))
-        preset.update(id='lib-nexus-'+family+'-setup', name=name, version='nexus-setups-2',
+        preset.update(id='lib-nexus-'+family+'-setup', name=name, version='nexus-setups-3',
                       setupFamily=family, description='Versioned setup family with NSE liquidity floors and frozen lifecycle qualification.')
         nodes=preset['expression']['children']
         if family=='vcp':
@@ -106,16 +106,42 @@ def materialize_base_preset(preset, parameters):
                 if node['params'].get('metric') in methods.values():node['params']['metric']=methods[method]
         depth=number('maxBaseDepth',35 if preset.get('setupFamily') in ('vcp','ipo') else 95,1,95)
         expression['children'].append(metric(stage,'base.depthPct','BELOW',depth))
-        legs=number('minContractionLegs',0,0,10,True)
+        def boolean(key,default=False):
+            value=parameters.get(key,default)
+            if not isinstance(value,bool):raise ValueError(key+' must be boolean')
+            return value
+        strict=boolean('strictContractionLegs')
+        legs=number('minContractionLegs',2 if strict else 0,0,10,True)
+        if strict and legs==0:legs=2
         leg_ratio=number('maxContractionLegRatio',1,0,2)
+        if strict and leg_ratio>1:raise ValueError('Strict contraction ratio must not exceed one')
         if legs==1:raise ValueError('Contraction ratio requires at least two legs')
         if legs:
-            expression['children'].extend([metric(stage,'base.contractionLegCount','ABOVE',legs),metric(stage,'base.contractionMaxRatio','BELOW',leg_ratio)])
+            expression['children'].extend([metric(stage,'base.contractionLegCount','ABOVE',legs),metric(stage,'base.contractionMaxRatio','LESS' if strict else 'BELOW',leg_ratio)])
+        scope='current' if stage=='FORMING' else 'selection'
+        prior=number('minPriorAdvancePct',0,0,1000)
+        if prior:expression['children'].append(metric(stage,'base.priorAdvance63Pct','ABOVE',prior))
+        if boolean('requireAccumulation'):expression['children'].append(metric(stage,'base.netUpDownVolume','GREATER',0))
+        if boolean('requireRising200'):expression['children'].append(metric(stage,scope+'.slopeSMA200','GREATER',0))
+        for key,path in (('reclaim200Within','reclaimSMA200Age'),('slopeTurn200Within','slopeTurnSMA200Age')):
+            days=number(key,0,0,252,True)
+            if days:expression['children'].append(metric(stage,scope+'.'+path,'LESS',days))
+        persistence=number('above50Persistence',1,1,252,True)
+        if persistence>1:expression['children'].append(metric(stage,scope+'.aboveSMA50Sessions','ABOVE',persistence))
+        confirm=boolean('requireBreakoutConfirmation')
+        volume=number('minBreakoutVolume',1.5,0,100)
+        close_range=number('minBreakoutCloseInRange',.7,0,1)
+        extension=number('maxBreakoutExtensionPct',5,0,1000)
+        age=number('maxBreakoutAge',5,0,1500,True)
+        if confirm:
+            if stage=='FORMING':raise ValueError('Breakout confirmation requires a post-breakout stage')
+            expression['children'].extend([metric(stage,'breakout.volumeRatio','ABOVE',volume),metric(stage,'breakout.closeInRange','ABOVE',close_range),metric(stage,'breakout.throughPct','GREATER',0)])
+            if stage=='FRESH_BREAKOUT':expression['children'].extend([metric(stage,'breakoutAgeSessions','BELOW',age),metric(stage,'distanceFromPivotPct','ABOVE',0),metric(stage,'distanceFromPivotPct','BELOW',extension)])
         first=parameters.get('requireFirstBase',preset.get('setupFamily')=='ipo')
         if not isinstance(first,bool):raise ValueError('requireFirstBase must be boolean')
         expression['children']=[node for node in expression['children'] if node.get('params',{}).get('metric')!='firstEligibleBase']
         if first:expression['children'].append(metric(stage,'firstEligibleBase','EQUAL',1))
-        ath=parameters.get('athPolicy','CLOSING_AVAILABLE')
+        ath=parameters.get('athPolicy','INTRADAY_AVAILABLE')
         if ath not in ('CLOSING_AVAILABLE','INTRADAY_AVAILABLE','AUDITED_INTRADAY'):raise ValueError('Unsupported ATH policy')
         if preset.get('setupFamily')=='blue-sky' and ath!='CLOSING_AVAILABLE':
             scope='current' if stage=='FORMING' else 'selection'

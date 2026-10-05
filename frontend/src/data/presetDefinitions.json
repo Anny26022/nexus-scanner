@@ -3181,7 +3181,7 @@
     "horizon": "Positional",
     "description": "Versioned setup family with NSE liquidity floors and frozen lifecycle qualification.",
     "aka": [],
-    "version": "nexus-setups-2",
+    "version": "nexus-setups-3",
     "rules": [
       "Contracting base with drying volume, trend alignment and relative strength."
     ],
@@ -3358,7 +3358,7 @@
     "horizon": "Positional",
     "description": "Versioned setup family with NSE liquidity floors and frozen lifecycle qualification.",
     "aka": [],
-    "version": "nexus-setups-2",
+    "version": "nexus-setups-3",
     "rules": [
       "Strong forming base without higher closing-price supply in available history."
     ],
@@ -3455,7 +3455,7 @@
     "horizon": "Positional",
     "description": "Versioned setup family with NSE liquidity floors and frozen lifecycle qualification.",
     "aka": [],
-    "version": "nexus-setups-2",
+    "version": "nexus-setups-3",
     "rules": [
       "Long-duration base above the 200 SMA with improving price position."
     ],
@@ -3562,7 +3562,7 @@
     "horizon": "Positional",
     "description": "Versioned setup family with NSE liquidity floors and frozen lifecycle qualification.",
     "aka": [],
-    "version": "nexus-setups-2",
+    "version": "nexus-setups-3",
     "rules": [
       "Recent official listing forming a shallow base above its 50 SMA."
     ],

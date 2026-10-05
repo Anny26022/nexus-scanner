@@ -18,6 +18,7 @@ from edl_pipeline.scanner.context import normalize_condition_spec
 from edl_pipeline.scanner.context import CONTEXT_CONDITION_REGISTRY
 from edl_pipeline.scanner.presets import get_preset
 from edl_pipeline.scanner.query import compile_query
+from edl_pipeline.scanner.base_publication import compact_setup_match
 from edl_pipeline.scanner.trend import evaluate_history, normalize_history, _comparison, _evaluate_expression, _leaf_results
 from edl_pipeline.scanner.financials import finite_number, financial_value
 from edl_pipeline.scanner.turnover import average_turnover_crore
@@ -48,7 +49,10 @@ def band(kind, field, low, high, **params):
 def translate(identifier, p):
     if identifier.startswith('lib-nexus-'):
         from edl_pipeline.scanner.base_presets import materialize_base_preset
-        return materialize_base_preset(get_preset(identifier),p)
+        preset=get_preset(identifier)
+        materialize_base_preset(preset,p)
+        if preset.get('setupFamily'):return leaf('BASE_SETUP',presetId=identifier,**p)
+        return materialize_base_preset(preset,p)
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
         return {"type": "preset", "expression": preset["expression"]}
@@ -119,9 +123,9 @@ def frontend_expression(node):
     if node["type"] == "group":
         return group("OR" if node["operator"] == "any" else "AND", *[frontend_expression(c) for c in node["children"]])
     c = node["condition"]
-    if c.get("isNegated"):
-        return {"type":"not", "child":translate(c["conditionId"], c["parameters"])}
-    return translate(c["conditionId"], c["parameters"])
+    translated=translate(c['conditionId'],c['parameters'])
+    if translated.get('kind')=='BASE_SETUP':translated['instanceId']=c.get('instanceId',c['conditionId'])
+    return {'type':'not','child':translated} if c.get('isNegated') else translated
 
 
 def snapshot_rule(s, spec, as_of):
@@ -198,6 +202,12 @@ def _needs_delivery(expression):
 
 
 def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
+    if node.get('kind')=='BASE_SETUP':
+        from edl_pipeline.scanner.base_conditions import select_setup_episode
+        p=node.get('params',{});value,record=select_setup_episode(context.get('base_episodes',{}).get(s['symbol']),get_preset(p['presetId']),p)
+        if record is not None:context.setdefault('setup_matches',{}).setdefault(s['symbol'],{})[node.get('instanceId',p['presetId'])]=record
+        if value is None:diagnostics.add(('BASE_SETUP','setup_candidates_unavailable'))
+        return value
     if node.get('kind') in ('BASE_STAGE','BASE_METRIC','BASE_FORMULA'):
         from edl_pipeline.scanner.base_conditions import evaluate_base_condition
         value=evaluate_base_condition(context.get('base_episodes',{}).get(s['symbol']),node['kind'],node.get('params',{}))
@@ -400,12 +410,13 @@ def run(request, root=ROOT, cache=None):
             history=cache.frame(root,symbol,as_of) if cache is not None else normalize_history(pd.read_csv(path),as_of) if path.exists() else None
             if history is not None and not history.empty and history.Date.iloc[-1].strftime('%Y-%m-%d')==as_of:
                 frames[symbol]=history
-        context['base_episodes']=build_base_records(frames,context['stocks'],context.get('benchmarks'),selected_only=True,history_audits=load_history_audits(root))
+        context['base_episodes']=build_base_records(frames,context['stocks'],context.get('benchmarks'),selected_only=True,setup_candidates=True,history_audits=load_history_audits(root))
     # Both public delivery conditions need dated history.  The spike condition
     # is named ``DELIVERY_PCT_SPIKE`` while the latest-session condition uses
     # ``DELIVERY_PERCENT``; checking only the latter quietly made spike
     # screens unavailable.
     delivery = _load_delivery_history(root/"delivery_history_data", selected, root/"eod2_delivery_history_data") if _needs_delivery(expression) else {}
+    context["setup_matches"] = {}
     matched, counts, unresolved = [], Counter(), 0
     for s in stocks:
         path = root/"ohlcv_data"/f"{s['symbol']}.csv"
@@ -422,6 +433,7 @@ def run(request, root=ROOT, cache=None):
             from edl_pipeline.scanner.base_publication import compact_base_records
             row=stock_row(s,context["rs_ratings"] if context.get("rs_ratings_as_of")==as_of else {})
             if 'base_episodes' in context:row['bases']=compact_base_records(context['base_episodes'].get(s['symbol'],[]))
+            row['setupMatches']={key:compact_setup_match(value) for key,value in context.get('setup_matches',{}).get(s['symbol'],{}).items()}
             row["fnoBan"]=bool(context["fno_ban_symbols"].get(s["symbol"])) if context.get("fno_ban_trade_date")==as_of else None
             if "financial_history" in context:
                 row["peRatio"] = financial_value(context, s, {"condition":"pe_ratio"}, date.fromisoformat(as_of), finite_number(s.get("market_cap_crore")))[0]

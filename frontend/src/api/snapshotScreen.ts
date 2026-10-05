@@ -2,11 +2,13 @@ import { materializeBasePreset } from '../engine/basePresets';
 import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 
 import presetDefinitions from '../data/presetDefinitions.json';
-import { evaluateBaseCondition, type SelectedBases } from '../engine/baseConditions';
+import { selectSetupEpisode, evaluateBaseCondition, type BaseRecord, type SelectedBases } from '../engine/baseConditions';
 
 type Truth = boolean | null;
 export interface SnapshotStock extends StockRow {
   bases?: SelectedBases;
+  setupCandidates?: BaseRecord[];
+  setupMatches?: Record<string,BaseRecord>;
   asOfDate: string | null;
   metadataAsOfDate: string | null;
   historyAligned: boolean;
@@ -49,6 +51,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
   if(c.conditionId.startsWith('lib-nexus-')){
     const preset=presetDefinitions.find(item=>item.id===c.conditionId);
     if(!preset)return null;
+    if('setupFamily' in preset)return s=>!s.historyAligned||s.asOfDate!==session?null:selectSetupEpisode(s.setupCandidates,preset,p).value;
     const conditions=materializeBasePreset(preset,p);
     return s=>!s.historyAligned||s.asOfDate!==session?null:combine(conditions.map(node=>evaluateBaseCondition(s.bases,node)),true);
   }

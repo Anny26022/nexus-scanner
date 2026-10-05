@@ -24,7 +24,8 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from pipeline_utils import BASE_DIR, load_json, save_json
-from edl_pipeline.scanner.base_publication import load_history_audits, build_base_records, compact_base_records
+from edl_pipeline.scanner.base_publication import setup_candidate_records, load_history_audits, build_base_records, compact_base_records
+from edl_pipeline.scanner.trend import normalize_history
 from standardize_stock_artifact import canonicalize_stock
 
 
@@ -197,11 +198,12 @@ def main() -> int:
     # Retain numeric frames for cross-sectional strength, not a second universe
     # of candle dictionaries. Chart payloads are loaded one symbol at a time.
     for symbol in canonical:
-        candles=_load_candles(root/'ohlcv_data'/f'{symbol}.csv',as_of,include_turnover=True)
-        if not candles or candles[-1]['date']!=as_of or not canonical[symbol].get('default_screener_eligible',True): continue
-        frame=pd.DataFrame(candles).rename(columns={key:key.title() for key in ('date','open','high','low','close','volume','turnover')})
-        frame['Date']=pd.to_datetime(frame.Date)
-        frames[symbol]=frame
+        path=root/'ohlcv_data'/f'{symbol}.csv'
+        if not path.exists() or not canonical[symbol].get('default_screener_eligible',True):continue
+        # Use the scanner's numeric parser/normalizer for identical threshold
+        # values; the chart candle serializer remains a separate wire format.
+        frame=normalize_history(pd.read_csv(path),as_of)
+        if not frame.empty and str(frame.Date.iloc[-1].date())==as_of:frames[symbol]=frame
     benchmarks={}
     for item in _artifact(root,'all_indices_history_v2.json',{}).get('indices',[]):
         keys={str(value).upper().replace(' ','_') for value in (item.get('symbol'),item.get('name')) if value}
@@ -210,7 +212,7 @@ def main() -> int:
         if not benchmark.empty and {'date','close'}.issubset(benchmark):
             benchmark['Date']=pd.to_datetime(benchmark.date)
             benchmarks['NIFTY_500']=benchmark.loc[benchmark.Date<=pd.Timestamp(as_of)]
-    bases=build_base_records(frames,canonical,benchmarks,selected_only=True,history_audits=load_history_audits(root))
+    bases=build_base_records(frames,canonical,benchmarks,selected_only=True,setup_candidates=True,history_audits=load_history_audits(root))
     for stock in stocks:
         symbol = str(stock.get("Symbol") or stock.get("symbol") or "").upper()
         if not symbol:
@@ -220,6 +222,7 @@ def main() -> int:
             "schemaVersion": 1, "symbol": symbol, "asOfDate": as_of,
             "historyStartDate": candles[0]["date"] if candles else None,
             "bases": compact_base_records(bases.get(symbol,[]),public=True),
+            "setupCandidates": setup_candidate_records(bases.get(symbol,[])),
             "candles": candles, "volumeEvents": _volume_events(candles),
             "corporateActions": [row for row in actions[symbol] if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
             "earnings": [row for row in earnings[symbol] if _date(row.get("filing_date")) and row["filing_date"] <= as_of],

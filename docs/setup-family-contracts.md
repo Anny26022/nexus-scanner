@@ -2,16 +2,16 @@
 
 ## What changed
 
-Engine `nexus-bases-4` adds four `nexus-setups-2` family presets alongside the
-seven existing `nexus-bases-1` research presets and the original 45 scans.
-The library now contains 56 presets. The existing seven expressions and IDs
-remain unchanged. New publications use a broader candidate detector: maximum
-base depth 95%, previously 60%. Consequently, selected base identities, nested
-structure and old preset result lists can change on a newly published release.
-This is a versioned calculation change, not a promise of identical old results.
-Direct `BaseConfig()` still defaults to 60%; use `--max-depth-pct 60` to reproduce
-that detector policy in replay. Scanner, chart and private-pack publication all
-use the same 95% candidate policy, then apply each setup's separate depth gate.
+Engine `nexus-bases-5` supplies four `nexus-setups-3` family presets alongside
+the seven existing research presets and the original 45 scans (56 total).
+Legacy standalone stage selection retains its 60% maximum-depth CLOSE policy.
+Families use separately identified 95% candidate policies (CLOSE, and HIGH for
+intraday Blue Sky), then apply their own editable depth gates. This reverses
+the earlier v4 publication-wide 95% change, which could change legacy results.
+Detector version and complete configuration participate in each base ID; IDs
+therefore change across this engine release even when a formation is unchanged.
+Charts, scanner publication, private packs, local scans and replay share these
+policies. Neither arbitrary filters nor legacy screens silently inherit a family.
 
 There is no additional market-data provider. Turnover uses official NSE traded
 value, never close × volume as a substitute. These floors are NSE-only; a
@@ -22,9 +22,9 @@ combined NSE/BSE floor would require BSE ingestion.
 | Family | New preset ID | Important defaults |
 | --- | --- | --- |
 | VCP Setup | `lib-nexus-vcp-setup` | Raw TR% contraction 0.3–0.9, volume dry-up 0.05–0.9, 15–1,500 sessions, depth 2–35%, above SMA50/200, RS ≥70, within 30% of closing 52-week high and ≥15% above closing low |
-| Blue Sky Setup | `lib-nexus-blue-sky-setup` | Available closing-history ceiling, RS ≥70, 0–20% below pivot; depth ≤95% |
+| Blue Sky Setup | `lib-nexus-blue-sky-setup` | Available intraday-history ceiling, RS ≥70, 0–20% below pivot; depth ≤95% |
 | Multi-year Setup | `lib-nexus-multi-year-setup` | ≥52 session-weeks (260 observed base sessions), ≤1,500 sessions, above SMA200, RS ≥60, 0–20% below pivot; depth ≤95% |
-| IPO First Base | `lib-nexus-ipo-setup` | Listing age 2–50 market-session weeks, ≥15 base sessions, depth 2–35%, above SMA50, 0–20% below pivot; first eligible detected base required |
+| IPO First Base | `lib-nexus-ipo-setup` | Listing age 2–50 market-session weeks, ≥15 base sessions, depth 2–35%, above SMA50, 0–20% below pivot; first structurally qualified base required |
 
 All four require market cap ≥₹300 Cr and a complete 20-session median official
 NSE turnover ≥₹1 Cr/day. Existing threshold controls edit those floors.
@@ -35,7 +35,11 @@ These are research defaults; no optimality or return guarantee is claimed.
 ## One formation through four stages
 
 `setupStage` selects FORMING, FRESH_BREAKOUT, HOLDING or PLAYED_OUT. Every leaf
-uses the same deterministic selected base ID for that stage. During FORMING,
+binds to one candidate. All candidates of the requested family, pivot basis and
+stage are evaluated before selection. A match is existential: one candidate must
+pass every family clause. The most recent qualifying start/breakout, then base
+ID, selects a deterministic witness. Liquidity on one base cannot satisfy trend
+on another. Missing data retains three-valued AND/OR semantics. During FORMING,
 context uses current facts. After breakout, qualification uses `selection.*`
 observations at the final prebreakout session, including market cap, turnover,
 RS, trend, listing age and pivot proximity. A later price or rank change cannot
@@ -47,9 +51,12 @@ proxies; they are not certified point-in-time fundamentals or constituents.
 Base slices also exclude the breakout
 candle and freeze at breakout.
 
-The family presets classify the setup; they do not implicitly add a volume
-confirmation rule. Apply `breakout.volumeRatio`, `breakout.closeInRange`,
-`breakout.throughPct` and `breakoutAgeSessions` explicitly when desired.
+Confirmation is optional (`requireBreakoutConfirmation=false` by default).
+When enabled for post-breakout stages, require breakout volume ≥1.5× the prior
+20-session median, close-in-range ≥0.7 and positive closing distance through the
+pivot. FRESH additionally requires age ≤5 sessions and current extension 0–5%.
+All thresholds are editable. FORMING with confirmation enabled is rejected.
+Holding/played-out qualification does not incorrectly impose a fresh-age limit.
 The existing Fresh Breakouts screen already supplies those confirmation gates.
 Holding policy may allow any selected episode, require continuous holding, or
 allow retests while the current close remains above pivot. Played-out family
@@ -98,12 +105,30 @@ close extremes. A terminal unconfirmed pivot is excluded. The published
 One leg cannot establish a contraction ratio. Replay exposes the noise setting;
 publication records its detector policy. Complete depth arrays stay private.
 
-`firstEligibleBase` identifies the earliest detected formation reaching the
-minimum duration under the detector's configuration, before latest-stage
-selection. It does not mean the first base passing every configurable IPO
-preset filter. It stays unavailable when listing coverage is absent or gaps
-exist; a truncated cache never establishes a first-lifetime-base claim.
-`requireFirstBase` can disable this extra IPO restriction.
+`firstEligibleBase` identifies the earliest CLOSE family formation to reach
+minimum duration and 2–35% depth. `structuralQualifiedDate` records the first
+qualifying close causally; a later deterioration does not renumber formations.
+An earlier overdeep pause is excluded. MA/liquidity edits remain separate gates:
+a first base can qualify later after SMA50 warmup without becoming a different
+base. Missing inception/observed-session coverage makes first-base identity
+unavailable. This remains a disclosed structural definition, not a claim to
+reproduce a proprietary detector. `requireFirstBase` disables the restriction.
+
+Optional family policies (disabled by default):
+
+| Parameter | Meaning |
+| --- | --- |
+| `strictContractionLegs` | At least two confirmed legs; each successive depth strictly smaller (ratio <1 by default) |
+| `minPriorAdvancePct` | Close at base start versus 63 sessions earlier; insufficient lookback unavailable |
+| `requireAccumulation` | Positive `(up volume − down volume)/(up volume + down volume)` within that base |
+| `requireRising200` | Positive 21-session SMA200 slope |
+| `reclaim200Within` | Close crossed above SMA200 within the last N sessions (age <N) |
+| `slopeTurn200Within` | SMA200 slope crossed from nonpositive to positive within N sessions |
+| `above50Persistence` | Consecutive closes strictly above SMA50; default one |
+
+After breakout these gates read frozen prebreakout context. Strict leg mode
+rejects a maximum ratio above1, and automatically requires two legs if a zero
+minimum is supplied. Event windows and persistence are validated integer bounds.
 
 ## Available history versus audited lifetime history
 
@@ -111,9 +136,10 @@ Blue Sky offers three policies:
 
 1. CLOSING_AVAILABLE: the closing-price proxy in available history, with the
    existing listing-start proximity check. This does not certify lifetime ATH.
-2. INTRADAY_AVAILABLE: additionally requires complete observed-session coverage
-   and the closing pivot at least as high as the available historical intraday
-   high. Wicks above a closing pivot can make this stricter test fail.
+2. INTRADAY_AVAILABLE (default): uses a separate HIGH candidate lifecycle with
+   the actual established intraday ceiling as pivot. Breakout requires a close
+   above it. The pivot must reach the available historical intraday high, and
+   observed-session coverage must be complete. It is not a closing-pivot proxy.
 3. AUDITED_INTRADAY: additionally requires independently verified adjusted
    lifetime-price provenance. Without it, this clause is unavailable.
 
@@ -173,16 +199,25 @@ frozen prebreakout measurements and never uses future returns to qualify entry.
 
 ## Publication and execution
 
-Public technical packs retain selected scalar facts and current/frozen context
-needed by default family presets. Strict intraday/lifetime policies, less-used
-raw base statistics and industry/benchmark context use the private pack; the
-entire expression routes to advanced if any leaf needs those fields. No
-condition is omitted. Private packs retain full slice detail, confirmed-leg
-arrays and complete episode archives. Both use the shared publication engine.
-Python and TypeScript materialize the same expression, preserving exact
-comparisons and whole nested-expression routing. Advanced evaluation reads
-private detail by the same published base ID, rather than finding another base.
-The engine identity changes, so old/new snapshots cannot silently mix formulas.
+Public packs keep the deterministic legacy selected scalar facts. Every new
+family routes its complete containing expression to the advanced engine,
+because evaluating only the selected legacy base can hide a qualifying older
+formation. Private auxiliary shards contain all mature family candidates,
+projected to qualification scalars (no slice arrays or hypothetical trade
+histories). Complete archives remain separate private objects.
+
+The Worker evaluates one candidate per family conjunction, releases shards, and
+retains only witness IDs for pagination. `setupMatches` maps condition instance
+IDs to the selected public base summary; chart `setupCandidates` uses those same
+IDs and pivots. Repeated families may have different witnesses. Cached local
+requests clear prior evidence before evaluation. No candidate is silently dropped.
+Auxiliary publication rejects decoded shards above12 MiB before pointer
+promotion, and Worker decompression is bounded to the same limit. Oversize
+publications need a sharding/projection change rather than truncating history.
+
+Python/TypeScript materialization and truth/witness selection are parity tested.
+CLI family requests compile to the same correlated BASE_SETUP node. The engine
+identity changes, so old/new snapshots cannot silently mix formulas.
 
 Regression tests cover materialization across all four stages, edited floors,
 strict policy errors, raw TR% means, missing history, independently supplied
@@ -199,3 +234,19 @@ combined-pack limit before promoting its pointer. Real-history integration in
 this change generated and checksum-verified 130 private objects for a three-stock
 fixture, with chart/scanner values equal; this does not certify full-universe
 CPU, memory or packet-size targets.
+
+### v5 verification
+
+266 pipeline Python tests, 54 frontend Python tests, 84 shared/frontend
+TypeScript tests and 16 Worker tests passed (420 total). Frontend production
+build, Worker typecheck and Wrangler dry deployment succeeded.
+
+The October1 recovered-history fixture contains RELIANCE7,810 candles,
+TCS5,455 and VENUSPIPES1,074. Chart and private-pack projections are exactly
+equal for all1,633 mature family candidates (951/534/148 respectively), after
+using the same numeric CSV parser for base calculations. All130 private object
+checksums passed. The largest decoded auxiliary shard in this fixture is
+3,020,375 bytes, below its12 MiB guard. This three-symbol fixture is not a
+full-universe performance or historical-RS correctness certification. It uses
+only those three symbols as rank peers; deterministic correctness is verified,
+not investment quality. Production R2/Worker releases are not promoted here.

@@ -8,6 +8,7 @@ the ``persistent_momentum`` condition itself is an explicit any-of EMA rule.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -341,6 +342,14 @@ def _persisted(frame, average, comparison, days, mode):
 
 def _evaluate(frame, spec, delivery_history=None, context=None):
     base_kind=str(spec.get('kind') or spec.get('condition') or '').upper()
+    if base_kind=='BASE_SETUP':
+        from .base_conditions import select_setup_episode
+        from .presets import get_preset
+        p=spec.get('params',spec);context=context or {}
+        records=context.get('base_episodes');symbol=(context.get('stock') or {}).get('symbol')
+        if isinstance(records,dict):records=records.get(symbol)
+        value,_=select_setup_episode(records,get_preset(p['presetId']),p)
+        return _unavailable('base_setup','setup_candidates_unavailable') if value is None else _result('base_setup',value)
     if base_kind in ('BASE_STAGE','BASE_METRIC','BASE_FORMULA'):
         from .base_conditions import evaluate_base_condition
         context=context or {}
@@ -688,6 +697,17 @@ def evaluate_universe(ohlcv_directory, conditions, as_of_date: str | None = None
     """Evaluate a screen against selected cached symbols, returning only matches by default."""
     directory = Path(ohlcv_directory)
     wanted = {str(symbol).upper() for symbol in symbols} if symbols else None
+    context_by_symbol = dict(context_by_symbol or {})
+    if 'BASE_' in json.dumps(conditions) and 'base_episodes' not in context_by_symbol:
+        from .base_publication import build_base_records, load_history_audits
+        frames={}
+        for path in sorted(directory.glob('*.csv')):
+            stock=(context_by_symbol.get('stocks') or {}).get(path.stem,{})
+            if not stock.get('default_screener_eligible',True):continue
+            frame=normalize_history(pd.read_csv(path),as_of_date)
+            if not frame.empty and (not as_of_date or str(frame.Date.iloc[-1].date())==as_of_date):frames[path.stem]=frame
+        stocks={symbol:(context_by_symbol.get('stocks') or {}).get(symbol,{'symbol':symbol}) for symbol in frames}
+        context_by_symbol['base_episodes']=build_base_records(frames,stocks,context_by_symbol.get('benchmarks'),selected_only=True,setup_candidates=True,history_audits=load_history_audits(directory.parent))
     results = []
     counts = {"match": 0, "no_match": 0, "unavailable": 0}
     for path in sorted(directory.glob("*.csv")):

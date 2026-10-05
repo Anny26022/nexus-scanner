@@ -96,7 +96,7 @@ def _publish(root, output, archive_directory):
             base_frames[symbol]=frame
     context['base_rs_history']={}
     with BaseHistoryArchive(archive_directory) as archive:
-        context['base_episodes']=build_base_records(base_frames,context['stocks'],context.get('benchmarks'),context['base_rs_history'],episode_sink=archive,history_audits=load_history_audits(root))
+        context['base_episodes']=build_base_records(base_frames,context['stocks'],context.get('benchmarks'),context['base_rs_history'],episode_sink=archive,setup_candidates=True,history_audits=load_history_audits(root))
     context['base_history_archive']=archive_directory
     rows=[]; default_count=0
     for stock in context['stocks'].values():

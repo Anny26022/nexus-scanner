@@ -5,7 +5,7 @@ from .base_formula import evaluate_formula
 
 STAGES = ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT')
 METRICS = {
-    'firstEligibleBase','trade.capitalReturnPct','trade.sizing.positionFraction','trade.sizing.plannedRiskPct','pivot','distanceFromPivotPct','breakoutAgeSessions','belowPivotCloses','returnSinceBreakoutPct','failedPokeCount','maxGainPct','maxDrawdownPct','breakoutFailed','exitSignaled','tradeClosed','trade.realizedReturnPct','trade.netRealizedReturnPct',
+    'base.priorAdvance63Pct','current.aboveSMA50Sessions','selection.aboveSMA50Sessions','current.reclaimSMA200Age','selection.reclaimSMA200Age','current.slopeTurnSMA200Age','selection.slopeTurnSMA200Age','firstEligibleBase','trade.capitalReturnPct','trade.sizing.positionFraction','trade.sizing.plannedRiskPct','pivot','distanceFromPivotPct','breakoutAgeSessions','belowPivotCloses','returnSinceBreakoutPct','failedPokeCount','maxGainPct','maxDrawdownPct','breakoutFailed','exitSignaled','tradeClosed','trade.realizedReturnPct','trade.netRealizedReturnPct',
     *('base.'+key for key in ('ageSessions','ageWeeks','ageCalendarWeeks','trueRangeContraction','contractionLegCount','contractionMaxRatio','contractionFinalDepthPct','quietVolume','medianVolume','quietTurnoverCr','medianTurnoverCr','quietTurnoverAgeSessions','depthPct','atrContraction','volumeDryUp','quietDepth','quietAgeSessions','upDownVolumeRatio','netUpDownVolume','rsStart','rsEnd','rsAverage','rsMinimum','rsMaximum','level','overheadPct','overheadPriceDistancePct','overheadCloseVolume252Pct','atrSimpleContraction','nestedCount','touchCount','squatCount')),
     *('base.parts.'+part+'.'+key for part in ('full',*(f'{name}_{index}' for name,count in (('half',2),('third',3),('quarter',4),('fifth',5)) for index in range(1,count+1))) for key in ('atrPct','atrWilderPct','atrSimplePct','trueRangePct','volume','highClose','lowClose','upVolume','downVolume','turnoverCr','upTurnoverCr','downTurnoverCr','upDays','downDays','changePct')),
     *('breakout.'+key for key in ('volumeRatio','gapPct','throughPct','dailyGainPct','closeInRange')),
@@ -24,7 +24,7 @@ def metric(record, path):
     for key in path.split('.'):
         value=value.get(key) if isinstance(value,dict) else None
     if path in ('breakoutFailed','exitSignaled','tradeClosed') and isinstance(value,bool): return int(value)
-    return value if isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) else None
+    return float(value) if isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) else None
 
 
 def compare(value, operation, target):
@@ -59,3 +59,22 @@ def evaluate_base_condition(episodes, kind, parameters):
         left=None if left is None or right is None or (operation=='DIVIDE' and right==0) else {'ADD':lambda:left+right,'SUBTRACT':lambda:left-right,'MULTIPLY':lambda:left*right,'DIVIDE':lambda:left/right}[operation]()
     elif kind not in ('BASE_METRIC','BASE_FORMULA'): raise ValueError('Unsupported base condition')
     return compare(left,parameters.get('comparison','ABOVE'),parameters.get('value'))
+
+
+def select_setup_episode(episodes, preset, parameters):
+    """Apply every family clause to one candidate before deterministic selection."""
+    from .base_presets import materialize_base_preset
+    leaves=materialize_base_preset(preset,parameters)['children']
+    stage=leaves[0]['params']['stage']
+    basis='HIGH' if preset.get('setupFamily')=='blue-sky' and parameters.get('athPolicy','INTRADAY_AVAILABLE')!='CLOSING_AVAILABLE' else 'CLOSE'
+    if episodes is None:return None,None
+    family_records=[e for e in episodes if e.get('setupCandidateOnly')]
+    source=family_records if family_records else episodes
+    candidates=[e for e in source if e.get('pivotBasis','CLOSE')==basis and e['stage']==stage]
+    matches=[];unavailable=False
+    for record in candidates:
+        results=[evaluate_base_condition({stage:record},leaf['kind'],leaf['params']) for leaf in leaves]
+        if all(value is True for value in results):matches.append(record)
+        elif False not in results and None in results:unavailable=True
+    if not matches:return (None if unavailable else False),None
+    return True,max(matches,key=lambda e:((e.get('breakout') or {}).get('date',e['base']['startDate']),e['id']))

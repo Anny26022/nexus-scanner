@@ -262,12 +262,17 @@ The base engine ties quality, strength and breakout measurements to one detected
 formation. It does not combine a contraction from one base with a pivot or RS
 value from another. Conditions for the same lifecycle stage use the same
 stable selected base ID in Python, the browser and the advanced Worker.
+The four newer setup families instead test every eligible family candidate
+before choosing the latest qualifying witness; their clauses still bind to
+one formation. They route to the advanced engine and return `setupMatches`
+by condition instance. Legacy standalone filters retain their selection policy.
 
 ### Detection and measurements
 
 A causal closing-price peak is confirmed after a 5% close pullback. A base needs
 at least 15 sessions before a close above its fixed pivot can trigger a breakout.
-The detector allows up to 1,500 base sessions and 60% depth; research screens
+The legacy detector allows up to 1,500 base sessions and 60% depth. Setup
+families have separate 95% candidate policies and their own depth gates; research screens
 apply tighter thresholds. Nested formations, parent invalidation, failed pokes,
 pivot touches and squats remain explicit episode facts.
 
@@ -850,4 +855,4 @@ older observations. No new price history is fetched by this command.
 
 ### Versioned setup families
 
-VCP, Blue Sky, Multi-year and IPO First Base now expose editable NSE liquidity floors, lifecycle selection, depth limits and optional confirmed-leg/history policies. See [setup-family contracts](docs/setup-family-contracts.md) for exact formulas, frozen qualification, history provenance, replay sizing and the `nexus-bases-4` detector change.
+VCP, Blue Sky, Multi-year and IPO First Base now expose editable NSE liquidity floors, lifecycle selection, depth limits and optional confirmed-leg/history policies. See [setup-family contracts](docs/setup-family-contracts.md) for exact formulas, frozen qualification, history provenance, replay sizing and the `nexus-bases-5` detector change.

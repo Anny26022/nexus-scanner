@@ -36,11 +36,11 @@ class SetupFamilyTests(unittest.TestCase):
             self.assertIn(scope+'.medianTurnover20',paths)
             self.assertIn('distanceFromPivotPct' if stage=='FORMING' else 'selection.distanceFromPivotPct',paths)
             self.assertTrue(all(leaf['params']['stage']==stage for leaf in leaves))
-        leaves=clauses('blue-sky',setupStage='PLAYED_OUT')
+        leaves=clauses('blue-sky',setupStage='PLAYED_OUT',athPolicy='CLOSING_AVAILABLE')
         facts={'stage':'PLAYED_OUT','base':{'overheadPct':0,'depthPct':40},'selection':{'historyFromListing':1,'rsRating':90,'marketCapCr':500,'medianTurnover20':2,'distanceFromPivotPct':-3},'current':{'rsRating':1,'marketCapCr':10,'medianTurnover20':0}}
         self.assertTrue(all(evaluate_base_condition({'PLAYED_OUT':facts},leaf['kind'],leaf['params']) is True for leaf in leaves))
         cap=next(i for i,n in enumerate(get_preset('lib-nexus-blue-sky-setup')['expression']['children']) if n['params'].get('metric')=='current.marketCapCr')
-        edited=clauses('blue-sky',setupStage='PLAYED_OUT',**{f'threshold{cap}':600})
+        edited=clauses('blue-sky',setupStage='PLAYED_OUT',athPolicy='CLOSING_AVAILABLE',**{f'threshold{cap}':600})
         self.assertFalse(all(evaluate_base_condition({'PLAYED_OUT':facts},leaf['kind'],leaf['params']) is True for leaf in edited))
 
     def test_generated_contract_and_audit_loader_match_publication_inputs(self):

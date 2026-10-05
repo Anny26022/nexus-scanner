@@ -6,7 +6,7 @@ whether to enter. Historical membership still uses today's eligible universe.
 """
 from __future__ import annotations
 import pandas as pd
-from .base_conditions import evaluate_base_condition
+from .base_conditions import evaluate_base_condition, select_setup_episode
 from .presets import get_preset
 from .base_presets import materialize_base_preset
 from .base_execution import net_return, trade_facts, validate_costs, position_size
@@ -35,7 +35,9 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
     dates=list(positions)
     opens=frame.Open.to_numpy(float)
     trades=[]
-    for episode in episodes:
+    family_records=[e for e in episodes if e.get('setupCandidateOnly')]
+    source=family_records if preset.get('setupFamily') and family_records else [e for e in episodes if not e.get('setupCandidateOnly')]
+    for episode in source:
         if episode.get('breakout') is None: continue
         trigger=positions.get(episode['breakout']['date'])
         if trigger is None: raise ValueError('Breakout event lies outside replay history')
@@ -43,8 +45,12 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
         # are read-only. Avoid copying every base slice for rejected episodes.
         record=dict(episode)
         record.update(stage='FRESH_BREAKOUT',breakoutAgeSessions=0,distanceFromPivotPct=episode['breakout']['throughPct'],holdsPivot=True,continuousHolding=True)
-        results=[evaluate_base_condition({'FRESH_BREAKOUT':record},leaf['kind'],leaf['params']) for leaf in leaves]
-        if not all(result is True for result in results): continue
+        if preset.get('setupFamily'):
+            qualifies,_=select_setup_episode([record],preset,parameters)
+        else:
+            results=[evaluate_base_condition({'FRESH_BREAKOUT':record},leaf['kind'],leaf['params']) for leaf in leaves]
+            qualifies=all(result is True for result in results)
+        if qualifies is not True:continue
         execution=trade_facts(dates,opens,episode,positions,fee_bps,slippage_bps,risk_pct=risk_pct,max_position_pct=max_position_pct,capital=capital)
         row={'baseId':episode['id'],'symbol':episode['symbol'],'signalDate':episode['breakout']['date'],
              'entryDate':None,'entryPrice':None,'execution':'NEXT_SESSION_OPEN','feeBpsPerSide':fee_bps,

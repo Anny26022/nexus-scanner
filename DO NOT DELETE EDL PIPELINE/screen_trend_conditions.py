@@ -217,6 +217,11 @@ def main(argv=None):
     if preset and (request.get("expression") or request.get("conditions")):
         parser.error("A preset request must not also supply expression or conditions")
     conditions = compile_query(args.query) if args.query else (preset or {}).get("expression") or request.get("expression", request.get("conditions"))
+    if preset and preset.get("setupFamily"):
+        from edl_pipeline.scanner.base_presets import materialize_base_preset
+        parameters=request.get("parameters") or {}
+        materialize_base_preset(preset,parameters)
+        conditions={"type":"condition","kind":"BASE_SETUP","params":{"presetId":preset["id"],**parameters}}
     if not conditions:
         parser.error("request.expression or request.conditions must be non-empty")
     validate_preset_library(CONDITION_REGISTRY)

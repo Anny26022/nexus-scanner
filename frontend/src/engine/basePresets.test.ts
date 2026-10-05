@@ -48,7 +48,7 @@ describe('versioned setup family parity',()=>{
   it('routes complete presets to advanced when an optional policy needs private history facts',()=>{
     const local=condition('lib-nexus-blue-sky-setup',{setupStage:'HOLDING'});
     const strict=condition('lib-nexus-blue-sky-setup',{setupStage:'HOLDING',athPolicy:'AUDITED_INTRADAY'});
-    expect(expressionPlan({type:'condition',condition:local}).browser).toBe(true);
+    expect(expressionPlan({type:'condition',condition:local}).browser).toBe(false);
     expect(expressionPlan({type:'condition',condition:strict}).browser).toBe(false);
     expect(expressionPlan({type:'condition',condition:condition('BASE_METRIC',{metric:'base.rsMinimum',value:80})}).browser).toBe(false);
   });
@@ -58,8 +58,9 @@ describe('versioned setup family parity',()=>{
   });
   it('uses frozen liquidity, strength and pivot position for played-out families',()=>{
     const facts={stage:'PLAYED_OUT',base:{overheadPct:0,depthPct:40},selection:{historyFromListing:1,rsRating:90,marketCapCr:500,medianTurnover20:2,distanceFromPivotPct:-3},current:{rsRating:1,marketCapCr:10,medianTurnover20:0}};
-    const input={historyAligned:true,asOfDate:session,bases:{PLAYED_OUT:facts}} as unknown as SnapshotStock;
-    expect(evaluateSnapshotCondition(input,condition('lib-nexus-blue-sky-setup',{setupStage:'PLAYED_OUT'}),session)).toBe(true);
+    const input={historyAligned:true,asOfDate:session,bases:{PLAYED_OUT:facts},setupCandidates:[{...facts,id:'first',pivotBasis:'CLOSE'}]} as unknown as SnapshotStock;
+    expect(evaluateSnapshotCondition(input,condition('lib-nexus-blue-sky-setup',{setupStage:'PLAYED_OUT',athPolicy:'CLOSING_AVAILABLE'}),session)).toBe(true);
+    input.setupCandidates!.push({...facts,id:'intraday',pivotBasis:'HIGH',selection:{...facts.selection,historyCoverageComplete:1,pivotVsHistoricalIntradayHigh:0}});
     expect(evaluateSnapshotCondition(input,condition('lib-nexus-blue-sky-setup',{setupStage:'PLAYED_OUT',athPolicy:'AUDITED_INTRADAY'}),session)).toBe(null);
   });
 });

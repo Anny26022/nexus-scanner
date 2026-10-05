@@ -89,7 +89,7 @@ measurements, not realized trade returns.
 
 ## Compatibility and release
 
-Engine version is `nexus-bases-4`; the generated scanner identity changes so old
+Engine version is `nexus-bases-5`; the generated scanner identity changes so old
 packs cannot be mistaken for the new contract. Existing names remain aliases
 where stated. Rebuilding the pipeline, chart artifacts and scanner packs is
 required to populate new facts. Updating source code alone does not replace an

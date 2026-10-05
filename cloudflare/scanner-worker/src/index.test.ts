@@ -107,7 +107,7 @@ it('runs a complete nested base preset and private metric through verified R2 sh
     raw.write('NSPK0001');raw.writeUInt32LE(header.length,8);header.copy(raw,12);
     if(count){raw.writeInt32LE(Math.floor(Date.parse(session)/86400000),dates);[100,102,98,100,1000].forEach((n,i)=>raw.writeDoubleLE(n,values+i*8));}
     const suffix=String(index).padStart(2,'0');objects.set(`shards/${suffix}.bin.gz`,gzipSync(raw));
-    save(`auxiliary/${suffix}.json.gz`,{stocks:count?{[symbol]:{...nativeStock,symbol,close:symbol==='TEST'?100:80,marketCap:symbol==='TEST'?1000:500}}:{},delivery:{},earnings:{},bases:count?{[symbol]:[{...base,current:{...base.current,distanceEMA150:8}}]}:{}});
+    save(`auxiliary/${suffix}.json.gz`,{stocks:count?{[symbol]:{...nativeStock,symbol,close:symbol==='TEST'?100:80,marketCap:symbol==='TEST'?1000:500}}:{},setupCandidates:count?{[symbol]:[{id:'old-long',stage:'FORMING',pivotBasis:'CLOSE',setupCandidateOnly:true,config:{min_sessions:15},pivot:100,distanceFromPivotPct:-2,base:{startDate:'2025-01-01',ageWeeks:60,ageSessions:300,depthPct:20},current:{marketCapCr:500,medianTurnover20:2,distanceSMA200:2,rsRating:90}},{id:'new-short',stage:'FORMING',pivotBasis:'CLOSE',setupCandidateOnly:true,config:{min_sessions:15},pivot:100,distanceFromPivotPct:-2,base:{startDate:'2026-09-01',ageWeeks:4,ageSessions:20,depthPct:10},current:{marketCapCr:500,medianTurnover20:2,distanceSMA200:2,rsRating:90}}]}:{},delivery:{},earnings:{},bases:count?{[symbol]:[{...base,current:{...base.current,distanceEMA150:8}}]}:{}});
   }
   const manifest={...SCANNER_IDENTITY,schemaVersion:7,revision,session,shards:32,symbols:2,maxSessions:1500,
     limits:{maxLeaves:32,maxDepth:8,maxPageSize:100,maxRequestBytes:100000},objects:[...objects].map(([key,buffer])=>({key,bytes:buffer.length,sha256:createHash('sha256').update(buffer).digest('hex')}))};
@@ -142,6 +142,12 @@ it('runs a complete nested base preset and private metric through verified R2 sh
   expect(pageBody.matchCount).toBe(2);
   expect(pageBody.rows).toHaveLength(1);
   expect(pageBody.rows[0]).toMatchObject({symbol:'OTHER',close:80,marketCap:500,bases:{FORMING:{base:{depthPct:20}}}});
+  const familyResponse=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',headers:{origin:'https://app.example'},body:JSON.stringify({...payload,expressionTree:{type:'group',operator:'any',children:[leaf('lib-nexus-multi-year-setup',{}),leaf('PRICE_CHANGE_PCT',{overDays:21,comparison:'ABOVE',pct:1000})]}})}),env,execution);
+  expect(familyResponse.status).toBe(200);
+  const familyBody=await familyResponse.json() as any;expect(familyBody.matchCount).toBe(2);
+  expect(familyBody.rows[0].setupMatches['lib-nexus-multi-year-setup'].id).toBe('old-long');
+  expect(familyBody.rows[0].setupMatches['lib-nexus-multi-year-setup'].config).toBeUndefined();
+  expect(familyBody.rows[0].bases.FORMING.id).toBe('same-base');
   const invalidResponse=await worker.fetch(textRequest(`${query} AND Base Metric(FORMING, imaginary) > 1`),env,execution);
   expect(invalidResponse.status).toBe(400);
   expect(await invalidResponse.json()).toMatchObject({error:'Unsupported base metric'});

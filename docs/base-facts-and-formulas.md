@@ -1,6 +1,6 @@
 # Precomputed base facts and arithmetic
 
-The base detector version `nexus-bases-4` adds raw facts and slice measures to
+The base detector version `nexus-bases-5` adds raw facts and slice measures to
 the existing episode contract. It does not change the detector's threshold
 policy. New identities prevent old incomplete records from appearing compatible.
 

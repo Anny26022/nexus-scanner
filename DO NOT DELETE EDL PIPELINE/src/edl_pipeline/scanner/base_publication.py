@@ -1,5 +1,6 @@
 """Build dated Nexus strength ranks and base episodes from canonical candles."""
 from __future__ import annotations
+from dataclasses import replace
 import numpy as np
 import pandas as pd
 from .bases import BaseConfig, detect_bases, finite, ratio
@@ -77,6 +78,12 @@ def trend_series(frame, ranks=None, listing_date=None):
     values['atrSimple14Pct']=true_range(frame).rolling(14,min_periods=14).mean()/close*100
     values['adrClose14Pct']=((frame.High-frame.Low)/close*100).rolling(14,min_periods=14).mean()
     values['adrLow14Pct']=((frame.High-frame.Low)/frame.Low*100).rolling(14,min_periods=14).mean()
+    above=close>values['sma50']
+    values['aboveSMA50Sessions']=above.astype(int).groupby((~above).cumsum()).cumsum()
+    values['aboveSMA50Sessions']=values['aboveSMA50Sessions'].where(above,0).where(values['sma50'].notna())
+    for name,signal in (('reclaimSMA200',(close>values['sma200'])&(close.shift(1)<=values['sma200'].shift(1))),('slopeTurnSMA200',(values['slopeSMA200']>0)&(values['slopeSMA200'].shift(1)<=0))):
+        events=pd.Series(np.where(signal,np.arange(len(frame)),np.nan),index=frame.index).ffill()
+        values[name+'Age']=pd.Series(np.arange(len(frame)),index=frame.index)-events
     values['price']=close
     values['turnoverCr']=turnover/1e7
     values['volume']=frame.Volume.astype(float)
@@ -107,11 +114,11 @@ def trend_context(frame,index,ranks=None,listing_date=None):
     return {key:finite(value) for key,value in trend_series(frame,ranks,listing_date).iloc[index].items()}
 
 
-def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False, episode_sink=None, history_audits=None):
+def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False, episode_sink=None, history_audits=None, setup_candidates=False):
     if selected_only and episode_sink is not None:
         raise ValueError('Complete archives require all episodes before stage selection.')
     frames=normalize_frames(frames)
-    config=config or BaseConfig(max_depth_pct=95)
+    config=config or BaseConfig()
     requested=set(frames) if symbols is None else set(symbols)
     missing=requested-set(frames)
     if missing:raise ValueError('Missing aligned history: '+', '.join(sorted(missing)))
@@ -149,7 +156,12 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
         if rank_history is not None:
             rank_history[symbol]={'dates':[str(day.date()) for day in frame.Date], 'ratings':[finite(value) for value in rank]}
         episodes=detect_bases(frame,symbol,config=config,rs=rank)
-        mature=sorted((e for e in episodes if e['base']['ageSessions']>=config.min_sessions),key=lambda e:(e['base']['startDate'],e['id']))
+        if setup_candidates:
+            for basis in ('CLOSE','HIGH'):
+                candidates=detect_bases(frame,symbol,config=replace(config,pivot_basis=basis,max_depth_pct=95,candidate_policy='SETUP'),rs=rank)
+                for candidate in candidates:candidate['setupCandidateOnly']=True
+                episodes += candidates
+        mature=sorted((e for e in episodes if e.get('pivotBasis','CLOSE')=='CLOSE' and (not setup_candidates or e.get('setupCandidateOnly')) and e.get('structuralQualifiedDate')),key=lambda e:(e['structuralQualifiedDate'],e['base']['startDate'],e['id']))
         first_id=mature[0]['id'] if mature else None
         context_rows=trend_series(frame,rank,stocks[symbol].get('listing_date'))
         for days in (5,22):
@@ -208,14 +220,14 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
             episode['firstEligibleBase']=None if episode['selection']['historyCoverageComplete'] is None else int(episode['id']==first_id) if episode['selection']['historyCoverageComplete']==1 else None
             episode['historyCoverage']={'basis':'OBSERVED_RELEASE_MARKET_SESSION_LEDGER','firstDate':str(frame.Date.iloc[0].date()),'lastDate':str(frame.Date.iloc[-1].date()),'missingSessions':current.get('historyMissingSessions'),'adjustmentAuditSource':audit.get('source') if verified else None}
             episode['strengthUniverse']='CURRENT_NEXUS_ELIGIBLE'
-        if selected_only:episodes=list(selected_base_episodes(episodes).values())
+        if selected_only and not setup_candidates:episodes=list(selected_base_episodes(episodes).values())
         if episode_sink is not None:
             # Archive one symbol before releasing its historical episodes. Runtime
             # publication needs only the same deterministic stage selections.
             episode_sink(symbol, episodes)
-            output[symbol]=list(selected_base_episodes(episodes).values())
+            output[symbol]=runtime_base_records(episodes) if setup_candidates else list(selected_base_episodes(episodes).values())
         else:
-            output[symbol]=episodes
+            output[symbol]=runtime_base_records(episodes) if selected_only and setup_candidates else episodes
     return output
 
 
@@ -232,7 +244,7 @@ def selected_base_episodes(episodes):
     """Select stable episode identities independently of their output projection."""
     selected = {}
     for stage in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT'):
-        candidates = [e for e in episodes if e['stage']==stage and e['base']['ageSessions']>=e['config']['min_sessions']]
+        candidates = [e for e in episodes if not e.get('setupCandidateOnly') and e.get('pivotBasis','CLOSE')=='CLOSE' and e['stage']==stage and e['base']['ageSessions']>=e['config']['min_sessions']]
         if not candidates: continue
         selected[stage] = max(candidates,key=lambda e:((e['breakout'] or {}).get('date',e['base']['startDate']),e['id']))
     return selected
@@ -251,3 +263,30 @@ def compact_base_records(episodes, include_parts=False, public=False):
                 selected[stage][scope]={key:value for key,value in episode[scope].items() if key in PUBLIC_CONTEXT_KEYS}
         selected[stage]['base'] = {key:value for key,value in episode['base'].items() if (include_parts or key!='parts') and (not public or key in PUBLIC_BASE_KEYS)}
     return selected
+
+
+SETUP_CONTEXT_KEYS = PUBLIC_CONTEXT_KEYS | {'historyCoverageComplete','lifetimePriceHistoryVerified','pivotVsHistoricalIntradayHigh','historicalIntradayHigh','aboveSMA50Sessions','reclaimSMA200Age','slopeTurnSMA200Age'}
+SETUP_BASE_KEYS = PUBLIC_BASE_KEYS | {'priorAdvance63Pct'}
+
+def setup_candidate_records(episodes):
+    """Bounded scalar candidates, excluding private slices and trade histories."""
+    keys={'id','symbol','stage','pivot','pivotBasis','structuralQualifiedDate','firstEligibleBase','setupCandidateOnly','distanceFromPivotPct','breakout','breakoutAgeSessions','holdsPivot','continuousHolding','config'}
+    family_records=[e for e in episodes if e.get('setupCandidateOnly')]
+    source=family_records if family_records else episodes
+    return [{**{key:e[key] for key in keys if key in e},
+             'base':{key:value for key,value in e['base'].items() if key in SETUP_BASE_KEYS},
+             **{scope:{key:value for key,value in e[scope].items() if key in SETUP_CONTEXT_KEYS} for scope in ('current','selection')}}
+            for e in source if e['stage'] in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT') and e['base']['ageSessions']>=e['config']['min_sessions']]
+
+def runtime_base_records(episodes):
+    selected=list(selected_base_episodes(episodes).values())
+    selected_ids={e['id'] for e in selected}
+    return selected+[e for e in setup_candidate_records(episodes) if e['id'] not in selected_ids]
+
+
+def compact_setup_match(episode):
+    """A public witness with the same ID and pivot used during qualification."""
+    record=setup_candidate_records([episode])[0]
+    for scope in ('current','selection'):
+        record[scope]={key:value for key,value in record[scope].items() if key in PUBLIC_CONTEXT_KEYS}
+    return record

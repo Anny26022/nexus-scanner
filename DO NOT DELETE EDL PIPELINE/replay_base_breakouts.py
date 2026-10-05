@@ -28,13 +28,25 @@ def main():
     parser.add_argument('--risk-pct',type=float,default=1.5)
     parser.add_argument('--max-position-pct',type=float,default=100)
     parser.add_argument('--breakeven-gain-pct',type=float,default=0,help='0 disables cost-aware breakeven arming')
-    parser.add_argument('--max-depth-pct',type=float,default=95)
+    parser.add_argument('--max-depth-pct',type=float,default=60)
     parser.add_argument('--contraction-noise-pct',type=float,default=5)
     parser.add_argument('--min-contraction-legs',type=int,default=0)
     parser.add_argument('--max-contraction-leg-ratio',type=float,default=1)
     parser.add_argument('--contraction-method',choices=('RAW_TR','WILDER_ATR','SIMPLE_ATR'))
     parser.add_argument('--ath-policy',choices=('CLOSING_AVAILABLE','INTRADAY_AVAILABLE','AUDITED_INTRADAY'))
     parser.add_argument('--first-base-policy',choices=('REQUIRE','ALLOW'))
+    parser.add_argument('--min-prior-advance-pct',type=float,default=0)
+    parser.add_argument('--reclaim200-within',type=int,default=0)
+    parser.add_argument('--slope-turn200-within',type=int,default=0)
+    parser.add_argument('--above50-persistence',type=int,default=1)
+    parser.add_argument('--min-breakout-volume',type=float,default=1.5)
+    parser.add_argument('--min-breakout-close-in-range',type=float,default=0.7)
+    parser.add_argument('--max-breakout-extension-pct',type=float,default=5)
+    parser.add_argument('--max-breakout-age',type=int,default=5)
+    parser.add_argument('--strict-contraction-legs',action='store_true')
+    parser.add_argument('--require-accumulation',action='store_true')
+    parser.add_argument('--require-rising200',action='store_true')
+    parser.add_argument('--require-breakout-confirmation',action='store_true')
     args=parser.parse_args()
     config=BaseConfig(stop_pct=args.stop_pct,trail_period=args.trail_period,fee_bps=args.fee_bps,slippage_bps=args.slippage_bps,risk_pct=args.risk_pct,max_position_pct=args.max_position_pct,breakeven_gain_pct=args.breakeven_gain_pct,max_depth_pct=args.max_depth_pct,contraction_noise_pct=args.contraction_noise_pct)
     try:config.validate()
@@ -46,8 +58,14 @@ def main():
     if args.contraction_method is not None:parameters['contractionMethod']=args.contraction_method
     if args.ath_policy is not None:parameters['athPolicy']=args.ath_policy
     if args.first_base_policy is not None:parameters['requireFirstBase']=args.first_base_policy=='REQUIRE'
+    policy_keys={'minPriorAdvancePct':'min_prior_advance_pct','reclaim200Within':'reclaim200_within','slopeTurn200Within':'slope_turn200_within','above50Persistence':'above50_persistence','minBreakoutVolume':'min_breakout_volume','minBreakoutCloseInRange':'min_breakout_close_in_range','maxBreakoutExtensionPct':'max_breakout_extension_pct','maxBreakoutAge':'max_breakout_age','strictContractionLegs':'strict_contraction_legs','requireAccumulation':'require_accumulation','requireRising200':'require_rising200','requireBreakoutConfirmation':'require_breakout_confirmation'}
     try:
         preset=get_preset(args.preset)
+        if preset.get('setupFamily'):
+            parameters.update({key:getattr(args,value) for key,value in policy_keys.items()})
+            parameters['setupStage']='FRESH_BREAKOUT'
+            if args.strict_contraction_legs and not args.min_contraction_legs:parameters['minContractionLegs']=2
+        elif any(flag in sys.argv for flag in ('--'+value.replace('_','-') for value in policy_keys.values())):raise ValueError('Setup policies require a setup-family preset')
         if not preset.get('setupFamily') and (args.min_contraction_legs or args.max_contraction_leg_ratio!=1 or args.contraction_method is not None or args.ath_policy is not None or args.first_base_policy is not None):raise ValueError('Setup policies require a setup-family preset')
         position_size(100,92,args.capital,args.risk_pct,args.max_position_pct,args.fee_bps,args.slippage_bps)
         materialize_base_preset(preset,parameters)
@@ -74,7 +92,7 @@ def main():
         reports[symbol]=replay_breakouts(frames[symbol],episodes,preset_id=args.preset,fee_bps=args.fee_bps,slippage_bps=args.slippage_bps,preset_parameters=parameters,capital=args.capital,risk_pct=args.risk_pct,max_position_pct=args.max_position_pct)
     # Evaluate every historical episode before releasing it, preserving full
     # replay coverage without retaining the universe's raw episodes together.
-    build_base_records(frames,stocks,config=config,symbols=requested,episode_sink=replay_symbol,history_audits=load_history_audits(args.root))
+    build_base_records(frames,stocks,config=config,symbols=requested,episode_sink=replay_symbol,setup_candidates=bool(preset.get('setupFamily')),history_audits=load_history_audits(args.root))
     from dataclasses import asdict
     payload={'detectorConfig':asdict(config),'schemaVersion':2,'asOfDate':session,'metadataAsOfDate':metadata_session,'symbols':reports,'membershipBasis':'CURRENT_NEXUS_ELIGIBLE',
              'note':'Current-universe historical replay; not survivorship-free. Defaults have not been optimized.'}

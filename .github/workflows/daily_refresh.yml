@@ -134,6 +134,8 @@ jobs:
           git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_details_archive.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/shareholding_history.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/quarterly_financial_history.json.gz"
+          git add reference/index-constituent-mappings.json.gz
+          git add reference/index-constituent-mappings.manifest.json
           git add frontend/public/data/current.json frontend/public/data/revisions
           git commit -m "Automated Daily Data Refresh [skip ci]" || echo "No changes to commit"
           git push

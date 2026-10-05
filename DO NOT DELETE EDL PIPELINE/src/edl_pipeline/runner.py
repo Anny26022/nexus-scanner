@@ -398,6 +398,15 @@ def main(config=None):
                 required=script in REQUIRED_PHASE2_SCRIPTS,
             )
 
+    print("\nPHASE 2.75: Standalone official index constituents")
+    print("-" * 40)
+    # This preserves a separate official reference only.  It is intentionally
+    # not consumed by the scanner or publication path, and a temporary public
+    # source failure must not block the core market-data refresh.
+    results["refresh_official_index_constituents.py"] = run_script(
+        "refresh_official_index_constituents.py", "Phase 2.75", required=False
+    )
+
     print("\nPHASE 3: Base Analysis (Building Master JSON)")
     print("-" * 40)
     results["bulk_market_analyzer.py"] = run_script("bulk_market_analyzer.py", "Phase 3", required=True)

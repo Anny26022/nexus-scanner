@@ -26,6 +26,7 @@ const scalarFundamental = new Set([
 function parameterCompatible(condition: ActiveCondition): boolean {
   const p = condition.parameters;
   switch (condition.conditionId) {
+    case 'BASE_METRIC': case 'BASE_FORMULA': return ![p.metric,p.rightMetric].some(value=>String(value??'').startsWith('base.parts.'));
     case 'PRICE_CHANGE_PCT': return [1,5,21,63,126,252].includes(Number(p.overDays));
     case 'VOLUME_VS_AVG': return Number(p.avgDays) === 20 && Number(p.withinDays) === 1;
     case 'PRICE_VS_EMA': return Number(p.persistDays) === 1 && [20,50,200].includes(Number(p.period));

@@ -6,6 +6,7 @@ import { ActiveCondition, ExpressionNode, MatchMode, ScreenerRunRequest } from '
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 import { ResultsTable } from './ResultsTable';
+import { baseStageForCondition } from '../engine/baseConditions';
 import { ScreenerModal } from './ScreenerModal';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { SymbolWithLogo } from './SymbolWithLogo';
@@ -142,6 +143,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
           error={screenQuery.error}
           onPageChange={setScreenPage}
           onSortChange={(field, direction) => { setScreenSort({ field, direction }); setScreenPage(1); }}
+          baseStages={[...new Set(activeConditions.map(baseStageForCondition).filter(stage => stage !== undefined))]}
           currentSort={screenSort}
         />
       ) : (

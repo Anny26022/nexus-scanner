@@ -45,4 +45,22 @@ class ScannerPackTests(unittest.TestCase):
                 self.assertEqual((target/descriptor['key']).read_bytes(),(second/descriptor['key']).read_bytes())
 
 
+    def test_runtime_shards_only_load_selected_bases_and_archive_all_episodes(self):
+        from edl_pipeline.scanner.base_publication import build_base_records
+        frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-10-01',periods=70),'Open':[100]+[94]*19+[102]+[100]*49,
+            'High':[101]+[95]*19+[103]+[101]*49,'Low':[99]+[93]*19+[101]+[99]*49,'Close':[100]+[94]*19+[102]+[100]*49,'Volume':1000.})
+        stocks={'TEST':{'symbol':'TEST'}}
+        records=build_base_records({'TEST':frame},stocks)
+        context={'stocks':stocks,'base_episodes':records}
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);target,manifest=build_private_scanner_pack(root,root/'packs','a'*64,'2026-10-01',Cache(frame),context,{},[])
+            archives=[item for item in manifest['objects'] if item['key'].startswith('base-history/')]
+            self.assertEqual(len(archives),32)
+            archive=next(item for item in archives if 'TEST' in json.loads(gzip.decompress((target/item['key']).read_bytes())))
+            saved=json.loads(gzip.decompress((target/archive['key']).read_bytes()))['TEST']
+            self.assertEqual(saved,records['TEST'])
+            runtime=json.loads(gzip.decompress((target/archive['key'].replace('base-history/','auxiliary/')).read_bytes()))['bases']['TEST']
+            self.assertLessEqual(len(runtime),4)
+            self.assertTrue({row['id'] for row in runtime}.issubset({row['id'] for row in saved}))
+
 if __name__=='__main__': unittest.main()

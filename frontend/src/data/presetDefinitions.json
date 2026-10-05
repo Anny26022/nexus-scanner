@@ -2934,6 +2934,16 @@
           "kind": "BASE_METRIC",
           "params": {
             "stage": "FORMING",
+            "metric": "current.historyFromListing",
+            "comparison": "EQUAL",
+            "value": 1
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
             "metric": "base.overheadPct",
             "comparison": "EQUAL",
             "value": 0

@@ -12,20 +12,20 @@ not claim result parity with another platform's undisclosed base detector.
 - [x] Average ATR and volume contraction; equal base slices.
 - [x] Quiet-day depth/recency and up/down volume metrics.
 - [x] Frozen breakout measurements and armed MA trailing exits.
-- [ ] Finish detection policy: local peak confirmation, overlap selection, nested
+- [x] Finish detection policy: local peak confirmation, overlap selection, nested
   invalidation, confirmed failed pokes and history completeness.
-- [ ] Historical RS ledger, rank progression, base RS summaries and industry
+- [x] Historical RS ledger, rank progression, base RS summaries and industry
   relative returns with explicitly defined peer membership.
-- [ ] Trend distance/ratio/slope, median turnover and base context metrics.
-- [ ] Configurable strict holding and retest policies; episode termination facts.
-- [ ] Daily pipeline generation, artifact validation and durable episode outputs.
-- [ ] Public scalar metrics and private R2 episodes bound to one release revision.
-- [ ] Python, browser and advanced Worker evaluation with formula parity.
-- [ ] Editable Strong Bases, Fresh Breakouts, Holding Breakouts, VCP, Blue Sky,
+- [x] Trend distance/ratio/slope, median turnover and base context metrics.
+- [x] Configurable strict holding and retest policies; episode termination facts.
+- [x] Daily pipeline generation, artifact validation and durable episode outputs.
+- [x] Public scalar metrics and private R2 episodes bound to one release revision.
+- [x] Python, browser and advanced Worker evaluation with formula parity.
+- [x] Editable Strong Bases, Fresh Breakouts, Holding Breakouts, VCP, Blue Sky,
   Multi-year and IPO Base presets.
-- [ ] Existing filter UI, compact stage selection and explanation columns.
-- [ ] Per-symbol chart base/pivot/breakout overlays.
-- [ ] Historical replay, forward outcome measurement and costs.
+- [x] Existing filter UI, compact stage selection and explanation columns.
+- [x] Per-symbol chart base/pivot/breakout overlays.
+- [x] Historical replay, forward outcome measurement and costs.
 - [ ] Golden fixtures, prefix-invariance tests, integration and browser checks.
 - [ ] New reviewed PR with exact scope, dependency and validation evidence.
 
@@ -58,14 +58,18 @@ selected by the most recent breakout date (or start date for forming bases),
 with the stable ID as a tie breaker. Detailed base slices and episode events
 are stored in the matching private R2 auxiliary shard. All filters for one
 stage must refer to that same selected ID; matching unrelated bases across
-conditions would be incorrect. Browser/Worker integration is still pending.
+conditions would be incorrect. Python, browser and Worker evaluate the same selected episode IDs. Slice
+arithmetic routes the complete expression to the Worker. Complete episodes
+and dated rank ledgers remain in separate private archive shards, verified
+with the manifest and excluded from latest-session scans.
 
 The initial strength ledger uses weighted 63/126/189/252-session returns
 (40/20/20/20 percent), ranked among the currently eligible aligned Nexus peers.
 It is not a historical constituent universe and is not survivorship-free.
 Missing observations are not forward-filled. Industry return context currently
 uses equal-weight current-classification peers including the subject, with at
-least three available peers; historical industry context remains unfinished.
+least three available peers; dated industry context uses the same current classification on each session.
+Rank changes use the market session ledger.
 
 Median turnover estimates traded value as close times volume; it does not
 claim to reproduce exchange-reported turnover. Listing age uses an official
@@ -74,7 +78,8 @@ listing date and is unavailable when absent, rather than using cache length.
 A breakout failure (first close back inside the base) is separate from a trade
 exit. Forward 5/20/60-session returns and excursions are only populated after
 the full horizon exists and continue measuring market outcomes after an exit.
-Transaction-cost modelling and replay cohort aggregation remain to implement.
+Replay includes explicit fees, slippage, next-session execution and per-symbol
+cohort aggregation.
 
 ## Editable Nexus presets
 
@@ -88,12 +93,14 @@ precomputed matches. The defaults are research starting points.
 Fresh Breakouts and Holding Breakouts apply quality checks to `selection`
 (pre-breakout context) and contraction/depth checks to the frozen `base`.
 Extension and pivot holding use current observations. Forming presets use
-current context. Blue Sky means no higher close in the available cache; it is
-not proof of an all-time high when historical coverage is incomplete.
+current context. Blue Sky requires no higher close in the available cache and history beginning
+within seven calendar days of the official listing. This coverage check does
+not independently audit missing bars or historical adjustments.
 
 Targeted preset tests cover edited thresholds, frozen quality, session
-alignment and strict/retest policies. Rendered UI, full-universe replay and
-performance acceptance are still outstanding.
+alignment and strict/retest policies. Rendered fixture checks verify editing, Apply persistence, stage selection,
+chart opening and Escape/focus restoration. Full-universe performance acceptance
+and historical validation remain outstanding.
 
 ## Chart integration
 
@@ -107,8 +114,8 @@ The chart payload remains backward compatible through an optional `bases` field.
 
 Chart-generation fixtures verify equality with scanner base summaries, including
 pre-breakout boundaries. SVG geometry tests verify the overlay coordinates and
-missing-history behavior. Browser interaction and full-data performance testing
-are still outstanding.
+missing-history behavior. Browser interactions have been verified with a labelled integration fixture.
+Full-data performance acceptance remains outstanding.
 
 ## Local historical replay
 
@@ -128,3 +135,30 @@ The output includes returns, excursions, failed pivot holds, counts and executio
 assumptions. Historical membership reconstruction and validation of the proposed
 thresholds on complete real histories are still required before interpreting
 these results as an unbiased performance estimate.
+
+## Detection and hierarchy policy
+
+The newest mature episode per stage is selected deterministically. Overlapping
+episodes remain in the private archive. A child increments its parent's nested
+count only after reaching minimum duration while the parent remains forming.
+Parent invalidation is recorded on active children; children remain independent
+formations. A failed poke is confirmed when a close returns inside within ten
+sessions without exceeding the frozen intraday ceiling. Configurable touch
+tolerance is part of episode identity.
+
+Invalid candles and duplicate dates are rejected. Missing trading sessions are
+not fabricated. Closing 52-week measures require 252 sessions. Follow-through
+continues after trade exit. Forward horizons require complete observations.
+Intraday peak-to-trough drawdown is conservative: OHLCV cannot establish the
+order of a session's high and low.
+
+## Validation status
+
+71 frontend tests and 13 Worker tests passed, including base metric/arithmetic
+parity; Wrangler dry build and frontend production build passed. The pipeline
+suite passed 228 tests including the hierarchy and failed-poke fixtures. Final regression and performance acceptance remain required.
+
+The local stock artifact is dated 30 September 2026 while most OHLCV files
+end on 1 October and omit 30 September. A separate 1 October benchmark covers
+2,589 aligned histories; this is not a published release or proof that the
+September snapshot was validated across the complete universe.

@@ -202,7 +202,9 @@ def _needs_delivery(expression):
 def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
     if node.get('kind') in ('BASE_STAGE','BASE_METRIC','BASE_FORMULA'):
         from edl_pipeline.scanner.base_conditions import evaluate_base_condition
-        return evaluate_base_condition(context.get('base_episodes',{}).get(s['symbol']),node['kind'],node.get('params',{}))
+        value=evaluate_base_condition(context.get('base_episodes',{}).get(s['symbol']),node['kind'],node.get('params',{}))
+        if value is None:diagnostics.add((node['kind'],'base_measurement_unavailable'))
+        return value
     if node["type"] == "group":
         if not node["children"]:
             return True
@@ -400,7 +402,7 @@ def run(request, root=ROOT, cache=None):
             history=cache.frame(root,symbol,as_of) if cache is not None else normalize_history(pd.read_csv(path),as_of) if path.exists() else None
             if history is not None and not history.empty and history.Date.iloc[-1].strftime('%Y-%m-%d')==as_of:
                 frames[symbol]=history
-        context['base_episodes']=build_base_records(frames,context['stocks'])
+        context['base_episodes']=build_base_records(frames,context['stocks'],context.get('benchmarks'))
     # Both public delivery conditions need dated history.  The spike condition
     # is named ``DELIVERY_PCT_SPIKE`` while the latest-session condition uses
     # ``DELIVERY_PERCENT``; checking only the latter quietly made spike
@@ -419,7 +421,9 @@ def run(request, root=ROOT, cache=None):
         if value is None:
             unresolved += 1
         if value is True:
+            from edl_pipeline.scanner.base_publication import compact_base_records
             row=stock_row(s,context["rs_ratings"] if context.get("rs_ratings_as_of")==as_of else {})
+            if 'base_episodes' in context:row['bases']=compact_base_records(context['base_episodes'].get(s['symbol'],[]))
             row["fnoBan"]=bool(context["fno_ban_symbols"].get(s["symbol"])) if context.get("fno_ban_trade_date")==as_of else None
             if "financial_history" in context:
                 row["peRatio"] = financial_value(context, s, {"condition":"pe_ratio"}, date.fromisoformat(as_of), finite_number(s.get("market_cap_crore")))[0]

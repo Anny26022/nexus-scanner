@@ -4,10 +4,11 @@ from .base_publication import compact_base_records
 
 STAGES = ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT')
 METRICS = {
-    'pivot','distanceFromPivotPct','breakoutAgeSessions','belowPivotCloses','returnSinceBreakoutPct',
-    *('base.'+key for key in ('ageSessions','depthPct','atrContraction','volumeDryUp','quietDepth','quietAgeSessions','upDownVolumeRatio','netUpDownVolume','rsStart','rsEnd','rsAverage','rsMinimum','rsMaximum','level','overheadPct','nestedCount')),
+    'pivot','distanceFromPivotPct','breakoutAgeSessions','belowPivotCloses','returnSinceBreakoutPct','failedPokeCount','maxGainPct','maxDrawdownPct',
+    *('base.'+key for key in ('ageSessions','depthPct','atrContraction','volumeDryUp','quietDepth','quietAgeSessions','upDownVolumeRatio','netUpDownVolume','rsStart','rsEnd','rsAverage','rsMinimum','rsMaximum','level','overheadPct','nestedCount','touchCount','squatCount')),
+    *('base.parts.'+part+'.'+key for part in ('full',*(f'{name}_{index}' for name,count in (('half',2),('third',3),('quarter',4),('fifth',5)) for index in range(1,count+1))) for key in ('atrPct','volume','highClose','lowClose','upVolume','downVolume')),
     *('breakout.'+key for key in ('volumeRatio','gapPct','throughPct','dailyGainPct','closeInRange')),
-    *(scope+'.'+key for scope in ('selection','current') for key in ('medianTurnover20','distanceClosing52wHigh','aboveClosing52wLow','listingAgeWeeks','rsRating','rsChange5','rsChange22','industryRelative63','industryRelative252')),
+    *(scope+'.'+key for scope in ('selection','current') for key in ('medianTurnover20','distanceClosing52wHigh','aboveClosing52wLow','listingAgeWeeks','historyFromListing','historySessions','rsRating','rsChange5','rsChange22','industryRelative63','industryRelative252','rsLineAtHigh','benchmarkDistanceSMA200','industryAboveSMA50Pct','industryAboveSMA200Pct')),
     *(scope+'.'+prefix+kind+str(period) for scope in ('selection','current') for prefix in ('distance','slope') for kind in ('SMA','EMA') for period in (10,20,50,100,150,200)),
     *(scope+'.ratio'+kind+pair for scope in ('selection','current') for kind in ('SMA','EMA') for pair in ('50_200','150_200','10_20','20_50')),
 }
@@ -31,7 +32,7 @@ def compare(value, operation, target):
 def evaluate_base_condition(episodes, kind, parameters):
     stage=parameters.get('stage','FORMING')
     if stage not in STAGES: raise ValueError('Unsupported base stage')
-    selected=compact_base_records(episodes) if isinstance(episodes,list) else episodes
+    selected=compact_base_records(episodes,include_parts=True) if isinstance(episodes,list) else episodes
     record=(selected or {}).get(stage)
     if kind=='BASE_STAGE':
         policy=parameters.get('holdingPolicy','ANY')

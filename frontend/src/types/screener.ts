@@ -71,6 +71,7 @@ export interface ScreenerRunRequest {
 }
 
 export interface StockRow {
+  bases?: import('../engine/baseConditions').SelectedBases;
   symbol: string;
   name: string;
   listingDate: string;

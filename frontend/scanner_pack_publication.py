@@ -18,6 +18,7 @@ import subprocess
 import tempfile
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"DO NOT DELETE EDL PIPELINE/src"))
 from scanner_identity import checked_identity
 
 import numpy as np
@@ -120,6 +121,7 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
     def available_filings(symbol):
         return [record for record in financial_history.get(symbol, [])
                 if str(record.get("filing_date") or record.get("filedAt") or "")[:10] <= session]
+    from edl_pipeline.scanner.base_publication import compact_base_records
     for index, entries in enumerate(grouped):
         shard_symbols = {symbol for symbol, _frame in entries}
         aux = {
@@ -127,13 +129,31 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
             "earnings": {symbol: available_filings(symbol) for symbol in sorted(shard_symbols)
                          if available_filings(symbol)},
             "breadth": context.get("breadth", {}),
-            "bases": {symbol:context.get("base_episodes", {}).get(symbol,[]) for symbol in sorted(shard_symbols)},
+            "bases": {symbol:[episode for episode in context.get("base_episodes", {}).get(symbol,[])
+                if episode['id'] in {record['id'] for record in compact_base_records(context.get("base_episodes", {}).get(symbol,[])).values()}]
+                for symbol in sorted(shard_symbols)},
         }
         aux_data = gzip.compress(_json_bytes(aux), compresslevel=6, mtime=0)
         name = f"auxiliary/{index:02d}.json.gz"
         _write(target / name, aux_data)
         objects.append({"key": name, "bytes": len(aux_data), "sha256": _sha(aux_data),
                         "symbols": len(shard_symbols), "encoding": "gzip"})
+
+        if 'base_episodes' in context:
+            # Historical archives are durable, but never decompressed by the
+            # latest-session Worker. Runtime auxiliary packs carry selected IDs only.
+            archive={symbol:context['base_episodes'].get(symbol,[]) for symbol in sorted(shard_symbols)}
+            archive_data=gzip.compress(_json_bytes(archive),compresslevel=6,mtime=0)
+            name=f'base-history/{index:02d}.json.gz'
+            _write(target/name,archive_data)
+            objects.append({'key':name,'bytes':len(archive_data),'sha256':_sha(archive_data),'encoding':'gzip'})
+
+        if 'base_rs_history' in context:
+            ledger={symbol:context['base_rs_history'].get(symbol,{}) for symbol in sorted(shard_symbols)}
+            ledger_data=gzip.compress(_json_bytes(ledger),compresslevel=6,mtime=0)
+            name=f'base-ranks/{index:02d}.json.gz'
+            _write(target/name,ledger_data)
+            objects.append({'key':name,'bytes':len(ledger_data),'sha256':_sha(ledger_data),'encoding':'gzip'})
 
     metadata_data = gzip.compress(_json_bytes({"stocks": rows or []}), compresslevel=6, mtime=0)
     _write(target / "metadata.json.gz", metadata_data)

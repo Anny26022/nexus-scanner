@@ -84,7 +84,8 @@ def publish(root=bridge.ROOT, output=OUTPUT):
         frame=cache.frame(root,symbol,session)
         if frame is not None and not frame.empty and frame.Date.iloc[-1].strftime('%Y-%m-%d')==session:
             base_frames[symbol]=frame
-    context['base_episodes']=build_base_records(base_frames,context['stocks'])
+    context['base_rs_history']={}
+    context['base_episodes']=build_base_records(base_frames,context['stocks'],context.get('benchmarks'),context['base_rs_history'])
     rows=[]; default_count=0
     for stock in context['stocks'].values():
         if not stock.get('default_screener_eligible',True):

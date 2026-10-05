@@ -36,4 +36,19 @@ class BasePublicationTests(unittest.TestCase):
         self.assertIsNone(public['selection']['rsRating'])
         self.assertIsNone(public['current']['industryRelative63'])
 
+    def test_dated_industry_context_does_not_change_frozen_selection(self):
+        frames={name:candles([100+i*.1 for i in range(270)]+[120]*19+[140]+[150]*10) for name in ('A','B','C')}
+        frames['A'].loc[270:288,'Close']=110
+        frames['A'].loc[270:288,'Open']=110
+        frames['A'].loc[270:288,'High']=111
+        frames['A'].loc[270:288,'Low']=109
+        stocks={name:{'industry':'Peer Group'} for name in frames}
+        prefix=build_base_records({name:frame.iloc[:290] for name,frame in frames.items()},stocks)
+        complete=build_base_records(frames,stocks)
+        first=next(e for e in prefix['A'] if e['breakout'])
+        later=next(e for e in complete['A'] if e['id']==first['id'])
+        self.assertEqual(first['selection'],later['selection'])
+        self.assertIsNotNone(first['selection']['industryRelative63'])
+        self.assertIsNotNone(first['selection']['industryAboveSMA50Pct'])
+
 if __name__=='__main__':unittest.main()

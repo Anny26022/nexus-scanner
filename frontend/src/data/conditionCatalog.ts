@@ -1,6 +1,7 @@
 import { ConditionDef } from '../types/screener';
 import nativeConditions from './nativeConditions.json';
 import baseMetrics from './baseMetrics.json';
+import { baseMetricLabel } from '../utils/baseMetricLabel';
 
 const INDICATOR_OPTIONS = [
   'CLOSE','OPEN','HIGH','LOW','VOLUME','HL2','HLC3','OHLC4','SMA','EMA','WMA','VOLUME_SMA',
@@ -78,7 +79,7 @@ const BASE_STAGE_PARAMETER: ConditionDef['parameters'][number] = {
     {label:'Holding',value:'HOLDING'},{label:'Played out',value:'PLAYED_OUT'}],
 };
 const BASE_METRIC_PARAMETERS: ConditionDef['parameters'] = [BASE_STAGE_PARAMETER,
-  {id:'metric',label:'Metric',type:'select',defaultValue:'base.depthPct',options:baseMetrics.map(value=>({label:value,value}))},
+  {id:'metric',label:'Metric',type:'select',defaultValue:'base.depthPct',options:baseMetrics.map(value=>({label:baseMetricLabel(value),value}))},
   {id:'comparison',label:'Comparison',type:'select',defaultValue:'BELOW',options:[
     {label:'> Greater',value:'GREATER'},{label:'≥ At or above',value:'ABOVE'},{label:'= Equal',value:'EQUAL'},
     {label:'≤ At or below',value:'BELOW'},{label:'< Less',value:'LESS'}]},
@@ -91,7 +92,7 @@ const BASE_CONDITIONS: ConditionDef[] = [
   {id:'BASE_METRIC',label:'Base quality / strength',category:'range',description:'Compare a metric within the selected base. Breakout base measurements are frozen.',parameters:BASE_METRIC_PARAMETERS},
   {id:'BASE_FORMULA',label:'Base metric arithmetic',category:'range',description:'Compare arithmetic between two metrics of the same selected base.',parameters:[...BASE_METRIC_PARAMETERS,
     {id:'arithmetic',label:'Operation',type:'select',defaultValue:'DIVIDE',options:['ADD','SUBTRACT','MULTIPLY','DIVIDE'].map(value=>({label:value.toLowerCase(),value}))},
-    {id:'rightMetric',label:'Second metric',type:'select',defaultValue:'base.volumeDryUp',options:baseMetrics.map(value=>({label:value,value}))}]},
+    {id:'rightMetric',label:'Second metric',type:'select',defaultValue:'base.volumeDryUp',options:baseMetrics.map(value=>({label:baseMetricLabel(value),value}))}]},
 ];
 export const NEXUS_CONDITION_CATALOG: ConditionDef[] = [
   ...BASE_CONDITIONS,

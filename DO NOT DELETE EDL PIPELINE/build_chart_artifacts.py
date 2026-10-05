@@ -194,7 +194,15 @@ def main() -> int:
         frame=pd.DataFrame(candles).rename(columns={key:key.title() for key in ('date','open','high','low','close','volume')})
         frame['Date']=pd.to_datetime(frame.Date)
         frames[symbol]=frame
-    bases=build_base_records(frames,canonical)
+    benchmarks={}
+    for item in _artifact(root,'all_indices_history_v2.json',{}).get('indices',[]):
+        keys={str(value).upper().replace(' ','_') for value in (item.get('symbol'),item.get('name')) if value}
+        if not keys.intersection({'NIFTY_500','NIFTY500'}): continue
+        benchmark=pd.DataFrame(item.get('records',[]))
+        if not benchmark.empty and {'date','close'}.issubset(benchmark):
+            benchmark['Date']=pd.to_datetime(benchmark.date)
+            benchmarks['NIFTY_500']=benchmark.loc[benchmark.Date<=pd.Timestamp(as_of)]
+    bases=build_base_records(frames,canonical,benchmarks)
     for stock in stocks:
         symbol = str(stock.get("Symbol") or stock.get("symbol") or "").upper()
         if not symbol:

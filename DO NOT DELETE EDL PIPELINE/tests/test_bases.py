@@ -1,6 +1,6 @@
 import unittest
 import pandas as pd
-from edl_pipeline.scanner.bases import BaseConfig, detect_bases
+from edl_pipeline.scanner.bases import BaseConfig, detect_bases, measure_base
 
 
 def candles(closes):
@@ -57,6 +57,31 @@ class BaseTests(unittest.TestCase):
         first=detect_bases(frame,'TEST',BaseConfig(stop_pct=8))[0]
         second=detect_bases(frame,'TEST',BaseConfig(stop_pct=9))[0]
         self.assertNotEqual(first['id'],second['id'])
+
+    def test_touch_tolerance_is_configured_and_failed_poke_is_confirmed(self):
+        frame=candles([100]+[94]*18+[99,100.5,98])
+        # An intraday ceiling above the closing pivot makes this a poke,
+        # confirmed only when a later close returns inside the base.
+        frame.loc[0,'High']=102
+        before=next(e for e in detect_bases(frame.iloc[:21],'TEST',BaseConfig(trail_period=200)) if e['breakout'])
+        after=next(e for e in detect_bases(frame,'TEST',BaseConfig(trail_period=200)) if e['id']==before['id'])
+        self.assertEqual(before['failedPokeCount'],0)
+        self.assertEqual(after['failedPokeCount'],1)
+        self.assertEqual(before['base'],after['base'])
+        atr=pd.Series([1.0]*len(frame))
+        tight=measure_base(frame,0,19,atr,touch_tolerance_pct=.5)
+        loose=measure_base(frame,0,19,atr,touch_tolerance_pct=2)
+        self.assertEqual(tight['touchCount'],1)
+        self.assertEqual(loose['touchCount'],2)
+
+    def test_immature_children_do_not_inflate_nested_count(self):
+        frame=candles([100,94,99,93]+[94]*14)
+        early=detect_bases(frame.iloc[:5],'TEST')
+        parent=next(e for e in early if e['pivot']==100)
+        self.assertEqual(parent['base']['nestedCount'],0)
+        later=detect_bases(frame,'TEST')
+        parent=next(e for e in later if e['id']==parent['id'])
+        self.assertEqual(parent['base']['nestedCount'],1)
 
     def test_inconsistent_ohlc_is_rejected(self):
         frame=candles([100,94]);frame.loc[1,'High']=90

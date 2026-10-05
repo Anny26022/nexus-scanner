@@ -37,64 +37,107 @@ def strength_history(frames):
     return ranks
 
 
-def trend_context(frame, index, ranks=None, listing_date=None):
-    prefix=frame.iloc[:index+1]
-    close=float(prefix.Close.iloc[-1]); values={}
+def trend_series(frame, ranks=None, listing_date=None):
+    """Calculate causal context columns once, rather than once per episode."""
+    close=frame.Close.astype(float); values={}
     for kind in ('SMA','EMA'):
         for period in (10,20,50,100,150,200):
-            series=prefix.Close.rolling(period,min_periods=period).mean() if kind=='SMA' else prefix.Close.ewm(span=period,adjust=False,min_periods=period).mean()
-            current=finite(series.iloc[-1])
-            values[f'{kind.lower()}{period}']=current
-            values[f'distance{kind}{period}']=None if current is None else (close/current-1)*100
-            values[f'slope{kind}{period}']=ratio(current-series.iloc[-22],series.iloc[-22])*100 if current is not None and len(series)>21 and ratio(current-series.iloc[-22],series.iloc[-22]) is not None else None
+            series=close.rolling(period,min_periods=period).mean() if kind=='SMA' else close.ewm(span=period,adjust=False,min_periods=period).mean()
+            values[f'{kind.lower()}{period}']=series
+            values[f'distance{kind}{period}']=(close/series-1)*100
+            values[f'slope{kind}{period}']=(series/series.shift(21)-1)*100
         for a,b in ((50,200),(150,200),(10,20),(20,50)):
-            left,right=values[f'{kind.lower()}{a}'],values[f'{kind.lower()}{b}']
-            values[f'ratio{kind}{a}_{b}']=None if left is None or right is None else ratio(left,right)
-    money=prefix.Close*prefix.Volume/1e7
-    values['medianTurnover20']=finite(money.tail(20).median()) if len(prefix)>=20 else None
-    values['distanceClosing52wHigh']=(prefix.Close.tail(252).max()-close)/prefix.Close.tail(252).max()*100
-    values['aboveClosing52wLow']=(close/prefix.Close.tail(252).min()-1)*100
-    # A truncated candle cache must never masquerade as the listing age.
-    listing = pd.to_datetime(listing_date, errors='coerce')
-    values['listingAgeWeeks'] = None if pd.isna(listing) or listing > prefix.Date.iloc[-1] else (prefix.Date.iloc[-1]-listing).days/7
+            values[f'ratio{kind}{a}_{b}']=values[f'{kind.lower()}{a}']/values[f'{kind.lower()}{b}']
+    values['medianTurnover20']=(close*frame.Volume/1e7).rolling(20,min_periods=20).median()
+    highest=close.rolling(252,min_periods=252).max();lowest=close.rolling(252,min_periods=252).min()
+    values['distanceClosing52wHigh']=(highest-close)/highest*100
+    values['aboveClosing52wLow']=(close/lowest-1)*100
+    listing=pd.to_datetime(listing_date,errors='coerce')
+    values['historyFromListing']=float(frame.Date.iloc[0]<=listing+pd.Timedelta(days=7)) if pd.notna(listing) else np.nan
+    values['historySessions']=pd.Series(np.arange(1,len(frame)+1),index=frame.index)
+    values['listingAgeWeeks']=(frame.Date-listing).dt.days/7 if pd.notna(listing) else np.nan
     if ranks is not None:
-        values['rsRating']=finite(ranks[index])
-        for days in (5,22):
-            values[f'rsChange{days}']=finite(ranks[index]-ranks[index-days]) if index>=days else None
-    return values
+        ranks=pd.Series(ranks,index=frame.index,dtype=float)
+        values['rsRating']=ranks
+        for days in (5,22): values[f'rsChange{days}']=ranks-ranks.shift(days)
+    # Absolute averages are intermediate columns; the condition contract exposes
+    # distances, slopes and ratios. Do not duplicate unused values in every episode.
+    values={key:value for key,value in values.items() if not key.startswith(('sma','ema'))}
+    return pd.DataFrame(values,index=frame.index).replace([np.inf,-np.inf],np.nan)
 
 
-def build_base_records(frames, stocks):
+def trend_context(frame,index,ranks=None,listing_date=None):
+    return {key:finite(value) for key,value in trend_series(frame,ranks,listing_date).iloc[index].items()}
+
+
+def build_base_records(frames, stocks, benchmarks=None, rank_history=None):
     frames=normalize_frames(frames)
     ranks=strength_history(frames) if frames else pd.DataFrame()
     output={}
-    # Industry comparisons are equal-weight peer returns, include the subject,
-    # and use today's taxonomy. Unknown industry is unavailable.
-    peer_returns={}
-    for symbol,frame in frames.items():
+    closes=pd.concat({symbol:frame.set_index('Date').Close for symbol,frame in frames.items()},axis=1).sort_index() if frames else pd.DataFrame()
+    industries={}
+    for symbol in frames:
         industry=stocks[symbol].get('industry')
-        if not industry or str(industry).lower() in ('unclassified','n/a'): continue
-        for days in (63,252):
-            if len(frame)>days:
-                peer_returns.setdefault((industry,days),[]).append((symbol,float(frame.Close.iloc[-1]/frame.Close.iloc[-1-days]-1)*100))
+        if industry and str(industry).lower() not in ('unclassified','n/a'):
+            industries.setdefault(industry,[]).append(symbol)
+    industry_context={}
+    for days in (63,252):
+        returns=(closes/closes.shift(days)-1)*100
+        for industry,symbols in industries.items():
+            peers=returns[symbols]
+            industry_context[(industry,days)]=peers.mean(axis=1).where(peers.count(axis=1)>=3)
+    industry_breadth={}
+    for period in (50,200):
+        averages=closes.rolling(period,min_periods=period).mean()
+        flags=(closes>averages).astype(float).where(closes.notna()&averages.notna())
+        for industry,symbols in industries.items():
+            peers=flags[symbols]
+            industry_breadth[(industry,period)]=(peers.mean(axis=1)*100).where(peers.count(axis=1)>=3)
+    benchmark=(benchmarks or {}).get('NIFTY_500')
+    if benchmark is None:benchmark=(benchmarks or {}).get('NIFTY500')
+    benchmark_close=None
+    if benchmark is not None and not benchmark.empty:
+        date_key='Date' if 'Date' in benchmark else 'date'
+        price_key='Close' if 'Close' in benchmark else 'close'
+        benchmark_close=benchmark.set_index(date_key)[price_key].reindex(closes.index)
     for symbol,frame in frames.items():
         rank=ranks[symbol].reindex(frame.Date).to_numpy(float)
+        if rank_history is not None:
+            rank_history[symbol]={'dates':[str(day.date()) for day in frame.Date], 'ratings':[finite(value) for value in rank]}
         episodes=detect_bases(frame,symbol,rs=rank)
+        context_rows=trend_series(frame,rank,stocks[symbol].get('listing_date'))
+        for days in (5,22):
+            context_rows[f'rsChange{days}']=(ranks[symbol]-ranks[symbol].shift(days)).reindex(frame.Date).to_numpy(float)
+        for days in (63,252):
+            peers=industry_context.get((stocks[symbol].get('industry'),days))
+            own=(closes[symbol]/closes[symbol].shift(days)-1)*100
+            context_rows[f'industryRelative{days}']=(own-peers).reindex(frame.Date).to_numpy(float) if peers is not None else np.nan
+        for period in (50,200):
+            peers=industry_breadth.get((stocks[symbol].get('industry'),period))
+            context_rows[f'industryAboveSMA{period}Pct']=peers.reindex(frame.Date).to_numpy(float) if peers is not None else np.nan
+        if benchmark_close is not None:
+            line=closes[symbol]/benchmark_close
+            rolling=line.rolling(252,min_periods=252).max()
+            signal=(line>=rolling).astype(float).where(rolling.notna() & line.notna())
+            context_rows['rsLineAtHigh']=signal.reindex(frame.Date).to_numpy(float)
+            trend=benchmark_close.rolling(200,min_periods=200).mean()
+            context_rows['benchmarkDistanceSMA200']=((benchmark_close/trend-1)*100).reindex(frame.Date).to_numpy(float)
+        else:
+            context_rows['rsLineAtHigh']=np.nan
+            context_rows['benchmarkDistanceSMA200']=np.nan
+        dates={str(day.date()):i for i,day in enumerate(frame.Date)}
+        current={key:finite(value) for key,value in context_rows.iloc[-1].items()}
         for episode in episodes:
             marker=episode['base']['endDate']
-            index=int(frame.index[frame.Date.dt.strftime('%Y-%m-%d').eq(marker)][0])
-            episode['selection']=trend_context(frame,index,rank,stocks[symbol].get('listing_date'))
-            episode['current']=trend_context(frame,len(frame)-1,rank,stocks[symbol].get('listing_date'))
-            for days in (63,252):
-                peers=peer_returns.get((stocks[symbol].get('industry'),days),[])
-                subject=next((value for name,value in peers if name==symbol),None)
-                episode['current'][f'industryRelative{days}']=subject-float(np.mean([value for _,value in peers])) if subject is not None and len(peers)>=3 else None
+            index=dates[marker]
+            episode['selection']={key:finite(value) for key,value in context_rows.iloc[index].items()}
+            episode['current']=dict(current)
             episode['strengthUniverse']='CURRENT_NEXUS_ELIGIBLE'
         output[symbol]=episodes
     return output
 
 
-def compact_base_records(episodes):
+def compact_base_records(episodes, include_parts=False):
     """One deterministic episode per stage; every filter sees the same record."""
     selected = {}
     for stage in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT'):
@@ -104,6 +147,6 @@ def compact_base_records(episodes):
         selected[stage] = {key:episode[key] for key in (
             'id','stage','pivot','distanceFromPivotPct','breakout','breakoutAgeSessions',
             'holdsPivot','continuousHolding','belowPivotCloses','breakoutFailure',
-            'returnSinceBreakoutPct','selection','current')}
-        selected[stage]['base'] = {key:value for key,value in episode['base'].items() if key!='parts'}
+            'returnSinceBreakoutPct','maxGainPct','maxDrawdownPct','selection','current','failedPokeCount','parentInvalidationDate')}
+        selected[stage]['base'] = {key:value for key,value in episode['base'].items() if include_parts or key!='parts'}
     return selected

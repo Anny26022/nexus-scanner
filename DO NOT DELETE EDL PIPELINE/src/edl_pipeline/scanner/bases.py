@@ -50,7 +50,7 @@ def finite(value):
     return float(value) if pd.notna(value) and np.isfinite(value) else None
 
 
-def measure_base(frame, start, end, atr_pct, rs=None):
+def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1):
     """Measure inclusive base boundaries. Halves differ by at most one session."""
     base = frame.iloc[start:end + 1]
     volume = base.Volume.to_numpy(float)
@@ -87,6 +87,8 @@ def measure_base(frame, start, end, atr_pct, rs=None):
             'rsAverage': None if ranks is None else finite(avg(ranks)),
             'rsMinimum': None if ranks is None or not np.isfinite(ranks).all() else float(ranks.min()),
             'rsMaximum': None if ranks is None or not np.isfinite(ranks).all() else float(ranks.max()),
+            'touchCount':int((np.abs(close/pivot-1)*100<=touch_tolerance_pct).sum()),
+            'squatCount':int(((base.High.to_numpy(float)>pivot)&(close<pivot)).sum()),
             'parts': parts}
 
 
@@ -110,12 +112,18 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
     episodes, active = [], []
     peak = 0
     index = 0
-    for index in range(1, len(frame)):
-        row = frame.iloc[index]
+    rows=list(frame.itertuples(index=False))
+    closes=frame.Close.to_numpy(float)
+    highest_close=closes[0]
+    date_positions={str(day.date()):i for i,day in enumerate(frame.Date)}
+    for index,row in enumerate(rows[1:],1):
         date = str(row.Date.date())
         # Update existing candidates before creating today's new candidate.
         for episode in list(active):
             start, pivot = episode['_start'], episode['pivot']
+            if episode['parentId'] and episode['parentInvalidationDate'] is None:
+                parent=episode['_parent']
+                if parent and parent['stage']=='INVALIDATED':episode['parentInvalidationDate']=parent['exit']['date']
             if episode['breakout'] is not None:
                 bo = episode['breakout']
                 episode['breakoutAgeSessions'] = index - episode['_breakout']
@@ -144,10 +152,15 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
                     episode['stage'] = 'FRESH_BREAKOUT' if index-episode['_breakout'] < config.fresh_sessions else 'HOLDING'
                 continue
             duration = index-start
+            if episode['parentId'] and not episode['_nestedConfirmed'] and duration+1>=config.min_sessions:
+                parent=episode['_parent']
+                if parent is not None and parent['breakout'] is None:
+                    parent['nestedCount']+=1
+                episode['_nestedConfirmed']=True
             if row.Close > pivot:
                 if duration < config.min_sessions:
                     active.remove(episode); episodes.remove(episode); continue
-                episode['base'] = measure_base(frame,start,index-1,atr_pct,rs)
+                episode['base'] = measure_base(frame,start,index-1,atr_pct,rs,config.touch_tolerance_pct)
                 episode['base']['nestedCount'] = episode['nestedCount']
                 episode['base']['level'] = episode['level']
                 episode['base']['overheadPct'] = episode['overheadPct']
@@ -160,40 +173,60 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
                 episode['_breakout'] = index; episode['_maxBreakoutHigh'] = float(row.High); episode['stage'] = 'FRESH_BREAKOUT'
                 episode['trailArmed'] = bool(pd.notna(trail.iloc[index]) and row.Close > trail.iloc[index])
                 continue
-            depth = (pivot - float(frame.Low.iloc[start:index+1].min())) / pivot * 100
+            episode['_floor']=min(episode['_floor'],float(row.Low))
+            depth = (pivot-episode['_floor'])/pivot*100
             if row.High > pivot and row.Close < pivot: episode['squatDates'].append(date)
             if abs(row.Close/pivot-1)*100 <= config.touch_tolerance_pct: episode['touchDates'].append(date)
             if duration > config.max_sessions or depth > config.max_depth_pct:
                 episode['stage'] = 'INVALIDATED'; episode['exit'] = {'date':date,'reason':'BASE_LIMIT'}; active.remove(episode)
-        if row.Close >= frame.Close.iloc[peak]: peak=index
-        elif (1-row.Close/frame.Close.iloc[peak])*100 >= config.pullback_pct:
+        highest_close=max(highest_close,float(row.Close))
+        if row.Close >= closes[peak]: peak=index
+        elif (1-row.Close/closes[peak])*100 >= config.pullback_pct:
             if not any(e['_start']==peak for e in episodes):
-                pivot = float(frame.Close.iloc[peak])
+                pivot = float(closes[peak])
                 parents = [e for e in active if e['breakout'] is None and e['_start'] < peak and pivot <= e['pivot']]
                 parent = max(parents,key=lambda e:e['_start']) if parents else None
                 identity = f'{ENGINE_VERSION}:{symbol}:{frame.Date.iloc[peak].date()}:{json.dumps(asdict(config),sort_keys=True)}'
                 episode = {'id':hashlib.sha256(identity.encode()).hexdigest()[:24], 'symbol':symbol,
                     'engineVersion':ENGINE_VERSION, 'config':asdict(config), '_start':peak,
-                    'parentId':parent['id'] if parent else None, 'nestedCount':0,
-                    'level':min(4,parent['level']+1) if parent else (1 if pivot >= frame.Close.iloc[:peak+1].max() else 2),
-                    'overheadPct':max(0,(frame.Close.iloc[:peak+1].max()/pivot-1)*100),
+                    '_parent':parent,'_nestedConfirmed':False,'parentInvalidationDate':None,'_floor':float(frame.Low.iloc[peak:index+1].min()),'parentId':parent['id'] if parent else None, 'nestedCount':0,
+                    'level':min(4,parent['level']+1) if parent else (1 if pivot >= highest_close else 2),
+                    'overheadPct':max(0,(highest_close/pivot-1)*100),
                     'pivot':pivot,'stage':'FORMING','breakout':None,'exit':None,
                     'breakoutFailure':None,'peakToTroughDrawdownPct':0.0,
-                    'failedPokeDates':[], 'retestDates':[], 'continuousHolding':True, 'squatDates':[],'touchDates':[],'base':measure_base(frame,peak,index,atr_pct,rs),
+                    'failedPokeDates':[], 'retestDates':[], 'continuousHolding':True, 'squatDates':[],'touchDates':[],'base':{},
                     'trailArmed':False,'breakoutAgeSessions':0,'returnSinceBreakoutPct':0.0,
                     'maxGainPct':0.0,'maxDrawdownPct':0.0,'belowPivotCloses':0,'holdsPivot':True}
-                if parent: parent['nestedCount'] += 1
                 episodes.append(episode); active.append(episode)
             # Local peaks allow tighter children inside an older ceiling.
             peak=index
     for episode in episodes:
         if episode['breakout'] is None:
-            end = index if episode['exit'] is None else int(frame.index[frame.Date.dt.strftime('%Y-%m-%d').eq(episode['exit']['date'])][0])
-            episode['base'] = measure_base(frame,episode['_start'],end,atr_pct,rs)
+            end = index if episode['exit'] is None else date_positions[episode['exit']['date']]
+            episode['base'] = measure_base(frame,episode['_start'],end,atr_pct,rs,config.touch_tolerance_pct)
             episode['base'].update(level=episode['level'],overheadPct=episode['overheadPct'],nestedCount=episode['nestedCount'])
         if episode['breakout'] is not None:
             origin = episode['_breakout']
             entry = episode['breakout']['close']
+            # Follow-through describes market behavior through publication even
+            # after a simulated trade exit; the exit facts stay immutable.
+            observed=frame.iloc[origin+1:]
+            episode['breakoutAgeSessions']=len(frame)-1-origin
+            episode['returnSinceBreakoutPct']=(float(frame.Close.iloc[-1])/entry-1)*100
+            episode['holdsPivot']=bool(frame.Close.iloc[-1]>=episode['pivot'])
+            inside=observed.Close<episode['pivot']
+            episode['belowPivotCloses']=int(inside.sum())
+            episode['continuousHolding']=not bool(inside.any())
+            episode['sessionsHeldAbovePivot']=int((observed.Close>=episode['pivot']).sum())
+            episode['retestDates']=[str(day.date()) for day in observed.loc[inside,'Date']]
+            if inside.any():
+                episode['breakoutFailure']={'date':episode['retestDates'][0],'reason':'CLOSE_BACK_INSIDE'}
+            episode['maxGainPct']=max(0,(float(observed.High.max())/entry-1)*100) if len(observed) else 0
+            episode['maxDrawdownPct']=min(0,(float(observed.Low.min())/entry-1)*100) if len(observed) else 0
+            recent=frame.iloc[origin:origin+11]
+            pokes=recent.Close<episode['pivot']
+            poke_candidates=pokes & (recent.High.cummax()<=episode['base']['ceiling'])
+            episode['failedPokeDates']=[str(day.date()) for day in recent.loc[poke_candidates,'Date'].head(1)]
             episode['outcomes'] = {}
             for horizon in (5,20,60):
                 if origin+horizon >= len(frame):
@@ -206,7 +239,8 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
                     'maxFavorableExcursionPct':max(0,(float(window.High.max())/entry-1)*100),
                     'closedInsideBase':bool((window.Close < episode['pivot']).any())}
         episode.pop('_maxBreakoutHigh',None)
+        episode['failedPokeCount']=len(episode['failedPokeDates'])
         episode['asOfDate'] = str(frame.Date.iloc[-1].date())
         episode['distanceFromPivotPct'] = (float(frame.Close.iloc[-1])/episode['pivot']-1)*100
-        episode.pop('_start',None); episode.pop('_breakout',None)
+        episode.pop('_start',None); episode.pop('_breakout',None);episode.pop('_floor',None);episode.pop('_parent',None);episode.pop('_nestedConfirmed',None)
     return episodes

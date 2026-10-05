@@ -10,11 +10,13 @@ import {
   TrendingUp,
   TrendingDown,
 } from 'lucide-react';
+import type { SelectedBases,BaseRecord } from '../engine/baseConditions';
 import { BaseChartDialog } from './BaseChart';
 import { SymbolWithLogo } from './SymbolWithLogo';
 
 interface ResultsTableProps {
   data?: ScreenerRunResponse;
+  baseStages?: Array<keyof SelectedBases>;
   isLoading: boolean;
   isError: boolean;
   error?: Error | null;
@@ -26,6 +28,7 @@ interface ResultsTableProps {
 
 export const ResultsTable: React.FC<ResultsTableProps> = ({
   data,
+  baseStages=[],
   isLoading,
   isError,
   error,
@@ -36,6 +39,8 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
 }) => {
   const [copiedTv, setCopiedTv] = useState(false);
   const [chartSymbol,setChartSymbol]=useState<string|null>(null);
+  const [stageChoice,setStageChoice]=useState<keyof SelectedBases|undefined>();
+  const stage=stageChoice&&baseStages.includes(stageChoice)?stageChoice:baseStages[0];
   const chartTrigger=useRef<HTMLButtonElement|null>(null);
 
   if (isLoading) {
@@ -119,6 +124,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
             <thead className="sticky top-0 z-10 bg-slate-50/95 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200/90 backdrop-blur-sm">
               <tr>
                 <th className="py-3 px-4 font-semibold">Symbol & Name</th>
+                {stage&&<th className="py-3 px-4 font-semibold">Base setup{baseStages.length>1&&<select aria-label="Displayed base stage" value={stage} onChange={event=>setStageChoice(event.target.value as keyof SelectedBases)} className="ml-2 rounded border border-slate-200 px-1 py-0.5 text-[10px]">{baseStages.map(value=><option key={value} value={value}>{value.replaceAll('_',' ').toLowerCase()}</option>)}</select>}</th>}
                 <th className="py-3 px-4 font-semibold">Sector / Industry</th>
                 <th
                   onClick={() => handleSortClick('close')}
@@ -163,7 +169,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
             <tbody className="divide-y divide-slate-100 font-mono">
               {data.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-slate-500 font-sans">
+                  <td colSpan={stage?9:8} className="py-10 text-center text-slate-500 font-sans">
                     <FileQuestion className="h-7 w-7 text-slate-400 mx-auto mb-2" />
                     <p className="text-xs font-semibold text-slate-700">No Equities Matched Screener Criteria</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
@@ -186,6 +192,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
                       </div>
                     </td>
 
+                    {stage&&<td className="py-3.5 px-4 text-[11px] text-slate-600"><BaseExplanation record={row.bases?.[stage]}/></td>}
                     {/* Sector & Industry */}
                     <td className="py-3.5 px-4 font-sans">
                       <div
@@ -297,3 +304,10 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
     </div>
   );
 };
+
+function BaseExplanation({record}:{record?:BaseRecord}){
+  if(!record)return <span>—</span>;
+  const base=(record.base??{}) as BaseRecord,context=(record.stage==='FORMING'?record.current:record.selection) as BaseRecord|undefined;
+  const format=(value:unknown,suffix='')=>typeof value==='number'&&Number.isFinite(value)?`${value.toFixed(2)}${suffix}`:'—';
+  return <div className="min-w-48"><span className="block font-medium text-slate-700">RS {format(context?.rsRating)} · Depth {format(base.depthPct,'%')}</span><span className="block text-slate-500">ATR {format(base.atrContraction,'×')} · Volume {format(base.volumeDryUp,'×')} · Pivot {format(record.distanceFromPivotPct,'%')}</span></div>;
+}

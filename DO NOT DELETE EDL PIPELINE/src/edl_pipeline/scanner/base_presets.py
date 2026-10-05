@@ -42,7 +42,7 @@ def build_presets():
         metric('FORMING','current.distanceClosing52wHigh','BELOW',30),metric('FORMING','current.aboveClosing52wLow','ABOVE',15),
         metric('FORMING','current.rsRating','ABOVE',70)],'Contracting base with drying volume, trend alignment and relative strength.')
     add('blue-sky','Blue Sky','FORMING',[
-        metric('FORMING','base.overheadPct','EQUAL',0),metric('FORMING','current.rsRating','ABOVE',70),
+        metric('FORMING','current.historyFromListing','EQUAL',1),metric('FORMING','base.overheadPct','EQUAL',0),metric('FORMING','current.rsRating','ABOVE',70),
         metric('FORMING','distanceFromPivotPct','ABOVE',-20),metric('FORMING','distanceFromPivotPct','BELOW',0)],'Strong forming base without higher closing-price supply in available history.')
     add('multi-year-base','Multi-year Base','FORMING',[
         metric('FORMING','base.ageSessions','ABOVE',252),metric('FORMING','base.ageSessions','BELOW',1500),

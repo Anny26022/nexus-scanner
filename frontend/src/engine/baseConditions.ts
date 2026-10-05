@@ -34,3 +34,26 @@ export function evaluateBaseCondition(bases: SelectedBases|undefined,condition:A
   if(!['GREATER','ABOVE','LESS','BELOW','EQUAL'].includes(String(p.comparison??'ABOVE')))throw new Error('Unsupported base comparison');
   return compare(value,p.comparison??'ABOVE',p.value);
 }
+
+export function detailedSelectedBases(selected:SelectedBases|undefined,episodes:BaseRecord[]|undefined):SelectedBases|undefined {
+  if(!episodes)return selected;
+  const result:SelectedBases={};
+  for(const stage of stages){
+    const summary=selected?.[stage as keyof SelectedBases];
+    if(!summary)continue;
+    const episode=episodes.find(record=>record.id===summary.id);
+    result[stage as keyof SelectedBases]=episode?{...summary,base:episode.base}:summary;
+  }
+  return result;
+}
+
+export function baseStageForCondition(condition:ActiveCondition):keyof SelectedBases|undefined {
+  if(['BASE_STAGE','BASE_METRIC','BASE_FORMULA'].includes(condition.conditionId)){
+    const stage=String(condition.parameters.stage??'FORMING');
+    return stages.includes(stage)?stage as keyof SelectedBases:undefined;
+  }
+  if(condition.conditionId==='lib-nexus-fresh-breakouts')return 'FRESH_BREAKOUT';
+  if(condition.conditionId==='lib-nexus-holding-breakouts')return 'HOLDING';
+  if(['lib-nexus-strong-bases','lib-nexus-vcp-base','lib-nexus-blue-sky','lib-nexus-multi-year-base','lib-nexus-ipo-base'].includes(condition.conditionId))return 'FORMING';
+  return undefined;
+}

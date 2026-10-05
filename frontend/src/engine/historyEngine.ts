@@ -1,3 +1,4 @@
+import { detailedSelectedBases,type BaseRecord } from './baseConditions';
 import type { ActiveCondition } from '../types/screener';
 import type { SnapshotStock } from '../api/snapshotScreen';
 import { evaluateSnapshotCondition } from '../api/snapshotScreen';
@@ -6,6 +7,7 @@ import { compare, negate, type Truth } from './expression';
 export interface CandleSeries { dates:Int32Array; open:Float64Array; high:Float64Array; low:Float64Array; close:Float64Array; volume:Float64Array }
 export interface AdvancedContext {
   stock: SnapshotStock;
+  bases?: BaseRecord[];
   session: string;
   benchmarks?: Record<string,{dates:number[];closes:number[]}>;
   delivery?: Array<Record<string,unknown>>;
@@ -165,7 +167,7 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
   const legacy=translateLegacy(condition);
   if(legacy!==condition)return evaluateHistoryCondition(series,legacy,context);
   const id=condition.conditionId,p=condition.parameters;
-  if(['BASE_STAGE','BASE_METRIC','BASE_FORMULA'].includes(id))return evaluateSnapshotCondition(context.stock,condition,context.session);
+  if(['BASE_STAGE','BASE_METRIC','BASE_FORMULA'].includes(id))return evaluateSnapshotCondition({...context.stock,bases:detailedSelectedBases(context.stock.bases,context.bases)},condition,context.session);
   if(id.startsWith('lib-'))return evaluateSnapshotCondition(context.stock,condition,context.session);
   if(!scalarIds.has(id)&&!historyIds.has(id))throw new Error(`Unsupported condition: ${id}`);
   if(scalarIds.has(id)){const value=evaluateSnapshotCondition(context.stock,{...condition,isNegated:false},context.session);if(value!==null)return condition.isNegated?negate(value):value;}

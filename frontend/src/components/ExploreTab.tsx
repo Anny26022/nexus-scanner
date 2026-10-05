@@ -11,6 +11,7 @@ import { screenerApi } from '../api/screenerApi';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 import { explainExpressionTree } from '../utils/nqlParser';
+import { baseStageForCondition } from '../engine/baseConditions';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown } from 'lucide-react';
@@ -248,6 +249,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       {/* ── Results Table ── */}
       <ResultsTable
         data={data}
+        baseStages={[...new Set(activeConditionsArray.map(baseStageForCondition).filter(value=>value!==undefined))]}
         isLoading={isLoading}
         isError={isError}
         error={error}

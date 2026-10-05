@@ -14,6 +14,7 @@ from chart_publication import chart_preflight, charts_enabled, complete_release
 from scanner_pack_publication import build_private_scanner_pack, publish_private_pack
 from scanner_identity import checked_identity
 from edl_pipeline.scanner.presets import list_presets
+from edl_pipeline.scanner.base_publication import build_base_records, compact_base_records
 from edl_pipeline.scanner.financials import financial_value, finite_number
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
@@ -36,7 +37,7 @@ CORE_FIELDS = {
 TECHNICAL_FIELDS = {
     'symbol','rvol','rsi14','adr20Pct','atr14','sma20','sma50','sma200','ema20','ema50','ema200',
     'dist52wHighPct','dist52wLowPct','distAthPct','rsRating','rsRating1m','rsRating3m','rsRating6m','rsRating12m','metrics','presetMatches','allTimeHigh',
-    'allTimeLow','return5yPct',
+    'allTimeLow','return5yPct','bases',
 }
 
 
@@ -77,6 +78,13 @@ def publish(root=bridge.ROOT, output=OUTPUT):
     presets={p['id']:bridge.translate(p['id'],{}) for p in list_presets()}
     default=bridge.group('AND',bridge.translate('mom_rvol',{'minRvol':1.5,'maxRvol':20}),bridge.translate('trend_price_vs_ma',{'maType':'SMA','maPeriod':50,'operator':'above','thresholdPct':0}))
     delivery=bridge._load_delivery_history(root/'delivery_history_data',None,root/'eod2_delivery_history_data')
+    base_frames={}
+    for symbol,stock in context['stocks'].items():
+        if not stock.get('default_screener_eligible',True): continue
+        frame=cache.frame(root,symbol,session)
+        if frame is not None and not frame.empty and frame.Date.iloc[-1].strftime('%Y-%m-%d')==session:
+            base_frames[symbol]=frame
+    context['base_episodes']=build_base_records(base_frames,context['stocks'])
     rows=[]; default_count=0
     for stock in context['stocks'].values():
         if not stock.get('default_screener_eligible',True):
@@ -121,6 +129,7 @@ def publish(root=bridge.ROOT, output=OUTPUT):
                 for value in true_range[15:]: atr=(atr*13+float(value))/14
                 metrics['atrPct14']=atr/float(last['Close'])*100 if last['Close']>0 else None
         row['metrics']=metrics
+        row['bases']=compact_base_records(context['base_episodes'].get(symbol,[]))
         row['historyMetadata']=stock.get('history_metadata')
         row['financialMetadata']=stock.get('financial_metadata')
         row['dividendExDate']=stock.get('dividend_ex_date')

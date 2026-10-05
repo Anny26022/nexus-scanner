@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 import hashlib
+import json
 import math
 import numpy as np
 import pandas as pd
@@ -102,10 +103,13 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
     if not np.isfinite(frame[columns].to_numpy(float)).all() or (frame[['Open','High','Low','Close']] <= 0).any().any() or (frame.Volume < 0).any():
         raise ValueError('Base history contains invalid OHLCV')
     if frame.empty: return []
+    if (frame.High < frame[['Open','Close','Low']].max(axis=1)).any() or (frame.Low > frame[['Open','Close','High']].min(axis=1)).any():
+        raise ValueError('Base history contains inconsistent candle ranges')
     atr_pct = wilder_average(true_range(frame), config.atr_period) / frame.Close * 100
     trail = frame.Close.rolling(config.trail_period, min_periods=config.trail_period).mean()
     episodes, active = [], []
     peak = 0
+    index = 0
     for index in range(1, len(frame)):
         row = frame.iloc[index]
         date = str(row.Date.date())
@@ -119,6 +123,14 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
                 episode['maxGainPct'] = max(episode['maxGainPct'], (row.High / bo['close'] - 1) * 100)
                 episode['maxDrawdownPct'] = min(episode['maxDrawdownPct'], (row.Low / bo['close'] - 1) * 100)
                 episode['belowPivotCloses'] += int(row.Close < pivot)
+                episode['continuousHolding'] &= bool(row.Close >= pivot)
+                episode['_maxBreakoutHigh'] = max(episode['_maxBreakoutHigh'], float(row.High))
+                episode['peakToTroughDrawdownPct'] = min(episode['peakToTroughDrawdownPct'], (row.Low / episode['_maxBreakoutHigh'] - 1) * 100)
+                if row.Close < pivot and episode['breakoutFailure'] is None:
+                    episode['breakoutFailure'] = {'date':date, 'reason':'CLOSE_BACK_INSIDE'}
+                if not episode['failedPokeDates'] and index-episode['_breakout'] <= 10 and row.Close < pivot and episode['_maxBreakoutHigh'] <= episode['base']['ceiling']:
+                    episode['failedPokeDates'].append(date)
+                if row.Close < pivot: episode['retestDates'].append(date)
                 episode['holdsPivot'] = bool(row.Close >= pivot)
                 was_armed = episode['trailArmed']
                 stop = row.Close < pivot * (1 - config.stop_pct / 100)
@@ -136,19 +148,22 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
                 if duration < config.min_sessions:
                     active.remove(episode); episodes.remove(episode); continue
                 episode['base'] = measure_base(frame,start,index-1,atr_pct,rs)
+                episode['base']['nestedCount'] = episode['nestedCount']
+                episode['base']['level'] = episode['level']
+                episode['base']['overheadPct'] = episode['overheadPct']
                 prior_volume = frame.Volume.iloc[max(0,index-20):index]
                 episode['breakout'] = {'date':date, 'close':float(row.Close),
                     'volumeRatio':ratio(row.Volume, prior_volume.median()) if len(prior_volume)==20 else None,
                     'gapPct':(row.Open/pivot-1)*100, 'throughPct':(row.Close/pivot-1)*100,
                     'dailyGainPct':(row.Close/frame.Close.iloc[index-1]-1)*100,
                     'closeInRange':ratio(row.Close-row.Low,row.High-row.Low)}
-                episode['_breakout'] = index; episode['stage'] = 'FRESH_BREAKOUT'
+                episode['_breakout'] = index; episode['_maxBreakoutHigh'] = float(row.High); episode['stage'] = 'FRESH_BREAKOUT'
                 episode['trailArmed'] = bool(pd.notna(trail.iloc[index]) and row.Close > trail.iloc[index])
                 continue
-            episode['base'] = measure_base(frame,start,index,atr_pct,rs)
+            depth = (pivot - float(frame.Low.iloc[start:index+1].min())) / pivot * 100
             if row.High > pivot and row.Close < pivot: episode['squatDates'].append(date)
             if abs(row.Close/pivot-1)*100 <= config.touch_tolerance_pct: episode['touchDates'].append(date)
-            if duration > config.max_sessions or episode['base']['depthPct'] > config.max_depth_pct:
+            if duration > config.max_sessions or depth > config.max_depth_pct:
                 episode['stage'] = 'INVALIDATED'; episode['exit'] = {'date':date,'reason':'BASE_LIMIT'}; active.remove(episode)
         if row.Close >= frame.Close.iloc[peak]: peak=index
         elif (1-row.Close/frame.Close.iloc[peak])*100 >= config.pullback_pct:
@@ -156,14 +171,15 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
                 pivot = float(frame.Close.iloc[peak])
                 parents = [e for e in active if e['breakout'] is None and e['_start'] < peak and pivot <= e['pivot']]
                 parent = max(parents,key=lambda e:e['_start']) if parents else None
-                identity = f'{ENGINE_VERSION}:{symbol}:{frame.Date.iloc[peak].date()}'
+                identity = f'{ENGINE_VERSION}:{symbol}:{frame.Date.iloc[peak].date()}:{json.dumps(asdict(config),sort_keys=True)}'
                 episode = {'id':hashlib.sha256(identity.encode()).hexdigest()[:24], 'symbol':symbol,
                     'engineVersion':ENGINE_VERSION, 'config':asdict(config), '_start':peak,
                     'parentId':parent['id'] if parent else None, 'nestedCount':0,
-                    'level':parent['level']+1 if parent else (1 if pivot >= frame.Close.iloc[:peak+1].max() else 2),
+                    'level':min(4,parent['level']+1) if parent else (1 if pivot >= frame.Close.iloc[:peak+1].max() else 2),
                     'overheadPct':max(0,(frame.Close.iloc[:peak+1].max()/pivot-1)*100),
                     'pivot':pivot,'stage':'FORMING','breakout':None,'exit':None,
-                    'squatDates':[],'touchDates':[],'base':measure_base(frame,peak,index,atr_pct,rs),
+                    'breakoutFailure':None,'peakToTroughDrawdownPct':0.0,
+                    'failedPokeDates':[], 'retestDates':[], 'continuousHolding':True, 'squatDates':[],'touchDates':[],'base':measure_base(frame,peak,index,atr_pct,rs),
                     'trailArmed':False,'breakoutAgeSessions':0,'returnSinceBreakoutPct':0.0,
                     'maxGainPct':0.0,'maxDrawdownPct':0.0,'belowPivotCloses':0,'holdsPivot':True}
                 if parent: parent['nestedCount'] += 1
@@ -171,6 +187,24 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
             # Local peaks allow tighter children inside an older ceiling.
             peak=index
     for episode in episodes:
+        if episode['breakout'] is None:
+            end = index if episode['exit'] is None else int(frame.index[frame.Date.dt.strftime('%Y-%m-%d').eq(episode['exit']['date'])][0])
+            episode['base'] = measure_base(frame,episode['_start'],end,atr_pct,rs)
+        if episode['breakout'] is not None:
+            origin = episode['_breakout']
+            entry = episode['breakout']['close']
+            episode['outcomes'] = {}
+            for horizon in (5,20,60):
+                if origin+horizon >= len(frame):
+                    episode['outcomes'][str(horizon)] = None
+                    continue
+                window = frame.iloc[origin+1:origin+horizon+1]
+                episode['outcomes'][str(horizon)] = {
+                    'returnPct':(float(window.Close.iloc[-1])/entry-1)*100,
+                    'maxAdverseExcursionPct':min(0,(float(window.Low.min())/entry-1)*100),
+                    'maxFavorableExcursionPct':max(0,(float(window.High.max())/entry-1)*100),
+                    'closedInsideBase':bool((window.Close < episode['pivot']).any())}
+        episode.pop('_maxBreakoutHigh',None)
         episode['asOfDate'] = str(frame.Date.iloc[-1].date())
         episode['distanceFromPivotPct'] = (float(frame.Close.iloc[-1])/episode['pivot']-1)*100
         episode.pop('_start',None); episode.pop('_breakout',None)

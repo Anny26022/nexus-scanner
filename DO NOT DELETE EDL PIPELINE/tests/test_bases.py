@@ -42,4 +42,25 @@ class BaseTests(unittest.TestCase):
         self.assertIsNone(episode['base']['rsAverage'])
         self.assertEqual(episode['base']['netUpDownVolume'],-1.0)
 
+    def test_outcomes_are_unavailable_until_horizon_and_ignore_trade_exit(self):
+        frame=candles([100]+[94]*19+[102,90]+[105]*60)
+        early=next(e for e in detect_bases(frame.iloc[:25],'TEST') if e['breakout'])
+        final=next(e for e in detect_bases(frame,'TEST') if e['id']==early['id'])
+        self.assertIsNone(early['outcomes']['5'])
+        self.assertEqual(final['exit']['reason'],'STOP')
+        self.assertTrue(final['outcomes']['5']['closedInsideBase'])
+        self.assertAlmostEqual(final['outcomes']['60']['returnPct'],(105/102-1)*100)
+        self.assertEqual(final['breakoutFailure']['reason'],'CLOSE_BACK_INSIDE')
+
+    def test_configuration_is_part_of_episode_identity(self):
+        frame=candles([100]+[94]*20)
+        first=detect_bases(frame,'TEST',BaseConfig(stop_pct=8))[0]
+        second=detect_bases(frame,'TEST',BaseConfig(stop_pct=9))[0]
+        self.assertNotEqual(first['id'],second['id'])
+
+    def test_inconsistent_ohlc_is_rejected(self):
+        frame=candles([100,94]);frame.loc[1,'High']=90
+        with self.assertRaises(ValueError): detect_bases(frame,'TEST')
+
 if __name__=='__main__':unittest.main()
+

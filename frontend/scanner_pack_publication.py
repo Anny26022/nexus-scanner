@@ -127,6 +127,7 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
             "earnings": {symbol: available_filings(symbol) for symbol in sorted(shard_symbols)
                          if available_filings(symbol)},
             "breadth": context.get("breadth", {}),
+            "bases": {symbol:context.get("base_episodes", {}).get(symbol,[]) for symbol in sorted(shard_symbols)},
         }
         aux_data = gzip.compress(_json_bytes(aux), compresslevel=6, mtime=0)
         name = f"auxiliary/{index:02d}.json.gz"

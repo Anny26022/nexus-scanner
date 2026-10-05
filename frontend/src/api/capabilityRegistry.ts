@@ -1,5 +1,7 @@
+import { materializeBasePreset } from '../engine/basePresets';
 import type { ActiveCondition, ExpressionNode } from '../types/screener';
 import presetDefinitions from '../data/presetDefinitions.json';
+import basePublicKeys from '../data/basePublicKeys.json';
 import baseContextKeys from '../data/baseContextKeys.json';
 
 export type PackDependency = 'core' | 'technical' | 'fundamentals' | 'advanced';
@@ -27,7 +29,7 @@ const scalarFundamental = new Set([
 function parameterCompatible(condition: ActiveCondition): boolean {
   const p = condition.parameters;
   switch (condition.conditionId) {
-    case 'BASE_METRIC': case 'BASE_FORMULA': return !p.formula && ![p.metric,p.rightMetric].some(value=>{const path=String(value??'');return path.startsWith('base.parts.')||(['current','selection'].includes(path.split('.')[0])&&!baseContextKeys.includes(path.split('.')[1]));});
+    case 'BASE_METRIC': case 'BASE_FORMULA': return !p.formula && ![p.metric,p.rightMetric].some(value=>{const path=String(value??'');return (path.startsWith('base.')&&!basePublicKeys.includes(path.split('.')[1]))||(['current','selection'].includes(path.split('.')[0])&&!baseContextKeys.includes(path.split('.')[1]));});
     case 'PRICE_CHANGE_PCT': return [1,5,21,63,126,252].includes(Number(p.overDays));
     case 'VOLUME_VS_AVG': return Number(p.avgDays) === 20 && Number(p.withinDays) === 1;
     case 'PRICE_VS_EMA': return Number(p.persistDays) === 1 && [20,50,200].includes(Number(p.period));
@@ -45,6 +47,10 @@ function parameterCompatible(condition: ActiveCondition): boolean {
 }
 
 export function conditionCapability(condition: ActiveCondition): ConditionCapability {
+  if(condition.conditionId.startsWith('lib-nexus-')) {
+    const preset=presetDefinitions.find(item=>item.id===condition.conditionId);
+    return preset && materializeBasePreset(preset,condition.parameters).every(parameterCompatible) ? technical() : advanced();
+  }
   if (condition.conditionId.startsWith('lib-')) return presetIds.has(condition.conditionId) ? technical() : advanced();
   if (condition.conditionId === 'FUNDAMENTAL_METRIC' && ['ALL_TIME_HIGH','ALL_TIME_LOW','RETURN_5Y'].includes(String(condition.parameters.metric))) return technical();
   if (scalarTechnical.has(condition.conditionId)) return technical(parameterCompatible);

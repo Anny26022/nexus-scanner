@@ -19,12 +19,15 @@ class ChartNewsPublicationTests(unittest.TestCase):
     def test_news_reaches_published_charts_after_stage_is_discarded(self):
         with tempfile.TemporaryDirectory() as folder:
             destination=Path(folder)
+            audit={'TEST':{'source':'independent fixture'}}
+            (destination/'base_history_audits.json').write_text(json.dumps(audit))
             stages=[]
             def worker(command, cwd, env):
                 self.assertEqual(command[1], '-c')
                 self.assertIn('edl_pipeline.runner', command[2])
                 stage=Path(cwd); stages.append(stage)
                 self.assertEqual(env['EDL_CLEANUP_INTERMEDIATE'],'0')
+                self.assertEqual(json.loads((stage/'base_history_audits.json').read_text()),audit)
                 for spec in FINAL_ARTIFACT_SPECS:
                     if spec.path.endswith('.gz'):
                         (stage/spec.path).write_bytes(gzip.compress(b'{"records":[]}'))

@@ -8,10 +8,11 @@ from __future__ import annotations
 import pandas as pd
 from .base_conditions import evaluate_base_condition
 from .presets import get_preset
-from .base_execution import net_return, trade_facts, validate_costs
+from .base_presets import materialize_base_preset
+from .base_execution import net_return, trade_facts, validate_costs, position_size
 
 
-def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bps=10,slippage_bps=10):
+def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bps=10,slippage_bps=10, *, preset_parameters=None, capital=None, risk_pct=1.5, max_position_pct=100):
     """Horizon N exits at the Nth session close after next-session open entry.
 
     Fixed-horizon outcomes are measured independently of stop/trail exits.
@@ -19,8 +20,12 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
     Incomplete entries/exits and horizon observations stay unavailable.
     """
     validate_costs(fee_bps,slippage_bps)
+    position_size(100,92,capital,risk_pct,max_position_pct,fee_bps,slippage_bps)
     preset=get_preset(preset_id)
-    leaves=preset['expression']['children']
+    parameters=dict(preset_parameters or {})
+    if not preset.get('setupFamily') and (parameters.get('minContractionLegs',0) or parameters.get('maxContractionLegRatio',1)!=1 or any(key in parameters for key in ('contractionMethod','athPolicy','requireFirstBase','setupStage'))):raise ValueError('Setup policies require a setup-family preset')
+    if preset.get('setupFamily'):parameters['setupStage']='FRESH_BREAKOUT'
+    leaves=materialize_base_preset(preset,parameters)['children']
     if any(leaf['params'].get('stage')!='FRESH_BREAKOUT' for leaf in leaves):
         raise ValueError('Breakout replay requires a fresh-breakout preset')
     frame=frame.copy().reset_index(drop=True)
@@ -40,10 +45,10 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
         record.update(stage='FRESH_BREAKOUT',breakoutAgeSessions=0,distanceFromPivotPct=episode['breakout']['throughPct'],holdsPivot=True,continuousHolding=True)
         results=[evaluate_base_condition({'FRESH_BREAKOUT':record},leaf['kind'],leaf['params']) for leaf in leaves]
         if not all(result is True for result in results): continue
-        execution=trade_facts(dates,opens,episode,positions,fee_bps,slippage_bps)
+        execution=trade_facts(dates,opens,episode,positions,fee_bps,slippage_bps,risk_pct=risk_pct,max_position_pct=max_position_pct,capital=capital)
         row={'baseId':episode['id'],'symbol':episode['symbol'],'signalDate':episode['breakout']['date'],
              'entryDate':None,'entryPrice':None,'execution':'NEXT_SESSION_OPEN','feeBpsPerSide':fee_bps,
-             'slippageBpsPerSide':slippage_bps,'outcomes':{},'tradeExit':None}
+             'slippageBpsPerSide':slippage_bps,'sizing':execution['sizing'],'capitalReturnPct':execution['capitalReturnPct'],'outcomes':{},'tradeExit':None}
         if trigger+1>=len(frame):
             row['outcomes']={str(h):None for h in (5,20,60)};trades.append(row);continue
         entry_index=trigger+1;entry=execution['entryPrice']
@@ -68,6 +73,6 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
         summary[horizon]={'complete':len(available),'incomplete':len(trades)-len(available),
             'meanNetReturnPct':sum(item['netReturnPct'] for item in available)/len(available) if available else None,
             'failurePct':sum(item['closedInsideBase'] for item in available)/len(available)*100 if available else None}
-    return {'schemaVersion':1,'presetId':preset_id,'trades':trades,'summary':summary,
+    return {'schemaVersion':1,'presetId':preset_id,'presetParameters':parameters,'capital':capital,'riskPct':risk_pct,'maxPositionPct':max_position_pct,'trades':trades,'summary':summary,
             'membershipBasis':'CURRENT_NEXUS_ELIGIBLE','execution':'NEXT_SESSION_OPEN',
-            'assumptions':['No historical constituent reconstruction','Fixed-horizon outcomes continue after trade exits','Costs applied to both entry and exit','No intraday stop execution assumed']}
+            'assumptions':['No historical constituent reconstruction','Fixed-horizon outcomes continue after trade exits','Costs applied to both entry and exit','No intraday stop execution assumed','Planned risk can be exceeded by next-open gaps','Per-signal sizing only; simultaneous positions are not a portfolio backtest']}

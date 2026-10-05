@@ -5,9 +5,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_FILES = ['frontend/src/data/conditionCatalog.ts', 'frontend/src/types/screener.ts',
-                  'frontend/src/data/nativeConditions.json', 'frontend/src/data/baseMetrics.json', 'frontend/src/data/presetDefinitions.json',
+                  'frontend/src/data/nativeConditions.json', 'frontend/src/data/baseMetrics.json', 'frontend/src/data/baseContextKeys.json', 'frontend/src/data/basePublicKeys.json', 'frontend/src/data/presetDefinitions.json',
                   'DO NOT DELETE EDL PIPELINE/tests/fixtures/reference_screener_contract.json']
-ENGINE_FILES = ['frontend/src/engine/baseConditions.ts', 'frontend/src/engine/expression.ts', 'frontend/src/engine/historyEngine.ts',
+ENGINE_FILES = ['frontend/src/engine/basePresets.ts', 'frontend/src/engine/baseConditions.ts', 'frontend/src/engine/expression.ts', 'frontend/src/engine/historyEngine.ts',
                 'frontend/src/engine/queryCompiler.ts', 'frontend/src/api/snapshotScreen.ts',
                 'frontend/src/api/capabilityRegistry.ts', 'frontend/scanner_bridge.py',
                 'frontend/scanner_pack_publication.py', 'frontend/scanner_cache.py', 'frontend/publish_snapshot.py', 'cloudflare/scanner-worker/src/index.ts',

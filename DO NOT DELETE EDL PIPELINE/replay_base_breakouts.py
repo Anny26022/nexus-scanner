@@ -8,7 +8,7 @@ ROOT=Path(__file__).resolve().parent
 sys.path.insert(0,str(ROOT/'src'))
 from build_chart_artifacts import _artifact, _write_gzip_json
 from standardize_stock_artifact import canonicalize_stock
-from edl_pipeline.scanner.base_publication import build_base_records
+from edl_pipeline.scanner.base_publication import load_history_audits, build_base_records
 from edl_pipeline.scanner.base_replay import replay_breakouts
 from edl_pipeline.scanner.bases import BaseConfig
 
@@ -23,9 +23,34 @@ def main():
     parser.add_argument('--slippage-bps',type=float,default=10)
     parser.add_argument('--stop-pct',type=float,default=8)
     parser.add_argument('--trail-period',type=int,default=50)
+    parser.add_argument('--preset',default='lib-nexus-fresh-breakouts')
+    parser.add_argument('--capital',type=float,help='Optional capital for integer-share sizing')
+    parser.add_argument('--risk-pct',type=float,default=1.5)
+    parser.add_argument('--max-position-pct',type=float,default=100)
+    parser.add_argument('--breakeven-gain-pct',type=float,default=0,help='0 disables cost-aware breakeven arming')
+    parser.add_argument('--max-depth-pct',type=float,default=95)
+    parser.add_argument('--contraction-noise-pct',type=float,default=5)
+    parser.add_argument('--min-contraction-legs',type=int,default=0)
+    parser.add_argument('--max-contraction-leg-ratio',type=float,default=1)
+    parser.add_argument('--contraction-method',choices=('RAW_TR','WILDER_ATR','SIMPLE_ATR'))
+    parser.add_argument('--ath-policy',choices=('CLOSING_AVAILABLE','INTRADAY_AVAILABLE','AUDITED_INTRADAY'))
+    parser.add_argument('--first-base-policy',choices=('REQUIRE','ALLOW'))
     args=parser.parse_args()
-    config=BaseConfig(stop_pct=args.stop_pct,trail_period=args.trail_period)
+    config=BaseConfig(stop_pct=args.stop_pct,trail_period=args.trail_period,fee_bps=args.fee_bps,slippage_bps=args.slippage_bps,risk_pct=args.risk_pct,max_position_pct=args.max_position_pct,breakeven_gain_pct=args.breakeven_gain_pct,max_depth_pct=args.max_depth_pct,contraction_noise_pct=args.contraction_noise_pct)
     try:config.validate()
+    except ValueError as error:parser.error(str(error))
+    from edl_pipeline.scanner.base_execution import position_size
+    from edl_pipeline.scanner.base_presets import materialize_base_preset
+    from edl_pipeline.scanner.presets import get_preset
+    parameters={'minContractionLegs':args.min_contraction_legs,'maxContractionLegRatio':args.max_contraction_leg_ratio}
+    if args.contraction_method is not None:parameters['contractionMethod']=args.contraction_method
+    if args.ath_policy is not None:parameters['athPolicy']=args.ath_policy
+    if args.first_base_policy is not None:parameters['requireFirstBase']=args.first_base_policy=='REQUIRE'
+    try:
+        preset=get_preset(args.preset)
+        if not preset.get('setupFamily') and (args.min_contraction_legs or args.max_contraction_leg_ratio!=1 or args.contraction_method is not None or args.ath_policy is not None or args.first_base_policy is not None):raise ValueError('Setup policies require a setup-family preset')
+        position_size(100,92,args.capital,args.risk_pct,args.max_position_pct,args.fee_bps,args.slippage_bps)
+        materialize_base_preset(preset,parameters)
     except ValueError as error:parser.error(str(error))
     stocks={row['symbol']:row for item in _artifact(args.root,'all_stocks_fundamental_analysis.json',[]) if (row:=canonicalize_stock(item)).get('symbol') and row.get('default_screener_eligible',True)}
     if not stocks:parser.error('Canonical eligible stocks are required')
@@ -46,11 +71,12 @@ def main():
     if missing:parser.error('Missing aligned history: '+', '.join(sorted(missing)))
     reports={}
     def replay_symbol(symbol, episodes):
-        reports[symbol]=replay_breakouts(frames[symbol],episodes,fee_bps=args.fee_bps,slippage_bps=args.slippage_bps)
+        reports[symbol]=replay_breakouts(frames[symbol],episodes,preset_id=args.preset,fee_bps=args.fee_bps,slippage_bps=args.slippage_bps,preset_parameters=parameters,capital=args.capital,risk_pct=args.risk_pct,max_position_pct=args.max_position_pct)
     # Evaluate every historical episode before releasing it, preserving full
     # replay coverage without retaining the universe's raw episodes together.
-    build_base_records(frames,stocks,config=config,symbols=requested,episode_sink=replay_symbol)
-    payload={'schemaVersion':1,'asOfDate':session,'metadataAsOfDate':metadata_session,'symbols':reports,'membershipBasis':'CURRENT_NEXUS_ELIGIBLE',
+    build_base_records(frames,stocks,config=config,symbols=requested,episode_sink=replay_symbol,history_audits=load_history_audits(args.root))
+    from dataclasses import asdict
+    payload={'detectorConfig':asdict(config),'schemaVersion':2,'asOfDate':session,'metadataAsOfDate':metadata_session,'symbols':reports,'membershipBasis':'CURRENT_NEXUS_ELIGIBLE',
              'note':'Current-universe historical replay; not survivorship-free. Defaults have not been optimized.'}
     output=args.output or args.root/'.scanner_cache/base-replay.json.gz'
     _write_gzip_json(output,payload)

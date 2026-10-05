@@ -52,8 +52,8 @@ class TrendScannerTests(unittest.TestCase):
     def test_vendored_preset_library_is_complete_and_uses_supported_conditions(self):
         library = load_preset_library()
         self.assertEqual(library["schema_version"], 1)
-        self.assertEqual(len(library["presets"]), 52)
-        self.assertEqual(len({preset["id"] for preset in library["presets"]}), 52)
+        self.assertEqual(len(library["presets"]), 56)
+        self.assertEqual(len({preset["id"] for preset in library["presets"]}), 56)
         self.assertEqual(get_preset("Horizontal Resistance")["id"], "lib-horizontal-resistance")
         self.assertEqual(list_presets()[0]["id"], "lib-persistent-momentum")
         validate_preset_library(CONDITION_REGISTRY)

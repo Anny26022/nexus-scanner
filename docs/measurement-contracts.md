@@ -89,8 +89,11 @@ measurements, not realized trade returns.
 
 ## Compatibility and release
 
-Engine version is `nexus-bases-3`; the generated scanner identity changes so old
+Engine version is `nexus-bases-4`; the generated scanner identity changes so old
 packs cannot be mistaken for the new contract. Existing names remain aliases
 where stated. Rebuilding the pipeline, chart artifacts and scanner packs is
 required to populate new facts. Updating source code alone does not replace an
 active R2 revision or browser pointer.
+
+For current setup-family defaults, raw TR% measures, public/private projections
+and replay policies, see [setup-family contracts](setup-family-contracts.md).

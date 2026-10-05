@@ -3173,5 +3173,523 @@
         }
       ]
     }
+  },
+  {
+    "id": "lib-nexus-vcp-setup",
+    "name": "VCP Setup",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Versioned setup family with NSE liquidity floors and frozen lifecycle qualification.",
+    "aka": [],
+    "version": "nexus-setups-2",
+    "rules": [
+      "Contracting base with drying volume, trend alignment and relative strength."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "FORMING",
+            "holdingPolicy": "ANY"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.trueRangeContraction",
+            "comparison": "ABOVE",
+            "value": 0.3
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.trueRangeContraction",
+            "comparison": "BELOW",
+            "value": 0.9
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.volumeDryUp",
+            "comparison": "ABOVE",
+            "value": 0.05
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.volumeDryUp",
+            "comparison": "BELOW",
+            "value": 0.9
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "ABOVE",
+            "value": 15
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "BELOW",
+            "value": 1500
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.depthPct",
+            "comparison": "ABOVE",
+            "value": 2
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.depthPct",
+            "comparison": "BELOW",
+            "value": 35
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceSMA50",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceSMA200",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceClosing52wHigh",
+            "comparison": "BELOW",
+            "value": 30
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.aboveClosing52wLow",
+            "comparison": "ABOVE",
+            "value": 15
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.rsRating",
+            "comparison": "ABOVE",
+            "value": 70
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.marketCapCr",
+            "comparison": "ABOVE",
+            "value": 300
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.medianTurnover20",
+            "comparison": "ABOVE",
+            "value": 1
+          }
+        }
+      ]
+    },
+    "setupFamily": "vcp"
+  },
+  {
+    "id": "lib-nexus-blue-sky-setup",
+    "name": "Blue Sky Setup",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Versioned setup family with NSE liquidity floors and frozen lifecycle qualification.",
+    "aka": [],
+    "version": "nexus-setups-2",
+    "rules": [
+      "Strong forming base without higher closing-price supply in available history."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "FORMING",
+            "holdingPolicy": "ANY"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.historyFromListing",
+            "comparison": "EQUAL",
+            "value": 1
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.overheadPct",
+            "comparison": "EQUAL",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.rsRating",
+            "comparison": "ABOVE",
+            "value": 70
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "ABOVE",
+            "value": -20
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "BELOW",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.marketCapCr",
+            "comparison": "ABOVE",
+            "value": 300
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.medianTurnover20",
+            "comparison": "ABOVE",
+            "value": 1
+          }
+        }
+      ]
+    },
+    "setupFamily": "blue-sky"
+  },
+  {
+    "id": "lib-nexus-multi-year-setup",
+    "name": "Multi-year Setup",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Versioned setup family with NSE liquidity floors and frozen lifecycle qualification.",
+    "aka": [],
+    "version": "nexus-setups-2",
+    "rules": [
+      "Long-duration base above the 200 SMA with improving price position."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "FORMING",
+            "holdingPolicy": "ANY"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageWeeks",
+            "comparison": "ABOVE",
+            "value": 52
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "BELOW",
+            "value": 1500
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceSMA200",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.rsRating",
+            "comparison": "ABOVE",
+            "value": 60
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "ABOVE",
+            "value": -20
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "BELOW",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.marketCapCr",
+            "comparison": "ABOVE",
+            "value": 300
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.medianTurnover20",
+            "comparison": "ABOVE",
+            "value": 1
+          }
+        }
+      ]
+    },
+    "setupFamily": "multi-year"
+  },
+  {
+    "id": "lib-nexus-ipo-setup",
+    "name": "IPO First Base",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Versioned setup family with NSE liquidity floors and frozen lifecycle qualification.",
+    "aka": [],
+    "version": "nexus-setups-2",
+    "rules": [
+      "Recent official listing forming a shallow base above its 50 SMA."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "FORMING",
+            "holdingPolicy": "ANY"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.listingAgeSessionWeeks",
+            "comparison": "ABOVE",
+            "value": 2
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.listingAgeSessionWeeks",
+            "comparison": "BELOW",
+            "value": 50
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "ABOVE",
+            "value": 15
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.depthPct",
+            "comparison": "ABOVE",
+            "value": 2
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.depthPct",
+            "comparison": "BELOW",
+            "value": 35
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceSMA50",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "ABOVE",
+            "value": -20
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "BELOW",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "firstEligibleBase",
+            "comparison": "EQUAL",
+            "value": 1
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.marketCapCr",
+            "comparison": "ABOVE",
+            "value": 300
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.medianTurnover20",
+            "comparison": "ABOVE",
+            "value": 1
+          }
+        }
+      ]
+    },
+    "setupFamily": "ipo"
   }
 ]

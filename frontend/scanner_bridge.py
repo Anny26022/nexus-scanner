@@ -47,13 +47,8 @@ def band(kind, field, low, high, **params):
 
 def translate(identifier, p):
     if identifier.startswith('lib-nexus-'):
-        preset=get_preset(identifier)
-        for index,node in enumerate(preset['expression']['children']):
-            if node['kind']=='BASE_METRIC' and f'threshold{index}' in p:
-                node['params']['value']=p[f'threshold{index}']
-            elif node['kind']=='BASE_STAGE' and 'holdingPolicy' in p:
-                node['params']['holdingPolicy']=p['holdingPolicy']
-        return preset['expression']
+        from edl_pipeline.scanner.base_presets import materialize_base_preset
+        return materialize_base_preset(get_preset(identifier),p)
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
         return {"type": "preset", "expression": preset["expression"]}
@@ -397,7 +392,7 @@ def run(request, root=ROOT, cache=None):
     text_query = str(request.get("textQuery") or "").strip()
     expression = compile_query(text_query) if text_query else frontend_expression(request["expressionTree"])
     if 'BASE_' in json.dumps(expression) and 'base_episodes' not in context:
-        from edl_pipeline.scanner.base_publication import build_base_records
+        from edl_pipeline.scanner.base_publication import load_history_audits, build_base_records
         frames={}
         for symbol,stock in context['stocks'].items():
             if not stock.get('default_screener_eligible',True): continue
@@ -405,7 +400,7 @@ def run(request, root=ROOT, cache=None):
             history=cache.frame(root,symbol,as_of) if cache is not None else normalize_history(pd.read_csv(path),as_of) if path.exists() else None
             if history is not None and not history.empty and history.Date.iloc[-1].strftime('%Y-%m-%d')==as_of:
                 frames[symbol]=history
-        context['base_episodes']=build_base_records(frames,context['stocks'],context.get('benchmarks'),selected_only=True)
+        context['base_episodes']=build_base_records(frames,context['stocks'],context.get('benchmarks'),selected_only=True,history_audits=load_history_audits(root))
     # Both public delivery conditions need dated history.  The spike condition
     # is named ``DELIVERY_PCT_SPIKE`` while the latest-session condition uses
     # ``DELIVERY_PERCENT``; checking only the latter quietly made spike

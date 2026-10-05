@@ -79,7 +79,7 @@ Nexus is deliberately split into a data plane and an interaction plane.
 | `edl_pipeline.scanner.trend` | Normalizes OHLCV and evaluates the condition-expression tree with match/no-match/unavailable results. |
 | `edl_pipeline.scanner.context` | Evaluates fundamentals, RS, earnings, surveillance, and snapshot-aligned conditions. |
 | `edl_pipeline.scanner.patterns` | Implements gaps, inside bars, range contraction, VCP, resistance, and related chart patterns. |
-| `edl_pipeline.scanner.presets` | Stores and validates the original 45 presets plus seven Nexus base screens. |
+| `edl_pipeline.scanner.presets` | Stores and validates the original 45 presets, seven Nexus base screens and four versioned setup families. |
 | `edl_pipeline.breadth` | Builds eligible universes, benchmark alignment, breadth measures, and ratings inputs. |
 | `edl_pipeline.sources` | Encapsulates public Dhan, NSE archive, and news-source retrieval. |
 | `edl_pipeline.transforms` | Produces fundamental, event, and market-breadth derived artifacts. |
@@ -252,7 +252,7 @@ Financial amounts labelled in lakhs are converted from ScanX crore values. State
 
 ### Built-in scans
 
-The versioned local preset library contains 52 scans: the original 45 definitions plus seven Nexus base screens. The original definitions include Persistent Momentum, Easy Money, Relative Strength Leaders, RS Line at New High, Stage 2 Uptrend, Momentum Burst, Quiet Strength, 52-Week High Breakout, 20-Day High on Record Volume, Breakout from Tight Base, Pocket Pivot, ADX Trend Breakout, Circuit-Safe Breakout, VCP Contraction, Inside Bar Coil, Weekly Inside Bar, Volume Dry-Up Base, Flat Base, Horizontal Resistance, Flags & Pennants, Low-ATR Coil, 21 EMA Pullback, 50 EMA Shakeout, Higher-Low Pullback, Gap Support Retest, Volume Surge, Highest Volume in 3 Months, Delivery-Backed Accumulation, Sustained Accumulation, Unfilled Gap Up, Gap & Go, Gap Down Washout, 52-Week Low Bounce, RS Divergence Turn, Relative Weakness, Earnings Growth Momentum, Post-Earnings Drift, Growth at a Fair Price, Revenue & Profit Acceleration, Pre-Earnings Coil, Breadth-Gated Leaders, Liquid Trading Universe, Fresh IPO Base, Nifty 500 Momentum, and Midcap Breakout.
+The versioned local preset library contains 56 scans: the original 45 definitions, seven Nexus base screens and four versioned setup families. The original definitions include Persistent Momentum, Easy Money, Relative Strength Leaders, RS Line at New High, Stage 2 Uptrend, Momentum Burst, Quiet Strength, 52-Week High Breakout, 20-Day High on Record Volume, Breakout from Tight Base, Pocket Pivot, ADX Trend Breakout, Circuit-Safe Breakout, VCP Contraction, Inside Bar Coil, Weekly Inside Bar, Volume Dry-Up Base, Flat Base, Horizontal Resistance, Flags & Pennants, Low-ATR Coil, 21 EMA Pullback, 50 EMA Shakeout, Higher-Low Pullback, Gap Support Retest, Volume Surge, Highest Volume in 3 Months, Delivery-Backed Accumulation, Sustained Accumulation, Unfilled Gap Up, Gap & Go, Gap Down Washout, 52-Week Low Bounce, RS Divergence Turn, Relative Weakness, Earnings Growth Momentum, Post-Earnings Drift, Growth at a Fair Price, Revenue & Profit Acceleration, Pre-Earnings Coil, Breadth-Gated Leaders, Liquid Trading Universe, Fresh IPO Base, Nifty 500 Momentum, and Midcap Breakout.
 
 The original preset defaults deliberately include market cap above ₹1,000 Cr, price above ₹10, and 50-day average turnover above ₹5 Cr. They have no upper market-cap or price ceiling and no blanket 2% or 5% circuit exclusion.
 
@@ -847,3 +847,7 @@ compressed daily files are reusable. Coverage extends only to existing stock
 candles, and historical symbol renames may still leave gaps. The ten-year
 command does not change the daily pipeline's 260-session fill window or prune
 older observations. No new price history is fetched by this command.
+
+### Versioned setup families
+
+VCP, Blue Sky, Multi-year and IPO First Base now expose editable NSE liquidity floors, lifecycle selection, depth limits and optional confirmed-leg/history policies. See [setup-family contracts](docs/setup-family-contracts.md) for exact formulas, frozen qualification, history provenance, replay sizing and the `nexus-bases-4` detector change.

@@ -48,7 +48,12 @@ def _library() -> dict[str, Any]:
 def load_preset_library() -> dict[str, Any]:
     """Return a defensive copy of the complete, versioned preset library."""
     library=deepcopy(_library())
+    # Keep display wording aligned with the preserved CURRENT weekly-bar rule.
+    weekly=next(p for p in library['presets'] if p['id']=='lib-weekly-inside-bar')
+    weekly['description']='The current ISO week to date remains inside the prior completed week, while price stays near its 52-week high.'
+    weekly['rules'][0]='Current ISO week to date inside the prior completed week'
     library['nexus_base_version']='nexus-bases-1'
+    library['nexus_setup_version']='nexus-setups-2'
     library['presets'].extend(build_presets())
     return library
 

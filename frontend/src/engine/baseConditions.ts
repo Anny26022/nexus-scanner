@@ -1,4 +1,5 @@
 import metrics from '../data/baseMetrics.json';
+import publicBaseKeys from '../data/basePublicKeys.json';
 import publicContextKeys from '../data/baseContextKeys.json';
 import { compare, type Truth, type EngineCondition } from './expression';
 import type { ActiveCondition } from '../types/screener';
@@ -83,7 +84,7 @@ export function publicSelectedBases(selected:SelectedBases|undefined):SelectedBa
   const context=(value:unknown)=>value&&typeof value==='object'
     ?Object.fromEntries(Object.entries(value).filter(([key])=>publicContextKeys.includes(key))):value;
   return Object.fromEntries(Object.entries(selected).map(([stage,record])=>[stage,{...record,
-    base:record.base&&typeof record.base==='object'?Object.fromEntries(Object.entries(record.base).filter(([key])=>key!=='parts')):record.base,
+    base:record.base&&typeof record.base==='object'?Object.fromEntries(Object.entries(record.base).filter(([key])=>publicBaseKeys.includes(key))):record.base,
     current:context(record.current),selection:context(record.selection)}]));
 }
 
@@ -92,6 +93,7 @@ export function baseStageForCondition(condition:EngineCondition):keyof SelectedB
     const stage=String(condition.parameters.stage??'FORMING');
     return stages.includes(stage)?stage as keyof SelectedBases:undefined;
   }
+  if(['lib-nexus-vcp-setup','lib-nexus-blue-sky-setup','lib-nexus-multi-year-setup','lib-nexus-ipo-setup'].includes(condition.conditionId)) { const stage=String(condition.parameters.setupStage??'FORMING'); return stages.includes(stage)?stage as keyof SelectedBases:undefined; }
   if(condition.conditionId==='lib-nexus-fresh-breakouts')return 'FRESH_BREAKOUT';
   if(condition.conditionId==='lib-nexus-holding-breakouts')return 'HOLDING';
   if(['lib-nexus-strong-bases','lib-nexus-vcp-base','lib-nexus-blue-sky','lib-nexus-multi-year-base','lib-nexus-ipo-base'].includes(condition.conditionId))return 'FORMING';

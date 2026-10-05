@@ -38,7 +38,7 @@ This is not an independent review approval.
 
 The raw fact and slice extension is documented in
 [Precomputed base facts and arithmetic](base-facts-and-formulas.md). Detector
-version `nexus-bases-3` retains absolute current and prior-month SMA/EMA values,
+version `nexus-bases-4` retains absolute current and prior-month SMA/EMA values,
 official traded-value windows, independent share/turnover quiet-day facts and
 slice traded-value totals, counts and returns. Detailed context and parts stay
 in private packs. Bounded `Base Expression` arithmetic complements the existing
@@ -631,3 +631,11 @@ older observations. No new price history is fetched by this command.
 
 Measurement families and modeled trade events are explicitly distinguished in
 [the measurement contract](measurement-contracts.md).
+
+## Current setup-family extension
+
+The four `nexus-setups-2` families, raw TR% means, explicit age conventions,
+optional confirmed legs and provenance, replay sizing/breakeven, and lean public
+projection are documented in [setup-family contracts](setup-family-contracts.md).
+Earlier performance and replay sections above describe their dated validation
+runs; they are not measurements of the newest full-universe release.

@@ -96,6 +96,11 @@ def main():
         if not methodology.exists():
             methodology = source / "breadth_methodology.json"
         shutil.copy2(methodology, stage / methodology.name)
+        # Carry optional independently verified provenance into chart generation.
+        # It is an input, not a certification produced by the refresh.
+        for name in ('base_history_audits.json','base_history_audits.json.gz'):
+            audit_input=destination/name
+            if audit_input.exists():shutil.copy2(audit_input,stage/name)
         env = dict(os.environ, EDL_BASE_DIR=str(stage), EDL_CLEANUP_INTERMEDIATE="0")
         env["PYTHONPATH"] = os.pathsep.join([str(source), str(source / "src"), env.get("PYTHONPATH", "")])
         result = subprocess.run(

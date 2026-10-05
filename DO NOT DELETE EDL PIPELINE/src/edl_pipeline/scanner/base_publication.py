@@ -2,8 +2,24 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from .bases import detect_bases, finite, ratio
+from .bases import BaseConfig, detect_bases, finite, ratio
 from .indicators import true_range, wilder_average
+
+
+def load_history_audits(root):
+    """Optional, independently verified provenance; absence is not certification."""
+    import gzip
+    import json
+    from pathlib import Path
+    root=Path(root)
+    compressed=root/'base_history_audits.json.gz'
+    plain=root/'base_history_audits.json'
+    if plain.exists():payload=json.loads(plain.read_text())
+    elif compressed.exists():
+        with gzip.open(compressed,'rt') as source:payload=json.load(source)
+    else:return {}
+    if not isinstance(payload,dict) or any(not isinstance(value,dict) for value in payload.values()):raise ValueError('History audits must map symbols to provenance objects')
+    return payload
 
 
 def normalize_frames(frames):
@@ -53,6 +69,10 @@ def trend_series(frame, ranks=None, listing_date=None):
     turnover=pd.to_numeric(frame.get('Turnover',pd.Series(index=frame.index,dtype=float)),errors='coerce')
     turnover=turnover.where(np.isfinite(turnover)&(turnover>=0))
     values['medianTurnover20']=(turnover/1e7).rolling(20,min_periods=20).median()
+    raw_tr=true_range(frame)/close*100
+    for period in (10,20,50,100,200):values[f'trMeanPct{period}']=raw_tr.rolling(period,min_periods=period).mean()
+    values['historicalClosingHigh']=close.expanding().max()
+    values['historicalIntradayHigh']=frame.High.expanding().max()
     values['atrWilder14Pct']=wilder_average(true_range(frame),14)/close*100
     values['atrSimple14Pct']=true_range(frame).rolling(14,min_periods=14).mean()/close*100
     values['adrClose14Pct']=((frame.High-frame.Low)/close*100).rolling(14,min_periods=14).mean()
@@ -87,10 +107,11 @@ def trend_context(frame,index,ranks=None,listing_date=None):
     return {key:finite(value) for key,value in trend_series(frame,ranks,listing_date).iloc[index].items()}
 
 
-def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False, episode_sink=None):
+def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False, episode_sink=None, history_audits=None):
     if selected_only and episode_sink is not None:
         raise ValueError('Complete archives require all episodes before stage selection.')
     frames=normalize_frames(frames)
+    config=config or BaseConfig(max_depth_pct=95)
     requested=set(frames) if symbols is None else set(symbols)
     missing=requested-set(frames)
     if missing:raise ValueError('Missing aligned history: '+', '.join(sorted(missing)))
@@ -128,13 +149,30 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
         if rank_history is not None:
             rank_history[symbol]={'dates':[str(day.date()) for day in frame.Date], 'ratings':[finite(value) for value in rank]}
         episodes=detect_bases(frame,symbol,config=config,rs=rank)
-        if selected_only:
-            episodes=list(selected_base_episodes(episodes).values())
+        mature=sorted((e for e in episodes if e['base']['ageSessions']>=config.min_sessions),key=lambda e:(e['base']['startDate'],e['id']))
+        first_id=mature[0]['id'] if mature else None
         context_rows=trend_series(frame,rank,stocks[symbol].get('listing_date'))
         for days in (5,22):
             context_rows[f'rsChange{days}']=(ranks[symbol]-ranks[symbol].shift(days)).reindex(frame.Date).to_numpy(float)
         context_rows['rsMonthAgo']=ranks[symbol].shift(22).reindex(frame.Date).to_numpy(float)
         stock=stocks[symbol]
+        listing=pd.to_datetime(stock.get('listing_date'),errors='coerce')
+        observed_index=pd.DatetimeIndex(frame.Date)
+        calendar=closes.index
+        calendar_known=pd.notna(listing) and calendar[0]<=listing
+        if calendar_known:
+            expected=np.searchsorted(calendar.values,observed_index.values,side='right')-np.searchsorted(calendar.values,listing.to_datetime64(),side='left')
+            actual=np.cumsum((observed_index>=listing).astype(int))
+            missing=np.maximum(0,expected-actual)
+            context_rows['listingAgeSessions']=expected
+            context_rows['listingAgeSessionWeeks']=expected/5
+            context_rows['historyMissingSessions']=missing
+            context_rows['historyCoverageComplete']=((missing==0)&(context_rows['historyFromListing']==1)).astype(float)
+        else:
+            for key in ('listingAgeSessions','listingAgeSessionWeeks','historyMissingSessions','historyCoverageComplete'):context_rows[key]=np.nan
+        audit=(history_audits or {}).get(symbol,{})
+        verified=audit.get('pricesAdjusted') is True and audit.get('sessionsVerified') is True and isinstance(audit.get('source'),str) and bool(audit['source']) and str(audit.get('throughDate'))==str(frame.Date.iloc[-1].date()) and str(audit.get('historyStartDate'))==str(listing.date()) if pd.notna(listing) else False
+        context_rows['lifetimePriceHistoryVerified']=np.where(context_rows['historyCoverageComplete']==1,1 if verified else np.nan,np.where(context_rows['historyCoverageComplete']==0,0,np.nan))
         cap=finite(stock.get('market_cap_crore'))
         aligned=str(stock.get('as_of_date'))==str(frame.Date.iloc[-1].date())
         context_rows['marketCapCr']=frame.Close/frame.Close.iloc[-1]*cap if aligned and cap is not None else np.nan
@@ -165,9 +203,12 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
                 selections[index]={key:finite(value) for key,value in context_rows.iloc[index].items()}
             # These context observations are read-only publication inputs.
             # Overlapping episodes share current facts and dated observations.
-            episode['selection']=selections[index]
-            episode['current']=current
+            episode['selection']={**selections[index],'distanceFromPivotPct':(frame.Close.iloc[index]/episode['pivot']-1)*100,'pivotVsHistoricalIntradayHigh':(episode['pivot']/context_rows['historicalIntradayHigh'].iloc[index]-1)*100}
+            episode['current']={**current,'distanceFromPivotPct':(frame.Close.iloc[-1]/episode['pivot']-1)*100,'pivotVsHistoricalIntradayHigh':(episode['pivot']/context_rows['historicalIntradayHigh'].iloc[-1]-1)*100}
+            episode['firstEligibleBase']=None if episode['selection']['historyCoverageComplete'] is None else int(episode['id']==first_id) if episode['selection']['historyCoverageComplete']==1 else None
+            episode['historyCoverage']={'basis':'OBSERVED_RELEASE_MARKET_SESSION_LEDGER','firstDate':str(frame.Date.iloc[0].date()),'lastDate':str(frame.Date.iloc[-1].date()),'missingSessions':current.get('historyMissingSessions'),'adjustmentAuditSource':audit.get('source') if verified else None}
             episode['strengthUniverse']='CURRENT_NEXUS_ELIGIBLE'
+        if selected_only:episodes=list(selected_base_episodes(episodes).values())
         if episode_sink is not None:
             # Archive one symbol before releasing its historical episodes. Runtime
             # publication needs only the same deterministic stage selections.
@@ -178,11 +219,13 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
     return output
 
 
+PUBLIC_BASE_KEYS={'quietTurnoverCr','medianTurnoverCr','startDate','endDate','ageSessions','ageWeeks','ageCalendarWeeks','depthPct','atrContraction','atrSimpleContraction','trueRangeContraction','volumeDryUp','overheadPct','overheadPriceDistancePct','level','rsAverage','upDownVolumeRatio','netUpDownVolume','quietDepth','quietAgeSessions','nestedCount','touchCount','squatCount','contractionLegCount','contractionMaxRatio','contractionFinalDepthPct'}
+
+
 PUBLIC_CONTEXT_KEYS={
-    'medianTurnover20','distanceClosing52wHigh','aboveClosing52wLow','listingAgeWeeks',
+    'marketCapCr','listingAgeSessionWeeks','listingAgeSessions','distanceFromPivotPct','medianTurnover20','distanceClosing52wHigh','aboveClosing52wLow','listingAgeWeeks',
     'historyFromListing','historySessions','rsRating','rsChange5','rsChange22',
-    'industryRelative63','industryRelative252','rsLineAtHigh','benchmarkDistanceSMA200',
-    'industryAboveSMA50Pct','industryAboveSMA200Pct','distanceSMA50','distanceSMA200','slopeSMA200',
+    'distanceSMA50','distanceSMA200','slopeSMA200',
 }
 
 def selected_base_episodes(episodes):
@@ -202,9 +245,9 @@ def compact_base_records(episodes, include_parts=False, public=False):
         selected[stage] = {key:episode[key] for key in (
             'id','stage','pivot','distanceFromPivotPct','breakout','breakoutAgeSessions',
             'holdsPivot','continuousHolding','belowPivotCloses','breakoutFailure',
-            'returnSinceBreakoutPct','maxGainPct','maxDrawdownPct','measurementPolicy','breakoutFailed','exitSignaled','tradeClosed','selection','current','failedPokeCount','parentInvalidationDate','exit','trade')}
+            'returnSinceBreakoutPct','maxGainPct','maxDrawdownPct','measurementPolicy','firstEligibleBase','historyCoverage','breakevenArmed','breakevenArmedDate','breakoutFailed','exitSignaled','tradeClosed','selection','current','failedPokeCount','parentInvalidationDate','exit','trade')}
         if public:
             for scope in ('selection','current'):
                 selected[stage][scope]={key:value for key,value in episode[scope].items() if key in PUBLIC_CONTEXT_KEYS}
-        selected[stage]['base'] = {key:value for key,value in episode['base'].items() if include_parts or key!='parts'}
+        selected[stage]['base'] = {key:value for key,value in episode['base'].items() if (include_parts or key!='parts') and (not public or key in PUBLIC_BASE_KEYS)}
     return selected

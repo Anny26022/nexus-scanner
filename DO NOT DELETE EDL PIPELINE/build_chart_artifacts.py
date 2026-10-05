@@ -24,7 +24,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from pipeline_utils import BASE_DIR, load_json, save_json
-from edl_pipeline.scanner.base_publication import build_base_records, compact_base_records
+from edl_pipeline.scanner.base_publication import load_history_audits, build_base_records, compact_base_records
 from standardize_stock_artifact import canonicalize_stock
 
 
@@ -210,7 +210,7 @@ def main() -> int:
         if not benchmark.empty and {'date','close'}.issubset(benchmark):
             benchmark['Date']=pd.to_datetime(benchmark.date)
             benchmarks['NIFTY_500']=benchmark.loc[benchmark.Date<=pd.Timestamp(as_of)]
-    bases=build_base_records(frames,canonical,benchmarks,selected_only=True)
+    bases=build_base_records(frames,canonical,benchmarks,selected_only=True,history_audits=load_history_audits(root))
     for stock in stocks:
         symbol = str(stock.get("Symbol") or stock.get("symbol") or "").upper()
         if not symbol:

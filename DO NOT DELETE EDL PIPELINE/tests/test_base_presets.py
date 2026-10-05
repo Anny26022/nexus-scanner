@@ -22,7 +22,8 @@ def evaluate(preset,records):
 class BasePresetTests(unittest.TestCase):
     def test_seven_original_presets_preserve_original_library(self):
         ids={p['id'] for p in list_presets()}
-        self.assertEqual(len([x for x in ids if x.startswith('lib-nexus-')]),7)
+        self.assertEqual(len([x for x in ids if x.startswith('lib-nexus-') and not x.endswith('-setup')]),7)
+        self.assertEqual(len([x for x in ids if x.endswith('-setup')]),4)
         self.assertEqual(len([x for x in ids if not x.startswith('lib-nexus-')]),45)
 
     def test_fresh_breakout_uses_frozen_quality_and_current_extension(self):

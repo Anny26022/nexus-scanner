@@ -15,7 +15,7 @@ from chart_publication import chart_preflight, charts_enabled, complete_release
 from scanner_pack_publication import BaseHistoryArchive, build_private_scanner_pack, publish_private_pack
 from scanner_identity import checked_identity
 from edl_pipeline.scanner.presets import list_presets
-from edl_pipeline.scanner.base_publication import build_base_records, compact_base_records
+from edl_pipeline.scanner.base_publication import load_history_audits, build_base_records, compact_base_records
 from edl_pipeline.scanner.financials import financial_value, finite_number
 from edl_pipeline.scanner.turnover import average_turnover_crore
 from edl_pipeline.scanner.indicators import true_range, wilder_average
@@ -69,6 +69,8 @@ def _publish(root, output, archive_directory):
     starting_revision=cache.revision
     source_files=[p for p in sorted(root.glob('*.json.gz')) if p.name!='filing_history.json.gz']
     source_bytes={p.name:p.read_bytes() for p in source_files}
+    audit_file=root/'base_history_audits.json'
+    if audit_file.exists():source_bytes['base_history_audits.json.gz']=gzip.compress(audit_file.read_bytes(),mtime=0)
     delivery_bytes={}
     for folder in ('delivery_history_data','eod2_delivery_history_data'):
         for p in (root/folder).glob('*.json'):
@@ -94,7 +96,7 @@ def _publish(root, output, archive_directory):
             base_frames[symbol]=frame
     context['base_rs_history']={}
     with BaseHistoryArchive(archive_directory) as archive:
-        context['base_episodes']=build_base_records(base_frames,context['stocks'],context.get('benchmarks'),context['base_rs_history'],episode_sink=archive)
+        context['base_episodes']=build_base_records(base_frames,context['stocks'],context.get('benchmarks'),context['base_rs_history'],episode_sink=archive,history_audits=load_history_audits(root))
     context['base_history_archive']=archive_directory
     rows=[]; default_count=0
     for stock in context['stocks'].values():

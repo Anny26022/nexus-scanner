@@ -294,7 +294,7 @@ the base is distinct from a stop or an armed moving-average exit.
 | Fresh Breakouts | Frozen base quality plus ≥1.5× breakout volume, close-in-range ≥0.7, positive pivot clearance, age 0–5 and current extension at most 5%. |
 | Holding Breakouts | Frozen base quality and continued pivot holding; holding policy is editable. |
 | VCP Base | Contraction, depth, duration, trend, position and strength conditions tied to the selected forming base. |
-| Blue Sky | Selected first-level base with complete listing coverage and no higher closing price in available history. |
+| Blue Sky | Selected forming base with history starting within seven calendar days of official listing and no higher closing price in available history. |
 | Multi-year Base | Long-duration selected formation with trend and pivot-proximity conditions. |
 | IPO Base | Official listing age plus formation age/depth, trend and pivot proximity. |
 

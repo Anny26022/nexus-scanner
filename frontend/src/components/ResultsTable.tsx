@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useRef } from 'react';
 import { ScreenerRunResponse } from '../types/screener';
 import {
   ArrowUpDown,
@@ -10,6 +10,7 @@ import {
   TrendingUp,
   TrendingDown,
 } from 'lucide-react';
+import { BaseChartDialog } from './BaseChart';
 import { SymbolWithLogo } from './SymbolWithLogo';
 
 interface ResultsTableProps {
@@ -34,6 +35,8 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
   onAddToWatchlist,
 }) => {
   const [copiedTv, setCopiedTv] = useState(false);
+  const [chartSymbol,setChartSymbol]=useState<string|null>(null);
+  const chartTrigger=useRef<HTMLButtonElement|null>(null);
 
   if (isLoading) {
     return (
@@ -174,7 +177,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
                     {/* Symbol & Name */}
                     <td className="py-3.5 px-4 font-sans">
                       <div className="flex items-center gap-1.5">
-                        <SymbolWithLogo symbol={row.symbol} name={row.name} />
+                        <button onClick={event=>{chartTrigger.current=event.currentTarget;setChartSymbol(row.symbol);}} aria-label={`Open ${row.symbol} chart`} className="rounded text-left hover:underline focus-visible:outline-2 focus-visible:outline-teal-600"><SymbolWithLogo symbol={row.symbol} name={row.name} /></button>
                         {row.isFno && (
                           <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
                             F&O
@@ -290,6 +293,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
           </div>
         )}
       </div>
+      {chartSymbol&&<BaseChartDialog key={`${data.immutableRevision}:${chartSymbol}`} symbol={chartSymbol} revision={data.immutableRevision} onClose={()=>{setChartSymbol(null);chartTrigger.current?.focus();}}/>}
     </div>
   );
 };

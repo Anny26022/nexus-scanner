@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -23,6 +24,8 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from pipeline_utils import BASE_DIR, load_json, save_json
+from edl_pipeline.scanner.base_publication import build_base_records, compact_base_records
+from standardize_stock_artifact import canonicalize_stock
 
 
 # HVE is the one all-history record.  Twenty quarters gives five years of
@@ -183,14 +186,24 @@ def main() -> int:
     shutil.rmtree(temporary, ignore_errors=True)
     temporary.mkdir(parents=True)
     count = 0
+    canonical={str(stock.get('symbol') or stock.get('Symbol')).upper():canonicalize_stock(stock) for stock in stocks if stock.get('symbol') or stock.get('Symbol')}
+    candle_cache={symbol:_load_candles(root/'ohlcv_data'/f'{symbol}.csv',as_of) for symbol in canonical}
+    frames={}
+    for symbol,candles in candle_cache.items():
+        if not candles or candles[-1]['date']!=as_of or not canonical[symbol].get('default_screener_eligible',True): continue
+        frame=pd.DataFrame(candles).rename(columns={key:key.title() for key in ('date','open','high','low','close','volume')})
+        frame['Date']=pd.to_datetime(frame.Date)
+        frames[symbol]=frame
+    bases=build_base_records(frames,canonical)
     for stock in stocks:
         symbol = str(stock.get("Symbol") or stock.get("symbol") or "").upper()
         if not symbol:
             continue
-        candles = _load_candles(root / "ohlcv_data" / f"{symbol}.csv", as_of)
+        candles = candle_cache[symbol]
         payload = {
             "schemaVersion": 1, "symbol": symbol, "asOfDate": as_of,
             "historyStartDate": candles[0]["date"] if candles else None,
+            "bases": compact_base_records(bases.get(symbol,[])),
             "candles": candles, "volumeEvents": _volume_events(candles),
             "corporateActions": [row for row in actions[symbol] if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
             "earnings": [row for row in earnings[symbol] if _date(row.get("filing_date")) and row["filing_date"] <= as_of],

@@ -94,3 +94,37 @@ not proof of an all-time high when historical coverage is incomplete.
 Targeted preset tests cover edited thresholds, frozen quality, session
 alignment and strict/retest policies. Rendered UI, full-universe replay and
 performance acceptance are still outstanding.
+
+## Chart integration
+
+Daily chart generation embeds the same deterministic selected base summaries
+as scanner publication. Clicking a symbol opens its immutable-revision chart
+on demand. The viewer shows daily candles and volume, the detected floor/pivot
+range through the last base session, a pivot line, a breakout marker and concise
+quality measurements. Stage selection is independent of filter editing. Missing
+base records render plain candles; missing chart publication shows an error.
+The chart payload remains backward compatible through an optional `bases` field.
+
+Chart-generation fixtures verify equality with scanner base summaries, including
+pre-breakout boundaries. SVG geometry tests verify the overlay coordinates and
+missing-history behavior. Browser interaction and full-data performance testing
+are still outstanding.
+
+## Local historical replay
+
+From the pipeline directory, run:
+
+```sh
+python3 replay_base_breakouts.py --symbols RELIANCE --fee-bps 10 --slippage-bps 10
+```
+
+RS ranks still use the complete current eligible universe before optional symbol
+selection. The default output is `.scanner_cache/base-replay.json.gz`. Qualified
+Fresh Breakouts enter at the next session open. A closing stop or armed-MA exit
+signal executes at the following session open. Fixed 5/20/60-session outcomes
+exit at each horizon's final close and remain independent of trade exits.
+Fees and slippage are applied on both sides. Incomplete observations stay null.
+The output includes returns, excursions, failed pivot holds, counts and execution
+assumptions. Historical membership reconstruction and validation of the proposed
+thresholds on complete real histories are still required before interpreting
+these results as an unbiased performance estimate.

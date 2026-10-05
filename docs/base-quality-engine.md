@@ -154,7 +154,7 @@ order of a session's high and low.
 
 ## Validation status
 
-71 frontend tests and 13 Worker tests passed, including base metric/arithmetic
+72 frontend tests and 13 Worker tests passed, including base metric/arithmetic
 parity; Wrangler dry build and frontend production build passed. The pipeline
 suite passed 228 tests including the hierarchy and failed-poke fixtures. Final regression and performance acceptance remain required.
 
@@ -162,3 +162,11 @@ The local stock artifact is dated 30 September 2026 while most OHLCV files
 end on 1 October and omit 30 September. A separate 1 October benchmark covers
 2,589 aligned histories; this is not a published release or proof that the
 September snapshot was validated across the complete universe.
+
+Public context includes the fields used by all seven presets and common strength
+filters. Expanded SMA/EMA distance, slope and ratio variants remain in private
+selected records; the dependency registry sends those complete expressions to
+the advanced Worker. Published numeric values retain full precision.
+
+Replay accepts `--stop-pct` and `--trail-period` to regenerate episodes under
+a different exit policy. Each configuration changes stable episode identity.

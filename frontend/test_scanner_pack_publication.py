@@ -51,7 +51,7 @@ class ScannerPackTests(unittest.TestCase):
             'High':[101]+[95]*19+[103]+[101]*49,'Low':[99]+[93]*19+[101]+[99]*49,'Close':[100]+[94]*19+[102]+[100]*49,'Volume':1000.})
         stocks={'TEST':{'symbol':'TEST'}}
         records=build_base_records({'TEST':frame},stocks)
-        context={'stocks':stocks,'base_episodes':records}
+        context={'stocks':stocks,'base_episodes':records,'base_rs_history':{'TEST':{'dates':['2026-10-01'],'ratings':[92]}}}
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);target,manifest=build_private_scanner_pack(root,root/'packs','a'*64,'2026-10-01',Cache(frame),context,{},[])
             archives=[item for item in manifest['objects'] if item['key'].startswith('base-history/')]
@@ -59,6 +59,8 @@ class ScannerPackTests(unittest.TestCase):
             archive=next(item for item in archives if 'TEST' in json.loads(gzip.decompress((target/item['key']).read_bytes())))
             saved=json.loads(gzip.decompress((target/archive['key']).read_bytes()))['TEST']
             self.assertEqual(saved,records['TEST'])
+            rank_key=archive['key'].replace('base-history/','base-ranks/')
+            self.assertEqual(json.loads(gzip.decompress((target/rank_key).read_bytes()))['TEST']['ratings'],[92])
             runtime=json.loads(gzip.decompress((target/archive['key'].replace('base-history/','auxiliary/')).read_bytes()))['bases']['TEST']
             self.assertLessEqual(len(runtime),4)
             self.assertTrue({row['id'] for row in runtime}.issubset({row['id'] for row in saved}))

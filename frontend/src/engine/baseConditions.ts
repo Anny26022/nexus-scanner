@@ -42,7 +42,7 @@ export function detailedSelectedBases(selected:SelectedBases|undefined,episodes:
     const summary=selected?.[stage as keyof SelectedBases];
     if(!summary)continue;
     const episode=episodes.find(record=>record.id===summary.id);
-    result[stage as keyof SelectedBases]=episode?{...summary,base:episode.base}:summary;
+    result[stage as keyof SelectedBases]=episode?{...summary,base:episode.base,current:episode.current??summary.current,selection:episode.selection??summary.selection}:summary;
   }
   return result;
 }

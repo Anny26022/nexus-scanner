@@ -130,7 +130,7 @@ def publish(root=bridge.ROOT, output=OUTPUT):
                 for value in true_range[15:]: atr=(atr*13+float(value))/14
                 metrics['atrPct14']=atr/float(last['Close'])*100 if last['Close']>0 else None
         row['metrics']=metrics
-        row['bases']=compact_base_records(context['base_episodes'].get(symbol,[]))
+        row['bases']=compact_base_records(context['base_episodes'].get(symbol,[]),public=True)
         row['historyMetadata']=stock.get('history_metadata')
         row['financialMetadata']=stock.get('financial_metadata')
         row['dividendExDate']=stock.get('dividend_ex_date')

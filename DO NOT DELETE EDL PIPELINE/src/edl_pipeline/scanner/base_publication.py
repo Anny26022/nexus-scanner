@@ -53,7 +53,7 @@ def trend_series(frame, ranks=None, listing_date=None):
     values['distanceClosing52wHigh']=(highest-close)/highest*100
     values['aboveClosing52wLow']=(close/lowest-1)*100
     listing=pd.to_datetime(listing_date,errors='coerce')
-    values['historyFromListing']=float(frame.Date.iloc[0]<=listing+pd.Timedelta(days=7)) if pd.notna(listing) else np.nan
+    values['historyFromListing']=float(abs((frame.Date.iloc[0]-listing).days)<=7) if pd.notna(listing) else np.nan
     values['historySessions']=pd.Series(np.arange(1,len(frame)+1),index=frame.index)
     values['listingAgeWeeks']=(frame.Date-listing).dt.days/7 if pd.notna(listing) else np.nan
     if ranks is not None:
@@ -70,7 +70,7 @@ def trend_context(frame,index,ranks=None,listing_date=None):
     return {key:finite(value) for key,value in trend_series(frame,ranks,listing_date).iloc[index].items()}
 
 
-def build_base_records(frames, stocks, benchmarks=None, rank_history=None):
+def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None):
     frames=normalize_frames(frames)
     ranks=strength_history(frames) if frames else pd.DataFrame()
     output={}
@@ -104,7 +104,7 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None):
         rank=ranks[symbol].reindex(frame.Date).to_numpy(float)
         if rank_history is not None:
             rank_history[symbol]={'dates':[str(day.date()) for day in frame.Date], 'ratings':[finite(value) for value in rank]}
-        episodes=detect_bases(frame,symbol,rs=rank)
+        episodes=detect_bases(frame,symbol,config=config,rs=rank)
         context_rows=trend_series(frame,rank,stocks[symbol].get('listing_date'))
         for days in (5,22):
             context_rows[f'rsChange{days}']=(ranks[symbol]-ranks[symbol].shift(days)).reindex(frame.Date).to_numpy(float)
@@ -137,7 +137,14 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None):
     return output
 
 
-def compact_base_records(episodes, include_parts=False):
+PUBLIC_CONTEXT_KEYS={
+    'medianTurnover20','distanceClosing52wHigh','aboveClosing52wLow','listingAgeWeeks',
+    'historyFromListing','historySessions','rsRating','rsChange5','rsChange22',
+    'industryRelative63','industryRelative252','rsLineAtHigh','benchmarkDistanceSMA200',
+    'industryAboveSMA50Pct','industryAboveSMA200Pct','distanceSMA50','distanceSMA200','slopeSMA200',
+}
+
+def compact_base_records(episodes, include_parts=False, public=False):
     """One deterministic episode per stage; every filter sees the same record."""
     selected = {}
     for stage in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT'):
@@ -148,5 +155,8 @@ def compact_base_records(episodes, include_parts=False):
             'id','stage','pivot','distanceFromPivotPct','breakout','breakoutAgeSessions',
             'holdsPivot','continuousHolding','belowPivotCloses','breakoutFailure',
             'returnSinceBreakoutPct','maxGainPct','maxDrawdownPct','selection','current','failedPokeCount','parentInvalidationDate')}
+        if public:
+            for scope in ('selection','current'):
+                selected[stage][scope]={key:value for key,value in episode[scope].items() if key in PUBLIC_CONTEXT_KEYS}
         selected[stage]['base'] = {key:value for key,value in episode['base'].items() if include_parts or key!='parts'}
     return selected

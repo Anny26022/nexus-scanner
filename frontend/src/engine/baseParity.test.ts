@@ -10,6 +10,13 @@ import { expressionPlan } from '../api/capabilityRegistry';
 import type { SnapshotStock } from '../api/snapshotScreen';
 const condition=(id:string,parameters:Record<string,unknown>)=>({instanceId:'test',conditionId:id,parameters});
 describe('base Python/browser/advanced parity',()=>{
+  it('keeps expanded trend context private without dropping its condition',()=>{
+    const leaf=condition('BASE_METRIC',{stage:'FORMING',metric:'current.distanceEMA150',comparison:'ABOVE',value:0});
+    const local=condition('BASE_METRIC',{stage:'FORMING',metric:'current.distanceSMA200',comparison:'ABOVE',value:0});
+    expect(expressionPlan({type:'condition',condition:leaf}).browser).toBe(false);
+    expect(expressionPlan({type:'condition',condition:local}).browser).toBe(true);
+  });
+
   it('matches Python for every exposed metric, comparison boundary and arithmetic operation',()=>{
     const record:Record<string,any>={continuousHolding:false,holdsPivot:true,id:'selected'};
     metrics.forEach((path,index)=>{const keys=path.split('.');let target=record;keys.slice(0,-1).forEach(key=>{target[key]??={};target=target[key];});target[keys.at(-1)!]=index+1;});

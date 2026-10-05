@@ -1,0 +1,20 @@
+[
+  "aboveClosing52wLow",
+  "benchmarkDistanceSMA200",
+  "distanceClosing52wHigh",
+  "distanceSMA200",
+  "distanceSMA50",
+  "historyFromListing",
+  "historySessions",
+  "industryAboveSMA200Pct",
+  "industryAboveSMA50Pct",
+  "industryRelative252",
+  "industryRelative63",
+  "listingAgeWeeks",
+  "medianTurnover20",
+  "rsChange22",
+  "rsChange5",
+  "rsLineAtHigh",
+  "rsRating",
+  "slopeSMA200"
+]

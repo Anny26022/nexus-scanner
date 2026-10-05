@@ -156,7 +156,9 @@ def normalize_history(rows: pd.DataFrame, as_of_date: str | None = None):
     missing = [column for column in REQUIRED_COLUMNS if column not in rows.columns]
     if missing:
         raise ValueError(f"Missing OHLCV columns: {', '.join(missing)}")
-    frame = rows.loc[:, REQUIRED_COLUMNS].copy()
+    frame = rows.loc[:, [*REQUIRED_COLUMNS, *(["Turnover"] if "Turnover" in rows else [])]].copy()
+    if "Turnover" in frame:
+        frame["Turnover"] = pd.to_numeric(frame["Turnover"], errors="coerce").where(lambda values: values >= 0)
     frame["Date"] = pd.to_datetime(frame["Date"], errors="coerce")
     for column in REQUIRED_COLUMNS[1:]:
         frame[column] = pd.to_numeric(frame[column], errors="coerce")

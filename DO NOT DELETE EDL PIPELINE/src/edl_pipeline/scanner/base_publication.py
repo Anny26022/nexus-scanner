@@ -48,7 +48,9 @@ def trend_series(frame, ranks=None, listing_date=None):
             values[f'slope{kind}{period}']=(series/series.shift(21)-1)*100
         for a,b in ((50,200),(150,200),(10,20),(20,50)):
             values[f'ratio{kind}{a}_{b}']=values[f'{kind.lower()}{a}']/values[f'{kind.lower()}{b}']
-    values['medianTurnover20']=(close*frame.Volume/1e7).rolling(20,min_periods=20).median()
+    turnover=pd.to_numeric(frame.get('Turnover',pd.Series(index=frame.index,dtype=float)),errors='coerce')
+    turnover=turnover.where(np.isfinite(turnover)&(turnover>=0))
+    values['medianTurnover20']=(turnover/1e7).rolling(20,min_periods=20).median()
     highest=close.rolling(252,min_periods=252).max();lowest=close.rolling(252,min_periods=252).min()
     values['distanceClosing52wHigh']=(highest-close)/highest*100
     values['aboveClosing52wLow']=(close/lowest-1)*100

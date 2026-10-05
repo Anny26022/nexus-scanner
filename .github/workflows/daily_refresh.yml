@@ -31,6 +31,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            DO NOT DELETE EDL PIPELINE/nse_turnover_history
             DO NOT DELETE EDL PIPELINE/ohlcv_data
             DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
             DO NOT DELETE EDL PIPELINE/delivery_history_data

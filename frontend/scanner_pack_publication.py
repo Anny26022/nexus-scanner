@@ -185,6 +185,9 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
         aux = {
             "stocks": {symbol: native_rows[symbol] for symbol in sorted(shard_symbols) if symbol in native_rows},
             "delivery": delivery_rows,
+            "turnover": {symbol: {"dates": frame["Date"].tail(MAX_SESSIONS).to_numpy(dtype="datetime64[D]").astype("int32").tolist(),
+                "values": [float(value) if np.isfinite(value) and value >= 0 else None for value in frame["Turnover"].tail(MAX_SESSIONS)]}
+                for symbol, frame in entries if "Turnover" in frame},
             "earnings": {symbol: available_filings(symbol) for symbol in sorted(shard_symbols)
                          if available_filings(symbol)},
             "breadth": context.get("breadth", {}),

@@ -9,6 +9,7 @@ export interface AdvancedContext {
   stock: SnapshotStock;
   bases?: BaseRecord[];
   session: string;
+  turnover?: {dates:number[];values:(number|null)[]};
   benchmarks?: Record<string,{dates:number[];closes:number[]}>;
   delivery?: Array<Record<string,unknown>> | {dates:number[];percentages:unknown[]};
   earnings?: Array<Record<string,unknown>>;
@@ -220,7 +221,7 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
     }
   }
   else if(id==='RELATIVE_STRENGTH'||id==='RS_NEW_HIGH'){const benchmark=context.benchmarks?.[str(p.benchmark,'NIFTY_50').toUpperCase()];if(!benchmark)result=null;else{const byDate=new Map(benchmark.dates.map((date,i)=>[date,benchmark.closes[i]])),pairs=Array.from(series.dates,(_,i)=>[series.close[i],byDate.get(series.dates[i])] as const).filter((pair):pair is readonly[number,number]=>pair[1]!=null);const days=n(p.overDays??p.lookbackDays,60);if(pairs.length<=days)result=null;else if(id==='RELATIVE_STRENGTH'){const latest=pairs[pairs.length-1],prior=pairs[pairs.length-1-days],spread=percentChange(latest[0],prior[0])-percentChange(latest[1],prior[1]);result=compare(spread,p.comparison,p.pct??p.value);}else{const rs=pairs.slice(-days).map(pair=>pair[0]/pair[1]),price=slice(series.high,-days),distance=(max(price)-last(series.close))/max(price)*100;result=last(rs)>=max(rs)&&distance>=n(p.minPriceBelowHighPct);}}}
-  else if(id==='AVG_TURNOVER'){const days=n(p.lookbackDays,20);result=series.close.length<days?null:compare(mean(Array.from({length:days},(_,j)=>{const i=series.close.length-days+j;return series.close[i]*series.volume[i]/1e7;})),p.comparison,p.valueCr);}
+  else if(id==='AVG_TURNOVER'){const days=n(p.lookbackDays,20),official=context.turnover,byDate=new Map(official?.dates.map((day,i)=>[day,official.values[i]])??[]),values=slice(series.dates,-days).map(day=>byDate.get(day));result=days<=0||series.dates.length<days||values.some(value=>value==null||!Number.isFinite(value)||value<0)?null:compare(mean(values.map(value=>Number(value)/1e7)),p.comparison,p.valueCr);}
   else if(id==='ADR_PCT'){const days=n(p.lookbackDays,14);result=series.close.length<days?null:compare(mean(Array.from({length:days},(_,j)=>{const i=series.close.length-days+j;return (series.high[i]-series.low[i])/series.close[i]*100;})),p.comparison,p.pct);}
   else if(id==='DAYS_SINCE_EARNINGS'||id==='LISTING_AGE_DAYS'){const marker=id==='DAYS_SINCE_EARNINGS'?context.stock.earningsDate:context.stock.listingDate;if(!marker)result=null;else{const day=Math.floor(Date.parse(marker+'T00:00:00Z')/86400000),sessions=Array.from(series.dates).filter(value=>value>day).length;result=compare(sessions,p.comparison,p.days);}}
   else if(id==='EARNINGS_GROWTH'){

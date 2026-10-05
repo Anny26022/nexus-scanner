@@ -76,8 +76,9 @@ uses equal-weight current-classification peers including the subject, with at
 least three available peers; dated industry context uses the same current classification on each session.
 Rank changes use the market session ledger.
 
-Median turnover estimates traded value as close times volume; it does not
-claim to reproduce exchange-reported turnover. Listing age uses an official
+Median turnover uses official NSE traded value in rupees, with complete
+20-session windows; it excludes BSE turnover and has no estimated fallback.
+Missing historical windows remain unavailable. Listing age uses an official
 listing date and is unavailable when absent, rather than using cache length.
 
 A breakout failure (first close back inside the base) is separate from a trade

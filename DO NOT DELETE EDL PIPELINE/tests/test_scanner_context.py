@@ -17,7 +17,7 @@ from nse_fno_ban import parse_report, parse_symbols
 def history(length=300):
     dates = pd.date_range("2025-01-01", periods=length, freq="B")
     close = [100 + index for index in range(length)]
-    return pd.DataFrame({"Date": dates, "Open": close, "High": [item + 2 for item in close], "Low": [item - 2 for item in close], "Close": close, "Volume": [1_000_000] * length})
+    return pd.DataFrame({"Date": dates, "Open": close, "High": [item + 2 for item in close], "Low": [item - 2 for item in close], "Close": close, "Volume": [1_000_000] * length, "Turnover": [item*1_000_000 for item in close]})
 
 
 class ScannerContextTests(unittest.TestCase):

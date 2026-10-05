@@ -21,6 +21,18 @@ class Cache:
 
 
 class ScannerPackTests(unittest.TestCase):
+    def test_private_pack_preserves_actual_turnover_and_missing_values(self):
+        frame=pd.DataFrame({'Date':pd.to_datetime(['2026-09-30','2026-10-01']),
+            'Open':[1.,1.],'High':[2.,2.],'Low':[.5,.5],'Close':[1.5,1.5],
+            'Volume':[100.,100.],'Turnover':[float('nan'),999.]})
+        context={'stocks':{'TEST':{'symbol':'TEST'}}}
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            target,_=build_private_scanner_pack(root,root/'packs','a'*64,'2026-10-01',Cache(frame),context,{})
+            aux=json.loads(gzip.decompress((target/f'auxiliary/{_shard("TEST"):02d}.json.gz').read_bytes()))
+            self.assertEqual(aux['turnover']['TEST']['values'],[None,999.])
+            self.assertEqual(len(aux['turnover']['TEST']['dates']),2)
+
     def test_streamed_archives_preserve_complete_episodes_in_private_pack(self):
         frame=pd.DataFrame({'Date':pd.to_datetime(['2026-10-01']),'Open':[1.],'High':[2.],'Low':[.5],'Close':[1.5],'Volume':[100.]})
         episodes=[{'id':'old','value':1},{'id':'selected','value':2}]

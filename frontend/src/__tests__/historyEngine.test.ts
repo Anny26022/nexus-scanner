@@ -20,6 +20,14 @@ const context={stock,session:'2026-10-01'};
 const leaf=(conditionId:string,parameters:Record<string,unknown>={}):ActiveCondition=>({instanceId:conditionId,conditionId,parameters});
 
 describe('shared history engine',()=>{
+  it('uses date-aligned official turnover and never substitutes close times volume',()=>{
+    const condition=leaf('AVG_TURNOVER',{lookbackDays:20,comparison:'ABOVE',valueCr:15});
+    const turnover={dates:Array.from(series.dates),values:Array.from(series.dates,()=>200000000 as number|null)};
+    expect(evaluateHistoryCondition(series,condition,{...context,turnover})).toBe(true);
+    expect(evaluateHistoryCondition(series,condition,context)).toBeNull();
+    turnover.values[turnover.values.length-1]=null;
+    expect(evaluateHistoryCondition(series,condition,{...context,turnover})).toBeNull();
+  });
   it('preserves delivery semantics with compact dated columns including duplicates and missing values',()=>{
     const day=series.dates[length-1],session=new Date(day*86400000).toISOString().slice(0,10);
     const rows=[{date:session,delivery_percent:20},{date:session,delivery_percent:65}];

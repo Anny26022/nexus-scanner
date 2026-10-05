@@ -276,7 +276,7 @@ pivot touches and squats remain explicit episode facts.
 | Base quality | Start/end, pivot, floor, age, depth, level/nesting, overhead supply, ATR contraction, volume dry-up, quietest-volume depth and recency. |
 | Accumulation | Up/down volume ratio and net balance `(up − down) / (up + down)`, distinct from OBV. |
 | Strength | Weighted RS rank, 5/22-session rank change, rank minimum/average inside the base, RS-line high and industry-relative return/breadth. |
-| Trend | SMA/EMA distances, ratios and slopes, 52-week closing-price position and median 20-session estimated turnover. |
+| Trend | SMA/EMA distances, ratios and slopes, 52-week closing-price position and median 20-session official NSE traded value. |
 | Breakout | Date, volume versus the preceding 20-session median, gap relative to pivot, closing extension, daily gain and close-in-range. |
 | Follow-through | Breakout age, continuous/current pivot holding, closes inside, gain, drawdown and completed 5/20/60-session outcomes. |
 
@@ -359,7 +359,7 @@ All technical windows below use trading sessions, not calendar days. Data is cut
 | Daily return | Same formula with N=1. |
 | Gap % | `100 × (current open / prior close − 1)`. |
 | RVOL(N) | Current volume divided by the mean of the preceding N volumes, excluding the current session. |
-| Average turnover(N) | Mean of `close × volume` over N sessions, divided by 10,000,000 for ₹Cr. |
+| Average turnover(N) | Mean official NSE `Turnover` over N complete sessions, divided by 10,000,000 for ₹Cr; missing values remain unavailable. |
 | ADR(N) % | Mean of `100 × (high − low) / close` over N sessions. |
 | True range | Maximum of `high − low`, `abs(high − prior close)`, and `abs(low − prior close)`. |
 | ATR % | Wilder-smoothed true range divided by current close, multiplied by 100. |
@@ -805,3 +805,30 @@ Defaults are 10 bps fees and 10 bps slippage per side, configurable through
 The live return since breakout remains a separate measurement. Daily and weekly
 pipeline generation compute these records; no new UI or market feed is required.
 See [the data contract](docs/base-quality-engine.md#precomputed-trade-execution-data-no-ui-changes).
+
+### Official NSE turnover history
+
+Turnover calculations use NSE's actual daily traded value, stored as an optional
+`Turnover` column in OHLCV CSVs **in rupees**. The full bhavcopy's
+`TURNOVER_LACS` is multiplied by 100,000 at ingestion. This value remains raw
+when chart prices are adjusted; it is never reconstructed from adjusted close
+and volume. Only NSE turnover is included.
+
+Daily and weekly pipelines run `backfill_nse_turnover.py` in the serial OHLCV
+lane after price-history refresh, before scanner calculations. It fills missing
+values for the latest 260 observed sessions using one full-universe file per
+date, caches compressed files in `nse_turnover_history/`, and preserves existing
+prices. Both Actions workflows retain that cache. Failures are listed in
+`nse_turnover_report.json`; incomplete windows produce unavailable/null metrics.
+An old base may need deeper history before its frozen turnover qualifies.
+
+For an explicit deeper backfill, from the pipeline directory:
+
+```sh
+python backfill_nse_turnover.py --sessions 1500
+```
+
+Average-turnover filters, 20/50/100-session snapshot averages and the base's
+20-session median use complete official windows. Private scanner packs carry
+compact dated turnover arrays for the advanced Worker; common precomputed
+values remain in public packs. No BSE integration or estimated fallback is used.

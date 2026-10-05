@@ -111,6 +111,7 @@ OHLCV_FETCH_LANE = (
     "fetch_nse_delivery_data.py",
     "apply_nse_daily_ohlcv.py",
     "fetch_all_ohlcv.py",
+    "backfill_nse_turnover.py",
 )
 
 PHASE4_SCRIPTS = [
@@ -236,6 +237,9 @@ SCRIPT_OUTPUT_SPECS = {
     ],
     "fetch_all_ohlcv.py": [
         ArtifactSpec("ohlcv_data", "dir", min_count=1),
+    ],
+    "backfill_nse_turnover.py": [
+        ArtifactSpec("nse_turnover_report.json", "json", required_fields=("applied_rows", "failures")),
     ],
     "apply_nse_daily_ohlcv.py": [
         ArtifactSpec("nse_daily_ohlcv_report.json", "json", required_fields=("available",)),

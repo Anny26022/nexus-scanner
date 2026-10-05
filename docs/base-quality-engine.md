@@ -154,7 +154,7 @@ order of a session's high and low.
 
 ## Validation status
 
-72 frontend tests and 13 Worker tests passed, including base metric/arithmetic
+72 frontend tests and 14 Worker tests passed, including base metric/arithmetic
 parity; Wrangler dry build and frontend production build passed. The pipeline
 suite passed 228 tests including the hierarchy and failed-poke fixtures. Final regression and performance acceptance remain required.
 
@@ -170,3 +170,8 @@ the advanced Worker. Published numeric values retain full precision.
 
 Replay accepts `--stop-pct` and `--trail-period` to regenerate episodes under
 a different exit policy. Each configuration changes stable episode identity.
+
+Worker integration fixtures now exercise a nested Nexus preset plus a private
+MA metric through all 32 checksum-verified R2 shards and verify edge-cache reuse.
+The base measurement optimization matched complete episode JSON on RELIANCE,
+TCS, VENUSPIPES and HDFCBANK. Full-universe benchmark verification is pending.

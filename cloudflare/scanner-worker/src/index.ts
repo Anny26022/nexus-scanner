@@ -4,6 +4,7 @@ import type { SnapshotStock } from '../../../frontend/src/api/snapshotScreen';
 import { evaluateExpression, expressionDepth, negate, walkExpression, type EngineCondition, type EngineExpression, type Truth } from '../../../frontend/src/engine/expression';
 import { evaluateHistoryCondition, type AdvancedContext, type CandleSeries } from '../../../frontend/src/engine/historyEngine';
 import { compileTextQuery } from '../../../frontend/src/engine/queryCompiler';
+import { PRESET_CATALOG } from '../../../frontend/src/data/presetCatalog';
 import { NEXUS_CONDITION_CATALOG } from '../../../frontend/src/data/conditionCatalog';
 
 interface Env { SCANNER_DATA:R2Bucket; ALLOWED_ORIGINS:string; SCANNER_RELEASE_URL:string }
@@ -11,7 +12,7 @@ interface PrivateManifest {schemaVersion:number;engineVersion:string;conditionCo
 interface Metadata {stocks:SnapshotStock[]}
 interface Auxiliary {bases?:Record<string,import('../../../frontend/src/engine/baseConditions').BaseRecord[]>;delivery:Record<string,Array<Record<string,unknown>>>;earnings:Record<string,Array<Record<string,unknown>>>;breadth?:Record<string,Record<string,number|null>>}
 
-const conditionDefinitions=new Map(NEXUS_CONDITION_CATALOG.map(definition=>[definition.id,definition]));
+const conditionDefinitions=new Map([...NEXUS_CONDITION_CATALOG,...PRESET_CATALOG].map(definition=>[definition.id,definition]));
 const internalConditions=new Set(['FIELD_COMPARISON','DELIVERY_PERCENT']);
 
 export function validateExpression(expression:EngineExpression){

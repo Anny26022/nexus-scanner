@@ -1,3 +1,5 @@
+import {gzipSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
 import { afterEach,describe,expect,it,vi } from 'vitest';
 import worker,{executionWarnings,validateExpression} from './index';
 import { SCANNER_IDENTITY } from '../../../frontend/src/engine/compatibility';
@@ -82,4 +84,38 @@ it('reports unhealthy when the private engine differs despite matching revision 
   env.SCANNER_DATA.get=vi.fn(async()=>({json:async()=>({...SCANNER_IDENTITY,engineVersion:'old',schemaVersion:7,revision:'a'.repeat(64),session:'2026-10-01'})}));
   const response=await worker.fetch(new Request('https://worker.example/v1/health'),env,execution);
   expect(response.status).toBe(503);
+});
+
+it('runs a complete nested base preset and private metric through verified R2 shards',async()=>{
+  const revision='a'.repeat(64),session='2026-10-01',objects=new Map<string,Buffer>();
+  const base={id:'same-base',pivot:100,distanceFromPivotPct:-2,continuousHolding:true,holdsPivot:true,
+    base:{ageSessions:40,depthPct:20,atrContraction:.6,volumeDryUp:.6},
+    current:{medianTurnover20:10,distanceSMA200:10,slopeSMA200:1,rsRating:90,rsChange22:5,distanceClosing52wHigh:10}};
+  const stock={symbol:'TEST',name:'Test',historyAligned:true,asOfDate:session,bases:{FORMING:base}};
+  const save=(key:string,value:unknown)=>objects.set(key,gzipSync(Buffer.from(JSON.stringify(value))));
+  save('metadata.json.gz',{stocks:[stock]});save('benchmarks.json.gz',{});
+  for(let index=0;index<32;index++){
+    const count=index===0?1:0,header=Buffer.from(JSON.stringify({symbols:count?[{symbol:'TEST',offset:0,count:1}]:[]}));
+    const dates=(12+header.length+7)&~7,values=(dates+count*4+7)&~7,raw=Buffer.alloc(values+count*40);
+    raw.write('NSPK0001');raw.writeUInt32LE(header.length,8);header.copy(raw,12);
+    if(count){raw.writeInt32LE(Math.floor(Date.parse(session)/86400000),dates);[100,102,98,100,1000].forEach((n,i)=>raw.writeDoubleLE(n,values+i*8));}
+    const suffix=String(index).padStart(2,'0');objects.set(`shards/${suffix}.bin.gz`,gzipSync(raw));
+    save(`auxiliary/${suffix}.json.gz`,{delivery:{},earnings:{},bases:count?{TEST:[{...base,current:{...base.current,distanceEMA150:8}}]}:{}});
+  }
+  const manifest={...SCANNER_IDENTITY,schemaVersion:7,revision,session,shards:32,symbols:1,maxSessions:1500,
+    limits:{maxLeaves:32,maxDepth:8,maxPageSize:100,maxRequestBytes:100000},objects:[...objects].map(([key,buffer])=>({key,bytes:buffer.length,sha256:createHash('sha256').update(buffer).digest('hex')}))};
+  const get=vi.fn(async(key:string)=>{const name=key.replace(`scanner/v1/revisions/${revision}/`,'');if(name==='manifest.json')return {json:async()=>manifest};const buffer=objects.get(name);return buffer?{arrayBuffer:async()=>buffer.buffer.slice(buffer.byteOffset,buffer.byteOffset+buffer.byteLength)}:null;});
+  const env={...environment(),SCANNER_DATA:{get} as unknown as R2Bucket};
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({...SCANNER_IDENTITY,revision,sessionDate:session,schemaVersion:7}))));
+  const match=vi.fn(async()=>undefined),put=vi.fn(async()=>undefined);vi.stubGlobal('caches',{default:{match,put}});
+  const leaf=(conditionId:string,parameters:Record<string,unknown>)=>({type:'condition',condition:{instanceId:conditionId,conditionId,parameters}});
+  const payload={...SCANNER_IDENTITY,datasetRevision:revision,asOfDate:session,universe:'mainboard',page:1,pageSize:15,
+    expressionTree:{type:'group',operator:'all',children:[leaf('lib-nexus-strong-bases',{}),{type:'group',operator:'any',children:[leaf('BASE_METRIC',{stage:'FORMING',metric:'current.distanceEMA150',comparison:'GREATER',value:7}),leaf('BASE_METRIC',{stage:'FORMING',metric:'base.depthPct',comparison:'LESS',value:10})]}]}};
+  const request=()=>new Request('https://worker.example/v1/screens/run',{method:'POST',headers:{origin:'https://app.example'},body:JSON.stringify(payload)});
+  const response=await worker.fetch(request(),env,execution);expect(response.status).toBe(200);
+  const body=await response.clone().json() as any;expect(body.rows.map((row:any)=>row.symbol)).toEqual(['TEST']);expect(body.unavailableDiagnostics).toEqual([]);
+  expect(get.mock.calls.some(([key])=>key.includes('base-history/'))).toBe(false);
+  expect(put).toHaveBeenCalledOnce();const reads=get.mock.calls.length;
+  match.mockImplementation(async()=>response.clone() as any);
+  const cached=await worker.fetch(request(),env,execution);expect(cached.status).toBe(200);expect(get).toHaveBeenCalledTimes(reads);
 });

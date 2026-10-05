@@ -50,23 +50,23 @@ def finite(value):
     return float(value) if pd.notna(value) and np.isfinite(value) else None
 
 
-def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1):
+def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1, _arrays=None):
     """Measure inclusive base boundaries. Halves differ by at most one session."""
-    base = frame.iloc[start:end + 1]
-    volume = base.Volume.to_numpy(float)
-    close = base.Close.to_numpy(float)
-    pivot = float(close.max())
-    midpoint = (len(base) + 1) // 2
-    averages = atr_pct.iloc[start:end + 1].to_numpy(float)
-    change = frame.Close.diff().iloc[start:end + 1].to_numpy(float)
+    arrays=_arrays or {'volume':frame.Volume.to_numpy(float),'close':frame.Close.to_numpy(float),
+        'high':frame.High.to_numpy(float),'low':frame.Low.to_numpy(float),'change':frame.Close.diff().to_numpy(float),
+        'dates':[str(day.date()) for day in frame.Date],'atr':atr_pct.to_numpy(float)}
+    volume=arrays['volume'][start:end+1];close=arrays['close'][start:end+1]
+    high=arrays['high'][start:end+1];low=arrays['low'][start:end+1]
+    size=end-start+1;pivot=float(close.max());midpoint=(size+1)//2
+    averages=arrays['atr'][start:end+1];change=arrays['change'][start:end+1]
     up, down = float(volume[change > 0].sum()), float(volume[change < 0].sum())
     quiet = int(np.argmin(volume))
     def avg(values):
         return float(np.mean(values)) if len(values) and np.isfinite(values).all() else np.nan
-    depth = (pivot - float(base.Low.min())) / pivot * 100
+    depth = (pivot - float(low.min())) / pivot * 100
     parts = {}
     for divisor, name in ((1,'full'), (2,'half'), (3,'third'), (4,'quarter'), (5,'fifth')):
-        for number, positions in enumerate(np.array_split(np.arange(len(base)), divisor), 1):
+        for number, positions in enumerate(np.array_split(np.arange(size), divisor), 1):
             if not len(positions): continue
             key = name if divisor == 1 else f'{name}_{number}'
             parts[key] = {'atrPct': finite(avg(averages[positions])), 'volume': float(volume[positions].mean()),
@@ -74,13 +74,13 @@ def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1):
                           'upVolume': float(volume[positions][change[positions] > 0].sum()),
                           'downVolume': float(volume[positions][change[positions] < 0].sum())}
     ranks = None if rs is None else np.asarray(rs[start:end + 1], dtype=float)
-    return {'startDate': str(base.Date.iloc[0].date()), 'endDate': str(base.Date.iloc[-1].date()),
-            'ageSessions': len(base), 'pivot': pivot, 'ceiling': float(base.High.max()),
-            'floor': float(base.Low.min()), 'depthPct': depth,
+    return {'startDate': arrays['dates'][start], 'endDate': arrays['dates'][end],
+            'ageSessions': size, 'pivot': pivot, 'ceiling': float(high.max()),
+            'floor': float(low.min()), 'depthPct': depth,
             'atrContraction': ratio(avg(averages[midpoint:]), avg(averages[:midpoint])),
             'volumeDryUp': ratio(avg(volume[midpoint:]), avg(volume[:midpoint])),
             'quietDepth': ratio(volume[quiet], np.median(volume)),
-            'quietDate': str(base.Date.iloc[quiet].date()), 'quietAgeSessions': len(base)-1-quiet,
+            'quietDate': arrays['dates'][start+quiet], 'quietAgeSessions': size-1-quiet,
             'upDownVolumeRatio': ratio(up, down), 'netUpDownVolume': ratio(up-down, up+down),
             'rsStart': None if ranks is None else finite(ranks[0]),
             'rsEnd': None if ranks is None else finite(ranks[-1]),
@@ -88,7 +88,7 @@ def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1):
             'rsMinimum': None if ranks is None or not np.isfinite(ranks).all() else float(ranks.min()),
             'rsMaximum': None if ranks is None or not np.isfinite(ranks).all() else float(ranks.max()),
             'touchCount':int((np.abs(close/pivot-1)*100<=touch_tolerance_pct).sum()),
-            'squatCount':int(((base.High.to_numpy(float)>pivot)&(close<pivot)).sum()),
+            'squatCount':int(((high>pivot)&(close<pivot)).sum()),
             'parts': parts}
 
 
@@ -109,6 +109,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
         raise ValueError('Base history contains inconsistent candle ranges')
     atr_pct = wilder_average(true_range(frame), config.atr_period) / frame.Close * 100
     trail = frame.Close.rolling(config.trail_period, min_periods=config.trail_period).mean()
+    arrays={'volume':frame.Volume.to_numpy(float),'close':frame.Close.to_numpy(float),'high':frame.High.to_numpy(float),'low':frame.Low.to_numpy(float),'change':frame.Close.diff().to_numpy(float),'dates':[str(day.date()) for day in frame.Date],'atr':atr_pct.to_numpy(float)}
     episodes, active = [], []
     peak = 0
     index = 0
@@ -160,7 +161,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
             if row.Close > pivot:
                 if duration < config.min_sessions:
                     active.remove(episode); episodes.remove(episode); continue
-                episode['base'] = measure_base(frame,start,index-1,atr_pct,rs,config.touch_tolerance_pct)
+                episode['base'] = measure_base(frame,start,index-1,atr_pct,rs,config.touch_tolerance_pct,arrays)
                 episode['base']['nestedCount'] = episode['nestedCount']
                 episode['base']['level'] = episode['level']
                 episode['base']['overheadPct'] = episode['overheadPct']
@@ -203,7 +204,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
     for episode in episodes:
         if episode['breakout'] is None:
             end = index if episode['exit'] is None else date_positions[episode['exit']['date']]
-            episode['base'] = measure_base(frame,episode['_start'],end,atr_pct,rs,config.touch_tolerance_pct)
+            episode['base'] = measure_base(frame,episode['_start'],end,atr_pct,rs,config.touch_tolerance_pct,arrays)
             episode['base'].update(level=episode['level'],overheadPct=episode['overheadPct'],nestedCount=episode['nestedCount'])
         if episode['breakout'] is not None:
             origin = episode['_breakout']

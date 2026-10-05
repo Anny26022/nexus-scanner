@@ -217,7 +217,9 @@ def publish(root=bridge.ROOT, output=OUTPUT):
         raise RuntimeError('Schema-7 public packs exceed the 4 MB compressed performance budget')
     private_root, private_manifest = build_private_scanner_pack(
         root, root/'scanner_artifacts', revision, session, cache, context, delivery, rows)
-    advanced_published = publish_private_pack(private_root, revision)
+    pointer_path = output / 'current.json'
+    active_revision = json.loads(pointer_path.read_text()).get('revision') if pointer_path.exists() else None
+    advanced_published = publish_private_pack(private_root, revision, active_revision=active_revision)
     manifest={'revision':revision,'sessionDate':session,'publishedAt':datetime.now(timezone.utc).isoformat(),
               'schemaVersion':7,**checked_identity(),'totalStocks':len(rows),
               'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json',

@@ -199,7 +199,7 @@ fixture; complete production session alignment remains a separate gate.
 The exact CI pipeline test command now works without a custom PYTHONPATH. The
 five new test modules resolve their source directory relative to their own file,
 matching existing test conventions. The current results are 230 pipeline tests,
-42 frontend Python publication/bridge tests and 73 frontend TypeScript tests.
+43 frontend Python publication/bridge tests and 73 frontend TypeScript tests.
 Chart dialogs initialize to the base stage selected in the results table.
 
 
@@ -292,3 +292,10 @@ session outcome returns, costs and excursion measurements. This small sample
 checks execution correctness; it does not establish threshold effectiveness.
 The report records the 30 September metadata date separately from the replay
 cutoff, preserving the known current-classification limitation.
+
+Private retention keeps seven complete revisions including the previous active
+Git-pointer revision and the newly uploaded revision. The active revision is
+protected even after multiple uploads fail later chart or pointer promotion.
+Manifest-less uploads do not count as completed rollback revisions. Tests check
+that an oldest active revision survives eight newer complete uploads, and that
+the publication path passes its active pointer revision into private retention.

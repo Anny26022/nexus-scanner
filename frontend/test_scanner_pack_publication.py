@@ -5,13 +5,14 @@ import struct
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
+from types import SimpleNamespace
 
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from scanner_identity import checked_identity
-from scanner_pack_publication import MAGIC,SHARD_COUNT,build_private_scanner_pack
+from scanner_pack_publication import MAGIC,SHARD_COUNT,build_private_scanner_pack,PrivateR2Store
 
 
 class Cache:
@@ -20,6 +21,19 @@ class Cache:
 
 
 class ScannerPackTests(unittest.TestCase):
+    def test_retention_preserves_active_release_after_repeated_failed_promotions(self):
+        store=object.__new__(PrivateR2Store)
+        store.bucket='nexus-screener-private-data'
+        revisions=[str(index)*64 for index in range(9)]
+        listing=[{'Path':revision+'/manifest.json','ModTime':f'2026-10-{index+1:02d}T00:00:00Z'} for index,revision in enumerate(revisions)]
+        # Uncommitted objects do not qualify as a completed rollback revision.
+        listing.append({'Path':'partial/shards/00.bin.gz','ModTime':'2026-11-01T00:00:00Z'})
+        store.run=Mock(return_value=SimpleNamespace(stdout=json.dumps(listing)))
+        store.retain_latest(7,protected={revisions[0],revisions[8]})
+        deleted={call.args[1].rsplit('/',1)[-1] for call in store.run.call_args_list if call.args[0]=='purge'}
+        self.assertEqual(deleted,{revisions[1],revisions[2]})
+        self.assertNotIn(revisions[0],deleted)
+
     def test_binary_pack_is_deterministic_bounded_and_manifested(self):
         frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-10-01',periods=1600),'Open':1.,'High':2.,'Low':.5,'Close':1.5,'Volume':100.})
         context={'stocks':{'TEST':{'symbol':'TEST'}},'benchmarks':{},'financial_history':{}}

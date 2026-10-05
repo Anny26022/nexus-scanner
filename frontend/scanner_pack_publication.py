@@ -234,19 +234,28 @@ class PrivateR2Store:
                     self.run("purge", self.remote(prefix))
                 raise
 
-    def retain_latest(self, keep=7):
+    def retain_latest(self, keep=7, protected=()):
         listing = self.run("lsjson", self.remote("scanner/v1/revisions"), "--recursive", "--files-only", capture=True)
         # Prefixes have no reliable timestamp in object storage. Manifest
         # objects are commit markers, so their LastModified value orders only
         # complete revisions and excludes abandoned partial uploads.
         manifests = [item for item in json.loads(listing.stdout) if item.get("Path", "").endswith("/manifest.json")]
         manifests.sort(key=lambda item: item.get("ModTime", ""), reverse=True)
-        for item in manifests[keep:]:
+        revisions = [item["Path"].split("/", 1)[0] for item in manifests]
+        retained = set(protected) & set(revisions)
+        if len(retained) > keep:
+            raise RuntimeError('Protected scanner revisions exceed the retention budget')
+        for revision in revisions:
+            if len(retained) >= keep:
+                break
+            retained.add(revision)
+        for item in manifests:
             revision = item["Path"].split("/", 1)[0]
-            self.run("purge", self.remote("scanner/v1/revisions/" + revision))
+            if revision not in retained:
+                self.run("purge", self.remote("scanner/v1/revisions/" + revision))
 
 
-def publish_private_pack(source, revision):
+def publish_private_pack(source, revision, active_revision=None):
     mode = os.environ.get("EDL_SCANNER_STORAGE", "local")
     if mode not in {"local", "r2"}:
         raise RuntimeError('EDL_SCANNER_STORAGE must be "local" or "r2"')
@@ -258,6 +267,8 @@ def publish_private_pack(source, revision):
             return False
         store = PrivateR2Store()
         store.publish(source, revision)
-        store.retain_latest(7)
+        # Git pointer promotion follows chart publication and may still fail.
+        # Never remove the pack currently referenced by that pointer.
+        store.retain_latest(7, protected={revision, active_revision})
         return True
     return False

@@ -101,8 +101,9 @@ class SnapshotPublicationTests(unittest.TestCase):
             root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
             publish(root,output); original=(output/'current.json').read_bytes()
             self.fixture(root,cap=7000)
-            with patch('publish_snapshot.publish_private_pack',side_effect=RuntimeError('R2 failed')):
+            with patch('publish_snapshot.publish_private_pack',side_effect=RuntimeError('R2 failed')) as upload:
                 with self.assertRaisesRegex(RuntimeError,'R2 failed'): publish(root,output)
+                self.assertEqual(upload.call_args.kwargs['active_revision'],json.loads(original)['revision'])
             self.assertEqual((output/'current.json').read_bytes(),original)
 
     def test_optional_private_pack_is_not_advertised(self):

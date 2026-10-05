@@ -5,7 +5,7 @@ from .base_publication import compact_base_records
 STAGES = ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT')
 METRICS = {
     'pivot','distanceFromPivotPct','breakoutAgeSessions','belowPivotCloses','returnSinceBreakoutPct',
-    *('base.'+key for key in ('ageSessions','depthPct','atrContraction','volumeDryUp','quietDepth','quietAgeSessions','upDownVolumeRatio','netUpDownVolume','rsStart','rsEnd','rsAverage','rsMinimum','rsMaximum')),
+    *('base.'+key for key in ('ageSessions','depthPct','atrContraction','volumeDryUp','quietDepth','quietAgeSessions','upDownVolumeRatio','netUpDownVolume','rsStart','rsEnd','rsAverage','rsMinimum','rsMaximum','level','overheadPct','nestedCount')),
     *('breakout.'+key for key in ('volumeRatio','gapPct','throughPct','dailyGainPct','closeInRange')),
     *(scope+'.'+key for scope in ('selection','current') for key in ('medianTurnover20','distanceClosing52wHigh','aboveClosing52wLow','listingAgeWeeks','rsRating','rsChange5','rsChange22','industryRelative63','industryRelative252')),
     *(scope+'.'+prefix+kind+str(period) for scope in ('selection','current') for prefix in ('distance','slope') for kind in ('SMA','EMA') for period in (10,20,50,100,150,200)),

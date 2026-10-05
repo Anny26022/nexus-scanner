@@ -190,6 +190,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
         if episode['breakout'] is None:
             end = index if episode['exit'] is None else int(frame.index[frame.Date.dt.strftime('%Y-%m-%d').eq(episode['exit']['date'])][0])
             episode['base'] = measure_base(frame,episode['_start'],end,atr_pct,rs)
+            episode['base'].update(level=episode['level'],overheadPct=episode['overheadPct'],nestedCount=episode['nestedCount'])
         if episode['breakout'] is not None:
             origin = episode['_breakout']
             entry = episode['breakout']['close']

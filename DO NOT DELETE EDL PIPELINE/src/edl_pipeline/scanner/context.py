@@ -12,6 +12,7 @@ from .financials import financial_value
 
 
 CONTEXT_CONDITION_REGISTRY = {
+    **{kind:{'inputs':{'stage':'string','metric':'string','comparison':'comparison','value':'number'},'definition':'Compare facts from one selected detected base.'} for kind in ('base_stage','base_metric','base_formula')},
     "relative_strength": {"inputs": {"benchmark": "string", "window": "integer", "comparison": "comparison", "value": "number"}, "definition": "Stock return less benchmark return over the same sessions, in percentage points."},
     "rs_new_high": {"inputs": {"benchmark": "string", "lookback_days": "integer", "minimum_price_below_high_percent": "number"}, "definition": "Relative-strength line is at its lookback high while price remains below its own high."},
     "rs_rating": {"inputs": {"window": "one_month | three_month | six_month | twelve_month | front_weighted", "comparison": "comparison", "value": "number"}, "definition": "Cross-sectional 1–99 Nifty 500 relative-strength percentile for a 21/63/126/252-session horizon, or its 40/20/20/20 front-weighted composite."},

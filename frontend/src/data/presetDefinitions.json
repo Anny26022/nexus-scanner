@@ -2231,5 +2231,937 @@
         }
       ]
     }
+  },
+  {
+    "id": "lib-nexus-strong-bases",
+    "name": "Strong Bases",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Liquid, shallow, tightening bases with persistent RS leadership, within 5% below pivot.",
+    "aka": [],
+    "version": "nexus-bases-1",
+    "rules": [
+      "Liquid, shallow, tightening bases with persistent RS leadership, within 5% below pivot."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "FORMING",
+            "holdingPolicy": "ANY"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.medianTurnover20",
+            "comparison": "ABOVE",
+            "value": 5
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceSMA200",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.slopeSMA200",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.rsRating",
+            "comparison": "ABOVE",
+            "value": 80
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.rsChange22",
+            "comparison": "ABOVE",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceClosing52wHigh",
+            "comparison": "BELOW",
+            "value": 20
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "ABOVE",
+            "value": 15
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "BELOW",
+            "value": 100
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.depthPct",
+            "comparison": "BELOW",
+            "value": 25
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.atrContraction",
+            "comparison": "BELOW",
+            "value": 0.8
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.volumeDryUp",
+            "comparison": "BELOW",
+            "value": 0.8
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "ABOVE",
+            "value": -5
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "BELOW",
+            "value": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-nexus-fresh-breakouts",
+    "name": "Fresh Breakouts",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Qualified frozen base, 1.5\u00d7 median volume, strong close and latest-five-session breakout.",
+    "aka": [],
+    "version": "nexus-bases-1",
+    "rules": [
+      "Qualified frozen base, 1.5\u00d7 median volume, strong close and latest-five-session breakout."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "holdingPolicy": "ANY"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "selection.medianTurnover20",
+            "comparison": "ABOVE",
+            "value": 5
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "selection.distanceSMA200",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "selection.slopeSMA200",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "selection.rsRating",
+            "comparison": "ABOVE",
+            "value": 80
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "selection.rsChange22",
+            "comparison": "ABOVE",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "selection.distanceClosing52wHigh",
+            "comparison": "BELOW",
+            "value": 20
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "base.ageSessions",
+            "comparison": "ABOVE",
+            "value": 15
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "base.ageSessions",
+            "comparison": "BELOW",
+            "value": 100
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "base.depthPct",
+            "comparison": "BELOW",
+            "value": 25
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "base.atrContraction",
+            "comparison": "BELOW",
+            "value": 0.8
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "base.volumeDryUp",
+            "comparison": "BELOW",
+            "value": 0.8
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "breakout.volumeRatio",
+            "comparison": "ABOVE",
+            "value": 1.5
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "breakout.closeInRange",
+            "comparison": "ABOVE",
+            "value": 0.7
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "breakout.throughPct",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "distanceFromPivotPct",
+            "comparison": "BELOW",
+            "value": 5
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "distanceFromPivotPct",
+            "comparison": "ABOVE",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FRESH_BREAKOUT",
+            "metric": "breakoutAgeSessions",
+            "comparison": "BELOW",
+            "value": 4
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-nexus-holding-breakouts",
+    "name": "Holding Breakouts",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Qualified breakouts that have continuously held the original pivot.",
+    "aka": [],
+    "version": "nexus-bases-1",
+    "rules": [
+      "Qualified breakouts that have continuously held the original pivot."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "HOLDING",
+            "holdingPolicy": "STRICT"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "selection.medianTurnover20",
+            "comparison": "ABOVE",
+            "value": 5
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "selection.distanceSMA200",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "selection.slopeSMA200",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "selection.rsRating",
+            "comparison": "ABOVE",
+            "value": 80
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "selection.rsChange22",
+            "comparison": "ABOVE",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "selection.distanceClosing52wHigh",
+            "comparison": "BELOW",
+            "value": 20
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "base.ageSessions",
+            "comparison": "ABOVE",
+            "value": 15
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "base.ageSessions",
+            "comparison": "BELOW",
+            "value": 100
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "base.depthPct",
+            "comparison": "BELOW",
+            "value": 25
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "base.atrContraction",
+            "comparison": "BELOW",
+            "value": 0.8
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "base.volumeDryUp",
+            "comparison": "BELOW",
+            "value": 0.8
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "breakout.volumeRatio",
+            "comparison": "ABOVE",
+            "value": 1.5
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "breakout.closeInRange",
+            "comparison": "ABOVE",
+            "value": 0.7
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "HOLDING",
+            "metric": "breakout.throughPct",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-nexus-vcp-base",
+    "name": "VCP Base",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Contracting base with drying volume, trend alignment and relative strength.",
+    "aka": [],
+    "version": "nexus-bases-1",
+    "rules": [
+      "Contracting base with drying volume, trend alignment and relative strength."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "FORMING",
+            "holdingPolicy": "ANY"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.atrContraction",
+            "comparison": "ABOVE",
+            "value": 0.3
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.atrContraction",
+            "comparison": "BELOW",
+            "value": 0.9
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.volumeDryUp",
+            "comparison": "ABOVE",
+            "value": 0.05
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.volumeDryUp",
+            "comparison": "BELOW",
+            "value": 0.9
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "ABOVE",
+            "value": 15
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "BELOW",
+            "value": 1500
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.depthPct",
+            "comparison": "ABOVE",
+            "value": 2
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.depthPct",
+            "comparison": "BELOW",
+            "value": 35
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceSMA50",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceSMA200",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceClosing52wHigh",
+            "comparison": "BELOW",
+            "value": 30
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.aboveClosing52wLow",
+            "comparison": "ABOVE",
+            "value": 15
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.rsRating",
+            "comparison": "ABOVE",
+            "value": 70
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-nexus-blue-sky",
+    "name": "Blue Sky",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Strong forming base without higher closing-price supply in available history.",
+    "aka": [],
+    "version": "nexus-bases-1",
+    "rules": [
+      "Strong forming base without higher closing-price supply in available history."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "FORMING",
+            "holdingPolicy": "ANY"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.overheadPct",
+            "comparison": "EQUAL",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.rsRating",
+            "comparison": "ABOVE",
+            "value": 70
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "ABOVE",
+            "value": -20
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "BELOW",
+            "value": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-nexus-multi-year-base",
+    "name": "Multi-year Base",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Long-duration base above the 200 SMA with improving price position.",
+    "aka": [],
+    "version": "nexus-bases-1",
+    "rules": [
+      "Long-duration base above the 200 SMA with improving price position."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "FORMING",
+            "holdingPolicy": "ANY"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "ABOVE",
+            "value": 252
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "BELOW",
+            "value": 1500
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceSMA200",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.rsRating",
+            "comparison": "ABOVE",
+            "value": 60
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "ABOVE",
+            "value": -20
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "BELOW",
+            "value": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-nexus-ipo-base",
+    "name": "IPO Base",
+    "category": "Bases & Contraction",
+    "horizon": "Positional",
+    "description": "Recent official listing forming a shallow base above its 50 SMA.",
+    "aka": [],
+    "version": "nexus-bases-1",
+    "rules": [
+      "Recent official listing forming a shallow base above its 50 SMA."
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "BASE_STAGE",
+          "params": {
+            "stage": "FORMING",
+            "holdingPolicy": "ANY"
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.listingAgeWeeks",
+            "comparison": "ABOVE",
+            "value": 2
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.listingAgeWeeks",
+            "comparison": "BELOW",
+            "value": 50
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.ageSessions",
+            "comparison": "ABOVE",
+            "value": 15
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.depthPct",
+            "comparison": "ABOVE",
+            "value": 2
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "base.depthPct",
+            "comparison": "BELOW",
+            "value": 35
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "current.distanceSMA50",
+            "comparison": "GREATER",
+            "value": 0
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "ABOVE",
+            "value": -20
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "BASE_METRIC",
+          "params": {
+            "stage": "FORMING",
+            "metric": "distanceFromPivotPct",
+            "comparison": "BELOW",
+            "value": 0
+          }
+        }
+      ]
+    }
   }
 ]

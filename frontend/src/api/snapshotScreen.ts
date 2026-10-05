@@ -1,5 +1,6 @@
 import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 
+import presetDefinitions from '../data/presetDefinitions.json';
 import { evaluateBaseCondition, type SelectedBases } from '../engine/baseConditions';
 
 type Truth = boolean | null;
@@ -44,6 +45,16 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
   const p = c.parameters;
   let fn: Predicate;
   let metadata = false;
+  if(c.conditionId.startsWith('lib-nexus-')){
+    const preset=presetDefinitions.find(item=>item.id===c.conditionId);
+    if(!preset)return null;
+    return s=>!s.historyAligned||s.asOfDate!==session?null:combine(preset.expression.children.map((node,index)=>{
+      const parameters={...node.params} as Record<string,any>;
+      if(node.kind==='BASE_METRIC' && p[`threshold${index}`]!==undefined)parameters.value=p[`threshold${index}`];
+      if(node.kind==='BASE_STAGE' && p.holdingPolicy!==undefined)parameters.holdingPolicy=p.holdingPolicy;
+      return evaluateBaseCondition(s.bases,{instanceId:String(index),conditionId:String(node.kind),parameters});
+    }),true);
+  }
   switch (c.conditionId) {
     case 'BASE_STAGE': case 'BASE_METRIC': case 'BASE_FORMULA': fn=s=>evaluateBaseCondition(s.bases,c); break;
     case 'mom_rvol': fn = s => between(s.rvol, p.minRvol, p.maxRvol); break;

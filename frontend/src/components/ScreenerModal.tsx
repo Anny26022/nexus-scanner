@@ -117,7 +117,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
 
   const updateParam = (condId: string, paramId: string, value: any) => {
     setLocalMap((prev) => {
-      const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === condId);
+      const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === condId) ?? PRESET_CATALOG.find(c=>c.id===condId);
       const existing = prev[condId];
       if (!existing && def) {
         const params: Record<string, any> = {};
@@ -310,7 +310,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
                     </label>
 
                     {/* Inputs keep their own compact groups and wrap inside this row when needed. */}
-                    {activeTab === 'custom' && def.parameters && def.parameters.length > 0 && (
+                    {(activeTab === 'custom' || checked) && def.parameters && def.parameters.length > 0 && (
                       <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
                         {def.parameters.map((p) => renderInput(def.id, p, checked))}
                       </div>

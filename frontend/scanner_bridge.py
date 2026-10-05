@@ -45,6 +45,14 @@ def band(kind, field, low, high, **params):
 
 
 def translate(identifier, p):
+    if identifier.startswith('lib-nexus-'):
+        preset=get_preset(identifier)
+        for index,node in enumerate(preset['expression']['children']):
+            if node['kind']=='BASE_METRIC' and f'threshold{index}' in p:
+                node['params']['value']=p[f'threshold{index}']
+            elif node['kind']=='BASE_STAGE' and 'holdingPolicy' in p:
+                node['params']['holdingPolicy']=p['holdingPolicy']
+        return preset['expression']
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
         return {"type": "preset", "expression": preset["expression"]}

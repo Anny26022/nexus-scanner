@@ -338,6 +338,16 @@ def _persisted(frame, average, comparison, days, mode):
 
 
 def _evaluate(frame, spec, delivery_history=None, context=None):
+    base_kind=str(spec.get('kind') or spec.get('condition') or '').upper()
+    if base_kind in ('BASE_STAGE','BASE_METRIC','BASE_FORMULA'):
+        from .base_conditions import evaluate_base_condition
+        context=context or {}
+        records=context.get('base_episodes')
+        if isinstance(records,dict) and (context.get('stock') or {}).get('symbol') in records:
+            records=records[context['stock']['symbol']]
+        parameters=spec.get('params',spec)
+        value=evaluate_base_condition(records,base_kind,parameters)
+        return _unavailable(base_kind.lower(),'base_record_unavailable') if value is None else _result(base_kind.lower(),value)
     spec = normalize_condition_spec(spec)
     condition = spec.get("condition") or spec.get("id")
     if condition not in CONDITION_REGISTRY and condition != "field_comparison":

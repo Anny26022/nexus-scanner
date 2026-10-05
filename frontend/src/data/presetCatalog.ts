@@ -10,5 +10,10 @@ const categories: Record<string, ConditionCategory> = {
 
 export const PRESET_CATALOG: ConditionDef[] = definitions.map(p => ({
   id: p.id, label: p.name, category: categories[p.category] ?? 'trend',
-  description: p.rules.join('; '), parameters: [],
+  description: p.rules.join('; '), parameters: p.id.startsWith('lib-nexus-') ? p.expression.children.flatMap<ConditionDef['parameters'][number]>((node,index)=>{
+    const parameters=node.params as Record<string,unknown>;
+    if(node.kind==='BASE_STAGE')return [{id:'holdingPolicy',label:'Holding policy',type:'select' as const,defaultValue:parameters.holdingPolicy,
+      options:[{label:'Any',value:'ANY'},{label:'Always above pivot',value:'STRICT'},{label:'Retests allowed',value:'RETEST'}]}];
+    return [{id:`threshold${index}`,label:`${String(parameters.metric)} ${String(parameters.comparison).toLowerCase()}`,type:'number' as const,defaultValue:parameters.value}];
+  }) : [],
 }));

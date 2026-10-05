@@ -75,3 +75,22 @@ A breakout failure (first close back inside the base) is separate from a trade
 exit. Forward 5/20/60-session returns and excursions are only populated after
 the full horizon exists and continue measuring market outcomes after an exit.
 Transaction-cost modelling and replay cohort aggregation remain to implement.
+
+## Editable Nexus presets
+
+Seven `lib-nexus-*` definitions extend the original 45 offline presets. Strong
+Bases, Fresh Breakouts, Holding Breakouts, VCP Base, Blue Sky, Multi-year Base
+and IPO Base use the same stage-selected records as individual conditions.
+Numeric thresholds and the holding policy are editable in the existing preset
+panel. Changed thresholds are evaluated directly instead of using unchanged
+precomputed matches. The defaults are research starting points.
+
+Fresh Breakouts and Holding Breakouts apply quality checks to `selection`
+(pre-breakout context) and contraction/depth checks to the frozen `base`.
+Extension and pivot holding use current observations. Forming presets use
+current context. Blue Sky means no higher close in the available cache; it is
+not proof of an all-time high when historical coverage is incomplete.
+
+Targeted preset tests cover edited thresholds, frozen quality, session
+alignment and strict/retest policies. Rendered UI, full-universe replay and
+performance acceptance are still outstanding.

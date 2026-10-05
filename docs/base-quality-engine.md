@@ -436,3 +436,11 @@ stock metadata and these authoritative candle files. Snapshot publication
 already replaces aligned rows' open/high/low/close/volume with their candle
 values; final release validation must verify those replacements rather than
 assume date equality proves numeric equality. No source prices were edited.
+
+
+Chart generation now retains numeric cross-sectional frames without retaining
+a duplicate universe-wide candle-dictionary cache. Each output payload reloads
+only its own candle history. Nine pipeline chart/news tests and thirteen chart
+publication tests pass, including equality of frozen base facts and news
+preservation. Full recovered-data chart generation is queued after scanner
+publication so the two complete-universe jobs do not compete for memory.

@@ -187,9 +187,11 @@ def main() -> int:
     temporary.mkdir(parents=True)
     count = 0
     canonical={str(stock.get('symbol') or stock.get('Symbol')).upper():canonicalize_stock(stock) for stock in stocks if stock.get('symbol') or stock.get('Symbol')}
-    candle_cache={symbol:_load_candles(root/'ohlcv_data'/f'{symbol}.csv',as_of) for symbol in canonical}
     frames={}
-    for symbol,candles in candle_cache.items():
+    # Retain numeric frames for cross-sectional strength, not a second universe
+    # of candle dictionaries. Chart payloads are loaded one symbol at a time.
+    for symbol in canonical:
+        candles=_load_candles(root/'ohlcv_data'/f'{symbol}.csv',as_of)
         if not candles or candles[-1]['date']!=as_of or not canonical[symbol].get('default_screener_eligible',True): continue
         frame=pd.DataFrame(candles).rename(columns={key:key.title() for key in ('date','open','high','low','close','volume')})
         frame['Date']=pd.to_datetime(frame.Date)
@@ -207,7 +209,7 @@ def main() -> int:
         symbol = str(stock.get("Symbol") or stock.get("symbol") or "").upper()
         if not symbol:
             continue
-        candles = candle_cache[symbol]
+        candles = _load_candles(root/'ohlcv_data'/f'{symbol}.csv',as_of)
         payload = {
             "schemaVersion": 1, "symbol": symbol, "asOfDate": as_of,
             "historyStartDate": candles[0]["date"] if candles else None,

@@ -69,6 +69,44 @@ class PublishedFieldsTests(unittest.TestCase):
         row['AVG_PRICE'] = 'NaN'
         self.assertNotIn('vwap', normalize_ohlcv_row(row))
 
+    def test_nse_auction_open_expands_the_daily_envelope(self):
+        row = normalize_ohlcv_row({
+            'SYMBOL':'EIFFL', 'SERIES':'BE', 'DATE1':'05-Oct-2026',
+            'OPEN_PRICE':'267.75', 'HIGH_PRICE':'262.40',
+            'LOW_PRICE':'262.40', 'CLOSE_PRICE':'262.40',
+            'TTL_TRD_QNTY':'573',
+        })
+        self.assertEqual(
+            {key: row[key] for key in ('open', 'high', 'low', 'close')},
+            {'open':267.75, 'high':267.75, 'low':262.4, 'close':262.4},
+        )
+        self.assertEqual(row['reported_high'], 262.4)
+        self.assertTrue(row['ohlc_envelope_adjusted'])
+
+    def test_official_bhavcopy_replaces_live_snapshot_ohlcv(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stock = {
+                'Symbol':'EIFFL', 'open':267.75, 'high':262.4,
+                'low':262.4, 'close':262.4, 'volume':1,
+            }
+            bhavcopy = {
+                'as_of_date':'2026-10-05',
+                'ohlcv_records':[{
+                    'symbol':'EIFFL', 'date':'2026-10-05',
+                    'open':267.75, 'high':267.75, 'low':262.4,
+                    'close':262.4, 'volume':573,
+                    'ohlc_envelope_adjusted':True,
+                }],
+            }
+            enrich([stock], bhavcopy, {}, {}, Path(tmp))
+            self.assertEqual(
+                [stock[key] for key in ('open', 'high', 'low', 'close', 'volume')],
+                [267.75, 267.75, 262.4, 262.4, 573],
+            )
+            self.assertEqual(stock['rupee_volume'], 150355.2)
+            self.assertEqual(stock['as_of_date'], '2026-10-05')
+            self.assertTrue(stock['ohlc_envelope_adjusted'])
+
     def test_dividend_source_details_and_ambiguity(self):
         self.assertEqual(dividend_amount('Dividend - Rs. 5/- per share'), 5)
         self.assertEqual(dividend_amount('Interim Dividend Re 0.50 Per Share'), .5)

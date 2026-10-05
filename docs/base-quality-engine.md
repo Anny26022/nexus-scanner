@@ -333,3 +333,14 @@ ten inspector observations sampled a maximum of 81,072,852 bytes of heap plus
 backing storage. This fixture still lacks detailed base slices and complete
 historical episode archives; worst supported expressions and real R2 network
 latency remain separate acceptance gates. No production data was published.
+
+
+Detailed slices were subsequently calculated from each selected base's original
+candle boundaries and added to the same full-auxiliary runtime fixture. An
+all-match 100-row-page scan measured 1,896 ms cold, 11.0 ms cached and 96,293,572
+bytes sampled heap plus backing storage. A separate maximum-leaf fixture used
+one price comparison plus 31 private base-slice arithmetic leaves in a nested
+boolean expression, with all leaves evaluated: 2,054 ms cold, 11.4 ms cached,
+89,278,788 bytes sampled memory across five cold scans. No full-history archive
+objects were read by these latest-session scans. These are observed local
+measurements, not production Cloudflare CPU or guaranteed peak memory values.

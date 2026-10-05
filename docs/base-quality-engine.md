@@ -283,3 +283,12 @@ MULTIPLY or DIVIDE over two whitelisted metrics of the same selected episode.
 Private metrics send the complete query to the advanced service. Results show
 base explanations and stage-specific charts for text queries as well as filters.
 Cross-language compiler tests cover all three functions and invalid syntax.
+
+The current CLI was replayed through 1 October for RELIANCE, TCS, VENUSPIPES
+and HDFCBANK while retaining full-universe strength calculations. It selected
+five trades. An independent check against the source CSVs verified all five
+next-session-open entries, five next-session trade exits and fifteen 5/20/60
+session outcome returns, costs and excursion measurements. This small sample
+checks execution correctness; it does not establish threshold effectiveness.
+The report records the 30 September metadata date separately from the replay
+cutoff, preserving the known current-classification limitation.

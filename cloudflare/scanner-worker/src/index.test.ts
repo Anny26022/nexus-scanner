@@ -122,6 +122,17 @@ it('runs a complete nested base preset and private metric through verified R2 sh
   expect(put).toHaveBeenCalledOnce();const reads=get.mock.calls.length;
   match.mockImplementation(async()=>response.clone() as any);
   const cached=await worker.fetch(request(),env,execution);expect(cached.status).toBe(200);expect(get).toHaveBeenCalledTimes(reads);
+  match.mockImplementation(async()=>undefined);
+  const query='Base Stage(FORMING) AND (Base Metric(FORMING, current.distanceEMA150) > 7 OR Base Metric(FORMING, base.depthPct) < 10)';
+  const textRequest=(textQuery:string)=>new Request('https://worker.example/v1/screens/run',{method:'POST',headers:{origin:'https://app.example'},body:JSON.stringify({...payload,textQuery})});
+  const textResponse=await worker.fetch(textRequest(query),env,execution);
+  expect(textResponse.status).toBe(200);
+  const textBody=await textResponse.json() as any;
+  expect(textBody.rows.map((row:any)=>row.symbol)).toEqual(['TEST']);
+  expect(textBody.unavailableDiagnostics).toEqual([]);
+  const invalidResponse=await worker.fetch(textRequest(`${query} AND Base Metric(FORMING, imaginary) > 1`),env,execution);
+  expect(invalidResponse.status).toBe(400);
+  expect(await invalidResponse.json()).toMatchObject({error:'Unsupported base metric'});
 });
 
 it('serializes cold scans, releases failed work and bounds admission',async()=>{

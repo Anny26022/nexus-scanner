@@ -514,3 +514,18 @@ latest-session scans required only manifested runtime objects. This is local
 workerd/R2 emulation, not production network/CPU evidence. A local harness
 file-path startup failure reproduced with a one-line Worker and was resolved
 by passing the same built module bytes directly; production code was unchanged.
+
+
+Actual-release local stress measurements used one current-price leaf plus 31
+private slice-arithmetic leaves, an all-match 100-row page and all dated auxiliary
+data. The cold response measured 2,110.86 ms and cached response 13.82 ms.
+Four queued cold requests completed in 8,656.92 ms. Eight inspector observations
+sampled a maximum 86,739,780 bytes heap plus backing storage, below the 100 MB
+acceptance target; this is observed sampling, not a guaranteed hard peak or a
+production Cloudflare CPU measurement.
+
+The real browser application served the validated release and returned 1,919
+forming/depth matches and 863 private half-volume arithmetic matches, agreeing
+with Python/workerd. The base explanation column rendered and private queries
+used the advanced API. Only core/technical packs loaded for the default screen;
+fundamentals were not fetched unnecessarily. Chart checks remain in progress.

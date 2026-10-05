@@ -70,7 +70,7 @@ def trend_context(frame,index,ranks=None,listing_date=None):
     return {key:finite(value) for key,value in trend_series(frame,ranks,listing_date).iloc[index].items()}
 
 
-def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None):
+def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False):
     frames=normalize_frames(frames)
     requested=set(frames) if symbols is None else set(symbols)
     missing=requested-set(frames)
@@ -109,6 +109,8 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
         if rank_history is not None:
             rank_history[symbol]={'dates':[str(day.date()) for day in frame.Date], 'ratings':[finite(value) for value in rank]}
         episodes=detect_bases(frame,symbol,config=config,rs=rank)
+        if selected_only:
+            episodes=list(selected_base_episodes(episodes).values())
         context_rows=trend_series(frame,rank,stocks[symbol].get('listing_date'))
         for days in (5,22):
             context_rows[f'rsChange{days}']=(ranks[symbol]-ranks[symbol].shift(days)).reindex(frame.Date).to_numpy(float)
@@ -153,13 +155,20 @@ PUBLIC_CONTEXT_KEYS={
     'industryAboveSMA50Pct','industryAboveSMA200Pct','distanceSMA50','distanceSMA200','slopeSMA200',
 }
 
-def compact_base_records(episodes, include_parts=False, public=False):
-    """One deterministic episode per stage; every filter sees the same record."""
+def selected_base_episodes(episodes):
+    """Select stable episode identities independently of their output projection."""
     selected = {}
     for stage in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT'):
         candidates = [e for e in episodes if e['stage']==stage and e['base']['ageSessions']>=e['config']['min_sessions']]
         if not candidates: continue
-        episode = max(candidates,key=lambda e:((e['breakout'] or {}).get('date',e['base']['startDate']),e['id']))
+        selected[stage] = max(candidates,key=lambda e:((e['breakout'] or {}).get('date',e['base']['startDate']),e['id']))
+    return selected
+
+
+def compact_base_records(episodes, include_parts=False, public=False):
+    """One deterministic episode per stage; every filter sees the same record."""
+    selected = {}
+    for stage,episode in selected_base_episodes(episodes).items():
         selected[stage] = {key:episode[key] for key in (
             'id','stage','pivot','distanceFromPivotPct','breakout','breakoutAgeSessions',
             'holdsPivot','continuousHolding','belowPivotCloses','breakoutFailure',

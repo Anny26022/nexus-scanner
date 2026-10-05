@@ -202,7 +202,7 @@ def main() -> int:
         if not benchmark.empty and {'date','close'}.issubset(benchmark):
             benchmark['Date']=pd.to_datetime(benchmark.date)
             benchmarks['NIFTY_500']=benchmark.loc[benchmark.Date<=pd.Timestamp(as_of)]
-    bases=build_base_records(frames,canonical,benchmarks)
+    bases=build_base_records(frames,canonical,benchmarks,selected_only=True)
     for stock in stocks:
         symbol = str(stock.get("Symbol") or stock.get("symbol") or "").upper()
         if not symbol:

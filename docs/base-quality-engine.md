@@ -299,3 +299,10 @@ protected even after multiple uploads fail later chart or pointer promotion.
 Manifest-less uploads do not count as completed rollback revisions. Tests check
 that an oldest active revision survives eight newer complete uploads, and that
 the publication path passes its active pointer revision into private retention.
+
+Chart generation uses `selected_only=True` to retain at most four full episodes
+per symbol after detection. It computes strength against the complete universe
+and uses the same deterministic stage selection as scanner publication. Tests
+compare selected chart output, including detailed slices and frozen context,
+against selection from full episode history. Full scanner archives and replay
+continue retaining every episode; no historical observations are removed.

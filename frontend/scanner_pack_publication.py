@@ -119,7 +119,9 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
     # filings ledger at once would consume most of a 128 MB Worker isolate.
     financial_history = context.get("financial_history", {})
     def available_filings(symbol):
-        return [record for record in financial_history.get(symbol, [])
+        provenance = {'symbol','isin','filing_caption','filing_descriptor','filing_source','filing_url','numeric_source'}
+        return [{key:value for key,value in record.items() if key not in provenance}
+                for record in financial_history.get(symbol, [])
                 if str(record.get("filing_date") or record.get("filedAt") or "")[:10] <= session]
     from edl_pipeline.scanner.base_publication import compact_base_records
     def selected_episodes(symbol):
@@ -134,9 +136,22 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
 
     for index, entries in enumerate(grouped):
         shard_symbols = {symbol for symbol, _frame in entries}
+        # Delivery conditions read only dated percentages on retained candle
+        # sessions. Quantity/provenance fields remain in the pipeline history;
+        # repeating them in runtime packs greatly inflates JSON heap usage.
+        delivery_rows = {}
+        for symbol, frame in entries:
+            dates = {str(day.date()) for day in frame['Date'].tail(MAX_SESSIONS)}
+            values = [{'date':row['date'], 'delivery_percent':row.get('delivery_percent')}
+                      for row in delivery.get(symbol, []) if row.get('date') in dates]
+            if values:
+                delivery_rows[symbol] = {
+                    'dates': [int(np.datetime64(row['date'], 'D').astype('int64')) for row in values],
+                    'percentages': [row['delivery_percent'] for row in values],
+                }
         aux = {
             "stocks": {symbol: native_rows[symbol] for symbol in sorted(shard_symbols) if symbol in native_rows},
-            "delivery": {symbol: delivery[symbol] for symbol in shard_symbols if symbol in delivery},
+            "delivery": delivery_rows,
             "earnings": {symbol: available_filings(symbol) for symbol in sorted(shard_symbols)
                          if available_filings(symbol)},
             "breadth": context.get("breadth", {}),

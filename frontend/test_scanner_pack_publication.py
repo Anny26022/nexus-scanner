@@ -36,9 +36,15 @@ class ScannerPackTests(unittest.TestCase):
 
     def test_binary_pack_is_deterministic_bounded_and_manifested(self):
         frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-10-01',periods=1600),'Open':1.,'High':2.,'Low':.5,'Close':1.5,'Volume':100.})
-        context={'stocks':{'TEST':{'symbol':'TEST'}},'benchmarks':{},'financial_history':{}}
+        context={'stocks':{'TEST':{'symbol':'TEST'}},'benchmarks':{},'financial_history':{'TEST':[
+            {'filing_date':'2026-10-01','quarter_end':'2026-06-30','report_type':'CONSOLIDATED','net_profit':12,'eps':3,'filing_url':'https://example.com/filing','symbol':'TEST'},
+            {'filing_date':'2026-10-02','net_profit':999}]}}
+        delivery={'TEST':[{'date':str(frame.Date.iloc[0].date()),'delivery_percent':99},
+                          {'date':'2026-10-01','delivery_percent':29,'source':'NSE','traded_quantity':123},
+                          {'date':'2026-10-01','delivery_percent':30,'source':'adjusted'},
+                          {'date':'2026-10-02','delivery_percent':100}]}
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder);target,manifest=build_private_scanner_pack(root,root/'packs','a'*64,'2026-10-01',Cache(frame),context,{},[])
+            root=Path(folder);target,manifest=build_private_scanner_pack(root,root/'packs','a'*64,'2026-10-01',Cache(frame),context,delivery,[])
             self.assertEqual(manifest['shards'],SHARD_COUNT)
             for key,value in checked_identity().items(): self.assertEqual(manifest[key],value)
             self.assertEqual(manifest['symbols'],1)
@@ -53,8 +59,14 @@ class ScannerPackTests(unittest.TestCase):
             self.assertEqual(header['symbols'][0]['count'],1500)
             auxiliary={item['key'] for item in manifest['objects'] if item['key'].startswith('auxiliary/')}
             self.assertEqual(len(auxiliary),SHARD_COUNT)
+            populated_aux=next(item for item in manifest['objects'] if item['key'].startswith('auxiliary/') and item.get('symbols')==1)
+            runtime_delivery=json.loads(gzip.decompress((target/populated_aux['key']).read_bytes()))['delivery']['TEST']
+            day=(pd.Timestamp('2026-10-01')-pd.Timestamp('1970-01-01')).days
+            self.assertEqual(runtime_delivery,{'dates':[day,day],'percentages':[29,30]})
+            runtime_earnings=json.loads(gzip.decompress((target/populated_aux['key']).read_bytes()))['earnings']['TEST']
+            self.assertEqual(runtime_earnings,[{'filing_date':'2026-10-01','quarter_end':'2026-06-30','report_type':'CONSOLIDATED','net_profit':12,'eps':3}])
             self.assertEqual({item['key'] for item in manifest['objects'] if not item['key'].startswith(('shards/','auxiliary/'))},{'benchmarks.json.gz','metadata.json.gz'})
-            second, second_manifest=build_private_scanner_pack(root,root/'packs-2','a'*64,'2026-10-01',Cache(frame),context,{},[])
+            second, second_manifest=build_private_scanner_pack(root,root/'packs-2','a'*64,'2026-10-01',Cache(frame),context,delivery,[])
             self.assertEqual(manifest,second_manifest)
             for descriptor in manifest['objects']:
                 self.assertEqual((target/descriptor['key']).read_bytes(),(second/descriptor['key']).read_bytes())

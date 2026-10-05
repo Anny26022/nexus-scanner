@@ -10,7 +10,7 @@ export interface AdvancedContext {
   bases?: BaseRecord[];
   session: string;
   benchmarks?: Record<string,{dates:number[];closes:number[]}>;
-  delivery?: Array<Record<string,unknown>>;
+  delivery?: Array<Record<string,unknown>> | {dates:number[];percentages:unknown[]};
   earnings?: Array<Record<string,unknown>>;
   breadth?: Record<string,Record<string,number|null>>;
 }
@@ -191,10 +191,10 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
   else if(id==='AVG_VOLUME_RATIO'){const recent=n(p.recentDays),base=n(p.baseDays);result=series.volume.length<recent+base?null:compare(mean(slice(series.volume,-recent))/mean(slice(series.volume,-recent-base,-recent)),p.comparison,p.ratio);}
   else if(id==='HIGHEST_VOLUME_IN_N_DAYS'){const look=n(p.lookbackDays),flags=Array.from({length:series.volume.length},(_,i)=>i+1<look?null:series.volume[i]>=max(slice(series.volume,i+1-look,i+1))&&(!p.positiveClose||series.close[i]>series.close[i-1]));result=event(flags,n(p.withinDays,1));}
   else if(id==='DELIVERY_PCT_SPIKE'){
-    const byDate=new Map((context.delivery??[]).map(row=>[String(row.date),n(row.delivery_percent,NaN)])),within=Math.max(1,n(p.withinDays,1)),values=slice(series.dates,-within).map(day=>byDate.get(new Date(day*86400000).toISOString().slice(0,10))).filter((value):value is number=>value!==undefined&&Number.isFinite(value));
+    const delivery=context.delivery??[],packed=!Array.isArray(delivery),byDate=new Map<string|number,number>(Array.isArray(delivery)?delivery.map(row=>[String(row.date),n(row.delivery_percent,NaN)]):delivery.dates.map((day,index)=>[day,n(delivery.percentages[index],NaN)])),within=Math.max(1,n(p.withinDays,1)),values=slice(series.dates,-within).map(day=>byDate.get(packed?day:new Date(day*86400000).toISOString().slice(0,10))).filter((value):value is number=>value!==undefined&&Number.isFinite(value));
     result=values.length?values.some(value=>value>=n(p.minDeliverablePct)):null;
   }
-  else if(id==='DELIVERY_PERCENT'){const item=context.delivery?.find(row=>row.date===context.session),value=n(item?.delivery_percent,NaN);result=Number.isFinite(value)?compare(value,p.comparison,p.value):null;}
+  else if(id==='DELIVERY_PERCENT'){const delivery=context.delivery??[],value=Array.isArray(delivery)?n(delivery.find(row=>row.date===context.session)?.delivery_percent,NaN):n(delivery.percentages[delivery.dates.indexOf(Math.floor(Date.parse(context.session)/86400000))],NaN);result=Number.isFinite(value)?compare(value,p.comparison,p.value):null;}
   else if(id==='NEW_HIGH'||id==='NEW_LOW'){const look=n(p.lookbackDays),source=id==='NEW_HIGH'?series.high:series.low,flags=Array.from({length:source.length},(_,i)=>i+1<look?null:id==='NEW_HIGH'?source[i]>=max(slice(source,i+1-look,i+1)):source[i]<=min(slice(source,i+1-look,i+1)));result=event(flags,n(p.withinDays,1));}
   else if(id==='PCT_FROM_52W_HIGH'||id==='PCT_FROM_52W_LOW'){const source=id.endsWith('HIGH')?series.high:series.low,extreme=id.endsWith('HIGH')?max(slice(source,-252)):min(slice(source,-252)),distance=id.endsWith('HIGH')?(extreme-last(series.close))/extreme*100:(last(series.close)-extreme)/extreme*100;result=compare(distance,p.comparison,p.pct);}
   else if(id==='CONSOLIDATION_RANGE'){const end=series.close.length-n(p.excludeLatest),start=end-n(p.lookbackDays);result=start<0?null:(max(slice(series.high,start,end))-min(slice(series.low,start,end)))/series.close[end-1]*100<=n(p.maxRangePct);}

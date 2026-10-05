@@ -199,7 +199,7 @@ fixture; complete production session alignment remains a separate gate.
 The exact CI pipeline test command now works without a custom PYTHONPATH. The
 five new test modules resolve their source directory relative to their own file,
 matching existing test conventions. The current results are 230 pipeline tests,
-43 frontend Python publication/bridge tests and 73 frontend TypeScript tests.
+43 frontend Python publication/bridge tests and 74 frontend TypeScript tests.
 Chart dialogs initialize to the base stage selected in the results table.
 
 
@@ -306,3 +306,30 @@ and uses the same deterministic stage selection as scanner publication. Tests
 compare selected chart output, including detailed slices and frozen context,
 against selection from full episode history. Full scanner archives and replay
 continue retaining every episode; no historical observations are removed.
+
+
+### Broad-result and auxiliary-data memory checks
+
+An all-match local Workerd query exposed excessive retention: keeping full rows
+before pagination sampled 142 MB. The Worker now retains only symbol, sort value
+and shard location, then reconstructs complete rows for the requested page.
+Cross-shard sorting/pagination tests verify native fields and base explanations.
+Owned decompressed buffers and temporary candle columns are released after use
+where ArrayBuffer transfer is supported; older engines retain the GC fallback.
+
+Private delivery data is published as integer-day and percentage columns,
+restricted to retained candle sessions. Duplicate ordering is preserved. Both
+columnar and legacy row formats are supported by the shared engine; parity tests
+cover duplicate dates, latest delivery, spikes and unavailable percentages.
+Filings omit only identity/provenance strings unused by the scanner; numerical
+fields, report basis and filing/quarter dates remain. Original provenance remains
+in pipeline artifacts and chart events.
+
+The broader fixture includes 2,586 delivery histories, 2,431 financial ledgers
+and 346 benchmarks for 2,589 stocks. Runtime and selected-base archive objects
+compressed to 60,497,474 bytes. An all-match scan with a 100-row page took
+1,729 ms cold and 11.2 ms cached. Four queued cold scans took 6.69 seconds total;
+ten inspector observations sampled a maximum of 81,072,852 bytes of heap plus
+backing storage. This fixture still lacks detailed base slices and complete
+historical episode archives; worst supported expressions and real R2 network
+latency remain separate acceptance gates. No production data was published.

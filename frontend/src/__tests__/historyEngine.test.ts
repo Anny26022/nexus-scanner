@@ -20,6 +20,15 @@ const context={stock,session:'2026-10-01'};
 const leaf=(conditionId:string,parameters:Record<string,unknown>={}):ActiveCondition=>({instanceId:conditionId,conditionId,parameters});
 
 describe('shared history engine',()=>{
+  it('preserves delivery semantics with compact dated columns including duplicates and missing values',()=>{
+    const day=series.dates[length-1],session=new Date(day*86400000).toISOString().slice(0,10);
+    const rows=[{date:session,delivery_percent:20},{date:session,delivery_percent:65}];
+    const packed={dates:[day,day],percentages:[20,65]};
+    for(const condition of [leaf('DELIVERY_PERCENT',{comparison:'ABOVE',value:50}),leaf('DELIVERY_PCT_SPIKE',{minDeliverablePct:50,withinDays:1}),leaf('DELIVERY_PCT_SPIKE',{minDeliverablePct:50,withinDays:0})]){
+      expect(evaluateHistoryCondition(series,condition,{...context,session,delivery:packed})).toBe(evaluateHistoryCondition(series,condition,{...context,session,delivery:rows}));
+    }
+    expect(evaluateHistoryCondition(series,leaf('DELIVERY_PERCENT',{comparison:'ABOVE',value:1}),{...context,session,delivery:{dates:[day],percentages:[null]}})).toBeNull();
+  });
   it('keeps strict and inclusive comparisons distinct',()=>{
     expect(evaluateHistoryCondition(series,leaf('INDICATOR_COMPARE',{leftIndicator:'CLOSE',leftPeriod:1,op:'GREATER',rightValue:series.close[length-1],rightIndicator:'',withinDays:1}),context)).toBe(false);
     expect(evaluateHistoryCondition(series,leaf('INDICATOR_COMPARE',{leftIndicator:'CLOSE',leftPeriod:1,op:'ABOVE',rightValue:series.close[length-1],rightIndicator:'',withinDays:1}),context)).toBe(true);

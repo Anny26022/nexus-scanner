@@ -91,19 +91,19 @@ it('runs a complete nested base preset and private metric through verified R2 sh
   const base={id:'same-base',pivot:100,distanceFromPivotPct:-2,continuousHolding:true,holdsPivot:true,
     base:{ageSessions:40,depthPct:20,atrContraction:.6,volumeDryUp:.6},
     current:{medianTurnover20:10,distanceSMA200:10,slopeSMA200:1,rsRating:90,rsChange22:5,distanceClosing52wHigh:10}};
-  const stock={symbol:'TEST',name:'Test',historyAligned:true,asOfDate:session,metrics:{return21:12},bases:{FORMING:base}};
+  const stock={symbol:'TEST',name:'Test',close:100,marketCap:1000,historyAligned:true,asOfDate:session,metrics:{return21:12},bases:{FORMING:base}};
   const save=(key:string,value:unknown)=>objects.set(key,gzipSync(Buffer.from(JSON.stringify(value))));
   const nativeStock={...stock,bases:{FORMING:{...Object.fromEntries(Object.entries(base).filter(([key])=>!['base','current','selection'].includes(key))),stage:'FORMING'}}};
-  save('metadata.json.gz',{stocks:[{symbol:stock.symbol,name:stock.name,historyAligned:true,asOfDate:session}]});save('benchmarks.json.gz',{});
+  save('metadata.json.gz',{stocks:['TEST','OTHER'].map(symbol=>({symbol,name:symbol,historyAligned:true,asOfDate:session}))});save('benchmarks.json.gz',{});
   for(let index=0;index<32;index++){
-    const count=index===0?1:0,header=Buffer.from(JSON.stringify({symbols:count?[{symbol:'TEST',offset:0,count:1}]:[]}));
+    const count=index<2?1:0,symbol=index===0?'TEST':'OTHER',header=Buffer.from(JSON.stringify({symbols:count?[{symbol,offset:0,count:1}]:[]}));
     const dates=(12+header.length+7)&~7,values=(dates+count*4+7)&~7,raw=Buffer.alloc(values+count*40);
     raw.write('NSPK0001');raw.writeUInt32LE(header.length,8);header.copy(raw,12);
     if(count){raw.writeInt32LE(Math.floor(Date.parse(session)/86400000),dates);[100,102,98,100,1000].forEach((n,i)=>raw.writeDoubleLE(n,values+i*8));}
     const suffix=String(index).padStart(2,'0');objects.set(`shards/${suffix}.bin.gz`,gzipSync(raw));
-    save(`auxiliary/${suffix}.json.gz`,{stocks:count?{TEST:nativeStock}:{},delivery:{},earnings:{},bases:count?{TEST:[{...base,current:{...base.current,distanceEMA150:8}}]}:{}});
+    save(`auxiliary/${suffix}.json.gz`,{stocks:count?{[symbol]:{...nativeStock,symbol,close:symbol==='TEST'?100:80,marketCap:symbol==='TEST'?1000:500}}:{},delivery:{},earnings:{},bases:count?{[symbol]:[{...base,current:{...base.current,distanceEMA150:8}}]}:{}});
   }
-  const manifest={...SCANNER_IDENTITY,schemaVersion:7,revision,session,shards:32,symbols:1,maxSessions:1500,
+  const manifest={...SCANNER_IDENTITY,schemaVersion:7,revision,session,shards:32,symbols:2,maxSessions:1500,
     limits:{maxLeaves:32,maxDepth:8,maxPageSize:100,maxRequestBytes:100000},objects:[...objects].map(([key,buffer])=>({key,bytes:buffer.length,sha256:createHash('sha256').update(buffer).digest('hex')}))};
   const get=vi.fn(async(key:string)=>{const name=key.replace(`scanner/v1/revisions/${revision}/`,'');if(name==='manifest.json')return {json:async()=>manifest};const buffer=objects.get(name);return buffer?{arrayBuffer:async()=>buffer.buffer.slice(buffer.byteOffset,buffer.byteOffset+buffer.byteLength)}:null;});
   const env={...environment(),SCANNER_DATA:{get} as unknown as R2Bucket};
@@ -114,7 +114,7 @@ it('runs a complete nested base preset and private metric through verified R2 sh
     expressionTree:{type:'group',operator:'all',children:[leaf('PRICE_CHANGE_PCT',{overDays:21,comparison:'ABOVE',pct:10}),leaf('lib-nexus-strong-bases',{}),{type:'group',operator:'any',children:[leaf('BASE_METRIC',{stage:'FORMING',metric:'current.distanceEMA150',comparison:'GREATER',value:7}),leaf('BASE_METRIC',{stage:'FORMING',metric:'base.depthPct',comparison:'LESS',value:10})]}]}};
   const request=()=>new Request('https://worker.example/v1/screens/run',{method:'POST',headers:{origin:'https://app.example'},body:JSON.stringify(payload)});
   const response=await worker.fetch(request(),env,execution);expect(response.status).toBe(200);
-  const body=await response.clone().json() as any;expect(body.rows.map((row:any)=>row.symbol)).toEqual(['TEST']);expect(body.unavailableDiagnostics).toEqual([]);
+  const body=await response.clone().json() as any;expect(body.rows.map((row:any)=>row.symbol)).toEqual(['OTHER','TEST']);expect(body.unavailableDiagnostics).toEqual([]);
   expect(body.rows[0].bases.FORMING.base.depthPct).toBe(20);
   expect(body.rows[0].bases.FORMING.current.rsRating).toBe(90);
   expect(body.rows[0].bases.FORMING.current.distanceEMA150).toBeUndefined();
@@ -128,8 +128,14 @@ it('runs a complete nested base preset and private metric through verified R2 sh
   const textResponse=await worker.fetch(textRequest(query),env,execution);
   expect(textResponse.status).toBe(200);
   const textBody=await textResponse.json() as any;
-  expect(textBody.rows.map((row:any)=>row.symbol)).toEqual(['TEST']);
+  expect(textBody.rows.map((row:any)=>row.symbol)).toEqual(['OTHER','TEST']);
   expect(textBody.unavailableDiagnostics).toEqual([]);
+  const pageResponse=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',headers:{origin:'https://app.example'},body:JSON.stringify({...payload,page:2,pageSize:1,sort:{field:'marketCap',direction:'desc'}})}),env,execution);
+  expect(pageResponse.status).toBe(200);
+  const pageBody=await pageResponse.json() as any;
+  expect(pageBody.matchCount).toBe(2);
+  expect(pageBody.rows).toHaveLength(1);
+  expect(pageBody.rows[0]).toMatchObject({symbol:'OTHER',close:80,marketCap:500,bases:{FORMING:{base:{depthPct:20}}}});
   const invalidResponse=await worker.fetch(textRequest(`${query} AND Base Metric(FORMING, imaginary) > 1`),env,execution);
   expect(invalidResponse.status).toBe(400);
   expect(await invalidResponse.json()).toMatchObject({error:'Unsupported base metric'});

@@ -398,8 +398,12 @@ all selected metrics against the non-streaming implementation and check that
 private packs contain the complete archived objects even when runtime episode
 lists are empty. All 230 pipeline, 47 publication/bridge, 74 frontend TypeScript
 and 15 Worker tests pass; frontend production build and Worker type/dry-build
-checks pass. The replacement full-generation benchmark is running with progress
-logging; its final peak memory, duration and archive size remain to be verified.
+checks pass. The replacement full-generation benchmark completed for 2,589
+aligned stocks: 503,808 complete episodes archived, 5,360 selected episodes
+retained for runtime, 1,355.82 seconds (22.60 minutes), and 3,530,702,848 bytes
+peak process RSS. Complete compressed archives occupy 1,142,974,331 bytes.
+This benchmark used the older local stock artifact with the 1 October candle
+cutoff; the newer 2,603-row recovered-data publication is a separate check.
 
 
 The local Python bridge also retains only selected stage episodes. Cached base

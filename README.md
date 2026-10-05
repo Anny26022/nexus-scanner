@@ -832,3 +832,18 @@ Average-turnover filters, 20/50/100-session snapshot averages and the base's
 20-session median use complete official windows. Private scanner packs carry
 compact dated turnover arrays for the advanced Worker; common precomputed
 values remain in public packs. No BSE integration or estimated fallback is used.
+
+A calendar-aligned ten-year official turnover backfill can be run once:
+
+```sh
+python backfill_nse_turnover.py --years 10
+```
+
+The endpoint falls back to legacy NSE equity bhavcopy ZIPs when the full
+bhavcopy is absent. Legacy `TOTTRDVAL` is already rupees, whereas
+`TURNOVER_LACS` is multiplied by 100,000. Dates and finite nonnegative values
+are validated. A temporary disk index limits RAM use during long backfills;
+compressed daily files are reusable. Coverage extends only to existing stock
+candles, and historical symbol renames may still leave gaps. The ten-year
+command does not change the daily pipeline's 260-session fill window or prune
+older observations. No new price history is fetched by this command.

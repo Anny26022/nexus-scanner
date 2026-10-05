@@ -604,3 +604,18 @@ A sizing fixture adding selected trade data to the recovered public packs totals
 tradeoff of publishing execution data. The measurements above for the previous
 release remain historical evidence, not fresh performance acceptance.
 No production pointer, R2 upload, or UI change was made for this addition.
+
+A calendar-aligned ten-year official turnover backfill can be run once:
+
+```sh
+python backfill_nse_turnover.py --years 10
+```
+
+The endpoint falls back to legacy NSE equity bhavcopy ZIPs when the full
+bhavcopy is absent. Legacy `TOTTRDVAL` is already rupees, whereas
+`TURNOVER_LACS` is multiplied by 100,000. Dates and finite nonnegative values
+are validated. A temporary disk index limits RAM use during long backfills;
+compressed daily files are reusable. Coverage extends only to existing stock
+candles, and historical symbol renames may still leave gaps. The ten-year
+command does not change the daily pipeline's 260-session fill window or prune
+older observations. No new price history is fetched by this command.

@@ -1,4 +1,7 @@
 import sys
+from io import BytesIO
+import zipfile
+from unittest.mock import Mock
 import tempfile
 import unittest
 from pathlib import Path
@@ -9,13 +12,22 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT),str(ROOT/'src')]
 from nse_delivery import normalize_ohlcv_row
 from ohlcv_utils import merge_rows_by_date, read_ohlcv_csv, write_ohlcv_csv
-from backfill_nse_turnover import backfill
+from backfill_nse_turnover import backfill, fetch_turnover
 from advanced_metrics_processor import process_symbol_csv
 from edl_pipeline.scanner.base_publication import trend_series
 from edl_pipeline.scanner.trend import evaluate_history
 
 
 class OfficialTurnoverTests(unittest.TestCase):
+    def test_legacy_archive_uses_rupees_and_validates_session(self):
+        buffer=BytesIO()
+        with zipfile.ZipFile(buffer,'w') as archive:
+            archive.writestr('cm03OCT2016bhav.csv','SYMBOL,SERIES,TOTTRDVAL,TIMESTAMP\nTEST,EQ,123456789,03-OCT-2016\nWRONG,EQ,42,04-OCT-2016\n')
+        client=Mock()
+        client.get.side_effect=[Mock(status_code=404),Mock(status_code=200,content=buffer.getvalue())]
+        self.assertEqual(fetch_turnover('2016-10-03',client),{'TEST':123456789})
+        self.assertIn('/2016/OCT/cm03OCT2016bhav.csv.zip',client.get.call_args.args[0])
+
     def frame(self):
         return pd.DataFrame({'Date':pd.bdate_range('2026-08-01',periods=30),
             'Open':100,'High':101,'Low':99,'Close':100,'Volume':1000000,'Turnover':200000000})
@@ -59,3 +71,15 @@ class OfficialTurnoverTests(unittest.TestCase):
             self.assertIsNone(process_symbol_csv(str(path))[1]['Daily Rupee Turnover 50(Cr.)'])
             self.assertEqual(backfill(root,20,fetch)['applied_rows'],0)
             self.assertEqual(len(calls),20)
+
+    def test_calendar_year_horizon_and_session_horizon_are_distinct(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'ohlcv_data').mkdir()
+            rows=[{'Date':day,'Open':100,'High':101,'Low':99,'Close':100,'Volume':1}
+                  for day in ['2016-09-30','2016-10-03','2026-10-01']]
+            write_ohlcv_csv(root/'ohlcv_data/TEST.csv',rows)
+            calls=[]
+            report=backfill(root,fetcher=lambda day,session: calls.append(day) or {'TEST':123},years=10)
+            self.assertEqual(set(calls),{'2016-10-03','2026-10-01'})
+            self.assertEqual(report['requested_years'],10)
+            self.assertEqual(report['first_date'],'2016-10-03')

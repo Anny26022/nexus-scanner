@@ -444,3 +444,9 @@ only its own candle history. Nine pipeline chart/news tests and thirteen chart
 publication tests pass, including equality of frozen base facts and news
 preservation. Full recovered-data chart generation is queued after scanner
 publication so the two complete-universe jobs do not compete for memory.
+
+
+Chart base summaries now use the same public context projection as scanner
+rows, preserving selected IDs, frozen quality and breakout facts while omitting
+advanced-only context fields. Regression coverage explicitly verifies the public
+RS field remains and the private EMA150 context is omitted.

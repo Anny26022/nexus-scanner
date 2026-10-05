@@ -73,8 +73,10 @@ class ChartNewsPublicationTests(unittest.TestCase):
             with mock.patch.object(build_chart_artifacts,'BASE_DIR',str(root)):
                 self.assertEqual(build_chart_artifacts.main(),0)
             with gzip.open(root/'chart_artifacts/TEST.json.gz','rt') as handle:chart=json.load(handle)
-            expected=compact_base_records(build_base_records({'TEST':frame},{'TEST':stock})['TEST'])
+            expected=compact_base_records(build_base_records({'TEST':frame},{'TEST':stock})['TEST'],public=True)
             self.assertEqual(chart['bases'],expected)
+            self.assertNotIn('distanceEMA150',chart['bases']['FRESH_BREAKOUT']['current'])
+            self.assertIn('rsRating',chart['bases']['FRESH_BREAKOUT']['current'])
             base=chart['bases']['FRESH_BREAKOUT']
             self.assertLess(base['base']['endDate'],base['breakout']['date'])
             self.assertEqual(base['pivot'],100)

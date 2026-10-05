@@ -213,7 +213,7 @@ def main() -> int:
         payload = {
             "schemaVersion": 1, "symbol": symbol, "asOfDate": as_of,
             "historyStartDate": candles[0]["date"] if candles else None,
-            "bases": compact_base_records(bases.get(symbol,[])),
+            "bases": compact_base_records(bases.get(symbol,[]),public=True),
             "candles": candles, "volumeEvents": _volume_events(candles),
             "corporateActions": [row for row in actions[symbol] if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
             "earnings": [row for row in earnings[symbol] if _date(row.get("filing_date")) and row["filing_date"] <= as_of],

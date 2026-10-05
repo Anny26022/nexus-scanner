@@ -13,6 +13,7 @@ import math
 import numpy as np
 import pandas as pd
 from .indicators import true_range, wilder_average
+from .base_execution import trade_facts, validate_costs
 
 ENGINE_VERSION = "nexus-bases-1"
 
@@ -28,8 +29,11 @@ class BaseConfig:
     trail_period: int = 50
     fresh_sessions: int = 6
     touch_tolerance_pct: float = 1.0
+    fee_bps: float = 10
+    slippage_bps: float = 10
 
     def validate(self):
+        validate_costs(self.fee_bps, self.slippage_bps)
         for name in ('min_sessions', 'max_sessions', 'atr_period', 'trail_period', 'fresh_sessions'):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 1:
@@ -117,6 +121,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
     closes=frame.Close.to_numpy(float)
     highest_close=closes[0]
     date_positions={str(day.date()):i for i,day in enumerate(frame.Date)}
+    opens=frame.Open.to_numpy(float)
     for index,row in enumerate(rows[1:],1):
         date = str(row.Date.date())
         # Update existing candidates before creating today's new candidate.
@@ -243,5 +248,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
         episode['failedPokeCount']=len(episode['failedPokeDates'])
         episode['asOfDate'] = str(frame.Date.iloc[-1].date())
         episode['distanceFromPivotPct'] = (float(frame.Close.iloc[-1])/episode['pivot']-1)*100
+        episode['trade'] = trade_facts(arrays['dates'], opens, episode,
+                                      date_positions, config.fee_bps, config.slippage_bps)
         episode.pop('_start',None); episode.pop('_breakout',None);episode.pop('_floor',None);episode.pop('_parent',None);episode.pop('_nestedConfirmed',None)
     return episodes

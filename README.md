@@ -794,3 +794,14 @@ Read [`DO NOT DELETE EDL PIPELINE/docs/DATA_LIMITATIONS.md`](DO%20NOT%20DELETE%2
 ## License
 
 [MIT](LICENSE)
+
+### Precomputed base trade outcomes
+
+Base episodes, selected scanner summaries and chart payloads include a `trade`
+record with next-session-open entry/exit dates and prices, pending/open/closed
+status, stop/trailing exit reason, frozen gross/net returns and explicit costs.
+Defaults are 10 bps fees and 10 bps slippage per side, configurable through
+`BaseConfig`. Missing execution candles keep realized returns unavailable.
+The live return since breakout remains a separate measurement. Daily and weekly
+pipeline generation compute these records; no new UI or market feed is required.
+See [the data contract](docs/base-quality-engine.md#precomputed-trade-execution-data-no-ui-changes).

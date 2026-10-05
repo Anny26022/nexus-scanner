@@ -553,3 +553,53 @@ These are local release checks; production rollout remains a separate action.
 The chart stage selector switched PIXTRANS to PLAYED_OUT and rendered its
 breakout marker; Escape closed the viewer. The editable Strong Bases RS
 threshold persisted at 85 after Apply, reload and reopening the preset editor.
+
+
+## Precomputed trade execution data (no UI changes)
+
+Every episode carries `trade`; public summaries, private runtime/complete
+archives and per-symbol charts retain it together with `exit`. Existing
+daily/weekly generation calls the detector automatically. Older immutable
+revisions stay unchanged until a new matching release is generated.
+
+| Field in `trade` | Meaning |
+| --- | --- |
+| `breakoutDate` | Breakout close signal |
+| `entryDate`, `entryPrice` | Next observed session open |
+| `exitSignalDate`, `exitReason` | Close signal, `STOP` or `MA_TRAIL` |
+| `executionDate`, `exitPrice` | Next observed session open exit |
+| `realizedReturnPct` | Frozen executed entry-to-exit gross return |
+| `netRealizedReturnPct` | Frozen return after costs on both sides |
+| `execution` | `NEXT_SESSION_OPEN` |
+| `feeBpsPerSide`, `slippageBpsPerSide` | Explicit costs; defaults 10 bps each |
+| `status` | `NOT_TRIGGERED`, `ENTRY_PENDING`, `OPEN`, `EXIT_PENDING`, `CLOSED` |
+
+Gross return is `(exitPrice / entryPrice - 1) * 100`. For
+`c = (feeBpsPerSide + slippageBpsPerSide) / 10000`, net return is
+`(exitPrice * (1 - c) / (entryPrice * (1 + c)) - 1) * 100`. Costs are configurable
+in BaseConfig and part of episode identity. Publication/replay share one
+implementation. Signal-level `exit.close` is distinct from executed price.
+Missing following candles leave execution and realized returns null.
+Untriggered/invalidated formations have no executed trade. Live
+`returnSinceBreakoutPct` uses the breakout close and continues after exit;
+it is not realized return. Fixed-horizon formation outcomes remain separate.
+
+The detector requires ordered valid OHLCV and executes against the next
+observed session, without inventing missing candles or intraday fills.
+Verification covers pending events, both exit reasons, exact costs, frozen
+returns and preservation in public/private projections. No UI changes.
+
+Full recovered-history execution validation covered 2,591 symbols and 503,808
+episodes in 125.10 seconds: 398,640 closed trades, 2,953 open, 633 exit-pending,
+163 entry-pending and 101,419 untriggered. Every closed gross/net return,
+execution date/price and prefix-invariance check passed. The local compressed
+execution archive is 23,126,838 bytes; 5,360 selected records were also generated.
+These are derived data from the previously verified 1 October source release,
+not a promoted immutable release. New episode IDs include the cost settings.
+
+A sizing fixture adding selected trade data to the recovered public packs totals
+4,141,245 compressed bytes before adding the signal exit object (previously
+3,969,941). This exceeds the earlier 4 MB target; it is an explicit payload
+tradeoff of publishing execution data. The measurements above for the previous
+release remain historical evidence, not fresh performance acceptance.
+No production pointer, R2 upload, or UI change was made for this addition.

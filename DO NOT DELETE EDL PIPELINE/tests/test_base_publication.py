@@ -62,6 +62,12 @@ class BasePublicationTests(unittest.TestCase):
         self.assertIn('parts',records[0]['base'])
         self.assertIsNone(public['selection']['rsRating'])
         self.assertIsNone(public['current']['industryRelative63'])
+        self.assertEqual(public['trade'],records[0]['trade'])
+        self.assertEqual(public['exit'],records[0]['exit'])
+        self.assertEqual(public['trade']['status'],'OPEN')
+        for detailed in (False,True):
+            projection=compact_base_records(records,include_parts=detailed,public=not detailed)['FRESH_BREAKOUT']
+            self.assertEqual(projection['trade'],public['trade'])
 
     def test_dated_industry_context_does_not_change_frozen_selection(self):
         frames={name:candles([100+i*.1 for i in range(270)]+[120]*19+[140]+[150]*10) for name in ('A','B','C')}
@@ -77,5 +83,21 @@ class BasePublicationTests(unittest.TestCase):
         self.assertEqual(first['selection'],later['selection'])
         self.assertIsNotNone(first['selection']['industryRelative63'])
         self.assertIsNotNone(first['selection']['industryAboveSMA50Pct'])
+
+    def test_closed_execution_facts_survive_public_and_private_projection(self):
+        frame=candles([100]+[94]*19+[102,90,95,130])
+        frame.loc[21,'Open']=110
+        frame.loc[21,'High']=111
+        records=build_base_records({'A':frame},{'A':{}})['A']
+        episode=next(e for e in records if e['trade']['status']=='CLOSED')
+        trade=episode['trade']
+        self.assertEqual(trade['entryPrice'],110)
+        self.assertEqual(trade['exitPrice'],95)
+        self.assertEqual(trade['exitReason'],'STOP')
+        self.assertAlmostEqual(trade['realizedReturnPct'],(95/110-1)*100)
+        for public in (True,False):
+            selected=compact_base_records(records,include_parts=not public,public=public)['PLAYED_OUT']
+            self.assertEqual(selected['trade'],trade)
+            self.assertEqual(selected['exit'],episode['exit'])
 
 if __name__=='__main__':unittest.main()

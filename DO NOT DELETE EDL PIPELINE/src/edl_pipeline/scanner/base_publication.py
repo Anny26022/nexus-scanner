@@ -180,7 +180,7 @@ def compact_base_records(episodes, include_parts=False, public=False):
         selected[stage] = {key:episode[key] for key in (
             'id','stage','pivot','distanceFromPivotPct','breakout','breakoutAgeSessions',
             'holdsPivot','continuousHolding','belowPivotCloses','breakoutFailure',
-            'returnSinceBreakoutPct','maxGainPct','maxDrawdownPct','selection','current','failedPokeCount','parentInvalidationDate')}
+            'returnSinceBreakoutPct','maxGainPct','maxDrawdownPct','selection','current','failedPokeCount','parentInvalidationDate','exit','trade')}
         if public:
             for scope in ('selection','current'):
                 selected[stage][scope]={key:value for key,value in episode[scope].items() if key in PUBLIC_CONTEXT_KEYS}

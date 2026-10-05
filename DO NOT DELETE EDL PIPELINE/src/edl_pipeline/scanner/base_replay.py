@@ -5,15 +5,10 @@ rank, current pivot distance, final lifecycle stage or future outcome to decide
 whether to enter. Historical membership still uses today's eligible universe.
 """
 from __future__ import annotations
-import math
 import pandas as pd
 from .base_conditions import evaluate_base_condition
 from .presets import get_preset
-
-
-def net_return(entry,exit,fee_bps,slippage_bps):
-    cost=(fee_bps+slippage_bps)/10000
-    return (exit*(1-cost)/(entry*(1+cost))-1)*100
+from .base_execution import net_return, trade_facts, validate_costs
 
 
 def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bps=10,slippage_bps=10):
@@ -23,9 +18,7 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
     A stop or armed-trail close signal executes at the following session open.
     Incomplete entries/exits and horizon observations stay unavailable.
     """
-    for value in (fee_bps,slippage_bps):
-        if isinstance(value,bool) or not isinstance(value,(int,float)) or not math.isfinite(value) or not 0<=value<=1000:
-            raise ValueError('Execution costs must be finite basis points between 0 and 1000')
+    validate_costs(fee_bps,slippage_bps)
     preset=get_preset(preset_id)
     leaves=preset['expression']['children']
     if any(leaf['params'].get('stage')!='FRESH_BREAKOUT' for leaf in leaves):
@@ -34,6 +27,8 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
     frame['Date']=pd.to_datetime(frame.Date)
     if frame.Date.duplicated().any() or not frame.Date.is_monotonic_increasing: raise ValueError('Replay requires strictly increasing candle dates')
     positions={str(value.date()):index for index,value in enumerate(frame.Date)}
+    dates=list(positions)
+    opens=frame.Open.to_numpy(float)
     trades=[]
     for episode in episodes:
         if episode.get('breakout') is None: continue
@@ -45,13 +40,13 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
         record.update(stage='FRESH_BREAKOUT',breakoutAgeSessions=0,distanceFromPivotPct=episode['breakout']['throughPct'],holdsPivot=True,continuousHolding=True)
         results=[evaluate_base_condition({'FRESH_BREAKOUT':record},leaf['kind'],leaf['params']) for leaf in leaves]
         if not all(result is True for result in results): continue
+        execution=trade_facts(dates,opens,episode,positions,fee_bps,slippage_bps)
         row={'baseId':episode['id'],'symbol':episode['symbol'],'signalDate':episode['breakout']['date'],
              'entryDate':None,'entryPrice':None,'execution':'NEXT_SESSION_OPEN','feeBpsPerSide':fee_bps,
              'slippageBpsPerSide':slippage_bps,'outcomes':{},'tradeExit':None}
         if trigger+1>=len(frame):
             row['outcomes']={str(h):None for h in (5,20,60)};trades.append(row);continue
-        entry_index=trigger+1;entry=float(frame.Open.iloc[entry_index])
-        if not math.isfinite(entry) or entry<=0: raise ValueError('Replay entry price must be finite and positive')
+        entry_index=trigger+1;entry=execution['entryPrice']
         row.update(entryDate=str(frame.Date.iloc[entry_index].date()),entryPrice=entry)
         for horizon in (5,20,60):
             exit_index=entry_index+horizon-1
@@ -62,13 +57,10 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
                 'maxAdverseExcursionPct':min(0,(float(window.Low.min())/entry-1)*100),
                 'maxFavorableExcursionPct':max(0,(float(window.High.max())/entry-1)*100),
                 'closedInsideBase':bool((window.Close<episode['pivot']).any())}
-        exit=episode.get('exit')
-        if exit and exit['date'] in positions:
-            index=positions[exit['date']]+1
-            if index<len(frame):
-                price=float(frame.Open.iloc[index])
-                row['tradeExit']={'signalDate':exit['date'],'executionDate':str(frame.Date.iloc[index].date()),
-                    'price':price,'reason':exit['reason'],'netReturnPct':net_return(entry,price,fee_bps,slippage_bps)}
+        if execution['status']=='CLOSED':
+            row['tradeExit']={'signalDate':execution['exitSignalDate'],'executionDate':execution['executionDate'],
+                'price':execution['exitPrice'],'reason':execution['exitReason'],
+                'netReturnPct':execution['netRealizedReturnPct']}
         trades.append(row)
     summary={}
     for horizon in ('5','20','60'):

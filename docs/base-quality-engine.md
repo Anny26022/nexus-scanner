@@ -450,3 +450,30 @@ Chart base summaries now use the same public context projection as scanner
 rows, preserving selected IDs, frozen quality and breakout facts while omitting
 advanced-only context fields. Regression coverage explicitly verifies the public
 RS field remains and the private EMA150 context is omitted.
+
+
+### Recovered-data publication validation
+
+The actual publisher completed against the verified recovered Actions cache and
+newer Git stock artifact for 1 October 2026. Release
+`1fdc4d2b60dd330660e32109e4714325c22e896c2137a18d3169e6656296f4c8`
+contains 2,603 eligible stocks: 2,591 have exact-session history and twelve are
+explicitly unavailable for base/history conditions. All three public packs
+agree on revision, session and symbol ordering. Their compressed total is
+3,969,941 bytes, below the enforced 4 MB limit with limited headroom.
+
+The check independently verified every aligned row's open/high/low/close/volume
+against its 1 October candle, including all 76 metadata/candle differences. All
+130 private object sizes and SHA-256 hashes passed. Complete archives contain
+503,808 episodes, with 5,360 selected runtime base summaries. Publication took
+1,719.21 seconds (28.65 minutes) and reached 6,026,149,888 bytes peak process RSS.
+This is a local publication measurement, not Worker isolate memory or production
+R2 network performance. No production pointers or R2 objects changed.
+
+All-symbol chart generation and full archived-episode replay are now running.
+Python reference result lists are prepared for all seven new presets and eight
+base queries, including private EMA context, slice arithmetic, repeated clauses
+and nested boolean groups. The strict starting defaults currently match zero
+Strong Bases/Fresh Breakouts/Holding Breakouts; they have not been loosened to
+manufacture matches. Other preset and stage queries have non-empty reference
+results for runtime verification.

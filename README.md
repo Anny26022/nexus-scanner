@@ -840,7 +840,7 @@ python backfill_nse_turnover.py --years 10
 ```
 
 The endpoint falls back to legacy NSE equity bhavcopy ZIPs when the full
-bhavcopy is absent. Legacy `TOTTRDVAL` is already rupees, whereas
+bhavcopy is absent, incorrectly encoded, or contains a different session. Legacy `TOTTRDVAL` is already rupees, whereas
 `TURNOVER_LACS` is multiplied by 100,000. Dates and finite nonnegative values
 are validated. A temporary disk index limits RAM use during long backfills;
 compressed daily files are reusable. Coverage extends only to existing stock

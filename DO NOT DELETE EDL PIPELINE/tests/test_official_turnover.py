@@ -23,10 +23,12 @@ class OfficialTurnoverTests(unittest.TestCase):
         buffer=BytesIO()
         with zipfile.ZipFile(buffer,'w') as archive:
             archive.writestr('cm03OCT2016bhav.csv','SYMBOL,SERIES,TOTTRDVAL,TIMESTAMP\nTEST,EQ,123456789,03-OCT-2016\nWRONG,EQ,42,04-OCT-2016\n')
-        client=Mock()
-        client.get.side_effect=[Mock(status_code=404),Mock(status_code=200,content=buffer.getvalue())]
-        self.assertEqual(fetch_turnover('2016-10-03',client),{'TEST':123456789})
-        self.assertIn('/2016/OCT/cm03OCT2016bhav.csv.zip',client.get.call_args.args[0])
+        wrong_day=b'SYMBOL,SERIES,DATE1,OPEN_PRICE,HIGH_PRICE,LOW_PRICE,CLOSE_PRICE,TTL_TRD_QNTY,TURNOVER_LACS\nTEST,EQ,04-Oct-2016,100,101,99,100,100,100\n'
+        for first in (Mock(status_code=404),Mock(status_code=200,content=b'PK\x03\x04\x90'),Mock(status_code=200,content=wrong_day)):
+            client=Mock()
+            client.get.side_effect=[first,Mock(status_code=200,content=buffer.getvalue())]
+            self.assertEqual(fetch_turnover('2016-10-03',client),{'TEST':123456789})
+            self.assertIn('/2016/OCT/cm03OCT2016bhav.csv.zip',client.get.call_args.args[0])
 
     def frame(self):
         return pd.DataFrame({'Date':pd.bdate_range('2026-08-01',periods=30),

@@ -24,44 +24,52 @@ from pipeline_utils import BASE_DIR
 
 
 def fetch_turnover(day, session):
-    response = session.get(HISTORICAL_FILE_URL.format(date=day[8:10]+day[5:7]+day[:4]), timeout=30)
-    legacy = response.status_code == 404
-    if legacy:
-        stamp = date.fromisoformat(day)
-        month = stamp.strftime('%b').upper()
-        url = f"https://nsearchives.nseindia.com/content/historical/EQUITIES/{stamp.year}/{month}/cm{stamp.day:02d}{month}{stamp.year}bhav.csv.zip"
+    stamp = date.fromisoformat(day)
+    month = stamp.strftime('%b').upper()
+    urls = [HISTORICAL_FILE_URL.format(date=stamp.strftime('%d%m%Y')),
+            f"https://nsearchives.nseindia.com/content/historical/EQUITIES/{stamp.year}/{month}/cm{stamp.day:02d}{month}{stamp.year}bhav.csv.zip"]
+    for legacy, url in enumerate(urls):
         response = session.get(url, timeout=30)
-    response.raise_for_status()
-    if legacy:
-        with zipfile.ZipFile(BytesIO(response.content)) as archive:
-            content = archive.read(archive.namelist()[0]).decode('utf-8-sig')
-    else:
-        content = response.content.decode('utf-8-sig')
-    grouped = {}
-    for row in csv.DictReader(StringIO(content)):
-        if legacy:
-            row = {str(key).strip():value for key,value in row.items() if key}
-            try:
-                from nse_delivery import parse_nse_date
-                value = float(row['TOTTRDVAL'])  # Legacy value is rupees, not lakhs.
-                record = {'symbol':row['SYMBOL'].strip(), 'series':row['SERIES'].strip(),
-                          'date':parse_nse_date(row['TIMESTAMP']), 'turnover':value}
-                if not math.isfinite(value) or value < 0:
-                    continue
-            except (KeyError, TypeError, ValueError):
+        if not legacy and response.status_code == 404:
+            continue
+        response.raise_for_status()
+        try:
+            if legacy:
+                with zipfile.ZipFile(BytesIO(response.content)) as archive:
+                    content = archive.read(archive.namelist()[0]).decode('utf-8-sig')
+            else:
+                content = response.content.decode('utf-8-sig')
+        except (UnicodeDecodeError, zipfile.BadZipFile):
+            if not legacy:
                 continue
-        else:
-            record = normalize_ohlcv_row(row)
-        if record and record['date'] == day and 'turnover' in record:
-            grouped.setdefault(record['symbol'], []).append(record)
-    values = {}
-    for symbol, rows in grouped.items():
-        selected = [row for row in rows if row['series'] == 'EQ']
-        if len(selected) == 1 or len(rows) == 1:
-            values[symbol] = (selected or rows)[0]['turnover']
-    if not values:
-        raise ValueError(f'No date-aligned turnover in NSE file for {day}')
-    return values
+            raise
+        grouped = {}
+        for row in csv.DictReader(StringIO(content)):
+            if legacy:
+                row = {str(key).strip():value for key,value in row.items() if key}
+                try:
+                    from nse_delivery import parse_nse_date
+                    value = float(row['TOTTRDVAL'])  # Legacy value is rupees.
+                    record = {'symbol':row['SYMBOL'].strip(), 'series':row['SERIES'].strip(),
+                              'date':parse_nse_date(row['TIMESTAMP']), 'turnover':value}
+                    if not math.isfinite(value) or value < 0:
+                        continue
+                except (KeyError, TypeError, ValueError):
+                    continue
+            else:
+                record = normalize_ohlcv_row(row)
+            if record and record['date'] == day and 'turnover' in record:
+                grouped.setdefault(record['symbol'], []).append(record)
+        values = {}
+        for symbol, rows in grouped.items():
+            selected = [row for row in rows if row['series'] == 'EQ']
+            if len(selected) == 1 or len(rows) == 1:
+                values[symbol] = (selected or rows)[0]['turnover']
+        if values:
+            return values
+        # An HTTP 200 can still contain an old session. Try the dated archive
+        # without relabelling those rows as the requested day.
+    raise ValueError(f'No date-aligned turnover in NSE files for {day}')
 
 
 def backfill(root, sessions=260, fetcher=fetch_turnover, years=None):

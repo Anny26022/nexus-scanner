@@ -10,7 +10,7 @@ CONTRACT_FILES = ['frontend/src/data/conditionCatalog.ts', 'frontend/src/types/s
 ENGINE_FILES = ['frontend/src/engine/baseConditions.ts', 'frontend/src/engine/expression.ts', 'frontend/src/engine/historyEngine.ts',
                 'frontend/src/engine/queryCompiler.ts', 'frontend/src/api/snapshotScreen.ts',
                 'frontend/src/api/capabilityRegistry.ts', 'frontend/scanner_bridge.py',
-                'frontend/scanner_pack_publication.py', 'cloudflare/scanner-worker/src/index.ts',
+                'frontend/scanner_pack_publication.py', 'frontend/scanner_cache.py', 'frontend/publish_snapshot.py', 'cloudflare/scanner-worker/src/index.ts',
                 'DO NOT DELETE EDL PIPELINE/screen_trend_conditions.py']
 ENGINE_FILES += [path.relative_to(ROOT).as_posix() for path in
                  (ROOT / 'DO NOT DELETE EDL PIPELINE/src/edl_pipeline/scanner').glob('*.py')]

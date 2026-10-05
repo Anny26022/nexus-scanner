@@ -17,6 +17,7 @@ from scanner_identity import checked_identity
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.base_publication import build_base_records, compact_base_records
 from edl_pipeline.scanner.financials import financial_value, finite_number
+from edl_pipeline.scanner.turnover import average_turnover_crore
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
 
@@ -123,7 +124,7 @@ def _publish(root, output, archive_directory):
                 metrics[f'return{period}']=float((last['Close']/frame['Close'].iloc[-1-period]-1)*100) if len(frame)>period else None
             metrics['gapPct']=float((last['Open']/frame['Close'].iloc[-2]-1)*100) if len(frame)>1 else None
             for period in (20,50,100):
-                metrics[f'turnover{period}']=float((frame['Close']*frame['Volume']).tail(period).mean()/1e7) if len(frame)>=period else None
+                metrics[f'turnover{period}']=average_turnover_crore(frame,period)
             for period in (20,50,252):
                 metrics[f'newHigh{period}']=bool(last['High'] >= frame['High'].tail(period).max()) if len(frame)>=period else None
                 metrics[f'newLow{period}']=bool(last['Low'] <= frame['Low'].tail(period).min()) if len(frame)>=period else None
@@ -177,7 +178,7 @@ def _publish(root, output, archive_directory):
     packed=root/'.scanner_cache/history.npz'
     if packed.exists():
         with np.load(packed,allow_pickle=False) as data:
-            for name in ('symbols','offsets','dates','values'):
+            for name in ('symbols','offsets','dates','values','turnover'):
                 digest.update(data[name].tobytes())
     cache.refresh(root)
     if cache.revision!=starting_revision:

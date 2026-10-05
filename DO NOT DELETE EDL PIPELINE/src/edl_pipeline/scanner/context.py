@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from .financials import financial_value
+from .turnover import average_turnover_crore
 
 
 CONTEXT_CONDITION_REGISTRY = {
@@ -408,10 +409,9 @@ def evaluate_context_condition(frame, spec, context, result: Callable[..., Any],
             return unavailable(condition, "intraday_turnover_history_unavailable")
         window = int(spec.get("lookback_days", 20))
         if len(frame) < window: return unavailable(condition, "insufficient_history")
-        values = pd.to_numeric(frame.get("Turnover", pd.Series(index=frame.index, dtype=float)), errors="coerce").tail(window)
-        if window <= 0 or not np.isfinite(values).all() or (values < 0).any():
+        value = average_turnover_crore(frame, window)
+        if value is None:
             return unavailable(condition, "official_turnover_history_unavailable")
-        value = float(values.mean() / 10_000_000)
         target = float(spec["value_crore"])
         return result(condition, comparison(value, spec["comparison"], target), round(value, 6), lookback_days=window, comparison=spec["comparison"], target=target)
 

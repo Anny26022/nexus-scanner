@@ -24,6 +24,9 @@ describe('shared history engine',()=>{
     const condition=leaf('AVG_TURNOVER',{lookbackDays:20,comparison:'ABOVE',valueCr:15});
     const turnover={dates:Array.from(series.dates),values:Array.from(series.dates,()=>200000000 as number|null)};
     expect(evaluateHistoryCondition(series,condition,{...context,turnover})).toBe(true);
+    const published={...stock,metrics:{turnover20:20}};
+    expect(evaluateHistoryCondition(series,condition,{...context,stock:published,turnover})).toBe(true);
+    expect(evaluateHistoryCondition(series,leaf('AVG_TURNOVER',{lookbackDays:17,comparison:'ABOVE',valueCr:15}),{...context,stock:published,turnover})).toBe(true);
     expect(evaluateHistoryCondition(series,condition,context)).toBeNull();
     turnover.values[turnover.values.length-1]=null;
     expect(evaluateHistoryCondition(series,condition,{...context,turnover})).toBeNull();

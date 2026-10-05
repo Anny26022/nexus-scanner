@@ -69,6 +69,29 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(new['rows'][0]['marketCapCrore'],6000)
             self.assertTrue((root/'.scanner_cache/revisions'/second['revision']/'delivery_history_data/2026-09-30.json.gz').exists())
 
+    def test_official_turnover_survives_publication_and_warm_cache(self):
+        with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[]):
+            root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
+            path=root/'ohlcv_data/TEST.csv'
+            frame=pd.read_csv(path);frame['Turnover']=200_000_000.;frame.to_csv(path,index=False)
+            first=publish(root,output)
+            def metric(manifest):
+                return json.loads((output/'revisions'/manifest['revision']/'stocks.json').read_text())['stocks'][0]['metrics']['turnover20']
+            self.assertEqual(metric(first),20.)  # close * volume would be 0.001 Cr
+            second=publish(root,output)
+            self.assertEqual(metric(second),20.)
+            self.assertEqual(first['revision'],second['revision'])
+            restored=ScannerCache();restored.refresh(root/'.scanner_cache/revisions'/first['revision'])
+            self.assertEqual(restored.frame(root,'TEST','2026-09-30')['Turnover'].iloc[-1],200_000_000.)
+            # Correct a day outside every complete public turnover window.
+            # Private arbitrary-window history must still receive a new revision.
+            frame.loc[0,'Turnover']=190_000_000.;frame.to_csv(path,index=False)
+            corrected=publish(root,output)
+            self.assertEqual(metric(corrected),20.)
+            self.assertNotEqual(second['revision'],corrected['revision'])
+            frame.loc[frame.index[-1],'Turnover']=float('nan');frame.to_csv(path,index=False)
+            self.assertIsNone(metric(publish(root,output)))
+
     def test_local_bridge_validates_identity_before_loading_data(self):
         request = {'asOfDate':'2026-09-30','universe':'mainboard','expressionTree':{'type':'group','operator':'all','children':[]},
                    'page':1,'pageSize':50,'datasetRevision':'a' * 64}

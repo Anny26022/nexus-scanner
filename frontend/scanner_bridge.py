@@ -20,6 +20,7 @@ from edl_pipeline.scanner.presets import get_preset
 from edl_pipeline.scanner.query import compile_query
 from edl_pipeline.scanner.trend import evaluate_history, normalize_history, _comparison, _evaluate_expression, _leaf_results
 from edl_pipeline.scanner.financials import finite_number, financial_value
+from edl_pipeline.scanner.turnover import average_turnover_crore
 
 LOCAL_SCANNER_IDENTITY = checked_identity()
 
@@ -151,9 +152,9 @@ def snapshot_rule(s, spec, as_of):
         value = finite_number(s.get("delivery_percent")) if s.get("delivery_as_of_date") == as_of else None
         return None if value is None else value >= spec["minimum_delivery_percent"]
     elif kind == "average_turnover" and str(spec.get("window_minutes", "")) in {"", "daily"}:
-        value = finite_number(s.get(f"daily_rupee_turnover_{int(spec['lookback_days'])}_cr"))
-        if value is not None:
-            return _comparison(value, spec["comparison"], spec["value_crore"])
+        # Older native snapshots may contain rounded or estimated averages.
+        # Only aligned official history can establish this condition.
+        return None
     elif kind == "adr_percent":
         value = finite_number(s.get(f"adr_percent_{int(spec['lookback_days'])}"))
     elif kind == "atr_percent" and int(spec["period"]) == 14:
@@ -176,8 +177,10 @@ def snapshot_rule(s, spec, as_of):
     return None
 
 
-def preset_baseline(s):
+def preset_baseline(s, frame=None):
     cap, price, turnover = [finite_number(s.get(k)) for k in ("market_cap_crore", "close", "daily_rupee_turnover_50_cr")]
+    if frame is not None:
+        turnover = average_turnover_crore(frame, 50)
     if cap is not None and cap <= 1000:
         return False
     if price is not None and price <= 10:
@@ -213,7 +216,7 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
         value = evaluate(node["child"],s,frame,context,as_of,diagnostics,delivery)
         return None if value is None else not value
     if node["type"] == "preset":
-        baseline = preset_baseline(s) if s.get("as_of_date") == as_of else None
+        baseline = preset_baseline(s, frame) if s.get("as_of_date") == as_of and frame is not None and not frame.empty and frame['Date'].iloc[-1].strftime('%Y-%m-%d') == as_of else None
         if baseline is False:
             return False
         if baseline is None:

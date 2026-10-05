@@ -53,11 +53,14 @@ class ScannerCache:
             with np.load(path, allow_pickle=False) as data:
                 if str(data['revision']) != history_revision:
                     return
-                offsets, values, dates = data['offsets'], data['values'], data['dates']
+                # Old caches omitted traded value. Reject them before loading
+                # any frames, so CSV history can rebuild a complete cache.
+                offsets, values, dates, turnover = data['offsets'], data['values'], data['dates'], data['turnover']
                 for i, symbol in enumerate(data['symbols']):
                     start, end = offsets[i:i+2]
                     frame = pd.DataFrame(values[start:end], columns=['Open','High','Low','Close','Volume'])
                     frame.insert(0, 'Date', pd.to_datetime(dates[start:end]))
+                    frame['Turnover'] = turnover[start:end]
                     self.frames[str(symbol)] = frame
                 del self.history_revision
         except (OSError, ValueError, KeyError):
@@ -82,7 +85,8 @@ class ScannerCache:
         temporary = path.with_name('history.tmp.npz')
         np.savez(temporary, revision=self.history_revision, symbols=np.array([s for s,_ in frames]),
                  offsets=offsets, dates=np.concatenate([f['Date'].to_numpy(dtype='datetime64[ns]').astype('int64') for _,f in frames]),
-                 values=np.concatenate([f[['Open','High','Low','Close','Volume']].to_numpy(dtype='float64') for _,f in frames]))
+                 values=np.concatenate([f[['Open','High','Low','Close','Volume']].to_numpy(dtype='float64') for _,f in frames]),
+                 turnover=np.concatenate([f.get('Turnover', pd.Series(np.nan, index=f.index)).to_numpy(dtype='float64') for _,f in frames]))
         temporary.replace(path)
         del self.history_revision
 

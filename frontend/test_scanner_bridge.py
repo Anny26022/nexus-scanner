@@ -6,11 +6,25 @@ from unittest.mock import patch
 
 import scanner_bridge as bridge
 import pandas as pd
+import numpy as np
 from scanner_cache import ScannerCache
 from edl_pipeline.scanner.presets import list_presets
 
 
 class BridgeTests(unittest.TestCase):
+    def test_old_compact_cache_rebuilds_official_turnover_from_csv(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'ohlcv_data').mkdir()
+            frame=self.history();frame['Turnover']=200_000_000.;frame.to_csv(root/'ohlcv_data/TEST.csv',index=False)
+            cache=ScannerCache();cache.refresh(root);cache.frame(root,'TEST','2026-09-30');cache.save_frames(root)
+            path=root/'.scanner_cache/history.npz'
+            with np.load(path,allow_pickle=False) as data:
+                legacy={name:data[name] for name in data.files if name!='turnover'}
+            np.savez(path,**legacy)
+            restored=ScannerCache();restored.refresh(root)
+            self.assertEqual(restored.frames,{})
+            self.assertEqual(restored.frame(root,'TEST','2026-09-30')['Turnover'].iloc[-1],200_000_000.)
+
     def test_local_base_query_keeps_stage_identity_across_cached_queries(self):
         context={'stocks':{'TEST':self.stock()},'financial_history_as_of':'2026-09-30','rs_ratings':{},'fno_ban_symbols':{}}
         frame=self.history()
@@ -55,7 +69,14 @@ class BridgeTests(unittest.TestCase):
             self.assertGreater(load.call_count,calls)
 
     def history(self, count=60, latest="2026-09-30"):
-        return pd.DataFrame({"Date":pd.bdate_range(end=latest,periods=count),"Open":100.,"High":101.,"Low":99.,"Close":100.,"Volume":[100.]*(count-1)+[200.]})
+        return pd.DataFrame({"Date":pd.bdate_range(end=latest,periods=count),"Open":100.,"High":101.,"Low":99.,"Close":100.,"Volume":[100.]*(count-1)+[200.],"Turnover":100_000_000.})
+
+    def test_preset_liquidity_uses_unrounded_official_history(self):
+        frame=self.history();frame['Turnover']=50_001_000.
+        self.assertTrue(bridge.preset_baseline({**self.stock(),'daily_rupee_turnover_50_cr':5.0},frame))
+        frame.loc[frame.index[-1],'Turnover']=float('nan')
+        self.assertIsNone(bridge.preset_baseline(self.stock(),frame))
+        self.assertIsNone(bridge.snapshot_rule(self.stock(),{'condition':'average_turnover','lookback_days':50,'comparison':'above','value_crore':5},'2026-09-30'))
 
     def test_rvol_upper_bound_uses_history_when_snapshot_is_missing_or_wrong(self):
         node=bridge.translate("mom_rvol",{"minRvol":1.5,"maxRvol":3})

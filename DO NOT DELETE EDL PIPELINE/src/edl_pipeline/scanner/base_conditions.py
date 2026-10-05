@@ -5,11 +5,11 @@ from .base_formula import evaluate_formula
 
 STAGES = ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT')
 METRICS = {
-    'pivot','distanceFromPivotPct','breakoutAgeSessions','belowPivotCloses','returnSinceBreakoutPct','failedPokeCount','maxGainPct','maxDrawdownPct',
-    *('base.'+key for key in ('ageSessions','ageWeeks','quietVolume','medianVolume','quietTurnoverCr','medianTurnoverCr','quietTurnoverAgeSessions','depthPct','atrContraction','volumeDryUp','quietDepth','quietAgeSessions','upDownVolumeRatio','netUpDownVolume','rsStart','rsEnd','rsAverage','rsMinimum','rsMaximum','level','overheadPct','nestedCount','touchCount','squatCount')),
-    *('base.parts.'+part+'.'+key for part in ('full',*(f'{name}_{index}' for name,count in (('half',2),('third',3),('quarter',4),('fifth',5)) for index in range(1,count+1))) for key in ('atrPct','volume','highClose','lowClose','upVolume','downVolume','turnoverCr','upTurnoverCr','downTurnoverCr','upDays','downDays','changePct')),
+    'pivot','distanceFromPivotPct','breakoutAgeSessions','belowPivotCloses','returnSinceBreakoutPct','failedPokeCount','maxGainPct','maxDrawdownPct','breakoutFailed','exitSignaled','tradeClosed','trade.realizedReturnPct','trade.netRealizedReturnPct',
+    *('base.'+key for key in ('ageSessions','ageWeeks','quietVolume','medianVolume','quietTurnoverCr','medianTurnoverCr','quietTurnoverAgeSessions','depthPct','atrContraction','volumeDryUp','quietDepth','quietAgeSessions','upDownVolumeRatio','netUpDownVolume','rsStart','rsEnd','rsAverage','rsMinimum','rsMaximum','level','overheadPct','overheadPriceDistancePct','overheadCloseVolume252Pct','atrSimpleContraction','nestedCount','touchCount','squatCount')),
+    *('base.parts.'+part+'.'+key for part in ('full',*(f'{name}_{index}' for name,count in (('half',2),('third',3),('quarter',4),('fifth',5)) for index in range(1,count+1))) for key in ('atrPct','atrWilderPct','atrSimplePct','volume','highClose','lowClose','upVolume','downVolume','turnoverCr','upTurnoverCr','downTurnoverCr','upDays','downDays','changePct')),
     *('breakout.'+key for key in ('volumeRatio','gapPct','throughPct','dailyGainPct','closeInRange')),
-    *(scope+'.'+key for scope in ('selection','current') for key in ('price','marketCapCr','turnoverCr','volume','rsMonthAgo','medianTurnover20','distanceClosing52wHigh','aboveClosing52wLow','listingAgeWeeks','historyFromListing','historySessions','rsRating','rsChange5','rsChange22','industryRelative63','industryRelative252','rsLineAtHigh','benchmarkDistanceSMA200','industryAboveSMA50Pct','industryAboveSMA200Pct')),
+    *(scope+'.'+key for scope in ('selection','current') for key in ('atrWilder14Pct','atrSimple14Pct','adrClose14Pct','adrLow14Pct','closing52wHigh','closing52wLow','intraday52wHigh','intraday52wLow','distanceIntraday52wHigh','aboveIntraday52wLow','price','marketCapCr','turnoverCr','volume','rsMonthAgo','medianTurnover20','distanceClosing52wHigh','aboveClosing52wLow','listingAgeWeeks','historyFromListing','historySessions','rsRating','rsChange5','rsChange22','industryRelative63','industryRelative252','rsLineAtHigh','benchmarkDistanceSMA200','industryAboveSMA50Pct','industryAboveSMA200Pct')),
     *(scope+'.'+prefix+kind+str(period) for scope in ('selection','current') for prefix in ('distance','slope') for kind in ('SMA','EMA') for period in (10,20,50,100,150,200)),
     *(scope+'.'+kind+str(period)+suffix for scope in ('selection','current') for kind in ('sma','ema') for period in (10,20,50,100,150,200) for suffix in ('','MonthAgo')),
     *(scope+'.'+kind+str(period) for scope in ('selection','current') for kind in ('averageTurnover','averageVolume') for period in (10,20,50,100,200)),
@@ -22,6 +22,7 @@ def metric(record, path):
     value=record
     for key in path.split('.'):
         value=value.get(key) if isinstance(value,dict) else None
+    if path in ('breakoutFailed','exitSignaled','tradeClosed') and isinstance(value,bool): return int(value)
     return value if isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) else None
 
 

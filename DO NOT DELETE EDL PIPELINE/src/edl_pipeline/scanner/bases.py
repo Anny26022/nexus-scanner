@@ -15,7 +15,7 @@ import pandas as pd
 from .indicators import true_range, wilder_average
 from .base_execution import trade_facts, validate_costs
 
-ENGINE_VERSION = "nexus-bases-2"
+ENGINE_VERSION = "nexus-bases-3"
 
 
 @dataclass(frozen=True)
@@ -58,12 +58,12 @@ def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1, _ar
     """Measure inclusive base boundaries. Halves differ by at most one session."""
     arrays=_arrays or {'volume':frame.Volume.to_numpy(float),'close':frame.Close.to_numpy(float),
         'high':frame.High.to_numpy(float),'low':frame.Low.to_numpy(float),'change':frame.Close.diff().to_numpy(float),
-        'dates':[str(day.date()) for day in frame.Date],'atr':atr_pct.to_numpy(float),
+        'dates':[str(day.date()) for day in frame.Date],'atr':atr_pct.to_numpy(float), 'atrSimple':(true_range(frame).rolling(14,min_periods=14).mean()/frame.Close*100).to_numpy(float),
         'turnover':pd.to_numeric(frame.get('Turnover',pd.Series(index=frame.index,dtype=float)),errors='coerce').to_numpy(float)}
     volume=arrays['volume'][start:end+1];close=arrays['close'][start:end+1]
     high=arrays['high'][start:end+1];low=arrays['low'][start:end+1]
     size=end-start+1;pivot=float(close.max());midpoint=(size+1)//2
-    averages=arrays['atr'][start:end+1];change=arrays['change'][start:end+1]
+    averages=arrays['atr'][start:end+1];simple=arrays['atrSimple'][start:end+1];change=arrays['change'][start:end+1]
     up, down = float(volume[change > 0].sum()), float(volume[change < 0].sum())
     quiet = int(np.argmin(volume))
     turnover=arrays['turnover'][start:end+1]
@@ -78,7 +78,7 @@ def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1, _ar
         for number, positions in enumerate(np.array_split(np.arange(size), divisor), 1):
             if not len(positions): continue
             key = name if divisor == 1 else f'{name}_{number}'
-            parts[key] = {'atrPct': finite(avg(averages[positions])), 'volume': float(volume[positions].mean()),
+            parts[key] = {'atrPct': finite(avg(averages[positions])), 'atrWilderPct': finite(avg(averages[positions])), 'atrSimplePct':finite(avg(simple[positions])), 'volume': float(volume[positions].mean()),
                           'highClose': float(close[positions].max()), 'lowClose': float(close[positions].min()),
                           'upVolume': float(volume[positions][change[positions] > 0].sum()),
                           'downVolume': float(volume[positions][change[positions] < 0].sum()),
@@ -87,10 +87,17 @@ def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1, _ar
                           'downTurnoverCr': float(turnover[positions][change[positions]<0].sum()) if np.isfinite(turnover[positions]).all() else None,
                           'upDays': int((change[positions]>0).sum()), 'downDays': int((change[positions]<0).sum()),
                           'changePct': float((close[positions[-1]]/close[positions[0]]-1)*100)}
+    overhead_start=max(0,end-251)
+    overhead_volume=arrays['volume'][overhead_start:end+1]
+    overhead_close=arrays['close'][overhead_start:end+1]
+    overhead_share=None if len(overhead_volume)<252 or overhead_volume.sum()==0 else float(overhead_volume[overhead_close>pivot].sum()/overhead_volume.sum()*100)
     ranks = None if rs is None else np.asarray(rs[start:end + 1], dtype=float)
     return {'startDate': arrays['dates'][start], 'endDate': arrays['dates'][end],
             'ageSessions': size, 'ageWeeks': size/5, 'pivot': pivot, 'ceiling': float(high.max()),
             'floor': float(low.min()), 'depthPct': depth,
+            'overheadCloseVolume252Pct':overhead_share,
+            'atrPeriod':arrays.get('atrPeriod',14), 'atrMethod':'WILDER_EWM_FIRST_TR', 'atrSimpleMethod':'ROLLING_MEAN_TR',
+            'atrSimpleContraction':ratio(avg(simple[midpoint:]),avg(simple[:midpoint])),
             'atrContraction': ratio(avg(averages[midpoint:]), avg(averages[:midpoint])),
             'volumeDryUp': ratio(avg(volume[midpoint:]), avg(volume[:midpoint])),
             'quietDepth': ratio(volume[quiet], np.median(volume)),
@@ -128,7 +135,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
         raise ValueError('Base history contains inconsistent candle ranges')
     atr_pct = wilder_average(true_range(frame), config.atr_period) / frame.Close * 100
     trail = frame.Close.rolling(config.trail_period, min_periods=config.trail_period).mean()
-    arrays={'volume':frame.Volume.to_numpy(float),'close':frame.Close.to_numpy(float),'high':frame.High.to_numpy(float),'low':frame.Low.to_numpy(float),'change':frame.Close.diff().to_numpy(float),'dates':[str(day.date()) for day in frame.Date],'atr':atr_pct.to_numpy(float),
+    arrays={'atrPeriod':config.atr_period,'volume':frame.Volume.to_numpy(float),'close':frame.Close.to_numpy(float),'high':frame.High.to_numpy(float),'low':frame.Low.to_numpy(float),'change':frame.Close.diff().to_numpy(float),'dates':[str(day.date()) for day in frame.Date],'atr':atr_pct.to_numpy(float), 'atrSimple':(true_range(frame).rolling(config.atr_period,min_periods=config.atr_period).mean()/frame.Close*100).to_numpy(float),
         'turnover':pd.to_numeric(frame.get('Turnover',pd.Series(index=frame.index,dtype=float)),errors='coerce').to_numpy(float)}
     episodes, active = [], []
     peak = 0
@@ -186,6 +193,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
                 episode['base']['nestedCount'] = episode['nestedCount']
                 episode['base']['level'] = episode['level']
                 episode['base']['overheadPct'] = episode['overheadPct']
+                episode['base']['overheadPriceDistancePct'] = episode['overheadPct']
                 prior_volume = frame.Volume.iloc[max(0,index-20):index]
                 episode['breakout'] = {'date':date, 'close':float(row.Close),
                     'volumeRatio':ratio(row.Volume, prior_volume.median()) if len(prior_volume)==20 else None,
@@ -226,7 +234,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
         if episode['breakout'] is None:
             end = index if episode['exit'] is None else date_positions[episode['exit']['date']]
             episode['base'] = measure_base(frame,episode['_start'],end,atr_pct,rs,config.touch_tolerance_pct,arrays)
-            episode['base'].update(level=episode['level'],overheadPct=episode['overheadPct'],nestedCount=episode['nestedCount'])
+            episode['base'].update(level=episode['level'],overheadPct=episode['overheadPct'],overheadPriceDistancePct=episode['overheadPct'],nestedCount=episode['nestedCount'])
         if episode['breakout'] is not None:
             origin = episode['_breakout']
             entry = episode['breakout']['close']
@@ -266,5 +274,9 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
         episode['distanceFromPivotPct'] = (float(frame.Close.iloc[-1])/episode['pivot']-1)*100
         episode['trade'] = trade_facts(arrays['dates'], opens, episode,
                                       date_positions, config.fee_bps, config.slippage_bps)
+        episode['breakoutFailed']=None if not episode['breakout'] else bool(episode['breakoutFailure'])
+        episode['exitSignaled']=None if not episode['breakout'] else bool(episode['exit'])
+        episode['tradeClosed']=None if not episode['breakout'] else episode['trade']['status']=='CLOSED'
+        episode['measurementPolicy']={'atrPeriod':config.atr_period,'atrMethod':'WILDER_EWM_FIRST_TR','feeBpsPerSide':config.fee_bps,'slippageBpsPerSide':config.slippage_bps,'stopPct':config.stop_pct,'trailPeriod':config.trail_period,'stopTrigger':'CLOSE_BELOW_PIVOT_STOP','trailTrigger':'CLOSE_BELOW_ARMED_SMA','execution':'NEXT_SESSION_OPEN','failureTrigger':'CLOSE_BACK_INSIDE','overheadVolume':'252_SESSION_CLOSE_CLASSIFIED_VOLUME_NOT_VOLUME_AT_PRICE'}
         episode.pop('_start',None); episode.pop('_breakout',None);episode.pop('_floor',None);episode.pop('_parent',None);episode.pop('_nestedConfirmed',None)
     return episodes

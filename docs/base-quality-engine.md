@@ -38,7 +38,7 @@ This is not an independent review approval.
 
 The raw fact and slice extension is documented in
 [Precomputed base facts and arithmetic](base-facts-and-formulas.md). Detector
-version `nexus-bases-2` retains absolute current and prior-month SMA/EMA values,
+version `nexus-bases-3` retains absolute current and prior-month SMA/EMA values,
 official traded-value windows, independent share/turnover quiet-day facts and
 slice traded-value totals, counts and returns. Detailed context and parts stay
 in private packs. Bounded `Base Expression` arithmetic complements the existing
@@ -628,3 +628,6 @@ compressed daily files are reusable. Coverage extends only to existing stock
 candles, and historical symbol renames may still leave gaps. The ten-year
 command does not change the daily pipeline's 260-session fill window or prune
 older observations. No new price history is fetched by this command.
+
+Measurement families and modeled trade events are explicitly distinguished in
+[the measurement contract](measurement-contracts.md).

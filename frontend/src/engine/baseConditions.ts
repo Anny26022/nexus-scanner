@@ -11,6 +11,7 @@ function metric(record: unknown,path:unknown): number|null {
   if(typeof path!=='string'||!allowed.has(path))throw new Error('Unsupported base metric');
   let value:unknown=record;
   for(const key of path.split('.'))value=value&&typeof value==='object'?(value as BaseRecord)[key]:undefined;
+  if(['breakoutFailed','exitSignaled','tradeClosed'].includes(path)&&typeof value==='boolean')return Number(value);
   return typeof value==='number'&&Number.isFinite(value)?value:null;
 }
 /** Parse bounded arithmetic without eval; validate every metric even if missing. */

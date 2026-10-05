@@ -138,9 +138,9 @@ proof that its detector, hierarchy or outcomes reproduce an external screener.
 - Base ATR uses Wilder smoothing; a simple-mean ATR warehouse field is a
   different measurement. Base half-window contraction must use one specified
   smoothing convention on both halves.
-- Legacy advanced-metric ADR fields use `(high-low)/low`, whereas scanner ADR
-  and its published common-window values use `(high-low)/close`. These existing
-  field families must remain clearly distinguished.
+- Legacy display ADR fields and `adr_percent_low_20` use `(high-low)/low`.
+  Canonical `adr_percent_20`, scanner ADR and browser `adr20Pct` now consistently
+  use `(high-low)/close`. The old display family remains for compatibility.
 - Closing-price 52-week base context differs from intraday-high/low event gates.
 - Outcomes depend on configured stop, trailing-average arming and execution
   timing. A frozen breakout-day summary is not a completed trade result.
@@ -148,3 +148,6 @@ proof that its detector, hierarchy or outcomes reproduce an external screener.
 These are disclosure/policy differences, not silently changed by the turnover
 migration. Historical replay and real-cloud performance validation remain
 necessary before claiming external parity or validated preset effectiveness.
+
+The follow-up [measurement contract](measurement-contracts.md) makes these
+distinctions selectable and corrects the publisher ATR initialization.

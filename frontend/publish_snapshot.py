@@ -18,6 +18,7 @@ from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.base_publication import build_base_records, compact_base_records
 from edl_pipeline.scanner.financials import financial_value, finite_number
 from edl_pipeline.scanner.turnover import average_turnover_crore
+from edl_pipeline.scanner.indicators import true_range, wilder_average
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
 
@@ -131,13 +132,14 @@ def _publish(root, output, archive_directory):
             for period in (14,20):
                 if len(frame)>=period:
                     metrics[f'adr{period}']=float(((frame['High']-frame['Low'])/frame['Close']*100).tail(period).mean())
-            if len(frame)>=15:
-                previous=frame['Close'].shift(1)
-                true_range=np.maximum.reduce([(frame['High']-frame['Low']).to_numpy(),
-                    (frame['High']-previous).abs().to_numpy(),(frame['Low']-previous).abs().to_numpy()])
-                atr=float(np.nanmean(true_range[1:15]))
-                for value in true_range[15:]: atr=(atr*13+float(value))/14
+            if len(frame)>=14:
+                atr=float(wilder_average(true_range(frame),14).iloc[-1])
                 metrics['atrPct14']=atr/float(last['Close'])*100 if last['Close']>0 else None
+                row['atr14']=atr
+            else:
+                metrics['atrPct14']=None
+                row['atr14']=None
+            row['adr20Pct']=metrics.get('adr20')
         row['metrics']=metrics
         row['bases']=compact_base_records(context['base_episodes'].get(symbol,[]),public=True)
         row['historyMetadata']=stock.get('history_metadata')

@@ -1,6 +1,6 @@
 # Precomputed base facts and arithmetic
 
-The base detector version `nexus-bases-2` adds raw facts and slice measures to
+The base detector version `nexus-bases-3` adds raw facts and slice measures to
 the existing episode contract. It does not change the detector's threshold
 policy. New identities prevent old incomplete records from appearing compatible.
 
@@ -110,3 +110,9 @@ private selected-ID routing. Publication tests check that new facts survive
 compressed private shard and archive serialization. Republish matching chart,
 scanner and Worker versions to activate the new contract; old releases remain
 immutable. No production release is implied by a local test or PR update.
+
+## Measurement conventions
+
+See [the versioned measurement contract](measurement-contracts.md) for overhead
+proxies, the distinct ATR/ADR families, closing versus intraday 52-week context,
+and breakout failure versus exit signal and executed trade return.

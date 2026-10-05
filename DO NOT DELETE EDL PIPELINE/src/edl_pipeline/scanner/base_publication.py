@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from .bases import detect_bases, finite, ratio
+from .indicators import true_range, wilder_average
 
 
 def normalize_frames(frames):
@@ -52,6 +53,10 @@ def trend_series(frame, ranks=None, listing_date=None):
     turnover=pd.to_numeric(frame.get('Turnover',pd.Series(index=frame.index,dtype=float)),errors='coerce')
     turnover=turnover.where(np.isfinite(turnover)&(turnover>=0))
     values['medianTurnover20']=(turnover/1e7).rolling(20,min_periods=20).median()
+    values['atrWilder14Pct']=wilder_average(true_range(frame),14)/close*100
+    values['atrSimple14Pct']=true_range(frame).rolling(14,min_periods=14).mean()/close*100
+    values['adrClose14Pct']=((frame.High-frame.Low)/close*100).rolling(14,min_periods=14).mean()
+    values['adrLow14Pct']=((frame.High-frame.Low)/frame.Low*100).rolling(14,min_periods=14).mean()
     values['price']=close
     values['turnoverCr']=turnover/1e7
     values['volume']=frame.Volume.astype(float)
@@ -59,6 +64,11 @@ def trend_series(frame, ranks=None, listing_date=None):
         values[f'averageTurnover{period}']=(turnover/1e7).rolling(period,min_periods=period).mean()
         values[f'averageVolume{period}']=frame.Volume.rolling(period,min_periods=period).mean()
     highest=close.rolling(252,min_periods=252).max();lowest=close.rolling(252,min_periods=252).min()
+    values['closing52wHigh']=highest;values['closing52wLow']=lowest
+    intraday_high=frame.High.rolling(252,min_periods=252).max();intraday_low=frame.Low.rolling(252,min_periods=252).min()
+    values['intraday52wHigh']=intraday_high;values['intraday52wLow']=intraday_low
+    values['distanceIntraday52wHigh']=(intraday_high-close)/intraday_high*100
+    values['aboveIntraday52wLow']=(close/intraday_low-1)*100
     values['distanceClosing52wHigh']=(highest-close)/highest*100
     values['aboveClosing52wLow']=(close/lowest-1)*100
     listing=pd.to_datetime(listing_date,errors='coerce')
@@ -192,7 +202,7 @@ def compact_base_records(episodes, include_parts=False, public=False):
         selected[stage] = {key:episode[key] for key in (
             'id','stage','pivot','distanceFromPivotPct','breakout','breakoutAgeSessions',
             'holdsPivot','continuousHolding','belowPivotCloses','breakoutFailure',
-            'returnSinceBreakoutPct','maxGainPct','maxDrawdownPct','selection','current','failedPokeCount','parentInvalidationDate','exit','trade')}
+            'returnSinceBreakoutPct','maxGainPct','maxDrawdownPct','measurementPolicy','breakoutFailed','exitSignaled','tradeClosed','selection','current','failedPokeCount','parentInvalidationDate','exit','trade')}
         if public:
             for scope in ('selection','current'):
                 selected[stage][scope]={key:value for key,value in episode[scope].items() if key in PUBLIC_CONTEXT_KEYS}

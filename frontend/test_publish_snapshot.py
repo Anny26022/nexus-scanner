@@ -42,6 +42,27 @@ class SnapshotPublicationTests(unittest.TestCase):
         frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-09-30',periods=60),'Open':99.,'High':101.,'Low':98.,'Close':100.,'Volume':100.})
         frame.to_csv(root/'ohlcv_data/TEST.csv',index=False)
 
+    def test_published_atr_reuses_shared_wilder_initialization(self):
+        from edl_pipeline.scanner.indicators import true_range, wilder_average
+        for size in (13, 14, 60):
+            with tempfile.TemporaryDirectory() as folder, patch('publish_snapshot.list_presets', return_value=[]):
+                root = Path(folder) / 'edl'; root.mkdir()
+                output = Path(folder) / 'public'; self.fixture(root)
+                frame = pd.read_csv(root / 'ohlcv_data/TEST.csv').tail(size).reset_index(drop=True)
+                frame.loc[0, 'High'] = 140.
+                frame.to_csv(root / 'ohlcv_data/TEST.csv', index=False)
+                manifest = publish(root, output)
+                payload = json.loads((output / 'revisions' / manifest['revision'] / 'stocks.json').read_text())
+                row = payload['stocks'][0]
+                if size < 14:
+                    self.assertIsNone(row['atr14'])
+                else:
+                    expected = wilder_average(true_range(frame), 14).iloc[-1]
+                    self.assertAlmostEqual(row['atr14'], expected)
+                    self.assertAlmostEqual(row['metrics']['atrPct14'], expected)
+                if size >= 20:
+                    self.assertEqual(row['adr20Pct'], row['metrics']['adr20'])
+
     def test_same_session_correction_creates_new_revision_and_old_backend_stays_frozen(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)

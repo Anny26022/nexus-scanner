@@ -174,4 +174,30 @@ a different exit policy. Each configuration changes stable episode identity.
 Worker integration fixtures now exercise a nested Nexus preset plus a private
 MA metric through all 32 checksum-verified R2 shards and verify edge-cache reuse.
 The base measurement optimization matched complete episode JSON on RELIANCE,
-TCS, VENUSPIPES and HDFCBANK. Full-universe benchmark verification is pending.
+TCS, VENUSPIPES and HDFCBANK. The intermediate full-universe benchmark produced 503,808 episodes over 2,589 aligned histories in 1,086.6 seconds (18.1 minutes), compared with 1,599.1 seconds before date-position caching. Peak process RSS was 4.51 GB. A later array-reuse optimization has exact full-episode parity on the four stocks above; its full-universe timing remains to be measured.
+
+
+### Browser and payload measurements
+
+A local browser fixture merged real 1 October base summaries for 2,589 symbols
+with the existing table snapshot. It explicitly aligned the base fields only;
+other table fields were sizing fixtures, and no release was published. The
+production snapshot Web Worker ran eleven distinct warm thresholds for each
+case, avoiding identical-query result-cache reuse:
+
+- Forming-base depth: 1.8–2.4 ms, returning 1,893–1,914 matching rows.
+- Strong Bases preset: 9.2–11.0 ms; no matches on this particular dataset.
+- Cold load plus first scan: 81.7 ms and 98.3 ms respectively on the local desktop.
+- No main-thread long-task entries were observed during these runs.
+
+These are desktop, local-fixture measurements, not mobile or network latency
+claims. Real base summaries plus the existing stock fields compressed into
+219,232-byte core, 2,334,640-byte technical and 351,616-byte fundamental packs
+(2,905,488 bytes total). This passes the payload-size targets for the sizing
+fixture; complete production session alignment remains a separate gate.
+
+The exact CI pipeline test command now works without a custom PYTHONPATH. The
+five new test modules resolve their source directory relative to their own file,
+matching existing test conventions. The current results are 228 pipeline tests,
+42 frontend Python publication/bridge tests and 72 frontend TypeScript tests.
+Chart dialogs initialize to the base stage selected in the results table.

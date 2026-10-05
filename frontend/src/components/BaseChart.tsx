@@ -38,8 +38,8 @@ export function BaseChartPlot({chart,record}:{chart:ChartSnapshot;record?:BaseRe
     {record&&<p className="border-t border-slate-100 pt-3 text-xs text-slate-600">Depth {display(base.depthPct,'%')} · ATR contraction {display(base.atrContraction,'×')} · Volume dry-up {display(base.volumeDryUp,'×')} · Base RS {display(base.rsAverage)} · Pivot distance {display(record.distanceFromPivotPct,'%')}</p>}
   </>;
 }
-export function BaseChartDialog({symbol,revision,onClose}:{symbol:string;revision:string;onClose:()=>void}){
-  const [stage,setStage]=useState<string|null>(null);
+export function BaseChartDialog({symbol,revision,initialStage,onClose}:{symbol:string;revision:string;initialStage?:string;onClose:()=>void}){
+  const [stage,setStage]=useState<string|null>(initialStage??null);
   const query=useQuery({queryKey:['chart',revision,symbol],queryFn:()=>screenerApi.getChart(symbol,revision),staleTime:Infinity,retry:1});
   const stages=['FRESH_BREAKOUT','HOLDING','FORMING','PLAYED_OUT'].filter(key=>query.data?.bases?.[key as keyof NonNullable<ChartSnapshot['bases']>]);
   const selected=stage&&stages.includes(stage)?stage:stages[0];

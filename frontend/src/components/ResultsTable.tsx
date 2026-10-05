@@ -300,7 +300,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
           </div>
         )}
       </div>
-      {chartSymbol&&<BaseChartDialog key={`${data.immutableRevision}:${chartSymbol}`} symbol={chartSymbol} revision={data.immutableRevision} onClose={()=>{setChartSymbol(null);chartTrigger.current?.focus();}}/>}
+      {chartSymbol&&<BaseChartDialog key={`${data.immutableRevision}:${chartSymbol}`} symbol={chartSymbol} revision={data.immutableRevision} initialStage={stage} onClose={()=>{setChartSymbol(null);chartTrigger.current?.focus();}}/>}
     </div>
   );
 };

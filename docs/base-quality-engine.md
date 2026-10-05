@@ -496,3 +496,21 @@ universe without recomputing or truncating archived candidates.
 
 These results retain the documented current-universe and current-industry bias;
 they do not establish optimized defaults or unbiased strategy performance.
+
+
+### Actual-release Python/Worker result parity
+
+Local workerd evaluated the recovered-data release through checksum-verified R2
+runtime objects. All seven base presets and eight deterministic queries matched
+Python's entire sorted symbol list across every page, including 2,249 forming,
+277 fresh, 174 strict holding and 2,361 played-out stage matches. Nested private
+EMA150/depth logic matched 646 symbols; half-volume arithmetic matched 863;
+repeated strict depth bounds matched 1,588. Preset results were 0/0/0 for
+Strong/Fresh/Holding, 25 VCP Base, 52 Blue Sky, 94 Multi-year and 34 IPO Base.
+
+Observed first-page cold scans ranged from 1,443 to 3,612 ms, with cached responses
+3–24 ms. Complete historical archives were absent from the local R2 runtime;
+latest-session scans required only manifested runtime objects. This is local
+workerd/R2 emulation, not production network/CPU evidence. A local harness
+file-path startup failure reproduced with a one-line Worker and was resolved
+by passing the same built module bytes directly; production code was unchanged.

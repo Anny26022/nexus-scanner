@@ -29,7 +29,7 @@ not claim result parity with another platform's undisclosed base detector.
 - [x] Golden fixtures, prefix-invariance tests, integration and browser fixture checks.
 - [x] PR #26 with scope, dependencies and validation evidence; CI passes.
 - [x] Final full-generation measurement and complete aligned-data release check.
-- [ ] Recovered-data chart equality, Worker symbol parity and browser smoke checks.
+- [x] Recovered-data chart equality, Worker symbol parity and browser smoke checks.
 
 The automated reviewer currently skips PR #26 and there are no review threads.
 This is not an independent review approval.
@@ -163,8 +163,9 @@ order of a session's high and low.
 parity; Wrangler dry build and frontend production build passed. The pipeline
 suite passed 230 tests including hierarchy and failed-poke fixtures. Publication/bridge
 coverage passed 46 tests, including the three new release-coverage audit tests. The latest
-code and documentation CI checks pass. Final aligned-data and production performance
-acceptance remain required.
+code and documentation CI checks pass. The recovered-data release, parity and browser
+checks documented below supersede the initial data limitation. Production deployment
+and Cloudflare network/CPU measurements have not been performed in this PR.
 
 The local stock artifact is dated 30 September 2026 while most OHLCV files
 end on 1 October and omit 30 September. A separate 1 October benchmark covers
@@ -528,4 +529,27 @@ The real browser application served the validated release and returned 1,919
 forming/depth matches and 863 private half-volume arithmetic matches, agreeing
 with Python/workerd. The base explanation column rendered and private queries
 used the advanced API. Only core/technical packs loaded for the default screen;
-fundamentals were not fetched unnecessarily. Chart checks remain in progress.
+fundamentals were not fetched unnecessarily. Chart checks completed as described below.
+
+
+### Complete charts and final browser checks
+
+All 2,603 generated chart files passed session, candle cutoff and exact public
+base-summary equality checks against the recovered scanner release. Chart
+revision is `8e951b28b6a02383b1b0893ee6a38b5b8b53bcf98a681e01bdff8189298d647c`.
+Compressed chart size is 129,612,358 bytes; generation and verification took
+1,441.94 seconds with 3,140,485,120 bytes peak RSS. RELIANCE has 7,810 candles,
+TCS 5,455, VENUSPIPES 1,074 and HDFCBANK 7,695. The twelve unaligned stocks
+retain unavailable base summaries. No production pointer or R2 object changed.
+
+The actual browser opened PIXTRANS from the forming/depth query, loaded its
+per-symbol chart and rendered the forming range and pivot at ₹1,863.60. The
+viewer showed depth 8.25%, ATR contraction 0.82×, volume dry-up 10.64×, base RS
+72.65 and pivot distance −2.91%, matching the published selected base.
+Warm scalar scans measured 1.2–2.8 ms with no observed UI-thread long task.
+Unsupported fields produced an explicit query failure and no reduced results.
+These are local release checks; production rollout remains a separate action.
+
+The chart stage selector switched PIXTRANS to PLAYED_OUT and rendered its
+breakout marker; Escape closed the viewer. The editable Strong Bases RS
+threshold persisted at 85 after Apply, reload and reopening the preset editor.

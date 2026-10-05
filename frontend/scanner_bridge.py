@@ -402,7 +402,7 @@ def run(request, root=ROOT, cache=None):
             history=cache.frame(root,symbol,as_of) if cache is not None else normalize_history(pd.read_csv(path),as_of) if path.exists() else None
             if history is not None and not history.empty and history.Date.iloc[-1].strftime('%Y-%m-%d')==as_of:
                 frames[symbol]=history
-        context['base_episodes']=build_base_records(frames,context['stocks'],context.get('benchmarks'))
+        context['base_episodes']=build_base_records(frames,context['stocks'],context.get('benchmarks'),selected_only=True)
     # Both public delivery conditions need dated history.  The spike condition
     # is named ``DELIVERY_PCT_SPIKE`` while the latest-session condition uses
     # ``DELIVERY_PERCENT``; checking only the latter quietly made spike

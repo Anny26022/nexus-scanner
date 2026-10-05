@@ -44,8 +44,12 @@ def main():
     requested={symbol.strip().upper() for symbol in args.symbols.split(',')} if args.symbols else set(frames)
     missing=requested-set(frames)
     if missing:parser.error('Missing aligned history: '+', '.join(sorted(missing)))
-    episodes=build_base_records(frames,stocks,config=config,symbols=requested)
-    reports={symbol:replay_breakouts(frames[symbol],episodes[symbol],fee_bps=args.fee_bps,slippage_bps=args.slippage_bps) for symbol in sorted(requested)}
+    reports={}
+    def replay_symbol(symbol, episodes):
+        reports[symbol]=replay_breakouts(frames[symbol],episodes,fee_bps=args.fee_bps,slippage_bps=args.slippage_bps)
+    # Evaluate every historical episode before releasing it, preserving full
+    # replay coverage without retaining the universe's raw episodes together.
+    build_base_records(frames,stocks,config=config,symbols=requested,episode_sink=replay_symbol)
     payload={'schemaVersion':1,'asOfDate':session,'metadataAsOfDate':metadata_session,'symbols':reports,'membershipBasis':'CURRENT_NEXUS_ELIGIBLE',
              'note':'Current-universe historical replay; not survivorship-free. Defaults have not been optimized.'}
     output=args.output or args.root/'.scanner_cache/base-replay.json.gz'

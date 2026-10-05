@@ -11,6 +11,26 @@ from edl_pipeline.scanner.presets import list_presets
 
 
 class BridgeTests(unittest.TestCase):
+    def test_local_base_query_keeps_stage_identity_across_cached_queries(self):
+        context={'stocks':{'TEST':self.stock()},'financial_history_as_of':'2026-09-30','rs_ratings':{},'fno_ban_symbols':{}}
+        frame=self.history()
+        closes=[100.]+[94.]*40+[102.]+[101.]*18
+        for key in ('Open','Close'):
+            frame[key]=closes
+        frame['High']=[value+1 for value in closes]
+        frame['Low']=[value-1 for value in closes]
+        request={'asOfDate':'2026-09-30','universe':'mainboard','textQuery':'Base Stage(HOLDING, STRICT)'}
+        with tempfile.TemporaryDirectory() as folder, patch.object(bridge,'_load_context',return_value=context):
+            root=Path(folder);(root/'ohlcv_data').mkdir()
+            frame.to_csv(root/'ohlcv_data/TEST.csv',index=False)
+            cache=ScannerCache()
+            first=bridge.run(request,root,cache)
+            second=bridge.run({**request,'textQuery':'Base Stage(HOLDING, STRICT) AND Base Metric(HOLDING, base.depthPct) < 10'},root,cache)
+            self.assertEqual(first['matchCount'],1)
+            self.assertEqual(second['matchCount'],1)
+            self.assertEqual(first['rows'][0]['bases']['HOLDING']['id'],second['rows'][0]['bases']['HOLDING']['id'])
+            self.assertLessEqual(len(context['base_episodes']['TEST']),4)
+
     def test_cache_reuses_scan_for_pagination_and_invalidates_changed_history(self):
         context={"stocks":{"TEST":self.stock()},"financial_history_as_of":"2026-09-30","rs_ratings":{},"fno_ban_symbols":{}}
         request={"asOfDate":"2026-09-30","universe":"mainboard","expressionTree":{"type":"group","operator":"all","children":[]}}

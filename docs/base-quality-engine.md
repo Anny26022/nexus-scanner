@@ -400,3 +400,20 @@ lists are empty. All 230 pipeline, 47 publication/bridge, 74 frontend TypeScript
 and 15 Worker tests pass; frontend production build and Worker type/dry-build
 checks pass. The replacement full-generation benchmark is running with progress
 logging; its final peak memory, duration and archive size remain to be verified.
+
+
+The local Python bridge also retains only selected stage episodes. Cached base
+text queries preserve the same selected ID across different thresholds. The
+replay CLI consumes complete episodes one symbol at a time and retains the
+qualified trade reports, preserving all historical candidates. Its four-stock
+real-data output is exactly equal to the preceding implementation's entire JSON
+payload (five trades, all costs and outcomes). Publication/bridge coverage now
+passes 48 tests.
+
+The newer Git stock artifact has 2,603 eligible rows and resolves the latest
+session to 1 October. Against the existing original OHLCV cache, 2,591 histories
+match that session; eleven omit it and one has no history at the cutoff. The
+2,591 matching rows also carry 1 October metadata. The remaining rows have
+older or missing metadata. This is a materially stronger source-data check than
+the earlier mixed-date sizing fixture, but complete publication with the
+recovered Actions history and explicit unavailable handling remains to be run.

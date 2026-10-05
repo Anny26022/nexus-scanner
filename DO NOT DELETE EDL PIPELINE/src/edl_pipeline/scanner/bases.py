@@ -26,7 +26,7 @@ class BaseConfig:
     atr_period: int = 14
     stop_pct: float = 8.0
     trail_period: int = 50
-    fresh_sessions: int = 5
+    fresh_sessions: int = 6
     touch_tolerance_pct: float = 1.0
 
     def validate(self):

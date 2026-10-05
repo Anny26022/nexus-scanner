@@ -45,7 +45,7 @@ quality preset thresholds are tighter. These detector choices are versioned and
 need historical validation.
 
 Breakout volume uses the preceding 20-session median, excluding breakout day.
-Fresh status covers ages 0 through 4 (the latest five sessions). The default exit
+Fresh status covers ages 0 through 5 inclusive (six sessions including breakout day). The default exit
 is a closing-price stop 8% below pivot or a close below SMA50 after that trail has
 armed. Exit timing and execution costs must be explicit in replay; calculated
 hypothetical outcomes are not real executions.
@@ -154,7 +154,7 @@ order of a session's high and low.
 
 ## Validation status
 
-72 frontend tests and 14 Worker tests passed, including base metric/arithmetic
+72 frontend tests and 15 Worker tests passed, including base metric/arithmetic
 parity; Wrangler dry build and frontend production build passed. The pipeline
 suite passed 228 tests including the hierarchy and failed-poke fixtures. Final regression and performance acceptance remain required.
 
@@ -198,6 +198,59 @@ fixture; complete production session alignment remains a separate gate.
 
 The exact CI pipeline test command now works without a custom PYTHONPATH. The
 five new test modules resolve their source directory relative to their own file,
-matching existing test conventions. The current results are 228 pipeline tests,
+matching existing test conventions. The current results are 230 pipeline tests,
 42 frontend Python publication/bridge tests and 72 frontend TypeScript tests.
 Chart dialogs initialize to the base stage selected in the results table.
+
+
+### Advanced runtime measurement and memory policy
+
+A local private-runtime fixture used all 2,589 aligned histories, the production
+32-shard binary encoder (up to 1,500 sessions per symbol), real selected base
+contexts and the existing table metadata. It omitted dated filings/delivery,
+base slices and complete episode archives; therefore it is not a complete
+production upload or an upper bound for every condition.
+
+A forming-base plus positive EMA150-distance expression returned 605 matches,
+matching Python's count. The HTTP Worker handler verified all runtime objects
+and exercised the revision response cache. Eager batch decoding measured
+1.32 seconds and 157,922,942 bytes of observed Node heap plus array buffers.
+The decoder now yields one stock at a time, uses views for dates/interleaved
+values, and processes one shard at a time. With Node old space capped at 64 MB,
+this fixture measured 1.64 seconds, 77,034,642 bytes observed heap plus array
+buffers, and a 1.54 ms local cached response. Unrestricted Node GC can retain
+more transient buffers; these are not Cloudflare isolate measurements or R2
+network latency claims. Cloudflare runtime, complete auxiliary data and worst
+supported-expression acceptance remain outstanding.
+
+Private publication selects each symbol's runtime base IDs once, rather than
+repeating selection for every historical episode. Archive contents and selected
+IDs are unchanged, and the archive-isolation fixture verifies the single call.
+
+
+### Latest publication and replay changes
+
+Fresh breakouts include ages 0–5 sessions; age 6 enters the holding stage.
+Replay accepts an explicit `--as-of` cutoff and a symbol subset. Strength and
+industry observations still use the complete aligned universe, rather than
+ranking only the requested replay symbols. Current context is shared read-only
+between episodes, and frozen context is shared by observation date; public
+projection creates independent output dictionaries.
+
+Aligned native stock fields now live in auxiliary shards beside their histories.
+The global metadata index retains only identity, universe and alignment fields.
+Stocks without aligned history retain their full metadata for metadata-only
+conditions. The Worker reconstructs compact public base explanations for response
+rows, without exposing private base slices or expanded context fields.
+
+One cold scan runs per isolate, with at most seven additional queued requests;
+cache hits bypass that queue. A full queue returns a concise 503 response. The
+scanner identity also fingerprints private publication and Worker code, so a
+wire-format change requires matching publication and deployment.
+
+The latest local Workerd run of this limited fixture returned 605 matches in
+937 ms, with a 7.6 ms cached response. Four queued scans returned 570, 519,
+483 and 444 matches in 3.46 seconds total. Eight inspector observations measured
+a peak of 96,261,349 bytes of heap plus backing storage. Sampling can miss brief
+peaks; complete auxiliary-data and worst-expression validation remain required.
+These measurements used local R2 fixtures, with no production bucket updates.

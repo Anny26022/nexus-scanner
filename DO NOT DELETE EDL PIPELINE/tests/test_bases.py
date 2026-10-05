@@ -13,6 +13,15 @@ def candles(closes):
 
 
 class BaseTests(unittest.TestCase):
+    def test_fresh_age_five_is_included_and_age_six_is_holding(self):
+        frame=candles([100]+[94]*19+[102]*7)
+        fresh=next(e for e in detect_bases(frame.iloc[:-1],'TEST') if e['breakout'])
+        holding=next(e for e in detect_bases(frame,'TEST') if e['breakout'])
+        self.assertEqual(fresh['breakoutAgeSessions'],5)
+        self.assertEqual(fresh['stage'],'FRESH_BREAKOUT')
+        self.assertEqual(holding['breakoutAgeSessions'],6)
+        self.assertEqual(holding['stage'],'HOLDING')
+
     def test_breakout_freezes_base_and_excludes_breakout_bar(self):
         frame=candles([100]+[94]*19+[102,104,110])
         cfg=BaseConfig(atr_period=2)
@@ -91,4 +100,3 @@ class BaseTests(unittest.TestCase):
         with self.assertRaises(ValueError): detect_bases(frame,'TEST')
 
 if __name__=='__main__':unittest.main()
-

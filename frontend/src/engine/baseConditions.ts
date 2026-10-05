@@ -1,4 +1,5 @@
 import metrics from '../data/baseMetrics.json';
+import publicContextKeys from '../data/baseContextKeys.json';
 import { compare, type Truth } from './expression';
 import type { ActiveCondition } from '../types/screener';
 
@@ -45,6 +46,16 @@ export function detailedSelectedBases(selected:SelectedBases|undefined,episodes:
     result[stage as keyof SelectedBases]=episode?{...summary,base:episode.base,current:episode.current??summary.current,selection:episode.selection??summary.selection}:summary;
   }
   return result;
+}
+
+/** Restore compact table explanations without retaining private slice/context detail. */
+export function publicSelectedBases(selected:SelectedBases|undefined):SelectedBases|undefined {
+  if(!selected)return selected;
+  const context=(value:unknown)=>value&&typeof value==='object'
+    ?Object.fromEntries(Object.entries(value).filter(([key])=>publicContextKeys.includes(key))):value;
+  return Object.fromEntries(Object.entries(selected).map(([stage,record])=>[stage,{...record,
+    base:record.base&&typeof record.base==='object'?Object.fromEntries(Object.entries(record.base).filter(([key])=>key!=='parts')):record.base,
+    current:context(record.current),selection:context(record.selection)}]));
 }
 
 export function baseStageForCondition(condition:ActiveCondition):keyof SelectedBases|undefined {

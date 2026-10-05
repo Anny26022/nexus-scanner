@@ -5,7 +5,6 @@ rank, current pivot distance, final lifecycle stage or future outcome to decide
 whether to enter. Historical membership still uses today's eligible universe.
 """
 from __future__ import annotations
-from copy import deepcopy
 import math
 import pandas as pd
 from .base_conditions import evaluate_base_condition
@@ -40,7 +39,9 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
         if episode.get('breakout') is None: continue
         trigger=positions.get(episode['breakout']['date'])
         if trigger is None: raise ValueError('Breakout event lies outside replay history')
-        record=deepcopy(episode)
+        # Qualification overrides only lifecycle scalars; frozen measurements
+        # are read-only. Avoid copying every base slice for rejected episodes.
+        record=dict(episode)
         record.update(stage='FRESH_BREAKOUT',breakoutAgeSessions=0,distanceFromPivotPct=episode['breakout']['throughPct'],holdsPivot=True,continuousHolding=True)
         results=[evaluate_base_condition({'FRESH_BREAKOUT':record},leaf['kind'],leaf['params']) for leaf in leaves]
         if not all(result is True for result in results): continue

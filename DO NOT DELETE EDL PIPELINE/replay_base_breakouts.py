@@ -17,6 +17,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root',type=Path,default=ROOT)
     parser.add_argument('--symbols',help='Optional comma-separated symbols; RS still uses the full eligible universe')
+    parser.add_argument('--as-of',help='Optional replay cutoff (YYYY-MM-DD); defaults to the stock artifact session')
     parser.add_argument('--output',type=Path)
     parser.add_argument('--fee-bps',type=float,default=10)
     parser.add_argument('--slippage-bps',type=float,default=10)
@@ -28,8 +29,10 @@ def main():
     except ValueError as error:parser.error(str(error))
     stocks={row['symbol']:row for item in _artifact(args.root,'all_stocks_fundamental_analysis.json',[]) if (row:=canonicalize_stock(item)).get('symbol') and row.get('default_screener_eligible',True)}
     if not stocks:parser.error('Canonical eligible stocks are required')
-    session=max(str(row.get('as_of_date') or '')[:10] for row in stocks.values())
-    date.fromisoformat(session)  # Reject an absent or invalid publication session.
+    metadata_session=max(str(row.get('as_of_date') or '')[:10] for row in stocks.values())
+    session=args.as_of or metadata_session
+    try:date.fromisoformat(session)
+    except ValueError:parser.error('Replay cutoff must be a valid YYYY-MM-DD date')
     frames={}
     for symbol in stocks:
         path=args.root/'ohlcv_data'/f'{symbol}.csv'
@@ -38,12 +41,12 @@ def main():
         frame=frame.loc[frame.Date<=pd.Timestamp(session)].reset_index(drop=True)
         if not frame.empty and str(frame.Date.iloc[-1].date())==session:frames[symbol]=frame
     if not frames:parser.error('Aligned local OHLCV histories are required')
-    episodes=build_base_records(frames,stocks,config=config)
     requested={symbol.strip().upper() for symbol in args.symbols.split(',')} if args.symbols else set(frames)
     missing=requested-set(frames)
     if missing:parser.error('Missing aligned history: '+', '.join(sorted(missing)))
+    episodes=build_base_records(frames,stocks,config=config,symbols=requested)
     reports={symbol:replay_breakouts(frames[symbol],episodes[symbol],fee_bps=args.fee_bps,slippage_bps=args.slippage_bps) for symbol in sorted(requested)}
-    payload={'schemaVersion':1,'asOfDate':session,'symbols':reports,'membershipBasis':'CURRENT_NEXUS_ELIGIBLE',
+    payload={'schemaVersion':1,'asOfDate':session,'metadataAsOfDate':metadata_session,'symbols':reports,'membershipBasis':'CURRENT_NEXUS_ELIGIBLE',
              'note':'Current-universe historical replay; not survivorship-free. Defaults have not been optimized.'}
     output=args.output or args.root/'.scanner_cache/base-replay.json.gz'
     _write_gzip_json(output,payload)

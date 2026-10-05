@@ -2393,11 +2393,11 @@
     "name": "Fresh Breakouts",
     "category": "Bases & Contraction",
     "horizon": "Positional",
-    "description": "Qualified frozen base, 1.5\u00d7 median volume, strong close and latest-five-session breakout.",
+    "description": "Qualified frozen base, 1.5\u00d7 median volume, strong close and breakout age 0\u20135 sessions inclusive.",
     "aka": [],
     "version": "nexus-bases-1",
     "rules": [
-      "Qualified frozen base, 1.5\u00d7 median volume, strong close and latest-five-session breakout."
+      "Qualified frozen base, 1.5\u00d7 median volume, strong close and breakout age 0\u20135 sessions inclusive."
     ],
     "expression": {
       "type": "group",
@@ -2578,7 +2578,7 @@
             "stage": "FRESH_BREAKOUT",
             "metric": "breakoutAgeSessions",
             "comparison": "BELOW",
-            "value": 4
+            "value": 5
           }
         }
       ]

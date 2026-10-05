@@ -122,16 +122,25 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
         return [record for record in financial_history.get(symbol, [])
                 if str(record.get("filing_date") or record.get("filedAt") or "")[:10] <= session]
     from edl_pipeline.scanner.base_publication import compact_base_records
+    def selected_episodes(symbol):
+        episodes = context.get("base_episodes", {}).get(symbol, [])
+        selected_ids = {record['id'] for record in compact_base_records(episodes).values()}
+        return [episode for episode in episodes if episode['id'] in selected_ids]
+
+    native_rows = {row['symbol']: {**row, 'bases': {
+        stage: {key: value for key, value in record.items() if key not in ('base', 'current', 'selection')}
+        for stage, record in row.get('bases', {}).items()
+    }} if isinstance(row.get('bases'), dict) else dict(row) for row in rows or []}
+
     for index, entries in enumerate(grouped):
         shard_symbols = {symbol for symbol, _frame in entries}
         aux = {
+            "stocks": {symbol: native_rows[symbol] for symbol in sorted(shard_symbols) if symbol in native_rows},
             "delivery": {symbol: delivery[symbol] for symbol in shard_symbols if symbol in delivery},
             "earnings": {symbol: available_filings(symbol) for symbol in sorted(shard_symbols)
                          if available_filings(symbol)},
             "breadth": context.get("breadth", {}),
-            "bases": {symbol:[episode for episode in context.get("base_episodes", {}).get(symbol,[])
-                if episode['id'] in {record['id'] for record in compact_base_records(context.get("base_episodes", {}).get(symbol,[])).values()}]
-                for symbol in sorted(shard_symbols)},
+            "bases": {symbol: selected_episodes(symbol) for symbol in sorted(shard_symbols)},
         }
         aux_data = gzip.compress(_json_bytes(aux), compresslevel=6, mtime=0)
         name = f"auxiliary/{index:02d}.json.gz"
@@ -155,7 +164,13 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
             _write(target/name,ledger_data)
             objects.append({'key':name,'bytes':len(ledger_data),'sha256':_sha(ledger_data),'encoding':'gzip'})
 
-    metadata_data = gzip.compress(_json_bytes({"stocks": rows or []}), compresslevel=6, mtime=0)
+    # Aligned native fields are loaded with their history shard. Preserve full
+    # metadata for rows without history so metadata-only fallback still works.
+    index_keys = ('symbol', 'name', 'close', 'indexMemberships', 'historyAligned', 'asOfDate')
+    metadata_rows = [{key: row[key] for key in index_keys if key in row}
+                     if row.get('historyAligned') is True and row['symbol'] in symbols
+                     else row for row in rows or []]
+    metadata_data = gzip.compress(_json_bytes({"stocks": metadata_rows}), compresslevel=6, mtime=0)
     _write(target / "metadata.json.gz", metadata_data)
     objects.append({"key": "metadata.json.gz", "bytes": len(metadata_data), "sha256": _sha(metadata_data), "encoding": "gzip"})
 

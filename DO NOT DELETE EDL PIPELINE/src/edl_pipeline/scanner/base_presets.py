@@ -29,8 +29,8 @@ def build_presets():
         'Liquid, shallow, tightening bases with persistent RS leadership, within 5% below pivot.')
     breakout=[metric('FRESH_BREAKOUT','breakout.volumeRatio','ABOVE',1.5),metric('FRESH_BREAKOUT','breakout.closeInRange','ABOVE',.7),
         metric('FRESH_BREAKOUT','breakout.throughPct','GREATER',0),metric('FRESH_BREAKOUT','distanceFromPivotPct','BELOW',5),
-        metric('FRESH_BREAKOUT','distanceFromPivotPct','ABOVE',0),metric('FRESH_BREAKOUT','breakoutAgeSessions','BELOW',4)]
-    add('fresh-breakouts','Fresh Breakouts','FRESH_BREAKOUT',quality('FRESH_BREAKOUT')+breakout,'Qualified frozen base, 1.5× median volume, strong close and latest-five-session breakout.')
+        metric('FRESH_BREAKOUT','distanceFromPivotPct','ABOVE',0),metric('FRESH_BREAKOUT','breakoutAgeSessions','BELOW',5)]
+    add('fresh-breakouts','Fresh Breakouts','FRESH_BREAKOUT',quality('FRESH_BREAKOUT')+breakout,'Qualified frozen base, 1.5× median volume, strong close and breakout age 0–5 sessions inclusive.')
     holding=[metric('HOLDING',node['params']['metric'],node['params']['comparison'],node['params']['value']) for node in breakout[:3]]
     add('holding-breakouts','Holding Breakouts','HOLDING',quality('HOLDING')+holding,'Qualified breakouts that have continuously held the original pivot.')
     add('vcp-base','VCP Base','FORMING',[

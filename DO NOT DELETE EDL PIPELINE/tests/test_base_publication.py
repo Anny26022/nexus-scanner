@@ -14,6 +14,18 @@ def candles(values):
 
 
 class BasePublicationTests(unittest.TestCase):
+    def test_symbol_selection_preserves_full_universe_strength_and_peers(self):
+        frames={name:candles([100+i*.1 for i in range(270)]+[110]*19+[140]+[150]*10) for name in ('A','B','C')}
+        stocks={name:{'industry':'Peer Group'} for name in frames}
+        complete=build_base_records(frames,stocks)
+        selected=build_base_records(frames,stocks,symbols={'A'})
+        self.assertEqual(set(selected),{'A'})
+        self.assertEqual(selected['A'],complete['A'])
+        self.assertTrue(any(episode['current']['rsRating'] is not None for episode in selected['A']))
+        self.assertTrue(any(episode['current']['industryRelative63'] is not None for episode in selected['A']))
+        with self.assertRaisesRegex(ValueError,'Missing aligned history: MISSING'):
+            build_base_records(frames,stocks,symbols={'MISSING'})
+
     def test_strength_is_prefix_invariant_and_requires_warmup(self):
         frames={'A':candles(np.arange(1,301)+100),'B':candles(np.arange(1,301)*.2+100)}
         full=strength_history(frames)

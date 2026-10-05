@@ -70,8 +70,11 @@ def trend_context(frame,index,ranks=None,listing_date=None):
     return {key:finite(value) for key,value in trend_series(frame,ranks,listing_date).iloc[index].items()}
 
 
-def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None):
+def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None):
     frames=normalize_frames(frames)
+    requested=set(frames) if symbols is None else set(symbols)
+    missing=requested-set(frames)
+    if missing:raise ValueError('Missing aligned history: '+', '.join(sorted(missing)))
     ranks=strength_history(frames) if frames else pd.DataFrame()
     output={}
     closes=pd.concat({symbol:frame.set_index('Date').Close for symbol,frame in frames.items()},axis=1).sort_index() if frames else pd.DataFrame()
@@ -101,6 +104,7 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
         price_key='Close' if 'Close' in benchmark else 'close'
         benchmark_close=benchmark.set_index(date_key)[price_key].reindex(closes.index)
     for symbol,frame in frames.items():
+        if symbol not in requested:continue
         rank=ranks[symbol].reindex(frame.Date).to_numpy(float)
         if rank_history is not None:
             rank_history[symbol]={'dates':[str(day.date()) for day in frame.Date], 'ratings':[finite(value) for value in rank]}
@@ -127,11 +131,16 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
             context_rows['benchmarkDistanceSMA200']=np.nan
         dates={str(day.date()):i for i,day in enumerate(frame.Date)}
         current={key:finite(value) for key,value in context_rows.iloc[-1].items()}
+        selections={}
         for episode in episodes:
             marker=episode['base']['endDate']
             index=dates[marker]
-            episode['selection']={key:finite(value) for key,value in context_rows.iloc[index].items()}
-            episode['current']=dict(current)
+            if index not in selections:
+                selections[index]={key:finite(value) for key,value in context_rows.iloc[index].items()}
+            # These context observations are read-only publication inputs.
+            # Overlapping episodes share current facts and dated observations.
+            episode['selection']=selections[index]
+            episode['current']=current
             episode['strengthUniverse']='CURRENT_NEXUS_ELIGIBLE'
         output[symbol]=episodes
     return output

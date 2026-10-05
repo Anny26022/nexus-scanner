@@ -36,6 +36,15 @@ This is not an independent review approval.
 
 ## Formula contracts
 
+The raw fact and slice extension is documented in
+[Precomputed base facts and arithmetic](base-facts-and-formulas.md). Detector
+version `nexus-bases-2` retains absolute current and prior-month SMA/EMA values,
+official traded-value windows, independent share/turnover quiet-day facts and
+slice traded-value totals, counts and returns. Detailed context and parts stay
+in private packs. Bounded `Base Expression` arithmetic complements the existing
+two-operand formula syntax. Chart generation preserves official turnover when
+constructing base summaries; chart/scanner equality tests include that input.
+
 Base-specific metrics use the inclusive detected start/end boundaries. At
 breakout they exclude the breakout candle and freeze. Current distance to pivot
 continues updating. ATR uses the existing Wilder implementation; half-volume and

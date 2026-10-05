@@ -66,6 +66,7 @@ class ChartNewsPublicationTests(unittest.TestCase):
             frame=pd.DataFrame({'Date':pd.bdate_range('2026-01-01',periods=len(closes)),
                 'Open':closes,'High':[v+1 for v in closes],'Low':[v-1 for v in closes],
                 'Close':closes,'Volume':1000})
+            frame['Turnover']=[2e7]*20+[9e8,8e8]
             session=str(frame.Date.iloc[-1].date())
             stock={'symbol':'TEST','as_of_date':session,'listing_date':'2020-01-01'}
             (root/'all_stocks_fundamental_analysis.json').write_text(json.dumps([stock]))
@@ -80,6 +81,8 @@ class ChartNewsPublicationTests(unittest.TestCase):
             base=chart['bases']['FRESH_BREAKOUT']
             self.assertLess(base['base']['endDate'],base['breakout']['date'])
             self.assertEqual(base['pivot'],100)
+            self.assertEqual(base['base']['quietTurnoverCr'],2)
+            self.assertEqual(base['base']['medianTurnoverCr'],2)
 
     def test_failed_pipeline_does_not_replace_previous_charts(self):
         with tempfile.TemporaryDirectory() as folder:

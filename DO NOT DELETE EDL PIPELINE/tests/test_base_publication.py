@@ -14,6 +14,39 @@ def candles(values):
 
 
 class BasePublicationTests(unittest.TestCase):
+    def test_absolute_context_facts_and_month_offsets(self):
+        frame=candles(np.arange(260)+100.)
+        frame['Turnover']=np.arange(260)*1e7
+        frame['Volume']=np.arange(260)+1
+        ranks=pd.Series(np.arange(260,dtype=float))
+        facts=trend_context(frame,259,ranks)
+        for period in (10,20,50,100,150,200):
+            self.assertAlmostEqual(facts[f'sma{period}'],frame.Close.tail(period).mean())
+            self.assertAlmostEqual(facts[f'sma{period}MonthAgo'],frame.Close.iloc[:-21].tail(period).mean())
+            self.assertAlmostEqual(facts[f'ema{period}MonthAgo'],frame.Close.ewm(span=period,adjust=False,min_periods=period).mean().iloc[-22])
+        for period in (10,20,50,100,200):
+            self.assertAlmostEqual(facts[f'averageTurnover{period}'],frame.Turnover.tail(period).mean()/1e7)
+            self.assertAlmostEqual(facts[f'averageVolume{period}'],frame.Volume.tail(period).mean())
+        self.assertEqual(facts['turnoverCr'],259)
+        self.assertEqual(facts['rsMonthAgo'],237)
+        frame.loc[259,'Turnover']=float('nan')
+        self.assertIsNone(trend_context(frame,259,ranks)['averageTurnover10'])
+
+    def test_market_cap_requires_alignment_and_frozen_turnover_excludes_breakout(self):
+        frame=candles([100]+[94]*19+[102,104])
+        frame['Turnover']=[2e7]*20+[9e8,8e8]
+        date=str(frame.Date.iloc[-1].date())
+        stock={'symbol':'A','market_cap_crore':1040,'as_of_date':date}
+        records=build_base_records({'A':frame},{'A':stock})['A']
+        record=compact_base_records(records,include_parts=True)['FRESH_BREAKOUT']
+        self.assertEqual(record['base']['parts']['full']['turnoverCr'],2)
+        self.assertEqual(record['selection']['turnoverCr'],2)
+        self.assertEqual(record['current']['turnoverCr'],80)
+        self.assertEqual(record['current']['marketCapCr'],1040)
+        self.assertAlmostEqual(record['selection']['marketCapCr'],940)
+        stale=build_base_records({'A':frame},{'A':{**stock,'as_of_date':'2020-01-01'}})['A']
+        self.assertIsNone(stale[0]['current']['marketCapCr'])
+
     def test_symbol_selection_preserves_full_universe_strength_and_peers(self):
         frames={name:candles([100+i*.1 for i in range(270)]+[110]*19+[140]+[150]*10) for name in ('A','B','C')}
         stocks={name:{'industry':'Peer Group'} for name in frames}

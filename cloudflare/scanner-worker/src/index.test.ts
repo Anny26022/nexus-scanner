@@ -9,6 +9,12 @@ const execution={waitUntil:vi.fn()} as unknown as ExecutionContext;
 function environment(marker=true){const manifest={...SCANNER_IDENTITY,schemaVersion:7,revision:'a'.repeat(64),session:'2026-10-01'};return {ALLOWED_ORIGINS:'https://app.example,http://localhost:8080',SCANNER_RELEASE_URL:'https://app.example/data/current.json',SCANNER_DATA:{get:vi.fn(async()=>marker?{json:async()=>manifest}:null)} as unknown as R2Bucket};}
 
 describe('scanner worker boundary',()=>{
+  it('validates arithmetic syntax and bounded metric references before loading shards',()=>{
+    const expression=(formula:string)=>({type:'condition' as const,condition:{conditionId:'BASE_FORMULA',parameters:{stage:'FORMING',formula,comparison:'ABOVE',value:1}}});
+    expect(()=>validateExpression(expression('(base.parts.half_2.turnoverCr / base.parts.half_1.turnoverCr) * 100'))).not.toThrow();
+    expect(()=>validateExpression(expression('pivot + imaginary'))).toThrow();
+    expect(()=>validateExpression(expression('pivot ** 2'))).toThrow();
+  });
   it('reports active revision health and applies allowlisted CORS',async()=>{
     vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({revision:'a'.repeat(64),sessionDate:'2026-10-01',schemaVersion:7,...SCANNER_IDENTITY}))));
     const response=await worker.fetch(new Request('https://worker.example/v1/health',{headers:{origin:'https://app.example'}}),environment(),execution);

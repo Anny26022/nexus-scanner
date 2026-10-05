@@ -13,6 +13,41 @@ def candles(closes):
 
 
 class BaseTests(unittest.TestCase):
+    def test_slice_facts_use_official_turnover_and_independent_quiet_dates(self):
+        frame=candles([100,110,105,105,120])
+        frame['Volume']=[10,20,30,40,50]
+        frame['Turnover']=[5e7,4e7,3e7,2e7,1e7]
+        measured=measure_base(frame,0,4,pd.Series([1.,2.,3.,4.,5.]))
+        full=measured['parts']['full'];first=measured['parts']['half_1'];second=measured['parts']['half_2']
+        self.assertEqual(full['turnoverCr'],3)
+        self.assertEqual(full['upTurnoverCr'],5)
+        self.assertEqual(full['downTurnoverCr'],3)
+        self.assertEqual((full['upDays'],full['downDays']),(2,1))
+        self.assertAlmostEqual(full['changePct'],20)
+        self.assertEqual(first['turnoverCr'],4)
+        self.assertEqual(second['turnoverCr'],1.5)
+        self.assertEqual(first['volume'],20)
+        self.assertEqual(measured['quietVolume'],10)
+        self.assertEqual(measured['medianVolume'],30)
+        self.assertEqual(measured['quietTurnoverCr'],1)
+        self.assertEqual(measured['medianTurnoverCr'],3)
+        self.assertNotEqual(measured['quietDate'],measured['quietTurnoverDate'])
+        self.assertEqual(measured['ageWeeks'],1)
+        self.assertEqual(measured['quietTurnoverAgeSessions'],0)
+        frame.loc[0,'Turnover']=float('nan')
+        missing=measure_base(frame,0,4,pd.Series([1.,2.,3.,4.,5.]))
+        self.assertIsNone(missing['parts']['half_1']['turnoverCr'])
+        self.assertIsNone(missing['parts']['half_1']['upTurnoverCr'])
+        self.assertIsNone(missing['quietTurnoverCr'])
+        self.assertEqual(missing['parts']['half_2']['turnoverCr'],1.5)
+        self.assertEqual(missing['quietVolume'],10)
+
+    def test_parts_count_boundary_changes_from_preceding_session(self):
+        frame=candles([100,110,105,120])
+        result=measure_base(frame,0,3,pd.Series([1.]*4))['parts']['half_2']
+        self.assertEqual((result['upDays'],result['downDays']),(1,1))
+        self.assertAlmostEqual(result['changePct'],(120/105-1)*100)
+
     def test_fresh_age_five_is_included_and_age_six_is_holding(self):
         frame=candles([100]+[94]*19+[102]*7)
         fresh=next(e for e in detect_bases(frame.iloc[:-1],'TEST') if e['breakout'])

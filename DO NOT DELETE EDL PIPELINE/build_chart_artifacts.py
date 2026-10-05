@@ -82,7 +82,7 @@ def _event_date(value):
     return _date(value)
 
 
-def _load_candles(path: Path, as_of: str):
+def _load_candles(path: Path, as_of: str, include_turnover=False):
     candles = []
     if not path.exists():
         return candles
@@ -98,6 +98,12 @@ def _load_candles(path: Path, as_of: str):
                     "low": float(row["Low"]), "close": float(row["Close"]),
                     "volume": int(float(row["Volume"])),
                 })
+                if include_turnover:
+                    # Optional traded value must not invalidate a valid candle.
+                    try:
+                        candles[-1]['turnover']=float(row.get('Turnover') or 'nan')
+                    except (TypeError,ValueError):
+                        candles[-1]['turnover']=float('nan')
             except (KeyError, TypeError, ValueError):
                 continue
     return candles
@@ -191,9 +197,9 @@ def main() -> int:
     # Retain numeric frames for cross-sectional strength, not a second universe
     # of candle dictionaries. Chart payloads are loaded one symbol at a time.
     for symbol in canonical:
-        candles=_load_candles(root/'ohlcv_data'/f'{symbol}.csv',as_of)
+        candles=_load_candles(root/'ohlcv_data'/f'{symbol}.csv',as_of,include_turnover=True)
         if not candles or candles[-1]['date']!=as_of or not canonical[symbol].get('default_screener_eligible',True): continue
-        frame=pd.DataFrame(candles).rename(columns={key:key.title() for key in ('date','open','high','low','close','volume')})
+        frame=pd.DataFrame(candles).rename(columns={key:key.title() for key in ('date','open','high','low','close','volume','turnover')})
         frame['Date']=pd.to_datetime(frame.Date)
         frames[symbol]=frame
     benchmarks={}

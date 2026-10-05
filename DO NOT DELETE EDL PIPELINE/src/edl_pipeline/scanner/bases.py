@@ -15,7 +15,7 @@ import pandas as pd
 from .indicators import true_range, wilder_average
 from .base_execution import trade_facts, validate_costs
 
-ENGINE_VERSION = "nexus-bases-1"
+ENGINE_VERSION = "nexus-bases-2"
 
 
 @dataclass(frozen=True)
@@ -58,13 +58,18 @@ def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1, _ar
     """Measure inclusive base boundaries. Halves differ by at most one session."""
     arrays=_arrays or {'volume':frame.Volume.to_numpy(float),'close':frame.Close.to_numpy(float),
         'high':frame.High.to_numpy(float),'low':frame.Low.to_numpy(float),'change':frame.Close.diff().to_numpy(float),
-        'dates':[str(day.date()) for day in frame.Date],'atr':atr_pct.to_numpy(float)}
+        'dates':[str(day.date()) for day in frame.Date],'atr':atr_pct.to_numpy(float),
+        'turnover':pd.to_numeric(frame.get('Turnover',pd.Series(index=frame.index,dtype=float)),errors='coerce').to_numpy(float)}
     volume=arrays['volume'][start:end+1];close=arrays['close'][start:end+1]
     high=arrays['high'][start:end+1];low=arrays['low'][start:end+1]
     size=end-start+1;pivot=float(close.max());midpoint=(size+1)//2
     averages=arrays['atr'][start:end+1];change=arrays['change'][start:end+1]
     up, down = float(volume[change > 0].sum()), float(volume[change < 0].sum())
     quiet = int(np.argmin(volume))
+    turnover=arrays['turnover'][start:end+1]
+    turnover= np.where(np.isfinite(turnover)&(turnover>=0),turnover,np.nan) / 1e7
+    complete_turnover=bool(np.isfinite(turnover).all())
+    quiet_turnover=int(np.argmin(turnover)) if complete_turnover else None
     def avg(values):
         return float(np.mean(values)) if len(values) and np.isfinite(values).all() else np.nan
     depth = (pivot - float(low.min())) / pivot * 100
@@ -76,14 +81,24 @@ def measure_base(frame, start, end, atr_pct, rs=None, touch_tolerance_pct=1, _ar
             parts[key] = {'atrPct': finite(avg(averages[positions])), 'volume': float(volume[positions].mean()),
                           'highClose': float(close[positions].max()), 'lowClose': float(close[positions].min()),
                           'upVolume': float(volume[positions][change[positions] > 0].sum()),
-                          'downVolume': float(volume[positions][change[positions] < 0].sum())}
+                          'downVolume': float(volume[positions][change[positions] < 0].sum()),
+                          'turnoverCr': finite(avg(turnover[positions])),
+                          'upTurnoverCr': float(turnover[positions][change[positions]>0].sum()) if np.isfinite(turnover[positions]).all() else None,
+                          'downTurnoverCr': float(turnover[positions][change[positions]<0].sum()) if np.isfinite(turnover[positions]).all() else None,
+                          'upDays': int((change[positions]>0).sum()), 'downDays': int((change[positions]<0).sum()),
+                          'changePct': float((close[positions[-1]]/close[positions[0]]-1)*100)}
     ranks = None if rs is None else np.asarray(rs[start:end + 1], dtype=float)
     return {'startDate': arrays['dates'][start], 'endDate': arrays['dates'][end],
-            'ageSessions': size, 'pivot': pivot, 'ceiling': float(high.max()),
+            'ageSessions': size, 'ageWeeks': size/5, 'pivot': pivot, 'ceiling': float(high.max()),
             'floor': float(low.min()), 'depthPct': depth,
             'atrContraction': ratio(avg(averages[midpoint:]), avg(averages[:midpoint])),
             'volumeDryUp': ratio(avg(volume[midpoint:]), avg(volume[:midpoint])),
             'quietDepth': ratio(volume[quiet], np.median(volume)),
+            'quietVolume': float(volume[quiet]), 'medianVolume': float(np.median(volume)),
+            'quietTurnoverCr': None if quiet_turnover is None else float(turnover[quiet_turnover]),
+            'medianTurnoverCr': float(np.median(turnover)) if complete_turnover else None,
+            'quietTurnoverDate': None if quiet_turnover is None else arrays['dates'][start+quiet_turnover],
+            'quietTurnoverAgeSessions': None if quiet_turnover is None else size-1-quiet_turnover,
             'quietDate': arrays['dates'][start+quiet], 'quietAgeSessions': size-1-quiet,
             'upDownVolumeRatio': ratio(up, down), 'netUpDownVolume': ratio(up-down, up+down),
             'rsStart': None if ranks is None else finite(ranks[0]),
@@ -113,7 +128,8 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
         raise ValueError('Base history contains inconsistent candle ranges')
     atr_pct = wilder_average(true_range(frame), config.atr_period) / frame.Close * 100
     trail = frame.Close.rolling(config.trail_period, min_periods=config.trail_period).mean()
-    arrays={'volume':frame.Volume.to_numpy(float),'close':frame.Close.to_numpy(float),'high':frame.High.to_numpy(float),'low':frame.Low.to_numpy(float),'change':frame.Close.diff().to_numpy(float),'dates':[str(day.date()) for day in frame.Date],'atr':atr_pct.to_numpy(float)}
+    arrays={'volume':frame.Volume.to_numpy(float),'close':frame.Close.to_numpy(float),'high':frame.High.to_numpy(float),'low':frame.Low.to_numpy(float),'change':frame.Close.diff().to_numpy(float),'dates':[str(day.date()) for day in frame.Date],'atr':atr_pct.to_numpy(float),
+        'turnover':pd.to_numeric(frame.get('Turnover',pd.Series(index=frame.index,dtype=float)),errors='coerce').to_numpy(float)}
     episodes, active = [], []
     peak = 0
     index = 0

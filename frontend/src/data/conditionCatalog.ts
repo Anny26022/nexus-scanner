@@ -90,7 +90,8 @@ const BASE_CONDITIONS: ConditionDef[] = [
     {id:'holdingPolicy',label:'Holding',type:'select',defaultValue:'ANY',options:[{label:'Any',value:'ANY'},
       {label:'Always above pivot',value:'STRICT'},{label:'Retests allowed; above now',value:'RETEST'}]}]},
   {id:'BASE_METRIC',label:'Base quality / strength',category:'range',description:'Compare a metric within the selected base. Breakout base measurements are frozen.',parameters:BASE_METRIC_PARAMETERS},
-  {id:'BASE_FORMULA',label:'Base metric arithmetic',category:'range',description:'Compare arithmetic between two metrics of the same selected base.',parameters:[...BASE_METRIC_PARAMETERS,
+  {id:'BASE_FORMULA',label:'Base metric arithmetic',category:'range',description:'Compare arithmetic within one selected base. An optional expression supports parentheses and +, −, ×, ÷.',parameters:[...BASE_METRIC_PARAMETERS,
+    {id:'formula',label:'Expression (optional)',type:'string',defaultValue:''},
     {id:'arithmetic',label:'Operation',type:'select',defaultValue:'DIVIDE',options:['ADD','SUBTRACT','MULTIPLY','DIVIDE'].map(value=>({label:value.toLowerCase(),value}))},
     {id:'rightMetric',label:'Second metric',type:'select',defaultValue:'base.volumeDryUp',options:baseMetrics.map(value=>({label:baseMetricLabel(value),value}))}]},
 ];

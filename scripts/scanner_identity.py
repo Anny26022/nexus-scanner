@@ -11,7 +11,7 @@ ENGINE_FILES = ['frontend/src/engine/baseConditions.ts', 'frontend/src/engine/ex
                 'frontend/src/engine/queryCompiler.ts', 'frontend/src/api/snapshotScreen.ts',
                 'frontend/src/api/capabilityRegistry.ts', 'frontend/scanner_bridge.py',
                 'frontend/scanner_pack_publication.py', 'frontend/scanner_cache.py', 'frontend/publish_snapshot.py', 'cloudflare/scanner-worker/src/index.ts',
-                'DO NOT DELETE EDL PIPELINE/screen_trend_conditions.py']
+                'DO NOT DELETE EDL PIPELINE/screen_trend_conditions.py', 'DO NOT DELETE EDL PIPELINE/build_chart_artifacts.py']
 ENGINE_FILES += [path.relative_to(ROOT).as_posix() for path in
                  (ROOT / 'DO NOT DELETE EDL PIPELINE/src/edl_pipeline/scanner').glob('*.py')]
 

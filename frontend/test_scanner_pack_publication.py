@@ -105,6 +105,7 @@ class ScannerPackTests(unittest.TestCase):
         from edl_pipeline.scanner.base_publication import build_base_records, compact_base_records
         frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-10-01',periods=70),'Open':[100]+[94]*19+[102]+[100]*49,
             'High':[101]+[95]*19+[103]+[101]*49,'Low':[99]+[93]*19+[101]+[99]*49,'Close':[100]+[94]*19+[102]+[100]*49,'Volume':1000.})
+        frame['Turnover']=20_000_000.
         stocks={'TEST':{'symbol':'TEST'}}
         records=build_base_records({'TEST':frame},stocks)
         public_bases=compact_base_records(records['TEST'],public=True)
@@ -132,6 +133,11 @@ class ScannerPackTests(unittest.TestCase):
             rank_key=archive['key'].replace('base-history/','base-ranks/')
             self.assertEqual(json.loads(gzip.decompress((target/rank_key).read_bytes()))['TEST']['ratings'],[92])
             runtime=json.loads(gzip.decompress((target/archive['key'].replace('base-history/','auxiliary/')).read_bytes()))['bases']['TEST']
+            for record in runtime:
+                self.assertEqual(record['base']['parts']['full']['turnoverCr'],2)
+                self.assertEqual(record['base']['quietTurnoverCr'],2)
+                self.assertEqual(record['current']['averageTurnover50'],2)
+                self.assertIn('sma50MonthAgo',record['current'])
             self.assertLessEqual(len(runtime),4)
             self.assertTrue({row['id'] for row in runtime}.issubset({row['id'] for row in saved}))
 

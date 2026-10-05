@@ -1,3 +1,4 @@
+import { evaluateBaseFormula } from './baseConditions';
 import type { EngineExpression } from './expression';
 import baseMetrics from '../data/baseMetrics.json';
 
@@ -138,8 +139,8 @@ function functionCondition(name: string, args: string[], operator?: string, rawV
   const arity = (minimum:number, maximum=minimum) => {
     if (args.length < minimum || args.length > maximum) throw new Error(`${name.trim()} requires ${minimum === maximum ? minimum : `${minimum}-${maximum}`} arguments.`);
   };
-  if (['base stage', 'base metric', 'base formula'].includes(key)) {
-    arity(key === 'base stage' ? 1 : key === 'base metric' ? 2 : 4, key === 'base stage' ? 2 : key === 'base metric' ? 2 : 4);
+  if (['base stage', 'base metric', 'base formula', 'base expression'].includes(key)) {
+    arity(key === 'base stage' ? 1 : ['base metric','base expression'].includes(key) ? 2 : 4, key === 'base stage' ? 2 : ['base metric','base expression'].includes(key) ? 2 : 4);
     const stage=args[0].toUpperCase();
     if (!['FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT'].includes(stage)) throw new Error('Unsupported base stage');
     if (key === 'base stage') {
@@ -149,6 +150,7 @@ function functionCondition(name: string, args: string[], operator?: string, rawV
       return leaf('BASE_STAGE',{stage,holdingPolicy});
     }
     if (target == null) throw new Error(`${name.trim()} requires a comparison and number.`);
+    if(key==='base expression'){evaluateBaseFormula(undefined,args[1]);return leaf('BASE_FORMULA',{stage,formula:args[1],comparison,value:target});}
     if (!baseMetrics.includes(args[1])) throw new Error('Unsupported base metric');
     if (key === 'base metric') return leaf('BASE_METRIC',{stage,metric:args[1],comparison,value:target});
     const arithmetic=args[2].toUpperCase();

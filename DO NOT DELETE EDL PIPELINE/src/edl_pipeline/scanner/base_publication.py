@@ -44,6 +44,7 @@ def trend_series(frame, ranks=None, listing_date=None):
         for period in (10,20,50,100,150,200):
             series=close.rolling(period,min_periods=period).mean() if kind=='SMA' else close.ewm(span=period,adjust=False,min_periods=period).mean()
             values[f'{kind.lower()}{period}']=series
+            values[f'{kind.lower()}{period}MonthAgo']=series.shift(21)
             values[f'distance{kind}{period}']=(close/series-1)*100
             values[f'slope{kind}{period}']=(series/series.shift(21)-1)*100
         for a,b in ((50,200),(150,200),(10,20),(20,50)):
@@ -51,6 +52,12 @@ def trend_series(frame, ranks=None, listing_date=None):
     turnover=pd.to_numeric(frame.get('Turnover',pd.Series(index=frame.index,dtype=float)),errors='coerce')
     turnover=turnover.where(np.isfinite(turnover)&(turnover>=0))
     values['medianTurnover20']=(turnover/1e7).rolling(20,min_periods=20).median()
+    values['price']=close
+    values['turnoverCr']=turnover/1e7
+    values['volume']=frame.Volume.astype(float)
+    for period in (10,20,50,100,200):
+        values[f'averageTurnover{period}']=(turnover/1e7).rolling(period,min_periods=period).mean()
+        values[f'averageVolume{period}']=frame.Volume.rolling(period,min_periods=period).mean()
     highest=close.rolling(252,min_periods=252).max();lowest=close.rolling(252,min_periods=252).min()
     values['distanceClosing52wHigh']=(highest-close)/highest*100
     values['aboveClosing52wLow']=(close/lowest-1)*100
@@ -61,10 +68,8 @@ def trend_series(frame, ranks=None, listing_date=None):
     if ranks is not None:
         ranks=pd.Series(ranks,index=frame.index,dtype=float)
         values['rsRating']=ranks
+        values['rsMonthAgo']=ranks.shift(22)
         for days in (5,22): values[f'rsChange{days}']=ranks-ranks.shift(days)
-    # Absolute averages are intermediate columns; the condition contract exposes
-    # distances, slopes and ratios. Do not duplicate unused values in every episode.
-    values={key:value for key,value in values.items() if not key.startswith(('sma','ema'))}
     return pd.DataFrame(values,index=frame.index).replace([np.inf,-np.inf],np.nan)
 
 
@@ -118,6 +123,11 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
         context_rows=trend_series(frame,rank,stocks[symbol].get('listing_date'))
         for days in (5,22):
             context_rows[f'rsChange{days}']=(ranks[symbol]-ranks[symbol].shift(days)).reindex(frame.Date).to_numpy(float)
+        context_rows['rsMonthAgo']=ranks[symbol].shift(22).reindex(frame.Date).to_numpy(float)
+        stock=stocks[symbol]
+        cap=finite(stock.get('market_cap_crore'))
+        aligned=str(stock.get('as_of_date'))==str(frame.Date.iloc[-1].date())
+        context_rows['marketCapCr']=frame.Close/frame.Close.iloc[-1]*cap if aligned and cap is not None else np.nan
         for days in (63,252):
             peers=industry_context.get((stocks[symbol].get('industry'),days))
             own=(closes[symbol]/closes[symbol].shift(days)-1)*100

@@ -3,7 +3,7 @@ import type { ScreenerRunRequest, ScreenerRunResponse } from '../../../frontend/
 import type { SnapshotStock } from '../../../frontend/src/api/snapshotScreen';
 import { evaluateExpression, expressionDepth, negate, walkExpression, type EngineCondition, type EngineExpression, type Truth } from '../../../frontend/src/engine/expression';
 import { evaluateHistoryCondition, type AdvancedContext, type CandleSeries } from '../../../frontend/src/engine/historyEngine';
-import { detailedSelectedBases, publicSelectedBases } from '../../../frontend/src/engine/baseConditions';
+import { detailedSelectedBases, publicSelectedBases, evaluateBaseCondition } from '../../../frontend/src/engine/baseConditions';
 import { compileTextQuery } from '../../../frontend/src/engine/queryCompiler';
 import { PRESET_CATALOG } from '../../../frontend/src/data/presetCatalog';
 import { NEXUS_CONDITION_CATALOG } from '../../../frontend/src/data/conditionCatalog';
@@ -35,6 +35,7 @@ export function validateExpression(expression:EngineExpression){
     if(internalConditions.has(condition.conditionId))continue;
     const definition=conditionDefinitions.get(condition.conditionId);
     if(!definition)throw new Error(`Unsupported condition: ${condition.conditionId}`);
+    if(condition.conditionId==='BASE_FORMULA' && condition.parameters.formula)evaluateBaseCondition(undefined,condition as import('../../../frontend/src/types/screener').ActiveCondition);
     const specifications=new Map(definition.parameters.map(parameter=>[parameter.id,parameter]));
     if(condition.conditionId==='MARKET_BREADTH' && String(condition.parameters.universe ?? 'ALL_ACTIVE').toUpperCase()!=='ALL_ACTIVE') throw new Error('Only ALL_ACTIVE market breadth is published in this release.');
     for(const [key,value] of Object.entries(condition.parameters)){

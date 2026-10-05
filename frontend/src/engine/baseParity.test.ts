@@ -11,14 +11,23 @@ import type { SnapshotStock } from '../api/snapshotScreen';
 import { compileTextQuery } from './queryCompiler';
 const condition=(id:string,parameters:Record<string,unknown>)=>({instanceId:'test',conditionId:id,parameters});
 describe('base Python/browser/advanced parity',()=>{
+  it('bounds expression size and rejects invalid facts even with no selected base',()=>{
+    for(const formula of ['unknown + 1','pivot ** 2','__import__(1)','(pivot','pivot 2','+'.repeat(70)+'1','('.repeat(10)+'1'+')'.repeat(10),'1'.repeat(2049)]){
+      expect(()=>evaluateBaseCondition(undefined,condition('BASE_FORMULA',{formula,comparison:'ABOVE',value:1}))).toThrow();
+    }
+    expect(evaluateBaseCondition(undefined,condition('BASE_FORMULA',{formula:'pivot * 2',comparison:'ABOVE',value:1}))).toBeNull();
+    expect(expressionPlan({type:'condition',condition:condition('BASE_FORMULA',{formula:'pivot * 2',comparison:'ABOVE',value:1})}).browser).toBe(false);
+  });
   it('compiles base queries identically in Python and TypeScript and rejects invalid clauses',()=>{
     const queries=['Base Stage(FORMING)','Base Stage(HOLDING, STRICT)',
       'Base Metric(FORMING, base.depthPct) < 25',
       'Base Metric(FRESH_BREAKOUT, breakoutAgeSessions) <= 5',
       'Base Formula(FORMING, base.parts.half_2.volume, DIVIDE, base.parts.half_1.volume) <= 0.8'];
+    queries.push('Base Expression(FORMING, "(base.parts.half_2.turnoverCr / base.parts.half_1.turnoverCr) * 100") < 80');
     const invalid=['Base Stage(UNKNOWN)','Base Stage(FORMING) > 1','Base Stage(HOLDING, UNKNOWN)',
       'Base Metric(FORMING, imaginary) > 1','Base Metric(FORMING, base.depthPct)',
       'Base Formula(FORMING, base.depthPct, MOD, pivot) > 1'];
+    invalid.push('Base Expression(FORMING, "pivot + imaginary") > 1','Base Expression(FORMING, "pivot ** 2") > 1');
     const source=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
     const script="import json,sys;from edl_pipeline.scanner.query import compile_query;q=json.load(sys.stdin);out=[]\nfor text in q:\n try: out.append(compile_query(text))\n except ValueError: out.append(None)\nprint(json.dumps(out))";
     const run=spawnSync('python3',['-c',script],{env:{...process.env,PYTHONPATH:`${source}/DO NOT DELETE EDL PIPELINE/src`},input:JSON.stringify([...queries,...invalid]),encoding:'utf8'});
@@ -43,6 +52,7 @@ describe('base Python/browser/advanced parity',()=>{
     metrics.forEach((path,index)=>{const keys=path.split('.');let target=record;keys.slice(0,-1).forEach(key=>{target[key]??={};target=target[key];});target[keys.at(-1)!]=index+1;});
     const cases=metrics.flatMap((metric,index)=>['GREATER','ABOVE','LESS','BELOW','EQUAL'].map(comparison=>({bases:{HOLDING:record} as SelectedBases,condition:condition('BASE_METRIC',{stage:'HOLDING',metric,comparison,value:index+1})})));
     for(const arithmetic of ['ADD','SUBTRACT','MULTIPLY','DIVIDE'])cases.push({bases:{HOLDING:record},condition:condition('BASE_FORMULA',{stage:'HOLDING',metric:'base.parts.half_2.volume',rightMetric:'base.parts.half_1.volume',arithmetic,comparison:'ABOVE',value:1})});
+    for(const formula of ['(pivot + base.depthPct) * 2 - 3','pivot / (base.depthPct - base.depthPct)','-pivot + 2 * base.depthPct','base.parts.half_2.turnoverCr / base.parts.half_1.turnoverCr * 100','pivot - base.depthPct - base.depthPct'])cases.push({bases:{HOLDING:record},condition:condition('BASE_FORMULA',{stage:'HOLDING',formula,comparison:'ABOVE',value:1})});
     const source=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
     const script="import json,sys;from edl_pipeline.scanner.base_conditions import evaluate_base_condition;c=json.load(sys.stdin);print(json.dumps([evaluate_base_condition(x['bases'],x['condition']['conditionId'],x['condition']['parameters']) for x in c]))";
     const run=spawnSync('python3',['-c',script],{env:{...process.env,PYTHONPATH:`${source}/DO NOT DELETE EDL PIPELINE/src`},input:JSON.stringify(cases),encoding:'utf8',maxBuffer:5*1024*1024});

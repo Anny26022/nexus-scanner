@@ -13,6 +13,34 @@ function metric(record: unknown,path:unknown): number|null {
   for(const key of path.split('.'))value=value&&typeof value==='object'?(value as BaseRecord)[key]:undefined;
   return typeof value==='number'&&Number.isFinite(value)?value:null;
 }
+/** Parse bounded arithmetic without eval; validate every metric even if missing. */
+export function evaluateBaseFormula(record:unknown,source:unknown):number|null {
+  if(typeof source!=='string'||!source.trim()||source.length>2048)throw new Error('Base formula requires 1-2048 characters');
+  const input=source.trim(),tokens:string[]=[];let position=0,cursor=0;
+  while(position<input.length){
+    const match=/^\s*(\d+(?:\.\d+)?|[A-Za-z][A-Za-z0-9_.]*|[()+*/-])/.exec(input.slice(position));
+    if(!match)throw new Error('Invalid base formula token');
+    tokens.push(match[1]);position+=match[0].length;
+  }
+  if(tokens.length>64)throw new Error('Base formula exceeds 64 tokens');
+  const priorities:Record<string,number>={'+':1,'-':1,'*':2,'/':2};
+  const expression=(depth=0,minimum=0):number|null=>{
+    if(depth>8||cursor>=tokens.length)throw new Error('Invalid base formula depth or operand');
+    const token=tokens[cursor++];let left:number|null;
+    if(token==='+'||token==='-'){left=expression(depth+1,3);if(left!==null&&token==='-')left=-left;}
+    else if(token==='('){left=expression(depth+1);if(tokens[cursor++]!==')')throw new Error('Unclosed base formula parenthesis');}
+    else if(/^\d/.test(token)){left=Number(token);if(!Number.isFinite(left))throw new Error('Nonfinite base formula constant');}
+    else if(/^[A-Za-z]/.test(token))left=metric(record,token);
+    else throw new Error('Invalid base formula operand');
+    while(cursor<tokens.length&&(priorities[tokens[cursor]]??0)>minimum){
+      const op=tokens[cursor++],right=expression(depth+1,priorities[op]);
+      left=left===null||right===null||(op==='/'&&right===0)?null:op==='+'?left+right:op==='-'?left-right:op==='*'?left*right:left/right;
+      if(left!==null&&!Number.isFinite(left))left=null;
+    }
+    return left;
+  };
+  const value=expression();if(cursor!==tokens.length)throw new Error('Unexpected base formula token');return value;
+}
 export function evaluateBaseCondition(bases: SelectedBases|undefined,condition:ActiveCondition):Truth {
   const p=condition.parameters,stage=String(p.stage??'FORMING');
   if(!stages.includes(stage))throw new Error('Unsupported base stage');
@@ -24,13 +52,13 @@ export function evaluateBaseCondition(bases: SelectedBases|undefined,condition:A
     if(!record)return false;
     return policy==='STRICT'?record.continuousHolding===true&&record.holdsPivot===true:policy==='RETEST'?record.holdsPivot===true:true;
   }
-  let value=metric(record,p.metric);
-  if(condition.conditionId==='BASE_FORMULA'){
+  let value=condition.conditionId==='BASE_FORMULA'&&p.formula?evaluateBaseFormula(record,p.formula):metric(record,p.metric);
+  if(condition.conditionId==='BASE_FORMULA'&&!p.formula){
     const right=metric(record,p.rightMetric),operation=String(p.arithmetic??'DIVIDE');
     if(!['ADD','SUBTRACT','MULTIPLY','DIVIDE'].includes(operation))throw new Error('Unsupported base arithmetic');
     value=value===null||right===null||(operation==='DIVIDE'&&right===0)?null:
       operation==='ADD'?value+right:operation==='SUBTRACT'?value-right:operation==='MULTIPLY'?value*right:value/right;
-  }else if(condition.conditionId!=='BASE_METRIC')throw new Error('Unsupported base condition');
+  }else if(!['BASE_METRIC','BASE_FORMULA'].includes(condition.conditionId))throw new Error('Unsupported base condition');
   if(typeof p.value!=='number'||!Number.isFinite(p.value))throw new Error('Base comparison requires a finite number');
   if(!['GREATER','ABOVE','LESS','BELOW','EQUAL'].includes(String(p.comparison??'ABOVE')))throw new Error('Unsupported base comparison');
   return compare(value,p.comparison??'ABOVE',p.value);

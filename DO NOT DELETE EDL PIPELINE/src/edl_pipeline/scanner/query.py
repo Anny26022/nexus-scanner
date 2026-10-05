@@ -99,10 +99,10 @@ def _function_condition(name: str, arguments: list[str], operator: str | None = 
     key = re.sub(r"[_\s]+", " ", name).strip().casefold()
     comparison = _OPERATORS.get(operator or ">=", "greater_or_equal")
     target = float(value.replace(",", "")) if value is not None else None
-    if key in ("base stage", "base metric", "base formula"):
+    if key in ("base stage", "base metric", "base formula", "base expression"):
         import math
         from .base_conditions import STAGES, METRICS
-        minimum = {"base stage": 1, "base metric": 2, "base formula": 4}[key]
+        minimum = {"base stage": 1, "base metric": 2, "base formula": 4, "base expression": 2}[key]
         maximum = 2 if key == "base stage" else minimum
         if not minimum <= len(arguments) <= maximum:
             raise ValueError(f"{name.strip()} requires {minimum}" + (f"-{maximum}" if minimum != maximum else "") + " arguments.")
@@ -118,6 +118,12 @@ def _function_condition(name: str, arguments: list[str], operator: str | None = 
             return {"type": "condition", "kind": "BASE_STAGE", "params": {"stage": stage, "holdingPolicy": policy}}
         if target is None or not math.isfinite(target):
             raise ValueError(f"{name.strip()} requires a comparison and finite number.")
+        if key == "base expression":
+            from .base_conditions import metric
+            from .base_formula import evaluate_formula
+            evaluate_formula(arguments[1], lambda path: metric(None, path))
+            op = {"greater": "GREATER", "greater_or_equal": "ABOVE", "less": "LESS", "less_or_equal": "BELOW", "equal": "EQUAL"}[comparison]
+            return {"type": "condition", "kind": "BASE_FORMULA", "params": {"stage": stage, "formula": arguments[1], "comparison": op, "value": target}}
         if arguments[1] not in METRICS:
             raise ValueError("Unsupported base metric")
         op = {"greater": "GREATER", "greater_or_equal": "ABOVE", "less": "LESS", "less_or_equal": "BELOW", "equal": "EQUAL"}[comparison]

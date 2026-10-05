@@ -417,3 +417,18 @@ match that session; eleven omit it and one has no history at the cutoff. The
 older or missing metadata. This is a materially stronger source-data check than
 the earlier mixed-date sizing fixture, but complete publication with the
 recovered Actions history and explicit unavailable handling remains to be run.
+
+
+The Actions `recovered-scanner-history` archive from run `37202681739` was
+downloaded and its ZIP SHA-256 verified against GitHub's artifact descriptor:
+`84ab17f2ee364cd4708741d684abc72e54a373cd21953ba29aee44985ebb2bb7`.
+It contains 5,644 files and was extracted only into a temporary validation root.
+All 2,602 recovered OHLCV CSV files are byte-identical to their existing local
+counterparts. The recovered cache confirms the same 2,591 aligned and twelve
+stale/unavailable stocks for the newer 1 October Git artifact.
+
+A separate all-symbol check found 76 OHLCV field differences between the Git
+stock metadata and these authoritative candle files. Snapshot publication
+already replaces aligned rows' open/high/low/close/volume with their candle
+values; final release validation must verify those replacements rather than
+assume date equality proves numeric equality. No source prices were edited.

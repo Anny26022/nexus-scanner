@@ -1,7 +1,10 @@
 import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 
+import { evaluateBaseCondition, type SelectedBases } from '../engine/baseConditions';
+
 type Truth = boolean | null;
 export interface SnapshotStock extends StockRow {
+  bases?: SelectedBases;
   asOfDate: string | null;
   metadataAsOfDate: string | null;
   historyAligned: boolean;
@@ -42,6 +45,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
   let fn: Predicate;
   let metadata = false;
   switch (c.conditionId) {
+    case 'BASE_STAGE': case 'BASE_METRIC': case 'BASE_FORMULA': fn=s=>evaluateBaseCondition(s.bases,c); break;
     case 'mom_rvol': fn = s => between(s.rvol, p.minRvol, p.maxRvol); break;
     case 'VOLUME_VS_AVG':
       if (p.avgDays !== 20 || p.withinDays !== 1) return null;

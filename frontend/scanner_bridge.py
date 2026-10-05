@@ -192,6 +192,9 @@ def _needs_delivery(expression):
 
 
 def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
+    if node.get('kind') in ('BASE_STAGE','BASE_METRIC','BASE_FORMULA'):
+        from edl_pipeline.scanner.base_conditions import evaluate_base_condition
+        return evaluate_base_condition(context.get('base_episodes',{}).get(s['symbol']),node['kind'],node.get('params',{}))
     if node["type"] == "group":
         if not node["children"]:
             return True
@@ -380,6 +383,16 @@ def run(request, root=ROOT, cache=None):
     stocks = [s for symbol,s in context["stocks"].items() if (wanted is None or symbol in wanted) and s.get("default_screener_eligible",True)]
     text_query = str(request.get("textQuery") or "").strip()
     expression = compile_query(text_query) if text_query else frontend_expression(request["expressionTree"])
+    if 'BASE_' in json.dumps(expression) and 'base_episodes' not in context:
+        from edl_pipeline.scanner.base_publication import build_base_records
+        frames={}
+        for symbol,stock in context['stocks'].items():
+            if not stock.get('default_screener_eligible',True): continue
+            path=root/'ohlcv_data'/f'{symbol}.csv'
+            history=cache.frame(root,symbol,as_of) if cache is not None else normalize_history(pd.read_csv(path),as_of) if path.exists() else None
+            if history is not None and not history.empty and history.Date.iloc[-1].strftime('%Y-%m-%d')==as_of:
+                frames[symbol]=history
+        context['base_episodes']=build_base_records(frames,context['stocks'])
     # Both public delivery conditions need dated history.  The spike condition
     # is named ``DELIVERY_PCT_SPIKE`` while the latest-session condition uses
     # ``DELIVERY_PERCENT``; checking only the latter quietly made spike

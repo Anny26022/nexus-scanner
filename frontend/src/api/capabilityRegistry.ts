@@ -12,7 +12,7 @@ const advanced = (): ConditionCapability => ({dependencies:['core','advanced'],b
 const presetIds = new Set(presetDefinitions.map(item => item.id));
 
 const scalarTechnical = new Set([
-  'PRICE_VS_SMA','PRICE_VS_EMA','PRICE_CHANGE_PCT','GAP_UP','GAP_DOWN','VOLUME_VS_AVG','NEW_HIGH','NEW_LOW','PCT_FROM_52W_HIGH',
+  'BASE_STAGE','BASE_METRIC','BASE_FORMULA','PRICE_VS_SMA','PRICE_VS_EMA','PRICE_CHANGE_PCT','GAP_UP','GAP_DOWN','VOLUME_VS_AVG','NEW_HIGH','NEW_LOW','PCT_FROM_52W_HIGH',
   'PCT_FROM_52W_LOW','PCT_FROM_ATH','ATR_PCT','RS_RATING','AVG_TURNOVER','ADR_PCT','ABSOLUTE_VOLUME',
   'PRICE_RANGE','trend_price_vs_ma','mom_rvol','mom_return','mom_gap','liq_turnover','fund_stock_price',
 ]);

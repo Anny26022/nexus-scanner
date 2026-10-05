@@ -8,8 +8,29 @@ import { evaluateBaseCondition,type SelectedBases } from './baseConditions';
 import { evaluateHistoryCondition,type CandleSeries } from './historyEngine';
 import { expressionPlan } from '../api/capabilityRegistry';
 import type { SnapshotStock } from '../api/snapshotScreen';
+import { compileTextQuery } from './queryCompiler';
 const condition=(id:string,parameters:Record<string,unknown>)=>({instanceId:'test',conditionId:id,parameters});
 describe('base Python/browser/advanced parity',()=>{
+  it('compiles base queries identically in Python and TypeScript and rejects invalid clauses',()=>{
+    const queries=['Base Stage(FORMING)','Base Stage(HOLDING, STRICT)',
+      'Base Metric(FORMING, base.depthPct) < 25',
+      'Base Metric(FRESH_BREAKOUT, breakoutAgeSessions) <= 5',
+      'Base Formula(FORMING, base.parts.half_2.volume, DIVIDE, base.parts.half_1.volume) <= 0.8'];
+    const invalid=['Base Stage(UNKNOWN)','Base Stage(FORMING) > 1','Base Stage(HOLDING, UNKNOWN)',
+      'Base Metric(FORMING, imaginary) > 1','Base Metric(FORMING, base.depthPct)',
+      'Base Formula(FORMING, base.depthPct, MOD, pivot) > 1'];
+    const source=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
+    const script="import json,sys;from edl_pipeline.scanner.query import compile_query;q=json.load(sys.stdin);out=[]\nfor text in q:\n try: out.append(compile_query(text))\n except ValueError: out.append(None)\nprint(json.dumps(out))";
+    const run=spawnSync('python3',['-c',script],{env:{...process.env,PYTHONPATH:`${source}/DO NOT DELETE EDL PIPELINE/src`},input:JSON.stringify([...queries,...invalid]),encoding:'utf8'});
+    expect(run.status,run.stderr).toBe(0);
+    const compiled=JSON.parse(run.stdout);
+    queries.forEach((query,index)=>{
+      const leaf=compileTextQuery(query);
+      expect(leaf).toMatchObject({type:'condition',condition:{conditionId:compiled[index].kind,parameters:compiled[index].params}});
+    });
+    invalid.forEach((query,index)=>{expect(()=>compileTextQuery(query)).toThrow();expect(compiled[queries.length+index]).toBeNull();});
+    expect(compileTextQuery(`${queries[0]} AND (${queries[2]} OR ${queries[3]})`)).toMatchObject({type:'group',operator:'all',children:[{type:'condition'},{type:'group',operator:'any'}]});
+  });
   it('keeps expanded trend context private without dropping its condition',()=>{
     const leaf=condition('BASE_METRIC',{stage:'FORMING',metric:'current.distanceEMA150',comparison:'ABOVE',value:0});
     const local=condition('BASE_METRIC',{stage:'FORMING',metric:'current.distanceSMA200',comparison:'ABOVE',value:0});

@@ -154,7 +154,7 @@ order of a session's high and low.
 
 ## Validation status
 
-72 frontend tests and 15 Worker tests passed, including base metric/arithmetic
+73 frontend tests and 15 Worker tests passed, including base metric/arithmetic
 parity; Wrangler dry build and frontend production build passed. The pipeline
 suite passed 228 tests including the hierarchy and failed-poke fixtures. Final regression and performance acceptance remain required.
 
@@ -199,7 +199,7 @@ fixture; complete production session alignment remains a separate gate.
 The exact CI pipeline test command now works without a custom PYTHONPATH. The
 five new test modules resolve their source directory relative to their own file,
 matching existing test conventions. The current results are 230 pipeline tests,
-42 frontend Python publication/bridge tests and 72 frontend TypeScript tests.
+42 frontend Python publication/bridge tests and 73 frontend TypeScript tests.
 Chart dialogs initialize to the base stage selected in the results table.
 
 
@@ -254,3 +254,32 @@ The latest local Workerd run of this limited fixture returned 605 matches in
 a peak of 96,261,349 bytes of heap plus backing storage. Sampling can miss brief
 peaks; complete auxiliary-data and worst-expression validation remain required.
 These measurements used local R2 fixtures, with no production bucket updates.
+
+
+### Deterministic base queries
+
+The text compiler supports the same base conditions as the visual builder.
+Stages and metric paths are validated against the published contract. Numeric
+comparisons preserve strict `>` / `<` and inclusive `>=` / `<=` semantics.
+Nested AND/OR groups and repeated clauses are retained; unsupported clauses
+reject the entire query.
+
+```text
+Base Stage(FORMING)
+AND Base Metric(FORMING, current.rsRating) >= 80
+AND Base Metric(FORMING, base.depthPct) <= 25
+AND Base Formula(FORMING, base.parts.half_2.volume, DIVIDE, base.parts.half_1.volume) <= 0.8
+```
+
+```text
+Base Stage(FRESH_BREAKOUT)
+AND Base Metric(FRESH_BREAKOUT, breakoutAgeSessions) <= 5
+AND Base Metric(FRESH_BREAKOUT, breakout.volumeRatio) >= 1.5
+```
+
+`Base Stage(HOLDING, STRICT)` requires uninterrupted pivot holding; `RETEST`
+requires the latest close to hold the pivot. Base Formula accepts ADD, SUBTRACT,
+MULTIPLY or DIVIDE over two whitelisted metrics of the same selected episode.
+Private metrics send the complete query to the advanced service. Results show
+base explanations and stage-specific charts for text queries as well as filters.
+Cross-language compiler tests cover all three functions and invalid syntax.

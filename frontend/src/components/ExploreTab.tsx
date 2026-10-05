@@ -12,6 +12,8 @@ import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 import { explainExpressionTree } from '../utils/nqlParser';
 import { baseStageForCondition } from '../engine/baseConditions';
+import { compileTextQuery } from '../engine/queryCompiler';
+import { walkExpression } from '../engine/expression';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown } from 'lucide-react';
@@ -53,6 +55,13 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   });
 
   const activeConditionsArray = useMemo(() => Object.values(activeConditionsMap), [activeConditionsMap]);
+  const baseStages = useMemo(() => {
+    if (!activeQuery) return [...new Set(activeConditionsArray.map(baseStageForCondition).filter(stage=>stage!==undefined))];
+    // Query errors are surfaced by the scanner; display hints must not replace
+    // an invalid query with the inactive visual-builder conditions.
+    try { return [...new Set(walkExpression(compileTextQuery(activeQuery)).map(baseStageForCondition).filter(stage=>stage!==undefined))]; }
+    catch { return []; }
+  }, [activeQuery, activeConditionsArray]);
 
   const expressionTree: ExpressionNode = useMemo(
     () => ({
@@ -249,7 +258,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       {/* ── Results Table ── */}
       <ResultsTable
         data={data}
-        baseStages={[...new Set(activeConditionsArray.map(baseStageForCondition).filter(value=>value!==undefined))]}
+        baseStages={baseStages}
         isLoading={isLoading}
         isError={isError}
         error={error}

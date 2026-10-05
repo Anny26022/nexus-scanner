@@ -1,4 +1,5 @@
 import type { EngineExpression } from './expression';
+import baseMetrics from '../data/baseMetrics.json';
 
 const OPERATORS: Record<string, string> = {
   '>': 'GREATER', '>=': 'ABOVE', '<': 'LESS', '<=': 'BELOW', '=': 'EQUAL',
@@ -137,6 +138,24 @@ function functionCondition(name: string, args: string[], operator?: string, rawV
   const arity = (minimum:number, maximum=minimum) => {
     if (args.length < minimum || args.length > maximum) throw new Error(`${name.trim()} requires ${minimum === maximum ? minimum : `${minimum}-${maximum}`} arguments.`);
   };
+  if (['base stage', 'base metric', 'base formula'].includes(key)) {
+    arity(key === 'base stage' ? 1 : key === 'base metric' ? 2 : 4, key === 'base stage' ? 2 : key === 'base metric' ? 2 : 4);
+    const stage=args[0].toUpperCase();
+    if (!['FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT'].includes(stage)) throw new Error('Unsupported base stage');
+    if (key === 'base stage') {
+      if (operator) throw new Error('Base Stage does not accept a numeric comparison');
+      const holdingPolicy=(args[1] || 'ANY').toUpperCase();
+      if (!['ANY','STRICT','RETEST'].includes(holdingPolicy)) throw new Error('Unsupported holding policy');
+      return leaf('BASE_STAGE',{stage,holdingPolicy});
+    }
+    if (target == null) throw new Error(`${name.trim()} requires a comparison and number.`);
+    if (!baseMetrics.includes(args[1])) throw new Error('Unsupported base metric');
+    if (key === 'base metric') return leaf('BASE_METRIC',{stage,metric:args[1],comparison,value:target});
+    const arithmetic=args[2].toUpperCase();
+    if (!['ADD','SUBTRACT','MULTIPLY','DIVIDE'].includes(arithmetic)) throw new Error('Unsupported base arithmetic');
+    if (!baseMetrics.includes(args[3])) throw new Error('Unsupported base metric');
+    return leaf('BASE_FORMULA',{stage,metric:args[1],arithmetic,rightMetric:args[3],comparison,value:target});
+  }
   if (INDICATOR_FUNCTIONS.has(key)) {
     arity(0,1);
     if (target == null) throw new Error(`${name.trim()} requires a comparison and number.`);

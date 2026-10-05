@@ -1,6 +1,6 @@
 import metrics from '../data/baseMetrics.json';
 import publicContextKeys from '../data/baseContextKeys.json';
-import { compare, type Truth } from './expression';
+import { compare, type Truth, type EngineCondition } from './expression';
 import type { ActiveCondition } from '../types/screener';
 
 export type BaseRecord = Record<string,unknown>;
@@ -58,7 +58,7 @@ export function publicSelectedBases(selected:SelectedBases|undefined):SelectedBa
     current:context(record.current),selection:context(record.selection)}]));
 }
 
-export function baseStageForCondition(condition:ActiveCondition):keyof SelectedBases|undefined {
+export function baseStageForCondition(condition:EngineCondition):keyof SelectedBases|undefined {
   if(['BASE_STAGE','BASE_METRIC','BASE_FORMULA'].includes(condition.conditionId)){
     const stage=String(condition.parameters.stage??'FORMING');
     return stages.includes(stage)?stage as keyof SelectedBases:undefined;

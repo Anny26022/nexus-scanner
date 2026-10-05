@@ -99,6 +99,37 @@ def _function_condition(name: str, arguments: list[str], operator: str | None = 
     key = re.sub(r"[_\s]+", " ", name).strip().casefold()
     comparison = _OPERATORS.get(operator or ">=", "greater_or_equal")
     target = float(value.replace(",", "")) if value is not None else None
+    if key in ("base stage", "base metric", "base formula"):
+        import math
+        from .base_conditions import STAGES, METRICS
+        minimum = {"base stage": 1, "base metric": 2, "base formula": 4}[key]
+        maximum = 2 if key == "base stage" else minimum
+        if not minimum <= len(arguments) <= maximum:
+            raise ValueError(f"{name.strip()} requires {minimum}" + (f"-{maximum}" if minimum != maximum else "") + " arguments.")
+        stage = arguments[0].upper()
+        if stage not in STAGES:
+            raise ValueError("Unsupported base stage")
+        if key == "base stage":
+            if operator:
+                raise ValueError("Base Stage does not accept a numeric comparison")
+            policy = (arguments[1] if len(arguments) > 1 else "ANY").upper()
+            if policy not in ("ANY", "STRICT", "RETEST"):
+                raise ValueError("Unsupported holding policy")
+            return {"type": "condition", "kind": "BASE_STAGE", "params": {"stage": stage, "holdingPolicy": policy}}
+        if target is None or not math.isfinite(target):
+            raise ValueError(f"{name.strip()} requires a comparison and finite number.")
+        if arguments[1] not in METRICS:
+            raise ValueError("Unsupported base metric")
+        op = {"greater": "GREATER", "greater_or_equal": "ABOVE", "less": "LESS", "less_or_equal": "BELOW", "equal": "EQUAL"}[comparison]
+        params = {"stage": stage, "metric": arguments[1], "comparison": op, "value": target}
+        if key == "base formula":
+            arithmetic = arguments[2].upper()
+            if arithmetic not in ("ADD", "SUBTRACT", "MULTIPLY", "DIVIDE"):
+                raise ValueError("Unsupported base arithmetic")
+            if arguments[3] not in METRICS:
+                raise ValueError("Unsupported base metric")
+            params.update(arithmetic=arithmetic, rightMetric=arguments[3])
+        return {"type": "condition", "kind": "BASE_METRIC" if key == "base metric" else "BASE_FORMULA", "params": params}
     if key in _INDICATOR_FUNCTIONS and key != "adx":
         if target is None:
             raise ValueError(f"{name.strip()} requires a comparison and number.")

@@ -28,8 +28,11 @@ not claim result parity with another platform's undisclosed base detector.
 - [x] Historical replay, forward outcome measurement and costs.
 - [x] Golden fixtures, prefix-invariance tests, integration and browser fixture checks.
 - [x] PR #26 with scope, dependencies and validation evidence; CI passes.
-- [ ] Independent code review (the automated review currently skips this PR).
-- [ ] Final full-generation measurement and complete aligned-data release check.
+- [x] Final full-generation measurement and complete aligned-data release check.
+- [ ] Recovered-data chart equality, Worker symbol parity and browser smoke checks.
+
+The automated reviewer currently skips PR #26 and there are no review threads.
+This is not an independent review approval.
 
 ## Formula contracts
 
@@ -477,3 +480,19 @@ and nested boolean groups. The strict starting defaults currently match zero
 Strong Bases/Fresh Breakouts/Holding Breakouts; they have not been loosened to
 manufacture matches. Other preset and stage queries have non-empty reference
 results for runtime verification.
+
+
+### Full archived-episode replay
+
+All 2,591 aligned stocks and 503,808 complete archived episodes were replayed
+with the unmodified Fresh Breakouts defaults, 10 bps fee and 10 bps slippage on
+each side. The run produced 82 hypothetical qualified signals. Completed horizon
+counts are 82 at five sessions, 81 at twenty sessions and 75 at sixty sessions;
+the remaining horizons stay unavailable. Every entry date/price and completed
+horizon's date/net return was independently checked against the source candle
+and explicit cost formula. Runtime was 137.49 seconds with 2,900,033,536 bytes
+peak process RSS. This extends the earlier four-stock check to the entire aligned
+universe without recomputing or truncating archived candidates.
+
+These results retain the documented current-universe and current-industry bias;
+they do not establish optimized defaults or unbiased strategy performance.

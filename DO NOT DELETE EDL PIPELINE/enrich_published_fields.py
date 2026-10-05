@@ -29,6 +29,18 @@ def enrich(stocks, bhavcopy, ledger, history_report, history_dir):
     for stock in stocks:
         symbol = stock.get("Symbol") or stock.get("symbol")
         price = prices.get((symbol, session), {})
+        ohlcv_fields = ("open", "high", "low", "close", "volume")
+        if all(price.get(field) is not None for field in ohlcv_fields):
+            # The closed-session NSE bhavcopy is the canonical daily candle.
+            # Replacing the live vendor snapshot here also prevents a mixed
+            # source OHLC record when an auction open sits outside NSE's
+            # reported regular-session high/low range.
+            for field in ohlcv_fields:
+                stock[field] = price[field]
+            stock["rupee_volume"] = round(price["close"] * price["volume"], 2)
+            stock["as_of_date"] = session
+            stock["ohlcv_source"] = "NSE daily full bhavcopy"
+            stock["ohlc_envelope_adjusted"] = bool(price.get("ohlc_envelope_adjusted"))
         stock["vwap"] = price.get("vwap")
         stock["vwap_as_of_date"] = session if stock["vwap"] is not None else None
         stock["vwap_source"] = "NSE full bhavcopy AVG_PRICE or traded value / volume" if stock["vwap"] is not None else None

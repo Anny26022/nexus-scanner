@@ -66,11 +66,21 @@ def normalize_ohlcv_row(row: dict) -> dict | None:
         }
     except (KeyError, TypeError, ValueError):
         return None
-    if (
-        not symbol or result["volume"] < 0 or result["low"] <= 0
-        or not result["low"] <= min(result["open"], result["close"]) <= max(result["open"], result["close"]) <= result["high"]
-    ):
+    prices = [result[key] for key in ("open", "high", "low", "close")]
+    if not symbol or not all(math.isfinite(value) and value > 0 for value in prices):
         return None
+    if not math.isfinite(result["volume"]) or result["volume"] < 0:
+        return None
+    # NSE occasionally reports an opening-auction price outside the regular
+    # session HIGH_PRICE/LOW_PRICE envelope. Preserve every reported price and
+    # derive a valid daily candle envelope instead of dropping the session.
+    reported_high, reported_low = result["high"], result["low"]
+    result["high"] = max(prices)
+    result["low"] = min(prices)
+    if result["high"] != reported_high or result["low"] != reported_low:
+        result["reported_high"] = reported_high
+        result["reported_low"] = reported_low
+        result["ohlc_envelope_adjusted"] = True
     try:
         vwap = float(row.get("AVG_PRICE") or 0)
         volume = result["volume"]

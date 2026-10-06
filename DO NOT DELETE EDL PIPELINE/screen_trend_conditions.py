@@ -138,7 +138,7 @@ def _requires_delivery(expression):
             return True
     except (TypeError, ValueError):
         pass
-    return any(_requires_delivery(value) for key, value in expression.items() if key in {"conditions", "children", "expression"})
+    return any(_requires_delivery(value) for key, value in expression.items() if key in {"conditions", "children", "expression", "child"})
 
 
 def _load_delivery_history(path, symbols=None, eod2_path=None):

@@ -1,4 +1,4 @@
-import { conditionValidationError } from '../utils/conditionValidation';
+import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, SlidersHorizontal, Library } from 'lucide-react';
@@ -185,10 +185,10 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       control = <input
         type="number"
         value={val}
-        onChange={(e) => updateParam(defId, p.id, parseFloat(e.target.value) || 0)}
+        onChange={(e) => updateParam(defId, p.id, numericInputValue(e.target.value))}
         min={p.min}
         max={p.max}
-        step={p.step ?? 0.1}
+        step={p.step ?? (isIntegerParameter(p) ? 1 : 0.1)}
         aria-label={p.label}
         className="w-14 bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 text-center focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
       />;
@@ -340,7 +340,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
             <button
               onClick={handleApply}
               disabled={Boolean(validationError)}
-              className="px-8 py-2 rounded-full bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-bold transition-colors shadow-sm"
+              className="px-8 py-2 rounded-full bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-bold transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-teal-600"
             >
               Apply
             </button>

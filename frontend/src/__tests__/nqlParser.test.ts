@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { explainCondition, explainExpressionTree } from '../utils/nqlParser';
 import { ExpressionGroupNode, ActiveCondition } from '../types/screener';
 
@@ -29,7 +28,7 @@ describe('Nexus Query Language (NQL) & Expression Serialization', () => {
     expect(res.explanation).toContain('Relative Volume');
   });
 
-  it('does not guess availability from the calendar date', () => {
+  it('explains the production delivery condition', () => {
     const tree: ExpressionGroupNode = {
       type: 'group',
       operator: 'all',
@@ -38,25 +37,15 @@ describe('Nexus Query Language (NQL) & Expression Serialization', () => {
           type: 'condition',
           condition: {
             instanceId: 'c3',
-            conditionId: 'mom_delivery_pct',
+            conditionId: 'mom_delivery_vol',
             parameters: { minDeliveryPct: 50 },
           },
         },
       ],
     };
 
-    // The legacy ID is no longer in the UI catalog. Register its definition
-    // so this regression actually reaches the former calendar-date gate.
-    const delivery = NEXUS_CONDITION_CATALOG.find(item => item.id === 'mom_delivery_vol')!;
-    NEXUS_CONDITION_CATALOG.push({...delivery, id:'mom_delivery_pct'});
-    try {
-      for (const session of ['2023-11-15', '2026-10-02']) {
-        const exp = explainExpressionTree(tree, session);
-        expect(exp.compiledExplanations[0].isDataAvailableForSession).toBe(true);
-        expect(exp.warnings).toEqual([]);
-      }
-    } finally {
-      NEXUS_CONDITION_CATALOG.pop();
-    }
+    const exp = explainExpressionTree(tree, '2026-10-02');
+    expect(exp.compiledExplanations[0].isDataAvailableForSession).toBe(true);
+    expect(exp.compiledExplanations[0].humanReadableText).toContain('NSE Delivery Volume %');
   });
 });

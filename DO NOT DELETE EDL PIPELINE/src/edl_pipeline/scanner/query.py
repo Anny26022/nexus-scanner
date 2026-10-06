@@ -8,6 +8,7 @@ and a builder-created screen on one calculation path.
 from __future__ import annotations
 
 import re
+import math
 from typing import Any
 
 
@@ -154,8 +155,8 @@ def _function_condition(name: str, arguments: list[str], operator: str | None = 
             raise ValueError("MA Convergence requires a maximum spread comparison.")
         if not arguments or "," not in arguments[0]:
             raise ValueError('MA Convergence periods must be a quoted comma-delimited list, for example "9,20,50,200".')
-        periods = [part.strip() for part in arguments[0].split(",") if part.strip()]
-        if len(periods) < 2 or not all(part.isdigit() and int(part) > 0 for part in periods) or len(set(periods)) != len(periods):
+        periods = [part.strip() for part in arguments[0].split(",")]
+        if len(periods) < 2 or not all(part.isdigit() and int(part) > 0 for part in periods) or len({int(part) for part in periods}) != len(periods):
             raise ValueError("MA Convergence requires at least two positive integer periods.")
         return {"type": "condition", "kind": "MA_CONVERGENCE", "params": {
             "periods": [int(part) for part in periods],
@@ -196,6 +197,8 @@ def _function_condition(name: str, arguments: list[str], operator: str | None = 
             else:
                 right_indicator, right_period, right_offset = "", 20, 0
                 within_days = int(arguments[5]) if len(arguments) > 5 else 1
+        if not math.isfinite(fixed_value):
+            raise ValueError("Indicator Compare fixed target must be finite.")
         if right_offset < 0 or within_days <= 0:
             raise ValueError("Indicator Compare offsets must be zero or positive and withinDays must be positive.")
         return {"type": "condition", "kind": "INDICATOR_COMPARE", "params": {

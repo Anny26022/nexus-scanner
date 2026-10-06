@@ -21,6 +21,17 @@ def history(length=300):
 
 
 class ScannerQueryTests(unittest.TestCase):
+    def test_rejects_equivalent_periods_and_empty_elements_during_compilation(self):
+        for periods in ['09,9', '9,,20', ',9,20', '9,20,']:
+            with self.subTest(periods=periods), self.assertRaisesRegex(ValueError, 'positive integer periods'):
+                compile_query(f'MA Convergence("{periods}") < 2')
+
+    def test_rejects_nonfinite_fixed_targets_in_both_query_forms(self):
+        for value in ['NaN', 'Inf', '-Inf']:
+            for target in [value, f'"", {value}']:
+                with self.subTest(target=target), self.assertRaisesRegex(ValueError, 'fixed target must be finite'):
+                    compile_query(f'Indicator Compare(RSI, 14, 0, ABOVE, {target})')
+
     def test_fixed_indicator_comparison_retains_the_legacy_explicit_blank_form(self):
         legacy = compile_query('Indicator Compare(RSI, 14, 0, ABOVE, "", 30, 2)')
         short = compile_query('Indicator Compare(RSI, 14, 0, ABOVE, 30, 2)')

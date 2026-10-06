@@ -2,6 +2,7 @@ import sys
 import tempfile
 import unittest
 import json
+from unittest.mock import patch
 from pathlib import Path
 
 import pandas as pd
@@ -341,9 +342,25 @@ class TrendScannerTests(unittest.TestCase):
         ]:
             with self.subTest(rule=rule), self.assertRaisesRegex(ValueError, "integer"):
                 evaluate_history(rising_history(), [rule])
-        for periods in [[9,20.5], [9,0], [9,True]]:
+        for periods in [[9,20.5], [9,0], [9,True], None, 9, {}, '9,,20', '9,20,']:
             with self.subTest(periods=periods), self.assertRaisesRegex(ValueError, "positive integers"):
                 evaluate_history(rising_history(), [{"kind":"MA_CONVERGENCE","params":{"periods":periods}}])
+
+    def test_invalid_integer_strings_fail_at_the_boundary(self):
+        for value in ['10.0', '1e1', float('inf')]:
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'period must be an integer'):
+                evaluate_history(rising_history(), [{"kind":"SUPERTREND","params":{"period":value}}])
+
+    def test_nonfinite_fixed_targets_and_divergence_values(self):
+        for value in [float('nan'), float('inf'), float('-inf')]:
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'fixed target must be finite'):
+                evaluate_history(rising_history(), [{"kind":"INDICATOR_COMPARE","params":{"rightValue":value}}])
+        for value in [float('inf'), float('-inf')]:
+            with patch('edl_pipeline.scanner.trend.indicator_series',
+                       side_effect=lambda frame, *args: pd.Series(value, index=frame.index)), \
+                 patch('edl_pipeline.scanner.trend._divergence_events') as pivots:
+                self.assertEqual(evaluate_history(rising_history(), [{"kind":"DIVERGENCE","params":{}}])['status'], 'unavailable')
+                pivots.assert_not_called()
 
     def test_supertrend_turn_and_unwarmed_divergence_are_safe(self):
         result = evaluate_history(rising_history(), [{"kind":"SUPERTREND","params":{"signal":"TURN"}}])

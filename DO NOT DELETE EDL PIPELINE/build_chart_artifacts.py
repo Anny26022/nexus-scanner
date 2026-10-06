@@ -23,7 +23,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from pipeline_utils import BASE_DIR, load_json, save_json
-from filing_classification import VERSION, TAXONOMY, classify_filing
+from filing_classification import VERSION, TAXONOMY, classify_filings, classify_corporate_action
 
 
 # HVE is the one all-history record.  Twenty quarters gives five years of
@@ -143,16 +143,17 @@ def _filing_events(payload, as_of):
     events = defaultdict(list)
     for row in _records(payload):
         symbol = str(row.get("symbol") or "").upper()
-        for filing in row.get("filings", []) if isinstance(row, dict) else []:
+        filings = row.get("filings", []) if isinstance(row, dict) else []
+        if any(not filing.get('filingId') or not isinstance(filing.get('classification'), dict)
+               or filing['classification'].get('version') != VERSION for filing in filings):
+            filings = classify_filings(filings)
+        for filing in filings:
             date = _date(filing.get("news_date"))
             if symbol and date and date <= as_of:
-                classification = filing.get("classification")
-                if not isinstance(classification, dict) or classification.get("version") != VERSION:
-                    classification = classify_filing(filing)
                 events[symbol].append({"date": date, "publishedAt": filing.get("news_date"),
                     "category": "Regulatory filing", "headline": filing.get("caption") or filing.get("descriptor"),
                     "url": filing.get("file_url"), "filingId": filing.get("filingId"),
-                    "classification": classification, "sourceEndpoints": filing.get("sourceEndpoints") or [filing.get("source_endpoint")],
+                    "classification": filing['classification'], "sourceEndpoints": filing.get("sourceEndpoints") if filing.get("sourceEndpoints") is not None else ([filing['source_endpoint']] if filing.get('source_endpoint') else []),
                     "sourceLabels": filing.get("sourceLabels") or [{k: filing.get(k) for k in ("descriptor", "ann_type", "cat")}]})
     return events
 
@@ -200,7 +201,7 @@ def main() -> int:
             "schemaVersion": 1, "symbol": symbol, "asOfDate": as_of,
             "historyStartDate": candles[0]["date"] if candles else None,
             "candles": candles, "volumeEvents": _volume_events(candles),
-            "corporateActions": [row for row in actions[symbol] if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
+            "corporateActions": [{**row, "classification": classify_corporate_action(row)} for row in actions[symbol] if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
             "earnings": [row for row in earnings[symbol] if _date(row.get("filing_date")) and row["filing_date"] <= as_of],
             "regulatoryAnnouncements": sorted(filings[symbol], key=lambda row: row["date"], reverse=True),
             "filingClassificationVersion": VERSION, "filingTaxonomy": TAXONOMY,

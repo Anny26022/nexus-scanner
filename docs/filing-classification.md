@@ -1,6 +1,6 @@
 # Filing classification
 
-The pipeline publishes 60 disclosure topics using the versioned, deterministic
+The pipeline publishes 61 disclosure topics using the versioned, deterministic
 rulebook in `DO NOT DELETE EDL PIPELINE/filing_classification.py`. Classification
 describes filing content, not financial impact or a recommendation. It does not
 claim to reproduce any other site's private classifier.
@@ -25,26 +25,53 @@ This PR does not deploy or replace active R2 releases.
 
 Official NSE corporate actions remain authoritative for action dates and price
 adjustments. A filing publication date is not an ex-date or meeting date.
+Chart corporate actions also carry classification and structured terms parsed
+from the official subject: dividend amounts per share, bonus issued/held ratio,
+and split old/new face values where explicit. Ex-dates and record dates are
+copied from the ledger. Raw subjects remain available and missing terms stay
+absent; no inferred payout or date is substituted.
 Filing topics do not change adjustment factors. Automatic cross-source action
 linking is deferred until there is a reliable matching contract.
 
 ## Rules and meaning
 
+Version 2 includes `filing_source_labels.json`: exact normalized mappings for
+244 descriptor labels, 121 announcement types and four category labels observed
+in the retained archive. Normalization folds punctuation and case. Known
+ambiguous labels (such as Appointment or Meeting Updates) intentionally map to
+no topic and require text evidence. Previously unseen labels use specific regex
+rules. The dictionary is committed code/configuration, not a generated runtime
+artifact. Changes require fixture review and a classifier version increment.
+
 Specific source labels precede caption/body fallback. Generic announcements and
 procedural documents can be refined by their text. Multiple topics are allowed;
-document type and status are separate fields. Status can be proposed, approved,
-completed, withdrawn, cancelled, revised or unspecified. These are textual
+document type and status are separate fields. Each `events` entry carries its
+topic, status, reference, versioned rule ID and the source field/excerpt used.
+Status can be proposed, conditional, approved, completed, not_completed,
+withdrawn, cancelled, revised, adverse, restriction_lifted or unspecified.
+The top-level status is `mixed` when events have different explicit statuses.
+Historical-reference phrases are flagged separately; presentations do not
+automatically turn their past achievements into new announcements.
+These are textual
 signals, not confirmation that a transaction has settled.
+
+Regulatory observations, restrictions and lifted import alerts use
+`regulatory_update`; an inspection without adverse observations is not a product
+approval. Provisional operational updates, sustainability reports, certificate
+notices, book closures and auditor reports also expose document subtypes.
 
 Tax/legal orders are excluded from order wins. Trading-window notices and
 trading plans are excluded from insider transactions. Meeting intimations do
 not claim financial results have been announced. ESOP and daily buyback
 paperwork have their own labels. Unknown records remain `unclassified`.
-Every matched topic carries a stable rule ID and classifier version.
+Every matched topic carries a stable rule ID and classifier version. Wrapper
+documents can retain several substantive topics, including mixed action statuses.
 
 Identical same-time documents with the same URL, caption and body merge across
 feeds while retaining source labels and endpoints. Revised content and different
-timestamps remain separate. This conservative merge can leave duplicates where
+timestamps remain separate. Classification is recomputed from all merged source
+labels so topics, event status and document type remain consistent. This
+conservative merge can leave duplicates where
 the feeds use different timestamps or wording; it avoids erasing real updates.
 
 ## Limits and validation
@@ -54,6 +81,17 @@ correctness for every record. Before enabling category filters, review a stratif
 sample, especially legal orders, defaults, governance and fundraising. Track the
 unclassified rate and refine the rulebook with regression fixtures. Importance
 is a user display preference; no inferred importance score is published.
+
+The version-2 audit enumerated labels across 1,089,666 local records and evaluated
+829 examples selected across all raw source-label families (264 descriptor
+variants, 123 announcement-type variants and four category variants). Compared
+with version 1, 98 examples changed topics and unclassified examples fell from
+67 to 55. These are coverage/regression observations, not an accuracy score or a
+claim that all PDFs were read. Regression fixtures cover commercial/tax orders,
+fraud captions, signature boilerplate, operational aliases, regulatory negatives,
+conditional and mixed actions, duplicate feed order and official action terms.
+The audit did not replace production artifacts; the next pipeline run after
+merge regenerates classification and publishes through the existing release flow.
 
 The historical archive is large. Publication reclassifies it in memory with the
 existing artifact builder; an incremental classified cache is deferred until

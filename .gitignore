@@ -1,5 +1,6 @@
 # EDL Pipeline generated intermediates
 DO NOT DELETE EDL PIPELINE/*.json
+!DO NOT DELETE EDL PIPELINE/filing_source_labels.json
 DO NOT DELETE EDL PIPELINE/*.csv
 DO NOT DELETE EDL PIPELINE/company_filings/
 DO NOT DELETE EDL PIPELINE/market_news/

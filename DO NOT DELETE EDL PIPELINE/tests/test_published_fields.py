@@ -83,6 +83,14 @@ class PublishedFieldsTests(unittest.TestCase):
         self.assertEqual(row['reported_high'], 262.4)
         self.assertTrue(row['ohlc_envelope_adjusted'])
 
+    def test_auction_envelope_does_not_repair_malformed_close_or_range(self):
+        row = {'SYMBOL':'BAD', 'SERIES':'EQ', 'DATE1':'05-Oct-2026',
+               'OPEN_PRICE':'100', 'HIGH_PRICE':'102', 'LOW_PRICE':'99',
+               'CLOSE_PRICE':'103', 'TTL_TRD_QNTY':'10'}
+        self.assertIsNone(normalize_ohlcv_row(row))
+        self.assertIsNone(normalize_ohlcv_row({**row, 'LOW_PRICE':'104'}))
+        self.assertIsNone(normalize_ohlcv_row({**row, 'CLOSE_PRICE':'100', 'OPEN_PRICE':'nan'}))
+
     def test_official_bhavcopy_replaces_live_snapshot_ohlcv(self):
         with tempfile.TemporaryDirectory() as tmp:
             stock = {
@@ -106,6 +114,8 @@ class PublishedFieldsTests(unittest.TestCase):
             self.assertEqual(stock['rupee_volume'], 150355.2)
             self.assertEqual(stock['as_of_date'], '2026-10-05')
             self.assertTrue(stock['ohlc_envelope_adjusted'])
+            from edl_pipeline.quality import ohlc_error
+            self.assertIsNone(ohlc_error(canonicalize_stock(stock)))
 
     def test_dividend_source_details_and_ambiguity(self):
         self.assertEqual(dividend_amount('Dividend - Rs. 5/- per share'), 5)

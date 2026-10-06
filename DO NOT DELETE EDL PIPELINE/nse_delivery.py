@@ -71,6 +71,10 @@ def normalize_ohlcv_row(row: dict) -> dict | None:
         return None
     if not math.isfinite(result["volume"]) or result["volume"] < 0:
         return None
+    # Only the auction open may lie outside an otherwise consistent range.
+    # Inverted ranges or a close outside the reported range remain malformed.
+    if not result["low"] <= result["close"] <= result["high"]:
+        return None
     # NSE occasionally reports an opening-auction price outside the regular
     # session HIGH_PRICE/LOW_PRICE envelope. Preserve every reported price and
     # derive a valid daily candle envelope instead of dropping the session.

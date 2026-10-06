@@ -58,6 +58,7 @@ def main():
             "source": payload.get("source"),
             "file_url": payload.get("file_url"),
             "as_of_date": payload["as_of_date"],
+            "retrieved_at": retrieved_at,
             "source_rows": len(records),
             "applied_symbols": applied,
         })

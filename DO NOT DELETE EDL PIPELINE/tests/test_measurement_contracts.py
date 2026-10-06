@@ -18,16 +18,16 @@ def candles(closes):
 
 class MeasurementContractsTests(unittest.TestCase):
     def test_wilder_and_simple_atr_and_adr_denominators_are_distinct(self):
-        frame = candles([100] * 270)
+        frame = candles([200] * 270)
         frame.loc[250, 'High'] = 140
         frame.loc[250, 'Low'] = 80
         facts = trend_context(frame, 269)
         tr = true_range(frame)
-        self.assertAlmostEqual(facts['atrWilder14Pct'], wilder_average(tr, 14).iloc[-1])
-        self.assertAlmostEqual(facts['atrSimple14Pct'], tr.tail(14).mean())
+        self.assertAlmostEqual(facts['atrWilder14Pct'], wilder_average(tr, 14).iloc[-1] / 200 * 100)
+        self.assertAlmostEqual(facts['atrSimple14Pct'], tr.tail(14).mean() / 200 * 100)
         self.assertNotEqual(facts['atrWilder14Pct'], facts['atrSimple14Pct'])
-        self.assertAlmostEqual(facts['adrClose14Pct'], 2)
-        self.assertAlmostEqual(facts['adrLow14Pct'], 2 / 99 * 100)
+        self.assertAlmostEqual(facts['adrClose14Pct'], 1)
+        self.assertAlmostEqual(facts['adrLow14Pct'], 2 / 199 * 100)
         measured = measure_base(frame, 240, 269, wilder_average(tr, 14) / frame.Close * 100)
         part = measured['parts']['full']
         self.assertEqual(part['atrPct'], part['atrWilderPct'])

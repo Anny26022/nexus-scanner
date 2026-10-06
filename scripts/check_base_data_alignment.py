@@ -18,7 +18,8 @@ def audit(root, session=None):
         if len(candidates) != 1:
             raise ValueError('Specify --session: eligible metadata has no unique session.')
         session = next(iter(candidates))
-    date.fromisoformat(session)
+    if len(session)==8 and session.isdigit():session=f'{session[:4]}-{session[4:6]}-{session[6:]}'
+    session = date.fromisoformat(session).isoformat()
     statuses = Counter()
     examples = {}
     for stock in stocks:
@@ -48,7 +49,7 @@ def main():
     args = parser.parse_args()
     try:
         report = audit(args.root, args.session)
-    except (ValueError, OSError, KeyError) as error:
+    except (ValueError, OSError, KeyError, TypeError, AttributeError) as error:
         parser.exit(2, f'Alignment check failed: {error}\n')
     print(json.dumps(report, indent=2))
     return 0 if report['complete'] else 1

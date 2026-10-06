@@ -23,13 +23,25 @@ describe('editable Nexus base presets',()=>{
     expect(index).toBeGreaterThan(0);
     expect(evaluateSnapshotCondition(stock,condition(id,{[`threshold${index}`]:19}),session)).toBe(false);
   });
+  it('negates legacy and family presets while preserving unavailable',()=>{
+    const id='lib-nexus-fresh-breakouts';
+    expect(evaluateSnapshotCondition(stock,{...condition(id),isNegated:true},session)).toBe(false);
+    expect(evaluateSnapshotCondition(stock,{...condition(id),isNegated:true},'2026-10-02')).toBeNull();
+    const family='lib-nexus-blue-sky-setup';
+    expect(evaluateSnapshotCondition({...stock,setupCandidates:[]},{...condition(family),isNegated:true},session)).toBe(true);
+  });
+  it('keeps parameter edits valid without weakening engine validation',()=>{
+    expect(updateSetupParameter({setupStage:'FORMING'},'requireBreakoutConfirmation',true)).toEqual({setupStage:'FRESH_BREAKOUT',requireBreakoutConfirmation:true});
+    expect(updateSetupParameter({requireBreakoutConfirmation:true},'setupStage','FORMING').requireBreakoutConfirmation).toBe(false);
+    expect(updateSetupParameter({},'minContractionLegs',1).minContractionLegs).toBe(2);
+  });
   it('rejects incompatible sessions rather than using stale bases',()=>{
     expect(evaluateSnapshotCondition(stock,condition('lib-nexus-fresh-breakouts'),'2026-10-02')).toBe(null);
   });
 });
 
 import { expressionPlan } from '../api/capabilityRegistry';
-import { materializeBasePreset } from './basePresets';
+import { materializeBasePreset, updateSetupParameter } from './basePresets';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 describe('versioned setup family parity',()=>{
@@ -57,7 +69,7 @@ describe('versioned setup family parity',()=>{
     for(const parameters of [{minContractionLegs:1},{maxBaseDepth:null},{setupStage:null},{requireFirstBase:null},{athPolicy:'UNKNOWN'}]) expect(()=>materializeBasePreset(preset,parameters)).toThrow();
   });
   it('uses frozen liquidity, strength and pivot position for played-out families',()=>{
-    const facts={stage:'PLAYED_OUT',base:{overheadPct:0,depthPct:40},selection:{historyFromListing:1,rsRating:90,marketCapCr:500,medianTurnover20:2,distanceFromPivotPct:-3},current:{rsRating:1,marketCapCr:10,medianTurnover20:0}};
+    const facts={stage:'PLAYED_OUT',base:{overheadPct:0,depthPct:40},selection:{historyFromListing:1,aboveSMA50Sessions:1,rsRating:90,marketCapCr:500,medianTurnover20:2,distanceFromPivotPct:-3},current:{rsRating:1,marketCapCr:10,medianTurnover20:0}};
     const input={historyAligned:true,asOfDate:session,bases:{PLAYED_OUT:facts},setupCandidates:[{...facts,id:'first',pivotBasis:'CLOSE'}]} as unknown as SnapshotStock;
     expect(evaluateSnapshotCondition(input,condition('lib-nexus-blue-sky-setup',{setupStage:'PLAYED_OUT',athPolicy:'CLOSING_AVAILABLE'}),session)).toBe(true);
     input.setupCandidates!.push({...facts,id:'intraday',pivotBasis:'HIGH',selection:{...facts.selection,historyCoverageComplete:1,pivotVsHistoricalIntradayHigh:0}});

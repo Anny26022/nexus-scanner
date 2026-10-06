@@ -76,7 +76,7 @@ def process_symbol_csv(csv_path):
         for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
             df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        df = df.replace([float('inf'), float('-inf')], float('nan')).dropna(subset=['Open','High','Low','Close','Volume'])
+        df = df.replace([float('inf'), float('-inf')], float('nan')).dropna(subset=(['Date'] if 'Date' in df.columns else []) + ['Open','High','Low','Close','Volume'])
         if df.empty: return sym, None
 
         df = df.sort_values('Date') if 'Date' in df.columns else df

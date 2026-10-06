@@ -114,7 +114,7 @@ def trend_context(frame,index,ranks=None,listing_date=None):
     return {key:finite(value) for key,value in trend_series(frame,ranks,listing_date).iloc[index].items()}
 
 
-def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False, episode_sink=None, history_audits=None, setup_candidates=False):
+def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False, episode_sink=None, history_audits=None, setup_candidates=False, rank_sink=None):
     if selected_only and episode_sink is not None:
         raise ValueError('Complete archives require all episodes before stage selection.')
     frames=normalize_frames(frames)
@@ -153,8 +153,10 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
     for symbol,frame in sorted(frames.items()):
         if symbol not in requested:continue
         rank=ranks[symbol].reindex(frame.Date).to_numpy(float)
-        if rank_history is not None:
-            rank_history[symbol]={'dates':[str(day.date()) for day in frame.Date], 'ratings':[finite(value) for value in rank]}
+        if rank_history is not None or rank_sink is not None:
+            ledger={'dates':[str(day.date()) for day in frame.Date], 'ratings':[finite(value) for value in rank]}
+            if rank_history is not None:rank_history[symbol]=ledger
+            if rank_sink is not None:rank_sink(symbol,ledger)
         episodes=detect_bases(frame,symbol,config=config,rs=rank)
         if setup_candidates:
             for basis in ('CLOSE','HIGH'):
@@ -231,7 +233,7 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
     return output
 
 
-PUBLIC_BASE_KEYS={'quietTurnoverCr','medianTurnoverCr','startDate','endDate','ageSessions','ageWeeks','ageCalendarWeeks','depthPct','atrContraction','atrSimpleContraction','trueRangeContraction','volumeDryUp','overheadPct','overheadPriceDistancePct','level','rsAverage','upDownVolumeRatio','netUpDownVolume','quietDepth','quietAgeSessions','nestedCount','touchCount','squatCount','contractionLegCount','contractionMaxRatio','contractionFinalDepthPct'}
+PUBLIC_BASE_KEYS={'floor','quietTurnoverCr','medianTurnoverCr','startDate','endDate','ageSessions','ageWeeks','ageCalendarWeeks','depthPct','atrContraction','atrSimpleContraction','trueRangeContraction','volumeDryUp','overheadPct','overheadPriceDistancePct','level','rsAverage','upDownVolumeRatio','netUpDownVolume','quietDepth','quietAgeSessions','nestedCount','touchCount','squatCount','contractionLegCount','contractionMaxRatio','contractionFinalDepthPct'}
 
 
 PUBLIC_CONTEXT_KEYS={
@@ -355,6 +357,7 @@ def runtime_base_records(episodes):
 def compact_setup_match(episode):
     """A public witness with the same ID and pivot used during qualification."""
     record=setup_candidate_records([episode])[0]
+    record.pop('config',None)
     for scope in ('current','selection'):
         record[scope]={key:value for key,value in record[scope].items() if key in PUBLIC_CONTEXT_KEYS}
     return record

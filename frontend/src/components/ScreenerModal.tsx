@@ -1,3 +1,4 @@
+import { updateSetupParameter } from '../engine/basePresets';
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, SlidersHorizontal, Library } from 'lucide-react';
@@ -122,7 +123,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       if (!existing && def) {
         const params: Record<string, any> = {};
         def.parameters.forEach((p) => (params[p.id] = p.defaultValue));
-        params[paramId] = value;
+        Object.assign(params, updateSetupParameter(params,paramId,value));
         return {
           ...prev,
           [condId]: { instanceId: `${condId}_${Date.now()}`, conditionId: condId, parameters: params },
@@ -131,7 +132,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       if (!existing) return prev;
       return {
         ...prev,
-        [condId]: { ...existing, parameters: { ...existing.parameters, [paramId]: value } },
+        [condId]: { ...existing, parameters: updateSetupParameter(existing.parameters,paramId,value) },
       };
     });
   };

@@ -54,7 +54,7 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
         execution=trade_facts(dates,opens,episode,positions,fee_bps,slippage_bps,risk_pct=risk_pct,max_position_pct=max_position_pct,capital=capital)
         row={'baseId':episode['id'],'symbol':episode['symbol'],'signalDate':episode['breakout']['date'],
              'entryDate':None,'entryPrice':None,'execution':'NEXT_SESSION_OPEN','feeBpsPerSide':fee_bps,
-             'slippageBpsPerSide':slippage_bps,'sizing':execution['sizing'],'capitalReturnPct':execution['capitalReturnPct'],'outcomes':{},'tradeExit':None}
+             'tradeStatus':execution['status'],'slippageBpsPerSide':slippage_bps,'sizing':execution['sizing'],'capitalReturnPct':execution['capitalReturnPct'],'outcomes':{},'tradeExit':None}
         if trigger+1>=len(frame):
             row['outcomes']={str(h):None for h in (5,20,60)};trades.append(row);continue
         entry_index=trigger+1;entry=execution['entryPrice']
@@ -68,8 +68,8 @@ def replay_breakouts(frame,episodes,preset_id='lib-nexus-fresh-breakouts',fee_bp
                 'maxAdverseExcursionPct':min(0,(float(window.Low.min())/entry-1)*100),
                 'maxFavorableExcursionPct':max(0,(float(window.High.max())/entry-1)*100),
                 'closedInsideBase':bool((window.Close<episode['pivot']).any())}
-        if execution['status']=='CLOSED':
-            row['tradeExit']={'signalDate':execution['exitSignalDate'],'executionDate':execution['executionDate'],
+        if execution['status'] in ('CLOSED','EXIT_PENDING'):
+            row['tradeExit']={'status':execution['status'],'signalDate':execution['exitSignalDate'],'executionDate':execution['executionDate'],
                 'price':execution['exitPrice'],'reason':execution['exitReason'],
                 'netReturnPct':execution['netRealizedReturnPct']}
         trades.append(row)

@@ -64,8 +64,8 @@ existing candles rather than creating absent price history. Independent
 verification matched 3,891,462 retained turnover observations to cached NSE
 files across 2,602 price histories. Only 1,208 histories reach the requested
 start. Complete current windows number 2,560 / 2,392 / 2,359 for 20 / 50 / 100
-sessions. A 260-session daily refresh window is an ingestion horizon, not a
-retention limit; older observations remain stored.
+sessions. The pipeline now refreshes up to 1,500 sessions, matching the supported base
+horizon; cached official files are reused and older observations remain stored.
 
 On the complete latest available windows in that local dataset, without
 universe eligibility or other preset gates:

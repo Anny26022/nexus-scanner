@@ -806,9 +806,9 @@
     "name": "Weekly Inside Bar",
     "category": "Bases & Contraction",
     "horizon": "Positional",
-    "description": "The current ISO week to date remains inside the prior completed week, while price stays near its 52-week high.",
+    "description": "The latest completed ISO week remains inside the preceding completed week, while price stays near its 52-week high.",
     "rules": [
-      "Current ISO week to date inside the prior completed week",
+      "Latest completed ISO week inside the preceding completed week",
       "Within 15% of the 52-week high",
       "Market cap above \u20b91,000 Cr"
     ],

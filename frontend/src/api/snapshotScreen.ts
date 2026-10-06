@@ -51,9 +51,10 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
   if(c.conditionId.startsWith('lib-nexus-')){
     const preset=presetDefinitions.find(item=>item.id===c.conditionId);
     if(!preset)return null;
-    if('setupFamily' in preset)return s=>!s.historyAligned||s.asOfDate!==session?null:selectSetupEpisode(s.setupCandidates,preset,p).value;
+    const negatePreset=(fn:Predicate):Predicate=>c.isNegated?s=>{const value=fn(s);return value===null?null:!value;}:fn;
+    if('setupFamily' in preset)return negatePreset(s=>!s.historyAligned||s.asOfDate!==session?null:selectSetupEpisode(s.setupCandidates,preset,p).value);
     const conditions=materializeBasePreset(preset,p);
-    return s=>!s.historyAligned||s.asOfDate!==session?null:combine(conditions.map(node=>evaluateBaseCondition(s.bases,node)),true);
+    return negatePreset(s=>!s.historyAligned||s.asOfDate!==session?null:combine(conditions.map(node=>evaluateBaseCondition(s.bases,node)),true));
   }
   switch (c.conditionId) {
     case 'BASE_STAGE': case 'BASE_METRIC': case 'BASE_FORMULA': fn=s=>evaluateBaseCondition(s.bases,c); break;

@@ -1,4 +1,4 @@
-# Measurement contracts — base engine version 3
+# Measurement contracts — base engine version 5
 
 These are distinct measurements. They must not be substituted for one another
 when reproducing a scan. The metric catalog and Python/TypeScript formula paths
@@ -6,7 +6,7 @@ expose these facts; detailed context and base slices remain in private packs.
 
 ## Overhead context
 
-`base.overheadPriceDistancePct` is `(highest historical close at candidate
+`base.overheadPriceDistancePct` is `(highest historical pivot-basis price (close for CLOSE, high for HIGH) at candidate
 creation / pivot - 1) * 100`, floored at zero. `base.overheadPct` remains its
 compatibility alias. It describes a price distance, not a volume distribution.
 
@@ -68,7 +68,7 @@ These contexts and events do not become equivalent just because both use 252.
 | Fact | Meaning |
 | --- | --- |
 | `breakoutFailed` | A post-breakout close returned inside the base |
-| `exitSignaled` | The configured stop or armed MA trail generated an exit |
+| `exitSignaled` | The configured stop, enabled breakeven stop or armed MA trail generated an exit |
 | `tradeClosed` | A subsequent session provided the modeled exit execution |
 | `trade.realizedReturnPct` | Executed entry-open to exit-open gross return |
 | `trade.netRealizedReturnPct` | The same executed return after configured costs |

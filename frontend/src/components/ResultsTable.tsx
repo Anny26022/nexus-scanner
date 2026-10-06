@@ -192,7 +192,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
                       </div>
                     </td>
 
-                    {stage&&<td className="py-3.5 px-4 text-[11px] text-slate-600"><BaseExplanation record={row.bases?.[stage]}/></td>}
+                    {stage&&<td className="py-3.5 px-4 text-[11px] text-slate-600"><BaseExplanation record={Object.values(row.setupMatches??{}).find(record=>record.stage===stage)??row.bases?.[stage]}/></td>}
                     {/* Sector & Industry */}
                     <td className="py-3.5 px-4 font-sans">
                       <div

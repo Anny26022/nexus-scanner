@@ -37,6 +37,14 @@ class ReplayTests(unittest.TestCase):
         no_entry=replay_breakouts(frame.iloc[:2],[record])['trades'][0]
         self.assertIsNone(no_entry['entryDate'])
 
+    def test_final_exit_signal_preserves_pending_reason_and_date(self):
+        frame,record=fixture()
+        trade=replay_breakouts(frame.iloc[:4],[record])['trades'][0]
+        self.assertEqual(trade['tradeStatus'],'EXIT_PENDING')
+        self.assertEqual(trade['tradeExit']['signalDate'],record['exit']['date'])
+        self.assertEqual(trade['tradeExit']['reason'],'STOP')
+        self.assertIsNone(trade['tradeExit']['executionDate'])
+
     def test_rejects_invalid_cost_and_non_breakout_presets(self):
         frame,record=fixture()
         with self.assertRaises(ValueError):replay_breakouts(frame,[record],fee_bps=-1)

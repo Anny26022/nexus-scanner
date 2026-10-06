@@ -9,6 +9,7 @@
   "contractionMaxRatio",
   "depthPct",
   "endDate",
+  "floor",
   "level",
   "medianTurnoverCr",
   "nestedCount",

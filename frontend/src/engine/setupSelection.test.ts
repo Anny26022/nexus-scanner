@@ -8,7 +8,7 @@ import {evaluateHistoryCondition,type AdvancedContext,type CandleSeries} from '.
 import {evaluateExpression} from './expression';
 import type {SnapshotStock} from '../api/snapshotScreen';
 const ipo=definitions.find(p=>p.id==='lib-nexus-ipo-setup')!;
-const candidate=(id:string,startDate:string,firstEligibleBase=1):BaseRecord=>({id,stage:'FORMING',pivotBasis:'CLOSE',setupCandidateOnly:true,firstEligibleBase,pivot:100,distanceFromPivotPct:-2,config:{min_sessions:15},base:{startDate,ageSessions:60,depthPct:20},current:{listingAgeSessionWeeks:20,distanceSMA50:2,marketCapCr:500,medianTurnover20:2}});
+const candidate=(id:string,startDate:string,firstEligibleBase=1):BaseRecord=>({id,stage:'FORMING',pivotBasis:'CLOSE',setupCandidateOnly:true,firstEligibleBase,pivot:100,distanceFromPivotPct:-2,config:{min_sessions:15},base:{startDate,ageSessions:60,depthPct:20},current:{listingAgeSessionWeeks:20,distanceSMA50:2,aboveSMA50Sessions:1,marketCapCr:500,medianTurnover20:2}});
 
 describe('correlated setup selection',()=>{
   it('does not hide a first IPO base behind a later candidate',()=>{

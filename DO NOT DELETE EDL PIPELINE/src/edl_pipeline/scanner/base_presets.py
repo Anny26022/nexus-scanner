@@ -127,7 +127,7 @@ def materialize_base_preset(preset, parameters):
             days=number(key,0,0,252,True)
             if days:expression['children'].append(metric(stage,scope+'.'+path,'LESS',days))
         persistence=number('above50Persistence',1,1,252,True)
-        if persistence>1:expression['children'].append(metric(stage,scope+'.aboveSMA50Sessions','ABOVE',persistence))
+        if persistence>=1:expression['children'].append(metric(stage,scope+'.aboveSMA50Sessions','ABOVE',persistence))
         confirm=boolean('requireBreakoutConfirmation')
         volume=number('minBreakoutVolume',1.5,0,100)
         close_range=number('minBreakoutCloseInRange',.7,0,1)

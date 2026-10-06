@@ -222,7 +222,7 @@ def main() -> int:
             "schemaVersion": 1, "symbol": symbol, "asOfDate": as_of,
             "historyStartDate": candles[0]["date"] if candles else None,
             "bases": compact_base_records(bases.get(symbol,[]),public=True),
-            "setupCandidates": setup_candidate_records(bases.get(symbol,[])),
+            "setupCandidates": setup_candidate_records([episode for episode in bases.get(symbol,[]) if episode.get("setupCandidateOnly")]),
             "candles": candles, "volumeEvents": _volume_events(candles),
             "corporateActions": [row for row in actions[symbol] if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
             "earnings": [row for row in earnings[symbol] if _date(row.get("filing_date")) and row["filing_date"] <= as_of],

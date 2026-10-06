@@ -219,9 +219,12 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
             _write(target/name,archive_data)
             objects.append({'key':name,'bytes':len(archive_data),'sha256':_sha(archive_data),'encoding':'gzip'})
 
-        if 'base_rs_history' in context:
-            ledger={symbol:context['base_rs_history'].get(symbol,{}) for symbol in sorted(shard_symbols)}
-            ledger_data=gzip.compress(_json_bytes(ledger),compresslevel=6,mtime=0)
+        if 'base_rs_history' in context or 'base_rs_archive' in context:
+            if 'base_rs_archive' in context:
+                ledger_data=(Path(context['base_rs_archive'])/f'{index:02d}.json.gz').read_bytes()
+            else:
+                ledger={symbol:context['base_rs_history'].get(symbol,{}) for symbol in sorted(shard_symbols)}
+                ledger_data=gzip.compress(_json_bytes(ledger),compresslevel=6,mtime=0)
             name=f'base-ranks/{index:02d}.json.gz'
             _write(target/name,ledger_data)
             objects.append({'key':name,'bytes':len(ledger_data),'sha256':_sha(ledger_data),'encoding':'gzip'})

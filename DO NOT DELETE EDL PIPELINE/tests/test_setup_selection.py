@@ -21,7 +21,7 @@ def candidate(identity,date,first=1,**context):
     return {'id':identity,'symbol':'A','stage':'FORMING','pivotBasis':'CLOSE','pivot':100,'setupCandidateOnly':True,
             'config':{'min_sessions':15},'firstEligibleBase':first,'distanceFromPivotPct':-2,
             'base':{'startDate':date,'ageSessions':60,'depthPct':20},
-            'current':{'listingAgeSessionWeeks':20,'distanceSMA50':2,'marketCapCr':500,'medianTurnover20':2,**context}}
+            'current':{'listingAgeSessionWeeks':20,'distanceSMA50':2,'aboveSMA50Sessions':1,'marketCapCr':500,'medianTurnover20':2,**context}}
 
 
 class SetupSelectionTests(unittest.TestCase):

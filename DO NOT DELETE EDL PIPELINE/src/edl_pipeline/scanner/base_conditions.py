@@ -57,6 +57,7 @@ def evaluate_base_condition(episodes, kind, parameters):
         operation=parameters.get('arithmetic','DIVIDE')
         if operation not in ('ADD','SUBTRACT','MULTIPLY','DIVIDE'): raise ValueError('Unsupported base arithmetic')
         left=None if left is None or right is None or (operation=='DIVIDE' and right==0) else {'ADD':lambda:left+right,'SUBTRACT':lambda:left-right,'MULTIPLY':lambda:left*right,'DIVIDE':lambda:left/right}[operation]()
+        left=left if left is None or math.isfinite(left) else None
     elif kind not in ('BASE_METRIC','BASE_FORMULA'): raise ValueError('Unsupported base condition')
     return compare(left,parameters.get('comparison','ABOVE'),parameters.get('value'))
 

@@ -94,9 +94,11 @@ def _publish(root, output, archive_directory):
         frame=cache.frame(root,symbol,session)
         if frame is not None and not frame.empty and frame.Date.iloc[-1].strftime('%Y-%m-%d')==session:
             base_frames[symbol]=frame
-    context['base_rs_history']={}
-    with BaseHistoryArchive(archive_directory) as archive:
-        context['base_episodes']=build_base_records(base_frames,context['stocks'],context.get('benchmarks'),context['base_rs_history'],episode_sink=archive,setup_candidates=True,history_audits=load_history_audits(root))
+    rank_directory=archive_directory/'ranks'
+    with BaseHistoryArchive(archive_directory) as archive, BaseHistoryArchive(rank_directory) as rank_archive:
+        context['base_episodes']=build_base_records(base_frames,context['stocks'],context.get('benchmarks'),episode_sink=archive,rank_sink=rank_archive,setup_candidates=True,history_audits=load_history_audits(root))
+    context['base_rs_archive']=rank_directory
+    del base_frames
     context['base_history_archive']=archive_directory
     rows=[]; default_count=0
     for stock in context['stocks'].values():

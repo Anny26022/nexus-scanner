@@ -40,7 +40,9 @@ class ScannerPackTests(unittest.TestCase):
             root=Path(folder)
             with BaseHistoryArchive(root/'archive') as sink:
                 sink('TEST',episodes)
-            context={'stocks':{'TEST':{'symbol':'TEST'}},'base_episodes':{'TEST':[]},'base_history_archive':root/'archive'}
+            with BaseHistoryArchive(root/'ranks') as sink:
+                sink('TEST',{'dates':['2026-10-01'],'ratings':[92]})
+            context={'stocks':{'TEST':{'symbol':'TEST'}},'base_episodes':{'TEST':[]},'base_history_archive':root/'archive','base_rs_archive':root/'ranks'}
             target,manifest=build_private_scanner_pack(root,root/'packs','a'*64,'2026-10-01',Cache(frame),context,{})
             archive=target/f'base-history/{_shard("TEST"):02d}.json.gz'
             self.assertEqual(json.loads(gzip.decompress(archive.read_bytes())),{'TEST':episodes})
@@ -49,6 +51,8 @@ class ScannerPackTests(unittest.TestCase):
                 self.assertEqual(source.read_bytes(),(target/f'base-history/{index:02d}.json.gz').read_bytes())
             descriptor=next(item for item in manifest['objects'] if item['key']==str(archive.relative_to(target)))
             self.assertEqual(descriptor['bytes'],archive.stat().st_size)
+            ranks=target/f'base-ranks/{_shard("TEST"):02d}.json.gz'
+            self.assertEqual(json.loads(gzip.decompress(ranks.read_bytes()))['TEST']['ratings'],[92])
 
     def test_oversized_auxiliary_blocks_publication_instead_of_dropping_candidates(self):
         frame=pd.DataFrame({'Date':pd.to_datetime(['2026-10-01']),'Open':[1.],'High':[2.],'Low':[.5],'Close':[1.5],'Volume':[100.]})

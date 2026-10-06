@@ -176,7 +176,7 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
   if(family){
     if(!context.stock.historyAligned||context.stock.asOfDate!==context.session)return null;
     const outcome=selectSetupEpisode(context.setupCandidates,family,p,context.setupCandidateHistoryComplete??true);
-    if(outcome.record&&context.setupMatches)context.setupMatches[condition.instanceId??id]=outcome.record;
+    if(outcome.value===true&&!condition.isNegated&&outcome.record&&context.setupMatches)context.setupMatches[condition.instanceId??id]=outcome.record;
     return condition.isNegated?negate(outcome.value):outcome.value;
   }
   if(['BASE_STAGE','BASE_METRIC','BASE_FORMULA'].includes(id)||id.startsWith('lib-nexus-'))return evaluateSnapshotCondition({...context.stock,bases:detailedSelectedBases(context.stock.bases,context.bases)},condition,context.session);

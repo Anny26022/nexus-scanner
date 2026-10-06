@@ -50,7 +50,7 @@ class BaseConfig:
             raise ValueError('max_sessions must be at least min_sessions')
         for name in ('pullback_pct', 'max_depth_pct', 'stop_pct', 'touch_tolerance_pct', 'contraction_noise_pct'):
             value = getattr(self, name)
-            if not math.isfinite(value) or not 0 < value < 100:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 < value < 100:
                 raise ValueError(f'{name} must be between 0 and 100')
 
         for name,low,high in (('breakeven_gain_pct',0,1000),('risk_pct',0,100),('max_position_pct',0,100)):
@@ -222,9 +222,9 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
                     episode['stage'] = 'FRESH_BREAKOUT' if index-episode['_breakout'] < config.fresh_sessions else 'HOLDING'
                 continue
             duration = index-start
-            if episode['parentId'] and not episode['_nestedConfirmed'] and duration+1>=config.min_sessions:
+            if episode['parentId'] and not episode['_nestedConfirmed'] and (duration if row.Close > pivot else duration+1)>=config.min_sessions:
                 parent=episode['_parent']
-                if parent is not None and parent['breakout'] is None:
+                if parent is not None and parent['stage']=='FORMING' and parent['breakout'] is None:
                     parent['nestedCount']+=1
                 episode['_nestedConfirmed']=True
             if row.Close > pivot:
@@ -250,7 +250,7 @@ def detect_bases(frame: pd.DataFrame, symbol: str, config: BaseConfig | None = N
             if abs(row.Close/pivot-1)*100 <= config.touch_tolerance_pct: episode['touchDates'].append(date)
             if episode['structuralQualifiedDate'] is None and duration+1>=config.min_sessions and 2<=depth<=35:
                 episode['structuralQualifiedDate']=date
-            if duration > config.max_sessions or depth > config.max_depth_pct:
+            if duration+1 > config.max_sessions or depth > config.max_depth_pct:
                 episode['stage'] = 'INVALIDATED'; episode['exit'] = {'date':date,'reason':'BASE_LIMIT'}; active.remove(episode)
         highest_close=max(highest_close,float(peaks[index]))
         if peaks[index] >= peaks[peak]: peak=index

@@ -39,7 +39,7 @@ class SnapshotPublicationTests(unittest.TestCase):
         (delivery/'2026-09-30.json').write_text(json.dumps({'date':'2026-09-30','records':[
             {'symbol':'TEST','date':'2026-09-30','delivery_percent':60.0}
         ]}))
-        frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-09-30',periods=60),'Open':99.,'High':101.,'Low':98.,'Close':100.,'Volume':100.})
+        frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-09-30',periods=60),'Open':199.,'High':201.,'Low':198.,'Close':200.,'Volume':100.})
         frame.to_csv(root/'ohlcv_data/TEST.csv',index=False)
 
     def test_published_atr_reuses_shared_wilder_initialization(self):
@@ -49,7 +49,7 @@ class SnapshotPublicationTests(unittest.TestCase):
                 root = Path(folder) / 'edl'; root.mkdir()
                 output = Path(folder) / 'public'; self.fixture(root)
                 frame = pd.read_csv(root / 'ohlcv_data/TEST.csv').tail(size).reset_index(drop=True)
-                frame.loc[0, 'High'] = 140.
+                frame.loc[0, 'High'] = 240.
                 frame.to_csv(root / 'ohlcv_data/TEST.csv', index=False)
                 manifest = publish(root, output)
                 payload = json.loads((output / 'revisions' / manifest['revision'] / 'stocks.json').read_text())
@@ -59,7 +59,7 @@ class SnapshotPublicationTests(unittest.TestCase):
                 else:
                     expected = wilder_average(true_range(frame), 14).iloc[-1]
                     self.assertAlmostEqual(row['atr14'], expected)
-                    self.assertAlmostEqual(row['metrics']['atrPct14'], expected)
+                    self.assertAlmostEqual(row['metrics']['atrPct14'], expected / 200 * 100)
                 if size >= 20:
                     self.assertEqual(row['adr20Pct'], row['metrics']['adr20'])
 

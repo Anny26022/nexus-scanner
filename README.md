@@ -136,7 +136,7 @@ After the run, inspect `data_quality.json`, `pipeline_report.json`, and the gene
 
 ### 6. Data platform operator: run charts at scale
 
-Set the R2 environment variables, enable `EDL_CHART_STORAGE=r2`, and run the normal pipeline. The publisher uploads immutable per-symbol files, verifies them, and updates the release only after all required publication work completes. An application consuming `screenerApi.getChart` can fetch a single chart at a time from the release URL template. The current table UI does not call this method.
+Set the R2 environment variables, enable `EDL_CHART_STORAGE=r2`, and run the normal pipeline. The publisher uploads immutable per-symbol files, verifies them, and updates the release only after all required publication work completes. An application consuming `screenerApi.getChart` can fetch a single chart at a time from the release URL template. Clicking a table symbol calls this method and opens the integrated chart viewer.
 
 ## What users can do
 
@@ -418,7 +418,7 @@ sequenceDiagram
   API->>R2: Read immutable manifest and required shards
   R2-->>API: OHLCV and matching auxiliary shards
   API-->>UI: Authoritative evaluated result and diagnostics
-  Note over UI,R2: Chart client exists, viewer integration is pending
+  Note over UI,R2: Symbol click loads candles and the selected base overlay
 ```
 
 ### Browser release loading
@@ -796,11 +796,8 @@ Read [`DO NOT DELETE EDL PIPELINE/docs/DATA_LIMITATIONS.md`](DO%20NOT%20DELETE%2
 - [Frontend guide](frontend/README.md)
 - [Contribution guide](CONTRIBUTING.md)
 
-## License
 
-[MIT](LICENSE)
-
-### Precomputed base trade outcomes
+## Precomputed base trade outcomes
 
 Base episodes, selected scanner summaries and chart payloads include a `trade`
 record with next-session-open entry/exit dates and prices, pending/open/closed
@@ -811,7 +808,7 @@ The live return since breakout remains a separate measurement. Daily and weekly
 pipeline generation compute these records; no new UI or market feed is required.
 See [the data contract](docs/base-quality-engine.md#precomputed-trade-execution-data-no-ui-changes).
 
-### Official NSE turnover history
+## Official NSE turnover history
 
 Turnover calculations use NSE's actual daily traded value, stored as an optional
 `Turnover` column in OHLCV CSVs **in rupees**. The full bhavcopy's
@@ -853,6 +850,11 @@ candles, and historical symbol renames may still leave gaps. The ten-year
 command does not change the daily pipeline's 260-session fill window or prune
 older observations. No new price history is fetched by this command.
 
-### Versioned setup families
+## Versioned setup families
 
 VCP, Blue Sky, Multi-year and IPO First Base now expose editable NSE liquidity floors, lifecycle selection, depth limits and optional confirmed-leg/history policies. See [setup-family contracts](docs/setup-family-contracts.md) for exact formulas, frozen qualification, history provenance, replay sizing and the `nexus-bases-5` detector change.
+
+
+## License
+
+[MIT](LICENSE)

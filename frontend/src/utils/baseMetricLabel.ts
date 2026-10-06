@@ -10,7 +10,7 @@ export function baseMetricLabel(path:string):string {
   const scope=parts.shift();
   const displayName=['current','selection'].includes(scope??'')&&key==='turnoverCr'?'1-day turnover (₹ Cr)':
     ['current','selection'].includes(scope??'')&&key==='volume'?'1-day volume (shares)':name;
-  const prefix=scope==='selection'?'Before breakout':scope==='current'?'Now':scope==='breakout'?'Breakout':scope==='base'?'Base':'';
+  const prefix=scope==='selection'?'At measurement':scope==='current'?'Now':scope==='breakout'?'Breakout':scope==='base'?'Base':'';
   const slice=parts.includes('parts')?parts.at(-1)?.replace('_',' '):undefined;
   return [prefix,slice,displayName.charAt(0).toUpperCase()+displayName.slice(1)].filter(Boolean).join(' · ');
 }

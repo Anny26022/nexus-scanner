@@ -13,7 +13,9 @@ from .turnover import average_turnover_crore
 
 
 CONTEXT_CONDITION_REGISTRY = {
-    **{kind:{'inputs':{'stage':'string','metric':'string','comparison':'comparison','value':'number'},'definition':'Compare facts from one selected detected base.'} for kind in ('base_stage','base_metric','base_formula')},
+    'base_stage': {'inputs': {'stage':'string','holdingPolicy':'ANY|STRICT|RETEST'}, 'definition':'Test the selected detected base stage and holding policy.'},
+    'base_metric': {'inputs': {'stage':'string','metric':'string','comparison':'comparison','value':'number'}, 'definition':'Compare a fact from one selected detected base.'},
+    'base_formula': {'inputs': {'stage':'string','formula':'string (or metric arithmetic below)','metric':'string','rightMetric':'string','arithmetic':'ADD|SUBTRACT|MULTIPLY|DIVIDE','comparison':'comparison','value':'number'}, 'definition':'Compare arithmetic over one selected detected base.'},
     "relative_strength": {"inputs": {"benchmark": "string", "window": "integer", "comparison": "comparison", "value": "number"}, "definition": "Stock return less benchmark return over the same sessions, in percentage points."},
     "rs_new_high": {"inputs": {"benchmark": "string", "lookback_days": "integer", "minimum_price_below_high_percent": "number"}, "definition": "Relative-strength line is at its lookback high while price remains below its own high."},
     "rs_rating": {"inputs": {"window": "one_month | three_month | six_month | twelve_month | front_weighted", "comparison": "comparison", "value": "number"}, "definition": "Cross-sectional 1–99 Nifty 500 relative-strength percentile for a 21/63/126/252-session horizon, or its 40/20/20/20 front-weighted composite."},

@@ -21,15 +21,17 @@ const leaf=(conditionId:string,parameters:Record<string,unknown>={}):ActiveCondi
 
 describe('shared history engine',()=>{
   it('uses date-aligned official turnover and never substitutes close times volume',()=>{
-    const condition=leaf('AVG_TURNOVER',{lookbackDays:20,comparison:'ABOVE',valueCr:15});
-    const turnover={dates:Array.from(series.dates),values:Array.from(series.dates,()=>200000000 as number|null)};
-    expect(evaluateHistoryCondition(series,condition,{...context,turnover})).toBe(true);
-    const published={...stock,metrics:{turnover20:20}};
-    expect(evaluateHistoryCondition(series,condition,{...context,stock:published,turnover})).toBe(true);
-    expect(evaluateHistoryCondition(series,leaf('AVG_TURNOVER',{lookbackDays:17,comparison:'ABOVE',valueCr:15}),{...context,stock:published,turnover})).toBe(true);
-    expect(evaluateHistoryCondition(series,condition,context)).toBeNull();
-    turnover.values[turnover.values.length-1]=null;
-    expect(evaluateHistoryCondition(series,condition,{...context,turnover})).toBeNull();
+    const dates=Array.from(series.dates).reverse();
+    const turnover={dates,values:dates.map(day=>(day-20000+1)*1e7 as number|null)};
+    for(const days of [20,17]){
+      const expected=(320+(321-days))/2;
+      const equal=leaf('AVG_TURNOVER',{lookbackDays:days,comparison:'EQUAL',valueCr:expected});
+      expect(evaluateHistoryCondition(series,equal,{...context,turnover})).toBe(true);
+      expect(evaluateHistoryCondition(series,{...equal,parameters:{...equal.parameters,valueCr:expected+1}}, {...context,turnover})).toBe(false);
+      expect(evaluateHistoryCondition(series,equal,context)).toBeNull();
+    }
+    turnover.values[0]=null;
+    expect(evaluateHistoryCondition(series,leaf('AVG_TURNOVER',{lookbackDays:20,comparison:'ABOVE',valueCr:1}),{...context,turnover})).toBeNull();
   });
   it('preserves delivery semantics with compact dated columns including duplicates and missing values',()=>{
     const day=series.dates[length-1],session=new Date(day*86400000).toISOString().slice(0,10);

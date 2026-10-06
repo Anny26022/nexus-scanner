@@ -61,6 +61,7 @@ export function evaluateBaseCondition(bases: SelectedBases|undefined,condition:A
     if(!['ADD','SUBTRACT','MULTIPLY','DIVIDE'].includes(operation))throw new Error('Unsupported base arithmetic');
     value=value===null||right===null||(operation==='DIVIDE'&&right===0)?null:
       operation==='ADD'?value+right:operation==='SUBTRACT'?value-right:operation==='MULTIPLY'?value*right:value/right;
+    if(value!==null&&!Number.isFinite(value))value=null;
   }else if(!['BASE_METRIC','BASE_FORMULA'].includes(condition.conditionId))throw new Error('Unsupported base condition');
   if(typeof p.value!=='number'||!Number.isFinite(p.value))throw new Error('Base comparison requires a finite number');
   if(!['GREATER','ABOVE','LESS','BELOW','EQUAL'].includes(String(p.comparison??'ABOVE')))throw new Error('Unsupported base comparison');

@@ -1,3 +1,4 @@
+import { updateSetupParameter } from '../engine/basePresets';
 import React, { useState } from 'react';
 import { X, Search, Sliders, RotateCcw, Check, Play, Info } from 'lucide-react';
 import { ConditionDef, ConditionCategory, ActiveCondition, MatchMode } from '../types/screener';
@@ -77,7 +78,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
         def.parameters.forEach((p) => {
           defaultParams[p.id] = p.defaultValue;
         });
-        defaultParams[paramId] = value;
+        Object.assign(defaultParams, updateSetupParameter(defaultParams,paramId,value));
         return {
           ...prev,
           [conditionId]: {
@@ -92,10 +93,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
         ...prev,
         [conditionId]: {
           ...existing,
-          parameters: {
-            ...existing.parameters,
-            [paramId]: value,
-          },
+          parameters: updateSetupParameter(existing.parameters,paramId,value),
         },
       };
     });

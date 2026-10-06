@@ -62,6 +62,7 @@ def main():
     try:
         preset=get_preset(args.preset)
         if preset.get('setupFamily'):
+            if '--max-depth-pct' in sys.argv or any(arg.startswith('--max-depth-pct=') for arg in sys.argv):parameters['maxBaseDepth']=args.max_depth_pct
             parameters.update({key:getattr(args,value) for key,value in policy_keys.items()})
             parameters['setupStage']='FRESH_BREAKOUT'
             if args.strict_contraction_legs and not args.min_contraction_legs:parameters['minContractionLegs']=2

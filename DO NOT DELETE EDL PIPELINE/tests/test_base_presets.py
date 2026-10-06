@@ -16,7 +16,7 @@ def record():
 
 def evaluate(preset,records):
     values=[evaluate_base_condition(records,node['kind'],node['params']) for node in preset['expression']['children']]
-    return False if False in values else None if None in values else True
+    return (False if False in values else None if None in values else True) if preset['expression'].get('op','AND').upper()=='AND' else (True if True in values else None if None in values else False)
 
 
 class BasePresetTests(unittest.TestCase):

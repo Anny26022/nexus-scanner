@@ -698,7 +698,7 @@ def evaluate_universe(ohlcv_directory, conditions, as_of_date: str | None = None
     directory = Path(ohlcv_directory)
     wanted = {str(symbol).upper() for symbol in symbols} if symbols else None
     context_by_symbol = dict(context_by_symbol or {})
-    if 'BASE_' in json.dumps(conditions) and 'base_episodes' not in context_by_symbol:
+    if 'BASE_' in json.dumps(conditions).upper() and 'base_episodes' not in context_by_symbol:
         from .base_publication import build_base_records, load_history_audits
         frames={}
         for path in sorted(directory.glob('*.csv')):
@@ -708,6 +708,7 @@ def evaluate_universe(ohlcv_directory, conditions, as_of_date: str | None = None
             if not frame.empty and (not as_of_date or str(frame.Date.iloc[-1].date())==as_of_date):frames[path.stem]=frame
         stocks={symbol:(context_by_symbol.get('stocks') or {}).get(symbol,{'symbol':symbol}) for symbol in frames}
         context_by_symbol['base_episodes']=build_base_records(frames,stocks,context_by_symbol.get('benchmarks'),selected_only=True,setup_candidates=True,history_audits=load_history_audits(directory.parent))
+        del frames
     results = []
     counts = {"match": 0, "no_match": 0, "unavailable": 0}
     for path in sorted(directory.glob("*.csv")):

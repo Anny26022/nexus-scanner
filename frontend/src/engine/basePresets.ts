@@ -51,7 +51,7 @@ export function materializeBasePreset(preset: BasePresetDefinition, p: Record<st
   if(boolean('requireRising200'))append(scope+'.slopeSMA200','GREATER',0);
   for(const [key,path] of [['reclaim200Within','reclaimSMA200Age'],['slopeTurn200Within','slopeTurnSMA200Age']]){const days=number(key,0,0,252,true);if(days)append(scope+'.'+path,'LESS',days);}
   const persistence=number('above50Persistence',1,1,252,true);
-  if(persistence>1)append(scope+'.aboveSMA50Sessions','ABOVE',persistence);
+  if(persistence>=1)append(scope+'.aboveSMA50Sessions','ABOVE',persistence);
   const confirm=boolean('requireBreakoutConfirmation');
   const volume=number('minBreakoutVolume',1.5,0,100),closeRange=number('minBreakoutCloseInRange',.7,0,1),extension=number('maxBreakoutExtensionPct',5,0,1000),age=number('maxBreakoutAge',5,0,1500,true);
   if(confirm){
@@ -72,4 +72,12 @@ export function materializeBasePreset(preset: BasePresetDefinition, p: Record<st
     if (ath === 'AUDITED_INTRADAY') append(scope + '.lifetimePriceHistoryVerified','EQUAL',1);
   }
   return leaves;
+}
+
+/** Keep setup controls valid in the same user edit; engine validation remains strict. */
+export function updateSetupParameter(parameters:Record<string,any>,key:string,value:any):Record<string,any>{
+  const next={...parameters,[key]:key==='minContractionLegs'&&value===1?2:value};
+  if(key==='requireBreakoutConfirmation'&&value===true&&(next.setupStage??'FORMING')==='FORMING')next.setupStage='FRESH_BREAKOUT';
+  if(key==='setupStage'&&value==='FORMING')next.requireBreakoutConfirmation=false;
+  return next;
 }

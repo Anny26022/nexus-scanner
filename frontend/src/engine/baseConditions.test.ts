@@ -16,6 +16,9 @@ describe('base conditions',()=>{
     expect(evaluateBaseCondition(undefined,condition('BASE_STAGE',{}))).toBe(null);
     expect(evaluateBaseCondition({},condition('BASE_METRIC',{metric:'base.depthPct',value:25}))).toBe(null);
   });
+  it('returns unavailable for overflowing direct arithmetic',()=>{
+    expect(evaluateBaseCondition({HOLDING:{base:{depthPct:1e308,ageSessions:1e308}}},condition('BASE_FORMULA',{metric:'base.depthPct',rightMetric:'base.ageSessions',arithmetic:'MULTIPLY',value:1}))).toBeNull();
+  });
   it('evaluates same-base arithmetic and rejects unknown paths',()=>{
     expect(evaluateBaseCondition(bases,condition('BASE_FORMULA',{metric:'base.atrContraction',rightMetric:'base.volumeDryUp',arithmetic:'DIVIDE',comparison:'LESS',value:1}))).toBe(true);
     expect(()=>evaluateBaseCondition({},condition('BASE_METRIC',{metric:'__proto__',value:1}))).toThrow();

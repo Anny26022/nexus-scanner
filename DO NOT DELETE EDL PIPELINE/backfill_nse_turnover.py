@@ -1,7 +1,7 @@
 """Fill missing official NSE traded value on existing candles (rupees).
 
 Bulk daily files are cached once. Prices, volume and corporate-action
-adjustments are never changed. Default coverage is the latest 260 sessions;
+adjustments are never changed. Default coverage is the latest 1500 sessions;
 use --sessions 1500 for deeper base replay history.
 """
 import argparse
@@ -72,7 +72,7 @@ def fetch_turnover(day, session):
     raise ValueError(f'No date-aligned turnover in NSE files for {day}')
 
 
-def backfill(root, sessions=260, fetcher=fetch_turnover, years=None):
+def backfill(root, sessions=1500, fetcher=fetch_turnover, years=None):
     if sessions <= 0:
         raise ValueError('sessions must be positive')
     started = time.monotonic()
@@ -143,7 +143,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root',type=Path,default=Path(BASE_DIR))
     horizon=parser.add_mutually_exclusive_group()
-    horizon.add_argument('--sessions',type=int,default=260)
+    horizon.add_argument('--sessions',type=int,default=1500)
     horizon.add_argument('--years',type=int)
     args=parser.parse_args()
     report=backfill(args.root,args.sessions,years=args.years)

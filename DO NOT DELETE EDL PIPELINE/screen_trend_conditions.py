@@ -220,8 +220,8 @@ def main(argv=None):
     if preset and preset.get("setupFamily"):
         from edl_pipeline.scanner.base_presets import materialize_base_preset
         parameters=request.get("parameters") or {}
-        materialize_base_preset(preset,parameters)
-        conditions={"type":"condition","kind":"BASE_SETUP","params":{"presetId":preset["id"],**parameters}}
+        materialized_preset=materialize_base_preset(preset,parameters)
+        conditions={"type":"condition","kind":"BASE_SETUP","params":{**parameters,"presetId":preset["id"]}}
     if not conditions:
         parser.error("request.expression or request.conditions must be non-empty")
     validate_preset_library(CONDITION_REGISTRY)
@@ -267,8 +267,9 @@ def main(argv=None):
         result["preset"] = {
             "id": preset["id"], "name": preset["name"], "category": preset["category"],
             "horizon": preset["horizon"], "description": preset["description"],
-            "rules": preset["rules"],
+            "rules": preset["rules"], "expression": conditions, "parameters": request.get("parameters") or {},
         }
+        if preset.get("setupFamily"):result["preset"]["materializedExpression"]=materialized_preset
     rendered = json.dumps(result, indent=2, allow_nan=False)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

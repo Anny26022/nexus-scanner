@@ -28,11 +28,11 @@ not claim result parity with another platform's undisclosed base detector.
 - [x] Historical replay, forward outcome measurement and costs.
 - [x] Golden fixtures, prefix-invariance tests, integration and browser fixture checks.
 - [x] PR #26 with scope, dependencies and validation evidence; CI passes.
-- [x] Final full-generation measurement and complete aligned-data release check.
+- [ ] Fresh full-generation performance measurement and complete aligned-data release check.
 - [x] Recovered-data chart equality, Worker symbol parity and browser smoke checks.
 
-The automated reviewer currently skips PR #26 and there are no review threads.
-This is not an independent review approval.
+PR #26 has automated review threads. Fixes and their regression checks are
+tracked in those threads; passing local tests is not production validation.
 
 ## Formula contracts
 

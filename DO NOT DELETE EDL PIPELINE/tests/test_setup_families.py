@@ -37,7 +37,7 @@ class SetupFamilyTests(unittest.TestCase):
             self.assertIn('distanceFromPivotPct' if stage=='FORMING' else 'selection.distanceFromPivotPct',paths)
             self.assertTrue(all(leaf['params']['stage']==stage for leaf in leaves))
         leaves=clauses('blue-sky',setupStage='PLAYED_OUT',athPolicy='CLOSING_AVAILABLE')
-        facts={'stage':'PLAYED_OUT','base':{'overheadPct':0,'depthPct':40},'selection':{'historyFromListing':1,'rsRating':90,'marketCapCr':500,'medianTurnover20':2,'distanceFromPivotPct':-3},'current':{'rsRating':1,'marketCapCr':10,'medianTurnover20':0}}
+        facts={'stage':'PLAYED_OUT','base':{'overheadPct':0,'depthPct':40},'selection':{'historyFromListing':1,'aboveSMA50Sessions':1,'rsRating':90,'marketCapCr':500,'medianTurnover20':2,'distanceFromPivotPct':-3},'current':{'rsRating':1,'marketCapCr':10,'medianTurnover20':0}}
         self.assertTrue(all(evaluate_base_condition({'PLAYED_OUT':facts},leaf['kind'],leaf['params']) is True for leaf in leaves))
         cap=next(i for i,n in enumerate(get_preset('lib-nexus-blue-sky-setup')['expression']['children']) if n['params'].get('metric')=='current.marketCapCr')
         edited=clauses('blue-sky',setupStage='PLAYED_OUT',athPolicy='CLOSING_AVAILABLE',**{f'threshold{cap}':600})

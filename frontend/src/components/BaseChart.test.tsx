@@ -26,5 +26,7 @@ describe('base chart overlays',()=>{
     expect(chartGeometry({...chart,candles:[]})).toBe(null);
     render(<BaseChartPlot chart={chart}/>);
     expect(screen.queryByTestId('base-range')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('base-pivot')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('base-breakout')).not.toBeInTheDocument();
   });
 });

@@ -54,7 +54,8 @@ class FilingHistoryTests(unittest.TestCase):
             result = fetch_company_filings.fetch_filings({"Symbol":"ABC","ISIN":"INE000000001"},existing)
         self.assertEqual(len(calls),6)
         self.assertTrue(result["refresh_complete"])
-        self.assertEqual({r["news_id"] for r in result["current"]}, {"new1"})
+        self.assertEqual({(r["news_id"], r["source_endpoint"]) for r in result["current"]},
+                         {("new1", "company_filings"), ("new1", "lodr")})
         for endpoint in ("company_filings","lodr"):
             self.assertEqual(result["history"]["fetch_status"][endpoint]["pages_fetched"],3)
             self.assertEqual({r["news_id"] for r in result["history"]["filings"] if r["source_endpoint"]==endpoint}, {"old","new1","new2"})
@@ -80,6 +81,22 @@ class FilingHistoryTests(unittest.TestCase):
                     {"news_id":"same","caption":"Dividend","news_body":"Full body","file_url":"https://example.com/a.pdf"}])
         self.assertEqual(len(enriched),1)
         self.assertEqual(enriched[0]["news_body"],"Full body")
+
+    def test_idless_url_enrichment_merges_but_conflicting_urls_remain_versions(self):
+        bare = {"news_date":"2026-10-06", "descriptor":"Dividend", "caption":"Dividend approved",
+                "source_endpoint":"lodr"}
+        enriched = {**bare,"file_url":"https://example.com/a.pdf"}
+        other = {**bare,"file_url":"https://example.com/b.pdf"}
+        for items in ([bare,enriched], [enriched,bare]):
+            with self.subTest(items=items):
+                records = fetch_company_filings.dedupe_filings(items)
+                self.assertEqual(len(records),1)
+                self.assertEqual(records[0]["file_url"], enriched["file_url"])
+        versions = fetch_company_filings.dedupe_filings([bare,enriched,other])
+        self.assertEqual({record["file_url"] for record in versions}, {enriched["file_url"],other["file_url"]})
+        self.assertEqual(len(versions),2)
+        self.assertEqual(fetch_company_filings.dedupe_filings([{"file_url":enriched["file_url"]}]),
+                         [{"file_url":enriched["file_url"]}])
 
     def test_failed_refresh_preserves_success_time_and_retries_past_cached_first_page(self):
         existing = {"lodr_backfill_complete":True,

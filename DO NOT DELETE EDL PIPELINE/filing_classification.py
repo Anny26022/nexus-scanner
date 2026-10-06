@@ -296,8 +296,9 @@ def classify_filings(filings):
         url_key = urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path, parts.query, ""))
         # Timestamp and content protect revisions even if a provider reuses a URL.
         identity = (str(row.get("news_date") or ""), url_key, _text(row.get("caption")), _text(row.get("news_body")))
+        identity = identity + (str(row.get('news_id') or '') if not url else '',)
         source = row.get("source_endpoint")
-        if url and identity in seen:
+        if identity in seen:
             existing = seen[identity]
             existing["sourceEndpoints"] = sorted(set(existing["sourceEndpoints"] + ([source] if source else [])))
             source_labels = {k: row.get(k) for k in ("source_endpoint", "descriptor", "ann_type", "cat")}
@@ -309,8 +310,7 @@ def classify_filings(filings):
         row["classification"] = classify_filing(row)
         row.setdefault("sourceEndpoints", [source] if source else [])
         row.setdefault("sourceLabels", [{k: row.get(k) for k in ("source_endpoint", "descriptor", "ann_type", "cat")}])
-        row["filingId"] = hashlib.sha256(repr(identity + (str(row.get('news_id') or '') if not url else '',)).encode()).hexdigest()[:24]
+        row["filingId"] = hashlib.sha256(repr(identity).encode()).hexdigest()[:24]
         result.append(row)
-        if url:
-            seen[identity] = row
+        seen[identity] = row
     return result

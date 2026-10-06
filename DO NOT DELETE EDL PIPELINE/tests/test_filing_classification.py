@@ -92,6 +92,22 @@ class FilingClassificationTests(unittest.TestCase):
         self.assertIn('financial_results', enriched[0]['classification']['topics'])
         self.assertNotIn('general_announcement', enriched[0]['classification']['topics'])
 
+    def test_urlless_cross_feed_duplicates_merge_sources_but_preserve_revisions(self):
+        base = {'news_id':'same', 'news_date':'2026-10-06 16:00:00',
+                'caption':'Dividend', 'news_body':'Declared dividend'}
+        feeds = [{**base,'source_endpoint':'lodr','descriptor':'General'},
+                 {**base,'source_endpoint':'company_filings','descriptor':'Dividend'}]
+        rows = classify_filings(feeds + [{**feeds[0],'caption':'Revised dividend'}])
+        self.assertEqual(len(rows),2)
+        self.assertEqual(rows[0]['sourceEndpoints'], ['company_filings','lodr'])
+        self.assertEqual({(labels['source_endpoint'],labels['descriptor']) for labels in rows[0]['sourceLabels']},
+                         {('lodr','General'),('company_filings','Dividend')})
+        self.assertEqual(len({row['filingId'] for row in rows}),2)
+        self.assertIn('dividend',rows[0]['classification']['topics'])
+        distinct = classify_filings([feeds[0], {**feeds[0],'news_id':'different'}])
+        self.assertEqual(len(distinct),2)
+        self.assertNotEqual(distinct[0]['filingId'],distinct[1]['filingId'])
+
     def test_pipeline_publication_reaches_chart_without_future_filings(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

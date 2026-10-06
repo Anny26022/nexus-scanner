@@ -54,7 +54,10 @@ def _key(entry):
     news_id = entry.get("news_id")
     if news_id not in (None, ""):
         return f"id:{news_id}"
-    return "|".join(str(entry.get(field) or "") for field in ("news_date", "descriptor", "caption", "file_url"))
+    identity = "|".join(str(entry.get(field) or "") for field in ("news_date", "descriptor", "caption"))
+    # A later URL is enrichment, not a new identity. URL-only observations have
+    # no other usable identity and retain their original URL fallback.
+    return identity if identity.strip("|") else str(entry.get("file_url") or "")
 
 
 def _content_key(entry):

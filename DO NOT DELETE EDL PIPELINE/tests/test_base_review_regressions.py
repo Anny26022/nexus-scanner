@@ -15,6 +15,18 @@ from edl_pipeline.scanner.base_presets import materialize_base_preset
 
 
 class BaseReviewRegressions(unittest.TestCase):
+    def test_complete_checkpoints_skip_cross_sectional_context(self):
+        import sys
+        from unittest.mock import patch
+        sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'scripts'))
+        import validate_scanner_full_universe as validation
+        frames={'A':object(),'B':object()}
+        with patch.object(validation,'prepare_base_peer_context',return_value='prepared') as prepare:
+            self.assertIsNone(validation.pending_peer_context(frames,{},None,{'A','B'}))
+            prepare.assert_not_called()
+            self.assertEqual(validation.pending_peer_context(frames,{},None,{'A'}),'prepared')
+            prepare.assert_called_once_with(frames,{},None)
+
     def test_missing_date_never_becomes_latest_metrics_row(self):
         from advanced_metrics_processor import process_symbol_csv
         frame=pd.DataFrame({'Date':['2026-09-29','2026-09-30',None], 'Open':[100,101,900], 'High':[102,103,901], 'Low':[99,100,899], 'Close':[101,102,900], 'Volume':[1000,1000,1000], 'Turnover':[1e7,2e7,9e7]})

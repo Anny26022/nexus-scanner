@@ -818,13 +818,13 @@ and volume. Only NSE turnover is included.
 
 Daily and weekly pipelines run `backfill_nse_turnover.py` in the serial OHLCV
 lane after price-history refresh, before scanner calculations. It fills missing
-values for the latest 260 observed sessions using one full-universe file per
+values for the latest 1,500 observed sessions using one full-universe file per
 date, caches compressed files in `nse_turnover_history/`, and preserves existing
 prices. Both Actions workflows retain that cache. Failures are listed in
 `nse_turnover_report.json`; incomplete windows produce unavailable/null metrics.
 An old base may need deeper history before its frozen turnover qualifies.
 
-For an explicit deeper backfill, from the pipeline directory:
+To run the 1,500-session default explicitly, from the pipeline directory:
 
 ```sh
 python backfill_nse_turnover.py --sessions 1500
@@ -847,7 +847,7 @@ bhavcopy is absent, incorrectly encoded, or contains a different session. Legacy
 are validated. A temporary disk index limits RAM use during long backfills;
 compressed daily files are reusable. Coverage extends only to existing stock
 candles, and historical symbol renames may still leave gaps. The ten-year
-command does not change the daily pipeline's 260-session fill window or prune
+command does not change the daily pipeline's 1,500-session fill window or prune
 older observations. No new price history is fetched by this command.
 
 ## Versioned setup families

@@ -8,6 +8,7 @@
   "base.contractionLegCount",
   "base.contractionMaxRatio",
   "base.depthPct",
+  "base.floor",
   "base.level",
   "base.medianTurnoverCr",
   "base.medianVolume",

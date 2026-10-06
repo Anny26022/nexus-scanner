@@ -66,12 +66,12 @@ function releaseOwnedBuffer(buffer:ArrayBuffer){
   // consumption rather than waiting for GC between successive cold scans.
   (buffer as ArrayBuffer&{transfer?:(length:number)=>ArrayBuffer}).transfer?.(0);
 }
-async function ungzip(bytes:ArrayBuffer,limit=80*1024*1024){
+export async function ungzip(bytes:ArrayBuffer,limit=80*1024*1024){
   // Blob construction copies the compressed buffer. Feed its immutable view
   // directly so repeated scans do not allocate an extra copy of each object.
   const stream=new ReadableStream<BufferSource>({start(controller){controller.enqueue(new Uint8Array(bytes));controller.close();}});
   const reader=stream.pipeThrough(new DecompressionStream('gzip')).getReader();
-  try{const size=bytes.byteLength>=4?new DataView(bytes).getUint32(bytes.byteLength-4,true):limit+1;if(size>limit)throw new Error('Decoded scanner object exceeds its memory budget');const output=new Uint8Array(size);let offset=0;while(true){const {done,value}=await reader.read();if(done)break;if(offset+value.byteLength>size){await reader.cancel();throw new Error('Decoded scanner size does not match gzip trailer');}output.set(value,offset);offset+=value.byteLength;}if(offset!==size)throw new Error('Decoded scanner size does not match gzip trailer');return output.buffer;}
+  try{const size=bytes.byteLength>=4?new DataView(bytes).getUint32(bytes.byteLength-4,true):limit+1;if(size>limit){await reader.cancel();throw new Error('Decoded scanner object exceeds its memory budget');}const output=new Uint8Array(size);let offset=0;while(true){const {done,value}=await reader.read();if(done)break;if(offset+value.byteLength>size){await reader.cancel();throw new Error('Decoded scanner size does not match gzip trailer');}output.set(value,offset);offset+=value.byteLength;}if(offset!==size)throw new Error('Decoded scanner size does not match gzip trailer');return output.buffer;}
   finally{releaseOwnedBuffer(bytes);}
 }
 async function objectBytes(env:Env,key:string,expected?:{bytes:number;sha256:string}){const object=await env.SCANNER_DATA.get(key);if(!object)throw new Error(`Advanced scanner object is unavailable: ${key}`);const bytes=await object.arrayBuffer();if(expected){const digest=await crypto.subtle.digest('SHA-256',bytes),hex=[...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,'0')).join('');if(bytes.byteLength!==expected.bytes||hex!==expected.sha256)throw new Error(`Advanced scanner checksum mismatch: ${key}`);}return bytes;}

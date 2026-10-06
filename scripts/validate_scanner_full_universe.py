@@ -37,6 +37,11 @@ def load(path):
     return json.loads(gzip.decompress(path.read_bytes()))
 
 
+def pending_peer_context(frames, stocks, benchmarks, completed):
+    """A complete checkpoint set needs no further cross-sectional calculations."""
+    return prepare_base_peer_context(frames,stocks,benchmarks) if any(symbol not in completed for symbol in frames) else None
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source',type=Path,required=True)
@@ -85,7 +90,7 @@ def main():
         print(json.dumps({'event':'checkpoint','symbol':symbol,'completed':len(completed),'total':len(frames),'elapsedSeconds':round(time.monotonic()-started,2)}),flush=True)
     # Every batch still uses the entire peer universe for strength and industry
     # context. Partition only requested symbols, never the ranking population.
-    peer_context=prepare_base_peer_context(frames,context['stocks'],context.get('benchmarks'))
+    peer_context=pending_peer_context(frames,context['stocks'],context.get('benchmarks'),completed)
     for shard in range(32):
         requested={symbol for symbol in frames if _shard(symbol)==shard and symbol not in completed}
         if not requested: continue

@@ -634,7 +634,7 @@ bhavcopy is absent, incorrectly encoded, or contains a different session. Legacy
 are validated. A temporary disk index limits RAM use during long backfills;
 compressed daily files are reusable. Coverage extends only to existing stock
 candles, and historical symbol renames may still leave gaps. The ten-year
-command does not change the daily pipeline's 260-session fill window or prune
+command does not change the daily pipeline's 1,500-session fill window or prune
 older observations. No new price history is fetched by this command.
 
 Measurement families and modeled trade events are explicitly distinguished in

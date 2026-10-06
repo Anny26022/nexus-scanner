@@ -1,7 +1,7 @@
 import {gzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import { afterEach,describe,expect,it,vi } from 'vitest';
-import worker,{executionWarnings,validateExpression,serializeScan} from './index';
+import worker,{executionWarnings,validateExpression,serializeScan,ungzip} from './index';
 import { SCANNER_IDENTITY } from '../../../frontend/src/engine/compatibility';
 
 afterEach(()=>vi.unstubAllGlobals());
@@ -9,6 +9,15 @@ const execution={waitUntil:vi.fn()} as unknown as ExecutionContext;
 function environment(marker=true){const manifest={...SCANNER_IDENTITY,schemaVersion:7,revision:'a'.repeat(64),session:'2026-10-01'};return {ALLOWED_ORIGINS:'https://app.example,http://localhost:8080',SCANNER_RELEASE_URL:'https://app.example/data/current.json',SCANNER_DATA:{get:vi.fn(async()=>marker?{json:async()=>manifest}:null)} as unknown as R2Bucket};}
 
 describe('scanner worker boundary',()=>{
+  it('cancels decompression before rejecting an oversized trailer',async()=>{
+    const cancel=vi.fn(),reader={cancel,read:vi.fn()};
+    const pipe=vi.spyOn(ReadableStream.prototype,'pipeThrough').mockReturnValue({getReader:()=>reader} as unknown as ReadableStream);
+    const compressed=new ArrayBuffer(4);new DataView(compressed).setUint32(0,1025,true);
+    try{
+      await expect(ungzip(compressed,1024)).rejects.toThrow('memory budget');
+      expect(cancel).toHaveBeenCalledOnce();expect(reader.read).not.toHaveBeenCalled();
+    }finally{pipe.mockRestore();}
+  });
   it('validates arithmetic syntax and bounded metric references',()=>{
     const expression=(formula:string)=>({type:'condition' as const,condition:{conditionId:'BASE_FORMULA',parameters:{stage:'FORMING',formula,comparison:'ABOVE',value:1}}});
     expect(()=>validateExpression(expression('(base.parts.half_2.turnoverCr / base.parts.half_1.turnoverCr) * 100'))).not.toThrow();

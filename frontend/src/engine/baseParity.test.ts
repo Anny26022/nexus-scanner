@@ -21,6 +21,7 @@ describe('base Python/browser/advanced parity',()=>{
   it('compiles base queries identically in Python and TypeScript and rejects invalid clauses',()=>{
     const queries=['Base Stage(FORMING)','Base Stage(HOLDING, STRICT)',
       'Base Metric(FORMING, base.depthPct) < 25',
+      'Base Metric(FORMING, base.floor) > 80',
       'Base Metric(FRESH_BREAKOUT, breakoutAgeSessions) <= 5',
       'Base Formula(FORMING, base.parts.half_2.volume, DIVIDE, base.parts.half_1.volume) <= 0.8'];
     queries.push('Base Expression(FORMING, "(base.parts.half_2.turnoverCr / base.parts.half_1.turnoverCr) * 100") < 80');
@@ -39,6 +40,12 @@ describe('base Python/browser/advanced parity',()=>{
     });
     invalid.forEach((query,index)=>{expect(()=>compileTextQuery(query)).toThrow();expect(compiled[queries.length+index]).toBeNull();});
     expect(compileTextQuery(`${queries[0]} AND (${queries[2]} OR ${queries[3]})`)).toMatchObject({type:'group',operator:'all',children:[{type:'condition'},{type:'group',operator:'any'}]});
+  });
+  it('routes the published floor through the browser evaluator',()=>{
+    const leaf=condition('BASE_METRIC',{stage:'FORMING',metric:'base.floor',comparison:'GREATER',value:80});
+    expect(expressionPlan({type:'condition',condition:leaf}).browser).toBe(true);
+    expect(evaluateBaseCondition({FORMING:{base:{floor:90}}},leaf)).toBe(true);
+    expect(evaluateBaseCondition({FORMING:{base:{floor:80}}},leaf)).toBe(false);
   });
   it('keeps expanded trend context private without dropping its condition',()=>{
     const leaf=condition('BASE_METRIC',{stage:'FORMING',metric:'current.distanceEMA150',comparison:'ABOVE',value:0});

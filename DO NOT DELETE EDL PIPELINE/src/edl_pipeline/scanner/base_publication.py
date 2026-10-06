@@ -114,16 +114,10 @@ def trend_context(frame,index,ranks=None,listing_date=None):
     return {key:finite(value) for key,value in trend_series(frame,ranks,listing_date).iloc[index].items()}
 
 
-def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False, episode_sink=None, history_audits=None, setup_candidates=False, rank_sink=None):
-    if selected_only and episode_sink is not None:
-        raise ValueError('Complete archives require all episodes before stage selection.')
+def prepare_base_peer_context(frames, stocks, benchmarks=None):
+    """Compute dated cross-sectional context once for a fixed publication input."""
     frames=normalize_frames(frames)
-    config=config or BaseConfig()
-    requested=set(frames) if symbols is None else set(symbols)
-    missing=requested-set(frames)
-    if missing:raise ValueError('Missing aligned history: '+', '.join(sorted(missing)))
     ranks=strength_history(frames) if frames else pd.DataFrame()
-    output={}
     closes=pd.concat({symbol:frame.set_index('Date').Close for symbol,frame in frames.items()},axis=1).sort_index() if frames else pd.DataFrame()
     industries={}
     for symbol in frames:
@@ -150,6 +144,21 @@ def build_base_records(frames, stocks, benchmarks=None, rank_history=None, confi
         date_key='Date' if 'Date' in benchmark else 'date'
         price_key='Close' if 'Close' in benchmark else 'close'
         benchmark_close=benchmark.set_index(date_key)[price_key].reindex(closes.index)
+    return {'frames':frames,'ranks':ranks,'closes':closes,'industry_context':industry_context,'industry_breadth':industry_breadth,'benchmark_close':benchmark_close}
+
+
+def build_base_records(frames, stocks, benchmarks=None, rank_history=None, config=None, symbols=None, selected_only=False, episode_sink=None, history_audits=None, setup_candidates=False, rank_sink=None, peer_context=None):
+    if selected_only and episode_sink is not None:
+        raise ValueError('Complete archives require all episodes before stage selection.')
+    peer_context=peer_context if peer_context is not None else prepare_base_peer_context(frames,stocks,benchmarks)
+    frames=peer_context['frames']
+    config=config or BaseConfig()
+    requested=set(frames) if symbols is None else set(symbols)
+    missing=requested-set(frames)
+    if missing:raise ValueError('Missing aligned history: '+', '.join(sorted(missing)))
+    ranks=peer_context['ranks'];closes=peer_context['closes']
+    industry_context=peer_context['industry_context'];industry_breadth=peer_context['industry_breadth']
+    benchmark_close=peer_context['benchmark_close'];output={}
     for symbol,frame in sorted(frames.items()):
         if symbol not in requested:continue
         rank=ranks[symbol].reindex(frame.Date).to_numpy(float)
@@ -297,6 +306,8 @@ RUNTIME_SETUP_BASE_KEYS = {
     'contractionLegCount','contractionMaxRatio','depthPct','netUpDownVolume',
     'overheadPct','priorAdvance63Pct','trueRangeContraction','volumeDryUp',
 }
+RUNTIME_SETUP_TOP_KEYS = {'id','symbol','stage','pivot','pivotBasis','firstEligibleBase','setupCandidateOnly',
+                        'distanceFromPivotPct','breakoutAgeSessions','holdsPivot','continuousHolding'}
 RUNTIME_SETUP_BREAKOUT_KEYS = {'date','volumeRatio','closeInRange','throughPct'}
 RUNTIME_COMPLETED_SETUPS_PER_BASIS = 2
 
@@ -335,8 +346,7 @@ def runtime_setup_candidate_records(episodes):
                            if episode['stage']=='PLAYED_OUT' and episode.get('pivotBasis','CLOSE')==basis),
                           key=lambda episode:(str((episode.get('breakout') or {}).get('date') or episode.get('base',{}).get('startDate') or ''),str(episode.get('id',''))), reverse=True)
         completed.extend(candidates[:RUNTIME_COMPLETED_SETUPS_PER_BASIS])
-    keys={'id','symbol','stage','pivot','pivotBasis','firstEligibleBase','setupCandidateOnly',
-          'distanceFromPivotPct','breakoutAgeSessions','holdsPivot','continuousHolding'}
+    keys=RUNTIME_SETUP_TOP_KEYS
     def project(episode):
         record={key:episode[key] for key in keys if key in episode}
         record['base']={key:value for key,value in episode.get('base',{}).items() if key in RUNTIME_SETUP_BASE_KEYS}

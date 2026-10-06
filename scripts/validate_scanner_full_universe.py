@@ -20,7 +20,7 @@ from scanner_cache import ScannerCache
 from scanner_identity import checked_identity
 from scanner_pack_publication import build_private_scanner_pack, _shard
 from edl_pipeline.scanner.base_publication import (
-    build_base_records, compact_base_records, runtime_setup_candidate_records,
+    build_base_records, prepare_base_peer_context, compact_base_records, runtime_setup_candidate_records,
     runtime_setup_candidate_history_complete, load_history_audits,
 )
 
@@ -85,13 +85,15 @@ def main():
         print(json.dumps({'event':'checkpoint','symbol':symbol,'completed':len(completed),'total':len(frames),'elapsedSeconds':round(time.monotonic()-started,2)}),flush=True)
     # Every batch still uses the entire peer universe for strength and industry
     # context. Partition only requested symbols, never the ranking population.
+    peer_context=prepare_base_peer_context(frames,context['stocks'],context.get('benchmarks'))
     for shard in range(32):
         requested={symbol for symbol in frames if _shard(symbol)==shard and symbol not in completed}
         if not requested: continue
         build_base_records(frames,context['stocks'],context.get('benchmarks'),rank_history,
                            symbols=requested,episode_sink=sink,setup_candidates=True,
-                           history_audits=load_history_audits(source))
+                           history_audits=load_history_audits(source),peer_context=peer_context)
         rank_history.clear()
+    del peer_context
     context['base_episodes']={}; context['base_rs_history']={}
     completeness={}; rows=[]; episode_count=0
     native_rows={}; native_session=None
@@ -138,7 +140,7 @@ def main():
             'privateCompressedBytes':sum(item['bytes'] for item in manifest['objects']),
             'maximumAuxiliaryDecodedBytes':max(item.get('decodedBytes',0) for item in manifest['objects']),
             'packRoot':str(target),'buildWallSeconds':time.monotonic()-started,
-            'processPeakRssBytes':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+            'processPeakRssBytes':resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * (1 if sys.platform=='darwin' else 1024),
             'scope':'private pack generation; Cloudflare runtime measurements are separate'}
     (output/'build-report.json').write_text(json.dumps(report,indent=2))
     print(json.dumps({'event':'complete',**report}),flush=True)

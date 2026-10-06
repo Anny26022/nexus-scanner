@@ -133,7 +133,7 @@ class SetupSelectionTests(unittest.TestCase):
         self.assertEqual(actual[0],expected[0]);self.assertEqual(actual[1]['id'],expected[1]['id'])
 
     def test_runtime_projection_covers_every_materialized_family_dependency(self):
-        from edl_pipeline.scanner.base_publication import RUNTIME_SETUP_BASE_KEYS, RUNTIME_SETUP_CONTEXT_KEYS, RUNTIME_SETUP_BREAKOUT_KEYS
+        from edl_pipeline.scanner.base_publication import RUNTIME_SETUP_BASE_KEYS, RUNTIME_SETUP_CONTEXT_KEYS, RUNTIME_SETUP_BREAKOUT_KEYS, RUNTIME_SETUP_TOP_KEYS
         for family in ('vcp','blue-sky','multi-year','ipo'):
             for stage in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT'):
                 parameters={'setupStage':stage,'strictContractionLegs':True,'requireAccumulation':True,
@@ -142,7 +142,9 @@ class SetupSelectionTests(unittest.TestCase):
                 if stage!='FORMING':parameters['requireBreakoutConfirmation']=True
                 for leaf in materialize_base_preset(get_preset('lib-nexus-'+family+'-setup'),parameters)['children']:
                     metric=leaf['params'].get('metric')
-                    if not metric or '.' not in metric:continue
+                    if not metric:continue
+                    if '.' not in metric:
+                        self.assertIn(metric,RUNTIME_SETUP_TOP_KEYS,(family,stage,metric));continue
                     scope,key=metric.split('.',1)
                     keys=RUNTIME_SETUP_BASE_KEYS if scope=='base' else RUNTIME_SETUP_BREAKOUT_KEYS if scope=='breakout' else RUNTIME_SETUP_CONTEXT_KEYS
                     self.assertIn(key,keys,(family,stage,metric))

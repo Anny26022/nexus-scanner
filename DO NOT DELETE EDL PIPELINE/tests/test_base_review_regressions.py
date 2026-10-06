@@ -9,7 +9,7 @@ import pandas as pd
 from edl_pipeline.scanner.bases import BaseConfig, detect_bases
 from edl_pipeline.scanner.turnover import average_turnover_crore
 from edl_pipeline.scanner.base_conditions import evaluate_base_condition
-from edl_pipeline.scanner.base_publication import build_base_records, compact_setup_match
+from edl_pipeline.scanner.base_publication import build_base_records, prepare_base_peer_context, compact_setup_match
 from edl_pipeline.scanner.presets import get_preset
 from edl_pipeline.scanner.base_presets import materialize_base_preset
 
@@ -75,6 +75,13 @@ class BaseReviewRegressions(unittest.TestCase):
         only_stream={}
         build_base_records(frames,stocks,rank_sink=lambda symbol,ledger:only_stream.update({symbol:ledger}))
         self.assertEqual(only_stream,retained)
+        shared=prepare_base_peer_context(frames,stocks)
+        from unittest.mock import patch
+        with patch('edl_pipeline.scanner.base_publication.strength_history',side_effect=AssertionError('must reuse peer context')):
+            for symbol in frames:
+                ledger={}
+                build_base_records(frames,stocks,symbols={symbol},rank_history=ledger,peer_context=shared)
+                self.assertEqual(ledger[symbol],retained[symbol])
 
     def test_nested_maturity_excludes_breakout_and_invalidated_parent(self):
         close=100+np.sin(np.arange(240)*.23)*12+np.cos(np.arange(240)*.06)*20

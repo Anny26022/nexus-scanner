@@ -219,6 +219,7 @@ def classify_filing(filing):
             # Discard the broad approval label, not an independent approval clause.
             approvals = [m for m in evidence['regulatory_approval']
                          if m['match'] == 'text_rule'
+                         and m.get('outcome') == 'approval'
                          and (m['field'], m['excerpt']) not in negative_clauses]
             if approvals:
                 evidence['regulatory_approval'] = approvals

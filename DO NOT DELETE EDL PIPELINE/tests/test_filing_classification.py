@@ -147,6 +147,31 @@ class FilingClassificationTests(unittest.TestCase):
                 self.assertTrue(any(e['evidence'].get('outcome') == outcome for e in result['events']))
         self.assertIn('regulatory_approval', classify_filing({'caption': 'USFDA approved product'})['topics'])
 
+    def test_adverse_body_does_not_turn_approval_status_caption_into_approval(self):
+        result = classify_filing({
+            'descriptor':'Regulatory Approval',
+            'caption':'Update on status of USFDA approval for facility',
+            'news_body':'USFDA issued import alert for the facility',
+        })
+        self.assertNotIn('regulatory_approval', result['topics'])
+        self.assertFalse(any(event['topic'] == 'regulatory_approval' for event in result['events']))
+        self.assertTrue(any(event['topic'] == 'regulatory_update'
+                            and event['status'] == 'adverse'
+                            and event['evidence'].get('outcome') == 'adverse_observations'
+                            for event in result['events']))
+
+    def test_adverse_update_preserves_an_independent_positive_approval(self):
+        result = classify_filing({
+            'descriptor':'Regulatory Approval',
+            'caption':'USFDA approved product',
+            'news_body':'USFDA issued import alert for another facility',
+        })
+        self.assertIn('regulatory_approval', result['topics'])
+        self.assertIn('regulatory_update', result['topics'])
+        approvals = [event for event in result['events'] if event['topic'] == 'regulatory_approval']
+        self.assertTrue(approvals)
+        self.assertTrue(all(event['evidence'].get('outcome') == 'approval' for event in approvals))
+
     def test_event_statuses_remain_separate(self):
         for text in ('Regulatory approval pending', 'Awaiting approval', 'Approval for project'):
             self.assertNotEqual(classify_filing({'caption': text})['status'], 'approved')

@@ -55,9 +55,9 @@ try{
   for(const [name,expressionTree] of screens){
     const payload={...identity,datasetRevision:manifest.revision,asOfDate:manifest.session,universe:'mainboard',page:1,pageSize:100,expressionTree};
     const request=()=>mf.dispatchFetch('http://localhost:8080/v1/screens/run',{method:'POST',headers:{'content-type':'application/json',origin:'http://localhost:8080'},body:JSON.stringify(payload)});
-    const measurements=[];
+    const measurements=[],samplingErrors=[];
     let polling=false;
-    const timer=setInterval(async()=>{if(polling)return;polling=true;try{measurements.push(await command('Runtime.getHeapUsage'));}finally{polling=false;}},25);
+    const timer=setInterval(async()=>{if(polling)return;polling=true;try{measurements.push(await command('Runtime.getHeapUsage'));}catch(error){samplingErrors.push(String(error));}finally{polling=false;}},25);
     await command('Profiler.start');const started=performance.now();
     const response=await request();const body=await response.json();
     const coldMs=performance.now()-started;clearInterval(timer);
@@ -72,13 +72,13 @@ try{
     const peakV8Bytes=Math.max(...measurements.map(value=>value.usedSize+(value.backingStorageSize??0)+(value.embedderHeapUsedSize??0)));
     const result={name,coldMs,cachedMs,matchCount:body.matchCount,totalUniverseCount:body.totalUniverseCount,
       unavailableDiagnostics:body.unavailableDiagnostics,profileActiveSampleMs:activeSampleMicroseconds/1000,
-      peakV8Bytes,heapSamples:measurements.length};
+      peakV8Bytes,heapSamples:measurements.length,samplingErrors};
     results.push(result);console.log(JSON.stringify(result));
   }
     const report={runtime:'local workerd/Miniflare',revision:manifest.revision,session:manifest.session,stocks:manifest.symbols,
     limits:{coldMs:10000,cachedMs:500,peakV8Bytes:100*1024*1024,profileActiveSampleMs:30000},results,
     smoke:process.argv.includes('--smoke'),
-    sampledLocalAcceptance:results.every(result=>result.coldMs<=10000&&result.cachedMs<=500&&result.peakV8Bytes<100*1024*1024&&result.profileActiveSampleMs<30000),
+    sampledLocalAcceptance:results.every(result=>result.coldMs<=10000&&result.cachedMs<=500&&result.peakV8Bytes<100*1024*1024&&result.profileActiveSampleMs<30000&&result.samplingErrors.length===0),
     caveats:['R2 and Cache API are local fixtures; deployed edge latency remains unmeasured.',
       'V8 inspector reports sampled heap/backing memory; it is not total Cloudflare isolate memory.',
       'CPU profile active samples are an estimate, not billed Cloudflare CPU time.']};

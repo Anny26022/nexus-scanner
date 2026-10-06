@@ -118,6 +118,34 @@ class SetupSelectionTests(unittest.TestCase):
         self.assertNotIn('selection',next(record for record in runtime if record['stage']=='FORMING'))
         self.assertNotIn('current',next(record for record in runtime if record['stage']=='PLAYED_OUT'))
         self.assertNotIn('parts',runtime[0]['base'])
+        self.assertEqual(next(record for record in runtime if record['id']=='live')['base']['startDate'],'2026-09-01')
+
+    def test_runtime_projection_preserves_family_truth_and_selected_identity(self):
+        # Qualification must still pick the most recent matching formation,
+        # even when lexicographic IDs would select the older one.
+        earlier=candidate('z-earlier','2025-01-01')
+        later=candidate('a-later','2025-03-01',first=0)
+        later['selection']={};earlier['selection']={}
+        full=[earlier,later]
+        projected=runtime_setup_candidate_records(full)
+        expected=select_setup_episode(full,get_preset('lib-nexus-ipo-setup'),{'requireFirstBase':False})
+        actual=select_setup_episode(projected,get_preset('lib-nexus-ipo-setup'),{'requireFirstBase':False})
+        self.assertEqual(actual[0],expected[0]);self.assertEqual(actual[1]['id'],expected[1]['id'])
+
+    def test_runtime_projection_covers_every_materialized_family_dependency(self):
+        from edl_pipeline.scanner.base_publication import RUNTIME_SETUP_BASE_KEYS, RUNTIME_SETUP_CONTEXT_KEYS, RUNTIME_SETUP_BREAKOUT_KEYS
+        for family in ('vcp','blue-sky','multi-year','ipo'):
+            for stage in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT'):
+                parameters={'setupStage':stage,'strictContractionLegs':True,'requireAccumulation':True,
+                    'minPriorAdvancePct':20,'requireRising200':True,'reclaim200Within':5,
+                    'slopeTurn200Within':5,'above50Persistence':5,'athPolicy':'AUDITED_INTRADAY'}
+                if stage!='FORMING':parameters['requireBreakoutConfirmation']=True
+                for leaf in materialize_base_preset(get_preset('lib-nexus-'+family+'-setup'),parameters)['children']:
+                    metric=leaf['params'].get('metric')
+                    if not metric or '.' not in metric:continue
+                    scope,key=metric.split('.',1)
+                    keys=RUNTIME_SETUP_BASE_KEYS if scope=='base' else RUNTIME_SETUP_BREAKOUT_KEYS if scope=='breakout' else RUNTIME_SETUP_CONTEXT_KEYS
+                    self.assertIn(key,keys,(family,stage,metric))
 
     def test_optional_quality_and_confirmation_are_explicit(self):
         preset=get_preset('lib-nexus-vcp-setup')

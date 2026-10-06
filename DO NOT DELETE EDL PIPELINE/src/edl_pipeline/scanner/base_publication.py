@@ -291,7 +291,7 @@ RUNTIME_SETUP_CONTEXT_KEYS = {
     'slopeSMA200','slopeTurnSMA200Age',
 }
 RUNTIME_SETUP_BASE_KEYS = {
-    'ageSessions','ageWeeks','atrContraction','atrSimpleContraction',
+    'startDate','endDate','ageSessions','ageWeeks','atrContraction','atrSimpleContraction',
     'contractionLegCount','contractionMaxRatio','depthPct','netUpDownVolume',
     'overheadPct','priorAdvance63Pct','trueRangeContraction','volumeDryUp',
 }

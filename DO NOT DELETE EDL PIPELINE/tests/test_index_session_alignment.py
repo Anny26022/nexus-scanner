@@ -15,6 +15,31 @@ from fetch_indices_ohlcv import has_current_equity_session, index_snapshot_sessi
 
 
 class IndexSessionAlignmentTests(unittest.TestCase):
+    def test_preopen_reuses_one_coverage_pass_without_parsing_histories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for symbol in ("A", "B"):
+                (root / f"{symbol}.csv").write_text("Date,Close\n2026-10-05,100\n")
+            report = {"available":True,"as_of_date":"2026-10-05",
+                      "retrieved_at":"2026-10-06T01:00:00+05:30"}
+            with patch.object(indices,"_last_equity_date",wraps=indices._last_equity_date) as read, \
+                 patch.object(indices,"read_ohlcv_csv",side_effect=AssertionError("full parse")):
+                self.assertEqual(index_snapshot_session(root,{"A","B"},report,datetime(2026,10,6,1,10)),"2026-10-05")
+            self.assertEqual(read.call_count, 2)
+
+    def test_tail_reader_handles_deep_history_csv_layout_and_missing_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "A.csv"
+            path.write_bytes(b"Close,Date,Volume\r\n" + b"100,2020-01-01,1000\r\n" * 10000
+                             + b'101,"2026-10-06",1000\r\n\r\n')
+            self.assertEqual(indices._last_equity_date(path), "2026-10-06")
+            for payload in ("Date\n", "Close\n100\n", "Date\nnot-a-date\n", ""):
+                path.write_text(payload)
+                self.assertIsNone(indices._last_equity_date(path))
+            self.assertIsNone(indices._last_equity_date(root / "MISSING.csv"))
+            self.assertFalse(has_current_equity_session(root,"2026-10-06",{"A","MISSING"}))
+
     def test_after_midnight_uses_fresh_official_previous_session(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

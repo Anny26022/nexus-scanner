@@ -4,6 +4,7 @@ Merges deep history with Today's live snapshot from ScanX API.
 """
 
 import requests
+import csv
 import sys
 import time
 from collections import Counter
@@ -55,26 +56,40 @@ def fetch_chunk(payload):
     raise RuntimeError("Index OHLCV chunk failed after retries") from last_error
 
 
-def has_current_equity_session(directory, session, symbols=None):
-    """Whether the stock feed has a trustworthy current NSE session.
+def _last_equity_date(path):
+    """Read the header and bounded tail of a pipeline-owned, sorted daily CSV."""
+    try:
+        with Path(path).open("rb") as handle:
+            header = next(csv.reader([handle.readline(4096).decode("utf-8-sig")], strict=True), [])
+            date_column = header.index("Date")
+            handle.seek(0, 2)
+            start = max(0, handle.tell() - 4096)
+            handle.seek(start)
+            lines = handle.read(4096).decode("utf-8").splitlines()
+        if start:
+            lines = lines[1:]  # The first tail line may be truncated.
+        lines = [line for line in lines if line.strip()]
+        if not lines:
+            return None
+        row = next(csv.reader([lines[-1]], strict=True), [])
+        value = row[date_column]
+        return value if date.fromisoformat(value).isoformat() == value else None
+    except (OSError, UnicodeError, csv.Error, ValueError, IndexError):
+        return None
 
-    The index tick-history endpoint can lag its cash-market snapshot after
-    close.  We only label that snapshot as today's index candle when the same
-    provider has already produced today's daily candle for almost the complete
-    equity universe.  This prevents a prior close becoming a holiday candle.
-    """
+
+def _equity_session_coverage(directory, symbols=None):
     paths = (
         [Path(directory) / f"{symbol}.csv" for symbol in symbols]
         if symbols is not None else list(Path(directory).glob("*.csv"))
     )
-    if not paths:
-        return False
-    current = 0
-    for path in paths:
-        rows = read_ohlcv_csv(path)
-        if rows and rows[-1].get("Date") == session:
-            current += 1
-    return current / len(paths) >= MIN_CURRENT_EQUITY_COVERAGE
+    return Counter(_last_equity_date(path) for path in paths), len(paths)
+
+
+def has_current_equity_session(directory, session, symbols=None):
+    """Require observed coverage for at least 90% of the current equity master."""
+    counts, total = _equity_session_coverage(directory, symbols)
+    return bool(total) and counts[session] / total >= MIN_CURRENT_EQUITY_COVERAGE
 
 def index_snapshot_session(directory, symbols=None, official_report=None, now=None):
     """Choose the snapshot date from observed equity sessions, never midnight alone.
@@ -87,7 +102,11 @@ def index_snapshot_session(directory, symbols=None, official_report=None, now=No
     """
     instant = nse_now(now)
     today = instant.date().isoformat()
-    if has_current_equity_session(directory, today, symbols):
+    counts, total = _equity_session_coverage(directory, symbols)
+    def covered(session):
+        return bool(total) and counts[session] / total >= MIN_CURRENT_EQUITY_COVERAGE
+
+    if covered(today):
         return today
     report = official_report if isinstance(official_report, dict) else {}
     candidate = str(report.get("as_of_date") or "")
@@ -101,7 +120,7 @@ def index_snapshot_session(directory, symbols=None, official_report=None, now=No
         and age_days is not None
         and 1 <= age_days <= 7
         and str(report.get("retrieved_at") or "").startswith(today)
-        and has_current_equity_session(directory, candidate, symbols)):
+        and covered(candidate)):
         return candidate
     return None
 

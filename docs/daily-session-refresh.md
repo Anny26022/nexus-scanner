@@ -4,7 +4,10 @@ Undated index snapshots receive today’s date only when at least 90% of the
 current equity master has an observed candle for today. Weekday market hours
 alone do not establish an exchange session. Before opening, the existing fresh
 official-report path can select a confirmed prior session with matching equity
-coverage; otherwise the index refresh uses dated history only.
+coverage; otherwise the index refresh uses dated history only. Coverage reads
+only each pipeline-owned CSV header and its last 4 KiB, once per session selection.
+The same counts serve the today/prior-session checks; missing or malformed tails
+do not count toward coverage. No process-global cache can retain stale dates.
 
 Official stock OHLCV replaces a vendor snapshot only for the same session
 (or when the snapshot has no date). Missing symbols, mismatched row dates and

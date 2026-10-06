@@ -1,5 +1,7 @@
 import io
 import tempfile
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -65,6 +67,7 @@ class DocumentTests(unittest.TestCase):
                 documents.download_pdf('https://example.com/x.pdf')
             request.assert_not_called()
 
+    @unittest.skipIf(sys.platform == "darwin", "macOS RLIMIT_AS unsupported: parser intentionally fails closed")
     def test_scanned_pdf_is_unreadable_not_invented(self):
         writer = PdfWriter(); writer.add_blank_page(width=100, height=100)
         stream = io.BytesIO(); writer.write(stream)
@@ -100,7 +103,77 @@ class DocumentTests(unittest.TestCase):
             with patch.dict('os.environ', {'EDL_FILING_PDF_LIMIT': '1'}), patch.object(documents, 'extract_document', side_effect=ValueError('invalid')) as fetch:
                 documents.enrich_documents([{'filings': rows}], root, '2026-10-04')
                 self.assertEqual(fetch.call_count, 1)
-                self.assertEqual(rows[0]['documentExtraction']['status'], 'failed')
+                selected = next(row for row in rows if 'documentExtraction' in row)
+                self.assertEqual(selected['documentExtraction']['status'], 'failed')
                 self.assertEqual(classify_filing(rows[0])['topics'], ['corporate_guarantee'])
-                documents.enrich_documents([{'filings': rows[:1]}], root, '2026-10-04')
+                documents.enrich_documents([{'filings': [selected]}], root, '2026-10-04')
                 self.assertEqual(fetch.call_count, 1)
+
+
+class ReviewRegressionTests(unittest.TestCase):
+    def test_conditional_execution_and_signed_execution_are_distinct(self):
+        for text, expected in [
+            ('Execution of binding term sheet subject to board approval', 'conditional'),
+            ('Signing of binding term sheet subject to shareholder approval', 'conditional'),
+            ('Signed binding term sheet subject to regulatory approval', 'executed')]:
+            result = classify_filing({'caption': text})
+            event = next(e for e in result['events'] if e['topic'] == 'strategic_agreement')
+            self.assertEqual(event['status'], expected)
+            self.assertEqual(event['agreementStage'], expected)
+            self.assertEqual(event['transactionStage'], 'unknown')
+
+    def test_loan_not_strategic_and_explicit_collaboration_is(self):
+        loan = classify_filing({'caption': 'Execution of loan agreement'})
+        self.assertEqual(loan['topics'], ['borrowing'])
+        partnership = classify_filing({'caption': 'Execution of collaboration services agreement with UBS'})
+        self.assertIn('strategic_agreement', partnership['topics'])
+
+    def test_evidence_is_bounded_and_contains_late_match(self):
+        raw = 'background ' * 2000 + 'Corporate guarantee enhanced for subsidiary ABC'
+        event = classify_filing({'news_body': raw})['events'][0]
+        excerpt = event['evidence']['excerpt']
+        self.assertLessEqual(len(excerpt), 360)
+        self.assertIn('Corporate guarantee', excerpt)
+        self.assertIn(excerpt, raw)
+        self.assertFalse(any(k.startswith('_') for k in event['evidence']))
+
+    def test_equivalent_copies_merge_but_independent_events_remain(self):
+        result = classify_filing({'caption': 'Corporate guarantee for ABC', 'news_body': 'Please find attached intimation regarding corporate guarantee for ABC.'})
+        self.assertEqual(len(result['events']), 1)
+        result = classify_filing({'caption': 'Corporate guarantee for ABC; corporate guarantee for XYZ'})
+        self.assertEqual(len(result['events']), 2)
+
+    def test_pdf_sort_is_stable_and_invalid_budget_falls_back(self):
+        rows = [{'caption': 'Corporate guarantee', 'news_date': '2026-10-01', 'file_url': f'https://www.bseindia.com/{i}.pdf'} for i in range(3)]
+        selected = []
+        for ordered in (rows, list(reversed(rows))):
+            with tempfile.TemporaryDirectory() as directory, patch.dict('os.environ', {'EDL_FILING_PDF_LIMIT': '1'}), patch.object(documents, 'extract_document', return_value={'status': 'unreadable'}) as fetch:
+                documents.enrich_documents([{'filings': [dict(r) for r in ordered]}], Path(directory), '2026-10-04')
+                selected.append(fetch.call_args.args[0])
+        self.assertEqual(selected[0], selected[1])
+        with tempfile.TemporaryDirectory() as directory, patch.dict('os.environ', {'EDL_FILING_PDF_LIMIT': 'invalid'}):
+            result = documents.enrich_documents([], Path(directory), '2026-10-04')
+            self.assertEqual(result['limit'], 20)
+
+    def test_parser_has_resource_limits_and_timeout(self):
+        import resource
+        writer = PdfWriter(); writer.add_blank_page(width=100, height=100)
+        stream = io.BytesIO(); writer.write(stream)
+        with patch.object(resource, 'setrlimit') as limits:
+            self.assertEqual(documents._parse_pdf(stream.getvalue())['status'], 'unreadable')
+            self.assertEqual(limits.call_args_list[0].args, (resource.RLIMIT_AS, (384 * 1024 * 1024,) * 2))
+            self.assertEqual(limits.call_args_list[1].args, (resource.RLIMIT_CPU, (10, 10)))
+        with patch.object(documents, 'download_pdf', return_value=stream.getvalue()), patch.object(documents.subprocess, 'run', side_effect=subprocess.TimeoutExpired('parser', 15)) as run:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                documents.extract_document('https://www.bseindia.com/x.pdf')
+            self.assertEqual(run.call_args.kwargs['timeout'], 15)
+            self.assertTrue(run.call_args.kwargs['check'])
+
+    def test_chart_metadata_is_independent_of_attempt_time(self):
+        classified = classify_filings([{'caption': 'Corporate guarantee', 'news_date': '2026-10-01'}])[0]
+        outputs = []
+        for attempted in ('2026-10-01', '2026-10-02'):
+            row = {**classified, 'documentExtraction': {'status': 'failed', 'error': 'HTTPError', 'attemptedAt': attempted}}
+            outputs.append(_filing_events({'records': [{'symbol': 'ABC', 'filings': [row]}]}, '2026-10-04'))
+        self.assertEqual(outputs[0], outputs[1])
+        self.assertNotIn('attemptedAt', outputs[0]['ABC'][0]['documentExtraction'])

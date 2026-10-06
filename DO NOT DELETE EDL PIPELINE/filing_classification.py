@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-VERSION = 4
+VERSION = 5
 
 # Stable IDs, group, display name, and deliberately specific text rules.
 _GROUPS = {
@@ -33,7 +33,7 @@ _GROUPS = {
     "strategic": [("acquisition", "Acquisition", r"\bacquisition\b"),
                   ("merger", "Merger / demerger", r"\bmerger\b|\bdemerger\b|amalgamation|scheme of arrangement"),
                   ("joint_venture", "Joint venture", r"joint venture"),
-                  ("strategic_agreement", "Strategic agreement / partnership", r"(?:non binding |binding )?term sheet|memorandum of understanding|strategic .{0,40}tie up|(?:collaboration|cooperation|partnership|joint venture|power purchase) agreement|(?:execution|executed|signed|signing|entered into).{0,60}(?:agreement|contract)"),
+                  ("strategic_agreement", "Strategic agreement / partnership", r"(?:non binding |binding )?term sheet|memorandum of understanding|strategic .{0,40}tie up|(?:collaboration|cooperation|partnership|joint venture|power purchase) agreement|(?:execution|executed|signed|signing|entered into).{0,60}(?:strategic|collaboration|cooperation|partnership|joint venture|power purchase).{0,40}(?:agreement|contract)"),
                   ("divestment", "Divestment", r"disinvestment|divestment|sale or disposal"),
                   ("subsidiary", "New venture / subsidiary", r"incorporation|new subsidiary|new venture")],
     "capital": [("bonus_split", "Bonus / split", r"\bbonus\b|stock split|sub division"),
@@ -95,6 +95,31 @@ _LEGAL_ORDER = re.compile(r"tax officer|tax assessment|tax demand|assessment ord
 _COMMERCIAL_ORDER = re.compile(r"purchase order|commercial order|contract|letter of acceptance|letter of award")
 _RETROSPECTIVE_DOCUMENTS = {'investor_presentation', 'annual_report', 'call_transcript'}
 _TOPIC_GROUP = {row['id']: row['group'] for row in TAXONOMY}
+_TOPIC_RULE = {key: rx for key, _, _, rx in RULES}
+
+
+def _clause_identity(text):
+    text = re.sub(r'^please find (?:attached|enclosed)(?: herewith)?(?: an?| the)?(?: intimation)?(?: regarding| about| of)?\s+', '', text)
+    return hashlib.sha256(text.encode()).hexdigest()[:24]
+
+
+def _evidence_excerpt(raw, topic):
+    """Keep a literal, bounded window containing the matched topic."""
+    if len(raw) <= 360:
+        return raw
+    match = _TOPIC_RULE[topic].search(_text(raw))
+    if match is None and topic == 'litigation':
+        match = _LEGAL_ORDER.search(_text(raw))
+    target = match.start() if match else 0
+    offset = 0
+    position = 0
+    for token in re.finditer(r'[a-z0-9]+', raw, re.I):
+        if offset + len(token.group()) > target:
+            position = token.start()
+            break
+        offset += len(token.group()) + 1
+    start = max(0, position - 100)
+    return raw[start:start + 360]
 
 
 def _event_status(topic, text):
@@ -105,7 +130,7 @@ def _event_status(topic, text):
             return status
         if re.search(r'\bnot (?:yet )?(?:been )?(?:signed|executed|entered into)\b', text):
             return 'not_executed'
-        if re.search(r'\bexecution of|\bexecuted\b|\bsigned\b|\bsigning of|\bentered into\b', text):
+        if re.search(r'\b(?:executed|signed|entered into)\b', text) or (status != 'conditional' and re.search(r'\b(?:execution|signing) of\b', text)):
             return 'executed'
         return status if status in {'conditional', 'approved'} else 'unspecified'
     if topic in {'acquisition', 'merger', 'divestment', 'joint_venture'} and status == 'completed':
@@ -134,7 +159,7 @@ def _event_details(topic, match, status):
             details['instrument'] = 'mou'
         else:
             details['instrument'] = 'agreement'
-        details['agreementStage'] = status if status in {'executed', 'not_executed', 'proposed', 'approved', 'cancelled', 'withdrawn'} else 'unknown'
+        details['agreementStage'] = status if status in {'executed', 'not_executed', 'proposed', 'approved', 'conditional', 'cancelled', 'withdrawn'} else 'unknown'
     elif topic == 'letter_of_intent':
         details['instrument'] = 'letter_of_intent'
     elif topic in {'acquisition', 'merger', 'divestment', 'joint_venture'}:
@@ -152,7 +177,7 @@ def _status(text):
                          r"|\bapproval.{0,20}\bnot (?:yet )?(?:been )?(?:granted|received|obtained|secured)\b"
                          r"|\bnot (?:yet )?(?:been )?(?:granted|received|obtained|secured)(?: \w+){0,3} approval\b"),
         ("revised", r"revised|revision|corrigendum|restatement"),
-        ("conditional", r"if any|subject to approval|subject to .*conditions"),
+        ("conditional", r"if any|subject to (?:[a-z]+ ){0,4}approval|subject to .*conditions"),
         ("proposed", r"to consider|scheduled|proposal|proposed|plans to|pending approval|awaiting approval|approval (?:pending|awaited)"),
         ("completed", r"completed|completion|commissioned|commenced|inaugurat"),
         ("approved", r"approved|declared|(?:granted|received|obtained|secured).{0,40}approval|approval.{0,40}(?:granted|received|obtained)"),
@@ -243,7 +268,8 @@ def classify_filing(filing):
                 continue
             if key in {"kmp_change", "director_change", "secretary_change"} and not re.search(r"appoint|resign|retire|change|cessation|demise", text):
                 continue
-            item = {"field": field, "excerpt": raw, "status": _event_status(key, text),
+            item = {"field": field, "excerpt": _evidence_excerpt(raw, key), "status": _event_status(key, text),
+                    "clauseId": _clause_identity(text), "_raw": raw,
                     "reference": "historical" if re.search(r"previously announced|earlier announcement|last year", text) else "unspecified",
                     "match": "text_rule"}
             if key in {"regulatory_approval", "regulatory_update"}:
@@ -272,7 +298,7 @@ def classify_filing(filing):
     if len(evidence) > 1:
         evidence.pop("general_announcement", None)
     if 'regulatory_approval' in evidence and 'regulatory_update' in evidence:
-        negative_clauses = {(m['field'], m['excerpt']) for m in evidence['regulatory_update']
+        negative_clauses = {(m['field'], m.get('clauseId', m['excerpt'])) for m in evidence['regulatory_update']
                             if m.get('outcome') in {'restriction', 'adverse_observations',
                                                    'restriction_lifted', 'no_adverse_observations'}}
         if negative_clauses:
@@ -280,7 +306,7 @@ def classify_filing(filing):
             approvals = [m for m in evidence['regulatory_approval']
                          if m['match'] == 'text_rule'
                          and m.get('outcome') == 'approval'
-                         and (m['field'], m['excerpt']) not in negative_clauses]
+                         and (m['field'], m.get('clauseId', m['excerpt'])) not in negative_clauses]
             if approvals:
                 evidence['regulatory_approval'] = approvals
             else:
@@ -294,13 +320,14 @@ def classify_filing(filing):
         for match in selected:
             status = match['status']
             if 'board_intimation' in evidence and topic not in _WRAPPERS and status not in {'withdrawn', 'cancelled'}:
-                status = 'conditional' if 'if any' in _text(match['excerpt']) else 'proposed'
+                status = 'conditional' if 'if any' in _text(match.get('_raw', match['excerpt'])) else 'proposed'
             if topic == 'board_intimation':
                 status = 'proposed'
-            details = _event_details(topic, match, status)
-            key = (status, match['reference'], match.get('outcome'), details.get('instrument'), match['excerpt'])
+            details = _event_details(topic, {**match, 'excerpt': match.get('_raw', match['excerpt'])}, status)
+            key = (status, match['reference'], match.get('outcome'), details.get('instrument'),
+                   match.get('clauseId') or _clause_identity(_text(match['excerpt'])))
             variants.setdefault(key, {"topic": topic, "status": status, "reference": match['reference'],
-                                      "ruleId": f"v{VERSION}:{topic}", "evidence": match, **details})
+                                      "ruleId": f"v{VERSION}:{topic}", "evidence": {k: v for k, v in match.items() if not k.startswith('_')}, **details})
         events.extend(variants.values())
     statuses = {e['status'] for e in events if e['topic'] not in _WRAPPERS and e['status'] != 'unspecified'}
     if not statuses:

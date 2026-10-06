@@ -61,7 +61,7 @@ linking is deferred until there is a reliable matching contract.
 
 ## Rules and meaning
 
-Version 4 includes `filing_source_labels.json`: exact normalized mappings for
+Version 5 includes `filing_source_labels.json`: exact normalized mappings for
 244 descriptor labels, 121 announcement types and four category labels observed
 in the retained archive. Normalization folds punctuation and case. Known
 ambiguous labels (such as Appointment or Meeting Updates) intentionally map to
@@ -75,7 +75,8 @@ call transcripts retain stricter topic refinement to avoid promoting historical
 achievements into new announcements. Multiple topics are allowed;
 document type and status are separate fields. Each `events` entry carries its
 topic, status, reference, versioned rule ID and the source field/excerpt used.
-Status can be proposed, conditional, approved, completed, not_completed, not_approved,
+Status can be proposed, conditional, approved, executed, not_executed, completed,
+not_completed, not_approved,
 withdrawn, cancelled, revised, adverse, restriction_lifted or unspecified.
 The top-level status reflects explicit substantive non-wrapper statuses first.
 It is `mixed` when those statuses differ; wrapper statuses are used only when
@@ -132,7 +133,7 @@ The historical archive is large. Publication reclassifies it in memory with the
 existing artifact builder; an incremental classified cache is deferred until
 measured runtime justifies the extra storage and invalidation logic.
 
-## Version 4 event model and selective documents
+## Version 5 event model and selective documents
 
 Output explicitly identifies itself as `evidence_based_topic_tags`. Existing
 filing IDs, topics, event status, rule IDs and source excerpts remain available.
@@ -142,7 +143,7 @@ New exact topics are `strategic_agreement`, `corporate_guarantee` and
 `letter_of_intent`. `joint_venture` now requires an explicit JV description;
 MoU labels map to strategic agreements. `borrowing` describes borrowing/loans;
 guarantee source labels map to corporate guarantees. Existing topic IDs remain
-in the taxonomy, but consumers should follow these refined meanings in version 4.
+in the taxonomy, but consumers should follow these refined meanings in version 5.
 An intent letter alone is not an order win; commercial letters of award/acceptance
 are recognised while the legal-order exclusion remains.
 
@@ -163,14 +164,17 @@ During `build_filing_history_artifact.py`, both daily and weekly pipelines now
 attempt PDFs for ambiguous generic disclosures or agreement/guarantee/intent
 filings from the latest 14 calendar days relative to the cache publication date.
 Default budget: 20 attempts per run. `EDL_FILING_PDF_LIMIT=0` disables new downloads;
-values are capped at 100. Newest eligible filings are attempted first. This is a
+values are capped at 100; invalid values warn and fall back to 20. Newest eligible filings are attempted first, with a stable document-key tiebreaker. This is a
 bounded enrichment pass, not a complete historical attachment backfill; an
 oversized backlog can age out without extraction.
 
 Downloads allow only HTTPS BSE/NSE archive hosts, validate redirects, impose
 network timeouts and a 4 MiB file limit. Extraction uses pypdf, reads at most five
 pages and retains at most 4,000 characters per page. Page/character truncation
-is recorded. Download time is bounded; PDF parser CPU is not a hard deadline.
+is recorded. PDF parsing runs in a separate process with a 384 MiB address-space limit,
+a 10-second CPU limit and a 15-second wall timeout. Unsupported isolation fails
+closed to metadata-only tags (including the current macOS Python runner, whose
+address-space limit is unsupported; the production Ubuntu runner supports it).
 Encrypted, scanned/image-only, malformed or inaccessible files retain their
 metadata tags; no OCR or AI inference is performed. Failures retry no sooner
 than the next day. No attachment failure blocks normal filing publication.
@@ -185,10 +189,20 @@ This runner cache is not a durable backup guarantee.
 The raw provider cache is not rewritten. Extracted text is used only in the
 derived classification. Public filing/chart output includes exact evidence with
 `document_page_N` references and extraction status/hash/truncation metadata,
-not whole PDF text or binaries. The existing chart/R2 publication path is reused.
+not whole PDF text or binaries. Chart metadata excludes wall-clock retry times. The existing chart/R2 publication path is reused.
 
 Regression tests cover the observed Optiemus-style failure, guarantees, intent
 versus award, mixed events, negation, non-binding agreements, historical
 presentations, cache reuse and PDF-to-chart publication. These fixtures do not
 establish an archive-wide accuracy percentage. Broader independently labelled
 validation is still required before treating tags as authoritative categories.
+
+
+Version 5 preserves conditional execution nouns ("execution of ... subject to
+board approval") unless actual signing/execution is explicit. Ordinary loan
+agreements no longer use the strategic-agreement fallback. Evidence excerpts
+are literal windows of at most 360 characters around the topic match; full
+clauses are used only internally to determine status and instrument. A stable
+normalized clause ID collapses equivalent headline/body copies, including simple
+attachment boilerplate, while different substantive clauses remain separate.
+This is conservative normalization, not fuzzy event merging.

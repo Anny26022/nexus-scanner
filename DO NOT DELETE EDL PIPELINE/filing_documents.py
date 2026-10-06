@@ -2,6 +2,10 @@
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 import io
+import json
+import subprocess
+import sys
+from pathlib import Path
 import os
 import time
 from urllib.parse import urlsplit, urljoin
@@ -38,9 +42,12 @@ def download_pdf(url):
     raise ValueError('Too many disclosure redirects')
 
 
-def extract_document(url):
+def _parse_pdf(data):
+    # Fail closed if resource isolation is unsupported on the runner.
+    import resource
+    resource.setrlimit(resource.RLIMIT_AS, (384 * 1024 * 1024,) * 2)
+    resource.setrlimit(resource.RLIMIT_CPU, (10, 10))
     from pypdf import PdfReader
-    data = download_pdf(url)
     reader = PdfReader(io.BytesIO(data))
     if reader.is_encrypted:
         raise ValueError('Encrypted disclosure')
@@ -52,18 +59,30 @@ def extract_document(url):
             'truncated': len(reader.pages) > 5 or any(len(p['text']) == 4000 for p in pages)}
 
 
+def extract_document(url):
+    data = download_pdf(url)
+    parsed = subprocess.run([sys.executable, str(Path(__file__).resolve()), '--parse'],
+                            input=data, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                            timeout=15, check=True)
+    return json.loads(parsed.stdout)
+
+
 def enrich_documents(records, root, as_of):
     from filing_classification import classify_filing, _WRAPPERS
     path = root / 'filing_history_data/document_text.json'
     cache = load_json(path, default={})
-    limit = max(0, min(100, int(os.environ.get('EDL_FILING_PDF_LIMIT', '20'))))
+    try:
+        limit = max(0, min(100, int(os.environ.get('EDL_FILING_PDF_LIMIT', '20'))))
+    except (TypeError, ValueError):
+        limit = 20
+        print('WARNING: Invalid EDL_FILING_PDF_LIMIT; using 20.')
     cutoff = (date.fromisoformat(as_of) - timedelta(days=14)).isoformat()
     # Include old cached documents for deterministic reclassification; only
     # uncached recent disclosures may trigger a download.
     candidates = [row for record in records for row in record.get('filings', [])
                   if urlsplit(str(row.get('file_url') or '')).hostname in HOSTS
                   and (document_key(row) in cache or cutoff <= str(row.get('news_date') or '')[:10] <= as_of)]
-    candidates.sort(key=lambda row: str(row.get('news_date') or ''), reverse=True)
+    candidates.sort(key=lambda row: (str(row.get('news_date') or ''), document_key(row)), reverse=True)
     fetched = 0
     now = datetime.now(timezone.utc)
     for row in candidates:
@@ -89,3 +108,9 @@ def enrich_documents(records, root, as_of):
         save_json(path, cache, ensure_ascii=False)
     print(f'Disclosure PDFs attempted: {fetched}; limit: {limit}.')
     return {'attempted': fetched, 'limit': limit}
+
+
+if __name__ == '__main__':
+    if sys.argv[1:] != ['--parse']:
+        raise SystemExit('Use the filing-history builder to fetch documents.')
+    print(json.dumps(_parse_pdf(sys.stdin.buffer.read(MAX_BYTES + 1))))

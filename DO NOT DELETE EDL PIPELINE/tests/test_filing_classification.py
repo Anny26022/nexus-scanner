@@ -189,6 +189,11 @@ class FilingClassificationTests(unittest.TestCase):
                                 ('Cancelled revised dividend', 'cancelled')]:
             with self.subTest(caption=caption):
                 self.assertEqual(classify_filing({'caption': caption})['status'], status)
+        result = classify_filing({'caption':'Revised and approved dividend; withdrew rights issue'})
+        self.assertEqual(result['status'], 'mixed')
+        dividend = next(e for e in result['events'] if e['topic'] == 'dividend')
+        self.assertEqual(dividend['status'], 'revised')
+        self.assertEqual(dividend['evidence']['excerpt'], 'Revised and approved dividend')
 
     def test_rta_certificate_is_only_compliance_and_wrapper_status_is_secondary(self):
         result = classify_filing({'descriptor': 'Reg. 7(3) Compliance Certificate - RTA & Compliance Officer'})

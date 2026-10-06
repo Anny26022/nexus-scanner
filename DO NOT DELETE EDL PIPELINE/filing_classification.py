@@ -129,17 +129,22 @@ def _regulatory(text):
 
 
 def _clauses(filing):
+    boundary = r"[;\n]|[.!?](?=\s+[A-Z]|\s*$)|\band\b(?=\s+(?:approved|withdrew|withdrawn|cancelled|proposed|declared|completed))"
     for field in ("caption", "news_body"):
-        revision_prefix = ""
-        for clause in re.split(r"[;\n]|[.!?](?=\s+[A-Z]|\s*$)|\band\b(?=\s+(?:approved|withdrew|withdrawn|cancelled|proposed|declared|completed))", str(filing.get(field) or "")):
-            if clause.strip():
-                if _text(clause) in {"revised", "revision", "corrigendum", "restatement"}:
-                    revision_prefix = clause.strip()
-                    continue
-                if revision_prefix:
-                    clause = f"{revision_prefix} {clause.strip()}"
-                    revision_prefix = ""
-                yield field, clause.strip(), _text(clause)
+        raw = str(filing.get(field) or "")
+        start = 0
+        for match in re.finditer(boundary, raw):
+            clause = raw[start:match.start()].strip()
+            # Keep a correction modifier attached to its action and preserve
+            # the literal source excerpt, including the joining word.
+            if match.group() == "and" and _text(clause) in {"revised", "revision", "corrigendum", "restatement"}:
+                continue
+            if clause:
+                yield field, clause, _text(clause)
+            start = match.end()
+        clause = raw[start:].strip()
+        if clause:
+            yield field, clause, _text(clause)
 
 
 def classify_filing(filing):

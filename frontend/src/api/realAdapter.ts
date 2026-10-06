@@ -123,7 +123,7 @@ class RealDataAdapter {
   async runScreen(req: ScreenerRunRequest): Promise<ScreenerRunResponse> {
     const source = await snapshotSource(req.datasetRevision);
     const snapshot = req.textQuery?.trim()
-      ? {type:'screen' as const, source, revision:source.revision, sessionDate:source.sessionDate ?? '', result:null}
+      ? {type:'screen' as const, source, revision:source.revision, sessionDate:source.sessionDate ?? req.asOfDate, result:null}
       : await runSnapshotTask({type:'screen',source,request:req});
     if (snapshot.type !== 'screen') throw new Error('Unexpected scanner response');
     if (snapshot.result) return snapshot.result;

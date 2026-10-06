@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { explainCondition, explainExpressionTree } from '../utils/nqlParser';
 import { ExpressionGroupNode, ActiveCondition } from '../types/screener';
 
@@ -37,17 +38,25 @@ describe('Nexus Query Language (NQL) & Expression Serialization', () => {
           type: 'condition',
           condition: {
             instanceId: 'c3',
-            conditionId: 'mom_delivery_vol',
+            conditionId: 'mom_delivery_pct',
             parameters: { minDeliveryPct: 50 },
           },
         },
       ],
     };
 
-    for (const session of ['2023-11-15', '2026-10-02']) {
-      const exp = explainExpressionTree(tree, session);
-      expect(exp.compiledExplanations[0].isDataAvailableForSession).toBe(true);
-      expect(exp.warnings).toEqual([]);
+    // The legacy ID is no longer in the UI catalog. Register its definition
+    // so this regression actually reaches the former calendar-date gate.
+    const delivery = NEXUS_CONDITION_CATALOG.find(item => item.id === 'mom_delivery_vol')!;
+    NEXUS_CONDITION_CATALOG.push({...delivery, id:'mom_delivery_pct'});
+    try {
+      for (const session of ['2023-11-15', '2026-10-02']) {
+        const exp = explainExpressionTree(tree, session);
+        expect(exp.compiledExplanations[0].isDataAvailableForSession).toBe(true);
+        expect(exp.warnings).toEqual([]);
+      }
+    } finally {
+      NEXUS_CONDITION_CATALOG.pop();
     }
   });
 });

@@ -160,6 +160,21 @@ class TrendScannerTests(unittest.TestCase):
         self.assertEqual(weekly_result["status"], "match")
         self.assertTrue(weekly_result["conditions"][0]["details"]["provisional"])
 
+    def test_completed_week_includes_friday_and_excludes_developing_monday(self):
+        dates = pd.bdate_range("2026-01-05", periods=15)
+        frame = pd.DataFrame({"Date":dates,"Open":100.,"Close":100.,"Volume":100.,
+                              "High":[160.] * 10 + [150.] * 5,
+                              "Low":[40.] * 10 + [50.] * 5})
+        rule = {"kind":"INSIDE_BAR","params":{"timeframe":"WEEKLY","weeklyMode":"COMPLETED","consecutive":1}}
+        friday = evaluate_history(frame, [rule])
+        self.assertEqual(friday["status"], "match")
+        self.assertEqual(friday["conditions"][0]["details"]["signal_date"], "2026-01-23")
+        monday = pd.concat([frame,pd.DataFrame({"Date":[pd.Timestamp("2026-01-26")],
+                           "Open":[100.],"Close":[100.],"High":[200.],"Low":[20.],"Volume":[100.]})],ignore_index=True)
+        self.assertEqual(evaluate_history(monday, [rule])["status"], "match")
+        rule["params"]["weeklyMode"] = "CURRENT"
+        self.assertEqual(evaluate_history(monday, [rule])["status"], "no_match")
+
     def test_gap_state_uses_prior_close_as_the_fill_level(self):
         frame = rising_history(30)
         frame[["Open", "High", "Low", "Close"]] = frame[["Open", "High", "Low", "Close"]].astype(float)
@@ -316,6 +331,25 @@ class TrendScannerTests(unittest.TestCase):
         # because the frame ends at that candidate pivot.
         self.assertNotEqual(without_confirmation["status"], "match")
         self.assertEqual(with_confirmation["status"], "no_match")
+
+    def test_advanced_integer_inputs_reject_fractional_values(self):
+        for rule in [
+            {"kind":"INDICATOR_COMPARE","params":{"leftOffset":0.5}},
+            {"kind":"SUPERTREND","params":{"period":10.5}},
+            {"kind":"DIVERGENCE","params":{"pivotLeft":1.5}},
+            {"kind":"MA_CONVERGENCE","params":{"withinDays":1.5}},
+        ]:
+            with self.subTest(rule=rule), self.assertRaisesRegex(ValueError, "integer"):
+                evaluate_history(rising_history(), [rule])
+        for periods in [[9,20.5], [9,0], [9,True]]:
+            with self.subTest(periods=periods), self.assertRaisesRegex(ValueError, "positive integers"):
+                evaluate_history(rising_history(), [{"kind":"MA_CONVERGENCE","params":{"periods":periods}}])
+
+    def test_supertrend_turn_and_unwarmed_divergence_are_safe(self):
+        result = evaluate_history(rising_history(), [{"kind":"SUPERTREND","params":{"signal":"TURN"}}])
+        self.assertEqual(result["status"], "no_match")
+        rule = {"kind":"DIVERGENCE","params":{"oscPeriod":100}}
+        self.assertEqual(evaluate_history(rising_history(40), [rule])["status"], "unavailable")
 
     def test_indicator_offsets_and_supertrend_direction_are_validated(self):
         with self.assertRaisesRegex(ValueError, "offsets"):

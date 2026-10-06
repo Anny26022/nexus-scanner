@@ -342,6 +342,17 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
     condition = spec.get("condition") or spec.get("id")
     if condition not in CONDITION_REGISTRY and condition != "field_comparison":
         raise ValueError(f"Unsupported trend condition: {condition!r}")
+    if condition in {"indicator_compare", "ma_convergence", "supertrend", "divergence"}:
+        for key, kind in CONDITION_REGISTRY[condition]["inputs"].items():
+            if kind != "integer" or key not in spec:
+                continue
+            raw = spec[key]
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                raise ValueError(f"{key} must be an integer.") from None
+            if isinstance(raw, bool) or not np.isfinite(value) or not value.is_integer():
+                raise ValueError(f"{key} must be an integer.")
     if frame.empty:
         return _unavailable(condition, "no_ohlcv_history")
 
@@ -390,6 +401,9 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         periods = spec.get("periods", (9, 20, 50, 200))
         if isinstance(periods, str):
             periods = [part.strip() for part in periods.split(",") if part.strip()]
+        if any(isinstance(period, bool) or not str(period).strip().isdigit()
+               or int(period) <= 0 for period in periods):
+            raise ValueError("MA convergence periods must be positive integers.")
         periods = [int(period) for period in periods]
         if len(periods) < 2 or len(set(periods)) != len(periods):
             raise ValueError("MA convergence needs at least two distinct periods.")
@@ -433,7 +447,7 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         if oscillator_name not in OSCILLATORS:
             raise ValueError(f"Unsupported divergence oscillator: {oscillator_name}")
         oscillator = indicator_series(frame, oscillator_name, int(spec.get("oscillator_period", 14)))
-        if oscillator.notna().sum() == 0:
+        if oscillator.notna().sum() < int(spec.get("pivot_left", 5)) + int(spec.get("pivot_right", 3)) + 1:
             return _unavailable(condition, "insufficient_history")
         flags, metadata = _divergence_events(frame, oscillator, spec)
         outcome = _event_result(condition, flags, spec.get("fired_within", 8), oscillator, frame=frame,

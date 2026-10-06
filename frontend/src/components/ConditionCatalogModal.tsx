@@ -1,3 +1,4 @@
+import { conditionValidationError } from '../utils/conditionValidation';
 import React, { useState } from 'react';
 import { X, Search, Sliders, RotateCcw, Check, Play, Info } from 'lucide-react';
 import { ConditionDef, ConditionCategory, ActiveCondition, MatchMode } from '../types/screener';
@@ -110,7 +111,9 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
     setLocalConditionsMap({});
   };
 
+  const validationError = conditionValidationError(localConditionsMap);
   const handleApply = () => {
+    if (validationError) return;
     onApplyConditions(localConditionsMap, localMatchMode);
     onClose();
   };
@@ -313,6 +316,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
           )}
         </div>
 
+        {validationError && <p role="alert" className="px-6 py-2 text-sm text-red-600">{validationError}</p>}
         {/* Sticky Bottom Footer Bar */}
         <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-100 bg-slate-50/50">
           <button
@@ -330,6 +334,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
             </span>
             <button
               onClick={handleApply}
+              disabled={Boolean(validationError)}
               className="flex items-center space-x-2 px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-2xs transition-all cursor-pointer"
             >
               <Play className="h-3.5 w-3.5 fill-current" />

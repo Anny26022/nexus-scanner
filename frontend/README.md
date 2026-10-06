@@ -152,7 +152,7 @@ Descriptions summarize intent; the declarative expression and parameters determi
 - SMA50 needs 50 recorded closes.
 - Average turnover is mean `close × volume`, divided by 10,000,000 for ₹Cr.
 - EMA persistence defaults to the engine's extreme-based reset rule, rather than requiring every close to remain above the EMA.
-- Weekly inside bars use ISO-week aggregates of daily OHLCV. Completed-week mode excludes a developing Monday–Thursday week; current-week mode includes it and marks the result provisional.
+- Weekly inside bars use ISO-week aggregates of daily OHLCV. Completed-week mode includes Friday-ended bars and excludes a developing Monday–Thursday week. Holiday-shortened weeks ending before Friday remain conservatively excluded without an exchange-calendar completeness marker. Current-week mode includes the latest week and marks the result provisional.
 
 See the [calculation guide](../README.md#calculation-conventions-and-formulas) and [condition engine documentation](../DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/TREND_CONDITION_ENGINE.md) for exact definitions and missing-data rules.
 

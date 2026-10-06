@@ -178,16 +178,24 @@ def _function_condition(name: str, arguments: list[str], operator: str | None = 
         left_offset = int(arguments[2])
         if left_offset < 0:
             raise ValueError("Indicator Compare offsets must be zero or positive.")
-        try:
-            fixed_value = float(arguments[4])
+        if not arguments[4]:
+            if len(arguments) < 6:
+                raise ValueError("Indicator Compare requires a numeric fixed target.")
+            fixed_value = float(arguments[5])
             right_indicator, right_period, right_offset = "", 20, 0
-            within_days = int(arguments[5]) if len(arguments) > 5 else 1
-        except ValueError:
-            right_indicator = arguments[4]
-            fixed_value = 0.0
-            right_period = int(arguments[5]) if len(arguments) > 5 else 20
-            right_offset = int(arguments[6]) if len(arguments) > 6 else 0
-            within_days = int(arguments[7]) if len(arguments) > 7 else 1
+            within_days = int(arguments[6]) if len(arguments) > 6 else 1
+        else:
+            try:
+                fixed_value = float(arguments[4])
+            except ValueError:
+                right_indicator = arguments[4]
+                fixed_value = 0.0
+                right_period = int(arguments[5]) if len(arguments) > 5 else 20
+                right_offset = int(arguments[6]) if len(arguments) > 6 else 0
+                within_days = int(arguments[7]) if len(arguments) > 7 else 1
+            else:
+                right_indicator, right_period, right_offset = "", 20, 0
+                within_days = int(arguments[5]) if len(arguments) > 5 else 1
         if right_offset < 0 or within_days <= 0:
             raise ValueError("Indicator Compare offsets must be zero or positive and withinDays must be positive.")
         return {"type": "condition", "kind": "INDICATOR_COMPARE", "params": {

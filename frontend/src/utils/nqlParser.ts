@@ -73,7 +73,7 @@ export function explainCondition(condition: ActiveCondition): {
     case 'mom_gap_up_down':
       explanation = `${p.gapType === 'gap_up' ? 'Gapped UP' : 'Gapped DOWN'} by AT LEAST ${p.minGapPct}% today`;
       break;
-    case 'mom_delivery_pct':
+    case 'mom_delivery_vol':
       explanation = `NSE Delivery Volume is AT LEAST ${p.minDeliveryPct}% of total volume`;
       break;
     case 'range_52w_high_low':

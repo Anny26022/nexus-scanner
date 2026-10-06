@@ -46,6 +46,6 @@ describe('Nexus Query Language (NQL) & Expression Serialization', () => {
 
     const exp = explainExpressionTree(tree, '2026-10-02');
     expect(exp.compiledExplanations[0].isDataAvailableForSession).toBe(true);
-    expect(exp.compiledExplanations[0].humanReadableText).toContain('NSE Delivery Volume %');
+    expect(exp.compiledExplanations[0].humanReadableText).toBe('NSE Delivery Volume is AT LEAST 50% of total volume');
   });
 });

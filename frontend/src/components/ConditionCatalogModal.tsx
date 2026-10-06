@@ -276,6 +276,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
                             </label>
                             {p.type === 'select' ? (
                               <select
+                                aria-label={p.label}
                                 value={currentValue}
                                 onChange={(e) =>
                                   handleUpdateParameter(def.id, p.id, e.target.value)
@@ -288,6 +289,14 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
                                   </option>
                                 ))}
                               </select>
+                            ) : p.type === 'boolean' ? (
+                              <input
+                                type="checkbox"
+                                aria-label={p.label}
+                                checked={Boolean(currentValue)}
+                                onChange={(e) => handleUpdateParameter(def.id, p.id, e.target.checked)}
+                                className="h-4 w-4 accent-emerald-600"
+                              />
                             ) : (
                               <input
                                 type={p.type === 'string' ? 'text' : 'number'}

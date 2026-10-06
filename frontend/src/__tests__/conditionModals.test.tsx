@@ -45,3 +45,36 @@ it.each(['catalog', 'screener'])('blocks a cleared zero-minimum field in the %s 
   fireEvent.click(button);
   expect(apply.mock.calls[0][0].DIVERGENCE.parameters.maxBarDifference).toBe(0);
 });
+
+
+it.each([
+  ['DIVERGENCE', 'invalidateOnBreak', true],
+  ['DIVERGENCE', 'invalidateOnBreak', false],
+] as const)('edits %s boolean parameters and submits a boolean', (conditionId, parameterId, initial) => {
+  const apply = vi.fn();
+  const map = active(conditionId);
+  map[conditionId].parameters[parameterId] = initial;
+  const definition = NEXUS_CONDITION_CATALOG.find(item => item.id === conditionId)!;
+  const parameter = definition.parameters.find(item => item.id === parameterId)!;
+  render(<ConditionCatalogModal isOpen onClose={vi.fn()} matchMode="all"
+    activeConditionsMap={map} onApplyConditions={apply} />);
+  fireEvent.change(screen.getByPlaceholderText(/Search indicator/), {target:{value:definition.label}});
+  const input = screen.getByRole('checkbox', {name:parameter.label});
+  expect((input as HTMLInputElement).checked).toBe(initial);
+  fireEvent.click(input);
+  expect((input as HTMLInputElement).checked).toBe(!initial);
+  fireEvent.click(screen.getByRole('button', {name:/Apply Filters/}));
+  expect(apply.mock.calls[0][0][conditionId].parameters[parameterId]).toBe(!initial);
+});
+
+
+it('preserves the existing F&O select parameter contract', () => {
+  const apply = vi.fn();
+  const definition = NEXUS_CONDITION_CATALOG.find(item => item.id === 'misc_fno_only')!;
+  render(<ConditionCatalogModal isOpen onClose={vi.fn()} matchMode="all"
+    activeConditionsMap={active('misc_fno_only')} onApplyConditions={apply} />);
+  fireEvent.change(screen.getByPlaceholderText(/Search indicator/), {target:{value:definition.label}});
+  fireEvent.change(screen.getByRole('combobox', {name:'Status'}), {target:{value:'false'}});
+  fireEvent.click(screen.getByRole('button', {name:/Apply Filters/}));
+  expect(apply.mock.calls[0][0].misc_fno_only.parameters.isFno).toBe('false');
+});

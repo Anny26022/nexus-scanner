@@ -11,7 +11,7 @@ from datetime import date, datetime, time as clock_time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from ohlcv_utils import discard_weekend_rows, is_nse_cash_session, merge_rows_by_date, nse_now, read_ohlcv_csv, rows_from_tick_data, write_ohlcv_csv
+from ohlcv_utils import discard_weekend_rows, merge_rows_by_date, nse_now, read_ohlcv_csv, rows_from_tick_data, write_ohlcv_csv
 from pipeline_utils import ensure_dir, get_headers, load_json, resolve_path
 
 # --- Configuration ---
@@ -87,7 +87,7 @@ def index_snapshot_session(directory, symbols=None, official_report=None, now=No
     """
     instant = nse_now(now)
     today = instant.date().isoformat()
-    if is_nse_cash_session(instant) or has_current_equity_session(directory, today, symbols):
+    if has_current_equity_session(directory, today, symbols):
         return today
     report = official_report if isinstance(official_report, dict) else {}
     candidate = str(report.get("as_of_date") or "")

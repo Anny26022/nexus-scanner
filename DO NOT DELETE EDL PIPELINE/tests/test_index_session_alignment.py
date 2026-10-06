@@ -65,6 +65,18 @@ class IndexSessionAlignmentTests(unittest.TestCase):
             self.assertEqual([row["Date"] for row in rows], ["2026-10-01", "2026-10-05"])
             self.assertEqual(rows[-1]["Close"], "103")
 
+    def test_daytime_requires_observed_equity_session_not_weekday_clock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for symbol in ('A','B'):(root/f'{symbol}.csv').write_text('Date\n2026-10-05\n')
+            report={'available':True,'as_of_date':'2026-10-05','retrieved_at':'2026-10-06T10:00:00+05:30'}
+            now=datetime(2026,10,6,10)
+            self.assertIsNone(index_snapshot_session(root,{'A','B'},report,now))
+            (root/'A.csv').write_text('Date\n2026-10-06\n')
+            self.assertIsNone(index_snapshot_session(root,{'A','B'},report,now))
+            (root/'B.csv').write_text('Date\n2026-10-06\n')
+            self.assertEqual(index_snapshot_session(root,{'A','B'},report,now),'2026-10-06')
+
     def test_current_equity_coverage_allows_after_close_index_snapshot(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

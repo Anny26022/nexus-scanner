@@ -18,6 +18,8 @@ NSE_HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Referer": "https://www.nseindia.com/all-reports",
 }
+# Conservative ingestion guard, not proof that an out-of-range open is genuine.
+MAX_AUCTION_ENVELOPE_DEVIATION = 0.05
 DELIVERY_FILE_KEY = "CM-BHAVDATA-FULL"
 HISTORICAL_FILE_URL = "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{date}.csv"
 
@@ -79,12 +81,20 @@ def normalize_ohlcv_row(row: dict) -> dict | None:
     # session HIGH_PRICE/LOW_PRICE envelope. Preserve every reported price and
     # derive a valid daily candle envelope instead of dropping the session.
     reported_high, reported_low = result["high"], result["low"]
+    if result['open'] > reported_high * (1 + MAX_AUCTION_ENVELOPE_DEVIATION) or result['open'] < reported_low * (1 - MAX_AUCTION_ENVELOPE_DEVIATION):
+        return None
     result["high"] = max(prices)
     result["low"] = min(prices)
     if result["high"] != reported_high or result["low"] != reported_low:
         result["reported_high"] = reported_high
         result["reported_low"] = reported_low
         result["ohlc_envelope_adjusted"] = True
+    try:
+        previous_close = float(row.get('PREV_CLOSE') or 0)
+        if math.isfinite(previous_close) and previous_close > 0:
+            result['previous_close'] = previous_close
+    except (TypeError, ValueError):
+        pass
     try:
         vwap = float(row.get("AVG_PRICE") or 0)
         volume = result["volume"]

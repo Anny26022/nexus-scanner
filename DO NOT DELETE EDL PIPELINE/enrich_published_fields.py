@@ -1,4 +1,5 @@
 """Connect staged NSE prices/dividends and verified history to published stock records."""
+import math
 from datetime import date, datetime
 from pathlib import Path
 
@@ -28,19 +29,25 @@ def enrich(stocks, bhavcopy, ledger, history_report, history_dir):
             dividends.setdefault(row["symbol"], []).append(row)
     for stock in stocks:
         symbol = stock.get("Symbol") or stock.get("symbol")
-        price = prices.get((symbol, session), {})
+        snapshot_day = listing_day(stock.get('as_of_date'))
+        official_day = listing_day(session)
+        price = prices.get((symbol, session), {}) if official_day and (snapshot_day is None or snapshot_day == official_day) else {}
+        replaced_ohlcv = False
         ohlcv_fields = ("open", "high", "low", "close", "volume")
         if all(price.get(field) is not None for field in ohlcv_fields):
             # The closed-session NSE bhavcopy is the canonical daily candle.
             # Replacing the live vendor snapshot here also prevents a mixed
             # source OHLC record when an auction open sits outside NSE's
             # reported regular-session high/low range.
+            replaced_ohlcv = True
             for field in ohlcv_fields:
                 stock[field] = price[field]
             stock["rupee_volume"] = round(price["close"] * price["volume"], 2)
             stock["as_of_date"] = session
             stock["ohlcv_source"] = "NSE daily full bhavcopy"
             stock["ohlc_envelope_adjusted"] = bool(price.get("ohlc_envelope_adjusted"))
+            stock['ohlcv_reported_high'] = price.get('reported_high', price['high'])
+            stock['ohlcv_reported_low'] = price.get('reported_low', price['low'])
         stock["vwap"] = price.get("vwap")
         stock["vwap_as_of_date"] = session if stock["vwap"] is not None else None
         stock["vwap_source"] = "NSE full bhavcopy AVG_PRICE or traded value / volume" if stock["vwap"] is not None else None
@@ -70,6 +77,17 @@ def enrich(stocks, bhavcopy, ledger, history_report, history_dir):
             if not session or row["Date"] <= session
         }.values())
         rows.sort(key=lambda row: row["Date"])
+        if replaced_ohlcv:
+            # Prefer NSE PREV_CLOSE so corporate-action reference changes use
+            # the exchange's return basis; otherwise use the prior cached close.
+            prior_rows = [row for row in rows if row['Date'] < session]
+            previous = price.get('previous_close', prior_rows[-1]['Close'] if prior_rows else None)
+            try:
+                previous = float(previous)
+                change = (float(price['close']) / previous - 1) * 100 if math.isfinite(previous) and previous > 0 else None
+                stock['change_percent'] = change if change is not None and math.isfinite(change) else None
+            except (TypeError, ValueError):
+                stock['change_percent'] = None
         listing = listing_day(stock.get("Listing Date") or stock.get("listing_date"))
         source = history_report.get("symbol_history", {}).get(symbol, {})
         first = date.fromisoformat(rows[0]["Date"]) if rows else None

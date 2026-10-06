@@ -148,8 +148,8 @@ it('runs a complete nested base preset and private metric through verified R2 sh
   expect(familyBody.rows[0].setupMatches['lib-nexus-multi-year-setup'].id).toBe('old-long');
   expect(familyBody.rows[0].setupMatches['lib-nexus-multi-year-setup'].config).toBeUndefined();
   expect(familyBody.rows[0].bases.FORMING.id).toBe('same-base');
-  const negatedFamily=leaf('lib-nexus-multi-year-setup',{});
-  negatedFamily.condition.isNegated=true;
+  const familyLeaf=leaf('lib-nexus-multi-year-setup',{});
+  const negatedFamily={...familyLeaf,condition:{...familyLeaf.condition,isNegated:true}};
   const negatedResponse=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',headers:{origin:'https://app.example'},body:JSON.stringify({...payload,expressionTree:{type:'group',operator:'any',children:[negatedFamily,leaf('FIELD_COMPARISON',{field:'close',comparison:'GREATER',value:1})]}})}),env,execution);
   expect(negatedResponse.status).toBe(200);
   const negatedBody=await negatedResponse.json() as any;

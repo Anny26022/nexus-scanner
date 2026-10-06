@@ -868,8 +868,7 @@
         "compliance"
       ],
       "reg 7 3 compliance certificate rta compliance officer": [
-        "compliance",
-        "secretary_change"
+        "compliance"
       ],
       "regulation 61 4 pcs certificate for transfer transmission transposition": [
         "compliance"
@@ -1008,5 +1007,5 @@
     "descriptor": 264
   },
   "source": "Local Dhan/ScanX filing metadata inventory, 2026-10-04",
-  "version": 2
+  "version": 3
 }

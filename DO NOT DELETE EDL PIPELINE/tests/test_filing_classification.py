@@ -162,6 +162,63 @@ class FilingClassificationTests(unittest.TestCase):
         self.assertEqual(classify_filing({'caption': 'Commercial production has not commenced'})['status'], 'not_completed')
         self.assertEqual(classify_filing({'descriptor': 'Closure of Trading Window', 'ann_type': 'Insider Trading / SAST'})['topics'], ['compliance'])
 
+    def test_negated_approval_and_completion_are_not_positive_events(self):
+        for caption in ('Dividend was not approved', 'Dividend has not yet been approved',
+                        'Dividend was not declared'):
+            with self.subTest(caption=caption):
+                result = classify_filing({'caption': caption})
+                self.assertEqual(result['status'], 'not_approved')
+                self.assertTrue(result['events'])
+                self.assertTrue(all(e['status'] != 'approved' for e in result['events']))
+        for caption in ('Regulatory approval has not yet been granted',
+                        'USFDA has not received regulatory approval'):
+            with self.subTest(caption=caption):
+                self.assertEqual(classify_filing({'caption':caption})['status'], 'not_approved')
+        for caption in ('Commissioning has not yet been completed',
+                        'Commissioning not yet been completed',
+                        'Commercial production has not yet commenced'):
+            with self.subTest(caption=caption):
+                result = classify_filing({'caption': caption})
+                self.assertEqual(result['status'], 'not_completed')
+                self.assertTrue(result['events'])
+
+    def test_revision_priority_preserves_withdrawal_and_cancellation(self):
+        for caption, status in [('Revised and approved dividend', 'revised'),
+                                ('Revised outcome dividend completed', 'revised'),
+                                ('Withdrawn revised dividend', 'withdrawn'),
+                                ('Cancelled revised dividend', 'cancelled')]:
+            with self.subTest(caption=caption):
+                self.assertEqual(classify_filing({'caption': caption})['status'], status)
+
+    def test_rta_certificate_is_only_compliance_and_wrapper_status_is_secondary(self):
+        result = classify_filing({'descriptor': 'Reg. 7(3) Compliance Certificate - RTA & Compliance Officer'})
+        self.assertEqual(result['topics'], ['compliance'])
+        self.assertEqual([e['topic'] for e in result['events']], ['compliance'])
+        result = classify_filing({'descriptor':'Board Meeting', 'caption':'Dividend withdrawn'})
+        self.assertEqual(result['status'], 'withdrawn')
+        self.assertIn(('board_intimation','proposed'), {(e['topic'],e['status']) for e in result['events']})
+
+    def test_regulatory_negative_clause_does_not_erase_separate_approval(self):
+        for update in ('USFDA warning letter', 'USFDA inspection with no adverse observations',
+                       'Import alert lifted by USFDA'):
+            with self.subTest(update=update):
+                result = classify_filing({'descriptor':'Regulatory approval',
+                                         'caption': f'USFDA approved product A; {update}'})
+                self.assertIn('regulatory_approval', result['topics'])
+                self.assertIn('regulatory_update', result['topics'])
+                approval = [e for e in result['events'] if e['topic'] == 'regulatory_approval']
+                self.assertEqual(len(approval), 1)
+                self.assertEqual(approval[0]['status'], 'approved')
+                self.assertEqual(approval[0]['evidence']['excerpt'], 'USFDA approved product A')
+
+    def test_missing_corporate_action_terms_are_absent(self):
+        self.assertEqual(classify_corporate_action({})['terms'], {})
+        action = classify_corporate_action({'action_type':'DIVIDEND', 'ex_date':'2026-10-05',
+                                           'source_details':'Dividend Rs 5 Per Share'})
+        self.assertNotIn('recordDate', action['terms'])
+        self.assertEqual(action['terms']['exDate'], '2026-10-05')
+        self.assertEqual(action['terms']['dividendAmountsRupeesPerShare'], [5.0])
+
     def test_legacy_chart_filings_have_ids_and_no_fake_endpoints(self):
         raw = {'caption': 'Dividend', 'news_date': '2026-10-05', 'sourceEndpoints': []}
         payload = {'records': [{'symbol': 'ABC', 'filings': [raw]}]}
@@ -174,6 +231,8 @@ class FilingClassificationTests(unittest.TestCase):
         result = classify_filing({'descriptor': 'Investor Presentation', 'caption': 'Investor presentation', 'news_body': 'Previously announced acquisition completed last year. Capacity enhancement in 2026.'})
         self.assertEqual(result['topics'], ['investor_presentation'])
         current = classify_filing({'caption': 'Capacity enhancement announced in 2026'})
+        self.assertIn('capex', current['topics'])
+        self.assertTrue(any(e['topic'] == 'capex' for e in current['events']))
         self.assertTrue(all(e['reference'] == 'unspecified' for e in current['events']))
         for label, subtype in [('Loss of Certificate / Duplicate Certificate', 'securities_certificate'),
                                ('Book Closure', 'book_closure'), ('Business Responsibility and Sustainability Report', 'sustainability_report')]:
@@ -219,5 +278,6 @@ class FilingClassificationTests(unittest.TestCase):
             published = chart['corporateActions'][0]
             self.assertEqual(published['adjustment_factor'], action['adjustment_factor'])
             self.assertEqual(published['share_factor'], action['share_factor'])
+            self.assertEqual(published['ex_date'], action['ex_date'])
             self.assertEqual(published['classification']['terms']['bonusRatio'], {'issued': 1, 'held': 2})
             self.assertEqual(chart['filingClassificationVersion'], VERSION)

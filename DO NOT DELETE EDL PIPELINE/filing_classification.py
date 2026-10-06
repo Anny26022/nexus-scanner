@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-VERSION = 2
+VERSION = 3
 
 # Stable IDs, group, display name, and deliberately specific text rules.
 _GROUPS = {
@@ -96,12 +96,16 @@ def _status(text):
     for status, pattern in (
         ("withdrawn", r"withdrawal|withdrawn|withdrew"),
         ("cancelled", r"cancelled|cancellation"),
-        ("not_completed", r"not (?:yet )?(?:commenced|commissioned|completed)|has not commenced"),
+        ("not_completed", r"\bnot (?:yet )?(?:been )?(?:commenced|commissioned|completed)\b"),
+        ("not_approved", r"\bnot (?:yet )?(?:been )?(?:approved|declared)\b"
+                         r"|\bno approval(?: was| has been| is)? (?:granted|received|obtained)\b"
+                         r"|\bapproval.{0,20}\bnot (?:yet )?(?:been )?(?:granted|received|obtained|secured)\b"
+                         r"|\bnot (?:yet )?(?:been )?(?:granted|received|obtained|secured)(?: \w+){0,3} approval\b"),
+        ("revised", r"revised|revision|corrigendum|restatement"),
         ("conditional", r"if any|subject to approval|subject to .*conditions"),
         ("proposed", r"to consider|scheduled|proposal|proposed|plans to|pending approval|awaiting approval|approval (?:pending|awaited)"),
         ("completed", r"completed|completion|commissioned|commenced|inaugurat"),
         ("approved", r"approved|declared|(?:granted|received|obtained|secured).{0,40}approval|approval.{0,40}(?:granted|received|obtained)"),
-        ("revised", r"revised|revision|corrigendum|restatement"),
     ):
         if re.search(pattern, text):
             return status
@@ -126,8 +130,15 @@ def _regulatory(text):
 
 def _clauses(filing):
     for field in ("caption", "news_body"):
+        revision_prefix = ""
         for clause in re.split(r"[;\n]|[.!?](?=\s+[A-Z]|\s*$)|\band\b(?=\s+(?:approved|withdrew|withdrawn|cancelled|proposed|declared|completed))", str(filing.get(field) or "")):
             if clause.strip():
+                if _text(clause) in {"revised", "revision", "corrigendum", "restatement"}:
+                    revision_prefix = clause.strip()
+                    continue
+                if revision_prefix:
+                    clause = f"{revision_prefix} {clause.strip()}"
+                    revision_prefix = ""
                 yield field, clause.strip(), _text(clause)
 
 
@@ -195,9 +206,19 @@ def classify_filing(filing):
         evidence.pop("board_intimation", None)
     if len(evidence) > 1:
         evidence.pop("general_announcement", None)
-    if 'regulatory_approval' in evidence and 'regulatory_update' in evidence and any(m.get('outcome') in {'restriction', 'adverse_observations', 'restriction_lifted', 'no_adverse_observations'} for m in evidence['regulatory_update']):
-        # A negative/cancelled approval is context, never a positive approval gate.
-        evidence.pop('regulatory_approval', None)
+    if 'regulatory_approval' in evidence and 'regulatory_update' in evidence:
+        negative_clauses = {(m['field'], m['excerpt']) for m in evidence['regulatory_update']
+                            if m.get('outcome') in {'restriction', 'adverse_observations',
+                                                   'restriction_lifted', 'no_adverse_observations'}}
+        if negative_clauses:
+            # Discard the broad approval label, not an independent approval clause.
+            approvals = [m for m in evidence['regulatory_approval']
+                         if m['match'] == 'text_rule'
+                         and (m['field'], m['excerpt']) not in negative_clauses]
+            if approvals:
+                evidence['regulatory_approval'] = approvals
+            else:
+                evidence.pop('regulatory_approval', None)
     events = []
     for topic, matches in sorted(evidence.items()):
         text_matches = [m for m in matches if m['match'] == 'text_rule']
@@ -240,8 +261,11 @@ def classify_corporate_action(action):
                          ('fundraise', r'rights'), ('buyback', r'buyback|buy back'),
                          ('merger', r'merger|demerger|scheme|amalgamation')):
         if re.search(pattern, types): topics.append(key)
-    terms = {'exDate': action.get('ex_date') or action.get('exDate'),
-             'recordDate': action.get('record_date') or action.get('recordDate')}
+    terms = {}
+    for key, value in (('exDate', action.get('ex_date') or action.get('exDate')),
+                       ('recordDate', action.get('record_date') or action.get('recordDate'))):
+        if value:
+            terms[key] = value
     if 'dividend' in topics:
         amounts = re.findall(r'\b(?:Rs\.?|Re\.?)\s*(\d+(?:\.\d+)?)\s*(?:/-)?\s*Per\s+Share', subject, re.I)
         if amounts: terms['dividendAmountsRupeesPerShare'] = [float(n) for n in amounts]
@@ -251,7 +275,8 @@ def classify_corporate_action(action):
     if 'split' in types:
         face_values = re.search(r'from\s+(?:Rs\.?|Re\.?)\s*(\d+(?:\.\d+)?).*?to\s+(?:Rs\.?|Re\.?)\s*(\d+(?:\.\d+)?)', subject, re.I)
         if face_values: terms['splitFaceValuesRupees'] = {'old': float(face_values[1]), 'new': float(face_values[2])}
-    terms['rawSubject'] = subject
+    if subject:
+        terms['rawSubject'] = subject
     return {'version': VERSION, 'topics': sorted(topics) or ['unclassified'], 'terms': terms,
             'source': 'NSE corporate actions', 'method': 'official_subject_rules'}
 

@@ -35,7 +35,7 @@ linking is deferred until there is a reliable matching contract.
 
 ## Rules and meaning
 
-Version 2 includes `filing_source_labels.json`: exact normalized mappings for
+Version 3 includes `filing_source_labels.json`: exact normalized mappings for
 244 descriptor labels, 121 announcement types and four category labels observed
 in the retained archive. Normalization folds punctuation and case. Known
 ambiguous labels (such as Appointment or Meeting Updates) intentionally map to
@@ -47,9 +47,11 @@ Specific source labels precede caption/body fallback. Generic announcements and
 procedural documents can be refined by their text. Multiple topics are allowed;
 document type and status are separate fields. Each `events` entry carries its
 topic, status, reference, versioned rule ID and the source field/excerpt used.
-Status can be proposed, conditional, approved, completed, not_completed,
+Status can be proposed, conditional, approved, completed, not_completed, not_approved,
 withdrawn, cancelled, revised, adverse, restriction_lifted or unspecified.
-The top-level status is `mixed` when events have different explicit statuses.
+The top-level status reflects explicit substantive non-wrapper statuses first.
+It is `mixed` when those statuses differ; wrapper statuses are used only when
+no substantive status is available.
 Historical-reference phrases are flagged separately; presentations do not
 automatically turn their past achievements into new announcements.
 These are textual
@@ -73,6 +75,11 @@ timestamps remain separate. Classification is recomputed from all merged source
 labels so topics, event status and document type remain consistent. This
 conservative merge can leave duplicates where
 the feeds use different timestamps or wording; it avoids erasing real updates.
+
+Version 3 rejects negated approvals and completions, preserves separate
+regulatory approval/update clauses, and treats revisions before positive
+approval/completion states. Withdrawals and cancellations take precedence.
+Missing action dates and empty subjects are omitted rather than serialized as null.
 
 ## Limits and validation
 

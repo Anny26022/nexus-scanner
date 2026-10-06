@@ -157,7 +157,7 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
         return [{key:value for key,value in record.items() if key not in provenance}
                 for record in financial_history.get(symbol, [])
                 if str(record.get("filing_date") or record.get("filedAt") or "")[:10] <= session]
-    from edl_pipeline.scanner.base_publication import compact_base_records, setup_candidate_records
+    from edl_pipeline.scanner.base_publication import compact_base_records, runtime_setup_candidate_records, runtime_setup_candidate_history_complete
     def selected_episodes(symbol):
         episodes = context.get("base_episodes", {}).get(symbol, [])
         selected_ids = {record['id'] for record in compact_base_records(episodes).values()}
@@ -193,7 +193,10 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
                          if available_filings(symbol)},
             "breadth": context.get("breadth", {}),
             "bases": {symbol: selected_episodes(symbol) for symbol in sorted(shard_symbols)},
-            "setupCandidates": {symbol: setup_candidate_records(context.get("base_episodes",{}).get(symbol,[])) for symbol in sorted(shard_symbols)},
+            # The Worker receives actionable setup witnesses, while the full
+            # episode ledger remains in the private base-history archive.
+            "setupCandidates": {symbol: runtime_setup_candidate_records(context.get("base_episodes",{}).get(symbol,[])) for symbol in sorted(shard_symbols)},
+            "setupCandidateHistoryComplete": {symbol: runtime_setup_candidate_history_complete(context.get("base_episodes",{}).get(symbol,[])) for symbol in sorted(shard_symbols)},
         }
         aux_raw = _json_bytes(aux)
         if len(aux_raw)>MAX_AUXILIARY_BYTES:raise ValueError(f"Auxiliary shard {index} exceeds the 12 MiB decoded budget; increase stable sharding before publication")

@@ -16,6 +16,10 @@ describe('correlated setup selection',()=>{
     expect(selectSetupEpisode([later,first],ipo,{}).record?.id).toBe('first');
     expect(selectSetupEpisode([first,later],ipo,{requireFirstBase:false}).record?.id).toBe('later');
   });
+  it('does not evaluate a completed setup family from a truncated live witness set',()=>{
+    const completed={...candidate('completed','2025-01-01'),stage:'PLAYED_OUT',selection:candidate('source','2025-01-01').current};
+    expect(selectSetupEpisode([completed],ipo,{setupStage:'PLAYED_OUT'},false).value).toBeNull();
+  });
   it('matches Python truth values and witness identities, including unknowns',()=>{
     const rich=candidate('rich','2025-01-01'),liquid=candidate('liquid','2025-02-01');
     (rich.current as BaseRecord).medianTurnover20=.1;(liquid.current as BaseRecord).marketCapCr=100;

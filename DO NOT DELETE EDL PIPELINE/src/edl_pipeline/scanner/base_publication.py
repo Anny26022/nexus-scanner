@@ -269,14 +269,82 @@ SETUP_CONTEXT_KEYS = PUBLIC_CONTEXT_KEYS | {'historyCoverageComplete','lifetimeP
 SETUP_BASE_KEYS = PUBLIC_BASE_KEYS | {'priorAdvance63Pct'}
 
 def setup_candidate_records(episodes):
-    """Bounded scalar candidates, excluding private slices and trade histories."""
+    """Return every compact family witness for charts and replay consumers."""
     keys={'id','symbol','stage','pivot','pivotBasis','structuralQualifiedDate','firstEligibleBase','setupCandidateOnly','distanceFromPivotPct','breakout','breakoutAgeSessions','holdsPivot','continuousHolding','config'}
     family_records=[e for e in episodes if e.get('setupCandidateOnly')]
     source=family_records if family_records else episodes
+    source=[e for e in source if e['stage'] in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT') and e['base']['ageSessions']>=e['config']['min_sessions']]
     return [{**{key:e[key] for key in keys if key in e},
              'base':{key:value for key,value in e['base'].items() if key in SETUP_BASE_KEYS},
              **{scope:{key:value for key,value in e[scope].items() if key in SETUP_CONTEXT_KEYS} for scope in ('current','selection')}}
-            for e in source if e['stage'] in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT') and e['base']['ageSessions']>=e['config']['min_sessions']]
+            for e in source]
+
+
+# These fields are the complete dependency set for the four latest-session
+# setup families.  Historical archives retain the complete episode object.
+RUNTIME_SETUP_CONTEXT_KEYS = {
+    'aboveClosing52wLow','aboveSMA50Sessions','distanceClosing52wHigh',
+    'distanceFromPivotPct','distanceSMA50','distanceSMA200',
+    'historyCoverageComplete','historyFromListing','lifetimePriceHistoryVerified',
+    'listingAgeSessionWeeks','marketCapCr','medianTurnover20',
+    'pivotVsHistoricalIntradayHigh','reclaimSMA200Age','rsChange22','rsRating',
+    'slopeSMA200','slopeTurnSMA200Age',
+}
+RUNTIME_SETUP_BASE_KEYS = {
+    'ageSessions','ageWeeks','atrContraction','atrSimpleContraction',
+    'contractionLegCount','contractionMaxRatio','depthPct','netUpDownVolume',
+    'overheadPct','priorAdvance63Pct','trueRangeContraction','volumeDryUp',
+}
+RUNTIME_SETUP_BREAKOUT_KEYS = {'date','volumeRatio','closeInRange','throughPct'}
+RUNTIME_COMPLETED_SETUPS_PER_BASIS = 2
+
+
+def _eligible_setup_candidates(episodes):
+    family=[episode for episode in episodes if episode.get('setupCandidateOnly')]
+    source=family if family else episodes
+    return [episode for episode in source
+            if episode.get('stage') in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT')
+            and episode.get('base',{}).get('ageSessions',0)>=episode.get('config',{}).get('min_sessions',0)]
+
+
+def runtime_setup_candidate_history_complete(episodes):
+    """Whether a live pack contains every completed family witness."""
+    eligible=_eligible_setup_candidates(episodes)
+    return all(sum(episode['stage']=='PLAYED_OUT' and episode.get('pivotBasis','CLOSE')==basis
+                   for episode in eligible)<=RUNTIME_COMPLETED_SETUPS_PER_BASIS
+               for basis in ('CLOSE','HIGH'))
+
+
+def runtime_setup_candidate_records(episodes):
+    """Project bounded, latest-session setup witnesses for Worker packs.
+
+    Forming, fresh and holding candidates remain available because they can
+    qualify a live scan.  Completed outcomes are research history: retain the
+    two latest witnesses per pivot basis for the latest-session endpoint and
+    keep every episode in ``base-history`` for durable replay.  This prevents
+    years of played-out pivots from inflating a live 100-symbol shard beyond
+    the Worker decoded-memory limit.
+    """
+    eligible=_eligible_setup_candidates(episodes)
+    live=[episode for episode in eligible if episode['stage']!='PLAYED_OUT']
+    completed=[]
+    for basis in ('CLOSE','HIGH'):
+        candidates=sorted((episode for episode in eligible
+                           if episode['stage']=='PLAYED_OUT' and episode.get('pivotBasis','CLOSE')==basis),
+                          key=lambda episode:(str((episode.get('breakout') or {}).get('date') or episode.get('base',{}).get('startDate') or ''),str(episode.get('id',''))), reverse=True)
+        completed.extend(candidates[:RUNTIME_COMPLETED_SETUPS_PER_BASIS])
+    keys={'id','symbol','stage','pivot','pivotBasis','firstEligibleBase','setupCandidateOnly',
+          'distanceFromPivotPct','breakoutAgeSessions','holdsPivot','continuousHolding'}
+    def project(episode):
+        record={key:episode[key] for key in keys if key in episode}
+        record['base']={key:value for key,value in episode.get('base',{}).items() if key in RUNTIME_SETUP_BASE_KEYS}
+        breakout=episode.get('breakout')
+        if isinstance(breakout,dict):
+            record['breakout']={key:value for key,value in breakout.items() if key in RUNTIME_SETUP_BREAKOUT_KEYS}
+        scope='current' if episode['stage']=='FORMING' else 'selection'
+        record[scope]={key:value for key,value in episode.get(scope,{}).items() if key in RUNTIME_SETUP_CONTEXT_KEYS}
+        return record
+    return [project(episode) for episode in sorted(live+completed,key=lambda episode:(str((episode.get('breakout') or {}).get('date') or episode.get('base',{}).get('startDate') or ''),str(episode.get('id',''))))]
 
 def runtime_base_records(episodes):
     selected=list(selected_base_episodes(episodes).values())

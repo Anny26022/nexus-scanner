@@ -5,7 +5,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 import unittest
 import numpy as np
 import pandas as pd
-from edl_pipeline.scanner.base_publication import build_base_records, selected_base_episodes, setup_candidate_records
+from edl_pipeline.scanner.base_publication import build_base_records, selected_base_episodes, setup_candidate_records, runtime_setup_candidate_records, runtime_setup_candidate_history_complete
 from edl_pipeline.scanner.base_conditions import select_setup_episode
 from edl_pipeline.scanner.base_presets import materialize_base_preset
 from edl_pipeline.scanner.presets import get_preset
@@ -101,6 +101,23 @@ class SetupSelectionTests(unittest.TestCase):
         self.assertEqual({k:v['id'] for k,v in selected_base_episodes(legacy).items()},{k:v['id'] for k,v in selected_base_episodes(enhanced).items()})
         self.assertTrue(all(v['config']['max_depth_pct']==60 for v in selected_base_episodes(enhanced).values()))
         self.assertTrue(all(e['config']['max_depth_pct']==95 for e in enhanced if e.get('setupCandidateOnly')))
+
+    def test_runtime_witnesses_keep_live_setups_and_bound_completed_history(self):
+        live=candidate('live','2026-09-01')
+        completed=[]
+        for basis in ('CLOSE','HIGH'):
+            for index in range(6):
+                record=candidate(f'{basis}-{index}',f'2026-0{index + 1}-01')
+                record.update(stage='PLAYED_OUT',pivotBasis=basis,breakout={'date':f'2026-0{index + 1}-01','volumeRatio':2,'closeInRange':.8,'throughPct':1},selection=record.pop('current'))
+                completed.append(record)
+        runtime=runtime_setup_candidate_records([live,*completed])
+        self.assertFalse(runtime_setup_candidate_history_complete([live,*completed]))
+        self.assertEqual({record['id'] for record in runtime if record['stage']=='FORMING'},{'live'})
+        self.assertEqual(len([record for record in runtime if record['stage']=='PLAYED_OUT']),4)
+        self.assertNotIn('config',runtime[0])
+        self.assertNotIn('selection',next(record for record in runtime if record['stage']=='FORMING'))
+        self.assertNotIn('current',next(record for record in runtime if record['stage']=='PLAYED_OUT'))
+        self.assertNotIn('parts',runtime[0]['base'])
 
     def test_optional_quality_and_confirmation_are_explicit(self):
         preset=get_preset('lib-nexus-vcp-setup')

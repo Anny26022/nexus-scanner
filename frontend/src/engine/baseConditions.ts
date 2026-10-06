@@ -103,10 +103,13 @@ export function baseStageForCondition(condition:EngineCondition):keyof SelectedB
 
 
 /** Existential family qualification; all clauses bind to the same candidate. */
-export function selectSetupEpisode(episodes:BaseRecord[]|undefined,preset:BasePresetDefinition,p:Record<string,unknown>):{value:Truth;record?:BaseRecord}{
+export function selectSetupEpisode(episodes:BaseRecord[]|undefined,preset:BasePresetDefinition,p:Record<string,unknown>,completedHistoryComplete=true):{value:Truth;record?:BaseRecord}{
   const leaves=materializeBasePreset(preset,p),stage=String(leaves[0].parameters.stage);
   const basis=preset.setupFamily==='blue-sky'&&(p.athPolicy??'INTRADAY_AVAILABLE')!=='CLOSING_AVAILABLE'?'HIGH':'CLOSE';
   if(episodes===undefined)return {value:null};
+  // The latest-session pack deliberately retains only a bounded completed
+  // witness set.  Never evaluate an outcome screen against that partial set.
+  if(stage==='PLAYED_OUT'&&!completedHistoryComplete)return {value:null};
   const familyRecords=episodes.filter(record=>record.setupCandidateOnly===true),source=familyRecords.length?familyRecords:episodes;
   const evaluated=source.filter(record=>(record.pivotBasis??'CLOSE')===basis&&record.stage===stage).map(record=>({record,value:and(leaves.map(leaf=>evaluateBaseCondition({[stage]:record},leaf)))}));
   const matches=evaluated.filter(item=>item.value===true).sort((a,b)=>{

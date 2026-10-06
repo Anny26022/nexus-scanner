@@ -10,6 +10,7 @@ export interface AdvancedContext {
   stock: SnapshotStock;
   bases?: BaseRecord[];
   setupCandidates?: BaseRecord[];
+  setupCandidateHistoryComplete?: boolean;
   setupMatches?: Record<string,BaseRecord>;
   session: string;
   turnover?: {dates:number[];values:(number|null)[]};
@@ -174,7 +175,7 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
   const family=definitions.find(preset=>preset.id===id&&'setupFamily' in preset);
   if(family){
     if(!context.stock.historyAligned||context.stock.asOfDate!==context.session)return null;
-    const outcome=selectSetupEpisode(context.setupCandidates,family,p);
+    const outcome=selectSetupEpisode(context.setupCandidates,family,p,context.setupCandidateHistoryComplete??true);
     if(outcome.record&&context.setupMatches)context.setupMatches[condition.instanceId??id]=outcome.record;
     return condition.isNegated?negate(outcome.value):outcome.value;
   }

@@ -144,7 +144,10 @@ class ScannerPackTests(unittest.TestCase):
             candidates=json.loads(gzip.decompress((target/archive['key'].replace('base-history/','auxiliary/')).read_bytes()))['setupCandidates']['TEST']
             self.assertTrue(any(record['pivotBasis']=='HIGH' for record in candidates))
             self.assertTrue(all('parts' not in record['base'] for record in candidates))
-            self.assertEqual({record['id'] for record in candidates},{record['id'] for record in records['TEST'] if record.get('setupCandidateOnly') and record['stage'] in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT') and record['base']['ageSessions']>=15})
+            complete={record['id'] for record in records['TEST'] if record.get('setupCandidateOnly') and record['stage'] in ('FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT') and record['base']['ageSessions']>=15}
+            self.assertTrue({record['id'] for record in candidates}.issubset(complete))
+            self.assertTrue(all('parts' not in record['base'] for record in candidates))
+            self.assertTrue(all('config' not in record for record in candidates))
             for record in runtime:
                 self.assertEqual(record['base']['parts']['full']['turnoverCr'],2)
                 self.assertEqual(record['base']['quietTurnoverCr'],2)

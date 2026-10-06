@@ -1,6 +1,6 @@
 # Filing classification
 
-The pipeline publishes 61 disclosure topics using the versioned, deterministic
+The pipeline publishes 64 disclosure topics using the versioned, deterministic
 rulebook in `DO NOT DELETE EDL PIPELINE/filing_classification.py`. Classification
 describes filing content, not financial impact or a recommendation. It does not
 claim to reproduce any other site's private classifier.
@@ -61,7 +61,7 @@ linking is deferred until there is a reliable matching contract.
 
 ## Rules and meaning
 
-Version 3 includes `filing_source_labels.json`: exact normalized mappings for
+Version 4 includes `filing_source_labels.json`: exact normalized mappings for
 244 descriptor labels, 121 announcement types and four category labels observed
 in the retained archive. Normalization folds punctuation and case. Known
 ambiguous labels (such as Appointment or Meeting Updates) intentionally map to
@@ -69,8 +69,10 @@ no topic and require text evidence. Previously unseen labels use specific regex
 rules. The dictionary is committed code/configuration, not a generated runtime
 artifact. Changes require fixture review and a classifier version increment.
 
-Specific source labels precede caption/body fallback. Generic announcements and
-procedural documents can be refined by their text. Multiple topics are allowed;
+Source labels are evidence, not a veto: current disclosure text may add independent
+topics even when a source label is specific. Annual reports, presentations and
+call transcripts retain stricter topic refinement to avoid promoting historical
+achievements into new announcements. Multiple topics are allowed;
 document type and status are separate fields. Each `events` entry carries its
 topic, status, reference, versioned rule ID and the source field/excerpt used.
 Status can be proposed, conditional, approved, completed, not_completed, not_approved,
@@ -109,7 +111,7 @@ Missing action dates and empty subjects are omitted rather than serialized as nu
 
 ## Limits and validation
 
-Rules inspect metadata/text only, not PDF attachments. They cannot prove semantic
+Rules inspect metadata and selectively extracted PDF text. They cannot prove semantic
 correctness for every record. Before enabling category filters, review a stratified
 sample, especially legal orders, defaults, governance and fundraising. Track the
 unclassified rate and refine the rulebook with regression fixtures. Importance
@@ -129,3 +131,64 @@ merge regenerates classification and publishes through the existing release flow
 The historical archive is large. Publication reclassifies it in memory with the
 existing artifact builder; an incremental classified cache is deferred until
 measured runtime justifies the extra storage and invalidation logic.
+
+## Version 4 event model and selective documents
+
+Output explicitly identifies itself as `evidence_based_topic_tags`. Existing
+filing IDs, topics, event status, rule IDs and source excerpts remain available.
+There is no importance, sentiment or recommendation score.
+
+New exact topics are `strategic_agreement`, `corporate_guarantee` and
+`letter_of_intent`. `joint_venture` now requires an explicit JV description;
+MoU labels map to strategic agreements. `borrowing` describes borrowing/loans;
+guarantee source labels map to corporate guarantees. Existing topic IDs remain
+in the taxonomy, but consumers should follow these refined meanings in version 4.
+An intent letter alone is not an order win; commercial letters of award/acceptance
+are recognised while the legal-order exclusion remains.
+
+Each event adds `family`, `evidenceBasis` and `transactionStage`. Agreement events
+also expose `instrument` (including binding versus non-binding term sheets) and
+`agreementStage`. Explicit signing/execution is `executed`, not transaction
+completion. Negated execution is `not_executed`; absent transaction evidence is
+`unknown`. Explicit "between A and B" wording can expose `partiesMentioned`;
+these are literal names, not resolved legal entities. A completion phrase must
+refer directly to the transaction. Conditional terms stay visible in the evidence.
+This remains a textual heuristic, not a universal language parser.
+
+A `documentGroupId` groups observations using the same document URL. Revisions
+retain distinct filing IDs and evidence. This does not merge different documents
+into one economic event or infer that two agreements are the same transaction.
+
+During `build_filing_history_artifact.py`, both daily and weekly pipelines now
+attempt PDFs for ambiguous generic disclosures or agreement/guarantee/intent
+filings from the latest 14 calendar days relative to the cache publication date.
+Default budget: 20 attempts per run. `EDL_FILING_PDF_LIMIT=0` disables new downloads;
+values are capped at 100. Newest eligible filings are attempted first. This is a
+bounded enrichment pass, not a complete historical attachment backfill; an
+oversized backlog can age out without extraction.
+
+Downloads allow only HTTPS BSE/NSE archive hosts, validate redirects, impose
+network timeouts and a 4 MiB file limit. Extraction uses pypdf, reads at most five
+pages and retains at most 4,000 characters per page. Page/character truncation
+is recorded. Download time is bounded; PDF parser CPU is not a hard deadline.
+Encrypted, scanned/image-only, malformed or inaccessible files retain their
+metadata tags; no OCR or AI inference is performed. Failures retry no sooner
+than the next day. No attachment failure blocks normal filing publication.
+
+The private runner cache is `filing_history_data/document_text.json`, already
+covered by the existing filing-history Actions cache and Git ignore rules.
+Keys include URL, publication timestamp, headline and body; changed metadata
+invalidates the document observation. Unchanged PDFs behind reused URLs are not
+automatically refetched. Old cached text remains usable on later publications.
+This runner cache is not a durable backup guarantee.
+
+The raw provider cache is not rewritten. Extracted text is used only in the
+derived classification. Public filing/chart output includes exact evidence with
+`document_page_N` references and extraction status/hash/truncation metadata,
+not whole PDF text or binaries. The existing chart/R2 publication path is reused.
+
+Regression tests cover the observed Optiemus-style failure, guarantees, intent
+versus award, mixed events, negation, non-binding agreements, historical
+presentations, cache reuse and PDF-to-chart publication. These fixtures do not
+establish an archive-wide accuracy percentage. Broader independently labelled
+validation is still required before treating tags as authoritative categories.

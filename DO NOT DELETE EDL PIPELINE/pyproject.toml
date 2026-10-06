@@ -27,6 +27,7 @@ dependencies = [
     "numpy>=1.24",
     "pandas>=2.0",
     "requests>=2.31",
+    "pypdf>=6.1,<7",
 ]
 
 [project.scripts]
@@ -54,6 +55,9 @@ py-modules = [
     "fetch_bulk_block_deals",
     "fetch_circuit_stocks",
     "fetch_company_filings",
+    "filing_classification",
+    "filing_documents",
+    "build_filing_history_artifact",
     "fetch_complete_price_bands",
     "fetch_corporate_actions",
     "fetch_dhan_data",

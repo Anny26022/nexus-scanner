@@ -153,7 +153,10 @@ def _filing_events(payload, as_of):
                 events[symbol].append({"date": date, "publishedAt": filing.get("news_date"),
                     "category": "Regulatory filing", "headline": filing.get("caption") or filing.get("descriptor"),
                     "url": filing.get("file_url"), "filingId": filing.get("filingId"),
-                    "classification": filing['classification'], "sourceEndpoints": filing.get("sourceEndpoints") if filing.get("sourceEndpoints") is not None else ([filing['source_endpoint']] if filing.get('source_endpoint') else []),
+                    "classification": filing['classification'],
+                    **({"documentExtraction": filing["documentExtraction"]} if filing.get("documentExtraction") else {}),
+                    **({"documentGroupId": filing["documentGroupId"]} if filing.get("documentGroupId") else {}),
+                    "sourceEndpoints": filing.get("sourceEndpoints") if filing.get("sourceEndpoints") is not None else ([filing['source_endpoint']] if filing.get('source_endpoint') else []),
                     "sourceLabels": filing.get("sourceLabels") or [{k: filing.get(k) for k in ("descriptor", "ann_type", "cat")}]})
     return events
 

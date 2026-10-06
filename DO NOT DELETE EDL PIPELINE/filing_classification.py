@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-VERSION = 3
+VERSION = 4
 
 # Stable IDs, group, display name, and deliberately specific text rules.
 _GROUPS = {
@@ -19,7 +19,8 @@ _GROUPS = {
                        ("board_outcome", "Board meeting outcome", r"outcome of board meeting|board meeting outcome|outcome without intimation"),
                        ("board_change", "Board meeting change", r"board meeting (?:rescheduled|cancelled)|reschedul.*board meeting")],
     "business": [("general_announcement", "General announcement", r"^general(?: announcements?)?$"),
-                 ("order_win", "Order win", r"award of order|receipt of order|bagging.{0,60}(?:order|contract)|awarding of orders?|(?:received|secured|awarded).{0,60}(?:contract|commercial order|purchase order)"),
+                 ("order_win", "Order win", r"award of order|receipt of order|bagging.{0,60}(?:order|contract)|awarding of orders?|letter of (?:award|acceptance)|(?:received|secured|awarded).{0,60}(?:contract|commercial order|purchase order)"),
+                 ("letter_of_intent", "Letter of intent", r"letter of intent"),
                  ("press_release", "Press release", r"press release|media release"),
                  ("business_update", "Business update / Monthly update", r"(?:monthly|quarterly|business|operational|operation) (?:business )?updates?|production figures|sales (?:performance|figures|volume)|quarterly newsletter"),
                  ("investor_presentation", "Investor presentation", r"(?:investor|corporate|earnings) (?:presentation|deck)"),
@@ -31,7 +32,8 @@ _GROUPS = {
                  ("recognition", "Award / recognition", r"award.*recognition|received .*award|won .*award")],
     "strategic": [("acquisition", "Acquisition", r"\bacquisition\b"),
                   ("merger", "Merger / demerger", r"\bmerger\b|\bdemerger\b|amalgamation|scheme of arrangement"),
-                  ("joint_venture", "Joint venture / MoU", r"joint venture|memorandum of understanding|strategic .*tie up"),
+                  ("joint_venture", "Joint venture", r"joint venture"),
+                  ("strategic_agreement", "Strategic agreement / partnership", r"(?:non binding |binding )?term sheet|memorandum of understanding|strategic .{0,40}tie up|(?:collaboration|cooperation|partnership|joint venture|power purchase) agreement|(?:execution|executed|signed|signing|entered into).{0,60}(?:agreement|contract)"),
                   ("divestment", "Divestment", r"disinvestment|divestment|sale or disposal"),
                   ("subsidiary", "New venture / subsidiary", r"incorporation|new subsidiary|new venture")],
     "capital": [("bonus_split", "Bonus / split", r"\bbonus\b|stock split|sub division"),
@@ -42,7 +44,8 @@ _GROUPS = {
                 ("fundraise", "Fundraise", r"raising of funds|funds raising|qualified institutional placement|\bqip\b|preferential issue|rights? issue|issue of securities"),
                 ("allotment", "Allotment", r"allotment of (?:equity shares|securities|warrants)|\ballotment\b"),
                 ("record_date", "Record date", r"record date"),
-                ("borrowing", "Borrowing / guarantee", r"\bborrowing\b|giving guarantees|giving .*indemnity"),
+                ("borrowing", "Borrowing / loan", r"\bborrowings?\b|loan agreement"),
+                ("corporate_guarantee", "Corporate guarantee / indemnity", r"corporate guarantee|giving guarantees|giving .{0,40}indemnity"),
                 ("esop", "ESOP allotment", r"\besop\b|\besps\b|\besos\b"),
                 ("ofs", "Offer for sale", r"offer for sale"),
                 ("debt_repayment", "Debt repayment / redemption", r"repayment of commercial paper|certificate of interest payment|\bredemption\b"),
@@ -90,6 +93,53 @@ def source_label_mapping():
 _WRAPPERS = {"board_intimation", "board_outcome", "board_change", "press_release", "general_announcement"}
 _LEGAL_ORDER = re.compile(r"tax officer|tax assessment|tax demand|assessment order|court order|tribunal order|arbitral award|adjudication|penalty|litigation")
 _COMMERCIAL_ORDER = re.compile(r"purchase order|commercial order|contract|letter of acceptance|letter of award")
+_RETROSPECTIVE_DOCUMENTS = {'investor_presentation', 'annual_report', 'call_transcript'}
+_TOPIC_GROUP = {row['id']: row['group'] for row in TAXONOMY}
+
+
+def _event_status(topic, text):
+    status = _status(text)
+    if topic == 'strategic_agreement':
+        # Settlement of a transaction is not completion of its agreement.
+        if status in {'withdrawn', 'cancelled', 'revised', 'not_approved', 'proposed'}:
+            return status
+        if re.search(r'\bnot (?:yet )?(?:been )?(?:signed|executed|entered into)\b', text):
+            return 'not_executed'
+        if re.search(r'\bexecution of|\bexecuted\b|\bsigned\b|\bsigning of|\bentered into\b', text):
+            return 'executed'
+        return status if status in {'conditional', 'approved'} else 'unspecified'
+    if topic in {'acquisition', 'merger', 'divestment', 'joint_venture'} and status == 'completed':
+        # Require completion tied to the transaction, not an unrelated action.
+        if not re.search(r'(?:completed|completion|consummated)(?: (?:of|the|proposed))* (?:acquisition|merger|divestment|joint venture)|(?:acquisition|merger|divestment|joint venture)(?: (?:has|have|was|is|been|successfully|transaction))* (?:completed|consummated)', text):
+            return 'unspecified'
+    return status
+
+
+def _event_details(topic, match, status):
+    text = _text(match['excerpt'])
+    details = {'family': _TOPIC_GROUP[topic],
+               'evidenceBasis': match['match'],
+               'transactionStage': 'unknown'}
+    if topic == 'strategic_agreement':
+        parties = re.search(r'\bbetween\s+(.{3,180}?)\s+and\s+(.{3,180}?)(?:[.;\n]|$)', match['excerpt'], re.I)
+        if parties:
+            details['partiesMentioned'] = [parties[1].strip(), parties[2].strip()]
+        if 'non binding term sheet' in text:
+            details['instrument'] = 'non_binding_term_sheet'
+        elif 'binding term sheet' in text:
+            details['instrument'] = 'binding_term_sheet'
+        elif 'term sheet' in text:
+            details['instrument'] = 'term_sheet'
+        elif 'memorandum of understanding' in text:
+            details['instrument'] = 'mou'
+        else:
+            details['instrument'] = 'agreement'
+        details['agreementStage'] = status if status in {'executed', 'not_executed', 'proposed', 'approved', 'cancelled', 'withdrawn'} else 'unknown'
+    elif topic == 'letter_of_intent':
+        details['instrument'] = 'letter_of_intent'
+    elif topic in {'acquisition', 'merger', 'divestment', 'joint_venture'}:
+        details['transactionStage'] = status if status in {'completed', 'not_completed', 'proposed', 'approved', 'conditional', 'withdrawn', 'cancelled'} else 'unknown'
+    return details
 
 
 def _status(text):
@@ -129,9 +179,12 @@ def _regulatory(text):
 
 
 def _clauses(filing):
-    boundary = r"[;\n]|[.!?](?=\s+[A-Z]|\s*$)|\band\b(?=\s+(?:approved|withdrew|withdrawn|cancelled|proposed|declared|completed))"
-    for field in ("caption", "news_body"):
-        raw = str(filing.get(field) or "")
+    boundary = r"[;\n]|[.!?](?=\s+[A-Z]|\s*$)|\band\b(?=\s+(?:approved|withdrew|withdrawn|cancelled|proposed|declared|completed|executed|signed))"
+    fields = [(field, str(filing.get(field) or '')) for field in ('caption', 'news_body')]
+    document = filing.get('documentExtraction') or {}
+    if document.get('status') == 'extracted':
+        fields.extend((f"document_page_{page['page']}", page['text']) for page in document.get('pages', []))
+    for field, raw in fields:
         start = 0
         for match in re.finditer(boundary, raw):
             clause = raw[start:match.start()].strip()
@@ -163,11 +216,18 @@ def classify_filing(filing):
             # Unseen labels can use specific rules; known ambiguous labels map to [].
             if mapped is None:
                 mapped = [key for key, _, _, rx in RULES if rx.search(value)]
+            else:
+                mapped = list(mapped)
+            # Narrow old source-label mappings without claiming a MoU is a JV.
+            if 'joint_venture' in mapped and 'joint venture' not in value and ('memorandum of understanding' in value or 'tie up' in value):
+                mapped = ['strategic_agreement' if key == 'joint_venture' else key for key in mapped]
+            if 'borrowing' in mapped and ('guarantee' in value or 'indemnity' in value):
+                mapped = ['corporate_guarantee' if key == 'borrowing' else key for key in mapped]
             for key in mapped:
                 evidence.setdefault(key, []).append({"field": field, "excerpt": str(source_labels.get(field))[:180], "status": "unspecified", "reference": "unspecified", "match": "source_label"})
     clauses = list(_clauses(filing))
     label_topics = set(evidence)
-    generic = not label_topics or label_topics <= _WRAPPERS
+    retrospective = bool(label_topics & _RETROSPECTIVE_DOCUMENTS)
     # Presentations describe many historical achievements. Refine their explicit
     # topic evidence only; do not interpret every discussed achievement as news.
     for field, raw, text in clauses:
@@ -179,11 +239,11 @@ def classify_filing(filing):
             candidates.append("litigation")
         for key in candidates:
             regulatory_refinement = key == 'regulatory_update' and 'regulatory_approval' in label_topics
-            if key == "general_announcement" or (not generic and key not in label_topics and not regulatory_refinement):
+            if key == "general_announcement" or (retrospective and key not in label_topics and not regulatory_refinement):
                 continue
             if key in {"kmp_change", "director_change", "secretary_change"} and not re.search(r"appoint|resign|retire|change|cessation|demise", text):
                 continue
-            item = {"field": field, "excerpt": raw[:180], "status": _status(text),
+            item = {"field": field, "excerpt": raw, "status": _event_status(key, text),
                     "reference": "historical" if re.search(r"previously announced|earlier announcement|last year", text) else "unspecified",
                     "match": "text_rule"}
             if key in {"regulatory_approval", "regulatory_update"}:
@@ -237,9 +297,10 @@ def classify_filing(filing):
                 status = 'conditional' if 'if any' in _text(match['excerpt']) else 'proposed'
             if topic == 'board_intimation':
                 status = 'proposed'
-            key = (status, match['reference'], match.get('outcome'))
+            details = _event_details(topic, match, status)
+            key = (status, match['reference'], match.get('outcome'), details.get('instrument'), match['excerpt'])
             variants.setdefault(key, {"topic": topic, "status": status, "reference": match['reference'],
-                                      "ruleId": f"v{VERSION}:{topic}", "evidence": match})
+                                      "ruleId": f"v{VERSION}:{topic}", "evidence": match, **details})
         events.extend(variants.values())
     statuses = {e['status'] for e in events if e['topic'] not in _WRAPPERS and e['status'] != 'unspecified'}
     if not statuses:
@@ -251,7 +312,7 @@ def classify_filing(filing):
         ('book_closure', r'book closure'), ('auditor_report', r'auditors report|limited review report'),
         ('provisional_update', r'provisional .*updates?'),
     ) if re.search(pattern, combined)]
-    return {"version": VERSION, "topics": sorted(evidence) or ["unclassified"], "events": events, "subtypes": subtypes,
+    return {"version": VERSION, "interpretation": "evidence_based_topic_tags", "topics": sorted(evidence) or ["unclassified"], "events": events, "subtypes": subtypes,
             "documentType": document_type, "status": next(iter(statuses)) if len(statuses) == 1 else 'mixed' if statuses else 'unspecified',
             "matchedRuleIds": [f"v{VERSION}:{key}" for key in sorted(evidence)],
             "method": "predefined_rules", "basis": "source_labels_and_text" if label_topics else "filing_text"}
@@ -311,6 +372,9 @@ def classify_filings(filings):
         row.setdefault("sourceEndpoints", [source] if source else [])
         row.setdefault("sourceLabels", [{k: row.get(k) for k in ("source_endpoint", "descriptor", "ann_type", "cat")}])
         row["filingId"] = hashlib.sha256(repr(identity).encode()).hexdigest()[:24]
+        if url:
+            # Shared document identity links observations/revisions, not deals.
+            row['documentGroupId'] = hashlib.sha256(url_key.encode()).hexdigest()[:24]
         result.append(row)
         seen[identity] = row
     return result

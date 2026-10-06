@@ -14,8 +14,8 @@ from pipeline_utils import save_json, load_json
 
 class FilingClassificationTests(unittest.TestCase):
     def test_taxonomy_has_unique_stable_ids(self):
-        self.assertEqual(len(TAXONOMY), 61)
-        self.assertEqual(len({r['id'] for r in TAXONOMY}), 61)
+        self.assertEqual(len(TAXONOMY), 64)
+        self.assertEqual(len({r['id'] for r in TAXONOMY}), 64)
 
     def test_all_topics_have_positive_disclosure_fixtures(self):
         fixtures = {
@@ -34,7 +34,9 @@ class FilingClassificationTests(unittest.TestCase):
             'bonus_split': 'Sub-division / Stock Split', 'buyback': 'Buy back',
             'listing': 'Delisting', 'dividend': 'Dividend', 'open_offer': 'Open Offer',
             'fundraise': 'Qualified Institutional Placement', 'allotment': 'Allotment of Equity Shares',
-            'record_date': 'Record Date', 'borrowing': 'Giving guarantees', 'esop': 'Allotment of ESOP / ESPS',
+            'record_date': 'Record Date', 'borrowing': 'Borrowing',
+            'corporate_guarantee': 'Corporate guarantee', 'strategic_agreement': 'Binding term sheet',
+            'letter_of_intent': 'Letter of intent', 'esop': 'Allotment of ESOP / ESPS',
             'ofs': 'Offer for Sale', 'debt_repayment': 'Intimation of Repayment of Commercial Paper',
             'fund_utilisation': 'Monitoring Agency Report', 'stake_change': 'Disclosures under SEBI SAST',
             'pledge': 'Pledge disclosure', 'credit_rating': 'Credit Rating', 'esg_rating': 'ESG rating',

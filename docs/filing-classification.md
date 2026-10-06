@@ -10,11 +10,37 @@ claim to reproduce any other site's private classifier.
 `fetch_company_filings.py` retains Dhan/ScanX company-filings and LODR metadata,
 including descriptor, announcement type, caption, body, publication time and
 document URL. The resumable cache remains the raw source of record.
+
+Daily and weekly refreshes catch up both feeds until a fully retained page is
+reached, or all provider-reported pages are exhausted. A mixed new/old page does
+not stop pagination. Initial LODR backfills traverse all pages. An incomplete
+catch-up also retries all reported pages, preventing its partially cached first
+page from hiding a still-missing middle. Unchanged completed histories normally
+require only page one. Recent per-symbol files retain page-one snapshots;
+additional recovered pages belong to the persistent history.
+
+Deduplication retains changed content even when a provider reuses a news ID.
+Identical observations and non-conflicting enrichment (such as adding a PDF URL
+or body) merge; conflicting captions, bodies, dates, labels or URLs remain
+separate observed versions. Cross-feed identities stay separate until publication
+merges identical documents with their provenance. This cannot detect an edited
+PDF whose URL and supplied metadata/body remain unchanged.
+
+Each history entry publishes `fetch_status` for both endpoints: `last_attempt_at`,
+`last_success_at`, `refresh_complete`, `pages_fetched`, `total_pages` and `error`.
+Success time advances only after catch-up completes; failures retain prior data
+and success time. `updated_at` records a cache update, not a successful fetch.
+`lodr_backfill_complete` describes the historical sweep and is not proof that
+both feeds refreshed today. Freshness metadata passes into the published history
+artifact. Older edits below the overlap page are not guaranteed to be revisited.
+The daily and weekly fetch behavior is identical; no extra weekly full scan is
+introduced by this change.
+
 `build_filing_history_artifact.py` classifies the entire retained history every
 publication, so rule changes also update old records without refetching them.
 The artifact contains the taxonomy, classifier version, filing count and
 unclassified count. Daily and weekly workflows already run this stage before
-chart generation.
+chart generation. No additional classified cache is introduced.
 
 `build_chart_artifacts.py` carries the classification, original publication
 timestamp, source labels, source endpoints and filing ID into per-symbol

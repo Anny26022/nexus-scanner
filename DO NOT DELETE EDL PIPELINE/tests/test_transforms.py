@@ -776,11 +776,22 @@ class ScanxMetricsTests(unittest.TestCase):
     def test_reported_borrowings_fallback_remains_available(self):
         item = self.fixture()
         item["bs_c"]["TOTAL_BORROWINGS"] = "108586.6"
-        fallback = canonicalize_stock(analyze_stock(item, {}, {}, {}))
-        self.assertAlmostEqual(fallback["debt_to_equity"], 0.1)
+        raw = analyze_stock(item, {}, {}, {})
+        self.assertEqual(raw["debt_to_equity"], raw["D/E"])
+        fallback = canonicalize_stock(raw)
+        self.assertEqual(fallback["debt_to_equity"], 0.1)
+        self.assertEqual(fallback["borrowings_crore"], 108586.6)
         self.assertEqual(fallback["debt_to_equity_source"], "TOTAL_BORROWINGS/TOTAL_EQUITY")
-        reported = canonicalize_stock(analyze_stock(item, {"Debt2Eq": 0.44}, {}, {}))
-        self.assertEqual(reported["debt_to_equity"], 0.44)
+        reported = analyze_stock(item, {"Debt2Eq": 0.441234, "Borrowings": 999}, {}, {})
+        self.assertEqual(reported["debt_to_equity"], reported["D/E"])
+        self.assertEqual(canonicalize_stock(reported)["debt_to_equity"], 0.441234)
+        self.assertEqual(reported["borrowings_crore"], 999)
+
+    def test_financing_cash_flow_uses_verified_provider_spelling(self):
+        item = self.fixture()
+        item["cF_c"] = {}
+        stock = analyze_stock(item, {"FinanacingCashFlow": -51549}, {}, {})
+        self.assertEqual(stock["financing_cash_flow_crore"], -51549)
 
     def test_verified_fields_survive_fetch_and_normalization(self):
         for fields in (DASHBOARD_FIELDS, FNO_FIELDS):

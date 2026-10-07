@@ -33,6 +33,7 @@ SCREEN_METRICS = {
     "FixedAssets": ("fixed_assets_crore", "fixedAssetsCrore"),
     "Borrowings": ("borrowings_crore", "borrowingsCrore"),
     "FreeCashFlow": ("free_cash_flow_crore", "freeCashFlowCrore"),
+    # Provider spelling verified against the ScanX screen API response.
     "FinanacingCashFlow": ("financing_cash_flow_crore", "financingCashFlowCrore"),
     "Year3ROE": ("average_roe_3y_percent", "averageRoe3yPct"),
     "Year3ROA": ("average_roa_3y_percent", "averageRoa3yPct"),

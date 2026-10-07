@@ -191,7 +191,7 @@ def valuation_fields(cv, ttm_cy, roce_roe, bs_c, eps_latest, yoy_eps, tech=None)
     return {
         "ROE(%)": roe,
         "ROCE(%)": roce,
-        "D/E": de_ratio,
+        "D/E": de_ratio if reported is not None else rounded(de_ratio),
         "debt_to_equity_source": "SCANX_Debt2Eq" if reported is not None else ("TOTAL_BORROWINGS/TOTAL_EQUITY" if de_ratio is not None else None),
         "OPM TTM(%)": get_float(ttm_cy.get("OPM")),
         "P/E": pe,
@@ -355,9 +355,9 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
     }
 
     for tag, (canonical, _public) in SCREEN_METRICS.items():
-        stock_analysis[canonical] = get_optional_float(tech.get(tag))
+        stock_analysis[canonical] = stock_analysis["D/E"] if canonical == "debt_to_equity" else get_optional_float(tech.get(tag))
     # These annual amounts are also available in the fundamental response.
-    for canonical, source in (("cwip_crore", "CWIP"), ("fixed_assets_crore", "FIXED_ASSETS")):
+    for canonical, source in (("cwip_crore", "CWIP"), ("fixed_assets_crore", "FIXED_ASSETS"), ("borrowings_crore", "TOTAL_BORROWINGS")):
         if stock_analysis[canonical] is None:
             stock_analysis[canonical] = get_value_from_pipe_string(bs_c.get(source), 0)
     if stock_analysis["financing_cash_flow_crore"] is None:

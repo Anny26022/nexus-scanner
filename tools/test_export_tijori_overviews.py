@@ -105,6 +105,32 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({r['symbol'] for r in data['records']}, {'TEST', 'NEW'})
         self.assertTrue(all(r['status'] == 'available' for r in data['records']))
 
+    async def test_visible_html_snapshot_and_watch_are_extracted(self):
+        html = """<p class="symbol">AMAGI</p>
+        <script id="companyId">59220</script>
+        <script id="memoryOverviewKeyEvents">[{"label":"Listed"}]</script>
+        <div id="company_memory_overview" data-company="Amagi Media Labs Ltd.">
+          <span class="memory_card__updated_date">15 Sep 2026</span>
+          <ul class="memory_the_read__list"><li>Cloud <b>SaaS</b> &amp; video.</li></ul>
+          <ul class="memory_what_to_watch__list"><li>
+            <span class="memory_watch__title">Margins</span>
+            <span class="memory_watch__window">Next quarter</span>
+            <div class="memory_watch__body">Watch <b>cash</b> conversion.</div>
+          </li></ul>
+        </div>"""
+        data = exporter.parse_company(html, exporter.BASE + '/company/amagi/')
+        self.assertEqual(data['symbol'], 'AMAGI')
+        self.assertEqual(data['company_id'], 59220)
+        self.assertEqual(data['memory_overview']['as_of'], '2026-09-15')
+        self.assertEqual(data['memory_overview']['the_read'], ['Cloud SaaS & video.'])
+        self.assertEqual(data['memory_overview']['what_to_watch'], [{'title': 'Margins', 'window': 'Next quarter', 'body': 'Watch cash conversion.'}])
+        self.assertEqual(data['memory_overview']['key_events'], [{'label': 'Listed'}])
+
+    async def test_visible_symbol_without_overview_is_not_an_extraction_error(self):
+        data = exporter.parse_company('<p class="symbol">TEST</p>', exporter.BASE)
+        self.assertEqual(data['symbol'], 'TEST')
+        self.assertIsNone(data['memory_overview'])
+
     async def test_publication_is_symbol_keyed_and_revision_stable(self):
         with TemporaryDirectory() as folder:
             root = Path(folder)

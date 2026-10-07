@@ -5,7 +5,6 @@ import asyncio
 from datetime import datetime, timezone
 import gzip
 import hashlib
-from html.parser import HTMLParser
 import json
 from pathlib import Path
 import re
@@ -14,6 +13,7 @@ from urllib.parse import urlencode, urlparse
 from email.utils import parsedate_to_datetime
 
 import httpx
+from bs4 import BeautifulSoup
 import xml.etree.ElementTree as ET
 
 BASE = 'https://www.tijorifinance.com'
@@ -34,23 +34,48 @@ class ExtractionError(ValueError):
         self.url = url
 
 
-class CompanyParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.active = False
-        self.parts = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag == 'script' and dict(attrs).get('id') == 'company_details_data':
-            self.active = True
-
-    def handle_data(self, value):
-        if self.active:
-            self.parts.append(value)
-
-    def handle_endtag(self, tag):
-        if tag == 'script':
-            self.active = False
+def parse_company(html, url):
+    soup = BeautifulSoup(html, 'html.parser')
+    embedded = soup.find('script', id='company_details_data')
+    if embedded:
+        try:
+            data = json.loads(embedded.get_text())
+        except ValueError as error:
+            raise ExtractionError(url, 'Invalid company_details_data JSON') from error
+        if isinstance(data, dict) and data.get('symbol'):
+            return data
+    symbol = soup.select_one('p.symbol')
+    if not symbol or not symbol.get_text(strip=True):
+        raise ExtractionError(url, 'Missing company symbol in page data')
+    card = soup.find(id='company_memory_overview')
+    overview = None
+    if card:
+        text = lambda selector: (card.select_one(selector).get_text(' ', strip=True)
+                                 if card.select_one(selector) else '')
+        date = text('.memory_card__updated_date')
+        try:
+            date = datetime.strptime(date, '%d %b %Y').date().isoformat()
+        except ValueError:
+            pass
+        overview = {
+            'as_of': date or None,
+            'the_read': [item.get_text(' ', strip=True) for item in card.select('.memory_the_read__list > li')],
+            'what_to_watch': [{key: (item.select_one(selector).get_text(' ', strip=True)
+                                    if item.select_one(selector) else '')
+                              for key, selector in [('title', '.memory_watch__title'),
+                                                    ('window', '.memory_watch__window'),
+                                                    ('body', '.memory_watch__body')]}
+                             for item in card.select('.memory_what_to_watch__list > li')],
+            'key_events': [],
+        }
+        events = soup.find('script', id='memoryOverviewKeyEvents')
+        if events:
+            overview['key_events'] = json.loads(events.get_text())
+    company_id = soup.find('script', id='companyId')
+    return {'symbol': symbol.get_text(strip=True),
+            'company': card.get('data-company') if card else None,
+            'company_id': json.loads(company_id.get_text()) if company_id else None,
+            'memory_overview': overview}
 
 
 def atomic_json(path, value):
@@ -222,17 +247,7 @@ async def main():
                         if not cached:
                             raise ValueError('304 without a cached company report')
                         return {**{k: v for k, v in cached.items() if k != 'refreshError'}, 'checkedAt': now()}
-                    html = response.text
-                    p = CompanyParser()
-                    p.feed(html)
-                    if not p.parts:
-                        raise ExtractionError(url, 'Missing company_details_data script')
-                    try:
-                        data = json.loads(''.join(p.parts))
-                    except ValueError as error:
-                        raise ExtractionError(url, 'Invalid company_details_data JSON') from error
-                    if not isinstance(data, dict) or not data.get('symbol'):
-                        raise ExtractionError(url, 'Missing company symbol in embedded data')
+                    data = parse_company(response.text, url)
                     identities.append({'sourceUrl': url, 'company': data.get('company'), 'symbol': data.get('symbol')})
                     if str(data.get('symbol', '')).upper() != stock['symbol'].upper():
                         return None

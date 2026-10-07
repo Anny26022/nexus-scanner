@@ -1,6 +1,6 @@
 # Tijori export
 
-Install the one dependency:
+Install the dependencies:
 
 ```sh
 python3 -m pip install -r tools/requirements-tijori.txt
@@ -60,3 +60,7 @@ A successful HTTP response missing valid embedded company data is an
 retry; company-symbol verification is still required before publication. HTTP
 403 remains an HTTP error. These failures are retried on subsequent runs and
 never replace a previously saved report.
+
+The parser supports both embedded company JSON and the visible snapshot/watch
+HTML used by some pages. The visible NSE symbol must match before saving either
+format.

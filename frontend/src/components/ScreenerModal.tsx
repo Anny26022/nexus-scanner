@@ -1,5 +1,5 @@
 import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
-import React, { useState } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, SlidersHorizontal, Library } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
@@ -81,83 +81,21 @@ const MultiSelectDropdown = ({ options, value, onChange }: any) => {
   );
 };
 
-export const ScreenerModal: React.FC<ScreenerModalProps> = ({
-  isOpen,
-  onClose,
-  activeConditionsMap,
-  matchMode,
-  onApply,
-}) => {
-  const [category, setCategory] = useState<ConditionCategory | 'all'>('all');
-  const [localMap, setLocalMap] = useState<Record<string, ActiveCondition>>(activeConditionsMap);
-  const [localMode, setLocalMode] = useState<MatchMode>(matchMode);
-  const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
+interface FilterRowProps {
+  def: ConditionDef;
+  active?: ActiveCondition;
+  showParameters: boolean;
+  toggle: (def: ConditionDef) => void;
+  updateParam: (condId: string, paramId: string, value: any) => void;
+}
 
-  if (!isOpen) return null;
-
-  const catalogToUse = activeTab === 'custom' ? NEXUS_CONDITION_CATALOG : PRESET_CATALOG;
-
-  const filtered = catalogToUse.filter((c) => {
-    return activeTab === 'presets' || category === 'all' || c.category === category;
-  });
-
-  const toggle = (def: ConditionDef) => {
-    setLocalMap((prev) => {
-      if (prev[def.id]) {
-        const next = { ...prev };
-        delete next[def.id];
-        return next;
-      }
-      const params: Record<string, any> = {};
-      def.parameters?.forEach((p) => (params[p.id] = p.defaultValue));
-      return {
-        ...prev,
-        [def.id]: { instanceId: `${def.id}_${Date.now()}`, conditionId: def.id, parameters: params },
-      };
-    });
-  };
-
-  const updateParam = (condId: string, paramId: string, value: any) => {
-    setLocalMap((prev) => {
-      const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === condId);
-      const existing = prev[condId];
-      if (!existing && def) {
-        const params: Record<string, any> = {};
-        def.parameters.forEach((p) => (params[p.id] = p.defaultValue));
-        params[paramId] = value;
-        if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
-          params.value = breadthMetricDefault(value);
-        }
-        return {
-          ...prev,
-          [condId]: { instanceId: `${condId}_${Date.now()}`, conditionId: condId, parameters: params },
-        };
-      }
-      if (!existing) return prev;
-      const parameters = { ...existing.parameters, [paramId]: value };
-      if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
-        parameters.value = breadthMetricDefault(value);
-      }
-      return {
-        ...prev,
-        [condId]: { ...existing, parameters },
-      };
-    });
-  };
-
-  const handleReset = () => setLocalMap({});
-
-  const validationError = conditionValidationError(localMap);
-  const handleApply = () => {
-    if (validationError) return;
-    onApply(localMap, localMode);
-    onClose();
-  };
-
+// Unchanged rows retain the same definition, condition and callback references.
+const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle, updateParam }: FilterRowProps) {
+  const checked = !!active;
   // The row title and each control's accessible label provide the context;
   // keeping the inputs compact makes dense filter groups easier to scan.
   const renderInput = (defId: string, p: ParameterSpec, checked: boolean) => {
-    const val = checked && localMap[defId] ? localMap[defId].parameters[p.id] : p.defaultValue;
+    const val = checked && active ? active.parameters[p.id] : p.defaultValue;
     let control: React.ReactNode;
     if (p.type === 'boolean') {
       control = <input aria-label={p.label} type="checkbox" checked={!!val}
@@ -200,6 +138,103 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         {p.unit && <span className="ml-1 text-[10px] text-gray-400 whitespace-nowrap">{readableUnit(p.unit)}</span>}
       </div>
     );
+  };
+
+  return (
+    <div className="grid grid-cols-[minmax(10rem,1fr)_minmax(0,auto)] items-start gap-x-3 py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 px-2 -mx-2 rounded transition-colors group">
+      <label className="flex items-center gap-2.5 cursor-pointer min-w-0 pt-1">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => toggle(def)}
+          className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
+        />
+        <span title={def.description} className={`text-[12px] font-semibold truncate ${checked ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-800'}`}>
+          {def.label}:
+        </span>
+      </label>
+
+      {/* Inputs keep their own compact groups and wrap inside this row when needed. */}
+      {showParameters && def.parameters && def.parameters.length > 0 && (
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
+          {def.parameters.map((p) => renderInput(def.id, p, checked))}
+        </div>
+      )}
+    </div>
+  );
+});
+
+export const ScreenerModal: React.FC<ScreenerModalProps> = ({
+  isOpen,
+  onClose,
+  activeConditionsMap,
+  matchMode,
+  onApply,
+}) => {
+  const [category, setCategory] = useState<ConditionCategory | 'all'>('all');
+  const [localMap, setLocalMap] = useState<Record<string, ActiveCondition>>(activeConditionsMap);
+  const [localMode, setLocalMode] = useState<MatchMode>(matchMode);
+  const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
+
+  const toggle = useCallback((def: ConditionDef) => {
+    setLocalMap((prev) => {
+      if (prev[def.id]) {
+        const next = { ...prev };
+        delete next[def.id];
+        return next;
+      }
+      const params: Record<string, any> = {};
+      def.parameters?.forEach((p) => (params[p.id] = p.defaultValue));
+      return {
+        ...prev,
+        [def.id]: { instanceId: `${def.id}_${Date.now()}`, conditionId: def.id, parameters: params },
+      };
+    });
+  }, []);
+
+  const updateParam = useCallback((condId: string, paramId: string, value: any) => {
+    setLocalMap((prev) => {
+      const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === condId);
+      const existing = prev[condId];
+      if (!existing && def) {
+        const params: Record<string, any> = {};
+        def.parameters.forEach((p) => (params[p.id] = p.defaultValue));
+        params[paramId] = value;
+        if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
+          params.value = breadthMetricDefault(value);
+        }
+        return {
+          ...prev,
+          [condId]: { instanceId: `${condId}_${Date.now()}`, conditionId: condId, parameters: params },
+        };
+      }
+      if (!existing) return prev;
+      const parameters = { ...existing.parameters, [paramId]: value };
+      if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
+        parameters.value = breadthMetricDefault(value);
+      }
+      return {
+        ...prev,
+        [condId]: { ...existing, parameters },
+      };
+    });
+  }, []);
+
+  if (!isOpen) return null;
+
+  const catalogToUse = activeTab === 'custom' ? NEXUS_CONDITION_CATALOG : PRESET_CATALOG;
+
+  const filtered = catalogToUse.filter((c) => {
+    return activeTab === 'presets' || category === 'all' || c.category === category;
+  });
+
+  const handleReset = () => setLocalMap({});
+
+  const validationError = conditionValidationError(localMap);
+  const handleApply = () => {
+    if (validationError) return;
+    onApply(localMap, localMode);
+    onClose();
   };
 
   return createPortal(
@@ -291,33 +326,10 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
 
           <div className="flex-1 overflow-y-auto p-5 bg-white overflow-x-hidden">
             <div className={`grid gap-x-8 gap-y-1 ${activeTab === 'presets' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 xl:grid-cols-2'}`}>
-              {filtered.map((def) => {
-                const active = localMap[def.id];
-                const checked = !!active;
-
-                return (
-                  <div key={def.id} className="grid grid-cols-[minmax(10rem,1fr)_minmax(0,auto)] items-start gap-x-3 py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 px-2 -mx-2 rounded transition-colors group">
-                    <label className="flex items-center gap-2.5 cursor-pointer min-w-0 pt-1">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggle(def)}
-                        className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
-                      />
-                      <span title={def.description} className={`text-[12px] font-semibold truncate ${checked ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-800'}`}>
-                        {def.label}:
-                      </span>
-                    </label>
-
-                    {/* Inputs keep their own compact groups and wrap inside this row when needed. */}
-                    {activeTab === 'custom' && def.parameters && def.parameters.length > 0 && (
-                      <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
-                        {def.parameters.map((p) => renderInput(def.id, p, checked))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {filtered.map(def => (
+                <FilterRow key={def.id} def={def} active={localMap[def.id]}
+                  showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />
+              ))}
             </div>
             
             {filtered.length === 0 && (

@@ -13,7 +13,7 @@ import export_tijori_overviews as exporter
 
 
 class ExportTests(unittest.IsolatedAsyncioTestCase):
-    async def request_sequence(self, responses, total):
+    async def request_sequence(self, responses, total, stopped=False):
         clock = [0.0]
         sleep = asyncio.sleep
         async def advance(delay):
@@ -27,7 +27,13 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
             fetcher = exporter.Fetcher(client, 8, 8)
             with patch.object(exporter, 'time', fake_time), patch.object(exporter.asyncio, 'sleep', advance):
                 for _ in range(total):
-                    await fetcher.request(exporter.BASE + '/company/test/')
+                    if stopped:
+                        with self.assertRaises(httpx.HTTPStatusError):
+                            await fetcher.request(exporter.BASE + '/company/test/')
+                        with self.assertRaisesRegex(RuntimeError, 'collection_stopped'):
+                            await fetcher.request(exporter.BASE + '/company/test/')
+                    else:
+                        await fetcher.request(exporter.BASE + '/company/test/')
             return fetcher, clock[0]
 
     async def test_successes_gradually_raise_limits(self):
@@ -40,18 +46,32 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((fetcher.capacity, fetcher.rate), (1, 1))
         self.assertGreaterEqual(elapsed, 45)
 
+    async def test_http_date_retry_after_is_honored(self):
+        _, elapsed = await self.request_sequence([(429, {'Retry-After': 'Thu, 01 Jan 1970 00:01:00 GMT'}), (200, {})], 1)
+        self.assertGreaterEqual(elapsed, 60)
+
+    async def test_three_rate_limits_stop_further_requests(self):
+        fetcher, _ = await self.request_sequence([(429, {})] * 3, 1, stopped=True)
+        self.assertTrue(fetcher.stopped)
+        self.assertEqual(fetcher.requests, 3)
+
     async def test_server_error_backs_off_then_recovers(self):
         fetcher, elapsed = await self.request_sequence([(503, {}), (200, {})], 1)
         self.assertEqual(fetcher.requests, 2)
         self.assertGreaterEqual(elapsed, 2)
 
-    async def run_refresh(self, status, compressed=False, new_stock=False, candidate=False, recovered=False):
+    async def run_refresh(self, status, compressed=False, new_stock=False, candidate=False, recovered=False, last_modified=False, sitemap_status=200, cached_sitemap=False, new_unmapped=False, bad_sitemap=False):
         with TemporaryDirectory() as folder:
             root = Path(folder)
             url = exporter.BASE + '/company/test/'
             old = {'symbol': 'TEST', 'name': 'Test', 'status': 'available', 'sourceUrl': url,
                    'sourceSymbol': 'TEST', 'fetchedAt': 'old', 'etag': 'v1',
                    'memory_overview': {'the_read': ['saved'], 'what_to_watch': []}}
+            if last_modified:
+                old.pop('etag')
+                old['lastModified'] = 'Tue, 06 Oct 2026 00:00:00 GMT'
+            if cached_sitemap:
+                (root / 'sitemap.xml').write_text(f'<urlset><url><loc>{url}</loc></url></urlset>')
             if candidate:
                 old = {'symbol': 'TEST', 'name': 'Test', 'status': 'extraction_error', 'candidateUrl': url}
             (root / 'universe.json').write_text(json.dumps({'manifest': {'sessionDate': '2026-10-06', 'revision': 'r'}, 'stocks': [{'symbol': 'TEST', 'name': 'Test'}]}))
@@ -71,10 +91,14 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
                 calls.append(request)
                 if request.url.path == '/sitemap.xml':
                     xml = f'<urlset><url><loc>{url}</loc><lastmod>2026-10-06</lastmod></url><url><loc>{exporter.BASE}/company/other/</loc><lastmod>2026-10-05</lastmod></url></urlset>'
-                    return httpx.Response(200, text=xml)
+                    return httpx.Response(sitemap_status, text='<html>Not a sitemap</html>' if bad_sitemap else xml if sitemap_status == 200 else 'unavailable')
                 if request.url.path == '/company/other/':
-                    payload = {'symbol': 'NEW', 'company_id': 2, 'memory_overview': {'the_read': ['new listing'], 'what_to_watch': []}}
+                    payload = {'symbol': 'OTHER' if new_unmapped else 'NEW', 'company_id': 2, 'memory_overview': {'the_read': ['new listing'], 'what_to_watch': []}}
                     return httpx.Response(200, text='<script id="company_details_data">' + json.dumps(payload) + '</script>')
+                if request.url.path == '/api/v1/ind/company_search/':
+                    return httpx.Response(200, json=[])
+                if last_modified:
+                    return httpx.Response(304 if request.headers.get('If-Modified-Since') == old['lastModified'] else 412)
                 if recovered:
                     payload = {'symbol': 'TEST', 'memory_overview': {'the_read': ['recovered'], 'what_to_watch': []}}
                     return httpx.Response(200, text='<script id="company_details_data">' + json.dumps(payload) + '</script>')
@@ -85,6 +109,8 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
             argv = ['export', '--output', str(root), '--sitemap', str(root / 'sitemap.xml'), '--refresh', '--public-root', str(root / 'public')]
             with patch('sys.argv', argv), patch.object(exporter.httpx, 'AsyncClient', client):
                 await exporter.main()
+            if bad_sitemap and cached_sitemap:
+                self.assertEqual((root / 'sitemap.xml').read_text(), f'<urlset><url><loc>{url}</loc></url></urlset>')
             return json.loads((root / 'tijori-overviews.json').read_text()), calls
 
     async def test_304_reuses_content_and_sends_etag(self):
@@ -93,6 +119,33 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data['records'][0]['fetchedAt'], 'old')
         self.assertEqual(data['records'][0]['memory_overview']['the_read'], ['saved'])
         self.assertIn('checkedAt', data['records'][0])
+
+    async def test_last_modified_validator_reuses_cached_report(self):
+        data, calls = await self.run_refresh(304, last_modified=True)
+        self.assertEqual(calls[-1].headers['If-Modified-Since'], 'Tue, 06 Oct 2026 00:00:00 GMT')
+        self.assertNotIn('If-None-Match', calls[-1].headers)
+        self.assertEqual(data['records'][0]['fetchedAt'], 'old')
+
+    async def test_sitemap_failure_still_refreshes_saved_urls(self):
+        for cached in (False, True):
+            with self.subTest(cached_sitemap=cached):
+                data, calls = await self.run_refresh(304, compressed=True, sitemap_status=403, cached_sitemap=cached)
+                self.assertEqual(data['records'][0]['status'], 'available')
+                self.assertIn('checkedAt', data['records'][0])
+                self.assertTrue(data['metadata']['discoveryError'])
+                self.assertFalse(data['metadata']['complete'])
+                self.assertEqual(calls[-1].url.path, '/company/test/')
+
+    async def test_non_sitemap_response_preserves_cached_sitemap(self):
+        data, _ = await self.run_refresh(304, cached_sitemap=True, bad_sitemap=True)
+        self.assertEqual(data['records'][0]['status'], 'available')
+        self.assertIn('not a urlset', data['metadata']['discoveryError'])
+        self.assertFalse(data['metadata']['complete'])
+
+    async def test_unmapped_symbol_keeps_export_incomplete(self):
+        data, _ = await self.run_refresh(304, new_stock=True, new_unmapped=True)
+        self.assertEqual(data['records'][1]['status'], 'unmapped')
+        self.assertFalse(data['metadata']['complete'])
 
     async def test_fresh_checkout_reuses_compressed_cache(self):
         data, calls = await self.run_refresh(304, compressed=True)
@@ -125,6 +178,20 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data['memory_overview']['the_read'], ['Cloud SaaS & video.'])
         self.assertEqual(data['memory_overview']['what_to_watch'], [{'title': 'Margins', 'window': 'Next quarter', 'body': 'Watch cash conversion.'}])
         self.assertEqual(data['memory_overview']['key_events'], [{'label': 'Listed'}])
+
+    async def test_unparseable_visible_date_is_null(self):
+        html = '<p class="symbol">TEST</p><div id="company_memory_overview"><span class="memory_card__updated_date">Yesterday</span></div>'
+        self.assertIsNone(exporter.parse_company(html, exporter.BASE)['memory_overview']['as_of'])
+
+    async def test_malformed_optional_scripts_preserve_extraction_url(self):
+        url = exporter.BASE + '/company/test/'
+        for identifier in ('companyId', 'memoryOverviewKeyEvents'):
+            html = f'<p class="symbol">TEST</p><div id="company_memory_overview"></div><script id="{identifier}">invalid</script>'
+            with self.subTest(identifier=identifier):
+                with self.assertRaises(exporter.ExtractionError) as caught:
+                    exporter.parse_company(html, url)
+                self.assertEqual(caught.exception.url, url)
+                self.assertIn(identifier, str(caught.exception))
 
     async def test_visible_symbol_without_overview_is_not_an_extraction_error(self):
         data = exporter.parse_company('<p class="symbol">TEST</p>', exporter.BASE)

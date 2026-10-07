@@ -1,5 +1,8 @@
 # Tijori export
 
+Run these commands from the repository root. Output and sitemap paths, and the
+default `--public-root frontend/public`, resolve relative to the current directory.
+
 Install the dependencies:
 
 ```sh
@@ -69,3 +72,9 @@ never replace a previously saved report.
 The parser supports both embedded company JSON and the visible snapshot/watch
 HTML used by some pages. The visible NSE symbol must match before saving either
 format.
+
+A failed sitemap refresh retains an existing valid sitemap. On a fresh checkout
+without one, collection can still use saved company URLs and search. Sitemap
+failures are recorded as `discoveryError` and make the export incomplete;
+persistent throttling still stops all requests. Unmapped symbols also keep
+`complete` false.

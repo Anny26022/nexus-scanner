@@ -35,6 +35,12 @@ class ExtractionError(ValueError):
 
 
 def parse_company(html, url):
+    def script_json(script):
+        try:
+            return json.loads(script.get_text())
+        except ValueError as error:
+            raise ExtractionError(url, f'Invalid {script.get("id")} JSON') from error
+
     soup = BeautifulSoup(html, 'html.parser')
     embedded = soup.find('script', id='company_details_data')
     if embedded:
@@ -56,7 +62,7 @@ def parse_company(html, url):
         try:
             date = datetime.strptime(date, '%d %b %Y').date().isoformat()
         except ValueError:
-            pass
+            date = None
         overview = {
             'as_of': date or None,
             'the_read': [item.get_text(' ', strip=True) for item in card.select('.memory_the_read__list > li')],
@@ -70,11 +76,11 @@ def parse_company(html, url):
         }
         events = soup.find('script', id='memoryOverviewKeyEvents')
         if events:
-            overview['key_events'] = json.loads(events.get_text())
+            overview['key_events'] = script_json(events)
     company_id = soup.find('script', id='companyId')
     return {'symbol': symbol.get_text(strip=True),
             'company': card.get('data-company') if card else None,
-            'company_id': json.loads(company_id.get_text()) if company_id else None,
+            'company_id': script_json(company_id) if company_id else None,
             'memory_overview': overview}
 
 
@@ -209,10 +215,28 @@ async def main():
     async with httpx.AsyncClient(limits=limits, timeout=30, follow_redirects=False,
                                 headers={'User-Agent': 'NexusResearchExport/1.0'}) as client:
         fetcher = Fetcher(client, args.rate, args.concurrency)
+        discovery_error = None
         if args.refresh and not args.finalize_only:
-            response = await fetcher.request(BASE + '/sitemap.xml')
-            args.sitemap.write_bytes(response.content)
-        entries = ET.parse(args.sitemap).getroot().findall('{*}url')
+            try:
+                response = await fetcher.request(BASE + '/sitemap.xml')
+                root = ET.fromstring(response.content)
+                if root.tag.rsplit('}', 1)[-1] != 'urlset':
+                    raise ValueError('Sitemap response is not a urlset')
+                args.sitemap.parent.mkdir(parents=True, exist_ok=True)
+                temporary = args.sitemap.with_suffix('.tmp')
+                temporary.write_bytes(response.content)
+                temporary.replace(args.sitemap)
+            except (httpx.HTTPError, OSError, ValueError, ET.ParseError, RuntimeError) as error:
+                discovery_error = str(error)
+                print(f'Sitemap refresh failed; continuing with cached URLs: {error}', flush=True)
+        try:
+            root = ET.parse(args.sitemap).getroot()
+            if root.tag.rsplit('}', 1)[-1] != 'urlset':
+                raise ValueError('Cached sitemap is not a urlset')
+            entries = root.findall('{*}url')
+        except (OSError, ValueError, ET.ParseError) as error:
+            discovery_error = discovery_error or str(error)
+            entries = []  # Cached company URLs and search remain usable without a sitemap.
         index = defaultdict(list)
         for entry in entries:
             url = entry.findtext('{*}loc')
@@ -331,7 +355,8 @@ async def main():
                     'attemptedSymbols': sum(r['status'] != 'not_fetched' for r in rows),
                     'withBothSections': sum(bool(r.get('memory_overview', {}).get('the_read')) and bool(r.get('memory_overview', {}).get('what_to_watch')) for r in rows if r['status'] == 'available'),
                     'refreshErrors': sum(bool(r.get('refreshError')) for r in rows),
-                    'complete': not any(r.get('refreshError') or r['status'] in ('not_fetched', 'error', 'extraction_error', 'http_error', 'rate_limited') for r in rows),
+                    'discoveryError': discovery_error,
+                    'complete': not discovery_error and not any(r.get('refreshError') or r['status'] in ('not_fetched', 'unmapped', 'error', 'extraction_error', 'http_error', 'rate_limited') for r in rows),
                     'note': 'Source symbols are verified against the NSE list; as_of dates belong to Tijori. Narrative claims have not been independently verified.'}
         atomic_json(args.output / 'tijori-overviews.json', {'metadata': metadata, 'records': rows})
         atomic_json(args.output / 'available-overviews.json', {'metadata': metadata, 'records': [r for r in rows if r['status'] == 'available']})

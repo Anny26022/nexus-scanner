@@ -38,7 +38,9 @@ class IndexSessionAlignmentTests(unittest.TestCase):
                 path.write_text(payload)
                 self.assertIsNone(indices._last_equity_date(path))
             self.assertIsNone(indices._last_equity_date(root / "MISSING.csv"))
-            self.assertFalse(has_current_equity_session(root,"2026-10-06",{"A","MISSING"}))
+            path.write_text("Date\n2026-10-06\n")
+            self.assertTrue(has_current_equity_session(root, "2026-10-06", {"A"}))
+            self.assertFalse(has_current_equity_session(root, "2026-10-06", {"A", "MISSING"}))
 
     def test_after_midnight_uses_fresh_official_previous_session(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -15,9 +15,23 @@ from edl_pipeline.scanner.shareholding import observations_from_fundamentals, se
 
 
 class ScannerHistoryTests(unittest.TestCase):
-    def test_snapshot_preserves_signed_quarterly_ownership_changes(self):
+    def test_statement_history_is_not_backfilled_before_observation(self):
+        stocks = [{"symbol": "TEST", "ttm_revenue_growth_percent": 20,
+                   "financial_statement_history": {"observed_on": "2026-10-07", "annual": [], "quarterly": []}}]
+        with tempfile.TemporaryDirectory() as directory:
+            build_snapshot(Path(directory), stocks, {}, {}, "2026-10-06")
+            old = load_snapshot(Path(directory), "2026-10-06")["stocks"][0]
+            self.assertIsNone(old["financial_statement_history"])
+            self.assertIsNone(old["ttm_revenue_growth_percent"])
+            build_snapshot(Path(directory), stocks, {}, {}, "2026-10-07")
+            current = load_snapshot(Path(directory), "2026-10-07")["stocks"][0]
+            self.assertEqual(current["financial_statement_history"],stocks[0]["financial_statement_history"])
+
+    def test_snapshot_preserves_metrics_and_current_ownership_changes(self):
         stocks = [{"symbol": "TEST", "as_of_date": "2026-09-25", "promoter_holding_percent": 50.48,
-                   "fii_percent_change_qoq": -1.47, "dii_percent_change_qoq": 0.0}]
+                   "fii_percent_change_qoq": -1.47, "dii_percent_change_qoq": 0.0,
+                   "cwip_crore": 237686, "total_income_in_lakhs": 31601800,
+                   "financial_units_version": 1, "debt_to_equity_source": "SCANX_Debt2Eq"}]
         with tempfile.TemporaryDirectory() as directory:
             build_snapshot(Path(directory), stocks, {}, {}, "2026-09-25")
             saved = load_snapshot(Path(directory), "2026-09-25")
@@ -25,6 +39,10 @@ class ScannerHistoryTests(unittest.TestCase):
         self.assertEqual(item["promoter_holding_percent"], 50.48)
         self.assertEqual(item["fii_percent_change_qoq"], -1.47)
         self.assertEqual(item["dii_percent_change_qoq"], 0.0)
+        self.assertEqual(item["cwip_crore"], 237686)
+        self.assertEqual(item["total_income_in_lakhs"], 31601800)
+        self.assertEqual(item["financial_units_version"], 1)
+        self.assertEqual(item["debt_to_equity_source"], "SCANX_Debt2Eq")
 
     def test_historical_ownership_changes_use_adjacent_observed_quarters(self):
         stocks = [{"symbol": "TEST", "as_of_date": "2026-10-07",

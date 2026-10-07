@@ -19,6 +19,7 @@ from edl_pipeline.scanner.presets import get_preset
 from edl_pipeline.scanner.query import compile_query
 from edl_pipeline.scanner.trend import evaluate_history, normalize_history, _comparison, _evaluate_expression, _leaf_results
 from edl_pipeline.scanner.financials import finite_number, financial_value
+from edl_pipeline.schemas import PUBLIC_FINANCIAL_FIELDS
 
 
 LEGACY_PRESETS = {
@@ -279,8 +280,16 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
     return outcome["status"] == "match"
 
 
+def data_completeness(row):
+    # Preserve the denominator used before the optional ScanX fields were added.
+    added = set(PUBLIC_FINANCIAL_FIELDS.values()) - {"epsTtm", "dividendYieldPct", "debtToEquity"}
+    added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness"})
+    values = [value for key, value in row.items() if key not in added]
+    return round(100 * sum(value is not None for value in values) / len(values)) if values else 0
+
+
 def stock_row(s, ratings):
-    fields = {"listingDate":"listing_date", "series":"listing_series", "changePct":"change_percent", "rvol":"relative_volume_20", "marketCapCrore":"market_cap_crore", "peRatio":"pe_ratio", "epsTtm":"eps_ttm", "dividendYieldPct":"dividend_yield_percent", "rsi14":"rsi14", "adr20Pct":"adr_percent_20", "atr14":"atr14", "dist52wHighPct":"distance_from_52w_high_percent", "dist52wLowPct":"distance_from_52w_low_percent", "distAthPct":"percent_from_ath", "earningsDate":"latest_earnings_date", "deliveryPct":"delivery_percent", "isFno":"fno_eligible", "circuitLimit":"circuit_limit", "roePct":"roe_percent", "rocePct":"roce_percent", "opmTtmPct":"operating_margin_ttm_percent", "debtToEquity":"debt_to_equity", "pegRatio":"peg_ratio", "salesGrowth5yPct":"sales_growth_5_years_percent", "epsLastYear":"eps_last_year", "epsTwoYearsBack":"eps_2_years_back", "surveillanceAvailable":"surveillance_available", "surveillanceAsOfDate":"surveillance_as_of_date", "surveillanceFetchedAt":"surveillance_fetched_at", "isAsm":"is_asm", "asmStage":"asm_stage", "isGsm":"is_gsm", "gsmStage":"gsm_stage"}
+    fields = {"listingDate":"listing_date", "series":"listing_series", "changePct":"change_percent", "rvol":"relative_volume_20", "marketCapCrore":"market_cap_crore", "peRatio":"pe_ratio", "rsi14":"rsi14", "adr20Pct":"adr_percent_20", "atr14":"atr14", "dist52wHighPct":"distance_from_52w_high_percent", "dist52wLowPct":"distance_from_52w_low_percent", "distAthPct":"percent_from_ath", "earningsDate":"latest_earnings_date", "deliveryPct":"delivery_percent", "isFno":"fno_eligible", "circuitLimit":"circuit_limit", "roePct":"roe_percent", "rocePct":"roce_percent", "opmTtmPct":"operating_margin_ttm_percent", "pegRatio":"peg_ratio", "salesGrowth5yPct":"sales_growth_5_years_percent", "epsLastYear":"eps_last_year", "epsTwoYearsBack":"eps_2_years_back", "surveillanceAvailable":"surveillance_available", "surveillanceAsOfDate":"surveillance_as_of_date", "surveillanceFetchedAt":"surveillance_fetched_at", "isAsm":"is_asm", "asmStage":"asm_stage", "isGsm":"is_gsm", "gsmStage":"gsm_stage"}
     fields["vwapAsOfDate"] = "vwap_as_of_date"
     fields.update({
         "totalRevenueLakh": "total_revenue_in_lakhs",
@@ -296,17 +305,16 @@ def stock_row(s, ratings):
     row = {k:s.get(v) for k,v in fields.items()}
     # Ownership levels are percentages; QoQ changes are percentage points.
     # Keep absent/non-finite values unavailable rather than fabricating zero.
-    for output, source in {
-        "promoterHoldingPct": "promoter_holding_percent",
-        "fiiChangePctQoq": "fii_percent_change_qoq",
-        "diiChangePctQoq": "dii_percent_change_qoq",
-    }.items():
+    for source, output in PUBLIC_FINANCIAL_FIELDS.items():
         row[output] = finite_number(s.get(source))
+    row["financialUnitsVersion"] = s.get("financial_units_version")
+    row["debtToEquitySource"] = s.get("debt_to_equity_source")
+    row["financialHistoryObservedOn"] = (s.get("financial_statement_history") or {}).get("observed_on")
     row.update({k:s.get(k) for k in ("symbol","name","open","high","low","close","volume")})
     row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7, rsRating=ratings.get(s["symbol"],{}).get("front_weighted"), daysSinceEarnings=None, fnoBan=False)
     for ma in ("sma20","sma50","sma200","ema20","ema50","ema200"):
         row[ma]=s.get(ma)
-    row["dataCompleteness"] = round(100 * sum(v is not None for v in row.values()) / len(row))
+    row["dataCompleteness"] = data_completeness(row)
     return row
 
 
@@ -405,13 +413,15 @@ def run(request, root=ROOT, cache=None):
                         "epsTwoYearsBack","totalRevenueLakh","nonCurrentAssetsLakh",
                         "totalLiabilitiesLakh","interestCoverage","dividendPerShare",
                         "vwap","vwapAsOfDate","allTimeHigh","allTimeLow","return5yPct",
+                        *PUBLIC_FINANCIAL_FIELDS.values(),
+                        "financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn",
                     ):
                         row[field]=None
             # stock_row starts from the current snapshot. Recalculate after
             # history substitution and current-only field sanitization so the
             # percentage describes the row that is actually returned.
             row.pop("dataCompleteness", None)
-            row["dataCompleteness"] = round(100 * sum(value is not None for value in row.values()) / len(row))
+            row["dataCompleteness"] = data_completeness(row)
             matched.append(row)
     sort=request.get("sort") or {}
     field=sort.get("field","symbol")

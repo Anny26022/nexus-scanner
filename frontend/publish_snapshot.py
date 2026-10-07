@@ -140,6 +140,13 @@ def publish(root=bridge.ROOT, output=OUTPUT):
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'referenceCounts':{'rvol15Sma50':default_count}}
     stock_bytes=write_json(generation/'stocks.json',payload)
+    # Keep the full financial series out of every lightweight scanner row.
+    histories = {symbol: stock["financial_statement_history"] for symbol, stock in context['stocks'].items()
+                 if stock.get("financial_statement_history")}
+    history_path = generation/'financial-history.json.gz'
+    history_temporary = history_path.with_name(history_path.name+'.tmp')
+    history_temporary.write_bytes(gzip.compress(json.dumps(histories, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
+    history_temporary.replace(history_path)
     compressed=gzip.compress(stock_bytes,compresslevel=6,mtime=0)
     compressed_path=generation/'stocks.json.gz'
     temporary=compressed_path.with_name(compressed_path.name+'.tmp')
@@ -157,6 +164,7 @@ def publish(root=bridge.ROOT, output=OUTPUT):
     manifest={'revision':revision,'sessionDate':session,'publishedAt':f'{session}T00:00:00Z','schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz','datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz'}
     if calendar_bytes is not None:
         manifest['earningsCalendarUrl']=f'/data/revisions/{revision}/earnings-calendar.json.gz'
+    manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'
     manifest = complete_release(chart_root, output, manifest)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest

@@ -37,8 +37,13 @@ including scheduled Sunday runs and manual dispatch. It commits
 the compressed cache, so source URLs, reports and HTTP validators survive between
 runs. The initial cache is seeded from the completed local NSE export. Per-company
 errors preserve existing reports and appear in the summary/diagnostics; a failed
-Tijori step does not block the market-data publication. Local HTML/checkpoint files
-are excluded from Git.
+Tijori step does not block the market-data publication. A hard failure or step
+timeout is recorded in `exceptions.json`, emits a workflow warning, and appears
+in the job summary; the diagnostics artifact includes this failure record.
+Local `reference/tijori/` intermediates, including `sitemap.xml`, `universe.json`,
+`responses.jsonl`, and `exceptions.json`, are excluded from Git. Only the compressed
+cache and `summary.json` are committed from that directory. Atomic publication
+`.tmp` files under `frontend/public/data/tijori/` are also excluded.
 
 Offline tests: `python3 -m unittest discover -s tools -p test_export_tijori_overviews.py`.
 

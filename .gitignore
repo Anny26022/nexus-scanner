@@ -73,3 +73,5 @@ frontend/public/data/objects/
 reference/tijori/*
 !reference/tijori/tijori-overviews.json.gz
 !reference/tijori/summary.json
+# Exclude interrupted atomic publication writes.
+frontend/public/data/tijori/**/*.tmp

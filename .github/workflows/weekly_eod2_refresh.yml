@@ -28,7 +28,9 @@ jobs:
         with:
           python-version: '3.10'
           cache: 'pip'
-          cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
+          cache-dependency-path: |
+            DO NOT DELETE EDL PIPELINE/requirements.txt
+            tools/requirements-tijori.txt
 
       - name: Restore pipeline history
         uses: actions/cache@v4
@@ -74,9 +76,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
+          pip install -r tools/requirements-tijori.txt
 
       - name: Verify Pipeline Code
         run: |
+          python -m unittest discover -s tools -p test_export_tijori_overviews.py
           cd "DO NOT DELETE EDL PIPELINE"
           python -m unittest discover -s tests -v
           python -m compileall -q .
@@ -99,6 +103,49 @@ jobs:
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
           python run_full_pipeline.py
+
+      - name: Refresh Tijori company overviews
+        id: tijori_refresh
+        continue-on-error: true
+        timeout-minutes: 60
+        run: |
+          python3 tools/export_tijori_overviews.py \
+            --output reference/tijori \
+            --sitemap reference/tijori/sitemap.xml \
+            --refresh --retry-unmapped
+
+      - name: Record Tijori refresh failure
+        continue-on-error: true
+        if: ${{ always() && steps.tijori_refresh.outcome == 'failure' }}
+        env:
+          TIJORI_STEP_OUTCOME: ${{ steps.tijori_refresh.outcome }}
+          TIJORI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          echo "::warning::Tijori refresh failed or timed out; see uploaded exceptions.json. The public dataset may be stale."
+          echo "### Tijori refresh failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "The public dataset may be stale. See the refresh step log and exceptions.json in weekly-eod2-diagnostics." >> "$GITHUB_STEP_SUMMARY"
+          python3 - <<'PYTHON'
+          from datetime import datetime, timezone
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path('reference/tijori/exceptions.json')
+          path.parent.mkdir(parents=True, exist_ok=True)
+          try:
+              diagnostics = json.loads(path.read_text())
+          except (OSError, ValueError):
+              diagnostics = {}
+          diagnostics['runFailure'] = {
+              'stepOutcome': os.environ['TIJORI_STEP_OUTCOME'],
+              'failedAt': datetime.now(timezone.utc).isoformat(),
+              'runUrl': os.environ['TIJORI_RUN_URL'],
+              'message': 'Tijori export failed or timed out; the public dataset may be stale. See the refresh step log.',
+          }
+          temporary = path.with_suffix('.tmp')
+          temporary.write_text(json.dumps(diagnostics, indent=2) + '\n')
+          temporary.replace(path)
+          PYTHON
 
       - name: Commit and Push Results
         run: |
@@ -141,6 +188,8 @@ jobs:
           git add reference/index-constituent-mappings.json.gz
           git add reference/index-constituent-mappings.manifest.json
           git add frontend/public/data/current.json frontend/public/data/revisions
+          git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
+          git add frontend/public/data/tijori/current.json frontend/public/data/tijori/revisions
           git commit -m "Automated weekly adjusted OHLCV refresh [skip ci]" || echo "No changes to commit"
           git push
 
@@ -156,3 +205,5 @@ jobs:
             DO NOT DELETE EDL PIPELINE/pipeline_failure_report.json
             DO NOT DELETE EDL PIPELINE/data_quality.json
             DO NOT DELETE EDL PIPELINE/data_quality_failure.json
+            reference/tijori/summary.json
+            reference/tijori/exceptions.json

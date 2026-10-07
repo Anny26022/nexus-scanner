@@ -85,6 +85,9 @@ class ValidatorTests(unittest.TestCase):
             json_path = Path(tmp) / "sample.json"
             gzip_path = Path(tmp) / "sample.json.gz"
             save_json(json_path, {"a": 1})
+            self.assertEqual(json_path.read_text(), '{"a":1}')
+            save_json(json_path, {"a": 1}, indent=4)
+            self.assertIn('\n', json_path.read_text())
             raw_size, gz_size = compress_file(json_path, gzip_path)
 
             self.assertEqual(load_json(json_path), {"a": 1})

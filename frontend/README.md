@@ -431,3 +431,24 @@ Tests verify contracts against fixtures. They do not establish complete live ups
 - Chart viewers, named saved screens, durable raw-history recovery, and persistent watchlists need further integration.
 
 Read the [repository guide](../README.md), [data limitations](../DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/DATA_LIMITATIONS.md), and [R2 publication guide](../docs/r2-chart-publication.md) for wider operational detail.
+
+### Python dependencies for frontend CI
+
+Frontend CI uses Python 3.12 and `frontend/requirements-ci.lock`, which pins all
+direct and transitive Python dependencies with distribution hashes. CI installs
+only wheels with `pip --require-hashes`; its pip cache follows the lockfile.
+The pipeline's `requirements.txt` remains the source of allowed ranges.
+
+After changing those ranges, regenerate the lock from the repository root using
+uv 0.12.23 (the version used for the initial lock):
+
+```bash
+uv pip compile --python-version 3.12 --python-platform x86_64-unknown-linux-gnu \
+  --generate-hashes --output-file frontend/requirements-ci.lock \
+  "DO NOT DELETE EDL PIPELINE/requirements.txt"
+```
+
+Add `--upgrade` to deliberately refresh all pinned versions, or
+`--upgrade-package NAME` for one package. Commit the updated lock with the input
+change and verify the frontend Python suite. Python requirement changes also
+trigger Frontend CI.

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'frontend/**'
+      - 'DO NOT DELETE EDL PIPELINE/requirements.txt'
       - '.nvmrc'
       - '.github/workflows/frontend-ci.yml'
       - '.github/workflows/ci.yml'
@@ -12,6 +13,7 @@ on:
       - main
     paths:
       - 'frontend/**'
+      - 'DO NOT DELETE EDL PIPELINE/requirements.txt'
       - '.nvmrc'
       - '.github/workflows/frontend-ci.yml'
       - '.github/workflows/ci.yml'
@@ -48,10 +50,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
           cache: pip
-          cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
+          cache-dependency-path: frontend/requirements-ci.lock
       - name: Install Python dependencies
-        run: python -m pip install -r '../DO NOT DELETE EDL PIPELINE/requirements.txt'
+        run: python -m pip install --require-hashes --only-binary=:all: -r requirements-ci.lock
       - name: Run frontend Python regression tests
         run: python -m unittest discover -s . -p 'test_*.py' -v

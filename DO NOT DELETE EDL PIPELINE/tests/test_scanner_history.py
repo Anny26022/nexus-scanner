@@ -47,8 +47,19 @@ class ScannerHistoryTests(unittest.TestCase):
             item = load_snapshot(Path(directory), "2026-08-15")["stocks"][0]
         self.assertEqual(item["promoter_holding_percent"], 50.48)
         self.assertEqual(item["shareholding_period_end"], "2026-06-30")
-        self.assertAlmostEqual(item["fii_percent_change_qoq"], -1.47)
+        self.assertEqual(item["fii_percent_change_qoq"], -1.47)
         self.assertEqual(item["dii_percent_change_qoq"], 0.0)
+
+    def test_ownership_changes_keep_four_decimal_precision(self):
+        observations = [
+            {"symbol": "TEST", "period_end": "2026-03-31", "observed_on": "2026-05-01",
+             "fii_holding_percent": 10, "dii_holding_percent": 20},
+            {"symbol": "TEST", "period_end": "2026-06-30", "observed_on": "2026-08-01",
+             "fii_holding_percent": 10.123456, "dii_holding_percent": 19.876544},
+        ]
+        selected = select_shareholding_observation(observations, "TEST", "2026-08-15")
+        self.assertEqual(selected["fii_percent_change_qoq"], 0.1235)
+        self.assertEqual(selected["dii_percent_change_qoq"], -0.1235)
 
     def test_ownership_changes_are_null_when_prior_quarter_is_unavailable(self):
         stocks = [{"symbol": "TEST", "as_of_date": "2026-09-25",

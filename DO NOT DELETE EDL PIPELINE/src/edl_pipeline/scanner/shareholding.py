@@ -134,5 +134,5 @@ def select_observation(observations: Iterable[dict], symbol: str, as_of_date: st
     for change, field in SHAREHOLDING_CHANGE_FIELDS.items():
         current = _number(latest.get(field))
         prior = _number(previous.get(field)) if previous else None
-        selected[change] = current - prior if current is not None and prior is not None else None
+        selected[change] = round(current - prior, 4) if current is not None and prior is not None else None
     return selected

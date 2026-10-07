@@ -131,6 +131,14 @@ export interface StockRow {
   fiiChangePctQoq?: number | null;
   diiChangePctQoq?: number | null;
   financialUnitsVersion?: number | null;
+  financialHistoryObservedOn?: string | null;
+  ttmRevenueCrore?: number | null;
+  ttmSalesCrore?: number | null;
+  ttmNetProfitCrore?: number | null;
+  ttmRevenueGrowthPct?: number | null;
+  ttmSalesGrowthPct?: number | null;
+  ttmNetProfitGrowthPct?: number | null;
+  opm5YearsAgoPct?: number | null;
   debtToEquitySource?: string | null;
   pbRatio?: number | null;
   evEbitda?: number | null;

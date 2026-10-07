@@ -40,6 +40,9 @@ class SnapshotPublicationTests(unittest.TestCase):
             stocks[0].update(cwip_crore=237686,pb_ratio=1.8247,ev_ebitda=24.91,
                              total_income_in_lakhs=31601800,total_tax_expenses_in_lakhs=743400,
                              debt_to_equity=0.44,financial_units_version=1,debt_to_equity_source='SCANX_Debt2Eq')
+            stocks[0]['financial_statement_history'] = {'source': 'ScanX', 'observed_on': '2026-09-30',
+                'quarterly': [{'period_end': '2026-06-30', 'revenue': 120}], 'annual': []}
+            stocks[0]['ttm_revenue_growth_percent'] = 20
             with gzip.open(source,'wt') as handle:
                 json.dump(stocks,handle)
             first=publish(root,output)
@@ -57,6 +60,13 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(row['debtToEquity'],0.44)
             self.assertEqual(row['financialUnitsVersion'],1)
             self.assertEqual(row['debtToEquitySource'],'SCANX_Debt2Eq')
+            self.assertEqual(row['ttmRevenueGrowthPct'],20)
+            self.assertEqual(row['financialHistoryObservedOn'],'2026-09-30')
+            self.assertNotIn('financialStatementHistory',row)
+            self.assertEqual(json.loads((output/'current.json').read_text())['financialHistoryUrl'],first['financialHistoryUrl'])
+            history_file=output/first['financialHistoryUrl'].removeprefix('/data/')
+            with gzip.open(history_file,'rt') as handle:
+                self.assertEqual(json.load(handle)['TEST'],stocks[0]['financial_statement_history'])
             stocks[0].update(promoter_holding_percent=None,fii_percent_change_qoq=None,dii_percent_change_qoq=2.25)
             with gzip.open(source,'wt') as handle:
                 json.dump(stocks,handle)

@@ -51,6 +51,13 @@ PUBLIC_FINANCIAL_FIELDS = {
     canonical: public for canonical, public in SCREEN_METRICS.values()
 }
 PUBLIC_FINANCIAL_FIELDS.update({
+    "ttm_revenue_crore": "ttmRevenueCrore",
+    "ttm_sales_crore": "ttmSalesCrore",
+    "ttm_net_profit_crore": "ttmNetProfitCrore",
+    "ttm_revenue_growth_percent": "ttmRevenueGrowthPct",
+    "ttm_sales_growth_percent": "ttmSalesGrowthPct",
+    "ttm_net_profit_growth_percent": "ttmNetProfitGrowthPct",
+    "opm_5_years_ago_percent": "opm5YearsAgoPct",
     "promoter_holding_percent": "promoterHoldingPct",
     "public_holding_percent": "publicHoldingPct",
     "number_of_shareholders": "numberOfShareholders",

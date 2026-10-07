@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import math
+from .financials import STATEMENT_METRICS
 from typing import Any
 
 
@@ -19,6 +20,10 @@ _INDICATOR_FUNCTIONS = {"rsi", "cci", "mfi", "roc", "obv", "adx", "atr", "stoch 
 # Names deliberately mirror the public query gallery.  Values are the stable
 # internal field identifiers evaluated by ``field_comparison``.
 FIELD_ALIASES = {
+    "ttm revenue growth": "ttm_revenue_growth_percent",
+    "ttm pat growth": "ttm_net_profit_growth_percent",
+    "ttm sales growth": "ttm_sales_growth_percent",
+    "opm 5 years ago": "opm_5_years_ago_percent",
     "market cap (in cr)": "market_cap_crore", "market cap": "market_cap_crore",
     "price to earning (p/e)": "pe_ratio", "price to earnings (p/e)": "pe_ratio", "p/e": "pe_ratio", "pe ratio": "pe_ratio",
     "debt to equity": "debt_to_equity", "earning per share (eps)": "eps_ttm", "earnings per share (eps)": "eps_ttm", "eps": "eps_ttm",
@@ -73,6 +78,13 @@ def _strip_outer(text: str) -> str:
 
 def _operand(value: str) -> Any:
     value = value.strip()
+    reference = re.fullmatch(r"Financial Value\(\s*(annual|quarterly)\s*,\s*([a-z_]+)\s*,\s*(\d+)\s*\)", value, re.I)
+    if reference:
+        frequency, metric, offset = reference.groups()
+        metric = {"pat": "net_profit", "pbt": "profit_before_tax"}.get(metric.lower(), metric.lower())
+        if metric not in STATEMENT_METRICS.values() or int(offset) > 100:
+            raise ValueError("Unsupported financial statement metric or offset")
+        return {"field": f"financial:{frequency.lower()}:{metric}:{int(offset)}"}
     try: return float(value.replace(",", ""))
     except ValueError:
         field = FIELD_ALIASES.get(value.casefold())
@@ -222,6 +234,10 @@ def _leaf(text: str) -> dict:
     function = re.match(r"^(.+?)\((.*)\)\s*(>=|<=|>|<|=)\s*(.+)$", text.strip())
     field_match = re.match(r"^(.+?)\s*(>=|<=|>|<|=)\s*(.+)$", text.strip())
     known_field = field_match and field_match.group(1).strip().casefold() in FIELD_ALIASES
+    if field_match and field_match.group(1).strip().lower().startswith("financial value("):
+        left, operator, right = field_match.groups()
+        return {"type": "condition", "condition": "field_comparison", "field": _operand(left)["field"],
+                "comparison": _OPERATORS[operator], "value": _operand(right)}
     if function and not known_field:
         name, arguments, operator, value = function.groups()
         return _function_condition(name, _arguments(arguments), operator, value)

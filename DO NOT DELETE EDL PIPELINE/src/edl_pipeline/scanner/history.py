@@ -11,6 +11,7 @@ from tempfile import NamedTemporaryFile
 from .earnings import EARNINGS_FIELDS, select_observation
 from .shareholding import SHAREHOLDING_FIELDS, select_observation as select_shareholding_observation
 from edl_pipeline.schemas import PUBLIC_FINANCIAL_FIELDS
+from .financials import statement_summary
 
 
 SCANNER_SNAPSHOT_FIELDS = (
@@ -39,7 +40,7 @@ SCANNER_SNAPSHOT_FIELDS = tuple(dict.fromkeys([
     *(field for field in PUBLIC_FINANCIAL_FIELDS if field not in {
         "fii_percent_change_qoq", "dii_percent_change_qoq",
     }),
-    "financial_units_version", "debt_to_equity_source",
+    "financial_units_version", "debt_to_equity_source", "financial_statement_history",
 ]))
 
 
@@ -69,6 +70,16 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
         if not stock.get("symbol"):
             continue
         item = {field: stock.get(field) for field in SCANNER_SNAPSHOT_FIELDS}
+        statement_history = item.get("financial_statement_history") or {}
+        observed_on = statement_history.get("observed_on")
+        try:
+            statement_history_available = date.fromisoformat(observed_on).isoformat() <= session
+        except (TypeError, ValueError):
+            statement_history_available = False
+        if not statement_history_available:
+            item["financial_statement_history"] = None
+            for field in statement_summary({}):
+                item[field] = None
         observation = select_observation(earnings_observations or [], stock["symbol"], session)
         if observation:
             # The selected values are now truly date-bounded, even if the

@@ -283,7 +283,7 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
 def data_completeness(row):
     # Preserve the denominator used before the optional ScanX fields were added.
     added = set(PUBLIC_FINANCIAL_FIELDS.values()) - {"epsTtm", "dividendYieldPct", "debtToEquity"}
-    added.update({"financialUnitsVersion", "debtToEquitySource", "dataCompleteness"})
+    added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness"})
     values = [value for key, value in row.items() if key not in added]
     return round(100 * sum(value is not None for value in values) / len(values)) if values else 0
 
@@ -309,6 +309,7 @@ def stock_row(s, ratings):
         row[output] = finite_number(s.get(source))
     row["financialUnitsVersion"] = s.get("financial_units_version")
     row["debtToEquitySource"] = s.get("debt_to_equity_source")
+    row["financialHistoryObservedOn"] = (s.get("financial_statement_history") or {}).get("observed_on")
     row.update({k:s.get(k) for k in ("symbol","name","open","high","low","close","volume")})
     row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7, rsRating=ratings.get(s["symbol"],{}).get("front_weighted"), daysSinceEarnings=None, fnoBan=False)
     for ma in ("sma20","sma50","sma200","ema20","ema50","ema200"):
@@ -413,7 +414,7 @@ def run(request, root=ROOT, cache=None):
                         "totalLiabilitiesLakh","interestCoverage","dividendPerShare",
                         "vwap","vwapAsOfDate","allTimeHigh","allTimeLow","return5yPct",
                         *PUBLIC_FINANCIAL_FIELDS.values(),
-                        "financialUnitsVersion", "debtToEquitySource",
+                        "financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn",
                     ):
                         row[field]=None
             # stock_row starts from the current snapshot. Recalculate after

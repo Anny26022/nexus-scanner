@@ -161,6 +161,43 @@ See the [calculation guide](../README.md#calculation-conventions-and-formulas) a
 
 ## How data reaches the application
 
+### ScanX financial history
+
+The existing fundamental fetch and normalization stages retain consolidated annual,
+quarterly, balance-sheet and cash-flow series aligned by period end. Statement
+amounts in this history are INR crore, EPS is rupees per share, and OPM is percent.
+The recorded `observed_on` is the fetch date in India, not an original filing date.
+Historical queries cannot use a series before its recorded observation date.
+
+Stock rows include TTM revenue/sales/net-profit amounts and growth percentages,
+five-year-old annual OPM, and `financialHistoryObservedOn`. Growth compares the
+latest four consecutive quarters against the preceding four, using the absolute
+prior-period total as denominator. Missing periods, non-finite values or a zero
+denominator produce null. Latest TTM totals may be available even when the prior
+four quarters needed for growth are missing.
+
+Full series are published separately as immutable `financial-history.json.gz`,
+keyed by symbol and linked by the manifest's `financialHistoryUrl`. Lightweight
+stock rows do not embed the full series. Python text-query evaluation supports:
+
+```text
+TTM Revenue Growth >= 15
+TTM PAT Growth >= 20
+OPM 5 Years Ago >= 10
+Financial Value(quarterly, revenue, 0) > Financial Value(quarterly, revenue, 4)
+Financial Value(annual, opm, 0) > Financial Value(annual, opm, 5)
+```
+
+Offsets refer to calendar quarters or years from the latest source period;
+missing periods are not replaced by older available rows. Supported statement
+metrics include revenue, sales, net_profit (alias PAT), profit_before_tax (alias
+PBT), EPS, OPM, EBITDA, operating_profit, expenses, interest, depreciation,
+other_income and tax_expenses. These expressions require the Python scanner
+endpoint; no browser evaluator or filter-builder control is added for them.
+Historical borrowings and ROCE remain unsupported because the inspected source
+does not supply those series. These are ScanX-derived calculations, not a claim
+of identical StockScans definitions or complete NSE coverage.
+
 ### 1. Fetch and maintain inputs
 
 The EDL pipeline retrieves and standardizes stock, listing, index, financial, delivery, event, and other supported inputs. History caches supply longer technical lookbacks. Daily and weekly workflows refresh these inputs through validated staging.

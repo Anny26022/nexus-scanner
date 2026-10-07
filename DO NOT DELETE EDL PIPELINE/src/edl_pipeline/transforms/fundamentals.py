@@ -7,6 +7,7 @@ import math
 
 from pipeline_utils import BASE_DIR, load_json, save_json
 from edl_pipeline.schemas import SCREEN_METRICS
+from edl_pipeline.scanner.financials import normalize_statement_history, statement_summary
 
 
 FUNDAMENTAL_FILE = os.path.join(BASE_DIR, "fundamental_data.json")
@@ -356,6 +357,9 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
 
     for tag, (canonical, _public) in SCREEN_METRICS.items():
         stock_analysis[canonical] = stock_analysis["D/E"] if canonical == "debt_to_equity" else get_optional_float(tech.get(tag))
+    statement_history = normalize_statement_history(item, item.get("financial_observed_on"))
+    stock_analysis["financial_statement_history"] = statement_history
+    stock_analysis.update(statement_summary(statement_history))
     # These annual amounts are also available in the fundamental response.
     for canonical, source in (("cwip_crore", "CWIP"), ("fixed_assets_crore", "FIXED_ASSETS"), ("borrowings_crore", "TOTAL_BORROWINGS")):
         if stock_analysis[canonical] is None:

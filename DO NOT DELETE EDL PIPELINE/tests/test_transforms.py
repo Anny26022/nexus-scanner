@@ -696,7 +696,10 @@ class EarningsCalendarTests(unittest.TestCase):
             fetch.assert_not_called()
             payload = json.loads((root / "earnings_calendar.json").read_text(encoding="utf-8"))
             self.assertFalse(payload["available"])
+            self.assertEqual(payload["source"], previous["source"])
             self.assertEqual(payload["events"][0]["symbol"], "EXISTING")
+            self.assertEqual(payload["events"][0]["source"], "BSE")
+            self.assertEqual(payload["fetched_at"], previous["fetched_at"])
 
     def test_invalid_response_preserves_cached_nexus_events_and_records_failure(self):
         from fetch_earnings_calendar import main
@@ -711,6 +714,7 @@ class EarningsCalendarTests(unittest.TestCase):
                 self.assertTrue(main(root))
             payload = json.loads((root / "earnings_calendar.json").read_text())
             self.assertFalse(payload["available"])
+            self.assertEqual(payload["source"], previous["source"])
             self.assertIn("records list", payload["last_fetch_error"])
             self.assertEqual(payload["events"][0]["symbol"], "EXISTING")
             self.assertEqual(payload["fetched_at"], previous["fetched_at"])

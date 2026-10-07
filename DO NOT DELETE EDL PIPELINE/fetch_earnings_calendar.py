@@ -152,7 +152,7 @@ def main(root: Path = Path(BASE_DIR)) -> bool:
         if payload is None:
             payload = {"source": SOURCE, "fetched_at": fetched_at, "events": [], "available": False, "last_fetch_error": str(error)}
         else:
-            payload = {**payload, "source": SOURCE, "available": False, "last_fetch_error": str(error)}
+            payload = {**payload, "available": False, "last_fetch_error": str(error)}
         print(f"Nexus Journal calendar unavailable; retaining prior calendar: {error}")
     else:
         payload["available"] = True

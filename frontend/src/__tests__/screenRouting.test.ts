@@ -19,7 +19,16 @@ it('runs scalar text through the browser without posting to the API',async()=>{
   const {realAdapter}=await import('../api/realAdapter');
   expect(await realAdapter.runScreen({...request,textQuery:'Market Cap > 2000 AND Close Price > 50 DMA'})).toEqual(result);
   expect(fetcher).toHaveBeenCalledTimes(1);
-  expect(snapshotTask.mock.calls[0][0].request).toMatchObject({textQuery:undefined,expressionTree:{type:'group',operator:'all'}});
+  expect(snapshotTask.mock.calls[0][0].request).toMatchObject({
+    textQuery: undefined,
+    expressionTree: {
+      type: 'group', operator: 'all', children: [
+        { type: 'condition', condition: { conditionId: 'FIELD_COMPARISON', parameters: { field: 'market_cap_crore', comparison: 'GREATER', value: 2000 } } },
+        { type: 'condition', condition: { conditionId: 'FIELD_COMPARISON', parameters: { field: 'close', comparison: 'GREATER', value: { field: 'sma_50' } } } },
+      ],
+    },
+  });
+  expect(snapshotTask.mock.calls[0][0].request.expressionTree.children).toHaveLength(2);
 });
 it('sends the complete mixed expression remotely without a partial local scan',async()=>{
   const fetcher=vi.fn().mockResolvedValueOnce(new Response(JSON.stringify(manifest)))

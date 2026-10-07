@@ -34,7 +34,9 @@ export function snapshotFieldDependency(field: string): 'core' | 'technical' | '
 export function readSnapshotField(stock: SnapshotStock, field: string, session: string): number | null {
   if (!snapshotFieldDependency(field)) return null;
   const metadata = Object.hasOwn(fundamentalFields,field);
-  if (metadata ? stock.metadataAsOfDate !== session : !stock.historyAligned || stock.asOfDate !== session) return null;
+  const publishedOnly = ['vwap', 'dividend_per_share_latest'].includes(field);
+  if (metadata ? stock.metadataAsOfDate !== session
+    : stock.asOfDate !== session || (!publishedOnly && !stock.historyAligned)) return null;
   if (field === 'vwap' && stock.vwapAsOfDate !== session) return null;
   const value = Object.hasOwn(metricFields,field) ? stock.metrics?.[metricFields[field]]
     : (stock as unknown as Record<string,unknown>)[fundamentalFields[field] ?? priceFields[field]];

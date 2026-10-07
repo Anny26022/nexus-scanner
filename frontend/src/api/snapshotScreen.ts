@@ -44,6 +44,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
   const p = c.parameters;
   let fn: Predicate;
   let metadata = false;
+  let publishedOnly = false;
   switch (c.conditionId) {
     case 'FIELD_COMPARISON': {
       const field = String(p.field), targetField = typeof p.value === 'object' && p.value !== null ? String(p.value.field) : null;
@@ -126,7 +127,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'DIVIDEND_YIELD': metadata = true; fn = s => compare(s.dividendYieldPct,p.comparison,p.value); break;
     case 'fund_roe': metadata = true; fn = s => compare(s.roePct,'ABOVE',p.minRoe); break;
     case 'fund_free_float': metadata = true; fn = s => between(s.freeFloatPct,p.minFloat,p.maxFloat); break;
-    case 'fund_stock_price': fn = s => compare(s.close,'GREATER',p.minPrice); break;
+    case 'fund_stock_price': fn = s => compare(s.close,'ABOVE',p.minPrice); break;
     case 'PRICE_RANGE': fn = s => between(s.close,p.minPrice,p.maxPrice); break;
     case 'PCT_FROM_ATH': fn = s => compare(s.distAthPct,p.comparison,p.pct); break;
     case 'FUNDAMENTAL_METRIC': {
@@ -138,6 +139,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       const key = field[String(p.metric).toUpperCase()];
       if (!key) return null;
       metadata = !['dividendPerShare','vwap','allTimeHigh','allTimeLow','return5yPct'].includes(key);
+      publishedOnly = ['dividendPerShare', 'vwap'].includes(key);
       fn = s => key === "vwap" && s.vwapAsOfDate !== session ? null : compare(s[key],p.comparison,p.value); break;
     }
     case 'EPS_LAST_YEAR_HIGHER':
@@ -180,7 +182,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
   }
   const checked: Predicate = s => metadata
     ? s.metadataAsOfDate === session ? fn(s) : null
-    : s.historyAligned && s.asOfDate === session ? fn(s) : null;
+    : (publishedOnly || s.historyAligned) && s.asOfDate === session ? fn(s) : null;
   return c.isNegated ? s => { const v = checked(s); return v == null ? null : !v; } : checked;
 }
 

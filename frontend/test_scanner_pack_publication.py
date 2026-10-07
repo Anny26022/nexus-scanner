@@ -7,7 +7,7 @@ import unittest
 
 import pandas as pd
 
-from scanner_pack_publication import MAGIC,SHARD_COUNT,build_private_scanner_pack
+from scanner_pack_publication import MAGIC,SHARD_COUNT,build_private_scanner_pack,_pack_shard
 
 
 class Cache:
@@ -16,6 +16,17 @@ class Cache:
 
 
 class ScannerPackTests(unittest.TestCase):
+    def test_worker_golden_shard_matches_actual_publisher(self):
+        fixtures = Path(__file__).resolve().parents[1] / 'cloudflare/scanner-worker/src/fixtures'
+        inputs = json.loads((fixtures / 'publisher-shard.json').read_text())
+        entries = []
+        for symbol, records in inputs.items():
+            frame = pd.DataFrame(records)
+            frame['Date'] = pd.to_datetime(frame['Date'])
+            entries.append((symbol, frame))
+        expected = gzip.decompress((fixtures / 'publisher-shard.bin.gz').read_bytes())
+        self.assertEqual(gzip.decompress(_pack_shard(entries)), expected)
+
     def test_binary_pack_is_deterministic_bounded_and_manifested(self):
         frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-10-01',periods=1600),'Open':1.,'High':2.,'Low':.5,'Close':1.5,'Volume':100.})
         context={'stocks':{'TEST':{'symbol':'TEST'}},'benchmarks':{},'financial_history':{}}

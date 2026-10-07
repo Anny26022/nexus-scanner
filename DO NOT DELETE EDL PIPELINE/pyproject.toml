@@ -52,7 +52,7 @@ py-modules = [
     "fetch_advanced_indicators",
     "fetch_all_indices",
     "fetch_all_ohlcv",
-    "fetch_bse_earnings_calendar",
+    "fetch_earnings_calendar",
     "fetch_bulk_block_deals",
     "fetch_circuit_stocks",
     "fetch_company_filings",

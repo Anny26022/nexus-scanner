@@ -113,7 +113,16 @@ def discard_invalid_ohlcv_rows(rows):
     return [row for row in rows if has_valid_ohlcv(row)]
 
 
-def plan_history_ranges(existing_rows, desired_start_ts, desired_end_ts):
+def missing_history_sessions(existing_rows, expected_sessions):
+    """Only require observed exchange sessions inside this security's history."""
+    observed = {row["Date"] for row in existing_rows}
+    if not observed:
+        return []
+    first, last = min(observed), max(observed)
+    return sorted({day for day in expected_sessions if first <= day <= last and day not in observed})
+
+
+def plan_history_ranges(existing_rows, desired_start_ts, desired_end_ts, expected_sessions=()):
     """Plan backward and forward gaps without discarding an existing cache."""
     if desired_start_ts >= desired_end_ts:
         return []
@@ -137,6 +146,11 @@ def plan_history_ranges(existing_rows, desired_start_ts, desired_end_ts):
         ranges.append((int(desired_start_ts), int(first_ts - one_day)))
     if last_ts + one_day < desired_end_ts:
         ranges.append((int(last_ts + one_day), int(desired_end_ts)))
+    missing = missing_history_sessions(existing_rows, expected_sessions)
+    if missing:
+        # A bounded repair range also covers non-consecutive missing sessions.
+        ranges.append((int(datetime.strptime(missing[0], "%Y-%m-%d").timestamp()),
+                       int(datetime.strptime(missing[-1], "%Y-%m-%d").timestamp()) + one_day))
     return ranges
 
 

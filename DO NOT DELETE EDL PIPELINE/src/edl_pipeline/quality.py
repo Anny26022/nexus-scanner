@@ -80,6 +80,22 @@ def ohlc_error(row):
     return None
 
 
+def inspect_breadth_history(breadth, window=30, minimum_ratio=0.90):
+    """Current file presence cannot certify coverage of earlier sessions."""
+    eligible = breadth.get("quality", {}).get("eligible_symbols")
+    if type(eligible) is not int or eligible <= 0:
+        raise ValueError("breadth eligible population is missing or invalid")
+    rows = breadth.get("records", [])[-window:]
+    gaps = []
+    for row in rows:
+        count = row.get("eligible_with_candle")
+        if type(count) is not int or not 0 <= count <= eligible:
+            raise ValueError("breadth session candle count is missing or invalid")
+        if count / eligible < minimum_ratio:
+            gaps.append({"date": row["date"], "with_candle": count, "eligible": eligible})
+    return {"checked_sessions": len(rows), "minimum_ratio": minimum_ratio, "low_coverage_sessions": gaps}
+
+
 def inspect_publication(root, today=None, expected_session=None, max_age_days=None):
     today = today or datetime.now(timezone(timedelta(hours=5, minutes=30))).date()
     max_age_days = max_age_days if max_age_days is not None else int(os.getenv("EDL_MAX_SESSION_AGE_DAYS", "7"))
@@ -107,6 +123,12 @@ def inspect_publication(root, today=None, expected_session=None, max_age_days=No
             errors.append("v2 outputs were not generated together today")
         if breadth["records"][-1]["date"] != session.isoformat():
             errors.append("breadth and benchmark sessions differ")
+        breadth_history = inspect_breadth_history(breadth)
+        if breadth_history["low_coverage_sessions"]:
+            errors.append("breadth candle coverage below 90%: " + ", ".join(
+                f"{row['date']} ({row['with_candle']}/{row['eligible']})"
+                for row in breadth_history["low_coverage_sessions"]
+            ))
         rs_methodology = rs_ratings.get("methodology")
         rs_benchmark_name = "NIFTY 500"
         if not isinstance(rs_methodology, dict):
@@ -227,6 +249,7 @@ def inspect_publication(root, today=None, expected_session=None, max_age_days=No
                                "ratings": len(ratings) if isinstance(ratings, dict) else 0,
                                "methodology": rs_ratings.get("methodology")},
                 "delivery_history": delivery_history,
+                "breadth_history": breadth_history,
                 "missing_field_counts": dict(Counter(k for row in availability for k in row["missing_fields"])),
                 "symbols": availability, "indices": index_availability, "errors": errors}
     except (ValueError, KeyError, TypeError, IndexError, StopIteration, OSError) as error:

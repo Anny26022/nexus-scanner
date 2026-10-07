@@ -115,11 +115,15 @@ jobs:
             --refresh --retry-unmapped
 
       - name: Record Tijori refresh failure
+        continue-on-error: true
         if: ${{ always() && steps.tijori_refresh.outcome == 'failure' }}
         env:
           TIJORI_STEP_OUTCOME: ${{ steps.tijori_refresh.outcome }}
           TIJORI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          echo "::warning::Tijori refresh failed or timed out; see uploaded exceptions.json. The public dataset may be stale."
+          echo "### Tijori refresh failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "The public dataset may be stale. See the refresh step log and exceptions.json in weekly-eod2-diagnostics." >> "$GITHUB_STEP_SUMMARY"
           python3 - <<'PYTHON'
           from datetime import datetime, timezone
           import json
@@ -138,11 +142,10 @@ jobs:
               'runUrl': os.environ['TIJORI_RUN_URL'],
               'message': 'Tijori export failed or timed out; the public dataset may be stale. See the refresh step log.',
           }
-          path.write_text(json.dumps(diagnostics, indent=2) + '\n')
+          temporary = path.with_suffix('.tmp')
+          temporary.write_text(json.dumps(diagnostics, indent=2) + '\n')
+          temporary.replace(path)
           PYTHON
-          echo "::warning::Tijori refresh failed or timed out; see uploaded exceptions.json. The public dataset may be stale."
-          echo "### Tijori refresh failed" >> "$GITHUB_STEP_SUMMARY"
-          echo "The public dataset may be stale. See the refresh step log and exceptions.json in weekly-eod2-diagnostics." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Commit and Push Results
         run: |

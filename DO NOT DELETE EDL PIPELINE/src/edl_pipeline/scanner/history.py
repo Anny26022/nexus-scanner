@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from .earnings import EARNINGS_FIELDS, select_observation
-from .shareholding import SHAREHOLDING_FIELDS, select_observation as select_shareholding_observation
+from .shareholding import SHAREHOLDING_FIELDS, SHAREHOLDING_CHANGE_FIELDS, select_observation as select_shareholding_observation
 
 
 SCANNER_SNAPSHOT_FIELDS = (
@@ -60,6 +60,10 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
         if not stock.get("symbol"):
             continue
         item = {field: stock.get(field) for field in SCANNER_SNAPSHOT_FIELDS}
+        # Provider changes have no independent observation date. They are safe
+        # only for their own snapshot session unless dated history replaces them.
+        for field in SHAREHOLDING_CHANGE_FIELDS:
+            item[field] = stock.get(field) if stock.get("as_of_date") == session else None
         observation = select_observation(earnings_observations or [], stock["symbol"], session)
         if observation:
             # The selected values are now truly date-bounded, even if the
@@ -70,6 +74,7 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
         holding = select_shareholding_observation(shareholding_observations or [], stock["symbol"], session)
         if holding:
             item.update({field: holding.get(field) for field in SHAREHOLDING_FIELDS.values()})
+            item.update({field: holding.get(field) for field in SHAREHOLDING_CHANGE_FIELDS})
             promoter = holding.get("promoter_holding_percent")
             if isinstance(promoter, (int, float)) and 0 <= promoter <= 100:
                 item["free_float_percent"] = 100.0 - promoter

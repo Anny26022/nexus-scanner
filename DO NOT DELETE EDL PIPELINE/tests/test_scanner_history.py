@@ -16,7 +16,7 @@ from edl_pipeline.scanner.shareholding import observations_from_fundamentals, se
 
 class ScannerHistoryTests(unittest.TestCase):
     def test_snapshot_preserves_signed_quarterly_ownership_changes(self):
-        stocks = [{"symbol": "TEST", "promoter_holding_percent": 50.48,
+        stocks = [{"symbol": "TEST", "as_of_date": "2026-09-25", "promoter_holding_percent": 50.48,
                    "fii_percent_change_qoq": -1.47, "dii_percent_change_qoq": 0.0}]
         with tempfile.TemporaryDirectory() as directory:
             build_snapshot(Path(directory), stocks, {}, {}, "2026-09-25")
@@ -25,6 +25,74 @@ class ScannerHistoryTests(unittest.TestCase):
         self.assertEqual(item["promoter_holding_percent"], 50.48)
         self.assertEqual(item["fii_percent_change_qoq"], -1.47)
         self.assertEqual(item["dii_percent_change_qoq"], 0.0)
+
+    def test_historical_ownership_changes_use_adjacent_observed_quarters(self):
+        stocks = [{"symbol": "TEST", "as_of_date": "2026-10-07",
+                   "promoter_holding_percent": 99, "fii_percent_change_qoq": 99,
+                   "dii_percent_change_qoq": 99}]
+        observations = [
+            {"symbol": "TEST", "period_end": "2026-03-31", "observed_on": "2026-05-01",
+             "fii_holding_percent": 18.67, "dii_holding_percent": 20.55},
+            {"symbol": "TEST", "period_end": "2026-06-30", "observed_on": "2026-08-01",
+             "promoter_holding_percent": 50.48, "fii_holding_percent": 17.20, "dii_holding_percent": 20.55},
+            # Neither the new quarter nor later corrections were known in August.
+            {"symbol": "TEST", "period_end": "2026-09-30", "observed_on": "2026-10-07",
+             "fii_holding_percent": 25, "dii_holding_percent": 25},
+            {"symbol": "TEST", "period_end": "2026-03-31", "observed_on": "2026-10-07",
+             "fii_holding_percent": 1, "dii_holding_percent": 1},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            build_snapshot(Path(directory), stocks, {}, {}, "2026-08-15",
+                           shareholding_observations=observations)
+            item = load_snapshot(Path(directory), "2026-08-15")["stocks"][0]
+        self.assertEqual(item["promoter_holding_percent"], 50.48)
+        self.assertEqual(item["shareholding_period_end"], "2026-06-30")
+        self.assertAlmostEqual(item["fii_percent_change_qoq"], -1.47)
+        self.assertEqual(item["dii_percent_change_qoq"], 0.0)
+
+    def test_ownership_changes_are_null_when_prior_quarter_is_unavailable(self):
+        stocks = [{"symbol": "TEST", "as_of_date": "2026-09-25",
+                   "fii_percent_change_qoq": 99, "dii_percent_change_qoq": 99}]
+        current = {"symbol": "TEST", "period_end": "2026-06-30", "observed_on": "2026-08-01",
+                   "fii_holding_percent": 17.20, "dii_holding_percent": 20.55}
+        for prior in [None,
+                      {"period_end": "2025-12-31", "observed_on": "2026-02-01"},
+                      {"period_end": "2026-03-31", "observed_on": "2026-10-07"},
+                      {"period_end": "2026-03-31", "observed_on": "2026-05-01",
+                       "fii_holding_percent": float('nan'), "dii_holding_percent": None}]:
+            with self.subTest(prior=prior), tempfile.TemporaryDirectory() as directory:
+                observations = [current]
+                if prior:
+                    observations.append({"symbol": "TEST", **prior})
+                build_snapshot(Path(directory), stocks, {}, {}, "2026-09-25",
+                               shareholding_observations=observations)
+                item = load_snapshot(Path(directory), "2026-09-25")["stocks"][0]
+                self.assertIsNone(item["fii_percent_change_qoq"])
+                self.assertIsNone(item["dii_percent_change_qoq"])
+
+    def test_undated_or_future_provider_changes_are_not_backfilled(self):
+        for source_date in [None, "2026-10-07"]:
+            with self.subTest(source_date=source_date), tempfile.TemporaryDirectory() as directory:
+                stocks = [{"symbol": "TEST", "as_of_date": source_date,
+                           "fii_percent_change_qoq": -1.47, "dii_percent_change_qoq": 0}]
+                build_snapshot(Path(directory), stocks, {}, {}, "2026-09-25")
+                item = load_snapshot(Path(directory), "2026-09-25")["stocks"][0]
+                self.assertIsNone(item["fii_percent_change_qoq"])
+                self.assertIsNone(item["dii_percent_change_qoq"])
+
+    def test_ownership_changes_handle_year_boundary_and_known_corrections(self):
+        observations = [
+            {"symbol": "TEST", "period_end": "2025-12-31", "observed_on": "2026-02-01",
+             "fii_holding_percent": 10, "dii_holding_percent": 20},
+            {"symbol": "TEST", "period_end": "2025-12-31", "observed_on": "2026-04-01",
+             "fii_holding_percent": 11, "dii_holding_percent": 20},
+            {"symbol": "TEST", "period_end": "2026-03-31", "observed_on": "2026-05-01",
+             "fii_holding_percent": 12, "dii_holding_percent": 19},
+        ]
+        selected = select_shareholding_observation(observations, "TEST", "2026-05-02")
+        self.assertEqual(selected["fii_percent_change_qoq"], 1)
+        self.assertEqual(selected["dii_percent_change_qoq"], -1)
+        self.assertNotIn("fii_percent_change_qoq", observations[-1])
 
     def test_persists_only_point_in_time_scanner_fields(self):
         stocks = [{

@@ -7,6 +7,7 @@ on:
       - 'cloudflare/scanner-worker/**'
       - 'frontend/src/engine/**'
       - 'frontend/src/api/snapshotScreen.ts'
+      - 'frontend/src/api/capabilityRegistry.ts'
       - 'frontend/src/data/**'
       - 'frontend/src/types/**'
       - '.github/workflows/deploy_scanner_worker.yml'

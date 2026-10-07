@@ -21,7 +21,10 @@ dates only, preserving all existing adjusted candles and the official latest can
 that leaves an identified internal gap makes the required history stage fail.
 
 Unusable ledger files are skipped with warnings; an entirely unusable ledger
-fails the required history stage.
+fails the required history stage. Malformed non-string symbols are skipped.
+Worker failures log the symbol and full exception, including missing session
+dates, in the refresh job output. These early fetch-stage failures occur before
+the publication audit and therefore do not produce `data_quality_failure.json`.
 
 The publication gate requires all 30 expected dates from the official delivery
 ledger through the benchmark session to be present exactly once in breadth:

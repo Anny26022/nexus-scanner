@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 
-from fetch_all_ohlcv import expected_sessions_by_symbol, fetch_single_stock
+from fetch_all_ohlcv import expected_sessions_by_symbol, fetch_single_stock, main
 from ohlcv_utils import missing_history_sessions, read_ohlcv_csv, write_ohlcv_csv
 from edl_pipeline.quality import inspect_breadth_history, inspect_publication
 import test_integrity
@@ -37,6 +37,29 @@ class ReviewRegressionTests(unittest.TestCase):
             with self.assertWarns(UserWarning):
                 result = expected_sessions_by_symbol(root, {"ABC": {}}, "2026-09-23")
             self.assertEqual(result, {"ABC": {"2026-09-23"}})
+
+    def test_non_string_ledger_symbols_are_skipped(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            day = "2026-09-23"
+            records = [{"symbol": symbol, "date": day}
+                       for symbol in ([], {}, None, 1, "OTHER", "ABC")]
+            (root / f"{day}.json").write_text(json.dumps({"date": day, "records": records}))
+            self.assertEqual(expected_sessions_by_symbol(root, {"ABC": {}}, day),
+                             {"ABC": {day}})
+
+    def test_worker_failure_logs_symbol_and_missing_sessions(self):
+        error = ValueError("ABC: required history sessions missing: 2026-09-22")
+        with patch("fetch_all_ohlcv.ensure_dir"), patch(
+            "fetch_all_ohlcv.load_json", return_value=[{"Symbol": "ABC", "Sid": 1}]
+        ), patch("fetch_all_ohlcv.is_nse_cash_session", return_value=False), patch(
+            "fetch_all_ohlcv.official_session", return_value="2026-09-23"
+        ), patch("fetch_all_ohlcv.expected_sessions_by_symbol", return_value={"ABC": {"2026-09-22"}}), patch(
+            "fetch_all_ohlcv.fetch_single_stock", side_effect=error
+        ), self.assertLogs("fetch_all_ohlcv", level="ERROR") as captured:
+            self.assertFalse(main())
+        self.assertIn("OHLCV history failed for ABC", "\n".join(captured.output))
+        self.assertIn(str(error), "\n".join(captured.output))
 
     def test_empty_or_missing_ledger_fails(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -86,7 +109,8 @@ class ReviewRegressionTests(unittest.TestCase):
         self.assertTrue(inspect_breadth_history(breadth, sessions[-1:])["errors"])
         for quality in (None, [], "invalid", 1):
             breadth["quality"] = quality
-            self.assertTrue(inspect_breadth_history(breadth, sessions)["errors"])
+            self.assertIn("breadth eligible population is missing or invalid",
+                          inspect_breadth_history(breadth, sessions)["errors"])
 
     def test_malformed_session_keeps_other_publication_findings(self):
         with tempfile.TemporaryDirectory() as folder:

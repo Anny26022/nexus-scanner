@@ -4,6 +4,7 @@ import sys
 import time
 import json
 import warnings
+import logging
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -33,6 +34,7 @@ HISTORY_CALENDAR_DAYS = int(os.getenv("EDL_OHLCV_HISTORY_DAYS", str(4 * 365)))
 FETCH_ATTEMPTS = 3
 NSE_DAILY_REPORT_FILE = "nse_daily_ohlcv_report.json"
 MIN_READY_HISTORY_ROWS = 252
+logger = logging.getLogger(__name__)
 
 
 def official_session():
@@ -79,7 +81,7 @@ def expected_sessions_by_symbol(cache_dir, symbols, through_session, window=30):
             continue
         for row in records:
             if (isinstance(row, dict) and row.get("date") == path.stem
-                    and row.get("symbol") in expected):
+                    and isinstance(row.get("symbol"), str) and row["symbol"] in expected):
                 expected[row["symbol"]].add(path.stem)
         used += 1
         if used >= window:
@@ -232,6 +234,7 @@ def main():
                 counts[res if res in counts else "error"] += 1
             except Exception:
                 counts["error"] += 1
+                logger.exception("OHLCV history failed for %s", futures[future])
 
     print(f"Done! Updated: {counts['success']} | UpToDate: {counts['uptodate']} | Errors: {counts['error']}")
     return counts["error"] == 0

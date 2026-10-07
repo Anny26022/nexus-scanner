@@ -323,6 +323,25 @@ Build with `npm ci` and `npm run build`, then host `dist/` with its public data 
 - Verify gzip transport: the client supports raw compressed bytes and responses decoded through HTTP `Content-Encoding: gzip`.
 - Deploy compatible application/catalogue and data versions.
 
+### Cloudflare production and PR previews
+
+The root `wrangler.jsonc` builds and serves the static frontend for both production
+and PR previews. It does not deploy the Python scanner bridge. Browser-evaluable
+conditions and published preset defaults work; expressions requiring historical
+Python evaluation need a separately deployed backend.
+
+Set `VITE_API_BASE_URL` in the Cloudflare build environment to that backend's API
+base before building; the frontend appends `/screens/run`. The backend must allow
+the production/preview origin through CORS and have the requested frozen dataset
+revision and history inputs. Build-time settings require a new build to take effect.
+
+Without an external API, the default `/api/screens/run` has no handler in this
+static deployment. With Wrangler 4.148.0, local checks return HTTP 405 for POST;
+an unmatched GET returns the SPA's `index.html` with HTTP 200. Neither response is
+a scanner API result. SPA fallback supports frontend deep links and does not
+supply API endpoints. Historical queries are unavailable in these previews until
+the separate backend is configured.
+
 ### Historical evaluation deployment
 
 A static-only installation supports browser-evaluable conditions and preset defaults. For richer expressions, supply `POST /screens/run` under the configured API base or proxy `/api/screens/run` to a Python service.

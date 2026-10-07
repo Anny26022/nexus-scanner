@@ -125,6 +125,48 @@ export interface StockRow {
   financialMetadata?: Record<string, unknown> | null;
   dividendExDate?: string | null;
 
+
+  promoterHoldingPct?: number | null;
+  // Quarter-on-quarter changes in percentage points, not relative growth.
+  fiiChangePctQoq?: number | null;
+  diiChangePctQoq?: number | null;
+  financialUnitsVersion?: number | null;
+  debtToEquitySource?: string | null;
+  pbRatio?: number | null;
+  evEbitda?: number | null;
+  currentRatio?: number | null;
+  roaPct?: number | null;
+  cwipCrore?: number | null;
+  fixedAssetsCrore?: number | null;
+  borrowingsCrore?: number | null;
+  freeCashFlowCrore?: number | null;
+  financingCashFlowCrore?: number | null;
+  averageRoe3yPct?: number | null;
+  averageRoa3yPct?: number | null;
+  averageOpm5yPct?: number | null;
+  medianSalesGrowth5yPct?: number | null;
+  epsGrowth1yPct?: number | null;
+  epsCagr3yPct?: number | null;
+  revenueCagr3yPct?: number | null;
+  fiiHoldingPct?: number | null;
+  diiHoldingPct?: number | null;
+  industryPeRatio?: number | null;
+  publicHoldingPct?: number | null;
+  numberOfShareholders?: number | null;
+  faceValue?: number | null;
+  totalIncomeLakh?: number | null;
+  totalExpenseLakh?: number | null;
+  profitBeforeTaxLakh?: number | null;
+  totalTaxExpensesLakh?: number | null;
+  netProfitLakh?: number | null;
+  totalEquityLakh?: number | null;
+  totalAssetsLakh?: number | null;
+  currentAssetsLakh?: number | null;
+  currentLiabilitiesLakh?: number | null;
+  nonCurrentLiabilitiesLakh?: number | null;
+  operatingCashFlowLakh?: number | null;
+  investingCashFlowLakh?: number | null;
+  netCashFlowLakh?: number | null;
   pegRatio?: number | null;
   salesGrowth5yPct?: number | null;
   epsLastYear?: number | null;

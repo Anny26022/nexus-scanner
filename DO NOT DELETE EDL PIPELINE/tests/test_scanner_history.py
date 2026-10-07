@@ -15,6 +15,23 @@ from edl_pipeline.scanner.shareholding import observations_from_fundamentals, se
 
 
 class ScannerHistoryTests(unittest.TestCase):
+    def test_snapshot_preserves_metrics_without_backfilling_ownership_changes(self):
+        stocks = [{"symbol": "TEST", "promoter_holding_percent": 50.48,
+                   "fii_percent_change_qoq": -1.47, "dii_percent_change_qoq": 0.0,
+                   "cwip_crore": 237686, "total_income_in_lakhs": 31601800,
+                   "financial_units_version": 1, "debt_to_equity_source": "SCANX_Debt2Eq"}]
+        with tempfile.TemporaryDirectory() as directory:
+            build_snapshot(Path(directory), stocks, {}, {}, "2026-09-25")
+            saved = load_snapshot(Path(directory), "2026-09-25")
+        item = saved["stocks"][0]
+        self.assertEqual(item["promoter_holding_percent"], 50.48)
+        self.assertNotIn("fii_percent_change_qoq", item)
+        self.assertNotIn("dii_percent_change_qoq", item)
+        self.assertEqual(item["cwip_crore"], 237686)
+        self.assertEqual(item["total_income_in_lakhs"], 31601800)
+        self.assertEqual(item["financial_units_version"], 1)
+        self.assertEqual(item["debt_to_equity_source"], "SCANX_Debt2Eq")
+
     def test_persists_only_point_in_time_scanner_fields(self):
         stocks = [{
             "symbol": "RELIANCE", "as_of_date": "2026-09-25", "close": 1400,

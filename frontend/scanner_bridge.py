@@ -19,6 +19,7 @@ from edl_pipeline.scanner.presets import get_preset
 from edl_pipeline.scanner.query import compile_query
 from edl_pipeline.scanner.trend import evaluate_history, normalize_history, _comparison, _evaluate_expression, _leaf_results
 from edl_pipeline.scanner.financials import finite_number, financial_value
+from edl_pipeline.schemas import PUBLIC_FINANCIAL_FIELDS
 
 
 LEGACY_PRESETS = {
@@ -294,6 +295,12 @@ def stock_row(s, ratings):
         "return5yPct": "return_5y",
     })
     row = {k:s.get(v) for k,v in fields.items()}
+    # Ownership levels are percentages; QoQ changes are percentage points.
+    # Keep absent/non-finite values unavailable rather than fabricating zero.
+    for source, output in PUBLIC_FINANCIAL_FIELDS.items():
+        row[output] = finite_number(s.get(source))
+    row["financialUnitsVersion"] = s.get("financial_units_version")
+    row["debtToEquitySource"] = s.get("debt_to_equity_source")
     row.update({k:s.get(k) for k in ("symbol","name","open","high","low","close","volume")})
     row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7, rsRating=ratings.get(s["symbol"],{}).get("front_weighted"), daysSinceEarnings=None, fnoBan=False)
     for ma in ("sma20","sma50","sma200","ema20","ema50","ema200"):

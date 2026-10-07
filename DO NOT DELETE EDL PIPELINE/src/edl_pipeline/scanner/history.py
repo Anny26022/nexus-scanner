@@ -10,6 +10,7 @@ from tempfile import NamedTemporaryFile
 
 from .earnings import EARNINGS_FIELDS, select_observation
 from .shareholding import SHAREHOLDING_FIELDS, select_observation as select_shareholding_observation
+from edl_pipeline.schemas import PUBLIC_FINANCIAL_FIELDS
 
 
 SCANNER_SNAPSHOT_FIELDS = (
@@ -31,6 +32,15 @@ SCANNER_SNAPSHOT_FIELDS = (
     "non_current_liabilities_in_lakhs", "operating_cash_flow_in_lakhs",
     "investing_cash_flow_in_lakhs", "net_cash_flow_in_lakhs",
 )
+SCANNER_SNAPSHOT_FIELDS = tuple(dict.fromkeys([
+    *SCANNER_SNAPSHOT_FIELDS,
+    # Historical ownership changes require adjacent dated observations;
+    # do not copy the latest provider changes into an earlier session.
+    *(field for field in PUBLIC_FINANCIAL_FIELDS if field not in {
+        "fii_percent_change_qoq", "dii_percent_change_qoq",
+    }),
+    "financial_units_version", "debt_to_equity_source",
+]))
 
 
 def _write_gzip_json(path: Path, payload: dict) -> None:

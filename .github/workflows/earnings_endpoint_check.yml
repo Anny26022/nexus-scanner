@@ -19,11 +19,14 @@ jobs:
           python - <<'PY'
           from fetch_earnings_calendar import fetch_calendar, build_calendar, nse_symbols, ENDPOINT
           from pathlib import Path
+          import gzip, json
           from datetime import datetime, timezone
           payload = fetch_calendar()
           assert isinstance(payload, dict) and isinstance(payload.get('records'), list)
           assert payload['records'], 'Expected nonempty live calendar'
-          calendar = build_calendar(payload, nse_symbols(Path('nse_equity_list.csv')), datetime.now(timezone.utc).isoformat())
+          with gzip.open('all_stocks_fundamental_analysis.json.gz', 'rt') as handle:
+              symbols = {row['symbol'] for row in json.load(handle)}
+          calendar = build_calendar(payload, symbols, datetime.now(timezone.utc).isoformat())
           assert calendar['events'], 'Expected mapped NSE events'
           print(f"Endpoint: {ENDPOINT}")
           print(f"HTTP success, raw records: {len(payload['records'])}, mapped NSE events: {len(calendar['events'])}")

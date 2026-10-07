@@ -120,9 +120,9 @@ class SnapshotPublicationTests(unittest.TestCase):
             compressed=(output/'revisions'/second['revision']/'stocks.json.gz').read_bytes()
             self.assertEqual(gzip.decompress(compressed),(output/'revisions'/second['revision']/'stocks.json').read_bytes())
             self.assertEqual(second['datasetPackedGzipUrl'], f"/data/revisions/{second['revision']}/stocks.packed.json.gz")
-            from packed_snapshot import pack_snapshot
+            from test_packed_snapshot import decode_packed_snapshot
             packed = json.loads(gzip.decompress((output/'revisions'/second['revision']/'stocks.packed.json.gz').read_bytes()))
-            self.assertEqual(packed, pack_snapshot(json.loads(gzip.decompress(compressed))))
+            self.assertEqual(decode_packed_snapshot(packed), json.loads((output/'revisions'/second['revision']/'stocks.json').read_text()))
             self.assertEqual(second['datasetGzipUrl'],f"/data/revisions/{second['revision']}/stocks.json.gz")
             self.assertNotEqual(first['revision'],second['revision'])
             self.assertEqual(json.loads((output/'current.json').read_text())['revision'],second['revision'])

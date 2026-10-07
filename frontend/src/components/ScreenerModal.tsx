@@ -89,56 +89,63 @@ interface FilterRowProps {
   updateParam: (condId: string, paramId: string, value: any) => void;
 }
 
+interface FilterParameterProps {
+  defId: string;
+  p: ParameterSpec;
+  val: any;
+  updateParam: FilterRowProps['updateParam'];
+}
+
+const FilterParameter = memo(function FilterParameter({ defId, p, val, updateParam }: FilterParameterProps) {
+  // The row title and each control's accessible label provide the context;
+  // keeping the inputs compact makes dense filter groups easier to scan.
+  let control: React.ReactNode;
+  if (p.type === 'boolean') {
+    control = <input aria-label={p.label} type="checkbox" checked={!!val}
+      onChange={e => updateParam(defId, p.id, e.target.checked)} />;
+  } else if (p.type === 'string') {
+    control = <input aria-label={p.label} value={val ?? ''}
+      onChange={e => updateParam(defId, p.id, e.target.value)}
+      className="w-24 bg-white border border-gray-200 rounded-md px-1.5 py-0.5 text-[11px]" />;
+  } else if (p.type === 'multiselect') {
+    control = <MultiSelectDropdown options={p.options || []} value={val}
+      onChange={(newVal: string[]) => updateParam(defId, p.id, newVal)} />;
+  } else if (p.type === 'select') {
+    control = <select
+        value={val}
+        onChange={(e) => updateParam(defId, p.id, e.target.value)}
+        className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 max-w-[110px] shrink-0 truncate transition-colors cursor-pointer"
+      >
+        {(p.options || []).map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>;
+  } else {
+    control = <input
+      type="number"
+      value={val}
+      onChange={(e) => updateParam(defId, p.id, numericInputValue(e.target.value))}
+      min={p.min}
+      max={p.max}
+      step={p.step ?? (isIntegerParameter(p) ? 1 : 0.1)}
+      aria-label={p.label}
+      className="w-14 bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 text-center focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
+    />;
+  }
+
+  return (
+    <div key={p.id} title={p.description ?? p.label} className="flex items-center shrink-0">
+      {control}
+      {p.unit && <span className="ml-1 text-[10px] text-gray-400 whitespace-nowrap">{readableUnit(p.unit)}</span>}
+    </div>
+  );
+});
+
 // Unchanged rows retain the same definition, condition and callback references.
 const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle, updateParam }: FilterRowProps) {
   const checked = !!active;
-  // The row title and each control's accessible label provide the context;
-  // keeping the inputs compact makes dense filter groups easier to scan.
-  const renderInput = (defId: string, p: ParameterSpec, checked: boolean) => {
-    const val = checked && active ? active.parameters[p.id] : p.defaultValue;
-    let control: React.ReactNode;
-    if (p.type === 'boolean') {
-      control = <input aria-label={p.label} type="checkbox" checked={!!val}
-        onChange={e => updateParam(defId, p.id, e.target.checked)} />;
-    } else if (p.type === 'string') {
-      control = <input aria-label={p.label} value={val ?? ''}
-        onChange={e => updateParam(defId, p.id, e.target.value)}
-        className="w-24 bg-white border border-gray-200 rounded-md px-1.5 py-0.5 text-[11px]" />;
-    } else if (p.type === 'multiselect') {
-      control = <MultiSelectDropdown options={p.options || []} value={val}
-        onChange={(newVal: string[]) => updateParam(defId, p.id, newVal)} />;
-    } else if (p.type === 'select') {
-      control = <select
-          value={val}
-          onChange={(e) => updateParam(defId, p.id, e.target.value)}
-          className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 max-w-[110px] shrink-0 truncate transition-colors cursor-pointer"
-        >
-          {(p.options || []).map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>;
-    } else {
-      control = <input
-        type="number"
-        value={val}
-        onChange={(e) => updateParam(defId, p.id, numericInputValue(e.target.value))}
-        min={p.min}
-        max={p.max}
-        step={p.step ?? (isIntegerParameter(p) ? 1 : 0.1)}
-        aria-label={p.label}
-        className="w-14 bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 text-center focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
-      />;
-    }
-
-    return (
-      <div key={p.id} title={p.description ?? p.label} className="flex items-center shrink-0">
-        {control}
-        {p.unit && <span className="ml-1 text-[10px] text-gray-400 whitespace-nowrap">{readableUnit(p.unit)}</span>}
-      </div>
-    );
-  };
 
   return (
     <div className="grid grid-cols-[minmax(10rem,1fr)_minmax(0,auto)] items-start gap-x-3 py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 px-2 -mx-2 rounded transition-colors group">
@@ -157,7 +164,10 @@ const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle,
       {/* Inputs keep their own compact groups and wrap inside this row when needed. */}
       {showParameters && def.parameters && def.parameters.length > 0 && (
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
-          {def.parameters.map((p) => renderInput(def.id, p, checked))}
+          {def.parameters.map(p => (
+            <FilterParameter key={p.id} defId={def.id} p={p}
+              val={active ? active.parameters[p.id] : p.defaultValue} updateParam={updateParam} />
+          ))}
         </div>
       )}
     </div>

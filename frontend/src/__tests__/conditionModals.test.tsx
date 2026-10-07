@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { ConditionCatalogModal } from '../components/ConditionCatalogModal';
 import { ScreenerModal } from '../components/ScreenerModal';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
@@ -98,4 +98,19 @@ it('keeps independently edited screener rows across category switches and resets
   expect(screen.getByRole('spinbutton', {name:'Max P/E'})).toHaveValue(30);
   fireEvent.click(screen.getByRole('button', {name:'Apply'}));
   expect(apply.mock.calls[1][0]).toEqual({});
+});
+
+it('updates the linked breadth threshold when its memoized metric control changes', () => {
+  const apply = vi.fn();
+  render(<ScreenerModal isOpen onClose={vi.fn()} matchMode="all"
+    activeConditionsMap={active('MARKET_BREADTH')} onApply={apply} />);
+  const row = screen.getByRole('checkbox', {name:'Market Breadth Gate:'}).closest('div')!;
+  const threshold = within(row).getByRole('spinbutton', {name:'Value'});
+  expect(threshold).toHaveValue(50);
+  const metric = within(row).getAllByRole('combobox')[1];
+  fireEvent.change(metric, {target:{value:'advance_decline_ratio_5d'}});
+  expect(threshold).toHaveValue(1);
+  fireEvent.change(threshold, {target:{value:'2'}});
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  expect(apply.mock.calls[0][0].MARKET_BREADTH.parameters).toMatchObject({metric:'advance_decline_ratio_5d', value:2});
 });

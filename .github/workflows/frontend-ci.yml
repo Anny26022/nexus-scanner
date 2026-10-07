@@ -1,0 +1,43 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.nvmrc'
+      - '.github/workflows/frontend-ci.yml'
+      - '.github/workflows/ci.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - '.nvmrc'
+      - '.github/workflows/frontend-ci.yml'
+      - '.github/workflows/ci.yml'
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+      - name: Run frontend tests
+        run: npm test
+      - name: Build frontend
+        run: npm run build
+

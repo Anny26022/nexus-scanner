@@ -294,6 +294,14 @@ def stock_row(s, ratings):
         "return5yPct": "return_5y",
     })
     row = {k:s.get(v) for k,v in fields.items()}
+    # Ownership levels are percentages; QoQ changes are percentage points.
+    # Keep absent/non-finite values unavailable rather than fabricating zero.
+    for output, source in {
+        "promoterHoldingPct": "promoter_holding_percent",
+        "fiiChangePctQoq": "fii_percent_change_qoq",
+        "diiChangePctQoq": "dii_percent_change_qoq",
+    }.items():
+        row[output] = finite_number(s.get(source))
     row.update({k:s.get(k) for k in ("symbol","name","open","high","low","close","volume")})
     row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7, rsRating=ratings.get(s["symbol"],{}).get("front_weighted"), daysSinceEarnings=None, fnoBan=False)
     for ma in ("sma20","sma50","sma200","ema20","ema50","ema200"):

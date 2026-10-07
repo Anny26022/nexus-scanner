@@ -25,6 +25,7 @@ SCANNER_SNAPSHOT_FIELDS = (
     "qoq_percent_eps_latest", "yoy_percent_eps_latest",
     "debt_to_equity", "eps_ttm", "promoter_holding_percent", "fii_holding_percent", "dii_holding_percent", "public_holding_percent",
     "number_of_shareholders", "dividend_yield_percent", "face_value",
+    "fii_percent_change_qoq", "dii_percent_change_qoq",
     "total_income_in_lakhs", "total_expense_in_lakhs", "profit_before_tax_in_lakhs",
     "total_tax_expenses_in_lakhs", "net_profit_in_lakhs", "total_equity_in_lakhs",
     "total_assets_in_lakhs", "current_assets_in_lakhs", "current_liabilities_in_lakhs",

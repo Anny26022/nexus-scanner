@@ -134,11 +134,11 @@ def _requires_delivery(expression):
     if not isinstance(expression, dict):
         return False
     try:
-        if normalize_condition_spec(expression).get("condition") == "delivery_percent_spike":
+        if normalize_condition_spec(expression).get("condition") in {"delivery_percent_spike", "delivery_percent"}:
             return True
     except (TypeError, ValueError):
         pass
-    return any(_requires_delivery(value) for key, value in expression.items() if key in {"conditions", "children", "expression"})
+    return any(_requires_delivery(value) for key, value in expression.items() if key in {"conditions", "children", "expression", "child"})
 
 
 def _load_delivery_history(path, symbols=None, eod2_path=None):

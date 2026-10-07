@@ -12,7 +12,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1] / "DO NOT DELETE EDL PIPELINE"
 sys.path[:0] = [str(ROOT), str(ROOT / "src")]
-from screen_trend_conditions import _load_context, _load_delivery_history, _resolve_universe
+from screen_trend_conditions import _load_context, _load_delivery_history, _resolve_universe, _requires_delivery as _needs_delivery
 from edl_pipeline.scanner.context import normalize_condition_spec
 from edl_pipeline.scanner.context import CONTEXT_CONDITION_REGISTRY
 from edl_pipeline.scanner.presets import get_preset
@@ -347,9 +347,11 @@ def run(request, root=ROOT, cache=None):
     stocks = [s for symbol,s in context["stocks"].items() if (wanted is None or symbol in wanted) and s.get("default_screener_eligible",True)]
     text_query = str(request.get("textQuery") or "").strip()
     expression = compile_query(text_query) if text_query else frontend_expression(request["expressionTree"])
-    # Only collect delivery if a translated condition asks for it.
-    serialized_expression = json.dumps(expression).lower()
-    delivery = _load_delivery_history(root/"delivery_history_data", selected, root/"eod2_delivery_history_data") if "delivery_percent" in serialized_expression else {}
+    # Both public delivery conditions need dated history.  The spike condition
+    # is named ``DELIVERY_PCT_SPIKE`` while the latest-session condition uses
+    # ``DELIVERY_PERCENT``; checking only the latter quietly made spike
+    # screens unavailable.
+    delivery = _load_delivery_history(root/"delivery_history_data", selected, root/"eod2_delivery_history_data") if _needs_delivery(expression) else {}
     matched, counts, unresolved = [], Counter(), 0
     for s in stocks:
         path = root/"ohlcv_data"/f"{s['symbol']}.csv"

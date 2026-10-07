@@ -28,7 +28,7 @@ describe('Nexus Query Language (NQL) & Expression Serialization', () => {
     expect(res.explanation).toContain('Relative Volume');
   });
 
-  it('does not guess availability from the calendar date', () => {
+  it('explains the production delivery condition', () => {
     const tree: ExpressionGroupNode = {
       type: 'group',
       operator: 'all',
@@ -44,8 +44,8 @@ describe('Nexus Query Language (NQL) & Expression Serialization', () => {
       ],
     };
 
-    const exp = explainExpressionTree(tree, '2023-11-15');
+    const exp = explainExpressionTree(tree, '2026-10-02');
     expect(exp.compiledExplanations[0].isDataAvailableForSession).toBe(true);
-    expect(exp.warnings).toEqual([]);
+    expect(exp.compiledExplanations[0].humanReadableText).toBe('NSE Delivery Volume is AT LEAST 50% of total volume');
   });
 });

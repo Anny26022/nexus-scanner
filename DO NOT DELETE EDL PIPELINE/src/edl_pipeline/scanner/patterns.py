@@ -243,11 +243,10 @@ def _evaluate_patterns(
         if weekly_mode not in {"completed", "current"}:
             raise ValueError("inside_bar weekly_mode must be completed or current.")
         bars = _weekly(frame) if timeframe == "weekly" else frame
-        if timeframe == "weekly" and weekly_mode == "completed":
-            # With daily bars alone we cannot prove that the final ISO week is
-            # exchange-complete (holiday weeks included), so the safe mode
-            # excludes the developing/latest bucket.  Current mode includes it
-            # and explicitly reports the result as provisional.
+        if timeframe == "weekly" and weekly_mode == "completed" and frame["Date"].iloc[-1].weekday() < 4:
+            # NSE's regular cash session ends on Friday. Monday through
+            # Thursday are developing weekly bars; a Friday-close bar is
+            # complete. This remains conservative for weekday holidays.
             bars = bars.iloc[:-1]
         matched = _inside_run(bars, consecutive)
         if matched is None:

@@ -10,10 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from screen_trend_conditions import _load_delivery_history
+from screen_trend_conditions import _load_delivery_history, _requires_delivery
 
 
 class Eod2DeliveryHistoryTests(unittest.TestCase):
+    def test_both_delivery_conditions_request_dated_history(self):
+        self.assertTrue(_requires_delivery({"kind": "DELIVERY_PCT_SPIKE", "params": {}}))
+        self.assertTrue(_requires_delivery({"kind": "DELIVERY_PERCENT", "params": {}}))
+
     def test_official_delivery_wins_and_eod2_fills_missing_history(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

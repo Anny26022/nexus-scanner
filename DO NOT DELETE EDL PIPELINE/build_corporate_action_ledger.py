@@ -15,7 +15,11 @@ OUTPUT_FILE = os.path.join(BASE_DIR, "corporate_action_ledger.json")
 def dividend_amount(details):
     """Parse explicit rupees per share only. Ambiguous/percentage declarations stay null."""
     text = str(details or "")
-    amounts = re.findall(r"(?:r[es]\.?|inr|₹|rupees)\s*-?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:/-)?\s*(?:per|each)\s*(?:equity\s+)?share", text, re.I)
+    currency = r"(?:rs\.?|re\.?|inr|₹|rupees)"
+    # A malformed double marker ("Rs Re 1") is not an unambiguous amount.
+    if re.search(rf"(?<![a-z]){currency}\s+{currency}\b", text, re.I):
+        return None
+    amounts = re.findall(rf"(?<![a-z]){currency}\s*-?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:/-)?\s*(?:per|each)\s*(?:equity\s+)?share", text, re.I)
     if len(amounts) != 1:
         return None
     value = Decimal(amounts[0])

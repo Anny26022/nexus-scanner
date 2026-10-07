@@ -1,0 +1,1011 @@
+{
+  "fields": {
+    "ann_type": {
+      "acquisition": [
+        "acquisition"
+      ],
+      "action s initiated or orders passed": [
+        "litigation"
+      ],
+      "action s taken or orders passed": [
+        "litigation"
+      ],
+      "address change": [
+        "administration"
+      ],
+      "agm egm": [
+        "shareholder_meeting"
+      ],
+      "agreements": [],
+      "allotment of securities": [
+        "allotment"
+      ],
+      "amalgamation merger": [
+        "merger"
+      ],
+      "amendment to aoa moa": [
+        "administration"
+      ],
+      "analysts institutional investor meet con call upd": [
+        "investor_meet"
+      ],
+      "appointment": [],
+      "arrangements for strategic technical manufacturi": [],
+      "awarding of order s contract s": [
+        "order_win"
+      ],
+      "bagging receiving of orders contracts": [
+        "order_win"
+      ],
+      "board meeting": [
+        "board_intimation"
+      ],
+      "bonus": [
+        "bonus_split"
+      ],
+      "buyback": [
+        "buyback"
+      ],
+      "capacity addition": [
+        "capex"
+      ],
+      "certificate under sebi depositories and participa": [
+        "compliance"
+      ],
+      "cessation": [],
+      "change in auditors": [
+        "auditor_change"
+      ],
+      "change in company secretary compliance officer": [
+        "compliance",
+        "secretary_change"
+      ],
+      "change in director s": [
+        "director_change"
+      ],
+      "change in management": [
+        "kmp_change"
+      ],
+      "clarification financial results": [
+        "clarification",
+        "financial_results"
+      ],
+      "commencement of commercial production operations": [
+        "commissioning"
+      ],
+      "committee meeting updates": [],
+      "company update": [],
+      "compliance": [
+        "compliance"
+      ],
+      "conversion": [],
+      "copy of newspaper publication": [
+        "newspaper"
+      ],
+      "corp action": [],
+      "corporate insolvency resolution process": [
+        "insolvency"
+      ],
+      "corrigendum": [
+        "administration"
+      ],
+      "credit rating": [
+        "credit_rating"
+      ],
+      "credit rating new": [
+        "credit_rating"
+      ],
+      "credit rating others": [
+        "credit_rating"
+      ],
+      "credit rating revision": [
+        "credit_rating"
+      ],
+      "defaults on payment of interest principal": [
+        "debt_default"
+      ],
+      "defaults under para a sub paragraph 6 of schedule": [],
+      "delay default in the payment of fines penalties du": [
+        "litigation"
+      ],
+      "delay in financial results": [
+        "financial_results",
+        "financial_revision"
+      ],
+      "demerger": [
+        "merger"
+      ],
+      "demise": [],
+      "disclosure of material issue": [],
+      "disclosure under sebi takeover regulations": [
+        "open_offer"
+      ],
+      "disruption of operations": [
+        "disruption"
+      ],
+      "diversification disinvestment": [
+        "divestment"
+      ],
+      "dividend": [
+        "dividend"
+      ],
+      "esop esos esps": [
+        "esop"
+      ],
+      "extension of financial year": [],
+      "forfeiture": [],
+      "fraud default arrest": [
+        "fraud"
+      ],
+      "frauds default by employees": [
+        "fraud"
+      ],
+      "frauds initial disclosure": [
+        "fraud"
+      ],
+      "frauds subsequent disclosure": [
+        "fraud"
+      ],
+      "general": [
+        "general_announcement"
+      ],
+      "general announcements": [
+        "general_announcement"
+      ],
+      "general information": [],
+      "general updates": [],
+      "giving guarantees indemnity becoming a surety for": [
+        "borrowing"
+      ],
+      "granting withdrawal surrender cancellation suspens": [],
+      "incorporation": [
+        "subsidiary"
+      ],
+      "increase in authorised capital": [],
+      "insider trading sast": [
+        "stake_change"
+      ],
+      "integrated filing financial": [
+        "financial_results"
+      ],
+      "integrated filing governance": [
+        "compliance"
+      ],
+      "intimation": [],
+      "investor presentation": [
+        "investor_presentation"
+      ],
+      "issue of securities": [
+        "fundraise"
+      ],
+      "memorandum of understanding agreements": [
+        "joint_venture"
+      ],
+      "monitoring agency report": [
+        "fund_utilisation"
+      ],
+      "monthly business updates": [
+        "business_update"
+      ],
+      "name and symbol change": [
+        "administration"
+      ],
+      "name change": [
+        "administration"
+      ],
+      "new listing": [
+        "listing"
+      ],
+      "news verification": [
+        "clarification"
+      ],
+      "one time settlement": [],
+      "open offer": [
+        "open_offer"
+      ],
+      "options to purchase securities": [],
+      "other restructuring": [],
+      "others": [],
+      "outcome": [],
+      "outcome of board meeting": [
+        "board_intimation",
+        "board_outcome"
+      ],
+      "pendency of litigation s dispute s or the outcom": [
+        "litigation"
+      ],
+      "post offer public announcement": [
+        "post_action"
+      ],
+      "preferential issue": [
+        "fundraise"
+      ],
+      "press release": [
+        "press_release"
+      ],
+      "press release revised": [
+        "press_release"
+      ],
+      "price movement": [
+        "clarification"
+      ],
+      "product launch": [
+        "product_launch"
+      ],
+      "public announcement open offer": [
+        "open_offer"
+      ],
+      "quarterly compliance report on corporate governanc": [
+        "compliance"
+      ],
+      "reasons for delayed non submission of financial re": [],
+      "record date": [
+        "record_date"
+      ],
+      "redemption": [
+        "debt_repayment"
+      ],
+      "related party transactions": [
+        "related_party"
+      ],
+      "reply to clarification financial results": [
+        "clarification",
+        "financial_results"
+      ],
+      "rescission termination s": [],
+      "resignation": [],
+      "resignation of director kmp smp": [
+        "director_change",
+        "kmp_change"
+      ],
+      "resignation of independent director": [
+        "director_change"
+      ],
+      "resignation of statutory auditor": [
+        "auditor_change"
+      ],
+      "result": [],
+      "retirement": [],
+      "revised record date": [
+        "record_date"
+      ],
+      "rights issue": [
+        "fundraise"
+      ],
+      "sale or disposal": [
+        "divestment"
+      ],
+      "scheme of arrangement": [
+        "merger"
+      ],
+      "shareholders meeting": [
+        "shareholder_meeting"
+      ],
+      "spurt in volume": [
+        "clarification"
+      ],
+      "statement of deviation s or variation s under re": [
+        "fund_utilisation"
+      ],
+      "stock split": [
+        "bonus_split"
+      ],
+      "structural digital database": [
+        "compliance"
+      ],
+      "suspension of trading": [],
+      "symbol change of company": [
+        "administration"
+      ],
+      "trading plan under pit": [
+        "trading_plan"
+      ],
+      "trading window": [
+        "compliance"
+      ],
+      "updates": [],
+      "utilisation of funds": [
+        "fund_utilisation"
+      ],
+      "voluntary revision of financial statements or repo": [
+        "financial_revision"
+      ]
+    },
+    "cat": {
+      "audio": [
+        "investor_meet"
+      ],
+      "financial results": [
+        "financial_results"
+      ],
+      "investor presentation": [
+        "investor_presentation"
+      ],
+      "transcript": [
+        "call_transcript"
+      ]
+    },
+    "descriptor": {
+      "57 4 prior intimation to the beginning of the quarter": [
+        "compliance"
+      ],
+      "57 5 intimation after the end of quarter": [
+        "compliance"
+      ],
+      "acquisition": [
+        "acquisition"
+      ],
+      "action s initiated or orders passed": [
+        "litigation"
+      ],
+      "action s taken or orders passed": [
+        "litigation"
+      ],
+      "address change": [
+        "administration"
+      ],
+      "admission of application by tribunal": [
+        "insolvency"
+      ],
+      "agm": [
+        "shareholder_meeting"
+      ],
+      "agreement": [],
+      "agreements": [],
+      "allotment of equity shares": [
+        "allotment"
+      ],
+      "allotment of esop esps": [
+        "allotment",
+        "esop"
+      ],
+      "allotment of securities": [
+        "allotment"
+      ],
+      "allotment of warrants": [
+        "allotment"
+      ],
+      "amalgamation merger": [
+        "merger"
+      ],
+      "amalgamation merger demerger": [
+        "merger"
+      ],
+      "amendment to aoa moa": [
+        "administration"
+      ],
+      "amendments to memorandum articles of association": [
+        "administration"
+      ],
+      "analyst investor meet": [
+        "investor_meet"
+      ],
+      "analysts institutional investor meet con call updates": [
+        "investor_meet"
+      ],
+      "annulment re issue of forfeited shares": [],
+      "appointment": [],
+      "appointment of company secretary compliance officer": [
+        "compliance",
+        "secretary_change"
+      ],
+      "appointment of interim resolution professional irp": [
+        "insolvency"
+      ],
+      "appointment of statutory auditor s": [
+        "auditor_change"
+      ],
+      "approval of resolution plan by tribunal": [
+        "insolvency"
+      ],
+      "arrangements for strategic technical manufacturing or marketing tie up": [
+        "joint_venture"
+      ],
+      "asset liability management alm statement": [
+        "compliance"
+      ],
+      "auditors report": [
+        "financial_results"
+      ],
+      "award of order receipt of order": [
+        "order_win"
+      ],
+      "awarding of order s contract s": [
+        "order_win"
+      ],
+      "bagging receiving of orders contracts": [
+        "order_win"
+      ],
+      "board meeting": [
+        "board_intimation"
+      ],
+      "board meeting cancelled": [
+        "board_change"
+      ],
+      "board meeting rescheduled": [
+        "board_change"
+      ],
+      "bonds right issue": [
+        "fundraise"
+      ],
+      "bonus": [
+        "bonus_split"
+      ],
+      "book closure": [
+        "administration"
+      ],
+      "book closure agm": [
+        "shareholder_meeting"
+      ],
+      "business responsibility and sustainability reporting brsr": [
+        "compliance"
+      ],
+      "buy back": [
+        "buyback"
+      ],
+      "buyback": [
+        "buyback"
+      ],
+      "cancellation of dividend": [
+        "dividend"
+      ],
+      "capacity addition": [
+        "capex"
+      ],
+      "capital reduction": [],
+      "certificate from ceo cfo": [
+        "compliance"
+      ],
+      "certificate under reg 74 5 of sebi dp regulations 2018": [
+        "compliance"
+      ],
+      "certificate under sebi depositories and participants regulations 2018": [
+        "compliance"
+      ],
+      "cessation": [],
+      "change in auditors": [
+        "auditor_change"
+      ],
+      "change in company secretary compliance officer": [
+        "compliance",
+        "secretary_change"
+      ],
+      "change in corporate office address": [
+        "administration"
+      ],
+      "change in director s": [
+        "director_change"
+      ],
+      "change in directorate": [
+        "director_change"
+      ],
+      "change in management": [
+        "kmp_change"
+      ],
+      "change in management control": [
+        "kmp_change"
+      ],
+      "change in registered office address": [
+        "administration"
+      ],
+      "change of name": [
+        "administration"
+      ],
+      "clarification": [
+        "clarification"
+      ],
+      "clarification financial results": [
+        "clarification",
+        "financial_results"
+      ],
+      "closure of buy back": [
+        "buyback",
+        "post_action"
+      ],
+      "closure of trading window": [
+        "compliance"
+      ],
+      "code of conduct under sebi pit regulations 2015": [
+        "compliance"
+      ],
+      "commencement of commercial production operations": [
+        "commissioning"
+      ],
+      "committee meeting": [],
+      "committee meeting updates": [],
+      "consolidation of shares": [],
+      "conversion": [],
+      "conversion of securities": [],
+      "copy of newspaper publication": [
+        "newspaper"
+      ],
+      "corporate debt restructuring": [],
+      "corporate insolvency resolution process": [
+        "insolvency"
+      ],
+      "corrigendum": [
+        "administration"
+      ],
+      "court convened meeting": [
+        "shareholder_meeting"
+      ],
+      "credit rating": [
+        "credit_rating"
+      ],
+      "credit rating new": [
+        "credit_rating"
+      ],
+      "credit rating others": [
+        "credit_rating"
+      ],
+      "credit rating revision": [
+        "credit_rating"
+      ],
+      "daily buy back of equity shares": [
+        "buyback",
+        "post_action"
+      ],
+      "date of payment of dividend": [
+        "dividend"
+      ],
+      "debt securities": [],
+      "defaults on payment of interest principal": [
+        "debt_default"
+      ],
+      "delay default in the payment of fines penalties dues etc to authority": [
+        "litigation"
+      ],
+      "delisting": [
+        "listing"
+      ],
+      "demerger": [
+        "merger"
+      ],
+      "demise": [],
+      "disclosure of divergence in the asset classification and provisioning by banks": [],
+      "disclosure of idr holding": [],
+      "disclosure of material issue": [],
+      "disclosure under reg 31 4 of sebi sast regulation 2011": [
+        "pledge"
+      ],
+      "disclosure under sebi takeover regulations": [
+        "open_offer"
+      ],
+      "disclosures by listed entities of defaults on payment of interest repayment of principal amount for": [
+        "debt_default"
+      ],
+      "disclosures under reg 10 5 in respect of acquisition under reg 10 1 a of sebi sast reg 2011": [
+        "stake_change"
+      ],
+      "disclosures under reg 10 5 in respect of acquisition under reg 10 4 f of sebi sast reg 2011": [
+        "stake_change"
+      ],
+      "disclosures under reg 10 6 of sebi sast regulations 2011": [
+        "stake_change"
+      ],
+      "disclosures under reg 10 7 of sebi sast regulations 2011": [
+        "stake_change"
+      ],
+      "disclosures under reg 18 6 of sebi sast regulations 2011": [
+        "open_offer"
+      ],
+      "disclosures under reg 29 1 of sebi sast regulations 2011": [
+        "stake_change"
+      ],
+      "disclosures under reg 29 2 of sebi sast regulations 2011": [
+        "stake_change"
+      ],
+      "disclosures under reg 31 1 and 31 2 of sebi sast regulations 2011": [
+        "pledge"
+      ],
+      "disruption of operations": [
+        "disruption"
+      ],
+      "diversification disinvestment": [
+        "divestment"
+      ],
+      "dividend": [
+        "dividend"
+      ],
+      "dividend agm": [
+        "dividend",
+        "shareholder_meeting"
+      ],
+      "dividend updates": [
+        "dividend"
+      ],
+      "earnings call transcript": [
+        "call_transcript"
+      ],
+      "egm": [
+        "shareholder_meeting"
+      ],
+      "esop esos esps": [
+        "esop"
+      ],
+      "extension of financial year": [],
+      "filing of resolution plan with tribunal": [
+        "insolvency"
+      ],
+      "financial results": [
+        "financial_results"
+      ],
+      "forfeiture": [],
+      "format of the annual disclosure to be made by an entity identified as a large corporate": [
+        "compliance"
+      ],
+      "format of the annual disclosure to be made by an entity identified as a lc annexure b1": [
+        "compliance"
+      ],
+      "format of the annual disclosure to be made by an entity identified as a lc annexure b2": [
+        "compliance"
+      ],
+      "format of the initial disclosure to be made by an entity identified as a large corporate annexure": [
+        "compliance"
+      ],
+      "fraud default arrest": [
+        "fraud"
+      ],
+      "frauds default by employees": [
+        "fraud"
+      ],
+      "funds raising by issuance of debt securities by large entities": [
+        "fundraise"
+      ],
+      "general": [
+        "general_announcement"
+      ],
+      "general updates": [],
+      "giving guarantees indemnity becoming a surety for third party": [
+        "borrowing"
+      ],
+      "granting withdrawal surrender cancellation suspension of key licenses regulatory approvals": [
+        "regulatory_approval"
+      ],
+      "half yearly communication debt instruments": [
+        "compliance"
+      ],
+      "half yearly report sebi circular no cir imd df 1 67 2017": [
+        "compliance"
+      ],
+      "incorporation": [
+        "subsidiary"
+      ],
+      "increase in authorised capital": [],
+      "initiation of corporate insolvency resolution process cirp by corporate applicant": [
+        "insolvency"
+      ],
+      "initiation of corporate insolvency resolution process cirp by financial creditors": [
+        "insolvency"
+      ],
+      "institutional placement programme": [],
+      "integrated filing financial": [
+        "financial_results"
+      ],
+      "integrated filing governance": [
+        "compliance"
+      ],
+      "interest rates updates": [],
+      "intimation of meeting of committee of creditors": [
+        "insolvency"
+      ],
+      "intimation of repayment of commercial paper cp": [
+        "debt_repayment"
+      ],
+      "investor presentation": [
+        "investor_presentation"
+      ],
+      "invitation of resolution plan": [
+        "insolvency"
+      ],
+      "issue of securities": [
+        "fundraise"
+      ],
+      "joint venture": [
+        "joint_venture"
+      ],
+      "limited review report": [
+        "financial_results"
+      ],
+      "liquidation corporate insolvency resolution process cirp": [
+        "insolvency"
+      ],
+      "list of creditors": [
+        "insolvency"
+      ],
+      "meeting updates": [],
+      "memorandum of understanding agreements": [
+        "joint_venture"
+      ],
+      "monitoring agency report": [
+        "fund_utilisation"
+      ],
+      "monthly business updates": [
+        "business_update"
+      ],
+      "mutual fund scheme summary document": [],
+      "name and symbol change": [
+        "administration"
+      ],
+      "name change": [
+        "administration"
+      ],
+      "new listing": [
+        "listing"
+      ],
+      "news verification": [
+        "clarification"
+      ],
+      "newspaper publication": [
+        "newspaper"
+      ],
+      "offer for sale": [
+        "ofs"
+      ],
+      "one time settlement": [],
+      "open offer": [
+        "open_offer"
+      ],
+      "open offer updates": [
+        "open_offer"
+      ],
+      "options to purchase securities": [],
+      "other restructuring": [],
+      "others": [],
+      "outcome of board meeting": [
+        "board_intimation",
+        "board_outcome"
+      ],
+      "outcome of meeting of committee of creditors": [
+        "insolvency"
+      ],
+      "outcome without intimation": [
+        "board_outcome"
+      ],
+      "pendency of litigation s dispute s or the outcome impacting the company": [
+        "litigation"
+      ],
+      "post buyback public announcement": [
+        "buyback",
+        "post_action"
+      ],
+      "post offer public announcement": [
+        "post_action"
+      ],
+      "postal ballot": [
+        "shareholder_meeting"
+      ],
+      "preferential issue": [
+        "fundraise"
+      ],
+      "press release": [
+        "press_release"
+      ],
+      "press release media release": [
+        "press_release"
+      ],
+      "press release media release revised": [
+        "press_release"
+      ],
+      "press release revised": [
+        "press_release"
+      ],
+      "price movement": [
+        "clarification"
+      ],
+      "product launch": [
+        "product_launch"
+      ],
+      "public announcement": [],
+      "public announcement buyback of shares": [
+        "buyback"
+      ],
+      "public announcement delisting": [
+        "listing"
+      ],
+      "public announcement open offer": [
+        "open_offer"
+      ],
+      "qualified institutional placement": [
+        "fundraise"
+      ],
+      "quarterly compliance report on corporate governance within 21 days from the end of the quarter": [
+        "compliance"
+      ],
+      "quarterly disclosures by listed entities of defaults on payment of interest repayment of principal": [
+        "debt_default"
+      ],
+      "raising of funds": [
+        "fundraise"
+      ],
+      "reasons for delayed non submission of financial results": [
+        "financial_results",
+        "financial_revision"
+      ],
+      "record date": [
+        "record_date"
+      ],
+      "redemption": [
+        "debt_repayment"
+      ],
+      "reg 13 3 statement of investor complaints": [
+        "compliance"
+      ],
+      "reg 24 a annual secretarial compliance": [
+        "compliance"
+      ],
+      "reg 32 1 3 statement of deviation variation": [
+        "fund_utilisation"
+      ],
+      "reg 34 1 annual report": [
+        "annual_report"
+      ],
+      "reg 39 3 details of loss of certificate duplicate certificate": [
+        "compliance"
+      ],
+      "reg 40 10 pcs certificate for transfer transmission transposition": [
+        "compliance"
+      ],
+      "reg 50 1 prior intimation about board meeting under regulation 50 1": [
+        "board_intimation"
+      ],
+      "reg 50 2 intimation to the exchange about meeting under 50 2": [
+        "board_intimation"
+      ],
+      "reg 51 1 2 price sensitive information disclosure of event information": [
+        "compliance"
+      ],
+      "reg 52 5 certificate from debenture trustee": [
+        "compliance"
+      ],
+      "reg 54 asset cover details": [
+        "compliance"
+      ],
+      "reg 57 1 certificate of interest payment principal in case of ncd": [
+        "compliance"
+      ],
+      "reg 57 2 undertaking that documents intimation submitted to debenture trustee": [
+        "compliance"
+      ],
+      "reg 7 3 compliance certificate rta compliance officer": [
+        "compliance"
+      ],
+      "regulation 61 4 pcs certificate for transfer transmission transposition": [
+        "compliance"
+      ],
+      "rejection of resolution pan by tribunal": [
+        "insolvency"
+      ],
+      "related party transactions": [
+        "related_party"
+      ],
+      "replacement of interim resolution professional irp": [
+        "insolvency"
+      ],
+      "reply to clarification financial results": [
+        "clarification",
+        "financial_results"
+      ],
+      "rescission termination s": [],
+      "resignation": [],
+      "resignation of chairman": [
+        "kmp_change"
+      ],
+      "resignation of chairman and managing director": [
+        "kmp_change"
+      ],
+      "resignation of chief executive officer ceo": [
+        "kmp_change"
+      ],
+      "resignation of chief financial officer cfo": [
+        "kmp_change"
+      ],
+      "resignation of company secretary compliance officer": [
+        "compliance",
+        "secretary_change"
+      ],
+      "resignation of director": [
+        "director_change"
+      ],
+      "resignation of director kmp smp": [
+        "director_change",
+        "kmp_change"
+      ],
+      "resignation of independent director": [
+        "director_change"
+      ],
+      "resignation of managing director": [
+        "kmp_change"
+      ],
+      "resignation of statutory auditor": [
+        "auditor_change"
+      ],
+      "resignation of statutory auditors": [
+        "auditor_change"
+      ],
+      "resolution plans received by resolution professional": [
+        "insolvency"
+      ],
+      "restructuring": [
+        "workforce"
+      ],
+      "retirement": [],
+      "revised record date": [
+        "record_date"
+      ],
+      "revision of outcome": [
+        "board_outcome"
+      ],
+      "rights issue": [
+        "fundraise"
+      ],
+      "sale of shares": [],
+      "sale or disposal": [
+        "divestment"
+      ],
+      "scheme of arrangement": [
+        "merger"
+      ],
+      "shareholders meeting": [
+        "shareholder_meeting"
+      ],
+      "shareholding": [
+        "shareholding_pattern"
+      ],
+      "spurt in volume": [
+        "clarification"
+      ],
+      "statement of deviation s or variation s under reg 32": [
+        "fund_utilisation"
+      ],
+      "stock split": [
+        "bonus_split"
+      ],
+      "strike": [
+        "disruption"
+      ],
+      "strikes lockouts disturbances": [
+        "disruption"
+      ],
+      "structural digital database": [
+        "compliance"
+      ],
+      "sub division stock split": [
+        "bonus_split"
+      ],
+      "suspension of trading": [],
+      "symbol change of company": [
+        "administration"
+      ],
+      "trading plan under pit": [
+        "trading_plan"
+      ],
+      "trading plan under sebi pit regulations 2015": [
+        "trading_plan"
+      ],
+      "trading window": [
+        "compliance"
+      ],
+      "updates": [],
+      "updates corporate insolvency resolution process cirp": [
+        "insolvency"
+      ],
+      "utilisation of funds": [
+        "fund_utilisation"
+      ],
+      "voluntary revision of financial statements or report": [
+        "financial_revision"
+      ],
+      "winding up": [
+        "disruption"
+      ]
+    }
+  },
+  "rawLabelCounts": {
+    "ann_type": 123,
+    "cat": 4,
+    "descriptor": 264
+  },
+  "source": "Local Dhan/ScanX filing metadata inventory, 2026-10-04",
+  "version": 5
+}

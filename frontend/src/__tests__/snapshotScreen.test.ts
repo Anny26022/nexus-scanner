@@ -18,6 +18,15 @@ describe('published snapshots', () => {
     const below = {...snapshot.stocks[0],rvol:1.496580446,asOfDate:snapshot.asOfDate,historyAligned:true,metrics:{sma50:0}};
     expect(screenSnapshot({...snapshot,stocks:[below]},request)!.matchCount).toBe(0);
   });
+  it('intersects announcement matches before pagination and keeps filters out of each other’s cache', () => {
+    const base = {...request, expressionTree:{type:'group' as const, operator:'all' as const, children:[]}, pageSize:1};
+    const wanted = snapshot.stocks.slice(0, 2).map(stock => stock.symbol);
+    const result = screenSnapshot(snapshot, {...base, announcementSymbols:wanted})!;
+    expect(result.matchCount).toBe(2);
+    expect(result.rows).toHaveLength(1);
+    expect(screenSnapshot(snapshot, {...base, announcementSymbols:[]})!.matchCount).toBe(0);
+    expect(screenSnapshot(snapshot, base)!.matchCount).toBe(snapshot.stocks.filter(stock => stock.close != null).length);
+  });
   it('uses all 45 authoritative preset results', () => {
     const presets = Object.keys(snapshot.stocks[0].presetMatches);
     expect(presets).toHaveLength(45);

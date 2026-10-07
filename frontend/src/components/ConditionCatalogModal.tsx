@@ -1,3 +1,4 @@
+import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
 import React, { useState } from 'react';
 import { X, Search, Sliders, RotateCcw, Check, Play, Info } from 'lucide-react';
 import { ConditionDef, ConditionCategory, ActiveCondition, MatchMode } from '../types/screener';
@@ -110,7 +111,9 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
     setLocalConditionsMap({});
   };
 
+  const validationError = conditionValidationError(localConditionsMap);
   const handleApply = () => {
+    if (validationError) return;
     onApplyConditions(localConditionsMap, localMatchMode);
     onClose();
   };
@@ -273,6 +276,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
                             </label>
                             {p.type === 'select' ? (
                               <select
+                                aria-label={p.label}
                                 value={currentValue}
                                 onChange={(e) =>
                                   handleUpdateParameter(def.id, p.id, e.target.value)
@@ -285,20 +289,29 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
                                   </option>
                                 ))}
                               </select>
+                            ) : p.type === 'boolean' ? (
+                              <input
+                                type="checkbox"
+                                aria-label={p.label}
+                                checked={Boolean(currentValue)}
+                                onChange={(e) => handleUpdateParameter(def.id, p.id, e.target.checked)}
+                                className="h-4 w-4 accent-emerald-600"
+                              />
                             ) : (
                               <input
-                                type="number"
+                                type={p.type === 'string' ? 'text' : 'number'}
+                                aria-label={p.label}
                                 value={currentValue}
                                 onChange={(e) =>
                                   handleUpdateParameter(
                                     def.id,
                                     p.id,
-                                    parseFloat(e.target.value) || 0
+                                    p.type === 'string' ? e.target.value : numericInputValue(e.target.value)
                                   )
                                 }
                                 min={p.min}
                                 max={p.max}
-                                step={p.step || 0.1}
+                                step={p.step ?? (isIntegerParameter(p) ? 1 : 0.1)}
                                 className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-mono text-slate-900 focus:outline-none focus:border-slate-400"
                               />
                             )}
@@ -313,6 +326,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
           )}
         </div>
 
+        {validationError && <p role="alert" className="px-6 py-2 text-sm text-red-600">{validationError}</p>}
         {/* Sticky Bottom Footer Bar */}
         <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-100 bg-slate-50/50">
           <button
@@ -330,7 +344,8 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
             </span>
             <button
               onClick={handleApply}
-              className="flex items-center space-x-2 px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-2xs transition-all cursor-pointer"
+              disabled={Boolean(validationError)}
+              className="flex items-center space-x-2 px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-2xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-emerald-600"
             >
               <Play className="h-3.5 w-3.5 fill-current" />
               <span>Apply Filters & Run Screen</span>

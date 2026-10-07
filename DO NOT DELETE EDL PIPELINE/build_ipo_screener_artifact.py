@@ -117,6 +117,7 @@ def _provider_catalogue_data(payload, scanx_payload=None):
             "source": payload.get("source"),
             "available": bool(payload.get("available")),
             "recent_feed_available": bool(payload.get("recent_feed_available")),
+            "refresh_complete": payload.get("refresh_complete"),
             "fetched_at": payload.get("fetched_at"),
             "listed_archive": payload.get("records", []),
             "feeds": payload.get("feeds", {}),

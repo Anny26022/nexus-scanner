@@ -47,17 +47,35 @@ async function objectBytes(env:Env,key:string,expected?:{bytes:number;sha256:str
 async function compressedJson<T>(env:Env,prefix:string,manifest:PrivateManifest,name:string):Promise<T>{const descriptor=manifest.objects.find(x=>x.key===name);if(!descriptor)throw new Error(`Advanced scanner manifest is incomplete: ${name}`);return JSON.parse(new TextDecoder().decode(await ungzip(await objectBytes(env,`${prefix}/${name}`,descriptor))));}
 
 function decodeShard(buffer:ArrayBuffer):Array<{symbol:string;series:CandleSeries}>{const bytes=new Uint8Array(buffer),magic=new TextDecoder().decode(bytes.slice(0,8));if(magic!=='NSPK0001')throw new Error('Invalid scanner shard');const view=new DataView(buffer),headerLength=view.getUint32(8,true),header=JSON.parse(new TextDecoder().decode(bytes.slice(12,12+headerLength))) as {symbols:Array<{symbol:string;offset:number;count:number}>};const count=header.symbols.reduce((total,item)=>Math.max(total,item.offset+item.count),0),dateStart=(12+headerLength+7)&~7,valueStart=(dateStart+count*4+7)&~7,dates=new Int32Array(buffer,dateStart,count),values=new Float64Array(buffer,valueStart,count*5);return header.symbols.map(item=>{const d=dates.slice(item.offset,item.offset+item.count),matrix=values.slice(item.offset*5,(item.offset+item.count)*5),column=(index:number)=>Float64Array.from({length:item.count},(_,i)=>matrix[i*5+index]);return {symbol:item.symbol,series:{dates:d,open:column(0),high:column(1),low:column(2),close:column(3),volume:column(4)}};});}
-function universeRows(rows:SnapshotStock[],request:ScreenerRunRequest){const labels:Record<string,string[]>= {nifty50:['NIFTY 50','NIFTY50'],nifty500:['NIFTY 500','NIFTY500'],midsmall400:['NIFTY MIDSMALLCAP 400','NIFTY MIDSMALL 400','MIDSMALL400']},custom=new Set(request.customSymbols?.map(v=>v.toUpperCase()));return rows.filter(row=>request.universe==='mainboard'||request.universe==='custom'?request.universe==='mainboard'||custom.has(row.symbol):((row as unknown as {indexMemberships?:string[]}).indexMemberships??[]).some(label=>labels[request.universe]?.includes(label.toUpperCase())));}
+function universeRows(rows: SnapshotStock[], request: ScreenerRunRequest) {
+  const labels: Record<string, string[]> = {
+    nifty50: ['NIFTY 50', 'NIFTY50'],
+    nifty500: ['NIFTY 500', 'NIFTY500'],
+    midsmall400: ['NIFTY MIDSMALLCAP 400', 'NIFTY MIDSMALL 400', 'MIDSMALL400'],
+  };
+  const custom = new Set(request.customSymbols?.map(symbol => symbol.toUpperCase()));
+  const announcements = request.announcementSymbols
+    ? new Set(request.announcementSymbols.map(symbol => symbol.toUpperCase())) : null;
+  return rows.filter(row => {
+    if (announcements && !announcements.has(row.symbol)) return false;
+    if (request.universe === 'mainboard') return true;
+    if (request.universe === 'custom') return custom.has(row.symbol);
+    return row.indexMemberships?.some(label => labels[request.universe]?.includes(label.toUpperCase()));
+  });
+}
 export function executionWarnings(leaves:EngineCondition[],missingHistory:number){const warnings:string[]=[];if(leaves.some(condition=>condition.conditionId==='INSIDE_BAR'&&String(condition.parameters.timeframe).toUpperCase()==='WEEKLY'&&String(condition.parameters.weeklyMode).toUpperCase()==='CURRENT'))warnings.push('Weekly inside-bar current mode includes a provisional week.');if(missingHistory)warnings.push(`${missingHistory} equities have no aligned history in this revision.`);return warnings;}
 
 async function currentRelease(env:Env){const response=await fetch(env.SCANNER_RELEASE_URL,{cf:{cacheTtl:30,cacheEverything:true}});if(!response.ok)throw new Error('Active scanner release is unavailable');return response.json() as Promise<{revision:string;sessionDate:string;schemaVersion:number}>;}
 // Bump when evaluation semantics change so unchanged data cannot reuse old results.
-const CACHE_VERSION = '2';
+const CACHE_VERSION = '3';
 type ScanResult = Omit<ScreenerRunResponse,'page' | 'pageSize'>;
 const emptySeries:CandleSeries = {dates:new Int32Array(),open:new Float64Array(),high:new Float64Array(),
   low:new Float64Array(),close:new Float64Array(),volume:new Float64Array()};
 
 function validateRequest(request:ScreenerRunRequest,expression:EngineExpression) {
+  if (request.announcementSymbols !== undefined && (!Array.isArray(request.announcementSymbols)
+      || request.announcementSymbols.some(symbol => typeof symbol !== 'string')))
+    throw new Error('Announcement symbols must be an array of strings.');
   const leaves=walkExpression(expression);
   if(!leaves.length)throw new Error('At least one condition is required.');
   if(leaves.length>32 || expressionDepth(expression)>8)throw new Error('Screen is too complex. Use at most 32 conditions and 8 nested levels.');
@@ -168,7 +186,9 @@ export default {
       validateRequest(payload,expression);
       // Cache the complete match set; sorting and pagination never change membership.
       const symbols=payload.universe==='custom' ? [...new Set(payload.customSymbols?.map(symbol=>symbol.toUpperCase()))].sort() : undefined;
-      const key=await hash(stable([CACHE_VERSION,payload.datasetRevision,payload.asOfDate,expression,payload.universe,symbols]));
+      const announcements = payload.announcementSymbols === undefined ? undefined
+        : [...new Set(payload.announcementSymbols.map(symbol => symbol.toUpperCase()))].sort();
+      const key=await hash(stable([CACHE_VERSION,payload.datasetRevision,payload.asOfDate,expression,payload.universe,symbols,announcements]));
       const cacheKey=new Request(`https://scanner-cache.invalid/v${CACHE_VERSION}/${key}`),cache=(caches as CacheStorage&{default:Cache}).default;
       const cached=await cache.match(cacheKey);
       let result:ScanResult;

@@ -69,6 +69,23 @@ describe('scanner execution and match caching',()=>{
     expect(sorted.body.rows.map((row:any)=>row.symbol)).toEqual(['BBB','AAA']);
     expect(sorted.body.perConditionCoverage).toEqual(first.body.perConditionCoverage);expect(f.get).not.toHaveBeenCalled();
   });
+  it('intersects announcement symbols with the universe and isolates cached matches', async () => {
+    const f = fixture();
+    const request = { customSymbols: ['AAA', 'BBB'], pageSize: 10 };
+    const first = await f.run({ ...request, announcementSymbols: ['AAA'] });
+    expect(first.body.rows.map((row: any) => row.symbol)).toEqual(['AAA']);
+    expect(first.body.totalUniverseCount).toBe(1);
+    const second = await f.run({ ...request, announcementSymbols: ['BBB'] });
+    expect(second.body.rows.map((row: any) => row.symbol)).toEqual(['BBB']);
+    f.get.mockClear();
+    const cached = await f.run({ ...request, announcementSymbols: ['bbb', 'BBB'] });
+    expect(cached.body.rows.map((row: any) => row.symbol)).toEqual(['BBB']);
+    expect(f.get).not.toHaveBeenCalled();
+    const empty = await f.run({ ...request, announcementSymbols: [] });
+    expect(empty.body.matchCount).toBe(0);
+    expect(empty.body.totalUniverseCount).toBe(0);
+  });
+
   it('validates pagination and current revision even when matches are cached',async()=>{
     const f=fixture();await f.run();f.get.mockClear();
     expect((await f.run({page:0})).response.status).toBe(400);expect((await f.run({pageSize:101})).response.status).toBe(400);

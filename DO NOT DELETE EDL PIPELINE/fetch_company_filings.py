@@ -1,8 +1,9 @@
 """Fetch ScanX filing metadata with a resumable LODR-history backfill.
 
-Every refresh gets page one for freshness. A symbol whose LODR history has
-not previously completed is paginated once and persisted in
-``filing_history_data``; later refreshes do not re-download old pages.
+Refresh recent pages until a fully retained overlap page is reached. Initial
+LODR backfills and retries after incomplete refreshes traverse all reported
+pages. Raw content revisions and endpoint freshness are retained in
+``filing_history_data``.
 """
 
 from __future__ import annotations
@@ -53,81 +54,106 @@ def _key(entry):
     news_id = entry.get("news_id")
     if news_id not in (None, ""):
         return f"id:{news_id}"
-    return "|".join(str(entry.get(field) or "") for field in ("news_date", "descriptor", "caption", "file_url"))
+    identity = "|".join(str(entry.get(field) or "") for field in ("news_date", "descriptor", "caption"))
+    # A later URL is enrichment, not a new identity. URL-only observations have
+    # no other usable identity and retain their original URL fallback.
+    return identity if identity.strip("|") else str(entry.get("file_url") or "")
 
 
-def _rank(entry):
-    return (bool(entry.get("file_url")), bool(entry.get("news_body")), len(str(entry.get("caption") or "")))
+def _content_key(entry):
+    # Only source content participates: refresh timestamps must not create versions.
+    fields = ("news_date", "descriptor", "ann_type", "cat", "caption", "news_body", "source_endpoint")
+    return (_key(entry), *(str(entry.get(field) or "") for field in fields))
+
+
+def _version_key(entry):
+    return (*_content_key(entry), str(entry.get("file_url") or ""))
 
 
 def dedupe_filings(items):
-    """Deduplicate endpoint/page overlap while preferring the fuller record."""
+    """Merge non-conflicting enrichment, retaining observable content revisions."""
     unique = {}
+    fields = ("news_date", "descriptor", "ann_type", "cat", "caption", "news_body", "file_url")
     for raw in items:
-        if not isinstance(raw, dict):
+        if not isinstance(raw, dict) or not _key(raw).strip("|"):
             continue
         entry = dict(raw)
-        key = _key(entry)
-        if not key.strip("|"):
-            continue
-        if key not in unique or _rank(entry) > _rank(unique[key]):
-            unique[key] = entry
-    return sorted(unique.values(), key=lambda item: str(item.get("news_date") or ""), reverse=True)
+        versions = unique.setdefault((_key(entry), entry.get("source_endpoint")), [])
+        for index, previous in enumerate(versions):
+            conflict = any(previous.get(field) not in (None, "")
+                           and entry.get(field) not in (None, "")
+                           and previous[field] != entry[field] for field in fields)
+            if not conflict:
+                versions[index] = {**previous, **{key: value for key, value in entry.items()
+                                                if value not in (None, "")}}
+                break
+        else:
+            versions.append(entry)
+    return sorted((entry for versions in unique.values() for entry in versions),
+                  key=lambda item: str(item.get("news_date") or ""), reverse=True)
 
 
 def _with_source(records, endpoint):
     return [{**record, "source_endpoint": endpoint} for record in records if isinstance(record, dict)]
 
 
-def _history_entry(existing, isin, legacy, lodr, total_pages, completed):
-    previous = existing if isinstance(existing, dict) else {}
-    return {
-        "isin": isin,
-        "lodr_total_pages": total_pages,
-        "lodr_backfill_complete": completed,
-        "filings": dedupe_filings([*(previous.get("filings") or []), *legacy, *lodr]),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
+def _refresh_endpoint(url, endpoint, isin, headers, existing, attempted_at, full_backfill=False):
+    previous = (existing.get("fetch_status") or {}).get(endpoint, {})
+    known = {_version_key({**row, "source_endpoint": endpoint})
+             for row in (existing.get("filings") or [])
+             if isinstance(row, dict) and row.get("source_endpoint") in {None, endpoint}}
+    # A failed catch-up may have cached its first pages. Those pages cannot act
+    # as the overlap fence on retry, or the still-missing middle would be skipped.
+    full_backfill = full_backfill or previous.get("refresh_complete") is False
+    fetched, current_page, total_pages, error, page, pages_fetched = [], [], 1, None, 1, 0
+    while page <= total_pages:
+        records, pages, error = fetch_page(url, isin, headers, page)
+        if records is None:
+            error = error or "endpoint returned no records"
+            break
+        pages_fetched += 1
+        total_pages = max(total_pages, pages or 1)
+        rows = _with_source(records, endpoint)
+        if page == 1:
+            current_page = rows
+        fetched.extend(rows)
+        if not full_backfill and rows and all(_version_key(row) in known for row in rows):
+            break
+        page += 1
+    complete = error is None
+    metadata = {"last_attempt_at": attempted_at,
+                "last_success_at": datetime.now(timezone.utc).isoformat() if complete else previous.get("last_success_at"),
+                "refresh_complete": complete, "pages_fetched": pages_fetched,
+                "total_pages": total_pages, "error": error}
+    return fetched, metadata, current_page
 
 
 def fetch_filings(item, existing_history=None):
-    """Fetch current pages and any missing historical LODR pages for one ISIN."""
+    """Catch up both feeds, preserving prior data and observable content revisions."""
     symbol = str(item.get("Symbol") or "").upper()
     isin = item.get("ISIN")
     if not symbol or not isin:
         return {"symbol": symbol, "status": "error", "error": "missing symbol or ISIN"}
 
+    existing = existing_history or {}
+    attempted_at = datetime.now(timezone.utc).isoformat()
     headers = get_headers(include_origin=True)
-    legacy_page, _legacy_pages, legacy_error = fetch_page(LEGACY_URL, isin, headers)
-    lodr_page, total_pages, lodr_error = fetch_page(LODR_URL, isin, headers)
-    existing_history = existing_history or {}
-    legacy = _with_source(legacy_page or [], "company_filings")
-    lodr = _with_source(lodr_page or [], "lodr")
-    completed = bool(existing_history.get("lodr_backfill_complete"))
-
-    if lodr_page is not None and not completed:
-        completed = True
-        for page in range(2, total_pages + 1):
-            records, _pages, error = fetch_page(LODR_URL, isin, headers, page)
-            if records is None:
-                completed = False
-                lodr_error = error
-                break
-            lodr.extend(_with_source(records, "lodr"))
-
-    # If page one fails after a completed backfill, retain known history rather
-    # than turning a temporary provider failure into data loss.
-    if lodr_page is None:
-        total_pages = existing_history.get("lodr_total_pages", 1)
-    history = _history_entry(existing_history, isin, legacy, lodr, total_pages or 1, completed)
-    current = dedupe_filings([*legacy, *(_with_source(lodr_page or [], "lodr"))]) or history["filings"]
-    return {
-        "symbol": symbol,
-        "status": "success" if legacy_page is not None or lodr_page is not None else "error",
-        "current": current,
-        "history": history,
-        "error": legacy_error or lodr_error,
-    }
+    legacy, legacy_status, legacy_current = _refresh_endpoint(LEGACY_URL, "company_filings", isin, headers,
+                                              existing, attempted_at)
+    lodr, lodr_status, lodr_current = _refresh_endpoint(LODR_URL, "lodr", isin, headers, existing,
+                                        attempted_at, not existing.get("lodr_backfill_complete", False))
+    completed = bool(existing.get("lodr_backfill_complete")) or lodr_status["refresh_complete"]
+    history = {"isin": isin,
+               "lodr_total_pages": lodr_status["total_pages"] if lodr_status["pages_fetched"] else existing.get("lodr_total_pages", 1),
+               "lodr_backfill_complete": completed,
+               "filings": dedupe_filings([*(existing.get("filings") or []), *legacy, *lodr]),
+               "updated_at": attempted_at,
+               "fetch_status": {"company_filings": legacy_status, "lodr": lodr_status}}
+    return {"symbol": symbol,
+            "status": "success" if legacy_status["pages_fetched"] or lodr_status["pages_fetched"] else "error",
+            "refresh_complete": legacy_status["refresh_complete"] and lodr_status["refresh_complete"],
+            "current": dedupe_filings([*legacy_current, *lodr_current]) or history["filings"],
+            "history": history, "error": legacy_status["error"] or lodr_status["error"]}
 
 
 def _load_history():
@@ -175,7 +201,7 @@ def main():
     checkpoint_batches = has_pending_backfill(existing, canonical_symbols)
     results = []
     started = time.time()
-    print(f"Refreshing page one for {len(stock_list)} mainboard symbols; threads: {MAX_THREADS}.")
+    print(f"Catching up recent filings for {len(stock_list)} mainboard symbols; threads: {MAX_THREADS}.")
     with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
         futures = {
             executor.submit(fetch_filings, item, existing.get(str(item.get("Symbol") or "").upper())): item
@@ -200,7 +226,8 @@ def main():
     _save_history(history)
     completed = sum(bool(record.get("lodr_backfill_complete")) for record in history.values())
     succeeded = sum(result.get("status") == "success" for result in results)
-    print(f"Filings refreshed: {succeeded}/{len(results)}; LODR histories complete: {completed}/{len(history)}.")
+    caught_up = sum(result.get("refresh_complete", False) for result in results)
+    print(f"Filings fetched: {succeeded}/{len(results)}; both feeds caught up: {caught_up}/{len(results)}; LODR histories complete: {completed}/{len(history)}.")
     return succeeded > 0
 
 

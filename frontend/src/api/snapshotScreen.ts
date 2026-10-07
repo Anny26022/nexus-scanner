@@ -196,7 +196,7 @@ const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
 export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): ScreenerRunResponse | null {
   if (request.textQuery?.trim()) request = {...request,expressionTree:compileTextQuery(request.textQuery) as ExpressionNode,textQuery:undefined};
-  const key = JSON.stringify([request.expressionTree,request.universe,request.customSymbols,request.sort]);
+  const key = JSON.stringify([request.expressionTree,request.universe,request.customSymbols,request.sort,request.announcementSymbols]);
   let cache = matchCache.get(data);
   if (!cache) { cache = new Map(); matchCache.set(data,cache); }
   let matches = cache.get(key);
@@ -209,8 +209,10 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
       midsmall400:['NIFTY MIDSMALLCAP 400','NIFTY MIDSMALL 400','MIDSMALL400'],
     };
     const symbols = new Set(request.customSymbols?.map(s => s.toUpperCase()));
+    const announcementSymbols = request.announcementSymbols ? new Set(request.announcementSymbols) : null;
     const universe = data.stocks.filter(s => request.universe === 'custom' ? symbols.has(s.symbol)
-      : request.universe === 'mainboard' || s.indexMemberships.some(label => labels[request.universe]?.includes(label.toUpperCase())));
+      : request.universe === 'mainboard' || s.indexMemberships.some(label => labels[request.universe]?.includes(label.toUpperCase())))
+      .filter(stock => !announcementSymbols || announcementSymbols.has(stock.symbol));
     const coverage = createCoverage(leaves,universe.length);
     const rows = universe.filter(s => {
       const values = new Map(leaves.map((condition,index) => [condition,predicates[index]!(s)]));

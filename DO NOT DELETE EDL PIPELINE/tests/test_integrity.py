@@ -269,7 +269,7 @@ class IntegrityTests(unittest.TestCase):
                 {'symbol':'NIFTY','records':[bar]},
                 {'symbol':'NIFTY 500','records':[bar]},
             ]},
-            'market_breadth_v2.json.gz':{'generated_at':stamp,'records':[{'date':'2026-09-24'}]},
+            'market_breadth_v2.json.gz':{'generated_at':stamp,'quality':{'eligible_symbols':1},'records':[{'date':(date(2026,9,24)-timedelta(days=offset)).isoformat(), 'eligible_with_candle':1} for offset in reversed(range(30))]},
             'breadth_universe_snapshot.json.gz':{'generated_at':stamp},
             'corporate_action_ledger.json.gz':{'source':'test','price_adjusted':False,'records':[]},
             'nse_fno_ban.json.gz':{'source':'test','available':False,'trade_date':None,'symbols':[]},
@@ -328,6 +328,16 @@ class IntegrityTests(unittest.TestCase):
                     if scenario=='wrong_breadth_date':data['market_breadth_v2.json.gz']['records'][0]['date']='2026-09-23'
                     for name,value in data.items():self.write(root,name,value)
                     self.assertTrue(inspect_publication(root,today=date(2026,9,24))['errors'])
+
+    def test_missing_historical_breadth_blocks_current_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            files = self.fixture(root)
+            files['market_breadth_v2.json.gz']['records'][-2]['eligible_with_candle'] = 0
+            self.write(root, 'market_breadth_v2.json.gz', files['market_breadth_v2.json.gz'])
+            report = inspect_publication(root, today=date(2026,9,24))
+            self.assertTrue(any('breadth candle coverage below 90%' in error for error in report['errors']))
+            self.assertEqual(report['breadth_history']['low_coverage_sessions'][0]['date'], '2026-09-23')
 
     def test_exact_session_gate(self):
         with tempfile.TemporaryDirectory() as tmp:

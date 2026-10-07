@@ -38,3 +38,29 @@ it('rejects incomplete text without executing a reduced query',async()=>{
   await expect(realAdapter.runScreen({...request,textQuery:'Market Cap > 2000 AND magic stocks'})).rejects.toThrow('Unsupported query clause');
   expect(fetcher).not.toHaveBeenCalled();expect(snapshotTask).not.toHaveBeenCalled();
 });
+
+it('keeps announcement selection when routing scalar text to the browser', async () => {
+  const result = { immutableRevision: revision, rows: [], matchCount: 0 };
+  snapshotTask.mockResolvedValue({ type: 'screen', result, revision, sessionDate: session });
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(manifest))));
+  const { realAdapter } = await import('../api/realAdapter');
+  vi.spyOn(realAdapter, 'getAnnouncementIndex').mockResolvedValue({
+    referenceSession: session,
+    publishedAt: '2026-10-02T06:00:00Z',
+    sinceLastClose: '2026-10-01T10:00:00Z',
+    records: [
+      { id: 'order', symbol: 'AAA', publishedAt: '2026-10-02T04:00:00Z', headline: 'Order', topics: ['order_win'], status: 'approved', detailPage: '' },
+      { id: 'other', symbol: 'BBB', publishedAt: '2026-10-02T04:00:00Z', headline: 'Other', topics: ['results'], status: 'approved', detailPage: '' },
+    ],
+  });
+  await realAdapter.runScreen({
+    ...request,
+    textQuery: 'Market Cap > 2000',
+    announcementFilter: { topics: ['order_win'], window: 'since_close' },
+  });
+  expect(snapshotTask.mock.calls[0][0].request).toMatchObject({
+    datasetRevision: revision,
+    announcementSymbols: ['AAA'],
+    textQuery: undefined,
+  });
+});

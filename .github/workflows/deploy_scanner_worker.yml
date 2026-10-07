@@ -41,6 +41,6 @@ jobs:
           ALLOWED_FRONTEND_ORIGINS: ${{ vars.ALLOWED_FRONTEND_ORIGINS }}
           SCANNER_RELEASE_URL: ${{ vars.SCANNER_RELEASE_URL }}
         run: |
-          npx wrangler deploy \
+          npx wrangler deploy --config wrangler.toml \
             --var "ALLOWED_ORIGINS:${ALLOWED_FRONTEND_ORIGINS}" \
             --var "SCANNER_RELEASE_URL:${SCANNER_RELEASE_URL}"

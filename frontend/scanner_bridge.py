@@ -12,7 +12,7 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1] / "DO NOT DELETE EDL PIPELINE"
 sys.path[:0] = [str(ROOT), str(ROOT / "src")]
-from screen_trend_conditions import _load_context, _load_delivery_history, _resolve_universe
+from screen_trend_conditions import _load_context, _load_delivery_history, _resolve_universe, _requires_delivery as _needs_delivery
 from edl_pipeline.scanner.context import normalize_condition_spec
 from edl_pipeline.scanner.context import CONTEXT_CONDITION_REGISTRY
 from edl_pipeline.scanner.presets import get_preset
@@ -181,12 +181,6 @@ def combine(values, op):
     if op == "AND":
         return False if False in values else None if None in values else True
     return True if True in values else None if None in values else False
-
-
-def _needs_delivery(expression):
-    """Whether an expression needs the dated delivery-history side input."""
-    serialized = json.dumps(expression).lower()
-    return any(marker in serialized for marker in ("delivery_pct_spike", "delivery_percent"))
 
 
 def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
@@ -373,6 +367,12 @@ def run(request, root=ROOT, cache=None):
     selected = _resolve_universe(context, universe, explicit)
     wanted = set(selected) if selected is not None else None
     stocks = [s for symbol,s in context["stocks"].items() if (wanted is None or symbol in wanted) and s.get("default_screener_eligible",True)]
+    if "announcementSymbols" in request:
+        announcement_symbols = request["announcementSymbols"]
+        if not isinstance(announcement_symbols, list) or any(not isinstance(s, str) for s in announcement_symbols):
+            raise ValueError("Invalid announcement symbol filter")
+        allowed_announcements = set(announcement_symbols)
+        stocks = [s for s in stocks if s.get("symbol") in allowed_announcements]
     text_query = str(request.get("textQuery") or "").strip()
     expression = compile_query(text_query) if text_query else frontend_expression(request["expressionTree"])
     # Both public delivery conditions need dated history.  The spike condition

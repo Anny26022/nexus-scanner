@@ -44,7 +44,7 @@ Nexus supports research and candidate discovery. It does not execute orders, man
 | Mainboard screener | Visual filters, presets, universe selection, active chips, sorting, and paginated results. |
 | IPO catalogue | Listing windows, symbol/company search, sorting, pagination, and screening of selected listings. |
 | Boolean expressions | Match All (`AND`) and Match Any (`OR`) in the UI; the underlying contract supports nested groups. |
-| Query input | The deterministic compiler runs at the Cloudflare boundary and mirrors the Python contract. In mock mode, entered query text is not evaluated; the adapter uses the expression tree. Unsupported clauses are rejected without guessed conditions or fallback filters. |
+| Query input | The deterministic compiler runs in the browser before routing and at the Cloudflare boundary, mirroring the Python contract. In mock mode, entered query text is not evaluated; the adapter uses the expression tree. Unsupported clauses are rejected without guessed conditions or fallback filters. |
 | Symbol lists | Comparison support and a symbol-list component exist; app navigation currently exposes screener and IPO tabs. |
 | Workspace persistence | Current preferences, conditions, sorting, universe, IPO controls, and the active text query persist in browser local storage. |
 | Named saved screens | A named-screen library is not implemented. |
@@ -57,7 +57,8 @@ Nexus supports research and candidate discovery. It does not execute orders, man
 
 ### Prerequisites
 
-- Node.js and npm compatible with the checked-in package lock.
+- Node.js 24 LTS (run `nvm use` from the repository root) and npm.
+- The frontend uses Vite 8, React plugin 6, and Vitest 5. Other supported Node versions are declared in `package.json`; Vitest requires at least Node 22.12.
 - Python 3.9 or later for pipeline tools and historical screen evaluation.
 - Published files under `frontend/public/data/` for real-data operation.
 - Matching EDL inputs and history for custom conditions requiring Python evaluation.
@@ -118,6 +119,8 @@ The initial workspace uses RVOL between 1.5 and 20 and price above SMA 50, unles
 
 Choose 30 days, 90 days, six months, one year, or all published listings. Search by symbol/company and sort the catalogue. Its mapped fields are symbol/company, listing date, current price, daily turnover in ₹Cr, market cap in ₹Cr, delivery percentage, sector, and industry.
 
+Matched IPO Decode rows also show the last complete detail refresh in IST and any failed endpoint names. Missing timestamps display “no complete refresh recorded”; catalogue refresh time is not substituted. The detail lane keeps its 18-issue budget, reserving up to four slots for the full retained listed archive. Each lane prioritizes never-attempted and oldest-attempted eligible issues; unused slots go to either lane. Partial refreshes retain cached endpoints and the last complete timestamp, and remain eligible for retry. Saved errors contain endpoint labels rather than request commands or session headers, including when older caches are restored. The catalogue shows complete, partial or failed provider refresh status separately from issue-detail freshness, and file-load failures have a Retry action.
+
 Listing windows are calendar-based and currently measured from the browser's current date; six months is represented by 183 days and one year by 365. This catalogue window is distinct from the scanner's published trading session. Catalogue pages contain 50 rows; main and IPO screening requests use 15 rows per page.
 
 Issue price, listing price, and return since listing are not mapped into the current table. Missing classification displays `Unclassified`. Some absent numeric source fields are currently mapped to zero by the IPO adapter; zero is not independently verified source coverage.
@@ -152,7 +155,7 @@ Descriptions summarize intent; the declarative expression and parameters determi
 - SMA50 needs 50 recorded closes.
 - Average turnover is mean `close × volume`, divided by 10,000,000 for ₹Cr.
 - EMA persistence defaults to the engine's extreme-based reset rule, rather than requiring every close to remain above the EMA.
-- Weekly inside bars use ISO-week aggregates of daily OHLCV. Completed-week mode includes Friday's close and excludes a developing Monday–Thursday week; current-week mode includes it and is labelled provisional.
+- Weekly inside bars use ISO-week aggregates of daily OHLCV. Completed-week mode includes Friday-ended bars and excludes a developing Monday–Thursday week. Holiday-shortened weeks ending before Friday remain conservatively excluded without an exchange-calendar completeness marker. Current-week mode includes the latest week and marks the result provisional.
 
 See the [calculation guide](../README.md#calculation-conventions-and-formulas) and [condition engine documentation](../DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/TREND_CONDITION_ENGINE.md) for exact definitions and missing-data rules.
 
@@ -320,6 +323,25 @@ Build with `npm ci` and `npm run build`, then host `dist/` with its public data 
 - Verify gzip transport: the client supports raw compressed bytes and responses decoded through HTTP `Content-Encoding: gzip`.
 - Deploy compatible application/catalogue and data versions.
 
+### Cloudflare production and PR previews
+
+The root `wrangler.jsonc` builds and serves the static frontend for both production
+and PR previews. It does not deploy the Python scanner bridge. Browser-evaluable
+conditions and published preset defaults work; expressions requiring historical
+Python evaluation need a separately deployed backend.
+
+Set `VITE_API_BASE_URL` in the Cloudflare build environment to that backend's API
+base before building; the frontend appends `/screens/run`. The backend must allow
+the production/preview origin through CORS and have the requested frozen dataset
+revision and history inputs. Build-time settings require a new build to take effect.
+
+Without an external API, the default `/api/screens/run` has no handler in this
+static deployment. With Wrangler 4.148.0, local checks return HTTP 405 for POST;
+an unmatched GET returns the SPA's `index.html` with HTTP 200. Neither response is
+a scanner API result. SPA fallback supports frontend deep links and does not
+supply API endpoints. Historical queries are unavailable in these previews until
+the separate backend is configured.
+
 ### Historical evaluation deployment
 
 A static-only installation supports browser-evaluable conditions and preset defaults. For richer expressions, supply `POST /screens/run` under the configured API base or proxy `/api/screens/run` to a Python service.
@@ -429,3 +451,24 @@ Tests verify contracts against fixtures. They do not establish complete live ups
 - Chart viewers, named saved screens, durable raw-history recovery, and persistent watchlists need further integration.
 
 Read the [repository guide](../README.md), [data limitations](../DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/DATA_LIMITATIONS.md), and [R2 publication guide](../docs/r2-chart-publication.md) for wider operational detail.
+
+### Python dependencies for frontend CI
+
+Frontend CI uses Python 3.12 and `frontend/requirements-ci.lock`, which pins all
+direct and transitive Python dependencies with distribution hashes. CI installs
+only wheels with `pip --require-hashes`; its pip cache follows the lockfile.
+The pipeline's `requirements.txt` remains the source of allowed ranges.
+
+After changing those ranges, regenerate the lock from the repository root using
+uv 0.12.23 (the version used for the initial lock):
+
+```bash
+uv pip compile --python-version 3.12 --python-platform x86_64-unknown-linux-gnu \
+  --generate-hashes --output-file frontend/requirements-ci.lock \
+  "DO NOT DELETE EDL PIPELINE/requirements.txt"
+```
+
+Add `--upgrade` to deliberately refresh all pinned versions, or
+`--upgrade-package NAME` for one package. Commit the updated lock with the input
+change and verify the frontend Python suite. Python requirement changes also
+trigger Frontend CI.

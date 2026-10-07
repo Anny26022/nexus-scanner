@@ -23,6 +23,11 @@ SHAREHOLDING_FIELDS = {
     "NO_OF_SHARE_HOLDERS": "number_of_shareholders",
 }
 
+SHAREHOLDING_CHANGE_FIELDS = {
+    "fii_percent_change_qoq": "fii_holding_percent",
+    "dii_percent_change_qoq": "dii_holding_percent",
+}
+
 
 def _iso_date(value) -> str | None:
     try:
@@ -114,4 +119,20 @@ def select_observation(observations: Iterable[dict], symbol: str, as_of_date: st
     ]
     if not candidates:
         return None
-    return max(candidates, key=lambda item: (str(item["period_end"]), str(item["observed_on"])))
+    latest = max(candidates, key=lambda item: (str(item["period_end"]), str(item["observed_on"])))
+    period = date.fromisoformat(_iso_date(latest["period_end"]))
+    # QoQ means adjacent completed quarters, not whichever older row exists.
+    previous = None
+    if period.month in (3, 6, 9, 12) and period.day == calendar.monthrange(period.year, period.month)[1]:
+        year, month_index = divmod(period.year * 12 + period.month - 1 - 3, 12)
+        month = month_index + 1
+        previous_end = date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+        prior_rows = [item for item in candidates if _iso_date(item["period_end"]) == previous_end]
+        if prior_rows:
+            previous = max(prior_rows, key=lambda item: str(item["observed_on"]))
+    selected = dict(latest)
+    for change, field in SHAREHOLDING_CHANGE_FIELDS.items():
+        current = _number(latest.get(field))
+        prior = _number(previous.get(field)) if previous else None
+        selected[change] = round(current - prior, 4) if current is not None and prior is not None else None
+    return selected

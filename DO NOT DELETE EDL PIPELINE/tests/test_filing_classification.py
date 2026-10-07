@@ -320,7 +320,9 @@ class FilingClassificationTests(unittest.TestCase):
             save_json(root / 'corporate_action_ledger.json', {'records': [action, {**action, 'ex_date': '2026-10-07'}]})
             with patch.object(chart_publisher, 'BASE_DIR', str(root)):
                 self.assertEqual(chart_publisher.main(), 0)
-            with gzip.open(root / 'chart_artifacts/ABC.json.gz', 'rt') as handle:
+            index = json.loads((root / 'chart_artifacts/index.json').read_text())
+            object_path = root / 'chart_artifacts/objects' / (index['chartObjects']['ABC'] + '.json.gz')
+            with gzip.open(object_path, 'rt') as handle:
                 chart = json.load(handle)
             self.assertEqual(len(chart['corporateActions']), 1)
             published = chart['corporateActions'][0]
@@ -328,4 +330,5 @@ class FilingClassificationTests(unittest.TestCase):
             self.assertEqual(published['share_factor'], action['share_factor'])
             self.assertEqual(published['ex_date'], action['ex_date'])
             self.assertEqual(published['classification']['terms']['bonusRatio'], {'issued': 1, 'held': 2})
-            self.assertEqual(chart['filingClassificationVersion'], VERSION)
+            self.assertNotIn('filingTaxonomy', chart)
+            self.assertNotIn('regulatoryAnnouncements', chart)

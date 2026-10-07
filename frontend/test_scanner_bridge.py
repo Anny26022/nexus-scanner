@@ -11,6 +11,23 @@ from edl_pipeline.scanner.presets import list_presets
 
 
 class BridgeTests(unittest.TestCase):
+    def test_announcement_filter_intersects_before_pagination_and_isolates_cache(self):
+        context = {"stocks": {symbol: {**self.stock(), "symbol": symbol} for symbol in ("AAA", "BBB")},
+                   "financial_history_as_of": "2026-09-30", "rs_ratings": {}, "fno_ban_symbols": {}}
+        request = {"asOfDate": "2026-09-30", "universe": "mainboard", "pageSize": 1,
+                   "expressionTree": {"type": "group", "operator": "all", "children": []}}
+        with tempfile.TemporaryDirectory() as folder, patch.object(bridge, "_load_context", return_value=context):
+            root = Path(folder)
+            cache = ScannerCache()
+            self.assertEqual(bridge.run(request, root, cache)["matchCount"], 2)
+            filtered = bridge.run({**request, "announcementSymbols": ["BBB"]}, root, cache)
+            self.assertEqual(filtered["matchCount"], 1)
+            self.assertEqual(filtered["rows"][0]["symbol"], "BBB")
+            self.assertEqual(bridge.run({**request, "announcementSymbols": []}, root, cache)["matchCount"], 0)
+            self.assertEqual(bridge.run(request, root, cache)["matchCount"], 2)
+            with self.assertRaises(ValueError):
+                bridge.run({**request, "announcementSymbols": "BBB"}, root, cache)
+
     def test_cache_reuses_scan_for_pagination_and_invalidates_changed_history(self):
         context={"stocks":{"TEST":self.stock()},"financial_history_as_of":"2026-09-30","rs_ratings":{},"fno_ban_symbols":{}}
         request={"asOfDate":"2026-09-30","universe":"mainboard","expressionTree":{"type":"group","operator":"all","children":[]}}

@@ -2,7 +2,7 @@
 
 The scanner and chart files share one release manifest: `frontend/public/data/current.json`.
 It contains the scanner revision, session date, immutable scanner/IPO URLs, chart revision,
-and chart URL template. Per-scanner `release.json` files let open screens keep their revision.
+and data-index/object URL references (schema 7). Legacy releases retain a chart URL template. Per-scanner `release.json` files let open screens keep their revision.
 New publications do not use a separate mutable R2 current pointer. The legacy
 `manifests/current.json` object may still exist in R2; it is obsolete, is not
 updated, and is not read by the application.
@@ -22,7 +22,7 @@ Missing or partial configuration logs a warning and publishes fresh schema-4
 scanner data without chart URLs, R2 requests, or frontend chart-cache copying.
 With all four settings present, invalid settings or upload/verification/archive
 failures stop publication before the Git commit and preserve the active release.
-Local development defaults to an ignored `/data/charts/<chart-revision>/` cache.
+Local development uses ignored `/data/objects/` files; legacy releases use `/data/charts/<chart-revision>/`.
 Chart bytes are `application/gzip`, without `Content-Encoding: gzip`; the browser
 explicitly decompresses them. Cache immutable chart URLs, but bypass CDN/browser
 caching for `/data/current.json`.
@@ -33,15 +33,29 @@ The pipeline builds charts after canonical financial/filing ledgers and before
 compression or intermediate cleanup. Staged chart files are preserved during
 publication; the workflows upload these files without rebuilding them after news
 inputs have been discarded. Scanner data is exported from the same pipeline run.
-They verify chart count, payload symbol/session and content revision before uploading.
-Uploads are checked against their source, and charts never enter frontend Git revisions.
-The shared manifest is written only after upload and any required month-end archive succeed.
-Git publishes the scanner snapshot and pointer together. R2 stores only immutable objects.
-Reruns use checksums. R2 release `publishedAt` is the session date at 00:00 UTC,
-a deterministic release timestamp rather than the actual upload time; this makes
-retries from a fresh runner produce identical immutable metadata.
+They verify chart count, symbol, content hashes, and announcement references before
+uploading. Content-addressed objects are shared across releases. One R2 listing
+identifies existing objects; only new objects transfer and receive download-based
+verification. Existing immutable objects must have the expected byte size.
+Charts, announcements and complete raw/classified backups stay outside Git;
+Git retains small release references and scanner data. The shared current manifest
+is written only after every object and release reference succeeds. Failed
+publication preserves the active pointer. See
+[lean announcement publication](lean-announcement-publication.md) for the layout.
+R2 release `publishedAt` remains the deterministic session date at 00:00 UTC;
+the announcement catalog separately records its filing-cache publication time.
 
-## Retention
+## Current object retention
+
+Schema-7 releases use `objects/<sha256>.json.gz` and
+`releases/<scanner-revision>/`. Keep both prefixes indefinitely: several releases
+can reference the same object. Do not apply the old daily lifecycle rule to them.
+There is no automatic garbage collection in this implementation. Unchanged chart
+and completed history pages are reused; newly changed pages and complete archive
+backups still add storage. Measure real usage before introducing reachability-based
+cleanup. Complete archives are for recovery and are never fetched by the UI.
+
+## Legacy retention
 
 - `daily/<session>/<chart-revision>/`: expire after **90 calendar days from upload**.
 - `monthly/<YYYY-MM>/<chart-revision>/`: keep indefinitely.
@@ -66,7 +80,7 @@ September 2026 upload. No existing objects were deleted when adding the rule.
 If publication stops for over 90 days, daily objects can expire before rollover archival;
 the rule does not protect the last current release through an indefinite outage.
 
-At 47 MB per full revision, the rolling daily storage is approximately 4.2 GB,
+For legacy full-copy releases, at 47 MB per full revision, the rolling daily storage is approximately 4.2 GB,
 plus approximately 0.56 GB for each year of month-end releases (before corrections).
 
 ## Lowest-volume records

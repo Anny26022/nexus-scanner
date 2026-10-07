@@ -11,7 +11,6 @@ from collections import defaultdict
 from datetime import datetime, timezone
 import gzip
 import hashlib
-import io
 import json
 from pathlib import Path
 import shutil
@@ -23,7 +22,8 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from pipeline_utils import BASE_DIR, load_json, save_json
-from filing_classification import VERSION, TAXONOMY, classify_filings, classify_corporate_action
+from filing_classification import VERSION, classify_filings, classify_corporate_action
+from announcement_artifacts import build_announcements, put_object
 
 
 # HVE is the one all-history record.  Twenty quarters gives five years of
@@ -48,16 +48,6 @@ def _artifact(root: Path, name: str, default):
             return json.load(handle)
     return default
 
-
-def _write_gzip_json(path: Path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode("utf-8")
-    buffer = io.BytesIO()
-    with gzip.GzipFile(fileobj=buffer, mode="wb", mtime=0) as handle:
-        handle.write(encoded)
-    compressed = buffer.getvalue()
-    path.write_bytes(compressed)
-    return compressed
 
 
 def _date(value):
@@ -188,12 +178,17 @@ def main() -> int:
         return 1
     actions = _by_symbol(_records(_artifact(root, "corporate_action_ledger.json", {})))
     earnings = _by_symbol(_records(_artifact(root, "quarterly_financial_history.json", {})))
-    filings = _filing_events(_artifact(root, "filing_history.json", {}), as_of)
+    filing_history = _artifact(root, "filing_history.json", {})
     news = _market_news(root, as_of)
     output = root / "chart_artifacts"
     temporary = root / ".chart_artifacts.tmp"
     shutil.rmtree(temporary, ignore_errors=True)
     temporary.mkdir(parents=True)
+    objects = temporary / "objects"
+    symbols = {str(stock.get("Symbol") or stock.get("symbol") or "").upper() for stock in stocks}
+    symbols.discard("")
+    announcements = build_announcements(filing_history, objects, symbols, as_of)
+    chart_objects = {}
     count = 0
     for stock in stocks:
         symbol = str(stock.get("Symbol") or stock.get("symbol") or "").upper()
@@ -201,25 +196,20 @@ def main() -> int:
             continue
         candles = _load_candles(root / "ohlcv_data" / f"{symbol}.csv", as_of)
         payload = {
-            "schemaVersion": 1, "symbol": symbol, "asOfDate": as_of,
+            "schemaVersion": 2, "symbol": symbol,
             "historyStartDate": candles[0]["date"] if candles else None,
             "candles": candles, "volumeEvents": _volume_events(candles),
             "corporateActions": [{**row, "classification": classify_corporate_action(row)} for row in actions[symbol] if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
             "earnings": [row for row in earnings[symbol] if _date(row.get("filing_date")) and row["filing_date"] <= as_of],
-            "regulatoryAnnouncements": sorted(filings[symbol], key=lambda row: row["date"], reverse=True),
-            "filingClassificationVersion": VERSION, "filingTaxonomy": TAXONOMY,
             "marketNews": sorted(news[symbol], key=lambda row: row["date"], reverse=True)[:50],
         }
-        _write_gzip_json(temporary / f"{symbol}.json.gz", payload)
+        chart_objects[symbol] = put_object(objects, payload)
         count += 1
-    revision = hashlib.sha256()
-    for path in sorted(temporary.glob("*.json.gz")):
-        revision.update(path.name.encode())
-        revision.update(path.read_bytes())
-    save_json(temporary / "index.json", {
-        "schemaVersion": 1, "revision": revision.hexdigest(), "asOfDate": as_of, "symbols": count,
-        "retention": {"highestEver": "all available history", "lowestEver": "all available history", "quarterlyQuarters": QUARTERLY_EVENT_LIMIT},
-    })
+    index = {"schemaVersion": 2, "asOfDate": as_of, "symbols": count,
+             "chartObjects": chart_objects, "announcements": announcements,
+             "retention": {"highestEver": "all available history", "quarterlyQuarters": QUARTERLY_EVENT_LIMIT}}
+    index["revision"] = hashlib.sha256(json.dumps(index, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    save_json(temporary / "index.json", index)
     shutil.rmtree(output, ignore_errors=True)
     temporary.replace(output)
     print(f"Published {count} immutable chart artifacts through {as_of}.")

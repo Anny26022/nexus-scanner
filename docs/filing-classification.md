@@ -42,12 +42,14 @@ The artifact contains the taxonomy, classifier version, filing count and
 unclassified count. Daily and weekly workflows already run this stage before
 chart generation. No additional classified cache is introduced.
 
-`build_chart_artifacts.py` carries the classification, original publication
-timestamp, source labels, source endpoints and filing ID into per-symbol
-compressed chart files. The existing R2 publisher uploads these with the chart
-release. A taxonomy accompanies each chart for consumers; the existing generic
-`category` field remains compatible. No classification runs in the browser.
-This PR does not deploy or replace active R2 releases.
+`build_chart_artifacts.py` publishes announcement summaries and full evidence as
+separate content-addressed objects. The taxonomy is shared once per release;
+charts retain official corporate actions without embedding the filing archive.
+The recent stock view covers 90 days, older history uses year pages of 100 filings,
+and screening uses a seven-day cross-stock summary index. No classification runs
+in the browser. See [lean announcement publication](lean-announcement-publication.md)
+for storage, backup and delivery details. This change does not replace active R2
+releases until the pipeline publishes after merge.
 
 Official NSE corporate actions remain authoritative for action dates and price
 adjustments. A filing publication date is not an ex-date or meeting date.
@@ -187,9 +189,9 @@ automatically refetched. Old cached text remains usable on later publications.
 This runner cache is not a durable backup guarantee.
 
 The raw provider cache is not rewritten. Extracted text is used only in the
-derived classification. Public filing/chart output includes exact evidence with
+derived classification. Public filing detail output includes exact evidence with
 `document_page_N` references and extraction status/hash/truncation metadata,
-not whole PDF text or binaries. Chart metadata excludes wall-clock retry times. The existing chart/R2 publication path is reused.
+not whole PDF text or binaries. Chart metadata excludes wall-clock retry times. The R2 publisher delivers separate announcement objects through the shared release manifest.
 
 Regression tests cover the observed Optiemus-style failure, guarantees, intent
 versus award, mixed events, negation, non-binding agreements, historical

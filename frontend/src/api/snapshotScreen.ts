@@ -133,7 +133,7 @@ const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
 export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): ScreenerRunResponse | null {
   if (request.textQuery?.trim()) return null;
-  const key = JSON.stringify([request.expressionTree,request.universe,request.customSymbols,request.sort]);
+  const key = JSON.stringify([request.expressionTree,request.universe,request.customSymbols,request.sort,request.announcementSymbols]);
   let cache = matchCache.get(data);
   if (!cache) { cache = new Map(); matchCache.set(data,cache); }
   let matches = cache.get(key);
@@ -147,7 +147,8 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
     const symbols = new Set(request.customSymbols?.map(s => s.toUpperCase()));
     const universe = data.stocks.filter(s => request.universe === 'custom' ? symbols.has(s.symbol)
       : request.universe === 'mainboard' || s.indexMemberships.some(label => labels[request.universe]?.includes(label.toUpperCase())));
-    const rows = universe.filter(s => predicate(s) === true && number(s.close) != null);
+    const announcementSymbols = request.announcementSymbols ? new Set(request.announcementSymbols) : null;
+    const rows = universe.filter(s => (!announcementSymbols || announcementSymbols.has(s.symbol)) && predicate(s) === true && number(s.close) != null);
     const field = (request.sort?.field ?? 'symbol') as keyof SnapshotStock;
     rows.sort((a,b) => {
       const x = a[field], y = b[field];

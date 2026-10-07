@@ -9,6 +9,7 @@ import numpy as np
 
 import scanner_bridge as bridge
 from scanner_cache import ScannerCache
+from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
@@ -100,7 +101,7 @@ def publish(root=bridge.ROOT, output=OUTPUT):
         default_count += evaluate(default) is True
         rows.append(row)
     cache.save_frames(root)
-    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__)]
+    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py")]
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
@@ -151,6 +152,11 @@ def publish(root=bridge.ROOT, output=OUTPUT):
     compressed_path=generation/'stocks.json.gz'
     temporary=compressed_path.with_name(compressed_path.name+'.tmp')
     temporary.write_bytes(compressed); temporary.replace(compressed_path)
+    packed_bytes = json.dumps(pack_snapshot(payload), separators=(',', ':'), allow_nan=False).encode()
+    packed_path = generation/'stocks.packed.json.gz'
+    temporary = packed_path.with_name(packed_path.name+'.tmp')
+    temporary.write_bytes(gzip.compress(packed_bytes, compresslevel=9, mtime=0))
+    temporary.replace(packed_path)
     with gzip.open(root/'ipo_screener.json.gz','rt') as handle:
         ipos=json.load(handle)
     ipo_payload=ipos if isinstance(ipos,dict) else {'records':ipos}
@@ -164,6 +170,7 @@ def publish(root=bridge.ROOT, output=OUTPUT):
     manifest={'revision':revision,'sessionDate':session,'publishedAt':f'{session}T00:00:00Z','schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz','datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz'}
     if calendar_bytes is not None:
         manifest['earningsCalendarUrl']=f'/data/revisions/{revision}/earnings-calendar.json.gz'
+    manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'
     manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'
     manifest = complete_release(chart_root, output, manifest)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)

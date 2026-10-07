@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { ConditionCatalogModal } from '../components/ConditionCatalogModal';
 import { ScreenerModal } from '../components/ScreenerModal';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
@@ -77,4 +77,40 @@ it('preserves the existing F&O select parameter contract', () => {
   fireEvent.change(screen.getByRole('combobox', {name:'Status'}), {target:{value:'false'}});
   fireEvent.click(screen.getByRole('button', {name:/Apply Filters/}));
   expect(apply.mock.calls[0][0].misc_fno_only.parameters.isFno).toBe('false');
+});
+
+it('keeps independently edited screener rows across category switches and resets to defaults', () => {
+  const apply = vi.fn();
+  render(<ScreenerModal isOpen onClose={vi.fn()} matchMode="all"
+    activeConditionsMap={{}} onApply={apply} />);
+  // Editing an unchecked row still activates it, and editing another row must retain it.
+  fireEvent.change(screen.getByRole('spinbutton', {name:'Max P/E'}), {target:{value:'20'}});
+  fireEvent.change(screen.getByRole('spinbutton', {name:'Min RVOL Multiple'}), {target:{value:'2'}});
+  fireEvent.click(screen.getByRole('button', {name:'Fundamentals'}));
+  expect(screen.getByRole('spinbutton', {name:'Max P/E'})).toHaveValue(20);
+  fireEvent.click(screen.getByRole('button', {name:'All'}));
+  expect(screen.getByRole('spinbutton', {name:'Min RVOL Multiple'})).toHaveValue(2);
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  const submitted = apply.mock.calls[0][0];
+  expect(submitted.fund_pe_ratio.parameters.maxPe).toBe(20);
+  expect(submitted.mom_rvol.parameters.minRvol).toBe(2);
+  fireEvent.click(screen.getByRole('button', {name:'Reset'}));
+  expect(screen.getByRole('spinbutton', {name:'Max P/E'})).toHaveValue(30);
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  expect(apply.mock.calls[1][0]).toEqual({});
+});
+
+it('updates the linked breadth threshold when its memoized metric control changes', () => {
+  const apply = vi.fn();
+  render(<ScreenerModal isOpen onClose={vi.fn()} matchMode="all"
+    activeConditionsMap={active('MARKET_BREADTH')} onApply={apply} />);
+  const row = screen.getByRole('checkbox', {name:'Market Breadth Gate:'}).closest('div')!;
+  const threshold = within(row).getByRole('spinbutton', {name:'Value'});
+  expect(threshold).toHaveValue(50);
+  const metric = within(row).getAllByRole('combobox')[1];
+  fireEvent.change(metric, {target:{value:'advance_decline_ratio_5d'}});
+  expect(threshold).toHaveValue(1);
+  fireEvent.change(threshold, {target:{value:'2'}});
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  expect(apply.mock.calls[0][0].MARKET_BREADTH.parameters).toMatchObject({metric:'advance_decline_ratio_5d', value:2});
 });

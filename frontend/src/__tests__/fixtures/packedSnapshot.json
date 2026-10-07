@@ -1,0 +1,232 @@
+{
+  "original": {
+    "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "asOfDate": "2026-10-06",
+    "totalStocks": 3,
+    "referenceCounts": {
+      "all": 3
+    },
+    "stocks": [
+      {
+        "symbol": "ONE",
+        "close": 17.2,
+        "metrics": {
+          "zero": 0,
+          "negative": -1.47
+        },
+        "presetMatches": {
+          "a": true,
+          "b": null
+        },
+        "financialMetadata": {
+          "text": "₹ café",
+          "empty": ""
+        },
+        "historyMetadata": {},
+        "other": [
+          null,
+          false,
+          {
+            "key": 3
+          }
+        ]
+      },
+      {
+        "symbol": "TWO",
+        "close": null,
+        "metrics": {
+          "zero": null
+        },
+        "presetMatches": {
+          "a": false
+        },
+        "financialMetadata": null
+      },
+      {
+        "symbol": "THREE",
+        "close": 0,
+        "metrics": {},
+        "presetMatches": {},
+        "historyMetadata": {
+          "available": false
+        }
+      }
+    ]
+  },
+  "packed": {
+    "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "asOfDate": "2026-10-06",
+    "totalStocks": 3,
+    "referenceCounts": {
+      "all": 3
+    },
+    "stockEncoding": "columnar-v1",
+    "stocksTable": {
+      "keys": [
+        "symbol",
+        "close",
+        "other",
+        "financialMetadata"
+      ],
+      "values": [
+        [
+          "ONE",
+          17.2,
+          [
+            null,
+            false,
+            {
+              "key": 3
+            }
+          ],
+          null
+        ],
+        [
+          "TWO",
+          null,
+          null,
+          null
+        ],
+        [
+          "THREE",
+          0,
+          null,
+          null
+        ]
+      ],
+      "missing": [
+        [
+          3
+        ],
+        [
+          2
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    "nestedTables": {
+      "presetMatches": {
+        "indexes": [
+          0,
+          1,
+          2
+        ],
+        "table": {
+          "keys": [
+            "a",
+            "b"
+          ],
+          "values": [
+            [
+              true,
+              null
+            ],
+            [
+              false,
+              null
+            ],
+            [
+              null,
+              null
+            ]
+          ],
+          "missing": [
+            [],
+            [
+              1
+            ],
+            [
+              0,
+              1
+            ]
+          ]
+        }
+      },
+      "metrics": {
+        "indexes": [
+          0,
+          1,
+          2
+        ],
+        "table": {
+          "keys": [
+            "zero",
+            "negative"
+          ],
+          "values": [
+            [
+              0,
+              -1.47
+            ],
+            [
+              null,
+              null
+            ],
+            [
+              null,
+              null
+            ]
+          ],
+          "missing": [
+            [],
+            [
+              1
+            ],
+            [
+              0,
+              1
+            ]
+          ]
+        }
+      },
+      "financialMetadata": {
+        "indexes": [
+          0
+        ],
+        "table": {
+          "keys": [
+            "text",
+            "empty"
+          ],
+          "values": [
+            [
+              "₹ café",
+              ""
+            ]
+          ],
+          "missing": [
+            []
+          ]
+        }
+      },
+      "historyMetadata": {
+        "indexes": [
+          0,
+          2
+        ],
+        "table": {
+          "keys": [
+            "available"
+          ],
+          "values": [
+            [
+              null
+            ],
+            [
+              false
+            ]
+          ],
+          "missing": [
+            [
+              0
+            ],
+            []
+          ]
+        }
+      }
+    }
+  }
+}

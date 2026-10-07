@@ -181,6 +181,14 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
                       {/* Symbol & Name */}
                       <td className="py-3.5 px-4 font-sans">
                         <SymbolWithLogo symbol={row.symbol} name={row.name} />
+                        {row.ipoDetailStatus && <div className="mt-1 text-[10px] text-slate-500">
+                          IPO Decode details: {row.ipoDetailStatus.lastSuccessAt
+                            ? `last complete refresh ${new Date(row.ipoDetailStatus.lastSuccessAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST`
+                            : 'no complete refresh recorded'}
+                          {row.ipoDetailStatus.failedEndpoints.length > 0 && <p className="text-amber-700">
+                            Refresh failed: {row.ipoDetailStatus.failedEndpoints.join(', ')}. Available data retained.
+                          </p>}
+                        </div>}
                       </td>
 
                       {/* Listing Date */}

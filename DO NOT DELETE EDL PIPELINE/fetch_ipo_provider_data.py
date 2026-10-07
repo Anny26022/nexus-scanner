@@ -210,8 +210,9 @@ def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT) -> dict:
                 errors.append(f"{name}: {error}")
         active = set(_detail_candidates(feeds, ("open", "upcoming", "closed")))
         candidates = _detail_candidates(feeds)
+        # Within each priority group, missing details precede the oldest cache.
         ordered = sorted(candidates, key=lambda identifier: (0 if identifier in active else 1,
-                         _age_hours(details.get(identifier, {}), now), identifier))
+                         -_age_hours(details.get(identifier, {}), now), identifier))
         attempted = 0
         for identifier in ordered:
             if attempted >= detail_limit:
@@ -222,10 +223,10 @@ def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT) -> dict:
                 continue
             values, detail_errors = _refresh_detail(client, identifier)
             # Preserve previous successful endpoints on partial or total failure.
-            # Only successful refreshes advance the freshness timestamp; failures
+            # Only complete refreshes advance the freshness timestamp; failures
             # remain eligible next run without exceeding this run's request budget.
             details[identifier] = {**current, "data": {**current.get("data", {}), **values}, "errors": detail_errors}
-            if values:
+            if not detail_errors:
                 details[identifier]["fetched_at"] = now.isoformat()
             errors.extend(f"{identifier} {error}" for error in detail_errors)
             attempted += 1

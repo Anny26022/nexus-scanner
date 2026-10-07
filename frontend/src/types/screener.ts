@@ -178,6 +178,7 @@ export interface IPORow {
   sector: string;
   industry: string;
   marketCapCrore: number;
+  ipoDetailStatus?: { lastSuccessAt: string | null; failedEndpoints: string[] };
   // Retained for the mock fixture; the live catalogue does not publish IPO terms.
   issuePrice?: number | null;
   listingPrice?: number | null;

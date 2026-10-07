@@ -31,6 +31,39 @@ class FakeClient:
 
 
 class IpoProviderFetchTests(unittest.TestCase):
+    def test_detail_budget_prioritizes_missing_then_oldest_within_active_group(self):
+        class ManyIssues(FakeClient):
+            def get_json(self, endpoint):
+                if endpoint == "/api/ipos/open":
+                    return {"ipos": [{"id": identifier} for identifier in ("NEWER", "OLDEST", "MISSING", "FRESH")]}
+                return super().get_json(endpoint)
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            _write_details_archive(root, {
+                "NEWER": {"fetched_at": "2001-01-01T00:00:00Z", "data": {}},
+                "OLDEST": {"fetched_at": "2000-01-01T00:00:00Z", "data": {}},
+                "FRESH": {"fetched_at": "2099-01-01T00:00:00Z", "data": {}},
+            }, "2001-01-01T00:00:00Z")
+            with patch("fetch_ipo_provider_data.IpoProviderClient", ManyIssues), \
+                    patch("fetch_ipo_provider_data._refresh_detail", return_value=({"issue": {}}, [])) as refresh:
+                fetch_all(root, detail_limit=3)
+            self.assertEqual([call.args[1] for call in refresh.call_args_list], ["MISSING", "OLDEST", "NEWER"])
+
+    def test_partial_detail_refresh_preserves_last_complete_timestamp_and_retries(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            previous = {"fetched_at": "2000-01-01T00:00:00Z", "data": {"issue": {"price": 100}, "gmp_history": [1]}}
+            _write_details_archive(root, {"NSE_TEST": previous}, previous["fetched_at"])
+            with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
+                    patch("fetch_ipo_provider_data._refresh_detail", return_value=({"issue": {"price": 110}}, ["gmp_history: unavailable"])) as refresh:
+                for _ in range(2):
+                    detail = fetch_all(root, detail_limit=1)["details"]["NSE_TEST"]
+                    self.assertEqual(detail["fetched_at"], previous["fetched_at"])
+                    self.assertEqual(detail["data"], {"issue": {"price": 110}, "gmp_history": [1]})
+                    self.assertEqual(detail["errors"], ["gmp_history: unavailable"])
+                self.assertEqual(refresh.call_count, 2)
+
     def test_preserves_archive_and_updates_recent_issue(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

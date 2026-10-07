@@ -142,12 +142,24 @@ class RealDataAdapter {
       const revision = manifest.revision;
       const promise = getIpoJson<Record<string, any> | {records:Record<string, any>[]}>(manifest.iposUrl).then(payload => {
         const rows: Record<string, any>[] = Array.isArray(payload) ? payload : payload.records;
-        return rows.map(r => ({
-        symbol:r.symbol, name:r.name || r.company_name || '', listingDate:r.listing_date || '',
-        currentPrice:r.close ?? 0, turnoverCrore:r.rupee_volume == null ? 0 : r.rupee_volume / 10_000_000,
-        deliveryPct:r.delivery_percent ?? null,
-        sector:r.sector || 'Unclassified', industry:r.industry || 'Unclassified', marketCapCrore:r.market_cap_crore ?? 0,
-        }));
+        const details = 'provider_data' in payload ? payload.provider_data?.details : undefined;
+        return rows.map(r => {
+          const detail = r.provider?.id ? details?.[r.provider.id] : undefined;
+          const timestamp = detail?.fetched_at;
+          const lastSuccessAt = typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp)) ? timestamp : null;
+          // Show endpoint names, never provider request/credential diagnostics.
+          const failedEndpoints = Array.isArray(detail?.errors)
+            ? [...new Set<string>(detail.errors.filter((error: unknown) => typeof error === 'string')
+                .map((error: string) => error.split(':', 1)[0]).map((name: string) => /^[a-z_]+$/.test(name) ? name : 'unknown'))]
+            : [];
+          return {
+          symbol:r.symbol, name:r.name || r.company_name || '', listingDate:r.listing_date || '',
+          currentPrice:r.close ?? 0, turnoverCrore:r.rupee_volume == null ? 0 : r.rupee_volume / 10_000_000,
+          deliveryPct:r.delivery_percent ?? null,
+          sector:r.sector || 'Unclassified', industry:r.industry || 'Unclassified', marketCapCrore:r.market_cap_crore ?? 0,
+          ipoDetailStatus: r.provider?.id ? {lastSuccessAt, failedEndpoints} : undefined,
+          };
+        });
       }).catch(error => { ipoSnapshots.delete(revision); throw error; });
       ipoSnapshots.set(revision,promise);
       if (ipoSnapshots.size > 3) ipoSnapshots.delete(ipoSnapshots.keys().next().value!);

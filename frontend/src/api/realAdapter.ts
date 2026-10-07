@@ -1,6 +1,7 @@
 import type { ScreenerRunRequest, ScreenerRunResponse, IPORow, ExplainRequest, ExplainResponse,
   SymbolComparisonRequest, SymbolComparisonResponse, RevisionCurrentResponse } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import type { IpoCatalogue } from '../types/screener';
 import { runSnapshotTask } from './snapshotClient';
 import type { SnapshotSource } from './snapshotEngine';
 import { filterAnnouncements, type Announcement, type AnnouncementCatalog, type AnnouncementIndex, type FilingTopic } from './announcements';
@@ -19,7 +20,7 @@ interface Manifest {
   objectUrlTemplate?: string;
 }
 let current: Manifest | undefined;
-const ipoSnapshots = new Map<string, Promise<IPORow[]>>();
+const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
 
 export interface ChartSnapshot {
   schemaVersion: number;
@@ -196,17 +197,41 @@ class RealDataAdapter {
   }
 
   async getIpos(): Promise<IPORow[]> {
+    return (await this.getIpoCatalogue()).records;
+  }
+
+  async getIpoCatalogue(): Promise<IpoCatalogue> {
     const manifest = current ?? await refreshManifest();
     if (!ipoSnapshots.has(manifest.revision)) {
       const revision = manifest.revision;
       const promise = getIpoJson<Record<string, any> | {records:Record<string, any>[]}>(manifest.iposUrl).then(payload => {
         const rows: Record<string, any>[] = Array.isArray(payload) ? payload : payload.records;
-        return rows.map(r => ({
-        symbol:r.symbol, name:r.name || r.company_name || '', listingDate:r.listing_date || '',
-        currentPrice:r.close ?? 0, turnoverCrore:r.rupee_volume == null ? 0 : r.rupee_volume / 10_000_000,
-        deliveryPct:r.delivery_percent ?? null,
-        sector:r.sector || 'Unclassified', industry:r.industry || 'Unclassified', marketCapCrore:r.market_cap_crore ?? 0,
-        }));
+        const details = 'provider_data' in payload ? payload.provider_data?.details : undefined;
+        const records = rows.map(r => {
+          const detail = r.provider?.id ? details?.[r.provider.id] : undefined;
+          const timestamp = detail?.fetched_at;
+          const lastSuccessAt = typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp)) ? timestamp : null;
+          // Show endpoint names, never provider request/credential diagnostics.
+          const failedEndpoints = Array.isArray(detail?.errors)
+            ? [...new Set<string>(detail.errors.filter((error: unknown) => typeof error === 'string')
+                .map((error: string) => error.split(':', 1)[0]).map((name: string) => /^[a-z_]+$/.test(name) ? name : 'unknown'))]
+            : [];
+          return {
+            symbol:r.symbol, name:r.name || r.company_name || '', listingDate:r.listing_date || '',
+            currentPrice:r.close ?? 0, turnoverCrore:r.rupee_volume == null ? 0 : r.rupee_volume / 10_000_000,
+            deliveryPct:r.delivery_percent ?? null,
+            sector:r.sector || 'Unclassified', industry:r.industry || 'Unclassified', marketCapCrore:r.market_cap_crore ?? 0,
+            ipoDetailStatus: r.provider?.id ? {lastSuccessAt, failedEndpoints} : undefined,
+          };
+        });
+        const provider = 'provider_data' in payload ? payload.provider_data : undefined;
+        return {records, providerStatus: provider ? {
+          checkedAt: typeof provider.fetched_at === 'string' && Number.isFinite(Date.parse(provider.fetched_at)) ? provider.fetched_at : null,
+          state: provider.refresh_complete === true ? 'complete' as const
+            : provider.refresh_complete == null ? 'unknown' as const
+            : Object.keys(provider.feeds ?? {}).length || Object.keys(provider.analytics ?? {}).length ? 'partial' as const
+            : provider.available === false ? 'unavailable' as const : 'retained' as const,
+        } : undefined};
       }).catch(error => { ipoSnapshots.delete(revision); throw error; });
       ipoSnapshots.set(revision,promise);
       if (ipoSnapshots.size > 3) ipoSnapshots.delete(ipoSnapshots.keys().next().value!);

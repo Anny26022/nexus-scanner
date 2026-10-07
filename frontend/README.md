@@ -118,6 +118,8 @@ The initial workspace uses RVOL between 1.5 and 20 and price above SMA 50, unles
 
 Choose 30 days, 90 days, six months, one year, or all published listings. Search by symbol/company and sort the catalogue. Its mapped fields are symbol/company, listing date, current price, daily turnover in ₹Cr, market cap in ₹Cr, delivery percentage, sector, and industry.
 
+Matched IPO Decode rows also show the last complete detail refresh in IST and any failed endpoint names. Missing timestamps display “no complete refresh recorded”; catalogue refresh time is not substituted. The detail lane keeps its 18-issue budget, reserving up to four slots for the full retained listed archive. Each lane prioritizes never-attempted and oldest-attempted eligible issues; unused slots go to either lane. Partial refreshes retain cached endpoints and the last complete timestamp, and remain eligible for retry. Saved errors contain endpoint labels rather than request commands or session headers, including when older caches are restored. The catalogue shows complete, partial or failed provider refresh status separately from issue-detail freshness, and file-load failures have a Retry action.
+
 Listing windows are calendar-based and currently measured from the browser's current date; six months is represented by 183 days and one year by 365. This catalogue window is distinct from the scanner's published trading session. Catalogue pages contain 50 rows; main and IPO screening requests use 15 rows per page.
 
 Issue price, listing price, and return since listing are not mapped into the current table. Missing classification displays `Unclassified`. Some absent numeric source fields are currently mapped to zero by the IPO adapter; zero is not independently verified source coverage.

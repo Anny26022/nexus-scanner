@@ -3,6 +3,7 @@ import tempfile
 import unittest
 import gzip
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from fetch_ipo_provider_data import DETAIL_ENDPOINTS, _load_cache, _merge_listed_archive, _write_details_archive, fetch_all, main
+from fetch_ipo_provider_data import DETAIL_ENDPOINTS, _load_cache, _merge_listed_archive, _refresh_detail, _write_details_archive, fetch_all, main
 
 
 class FakeClient:
@@ -31,6 +32,100 @@ class FakeClient:
 
 
 class IpoProviderFetchTests(unittest.TestCase):
+    def test_request_errors_and_legacy_cache_never_retain_session_headers(self):
+        secret = "synthetic-session-token"
+        error = subprocess.CalledProcessError(22, ["curl", "--header", "X-IPO-Session: " + secret])
+        with patch.object(FakeClient, "get_json", side_effect=error), patch("fetch_ipo_provider_data.time.sleep"):
+            _, errors = _refresh_detail(FakeClient(), "NSE_TEST")
+        self.assertEqual(len(errors), len(DETAIL_ENDPOINTS))
+        self.assertNotIn(secret, json.dumps(errors))
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            path = root / "ipo_provider_history_data" / "details.json"
+            path.parent.mkdir()
+            path.write_text(json.dumps({"details": {"OLD": {"errors": ["issue: " + str(error)], "data": {}}}}))
+            with patch("fetch_ipo_provider_data.BASE_DIR", root), patch("fetch_ipo_provider_data.fetch_all", side_effect=error):
+                main()
+            self.assertNotIn(secret, (root / "ipo_provider_data.json").read_text())
+            with gzip.open(root / "ipo_provider_details_archive.json.gz", "rt") as handle:
+                self.assertNotIn(secret, handle.read())
+
+    def test_history_gets_a_slot_even_with_active_backlog_and_outside_recent_feed(self):
+        class BusyClient(FakeClient):
+            def get_json(self, endpoint):
+                if endpoint == "/api/ipos/open":
+                    return {"ipos": [{"id": f"ACTIVE_{index}"} for index in range(5)]}
+                if endpoint == "/api/ipos/listed?days=60":
+                    return {"ipos": []}
+                return super().get_json(endpoint)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            _merge_listed_archive(root, [{"id": "ARCHIVED", "listing_date_iso": "2000-01-01"}])
+            with patch("fetch_ipo_provider_data.IpoProviderClient", BusyClient), \
+                    patch("fetch_ipo_provider_data._refresh_detail", return_value=({"issue": {}}, [])) as refresh:
+                fetch_all(root, detail_limit=4)
+            self.assertEqual(refresh.call_count, 4)
+            self.assertEqual(refresh.call_args_list[0].args[1], "ARCHIVED")
+
+    def test_failed_attempt_rotates_behind_never_attempted_issue(self):
+        class TwoIssues(FakeClient):
+            def get_json(self, endpoint):
+                if endpoint == "/api/ipos/open":
+                    return {"ipos": [{"id": "A_FAILURE"}, {"id": "B_NEW"}]}
+                return super().get_json(endpoint)
+        with tempfile.TemporaryDirectory() as folder:
+            with patch("fetch_ipo_provider_data.IpoProviderClient", TwoIssues), \
+                    patch("fetch_ipo_provider_data._refresh_detail", return_value=({}, ["issue: failed"])) as refresh:
+                fetch_all(Path(folder), detail_limit=1)
+                fetch_all(Path(folder), detail_limit=1)
+            self.assertEqual([call.args[1] for call in refresh.call_args_list], ["A_FAILURE", "B_NEW"])
+
+    def test_catalogue_failure_marks_refresh_incomplete_even_with_other_feeds(self):
+        class PartialClient(FakeClient):
+            def get_json(self, endpoint):
+                if endpoint == "/api/ipos/open":
+                    raise ValueError("invalid response")
+                return super().get_json(endpoint)
+        with tempfile.TemporaryDirectory() as folder:
+            with patch("fetch_ipo_provider_data.IpoProviderClient", PartialClient):
+                payload = fetch_all(Path(folder), detail_limit=0)
+            self.assertTrue(payload["available"])
+            self.assertFalse(payload["refresh_complete"])
+            self.assertEqual(payload["errors"], ["open: invalid provider response"])
+
+    def test_detail_budget_prioritizes_missing_then_oldest_within_active_group(self):
+        class ManyIssues(FakeClient):
+            def get_json(self, endpoint):
+                if endpoint == "/api/ipos/open":
+                    return {"ipos": [{"id": identifier} for identifier in ("NEWER", "OLDEST", "MISSING", "FRESH")]}
+                return super().get_json(endpoint)
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            _write_details_archive(root, {
+                "NEWER": {"fetched_at": "2001-01-01T00:00:00Z", "data": {}},
+                "OLDEST": {"fetched_at": "2000-01-01T00:00:00Z", "data": {}},
+                "FRESH": {"fetched_at": "2099-01-01T00:00:00Z", "data": {}},
+            }, "2001-01-01T00:00:00Z")
+            with patch("fetch_ipo_provider_data.IpoProviderClient", ManyIssues), \
+                    patch("fetch_ipo_provider_data._refresh_detail", return_value=({"issue": {}}, [])) as refresh:
+                fetch_all(root, detail_limit=3)
+            self.assertEqual([call.args[1] for call in refresh.call_args_list], ["MISSING", "OLDEST", "NEWER"])
+
+    def test_partial_detail_refresh_preserves_last_complete_timestamp_and_retries(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            previous = {"fetched_at": "2000-01-01T00:00:00Z", "data": {"issue": {"price": 100}, "gmp_history": [1]}}
+            _write_details_archive(root, {"NSE_TEST": previous}, previous["fetched_at"])
+            with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
+                    patch("fetch_ipo_provider_data._refresh_detail", return_value=({"issue": {"price": 110}}, ["gmp_history: unavailable"])) as refresh:
+                for _ in range(2):
+                    detail = fetch_all(root, detail_limit=1)["details"]["NSE_TEST"]
+                    self.assertEqual(detail["fetched_at"], previous["fetched_at"])
+                    self.assertEqual(detail["data"], {"issue": {"price": 110}, "gmp_history": [1]})
+                    self.assertEqual(detail["errors"], ["gmp_history: request failed"])
+                self.assertEqual(refresh.call_count, 2)
+
     def test_preserves_archive_and_updates_recent_issue(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

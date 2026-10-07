@@ -170,6 +170,14 @@ export interface ScreenerRunResponse {
   warnings: string[];
 }
 
+export interface IpoCatalogue {
+  records: IPORow[];
+  providerStatus?: {
+    checkedAt: string | null;
+    state: 'complete' | 'partial' | 'retained' | 'unavailable' | 'unknown';
+  };
+}
+
 export interface IPORow {
   symbol: string;
   name: string;
@@ -180,6 +188,7 @@ export interface IPORow {
   sector: string;
   industry: string;
   marketCapCrore: number;
+  ipoDetailStatus?: { lastSuccessAt: string | null; failedEndpoints: string[] };
   // Retained for the mock fixture; the live catalogue does not publish IPO terms.
   issuePrice?: number | null;
   listingPrice?: number | null;

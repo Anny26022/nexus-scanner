@@ -6,9 +6,9 @@ The latest closed NSE session is evaluated through one of two deterministic path
 
 1. The browser downloads `core.json.gz` and starts a dedicated Web Worker.
 2. The capability registry examines every leaf in the full expression.
-3. Scalar and common-window expressions load only the required `technical` or `fundamentals` pack and run locally.
+3. Text queries compile before routing. Scalar and common-window expressions, including supported field-to-field comparisons and equivalent RS/proximity aliases, load only the required public packs and run locally. Published values use the same freshness and unavailable-data rules in both runtimes.
 4. If any leaf needs arbitrary OHLCV history, the complete expression is posted to the Cloudflare Worker. Nested groups are never split across runtimes.
-5. The Worker validates the immutable revision, reads private R2 shards in batches of four, and caches the canonical response for that revision for 30 days.
+5. The Worker validates the immutable revision and reads only shards containing eligible symbols, in batches of four. Scalar requests need no history reads. It caches the complete match set for that revision for 30 days; page and sort changes reuse those matches when the cache entry is available.
 
 The product remains latest-session-only. No as-of date selector or historical screening endpoint is introduced.
 
@@ -63,13 +63,13 @@ The package is in `cloudflare/scanner-worker`.
 
 Requests are limited to 100 KB, 32 leaves, 8 expression levels, and 100 rows per page. The Worker configuration requests 30 seconds of paid CPU. Shards are loaded four at a time to keep peak isolate memory below the 128 MB platform ceiling. R2 bindings remain private; no credentials or object URLs are returned to clients.
 
-Only configured frontend and localhost origins receive CORS headers. Cache keys contain the revision, full expression or text query, universe, custom symbols, sorting, and pagination. Cached responses are immutable for 30 days.
+Only configured frontend and localhost origins receive CORS headers. Cache keys contain the evaluation version, revision, session, compiled expression, universe, and normalized custom symbols. Cached match sets are immutable for 30 days. Sorting and pagination are applied afterward; request limits and the active revision are checked before cache reuse. Cache eviction or a cold location can still require a new scan.
 
 ## Deterministic query behavior
 
 The TypeScript query compiler accepts only complete, recognized `field comparison value` clauses joined by `AND` or `OR`. `AND` binds more tightly. Parenthesized labels such as P/E, EPS, dividend yield, and absolute volume are matched as complete labels. Unsupported fields and malformed clauses fail the request; no guessed leaf, fallback RVOL rule, or reduced expression is executed.
 
-Python remains the publication and preset authority. The shared TypeScript runtime implements three-valued results (`match`, `no match`, `unavailable`), strict and inclusive operators, repeated conditions, negation, nested boolean expressions, indicator comparisons, convergence, Supertrend, confirmed divergence, patterns, RS, delivery, earnings, and context filters.
+Python remains the publication and preset authority. Published scalar values are authoritative for snapshot-compatible conditions; the advanced engine does not replace missing or stale scalars by recalculating them from history. Both paths report per-condition coverage and unavailable data. The shared TypeScript runtime implements three-valued results (`match`, `no match`, `unavailable`), strict and inclusive operators, repeated conditions, negation, nested boolean expressions, indicator comparisons, convergence, Supertrend, confirmed divergence, patterns, RS, delivery, earnings, and context filters.
 
 ## Configuration
 

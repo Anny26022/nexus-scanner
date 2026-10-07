@@ -3,6 +3,8 @@ import type { ScreenerRunRequest, ScreenerRunResponse, IPORow, ExplainRequest, E
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { runSnapshotTask } from './snapshotClient';
 import type { SnapshotSource } from './snapshotEngine';
+import { compileTextQuery } from '../engine/queryCompiler';
+import type { ExpressionNode } from '../types/screener';
 import { expressionPlan } from './capabilityRegistry';
 import type { PublicPacks } from './packStore';
 
@@ -139,10 +141,11 @@ class RealDataAdapter {
   }
 
   async runScreen(req: ScreenerRunRequest): Promise<ScreenerRunResponse> {
+    const expressionTree = req.textQuery?.trim() ? compileTextQuery(req.textQuery) as ExpressionNode : req.expressionTree;
     const source = await snapshotSource(req.datasetRevision);
-    const plan = expressionPlan(req.expressionTree,Boolean(req.textQuery?.trim()));
+    const plan = expressionPlan(expressionTree);
     if (plan.browser) {
-      const snapshot = await runSnapshotTask({type:'screen',source,request:req});
+      const snapshot = await runSnapshotTask({type:'screen',source,request:{...req,expressionTree,textQuery:undefined}});
       if (snapshot.type !== 'screen') throw new Error('Unexpected scanner response');
       if (snapshot.result) return snapshot.result;
     }

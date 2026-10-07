@@ -3,6 +3,8 @@ import type { SnapshotStock } from '../../../frontend/src/api/snapshotScreen';
 import { evaluateExpression, expressionDepth, negate, walkExpression, type EngineCondition, type EngineExpression, type Truth } from '../../../frontend/src/engine/expression';
 import { evaluateHistoryCondition, type AdvancedContext, type CandleSeries } from '../../../frontend/src/engine/historyEngine';
 import { compileTextQuery } from '../../../frontend/src/engine/queryCompiler';
+import { createCoverage } from '../../../frontend/src/engine/coverage';
+import { conditionCapability } from '../../../frontend/src/api/capabilityRegistry';
 import { NEXUS_CONDITION_CATALOG } from '../../../frontend/src/data/conditionCatalog';
 
 interface Env { SCANNER_DATA:R2Bucket; ALLOWED_ORIGINS:string; SCANNER_RELEASE_URL:string }
@@ -38,7 +40,6 @@ export function validateExpression(expression:EngineExpression){
 
 function cors(origin:string|null,env:Env):Record<string,string>{const allowed=new Set(env.ALLOWED_ORIGINS.split(',').map(v=>v.trim()).filter(Boolean));return origin&&allowed.has(origin)?{'Access-Control-Allow-Origin':origin,'Access-Control-Allow-Headers':'content-type','Access-Control-Allow-Methods':'POST,GET,OPTIONS','Vary':'Origin'}:{};}
 function json(value:unknown,status=200,headers:HeadersInit={}){return new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json; charset=utf-8',...headers}});}
-function responseWithCors(response:Response,headers:Record<string,string>){const merged=new Headers(response.headers);merged.delete('Access-Control-Allow-Origin');merged.delete('Access-Control-Allow-Headers');merged.delete('Access-Control-Allow-Methods');merged.delete('Vary');for(const [key,value] of Object.entries(headers))merged.set(key,value);return new Response(response.body,{status:response.status,headers:merged});}
 function stable(value:unknown):string{if(Array.isArray(value))return `[${value.map(stable).join(',')}]`;if(value&&typeof value==='object')return `{${Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${JSON.stringify(k)}:${stable(v)}`).join(',')}}`;return JSON.stringify(value);}
 async function hash(value:string){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,'0')).join('');}
 async function ungzip(bytes:ArrayBuffer){return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();}
@@ -50,12 +51,133 @@ function universeRows(rows:SnapshotStock[],request:ScreenerRunRequest){const lab
 export function executionWarnings(leaves:EngineCondition[],missingHistory:number){const warnings:string[]=[];if(leaves.some(condition=>condition.conditionId==='INSIDE_BAR'&&String(condition.parameters.timeframe).toUpperCase()==='WEEKLY'&&String(condition.parameters.weeklyMode).toUpperCase()==='CURRENT'))warnings.push('Weekly inside-bar current mode includes a provisional week.');if(missingHistory)warnings.push(`${missingHistory} equities have no aligned history in this revision.`);return warnings;}
 
 async function currentRelease(env:Env){const response=await fetch(env.SCANNER_RELEASE_URL,{cf:{cacheTtl:30,cacheEverything:true}});if(!response.ok)throw new Error('Active scanner release is unavailable');return response.json() as Promise<{revision:string;sessionDate:string;schemaVersion:number}>;}
-async function run(request:ScreenerRunRequest,env:Env):Promise<ScreenerRunResponse>{const active=await currentRelease(env);if(active.schemaVersion!==7||request.datasetRevision!==active.revision||request.asOfDate!==active.sessionDate)throw new Error('Scanner revision is stale or incompatible. Refresh and run again.');const prefix=`scanner/v1/revisions/${active.revision}`,manifestObject=await env.SCANNER_DATA.get(`${prefix}/manifest.json`);if(!manifestObject)throw new Error('Advanced scanner revision is not fully published.');const manifest=await manifestObject.json<PrivateManifest>();if(manifest.revision!==active.revision||manifest.session!==active.sessionDate||manifest.schemaVersion!==7||manifest.shards!==32)throw new Error('Advanced scanner manifest is incompatible.');const expression=(request.textQuery?.trim()?compileTextQuery(request.textQuery):request.expressionTree) as EngineExpression;if(!expression||typeof expression!=='object')throw new Error('A valid screen expression is required.');const leaves=walkExpression(expression);if(!leaves.length)throw new Error('At least one condition is required.');if(leaves.length>manifest.limits.maxLeaves||expressionDepth(expression)>manifest.limits.maxDepth)throw new Error('Screen is too complex. Use at most 32 conditions and 8 nested levels.');validateExpression(expression);if(!Number.isInteger(request.page)||request.page<1||!Number.isInteger(request.pageSize)||request.pageSize<1||request.pageSize>manifest.limits.maxPageSize)throw new Error('Page and page size must be positive integers; page size cannot exceed 100.');const [metadata,benchmarks]=await Promise.all([compressedJson<Metadata>(env,prefix,manifest,'metadata.json.gz'),compressedJson<AdvancedContext['benchmarks']>(env,prefix,manifest,'benchmarks.json.gz')]),eligible=universeRows(metadata.stocks,request),bySymbol=new Map(eligible.map(row=>[row.symbol,row])),matched:SnapshotStock[]=[],seen=new Set<string>();let sharedBreadth:Auxiliary['breadth'];
-  const coverage=leaves.map((condition,index)=>({key:condition.instanceId??`${condition.conditionId}:${index}`,conditionId:condition.conditionId,evaluated:0,matched:0,unavailable:0}));
-  const account=(values:Map<EngineCondition,Truth>)=>leaves.forEach((condition,index)=>{const raw=values.get(condition)??null,value=condition.isNegated?negate(raw):raw;if(value===null)coverage[index].unavailable+=1;else{coverage[index].evaluated+=1;if(value)coverage[index].matched+=1;}});
-  for(let batch=0;batch<manifest.shards;batch+=4){const decoded=await Promise.all(Array.from({length:Math.min(4,manifest.shards-batch)},async(_,offset)=>{const index=String(batch+offset).padStart(2,'0'),name=`shards/${index}.bin.gz`,auxiliaryName=`auxiliary/${index}.json.gz`,descriptor=manifest.objects.find(x=>x.key===name);if(!descriptor)throw new Error(`Missing shard ${name}`);const [history,auxiliary]=await Promise.all([ungzip(await objectBytes(env,`${prefix}/${name}`,descriptor)).then(decodeShard),compressedJson<Auxiliary>(env,prefix,manifest,auxiliaryName)]);return {history,auxiliary};}));for(const shard of decoded){sharedBreadth??=shard.auxiliary.breadth;for(const {symbol,series} of shard.history){const stock=bySymbol.get(symbol);if(!stock)continue;seen.add(symbol);const context:AdvancedContext={stock,session:manifest.session,benchmarks,delivery:shard.auxiliary.delivery[symbol],earnings:shard.auxiliary.earnings[symbol],breadth:shard.auxiliary.breadth},values=new Map<EngineCondition,Truth>();for(const condition of leaves)values.set(condition,evaluateHistoryCondition(series,{...condition,isNegated:false} as any,context));account(values);if(evaluateExpression(expression,condition=>values.get(condition)??null)===true)matched.push(stock);}}}
-  const missing=eligible.filter(stock=>!seen.has(stock.symbol)),empty:CandleSeries={dates:new Int32Array(),open:new Float64Array(),high:new Float64Array(),low:new Float64Array(),close:new Float64Array(),volume:new Float64Array()};
-  for(const stock of missing){const context:AdvancedContext={stock,session:manifest.session,benchmarks,breadth:sharedBreadth},values=new Map<EngineCondition,Truth>();for(const condition of leaves)values.set(condition,evaluateHistoryCondition(empty,{...condition,isNegated:false} as any,context));account(values);if(evaluateExpression(expression,condition=>values.get(condition)??null)===true)matched.push(stock);}
-  const missingHistory=missing.length,sort=request.sort??{field:'symbol',direction:'asc'},direction=sort.direction==='desc'?-1:1;matched.sort((a,b)=>{const x=(a as any)[sort.field],y=(b as any)[sort.field];if(x==null||y==null)return x==null&&y==null?0:x==null?1:-1;return (x<y?-1:x>y?1:0)*direction;});const page=request.page,size=request.pageSize,perConditionCoverage=Object.fromEntries(coverage.map(item=>[item.key,{conditionId:item.conditionId,evaluated:item.evaluated,matched:item.matched,coveragePct:eligible.length?Math.round(item.evaluated/eligible.length*10000)/100:0}])),unavailableDiagnostics=coverage.filter(item=>item.unavailable).map(item=>({conditionId:item.conditionId,reason:'required advanced data unavailable',affectedCount:item.unavailable}));return {resolvedSession:{date:manifest.session,sessionId:`NSE-${manifest.session.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},immutableRevision:manifest.revision,rows:matched.slice((page-1)*size,page*size),matchCount:matched.length,totalUniverseCount:eligible.length,page,pageSize:size,perConditionCoverage,unavailableDiagnostics,warnings:executionWarnings(leaves,missingHistory)};}
+// Bump when evaluation semantics change so unchanged data cannot reuse old results.
+const CACHE_VERSION = '2';
+type ScanResult = Omit<ScreenerRunResponse,'page' | 'pageSize'>;
+const emptySeries:CandleSeries = {dates:new Int32Array(),open:new Float64Array(),high:new Float64Array(),
+  low:new Float64Array(),close:new Float64Array(),volume:new Float64Array()};
 
-export default {async fetch(request:Request,env:Env,ctx:ExecutionContext){const origin=request.headers.get('origin'),headers=cors(origin,env);if(request.method==='OPTIONS')return new Response(null,{status:204,headers});const url=new URL(request.url);if(url.pathname==='/v1/health'&&request.method==='GET'){try{const active=await currentRelease(env),object=await env.SCANNER_DATA.get(`scanner/v1/revisions/${active.revision}/manifest.json`);let ready=false;if(object){const marker=await object.json<PrivateManifest>();ready=active.schemaVersion===7&&marker.schemaVersion===7&&marker.revision===active.revision&&marker.session===active.sessionDate;}return json({ok:ready,ready,revision:active.revision,session:active.sessionDate},ready?200:503,headers);}catch(error){return json({ok:false,error:error instanceof Error?error.message:'Unavailable'},503,headers);}}if(url.pathname!=='/v1/screens/run'||request.method!=='POST')return json({error:'Not found'},404,headers);const length=Number(request.headers.get('content-length')??0);if(length>100000)return json({error:'Request exceeds 100 KB'},413,headers);try{const text=await request.text();if(new TextEncoder().encode(text).byteLength>100000)throw new Error('Request exceeds 100 KB');const payload=JSON.parse(text) as ScreenerRunRequest,active=await currentRelease(env);if(active.schemaVersion!==7||payload.datasetRevision!==active.revision||payload.asOfDate!==active.sessionDate)throw new Error('Scanner revision is stale or incompatible. Refresh and run again.');const key=await hash(stable([payload.datasetRevision,payload.expressionTree,payload.textQuery,payload.universe,payload.customSymbols,payload.sort,payload.page,payload.pageSize])),cacheKey=new Request(`https://scanner-cache.invalid/v1/${key}`,{method:'GET'}),cache=(caches as CacheStorage&{default:Cache}).default,cached=await cache.match(cacheKey);if(cached)return responseWithCors(cached,headers);const response=json(await run(payload,env),200,{'Cache-Control':'public,max-age=2592000,immutable'});ctx.waitUntil(cache.put(cacheKey,response.clone()));return responseWithCors(response,headers);}catch(error){return json({error:error instanceof Error?error.message:'Advanced scanner failed'},400,headers);}}};
+function validateRequest(request:ScreenerRunRequest,expression:EngineExpression) {
+  const leaves=walkExpression(expression);
+  if(!leaves.length)throw new Error('At least one condition is required.');
+  if(leaves.length>32 || expressionDepth(expression)>8)throw new Error('Screen is too complex. Use at most 32 conditions and 8 nested levels.');
+  validateExpression(expression);
+  if(!Number.isInteger(request.page) || request.page<1 || !Number.isInteger(request.pageSize) || request.pageSize<1 || request.pageSize>100)
+    throw new Error('Page and page size must be positive integers; page size cannot exceed 100.');
+}
+
+async function selectedShards(symbols:string[],count:number):Promise<number[]> {
+  const indices=await Promise.all(symbols.map(async symbol=>{
+    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(symbol));
+    return new Uint8Array(digest)[0] % count;
+  }));
+  return [...new Set(indices)].sort((a,b)=>a-b);
+}
+
+async function run(request:ScreenerRunRequest,expression:EngineExpression,env:Env):Promise<ScanResult> {
+  const prefix=`scanner/v1/revisions/${request.datasetRevision}`;
+  const manifestObject=await env.SCANNER_DATA.get(`${prefix}/manifest.json`);
+  if(!manifestObject)throw new Error('Advanced scanner revision is not fully published.');
+  const manifest=await manifestObject.json<PrivateManifest>();
+  if(manifest.revision!==request.datasetRevision || manifest.session!==request.asOfDate || manifest.schemaVersion!==7 || manifest.shards!==32)
+    throw new Error('Advanced scanner manifest is incompatible.');
+  const leaves=walkExpression(expression);
+  const metadata=await compressedJson<Metadata>(env,prefix,manifest,'metadata.json.gz');
+  const eligible=universeRows(metadata.stocks,request),bySymbol=new Map(eligible.map(row=>[row.symbol,row]));
+  const matched:SnapshotStock[]=[],seen=new Set<string>(),coverage=createCoverage(leaves,eligible.length);
+  const needsHistory=leaves.some(condition=>!conditionCapability(condition as any).browser(condition as any));
+  const benchmarks=needsHistory && eligible.length
+    ? await compressedJson<AdvancedContext['benchmarks']>(env,prefix,manifest,'benchmarks.json.gz') : undefined;
+  let sharedBreadth:Auxiliary['breadth'];
+  const evaluate=(stock:SnapshotStock,series:CandleSeries,auxiliary?:Auxiliary)=>{
+    const context:AdvancedContext={stock,session:manifest.session,benchmarks,
+      delivery:auxiliary?.delivery[stock.symbol],earnings:auxiliary?.earnings[stock.symbol],
+      breadth:auxiliary?.breadth ?? sharedBreadth};
+    const values=new Map(leaves.map(condition=>[condition,evaluateHistoryCondition(series,{...condition,isNegated:false} as any,context)]));
+    coverage.account(leaves.map(condition=>condition.isNegated ? negate(values.get(condition)!) : values.get(condition)!));
+    if(evaluateExpression(expression,condition=>values.get(condition) ?? null)===true && Number.isFinite(stock.close))matched.push(stock);
+  };
+  if(needsHistory) {
+    const indices=await selectedShards(eligible.map(row=>row.symbol),manifest.shards);
+    for(let batch=0;batch<indices.length;batch+=4) {
+      const decoded=await Promise.all(indices.slice(batch,batch+4).map(async shard=>{
+        const index=String(shard).padStart(2,'0'),name=`shards/${index}.bin.gz`;
+        const descriptor=manifest.objects.find(object=>object.key===name);
+        if(!descriptor)throw new Error(`Missing shard ${name}`);
+        const [history,auxiliary]=await Promise.all([
+          ungzip(await objectBytes(env,`${prefix}/${name}`,descriptor)).then(decodeShard),
+          compressedJson<Auxiliary>(env,prefix,manifest,`auxiliary/${index}.json.gz`),
+        ]);
+        return {history,auxiliary};
+      }));
+      for(const shard of decoded) {
+        sharedBreadth ??= shard.auxiliary.breadth;
+        for(const {symbol,series} of shard.history) {
+          const stock=bySymbol.get(symbol);
+          if(!stock)continue;
+          seen.add(symbol);evaluate(stock,series,shard.auxiliary);
+        }
+      }
+    }
+  }
+  const missing=eligible.filter(stock=>!seen.has(stock.symbol));
+  for(const stock of missing)evaluate(stock,emptySeries);
+  return {
+    resolvedSession:{date:manifest.session,sessionId:`NSE-${manifest.session.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
+    immutableRevision:manifest.revision,rows:matched,matchCount:matched.length,totalUniverseCount:eligible.length,
+    ...coverage.result(),warnings:executionWarnings(leaves,needsHistory ? missing.length : 0),
+  };
+}
+
+function pageResult(result:ScanResult,request:ScreenerRunRequest):ScreenerRunResponse {
+  const sort=request.sort ?? {field:'symbol',direction:'asc'},direction=sort.direction==='desc' ? -1 : 1;
+  const rows=[...result.rows].sort((a,b)=>{
+    const x=(a as any)[sort.field],y=(b as any)[sort.field];
+    if(x==null || y==null)return x==null && y==null ? a.symbol.localeCompare(b.symbol) : x==null ? 1 : -1;
+    return (x<y ? -1 : x>y ? 1 : a.symbol.localeCompare(b.symbol))*direction;
+  });
+  return {...result,rows:rows.slice((request.page-1)*request.pageSize,request.page*request.pageSize),
+    page:request.page,pageSize:request.pageSize};
+}
+
+export default {
+  async fetch(request:Request,env:Env,ctx:ExecutionContext) {
+    const headers=cors(request.headers.get('origin'),env),url=new URL(request.url);
+    if(request.method==='OPTIONS')return new Response(null,{status:204,headers});
+    if(url.pathname==='/v1/health' && request.method==='GET') {
+      try {
+        const active=await currentRelease(env),object=await env.SCANNER_DATA.get(`scanner/v1/revisions/${active.revision}/manifest.json`);
+        let ready=false;
+        if(object) {
+          const marker=await object.json<PrivateManifest>();
+          ready=active.schemaVersion===7 && marker.schemaVersion===7 && marker.revision===active.revision && marker.session===active.sessionDate;
+        }
+        return json({ok:ready,ready,revision:active.revision,session:active.sessionDate},ready ? 200 : 503,headers);
+      } catch(error) { return json({ok:false,error:error instanceof Error ? error.message : 'Unavailable'},503,headers); }
+    }
+    if(url.pathname!=='/v1/screens/run' || request.method!=='POST')return json({error:'Not found'},404,headers);
+    if(Number(request.headers.get('content-length') ?? 0)>100000)return json({error:'Request exceeds 100 KB'},413,headers);
+    try {
+      const text=await request.text();
+      if(new TextEncoder().encode(text).byteLength>100000)throw new Error('Request exceeds 100 KB');
+      const payload=JSON.parse(text) as ScreenerRunRequest,active=await currentRelease(env);
+      if(active.schemaVersion!==7 || payload.datasetRevision!==active.revision || payload.asOfDate!==active.sessionDate)
+        throw new Error('Scanner revision is stale or incompatible. Refresh and run again.');
+      const expression=(payload.textQuery?.trim() ? compileTextQuery(payload.textQuery) : payload.expressionTree) as EngineExpression;
+      if(!expression || typeof expression!=='object')throw new Error('A valid screen expression is required.');
+      validateRequest(payload,expression);
+      // Cache the complete match set; sorting and pagination never change membership.
+      const symbols=payload.universe==='custom' ? [...new Set(payload.customSymbols?.map(symbol=>symbol.toUpperCase()))].sort() : undefined;
+      const key=await hash(stable([CACHE_VERSION,payload.datasetRevision,payload.asOfDate,expression,payload.universe,symbols]));
+      const cacheKey=new Request(`https://scanner-cache.invalid/v${CACHE_VERSION}/${key}`),cache=(caches as CacheStorage&{default:Cache}).default;
+      const cached=await cache.match(cacheKey);
+      let result:ScanResult;
+      if(cached)result=await cached.json<ScanResult>();
+      else {
+        result=await run(payload,expression,env);
+        ctx.waitUntil(cache.put(cacheKey,json(result,200,{'Cache-Control':'public,max-age=2592000,immutable'})));
+      }
+      return json(pageResult(result,payload),200,headers);
+    } catch(error) { return json({error:error instanceof Error ? error.message : 'Advanced scanner failed'},400,headers); }
+  },
+};

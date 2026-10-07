@@ -1,5 +1,7 @@
 import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
+import { compileTextQuery } from '../engine/queryCompiler';
+import type { ExpressionNode } from '../types/screener';
 import { expressionPlan } from './capabilityRegistry';
 import { mergePacks, type PublicPackName, type PublicPacks } from './packStore';
 
@@ -54,8 +56,10 @@ export function createSnapshotEngine(loader = readSnapshot) {
     return promise;
   }
   return async (task: SnapshotTask): Promise<SnapshotResult> => {
+    if (task.type === 'screen' && task.request.textQuery?.trim()) task = {...task,request:{...task.request,
+      expressionTree:compileTextQuery(task.request.textQuery) as ExpressionNode,textQuery:undefined}};
     const names:PublicPackName[] = task.type === 'compare' ? ['core','technical','fundamentals']
-      : expressionPlan(task.request.expressionTree,Boolean(task.request.textQuery?.trim())).dependencies
+      : expressionPlan(task.request.expressionTree).dependencies
           .filter((name):name is PublicPackName => name !== 'advanced');
     const data = await load(task.source,names);
     if (task.type === 'screen') return {type:'screen',result:screenSnapshot(data,task.request),revision:data.revision,sessionDate:data.asOfDate};

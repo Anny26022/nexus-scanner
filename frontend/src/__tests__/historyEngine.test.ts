@@ -15,7 +15,7 @@ const series:CandleSeries={
   close:Float64Array.from({length},(_,i)=>101+i*.25),
   volume:Float64Array.from({length},(_,i)=>100000+i*100),
 };
-const stock={symbol:'TEST',name:'Test',close:series.close[length-1],metadataAsOfDate:'2026-10-01',asOfDate:'2026-10-01',historyAligned:true,indexMemberships:[],metrics:{},presetMatches:{}} as unknown as SnapshotStock;
+const stock={symbol:'TEST',name:'Test',close:series.close[length-1],metadataAsOfDate:'2026-10-01',asOfDate:'2026-10-01',historyAligned:true,indexMemberships:[],changePct:0.14,metrics:{sma20:178.375,sma50:174.625},presetMatches:{}} as unknown as SnapshotStock;
 const context={stock,session:'2026-10-01'};
 const leaf=(conditionId:string,parameters:Record<string,unknown>={}):ActiveCondition=>({instanceId:conditionId,conditionId,parameters});
 

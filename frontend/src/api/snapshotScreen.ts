@@ -1,4 +1,9 @@
-import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
+import { evaluateExpression, walkExpression, negate, compare as compareValues } from '../engine/expression';
+import { createCoverage, type Coverage } from '../engine/coverage';
+import { normalizeSnapshotCondition, readSnapshotField, snapshotFieldDependency } from '../engine/snapshotFields';
+import { compileTextQuery } from '../engine/queryCompiler';
+import type { ExpressionNode } from '../types/screener';
+import type { ActiveCondition, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 
 type Truth = boolean | null;
 export interface SnapshotStock extends StockRow {
@@ -19,9 +24,6 @@ export interface Snapshot {
   stocks: SnapshotStock[];
 }
 type Predicate = (s: SnapshotStock) => Truth;
-const combine = (values: Truth[], all: boolean): Truth => all
-  ? values.includes(false) ? false : values.includes(null) ? null : true
-  : values.includes(true) ? true : values.includes(null) ? null : false;
 const number = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const between = (value: unknown, min: number, max: number): Truth => number(value) == null ? null : (value as number) >= min && (value as number) <= max;
 const compare = (value: unknown, op: string, target: number): Truth => {
@@ -38,10 +40,18 @@ const compare = (value: unknown, op: string, target: number): Truth => {
 };
 
 function leaf(c: ActiveCondition, session: string): Predicate | null {
+  c = normalizeSnapshotCondition(c);
   const p = c.parameters;
   let fn: Predicate;
   let metadata = false;
   switch (c.conditionId) {
+    case 'FIELD_COMPARISON': {
+      const field = String(p.field), targetField = typeof p.value === 'object' && p.value !== null ? String(p.value.field) : null;
+      if (!snapshotFieldDependency(field) || (targetField !== null && !snapshotFieldDependency(targetField))) return null;
+      fn = s => compareValues(readSnapshotField(s,field,session),p.comparison,
+        targetField === null ? p.value : readSnapshotField(s,targetField,session));
+      return c.isNegated ? s => negate(fn(s)) : fn;
+    }
     case 'mom_rvol': fn = s => between(s.rvol, p.minRvol, p.maxRvol); break;
     case 'VOLUME_VS_AVG':
       if (p.avgDays !== 20 || p.withinDays !== 1) return null;
@@ -181,26 +191,19 @@ export function evaluateSnapshotCondition(stock: SnapshotStock, condition: Activ
   return condition.isNegated && value != null ? !value : value;
 }
 
-function compile(node: ExpressionNode, session: string): Predicate | null {
-  if (node.type === 'condition') return leaf(node.condition, session);
-  const children = node.children.map(n => compile(n, session));
-  if (children.some(fn => fn == null)) return null;
-  if (!children.length) return () => true;
-  return s => combine(children.map(fn => fn!(s)), node.operator === 'all');
-}
-
-interface Matches { rows: SnapshotStock[]; universeCount: number }
+interface Matches extends Coverage { rows: SnapshotStock[]; universeCount: number }
 const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
 export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): ScreenerRunResponse | null {
-  if (request.textQuery?.trim()) return null;
+  if (request.textQuery?.trim()) request = {...request,expressionTree:compileTextQuery(request.textQuery) as ExpressionNode,textQuery:undefined};
   const key = JSON.stringify([request.expressionTree,request.universe,request.customSymbols,request.sort]);
   let cache = matchCache.get(data);
   if (!cache) { cache = new Map(); matchCache.set(data,cache); }
   let matches = cache.get(key);
   if (!matches) {
-    const predicate = compile(request.expressionTree, data.asOfDate);
-    if (!predicate) return null;
+    const leaves = walkExpression(request.expressionTree) as ActiveCondition[];
+    const predicates = leaves.map(condition => leaf({...condition,isNegated:false},data.asOfDate));
+    if (predicates.some(predicate => predicate === null)) return null;
     const labels: Record<string, string[]> = {
       nifty50:['NIFTY 50','NIFTY50'], nifty500:['NIFTY 500','NIFTY500'],
       midsmall400:['NIFTY MIDSMALLCAP 400','NIFTY MIDSMALL 400','MIDSMALL400'],
@@ -208,7 +211,12 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
     const symbols = new Set(request.customSymbols?.map(s => s.toUpperCase()));
     const universe = data.stocks.filter(s => request.universe === 'custom' ? symbols.has(s.symbol)
       : request.universe === 'mainboard' || s.indexMemberships.some(label => labels[request.universe]?.includes(label.toUpperCase())));
-    const rows = universe.filter(s => predicate(s) === true && number(s.close) != null);
+    const coverage = createCoverage(leaves,universe.length);
+    const rows = universe.filter(s => {
+      const values = new Map(leaves.map((condition,index) => [condition,predicates[index]!(s)]));
+      coverage.account(leaves.map(condition => condition.isNegated ? negate(values.get(condition)!) : values.get(condition)!));
+      return evaluateExpression(request.expressionTree,condition => values.get(condition as ActiveCondition) ?? null) === true && number(s.close) != null;
+    });
     const field = (request.sort?.field ?? 'symbol') as keyof SnapshotStock;
     rows.sort((a,b) => {
       const x = a[field], y = b[field];
@@ -216,7 +224,7 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
       const order = x < y ? -1 : x > y ? 1 : 0;
       return request.sort?.direction === 'desc' ? -order : order;
     });
-    matches = {rows,universeCount:universe.length};
+    matches = {rows,universeCount:universe.length,...coverage.result()};
     cache.set(key,matches);
     if (cache.size > 4) cache.delete(cache.keys().next().value!);
   }
@@ -224,5 +232,5 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
   const page = Math.max(1,request.page), size = Math.max(1,Math.min(100,request.pageSize));
   return { resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
     immutableRevision:data.revision,rows:rows.slice((page-1)*size,page*size),matchCount:rows.length,totalUniverseCount:matches.universeCount,
-    page,pageSize:size,perConditionCoverage:{},unavailableDiagnostics:[],warnings:[] };
+    page,pageSize:size,perConditionCoverage:matches.perConditionCoverage,unavailableDiagnostics:matches.unavailableDiagnostics,warnings:[] };
 }

@@ -28,6 +28,12 @@ def normalized(value):
     return re.sub('[^a-z0-9]', '', value)
 
 
+class ExtractionError(ValueError):
+    def __init__(self, url, reason):
+        super().__init__(reason)
+        self.url = url
+
+
 class CompanyParser(HTMLParser):
     def __init__(self):
         super().__init__()
@@ -220,8 +226,13 @@ async def main():
                     p = CompanyParser()
                     p.feed(html)
                     if not p.parts:
-                        return None
-                    data = json.loads(''.join(p.parts))
+                        raise ExtractionError(url, 'Missing company_details_data script')
+                    try:
+                        data = json.loads(''.join(p.parts))
+                    except ValueError as error:
+                        raise ExtractionError(url, 'Invalid company_details_data JSON') from error
+                    if not isinstance(data, dict) or not data.get('symbol'):
+                        raise ExtractionError(url, 'Missing company symbol in embedded data')
                     identities.append({'sourceUrl': url, 'company': data.get('company'), 'symbol': data.get('symbol')})
                     if str(data.get('symbol', '')).upper() != stock['symbol'].upper():
                         return None
@@ -232,8 +243,9 @@ async def main():
                             'memory_overview': overview, 'checkedAt': now(),
                             'etag': response.headers.get('ETag'), 'lastModified': response.headers.get('Last-Modified')}
 
-                if previous.get('sourceUrl'):
-                    result = await inspect(previous['sourceUrl'])
+                known_url = previous.get('sourceUrl') or previous.get('candidateUrl')
+                if known_url:
+                    result = await inspect(known_url)
                     if result:
                         return result
                 candidates = index.get(normalized(stock['name']), [])
@@ -264,6 +276,10 @@ async def main():
                 failure = {**row, 'status': 'unmapped', 'inspectedUrls': inspected,
                            'inspectedIdentities': identities,
                            'searchMatches': [{'name': r['name'], 'slug': r['slug']} for r in matches]}
+                return {**previous, 'checkedAt': now(), 'refreshError': failure} if previous.get('status') in ('available', 'no_overview') else failure
+            except ExtractionError as error:
+                failure = {**row, 'status': 'extraction_error', 'candidateUrl': error.url,
+                           'error': str(error), 'inspectedUrls': inspected}
                 return {**previous, 'checkedAt': now(), 'refreshError': failure} if previous.get('status') in ('available', 'no_overview') else failure
             except httpx.HTTPStatusError as error:
                 failure = {**row, 'status': 'rate_limited' if error.response.status_code == 429 else 'http_error', 'httpStatus': error.response.status_code, 'inspectedUrls': inspected}
@@ -300,7 +316,7 @@ async def main():
                     'attemptedSymbols': sum(r['status'] != 'not_fetched' for r in rows),
                     'withBothSections': sum(bool(r.get('memory_overview', {}).get('the_read')) and bool(r.get('memory_overview', {}).get('what_to_watch')) for r in rows if r['status'] == 'available'),
                     'refreshErrors': sum(bool(r.get('refreshError')) for r in rows),
-                    'complete': not any(r.get('refreshError') or r['status'] in ('not_fetched', 'error', 'http_error', 'rate_limited') for r in rows),
+                    'complete': not any(r.get('refreshError') or r['status'] in ('not_fetched', 'error', 'extraction_error', 'http_error', 'rate_limited') for r in rows),
                     'note': 'Source symbols are verified against the NSE list; as_of dates belong to Tijori. Narrative claims have not been independently verified.'}
         atomic_json(args.output / 'tijori-overviews.json', {'metadata': metadata, 'records': rows})
         atomic_json(args.output / 'available-overviews.json', {'metadata': metadata, 'records': [r for r in rows if r['status'] == 'available']})

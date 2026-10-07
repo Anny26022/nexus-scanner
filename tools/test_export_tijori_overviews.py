@@ -45,13 +45,15 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fetcher.requests, 2)
         self.assertGreaterEqual(elapsed, 2)
 
-    async def run_refresh(self, status, compressed=False, new_stock=False):
+    async def run_refresh(self, status, compressed=False, new_stock=False, candidate=False, recovered=False):
         with TemporaryDirectory() as folder:
             root = Path(folder)
             url = exporter.BASE + '/company/test/'
             old = {'symbol': 'TEST', 'name': 'Test', 'status': 'available', 'sourceUrl': url,
                    'sourceSymbol': 'TEST', 'fetchedAt': 'old', 'etag': 'v1',
                    'memory_overview': {'the_read': ['saved'], 'what_to_watch': []}}
+            if candidate:
+                old = {'symbol': 'TEST', 'name': 'Test', 'status': 'extraction_error', 'candidateUrl': url}
             (root / 'universe.json').write_text(json.dumps({'manifest': {'sessionDate': '2026-10-06', 'revision': 'r'}, 'stocks': [{'symbol': 'TEST', 'name': 'Test'}]}))
             if compressed:
                 (root / 'tijori-overviews.json.gz').write_bytes(gzip.compress(json.dumps({'records': [old]}).encode()))
@@ -72,6 +74,9 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
                     return httpx.Response(200, text=xml)
                 if request.url.path == '/company/other/':
                     payload = {'symbol': 'NEW', 'company_id': 2, 'memory_overview': {'the_read': ['new listing'], 'what_to_watch': []}}
+                    return httpx.Response(200, text='<script id="company_details_data">' + json.dumps(payload) + '</script>')
+                if recovered:
+                    payload = {'symbol': 'TEST', 'memory_overview': {'the_read': ['recovered'], 'what_to_watch': []}}
                     return httpx.Response(200, text='<script id="company_details_data">' + json.dumps(payload) + '</script>')
                 return httpx.Response(status)
             original_client = httpx.AsyncClient
@@ -129,6 +134,24 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
             path.write_text('existing')
             exporter.publish(root, [], {})
             self.assertEqual(path.read_text(), 'existing')
+
+    async def test_missing_embedded_data_is_retryable_and_preserves_report(self):
+        data, calls = await self.run_refresh(200)
+        row = data['records'][0]
+        self.assertEqual(row['status'], 'available')
+        self.assertEqual(row['memory_overview']['the_read'], ['saved'])
+        self.assertEqual(row['refreshError']['status'], 'extraction_error')
+        self.assertEqual(row['refreshError']['candidateUrl'], str(calls[-1].url))
+        self.assertFalse(data['metadata']['complete'])
+
+    async def test_failed_extraction_retries_candidate_and_recovers(self):
+        data, calls = await self.run_refresh(200, candidate=True)
+        self.assertEqual(data['records'][0]['status'], 'extraction_error')
+        self.assertFalse(data['metadata']['complete'])
+        data, calls = await self.run_refresh(200, candidate=True, recovered=True)
+        self.assertEqual(len(calls), 2)  # Sitemap and the saved candidate; no search.
+        self.assertEqual(data['records'][0]['status'], 'available')
+        self.assertEqual(data['records'][0]['memory_overview']['the_read'], ['recovered'])
 
     async def test_failed_refresh_keeps_previous_report(self):
         data, _ = await self.run_refresh(403)

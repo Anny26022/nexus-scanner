@@ -54,3 +54,9 @@ content reuses its revision. Weekly commits include the public manifest/revision
 The manifest declares `encoding: gzip`. Consumers must explicitly decode gzip
 bytes, unless the host supplies `Content-Encoding: gzip` and the browser already
 decoded the response. The filename extension does not set that header.
+
+A successful HTTP response missing valid embedded company data is an
+`extraction_error`, not an unmapped company. The candidate URL is retained for
+retry; company-symbol verification is still required before publication. HTTP
+403 remains an HTTP error. These failures are retried on subsequent runs and
+never replace a previously saved report.

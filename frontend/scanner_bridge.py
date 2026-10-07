@@ -345,6 +345,12 @@ def run(request, root=ROOT, cache=None):
     selected = _resolve_universe(context, universe, explicit)
     wanted = set(selected) if selected is not None else None
     stocks = [s for symbol,s in context["stocks"].items() if (wanted is None or symbol in wanted) and s.get("default_screener_eligible",True)]
+    if "announcementSymbols" in request:
+        announcement_symbols = request["announcementSymbols"]
+        if not isinstance(announcement_symbols, list) or any(not isinstance(s, str) for s in announcement_symbols):
+            raise ValueError("Invalid announcement symbol filter")
+        allowed_announcements = set(announcement_symbols)
+        stocks = [s for s in stocks if s.get("symbol") in allowed_announcements]
     text_query = str(request.get("textQuery") or "").strip()
     expression = compile_query(text_query) if text_query else frontend_expression(request["expressionTree"])
     # Only collect delivery if a translated condition asks for it.

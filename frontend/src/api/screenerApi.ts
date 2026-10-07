@@ -17,6 +17,11 @@ const USE_MOCK_API = import.meta.env.VITE_USE_MOCK === 'true';
 const adapter = USE_MOCK_API ? mockAdapter : realAdapter;
 
 export const screenerApi = {
+  getAnnouncementIndex: realAdapter.getAnnouncementIndex.bind(realAdapter),
+  getAnnouncementTopics: realAdapter.getAnnouncementTopics.bind(realAdapter),
+  getAnnouncements: realAdapter.getAnnouncements.bind(realAdapter),
+  getAnnouncementHistory: realAdapter.getAnnouncementHistory.bind(realAdapter),
+  getAnnouncementDetail: realAdapter.getAnnouncementDetail.bind(realAdapter),
   async getChart(symbol: string, revision?: string): Promise<ChartSnapshot> {
     if (USE_MOCK_API) throw new Error('Charts are unavailable in mock mode');
     return realAdapter.getChart(symbol, revision);
@@ -31,6 +36,7 @@ export const screenerApi = {
   },
 
   async runScreen(req: ScreenerRunRequest): Promise<ScreenerRunResponse> {
+    if (USE_MOCK_API && req.announcementFilter) throw new Error('Announcement filters are unavailable in mock mode');
     return adapter.runScreen(req);
   },
 

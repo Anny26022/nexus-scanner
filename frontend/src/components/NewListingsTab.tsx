@@ -119,7 +119,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
           </div>
           <div className="ml-auto flex items-center gap-2">
             <input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search symbol or company" className="h-8 w-44 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400" />
-            {!isLoading && !ipoQuery.isError && <span className="whitespace-nowrap text-[11px] text-slate-400">{filteredIpos.length.toLocaleString('en-IN')} listings</span>}
+            {!isLoading && (!ipoQuery.isError || ipoQuery.data) && <span className="whitespace-nowrap text-[11px] text-slate-400">{filteredIpos.length.toLocaleString('en-IN')} listings</span>}
             {activeConditions.length > 1 && <button onClick={() => { setConditions({}); setScreenPage(1); }} className="whitespace-nowrap text-xs text-gray-400 transition-colors hover:text-gray-600">Reset</button>}
             {showScreenResults && (
               <button type="button" onClick={() => setShowScreenResults(false)} className="px-3 py-2 text-xs font-semibold text-slate-500 transition-colors hover:text-slate-900">
@@ -180,7 +180,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
                     <p className="text-xs font-medium">Loading IPO catalogue...</p>
                   </td>
                 </tr>
-              ) : ipoQuery.isError ? (
+              ) : ipoQuery.isError && !ipoQuery.data ? (
                 <tr><td colSpan={7} role="alert" className="py-10 text-center font-sans text-slate-600">
                   IPO catalogue could not be loaded.
                   <button type="button" onClick={() => void ipoQuery.refetch()} className="ml-2 text-teal-700 underline">Retry</button>

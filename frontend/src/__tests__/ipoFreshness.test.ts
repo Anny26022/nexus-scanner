@@ -28,6 +28,7 @@ it('maps detail freshness by matched provider ID and exposes only endpoint names
 it.each([
   [{refresh_complete: true, feeds: {open: {}}, available: true}, 'complete'],
   [{refresh_complete: false, feeds: {open: {}}, available: true}, 'partial'],
+  [{refresh_complete: false, feeds: {}, analytics: {gmp: {}}, available: true}, 'partial'],
   [{refresh_complete: false, feeds: {}, available: true}, 'retained'],
   [{refresh_complete: false, feeds: {}, available: false}, 'unavailable'],
   [{feeds: {}, available: true}, 'unknown'],

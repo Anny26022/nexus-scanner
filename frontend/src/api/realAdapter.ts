@@ -170,7 +170,7 @@ class RealDataAdapter {
           checkedAt: typeof provider.fetched_at === 'string' && Number.isFinite(Date.parse(provider.fetched_at)) ? provider.fetched_at : null,
           state: provider.refresh_complete === true ? 'complete' as const
             : provider.refresh_complete == null ? 'unknown' as const
-            : Object.keys(provider.feeds ?? {}).length ? 'partial' as const
+            : Object.keys(provider.feeds ?? {}).length || Object.keys(provider.analytics ?? {}).length ? 'partial' as const
             : provider.available === false ? 'unavailable' as const : 'retained' as const,
         } : undefined};
       }).catch(error => { ipoSnapshots.delete(revision); throw error; });

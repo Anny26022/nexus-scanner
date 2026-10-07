@@ -44,6 +44,7 @@ def inspect_delivery_history(root, reference_session, previous_session=None):
         for item in latest_records if isinstance(item, dict)
     )
     return {
+        "sessions": sessions,
         "minimum_required_sessions": MIN_DELIVERY_HISTORY_SESSIONS,
         "cached_sessions": len(sessions),
         "oldest_session": sessions[0] if sessions else None,
@@ -80,20 +81,51 @@ def ohlc_error(row):
     return None
 
 
-def inspect_breadth_history(breadth, window=30, minimum_ratio=0.90):
-    """Current file presence cannot certify coverage of earlier sessions."""
-    eligible = breadth.get("quality", {}).get("eligible_symbols")
-    if type(eligible) is not int or eligible <= 0:
-        raise ValueError("breadth eligible population is missing or invalid")
-    rows = breadth.get("records", [])[-window:]
-    gaps = []
-    for row in rows:
-        count = row.get("eligible_with_candle")
-        if type(count) is not int or not 0 <= count <= eligible:
-            raise ValueError("breadth session candle count is missing or invalid")
-        if count / eligible < minimum_ratio:
-            gaps.append({"date": row["date"], "with_candle": count, "eligible": eligible})
-    return {"checked_sessions": len(rows), "minimum_ratio": minimum_ratio, "low_coverage_sessions": gaps}
+def inspect_breadth_history(breadth, expected_sessions, window=30, minimum_ratio=0.90):
+    """Check every required ledger session while retaining all audit findings."""
+    expected = sorted(set(expected_sessions))[-window:]
+    errors, gaps = [], []
+    quality = breadth.get("quality") if isinstance(breadth, dict) else None
+    eligible = quality.get("eligible_symbols") if isinstance(quality, dict) else None
+    valid_population = type(eligible) is int and eligible > 0
+    if not valid_population:
+        errors.append("breadth eligible population is missing or invalid")
+    if len(expected) < window:
+        errors.append(f"breadth history requires {window} official sessions; only {len(expected)} available")
+    records = breadth.get("records") if isinstance(breadth, dict) else None
+    by_date = {}
+    if not isinstance(records, list):
+        errors.append("breadth records are missing or invalid")
+        records = []
+    for row in records:
+        if not isinstance(row, dict) or not isinstance(row.get("date"), str):
+            errors.append("breadth record has a missing or invalid session date")
+            continue
+        by_date.setdefault(row["date"], []).append(row)
+    for day in expected:
+        rows = by_date.get(day, [])
+        count = rows[0].get("eligible_with_candle") if len(rows) == 1 else None
+        reason = None
+        ratio = None
+        if not rows:
+            reason = "missing breadth session"
+        elif len(rows) != 1:
+            reason = "duplicate breadth session"
+        elif type(count) is not int or count < 0 or (valid_population and count > eligible):
+            reason = "breadth session candle count is missing or invalid"
+        elif valid_population:
+            ratio = count / eligible
+            if ratio < minimum_ratio:
+                reason = "candle coverage below minimum"
+        if reason:
+            gaps.append({"date": day, "eligible_with_candle": count, "coverage_ratio": ratio, "reason": reason})
+            errors.append(f"breadth {day}: {reason}")
+    low_coverage = [{"date": row["date"], "with_candle": row["eligible_with_candle"], "eligible": eligible}
+                    for row in gaps if row["reason"] == "candle coverage below minimum"]
+    return {"checked_sessions": len(expected), "low_coverage_sessions": low_coverage,
+            "required_sessions": window, "expected_sessions": expected,
+            "eligible_symbols": eligible, "minimum_ratio": minimum_ratio,
+            "deficient_sessions": gaps, "errors": errors}
 
 
 def inspect_publication(root, today=None, expected_session=None, max_age_days=None):
@@ -123,12 +155,6 @@ def inspect_publication(root, today=None, expected_session=None, max_age_days=No
             errors.append("v2 outputs were not generated together today")
         if breadth["records"][-1]["date"] != session.isoformat():
             errors.append("breadth and benchmark sessions differ")
-        breadth_history = inspect_breadth_history(breadth)
-        if breadth_history["low_coverage_sessions"]:
-            errors.append("breadth candle coverage below 90%: " + ", ".join(
-                f"{row['date']} ({row['with_candle']}/{row['eligible']})"
-                for row in breadth_history["low_coverage_sessions"]
-            ))
         rs_methodology = rs_ratings.get("methodology")
         rs_benchmark_name = "NIFTY 500"
         if not isinstance(rs_methodology, dict):
@@ -156,6 +182,14 @@ def inspect_publication(root, today=None, expected_session=None, max_age_days=No
         delivery_history = inspect_delivery_history(
             root, session.isoformat(), previous_session.isoformat() if previous_session else None,
         )
+        breadth_history = inspect_breadth_history(
+            breadth, [day for day in delivery_history["sessions"] if day <= session.isoformat()],
+        )
+        errors.extend(breadth_history["errors"])
+        if breadth_history["low_coverage_sessions"]:
+            errors.append("breadth candle coverage below 90%: " + ", ".join(
+                row["date"] for row in breadth_history["low_coverage_sessions"]
+            ))
         if delivery_history["cached_sessions"] < MIN_DELIVERY_HISTORY_SESSIONS:
             errors.append(
                 "delivery-history coverage below "

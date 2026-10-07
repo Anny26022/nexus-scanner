@@ -114,12 +114,10 @@ def discard_invalid_ohlcv_rows(rows):
 
 
 def missing_history_sessions(existing_rows, expected_sessions):
-    """Only require observed exchange sessions inside this security's history."""
-    observed = {row["Date"] for row in existing_rows}
-    if not observed:
-        return []
-    first, last = min(observed), max(observed)
-    return sorted({day for day in expected_sessions if first <= day <= last and day not in observed})
+    """Require ledger dates from the first observed candle, including trailing gaps."""
+    dates = {row["Date"] for row in existing_rows}
+    first = min(dates) if dates else None
+    return sorted(day for day in expected_sessions if (first is None or day >= first) and day not in dates)
 
 
 def plan_history_ranges(existing_rows, desired_start_ts, desired_end_ts, expected_sessions=()):

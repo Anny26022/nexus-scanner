@@ -5,6 +5,10 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+import sys
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))
 from fetch_all_ohlcv import expected_sessions_by_symbol, fetch_single_stock, has_official_history
 from ohlcv_utils import missing_history_sessions, plan_history_ranges, read_ohlcv_csv, write_ohlcv_csv
 from edl_pipeline.quality import inspect_breadth_history
@@ -29,7 +33,7 @@ class HistoryGapTests(unittest.TestCase):
 
     def test_no_prelisting_or_unobserved_session_is_required(self):
         self.assertEqual(missing_history_sessions([candle('2026-09-28'),candle('2026-09-30')],['2026-09-25','2026-09-28','2026-09-30']),[])
-        self.assertEqual(missing_history_sessions([],['2026-09-28']),[])
+        self.assertEqual(missing_history_sessions([],['2026-09-28']),['2026-09-28'])
 
     def test_repair_fetches_gap_and_retains_official_latest_close(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -44,7 +48,8 @@ class HistoryGapTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             write_ohlcv_csv(Path(folder)/'TEST.csv', history())
             with patch('fetch_all_ohlcv.resolve_path',return_value=Path(folder)), patch('fetch_all_ohlcv.is_nse_cash_session',return_value=False), patch('fetch_all_ohlcv.time.time',return_value=datetime(2026,10,6,18).timestamp()), patch('fetch_all_ohlcv.fetch_history_chunk',return_value=[]):
-                self.assertEqual(fetch_single_stock('TEST',{'Exch':'NSE','Seg':'E','Inst':'EQUITY','Sid':1},official_nse_session='2026-10-06',expected_sessions=['2026-09-28','2026-10-06']), 'error')
+                with self.assertRaisesRegex(ValueError, 'required history sessions missing'):
+                    fetch_single_stock('TEST',{'Exch':'NSE','Seg':'E','Inst':'EQUITY','Sid':1},official_nse_session='2026-10-06',expected_sessions=['2026-09-28','2026-10-06'])
 
     def test_expected_sessions_use_only_dated_official_security_records(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -53,19 +58,20 @@ class HistoryGapTests(unittest.TestCase):
                 (root/(day+'.json')).write_text(json.dumps({'date':day,'records':[{'symbol':'TEST','series':'E1','date':day}]}))
             self.assertEqual(expected_sessions_by_symbol(root,['TEST','NO_TRADES'],'2026-10-06'),{'TEST':{'2026-09-25','2026-09-28'},'NO_TRADES':set()})
             (root/'2026-09-29.json').write_text(json.dumps({'date':'2026-09-29','records':[{'symbol':'TEST','date':'2026-09-28'}]}))
-            with self.assertRaisesRegex(ValueError,'Mixed dates'):expected_sessions_by_symbol(root,['TEST'],'2026-10-06')
+            with self.assertWarns(UserWarning):
+                self.assertEqual(expected_sessions_by_symbol(root,['TEST'],'2026-10-06')['TEST'], {'2026-09-25','2026-09-28'})
 
     def test_breadth_rejects_thin_history_even_with_healthy_latest_session(self):
         payload={'quality':{'eligible_symbols':2315},'records':[{'date':'2026-09-28','eligible_with_candle':8},{'date':'2026-10-06','eligible_with_candle':2312}]}
-        self.assertEqual([r['date'] for r in inspect_breadth_history(payload)['low_coverage_sessions']],['2026-09-28'])
+        self.assertEqual([r['date'] for r in inspect_breadth_history(payload, ['2026-09-28', '2026-10-06'], window=2)['low_coverage_sessions']],['2026-09-28'])
         payload['records'][0]['eligible_with_candle']=2200
-        self.assertEqual(inspect_breadth_history(payload)['low_coverage_sessions'],[])
+        self.assertEqual(inspect_breadth_history(payload, ['2026-09-28', '2026-10-06'], window=2)['low_coverage_sessions'],[])
         del payload['records'][0]['eligible_with_candle']
-        with self.assertRaisesRegex(ValueError,'count'):inspect_breadth_history(payload)
+        self.assertTrue(inspect_breadth_history(payload, ['2026-09-28', '2026-10-06'], window=2)['errors'])
 
     def test_bounded_check_preserves_90_percent_boundary(self):
         payload={'quality':{'eligible_symbols':10},'records':[{'date':'2020-01-01','eligible_with_candle':0},{'date':'2026-10-06','eligible_with_candle':9}]}
-        self.assertEqual(inspect_breadth_history(payload,window=1)['low_coverage_sessions'],[])
+        self.assertEqual(inspect_breadth_history(payload,['2026-10-06'],window=1)['low_coverage_sessions'],[])
 
     def test_official_session_ledger_is_ready_before_gap_repair(self):
         self.assertIn('fetch_nse_delivery_history.py',OHLCV_FETCH_LANE)

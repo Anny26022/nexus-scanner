@@ -13,16 +13,21 @@ fetch now finishes in the OHLCV lane before stock history is checked. Its latest
 No calendar-day approximation or guessed holiday calendar is introduced.
 
 Readiness checks and the existing Dhan adjusted-history fallback now repair
-missing sessions inside each security's observed first/last dates. Existing
+missing sessions from each security's first observed date onward, including
+trailing sessions; an empty cache must supply all expected dates. Existing
 backward/forward bootstrap still handles the outer ranges. A healthy history
-makes no additional per-stock history request. The existing official latest
-candle wins over overlapping fallback rows. An empty or partial provider response
+makes no additional per-stock history request. Fallback responses fill absent
+dates only, preserving all existing adjusted candles and the official latest candle. An empty or partial provider response
 that leaves an identified internal gap makes the required history stage fail.
 
-The publication gate checks candle coverage across the latest 30 breadth sessions:
+Unusable ledger files are skipped with warnings; an entirely unusable ledger
+fails the required history stage.
+
+The publication gate requires all 30 expected dates from the official delivery
+ledger through the benchmark session to be present exactly once in breadth:
 each must cover at least 90% of the eligible population. It records deficient
-dates in `data_quality.json` and blocks promotion even if today's coverage is
-healthy. The 90% threshold is an operational guard against widespread ingestion
+dates in `data_quality_failure.json` on rejection and blocks promotion even if
+today's coverage is healthy. The 90% threshold is an operational guard against widespread ingestion
 failure, not proof that every stock has complete history.
 
 This is bounded recent-gap recovery, not a certification of complete lifetime

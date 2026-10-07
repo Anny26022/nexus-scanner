@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import json
+import warnings
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -60,25 +61,31 @@ def has_official_history(existing_rows, session, desired_start, expected_session
 
 
 def expected_sessions_by_symbol(cache_dir, symbols, through_session, window=30):
-    """Reuse dated official files; do not guess holidays or non-trading days."""
+    """Use date-aligned official rows as evidence that a candle is expected."""
     expected = {symbol: set() for symbol in symbols}
-    paths = sorted(cache_dir.glob("????-??-??.json"), reverse=True)
     used = 0
-    for path in paths:
+    for path in sorted(cache_dir.glob("????-??-??.json"), reverse=True):
         if path.stem > through_session:
             continue
-        payload = load_json(path)
-        if payload.get("date") != path.stem or not payload.get("records"):
-            raise ValueError(f"Invalid official session cache: {path}")
-        for row in payload["records"]:
-            if row.get("date") != path.stem:
-                raise ValueError(f"Mixed dates in official session cache: {path}")
-            symbol = row.get("symbol")
-            if symbol in expected:
-                expected[symbol].add(path.stem)
+        try:
+            datetime.strptime(path.stem, "%Y-%m-%d")
+            payload = load_json(path)
+            records = payload.get("records") if isinstance(payload, dict) else None
+            if (not isinstance(records, list) or not records or payload.get("date") != path.stem
+                    or not any(isinstance(row, dict) and row.get("date") == path.stem for row in records)):
+                raise ValueError("no date-aligned delivery records")
+        except (OSError, ValueError, TypeError) as error:
+            warnings.warn(f"Skipping unusable official session cache {path}: {error}")
+            continue
+        for row in records:
+            if (isinstance(row, dict) and row.get("date") == path.stem
+                    and row.get("symbol") in expected):
+                expected[row["symbol"]].add(path.stem)
         used += 1
         if used >= window:
             break
+    if not any(expected.values()):
+        raise ValueError("delivery_history_data has no usable sessions for the stock universe; gap repair cannot run")
     return expected
 
 
@@ -148,6 +155,10 @@ def fetch_single_stock(sym, details, live_snapshot=None, official_nse_session=No
                 if chunk_rows:
                     new_rows.extend(chunk_rows)
 
+    # Provider ranges can overlap adjusted bars; fill absent dates only.
+    cached_dates = {row["Date"] for row in existing_rows}
+    new_rows = [row for row in new_rows if row.get("Date") not in cached_dates]
+
     # 2. Hybrid Step: Add Today using Live Snapshot
     if live_snapshot and is_nse_cash_session():
         s = live_snapshot
@@ -166,13 +177,12 @@ def fetch_single_stock(sym, details, live_snapshot=None, official_nse_session=No
     official_rows = [row for row in existing_rows if row["Date"] == official_nse_session]
     final_rows = merge_rows_by_date(discard_invalid_ohlcv_rows(existing_rows + new_rows + official_rows))
 
-    if missing_history_sessions(final_rows, expected_sessions):
-        # Keep useful repaired rows, but never report an incomplete repair as ready.
-        if final_rows != original_rows:
-            write_ohlcv_csv(output_path, final_rows)
-        return "error"
-
-    if not final_rows or final_rows == original_rows:
+    missing = missing_history_sessions(final_rows, expected_sessions)
+    if missing:
+        raise ValueError(f"{sym}: required history sessions missing: {', '.join(missing)}")
+    if not final_rows:
+        raise ValueError(f"{sym}: historical OHLCV is empty")
+    if final_rows == original_rows:
         return "uptodate"
 
     write_ohlcv_csv(output_path, final_rows)

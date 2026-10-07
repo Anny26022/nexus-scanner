@@ -76,6 +76,20 @@ class FinancialScannerTests(unittest.TestCase):
         result = evaluate_history(frame, tree, "2026-10-07", context={"stock": stock})
         self.assertEqual(result["status"], "match")
 
+    def test_financial_reference_syntax_errors_name_expected_format(self):
+        spaced = compile_query("Financial Value (annual, revenue, 0) > 1")
+        self.assertEqual(spaced["field"], "financial:annual:revenue:0")
+        for query in [
+            "Financial Value(annual, revenue) > 1",
+            "Financial Value (annual, revenue) > 1",
+            "Financial Value(annual, revenue, -1) > 1",
+            "Financial Value(monthly, revenue, 0) > 1",
+            "Financial Value annual revenue 0 > 1",
+            "Close Price > Financial Value(annual, revenue)",
+        ]:
+            with self.subTest(query=query), self.assertRaisesRegex(ValueError, r"Expected Financial Value\(frequency, metric, offset\)"):
+                compile_query(query)
+
     def context(self):
         rows=[]
         for statement,profits in [("CONSOLIDATED",[10,20,30,40]),("STANDALONE",[5,5,5,5])]:

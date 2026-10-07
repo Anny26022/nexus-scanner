@@ -78,13 +78,15 @@ def _strip_outer(text: str) -> str:
 
 def _operand(value: str) -> Any:
     value = value.strip()
-    reference = re.fullmatch(r"Financial Value\(\s*(annual|quarterly)\s*,\s*([a-z_]+)\s*,\s*(\d+)\s*\)", value, re.I)
+    reference = re.fullmatch(r"Financial Value\s*\(\s*(annual|quarterly)\s*,\s*([a-z_]+)\s*,\s*(\d+)\s*\)", value, re.I)
     if reference:
         frequency, metric, offset = reference.groups()
         metric = {"pat": "net_profit", "pbt": "profit_before_tax"}.get(metric.lower(), metric.lower())
         if metric not in STATEMENT_METRICS.values() or int(offset) > 100:
             raise ValueError("Unsupported financial statement metric or offset")
         return {"field": f"financial:{frequency.lower()}:{metric}:{int(offset)}"}
+    if value.casefold().startswith("financial value"):
+        raise ValueError("Expected Financial Value(frequency, metric, offset), with frequency annual or quarterly and a non-negative integer offset")
     try: return float(value.replace(",", ""))
     except ValueError:
         field = FIELD_ALIASES.get(value.casefold())
@@ -234,7 +236,7 @@ def _leaf(text: str) -> dict:
     function = re.match(r"^(.+?)\((.*)\)\s*(>=|<=|>|<|=)\s*(.+)$", text.strip())
     field_match = re.match(r"^(.+?)\s*(>=|<=|>|<|=)\s*(.+)$", text.strip())
     known_field = field_match and field_match.group(1).strip().casefold() in FIELD_ALIASES
-    if field_match and field_match.group(1).strip().lower().startswith("financial value("):
+    if field_match and field_match.group(1).strip().casefold().startswith("financial value"):
         left, operator, right = field_match.groups()
         return {"type": "condition", "condition": "field_comparison", "field": _operand(left)["field"],
                 "comparison": _OPERATORS[operator], "value": _operand(right)}

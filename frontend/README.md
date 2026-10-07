@@ -194,8 +194,11 @@ metrics include revenue, sales, net_profit (alias PAT), profit_before_tax (alias
 PBT), EPS, OPM, EBITDA, operating_profit, expenses, interest, depreciation,
 other_income and tax_expenses. These expressions require the Python scanner
 endpoint; no browser evaluator or filter-builder control is added for them.
-Historical borrowings and ROCE remain unsupported because the inspected source
-does not supply those series. These are ScanX-derived calculations, not a claim
+Historical borrowings remain excluded from the query interface, which accepts
+only annual/quarterly income-statement references. When supplied by ScanX,
+`bs_c.TOTAL_BORROWINGS` is retained in the separate balance-sheet history;
+availability varies by company. No dated ROCE series was supplied in the
+inspected response. These are ScanX-derived calculations, not a claim
 of identical StockScans definitions or complete NSE coverage.
 
 ### 1. Fetch and maintain inputs

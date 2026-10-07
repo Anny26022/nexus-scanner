@@ -111,6 +111,10 @@ export interface StockRow {
   rocePct?: number | null;
   opmTtmPct?: number | null;
   debtToEquity?: number | null;
+  promoterHoldingPct?: number | null;
+  // Quarter-on-quarter changes in percentage points, not relative growth.
+  fiiChangePctQoq?: number | null;
+  diiChangePctQoq?: number | null;
   totalRevenueLakh?: number | null;
   nonCurrentAssetsLakh?: number | null;
   totalLiabilitiesLakh?: number | null;
@@ -125,11 +129,6 @@ export interface StockRow {
   financialMetadata?: Record<string, unknown> | null;
   dividendExDate?: string | null;
 
-
-  promoterHoldingPct?: number | null;
-  // Quarter-on-quarter changes in percentage points, not relative growth.
-  fiiChangePctQoq?: number | null;
-  diiChangePctQoq?: number | null;
   financialUnitsVersion?: number | null;
   financialHistoryObservedOn?: string | null;
   ttmRevenueCrore?: number | null;

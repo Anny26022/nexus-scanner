@@ -11,6 +11,12 @@ from edl_pipeline.scanner.presets import list_presets
 
 
 class BridgeTests(unittest.TestCase):
+    def test_ownership_fields_keep_missing_and_non_finite_values_unavailable(self):
+        row = bridge.stock_row({"symbol": "TEST", "promoter_holding_percent": float('nan'),
+                                "fii_percent_change_qoq": float('inf')}, {})
+        for field in ('promoterHoldingPct', 'fiiChangePctQoq', 'diiChangePctQoq'):
+            self.assertIsNone(row[field])
+
     def test_announcement_filter_intersects_before_pagination_and_isolates_cache(self):
         context = {"stocks": {symbol: {**self.stock(), "symbol": symbol} for symbol in ("AAA", "BBB")},
                    "financial_history_as_of": "2026-09-30", "rs_ratings": {}, "fno_ban_symbols": {}}

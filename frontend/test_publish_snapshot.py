@@ -12,6 +12,33 @@ from scanner_cache import ScannerCache
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def test_publishes_ownership_values_and_preserves_old_revision(self):
+        with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl';root.mkdir();output=Path(folder)/'public';self.fixture(root)
+            source=root/'all_stocks_fundamental_analysis.json.gz'
+            with gzip.open(source,'rt') as handle:
+                stocks=json.load(handle)
+            stocks[0].update(promoter_holding_percent=50.48,fii_percent_change_qoq=-1.47,dii_percent_change_qoq=0.0)
+            with gzip.open(source,'wt') as handle:
+                json.dump(stocks,handle)
+            first=publish(root,output)
+            original=output/'revisions'/first['revision']/'stocks.json'
+            original_bytes=original.read_bytes()
+            row=json.loads(original_bytes)['stocks'][0]
+            self.assertEqual(row['promoterHoldingPct'],50.48)
+            self.assertEqual(row['fiiChangePctQoq'],-1.47)
+            self.assertEqual(row['diiChangePctQoq'],0.0)
+            stocks[0].update(promoter_holding_percent=None,fii_percent_change_qoq=None,dii_percent_change_qoq=2.25)
+            with gzip.open(source,'wt') as handle:
+                json.dump(stocks,handle)
+            second=publish(root,output)
+            row=json.loads((output/'revisions'/second['revision']/'stocks.json').read_text())['stocks'][0]
+            self.assertIsNone(row['promoterHoldingPct'])
+            self.assertIsNone(row['fiiChangePctQoq'])
+            self.assertEqual(row['diiChangePctQoq'],2.25)
+            self.assertNotEqual(first['revision'],second['revision'])
+            self.assertEqual(original.read_bytes(),original_bytes)
+
     def fixture(self, root, cap=5000):
         stocks=[{'symbol':'TEST','name':'Test','close':100,'open':99,'high':101,'low':98,'volume':200,'as_of_date':'2026-09-30',
                  'market_cap_crore':cap,'daily_rupee_turnover_50_cr':10,'circuit_limit':'20','listing_series':'EQ','index_memberships':[]}]

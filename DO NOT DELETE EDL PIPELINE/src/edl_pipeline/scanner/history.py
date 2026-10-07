@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from .earnings import EARNINGS_FIELDS, select_observation
-from .shareholding import SHAREHOLDING_FIELDS, select_observation as select_shareholding_observation
+from .shareholding import SHAREHOLDING_FIELDS, SHAREHOLDING_CHANGE_FIELDS, select_observation as select_shareholding_observation
 from edl_pipeline.schemas import PUBLIC_FINANCIAL_FIELDS
 from .financials import statement_summary
 
@@ -27,6 +27,7 @@ SCANNER_SNAPSHOT_FIELDS = (
     "qoq_percent_eps_latest", "yoy_percent_eps_latest",
     "debt_to_equity", "eps_ttm", "promoter_holding_percent", "fii_holding_percent", "dii_holding_percent", "public_holding_percent",
     "number_of_shareholders", "dividend_yield_percent", "face_value",
+    "fii_percent_change_qoq", "dii_percent_change_qoq",
     "total_income_in_lakhs", "total_expense_in_lakhs", "profit_before_tax_in_lakhs",
     "total_tax_expenses_in_lakhs", "net_profit_in_lakhs", "total_equity_in_lakhs",
     "total_assets_in_lakhs", "current_assets_in_lakhs", "current_liabilities_in_lakhs",
@@ -80,6 +81,10 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
             item["financial_statement_history"] = None
             for field in statement_summary({}):
                 item[field] = None
+        # Provider changes have no independent observation date. They are safe
+        # only for their own snapshot session unless dated history replaces them.
+        for field in SHAREHOLDING_CHANGE_FIELDS:
+            item[field] = stock.get(field) if stock.get("as_of_date") == session else None
         observation = select_observation(earnings_observations or [], stock["symbol"], session)
         if observation:
             # The selected values are now truly date-bounded, even if the
@@ -90,6 +95,7 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
         holding = select_shareholding_observation(shareholding_observations or [], stock["symbol"], session)
         if holding:
             item.update({field: holding.get(field) for field in SHAREHOLDING_FIELDS.values()})
+            item.update({field: holding.get(field) for field in SHAREHOLDING_CHANGE_FIELDS})
             promoter = holding.get("promoter_holding_percent")
             if isinstance(promoter, (int, float)) and 0 <= promoter <= 100:
                 item["free_float_percent"] = 100.0 - promoter

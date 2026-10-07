@@ -1,0 +1,31 @@
+name: Earnings endpoint runner check
+on:
+  push:
+    branches: [codex/nexus-earnings-calendar]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: pip install requests
+      - name: Fetch and normalize Nexus calendar on GitHub runner
+        working-directory: DO NOT DELETE EDL PIPELINE
+        run: |
+          python - <<'PY'
+          from fetch_earnings_calendar import fetch_calendar, build_calendar, nse_symbols, ENDPOINT
+          from pathlib import Path
+          from datetime import datetime, timezone
+          payload = fetch_calendar()
+          assert isinstance(payload, dict) and isinstance(payload.get('records'), list)
+          assert payload['records'], 'Expected nonempty live calendar'
+          calendar = build_calendar(payload, nse_symbols(Path('nse_equity_list.csv')), datetime.now(timezone.utc).isoformat())
+          assert calendar['events'], 'Expected mapped NSE events'
+          print(f"Endpoint: {ENDPOINT}")
+          print(f"HTTP success, raw records: {len(payload['records'])}, mapped NSE events: {len(calendar['events'])}")
+          print(f"Date range: {min(row['scheduled_date'] for row in calendar['events'])} to {max(row['scheduled_date'] for row in calendar['events'])}")
+          PY

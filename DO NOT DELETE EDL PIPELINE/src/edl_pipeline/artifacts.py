@@ -91,7 +91,7 @@ PHASE2_SCRIPTS = [
     "fetch_market_news.py",
     "fetch_nse_corporate_actions.py",
     "fetch_corporate_actions.py",
-    "fetch_bse_earnings_calendar.py",
+    "fetch_earnings_calendar.py",
     "fetch_surveillance_lists.py",
     "fetch_circuit_stocks.py",
     "fetch_bulk_block_deals.py",
@@ -204,7 +204,7 @@ SCRIPT_OUTPUT_SPECS = {
         ArtifactSpec("upcoming_earnings_events.json", "json", min_count=0),
         ArtifactSpec("history_earnings_events.json", "json", min_count=0),
     ],
-    "fetch_bse_earnings_calendar.py": [
+    "fetch_earnings_calendar.py": [
         ArtifactSpec("earnings_calendar.json", "json", min_count=1, required_fields=("source", "fetched_at", "events", "available")),
     ],
     "fetch_surveillance_lists.py": [

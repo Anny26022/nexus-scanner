@@ -624,33 +624,33 @@ class TransformTests(unittest.TestCase):
         self.assertEqual(rows[-1], "Nifty 50,100,101")
 
 
-class BseEarningsCalendarTests(unittest.TestCase):
+class EarningsCalendarTests(unittest.TestCase):
     def test_normalizes_only_canonical_eq_symbols(self):
-        from fetch_bse_earnings_calendar import build_calendar
-        payload = build_calendar({"Table": [
-            {"scrip_Code": "544915", "short_name": "rentomojo", "Long_Name": "Rentomojo Ltd", "meeting_date": "05 Oct 2026", "URL": "https://example.test/rentomojo"},
-            {"scrip_Code": "1", "short_name": "BSEONLY", "meeting_date": "05 Oct 2026"},
-            {"scrip_Code": "2", "short_name": "BROKEN", "meeting_date": "not a date"},
+        from fetch_earnings_calendar import build_calendar, ENDPOINT
+        payload = build_calendar({"records": [
+            {"securityCode": "544915", "securityName": "rentomojo", "companyName": "Rentomojo Ltd", "resultDate": "2026-10-05", "URL": "https://example.test/rentomojo"},
+            {"securityCode": "1", "securityName": "BSEONLY", "resultDate": "2026-10-05"},
+            {"securityCode": "2", "securityName": "BROKEN", "resultDate": "not a date"},
         ]}, {"RENTOMOJO"}, "2026-10-04T00:00:00+00:00")
         self.assertEqual(payload["events"], [{
             "symbol": "RENTOMOJO", "bse_security_code": "544915", "company_name": "Rentomojo Ltd",
-            "scheduled_date": "2026-10-05", "event_type": "RESULTS_BOARD_MEETING", "source": "BSE",
-            "source_url": "https://example.test/rentomojo",
+            "scheduled_date": "2026-10-05", "event_type": "RESULTS_SCHEDULED", "source": "NexusJournal",
+            "source_url": ENDPOINT,
         }])
 
     def test_bse_results_markers_are_limited_to_two_weeks(self):
-        from edl_pipeline.transforms.events import collect_upcoming_bse_results_events
-        events = collect_upcoming_bse_results_events({"events": [
+        from edl_pipeline.transforms.events import collect_upcoming_results_events
+        events = collect_upcoming_results_events({"events": [
             {"symbol": "RENTOMOJO", "scheduled_date": "2026-10-05", "event_type": "RESULTS_BOARD_MEETING"},
             {"symbol": "LATER", "scheduled_date": "2026-10-25", "event_type": "RESULTS_BOARD_MEETING"},
         ]}, today=datetime(2026, 10, 4))
         self.assertEqual(events, {"RENTOMOJO": ["⏰: Results board meeting (05-Oct)"]})
 
-    def test_calendar_uses_bse_first_and_scanx_for_missing_symbols(self):
-        from fetch_bse_earnings_calendar import merge_upcoming_results
-        from edl_pipeline.transforms.events import collect_upcoming_bse_results_events
+    def test_calendar_uses_nexus_first_and_scanx_for_missing_symbols(self):
+        from fetch_earnings_calendar import merge_upcoming_results
+        from edl_pipeline.transforms.events import collect_upcoming_results_events
         calendar = {"events": [
-            {"symbol": "BOTH", "scheduled_date": "2026-10-05", "event_type": "RESULTS_BOARD_MEETING", "source": "BSE"},
+            {"symbol": "BOTH", "scheduled_date": "2026-10-05", "event_type": "RESULTS_SCHEDULED", "source": "NexusJournal"},
         ]}
         merged = merge_upcoming_results(calendar, [
             {"Symbol": "BOTH", "ExDate": "2026-10-06", "Type": "QUARTERLY RESULT ANNOUNCEMENT"},
@@ -661,52 +661,69 @@ class BseEarningsCalendarTests(unittest.TestCase):
         by_symbol = {event["symbol"]: event for event in merged["events"]}
         self.assertEqual(set(by_symbol), {"BOTH", "FALLBACK"})
         self.assertEqual(by_symbol["BOTH"]["scheduled_date"], "2026-10-05")
-        self.assertEqual(by_symbol["BOTH"]["source_dates"], {"BSE": ["2026-10-05"], "ScanX": ["2026-10-06"]})
+        self.assertEqual(by_symbol["BOTH"]["source_dates"], {"NexusJournal": ["2026-10-05"], "ScanX": ["2026-10-06"]})
         self.assertTrue(by_symbol["BOTH"]["date_conflict"])
         self.assertEqual(by_symbol["FALLBACK"]["source"], "ScanX")
-        self.assertEqual(collect_upcoming_bse_results_events(merged, today=datetime(2026, 10, 4)), {
-            "BOTH": ["⏰: Results board meeting (05-Oct)"],
+        self.assertEqual(collect_upcoming_results_events(merged, today=datetime(2026, 10, 4)), {
+            "BOTH": ["⏰: Results scheduled (05-Oct)"],
             "FALLBACK": ["⏰: Results announcement (07-Oct)"],
         })
 
     def test_calendar_publication_reads_existing_scanx_feed(self):
-        from fetch_bse_earnings_calendar import main
+        from fetch_earnings_calendar import main
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "nse_equity_list.csv").write_text("SYMBOL,SERIES\nFALLBACK,EQ\n", encoding="utf-8")
             (root / "upcoming_earnings_events.json").write_text(json.dumps([{
                 "Symbol": "FALLBACK", "ExDate": "2099-10-07", "Type": "QUARTERLY RESULT ANNOUNCEMENT",
             }]), encoding="utf-8")
-            with mock.patch("fetch_bse_earnings_calendar.fetch_calendar", return_value=[]):
+            with mock.patch("fetch_earnings_calendar.fetch_calendar", return_value={"records": []}):
                 self.assertTrue(main(root))
             payload = json.loads((root / "earnings_calendar.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["events"][0]["symbol"], "FALLBACK")
             self.assertEqual(payload["events"][0]["source"], "ScanX")
 
     def test_missing_nse_list_retains_previous_calendar(self):
-        from fetch_bse_earnings_calendar import main
+        from fetch_earnings_calendar import main
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             previous = {"source": "BSE", "fetched_at": "2099-10-01T00:00:00+00:00", "available": True,
                         "events": [{"symbol": "EXISTING", "scheduled_date": "2099-10-05",
                                     "event_type": "RESULTS_BOARD_MEETING", "source": "BSE"}]}
             (root / "earnings_calendar.json").write_text(json.dumps(previous), encoding="utf-8")
-            with mock.patch("fetch_bse_earnings_calendar.fetch_calendar") as fetch:
+            with mock.patch("fetch_earnings_calendar.fetch_calendar") as fetch:
                 self.assertTrue(main(root))
             fetch.assert_not_called()
             payload = json.loads((root / "earnings_calendar.json").read_text(encoding="utf-8"))
             self.assertFalse(payload["available"])
             self.assertEqual(payload["events"][0]["symbol"], "EXISTING")
 
-    def test_bse_fetch_retries_transient_error(self):
+    def test_invalid_response_preserves_cached_nexus_events_and_records_failure(self):
+        from fetch_earnings_calendar import main
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "nse_equity_list.csv").write_text("SYMBOL,SERIES\nEXISTING,EQ\n", encoding="utf-8")
+            previous = {"source": "Nexus Journal", "fetched_at": "2099-10-01T00:00:00+00:00",
+                        "events": [{"symbol": "EXISTING", "scheduled_date": "2099-10-05",
+                                    "event_type": "RESULTS_SCHEDULED", "source": "NexusJournal"}]}
+            (root / "earnings_calendar.json").write_text(json.dumps(previous), encoding="utf-8")
+            with mock.patch("fetch_earnings_calendar.fetch_calendar", return_value={"unexpected": []}):
+                self.assertTrue(main(root))
+            payload = json.loads((root / "earnings_calendar.json").read_text())
+            self.assertFalse(payload["available"])
+            self.assertIn("records list", payload["last_fetch_error"])
+            self.assertEqual(payload["events"][0]["symbol"], "EXISTING")
+            self.assertEqual(payload["fetched_at"], previous["fetched_at"])
+
+    def test_calendar_fetch_retries_transient_error(self):
         import requests
-        from fetch_bse_earnings_calendar import fetch_calendar
+        from fetch_earnings_calendar import fetch_calendar
         response = mock.Mock()
-        response.json.return_value = {"Table": []}
+        response.json.return_value = {"records": []}
         session = mock.Mock()
         session.get.side_effect = [requests.ConnectionError("temporary"), response]
-        with mock.patch("fetch_bse_earnings_calendar.time.sleep") as sleep:
-            self.assertEqual(fetch_calendar(session), {"Table": []})
+        with mock.patch("fetch_earnings_calendar.time.sleep") as sleep:
+            self.assertEqual(fetch_calendar(session), {"records": []})
         self.assertEqual(session.get.call_count, 2)
         sleep.assert_called_once()
 

@@ -1,4 +1,4 @@
-"""Fetch BSE's forthcoming-results calendar into a durable scanner artifact."""
+"""Fetch Nexus Journal's results calendar into a durable scanner artifact."""
 
 from __future__ import annotations
 
@@ -14,19 +14,10 @@ import requests
 
 from pipeline_utils import BASE_DIR, save_json
 
-ENDPOINT = "https://api.bseindia.com/BseIndiaAPI/api/Corpforthresults/w"
+ENDPOINT = "https://www.nexusjournal.co.in/data/earnings-calendar.json"
 OUTPUT = "earnings_calendar.json"
-HEADERS = {
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7",
-    "Cache-Control": "no-cache",
-    "Pragma": "no-cache",
-    "Origin": "https://www.bseindia.com",
-    "Referer": "https://www.bseindia.com/",
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/154.0.0.0 Safari/537.36",
-}
+SOURCE = "Nexus Journal earnings calendar with ScanX fallback"
+HEADERS = {"Accept": "application/json"}
 
 
 def nse_symbols(path: Path) -> set[str]:
@@ -43,33 +34,33 @@ def nse_symbols(path: Path) -> set[str]:
 
 def parse_date(value: object) -> str | None:
     try:
-        return datetime.strptime(str(value), "%d %b %Y").date().isoformat()
+        return datetime.strptime(str(value), "%Y-%m-%d").date().isoformat()
     except (TypeError, ValueError):
         return None
 
 
 def normalize(rows: object, symbols: set[str]) -> list[dict]:
     if isinstance(rows, dict):
-        rows = rows.get("Table")
+        rows = rows.get("records")
     if not isinstance(rows, list):
-        raise ValueError("BSE results response must contain a Table list.")
+        raise ValueError("Nexus Journal results response must contain a records list.")
     records = []
     for row in rows:
         if not isinstance(row, dict):
             continue
-        symbol = str(row.get("short_name") or "").strip().upper()
-        date = parse_date(row.get("meeting_date"))
-        code = str(row.get("scrip_Code") or "").strip()
+        symbol = str(row.get("securityName") or "").strip().upper()
+        date = parse_date(row.get("resultDate"))
+        code = str(row.get("securityCode") or "").strip()
         if not symbol or symbol not in symbols or not date or not code:
             continue
         records.append({
             "symbol": symbol,
             "bse_security_code": code,
-            "company_name": str(row.get("Long_Name") or "").strip() or None,
+            "company_name": str(row.get("companyName") or "").strip() or None,
             "scheduled_date": date,
-            "event_type": "RESULTS_BOARD_MEETING",
-            "source": "BSE",
-            "source_url": row.get("URL"),
+            "event_type": "RESULTS_SCHEDULED",
+            "source": "NexusJournal",
+            "source_url": ENDPOINT,
         })
     return sorted(records, key=lambda item: (item["scheduled_date"], item["symbol"]))
 
@@ -91,7 +82,7 @@ def previous_calendar(root: Path) -> dict | None:
 
 def build_calendar(rows: object, symbols: set[str], fetched_at: str) -> dict:
     return {
-        "source": "BSE forthcoming results calendar with ScanX fallback",
+        "source": SOURCE,
         "fetched_at": fetched_at,
         "events": normalize(rows, symbols),
     }
@@ -101,7 +92,7 @@ def merge_upcoming_results(calendar: dict, scanx_rows: object, symbols: set[str]
     """Select one forthcoming date per symbol, retaining both source observations."""
     by_symbol: dict[str, list[dict]] = {}
     for event in calendar.get("events", []):
-        if event.get("source") == "BSE" and event.get("scheduled_date", "") >= today:
+        if event.get("source") in {"NexusJournal", "BSE"} and event.get("scheduled_date", "") >= today:
             by_symbol.setdefault(event["symbol"], []).append(event)
     if isinstance(scanx_rows, list):
         for row in scanx_rows:
@@ -123,12 +114,12 @@ def merge_upcoming_results(calendar: dict, scanx_rows: object, symbols: set[str]
 
     selected = []
     for symbol, observations in by_symbol.items():
-        # BSE's scheduled board meeting is preferred; the other source fills gaps.
-        observations.sort(key=lambda event: (event["source"] != "BSE", event["scheduled_date"]))
+        # The published calendar is preferred; ScanX fills missing symbols.
+        observations.sort(key=lambda event: (event["source"] not in {"NexusJournal", "BSE"}, event["scheduled_date"]))
         chosen = observations[0].copy()
         source_dates = {
             source: sorted({event["scheduled_date"] for event in observations if event["source"] == source})
-            for source in ("BSE", "ScanX") if any(event["source"] == source for event in observations)
+            for source in ("NexusJournal", "BSE", "ScanX") if any(event["source"] == source for event in observations)
         }
         chosen["source_dates"] = source_dates
         chosen["date_conflict"] = len({date for dates in source_dates.values() for date in dates}) > 1
@@ -159,13 +150,13 @@ def main(root: Path = Path(BASE_DIR)) -> bool:
     except (requests.RequestException, ValueError, json.JSONDecodeError) as error:
         payload = previous_calendar(root)
         if payload is None:
-            payload = {"source": "BSE forthcoming results calendar with ScanX fallback", "fetched_at": fetched_at, "events": [], "available": False}
+            payload = {"source": SOURCE, "fetched_at": fetched_at, "events": [], "available": False, "last_fetch_error": str(error)}
         else:
-            payload = {**payload, "available": False, "last_fetch_error": str(error)}
-        print(f"BSE calendar unavailable; retaining prior calendar: {error}")
+            payload = {**payload, "source": SOURCE, "available": False, "last_fetch_error": str(error)}
+        print(f"Nexus Journal calendar unavailable; retaining prior calendar: {error}")
     else:
         payload["available"] = True
-        print(f"Fetched {len(payload['events'])} mapped BSE forthcoming-results events.")
+        print(f"Fetched {len(payload['events'])} mapped Nexus Journal results events.")
     scanx_path = root / "upcoming_earnings_events.json"
     try:
         scanx_rows = json.loads(scanx_path.read_text(encoding="utf-8")) if scanx_path.exists() else []

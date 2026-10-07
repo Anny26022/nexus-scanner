@@ -98,7 +98,6 @@ PHASE2_SCRIPTS = [
     "fetch_incremental_price_bands.py",
     "fetch_complete_price_bands.py",
     "fetch_nse_delivery_data.py",
-    "fetch_nse_delivery_history.py",
     "fetch_nse_fno_ban.py",
     "fetch_all_indices.py",
 ]
@@ -111,11 +110,14 @@ REQUIRED_PHASE2_SCRIPTS = frozenset(
     }
 )
 
+# Official delivery history supplies observed per-security sessions for gap
+# repair. Prepare that ledger in this lane before stock history is checked.
 # The latest official NSE session must be applied before the incremental Dhan
 # backfill.  Keeping this chain in one lane prevents concurrent writers from
 # touching the OHLCV cache while independent enrichment fetches run alongside
 # it.
 OHLCV_FETCH_LANE = (
+    "fetch_nse_delivery_history.py",
     "import_eod2_ohlcv.py",
     "fetch_nse_delivery_data.py",
     "apply_nse_daily_ohlcv.py",

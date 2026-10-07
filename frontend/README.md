@@ -57,7 +57,8 @@ Nexus supports research and candidate discovery. It does not execute orders, man
 
 ### Prerequisites
 
-- Node.js and npm compatible with the checked-in package lock.
+- Node.js 24 LTS (run `nvm use` from the repository root) and npm.
+- The frontend uses Vite 8, React plugin 6, and Vitest 5. Other supported Node versions are declared in `package.json`; Vitest requires at least Node 22.12.
 - Python 3.9 or later for pipeline tools and historical screen evaluation.
 - Published files under `frontend/public/data/` for real-data operation.
 - Matching EDL inputs and history for custom conditions requiring Python evaluation.

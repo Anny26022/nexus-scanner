@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
@@ -26,7 +26,7 @@ function scannerBridge(): Plugin {
   };
   const ensureWorker = () => {
     if (worker) return worker;
-    const current = spawn('python3', ['-u', path.resolve(__dirname, 'scanner_worker.py')], { stdio: 'pipe' });
+    const current = spawn('python3', ['-u', path.resolve(import.meta.dirname, 'scanner_worker.py')], { stdio: 'pipe' });
     worker = current;
     current.stderr.on('data', chunk => console.error('Local scanner:', chunk.toString()));
     createInterface({ input: current.stdout }).on('line', line => {
@@ -92,8 +92,8 @@ function scannerBridge(): Plugin {
     configureServer(server) {
       server.middlewares.use(middleware);
       server.httpServer?.on('close', stopWorker);
-      server.watcher.add(['scanner_bridge.py', 'scanner_cache.py', 'scanner_worker.py'].map(file => path.resolve(__dirname, file)));
-      server.watcher.add(path.resolve(__dirname, '../DO NOT DELETE EDL PIPELINE/src'));
+      server.watcher.add(['scanner_bridge.py', 'scanner_cache.py', 'scanner_worker.py'].map(file => path.resolve(import.meta.dirname, file)));
+      server.watcher.add(path.resolve(import.meta.dirname, '../DO NOT DELETE EDL PIPELINE/src'));
       server.watcher.on('change', file => { if (file.endsWith('.py')) stopWorker(); });
     },
     configurePreviewServer(server) { server.middlewares.use(middleware); server.httpServer.on('close', stopWorker); },
@@ -104,7 +104,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), scannerBridge()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
   test: {

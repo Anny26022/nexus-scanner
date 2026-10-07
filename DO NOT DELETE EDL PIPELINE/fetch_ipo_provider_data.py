@@ -51,6 +51,26 @@ LISTED_ARCHIVE_NAME = "ipo_provider_listed_archive.json.gz"
 DETAILS_ARCHIVE_NAME = "ipo_provider_details_archive.json.gz"
 
 
+def _safe_error(error):
+    if isinstance(error, subprocess.CalledProcessError):
+        return f"request failed (curl exit {error.returncode})"
+    if isinstance(error, ValueError):
+        return "invalid provider response"
+    return "provider unavailable"
+
+
+def _clean_detail_errors(details):
+    # Older caches may contain subprocess commands, including session headers.
+    for item in details.values():
+        if "errors" not in item:
+            continue
+        item["errors"] = [
+            (str(error).split(":", 1)[0] if str(error).split(":", 1)[0] in DETAIL_ENDPOINTS else "unknown")
+            + ": request failed" for error in item.get("errors", [])
+        ]
+    return details
+
+
 def _read_nonce(cookie_jar: Path) -> str:
     for line in cookie_jar.read_text(encoding="utf-8").splitlines():
         columns = line.split("\t")
@@ -163,11 +183,11 @@ def _load_cache(root: Path) -> dict:
     payload = load_json(_cache_path(root), default={})
     if isinstance(payload, dict) and isinstance(payload.get("details"), dict):
         details.update(payload["details"])
-    return {"details": details}
+    return {"details": _clean_detail_errors(details)}
 
 
 def _write_details_archive(root: Path, details: dict, updated_at: str) -> None:
-    payload = {"schema_version": 1, "updated_at": updated_at, "details": details}
+    payload = {"schema_version": 1, "updated_at": updated_at, "details": _clean_detail_errors(details)}
     data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     (root / DETAILS_ARCHIVE_NAME).write_bytes(gzip.compress(data, compresslevel=9, mtime=0))
     save_json(_cache_path(root), payload, ensure_ascii=False)
@@ -187,7 +207,7 @@ def _refresh_detail(client: IpoProviderClient, identifier: str) -> tuple[dict, l
         try:
             values[name] = client.get_json(template.format(id=identifier))
         except (subprocess.CalledProcessError, ValueError) as error:
-            errors.append(f"{name}: {error}")
+            errors.append(f"{name}: {_safe_error(error)}")
         time.sleep(DETAIL_DELAY_SECONDS)
     return values, errors
 
@@ -202,38 +222,47 @@ def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT) -> dict:
             try:
                 feeds[name] = client.get_json(endpoint)
             except (subprocess.CalledProcessError, ValueError) as error:
-                errors.append(f"{name}: {error}")
+                errors.append(f"{name}: {_safe_error(error)}")
         for name, endpoint in ANALYTICS_ENDPOINTS.items():
             try:
                 analytics[name] = client.get_json(endpoint)
             except (subprocess.CalledProcessError, ValueError) as error:
-                errors.append(f"{name}: {error}")
+                errors.append(f"{name}: {_safe_error(error)}")
         active = set(_detail_candidates(feeds, ("open", "upcoming", "closed")))
-        candidates = _detail_candidates(feeds)
-        # Within each priority group, missing details precede the oldest cache.
-        ordered = sorted(candidates, key=lambda identifier: (0 if identifier in active else 1,
-                         -_age_hours(details.get(identifier, {}), now), identifier))
+        records = _merge_listed_archive(root, _records(feeds.get("listed_60d")))
+        candidates = set(_detail_candidates(feeds)) | {str(row["id"]) for row in records if row.get("id")}
+        # Last attempt rotates repeated failures; success time still controls freshness.
+        def priority(identifier):
+            item = details.get(identifier, {})
+            stamp = item.get("last_attempt_at") or item.get("fetched_at")
+            return (-_age_hours({"fetched_at": stamp}, now), identifier)
+
+        eligible = [identifier for identifier in candidates
+                    if _age_hours(details.get(identifier, {}), now) >= (24 if identifier in active else 24 * 7)]
+        active_queue = sorted((identifier for identifier in eligible if identifier in active), key=priority)
+        history_queue = sorted((identifier for identifier in eligible if identifier not in active), key=priority)
+        # Reserve a small share for retained history, then let either lane fill spare slots.
+        history_slots = detail_limit // 4 if detail_limit > 1 else 0
+        ordered = history_queue[:history_slots] + active_queue + history_queue[history_slots:]
         attempted = 0
         for identifier in ordered:
             if attempted >= detail_limit:
                 break
             current = details.get(identifier, {})
-            max_age = 24 if identifier in active else 24 * 7
-            if _age_hours(current, now) < max_age:
-                continue
             values, detail_errors = _refresh_detail(client, identifier)
             # Preserve previous successful endpoints on partial or total failure.
             # Only complete refreshes advance the freshness timestamp; failures
             # remain eligible next run without exceeding this run's request budget.
-            details[identifier] = {**current, "data": {**current.get("data", {}), **values}, "errors": detail_errors}
+            details[identifier] = {**current, "data": {**current.get("data", {}), **values},
+                                   "errors": detail_errors, "last_attempt_at": now.isoformat()}
             if not detail_errors:
                 details[identifier]["fetched_at"] = now.isoformat()
             errors.extend(f"{identifier} {error}" for error in detail_errors)
             attempted += 1
-    records = _merge_listed_archive(root, _records(feeds.get("listed_60d")))
     _write_details_archive(root, details, now.isoformat())
-    return {"schema_version": 2, "source": "Permitted IPO provider catalogue API", "available": bool(feeds),
+    return {"schema_version": 2, "source": "Permitted IPO provider catalogue API", "available": bool(feeds or records),
             "recent_feed_available": "listed_60d" in feeds,
+            "refresh_complete": len(feeds) == len(CATALOGUE_ENDPOINTS) and len(analytics) == len(ANALYTICS_ENDPOINTS),
             "fetched_at": now.isoformat(), "feeds": feeds, "analytics": analytics, "details": details,
             "records": records, "errors": errors}
 
@@ -253,9 +282,10 @@ def main() -> int:
             _write_details_archive(root, cache["details"], datetime.now(timezone.utc).isoformat())
         payload = {"schema_version": 2, "source": "Permitted IPO provider catalogue API", "available": bool(archive),
                    "recent_feed_available": False,
+                   "refresh_complete": False,
                    "fetched_at": datetime.now(timezone.utc).isoformat(), "feeds": {}, "analytics": {},
-                   "details": cache["details"], "records": archive, "errors": [str(error)]}
-        print(f"WARNING: IPO provider enrichment unavailable: {error}")
+                   "details": cache["details"], "records": archive, "errors": [_safe_error(error)]}
+        print(f"WARNING: IPO provider enrichment unavailable: {_safe_error(error)}")
     save_json(output, payload, ensure_ascii=False)
     return 0
 

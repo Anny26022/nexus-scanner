@@ -4,6 +4,7 @@ import {
   ExplainRequest,
   ExplainResponse,
   IPORow,
+  IpoCatalogue,
   SymbolComparisonRequest,
   SymbolComparisonResponse,
   RevisionCurrentResponse,
@@ -36,6 +37,10 @@ export const screenerApi = {
 
   async getIpos(): Promise<IPORow[]> {
     return adapter.getIpos();
+  },
+
+  async getIpoCatalogue(): Promise<IpoCatalogue> {
+    return USE_MOCK_API ? {records: await mockAdapter.getIpos()} : realAdapter.getIpoCatalogue();
   },
 
   async compareSymbols(req: SymbolComparisonRequest): Promise<SymbolComparisonResponse> {

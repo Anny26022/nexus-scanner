@@ -24,3 +24,19 @@ it('maps detail freshness by matched provider ID and exposes only endpoint names
   expect(rows[2].ipoDetailStatus?.lastSuccessAt).toBeNull();
   expect(rows[3].ipoDetailStatus).toBeUndefined();
 });
+
+it.each([
+  [{refresh_complete: true, feeds: {open: {}}, available: true}, 'complete'],
+  [{refresh_complete: false, feeds: {open: {}}, available: true}, 'partial'],
+  [{refresh_complete: false, feeds: {}, available: true}, 'retained'],
+  [{refresh_complete: false, feeds: {}, available: false}, 'unavailable'],
+  [{feeds: {}, available: true}, 'unknown'],
+] as const)('reports provider refresh state without treating attempts as successes', async (provider, state) => {
+  const revision = 'b'.repeat(64);
+  const manifest = {revision, schemaVersion: 4, sessionDate: '2026-10-06', totalStocks: 0,
+    datasetUrl: '/data/stocks.json', iposUrl: '/data/ipos.json'};
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ok: true, json: async () => manifest})
+    .mockResolvedValueOnce({ok: true, json: async () => ({records: [], provider_data: {...provider, fetched_at: '2026-10-06T17:00:00Z'}})}));
+  const { realAdapter } = await import('../api/realAdapter');
+  expect((await realAdapter.getIpoCatalogue()).providerStatus).toEqual({checkedAt: '2026-10-06T17:00:00Z', state});
+});

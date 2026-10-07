@@ -23,11 +23,14 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const [screenSort, setScreenSort] = useState<{ field: string; direction: 'asc' | 'desc' }>({ field: 'rvol', direction: 'desc' });
   const pageSize = 50;
 
-  const { data: ipoData = [], isLoading } = useQuery({
+  const ipoQuery = useQuery({
     queryKey: ['ipos', datasetRevision],
-    queryFn: () => screenerApi.getIpos(),
+    queryFn: () => screenerApi.getIpoCatalogue(),
     enabled: Boolean(datasetRevision),
   });
+  const { isLoading } = ipoQuery;
+  const ipoData = ipoQuery.data?.records ?? [];
+  const providerStatus = ipoQuery.data?.providerStatus;
 
   const filteredIpos = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -116,7 +119,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
           </div>
           <div className="ml-auto flex items-center gap-2">
             <input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search symbol or company" className="h-8 w-44 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400" />
-            {!isLoading && <span className="whitespace-nowrap text-[11px] text-slate-400">{filteredIpos.length.toLocaleString('en-IN')} listings</span>}
+            {!isLoading && !ipoQuery.isError && <span className="whitespace-nowrap text-[11px] text-slate-400">{filteredIpos.length.toLocaleString('en-IN')} listings</span>}
             {activeConditions.length > 1 && <button onClick={() => { setConditions({}); setScreenPage(1); }} className="whitespace-nowrap text-xs text-gray-400 transition-colors hover:text-gray-600">Reset</button>}
             {showScreenResults && (
               <button type="button" onClick={() => setShowScreenResults(false)} className="px-3 py-2 text-xs font-semibold text-slate-500 transition-colors hover:text-slate-900">
@@ -133,6 +136,15 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
           </div>
         </div>
       </div>
+
+      {providerStatus && <p role="status" className={`text-[11px] ${providerStatus.state === 'complete' ? 'text-slate-500' : 'text-amber-700'}`}>
+        IPO Decode: {providerStatus.state === 'complete' ? 'catalogue and analytics refreshed'
+          : providerStatus.state === 'partial' ? 'refresh incomplete; some data may be older'
+          : providerStatus.state === 'retained' ? 'refresh failed; retained data shown'
+          : providerStatus.state === 'unavailable' ? 'refresh failed; provider data unavailable'
+          : 'refresh completeness not recorded'}.
+        {providerStatus.checkedAt && ` Checked ${new Date(providerStatus.checkedAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST.`}
+      </p>}
 
       {showScreenResults ? (
         <ResultsTable
@@ -168,6 +180,11 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
                     <p className="text-xs font-medium">Loading IPO catalogue...</p>
                   </td>
                 </tr>
+              ) : ipoQuery.isError ? (
+                <tr><td colSpan={7} role="alert" className="py-10 text-center font-sans text-slate-600">
+                  IPO catalogue could not be loaded.
+                  <button type="button" onClick={() => void ipoQuery.refetch()} className="ml-2 text-teal-700 underline">Retry</button>
+                </td></tr>
               ) : filteredIpos.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-10 text-center text-slate-400 font-sans">

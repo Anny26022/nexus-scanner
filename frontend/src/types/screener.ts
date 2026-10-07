@@ -168,6 +168,14 @@ export interface ScreenerRunResponse {
   warnings: string[];
 }
 
+export interface IpoCatalogue {
+  records: IPORow[];
+  providerStatus?: {
+    checkedAt: string | null;
+    state: 'complete' | 'partial' | 'retained' | 'unavailable' | 'unknown';
+  };
+}
+
 export interface IPORow {
   symbol: string;
   name: string;

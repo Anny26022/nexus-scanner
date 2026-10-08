@@ -149,6 +149,10 @@ symbols with different provider/NSE ISINs remain eligible and are reported under
 `isin_mismatches`; reconciliation does not overwrite their ISIN or security ID.
 Each entry distinguishes `isin_mismatch` from `missing_provider_isin` via its
 `reason` field.
+OHLCV refreshes fetch the existing official bhavcopy before filtering so listings
+after its completed session are deferred. The report includes `session_date`,
+`deferred_listings` with reason `listing_after_session`, and their count. Listings
+on the session date remain eligible; deferred stocks are reconsidered each run.
 A reconciliation that would exclude more than 5% of the pre-reconciliation
 mainboard universe fails before writing outputs, guarding against a truncated
 listing response. Stdout reports SME exclusions, unlisted exclusions and ISIN

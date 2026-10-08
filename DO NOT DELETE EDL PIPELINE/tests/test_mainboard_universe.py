@@ -65,7 +65,7 @@ class MainboardUniverseTests(unittest.TestCase):
                 with self.subTest(missing=missing):
                     path.write_text('SYMBOL,ISIN NUMBER\n' + ''.join(
                         f"{row['Symbol']},{row['ISIN']}\n" for row in master[:100 - missing]))
-                    with patch('filter_mainboard_universe.load_json', side_effect=[master, [{'Symbol': 'SME'}], raw]), \
+                    with patch('filter_mainboard_universe.load_json', side_effect=[master, [{'Symbol': 'SME'}], raw, {}]), \
                             patch('filter_mainboard_universe.resolve_path', return_value=path), \
                             patch('filter_mainboard_universe.save_json') as save:
                         if missing > 5:
@@ -76,6 +76,41 @@ class MainboardUniverseTests(unittest.TestCase):
                             self.assertTrue(main())
                             self.assertEqual(len(save.call_args_list[0].args[1]), 95)
                             self.assertEqual(save.call_args_list[-1].args[1]['excluded_unlisted_count'], 5)
+
+    def test_session_cutoff_filters_outputs_reports_deferrals_and_readmits_on_listing_day(self):
+        master = [{'Symbol': symbol, 'ISIN': f'INE{i}', 'Sid': i}
+                  for i, symbol in enumerate(('OLD', 'BOUNDARY', 'NITYAS', 'VNL', 'SME'), 1)]
+        raw = [{'Sym': row['Symbol']} for row in master]
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'nse_equity_list.csv'
+            path.write_text('SYMBOL,ISIN NUMBER,DATE OF LISTING\n'
+                            'OLD,INE1,06-OCT-2026\nBOUNDARY,INE2,07-OCT-2026\n'
+                            'NITYAS,INE3,08-OCT-2026\nVNL,INE4,08-OCT-2026\n')
+            for session in ('2026-10-07', '2026-10-08'):
+                with self.subTest(session=session), \
+                        patch('filter_mainboard_universe.nse_calendar_date', return_value='2026-10-08'), \
+                        patch('filter_mainboard_universe.load_json', side_effect=[master, [{'Symbol': 'SME'}], raw,
+                              {'as_of_date': session, 'retrieved_at': '2026-10-08T09:33:00+05:30'}]), \
+                        patch('filter_mainboard_universe.resolve_path', return_value=path), \
+                        patch('filter_mainboard_universe.save_json') as save:
+                    self.assertTrue(main())
+                    kept = ['OLD', 'BOUNDARY'] if session == '2026-10-07' else ['OLD', 'BOUNDARY', 'NITYAS', 'VNL']
+                    self.assertEqual([r['Symbol'] for r in save.call_args_list[0].args[1]], kept)
+                    self.assertEqual([r['Sym'] for r in save.call_args_list[1].args[1]], kept)
+                    report = save.call_args_list[-1].args[1]
+                    self.assertEqual(report['session_date'], session)
+                    self.assertEqual(report['excluded_unlisted_count'], 0)
+                    self.assertEqual(report['deferred_listing_count'], 2 if session == '2026-10-07' else 0)
+                    if session == '2026-10-07':
+                        self.assertEqual(report['deferred_listings'], [
+                            {'symbol': 'NITYAS', 'isin': 'INE3', 'listing_date': '2026-10-08', 'reason': 'listing_after_session'},
+                            {'symbol': 'VNL', 'isin': 'INE4', 'listing_date': '2026-10-08', 'reason': 'listing_after_session'},
+                        ])
+
+    def test_invalid_listing_date_does_not_silently_defer_or_admit_stock(self):
+        with self.assertRaises(ValueError):
+            reconcile_listed_universe([{'Symbol': 'TEST', 'ISIN': 'INE1'}],
+                [{'SYMBOL': 'TEST', 'ISIN NUMBER': 'INE1', 'DATE OF LISTING': 'invalid'}], '2026-10-07')
 
 
 if __name__ == "__main__":

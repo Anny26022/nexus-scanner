@@ -10,6 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from filter_mainboard_universe import filter_mainboard_universe, filter_rows_by_symbol, reconcile_listed_universe, main
+from ohlcv_utils import nse_calendar_date
 
 
 class MainboardUniverseTests(unittest.TestCase):
@@ -63,9 +64,10 @@ class MainboardUniverseTests(unittest.TestCase):
             path = Path(folder) / 'nse_equity_list.csv'
             for missing in (50, 6, 5):
                 with self.subTest(missing=missing):
-                    path.write_text('SYMBOL,ISIN NUMBER\n' + ''.join(
-                        f"{row['Symbol']},{row['ISIN']}\n" for row in master[:100 - missing]))
-                    with patch('filter_mainboard_universe.load_json', side_effect=[master, [{'Symbol': 'SME'}], raw]), \
+                    path.write_text('SYMBOL,ISIN NUMBER,DATE OF LISTING\n' + ''.join(
+                        f"{row['Symbol']},{row['ISIN']},01-JAN-2000\n" for row in master[:100 - missing]))
+                    bhavcopy = {'as_of_date': '2026-10-07', 'retrieved_at': nse_calendar_date() + 'T09:33:00+05:30'}
+                    with patch('filter_mainboard_universe.load_json', side_effect=[master, [{'Symbol': 'SME'}], raw, bhavcopy]), \
                             patch('filter_mainboard_universe.resolve_path', return_value=path), \
                             patch('filter_mainboard_universe.save_json') as save:
                         if missing > 5:
@@ -76,6 +78,36 @@ class MainboardUniverseTests(unittest.TestCase):
                             self.assertTrue(main())
                             self.assertEqual(len(save.call_args_list[0].args[1]), 95)
                             self.assertEqual(save.call_args_list[-1].args[1]['excluded_unlisted_count'], 5)
+
+    def test_new_listings_follow_completed_session_and_fail_closed_without_dates(self):
+        master = [{'Symbol': symbol, 'ISIN': isin, 'Sid': index}
+                  for index, (symbol, isin) in enumerate([('OLD', 'I1'), ('NITYAS', 'I2'), ('VNL', 'I3'), ('SME', 'I4')])]
+        raw = [{'Sym': row['Symbol']} for row in master]
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'nse_equity_list.csv'
+            path.write_text('SYMBOL,ISIN NUMBER,DATE OF LISTING\nOLD,I1,01-JAN-2000\nNITYAS,I2,08-OCT-2026\nVNL,I3,08-OCT-2026\n')
+            for session, kept in [('2026-10-07', ['OLD']), ('2026-10-08', ['OLD', 'NITYAS', 'VNL'])]:
+                with self.subTest(session=session), patch('filter_mainboard_universe.load_json', side_effect=[
+                    master, [{'Symbol': 'SME'}], raw, {'as_of_date': session, 'retrieved_at': '2026-10-08T16:00:00+05:30'}
+                ]), patch('filter_mainboard_universe.nse_calendar_date', return_value='2026-10-08'), \
+                        patch('filter_mainboard_universe.resolve_path', return_value=path), patch('filter_mainboard_universe.save_json') as save:
+                    self.assertTrue(main())
+                    retained = save.call_args_list[0].args[1]
+                    self.assertEqual([row['Symbol'] for row in retained], kept)
+                    self.assertEqual(retained[0], {**master[0], 'ListingDate': '2000-01-01'})
+                    self.assertEqual([row['Sym'] for row in save.call_args_list[1].args[1]], kept)
+                    report = save.call_args_list[-1].args[1]
+                    self.assertEqual(report['as_of_date'], session)
+                    self.assertEqual(report['deferred_new_listing_count'], 3 - len(kept))
+                    self.assertTrue(all(row['reason'] == 'listed_after_as_of_session' for row in report['deferred_new_listings']))
+            path.write_text(path.read_text().replace('08-OCT-2026', 'unknown'))
+            with patch('filter_mainboard_universe.load_json', side_effect=[master, [{'Symbol': 'SME'}], raw,
+                {'as_of_date': '2026-10-07', 'retrieved_at': '2026-10-08T09:33:00+05:30'}]), \
+                    patch('filter_mainboard_universe.nse_calendar_date', return_value='2026-10-08'), \
+                    patch('filter_mainboard_universe.resolve_path', return_value=path), patch('filter_mainboard_universe.save_json') as save:
+                with self.assertRaises(ValueError):
+                    main()
+                save.assert_not_called()
 
 
 if __name__ == "__main__":

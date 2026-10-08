@@ -75,9 +75,17 @@ labels, keyed by classifier inputs and classifier/mapping content. EOD2 retains
 the existing import behavior without a separate fingerprint checkpoint. The
 classification cache lives in the existing ignored history directory. Full indicator/count history is
 retained; only breadth contribution lists outside the published date window are
-omitted. IPO/reference fetches overlap the existing fetch lanes, while stock
-artifact writers remain ordered. Per-thread HTTP sessions reuse connections
-without increasing request concurrency or changing pagination.
+omitted. The existing three fetch lanes separate filings, OHLCV, and the smaller
+reference/enrichment fetches, avoiding a serial tail behind filings. Configured
+per-script worker limits and pagination remain unchanged. Stock artifact writers
+remain ordered; per-thread HTTP sessions reuse connections.
+
+The latest completed NSE bhavcopy is fetched before universe filtering. Securities
+listed after its session are deferred until that session is available and recorded
+in `mainboard_universe_report.json`. Missing or invalid source dates stop filtering.
+The master map retains each NSE `ListingDate`, which bounds new provider history
+requests without removing older cached candles. Canonical OHLCV dates use a fast
+ISO parser with the existing legacy-date fallback; calculations are unchanged.
 
 `pipeline_report.json` includes per-script validation time. Filing logs report
 load, PDF enrichment, classification and serialization times plus process peak
@@ -164,9 +172,9 @@ series are reported separately and never treated as IPO candidates.
 
 ### Pipeline Phases
 ```
-PHASE 1 (Core):       fetch_dhan_data.py → fetch_sme_data.py → filter_mainboard_universe.py → fetch_fundamental_data.py
-PHASE 2 (Enrichment): fetch_company_filings.py, fetch_market_news.py, fetch_all_indices.py, etc.
-PHASE 2.5 (OHLCV):    optional EOD2 bootstrap → official NSE close → ScanX fallback/live → index sync
+PHASE 1 (Core):       Dhan + SME → fresh NSE listings + bhavcopy → universe filter → fundamentals
+PHASE 2 (3 lanes):    filings | delivery history → EOD2 → NSE close → ScanX sync | references + other enrichment
+PHASE 2.5 (Indices): index history sync after all fetch lanes finish
 PHASE 3 (Analysis):   bulk_market_analyzer.py (creates base JSON)
 PHASE 4 (Injection):  advanced_metrics_processor.py → process_market_breadth.py → add_corporate_events.py (LAST!)
 PHASE 5 (Output):     gzip compression of final artifacts

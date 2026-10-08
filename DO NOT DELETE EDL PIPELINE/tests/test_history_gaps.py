@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 from apply_nse_daily_ohlcv import repair_official_history
 from fetch_all_ohlcv import expected_sessions_by_symbol, fetch_single_stock, has_official_history
-from ohlcv_utils import missing_history_sessions, plan_history_ranges, read_ohlcv_csv, write_ohlcv_csv
+from ohlcv_utils import missing_history_sessions, parse_history_date, plan_history_ranges, read_ohlcv_csv, write_ohlcv_csv
 from edl_pipeline.quality import inspect_breadth_history
 from edl_pipeline.artifacts import OHLCV_FETCH_LANE, PHASE2_SCRIPTS
 
@@ -25,6 +25,35 @@ def history():
 
 
 class HistoryGapTests(unittest.TestCase):
+    def test_fast_date_parser_preserves_legacy_dates_and_invalid_inputs(self):
+        for value in ['2026-10-07', '2026-1-7', '2024-02-29', '2023-02-29', '20261007', '', None, 42]:
+            with self.subTest(value=value):
+                try:
+                    expected = datetime.strptime(value, '%Y-%m-%d')
+                except (ValueError, TypeError) as error:
+                    with self.assertRaises(type(error)):
+                        parse_history_date(value)
+                else:
+                    self.assertEqual(parse_history_date(value), expected)
+
+    def test_requests_start_at_listing_date_without_trimming_older_cached_rows(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for existing in ([], [candle('2026-10-05')], [candle('2020-01-02'), candle('2026-10-05')]):
+                with self.subTest(existing=existing):
+                    write_ohlcv_csv(root / 'TEST.csv', existing)
+                    with patch('fetch_all_ohlcv.resolve_path', return_value=root), \
+                            patch('fetch_all_ohlcv.is_nse_cash_session', return_value=False), \
+                            patch('fetch_all_ohlcv.time.time', return_value=datetime(2026,10,8,18).timestamp()), \
+                            patch('fetch_all_ohlcv.fetch_history_chunk', return_value=[candle('2026-10-06'), candle('2026-10-07')]) as fetch:
+                        result = fetch_single_stock('TEST', dict(Exch='NSE', Seg='E', Inst='EQUITY', Sid=1,
+                            ListingDate='2026-10-05'), official_nse_session='2026-10-07', expected_sessions=['2026-10-06', '2026-10-07'])
+                    self.assertEqual(result, 'success')
+                    self.assertTrue(fetch.called)
+                    self.assertTrue(all(call.args[0]['START'] >= datetime(2026,10,5).timestamp() for call in fetch.call_args_list))
+                    if existing:
+                        self.assertEqual(read_ohlcv_csv(root / 'TEST.csv')[0]['Date'], existing[0]['Date'])
+
     def test_latest_official_candle_does_not_hide_internal_gaps(self):
         expected=['2026-09-25','2026-09-28','2026-09-29','2026-10-05','2026-10-06']
         self.assertFalse(has_official_history(history(),'2026-10-06',datetime(2022,1,1).timestamp(),expected))

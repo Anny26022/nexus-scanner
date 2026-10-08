@@ -124,13 +124,45 @@ class RunnerTests(unittest.TestCase):
                                 )
 
         self.assertEqual(code, 0)
-        expected_fetches = set(PHASE2_SCRIPTS) | set(OHLCV_FETCH_LANE) | {"fetch_indices_ohlcv.py"}
+        expected_fetches = set(PHASE2_SCRIPTS) | set(OHLCV_FETCH_LANE) | {"fetch_indices_ohlcv.py", "fetch_nse_delivery_data.py"}
         for script in expected_fetches:
             self.assertEqual(calls.count(script), 1, script)
         lane_positions = [calls.index(script) for script in OHLCV_FETCH_LANE]
         self.assertEqual(lane_positions, sorted(lane_positions))
         self.assertGreater(calls.index("fetch_indices_ohlcv.py"), calls.index("fetch_all_indices.py"))
         self.assertGreater(calls.index("fetch_indices_ohlcv.py"), calls.index("fetch_all_ohlcv.py"))
+        self.assertLess(calls.index('fetch_nse_delivery_data.py'), calls.index('filter_mainboard_universe.py'))
+
+    def test_completed_session_failure_stops_before_universe_filter(self):
+        def result(script, phase_label='', required=False):
+            return ScriptResult(script != 'fetch_nse_delivery_data.py', required)
+        with mock.patch('edl_pipeline.runner.run_script', side_effect=result) as run, \
+                mock.patch('edl_pipeline.runner.download_nse_listing_dates', return_value=True), \
+                mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(PipelineConfig()), 1)
+        self.assertNotIn('filter_mainboard_universe.py', [call.args[0] for call in run.call_args_list])
+        self.assertTrue(run.call_args.kwargs['required'])
+
+    def test_rebalanced_lanes_keep_filings_separate_and_fetches_unique(self):
+        captured = {}
+        def lanes(groups):
+            captured.update(groups)
+            return {name: {script: ScriptResult(script != 'fetch_all_ohlcv.py', required)
+                          for script, _, required in scripts} for name, scripts in groups.items()}
+        with mock.patch('edl_pipeline.runner.run_script', return_value=ScriptResult(True, True)), \
+                mock.patch('edl_pipeline.runner.run_script_lanes', side_effect=lanes), \
+                mock.patch('edl_pipeline.runner.download_nse_listing_dates', return_value=True), \
+                mock.patch('edl_pipeline.runner.save_json'), mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(PipelineConfig()), 1)
+        self.assertEqual([script for script, _, _ in captured['enrichment']], ['fetch_company_filings.py'])
+        expected = set(PHASE2_SCRIPTS) | set(OHLCV_FETCH_LANE) | {
+            'fetch_ipo_provider_data.py', 'fetch_scanx_ipo_data.py', 'refresh_official_index_constituents.py'}
+        seen = [script for scripts in captured.values() for script, _, _ in scripts]
+        self.assertEqual(set(seen), expected)
+        self.assertEqual(len(seen), len(expected))
+        self.assertEqual(len(captured), 3)
 
     def test_split_refresh_executes_the_same_scripts_once_and_resumes_checks(self):
         calls = []

@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import csv
 
 from pipeline_utils import load_json, resolve_path, save_json
+from ohlcv_utils import nse_calendar_date, parse_history_date
 
 
 MASTER_FILE = "master_isin_map.json"
@@ -85,11 +86,25 @@ def main():
     if excluded_rows == 0:
         raise ValueError("NSE SME source did not match any canonical securities")
 
+    bhavcopy = load_json('nse_delivery_data.json')
+    session = bhavcopy['as_of_date']
+    if (session != parse_history_date(session).date().isoformat() or session > nse_calendar_date()
+            or not str(bhavcopy.get('retrieved_at', '')).startswith(nse_calendar_date())):
+        raise ValueError('Universe filtering requires a freshly fetched completed NSE session')
     with resolve_path('nse_equity_list.csv').open(encoding='utf-8-sig', newline='') as handle:
-        mainboard_rows, unsupported, mismatches = reconcile_listed_universe(mainboard_rows, list(csv.DictReader(handle)))
+        nse_rows = [{key.strip(): value for key, value in row.items()} for row in csv.DictReader(handle)]
+        mainboard_rows, unsupported, mismatches = reconcile_listed_universe(mainboard_rows, nse_rows)
     candidate_count = len(mainboard_rows) + len(unsupported)
     if len(unsupported) > candidate_count * 0.05:
         raise ValueError(f'NSE listing reconciliation rejected: {len(unsupported)}/{candidate_count} symbols absent (over 5%)')
+
+    listing_dates = {normalise_symbol(row['SYMBOL']): datetime.strptime(
+        row['DATE OF LISTING'].strip(), '%d-%b-%Y').date().isoformat() for row in nse_rows}
+    deferred = [{'symbol': normalise_symbol(row['Symbol']), 'listing_date': listing_dates[normalise_symbol(row['Symbol'])],
+                 'reason': 'listed_after_as_of_session'} for row in mainboard_rows
+                if listing_dates[normalise_symbol(row['Symbol'])] > session]
+    mainboard_rows = [{**row, 'ListingDate': listing_dates[normalise_symbol(row['Symbol'])]} for row in mainboard_rows
+                     if listing_dates[normalise_symbol(row['Symbol'])] <= session]
 
     canonical_symbols = {normalise_symbol(row.get("Symbol")) for row in mainboard_rows}
     mainboard_scanx_rows = filter_rows_by_symbol(raw_scanx_rows, canonical_symbols, "Sym")
@@ -100,6 +115,9 @@ def main():
     save_json(MAINBOARD_SCANX_FILE, mainboard_scanx_rows)
     save_json(REPORT_FILE, {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "as_of_date": session,
+        "deferred_new_listings": deferred,
+        "deferred_new_listing_count": len(deferred),
         "source": "NSE SME market watch and EQUITY_L membership",
         "excluded_unlisted": unsupported,
         "excluded_unlisted_count": len(unsupported),
@@ -119,7 +137,7 @@ def main():
     print(
         f"Canonical universe: {len(mainboard_rows)} mainboard symbols "
         f"({excluded_rows} current SME and {len(unsupported)} unlisted symbols excluded; "
-        f"{len(mismatches)} ISIN discrepancies reported)."
+        f"{len(mismatches)} ISIN discrepancies reported; {len(deferred)} listings after {session} deferred)."
     )
     return True
 

@@ -265,7 +265,8 @@ jobs:
           git add frontend/public/data/current.json frontend/public/data/revisions
           git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
           git add frontend/public/data/tijori/current.json frontend/public/data/tijori/revisions
-          git commit -m "Automated weekly adjusted OHLCV refresh [skip ci]" || echo "No changes to commit"
+          # Published frontend data needs a Cloudflare build; do not suppress it with [skip ci].
+          git commit -m "Automated weekly adjusted OHLCV refresh" || echo "No changes to commit"
           git push
 
       - name: Upload Refresh Diagnostics

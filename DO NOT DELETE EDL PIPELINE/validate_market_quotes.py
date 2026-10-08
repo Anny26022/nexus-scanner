@@ -65,7 +65,8 @@ def main():
             report['retry_error'] = str(error)
         report['errors'] = quote_errors(rows, symbols)
     report['unavailable_candles'] = [
-        {'symbol': row['Sym'], 'reason': 'zero volume with no session OHLC', 'raw_quote': row}
+        {'symbol': row['Sym'], 'reason': 'zero volume with no session OHLC',
+         'ltp_session_verified': False, 'raw_quote': row}
         for row in rows if row.get('Sym') in symbols and unavailable_candle(row)]
     save_json('price_validation_report.json', report)
     if report['errors']:

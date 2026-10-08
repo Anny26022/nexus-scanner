@@ -122,10 +122,31 @@ class MarketQuoteTests(unittest.TestCase):
         from edl_pipeline.quality import ohlc_error
         for row in rows:
             stock = analyze_stock({'Symbol': row['Sym']}, row, {}, {})
-            self.assertEqual(stock['close'], row['Ltp'])
+            self.assertEqual(stock['Stock Price(₹)'], row['Ltp'])
+            self.assertIsNone(stock['close'])
+            self.assertIsNone(stock['rupee_volume'])
             self.assertEqual(stock['volume'], 0)
             self.assertTrue(all(stock[key] is None for key in ('open', 'high', 'low')))
             self.assertIsNone(ohlc_error(stock))
+
+    def test_unavailable_candle_never_promotes_old_or_undated_ltp_to_session_close(self):
+        from edl_pipeline.transforms.fundamentals import analyze_stock
+        for timestamp in ('2025-01-01T10:00:00Z', None):
+            with self.subTest(provider_timestamp=timestamp):
+                row = quote(Open=None, High=None, Low=None, Volume=0, provider_timestamp=timestamp)
+                code, rows, report, calls = self.run_validation([row])
+                self.assertEqual(code, 0)
+                self.assertEqual(calls, 0)
+                self.assertFalse(report['unavailable_candles'][0]['ltp_session_verified'])
+                self.assertEqual(report['unavailable_candles'][0]['raw_quote']['provider_timestamp'], timestamp)
+                stock = analyze_stock({'Symbol': row['Sym']}, rows[0], {}, {})
+                self.assertEqual(stock['Stock Price(₹)'], row['Ltp'])
+                self.assertIsNone(stock['close'])
+                self.assertIsNone(stock['rupee_volume'])
+        for volume in (0, 100):
+            stock = analyze_stock({'Symbol': 'BI'}, quote(Volume=volume), {}, {})
+            self.assertEqual(stock['close'], 11)
+            self.assertEqual(stock['rupee_volume'], 11 * volume)
 
     def test_unavailable_candle_exception_does_not_accept_malformed_or_traded_quotes(self):
         for values in ({'Volume': 1}, {'Volume': None}, {'Volume': -1}, {'Ltp': 0},

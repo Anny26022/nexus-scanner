@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+from collections import defaultdict
 from datetime import date
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -57,6 +58,16 @@ def _write_gzip_json(path: Path, payload: dict) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def _observations_by_symbol(observations):
+    # Keep one-shot iterables on the original path; normal ledgers are lists.
+    if not isinstance(observations, (list, tuple)):
+        return None
+    grouped = defaultdict(list)
+    for observation in observations:
+        grouped[str(observation.get("symbol") or "").upper()].append(observation)
+    return grouped
+
+
 def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: dict, as_of_date: str,
                    earnings_observations=None, shareholding_observations=None) -> Path:
     """Persist only fields that influence scanner conditions for one session."""
@@ -67,6 +78,10 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
         candidate = next((item for item in payload.get("records", []) if item.get("date") == session), None)
         if candidate: breadth_universes[key] = candidate
     snapshot_stocks = []
+    earnings_by_symbol = holdings_by_symbol = None
+    if any(stock.get("symbol") for stock in stocks):
+        earnings_by_symbol = _observations_by_symbol(earnings_observations)
+        holdings_by_symbol = _observations_by_symbol(shareholding_observations)
     for stock in stocks:
         if not stock.get("symbol"):
             continue
@@ -85,14 +100,17 @@ def build_snapshot(cache_dir: Path, stocks: list[dict], breadth: dict, fno_ban: 
         # only for their own snapshot session unless dated history replaces them.
         for field in SHAREHOLDING_CHANGE_FIELDS:
             item[field] = stock.get(field) if stock.get("as_of_date") == session else None
-        observation = select_observation(earnings_observations or [], stock["symbol"], session)
+        symbol = str(stock["symbol"]).upper()
+        earnings = earnings_by_symbol.get(symbol, []) if earnings_by_symbol is not None else earnings_observations or []
+        observation = select_observation(earnings, stock["symbol"], session)
         if observation:
             # The selected values are now truly date-bounded, even if the
             # current provider snapshot has advanced to a newer quarter.
             item.update({field: observation.get(field) for field in EARNINGS_FIELDS})
             item["latest_earnings_date"] = observation["announcement_date"]
             item["earnings_observed_on"] = observation.get("observed_on")
-        holding = select_shareholding_observation(shareholding_observations or [], stock["symbol"], session)
+        holdings = holdings_by_symbol.get(symbol, []) if holdings_by_symbol is not None else shareholding_observations or []
+        holding = select_shareholding_observation(holdings, stock["symbol"], session)
         if holding:
             item.update({field: holding.get(field) for field in SHAREHOLDING_FIELDS.values()})
             item.update({field: holding.get(field) for field in SHAREHOLDING_CHANGE_FIELDS})

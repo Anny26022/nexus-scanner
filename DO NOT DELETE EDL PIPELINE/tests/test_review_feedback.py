@@ -17,6 +17,7 @@ from json_records import record_artifact
 from announcement_artifacts import build_announcements
 import build_chart_artifacts as charts
 import import_eod2_ohlcv as eod2
+import filing_archives
 from edl_pipeline import runner
 from edl_pipeline.config import PipelineConfig
 
@@ -112,6 +113,66 @@ class ReviewFeedbackTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), expected.getvalue().encode())
             with mock.patch.object(Path, 'write_bytes', side_effect=AssertionError('unchanged write')):
                 eod2.write_csv_if_changed(path, rows, eod2.OHLCV_FIELDS)
+
+    def test_announcement_failure_interrupts_chart_wait_and_cancels_bounded_queue(self):
+        announcement = Future()
+        futures = []
+        executor = mock.Mock()
+        def submit(function, chunk):
+            future = Future()
+            futures.append(future)
+            return future
+        def wait(waiting, **kwargs):
+            self.assertIn(announcement, waiting)
+            announcement.set_exception(ValueError('malformed filings'))
+            return {announcement}, set(futures)
+        executor.submit.side_effect = submit
+        with mock.patch.object(charts, 'ProcessPoolExecutor', return_value=executor), \
+                mock.patch.object(charts, 'wait', side_effect=wait):
+            with self.assertRaisesRegex(ValueError, 'malformed filings'):
+                charts._parallel_chart_objects(list(range(5000)), 2, announcement)
+        self.assertEqual(len(futures), 4)
+        self.assertTrue(all(future.cancelled() for future in futures))
+        executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+        # The single-core path must also stop before generating another object
+        # and leave the previously published chart directory intact.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            output = root / 'chart_artifacts'
+            output.mkdir()
+            index = output / 'index.json'
+            index.write_text('retained')
+            stocks = [{'symbol': symbol, 'as_of_date': '2026-10-08'} for symbol in ('A', 'B')]
+            background = mock.MagicMock()
+            background.__enter__.return_value.submit.return_value = announcement
+            def artifact(root, name, default):
+                return stocks if name == 'all_stocks_fundamental_analysis.json' else default
+            with mock.patch.object(charts, 'BASE_DIR', folder), \
+                    mock.patch.object(charts, '_artifact', side_effect=artifact), \
+                    mock.patch.object(charts, 'ThreadPoolExecutor', return_value=background), \
+                    mock.patch.object(charts.os, 'cpu_count', return_value=1), \
+                    mock.patch.object(charts, '_chart_object') as build:
+                with self.assertRaisesRegex(ValueError, 'malformed filings'):
+                    charts.main()
+            build.assert_not_called()
+            self.assertEqual(index.read_text(), 'retained')
+
+    def test_archive_manifest_partial_write_does_not_replace_existing_index(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            directory = root / 'prepared'
+            directory.mkdir()
+            index = directory / 'index.json'
+            index.write_text('{"classified":"previous"}')
+            original_write = Path.write_text
+            def fail_write(path, text, **kwargs):
+                original_write(path, text[:1], **kwargs)
+                raise OSError('disk full')
+            with mock.patch.object(Path, 'write_text', fail_write):
+                with self.assertRaisesRegex(OSError, 'disk full'):
+                    filing_archives.prepare_filing_archives(root, directory)
+            self.assertEqual(index.read_text(), '{"classified":"previous"}')
+            self.assertEqual(list(directory.iterdir()), [index])
 
 
 if __name__ == '__main__':

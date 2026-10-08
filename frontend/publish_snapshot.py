@@ -13,6 +13,7 @@ from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
+from edl_pipeline.scanner.calculation_cache import calculation_cache
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
 
@@ -97,8 +98,11 @@ def publish(root=bridge.ROOT, output=OUTPUT):
             if key not in memo:
                 memo[key]=bridge.evaluate(node,stock,frame,context,session,set(),delivery.get(symbol,[]))
             return memo[key]
-        row['presetMatches']={key:evaluate(node) for key,node in presets.items()}
-        default_count += evaluate(default) is True
+        # Frames/benchmarks remain immutable while all presets for this stock
+        # reuse their underlying series, alignment and persistence state.
+        with calculation_cache():
+            row['presetMatches']={key:evaluate(node) for key,node in presets.items()}
+            default_count += evaluate(default) is True
         rows.append(row)
     cache.save_frames(root)
     code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py")]

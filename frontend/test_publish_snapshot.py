@@ -1,4 +1,5 @@
 import gzip
+from contextlib import nullcontext
 import json
 from pathlib import Path
 import tempfile
@@ -12,6 +13,28 @@ from scanner_cache import ScannerCache
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def test_calculation_reuse_preserves_all_presets_and_publication_bytes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'edl'; root.mkdir()
+            self.fixture(root)
+            # Include sufficient full history and non-flat candles to exercise
+            # all 45 presets, moving averages and persistence modes.
+            import numpy as np
+            close = 100 + np.arange(300) / 10 + np.sin(np.arange(300) / 7) * 5
+            frame = pd.DataFrame({'Date': pd.bdate_range(end='2026-09-30', periods=300),
+                                  'Open': close, 'High': close + 2, 'Low': close - 2,
+                                  'Close': close, 'Volume': 100.})
+            frame.to_csv(root / 'ohlcv_data/TEST.csv', index=False)
+            baseline_output, cached_output = Path(folder) / 'baseline', Path(folder) / 'cached'
+            with patch('publish_snapshot.calculation_cache', side_effect=nullcontext):
+                baseline = publish(root, baseline_output)
+            cached = publish(root, cached_output)
+            self.assertEqual(cached, baseline)
+            def files(output):
+                return {str(path.relative_to(output)): path.read_bytes()
+                        for path in output.rglob('*') if path.is_file()}
+            self.assertEqual(files(cached_output), files(baseline_output))
+
     def test_publishes_ownership_values_and_preserves_old_revision(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir();output=Path(folder)/'public';self.fixture(root)

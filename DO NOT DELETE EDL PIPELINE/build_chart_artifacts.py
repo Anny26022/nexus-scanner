@@ -18,6 +18,7 @@ import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, wait, FIRST_COMPLETED
 import os
 from multiprocessing import get_context
+from functools import lru_cache
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -55,7 +56,11 @@ def _artifact(root: Path, name: str, default):
 
 
 def _date(value):
-    value = str(value or "")[:10]
+    return _parsed_date(str(value or "")[:10])
+
+
+@lru_cache(maxsize=16384)
+def _parsed_date(value):
     try:
         return datetime.strptime(value, "%Y-%m-%d").date().isoformat()
     except ValueError:
@@ -188,13 +193,15 @@ def _chart_chunk(tasks):
     return [_chart_object(task) for task in tasks]
 
 
-def _parallel_chart_objects(tasks, workers):
+def _parallel_chart_objects(tasks, workers, announcement=None):
     """Bound queued work and notice failures independently of result order."""
     executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'))
     chunks = iter(enumerate(tasks[start:start + 8] for start in range(0, len(tasks), 8)))
     pending, completed = {}, {}
     def refill():
         while len(pending) < 2 * workers:
+            if announcement is not None and announcement.done():
+                announcement.result()
             item = next(chunks, None)
             if item is None:
                 break
@@ -203,7 +210,16 @@ def _parallel_chart_objects(tasks, workers):
     try:
         refill()
         while pending:
-            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            waiting = set(pending)
+            if announcement is not None:
+                if announcement.done():
+                    announcement.result()
+                else:
+                    waiting.add(announcement)
+            done, _ = wait(waiting, return_when=FIRST_COMPLETED)
+            if announcement is not None and announcement.done():
+                announcement.result()
+                done.discard(announcement)
             for future in done:
                 index = pending.pop(future)
                 completed[index] = future.result()
@@ -262,9 +278,13 @@ def main() -> int:
         cpus = os.cpu_count() or 1
         workers = max(1, min(2, cpus - 1))
         if cpus > 1 and len(tasks) >= 32:
-            chart_objects.update(_parallel_chart_objects(tasks, workers))
+            chart_objects.update(_parallel_chart_objects(tasks, workers, announcement))
         else:
-            chart_objects.update(map(_chart_object, tasks))
+            for task in tasks:
+                if announcement.done():
+                    announcement.result()
+                symbol, digest = _chart_object(task)
+                chart_objects[symbol] = digest
         announcements = announcement.result()
     count = len(tasks)
     index = {"schemaVersion": 2, "asOfDate": as_of, "symbols": count,

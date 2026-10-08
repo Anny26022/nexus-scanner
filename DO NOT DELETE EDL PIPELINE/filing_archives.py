@@ -33,5 +33,8 @@ def prepare_filing_archives(root, directory):
             digest = file_digest(temporary)
             temporary.replace(directory / (digest + '.json.gz'))
             archives[name] = digest
-    (directory / 'index.json').write_text(json.dumps(archives, separators=(',', ':')))
+    with tempfile.TemporaryDirectory(dir=directory) as folder:
+        temporary = Path(folder) / 'index.json'
+        temporary.write_text(json.dumps(archives, separators=(',', ':')))
+        temporary.replace(directory / 'index.json')
     return archives

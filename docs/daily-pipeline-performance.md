@@ -64,9 +64,31 @@ separate compression, validation, promotion, archive preparation and upload.
   once, schedule required builds ahead of optional reference work, report both
   archive failures, and include the streaming/archive helpers in wheel builds.
 
+## Targeted scanner follow-up
+
+- Index earnings and shareholding observations once by symbol, then use the
+  original selectors on each ordered bucket. Date bounds, ties, adjacent-quarter
+  changes and precision are unchanged; one-shot iterables retain the old path.
+- Bound chart date parsing to 16,384 cached normalized strings per process.
+  The original coercion, truncation and `strptime` acceptance remain unchanged.
+- Reuse moving averages, benchmark alignment and full-history extreme-reset
+  replay during one immutable stock's preset evaluation. Cache scope ends after
+  that stock, so corrected history and different benchmarks cannot reuse stale
+  results. The original calculation bodies and persistence rules are retained.
+- Observe announcement failures while chart chunks are queued/running (and
+  between serial objects), cancelling the bounded pending window before more
+  work is submitted. Replace prepared archive manifests atomically so a partial
+  write cannot become a handoff manifest. Successful artifact bytes are unchanged.
+
+No earlier scanner-history scheduling was added: it writes into the retained
+history cache shared with the published checkout. Moving those writes before
+existing failure gates would require rollback handling. Additional EOD2 worker
+pools, publication concurrency, breadth rewrites and filing-storage changes are
+deferred until profiling demonstrates sufficient benefit for their complexity.
+
 ## Evidence and limits
 
-Python 3.12.14: 416 pipeline tests (one existing macOS skip), 48 frontend Python
+Python 3.12.14: 424 pipeline tests (one existing macOS skip), 49 frontend Python
 tests and 68 JavaScript tests pass; the production frontend build also succeeds.
 Coverage includes cache corruption, chunk boundaries, malformed/non-finite JSON,
 gzip CRC/truncation/extra-member failures, EOD2 re-overlay, real process workers,
@@ -90,6 +112,26 @@ including the same six missing histories. This verifies equivalence; it does
 not certify that the local snapshot meets live publication coverage gates.
 Use `--limit 0` for the full comparison. Measurements are local macOS/Python
 3.12, not a forecast of Linux daily-job runtime.
+
+Targeted follow-up measurements against the preceding PR revision, using frozen
+local data on the same runtime:
+
+- Full in-memory scanner-context construction for 2,605 stocks, 2,431 earnings
+  observations and 52,801 shareholding observations: 10.1956s to 0.0807s, with
+  identical serialized payload SHA256. Excludes ledger merging, gzip and disk.
+- Candle loading and volume-event construction for 100 CSVs / 223,415 candles:
+  three interleaved runs, median 1.0242s to 0.5140s, identical payload SHA256.
+  This excludes announcements, compression and other chart-stage work.
+- All 45 presets over 100 local histories: three interleaved runs, median
+  3.3647s to 2.2194s (34.04% lower), identical result SHA256. Each history uses
+  its own last session and delivery is omitted equally on both paths; this is
+  a CPU component comparison, not a live-publication timing.
+
+Regression tests also compare every publication file byte (including gzip,
+packed data and manifest/revision) with calculation reuse enabled versus
+disabled, and cover nested/error cache cleanup, input identity and NaN warmup.
+Code changes still intentionally change the existing code-derived revision
+fingerprint; equivalence does not mean retaining a previous code revision ID.
 
 No new source-cache sharding format, provider-concurrency change, incremental
 indicator state or stock-enrichment rewrite was introduced. Those broader

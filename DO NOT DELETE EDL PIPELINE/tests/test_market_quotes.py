@@ -63,7 +63,9 @@ class MarketQuoteTests(unittest.TestCase):
     def test_retry_failures_missing_fields_and_identity_changes_fail_closed(self):
         original = [quote(Ltp=20)]
         for retry in ([quote(Ltp=20)], [], [quote(Isin='DIFFERENT')],
-                      [quote(Sid='DIFFERENT')], [quote(High=None)], RuntimeError('provider unavailable')):
+                      [quote(Sid='DIFFERENT')], [quote(High=None)], [quote(Volume=None)],
+                      [{key: value for key, value in quote().items() if key != 'Volume'}],
+                      RuntimeError('provider unavailable')):
             with self.subTest(retry=retry):
                 code, rows, report, calls = self.run_validation(original, retry)
                 self.assertEqual(code, 1)
@@ -73,6 +75,34 @@ class MarketQuoteTests(unittest.TestCase):
                 self.assertEqual(report['errors'][0]['error'], 'inconsistent OHLC')
                 self.assertEqual(report['rejected'][0]['ohlcv'],
                                  {'open': 10, 'high': 12, 'low': 9, 'close': 20, 'volume': 100})
+
+    def test_missing_initial_ohlcv_fields_are_retried_or_rejected(self):
+        for field in ('Open', 'High', 'Low', 'Ltp', 'Volume'):
+            for missing in ('absent', None, 'invalid'):
+                with self.subTest(field=field, missing=missing):
+                    row = quote(**{field: missing})
+                    if missing == 'absent':
+                        row.pop(field)
+                    original = [row]
+                    for retry, expected_code in (([quote()], 0), (original, 1)):
+                        code, rows, report, calls = self.run_validation(original, retry)
+                        self.assertEqual(code, expected_code)
+                        self.assertEqual(calls, 1)
+                        self.assertEqual(rows, retry if code == 0 else original)
+                        self.assertIn('missing OHLCV fields', report['rejected'][0]['error'])
+
+    def test_partial_retry_keeps_original_inputs_and_records_remaining_errors(self):
+        original = [quote('BI', Ltp=20), quote('EIFFL', Open=20), quote('VALID')]
+        for unresolved in (quote('EIFFL', Open=20), quote('EIFFL', Sid='DIFFERENT')):
+            with self.subTest(unresolved=unresolved):
+                retry = [quote('BI'), unresolved]
+                code, rows, report, calls = self.run_validation(original, retry)
+                self.assertEqual(code, 1)
+                self.assertEqual(calls, 1)
+                self.assertEqual(rows, original)
+                self.assertEqual([row['symbol'] for row in report['errors']], ['EIFFL'])
+                self.assertEqual(report['retry_quotes'], retry)
+                self.assertEqual([row['symbol'] for row in report['rejected']], ['BI', 'EIFFL'])
 
     def test_nonpositive_prices_and_invalid_volume_use_publication_policy(self):
         for values in ({'High': 0}, {'Volume': -1}):

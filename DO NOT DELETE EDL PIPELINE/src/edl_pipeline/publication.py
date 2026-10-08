@@ -157,7 +157,10 @@ def main(phase="all", stage_path=None):
         # Preserve rejected raw quotes even when the temporary refresh fails.
         price_report = stage / 'price_validation_report.json'
         if price_report.is_file():
-            atomic_copy(price_report, destination / price_report.name)
+            try:
+                atomic_copy(price_report, destination / price_report.name)
+            except OSError as error:
+                print(f'Warning: could not preserve optional price diagnostics: {error}')
         report = pipeline_utils.load_json(report_path, default={})
         if result.returncode != 0 or not config.fetch_ohlcv:
             report["published"] = False

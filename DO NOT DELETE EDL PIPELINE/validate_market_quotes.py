@@ -18,7 +18,8 @@ def quote_errors(rows, symbols):
         values = {key: get_optional_float(row.get(source)) for key, source in
                   (('open', 'Open'), ('high', 'High'), ('low', 'Low'), ('close', 'Ltp'))}
         values['volume'] = get_optional_float(row.get('Volume', row.get('volume')))
-        error = ohlc_error(values)
+        missing = [key for key, value in values.items() if value is None]
+        error = ('missing OHLCV fields: ' + ', '.join(missing)) if missing else ohlc_error(values)
         if error:
             rejected.append({'symbol': row['Sym'], 'error': error, 'ohlcv': values, 'raw_quote': row})
     return rejected
@@ -47,8 +48,8 @@ def main():
             for row in rows:
                 replacement = replacements.get((row.get('Sym'), row.get('Isin'), str(row.get('Sid'))))
                 if row.get('Sym') in affected and replacement is not None:
-                    # Missing fields cannot make a previously invalid candle pass.
-                    if all(get_optional_float(replacement.get(key)) is not None for key in ('Open', 'High', 'Low', 'Ltp')):
+                    # Apply the same completeness and consistency policy to retries.
+                    if not quote_errors([replacement], affected):
                         row = replacement
                 refreshed.append(row)
             rows = refreshed

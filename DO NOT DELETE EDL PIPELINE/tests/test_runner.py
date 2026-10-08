@@ -156,6 +156,24 @@ class RunnerTests(unittest.TestCase):
                 main(phase='build')
             run.assert_not_called()
 
+    def test_required_fetch_failure_stops_before_index_and_build(self):
+        failed = ScriptResult(False, True, error='missing sessions')
+        lanes = {
+            'enrichment': {'fetch_company_filings.py': ScriptResult(True, True)},
+            'ohlcv': {'fetch_all_ohlcv.py': failed},
+            'reference': {},
+        }
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch('edl_pipeline.runner.BASE_DIR', directory), \
+                mock.patch('edl_pipeline.runner.run_script_lanes', return_value=lanes), \
+                mock.patch('edl_pipeline.runner.run_script', return_value=ScriptResult(True, True)) as run, \
+                mock.patch('edl_pipeline.runner.download_nse_listing_dates'), \
+                mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(PipelineConfig(cleanup_intermediate=False)), 1)
+        self.assertNotIn('fetch_indices_ohlcv.py', [call.args[0] for call in run.call_args_list])
+        self.assertNotIn('bulk_market_analyzer.py', [call.args[0] for call in run.call_args_list])
+
     def test_required_output_validation_failure_marks_script_failed(self):
         completed = mock.Mock(returncode=0)
         failed_check = ArtifactCheck("required.json", "json", False, "missing")

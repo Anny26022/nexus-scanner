@@ -9,6 +9,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
+from apply_nse_daily_ohlcv import repair_official_history
 from fetch_all_ohlcv import expected_sessions_by_symbol, fetch_single_stock, has_official_history
 from ohlcv_utils import missing_history_sessions, plan_history_ranges, read_ohlcv_csv, write_ohlcv_csv
 from edl_pipeline.quality import inspect_breadth_history
@@ -50,6 +51,38 @@ class HistoryGapTests(unittest.TestCase):
             with patch('fetch_all_ohlcv.resolve_path',return_value=Path(folder)), patch('fetch_all_ohlcv.is_nse_cash_session',return_value=False), patch('fetch_all_ohlcv.time.time',return_value=datetime(2026,10,6,18).timestamp()), patch('fetch_all_ohlcv.fetch_history_chunk',return_value=[]):
                 with self.assertRaisesRegex(ValueError, 'required history sessions missing'):
                     fetch_single_stock('TEST',{'Exch':'NSE','Seg':'E','Inst':'EQUITY','Sid':1},official_nse_session='2026-10-06',expected_sessions=['2026-09-28','2026-10-06'])
+
+    def test_official_recovery_fills_only_the_evidenced_missing_candle(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            write_ohlcv_csv(root / 'TEST.csv', [candle('2026-09-28')])
+            fetched = []
+
+            def official(day, _session):
+                fetched.append(day.isoformat())
+                return [
+                    {'symbol': 'OTHER', 'series': 'EQ', 'date': day.isoformat(),
+                     'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1},
+                    {'symbol': 'TEST', 'series': 'EQ', 'date': day.isoformat(),
+                     'open': 20, 'high': 22, 'low': 19, 'close': 21, 'volume': 200},
+                ]
+
+            self.assertEqual(repair_official_history({'TEST': {'2026-09-28', '2026-09-29'}}, root, official), 1)
+            self.assertEqual(fetched, ['2026-09-29'])
+            rows = {row['Date']: row for row in read_ohlcv_csv(root / 'TEST.csv')}
+            self.assertEqual(float(rows['2026-09-28']['Close']), 11)
+            self.assertEqual(float(rows['2026-09-29']['Close']), 21)
+
+    def test_official_recovery_leaves_provider_fallback_when_nse_has_no_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            write_ohlcv_csv(root / 'TEST.csv', [candle('2026-09-28')])
+            with patch('apply_nse_daily_ohlcv.requests.Session'), \
+                    patch('builtins.print'):
+                self.assertEqual(repair_official_history(
+                    {'TEST': {'2026-09-28', '2026-09-29'}}, root,
+                    lambda *_: (_ for _ in ()).throw(ValueError('not published'))), 0)
+            self.assertEqual([row['Date'] for row in read_ohlcv_csv(root / 'TEST.csv')], ['2026-09-28'])
 
     def test_expected_sessions_use_only_dated_official_security_records(self):
         with tempfile.TemporaryDirectory() as folder:

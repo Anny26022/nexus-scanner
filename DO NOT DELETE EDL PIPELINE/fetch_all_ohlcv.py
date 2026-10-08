@@ -1,5 +1,5 @@
 import requests
-from pipeline_utils import http_session
+from apply_nse_daily_ohlcv import repair_official_history
 import os
 import sys
 import time
@@ -23,7 +23,7 @@ from ohlcv_utils import (
     symbol_csv_path,
     write_ohlcv_csv,
 )
-from pipeline_utils import ensure_dir, fetch_scanx_data, get_headers, load_json, resolve_path
+from pipeline_utils import ensure_dir, fetch_scanx_data, get_headers, http_session, load_json, resolve_path
 
 # --- Configuration ---
 MASTER_FILE = "master_isin_map.json"
@@ -220,6 +220,8 @@ def main():
     expected_sessions = expected_sessions_by_symbol(
         resolve_path("delivery_history_data"), stocks, nse_session or nse_calendar_date()
     )
+
+    repair_official_history(expected_sessions, resolve_path(OUTPUT_DIR))
 
     print(f"Syncing OHLCV for {len(stocks)} stocks (Hybrid Multi-Chunk Mode)...")
     counts = {"success": 0, "uptodate": 0, "error": 0}

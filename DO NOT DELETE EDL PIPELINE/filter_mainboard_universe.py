@@ -7,8 +7,9 @@ market-watch symbols.
 """
 
 from datetime import datetime, timezone
+import csv
 
-from pipeline_utils import load_json, save_json
+from pipeline_utils import load_json, resolve_path, save_json
 
 
 MASTER_FILE = "master_isin_map.json"
@@ -44,6 +45,26 @@ def filter_rows_by_symbol(rows, allowed_symbols, symbol_key):
     ]
 
 
+def reconcile_listed_universe(master_rows, nse_rows):
+    """Require a matching NSE symbol and ISIN; report unsupported provider rows."""
+    listings = {normalise_symbol(row.get('SYMBOL')): normalise_symbol(row.get('ISIN NUMBER'))
+                for raw in nse_rows for row in [{key.strip(): value for key, value in raw.items()}]
+                if row.get('SYMBOL') and row.get('ISIN NUMBER')}
+    if not listings:
+        raise ValueError('NSE equity list has no usable symbol/ISIN pairs')
+    retained, excluded = [], []
+    for row in master_rows:
+        symbol, isin = normalise_symbol(row.get('Symbol')), normalise_symbol(row.get('ISIN'))
+        if symbol in listings and isin and listings[symbol] == isin:
+            retained.append(row)
+        else:
+            excluded.append({'symbol': symbol, 'isin': isin, 'nse_isin': listings.get(symbol),
+                             'reason': 'absent_from_nse_equity_list' if symbol not in listings else 'isin_mismatch'})
+    if not retained:
+        raise ValueError('NSE listing reconciliation removed every canonical security')
+    return retained, excluded
+
+
 def main():
     master_rows = load_json(MASTER_FILE)
     sme_rows = load_json(SME_FILE)
@@ -59,6 +80,9 @@ def main():
     if excluded_rows == 0:
         raise ValueError("NSE SME source did not match any canonical securities")
 
+    with resolve_path('nse_equity_list.csv').open(encoding='utf-8-sig', newline='') as handle:
+        mainboard_rows, unsupported = reconcile_listed_universe(mainboard_rows, list(csv.DictReader(handle)))
+
     canonical_symbols = {normalise_symbol(row.get("Symbol")) for row in mainboard_rows}
     mainboard_scanx_rows = filter_rows_by_symbol(raw_scanx_rows, canonical_symbols, "Sym")
     if not mainboard_scanx_rows:
@@ -68,7 +92,9 @@ def main():
     save_json(MAINBOARD_SCANX_FILE, mainboard_scanx_rows)
     save_json(REPORT_FILE, {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "source": "NSE SME market watch",
+        "source": "NSE SME market watch and EQUITY_L symbol/ISIN reconciliation",
+        "excluded_unlisted_or_mismatched": unsupported,
+        "excluded_unlisted_or_mismatched_count": len(unsupported),
         "raw_scanx_count": len(master_rows),
         "nse_sme_symbol_count": len(sme_symbols),
         "excluded_sme_count": excluded_rows,

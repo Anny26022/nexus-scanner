@@ -183,7 +183,7 @@ def download_nse_listing_dates():
             reader = csv.DictReader(handle)
             headers = {header.strip() for header in reader.fieldnames or []}
             valid_rows = sum(1 for _ in reader)
-        if result.returncode == 0 and {"SYMBOL", "NAME OF COMPANY"} <= headers and valid_rows >= 1000:
+        if result.returncode == 0 and {"SYMBOL", "NAME OF COMPANY", "ISIN NUMBER"} <= headers and valid_rows >= 1000:
             temporary_path.replace(csv_path)
             print("  OK NSE Listing Dates downloaded.")
             return True
@@ -351,6 +351,11 @@ def main(config=None, phase="all"):
             )
             return 1
 
+        if not download_nse_listing_dates():
+            results['nse_equity_list.csv'] = ScriptResult(False, True, error='Fresh NSE listing validation failed')
+            write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
+            return 1
+
         results["filter_mainboard_universe.py"] = run_script(
             "filter_mainboard_universe.py", "Phase 1", required=True
         )
@@ -370,7 +375,6 @@ def main(config=None, phase="all"):
             )
             return 1
 
-        download_nse_listing_dates()
         results["reconcile_nse_equity_universe.py"] = run_script(
             "reconcile_nse_equity_universe.py", "Phase 1", required=False
         )
@@ -404,6 +408,15 @@ def main(config=None, phase="all"):
             results.update(lane_results["ohlcv"])
             results.update(lane_results["reference"])
 
+            # A required fetch failure cannot produce a valid dataset. Stop
+            # here instead of spending the build phase on outputs that will be
+            # rejected, while retaining the report for the next retry.
+            if any(result.required and not result.ok for result in results.values()):
+                report = build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1)
+                save_json(checkpoint_path, report)
+                write_pipeline_report(report)
+                return 1
+
             print("\nPHASE 2.5: Index OHLCV (after index-list fetch)")
             print("-" * 40)
             results["fetch_indices_ohlcv.py"] = run_script(
@@ -421,8 +434,8 @@ def main(config=None, phase="all"):
 
             results.update(run_script_sequence(reference_scripts))
 
-        if phase == 'fetch':
-            failed = any(result.required and not result.ok for result in results.values())
+        failed = any(result.required and not result.ok for result in results.values())
+        if phase == 'fetch' or failed:
             report = build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, int(failed))
             save_json(checkpoint_path, report)
             write_pipeline_report(report)

@@ -183,7 +183,7 @@ def download_nse_listing_dates():
             reader = csv.DictReader(handle)
             headers = {header.strip() for header in reader.fieldnames or []}
             valid_rows = sum(1 for _ in reader)
-        if result.returncode == 0 and {"SYMBOL", "NAME OF COMPANY", "ISIN NUMBER"} <= headers and valid_rows >= 1000:
+        if result.returncode == 0 and {"SYMBOL", "NAME OF COMPANY", "ISIN NUMBER", "DATE OF LISTING"} <= headers and valid_rows >= 1000:
             temporary_path.replace(csv_path)
             print("  OK NSE Listing Dates downloaded.")
             return True
@@ -359,6 +359,12 @@ def main(config=None, phase="all"):
             write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
             return 1
 
+        # Establish the completed session before any consumer sees the universe.
+        results['fetch_nse_delivery_data.py'] = run_script('fetch_nse_delivery_data.py', 'Phase 1', required=True)
+        if not results['fetch_nse_delivery_data.py'].ok:
+            write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
+            return 1
+
         results["filter_mainboard_universe.py"] = run_script(
             "filter_mainboard_universe.py", "Phase 1", required=True
         )
@@ -390,13 +396,12 @@ def main(config=None, phase="all"):
             enrichment_scripts = [
                 (script, "Phase 2 / enrichment lane", script in REQUIRED_PHASE2_SCRIPTS)
                 for script in PHASE2_SCRIPTS
-                if script != "fetch_nse_delivery_data.py"
             ]
             ohlcv_scripts = [
                 (
                     script,
                     "Phase 2 / OHLCV lane",
-                    script != "fetch_nse_delivery_data.py",
+                    True,
                 )
                 for script in OHLCV_FETCH_LANE
             ]

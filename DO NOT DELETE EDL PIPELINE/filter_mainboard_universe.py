@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import csv
 
 from pipeline_utils import load_json, resolve_path, save_json
+from ohlcv_utils import nse_calendar_date
 
 
 MASTER_FILE = "master_isin_map.json"
@@ -45,14 +46,14 @@ def filter_rows_by_symbol(rows, allowed_symbols, symbol_key):
     ]
 
 
-def reconcile_listed_universe(master_rows, nse_rows):
-    """Require current NSE membership; report identity differences without rewriting them."""
+def reconcile_listed_universe(master_rows, nse_rows, session_date=None):
+    """Require NSE membership as of the session; retain provider identifiers."""
     listings = {}
     for raw in nse_rows:
         row = {key.strip(): value for key, value in raw.items()}
         symbol, isin = normalise_symbol(row.get('SYMBOL')), normalise_symbol(row.get('ISIN NUMBER'))
         if symbol and isin:
-            listings[symbol] = isin
+            listings[symbol] = row
     if not listings:
         raise ValueError('NSE equity list has no usable symbol/ISIN pairs')
     retained, excluded, mismatches = [], [], []
@@ -61,9 +62,16 @@ def reconcile_listed_universe(master_rows, nse_rows):
         if symbol not in listings:
             excluded.append({'symbol': symbol, 'isin': isin, 'reason': 'absent_from_nse_equity_list'})
             continue
+        listing = listings[symbol]
+        if session_date:
+            listing_date = datetime.strptime(listing['DATE OF LISTING'].strip(), '%d-%b-%Y').date().isoformat()
+            if listing_date > session_date:
+                excluded.append({'symbol': symbol, 'isin': isin, 'listing_date': listing_date,
+                                 'reason': 'listing_after_session'})
+                continue
         retained.append(row)
-        if isin != listings[symbol]:
-            mismatches.append({'symbol': symbol, 'isin': isin, 'nse_isin': listings[symbol],
+        if isin != listing['ISIN NUMBER'].strip().upper():
+            mismatches.append({'symbol': symbol, 'isin': isin, 'nse_isin': listing['ISIN NUMBER'].strip().upper(),
                                'reason': 'isin_mismatch' if isin else 'missing_provider_isin'})
     if not retained:
         raise ValueError('NSE listing reconciliation removed every canonical security')
@@ -85,9 +93,18 @@ def main():
     if excluded_rows == 0:
         raise ValueError("NSE SME source did not match any canonical securities")
 
+    staged = load_json('nse_delivery_data.json', default={})
+    session_date = staged.get('as_of_date')
+    if not session_date or not str(staged.get('retrieved_at', '')).startswith(nse_calendar_date()):
+        raise ValueError('Universe filtering requires a freshly fetched completed NSE session')
+    session_date = datetime.strptime(session_date, '%Y-%m-%d').date().isoformat()
+    if session_date > nse_calendar_date():
+        raise ValueError('NSE session cannot be in the future')
+    candidate_count = len(mainboard_rows)
     with resolve_path('nse_equity_list.csv').open(encoding='utf-8-sig', newline='') as handle:
-        mainboard_rows, unsupported, mismatches = reconcile_listed_universe(mainboard_rows, list(csv.DictReader(handle)))
-    candidate_count = len(mainboard_rows) + len(unsupported)
+        mainboard_rows, excluded, mismatches = reconcile_listed_universe(mainboard_rows, list(csv.DictReader(handle)), session_date)
+    unsupported = [row for row in excluded if row['reason'] == 'absent_from_nse_equity_list']
+    deferred = [row for row in excluded if row['reason'] == 'listing_after_session']
     if len(unsupported) > candidate_count * 0.05:
         raise ValueError(f'NSE listing reconciliation rejected: {len(unsupported)}/{candidate_count} symbols absent (over 5%)')
 
@@ -101,6 +118,9 @@ def main():
     save_json(REPORT_FILE, {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": "NSE SME market watch and EQUITY_L membership",
+        "session_date": session_date,
+        "deferred_listings": deferred,
+        "deferred_listing_count": len(deferred),
         "excluded_unlisted": unsupported,
         "excluded_unlisted_count": len(unsupported),
         "isin_mismatches": mismatches,
@@ -119,6 +139,7 @@ def main():
     print(
         f"Canonical universe: {len(mainboard_rows)} mainboard symbols "
         f"({excluded_rows} current SME and {len(unsupported)} unlisted symbols excluded; "
+        f"{len(deferred)} later listings deferred for session {session_date}; "
         f"{len(mismatches)} ISIN discrepancies reported)."
     )
     return True

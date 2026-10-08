@@ -97,7 +97,6 @@ PHASE2_SCRIPTS = [
     "fetch_bulk_block_deals.py",
     "fetch_incremental_price_bands.py",
     "fetch_complete_price_bands.py",
-    "fetch_nse_delivery_data.py",
     "fetch_nse_fno_ban.py",
     "fetch_all_indices.py",
 ]
@@ -119,7 +118,6 @@ REQUIRED_PHASE2_SCRIPTS = frozenset(
 OHLCV_FETCH_LANE = (
     "fetch_nse_delivery_history.py",
     "import_eod2_ohlcv.py",
-    "fetch_nse_delivery_data.py",
     "apply_nse_daily_ohlcv.py",
     "fetch_all_ohlcv.py",
 )

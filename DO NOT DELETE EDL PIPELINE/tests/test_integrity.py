@@ -370,14 +370,14 @@ class IntegrityTests(unittest.TestCase):
             root=Path(tmp);stage=root/'stage';stage.mkdir();dest=root/'dest';dest.mkdir()
             for name in ('a','b'):
                 (stage/name).write_text('new');(dest/name).write_text('old')
-            from pipeline_utils import atomic_replace_bytes
+            from edl_pipeline.publication import atomic_copy
             calls=0
-            def failing(path, data):
+            def failing(source, path):
                 nonlocal calls
                 calls+=1
                 if calls==2:raise OSError('disk failure')
-                atomic_replace_bytes(path,data)
-            with mock.patch('edl_pipeline.publication.atomic_replace_bytes',side_effect=failing):
+                atomic_copy(source,path)
+            with mock.patch('edl_pipeline.publication.atomic_copy',side_effect=failing):
                 with self.assertRaises(OSError):promote(stage,dest,['a','b'])
             self.assertEqual([(dest/name).read_text() for name in ('a','b')], ['old','old'])
 

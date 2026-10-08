@@ -1,4 +1,9 @@
 import sys
+import copy
+import threading
+from concurrent.futures import ThreadPoolExecutor
+import pipeline_utils
+from filing_classification import classify_filings
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +21,61 @@ from pipeline_utils import load_json, save_json
 
 
 class FilingHistoryTests(unittest.TestCase):
+    def test_cache_ignores_attempt_time_and_survives_empty_inputs_or_write_errors(self):
+        filings = [{'caption': 'Dividend approved', 'documentExtraction': {
+            'status': 'failed', 'attemptedAt': 'old', 'pages': []}}]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            expected = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            saved = path.read_bytes()
+            self.assertEqual(build_filing_history_artifact.classify_cached([], path, ['rules']), [])
+            self.assertEqual(path.read_bytes(), saved)
+            revised = copy.deepcopy(filings)
+            revised[0]['documentExtraction']['attemptedAt'] = 'new'
+            with mock.patch.object(build_filing_history_artifact, 'classify_filing') as classify:
+                observed = build_filing_history_artifact.classify_cached(revised, path, ['rules'])
+                self.assertEqual(observed[0]['classification'], expected[0]['classification'])
+                classify.assert_not_called()
+            with mock.patch.object(build_filing_history_artifact, 'save_json', side_effect=OSError('disk full')):
+                observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['new rules'])
+                self.assertEqual(observed, expected)
+            self.assertEqual(path.read_bytes(), saved)
+
+    def test_classification_cache_preserves_merged_labels_and_invalidates_inputs(self):
+        filings = [
+            {'news_id': 'one', 'caption': 'Dividend approved', 'descriptor': 'Dividend', 'file_url': 'https://example.com/a.pdf'},
+            {'news_id': 'two', 'caption': 'Dividend approved', 'descriptor': 'Board Meeting', 'file_url': 'https://example.com/a.pdf'},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            expected = classify_filings(copy.deepcopy(filings))
+            self.assertEqual(build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules']), expected)
+            with mock.patch.object(build_filing_history_artifact, 'classify_filing', wraps=build_filing_history_artifact.classify_filing) as classify:
+                self.assertEqual(build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules']), expected)
+                classify.assert_not_called()
+                for change in ('caption', 'documentExtraction', 'descriptor'):
+                    revised = copy.deepcopy(filings)
+                    revised[0][change] = {'status': 'ok', 'pages': ['Dividend approved']} if change == 'documentExtraction' else 'Results announced'
+                    self.assertEqual(build_filing_history_artifact.classify_cached(revised, path, ['rules']), classify_filings(copy.deepcopy(revised)))
+                self.assertGreaterEqual(classify.call_count, 3)
+                classify.reset_mock()
+                build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['new rules'])
+                classify.assert_called()
+            path.write_text('{broken')
+            self.assertEqual(build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules']), expected)
+
+    def test_http_sessions_are_reused_per_thread_not_shared(self):
+        barrier = threading.Barrier(2)
+        def worker():
+            first = pipeline_utils.http_session()
+            barrier.wait(timeout=5)
+            self.assertIs(first, pipeline_utils.http_session())
+            return first
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            one = pool.submit(worker)
+            two = pool.submit(worker)
+            self.assertIsNot(one.result(), two.result())
+
     def test_first_fetch_backfills_every_lodr_page_then_deduplicates(self):
         pages = iter([
             ([{"news_id": "legacy", "news_date": "2026-09-01"}], 1, None),

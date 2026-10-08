@@ -9,6 +9,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
+from apply_nse_daily_ohlcv import repair_official_history
 from fetch_all_ohlcv import expected_sessions_by_symbol, fetch_single_stock, has_official_history
 from ohlcv_utils import missing_history_sessions, plan_history_ranges, read_ohlcv_csv, write_ohlcv_csv
 from edl_pipeline.quality import inspect_breadth_history
@@ -50,6 +51,86 @@ class HistoryGapTests(unittest.TestCase):
             with patch('fetch_all_ohlcv.resolve_path',return_value=Path(folder)), patch('fetch_all_ohlcv.is_nse_cash_session',return_value=False), patch('fetch_all_ohlcv.time.time',return_value=datetime(2026,10,6,18).timestamp()), patch('fetch_all_ohlcv.fetch_history_chunk',return_value=[]):
                 with self.assertRaisesRegex(ValueError, 'required history sessions missing'):
                     fetch_single_stock('TEST',{'Exch':'NSE','Seg':'E','Inst':'EQUITY','Sid':1},official_nse_session='2026-10-06',expected_sessions=['2026-09-28','2026-10-06'])
+
+    def test_official_recovery_fills_only_the_evidenced_missing_candle(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            write_ohlcv_csv(root / 'TEST.csv', [candle('2026-09-28')])
+            fetched = []
+
+            def official(day, _session):
+                fetched.append(day.isoformat())
+                return [
+                    {'symbol': 'OTHER', 'series': 'EQ', 'date': day.isoformat(),
+                     'open': 1, 'high': 1, 'low': 1, 'close': 1, 'volume': 1},
+                    {'symbol': 'TEST', 'series': 'EQ', 'date': day.isoformat(),
+                     'open': 20, 'high': 22, 'low': 19, 'close': 21, 'volume': 200},
+                ]
+
+            self.assertEqual(repair_official_history({'TEST': {'2026-09-28', '2026-09-29'}}, root, official,
+                                                   adjusted_through={'TEST': '2026-09-28'}), 1)
+            self.assertEqual(fetched, ['2026-09-29'])
+            rows = {row['Date']: row for row in read_ohlcv_csv(root / 'TEST.csv')}
+            self.assertEqual(float(rows['2026-09-28']['Close']), 11)
+            self.assertEqual(float(rows['2026-09-29']['Close']), 21)
+
+    def test_official_recovery_leaves_provider_fallback_when_nse_has_no_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            write_ohlcv_csv(root / 'TEST.csv', [candle('2026-09-28')])
+            with patch('apply_nse_daily_ohlcv.requests.Session'), \
+                    patch('builtins.print'):
+                self.assertEqual(repair_official_history(
+                    {'TEST': {'2026-09-28', '2026-09-29'}}, root,
+                    lambda *_: (_ for _ in ()).throw(ValueError('not published')),
+                    adjusted_through={'TEST': '2026-09-28'}), 0)
+            self.assertEqual([row['Date'] for row in read_ohlcv_csv(root / 'TEST.csv')], ['2026-09-28'])
+
+    def test_recovery_skips_adjusted_and_unknown_bases_and_batches_safe_gaps(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for symbol in ('ADJUSTED', 'UNKNOWN'):
+                write_ohlcv_csv(root / f'{symbol}.csv', [dict(Date='2026-09-25',
+                    Open=5, High=6, Low=4, Close=5, Volume=100)])
+            expected = {symbol: {'2026-09-28', '2026-09-29', '2026-09-30'}
+                        for symbol in ('ADJUSTED', 'UNKNOWN', 'EMPTY')}
+
+            def official(day, _session):
+                return [dict(symbol=symbol, series='EQ', date=day.isoformat(),
+                             open=20, high=22, low=19, close=21, volume=200)
+                        for symbol in expected]
+
+            with patch('apply_nse_daily_ohlcv.read_ohlcv_csv', wraps=read_ohlcv_csv) as read, \
+                    patch('apply_nse_daily_ohlcv.write_ohlcv_csv', wraps=write_ohlcv_csv) as write:
+                self.assertEqual(repair_official_history(expected, root, official,
+                    adjusted_through={'ADJUSTED': '2026-09-28'}), 5)
+            self.assertEqual(read.call_count, 3)
+            self.assertEqual(write.call_count, 2)
+            adjusted = read_ohlcv_csv(root / 'ADJUSTED.csv')
+            self.assertEqual([row['Date'] for row in adjusted], ['2026-09-25', '2026-09-29', '2026-09-30'])
+            self.assertEqual(float(adjusted[0]['Close']), 5)
+            self.assertEqual(len(read_ohlcv_csv(root / 'UNKNOWN.csv')), 1)
+            self.assertEqual(len(read_ohlcv_csv(root / 'EMPTY.csv')), 3)
+
+    def test_recovery_write_failure_keeps_other_symbols_retryable(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+
+            def write(path, rows):
+                if path.name == 'LOCKED.csv':
+                    raise OSError('locked')
+                write_ohlcv_csv(path, rows)
+
+            def official(day, _session):
+                return [dict(symbol=symbol, series='EQ', date=day.isoformat(),
+                             open=10, high=12, low=9, close=11, volume=100)
+                        for symbol in ('LOCKED', 'OK')]
+
+            with patch('apply_nse_daily_ohlcv.write_ohlcv_csv', side_effect=write):
+                self.assertEqual(repair_official_history(
+                    {'LOCKED': {'2026-09-28'}, 'OK': {'2026-09-28'}}, root, official), 1)
+            self.assertFalse((root / 'LOCKED.csv').exists())
+            self.assertEqual(len(read_ohlcv_csv(root / 'OK.csv')), 1)
 
     def test_expected_sessions_use_only_dated_official_security_records(self):
         with tempfile.TemporaryDirectory() as folder:

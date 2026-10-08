@@ -1,4 +1,5 @@
 import requests
+from apply_nse_daily_ohlcv import repair_official_history
 import os
 import sys
 import time
@@ -22,7 +23,7 @@ from ohlcv_utils import (
     symbol_csv_path,
     write_ohlcv_csv,
 )
-from pipeline_utils import ensure_dir, fetch_scanx_data, get_headers, load_json, resolve_path
+from pipeline_utils import ensure_dir, fetch_scanx_data, get_headers, http_session, load_json, resolve_path
 
 # --- Configuration ---
 MASTER_FILE = "master_isin_map.json"
@@ -112,7 +113,7 @@ def fetch_history_chunk(payload):
     last_error = None
     for attempt in range(FETCH_ATTEMPTS):
         try:
-            response = requests.post(
+            response = http_session().post(
                 TICK_API_URL,
                 json=payload,
                 headers=get_headers(include_origin=True),
@@ -219,6 +220,13 @@ def main():
     expected_sessions = expected_sessions_by_symbol(
         resolve_path("delivery_history_data"), stocks, nse_session or nse_calendar_date()
     )
+
+    try:
+        eod2 = load_json('eod2_ohlcv_import_report.json', default={})
+        adjusted_through = {symbol: item['end_date'] for symbol, item in eod2.get('symbol_history', {}).items()}
+        repair_official_history(expected_sessions, resolve_path(OUTPUT_DIR), adjusted_through=adjusted_through)
+    except (OSError, requests.RequestException, ValueError, TypeError, KeyError, AttributeError) as error:
+        print(f'Official gap recovery skipped: {error}; continuing with provider sync.', flush=True)
 
     print(f"Syncing OHLCV for {len(stocks)} stocks (Hybrid Multi-Chunk Mode)...")
     counts = {"success": 0, "uptodate": 0, "error": 0}

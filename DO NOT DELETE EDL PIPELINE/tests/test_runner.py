@@ -2,6 +2,8 @@ import contextlib
 import io
 import sys
 import threading
+import tempfile
+from collections import Counter
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -48,6 +50,14 @@ class RunnerTests(unittest.TestCase):
             with mock.patch("edl_pipeline.runner.write_pipeline_report"):
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(main(PipelineConfig(fetch_ohlcv=False, fetch_optional=False, cleanup_intermediate=False)), 1)
+
+    def test_listing_download_failure_stops_before_universe_filter(self):
+        with mock.patch('edl_pipeline.runner.run_script', return_value=ScriptResult(True, True)) as run, \
+                mock.patch('edl_pipeline.runner.download_nse_listing_dates', return_value=False), \
+                mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(PipelineConfig()), 1)
+        self.assertNotIn('filter_mainboard_universe.py', [call.args[0] for call in run.call_args_list])
 
     def test_main_respects_ohlcv_and_optional_flags(self):
         calls = []
@@ -121,6 +131,65 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(lane_positions, sorted(lane_positions))
         self.assertGreater(calls.index("fetch_indices_ohlcv.py"), calls.index("fetch_all_indices.py"))
         self.assertGreater(calls.index("fetch_indices_ohlcv.py"), calls.index("fetch_all_ohlcv.py"))
+
+    def test_split_refresh_executes_the_same_scripts_once_and_resumes_checks(self):
+        calls = []
+        def run(script, phase_label='', required=False):
+            calls.append(script)
+            return ScriptResult(True, required, validations=[ArtifactCheck('fixture', 'json', True)])
+        config = PipelineConfig(cleanup_intermediate=False)
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch('edl_pipeline.runner.BASE_DIR', directory), \
+                mock.patch('edl_pipeline.runner.run_script', side_effect=run), \
+                mock.patch('edl_pipeline.runner.download_nse_listing_dates'), \
+                mock.patch('edl_pipeline.runner.compress_output', return_value=(100, 10)), \
+                mock.patch('edl_pipeline.runner.validate_final_artifacts', return_value=[]), \
+                mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(config), 0)
+            expected = Counter(calls)
+            calls.clear()
+            self.assertEqual(main(config, phase='fetch'), 0)
+            self.assertNotIn('bulk_market_analyzer.py', calls)
+            self.assertTrue((Path(directory) / 'fetch_checkpoint.json').exists())
+            self.assertEqual(main(config, phase='build'), 0)
+            self.assertEqual(Counter(calls), expected)
+            self.assertTrue(all(count == 1 for count in expected.values()))
+
+    def test_build_rejects_failed_fetch_checkpoint(self):
+        with mock.patch('edl_pipeline.runner.pipeline_utils.load_json', return_value={
+                'config': {'fetch_ohlcv': True, 'fetch_optional': False, 'cleanup_intermediate': True},
+                'exit_code': 1}), mock.patch('edl_pipeline.runner.run_script') as run:
+            with self.assertRaises(ValueError):
+                main(PipelineConfig(fetch_ohlcv=True, fetch_optional=False, cleanup_intermediate=True), phase='build')
+            run.assert_not_called()
+
+    def test_build_rejects_missing_or_malformed_checkpoint_clearly(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch('edl_pipeline.runner.BASE_DIR', directory):
+            for content in (None, '{broken', '[]'):
+                path = Path(directory) / 'fetch_checkpoint.json'
+                if content is not None:
+                    path.write_text(content)
+                with self.assertRaisesRegex(ValueError, 'Cannot build from a missing'):
+                    main(PipelineConfig(), phase='build')
+
+    def test_required_fetch_failure_stops_before_index_and_build(self):
+        failed = ScriptResult(False, True, error='missing sessions')
+        lanes = {
+            'enrichment': {'fetch_company_filings.py': ScriptResult(True, True)},
+            'ohlcv': {'fetch_all_ohlcv.py': failed},
+            'reference': {},
+        }
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch('edl_pipeline.runner.BASE_DIR', directory), \
+                mock.patch('edl_pipeline.runner.run_script_lanes', return_value=lanes), \
+                mock.patch('edl_pipeline.runner.run_script', return_value=ScriptResult(True, True)) as run, \
+                mock.patch('edl_pipeline.runner.download_nse_listing_dates'), \
+                mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(PipelineConfig(cleanup_intermediate=False)), 1)
+        self.assertNotIn('fetch_indices_ohlcv.py', [call.args[0] for call in run.call_args_list])
+        self.assertNotIn('bulk_market_analyzer.py', [call.args[0] for call in run.call_args_list])
 
     def test_required_output_validation_failure_marks_script_failed(self):
         completed = mock.Mock(returncode=0)

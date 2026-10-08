@@ -7,6 +7,8 @@
 """
 
 import gzip
+import hashlib
+import threading
 import json
 import math
 import os
@@ -17,6 +19,27 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import requests
+
+_http_local = threading.local()
+
+
+def http_session():
+    """Reuse connections within each fetch thread without sharing mutable sessions."""
+    if not hasattr(_http_local, "session"):
+        _http_local.session = requests.Session()
+    return _http_local.session
+
+
+def file_fingerprint(path):
+    path = Path(path)
+    if not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
 
 def _default_base_path():
     module_dir = Path(__file__).resolve().parent

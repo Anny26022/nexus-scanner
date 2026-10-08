@@ -1,8 +1,11 @@
 """Apply the staged official NSE full-bhavcopy candle to the local OHLCV cache."""
 
 from pathlib import Path
+from datetime import date
+import requests
 
-from ohlcv_utils import merge_rows_by_date, nse_calendar_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
+from ohlcv_utils import discard_invalid_ohlcv_rows, discard_weekend_rows, missing_history_sessions, merge_rows_by_date, nse_calendar_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
+from nse_delivery import fetch_ohlcv_file_for_date
 from pipeline_utils import BASE_DIR, load_json, save_json
 
 
@@ -34,6 +37,51 @@ def apply_official_ohlcv(master, records, output_dir):
         write_ohlcv_csv(destination, merge_rows_by_date([*read_ohlcv_csv(destination), candle]))
         applied += 1
     return applied
+
+
+def repair_official_history(expected, output_dir, fetcher=fetch_ohlcv_file_for_date, adjusted_through=None):
+    """Batch evidenced gaps outside known adjusted history; unknown bases are skipped."""
+    missing_by_date, existing_by_symbol, recovered = {}, {}, {}
+    adjusted_through = adjusted_through or {}
+    skipped = 0
+    for symbol, sessions in expected.items():
+        rows = discard_invalid_ohlcv_rows(discard_weekend_rows(read_ohlcv_csv(symbol_csv_path(output_dir, symbol))))
+        boundary = adjusted_through.get(symbol)
+        gaps = missing_history_sessions(rows, sessions)
+        if rows and not boundary:
+            skipped += len(gaps)
+            continue  # Previously restored CSVs may be adjusted; do not infer their basis.
+        for day in gaps:
+            if boundary and day <= boundary:
+                skipped += 1
+                continue
+            missing_by_date.setdefault(day, set()).add(symbol)
+            existing_by_symbol[symbol] = rows
+    with requests.Session() as session:
+        for day, symbols in sorted(missing_by_date.items()):
+            try:
+                records = fetcher(date.fromisoformat(day), session)
+            except (requests.RequestException, ValueError) as error:
+                print(f"Official gap recovery unavailable for {day}: {error}; trying provider fallback.", flush=True)
+                continue
+            for row in records:
+                symbol = row['symbol']
+                if symbol not in symbols or row['date'] != day or row.get('series') != 'EQ':
+                    continue
+                candle = {'Date': day, **{field: row[field.lower()] for field in ('Open', 'High', 'Low', 'Close', 'Volume')}}
+                if not discard_invalid_ohlcv_rows([candle]):
+                    continue
+                recovered.setdefault(symbol, []).append(candle)
+    repaired = 0
+    for symbol, candles in recovered.items():
+        try:
+            write_ohlcv_csv(symbol_csv_path(output_dir, symbol), merge_rows_by_date([*existing_by_symbol[symbol], *candles]))
+            repaired += len(candles)
+        except OSError as error:
+            print(f'Official gap recovery not saved for {symbol}: {error}; trying provider fallback.', flush=True)
+    print(f"Official history recovery: {repaired} candles across {len(missing_by_date)} requested sessions; "
+          f"{skipped} gaps deferred to provider sync because their price basis is adjusted or unknown.", flush=True)
+    return repaired
 
 
 def main():

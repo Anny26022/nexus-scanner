@@ -41,6 +41,58 @@ The same flags can be overridden without editing source:
 EDL_FETCH_OHLCV=0 EDL_CLEANUP_INTERMEDIATE=0 python3 run_full_pipeline.py
 ```
 
+### Refresh checkpoints and runtime
+
+Daily and weekly Actions use the same runner in two phases:
+
+```bash
+python3 run_full_pipeline.py --phase fetch --stage /tmp/edl-refresh-example
+python3 run_full_pipeline.py --phase build --stage /tmp/edl-refresh-example
+```
+
+Use a new stage directory and the same configuration for both commands. Fetch
+writes a validated checkpoint without publishing; build resumes it, validates
+all final artifacts, publishes, and removes the stage on success. The default
+command still runs both phases together. Failed stages remain available for
+inspection; start a new fetch for a new trading session.
+
+Actions restore separate price and enrichment caches first. The previous
+combined cache is used only when both split caches miss; a partial miss keeps
+the newer cache and rebuilds the missing group from sources. This prevents
+older combined files from being merged into newer cache contents.
+They save incremental history after successful or failed fetch attempts before
+build, then save updated enrichment caches even if build fails. Cache-save failures do
+not block publication. Eviction or an interrupted save can still require a
+backfill; these caches are an optimization, not durable storage.
+
+Historical Actions cache-save steps for October 4 and 6 took 4–6 seconds for
+the combined history cache and 0–4 seconds for the EOD2 checkout (a cache hit
+can skip upload). These step times include packaging and upload. New split-cache
+upload times remain unmeasured until a full refresh runs with this configuration.
+
+Filing classifications are cached per symbol after merging duplicate source
+labels, keyed by classifier inputs and classifier/mapping content. EOD2 retains
+the existing import behavior without a separate fingerprint checkpoint. The
+classification cache lives in the existing ignored history directory. Full indicator/count history is
+retained; only breadth contribution lists outside the published date window are
+omitted. IPO/reference fetches overlap the existing fetch lanes, while stock
+artifact writers remain ordered. Per-thread HTTP sessions reuse connections
+without increasing request concurrency or changing pagination.
+
+`pipeline_report.json` includes per-script validation time. Filing logs report
+load, PDF enrichment, classification and serialization times plus process peak
+RSS. Publication keeps rollback copies on disk instead of loading all old and
+new artifacts into RAM. The filing archive and validators still load JSON in
+memory; this does not eliminate every memory cost. Measure the next full Actions
+run before claiming an overall speedup.
+
+Official NSE gap recovery loads each symbol once and writes its recovered
+candles together. Raw prices are accepted only after the symbol's adjusted
+EOD2 history boundary, or into an empty cache. Gaps within adjusted history or
+an existing cache with an unknown price basis remain for provider sync and
+the existing completeness checks. Recovery I/O failures also fall through to
+provider sync; they do not bypass validation.
+
 ### Optional EOD2 historical bootstrap
 
 The normal daily refresh uses the official NSE full bhavcopy for the latest
@@ -90,6 +142,19 @@ fundamentals, OHLCV, breadth, rankings, or scanner artifacts. The retained
 `sme_market_data.json.gz` is source coverage only; no SME symbol appears in
 the scanner universe. `mainboard_universe_report.json` records the raw,
 excluded, and final counts for each refresh.
+
+Membership requires a symbol in the freshly validated NSE equity list after
+SME exclusion. Absent symbols are reported under `excluded_unlisted`. Listed
+symbols with different provider/NSE ISINs remain eligible and are reported under
+`isin_mismatches`; reconciliation does not overwrite their ISIN or security ID.
+Each entry distinguishes `isin_mismatch` from `missing_provider_isin` via its
+`reason` field.
+A reconciliation that would exclude more than 5% of the pre-reconciliation
+mainboard universe fails before writing outputs, guarding against a truncated
+listing response. Stdout reports SME exclusions, unlisted exclusions and ISIN
+discrepancy counts.
+A listing download/validation failure stops the refresh instead of filtering
+against stale data. NSE-only listings still require provider enrichment.
 
 `nse_universe_reconciliation.json` reports NSE
 `EQ` listings that are absent from ScanX; they remain pending until ScanX

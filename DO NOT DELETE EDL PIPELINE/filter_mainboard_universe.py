@@ -63,7 +63,8 @@ def reconcile_listed_universe(master_rows, nse_rows):
             continue
         retained.append(row)
         if isin != listings[symbol]:
-            mismatches.append({'symbol': symbol, 'isin': isin, 'nse_isin': listings[symbol]})
+            mismatches.append({'symbol': symbol, 'isin': isin, 'nse_isin': listings[symbol],
+                               'reason': 'isin_mismatch' if isin else 'missing_provider_isin'})
     if not retained:
         raise ValueError('NSE listing reconciliation removed every canonical security')
     return retained, excluded, mismatches
@@ -86,6 +87,9 @@ def main():
 
     with resolve_path('nse_equity_list.csv').open(encoding='utf-8-sig', newline='') as handle:
         mainboard_rows, unsupported, mismatches = reconcile_listed_universe(mainboard_rows, list(csv.DictReader(handle)))
+    candidate_count = len(mainboard_rows) + len(unsupported)
+    if len(unsupported) > candidate_count * 0.05:
+        raise ValueError(f'NSE listing reconciliation rejected: {len(unsupported)}/{candidate_count} symbols absent (over 5%)')
 
     canonical_symbols = {normalise_symbol(row.get("Symbol")) for row in mainboard_rows}
     mainboard_scanx_rows = filter_rows_by_symbol(raw_scanx_rows, canonical_symbols, "Sym")

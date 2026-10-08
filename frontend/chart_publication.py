@@ -136,6 +136,21 @@ def prepare_archives(chart_root):
     """Back up complete histories without loading another full archive in memory."""
     root = chart_root.parent
     archives = {}
+    prepared = chart_root / '.prepared_archives'
+    if (prepared / 'index.json').is_file():
+        archives = json.loads((prepared / 'index.json').read_text())
+        if not isinstance(archives, dict) or set(archives) - {'classified', 'raw'}:
+            raise RuntimeError('Invalid prepared filing archives')
+        for digest in archives.values():
+            if not re.fullmatch(r'[a-f0-9]{64}', str(digest)):
+                raise RuntimeError('Invalid prepared archive hash')
+            source = prepared / (digest + '.json.gz')
+            if file_digest(source) != digest:
+                raise RuntimeError('Prepared archive content does not match its hash')
+        for digest in archives.values():
+            destination = chart_root / 'objects' / (digest + '.json.gz')
+            destination.parent.mkdir(exist_ok=True)
+            shutil.copyfile(prepared / destination.name, destination)
     inputs = {'classified': root / 'filing_history.json.gz',
               'raw': root / 'filing_history_data' / 'filing_history.json'}
     def pack(item):
@@ -155,9 +170,19 @@ def prepare_archives(chart_root):
                 temporary.replace(destination)
             return name, digest
     with ThreadPoolExecutor(max_workers=2) as executor:
-        for name, digest in executor.map(pack, inputs.items()):
-            if digest is not None:
-                archives[name] = digest
+        futures = [(name, executor.submit(pack, (name, source)))
+                   for name, source in inputs.items() if name not in archives]
+        errors = []
+        for name, future in futures:
+            try:
+                _, digest = future.result()
+                if digest is not None:
+                    archives[name] = digest
+            except Exception as error:
+                print(f'Filing archive {name} failed: {error}', flush=True)
+                errors.append(error)
+        if errors:
+            raise errors[0]
     return archives
 
 

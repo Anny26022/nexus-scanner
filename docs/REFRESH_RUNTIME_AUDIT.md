@@ -194,10 +194,10 @@ cd 'DO NOT DELETE EDL PIPELINE'
 PYTHONPATH='.:src:tests' python3 -m unittest discover -s tests
 ```
 
-The baseline is the repository's published pre-optimization parent commit
-`3f346e45045d50d413ea3f75d8b2f87fc721074d`. Its compared filing/breadth sources
-are byte-identical to the audited revision. A shallow checkout must fetch that
-revision before running the benchmark (`git fetch origin 3f346e45045d50d413ea3f75d8b2f87fc721074d`).
+The baseline is the audited daily-run revision
+`9868bdeeb75a1e76dc9cf394d4e6133d20a7d179`, matching the benchmark tool's
+`BASELINE`. A shallow checkout must fetch that revision before running the
+benchmark (`git fetch origin 9868bdeeb75a1e76dc9cf394d4e6133d20a7d179`).
 The benchmark verifies unchanged
 formula dependencies and refuses to report equivalence if those have changed.
 Benchmark files and classification caches are disposable temporary files, not

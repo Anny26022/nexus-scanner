@@ -31,9 +31,18 @@ def fingerprint(value):
 
 def history_fingerprint(filings):
     # Retry timestamps/errors are publication metadata, not identity or evidence.
-    return fingerprint([{**row, 'documentExtraction': {
-        key: value for key, value in row['documentExtraction'].items() if key not in {'attemptedAt', 'error'}
-    }} if isinstance(row.get('documentExtraction'), dict) else row for row in filings])
+    # Hash the identical canonical array bytes without cloning/encoding another
+    # complete company history. Existing classification-cache keys stay valid.
+    digest = hashlib.sha256(b'[')
+    for index, row in enumerate(filings):
+        if index:
+            digest.update(b', ')
+        if isinstance(row.get('documentExtraction'), dict):
+            row = {**row, 'documentExtraction': {
+                key: value for key, value in row['documentExtraction'].items() if key not in {'attemptedAt', 'error'}}}
+        digest.update(json.dumps(row, sort_keys=True, ensure_ascii=False).encode())
+    digest.update(b']')
+    return digest.hexdigest()
 
 
 def classification_key(row):

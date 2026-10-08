@@ -55,7 +55,29 @@ def _save_json(path, data):
         prefix=f".{resolved.name}.",
         suffix=".tmp",
     ) as handle:
-        json.dump(data, handle, separators=(',', ':'), ensure_ascii=False, allow_nan=False)
+        # The C encoder handles one record/entity at a time. Avoid millions of
+        # tiny json.dump writes without encoding another full artifact string.
+        def encode(value):
+            return json.dumps(value, separators=(',', ':'), ensure_ascii=False, allow_nan=False)
+        def write(value):
+            if isinstance(value, dict):
+                handle.write('{')
+                for index, (key, item) in enumerate(value.items()):
+                    if index:
+                        handle.write(',')
+                    handle.write(encode({key: 0})[1:-3] + ':')
+                    write(item)
+                handle.write('}')
+            elif isinstance(value, list):
+                handle.write('[')
+                for index, item in enumerate(value):
+                    if index:
+                        handle.write(',')
+                    handle.write(encode(item))
+                handle.write(']')
+            else:
+                handle.write(encode(value))
+        write(data)
         temporary = Path(handle.name)
     try:
         temporary.replace(resolved)

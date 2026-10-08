@@ -73,17 +73,16 @@ class BreadthAccumulator:
             if symbol:
                 for target in targets:
                     target._retain_contribution_date(day)
-            fields = [names[index] for index in np.flatnonzero(mask)]
+            increments = [(names[index], float(volume) if names[index] in VOLUME_FIELDS else 1)
+                          for index in np.flatnonzero(mask)]
             # Never regroup floating-point volumes, and preserve contribution
             # membership even for zero-volume candles.
             for target, record in records:
-                for field in fields:
-                    if field not in VOLUME_FIELDS:
-                        target._add(record, field, symbol)
-                    else:
-                        record[field] += float(volume)
-                        if target._contributions is not None and symbol and day in target._contributions:
-                            target._contributions[day][field].append(symbol)
+                audit = target._contributions.get(day) if symbol and target._contributions is not None else None
+                for field, amount in increments:
+                    record[field] += amount
+                    if audit is not None:
+                        audit[field].append(symbol)
     def records(self): return [self._records[day] for day in sorted(self._records)]
     def contribution_records(self):
         return [{"date": day, "metrics": {key: sorted(value) for key, value in self._contributions[day].items()}} for day in sorted(self._contributions)] if self._contributions is not None else []
@@ -113,10 +112,11 @@ def _increment_flags(history, methodology):
             column = f'{ma_type}_{period}'
             valid = present(column)
             prefix = f'{ma_type.lower()}_{period}'
+            above, below = close > history[column], close < history[column]
             add('valid_' + prefix, valid)
-            add('above_' + prefix, valid & (close > history[column]))
-            add('below_' + prefix, valid & (close < history[column]))
-            add('equal_' + prefix, valid & ~((close > history[column]) | (close < history[column])))
+            add('above_' + prefix, valid & above)
+            add('below_' + prefix, valid & below)
+            add('equal_' + prefix, valid & ~(above | below))
     for label, valid_name, high, low in (
         ('Monthly', 'valid_monthly_extrema', 'new_monthly_high', 'new_monthly_low'),
         ('Quarterly', 'valid_quarterly_extrema', 'new_quarterly_high', 'new_quarterly_low'),

@@ -72,9 +72,9 @@ def filing_time(value):
     return stamp.astimezone(timezone.utc)
 
 
-def summary(filing, detail_page):
+def summary(filing, detail_page, stamp=None):
     classification = filing['classification']
-    return {'id': filing['filingId'], 'publishedAt': filing_time(filing['news_date']).isoformat(),
+    return {'id': filing['filingId'], 'publishedAt': (stamp or filing_time(filing['news_date'])).isoformat(),
             'headline': filing.get('caption') or filing.get('descriptor') or 'Company filing',
             'url': filing.get('file_url'), 'topics': classification['topics'],
             'status': classification['status'], 'detailPage': detail_page}
@@ -99,6 +99,8 @@ def build_announcements(payload, directory, symbols, reference_session, cache=No
             seen = set()
             for row in records:
                 if isinstance(row, dict) and row.get('symbol') in symbols:
+                    if row['symbol'] in seen:
+                        raise ValueError('Duplicate streamed filing symbol: ' + row['symbol'])
                     seen.add(row['symbol'])
                     yield row['symbol'], row
             for symbol in sorted(symbols - seen):
@@ -113,20 +115,19 @@ def build_announcements(payload, directory, symbols, reference_session, cache=No
         for filing in filings:
             stamp = filing_time(filing.get('news_date'))
             if stamp and stamp <= cutoff:
-                years[stamp.astimezone(IST).year].append(filing)
+                years[stamp.astimezone(IST).year].append((filing, stamp))
         recent, history = [], {}
         for year, rows in sorted(years.items(), reverse=True):
             # Ascending pages keep old pages reusable as new filings arrive.
-            rows.sort(key=lambda row: (filing_time(row['news_date']), row['filingId']))
+            rows.sort(key=lambda item: (item[1], item[0]['filingId']))
             pages = []
             for start in range(0, len(rows), PAGE_SIZE):
                 page = rows[start:start + PAGE_SIZE]
-                details = put({'symbol': symbol, 'records': {f['filingId']: f for f in page}})
-                summaries = [summary(f, details) for f in page]
+                details = put({'symbol': symbol, 'records': {f['filingId']: f for f, stamp in page}})
+                summaries = [summary(f, details, stamp) for f, stamp in page]
                 page_hash = put({'symbol': symbol, 'year': year, 'records': summaries})
                 pages.append({'summary': page_hash, 'details': details, 'count': len(page)})
-                for item in summaries:
-                    stamp = filing_time(item['publishedAt'])
+                for item, (_, stamp) in zip(summaries, page):
                     if stamp >= oldest:
                         recent.append(item)
                     if stamp >= index_oldest:

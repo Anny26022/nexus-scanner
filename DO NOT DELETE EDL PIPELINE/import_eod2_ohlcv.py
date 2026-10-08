@@ -12,7 +12,7 @@ import os
 from datetime import date
 from pathlib import Path
 
-from ohlcv_utils import OHLCV_FIELDS, merge_rows_by_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
+from ohlcv_utils import OHLCV_FIELDS, merge_rows_by_date, read_ohlcv_csv, symbol_csv_path
 from pipeline_utils import BASE_DIR, load_json, save_json
 
 
@@ -118,26 +118,24 @@ def eod2_rows_for_security(data_dir, mapping, symbol, isin):
     return merge_rows_by_date([*current, *mapped]), additional_rows
 
 
-def same_csv(path, rows, fields):
-    """Skip a write only when the original writer would emit identical bytes."""
+def write_csv_if_changed(path, rows, fields):
+    """Render once; use those same bytes for comparison and any required write."""
     buffer = io.StringIO(newline='')
     writer = csv.DictWriter(buffer, fieldnames=fields)
     writer.writeheader()
     writer.writerows(rows)
+    data = buffer.getvalue().encode()
     try:
-        return path.read_bytes() == buffer.getvalue().encode()
+        if path.read_bytes() == data:
+            return
     except FileNotFoundError:
-        return False
+        pass
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
 
 
 def write_delivery_csv(path, rows):
-    if same_csv(path, rows, DELIVERY_FIELDS):
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=DELIVERY_FIELDS)
-        writer.writeheader()
-        writer.writerows(rows)
+    write_csv_if_changed(path, rows, DELIVERY_FIELDS)
 
 
 def delivery_rows(imported):
@@ -209,8 +207,7 @@ def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
         ])
         # Still perform the overlay every run: unchanged source data may need
         # to replace locally modified historical rows.
-        if not same_csv(destination, merged, OHLCV_FIELDS):
-            write_ohlcv_csv(destination, merged)
+        write_csv_if_changed(destination, merged, OHLCV_FIELDS)
         report["symbol_history"][symbol] = {"isin": isin, "start_date": imported[0]["Date"], "end_date": imported[-1]["Date"], "sessions": len(imported)}
         delivery = delivery_rows(imported)
         if delivery:

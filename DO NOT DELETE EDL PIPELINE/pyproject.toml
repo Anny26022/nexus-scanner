@@ -72,6 +72,8 @@ py-modules = [
     "fetch_sme_data",
     "filing_classification",
     "filing_documents",
+    "filing_archives",
+    "json_records",
     "nse_archive_utils",
     "ohlcv_utils",
     "pipeline_utils",

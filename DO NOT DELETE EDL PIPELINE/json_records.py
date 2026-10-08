@@ -98,12 +98,21 @@ pass reads only that small header again, without retaining all companies.
     with path.open(encoding='utf-8') as handle:
         for key, value, is_record in object_members(handle):
             if key == 'records':
+                if not isinstance(value, list):
+                    raise ValueError('Filing records must be an array')
                 break
             header[key] = value
 
     def records():
+        seen_records = False
         with path.open(encoding='utf-8') as handle:
             for key, value, is_record in object_members(handle):
+                if key == 'records' and not is_record:
+                    if not isinstance(value, list):
+                        raise ValueError('Filing records must be an array')
+                    if seen_records:
+                        raise ValueError('Duplicate filing records field')
+                    seen_records = True
                 if is_record:
                     yield value
     return {**header, 'records': records()}

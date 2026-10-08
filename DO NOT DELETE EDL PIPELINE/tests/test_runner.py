@@ -319,7 +319,7 @@ class RunnerTests(unittest.TestCase):
                 self.assertEqual(positions, sorted(positions))
 
     def test_independent_builds_overlap_without_racing_consumers_or_skipping_failure(self):
-        for fail_filing in (False, True):
+        for failed_lane in (None, 'build_filing_history_artifact.py', OHLCV_DERIVED_SCRIPT):
             filing_started, breadth_started = threading.Event(), threading.Event()
             release_filing, release_breadth = threading.Event(), threading.Event()
             filing_done, breadth_done = threading.Event(), threading.Event()
@@ -330,11 +330,12 @@ class RunnerTests(unittest.TestCase):
                     filing_started.set()
                     self.assertTrue(release_filing.wait(5))
                     filing_done.set()
-                    return ScriptResult(not fail_filing, required)
+                    return ScriptResult(script != failed_lane, required)
                 if script == OHLCV_DERIVED_SCRIPT:
                     breadth_started.set()
                     self.assertTrue(release_breadth.wait(5))
                     breadth_done.set()
+                    return ScriptResult(script != failed_lane, required)
                 if script == PHASE4_SCRIPTS[0]:
                     self.assertTrue(filing_started.wait(5))
                     self.assertTrue(breadth_started.wait(5))
@@ -352,18 +353,68 @@ class RunnerTests(unittest.TestCase):
             config = PipelineConfig(cleanup_intermediate=False)
             checkpoint = {'config': {'fetch_ohlcv': True, 'fetch_optional': False, 'cleanup_intermediate': False},
                           'exit_code': 0, 'total_time_seconds': 0, 'scripts': {}}
-            with self.subTest(fail_filing=fail_filing), \
+            with self.subTest(failed_lane=failed_lane), \
                     mock.patch('edl_pipeline.runner.pipeline_utils.load_json', return_value=checkpoint), \
                     mock.patch('edl_pipeline.runner.run_script', side_effect=run), \
                     mock.patch('edl_pipeline.runner.compress_output', return_value=(100, 10)) as compress, \
                     mock.patch('edl_pipeline.runner.validate_final_artifacts', return_value=[]), \
                     mock.patch('edl_pipeline.runner.write_pipeline_report'), \
                     contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(main(config, phase='build'), int(fail_filing))
+                self.assertEqual(main(config, phase='build'), int(failed_lane is not None))
             self.assertEqual(calls.count(OHLCV_DERIVED_SCRIPT), 1)
             self.assertEqual(calls.count('build_filing_history_artifact.py'), 1)
-            if fail_filing:
+            if failed_lane is not None:
                 compress.assert_not_called()
+
+    def test_filing_preparation_overlaps_enrichment_and_is_not_compressed_twice(self):
+        started, release = threading.Event(), threading.Event()
+        checkpoint = {'config': {'fetch_ohlcv': True, 'fetch_optional': False, 'cleanup_intermediate': False},
+                      'exit_code': 0, 'total_time_seconds': 0, 'scripts': {}}
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            def run(script, phase_label='', required=False):
+                if script == 'build_filing_history_artifact.py':
+                    (root / 'filing_history.json').write_text('{"records":[1]}')
+                if script == PHASE4_SCRIPTS[0]:
+                    self.assertTrue(started.wait(5))
+                    release.set()
+                if script == 'build_chart_artifacts.py':
+                    (root / 'chart_artifacts').mkdir()
+                return ScriptResult(True, required)
+            def prepare():
+                started.set()
+                self.assertTrue(release.wait(5))
+                directory = root / '.filing_archives'; directory.mkdir()
+                (directory / 'index.json').write_text('{}')
+                return 100, 10
+            with mock.patch('edl_pipeline.runner.BASE_DIR', str(root)), \
+                    mock.patch('edl_pipeline.runner.pipeline_utils.load_json', return_value=checkpoint), \
+                    mock.patch('edl_pipeline.runner.run_script', side_effect=run), \
+                    mock.patch('edl_pipeline.runner.prepare_filing_output', side_effect=prepare) as preparation, \
+                    mock.patch('edl_pipeline.runner.compress_file', return_value=(0, 0)) as compression, \
+                    mock.patch('edl_pipeline.runner.validate_final_artifacts', return_value=[]), \
+                    mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(PipelineConfig(cleanup_intermediate=False), phase='build'), 0)
+            preparation.assert_called_once_with()
+            self.assertNotIn('filing_history.json', [call.args[0] for call in compression.call_args_list])
+            self.assertTrue((root / 'chart_artifacts/.prepared_archives/index.json').is_file())
+
+    def test_failed_filing_preparation_cannot_reach_final_validation(self):
+        checkpoint = {'config': {'fetch_ohlcv': True, 'fetch_optional': False, 'cleanup_intermediate': False},
+                      'exit_code': 0, 'total_time_seconds': 0, 'scripts': {}}
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); (root / 'filing_history.json').write_text('{"records":[1]}')
+            with mock.patch('edl_pipeline.runner.BASE_DIR', str(root)), \
+                    mock.patch('edl_pipeline.runner.pipeline_utils.load_json', return_value=checkpoint), \
+                    mock.patch('edl_pipeline.runner.run_script', side_effect=lambda script, phase_label='', required=False: ScriptResult(True, required)), \
+                    mock.patch('edl_pipeline.runner.prepare_filing_output', side_effect=OSError('archive failed')), \
+                    mock.patch('edl_pipeline.runner.compress_file', return_value=(0, 0)), \
+                    mock.patch('edl_pipeline.runner.validate_final_artifacts') as validation, \
+                    contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(OSError, 'archive failed'):
+                    main(PipelineConfig(cleanup_intermediate=False), phase='build')
+            validation.assert_not_called()
 
     def test_old_fetch_checkpoint_does_not_repeat_completed_reference(self):
         config = PipelineConfig(cleanup_intermediate=False)

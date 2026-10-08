@@ -15,8 +15,9 @@ import json
 from pathlib import Path
 import shutil
 import sys
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, wait, FIRST_COMPLETED
 import os
+from multiprocessing import get_context
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -183,6 +184,45 @@ def _chart_object(task):
     return symbol, put_object(objects, payload)
 
 
+def _chart_chunk(tasks):
+    return [_chart_object(task) for task in tasks]
+
+
+def _parallel_chart_objects(tasks, workers):
+    """Bound queued work and notice failures independently of result order."""
+    executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'))
+    chunks = iter(enumerate(tasks[start:start + 8] for start in range(0, len(tasks), 8)))
+    pending, completed = {}, {}
+    def refill():
+        while len(pending) < 2 * workers:
+            item = next(chunks, None)
+            if item is None:
+                break
+            index, chunk = item
+            pending[executor.submit(_chart_chunk, chunk)] = index
+    try:
+        refill()
+        while pending:
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                index = pending.pop(future)
+                completed[index] = future.result()
+            refill()
+    except BaseException:
+        for future in pending:
+            future.cancel()
+        # Running chunks cannot be cancelled safely: await only this bounded
+        # window, not the whole universe, before allowing a retry to reuse tmp.
+        executor.shutdown(wait=True, cancel_futures=True)
+        for future in pending:
+            if not future.cancelled() and future.exception() is not None:
+                print(f'Additional chart worker failure: {future.exception()}', file=sys.stderr)
+        raise
+    else:
+        executor.shutdown(wait=True)
+    return [item for index in sorted(completed) for item in completed[index]]
+
+
 def main() -> int:
     root = Path(BASE_DIR)
     stocks = _artifact(root, "all_stocks_fundamental_analysis.json", [])
@@ -205,8 +245,6 @@ def main() -> int:
     objects = temporary / "objects"
     symbols = {str(stock.get("Symbol") or stock.get("symbol") or "").upper() for stock in stocks}
     symbols.discard("")
-    announcements = build_announcements(filing_history, objects, symbols, as_of,
-                                        cache=root / 'filing_history_data/object_cache')
     chart_objects = {}
     count = 0
     tasks = []
@@ -215,12 +253,19 @@ def main() -> int:
         if not symbol:
             continue
         tasks.append((root, objects, symbol, as_of, actions[symbol], earnings[symbol], news[symbol]))
-    workers = min(2, os.cpu_count() or 1)
-    if workers > 1 and len(tasks) >= 32:
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            chart_objects.update(executor.map(_chart_object, tasks, chunksize=8))
-    else:
-        chart_objects.update(map(_chart_object, tasks))
+    # Reserve one core for announcement processing instead of stacking two
+    # unrestricted pools. Parent assembly stays ordered and publication waits
+    # for both branches, including any exception in the announcement iterator.
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix='announcements') as background:
+        announcement = background.submit(build_announcements, filing_history, objects, symbols, as_of,
+                                          cache=root / 'filing_history_data/object_cache')
+        cpus = os.cpu_count() or 1
+        workers = max(1, min(2, cpus - 1))
+        if cpus > 1 and len(tasks) >= 32:
+            chart_objects.update(_parallel_chart_objects(tasks, workers))
+        else:
+            chart_objects.update(map(_chart_object, tasks))
+        announcements = announcement.result()
     count = len(tasks)
     index = {"schemaVersion": 2, "asOfDate": as_of, "symbols": count,
              "chartObjects": chart_objects, "announcements": announcements,

@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 from dataclasses import replace
@@ -15,7 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / 'src')]
 from json_records import object_members, record_artifact
 from announcement_artifacts import build_announcements, object_bytes, put_object
-from edl_pipeline.validators import strict_json_decoder, validate_json
+from edl_pipeline.validators import strict_json_decoder, validate_json, validate_gzip_json
+from edl_pipeline.breadth.pipeline import _save_json
 import build_chart_artifacts as charts
 import import_eod2_ohlcv as eod2
 from edl_pipeline.breadth.aggregates import BreadthAccumulator
@@ -65,6 +67,39 @@ class PipelineSpeedTests(unittest.TestCase):
         self.assertEqual(next(iterator), ('records', {'symbol': '0'}, True))
         self.assertLessEqual(handle.tell(), 64)
         self.assertEqual(sum(is_record for _, _, is_record in iterator), 999)
+
+    def test_record_batched_breadth_writer_preserves_standard_encoder_bytes(self):
+        payload = {'metadata': {'text': '₹😃', 'null': None, 'negativeZero': -0.0, None: 'null key', 1.5: 'number key'},
+                   'universes': {'all': {'records': [{'date': '2026-10-08', 'metrics': {'A': [1e100, True]}}]}},
+                   'sectors': [{'name': 'A', 'records': [{'value': 1.123456789}]}]}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'breadth.json'
+            _save_json(path, payload)
+            self.assertEqual(path.read_bytes(), json.dumps(payload, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode())
+
+    def test_gzip_filing_validation_streams_and_checks_the_complete_trailer(self):
+        with tempfile.TemporaryDirectory() as folder:
+            stream, full = (Path(folder) / name for name in ('filing_history.json.gz', 'full.json.gz'))
+            for raw in (b'{"records":[{"value":1.25}],"source":"test"}',
+                        b'{"records":[],"records":[1,2],"source":"test"}',
+                        b'{"records":[1e999],"source":"test"}',
+                        b'{"records":[NaN],"source":"test"}',
+                        b'{"records":[1,],"source":"test"}',
+                        b'{"records":[1],"source":"test"} trailing',
+                        b'{"records":null,"source":"test"}'):
+                packed = gzip.compress(raw, mtime=0)
+                stream.write_bytes(packed); full.write_bytes(packed)
+                args = {'required_fields': ('records', 'source'), 'nested_min_counts': (('records', 1),)}
+                before, after = validate_gzip_json(full, **args), validate_gzip_json(stream, **args)
+                self.assertEqual((before.ok, before.count), (after.ok, after.count))
+            packed = gzip.compress(b'{"records":[1],"source":"test"}', mtime=0)
+            stream.write_bytes(packed)
+            with mock.patch('edl_pipeline.validators.strict_json_load', side_effect=AssertionError('full load')):
+                self.assertTrue(validate_gzip_json(stream).ok)
+            corrupt = bytearray(packed); corrupt[-8] ^= 1
+            for damaged in (packed[:-1], bytes(corrupt), packed + gzip.compress(b'x', mtime=0)):
+                stream.write_bytes(damaged)
+                self.assertFalse(validate_gzip_json(stream).ok)
 
     def test_streaming_validator_keeps_shape_finiteness_and_tail_checks(self):
         sources = ['{"records":[{"value":1.25}],"source":"test"}',
@@ -140,6 +175,32 @@ class PipelineSpeedTests(unittest.TestCase):
                     charts.main()
             self.assertEqual((root / 'chart_artifacts/index.json').read_bytes(), before['index.json'])
 
+    def test_announcements_overlap_candles_and_failure_keeps_previous_release(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'all_stocks_fundamental_analysis.json').write_text(json.dumps([
+                {'symbol': 'A', 'as_of_date': '2026-10-06'}]))
+            started, release = threading.Event(), threading.Event()
+            original_announcement, original_chart = charts.build_announcements, charts._chart_object
+            def announcement(*args, **kwargs):
+                started.set()
+                self.assertTrue(release.wait(5))
+                return original_announcement(*args, **kwargs)
+            def candle(task):
+                self.assertTrue(started.wait(5))
+                release.set()
+                return original_chart(task)
+            with mock.patch.object(charts, 'BASE_DIR', str(root)), \
+                    mock.patch.object(charts, 'build_announcements', side_effect=announcement), \
+                    mock.patch.object(charts, '_chart_object', side_effect=candle):
+                self.assertEqual(charts.main(), 0)
+            before = (root / 'chart_artifacts/index.json').read_bytes()
+            with mock.patch.object(charts, 'BASE_DIR', str(root)), \
+                    mock.patch.object(charts, 'build_announcements', side_effect=RuntimeError('announcement failed')):
+                with self.assertRaisesRegex(RuntimeError, 'announcement failed'):
+                    charts.main()
+            self.assertEqual((root / 'chart_artifacts/index.json').read_bytes(), before)
+
     def test_eod2_parses_current_segment_once_and_reapplies_changed_destination(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder); data = root / 'source'; (data / 'daily').mkdir(parents=True)
@@ -154,7 +215,7 @@ class PipelineSpeedTests(unittest.TestCase):
                 first = eod2.import_eod2_ohlcv(data, master, destination)
                 self.assertEqual(read.call_count, 1)
             expected = (destination / 'A.csv').read_bytes()
-            with mock.patch.object(eod2, 'write_ohlcv_csv', side_effect=AssertionError('unchanged rewrite')):
+            with mock.patch.object(Path, 'write_bytes', side_effect=AssertionError('unchanged rewrite')):
                 self.assertEqual(eod2.import_eod2_ohlcv(data, master, destination), first)
             (destination / 'A.csv').write_bytes(expected.replace(b'10.0', b'99.0'))
             self.assertEqual(eod2.import_eod2_ohlcv(data, master, destination), first)

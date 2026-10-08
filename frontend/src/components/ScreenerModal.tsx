@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
+import React, { memo, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, SlidersHorizontal, Library } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 
 interface ScreenerModalProps {
@@ -79,6 +81,99 @@ const MultiSelectDropdown = ({ options, value, onChange }: any) => {
   );
 };
 
+interface FilterRowProps {
+  def: ConditionDef;
+  active?: ActiveCondition;
+  showParameters: boolean;
+  toggle: (def: ConditionDef) => void;
+  updateParam: (condId: string, paramId: string, value: any) => void;
+}
+
+interface FilterParameterProps {
+  defId: string;
+  p: ParameterSpec;
+  val: any;
+  updateParam: FilterRowProps['updateParam'];
+}
+
+const FilterParameter = memo(function FilterParameter({ defId, p, val, updateParam }: FilterParameterProps) {
+  // The row title and each control's accessible label provide the context;
+  // keeping the inputs compact makes dense filter groups easier to scan.
+  let control: React.ReactNode;
+  if (p.type === 'boolean') {
+    control = <input aria-label={p.label} type="checkbox" checked={!!val}
+      onChange={e => updateParam(defId, p.id, e.target.checked)} />;
+  } else if (p.type === 'string') {
+    control = <input aria-label={p.label} value={val ?? ''}
+      onChange={e => updateParam(defId, p.id, e.target.value)}
+      className="w-24 bg-white border border-gray-200 rounded-md px-1.5 py-0.5 text-[11px]" />;
+  } else if (p.type === 'multiselect') {
+    control = <MultiSelectDropdown options={p.options || []} value={val}
+      onChange={(newVal: string[]) => updateParam(defId, p.id, newVal)} />;
+  } else if (p.type === 'select') {
+    control = <select
+        value={val}
+        onChange={(e) => updateParam(defId, p.id, e.target.value)}
+        className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 max-w-[110px] shrink-0 truncate transition-colors cursor-pointer"
+      >
+        {(p.options || []).map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>;
+  } else {
+    control = <input
+      type="number"
+      value={val}
+      onChange={(e) => updateParam(defId, p.id, numericInputValue(e.target.value))}
+      min={p.min}
+      max={p.max}
+      step={p.step ?? (isIntegerParameter(p) ? 1 : 0.1)}
+      aria-label={p.label}
+      className="w-14 bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 text-center focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
+    />;
+  }
+
+  return (
+    <div key={p.id} title={p.description ?? p.label} className="flex items-center shrink-0">
+      {control}
+      {p.unit && <span className="ml-1 text-[10px] text-gray-400 whitespace-nowrap">{readableUnit(p.unit)}</span>}
+    </div>
+  );
+});
+
+// Unchanged rows retain the same definition, condition and callback references.
+const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle, updateParam }: FilterRowProps) {
+  const checked = !!active;
+
+  return (
+    <div className="grid grid-cols-[minmax(10rem,1fr)_minmax(0,auto)] items-start gap-x-3 py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 px-2 -mx-2 rounded transition-colors group">
+      <label className="flex items-center gap-2.5 cursor-pointer min-w-0 pt-1">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={() => toggle(def)}
+          className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
+        />
+        <span title={def.description} className={`text-[12px] font-semibold truncate ${checked ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-800'}`}>
+          {def.label}:
+        </span>
+      </label>
+
+      {/* Inputs keep their own compact groups and wrap inside this row when needed. */}
+      {showParameters && def.parameters && def.parameters.length > 0 && (
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
+          {def.parameters.map(p => (
+            <FilterParameter key={p.id} defId={def.id} p={p}
+              val={active ? active.parameters[p.id] : p.defaultValue} updateParam={updateParam} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   isOpen,
   onClose,
@@ -91,15 +186,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const [localMode, setLocalMode] = useState<MatchMode>(matchMode);
   const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
 
-  if (!isOpen) return null;
-
-  const catalogToUse = activeTab === 'custom' ? NEXUS_CONDITION_CATALOG : PRESET_CATALOG;
-
-  const filtered = catalogToUse.filter((c) => {
-    return activeTab === 'presets' || category === 'all' || c.category === category;
-  });
-
-  const toggle = (def: ConditionDef) => {
+  const toggle = useCallback((def: ConditionDef) => {
     setLocalMap((prev) => {
       if (prev[def.id]) {
         const next = { ...prev };
@@ -113,9 +200,9 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         [def.id]: { instanceId: `${def.id}_${Date.now()}`, conditionId: def.id, parameters: params },
       };
     });
-  };
+  }, []);
 
-  const updateParam = (condId: string, paramId: string, value: any) => {
+  const updateParam = useCallback((condId: string, paramId: string, value: any) => {
     setLocalMap((prev) => {
       const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === condId);
       const existing = prev[condId];
@@ -123,83 +210,41 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         const params: Record<string, any> = {};
         def.parameters.forEach((p) => (params[p.id] = p.defaultValue));
         params[paramId] = value;
+        if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
+          params.value = breadthMetricDefault(value);
+        }
         return {
           ...prev,
           [condId]: { instanceId: `${condId}_${Date.now()}`, conditionId: condId, parameters: params },
         };
       }
       if (!existing) return prev;
+      const parameters = { ...existing.parameters, [paramId]: value };
+      if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
+        parameters.value = breadthMetricDefault(value);
+      }
       return {
         ...prev,
-        [condId]: { ...existing, parameters: { ...existing.parameters, [paramId]: value } },
+        [condId]: { ...existing, parameters },
       };
     });
-  };
+  }, []);
+
+  if (!isOpen) return null;
+
+  const catalogToUse = activeTab === 'custom' ? NEXUS_CONDITION_CATALOG : PRESET_CATALOG;
+
+  const filtered = catalogToUse.filter((c) => {
+    return activeTab === 'presets' || category === 'all' || c.category === category;
+  });
 
   const handleReset = () => setLocalMap({});
 
+  const validationError = conditionValidationError(localMap);
   const handleApply = () => {
-    // MA convergence is the only structured list entered as text. Preserve a
-    // safe default instead of sending a malformed list to the evaluator.
-    const validated = Object.fromEntries(Object.entries(localMap).map(([id, condition]) => {
-      if (condition.conditionId !== 'MA_CONVERGENCE') return [id, condition];
-      const values = String(condition.parameters.periods ?? '').split(',').map(value => value.trim());
-      const valid = values.length >= 2 && values.every(value => /^\d+$/.test(value) && Number(value) > 0)
-        && new Set(values).size === values.length;
-      return [id, valid ? condition : {
-        ...condition, parameters: { ...condition.parameters, periods: '9,20,50,200' },
-      }];
-    }));
-    onApply(validated, localMode);
+    if (validationError) return;
+    onApply(localMap, localMode);
     onClose();
-  };
-
-  // The row title and each control's accessible label provide the context;
-  // keeping the inputs compact makes dense filter groups easier to scan.
-  const renderInput = (defId: string, p: ParameterSpec, checked: boolean) => {
-    const val = checked && localMap[defId] ? localMap[defId].parameters[p.id] : p.defaultValue;
-    let control: React.ReactNode;
-    if (p.type === 'boolean') {
-      control = <input aria-label={p.label} type="checkbox" checked={!!val}
-        onChange={e => updateParam(defId, p.id, e.target.checked)} />;
-    } else if (p.type === 'string') {
-      control = <input aria-label={p.label} value={val ?? ''}
-        onChange={e => updateParam(defId, p.id, e.target.value)}
-        className="w-24 bg-white border border-gray-200 rounded-md px-1.5 py-0.5 text-[11px]" />;
-    } else if (p.type === 'multiselect') {
-      control = <MultiSelectDropdown options={p.options || []} value={val}
-        onChange={(newVal: string[]) => updateParam(defId, p.id, newVal)} />;
-    } else if (p.type === 'select') {
-      control = <select
-          value={val}
-          onChange={(e) => updateParam(defId, p.id, e.target.value)}
-          className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 max-w-[110px] shrink-0 truncate transition-colors cursor-pointer"
-        >
-          {(p.options || []).map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>;
-    } else {
-      control = <input
-        type="number"
-        value={val}
-        onChange={(e) => updateParam(defId, p.id, parseFloat(e.target.value) || 0)}
-        min={p.min}
-        max={p.max}
-        step={p.step ?? 0.1}
-        aria-label={p.label}
-        className="w-14 bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 text-center focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
-      />;
-    }
-
-    return (
-      <div key={p.id} title={p.description ?? p.label} className="flex items-center shrink-0">
-        {control}
-        {p.unit && <span className="ml-1 text-[10px] text-gray-400 whitespace-nowrap">{readableUnit(p.unit)}</span>}
-      </div>
-    );
   };
 
   return createPortal(
@@ -291,33 +336,10 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
 
           <div className="flex-1 overflow-y-auto p-5 bg-white overflow-x-hidden">
             <div className={`grid gap-x-8 gap-y-1 ${activeTab === 'presets' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 xl:grid-cols-2'}`}>
-              {filtered.map((def) => {
-                const active = localMap[def.id];
-                const checked = !!active;
-
-                return (
-                  <div key={def.id} className="grid grid-cols-[minmax(10rem,1fr)_minmax(0,auto)] items-start gap-x-3 py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 px-2 -mx-2 rounded transition-colors group">
-                    <label className="flex items-center gap-2.5 cursor-pointer min-w-0 pt-1">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggle(def)}
-                        className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
-                      />
-                      <span title={def.description} className={`text-[12px] font-semibold truncate ${checked ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-800'}`}>
-                        {def.label}:
-                      </span>
-                    </label>
-
-                    {/* Inputs keep their own compact groups and wrap inside this row when needed. */}
-                    {activeTab === 'custom' && def.parameters && def.parameters.length > 0 && (
-                      <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
-                        {def.parameters.map((p) => renderInput(def.id, p, checked))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {filtered.map(def => (
+                <FilterRow key={def.id} def={def} active={localMap[def.id]}
+                  showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />
+              ))}
             </div>
             
             {filtered.length === 0 && (
@@ -328,6 +350,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
             )}
           </div>
 
+        {validationError && <p role="alert" className="px-6 py-2 text-sm text-red-600">{validationError}</p>}
           {/* ── Footer ── */}
           <div className="flex items-center justify-center gap-6 px-6 py-4 border-t border-gray-100 bg-white">
             <button
@@ -338,7 +361,8 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
             </button>
             <button
               onClick={handleApply}
-              className="px-8 py-2 rounded-full bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-bold transition-colors shadow-sm"
+              disabled={Boolean(validationError)}
+              className="px-8 py-2 rounded-full bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-bold transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-teal-600"
             >
               Apply
             </button>

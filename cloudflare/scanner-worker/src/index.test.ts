@@ -49,7 +49,7 @@ describe('scanner worker boundary',()=>{
     const env=environment() as any;
     env.SCANNER_DATA.get=vi.fn(async()=>({json:async()=>({...SCANNER_IDENTITY,engineVersion:'old',schemaVersion:7,revision:'a'.repeat(64),session:'2026-10-01'})}));
     vi.stubGlobal('caches',{default:{match:vi.fn(async()=>undefined)}});
-    const response=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',body:JSON.stringify({...SCANNER_IDENTITY,datasetRevision:'a'.repeat(64),asOfDate:'2026-10-01'})}),env,execution);
+    const response=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',body:JSON.stringify({...SCANNER_IDENTITY,datasetRevision:'a'.repeat(64),asOfDate:'2026-10-01',page:1,pageSize:15,universe:'mainboard',expressionTree:{type:'condition',condition:{conditionId:'FIELD_COMPARISON',parameters:{field:'close',comparison:'GREATER',value:100}}}})}),env,execution);
     expect(response.status).toBe(400);
     expect(env.SCANNER_DATA.get).toHaveBeenCalledTimes(1);
   });

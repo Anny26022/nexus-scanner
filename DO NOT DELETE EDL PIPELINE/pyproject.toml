@@ -27,6 +27,7 @@ dependencies = [
     "numpy>=1.24",
     "pandas>=2.0",
     "requests>=2.31",
+    "pypdf>=6.1,<7",
 ]
 
 [project.scripts]
@@ -45,11 +46,13 @@ py-modules = [
     "advanced_metrics_processor",
     "bulk_market_analyzer",
     "build_corporate_action_ledger",
+    "build_filing_history_artifact",
     "dhan_next_utils",
     "enrich_fno_data",
     "fetch_advanced_indicators",
     "fetch_all_indices",
     "fetch_all_ohlcv",
+    "fetch_earnings_calendar",
     "fetch_bulk_block_deals",
     "fetch_circuit_stocks",
     "fetch_company_filings",
@@ -67,6 +70,8 @@ py-modules = [
     "fetch_new_announcements",
     "fetch_surveillance_lists",
     "fetch_sme_data",
+    "filing_classification",
+    "filing_documents",
     "nse_archive_utils",
     "ohlcv_utils",
     "pipeline_utils",

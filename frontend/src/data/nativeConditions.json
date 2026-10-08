@@ -1688,6 +1688,10 @@
             "label": "Nifty 50"
           },
           {
+            "value": "NIFTY500",
+            "label": "Nifty 500"
+          },
+          {
             "value": "NIFTYMIDSMALL400",
             "label": "Midsmall 400"
           }
@@ -1701,27 +1705,171 @@
         "options": [
           {
             "value": "pctAboveSma10",
-            "label": "% > 10 SMA"
+            "label": "% above 10 SMA"
           },
           {
             "value": "pctAboveSma20",
-            "label": "% > 20 SMA"
+            "label": "% above 20 SMA"
           },
           {
             "value": "pctAboveSma50",
-            "label": "% > 50 SMA"
+            "label": "% above 50 SMA"
           },
           {
             "value": "pctAboveSma200",
-            "label": "% > 200 SMA"
+            "label": "% above 200 SMA"
+          },
+          {
+            "value": "advances",
+            "label": "Advances"
+          },
+          {
+            "value": "declines",
+            "label": "Declines"
+          },
+          {
+            "value": "unchanged",
+            "label": "Unchanged"
+          },
+          {
+            "value": "net_breadth",
+            "label": "Net breadth"
+          },
+          {
+            "value": "up_4",
+            "label": "4% thrust advances"
+          },
+          {
+            "value": "down_4",
+            "label": "4% thrust declines"
+          },
+          {
+            "value": "up_4_5",
+            "label": "4.5% thrust advances"
+          },
+          {
+            "value": "down_4_5",
+            "label": "4.5% thrust declines"
+          },
+          {
+            "value": "advance_decline_ratio_5d",
+            "label": "5-day A/D ratio"
           },
           {
             "value": "adRatioSma10",
-            "label": "A/D ratio"
+            "label": "10-SMA above/below ratio"
           },
           {
-            "value": "volRatio20",
-            "label": "Vol ratio"
+            "value": "advance_decline_ratio_10d",
+            "label": "10-day A/D ratio"
+          },
+          {
+            "value": "new_monthly_high",
+            "label": "21-day new highs"
+          },
+          {
+            "value": "new_monthly_low",
+            "label": "21-day new lows"
+          },
+          {
+            "value": "new_quarterly_high",
+            "label": "63-day new highs"
+          },
+          {
+            "value": "new_quarterly_low",
+            "label": "63-day new lows"
+          },
+          {
+            "value": "new_52w_high",
+            "label": "252-day new highs"
+          },
+          {
+            "value": "new_52w_low",
+            "label": "252-day new lows"
+          },
+          {
+            "value": "new_52w_high_pct",
+            "label": "252-day new high %"
+          },
+          {
+            "value": "new_52w_low_pct",
+            "label": "252-day new low %"
+          },
+          {
+            "value": "up_25_month",
+            "label": "21-day momentum breadth"
+          },
+          {
+            "value": "down_25_month",
+            "label": "21-day momentum declines"
+          },
+          {
+            "value": "up_13_34d",
+            "label": "34-day momentum breadth"
+          },
+          {
+            "value": "down_13_34d",
+            "label": "34-day momentum declines"
+          },
+          {
+            "value": "up_25_quarter",
+            "label": "63-day momentum breadth"
+          },
+          {
+            "value": "down_25_quarter",
+            "label": "63-day momentum declines"
+          },
+          {
+            "value": "volume_above_20",
+            "label": "Volume above 20-day average"
+          },
+          {
+            "value": "volume_ratio_20",
+            "label": "Volume above/below ratio"
+          },
+          {
+            "value": "advance_volume",
+            "label": "Advance volume"
+          },
+          {
+            "value": "decline_volume",
+            "label": "Decline volume"
+          },
+          {
+            "value": "total_volume",
+            "label": "Total volume"
+          },
+          {
+            "value": "breakout_20d",
+            "label": "20-day breakouts"
+          },
+          {
+            "value": "breakdown_20d",
+            "label": "20-day breakdowns"
+          },
+          {
+            "value": "upper_half_52w",
+            "label": "Upper half of 52-week range"
+          },
+          {
+            "value": "lower_half_52w",
+            "label": "Lower half of 52-week range"
+          },
+          {
+            "value": "mbi_score",
+            "label": "MBI score"
+          },
+          {
+            "value": "warning_day",
+            "label": "MBI warning day (1/0)"
+          },
+          {
+            "value": "xp",
+            "label": "XP proxy"
+          },
+          {
+            "value": "index_change_pct",
+            "label": "Nifty daily return"
           }
         ]
       },

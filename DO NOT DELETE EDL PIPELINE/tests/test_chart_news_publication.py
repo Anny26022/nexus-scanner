@@ -50,7 +50,9 @@ class ChartNewsPublicationTests(unittest.TestCase):
                  mock.patch.dict('os.environ',{'EDL_FETCH_OHLCV':'1'}):
                 self.assertEqual(publication.main(),0)
             self.assertFalse(stages[0].exists())
-            with gzip.open(destination/'chart_artifacts/TEST.json.gz','rt') as handle:
+            index = json.loads((destination / 'chart_artifacts/index.json').read_text())
+            object_path = destination / 'chart_artifacts/objects' / (index['chartObjects']['TEST'] + '.json.gz')
+            with gzip.open(object_path, 'rt') as handle:
                 chart=json.load(handle)
             self.assertEqual([row['headline'] for row in chart['marketNews']],['Current announcement'])
             self.assertIn('build_chart_artifacts.py',POST_STANDARDIZATION_SCRIPTS)

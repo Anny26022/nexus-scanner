@@ -68,6 +68,7 @@ class RunnerTests(unittest.TestCase):
         self.assertNotIn("fetch_all_ohlcv.py", calls)
         self.assertNotIn("fetch_indices_ohlcv.py", calls)
         self.assertNotIn("fetch_etf_data.py", calls)
+        self.assertIn("refresh_official_index_constituents.py", calls)
         self.assertIn("bulk_market_analyzer.py", calls)
 
     def test_fetch_lanes_overlap_but_keep_each_lane_ordered(self):

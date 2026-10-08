@@ -1,4 +1,5 @@
 import type { ActiveCondition, ExpressionNode } from '../types/screener';
+import { normalizeSnapshotCondition, snapshotFieldDependency } from '../engine/snapshotFields';
 import presetDefinitions from '../data/presetDefinitions.json';
 
 export type PackDependency = 'core' | 'technical' | 'fundamentals' | 'advanced';
@@ -43,6 +44,16 @@ function parameterCompatible(condition: ActiveCondition): boolean {
 }
 
 export function conditionCapability(condition: ActiveCondition): ConditionCapability {
+  condition = normalizeSnapshotCondition(condition);
+  if (condition.conditionId === 'FIELD_COMPARISON') {
+    const fields = [String(condition.parameters.field)];
+    const target = condition.parameters.value;
+    if (typeof target === 'object' && target !== null) fields.push(String(target.field));
+    const dependencies = fields.map(snapshotFieldDependency);
+    return dependencies.every(value => value !== null)
+      ? {dependencies:['core',...new Set(dependencies.filter(value => value !== null))],browser:always}
+      : advanced();
+  }
   if (condition.conditionId.startsWith('lib-')) return presetIds.has(condition.conditionId) ? technical() : advanced();
   if (condition.conditionId === 'FUNDAMENTAL_METRIC' && ['ALL_TIME_HIGH','ALL_TIME_LOW','RETURN_5Y'].includes(String(condition.parameters.metric))) return technical();
   if (scalarTechnical.has(condition.conditionId)) return technical(parameterCompatible);
@@ -50,9 +61,9 @@ export function conditionCapability(condition: ActiveCondition): ConditionCapabi
   return advanced();
 }
 
-export function expressionPlan(expression: ExpressionNode, hasTextQuery = false) {
+export function expressionPlan(expression: ExpressionNode) {
   const dependencies = new Set<PackDependency>(['core']);
-  let browser = !hasTextQuery;
+  let browser = true;
   const visit = (node: ExpressionNode) => {
     if (node.type === 'group') { node.children.forEach(visit); return; }
     const capability = conditionCapability(node.condition);

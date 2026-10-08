@@ -128,8 +128,10 @@ controls. Supported daily-OHLCV conditions are:
   `nested` uses an enclosing base and is normally the weaker test.
 - `inside_bar` evaluates the latest requested run of daily bars, or ISO-week
   OHLCV bars for `timeframe: "weekly"`. Weekly mode defaults to `completed`,
-  which excludes the current ISO week. `current` includes it and marks the
-  result provisional because it can change before the week closes.
+  which includes Friday-ended bars and excludes a developing Monday–Thursday
+  week. Without an exchange-calendar completeness marker, holiday-shortened
+  weeks ending before Friday remain conservatively excluded. `current` includes
+  the latest week and marks it provisional.
 - `unfilled_gap` defines a gap relative to the prior close. An up-gap fills
   when a later low reaches that prior close; a down-gap fills when a later high
   reaches it. `state` selects `unfilled` or `filled` events.

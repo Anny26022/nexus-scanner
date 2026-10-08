@@ -68,6 +68,14 @@ def prepare_history(frame, methodology):
         df[f"New_{label}_Low"] = df["Low"] < prior_low
 
     df["Volume_SMA_20"] = df["Volume"].rolling(20, min_periods=20).mean()
+    valid_20d_candle = df["High"].notna() & df["Low"].notna()
+    df["Prior_20_High"] = df["High"].shift(1).rolling(20, min_periods=20).max().where(valid_20d_candle)
+    df["Prior_20_Low"] = df["Low"].shift(1).rolling(20, min_periods=20).min().where(valid_20d_candle)
+    # Breadth breakouts use the same closing-price rule as the scanner.
+    df["Breakout_20d"] = df["Close"] > df["Prior_20_High"]
+    df["Breakdown_20d"] = df["Close"] < df["Prior_20_Low"]
+    df["Yearly_Range_High"] = df["High"].rolling(methodology.yearly_sessions, min_periods=methodology.yearly_sessions).max()
+    df["Yearly_Range_Low"] = df["Low"].rolling(methodology.yearly_sessions, min_periods=methodology.yearly_sessions).min()
     df["Return_21"] = (df["Close"] / df["Close"].shift(methodology.monthly_sessions) - 1) * 100
     df["Return_34"] = (df["Close"] / df["Close"].shift(34) - 1) * 100
     df["Return_63"] = (df["Close"] / df["Close"].shift(methodology.quarterly_sessions) - 1) * 100

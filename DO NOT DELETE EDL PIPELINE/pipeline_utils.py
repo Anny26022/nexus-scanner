@@ -161,6 +161,43 @@ def save_json(path, data, indent=None, ensure_ascii=True):
     atomic_replace_text(path, text)
 
 
+def save_json_records(path, data, ensure_ascii=True):
+    """Write a string-keyed artifact with the same compact bytes as save_json.
+
+    Keep sanitization and encoding bounded to one record rather than cloning
+    and encoding a multi-gigabyte artifact in memory. Publish only on success.
+    """
+    resolved = resolve_path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    def encoded(value):
+        return json.dumps(finite_json(value), separators=(',', ':'),
+                          ensure_ascii=ensure_ascii, allow_nan=False).encode('utf-8')
+    temporary = None
+    try:
+        with NamedTemporaryFile('wb', delete=False, dir=resolved.parent,
+                                prefix=f'.{resolved.name}.', suffix='.tmp') as handle:
+            temporary = Path(handle.name)
+            handle.write(b'{')
+            for index, (key, value) in enumerate(data.items()):
+                if index:
+                    handle.write(b',')
+                handle.write(encoded(key) + b':')
+                if key == 'records' and isinstance(value, (list, tuple)):
+                    handle.write(b'[')
+                    for record_index, record in enumerate(value):
+                        if record_index:
+                            handle.write(b',')
+                        handle.write(encoded(record))
+                    handle.write(b']')
+                else:
+                    handle.write(encoded(value))
+            handle.write(b'}')
+        temporary.replace(resolved)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def compress_file(src, dst, compresslevel=9):
     """Atomically gzip one file and return raw/gz byte sizes."""
     src_path = resolve_path(src)

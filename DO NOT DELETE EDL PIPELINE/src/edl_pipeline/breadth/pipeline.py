@@ -145,14 +145,16 @@ def generate_market_breadth(
         try: prepared=prepare_history(pd.read_csv(csv_path), methodology)
         except Exception as error: invalid_history.append({"symbol":symbol,"error":str(error)}); continue
         if prepared.empty: invalid_history.append({"symbol":symbol,"error":"empty normalized history"}); continue
-        processed_symbols.append(symbol); accumulators["all_active"].update(prepared,symbol)
+        processed_symbols.append(symbol)
+        peers=[]
         info=metadata.get(symbol,{})
         memberships=info.get("memberships",set())
         for key, required in UNIVERSE_MEMBERSHIPS.items():
-            if memberships & required: accumulators[key].update(prepared,symbol)
+            if memberships & required: peers.append(accumulators[key])
         sector=info.get("sector") or "Unclassified"
         if sector != "Unclassified":
-            sectors.setdefault(sector,BreadthAccumulator(methodology)).update(prepared,symbol)
+            peers.append(sectors.setdefault(sector,BreadthAccumulator(methodology)))
+        accumulators["all_active"].update(prepared,symbol,peers=peers)
     closes=load_index_closes(index_csv)
     def enriched(accumulator):
         rows=enrich_records(accumulator.records(),methodology,closes)

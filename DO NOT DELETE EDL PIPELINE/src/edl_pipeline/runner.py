@@ -130,7 +130,8 @@ def run_script_lanes(lanes):
         name, scripts = next(iter(lanes.items()))
         return {name: run_script_sequence(scripts)}
 
-    with ThreadPoolExecutor(max_workers=len(lanes), thread_name_prefix="edl-fetch") as executor:
+    # More logical chains must not increase top-level provider concurrency.
+    with ThreadPoolExecutor(max_workers=min(3, len(lanes)), thread_name_prefix="edl-fetch") as executor:
         futures = {
             name: executor.submit(run_script_sequence, scripts)
             for name, scripts in lanes.items()
@@ -389,8 +390,8 @@ def main(config=None, phase="all"):
             "reconcile_nse_equity_universe.py", "Phase 1", required=False
         )
 
-        reference_scripts = [(name, "Phase 2 / reference lane", name != "refresh_official_index_constituents.py")
-                             for name in ("fetch_ipo_provider_data.py", "fetch_scanx_ipo_data.py", "refresh_official_index_constituents.py")]
+        reference_scripts = [(name, "Phase 2 / reference lane", True)
+                             for name in ("fetch_ipo_provider_data.py", "fetch_scanx_ipo_data.py")]
         if config.fetch_ohlcv:
             print("\nPHASE 2: Independent fetch lanes (Enrichment + OHLCV)")
             print("-" * 40)
@@ -398,6 +399,11 @@ def main(config=None, phase="all"):
                 (script, "Phase 2 / enrichment lane", script in REQUIRED_PHASE2_SCRIPTS)
                 for script in PHASE2_SCRIPTS
                 if script == "fetch_company_filings.py"
+            ]
+            independent_scripts = [
+                (script, "Phase 2 / independent lane", script in REQUIRED_PHASE2_SCRIPTS)
+                for script in PHASE2_SCRIPTS
+                if script != "fetch_company_filings.py"
             ]
             ohlcv_scripts = [
                 (
@@ -407,20 +413,23 @@ def main(config=None, phase="all"):
                 )
                 for script in OHLCV_FETCH_LANE
             ]
-            # Keep the filing catch-up off the smaller independent fetches'
-            # path, reusing the reference lane without adding concurrency.
-            reference_scripts += [(script, "Phase 2 / reference lane", script in REQUIRED_PHASE2_SCRIPTS)
-                                  for script in PHASE2_SCRIPTS if script != "fetch_company_filings.py"]
+            # These smaller fetches consume foundation files, not the official
+            # constituent refresh. Queue them on the first free worker rather
+            # than behind that slow refresh (still at most three subprocesses).
+            # Their internal order retains the corporate-actions/calendar and
+            # price-band dependencies; index OHLCV still waits for all lanes.
             lane_results = run_script_lanes(
                 {
                     "enrichment": enrichment_scripts,
                     "ohlcv": ohlcv_scripts,
                     "reference": reference_scripts,
+                    "independent": independent_scripts,
                 }
             )
             results.update(lane_results["enrichment"])
             results.update(lane_results["ohlcv"])
             results.update(lane_results["reference"])
+            results.update(lane_results["independent"])
 
             # A required fetch failure cannot produce a valid dataset. Stop
             # here instead of spending the build phase on outputs that will be
@@ -446,7 +455,9 @@ def main(config=None, phase="all"):
                     required=script in REQUIRED_PHASE2_SCRIPTS,
                 )
 
-            results.update(run_script_sequence(reference_scripts))
+            # Preserve the no-OHLCV diagnostic path's existing stage order.
+            results.update(run_script_sequence(reference_scripts + [
+                ("refresh_official_index_constituents.py", "Phase 2 / reference lane", False)]))
 
         failed = any(result.required and not result.ok for result in results.values())
         if phase == 'fetch' or failed:
@@ -455,6 +466,11 @@ def main(config=None, phase="all"):
             write_pipeline_report(report)
             return int(failed)
 
+    # The official constituent reference writes only repository/reference/.
+    # No scanner, index-history or publication calculation consumes it. Retain
+    # the refresh and its result, but hide network waits behind the build.
+    # Older fetch checkpoints may already include it: never execute it twice.
+    reference_name = "refresh_official_index_constituents.py"
     print("\nPHASE 3: Base Analysis (Building Master JSON)")
     print("-" * 40)
     results["bulk_market_analyzer.py"] = run_script("bulk_market_analyzer.py", "Phase 3", required=True)
@@ -466,19 +482,23 @@ def main(config=None, phase="all"):
         )
         return 1
 
-    print("\nPHASE 4: Enrichment (Injecting into Master JSON)")
-    print("-" * 40)
-    for script in PHASE4_SCRIPTS:
-        results[script] = run_script(
-            script,
-            "Phase 4",
-            required=True,
-        )
+    # Start best-effort work only after the fail-fast base build succeeds;
+    # executor shutdown cannot then delay reporting a base-build failure.
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="edl-reference") as executor:
+        reference = None if reference_name in results else executor.submit(
+            run_script, reference_name, "Build / standalone reference", required=False)
 
-    print("\nPHASE 4.5: Canonical consumers")
-    print("-" * 40)
-    for script in POST_STANDARDIZATION_SCRIPTS:
-        results[script] = run_script(script, "Phase 4.5", required=True)
+        print("\nPHASE 4: Enrichment (Injecting into Master JSON)")
+        print("-" * 40)
+        for script in PHASE4_SCRIPTS:
+            results[script] = run_script(script, "Phase 4", required=True)
+
+        print("\nPHASE 4.5: Canonical consumers")
+        print("-" * 40)
+        for script in POST_STANDARDIZATION_SCRIPTS:
+            results[script] = run_script(script, "Phase 4.5", required=True)
+        if reference is not None:
+            results[reference_name] = reference.result()
 
     if any(result.required and not result.ok for result in results.values()):
         write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))

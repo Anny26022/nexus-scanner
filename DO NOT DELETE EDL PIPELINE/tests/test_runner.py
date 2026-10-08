@@ -115,6 +115,36 @@ class RunnerTests(unittest.TestCase):
         self.assertLess(completed.index("one-first.py"), completed.index("one-second.py"))
         self.assertLess(completed.index("two-first.py"), completed.index("two-second.py"))
 
+    def test_independent_chain_starts_on_first_free_worker_with_three_worker_cap(self):
+        first_three = threading.Barrier(3)
+        independent_started = threading.Event()
+        lock = threading.Lock()
+        active = 0
+        peak = 0
+        def run(script, phase_label='', required=False):
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            try:
+                if script == 'independent':
+                    independent_started.set()
+                else:
+                    first_three.wait(timeout=5)
+                    if script != 'enrichment':
+                        self.assertTrue(independent_started.wait(timeout=5))
+                return ScriptResult(True, required)
+            finally:
+                with lock:
+                    active -= 1
+        groups = {name: [(name, '', False)] for name in
+                  ('enrichment', 'ohlcv', 'reference', 'independent')}
+        with mock.patch('edl_pipeline.runner.run_script', side_effect=run):
+            results = run_script_lanes(groups)
+        self.assertEqual(peak, 3)
+        self.assertEqual(list(results), list(groups))
+        self.assertTrue(all(result.ok for lane in results.values() for result in lane.values()))
+
     def test_ohlcv_run_executes_each_fetch_once_with_safe_dependencies(self):
         calls = []
 
@@ -173,11 +203,15 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(main(PipelineConfig()), 1)
         self.assertEqual([script for script, _, _ in captured['enrichment']], ['fetch_company_filings.py'])
         expected = set(PHASE2_SCRIPTS) | set(OHLCV_FETCH_LANE) | {
-            'fetch_ipo_provider_data.py', 'fetch_scanx_ipo_data.py', 'refresh_official_index_constituents.py'}
+            'fetch_ipo_provider_data.py', 'fetch_scanx_ipo_data.py'}
         seen = [script for scripts in captured.values() for script, _, _ in scripts]
         self.assertEqual(set(seen), expected)
         self.assertEqual(len(seen), len(expected))
-        self.assertEqual(len(captured), 3)
+        self.assertEqual(len(captured), 4)
+        self.assertEqual([script for script, _, _ in captured['reference']],
+                         ['fetch_ipo_provider_data.py', 'fetch_scanx_ipo_data.py'])
+        self.assertEqual([script for script, _, _ in captured['independent']],
+                         [script for script in PHASE2_SCRIPTS if script != 'fetch_company_filings.py'])
 
     def test_no_ohlcv_fetches_session_once_before_filter_and_stops_if_it_fails(self):
         for succeeds in (True, False):
@@ -224,6 +258,66 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(Counter(calls), expected)
             self.assertTrue(all(count == 1 for count in expected.values()))
 
+    def test_reference_overlaps_enrichment_but_does_not_delay_base_failure(self):
+        for fail_base, fail_reference in ((False, False), (True, False), (False, True)):
+            started = threading.Event()
+            release = threading.Event()
+            reported = []
+            calls = []
+            def run(script, phase_label='', required=False):
+                calls.append(script)
+                if script == 'refresh_official_index_constituents.py':
+                    self.assertFalse(required)
+                    started.set()
+                    self.assertTrue(release.wait(timeout=5))
+                    return ScriptResult(not fail_reference, required)
+                if script == 'bulk_market_analyzer.py':
+                    self.assertFalse(started.is_set())
+                    if fail_base:
+                        return ScriptResult(False, required)
+                if script == PHASE4_SCRIPTS[0]:
+                    self.assertTrue(started.wait(timeout=5))
+                    self.assertFalse(release.is_set())
+                if script == 'build_chart_artifacts.py':
+                    release.set()
+                return ScriptResult(True, required)
+            with self.subTest(fail_base=fail_base, fail_reference=fail_reference), \
+                    tempfile.TemporaryDirectory() as directory, \
+                    mock.patch('edl_pipeline.runner.BASE_DIR', directory), \
+                    mock.patch('edl_pipeline.runner.run_script', side_effect=run), \
+                    mock.patch('edl_pipeline.runner.download_nse_listing_dates', return_value=True), \
+                    mock.patch('edl_pipeline.runner.compress_output', return_value=(100, 10)), \
+                    mock.patch('edl_pipeline.runner.validate_final_artifacts', return_value=[]), \
+                    mock.patch('edl_pipeline.runner.write_pipeline_report', side_effect=reported.append), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(PipelineConfig(cleanup_intermediate=False)), int(fail_base))
+            if fail_base:
+                self.assertNotIn('refresh_official_index_constituents.py', calls)
+                self.assertNotIn('refresh_official_index_constituents.py', reported[-1]['scripts'])
+                self.assertNotIn(PHASE4_SCRIPTS[0], calls)
+            else:
+                self.assertEqual(calls.count('refresh_official_index_constituents.py'), 1)
+                result = reported[-1]['scripts']['refresh_official_index_constituents.py']
+                self.assertEqual(result['ok'], not fail_reference)
+                self.assertFalse(result['required'])
+                positions = [calls.index(script) for script in PHASE4_SCRIPTS]
+                self.assertEqual(positions, sorted(positions))
+
+    def test_old_fetch_checkpoint_does_not_repeat_completed_reference(self):
+        config = PipelineConfig(cleanup_intermediate=False)
+        reference = 'refresh_official_index_constituents.py'
+        checkpoint = {'config': {'fetch_ohlcv': True, 'fetch_optional': False, 'cleanup_intermediate': False},
+                      'exit_code': 0, 'total_time_seconds': 1,
+                      'scripts': {reference: ScriptResult(True, False).to_dict()}}
+        with mock.patch('edl_pipeline.runner.pipeline_utils.load_json', return_value=checkpoint), \
+                mock.patch('edl_pipeline.runner.run_script', return_value=ScriptResult(True, True)) as run, \
+                mock.patch('edl_pipeline.runner.compress_output', return_value=(100, 10)), \
+                mock.patch('edl_pipeline.runner.validate_final_artifacts', return_value=[]), \
+                mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(config, phase='build'), 0)
+        self.assertNotIn(reference, [call.args[0] for call in run.call_args_list])
+
     def test_build_rejects_failed_fetch_checkpoint(self):
         with mock.patch('edl_pipeline.runner.pipeline_utils.load_json', return_value={
                 'config': {'fetch_ohlcv': True, 'fetch_optional': False, 'cleanup_intermediate': True},
@@ -247,6 +341,7 @@ class RunnerTests(unittest.TestCase):
             'enrichment': {'fetch_company_filings.py': ScriptResult(True, True)},
             'ohlcv': {'fetch_all_ohlcv.py': failed},
             'reference': {},
+            'independent': {},
         }
         with tempfile.TemporaryDirectory() as directory, \
                 mock.patch('edl_pipeline.runner.BASE_DIR', directory), \

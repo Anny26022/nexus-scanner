@@ -55,7 +55,7 @@ def _save_json(path, data):
         prefix=f".{resolved.name}.",
         suffix=".tmp",
     ) as handle:
-        json.dump(data, handle, indent=2, ensure_ascii=False, allow_nan=False)
+        json.dump(data, handle, separators=(',', ':'), ensure_ascii=False, allow_nan=False)
         temporary = Path(handle.name)
     try:
         temporary.replace(resolved)
@@ -96,83 +96,76 @@ def _round_value(value, digits):
     return value
 
 
-def generate_market_breadth(
-    universe_rows,
-    ohlcv_dir,
-    index_csv,
-    methodology,
-    output_path,
-    snapshot_path,
-    generated_at=None,
-):
-    """Generate the versioned breadth series and its exact universe snapshot."""
-    methodology.validate()
-    generated_at = generated_at or datetime.now(timezone.utc).isoformat()
-    snapshot = build_universe_snapshot(universe_rows, methodology, generated_at)
-    _save_json(snapshot_path, snapshot)
-
-    accumulator = BreadthAccumulator(methodology)
-    missing_history = []
-    invalid_history = []
-    processed_symbols = []
-    ohlcv_root = Path(ohlcv_dir)
-
-    for stock in snapshot["eligible"]:
-        symbol = stock["symbol"]
-        csv_path = symbol_csv_path(ohlcv_root, symbol)
-        if not csv_path.exists():
-            missing_history.append(symbol)
+def _metadata_by_symbol(rows):
+    """Use the same highest-market-cap duplicate selection as the universe snapshot."""
+    result = {}
+    for row in rows:
+        symbol = str(row.get("Sym") or row.get("Symbol") or row.get("symbol") or "").strip()
+        if not symbol:
             continue
         try:
-            prepared = prepare_history(pd.read_csv(csv_path), methodology)
-        except Exception as error:
-            invalid_history.append({"symbol": symbol, "error": str(error)})
+            market_cap = float(row.get("Mcap", row.get("Market Cap(Cr.)", float("-inf"))))
+        except (TypeError, ValueError):
+            market_cap = float("-inf")
+        previous = result.get(symbol)
+        if previous is not None and market_cap <= previous["_market_cap"]:
             continue
-        if prepared.empty:
-            invalid_history.append({"symbol": symbol, "error": "empty normalized history"})
-            continue
-        accumulator.update(prepared)
-        processed_symbols.append(symbol)
+        memberships = (row.get("index_memberships") or row.get("indexMemberships") or row.get("index_membership") or row.get("Index Memberships") or row.get("Index") or row.get("indices") or [])
+        if isinstance(memberships, str):
+            memberships = [item.strip() for item in memberships.split(",") if item.strip()]
+        result[symbol] = {"sector": str(row.get("Sector") or row.get("sector") or "Unclassified"), "memberships": {str(item).upper().replace(" ", "") for item in memberships}, "_market_cap": market_cap}
+    for metadata in result.values():
+        metadata.pop("_market_cap", None)
+    return result
 
-    records = enrich_records(
-        accumulator.records(),
-        methodology,
-        load_index_closes(index_csv),
-    )
-    if methodology.output_sessions:
-        records = records[-methodology.output_sessions:]
-    rounded_records = [
-        {key: _round_value(value, methodology.rounding_digits) for key, value in row.items()}
-        for row in records
-    ]
+UNIVERSE_MEMBERSHIPS = {
+    "nifty50": {"NIFTY50"},
+    "nifty500": {"NIFTY500"},
+    "niftymidsmall400": {"NIFTYMIDSMALLCAP400", "NIFTYMIDSMALL400"},
+}
 
-    artifact = {
-        "generated_at": generated_at,
-        "methodology": methodology.to_dict(),
-        "table_schema": TRADINGVIEW_TABLE_SCHEMA,
-        "table_notes": {
-            "selected_ma_type": methodology.default_ma_type,
-            "default_index_symbol": "NIFTY",
-            "all_index_history_artifact": "all_indices_history_v2.json.gz",
-        },
-        "source": {
-            "universe": "Dhan ScanX customscan/fetchdt snapshot",
-            "equity_history": "Dhan openweb-ticks getDataH normalized OHLCV cache",
-            # Publication metadata must be portable across runners. The
-            # artifact name identifies the selected index history without
-            # persisting an absolute workspace path.
-            "index_history": Path(index_csv).name,
-        },
-        "quality": {
-            "eligible_symbols": snapshot["eligible_count"],
-            "processed_symbols": len(processed_symbols),
-            "missing_history_count": len(missing_history),
-            "missing_history_symbols": missing_history,
-            "invalid_history_count": len(invalid_history),
-            "invalid_history": invalid_history,
-            "record_count": len(rounded_records),
-        },
-        "records": rounded_records,
-    }
-    _save_json(output_path, artifact)
-    return artifact, snapshot
+def _round_records(records, digits):
+    return [{key: _round_value(value, digits) for key, value in row.items()} for row in records]
+
+def generate_market_breadth(
+    universe_rows, ohlcv_dir, index_csv, methodology, output_path, snapshot_path,
+    generated_at=None, sector_output_path=None, contribution_output_path=None, benchmark_panels=None,
+):
+    """Generate all-active, named-universe, sector and audit breadth artifacts."""
+    methodology.validate(); generated_at = generated_at or datetime.now(timezone.utc).isoformat()
+    snapshot = build_universe_snapshot(universe_rows, methodology, generated_at); _save_json(snapshot_path, snapshot)
+    metadata = _metadata_by_symbol(universe_rows)
+    accumulators = {"all_active": BreadthAccumulator(methodology, include_contributions=True)}
+    for key in UNIVERSE_MEMBERSHIPS: accumulators[key] = BreadthAccumulator(methodology, include_contributions=True)
+    sectors = {}
+    missing_history=[]; invalid_history=[]; processed_symbols=[]; root=Path(ohlcv_dir)
+    for stock in snapshot["eligible"]:
+        symbol=stock["symbol"]; csv_path=symbol_csv_path(root,symbol)
+        if not csv_path.exists(): missing_history.append(symbol); continue
+        try: prepared=prepare_history(pd.read_csv(csv_path), methodology)
+        except Exception as error: invalid_history.append({"symbol":symbol,"error":str(error)}); continue
+        if prepared.empty: invalid_history.append({"symbol":symbol,"error":"empty normalized history"}); continue
+        processed_symbols.append(symbol); accumulators["all_active"].update(prepared,symbol)
+        info=metadata.get(symbol,{})
+        memberships=info.get("memberships",set())
+        for key, required in UNIVERSE_MEMBERSHIPS.items():
+            if memberships & required: accumulators[key].update(prepared,symbol)
+        sector=info.get("sector") or "Unclassified"
+        if sector != "Unclassified":
+            sectors.setdefault(sector,BreadthAccumulator(methodology)).update(prepared,symbol)
+    closes=load_index_closes(index_csv)
+    def enriched(accumulator):
+        rows=enrich_records(accumulator.records(),methodology,closes)
+        return _round_records(rows[-methodology.output_sessions:] if methodology.output_sessions else rows, methodology.rounding_digits)
+    universe_records={key: enriched(value) for key,value in accumulators.items()}
+    records=universe_records["all_active"]
+    universe_payload={key:{"label": {"all_active":"All Active","nifty50":"Nifty 50","nifty500":"Nifty 500","niftymidsmall400":"Nifty MidSmall 400"}[key],"records":value,"available":bool(value)} for key,value in universe_records.items()}
+    artifact={"schema_version":3,"generated_at":generated_at,"methodology":methodology.to_dict(),"table_schema":TRADINGVIEW_TABLE_SCHEMA,"table_notes":{"selected_ma_type":methodology.default_ma_type,"default_index_symbol":"NIFTY","all_index_history_artifact":"all_indices_history_v2.json.gz","sector_history_artifact":"sector_breadth_v2.json.gz","contribution_artifact":"market_breadth_contributions_v2.json.gz"},"source":{"universe":"Dhan ScanX customscan/fetchdt snapshot","equity_history":"Dhan openweb-ticks getDataH normalized OHLCV cache","index_history":Path(index_csv).name},"quality":{"eligible_symbols":snapshot["eligible_count"],"processed_symbols":len(processed_symbols),"missing_history_count":len(missing_history),"missing_history_symbols":missing_history,"invalid_history_count":len(invalid_history),"invalid_history":invalid_history,"record_count":len(records)},"records":records,"universes":universe_payload,"benchmark_panels":benchmark_panels or {}}
+    _save_json(output_path,artifact)
+    if sector_output_path:
+        sector_artifact={"schema_version":1,"generated_at":generated_at,"methodology":methodology.to_dict(),"sectors":[{"sector":sector,"records":enriched(acc)} for sector,acc in sorted(sectors.items())]}
+        _save_json(sector_output_path,sector_artifact)
+    if contribution_output_path:
+        contribution_artifact={"schema_version":1,"generated_at":generated_at,"universes":{key:{"records":value.contribution_records()[-methodology.output_sessions:] if methodology.output_sessions else value.contribution_records()} for key,value in accumulators.items()}}
+        _save_json(contribution_output_path,contribution_artifact)
+    return artifact,snapshot

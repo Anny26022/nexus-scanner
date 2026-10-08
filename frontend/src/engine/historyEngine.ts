@@ -3,6 +3,8 @@ import { selectSetupEpisode, detailedSelectedBases,type BaseRecord } from './bas
 import type { ActiveCondition } from '../types/screener';
 import type { SnapshotStock } from '../api/snapshotScreen';
 import { evaluateSnapshotCondition } from '../api/snapshotScreen';
+import { normalizeSnapshotCondition, readSnapshotField, snapshotFieldDependency } from './snapshotFields';
+import { conditionCapability } from '../api/capabilityRegistry';
 import { compare, negate, type Truth } from './expression';
 
 export interface CandleSeries { dates:Int32Array; open:Float64Array; high:Float64Array; low:Float64Array; close:Float64Array; volume:Float64Array }
@@ -119,25 +121,10 @@ function persisted(s:CandleSeries,averages:number[],side:string,days:number,mode
 }
 function zigzag(s:CandleSeries,start:number,thresholdPct:number){const out:Array<[number,number,'high'|'low']>=[];let direction=0,extreme=start,price=s.close[start];const threshold=thresholdPct/100;for(let i=start+1;i<s.close.length;i++){const close=s.close[i];if(direction>=0){if(close>=price){extreme=i;price=close;}else if((price-close)/price>=threshold){out.push([extreme,s.high[extreme],'high']);direction=-1;extreme=i;price=close;continue;}}if(direction<=0){if(close<=price){extreme=i;price=close;}else if((close-price)/price>=threshold){out.push([extreme,s.low[extreme],'low']);direction=1;extreme=i;price=close;}}}if(direction>0)out.push([extreme,s.high[extreme],'high']);else if(direction<0)out.push([extreme,s.low[extreme],'low']);return out;}
 
-const stockFieldNames:Record<string,string>={
-  market_cap_crore:'marketCapCrore',pe_ratio:'peRatio',debt_to_equity:'debtToEquity',eps_ttm:'epsTtm',
-  promoter_holding_percent:'promoterHoldingPct',public_holding_percent:'publicHoldingPct',number_of_shareholders:'numberOfShareholders',
-  dividend_yield_percent:'dividendYieldPct',face_value:'faceValue',total_income_in_lakhs:'totalIncomeLakh',
-  total_expense_in_lakhs:'totalExpenseLakh',profit_before_tax_in_lakhs:'profitBeforeTaxLakh',
-  total_tax_expenses_in_lakhs:'totalTaxExpensesLakh',net_profit_in_lakhs:'netProfitLakh',total_equity_in_lakhs:'totalEquityLakh',
-  total_assets_in_lakhs:'totalAssetsLakh',current_assets_in_lakhs:'currentAssetsLakh',non_current_assets_in_lakhs:'nonCurrentAssetsLakh',
-  total_liabilities_in_lakhs:'totalLiabilitiesLakh',current_liabilities_in_lakhs:'currentLiabilitiesLakh',
-  non_current_liabilities_in_lakhs:'nonCurrentLiabilitiesLakh',total_revenue_in_lakhs:'totalRevenueLakh',
-  operating_cash_flow_in_lakhs:'operatingCashFlowLakh',investing_cash_flow_in_lakhs:'investingCashFlowLakh',
-  net_cash_flow_in_lakhs:'netCashFlowLakh',interest_coverage:'interestCoverage',vwap:'vwap',
-  dividend_per_share_latest:'dividendPerShare',all_time_high:'allTimeHigh',all_time_low:'allTimeLow',
-};
-
-function fieldValue(series:CandleSeries,stock:SnapshotStock,field:string):number{
-  const periods:Record<string,number>={sma_20:20,sma_50:50,sma_200:200};
-  const returns:Record<string,number>={return_1m:21,return_1y:252,return_3y:756,return_5y:1260};
-  if(field==='close')return last(series.close);if(field==='open')return last(series.open);if(field==='high')return last(series.high);if(field==='low')return last(series.low);if(field==='volume_lakh')return last(series.volume)/100000;
-  if(periods[field])return last(sma(series.close,periods[field]));
+function fieldValue(series:CandleSeries,stock:SnapshotStock,field:string,session:string):number{
+  if(snapshotFieldDependency(field))return readSnapshotField(stock,field,session) ?? NaN;
+  if(!stock.historyAligned || stock.asOfDate !== session)return NaN;
+  const returns:Record<string,number>={return_3y:756};
   if(field==='high_52w')return max(slice(series.high,-252));if(field==='low_52w')return min(slice(series.low,-252));
   if(returns[field])return series.close.length>returns[field]?percentChange(last(series.close),last(series.close,returns[field])):NaN;
   if(field==='return_ytd'){
@@ -150,8 +137,7 @@ function fieldValue(series:CandleSeries,stock:SnapshotStock,field:string):number
     const value=mean(Array.from({length:14},(_,j)=>{const i=series.close.length-14+j;return (series.high[i]-series.low[i])/series.close[i]*100;}));
     return field==='annualized_volatility'?value*Math.sqrt(250):value;
   }
-  const key=stockFieldNames[field]??field;
-  return n((stock as unknown as Record<string,unknown>)[key],NaN);
+  return NaN;
 }
 
 function financialRecords(context:AdvancedContext,parameters:Record<string,unknown>){
@@ -167,6 +153,8 @@ const scalarIds=new Set(['PRICE_VS_SMA','PRICE_VS_EMA','PRICE_CHANGE_PCT','GAP_U
 const historyIds=new Set(['FIELD_COMPARISON','PERSISTENT_MOMENTUM','PRICE_VS_EMA','PRICE_VS_SMA','EMA_SHAKEOUT','ADX','PCT_DAYS_ABOVE_MA','MA_STACK','MA_SLOPE','PRICE_CHANGE_PCT','CONSECUTIVE_UP_DAYS','GAP_UP','GAP_DOWN','VOLUME_VS_AVG','AVG_VOLUME_RATIO','HIGHEST_VOLUME_IN_N_DAYS','DELIVERY_PCT_SPIKE','DELIVERY_PERCENT','NEW_HIGH','NEW_LOW','PCT_FROM_52W_HIGH','PCT_FROM_52W_LOW','CONSOLIDATION_RANGE','ATR_PCT','RANGE_CONTRACTION','INSIDE_BAR','UNFILLED_GAP','VCP_LEGS','HORIZONTAL_RESISTANCE_LINE','MA_CONVERGENCE','SUPERTREND','INDICATOR_COMPARE','DIVERGENCE','RELATIVE_STRENGTH','RS_NEW_HIGH','AVG_TURNOVER','ADR_PCT','DAYS_SINCE_EARNINGS','LISTING_AGE_DAYS','EARNINGS_GROWTH','MARKET_BREADTH']);
 
 export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCondition,context:AdvancedContext):Truth{
+  const normalized=normalizeSnapshotCondition(condition);
+  if(normalized!==condition)return evaluateHistoryCondition(series,normalized,context);
   const special=evaluateLegacySpecial(series,condition,context);
   if(special!==undefined)return condition.isNegated?negate(special):special;
   const legacy=translateLegacy(condition);
@@ -180,11 +168,12 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
     return condition.isNegated?negate(outcome.value):outcome.value;
   }
   if(['BASE_STAGE','BASE_METRIC','BASE_FORMULA'].includes(id)||id.startsWith('lib-nexus-'))return evaluateSnapshotCondition({...context.stock,bases:detailedSelectedBases(context.stock.bases,context.bases)},condition,context.session);
+  if(id!=='AVG_TURNOVER'&&conditionCapability(condition).browser(condition))return evaluateSnapshotCondition(context.stock,condition,context.session);
   if(id.startsWith('lib-'))return evaluateSnapshotCondition(context.stock,condition,context.session);
   if(!scalarIds.has(id)&&!historyIds.has(id))throw new Error(`Unsupported condition: ${id}`);
   if(scalarIds.has(id)){const value=evaluateSnapshotCondition(context.stock,{...condition,isNegated:false},context.session);if(value!==null)return condition.isNegated?negate(value):value;}
   let result:Truth=null;
-  if(id==='FIELD_COMPARISON'){const left=fieldValue(series,context.stock,str(p.field)),target=typeof p.value==='object'&&p.value!==null?fieldValue(series,context.stock,str((p.value as {field?:unknown}).field)):n(p.value,NaN);result=compare(left,p.comparison,target);}
+  if(id==='FIELD_COMPARISON'){const left=fieldValue(series,context.stock,str(p.field),context.session),target=typeof p.value==='object'&&p.value!==null?fieldValue(series,context.stock,str((p.value as {field?:unknown}).field),context.session):n(p.value,NaN);result=compare(left,p.comparison,target);}
   else if(id==='PE_RATIO'){
     const records=financialRecords(context,p).slice(0,4),quarters=records.map(quarterIndex),profits=records.map(row=>n(row.net_profit??row.netProfit,NaN)),total=profits.reduce((sum,value)=>sum+value,0),marketCap=n(context.stock.marketCapCrore,NaN),consecutive=records.length===4&&quarters.every((value,index)=>index===0||quarters[index-1]-value===1);
     result=consecutive&&profits.every(Number.isFinite)&&total>0&&Number.isFinite(marketCap)?compare(marketCap/total,p.comparison,p.value):null;

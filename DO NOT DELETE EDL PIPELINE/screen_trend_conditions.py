@@ -62,16 +62,25 @@ def _load_context(root, as_of_date=None, stock_path=None, index_path=None, bread
         for stock in stocks:
             stock["as_of_date"] = as_of_date
         latest = [saved["breadth"]] if saved.get("breadth") else []
+    from edl_pipeline.breadth.gates import gate_metrics
     breadth = {}
-    if latest:
-        row = latest[0]
-        all_active = {
-            "pct_above_sma10": row.get("above_10_pct"), "pct_above_sma20": row.get("above_20_pct"),
-            "pct_above_sma50": row.get("above_50_pct"), "pct_above_sma200": row.get("above_200_pct"),
-            "ad_ratio_sma10": row.get("ratio_10"),
-            "volume_ratio20": (row.get("volume_above_20", 0) / row.get("volume_below_or_equal_20")) if row.get("volume_below_or_equal_20") else None,
-        }
-        breadth["all_active"] = all_active
+    source_universes = breadth_artifact.get("universes") or {"all_active": {"records": records}}
+    for key, payload in source_universes.items():
+        rows = payload.get("records", []) if isinstance(payload, dict) else []
+        if rows:
+            breadth[key] = gate_metrics(rows[-1])
+    if saved:
+        saved_universes = saved.get("breadth_universes") or {}
+        if saved_universes:
+            breadth = {key: gate_metrics(row) for key, row in saved_universes.items()}
+        elif saved.get("breadth"):
+            # Older snapshots predate named breadth universes. They remain
+            # point-in-time safe for their all-active breadth value.
+            breadth = {"all_active": gate_metrics(saved["breadth"])}
+        else:
+            breadth = {}
+    else:
+        latest = [breadth_artifact.get("records", [])[-1]] if breadth_artifact.get("records") else latest
     ban = (saved or {}).get("fno_ban") or _read_json(root / "nse_fno_ban.json") or _read_json(root / "nse_fno_ban.json.gz") or {}
     fno_ban_symbols = {str(symbol).upper(): True for symbol in ban.get("symbols", [])}
     rs_artifact = _read_json(root / "rs_rating_daily.json") or _read_json(root / "rs_rating_daily.json.gz") or {}
@@ -129,7 +138,7 @@ def _requires_delivery(expression):
             return True
     except (TypeError, ValueError):
         pass
-    return any(_requires_delivery(value) for key, value in expression.items() if key in {"conditions", "children", "expression"})
+    return any(_requires_delivery(value) for key, value in expression.items() if key in {"conditions", "children", "expression", "child"})
 
 
 def _load_delivery_history(path, symbols=None, eod2_path=None):

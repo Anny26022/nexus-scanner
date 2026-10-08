@@ -1,0 +1,14 @@
+{
+  "name": "nexus-scanner",
+  "compatibility_date": "2026-10-07",
+  "workers_dev": true,
+  "build": {
+    "command": "npm ci --prefix frontend && npm run build --prefix frontend"
+  },
+  // Static frontend only; external historical API setup: frontend/README.md.
+  "assets": {
+    "directory": "./frontend/dist",
+    "not_found_handling": "single-page-application"
+  },
+  "previews": {}
+}

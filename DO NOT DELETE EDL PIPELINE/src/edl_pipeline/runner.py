@@ -144,10 +144,12 @@ def compress_output(include_ohlcv_derived=True):
     for filename, output_name in FILES_TO_COMPRESS.items():
         if not include_ohlcv_derived and filename in OHLCV_DERIVED_FILES:
             continue
+        print(f"  Compressing {filename}...", flush=True)
         raw_size, gz_size = compress_file(filename, output_name)
         if raw_size:
             total_raw += raw_size
             total_gz += gz_size
+            print(f"  OK {output_name} ({gz_size / (1024 * 1024):.1f} MB)", flush=True)
         else:
             print(f"  WARNING: {filename} not found to compress.")
 
@@ -397,6 +399,15 @@ def main(config=None):
                 "Phase 2",
                 required=script in REQUIRED_PHASE2_SCRIPTS,
             )
+
+    print("\nPHASE 2.75: Standalone official index constituents")
+    print("-" * 40)
+    # This preserves a separate official reference only.  It is intentionally
+    # not consumed by the scanner or publication path, and a temporary public
+    # source failure must not block the core market-data refresh.
+    results["refresh_official_index_constituents.py"] = run_script(
+        "refresh_official_index_constituents.py", "Phase 2.75", required=False
+    )
 
     print("\nPHASE 3: Base Analysis (Building Master JSON)")
     print("-" * 40)

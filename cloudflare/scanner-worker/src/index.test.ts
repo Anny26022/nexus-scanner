@@ -66,7 +66,7 @@ describe('scanner worker boundary',()=>{
     const env=environment() as any;
     env.SCANNER_DATA.get=vi.fn(async()=>({json:async()=>({...SCANNER_IDENTITY,engineVersion:'old',schemaVersion:7,revision:'a'.repeat(64),session:'2026-10-01'})}));
     vi.stubGlobal('caches',{default:{match:vi.fn(async()=>undefined)}});
-    const response=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',body:JSON.stringify({...SCANNER_IDENTITY,datasetRevision:'a'.repeat(64),asOfDate:'2026-10-01'})}),env,execution);
+    const response=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',body:JSON.stringify({...SCANNER_IDENTITY,datasetRevision:'a'.repeat(64),asOfDate:'2026-10-01',page:1,pageSize:15,universe:'mainboard',expressionTree:{type:'condition',condition:{conditionId:'FIELD_COMPARISON',parameters:{field:'close',comparison:'GREATER',value:100}}}})}),env,execution);
     expect(response.status).toBe(400);
     expect(env.SCANNER_DATA.get).toHaveBeenCalledTimes(1);
   });
@@ -109,7 +109,7 @@ it('runs a complete nested base preset and private metric through verified R2 sh
   const stock={symbol:'TEST',name:'Test',close:100,marketCap:1000,historyAligned:true,asOfDate:session,metrics:{return21:12},bases:{FORMING:base}};
   const save=(key:string,value:unknown)=>objects.set(key,gzipSync(Buffer.from(JSON.stringify(value))));
   const nativeStock={...stock,bases:{FORMING:{...Object.fromEntries(Object.entries(base).filter(([key])=>!['base','current','selection'].includes(key))),stage:'FORMING'}}};
-  save('metadata.json.gz',{stocks:['TEST','OTHER'].map(symbol=>({symbol,name:symbol,historyAligned:true,asOfDate:session}))});save('benchmarks.json.gz',{});
+  save('metadata.json.gz',{nativeRowsInAuxiliary:true,stocks:['TEST','OTHER'].map(symbol=>({symbol,name:symbol,historyAligned:true,asOfDate:session}))});save('benchmarks.json.gz',{});
   for(let index=0;index<32;index++){
     const count=index<2?1:0,symbol=index===0?'TEST':'OTHER',header=Buffer.from(JSON.stringify({symbols:count?[{symbol,offset:0,count:1}]:[]}));
     const dates=(12+header.length+7)&~7,values=(dates+count*4+7)&~7,raw=Buffer.alloc(values+count*40);
@@ -133,8 +133,13 @@ it('runs a complete nested base preset and private metric through verified R2 sh
   expect(body.rows[0].bases.FORMING.base.depthPct).toBe(20);
   expect(body.rows[0].bases.FORMING.current.rsRating).toBe(90);
   expect(body.rows[0].bases.FORMING.current.distanceEMA150).toBeUndefined();
+  const publicBaseRequest=new Request('https://worker.example/v1/screens/run',{method:'POST',body:JSON.stringify({...payload,
+    expressionTree:leaf('lib-nexus-strong-bases',{})})});
+  const publicBaseResponse=await worker.fetch(publicBaseRequest,env,execution);
+  expect(publicBaseResponse.status).toBe(200);
+  expect((await publicBaseResponse.json() as any).rows.map((row:any)=>row.symbol)).toEqual(['OTHER','TEST']);
   expect(get.mock.calls.some(([key])=>key.includes('base-history/'))).toBe(false);
-  expect(put).toHaveBeenCalledOnce();const reads=get.mock.calls.length;
+  expect(put).toHaveBeenCalledTimes(2);const reads=get.mock.calls.length;
   match.mockImplementation(async()=>response.clone() as any);
   const cached=await worker.fetch(request(),env,execution);expect(cached.status).toBe(200);expect(get).toHaveBeenCalledTimes(reads);
   match.mockImplementation(async()=>undefined);

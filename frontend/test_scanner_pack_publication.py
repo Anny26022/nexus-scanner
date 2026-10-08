@@ -10,9 +10,10 @@ from types import SimpleNamespace
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from scanner_identity import checked_identity
 from scanner_pack_publication import BaseHistoryArchive,MAGIC,SHARD_COUNT,build_private_scanner_pack,PrivateR2Store,_shard
+from scanner_pack_publication import MAGIC,SHARD_COUNT,build_private_scanner_pack,_pack_shard
 
 
 class Cache:
@@ -74,6 +75,16 @@ class ScannerPackTests(unittest.TestCase):
         deleted={call.args[1].rsplit('/',1)[-1] for call in store.run.call_args_list if call.args[0]=='purge'}
         self.assertEqual(deleted,{revisions[1],revisions[2]})
         self.assertNotIn(revisions[0],deleted)
+    def test_worker_golden_shard_matches_actual_publisher(self):
+        fixtures = Path(__file__).resolve().parents[1] / 'cloudflare/scanner-worker/src/fixtures'
+        inputs = json.loads((fixtures / 'publisher-shard.json').read_text())
+        entries = []
+        for symbol, records in inputs.items():
+            frame = pd.DataFrame(records)
+            frame['Date'] = pd.to_datetime(frame['Date'])
+            entries.append((symbol, frame))
+        expected = gzip.decompress((fixtures / 'publisher-shard.bin.gz').read_bytes())
+        self.assertEqual(gzip.decompress(_pack_shard(entries)), expected)
 
     def test_binary_pack_is_deterministic_bounded_and_manifested(self):
         frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-10-01',periods=1600),'Open':1.,'High':2.,'Low':.5,'Close':1.5,'Volume':100.})

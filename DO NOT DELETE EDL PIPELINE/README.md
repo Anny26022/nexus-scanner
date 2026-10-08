@@ -515,3 +515,12 @@ The public entrypoint now stages each refresh, validates the complete output set
 and preserves the last published dataset on failure. See
 [Pipeline integrity](docs/PIPELINE_INTEGRITY.md) for coverage gates, freshness
 limits, per-symbol availability, and the intentional zero-to-null corrections.
+
+The upcoming-results calendar is fetched by `fetch_earnings_calendar.py` from
+`https://www.nexusjournal.co.in/data/earnings-calendar.json`. Its records are
+mapped to canonical NSE EQ symbols and published through the existing
+`earnings_calendar.json.gz` / `earnings-calendar.json.gz` artifacts. Dates are
+labelled as scheduled results, rather than assumed board-meeting dates. ScanX
+fills missing symbols; a failed fetch retains the previous calendar and records
+`available: false` plus the fetch error. There are no direct BSE calendar API
+requests or ScraperAPI credentials required for this source.

@@ -1,4 +1,8 @@
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+from edl_pipeline.schemas import SCREEN_METRICS
 
 from pipeline_utils import SCANX_FETCH_URL, fetch_scanx_data, save_json
 
@@ -15,6 +19,7 @@ FNO_FIELDS = [
     "Min5HighCurrentCandle", "Min15HighCurrentCandle", "Min5EMA50CurrentCandle", "Min15EMA50CurrentCandle",
     "Min15SMA100CurrentCandle", "Open", "BcClose", "Rmp", "PledgeBenefit"
 ]
+FNO_FIELDS = list(dict.fromkeys([*FNO_FIELDS, *SCREEN_METRICS]))
 
 
 def build_payload():

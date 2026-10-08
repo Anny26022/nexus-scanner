@@ -8,6 +8,8 @@ and a builder-created screen on one calculation path.
 from __future__ import annotations
 
 import re
+import math
+from .financials import STATEMENT_METRICS
 from typing import Any
 
 
@@ -18,6 +20,10 @@ _INDICATOR_FUNCTIONS = {"rsi", "cci", "mfi", "roc", "obv", "adx", "atr", "stoch 
 # Names deliberately mirror the public query gallery.  Values are the stable
 # internal field identifiers evaluated by ``field_comparison``.
 FIELD_ALIASES = {
+    "ttm revenue growth": "ttm_revenue_growth_percent",
+    "ttm pat growth": "ttm_net_profit_growth_percent",
+    "ttm sales growth": "ttm_sales_growth_percent",
+    "opm 5 years ago": "opm_5_years_ago_percent",
     "market cap (in cr)": "market_cap_crore", "market cap": "market_cap_crore",
     "price to earning (p/e)": "pe_ratio", "price to earnings (p/e)": "pe_ratio", "p/e": "pe_ratio", "pe ratio": "pe_ratio",
     "debt to equity": "debt_to_equity", "earning per share (eps)": "eps_ttm", "earnings per share (eps)": "eps_ttm", "eps": "eps_ttm",
@@ -72,6 +78,15 @@ def _strip_outer(text: str) -> str:
 
 def _operand(value: str) -> Any:
     value = value.strip()
+    reference = re.fullmatch(r"Financial Value\s*\(\s*(annual|quarterly)\s*,\s*([a-z_]+)\s*,\s*(\d+)\s*\)", value, re.I)
+    if reference:
+        frequency, metric, offset = reference.groups()
+        metric = {"pat": "net_profit", "pbt": "profit_before_tax"}.get(metric.lower(), metric.lower())
+        if metric not in STATEMENT_METRICS.values() or int(offset) > 100:
+            raise ValueError("Unsupported financial statement metric or offset")
+        return {"field": f"financial:{frequency.lower()}:{metric}:{int(offset)}"}
+    if value.casefold().startswith("financial value"):
+        raise ValueError("Expected Financial Value(frequency, metric, offset), with frequency annual or quarterly and a non-negative integer offset")
     try: return float(value.replace(",", ""))
     except ValueError:
         field = FIELD_ALIASES.get(value.casefold())
@@ -100,7 +115,6 @@ def _function_condition(name: str, arguments: list[str], operator: str | None = 
     comparison = _OPERATORS.get(operator or ">=", "greater_or_equal")
     target = float(value.replace(",", "")) if value is not None else None
     if key in ("base stage", "base metric", "base formula", "base expression"):
-        import math
         from .base_conditions import STAGES, METRICS
         minimum = {"base stage": 1, "base metric": 2, "base formula": 4, "base expression": 2}[key]
         maximum = 2 if key == "base stage" else minimum
@@ -191,8 +205,8 @@ def _function_condition(name: str, arguments: list[str], operator: str | None = 
             raise ValueError("MA Convergence requires a maximum spread comparison.")
         if not arguments or "," not in arguments[0]:
             raise ValueError('MA Convergence periods must be a quoted comma-delimited list, for example "9,20,50,200".')
-        periods = [part.strip() for part in arguments[0].split(",") if part.strip()]
-        if len(periods) < 2 or not all(part.isdigit() and int(part) > 0 for part in periods) or len(set(periods)) != len(periods):
+        periods = [part.strip() for part in arguments[0].split(",")]
+        if len(periods) < 2 or not all(part.isdigit() and int(part) > 0 for part in periods) or len({int(part) for part in periods}) != len(periods):
             raise ValueError("MA Convergence requires at least two positive integer periods.")
         return {"type": "condition", "kind": "MA_CONVERGENCE", "params": {
             "periods": [int(part) for part in periods],
@@ -215,16 +229,26 @@ def _function_condition(name: str, arguments: list[str], operator: str | None = 
         left_offset = int(arguments[2])
         if left_offset < 0:
             raise ValueError("Indicator Compare offsets must be zero or positive.")
-        try:
-            fixed_value = float(arguments[4])
+        if not arguments[4]:
+            if len(arguments) < 6:
+                raise ValueError("Indicator Compare requires a numeric fixed target.")
+            fixed_value = float(arguments[5])
             right_indicator, right_period, right_offset = "", 20, 0
-            within_days = int(arguments[5]) if len(arguments) > 5 else 1
-        except ValueError:
-            right_indicator = arguments[4]
-            fixed_value = 0.0
-            right_period = int(arguments[5]) if len(arguments) > 5 else 20
-            right_offset = int(arguments[6]) if len(arguments) > 6 else 0
-            within_days = int(arguments[7]) if len(arguments) > 7 else 1
+            within_days = int(arguments[6]) if len(arguments) > 6 else 1
+        else:
+            try:
+                fixed_value = float(arguments[4])
+            except ValueError:
+                right_indicator = arguments[4]
+                fixed_value = 0.0
+                right_period = int(arguments[5]) if len(arguments) > 5 else 20
+                right_offset = int(arguments[6]) if len(arguments) > 6 else 0
+                within_days = int(arguments[7]) if len(arguments) > 7 else 1
+            else:
+                right_indicator, right_period, right_offset = "", 20, 0
+                within_days = int(arguments[5]) if len(arguments) > 5 else 1
+        if not math.isfinite(fixed_value):
+            raise ValueError("Indicator Compare fixed target must be finite.")
         if right_offset < 0 or within_days <= 0:
             raise ValueError("Indicator Compare offsets must be zero or positive and withinDays must be positive.")
         return {"type": "condition", "kind": "INDICATOR_COMPARE", "params": {
@@ -248,6 +272,10 @@ def _leaf(text: str) -> dict:
     function = re.match(r"^(.+?)\((.*)\)\s*(>=|<=|>|<|=)\s*(.+)$", text.strip())
     field_match = re.match(r"^(.+?)\s*(>=|<=|>|<|=)\s*(.+)$", text.strip())
     known_field = field_match and field_match.group(1).strip().casefold() in FIELD_ALIASES
+    if field_match and field_match.group(1).strip().casefold().startswith("financial value"):
+        left, operator, right = field_match.groups()
+        return {"type": "condition", "condition": "field_comparison", "field": _operand(left)["field"],
+                "comparison": _OPERATORS[operator], "value": _operand(right)}
     if function and not known_field:
         name, arguments, operator, value = function.groups()
         return _function_condition(name, _arguments(arguments), operator, value)

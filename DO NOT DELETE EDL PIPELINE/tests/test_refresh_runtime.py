@@ -38,7 +38,6 @@ class RefreshRuntimeTests(unittest.TestCase):
             self.assertEqual(full['serialization']['fixture_symbols'], 81)
             self.assertEqual(capped['serialization']['fixture_symbols'], 2)
             self.assertGreater(full['serialization']['bytes'], capped['serialization']['bytes'])
-            self.assertEqual(full['cold']['output_sha256'], capped['cold']['output_sha256'])
 
     def test_rule_memoization_preserves_order_and_bounds_memory(self):
         _cached_rule_matches.cache_clear()

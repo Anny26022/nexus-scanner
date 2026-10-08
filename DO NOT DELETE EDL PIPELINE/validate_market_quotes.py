@@ -1,4 +1,4 @@
-"""Retry inconsistent ScanX mainboard quotes once, then fail before enrichment."""
+"""Retry invalid ScanX quotes; retain zero-volume quotes with unavailable candles."""
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,10 +10,18 @@ from fetch_dhan_data import fetch_market_snapshot
 from pipeline_utils import load_json, resolve_path, save_json
 
 
+def unavailable_candle(row):
+    """A retained LTP is not a session candle when OHLC is absent and volume is zero."""
+    ltp = get_optional_float(row.get('Ltp'))
+    return (all(row.get(key) is None for key in ('Open', 'High', 'Low'))
+            and get_optional_float(row.get('Volume', row.get('volume'))) == 0
+            and ltp is not None and ltp > 0)
+
+
 def quote_errors(rows, symbols):
     rejected = []
     for row in rows:
-        if row.get('Sym') not in symbols:
+        if row.get('Sym') not in symbols or unavailable_candle(row):
             continue
         values = {key: get_optional_float(row.get(source)) for key, source in
                   (('open', 'Open'), ('high', 'High'), ('low', 'Low'), ('close', 'Ltp'))}
@@ -56,6 +64,9 @@ def main():
         except Exception as error:
             report['retry_error'] = str(error)
         report['errors'] = quote_errors(rows, symbols)
+    report['unavailable_candles'] = [
+        {'symbol': row['Sym'], 'reason': 'zero volume with no session OHLC', 'raw_quote': row}
+        for row in rows if row.get('Sym') in symbols and unavailable_candle(row)]
     save_json('price_validation_report.json', report)
     if report['errors']:
         print('Price validation rejected: ' + '; '.join(f"{row['symbol']}: {row['error']}" for row in report['errors']))
@@ -63,7 +74,8 @@ def main():
     if rejected:
         save_json(path, rows)
         save_json('mainboard_scanx_data.json', [row for row in rows if row.get('Sym') in symbols])
-    print(f'Price validation passed for {len(symbols)} mainboard symbols.')
+    print(f"Price validation passed for {len(symbols)} mainboard symbols "
+          f"({len(report['unavailable_candles'])} unavailable session candles).")
     return 0
 
 

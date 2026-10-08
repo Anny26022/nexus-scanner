@@ -104,6 +104,42 @@ class MarketQuoteTests(unittest.TestCase):
                 self.assertEqual(report['retry_quotes'], retry)
                 self.assertEqual([row['symbol'] for row in report['rejected']], ['BI', 'EIFFL'])
 
+    def test_zero_volume_without_session_ohlc_preserves_ltp_and_unavailable_fields(self):
+        # Reduced raw quotes from run 37777648427; retry returned the same values.
+        original = [quote(symbol, Ltp=ltp, Volume=0) for symbol, ltp in
+                    (('MUKESHB', 123), ('LADDERUP', 51.9), ('SAMBANDAM', 105.25),
+                     ('KAMANWALA', 17), ('KALYANI', 144.99))]
+        for row in original:
+            for field in ('Open', 'High', 'Low'):
+                row.pop(field)
+        code, rows, report, calls = self.run_validation(original)
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, 0)
+        self.assertEqual(rows, original)
+        self.assertEqual(report['errors'], [])
+        self.assertEqual([entry['raw_quote'] for entry in report['unavailable_candles']], original)
+        from edl_pipeline.transforms.fundamentals import analyze_stock
+        from edl_pipeline.quality import ohlc_error
+        for row in rows:
+            stock = analyze_stock({'Symbol': row['Sym']}, row, {}, {})
+            self.assertEqual(stock['close'], row['Ltp'])
+            self.assertEqual(stock['volume'], 0)
+            self.assertTrue(all(stock[key] is None for key in ('open', 'high', 'low')))
+            self.assertIsNone(ohlc_error(stock))
+
+    def test_unavailable_candle_exception_does_not_accept_malformed_or_traded_quotes(self):
+        for values in ({'Volume': 1}, {'Volume': None}, {'Volume': -1}, {'Ltp': 0},
+                       {'Ltp': None}, {'Open': 10}, {'High': 'invalid'}, {'Low': 0}):
+            with self.subTest(values=values):
+                row = quote(Open=None, High=None, Low=None, Volume=0)
+                row.update(values)
+                self.assertTrue(quotes.quote_errors([row], {'BI'}))
+                code, rows, report, calls = self.run_validation([row], [row])
+                self.assertEqual(code, 1)
+                self.assertEqual(calls, 1)
+                self.assertEqual(rows, [row])
+                self.assertEqual(report['unavailable_candles'], [])
+
     def test_nonpositive_prices_and_invalid_volume_use_publication_policy(self):
         for values in ({'High': 0}, {'Volume': -1}):
             with self.subTest(values=values):

@@ -1,4 +1,5 @@
-import { ConditionDef, ConditionCategory } from '../types/screener';
+import { baseMetricLabel } from '../utils/baseMetricLabel';
+import { ConditionDef, ConditionCategory, ParameterSpec } from '../types/screener';
 import definitions from './presetDefinitions.json';
 
 const categories: Record<string, ConditionCategory> = {
@@ -8,7 +9,39 @@ const categories: Record<string, ConditionCategory> = {
   'Earnings & Value': 'fundamentals', 'Regime & Universe': 'liquidity',
 };
 
+function setupParameters(p: {id:string;setupFamily?:string}): ParameterSpec[] {
+  if(!p.setupFamily)return [];
+  return [
+    {id:'setupStage',label:'Setup stage',type:'select',defaultValue:'FORMING',options:['FORMING','FRESH_BREAKOUT','HOLDING','PLAYED_OUT'].map(value=>({label:value.replaceAll('_',' '),value}))},
+    {id:'holdingPolicy',label:'Pivot holding',type:'select',defaultValue:'ANY',options:[{label:'Any',value:'ANY'},{label:'Continuous',value:'STRICT'},{label:'Retests allowed',value:'RETEST'}]},
+    {id:'maxBaseDepth',label:'Family maximum depth (%)',type:'number',defaultValue:['vcp','ipo'].includes(p.setupFamily)?35:95,min:1,max:95},
+    {id:'minContractionLegs',label:'Confirmed contraction legs (0 or 2–10)',type:'number',defaultValue:0,min:0,max:10,step:1},
+    {id:'maxContractionLegRatio',label:'Maximum successive leg ratio',type:'number',defaultValue:1,min:0,max:2},
+    {id:'strictContractionLegs',label:'Strictly shrinking confirmed legs',type:'boolean',defaultValue:false},
+    {id:'minPriorAdvancePct',label:'Minimum prior 63-session advance (%, 0 disables)',type:'number',defaultValue:0,min:0,max:1000},
+    {id:'requireAccumulation',label:'Positive net up/down volume in base',type:'boolean',defaultValue:false},
+    {id:'requireRising200',label:'Require rising 200 SMA over 21 sessions',type:'boolean',defaultValue:false},
+    {id:'reclaim200Within',label:'200 SMA reclaim within sessions (0 disables)',type:'number',defaultValue:0,min:0,max:252,step:1},
+    {id:'slopeTurn200Within',label:'200 SMA slope turn within sessions (0 disables)',type:'number',defaultValue:0,min:0,max:252,step:1},
+    {id:'above50Persistence',label:'Consecutive closes above 50 SMA',type:'number',defaultValue:1,min:1,max:252,step:1},
+    {id:'requireBreakoutConfirmation',label:'Require post-breakout confirmation',type:'boolean',defaultValue:false},
+    {id:'minBreakoutVolume',label:'Breakout volume / preceding 20-session median',type:'number',defaultValue:1.5,min:0,max:100},
+    {id:'minBreakoutCloseInRange',label:'Minimum breakout close in range',type:'number',defaultValue:.7,min:0,max:1},
+    {id:'maxBreakoutExtensionPct',label:'Maximum fresh-breakout extension (%)',type:'number',defaultValue:5,min:0,max:1000},
+    {id:'maxBreakoutAge',label:'Maximum fresh-breakout age (sessions)',type:'number',defaultValue:5,min:0,max:1500,step:1},
+    {id:'requireFirstBase',label:'First structural IPO base only',type:'boolean',defaultValue:p.setupFamily==='ipo'},
+    ...(p.setupFamily==='vcp'?[{id:'contractionMethod',label:'Contraction measurement',type:'select' as const,defaultValue:'RAW_TR',options:[{label:'Raw daily TR% means',value:'RAW_TR'},{label:'Wilder ATR% means',value:'WILDER_ATR'},{label:'Simple ATR% means',value:'SIMPLE_ATR'}]}]:[]),
+    ...(p.setupFamily==='blue-sky'?[{id:'athPolicy',label:'Historical high policy',type:'select' as const,defaultValue:'INTRADAY_AVAILABLE',options:[{label:'Available closing history',value:'CLOSING_AVAILABLE'},{label:'Available intraday history',value:'INTRADAY_AVAILABLE'},{label:'Audited lifetime intraday history',value:'AUDITED_INTRADAY'}]}]:[]),
+  ];
+}
+
 export const PRESET_CATALOG: ConditionDef[] = definitions.map(p => ({
   id: p.id, label: p.name, category: categories[p.category] ?? 'trend',
-  description: p.rules.join('; '), parameters: [],
+  description: p.rules.join('; '), parameters: p.id.startsWith('lib-nexus-') ? [...setupParameters(p),...p.expression.children.flatMap<ConditionDef['parameters'][number]>((node,index)=>{
+    const parameters=node.params as Record<string,unknown>;
+    if((p as {setupFamily?:string}).setupFamily && (node.kind==='BASE_STAGE'||parameters.metric==='firstEligibleBase'||(parameters.metric==='base.depthPct'&&parameters.comparison==='BELOW')))return [];
+    if(node.kind==='BASE_STAGE')return parameters.stage!=='HOLDING'?[]:[{id:'holdingPolicy',label:'Holding policy',type:'select' as const,defaultValue:parameters.holdingPolicy,
+      options:[{label:'Any',value:'ANY'},{label:'Always above pivot',value:'STRICT'},{label:'Retests allowed',value:'RETEST'}]}];
+    return [{id:`threshold${index}`,label:`${baseMetricLabel(String(parameters.metric))} ${{ABOVE:'≥',BELOW:'≤',GREATER:'>',LESS:'<',EQUAL:'='}[String(parameters.comparison)] ?? parameters.comparison}`,type:'number' as const,defaultValue:parameters.value}];
+  })] : [],
 }));

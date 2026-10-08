@@ -9,10 +9,14 @@ import numpy as np
 import pandas as pd
 
 from .financials import financial_value, historical_field_value
+from .turnover import average_turnover_crore
 from ..breadth.gates import MARKET_BREADTH_METRICS
 
 
 CONTEXT_CONDITION_REGISTRY = {
+    'base_stage': {'inputs': {'stage':'string','holdingPolicy':'ANY|STRICT|RETEST'}, 'definition':'Test the selected detected base stage and holding policy.'},
+    'base_metric': {'inputs': {'stage':'string','metric':'string','comparison':'comparison','value':'number'}, 'definition':'Compare a fact from one selected detected base.'},
+    'base_formula': {'inputs': {'stage':'string','formula':'string (or metric arithmetic below)','metric':'string','rightMetric':'string','arithmetic':'ADD|SUBTRACT|MULTIPLY|DIVIDE','comparison':'comparison','value':'number'}, 'definition':'Compare arithmetic over one selected detected base.'},
     "relative_strength": {"inputs": {"benchmark": "string", "window": "integer", "comparison": "comparison", "value": "number"}, "definition": "Stock return less benchmark return over the same sessions, in percentage points."},
     "rs_new_high": {"inputs": {"benchmark": "string", "lookback_days": "integer", "minimum_price_below_high_percent": "number"}, "definition": "Relative-strength line is at its lookback high while price remains below its own high."},
     "rs_rating": {"inputs": {"window": "one_month | three_month | six_month | twelve_month | front_weighted", "comparison": "comparison", "value": "number"}, "definition": "Cross-sectional 1–99 Nifty 500 relative-strength percentile for a 21/63/126/252-session horizon, or its 40/20/20/20 front-weighted composite."},
@@ -410,7 +414,9 @@ def evaluate_context_condition(frame, spec, context, result: Callable[..., Any],
             return unavailable(condition, "intraday_turnover_history_unavailable")
         window = int(spec.get("lookback_days", 20))
         if len(frame) < window: return unavailable(condition, "insufficient_history")
-        value = float((frame["Close"] * frame["Volume"]).tail(window).mean() / 10_000_000)
+        value = average_turnover_crore(frame, window)
+        if value is None:
+            return unavailable(condition, "official_turnover_history_unavailable")
         target = float(spec["value_crore"])
         return result(condition, comparison(value, spec["comparison"], target), round(value, 6), lookback_days=window, comparison=spec["comparison"], target=target)
 

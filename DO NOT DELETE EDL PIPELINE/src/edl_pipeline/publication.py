@@ -96,6 +96,11 @@ def main():
         if not methodology.exists():
             methodology = source / "breadth_methodology.json"
         shutil.copy2(methodology, stage / methodology.name)
+        # Carry optional independently verified provenance into chart generation.
+        # It is an input, not a certification produced by the refresh.
+        for name in ('base_history_audits.json','base_history_audits.json.gz'):
+            audit_input=destination/name
+            if audit_input.exists():shutil.copy2(audit_input,stage/name)
         listed_archive = destination / "ipo_provider_listed_archive.json.gz"
         if listed_archive.exists():
             shutil.copy2(listed_archive, stage / listed_archive.name)

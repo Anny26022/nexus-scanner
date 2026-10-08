@@ -73,6 +73,8 @@ export interface ScreenerRunRequest {
 }
 
 export interface StockRow {
+  setupMatches?: Record<string,import('../engine/baseConditions').BaseRecord>;
+  bases?: import('../engine/baseConditions').SelectedBases;
   symbol: string;
   name: string;
   listingDate: string;

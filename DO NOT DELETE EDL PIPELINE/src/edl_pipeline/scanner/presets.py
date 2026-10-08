@@ -17,6 +17,7 @@ from functools import lru_cache
 import gzip
 import json
 from typing import Any, Mapping
+from .base_presets import build_presets
 
 
 SOURCE = {
@@ -46,7 +47,15 @@ def _library() -> dict[str, Any]:
 
 def load_preset_library() -> dict[str, Any]:
     """Return a defensive copy of the complete, versioned preset library."""
-    return deepcopy(_library())
+    library=deepcopy(_library())
+    # Keep display wording aligned with the completed weekly-bar rule.
+    weekly=next(p for p in library['presets'] if p['id']=='lib-weekly-inside-bar')
+    weekly['description']='The latest completed ISO week remains inside the preceding completed week, while price stays near its 52-week high.'
+    weekly['rules'][0]='Latest completed ISO week inside the preceding completed week'
+    library['nexus_base_version']='nexus-bases-5'
+    library['nexus_setup_version']='nexus-setups-3'
+    library['presets'].extend(build_presets())
+    return library
 
 
 def list_presets() -> list[dict[str, Any]]:
@@ -57,17 +66,17 @@ def list_presets() -> list[dict[str, Any]]:
             "category": preset["category"], "horizon": preset["horizon"],
             "description": preset["description"], "rule_count": len(preset["rules"]),
         }
-        for preset in _library()["presets"]
+        for preset in load_preset_library()["presets"]
     ]
 
 
 def get_preset(preset_id: str) -> dict[str, Any]:
     """Look up one preset by its stable ``lib-*`` identifier (or name)."""
     query = str(preset_id).strip().casefold()
-    for preset in _library()["presets"]:
+    for preset in load_preset_library()["presets"]:
         if preset["id"].casefold() == query or preset["name"].casefold() == query:
             return deepcopy(preset)
-    available = ", ".join(preset["id"] for preset in _library()["presets"])
+    available = ", ".join(preset["id"] for preset in load_preset_library()["presets"])
     raise ValueError(f"Unknown screener preset {preset_id!r}. Available IDs: {available}")
 
 
@@ -85,7 +94,7 @@ def validate_preset_library(condition_registry: Mapping[str, Any]) -> None:
             raise ValueError(f"Preset uses unsupported condition: {condition!r}")
 
     ids = set()
-    for preset in _library()["presets"]:
+    for preset in load_preset_library()["presets"]:
         if preset["id"] in ids:
             raise ValueError(f"Duplicate screener preset ID: {preset['id']}")
         ids.add(preset["id"])
@@ -98,4 +107,4 @@ def export_preset_library(path) -> None:
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(_library(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    target.write_text(json.dumps(load_preset_library(), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

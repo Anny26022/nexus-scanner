@@ -1,6 +1,9 @@
+import { materializeBasePreset } from '../engine/basePresets';
 import type { ActiveCondition, ExpressionNode } from '../types/screener';
 import { normalizeSnapshotCondition, snapshotFieldDependency } from '../engine/snapshotFields';
 import presetDefinitions from '../data/presetDefinitions.json';
+import basePublicKeys from '../data/basePublicKeys.json';
+import baseContextKeys from '../data/baseContextKeys.json';
 
 export type PackDependency = 'core' | 'technical' | 'fundamentals' | 'advanced';
 export interface ConditionCapability { dependencies: PackDependency[]; browser: (condition: ActiveCondition) => boolean }
@@ -13,7 +16,7 @@ const advanced = (): ConditionCapability => ({dependencies:['core','advanced'],b
 const presetIds = new Set(presetDefinitions.map(item => item.id));
 
 const scalarTechnical = new Set([
-  'PRICE_VS_SMA','PRICE_VS_EMA','PRICE_CHANGE_PCT','GAP_UP','GAP_DOWN','VOLUME_VS_AVG','NEW_HIGH','NEW_LOW','PCT_FROM_52W_HIGH',
+  'BASE_STAGE','BASE_METRIC','BASE_FORMULA','PRICE_VS_SMA','PRICE_VS_EMA','PRICE_CHANGE_PCT','GAP_UP','GAP_DOWN','VOLUME_VS_AVG','NEW_HIGH','NEW_LOW','PCT_FROM_52W_HIGH',
   'PCT_FROM_52W_LOW','PCT_FROM_ATH','ATR_PCT','RS_RATING','AVG_TURNOVER','ADR_PCT','ABSOLUTE_VOLUME',
   'PRICE_RANGE','trend_price_vs_ma','mom_rvol','mom_return','mom_gap','liq_turnover','fund_stock_price',
 ]);
@@ -27,6 +30,7 @@ const scalarFundamental = new Set([
 function parameterCompatible(condition: ActiveCondition): boolean {
   const p = condition.parameters;
   switch (condition.conditionId) {
+    case 'BASE_METRIC': case 'BASE_FORMULA': return !p.formula && ![p.metric,p.rightMetric].some(value=>{const path=String(value??'');return (path.startsWith('base.')&&!basePublicKeys.includes(path.split('.')[1]))||(['current','selection'].includes(path.split('.')[0])&&!baseContextKeys.includes(path.split('.')[1]));});
     case 'PRICE_CHANGE_PCT': return [1,5,21,63,126,252].includes(Number(p.overDays));
     case 'VOLUME_VS_AVG': return Number(p.avgDays) === 20 && Number(p.withinDays) === 1;
     case 'PRICE_VS_EMA': return Number(p.persistDays) === 1 && [20,50,200].includes(Number(p.period));
@@ -53,6 +57,11 @@ export function conditionCapability(condition: ActiveCondition): ConditionCapabi
     return dependencies.every(value => value !== null)
       ? {dependencies:['core',...new Set(dependencies.filter(value => value !== null))],browser:always}
       : advanced();
+  }
+  if(condition.conditionId.startsWith('lib-nexus-')) {
+    const preset=presetDefinitions.find(item=>item.id===condition.conditionId);
+    if(preset&&'setupFamily' in preset){materializeBasePreset(preset,condition.parameters);return advanced();}
+    return preset && materializeBasePreset(preset,condition.parameters).every(parameterCompatible) ? technical() : advanced();
   }
   if (condition.conditionId.startsWith('lib-')) return presetIds.has(condition.conditionId) ? technical() : advanced();
   if (condition.conditionId === 'FUNDAMENTAL_METRIC' && ['ALL_TIME_HIGH','ALL_TIME_LOW','RETURN_5Y'].includes(String(condition.parameters.metric))) return technical();

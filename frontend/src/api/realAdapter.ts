@@ -34,6 +34,7 @@ let current: Manifest | undefined;
 const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
 
 export interface ChartSnapshot {
+  bases?: import('../engine/baseConditions').SelectedBases;
   schemaVersion: number;
   symbol: string;
   asOfDate: string;

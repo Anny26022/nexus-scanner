@@ -80,6 +80,13 @@ def normalize_ohlcv_row(row: dict) -> dict | None:
             result["vwap"] = vwap
     except (TypeError, ValueError):
         pass
+    # A malformed optional traded-value field must not discard a valid candle.
+    try:
+        turnover = float(row.get("TURNOVER_LACS", "")) * 100_000
+        if math.isfinite(turnover) and turnover >= 0:
+            result["turnover"] = turnover
+    except (TypeError, ValueError):
+        pass
     return result
 
 

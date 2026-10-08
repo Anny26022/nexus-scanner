@@ -6,11 +6,46 @@ from unittest.mock import patch
 
 import scanner_bridge as bridge
 import pandas as pd
+import numpy as np
 from scanner_cache import ScannerCache
 from edl_pipeline.scanner.presets import list_presets
 
 
 class BridgeTests(unittest.TestCase):
+    def test_old_compact_cache_rebuilds_official_turnover_from_csv(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'ohlcv_data').mkdir()
+            frame=self.history();frame['Turnover']=200_000_000.;frame.to_csv(root/'ohlcv_data/TEST.csv',index=False)
+            cache=ScannerCache();cache.refresh(root);cache.frame(root,'TEST','2026-09-30');cache.save_frames(root)
+            path=root/'.scanner_cache/history.npz'
+            with np.load(path,allow_pickle=False) as data:
+                legacy={name:data[name] for name in data.files if name!='turnover'}
+            np.savez(path,**legacy)
+            restored=ScannerCache();restored.refresh(root)
+            self.assertEqual(restored.frames,{})
+            self.assertEqual(restored.frame(root,'TEST','2026-09-30')['Turnover'].iloc[-1],200_000_000.)
+
+    def test_local_base_query_keeps_stage_identity_across_cached_queries(self):
+        context={'stocks':{'TEST':self.stock()},'financial_history_as_of':'2026-09-30','rs_ratings':{},'fno_ban_symbols':{}}
+        frame=self.history()
+        closes=[100.]+[94.]*40+[102.]+[101.]*18
+        for key in ('Open','Close'):
+            frame[key]=closes
+        frame['High']=[value+1 for value in closes]
+        frame['Low']=[value-1 for value in closes]
+        request={'asOfDate':'2026-09-30','universe':'mainboard','textQuery':'Base Stage(HOLDING, STRICT)'}
+        with tempfile.TemporaryDirectory() as folder, patch.object(bridge,'_load_context',return_value=context):
+            root=Path(folder);(root/'ohlcv_data').mkdir()
+            frame.to_csv(root/'ohlcv_data/TEST.csv',index=False)
+            cache=ScannerCache()
+            first=bridge.run(request,root,cache)
+            second=bridge.run({**request,'textQuery':'Base Stage(HOLDING, STRICT) AND Base Metric(HOLDING, base.depthPct) < 10'},root,cache)
+            self.assertEqual(first['matchCount'],1)
+            self.assertEqual(second['matchCount'],1)
+            self.assertEqual(first['rows'][0]['bases']['HOLDING']['id'],second['rows'][0]['bases']['HOLDING']['id'])
+            from edl_pipeline.scanner.base_publication import selected_base_episodes
+            self.assertLessEqual(len(selected_base_episodes(context['base_episodes']['TEST'])),4)
+            self.assertTrue(any(e.get('setupCandidateOnly') for e in context['base_episodes']['TEST']))
     def test_ownership_fields_keep_missing_and_non_finite_values_unavailable(self):
         row = bridge.stock_row({"symbol": "TEST", "promoter_holding_percent": float('nan'),
                                 "fii_percent_change_qoq": float('inf')}, {})
@@ -46,12 +81,6 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(row["dataCompleteness"], 29)
         self.assertEqual((row["epsTtm"], row["dividendYieldPct"], row["debtToEquity"]), (25, 2, 0.44))
 
-    def test_ownership_fields_keep_missing_and_non_finite_values_unavailable(self):
-        row = bridge.stock_row({"symbol": "TEST", "promoter_holding_percent": float('nan'),
-                                "fii_percent_change_qoq": float('inf')}, {})
-        for field in ('promoterHoldingPct', 'fiiChangePctQoq', 'diiChangePctQoq'):
-            self.assertIsNone(row[field])
-
     def test_cache_reuses_scan_for_pagination_and_invalidates_changed_history(self):
         context={"stocks":{"TEST":self.stock()},"financial_history_as_of":"2026-09-30","rs_ratings":{},"fno_ban_symbols":{}}
         request={"asOfDate":"2026-09-30","universe":"mainboard","expressionTree":{"type":"group","operator":"all","children":[]}}
@@ -59,7 +88,9 @@ class BridgeTests(unittest.TestCase):
             root=Path(folder); (root/'ohlcv_data').mkdir(); path=root/'ohlcv_data/TEST.csv'
             self.history().to_csv(path,index=False)
             cache=ScannerCache()
+            context["setup_matches"]={"TEST":{"previous-request":{"id":"stale"}}}
             first=bridge.run(request,root,cache)
+            self.assertEqual(first["rows"][0]["setupMatches"],{})
             self.assertEqual(first,bridge.run(request,root))
             calls=load.call_count
             second=bridge.run({**request,"page":2,"pageSize":1},root,cache)
@@ -76,7 +107,14 @@ class BridgeTests(unittest.TestCase):
             self.assertGreater(load.call_count,calls)
 
     def history(self, count=60, latest="2026-09-30"):
-        return pd.DataFrame({"Date":pd.bdate_range(end=latest,periods=count),"Open":100.,"High":101.,"Low":99.,"Close":100.,"Volume":[100.]*(count-1)+[200.]})
+        return pd.DataFrame({"Date":pd.bdate_range(end=latest,periods=count),"Open":100.,"High":101.,"Low":99.,"Close":100.,"Volume":[100.]*(count-1)+[200.],"Turnover":100_000_000.})
+
+    def test_preset_liquidity_uses_unrounded_official_history(self):
+        frame=self.history();frame['Turnover']=50_001_000.
+        self.assertTrue(bridge.preset_baseline({**self.stock(),'daily_rupee_turnover_50_cr':5.0},frame))
+        frame.loc[frame.index[-1],'Turnover']=float('nan')
+        self.assertIsNone(bridge.preset_baseline(self.stock(),frame))
+        self.assertIsNone(bridge.snapshot_rule(self.stock(),{'condition':'average_turnover','lookback_days':50,'comparison':'above','value_crore':5},'2026-09-30'))
 
     def test_rvol_upper_bound_uses_history_when_snapshot_is_missing_or_wrong(self):
         node=bridge.translate("mom_rvol",{"minRvol":1.5,"maxRvol":3})

@@ -1,3 +1,4 @@
+import { updateSetupParameter } from '../engine/basePresets';
 import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
 import React, { useState } from 'react';
 import { X, Search, Sliders, RotateCcw, Check, Play, Info } from 'lucide-react';
@@ -79,7 +80,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
         def.parameters.forEach((p) => {
           defaultParams[p.id] = p.defaultValue;
         });
-        defaultParams[paramId] = value;
+        Object.assign(defaultParams, updateSetupParameter(defaultParams,paramId,value));
         if (conditionId === 'MARKET_BREADTH' && paramId === 'metric') {
           defaultParams.value = breadthMetricDefault(value);
         }
@@ -93,7 +94,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
         };
       }
       if (!existing) return prev;
-      const parameters = { ...existing.parameters, [paramId]: value };
+      const parameters = updateSetupParameter(existing.parameters,paramId,value);
       if (conditionId === 'MARKET_BREADTH' && paramId === 'metric') {
         parameters.value = breadthMetricDefault(value);
       }

@@ -18,6 +18,7 @@ import subprocess
 import tempfile
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"DO NOT DELETE EDL PIPELINE/src"))
 from scanner_identity import checked_identity
 
 import numpy as np
@@ -26,8 +27,42 @@ import numpy as np
 SCHEMA_VERSION = 7
 SHARD_COUNT = 32
 MAX_SESSIONS = 1500
+MAX_AUXILIARY_BYTES = 12 * 1024 * 1024
 MAGIC = b"NSPK0001"
 R2_KEYS = ("R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
+
+
+class BaseHistoryArchive:
+    """Stream complete episodes into stable shards, retaining one symbol at a time."""
+    def __init__(self, root):
+        self.root = Path(root)
+        self.files = []
+        self.streams = []
+        self.counts = [0] * SHARD_COUNT
+
+    def __enter__(self):
+        self.root.mkdir(parents=True, exist_ok=True)
+        for index in range(SHARD_COUNT):
+            file = (self.root / f'{index:02d}.json.gz').open('wb')
+            stream = gzip.GzipFile(filename='', mode='wb', fileobj=file, compresslevel=6, mtime=0)
+            stream.write(b'{')
+            self.files.append(file)
+            self.streams.append(stream)
+        return self
+
+    def __call__(self, symbol, episodes):
+        index = _shard(symbol)
+        if self.counts[index]:
+            self.streams[index].write(b',')
+        self.streams[index].write(_json_bytes(symbol) + b':' + _json_bytes(episodes))
+        self.counts[index] += 1
+
+    def __exit__(self, exc_type, exc, traceback):
+        for stream in self.streams:
+            stream.write(b'}')
+            stream.close()
+        for file in self.files:
+            file.close()
 
 
 def _json_bytes(value):
@@ -118,23 +153,91 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
     # filings ledger at once would consume most of a 128 MB Worker isolate.
     financial_history = context.get("financial_history", {})
     def available_filings(symbol):
-        return [record for record in financial_history.get(symbol, [])
+        provenance = {'symbol','isin','filing_caption','filing_descriptor','filing_source','filing_url','numeric_source'}
+        return [{key:value for key,value in record.items() if key not in provenance}
+                for record in financial_history.get(symbol, [])
                 if str(record.get("filing_date") or record.get("filedAt") or "")[:10] <= session]
+    from edl_pipeline.scanner.base_publication import compact_base_records, runtime_setup_candidate_records, runtime_setup_candidate_history_complete
+    def selected_episodes(symbol):
+        episodes = context.get("base_episodes", {}).get(symbol, [])
+        selected_ids = {record['id'] for record in compact_base_records(episodes).values()}
+        return [episode for episode in episodes if episode['id'] in selected_ids]
+
+    native_rows = {row['symbol']: {**row, 'bases': {
+        stage: {key: value for key, value in record.items() if key not in ('base', 'current', 'selection')}
+        for stage, record in row.get('bases', {}).items()
+    }} if isinstance(row.get('bases'), dict) else dict(row) for row in rows or []}
+
     for index, entries in enumerate(grouped):
         shard_symbols = {symbol for symbol, _frame in entries}
+        # Delivery conditions read only dated percentages on retained candle
+        # sessions. Quantity/provenance fields remain in the pipeline history;
+        # repeating them in runtime packs greatly inflates JSON heap usage.
+        delivery_rows = {}
+        for symbol, frame in entries:
+            dates = {str(day.date()) for day in frame['Date'].tail(MAX_SESSIONS)}
+            values = [{'date':row['date'], 'delivery_percent':row.get('delivery_percent')}
+                      for row in delivery.get(symbol, []) if row.get('date') in dates]
+            if values:
+                delivery_rows[symbol] = {
+                    'dates': [int(np.datetime64(row['date'], 'D').astype('int64')) for row in values],
+                    'percentages': [row['delivery_percent'] for row in values],
+                }
         aux = {
-            "delivery": {symbol: delivery[symbol] for symbol in shard_symbols if symbol in delivery},
+            "stocks": {symbol: native_rows[symbol] for symbol in sorted(shard_symbols) if symbol in native_rows},
+            "delivery": delivery_rows,
+            "turnover": {symbol: {"dates": frame["Date"].tail(MAX_SESSIONS).to_numpy(dtype="datetime64[D]").astype("int32").tolist(),
+                "values": [float(value) if np.isfinite(value) and value >= 0 else None for value in frame["Turnover"].tail(MAX_SESSIONS)]}
+                for symbol, frame in entries if "Turnover" in frame},
             "earnings": {symbol: available_filings(symbol) for symbol in sorted(shard_symbols)
                          if available_filings(symbol)},
             "breadth": context.get("breadth", {}),
+            "bases": {symbol: selected_episodes(symbol) for symbol in sorted(shard_symbols)},
+            # The Worker receives actionable setup witnesses, while the full
+            # episode ledger remains in the private base-history archive.
+            "setupCandidates": {symbol: runtime_setup_candidate_records(context.get("base_episodes",{}).get(symbol,[])) for symbol in sorted(shard_symbols)},
+            "setupCandidateHistoryComplete": {symbol: runtime_setup_candidate_history_complete(context.get("base_episodes",{}).get(symbol,[])) for symbol in sorted(shard_symbols)},
         }
-        aux_data = gzip.compress(_json_bytes(aux), compresslevel=6, mtime=0)
+        aux_raw = _json_bytes(aux)
+        if len(aux_raw)>MAX_AUXILIARY_BYTES:raise ValueError(f"Auxiliary shard {index} exceeds the 12 MiB decoded budget; increase stable sharding before publication")
+        aux_data = gzip.compress(aux_raw, compresslevel=6, mtime=0)
         name = f"auxiliary/{index:02d}.json.gz"
         _write(target / name, aux_data)
         objects.append({"key": name, "bytes": len(aux_data), "sha256": _sha(aux_data),
-                        "symbols": len(shard_symbols), "encoding": "gzip"})
+                        "symbols": len(shard_symbols), "decodedBytes":len(aux_raw), "encoding": "gzip"})
 
-    metadata_data = gzip.compress(_json_bytes({"stocks": rows or []}), compresslevel=6, mtime=0)
+        if 'base_episodes' in context:
+            # Historical archives are durable, but never decompressed by the
+            # latest-session Worker. Runtime auxiliary packs carry selected IDs only.
+            archive_root=context.get('base_history_archive')
+            if archive_root is not None:
+                archive_data=(Path(archive_root)/f'{index:02d}.json.gz').read_bytes()
+            else:
+                archive={symbol:context['base_episodes'].get(symbol,[]) for symbol in sorted(shard_symbols)}
+                archive_data=gzip.compress(_json_bytes(archive),compresslevel=6,mtime=0)
+            name=f'base-history/{index:02d}.json.gz'
+            _write(target/name,archive_data)
+            objects.append({'key':name,'bytes':len(archive_data),'sha256':_sha(archive_data),'encoding':'gzip'})
+
+        if 'base_rs_history' in context or 'base_rs_archive' in context:
+            if 'base_rs_archive' in context:
+                ledger_data=(Path(context['base_rs_archive'])/f'{index:02d}.json.gz').read_bytes()
+            else:
+                ledger={symbol:context['base_rs_history'].get(symbol,{}) for symbol in sorted(shard_symbols)}
+                ledger_data=gzip.compress(_json_bytes(ledger),compresslevel=6,mtime=0)
+            name=f'base-ranks/{index:02d}.json.gz'
+            _write(target/name,ledger_data)
+            objects.append({'key':name,'bytes':len(ledger_data),'sha256':_sha(ledger_data),'encoding':'gzip'})
+
+    # Aligned native fields are loaded with their history shard. Preserve full
+    # metadata for rows without history so metadata-only fallback still works.
+    index_keys = ('symbol', 'name', 'close', 'indexMemberships', 'historyAligned', 'asOfDate')
+    metadata_rows = [{key: row[key] for key in index_keys if key in row}
+                     if row.get('historyAligned') is True and row['symbol'] in symbols
+                     else row for row in rows or []]
+    metadata_data = gzip.compress(_json_bytes({"stocks": metadata_rows,
+        "nativeRowsInAuxiliary": any(row.get('historyAligned') is True and row['symbol'] in symbols
+                                     for row in rows or [])}), compresslevel=6, mtime=0)
     _write(target / "metadata.json.gz", metadata_data)
     objects.append({"key": "metadata.json.gz", "bytes": len(metadata_data), "sha256": _sha(metadata_data), "encoding": "gzip"})
 
@@ -198,19 +301,28 @@ class PrivateR2Store:
                     self.run("purge", self.remote(prefix))
                 raise
 
-    def retain_latest(self, keep=7):
+    def retain_latest(self, keep=7, protected=()):
         listing = self.run("lsjson", self.remote("scanner/v1/revisions"), "--recursive", "--files-only", capture=True)
         # Prefixes have no reliable timestamp in object storage. Manifest
         # objects are commit markers, so their LastModified value orders only
         # complete revisions and excludes abandoned partial uploads.
         manifests = [item for item in json.loads(listing.stdout) if item.get("Path", "").endswith("/manifest.json")]
         manifests.sort(key=lambda item: item.get("ModTime", ""), reverse=True)
-        for item in manifests[keep:]:
+        revisions = [item["Path"].split("/", 1)[0] for item in manifests]
+        retained = set(protected) & set(revisions)
+        if len(retained) > keep:
+            raise RuntimeError('Protected scanner revisions exceed the retention budget')
+        for revision in revisions:
+            if len(retained) >= keep:
+                break
+            retained.add(revision)
+        for item in manifests:
             revision = item["Path"].split("/", 1)[0]
-            self.run("purge", self.remote("scanner/v1/revisions/" + revision))
+            if revision not in retained:
+                self.run("purge", self.remote("scanner/v1/revisions/" + revision))
 
 
-def publish_private_pack(source, revision):
+def publish_private_pack(source, revision, active_revision=None):
     mode = os.environ.get("EDL_SCANNER_STORAGE", "local")
     if mode not in {"local", "r2"}:
         raise RuntimeError('EDL_SCANNER_STORAGE must be "local" or "r2"')
@@ -222,6 +334,8 @@ def publish_private_pack(source, revision):
             return False
         store = PrivateR2Store()
         store.publish(source, revision)
-        store.retain_latest(7)
+        # Git pointer promotion follows chart publication and may still fail.
+        # Never remove the pack currently referenced by that pointer.
+        store.retain_latest(7, protected={revision, active_revision})
         return True
     return False

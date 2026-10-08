@@ -19,12 +19,15 @@ class ChartNewsPublicationTests(unittest.TestCase):
     def test_news_reaches_published_charts_after_stage_is_discarded(self):
         with tempfile.TemporaryDirectory() as folder:
             destination=Path(folder)
+            audit={'TEST':{'source':'independent fixture'}}
+            (destination/'base_history_audits.json').write_text(json.dumps(audit))
             stages=[]
             def worker(command, cwd, env):
                 self.assertEqual(command[1], '-c')
                 self.assertIn('edl_pipeline.runner', command[2])
                 stage=Path(cwd); stages.append(stage)
                 self.assertEqual(env['EDL_CLEANUP_INTERMEDIATE'],'0')
+                self.assertEqual(json.loads((stage/'base_history_audits.json').read_text()),audit)
                 for spec in FINAL_ARTIFACT_SPECS:
                     if spec.path.endswith('.gz'):
                         (stage/spec.path).write_bytes(gzip.compress(b'{"records":[]}'))
@@ -58,6 +61,35 @@ class ChartNewsPublicationTests(unittest.TestCase):
             self.assertIn('build_chart_artifacts.py',POST_STANDARDIZATION_SCRIPTS)
             self.assertGreater(POST_STANDARDIZATION_SCRIPTS.index('build_chart_artifacts.py'),
                                POST_STANDARDIZATION_SCRIPTS.index('build_quarterly_financial_ledger.py'))
+
+    def test_chart_contains_the_same_base_and_frozen_breakout_facts(self):
+        import pandas as pd
+        from edl_pipeline.scanner.base_publication import build_base_records, compact_base_records
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);(root/'ohlcv_data').mkdir()
+            closes=[100]+[94]*19+[102,104]
+            frame=pd.DataFrame({'Date':pd.bdate_range('2026-01-01',periods=len(closes)),
+                'Open':closes,'High':[v+1 for v in closes],'Low':[v-1 for v in closes],
+                'Close':closes,'Volume':1000})
+            frame['Turnover']=[2e7]*20+[9e8,8e8]
+            session=str(frame.Date.iloc[-1].date())
+            stock={'symbol':'TEST','as_of_date':session,'listing_date':'2020-01-01'}
+            (root/'all_stocks_fundamental_analysis.json').write_text(json.dumps([stock]))
+            frame.to_csv(root/'ohlcv_data/TEST.csv',index=False)
+            with mock.patch.object(build_chart_artifacts,'BASE_DIR',str(root)):
+                self.assertEqual(build_chart_artifacts.main(),0)
+            index=json.loads((root/'chart_artifacts/index.json').read_text())
+            digest=index['chartObjects']['TEST']
+            with gzip.open(root/'chart_artifacts/objects'/f'{digest}.json.gz','rt') as handle:chart=json.load(handle)
+            expected=compact_base_records(build_base_records({'TEST':frame},{'TEST':stock})['TEST'],public=True)
+            self.assertEqual(chart['bases'],expected)
+            self.assertNotIn('distanceEMA150',chart['bases']['FRESH_BREAKOUT']['current'])
+            self.assertIn('rsRating',chart['bases']['FRESH_BREAKOUT']['current'])
+            base=chart['bases']['FRESH_BREAKOUT']
+            self.assertLess(base['base']['endDate'],base['breakout']['date'])
+            self.assertEqual(base['pivot'],100)
+            self.assertEqual(base['base']['quietTurnoverCr'],2)
+            self.assertEqual(base['base']['medianTurnoverCr'],2)
 
     def test_failed_pipeline_does_not_replace_previous_charts(self):
         with tempfile.TemporaryDirectory() as folder:

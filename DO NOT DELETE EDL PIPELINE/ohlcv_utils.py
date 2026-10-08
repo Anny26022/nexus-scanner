@@ -79,7 +79,15 @@ def read_ohlcv_csv(path):
 
 
 def merge_rows_by_date(rows):
-    return sorted({row["Date"]: row for row in rows}.values(), key=lambda row: row["Date"])
+    merged = {}
+    for row in rows:
+        prior = merged.get(row["Date"], {})
+        # Provider price refreshes must preserve official raw traded value.
+        turnover = row.get("Turnover")
+        if turnover in (None, ""):
+            turnover = prior.get("Turnover")
+        merged[row["Date"]] = {**row, **({"Turnover": turnover} if turnover is not None else {})}
+    return sorted(merged.values(), key=lambda row: row["Date"])
 
 
 def discard_weekend_rows(rows):
@@ -168,6 +176,8 @@ def chunk_history_range(start_ts, end_ts, chunk_days):
 
 def write_ohlcv_csv(path, rows):
     with open(path, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=OHLCV_FIELDS)
+        rows = list(rows)
+        fields = OHLCV_FIELDS + (["Turnover"] if any("Turnover" in row for row in rows) else [])
+        writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)

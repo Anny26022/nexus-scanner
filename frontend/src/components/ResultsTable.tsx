@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useRef } from 'react';
 import { ScreenerRunResponse } from '../types/screener';
 import {
   ArrowUpDown,
@@ -10,11 +10,14 @@ import {
   TrendingUp,
   TrendingDown,
 } from 'lucide-react';
+import type { SelectedBases,BaseRecord } from '../engine/baseConditions';
+import { BaseChartDialog } from './BaseChart';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { AnnouncementsPanel } from './AnnouncementsPanel';
 
 interface ResultsTableProps {
   data?: ScreenerRunResponse;
+  baseStages?: Array<keyof SelectedBases>;
   isLoading: boolean;
   isError: boolean;
   error?: Error | null;
@@ -26,6 +29,7 @@ interface ResultsTableProps {
 
 export const ResultsTable: React.FC<ResultsTableProps> = ({
   data,
+  baseStages=[],
   isLoading,
   isError,
   error,
@@ -35,6 +39,10 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
   onAddToWatchlist,
 }) => {
   const [copiedTv, setCopiedTv] = useState(false);
+  const [chartSymbol,setChartSymbol]=useState<string|null>(null);
+  const [stageChoice,setStageChoice]=useState<keyof SelectedBases|undefined>();
+  const stage=stageChoice&&baseStages.includes(stageChoice)?stageChoice:baseStages[0];
+  const chartTrigger=useRef<HTMLButtonElement|null>(null);
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
 
   if (isLoading) {
@@ -120,6 +128,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
             <thead className="sticky top-0 z-10 bg-slate-50/95 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200/90 backdrop-blur-sm">
               <tr>
                 <th className="py-3 px-4 font-semibold">Symbol & Name</th>
+                {stage&&<th className="py-3 px-4 font-semibold">Base setup{baseStages.length>1&&<select aria-label="Displayed base stage" value={stage} onChange={event=>setStageChoice(event.target.value as keyof SelectedBases)} className="ml-2 rounded border border-slate-200 px-1 py-0.5 text-[10px]">{baseStages.map(value=><option key={value} value={value}>{value.replaceAll('_',' ').toLowerCase()}</option>)}</select>}</th>}
                 <th className="py-3 px-4 font-semibold">Sector / Industry</th>
                 <th
                   onClick={() => handleSortClick('close')}
@@ -164,7 +173,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
             <tbody className="divide-y divide-slate-100 font-mono">
               {data.rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-slate-500 font-sans">
+                  <td colSpan={stage?9:8} className="py-10 text-center text-slate-500 font-sans">
                     <FileQuestion className="h-7 w-7 text-slate-400 mx-auto mb-2" />
                     <p className="text-xs font-semibold text-slate-700">No Equities Matched Screener Criteria</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
@@ -178,7 +187,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
                     {/* Symbol & Name */}
                     <td className="py-3.5 px-4 font-sans">
                       <div className="flex items-center gap-1.5">
-                        <SymbolWithLogo symbol={row.symbol} name={row.name} />
+                        <button onClick={event=>{chartTrigger.current=event.currentTarget;setChartSymbol(row.symbol);}} aria-label={`Open ${row.symbol} chart`} className="rounded text-left hover:underline focus-visible:outline-2 focus-visible:outline-teal-600"><SymbolWithLogo symbol={row.symbol} name={row.name} /></button>
                         <button type="button" aria-label={`View ${row.symbol} announcements`} onClick={() => setFilingSymbol(row.symbol)}
                           className="text-[10px] text-teal-700 underline">Filings</button>
                         {row.isFno && (
@@ -189,6 +198,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
                       </div>
                     </td>
 
+                    {stage&&<td className="py-3.5 px-4 text-[11px] text-slate-600"><BaseExplanation record={Object.values(row.setupMatches??{}).find(record=>record.stage===stage)??row.bases?.[stage]}/></td>}
                     {/* Sector & Industry */}
                     <td className="py-3.5 px-4 font-sans">
                       <div
@@ -296,6 +306,14 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
           </div>
         )}
       </div>
+      {chartSymbol&&<BaseChartDialog key={`${data.immutableRevision}:${chartSymbol}`} symbol={chartSymbol} revision={data.immutableRevision} initialStage={stage} onClose={()=>{setChartSymbol(null);chartTrigger.current?.focus();}}/>}
     </div>
   );
 };
+
+function BaseExplanation({record}:{record?:BaseRecord}){
+  if(!record)return <span>—</span>;
+  const base=(record.base??{}) as BaseRecord,context=(record.stage==='FORMING'?record.current:record.selection) as BaseRecord|undefined;
+  const format=(value:unknown,suffix='')=>typeof value==='number'&&Number.isFinite(value)?`${value.toFixed(2)}${suffix}`:'—';
+  return <div className="min-w-48"><span className="block font-medium text-slate-700">RS {format(context?.rsRating)} · Depth {format(base.depthPct,'%')}</span><span className="block text-slate-500">ATR {format(base.atrContraction,'×')} · Volume {format(base.volumeDryUp,'×')} · Pivot {format(record.distanceFromPivotPct,'%')}</span></div>;
+}

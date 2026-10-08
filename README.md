@@ -14,6 +14,7 @@ Every result is tied to one published trading session and one immutable revision
 - [Technical architecture](#technical-architecture)
 - [How people use this repository](#how-people-use-this-repository)
 - [Every scanner form and filter family](#every-scanner-form-and-filter-family)
+- [Base quality, strength and breakouts](#base-quality-strength-and-breakouts)
 - [Calculation conventions and formulas](#calculation-conventions-and-formulas)
 - [What happens at runtime](#what-happens-at-runtime)
 - [How every published file is generated](#how-every-published-file-is-generated)
@@ -47,7 +48,7 @@ Nexus is deliberately split into a data plane and an interaction plane.
 | Shared scanner engine | TypeScript in the browser and Cloudflare Worker, with Python as the publication authority | Evaluates scalar and historical rules against one versioned condition contract. Golden parity fixtures remain the release gate to extend. |
 | Data pipeline | Python, requests, BeautifulSoup, CSV/JSON/Gzip | Fetches, standardizes, validates, and promotes market artifacts. |
 | Release store | Git-hosted immutable JSON and gzip files | Publishes compact scanner releases and a small active-release pointer. |
-| Chart store | Cloudflare R2 | Supplies per-symbol compressed payloads through the chart client; an integrated chart viewer is not yet wired into the UI. |
+| Chart store | Cloudflare R2 | Supplies immutable per-symbol candles and events; the chart viewer overlays the selected base, pivot and breakout. |
 | Automation | GitHub Actions | Runs daily and weekly refreshes, tests, publication, and generated-data commits. |
 
 ### Frontend modules
@@ -78,7 +79,7 @@ Nexus is deliberately split into a data plane and an interaction plane.
 | `edl_pipeline.scanner.trend` | Normalizes OHLCV and evaluates the condition-expression tree with match/no-match/unavailable results. |
 | `edl_pipeline.scanner.context` | Evaluates fundamentals, RS, earnings, surveillance, and snapshot-aligned conditions. |
 | `edl_pipeline.scanner.patterns` | Implements gaps, inside bars, range contraction, VCP, resistance, and related chart patterns. |
-| `edl_pipeline.scanner.presets` | Stores and validates the versioned 45-preset library. |
+| `edl_pipeline.scanner.presets` | Stores and validates the original 45 presets, seven Nexus base screens and four versioned setup families. |
 | `edl_pipeline.breadth` | Builds eligible universes, benchmark alignment, breadth measures, and ratings inputs. |
 | `edl_pipeline.sources` | Encapsulates public Dhan, NSE archive, and news-source retrieval. |
 | `edl_pipeline.transforms` | Produces fundamental, event, and market-breadth derived artifacts. |
@@ -135,7 +136,7 @@ After the run, inspect `data_quality.json`, `pipeline_report.json`, and the gene
 
 ### 6. Data platform operator: run charts at scale
 
-Set the R2 environment variables, enable `EDL_CHART_STORAGE=r2`, and run the normal pipeline. The publisher uploads immutable per-symbol files, verifies them, and updates the release only after all required publication work completes. An application consuming `screenerApi.getChart` can fetch a single chart at a time from the release URL template. The current table UI does not call this method.
+Set the R2 environment variables, enable `EDL_CHART_STORAGE=r2`, and run the normal pipeline. The publisher uploads immutable per-symbol files, verifies them, and updates the release only after all required publication work completes. An application consuming `screenerApi.getChart` can fetch a single chart at a time from the release URL template. Clicking a table symbol calls this method and opens the integrated chart viewer.
 
 ## What users can do
 
@@ -169,7 +170,7 @@ The active tab, screener universe, conditions, match mode, and sort order are st
 | Screening and IPO tables | Implemented in the two app tabs. |
 | Copy TradingView symbols | Copies `NSE:<symbol>` values from the displayed page, not the entire matching universe. |
 | Watchlist button | Displays a confirmation toast; no watchlist persistence or external integration exists. |
-| Chart data | Generated payloads and a revision-validated `getChart` client exist; no integrated chart viewer exists. |
+| Chart data | Click a symbol to load its revision-validated candles and selected base overlay on demand. A scanner-only release shows a chart-unavailable message. |
 | Named saved screens | Not implemented; current workspace preferences persist automatically. |
 | Explain API | The real adapter currently returns a placeholder valid response; it is not authoritative server validation. |
 | Symbol-list component | Exists in source; top-level app navigation currently contains only screener and IPO. |
@@ -251,9 +252,105 @@ Financial amounts labelled in lakhs are converted from ScanX crore values. State
 
 ### Built-in scans
 
-The versioned local preset library contains 45 scans, including Persistent Momentum, Easy Money, Relative Strength Leaders, RS Line at New High, Stage 2 Uptrend, Momentum Burst, Quiet Strength, 52-Week High Breakout, 20-Day High on Record Volume, Breakout from Tight Base, Pocket Pivot, ADX Trend Breakout, Circuit-Safe Breakout, VCP Contraction, Inside Bar Coil, Weekly Inside Bar, Volume Dry-Up Base, Flat Base, Horizontal Resistance, Flags & Pennants, Low-ATR Coil, 21 EMA Pullback, 50 EMA Shakeout, Higher-Low Pullback, Gap Support Retest, Volume Surge, Highest Volume in 3 Months, Delivery-Backed Accumulation, Sustained Accumulation, Unfilled Gap Up, Gap & Go, Gap Down Washout, 52-Week Low Bounce, RS Divergence Turn, Relative Weakness, Earnings Growth Momentum, Post-Earnings Drift, Growth at a Fair Price, Revenue & Profit Acceleration, Pre-Earnings Coil, Breadth-Gated Leaders, Liquid Trading Universe, Fresh IPO Base, Nifty 500 Momentum, and Midcap Breakout.
+The versioned local preset library contains 56 scans: the original 45 definitions, seven Nexus base screens and four versioned setup families. The original definitions include Persistent Momentum, Easy Money, Relative Strength Leaders, RS Line at New High, Stage 2 Uptrend, Momentum Burst, Quiet Strength, 52-Week High Breakout, 20-Day High on Record Volume, Breakout from Tight Base, Pocket Pivot, ADX Trend Breakout, Circuit-Safe Breakout, VCP Contraction, Inside Bar Coil, Weekly Inside Bar, Volume Dry-Up Base, Flat Base, Horizontal Resistance, Flags & Pennants, Low-ATR Coil, 21 EMA Pullback, 50 EMA Shakeout, Higher-Low Pullback, Gap Support Retest, Volume Surge, Highest Volume in 3 Months, Delivery-Backed Accumulation, Sustained Accumulation, Unfilled Gap Up, Gap & Go, Gap Down Washout, 52-Week Low Bounce, RS Divergence Turn, Relative Weakness, Earnings Growth Momentum, Post-Earnings Drift, Growth at a Fair Price, Revenue & Profit Acceleration, Pre-Earnings Coil, Breadth-Gated Leaders, Liquid Trading Universe, Fresh IPO Base, Nifty 500 Momentum, and Midcap Breakout.
 
-Preset defaults deliberately include market cap above ₹1,000 Cr, price above ₹10, and 50-day average turnover above ₹5 Cr. They have no upper market-cap or price ceiling and no blanket 2% or 5% circuit exclusion.
+The original preset defaults deliberately include market cap above ₹1,000 Cr, price above ₹10, and 50-day average turnover above ₹5 Cr. They have no upper market-cap or price ceiling and no blanket 2% or 5% circuit exclusion.
+
+## Base quality, strength and breakouts
+
+The base engine ties quality, strength and breakout measurements to one detected
+formation. It does not combine a contraction from one base with a pivot or RS
+value from another. Conditions for the same lifecycle stage use the same
+stable selected base ID in Python, the browser and the advanced Worker.
+The four newer setup families instead test every eligible family candidate
+before choosing the latest qualifying witness; their clauses still bind to
+one formation. They route to the advanced engine and return `setupMatches`
+by condition instance. Legacy standalone filters retain their selection policy.
+
+### Detection and measurements
+
+A causal closing-price peak is confirmed after a 5% close pullback. A base needs
+at least 15 sessions before a close above its fixed pivot can trigger a breakout.
+The legacy detector allows up to 1,500 base sessions and 60% depth. Setup
+families have separate 95% candidate policies and their own depth gates; research screens
+apply tighter thresholds. Nested formations, parent invalidation, failed pokes,
+pivot touches and squats remain explicit episode facts.
+
+| Family | Published measurements |
+| --- | --- |
+| Base quality | Start/end, pivot, floor, age, depth, level/nesting, overhead supply, ATR contraction, volume dry-up, quietest-volume depth and recency. |
+| Accumulation | Up/down volume ratio and net balance `(up − down) / (up + down)`, distinct from OBV. |
+| Strength | Weighted RS rank, 5/22-session rank change, rank minimum/average inside the base, RS-line high and industry-relative return/breadth. |
+| Trend | SMA/EMA distances, ratios and slopes, 52-week closing-price position and median 20-session official NSE traded value. |
+| Breakout | Date, volume versus the preceding 20-session median, gap relative to pivot, closing extension, daily gain and close-in-range. |
+| Follow-through | Breakout age, continuous/current pivot holding, closes inside, gain, drawdown and completed 5/20/60-session outcomes. |
+
+Base quality uses the formation's own inclusive boundaries. Breakout-day quality
+freezes before the breakout candle; follow-through continues updating. Missing
+warmup, ranks and zero denominators remain unavailable. Fresh breakouts cover
+ages 0–5 inclusive; older unexited breakouts enter Holding. A first close inside
+the base is distinct from a stop or an armed moving-average exit.
+
+### Editable base screens
+
+| Screen | Main selection |
+| --- | --- |
+| Strong Bases | Forming base, median turnover ≥ ₹5 Cr/day, rising 200 SMA, RS ≥80 with nonnegative 22-session progression, within 20% of the closing 52-week high, age 15–100, depth ≤25%, ATR/volume contraction ≤0.8×, 0–5% below pivot. |
+| Fresh Breakouts | Frozen base quality plus ≥1.5× breakout volume, close-in-range ≥0.7, positive pivot clearance, age 0–5 and current extension at most 5%. |
+| Holding Breakouts | Frozen base quality and continued pivot holding; holding policy is editable. |
+| VCP Base | Contraction, depth, duration, trend, position and strength conditions tied to the selected forming base. |
+| Blue Sky | Selected forming base with history starting within seven calendar days of official listing and no higher closing price in available history. |
+| Multi-year Base | Long-duration selected formation with trend and pivot-proximity conditions. |
+| IPO Base | Official listing age plus formation age/depth, trend and pivot proximity. |
+
+These are Nexus research starting defaults, not optimized or proven optimal
+settings. Threshold edits execute the edited expression. Results show a concise
+base explanation, and charts use the same compact summary as the table.
+
+The deterministic query compiler accepts, for example:
+
+```text
+Base Stage(FORMING) AND Base Metric(FORMING, base.depthPct) <= 25
+Base Stage(HOLDING, STRICT)
+Base Stage(FORMING) AND Base Formula(FORMING, base.parts.half_2.volume, DIVIDE, base.parts.half_1.volume) <= 0.8
+```
+
+Common public scalars run in the browser worker. Detailed slices and additional
+context send the entire expression to the advanced Worker, preserving nested
+AND/OR semantics, repeated clauses and strict comparisons. Unsupported clauses
+are rejected.
+
+### Generation, storage and replay
+
+Daily and weekly publication generate bases from histories aligned to the release
+session. The technical browser pack keeps compact selected summaries. Matching
+private auxiliary shards contain detailed selected episodes. Complete historical
+episodes stream into 32 compressed `base-history/` shards; dated RS ledgers use
+`base-ranks/` shards. Latest-session scans do not load these archives. Private
+objects are hash-verified before release promotion, and private retention keeps
+seven complete revisions including the active release. Chart retention remains
+independent.
+
+Charts are generated before temporary news cleanup. Generation retains numeric
+frames for cross-sectional strength and loads each output's candle dictionaries
+one symbol at a time. Chart base summaries use the same public context projection
+as scanner rows.
+
+From the pipeline directory, replay local history with explicit execution costs:
+
+```sh
+python3 replay_base_breakouts.py --symbols RELIANCE --fee-bps 10 --slippage-bps 10
+```
+
+Omit `--symbols` to replay the aligned universe. Qualified signals enter at the
+next session open; closing stop/trail signals also execute at the next open.
+Fixed-horizon outcomes continue independently of trade exits, and incomplete
+horizons remain null. The replay uses today's eligible universe and industry
+classification, so it is not survivorship-free. Historical constituent
+reconstruction is required before interpreting it as an unbiased strategy study.
+
+See [the complete formula, lifecycle and validation contract](docs/base-quality-engine.md)
+for detector semantics, selection rules, measured performance and limitations.
 
 ## Calculation conventions and formulas
 
@@ -267,7 +364,7 @@ All technical windows below use trading sessions, not calendar days. Data is cut
 | Daily return | Same formula with N=1. |
 | Gap % | `100 × (current open / prior close − 1)`. |
 | RVOL(N) | Current volume divided by the mean of the preceding N volumes, excluding the current session. |
-| Average turnover(N) | Mean of `close × volume` over N sessions, divided by 10,000,000 for ₹Cr. |
+| Average turnover(N) | Mean official NSE `Turnover` over N complete sessions, divided by 10,000,000 for ₹Cr; missing values remain unavailable. |
 | ADR(N) % | Mean of `100 × (high − low) / close` over N sessions. |
 | True range | Maximum of `high − low`, `abs(high − prior close)`, and `abs(low − prior close)`. |
 | ATR % | Wilder-smoothed true range divided by current close, multiplied by 100. |
@@ -321,7 +418,7 @@ sequenceDiagram
   API->>R2: Read immutable manifest and required shards
   R2-->>API: OHLCV and matching auxiliary shards
   API-->>UI: Authoritative evaluated result and diagnostics
-  Note over UI,R2: Chart client exists, viewer integration is pending
+  Note over UI,R2: Symbol click loads candles and the selected base overlay
 ```
 
 ### Browser release loading
@@ -337,7 +434,7 @@ The main UI never claims a browser-only approximation is a result for a rule tha
 
 ### Browser charts
 
-The chart client requests one immutable compressed payload using the chart URL template in the release. It verifies the symbol and session before returning it to the caller. A future chart viewer can consume this method without loading every stock's chart. It must provide its own loading, error, drawing, and event-marker UI.
+The chart client requests one immutable compressed payload using the chart URL template in the release and verifies its symbol and session. The integrated viewer loads candles on demand and draws the selected base floor/pivot range and breakout marker. Its stage control changes which detected base is shown. It provides loading and unavailable states and keyboard dismissal; it does not load every stock's chart.
 
 ### Precomputed work versus runtime work
 
@@ -345,7 +442,7 @@ The chart client requests one immutable compressed payload using the chart URL t
 | --- | --- |
 | Source retrieval, history overlays, fundamental normalization | Pipeline refresh. |
 | RS ratings, breadth, events, and canonical market fields | Pipeline refresh. |
-| Supported numeric snapshot metrics and 45 preset results | Snapshot publication, once per immutable release. |
+| Supported numeric snapshot metrics and 52 preset results | Snapshot publication, once per immutable release. |
 | Chart candles and volume/event groups | Chart generation before cleanup. |
 | Snapshot decompression, parsing, and validation | First use of a revision in the worker. |
 | Supported custom comparisons, Boolean groups, universe selection | Browser screen execution against published metrics. |
@@ -582,7 +679,7 @@ Pipeline Boolean settings accept familiar true/false forms (`1/0`, `yes/no`, `on
 4. **Chart origin:** when charts are enabled, expose the R2 URL template with suitable browser CORS and gzip delivery. A scanner-only release legitimately has no chart URLs.
 5. **Operator monitoring:** watch failed workflows, stale session pointers, missing history, archive failures, and object expiry. Scheduled time is not a completion guarantee.
 
-Vite's local middleware handles `POST /api/screens/run` by managing a persistent Python worker. `npm run build` produces static files and does **not** package that middleware. The production advanced path is the Cloudflare Worker, with 100 KB requests, 32 leaves, expression depth 8, page size 100, four-shard batches, and revision-scoped edge caching.
+Vite's local middleware handles `POST /api/screens/run` by managing a persistent Python worker. `npm run build` produces static files and does **not** package that middleware. The production advanced path is the Cloudflare Worker, with 100 KB requests, 32 leaves, expression depth 8, page size 100, one shard resident at a time, a bounded cold-scan queue, and revision-scoped edge caching.
 
 The adapter's catalogue comes from compiled frontend data; IPO rows come from the immutable static release. The explain method is currently a placeholder. Do not create an assumed server route for every method in `screenerApi`.
 
@@ -698,6 +795,65 @@ Read [`DO NOT DELETE EDL PIPELINE/docs/DATA_LIMITATIONS.md`](DO%20NOT%20DELETE%2
 - [R2 chart publication](docs/r2-chart-publication.md)
 - [Frontend guide](frontend/README.md)
 - [Contribution guide](CONTRIBUTING.md)
+
+
+## Precomputed base trade outcomes
+
+Base episodes, selected scanner summaries and chart payloads include a `trade`
+record with next-session-open entry/exit dates and prices, pending/open/closed
+status, stop/trailing exit reason, frozen gross/net returns and explicit costs.
+Defaults are 10 bps fees and 10 bps slippage per side, configurable through
+`BaseConfig`. Missing execution candles keep realized returns unavailable.
+The live return since breakout remains a separate measurement. Daily and weekly
+pipeline generation compute these records; no new UI or market feed is required.
+See [the data contract](docs/base-quality-engine.md#precomputed-trade-execution-data-no-ui-changes).
+
+## Official NSE turnover history
+
+Turnover calculations use NSE's actual daily traded value, stored as an optional
+`Turnover` column in OHLCV CSVs **in rupees**. The full bhavcopy's
+`TURNOVER_LACS` is multiplied by 100,000 at ingestion. This value remains raw
+when chart prices are adjusted; it is never reconstructed from adjusted close
+and volume. Only NSE turnover is included.
+
+Daily and weekly pipelines run `backfill_nse_turnover.py` in the serial OHLCV
+lane after price-history refresh, before scanner calculations. It fills missing
+values for the latest 1,500 observed sessions using one full-universe file per
+date, caches compressed files in `nse_turnover_history/`, and preserves existing
+prices. Both Actions workflows retain that cache. Failures are listed in
+`nse_turnover_report.json`; incomplete windows produce unavailable/null metrics.
+An old base may need deeper history before its frozen turnover qualifies.
+
+To run the 1,500-session default explicitly, from the pipeline directory:
+
+```sh
+python backfill_nse_turnover.py --sessions 1500
+```
+
+Average-turnover filters, 20/50/100-session snapshot averages and the base's
+20-session median use complete official windows. Private scanner packs carry
+compact dated turnover arrays for the advanced Worker; common precomputed
+values remain in public packs. No BSE integration or estimated fallback is used.
+
+A calendar-aligned ten-year official turnover backfill can be run once:
+
+```sh
+python backfill_nse_turnover.py --years 10
+```
+
+The endpoint falls back to legacy NSE equity bhavcopy ZIPs when the full
+bhavcopy is absent, incorrectly encoded, or contains a different session. Legacy `TOTTRDVAL` is already rupees, whereas
+`TURNOVER_LACS` is multiplied by 100,000. Dates and finite nonnegative values
+are validated. A temporary disk index limits RAM use during long backfills;
+compressed daily files are reusable. Coverage extends only to existing stock
+candles, and historical symbol renames may still leave gaps. The ten-year
+command does not change the daily pipeline's 1,500-session fill window or prune
+older observations. No new price history is fetched by this command.
+
+## Versioned setup families
+
+VCP, Blue Sky, Multi-year and IPO First Base now expose editable NSE liquidity floors, lifecycle selection, depth limits and optional confirmed-leg/history policies. See [setup-family contracts](docs/setup-family-contracts.md) for exact formulas, frozen qualification, history provenance, replay sizing and the `nexus-bases-5` detector change.
+
 
 ## License
 

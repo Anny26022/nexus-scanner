@@ -59,14 +59,16 @@ describe('scanner execution and match caching',()=>{
     const input = JSON.parse(readFileSync(new URL('./fixtures/publisher-shard.json', import.meta.url), 'utf8')) as Record<string, Array<Record<string, string | number>>>;
     const compressed = readFileSync(new URL('./fixtures/publisher-shard.bin.gz', import.meta.url));
     const decoded = decodeShard(Uint8Array.from(gunzipSync(compressed)).buffer);
-    expect(decoded.map(item => item.symbol)).toEqual(Object.keys(input).sort());
+    const symbols: string[] = [];
     for (const { symbol, series } of decoded) {
+      symbols.push(symbol);
       const rows = input[symbol];
       expect([...series.dates]).toEqual(rows.map(row => Date.parse(String(row.Date)) / 86400000));
       for (const [field, column] of [['open', 'Open'], ['high', 'High'], ['low', 'Low'], ['close', 'Close'], ['volume', 'Volume']] as const) {
         expect([...series[field]]).toEqual(rows.map(row => row[column]));
       }
     }
+    expect(symbols).toEqual(Object.keys(input).sort());
   });
 
   it('reads only selected symbol shards for a custom universe',async()=>{

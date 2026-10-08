@@ -1,12 +1,18 @@
-import { evaluateExpression, walkExpression, negate, compare as compareValues } from '../engine/expression';
+import { materializeBasePreset } from '../engine/basePresets';
+import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
+import { evaluateExpression, walkExpression, negate, compare as compareValues, and } from '../engine/expression';
 import { createCoverage, type Coverage } from '../engine/coverage';
 import { normalizeSnapshotCondition, readSnapshotField, snapshotFieldDependency } from '../engine/snapshotFields';
 import { compileTextQuery } from '../engine/queryCompiler';
-import type { ExpressionNode } from '../types/screener';
-import type { ActiveCondition, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
+
+import presetDefinitions from '../data/presetDefinitions.json';
+import { selectSetupEpisode, evaluateBaseCondition, type BaseRecord, type SelectedBases } from '../engine/baseConditions';
 
 type Truth = boolean | null;
 export interface SnapshotStock extends StockRow {
+  bases?: SelectedBases;
+  setupCandidates?: BaseRecord[];
+  setupMatches?: Record<string,BaseRecord>;
   asOfDate: string | null;
   metadataAsOfDate: string | null;
   historyAligned: boolean;
@@ -44,8 +50,17 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
   const p = c.parameters;
   let fn: Predicate;
   let metadata = false;
+  if(c.conditionId.startsWith('lib-nexus-')){
+    const preset=presetDefinitions.find(item=>item.id===c.conditionId);
+    if(!preset)return null;
+    const negatePreset=(fn:Predicate):Predicate=>c.isNegated?s=>{const value=fn(s);return value===null?null:!value;}:fn;
+    if('setupFamily' in preset)return negatePreset(s=>!s.historyAligned||s.asOfDate!==session?null:selectSetupEpisode(s.setupCandidates,preset,p).value);
+    const conditions=materializeBasePreset(preset,p);
+    return negatePreset(s=>!s.historyAligned||s.asOfDate!==session?null:and(conditions.map(node=>evaluateBaseCondition(s.bases,node))));
+  }
   let publishedOnly = false;
   switch (c.conditionId) {
+    case 'BASE_STAGE': case 'BASE_METRIC': case 'BASE_FORMULA': fn=s=>evaluateBaseCondition(s.bases,c); break;
     case 'FIELD_COMPARISON': {
       const field = String(p.field), targetField = typeof p.value === 'object' && p.value !== null ? String(p.value.field) : null;
       if (!snapshotFieldDependency(field) || (targetField !== null && !snapshotFieldDependency(targetField))) return null;

@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -22,6 +23,9 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from pipeline_utils import BASE_DIR, load_json, save_json
+from edl_pipeline.scanner.base_publication import setup_candidate_records, load_history_audits, build_base_records, compact_base_records
+from edl_pipeline.scanner.trend import normalize_history
+from standardize_stock_artifact import canonicalize_stock
 from filing_classification import VERSION, classify_filings, classify_corporate_action
 from announcement_artifacts import build_announcements, put_object
 
@@ -70,7 +74,7 @@ def _event_date(value):
     return _date(value)
 
 
-def _load_candles(path: Path, as_of: str):
+def _load_candles(path: Path, as_of: str, include_turnover=False):
     candles = []
     if not path.exists():
         return candles
@@ -86,6 +90,12 @@ def _load_candles(path: Path, as_of: str):
                     "low": float(row["Low"]), "close": float(row["Close"]),
                     "volume": int(float(row["Volume"])),
                 })
+                if include_turnover:
+                    # Optional traded value must not invalidate a valid candle.
+                    try:
+                        candles[-1]['turnover']=float(row.get('Turnover') or 'nan')
+                    except (TypeError,ValueError):
+                        candles[-1]['turnover']=float('nan')
             except (KeyError, TypeError, ValueError):
                 continue
     return candles
@@ -190,14 +200,36 @@ def main() -> int:
     announcements = build_announcements(filing_history, objects, symbols, as_of)
     chart_objects = {}
     count = 0
+    canonical={str(stock.get('symbol') or stock.get('Symbol')).upper():canonicalize_stock(stock) for stock in stocks if stock.get('symbol') or stock.get('Symbol')}
+    frames={}
+    # Retain numeric frames for cross-sectional strength, not a second universe
+    # of candle dictionaries. Chart payloads are loaded one symbol at a time.
+    for symbol in canonical:
+        path=root/'ohlcv_data'/f'{symbol}.csv'
+        if not path.exists() or not canonical[symbol].get('default_screener_eligible',True):continue
+        # Use the scanner's numeric parser/normalizer for identical threshold
+        # values; the chart candle serializer remains a separate wire format.
+        frame=normalize_history(pd.read_csv(path),as_of)
+        if not frame.empty and str(frame.Date.iloc[-1].date())==as_of:frames[symbol]=frame
+    benchmarks={}
+    for item in _artifact(root,'all_indices_history_v2.json',{}).get('indices',[]):
+        keys={str(value).upper().replace(' ','_') for value in (item.get('symbol'),item.get('name')) if value}
+        if not keys.intersection({'NIFTY_500','NIFTY500'}): continue
+        benchmark=pd.DataFrame(item.get('records',[]))
+        if not benchmark.empty and {'date','close'}.issubset(benchmark):
+            benchmark['Date']=pd.to_datetime(benchmark.date)
+            benchmarks['NIFTY_500']=benchmark.loc[benchmark.Date<=pd.Timestamp(as_of)]
+    bases=build_base_records(frames,canonical,benchmarks,selected_only=True,setup_candidates=True,history_audits=load_history_audits(root))
     for stock in stocks:
         symbol = str(stock.get("Symbol") or stock.get("symbol") or "").upper()
         if not symbol:
             continue
-        candles = _load_candles(root / "ohlcv_data" / f"{symbol}.csv", as_of)
+        candles = _load_candles(root/'ohlcv_data'/f'{symbol}.csv',as_of)
         payload = {
             "schemaVersion": 2, "symbol": symbol,
             "historyStartDate": candles[0]["date"] if candles else None,
+            "bases": compact_base_records(bases.get(symbol,[]),public=True),
+            "setupCandidates": setup_candidate_records([episode for episode in bases.get(symbol,[]) if episode.get("setupCandidateOnly")]),
             "candles": candles, "volumeEvents": _volume_events(candles),
             "corporateActions": [{**row, "classification": classify_corporate_action(row)} for row in actions[symbol] if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
             "earnings": [row for row in earnings[symbol] if _date(row.get("filing_date")) and row["filing_date"] <= as_of],

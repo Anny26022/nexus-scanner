@@ -1,3 +1,5 @@
+import definitions from '../data/presetDefinitions.json';
+import { selectSetupEpisode, detailedSelectedBases,type BaseRecord } from './baseConditions';
 import type { ActiveCondition } from '../types/screener';
 import type { SnapshotStock } from '../api/snapshotScreen';
 import { evaluateSnapshotCondition } from '../api/snapshotScreen';
@@ -8,9 +10,14 @@ import { compare, negate, type Truth } from './expression';
 export interface CandleSeries { dates:Int32Array; open:Float64Array; high:Float64Array; low:Float64Array; close:Float64Array; volume:Float64Array }
 export interface AdvancedContext {
   stock: SnapshotStock;
+  bases?: BaseRecord[];
+  setupCandidates?: BaseRecord[];
+  setupCandidateHistoryComplete?: boolean;
+  setupMatches?: Record<string,BaseRecord>;
   session: string;
+  turnover?: {dates:number[];values:(number|null)[]};
   benchmarks?: Record<string,{dates:number[];closes:number[]}>;
-  delivery?: Array<Record<string,unknown>>;
+  delivery?: Array<Record<string,unknown>> | {dates:number[];percentages:unknown[]};
   earnings?: Array<Record<string,unknown>>;
   breadth?: Record<string,Record<string,number|null>>;
 }
@@ -148,13 +155,21 @@ const historyIds=new Set(['FIELD_COMPARISON','PERSISTENT_MOMENTUM','PRICE_VS_EMA
 export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCondition,context:AdvancedContext):Truth{
   const normalized=normalizeSnapshotCondition(condition);
   if(normalized!==condition)return evaluateHistoryCondition(series,normalized,context);
-  if(conditionCapability(condition).browser(condition))return evaluateSnapshotCondition(context.stock,condition,context.session);
   const special=evaluateLegacySpecial(series,condition,context);
   if(special!==undefined)return condition.isNegated?negate(special):special;
   const legacy=translateLegacy(condition);
   if(legacy!==condition)return evaluateHistoryCondition(series,legacy,context);
   const id=condition.conditionId,p=condition.parameters;
+  const family=definitions.find(preset=>preset.id===id&&'setupFamily' in preset);
+  if(family){
+    if(!context.stock.historyAligned||context.stock.asOfDate!==context.session)return null;
+    const outcome=selectSetupEpisode(context.setupCandidates,family,p,context.setupCandidateHistoryComplete??true);
+    if(outcome.value===true&&!condition.isNegated&&outcome.record&&context.setupMatches)context.setupMatches[condition.instanceId??id]=outcome.record;
+    return condition.isNegated?negate(outcome.value):outcome.value;
+  }
+  if(['BASE_STAGE','BASE_METRIC','BASE_FORMULA'].includes(id)||id.startsWith('lib-nexus-'))return evaluateSnapshotCondition({...context.stock,bases:detailedSelectedBases(context.stock.bases,context.bases)},condition,context.session);
   if(id.startsWith('lib-'))return evaluateSnapshotCondition(context.stock,condition,context.session);
+  if(conditionCapability(condition).browser(condition) && !(condition.conditionId==='AVG_TURNOVER' && series.dates.length))return evaluateSnapshotCondition(context.stock,condition,context.session);
   if(!scalarIds.has(id)&&!historyIds.has(id))throw new Error(`Unsupported condition: ${id}`);
   if(scalarIds.has(id)){const value=evaluateSnapshotCondition(context.stock,{...condition,isNegated:false},context.session);if(value!==null)return condition.isNegated?negate(value):value;}
   let result:Truth=null;
@@ -177,10 +192,10 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
   else if(id==='AVG_VOLUME_RATIO'){const recent=n(p.recentDays),base=n(p.baseDays);result=series.volume.length<recent+base?null:compare(mean(slice(series.volume,-recent))/mean(slice(series.volume,-recent-base,-recent)),p.comparison,p.ratio);}
   else if(id==='HIGHEST_VOLUME_IN_N_DAYS'){const look=n(p.lookbackDays),flags=Array.from({length:series.volume.length},(_,i)=>i+1<look?null:series.volume[i]>=max(slice(series.volume,i+1-look,i+1))&&(!p.positiveClose||series.close[i]>series.close[i-1]));result=event(flags,n(p.withinDays,1));}
   else if(id==='DELIVERY_PCT_SPIKE'){
-    const byDate=new Map((context.delivery??[]).map(row=>[String(row.date),n(row.delivery_percent,NaN)])),within=Math.max(1,n(p.withinDays,1)),values=slice(series.dates,-within).map(day=>byDate.get(new Date(day*86400000).toISOString().slice(0,10))).filter((value):value is number=>value!==undefined&&Number.isFinite(value));
+    const delivery=context.delivery??[],packed=!Array.isArray(delivery),byDate=new Map<string|number,number>(Array.isArray(delivery)?delivery.map(row=>[String(row.date),n(row.delivery_percent,NaN)]):delivery.dates.map((day,index)=>[day,n(delivery.percentages[index],NaN)])),within=Math.max(1,n(p.withinDays,1)),values=slice(series.dates,-within).map(day=>byDate.get(packed?day:new Date(day*86400000).toISOString().slice(0,10))).filter((value):value is number=>value!==undefined&&Number.isFinite(value));
     result=values.length?values.some(value=>value>=n(p.minDeliverablePct)):null;
   }
-  else if(id==='DELIVERY_PERCENT'){const item=context.delivery?.find(row=>row.date===context.session),value=n(item?.delivery_percent,NaN);result=Number.isFinite(value)?compare(value,p.comparison,p.value):null;}
+  else if(id==='DELIVERY_PERCENT'){const delivery=context.delivery??[],value=Array.isArray(delivery)?n(delivery.find(row=>row.date===context.session)?.delivery_percent,NaN):n(delivery.percentages[delivery.dates.indexOf(Math.floor(Date.parse(context.session)/86400000))],NaN);result=Number.isFinite(value)?compare(value,p.comparison,p.value):null;}
   else if(id==='NEW_HIGH'||id==='NEW_LOW'){const look=n(p.lookbackDays),source=id==='NEW_HIGH'?series.high:series.low,flags=Array.from({length:source.length},(_,i)=>i+1<look?null:id==='NEW_HIGH'?source[i]>=max(slice(source,i+1-look,i+1)):source[i]<=min(slice(source,i+1-look,i+1)));result=event(flags,n(p.withinDays,1));}
   else if(id==='PCT_FROM_52W_HIGH'||id==='PCT_FROM_52W_LOW'){const source=id.endsWith('HIGH')?series.high:series.low,extreme=id.endsWith('HIGH')?max(slice(source,-252)):min(slice(source,-252)),distance=id.endsWith('HIGH')?(extreme-last(series.close))/extreme*100:(last(series.close)-extreme)/extreme*100;result=compare(distance,p.comparison,p.pct);}
   else if(id==='CONSOLIDATION_RANGE'){const end=series.close.length-n(p.excludeLatest),start=end-n(p.lookbackDays);result=start<0?null:(max(slice(series.high,start,end))-min(slice(series.low,start,end)))/series.close[end-1]*100<=n(p.maxRangePct);}
@@ -206,7 +221,7 @@ export function evaluateHistoryCondition(series:CandleSeries,condition:ActiveCon
     }
   }
   else if(id==='RELATIVE_STRENGTH'||id==='RS_NEW_HIGH'){const benchmark=context.benchmarks?.[str(p.benchmark,'NIFTY_50').toUpperCase()];if(!benchmark)result=null;else{const byDate=new Map(benchmark.dates.map((date,i)=>[date,benchmark.closes[i]])),pairs=Array.from(series.dates,(_,i)=>[series.close[i],byDate.get(series.dates[i])] as const).filter((pair):pair is readonly[number,number]=>pair[1]!=null);const days=n(p.overDays??p.lookbackDays,60);if(pairs.length<=days)result=null;else if(id==='RELATIVE_STRENGTH'){const latest=pairs[pairs.length-1],prior=pairs[pairs.length-1-days],spread=percentChange(latest[0],prior[0])-percentChange(latest[1],prior[1]);result=compare(spread,p.comparison,p.pct??p.value);}else{const rs=pairs.slice(-days).map(pair=>pair[0]/pair[1]),price=slice(series.high,-days),distance=(max(price)-last(series.close))/max(price)*100;result=last(rs)>=max(rs)&&distance>=n(p.minPriceBelowHighPct);}}}
-  else if(id==='AVG_TURNOVER'){const days=n(p.lookbackDays,20);result=series.close.length<days?null:compare(mean(Array.from({length:days},(_,j)=>{const i=series.close.length-days+j;return series.close[i]*series.volume[i]/1e7;})),p.comparison,p.valueCr);}
+  else if(id==='AVG_TURNOVER'){const days=n(p.lookbackDays,20),official=context.turnover,byDate=new Map(official?.dates.map((day,i)=>[day,official.values[i]])??[]),values=slice(series.dates,-days).map(day=>byDate.get(day));result=days<=0||series.dates.length<days||values.some(value=>value==null||!Number.isFinite(value)||value<0)?null:compare(mean(values.map(value=>Number(value)/1e7)),p.comparison,p.valueCr);}
   else if(id==='ADR_PCT'){const days=n(p.lookbackDays,14);result=series.close.length<days?null:compare(mean(Array.from({length:days},(_,j)=>{const i=series.close.length-days+j;return (series.high[i]-series.low[i])/series.close[i]*100;})),p.comparison,p.pct);}
   else if(id==='DAYS_SINCE_EARNINGS'||id==='LISTING_AGE_DAYS'){const marker=id==='DAYS_SINCE_EARNINGS'?context.stock.earningsDate:context.stock.listingDate;if(!marker)result=null;else{const day=Math.floor(Date.parse(marker+'T00:00:00Z')/86400000),sessions=Array.from(series.dates).filter(value=>value>day).length;result=compare(sessions,p.comparison,p.days);}}
   else if(id==='EARNINGS_GROWTH'){

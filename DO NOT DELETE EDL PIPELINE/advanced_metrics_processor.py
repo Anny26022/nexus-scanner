@@ -76,7 +76,7 @@ def process_symbol_csv(csv_path):
         for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
             df[col] = pd.to_numeric(df[col], errors='coerce')
         
-        df = df.replace([float('inf'), float('-inf')], float('nan')).dropna()
+        df = df.replace([float('inf'), float('-inf')], float('nan')).dropna(subset=(['Date'] if 'Date' in df.columns else []) + ['Open','High','Low','Close','Volume'])
         if df.empty: return sym, None
 
         df = df.sort_values('Date') if 'Date' in df.columns else df
@@ -115,8 +115,9 @@ def process_symbol_csv(csv_path):
         pct_from_52w_low = ((latest['Close'] - low_52w) / low_52w) * 100 if len(df) >= 252 and low_52w > 0 else None
 
         # 5. Volume Metrics
-        df['Turnover_Cr'] = (df['Close'] * df['Volume']) / 10000000 
-        avg_rupee_vol_30 = df['Turnover_Cr'].tail(30).mean()
+        official = pd.to_numeric(df.get('Turnover', pd.Series(index=df.index,dtype=float)), errors='coerce')
+        df['Turnover_Cr'] = official.where(official >= 0) / 10000000
+        avg_rupee_vol_30 = df['Turnover_Cr'].rolling(30,min_periods=30).mean().iloc[-1]
         
         df['EMA_Vol_200'] = calculate_ema(df['Volume'], 200)
         ema_vol_200_latest = df['EMA_Vol_200'].iloc[-1]
@@ -126,9 +127,9 @@ def process_symbol_csv(csv_path):
         pct_from_ema_200_52w_high = ((ema_vol_200_latest - ema_vol_200_52w_high) / ema_vol_200_52w_high) * 100 if ema_vol_200_52w_high > 0 else 0
 
         # 6. Turnover Moving Averages
-        turnover_20 = df['Turnover_Cr'].tail(20).mean()
-        turnover_50 = df['Turnover_Cr'].tail(50).mean()
-        turnover_100 = df['Turnover_Cr'].tail(100).mean()
+        turnover_20 = df['Turnover_Cr'].rolling(20,min_periods=20).mean().iloc[-1]
+        turnover_50 = df['Turnover_Cr'].rolling(50,min_periods=50).mean().iloc[-1]
+        turnover_100 = df['Turnover_Cr'].rolling(100,min_periods=100).mean().iloc[-1]
 
         # 7. Normalized scanner fields. Values are null when there is not enough
         # history to calculate a trustworthy metric.
@@ -159,9 +160,9 @@ def process_symbol_csv(csv_path):
         ], axis=1).max(axis=1)
         atr14 = true_range.ewm(alpha=1 / 14, adjust=False, min_periods=14).mean().iloc[-1] if len(df) >= 14 else None
         adr20 = (df['High'] - df['Low']).tail(20).mean() if len(df) >= 20 else None
-        adr_percent_20 = df['Daily_Range_Pct'].tail(20).mean() if len(df) >= 20 else None
+        adr_percent_20 = (((df['High']-df['Low'])/df['Close'])*100).tail(20).mean() if len(df) >= 20 else None
         avg_volume_20 = prior_20['Volume'].mean() if len(prior_20) == 20 else None
-        avg_rupee_volume_20 = (prior_20['Close'] * prior_20['Volume']).mean() if len(prior_20) == 20 else None
+        avg_rupee_volume_20 = prior_20['Turnover_Cr'].mean()*1e7 if len(prior_20) == 20 and prior_20['Turnover_Cr'].notna().all() else None
 
         prior_20_high = df['High'].iloc[-21:-1].max() if len(df) >= 21 else None
         prior_50_high = df['High'].iloc[-51:-1].max() if len(df) >= 51 else None
@@ -181,6 +182,12 @@ def process_symbol_csv(csv_path):
             'atr_percent_14': value_or_none((atr14 / close) * 100) if atr14 is not None and close > 0 else None,
             'adr20': value_or_none(adr20),
             'adr_percent_20': value_or_none(adr_percent_20),
+            'range_percent_low': value_or_none(day_range_pct),
+            'adr_percent_low_20': value_or_none(adr_20) if len(df)>=20 else None,
+            'adr_denominator': 'CLOSE',
+            'legacy_adr_denominator': 'LOW',
+            'atr_method': 'WILDER_EWM_FIRST_TR',
+            'atr_simple_14': value_or_none(true_range.rolling(14,min_periods=14).mean().iloc[-1]),
             'close_above_sma10': boolean_or_none(lambda: close > rolling_sma[10], rolling_sma[10] is not None),
             'close_above_sma20': boolean_or_none(lambda: close > rolling_sma[20], rolling_sma[20] is not None),
             'close_above_sma50': boolean_or_none(lambda: close > rolling_sma[50], rolling_sma[50] is not None),

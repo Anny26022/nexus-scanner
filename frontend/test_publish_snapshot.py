@@ -65,9 +65,29 @@ class SnapshotPublicationTests(unittest.TestCase):
         (delivery/'2026-09-30.json').write_text(json.dumps({'date':'2026-09-30','records':[
             {'symbol':'TEST','date':'2026-09-30','delivery_percent':60.0}
         ]}))
-        frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-09-30',periods=60),'Open':99.,'High':101.,'Low':98.,'Close':100.,'Volume':100.})
+        frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-09-30',periods=60),'Open':199.,'High':201.,'Low':198.,'Close':200.,'Volume':100.})
         frame.to_csv(root/'ohlcv_data/TEST.csv',index=False)
 
+    def test_published_atr_reuses_shared_wilder_initialization(self):
+        from edl_pipeline.scanner.indicators import true_range, wilder_average
+        for size in (13, 14, 60):
+            with tempfile.TemporaryDirectory() as folder, patch('publish_snapshot.list_presets', return_value=[]):
+                root = Path(folder) / 'edl'; root.mkdir()
+                output = Path(folder) / 'public'; self.fixture(root)
+                frame = pd.read_csv(root / 'ohlcv_data/TEST.csv').tail(size).reset_index(drop=True)
+                frame.loc[0, 'High'] = 240.
+                frame.to_csv(root / 'ohlcv_data/TEST.csv', index=False)
+                manifest = publish(root, output)
+                payload = json.loads((output / 'revisions' / manifest['revision'] / 'stocks.json').read_text())
+                row = payload['stocks'][0]
+                if size < 14:
+                    self.assertIsNone(row['atr14'])
+                else:
+                    expected = wilder_average(true_range(frame), 14).iloc[-1]
+                    self.assertAlmostEqual(row['atr14'], expected)
+                    self.assertAlmostEqual(row['metrics']['atrPct14'], expected / 200 * 100)
+                if size >= 20:
+                    self.assertEqual(row['adr20Pct'], row['metrics']['adr20'])
     def test_publishes_ownership_values_and_preserves_old_revision(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir();output=Path(folder)/'public';self.fixture(root)
@@ -153,6 +173,29 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(new['rows'][0]['marketCapCrore'],6000)
             self.assertTrue((root/'.scanner_cache/revisions'/second['revision']/'delivery_history_data/2026-09-30.json.gz').exists())
 
+    def test_official_turnover_survives_publication_and_warm_cache(self):
+        with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[]):
+            root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
+            path=root/'ohlcv_data/TEST.csv'
+            frame=pd.read_csv(path);frame['Turnover']=200_000_000.;frame.to_csv(path,index=False)
+            first=publish(root,output)
+            def metric(manifest):
+                return json.loads((output/'revisions'/manifest['revision']/'stocks.json').read_text())['stocks'][0]['metrics']['turnover20']
+            self.assertEqual(metric(first),20.)  # close * volume would be 0.001 Cr
+            second=publish(root,output)
+            self.assertEqual(metric(second),20.)
+            self.assertEqual(first['revision'],second['revision'])
+            restored=ScannerCache();restored.refresh(root/'.scanner_cache/revisions'/first['revision'])
+            self.assertEqual(restored.frame(root,'TEST','2026-09-30')['Turnover'].iloc[-1],200_000_000.)
+            # Correct a day outside every complete public turnover window.
+            # Private arbitrary-window history must still receive a new revision.
+            frame.loc[0,'Turnover']=190_000_000.;frame.to_csv(path,index=False)
+            corrected=publish(root,output)
+            self.assertEqual(metric(corrected),20.)
+            self.assertNotEqual(second['revision'],corrected['revision'])
+            frame.loc[frame.index[-1],'Turnover']=float('nan');frame.to_csv(path,index=False)
+            self.assertIsNone(metric(publish(root,output)))
+
     def test_local_bridge_validates_identity_before_loading_data(self):
         request = {'asOfDate':'2026-09-30','universe':'mainboard','expressionTree':{'type':'group','operator':'all','children':[]},
                    'page':1,'pageSize':50,'datasetRevision':'a' * 64}
@@ -195,8 +238,9 @@ class SnapshotPublicationTests(unittest.TestCase):
             root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
             publish(root,output); original=(output/'current.json').read_bytes()
             self.fixture(root,cap=7000)
-            with patch('publish_snapshot.publish_private_pack',side_effect=RuntimeError('R2 failed')):
+            with patch('publish_snapshot.publish_private_pack',side_effect=RuntimeError('R2 failed')) as upload:
                 with self.assertRaisesRegex(RuntimeError,'R2 failed'): publish(root,output)
+                self.assertEqual(upload.call_args.kwargs['active_revision'],json.loads(original)['revision'])
             self.assertEqual((output/'current.json').read_bytes(),original)
 
     def test_optional_private_pack_is_not_advertised(self):

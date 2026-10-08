@@ -3,8 +3,9 @@ import gzip
 import hashlib
 import json
 import os
-from datetime import datetime, timezone
+import tempfile
 from pathlib import Path
+from datetime import datetime, timezone
 
 import numpy as np
 
@@ -12,10 +13,13 @@ import scanner_bridge as bridge
 from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
-from scanner_pack_publication import build_private_scanner_pack, publish_private_pack
+from scanner_pack_publication import BaseHistoryArchive, build_private_scanner_pack, publish_private_pack
 from scanner_identity import checked_identity
 from edl_pipeline.scanner.presets import list_presets
+from edl_pipeline.scanner.base_publication import load_history_audits, build_base_records, compact_base_records
 from edl_pipeline.scanner.financials import financial_value, finite_number
+from edl_pipeline.scanner.turnover import average_turnover_crore
+from edl_pipeline.scanner.indicators import true_range, wilder_average
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
 
@@ -37,7 +41,7 @@ CORE_FIELDS = {
 TECHNICAL_FIELDS = {
     'symbol','rvol','rsi14','adr20Pct','atr14','sma20','sma50','sma200','ema20','ema50','ema200',
     'dist52wHighPct','dist52wLowPct','distAthPct','rsRating','rsRating1m','rsRating3m','rsRating6m','rsRating12m','metrics','presetMatches','allTimeHigh',
-    'allTimeLow','return5yPct',
+    'allTimeLow','return5yPct','bases',
 }
 
 
@@ -57,10 +61,17 @@ def _write_pack(generation, name, payload):
 
 
 def publish(root=bridge.ROOT, output=OUTPUT):
+    with tempfile.TemporaryDirectory(prefix='nexus-base-history-') as archive_directory:
+        return _publish(root, output, Path(archive_directory))
+
+
+def _publish(root, output, archive_directory):
     cache=ScannerCache(); cache.refresh(root)
     starting_revision=cache.revision
     source_files=[p for p in sorted(root.glob('*.json.gz')) if p.name!='filing_history.json.gz']
     source_bytes={p.name:p.read_bytes() for p in source_files}
+    audit_file=root/'base_history_audits.json'
+    if audit_file.exists():source_bytes['base_history_audits.json.gz']=gzip.compress(audit_file.read_bytes(),mtime=0)
     delivery_bytes={}
     for folder in ('delivery_history_data','eod2_delivery_history_data'):
         for p in (root/folder).glob('*.json'):
@@ -78,6 +89,18 @@ def publish(root=bridge.ROOT, output=OUTPUT):
     presets={p['id']:bridge.translate(p['id'],{}) for p in list_presets()}
     default=bridge.group('AND',bridge.translate('mom_rvol',{'minRvol':1.5,'maxRvol':20}),bridge.translate('trend_price_vs_ma',{'maType':'SMA','maPeriod':50,'operator':'above','thresholdPct':0}))
     delivery=bridge._load_delivery_history(root/'delivery_history_data',None,root/'eod2_delivery_history_data')
+    base_frames={}
+    for symbol,stock in context['stocks'].items():
+        if not stock.get('default_screener_eligible',True): continue
+        frame=cache.frame(root,symbol,session)
+        if frame is not None and not frame.empty and frame.Date.iloc[-1].strftime('%Y-%m-%d')==session:
+            base_frames[symbol]=frame
+    rank_directory=archive_directory/'ranks'
+    with BaseHistoryArchive(archive_directory) as archive, BaseHistoryArchive(rank_directory) as rank_archive:
+        context['base_episodes']=build_base_records(base_frames,context['stocks'],context.get('benchmarks'),episode_sink=archive,rank_sink=rank_archive,setup_candidates=True,history_audits=load_history_audits(root))
+    context['base_rs_archive']=rank_directory
+    del base_frames
+    context['base_history_archive']=archive_directory
     rows=[]; default_count=0
     for stock in context['stocks'].values():
         if not stock.get('default_screener_eligible',True):
@@ -107,21 +130,23 @@ def publish(root=bridge.ROOT, output=OUTPUT):
                 metrics[f'return{period}']=float((last['Close']/frame['Close'].iloc[-1-period]-1)*100) if len(frame)>period else None
             metrics['gapPct']=float((last['Open']/frame['Close'].iloc[-2]-1)*100) if len(frame)>1 else None
             for period in (20,50,100):
-                metrics[f'turnover{period}']=float((frame['Close']*frame['Volume']).tail(period).mean()/1e7) if len(frame)>=period else None
+                metrics[f'turnover{period}']=average_turnover_crore(frame,period)
             for period in (20,50,252):
                 metrics[f'newHigh{period}']=bool(last['High'] >= frame['High'].tail(period).max()) if len(frame)>=period else None
                 metrics[f'newLow{period}']=bool(last['Low'] <= frame['Low'].tail(period).min()) if len(frame)>=period else None
             for period in (14,20):
                 if len(frame)>=period:
                     metrics[f'adr{period}']=float(((frame['High']-frame['Low'])/frame['Close']*100).tail(period).mean())
-            if len(frame)>=15:
-                previous=frame['Close'].shift(1)
-                true_range=np.maximum.reduce([(frame['High']-frame['Low']).to_numpy(),
-                    (frame['High']-previous).abs().to_numpy(),(frame['Low']-previous).abs().to_numpy()])
-                atr=float(np.nanmean(true_range[1:15]))
-                for value in true_range[15:]: atr=(atr*13+float(value))/14
+            if len(frame)>=14:
+                atr=float(wilder_average(true_range(frame),14).iloc[-1])
                 metrics['atrPct14']=atr/float(last['Close'])*100 if last['Close']>0 else None
+                row['atr14']=atr
+            else:
+                metrics['atrPct14']=None
+                row['atr14']=None
+            row['adr20Pct']=metrics.get('adr20')
         row['metrics']=metrics
+        row['bases']=compact_base_records(context['base_episodes'].get(symbol,[]),public=True)
         row['historyMetadata']=stock.get('history_metadata')
         row['financialMetadata']=stock.get('financial_metadata')
         row['dividendExDate']=stock.get('dividend_ex_date')
@@ -161,7 +186,7 @@ def publish(root=bridge.ROOT, output=OUTPUT):
     packed=root/'.scanner_cache/history.npz'
     if packed.exists():
         with np.load(packed,allow_pickle=False) as data:
-            for name in ('symbols','offsets','dates','values'):
+            for name in ('symbols','offsets','dates','values','turnover'):
                 digest.update(data[name].tobytes())
     cache.refresh(root)
     if cache.revision!=starting_revision:
@@ -228,7 +253,9 @@ def publish(root=bridge.ROOT, output=OUTPUT):
         raise RuntimeError('Schema-7 public packs exceed the 4 MB compressed performance budget')
     private_root, private_manifest = build_private_scanner_pack(
         root, root/'scanner_artifacts', revision, session, cache, context, delivery, rows)
-    advanced_published = publish_private_pack(private_root, revision)
+    pointer_path = output / 'current.json'
+    active_revision = json.loads(pointer_path.read_text()).get('revision') if pointer_path.exists() else None
+    advanced_published = publish_private_pack(private_root, revision, active_revision=active_revision)
     manifest={'revision':revision,'sessionDate':session,'publishedAt':datetime.now(timezone.utc).isoformat(),
               'schemaVersion':7,**checked_identity(),'totalStocks':len(rows),
               'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz',

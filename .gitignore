@@ -69,6 +69,9 @@ DO NOT DELETE EDL PIPELINE/scanner_artifacts/
 frontend/public/data/charts/
 frontend/public/data/revisions/*/charts/
 
+# Official traded-value bulk cache (runner cache, not Git).
+**/nse_turnover_history/
+**/nse_turnover_report.json
 # Shared immutable browser objects are delivered through R2.
 frontend/public/data/objects/
 

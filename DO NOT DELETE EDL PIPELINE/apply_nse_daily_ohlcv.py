@@ -29,6 +29,7 @@ def apply_official_ohlcv(master, records, output_dir):
         candle = {
             "Date": record["date"], "Open": record["open"], "High": record["high"],
             "Low": record["low"], "Close": record["close"], "Volume": record["volume"],
+            **({"Turnover": record["turnover"]} if "turnover" in record else {}),
         }
         destination = symbol_csv_path(output_dir, symbol)
         write_ohlcv_csv(destination, merge_rows_by_date([*read_ohlcv_csv(destination), candle]))

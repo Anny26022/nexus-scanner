@@ -36,7 +36,7 @@ class ScannerReferenceTests(unittest.TestCase):
         self.assertEqual(result["jaccard"], 1.0)
 
     def test_library_has_the_45_preset_ids_required_for_full_parity(self):
-        preset_ids = {preset["id"] for preset in list_presets()}
+        preset_ids = {preset["id"] for preset in list_presets() if not preset["id"].startswith("lib-nexus-")}
         self.assertEqual(len(preset_ids), 45)
         self.assertIn("lib-persistent-momentum", preset_ids)
 

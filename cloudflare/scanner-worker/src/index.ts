@@ -3,17 +3,33 @@ import type { ScreenerRunRequest, ScreenerRunResponse } from '../../../frontend/
 import type { SnapshotStock } from '../../../frontend/src/api/snapshotScreen';
 import { evaluateExpression, expressionDepth, negate, walkExpression, type EngineCondition, type EngineExpression, type Truth } from '../../../frontend/src/engine/expression';
 import { evaluateHistoryCondition, type AdvancedContext, type CandleSeries } from '../../../frontend/src/engine/historyEngine';
+import { publicSetupMatch, detailedSelectedBases, publicSelectedBases, evaluateBaseCondition } from '../../../frontend/src/engine/baseConditions';
 import { compileTextQuery } from '../../../frontend/src/engine/queryCompiler';
+import definitions from '../../../frontend/src/data/presetDefinitions.json';
+import { materializeBasePreset } from '../../../frontend/src/engine/basePresets';
+import { PRESET_CATALOG } from '../../../frontend/src/data/presetCatalog';
 import { createCoverage } from '../../../frontend/src/engine/coverage';
 import { conditionCapability } from '../../../frontend/src/api/capabilityRegistry';
 import { NEXUS_CONDITION_CATALOG } from '../../../frontend/src/data/conditionCatalog';
 
 interface Env { SCANNER_DATA:R2Bucket; ALLOWED_ORIGINS:string; SCANNER_RELEASE_URL:string }
 interface PrivateManifest {schemaVersion:number;engineVersion:string;conditionContractHash:string;revision:string;session:string;symbols:number;shards:number;maxSessions:number;limits:{maxLeaves:number;maxDepth:number;maxPageSize:number;maxRequestBytes:number};objects:Array<{key:string;bytes:number;sha256:string;symbols?:number}>}
-interface Metadata {stocks:SnapshotStock[]}
-interface Auxiliary {delivery:Record<string,Array<Record<string,unknown>>>;earnings:Record<string,Array<Record<string,unknown>>>;breadth?:Record<string,Record<string,number|null>>}
+interface Metadata {stocks:SnapshotStock[];nativeRowsInAuxiliary?:boolean}
+interface Auxiliary {setupCandidates?:Record<string,import('../../../frontend/src/engine/baseConditions').BaseRecord[]>;setupCandidateHistoryComplete?:Record<string,boolean>;turnover?:Record<string,NonNullable<AdvancedContext['turnover']>>;stocks?:Record<string,SnapshotStock>;bases?:Record<string,import('../../../frontend/src/engine/baseConditions').BaseRecord[]>;delivery:Record<string,NonNullable<AdvancedContext['delivery']>>;earnings:Record<string,Array<Record<string,unknown>>>;breadth?:Record<string,Record<string,number|null>>}
 
-const conditionDefinitions=new Map(NEXUS_CONDITION_CATALOG.map(definition=>[definition.id,definition]));
+class ScannerBusyError extends Error {}
+let scanTail:Promise<void>=Promise.resolve(),pendingScans=0;
+/** Bound cold-scan memory across concurrent requests sharing an isolate. */
+export async function serializeScan<T>(task:()=>Promise<T>):Promise<T>{
+  if(pendingScans>=8)throw new ScannerBusyError('Advanced scanner is busy. Try again shortly.');
+  pendingScans++;
+  const previous=scanTail;let release!:()=>void;
+  scanTail=new Promise<void>(resolve=>{release=resolve;});
+  await previous;
+  try{return await task();}finally{pendingScans--;release();}
+}
+
+const conditionDefinitions=new Map([...NEXUS_CONDITION_CATALOG,...PRESET_CATALOG].map(definition=>[definition.id,definition]));
 const internalConditions=new Set(['FIELD_COMPARISON','DELIVERY_PERCENT']);
 
 export function validateExpression(expression:EngineExpression){
@@ -23,6 +39,9 @@ export function validateExpression(expression:EngineExpression){
     if(internalConditions.has(condition.conditionId))continue;
     const definition=conditionDefinitions.get(condition.conditionId);
     if(!definition)throw new Error(`Unsupported condition: ${condition.conditionId}`);
+    if(condition.conditionId==='BASE_FORMULA' && condition.parameters.formula)evaluateBaseCondition(undefined,condition as import('../../../frontend/src/types/screener').ActiveCondition);
+    const preset=definitions.find(item=>item.id===condition.conditionId&&'setupFamily' in item);
+    if(preset)materializeBasePreset(preset,condition.parameters);
     const specifications=new Map(definition.parameters.map(parameter=>[parameter.id,parameter]));
     if(condition.conditionId==='MARKET_BREADTH' && String(condition.parameters.universe ?? 'ALL_ACTIVE').toUpperCase()!=='ALL_ACTIVE') throw new Error('Only ALL_ACTIVE market breadth is published in this release.');
     for(const [key,value] of Object.entries(condition.parameters)){
@@ -43,11 +62,45 @@ function cors(origin:string|null,env:Env):Record<string,string>{const allowed=ne
 function json(value:unknown,status=200,headers:HeadersInit={}){return new Response(JSON.stringify(value),{status,headers:{'content-type':'application/json; charset=utf-8',...headers}});}
 function stable(value:unknown):string{if(Array.isArray(value))return `[${value.map(stable).join(',')}]`;if(value&&typeof value==='object')return `{${Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${JSON.stringify(k)}:${stable(v)}`).join(',')}}`;return JSON.stringify(value);}
 async function hash(value:string){const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,'0')).join('');}
-async function ungzip(bytes:ArrayBuffer){return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();}
+function releaseOwnedBuffer(buffer:ArrayBuffer){
+  // These buffers are local to one object/stock. Release backing storage after
+  // consumption rather than waiting for GC between successive cold scans.
+  (buffer as ArrayBuffer&{transfer?:(length:number)=>ArrayBuffer}).transfer?.(0);
+}
+export async function ungzip(bytes:ArrayBuffer,limit=80*1024*1024){
+  // Blob construction copies the compressed buffer. Feed its immutable view
+  // directly so repeated scans do not allocate an extra copy of each object.
+  const stream=new ReadableStream<BufferSource>({start(controller){controller.enqueue(new Uint8Array(bytes));controller.close();}});
+  const reader=stream.pipeThrough(new DecompressionStream('gzip')).getReader();
+  try{const size=bytes.byteLength>=4?new DataView(bytes).getUint32(bytes.byteLength-4,true):limit+1;if(size>limit){await reader.cancel();throw new Error('Decoded scanner object exceeds its memory budget');}const output=new Uint8Array(size);let offset=0;while(true){const {done,value}=await reader.read();if(done)break;if(offset+value.byteLength>size){await reader.cancel();throw new Error('Decoded scanner size does not match gzip trailer');}output.set(value,offset);offset+=value.byteLength;}if(offset!==size)throw new Error('Decoded scanner size does not match gzip trailer');return output.buffer;}
+  finally{releaseOwnedBuffer(bytes);}
+}
 async function objectBytes(env:Env,key:string,expected?:{bytes:number;sha256:string}){const object=await env.SCANNER_DATA.get(key);if(!object)throw new Error(`Advanced scanner object is unavailable: ${key}`);const bytes=await object.arrayBuffer();if(expected){const digest=await crypto.subtle.digest('SHA-256',bytes),hex=[...new Uint8Array(digest)].map(v=>v.toString(16).padStart(2,'0')).join('');if(bytes.byteLength!==expected.bytes||hex!==expected.sha256)throw new Error(`Advanced scanner checksum mismatch: ${key}`);}return bytes;}
-async function compressedJson<T>(env:Env,prefix:string,manifest:PrivateManifest,name:string):Promise<T>{const descriptor=manifest.objects.find(x=>x.key===name);if(!descriptor)throw new Error(`Advanced scanner manifest is incomplete: ${name}`);return JSON.parse(new TextDecoder().decode(await ungzip(await objectBytes(env,`${prefix}/${name}`,descriptor))));}
+async function compressedJson<T>(env:Env,prefix:string,manifest:PrivateManifest,name:string):Promise<T>{const descriptor=manifest.objects.find(x=>x.key===name);if(!descriptor)throw new Error(`Advanced scanner manifest is incomplete: ${name}`);const bytes=await ungzip(await objectBytes(env,`${prefix}/${name}`,descriptor),name.startsWith('auxiliary/')?12*1024*1024:24*1024*1024);try{return JSON.parse(new TextDecoder().decode(bytes));}finally{releaseOwnedBuffer(bytes);}}
 
-export function decodeShard(buffer:ArrayBuffer):Array<{symbol:string;series:CandleSeries}>{const bytes=new Uint8Array(buffer),magic=new TextDecoder().decode(bytes.slice(0,8));if(magic!=='NSPK0001')throw new Error('Invalid scanner shard');const view=new DataView(buffer),headerLength=view.getUint32(8,true),header=JSON.parse(new TextDecoder().decode(bytes.slice(12,12+headerLength))) as {symbols:Array<{symbol:string;offset:number;count:number}>};const count=header.symbols.reduce((total,item)=>Math.max(total,item.offset+item.count),0),dateStart=(12+headerLength+7)&~7,valueStart=(dateStart+count*4+7)&~7,dates=new Int32Array(buffer,dateStart,count),values=new Float64Array(buffer,valueStart,count*5);return header.symbols.map(item=>{const d=dates.slice(item.offset,item.offset+item.count),matrix=values.slice(item.offset*5,(item.offset+item.count)*5),column=(index:number)=>Float64Array.from({length:item.count},(_,i)=>matrix[i*5+index]);return {symbol:item.symbol,series:{dates:d,open:column(0),high:column(1),low:column(2),close:column(3),volume:column(4)}};});}
+function* streamShard(buffer:ArrayBuffer):Generator<{symbol:string;series:CandleSeries}>{
+  const bytes=new Uint8Array(buffer),magic=new TextDecoder().decode(bytes.subarray(0,8));
+  if(magic!=='NSPK0001')throw new Error('Invalid scanner shard');
+  const headerLength=new DataView(buffer).getUint32(8,true);
+  const header=JSON.parse(new TextDecoder().decode(bytes.subarray(12,12+headerLength))) as {symbols:Array<{symbol:string;offset:number;count:number}>};
+  const count=header.symbols.reduce((total,item)=>Math.max(total,item.offset+item.count),0);
+  const dateStart=(12+headerLength+7)&~7,valueStart=(dateStart+count*4+7)&~7;
+  const dates=new Int32Array(buffer,dateStart,count),values=new Float64Array(buffer,valueStart,count*5);
+  // Retain the shard buffer and materialize columns only for the stock being
+  // evaluated. Eager decoding duplicates the complete batch's OHLCV arrays.
+  try{for(const item of header.symbols){
+    const matrix=values.subarray(item.offset*5,(item.offset+item.count)*5);
+    const column=(index:number)=>Float64Array.from({length:item.count},(_,i)=>matrix[i*5+index]);
+    const series={dates:dates.subarray(item.offset,item.offset+item.count),open:column(0),high:column(1),low:column(2),close:column(3),volume:column(4)};
+    try{yield {symbol:item.symbol,series};}
+    finally{for(const values of [series.open,series.high,series.low,series.close,series.volume])releaseOwnedBuffer(values.buffer);}
+  }}finally{releaseOwnedBuffer(buffer);}
+}
+export function decodeShard(buffer:ArrayBuffer):Array<{symbol:string;series:CandleSeries}>{
+  return Array.from(streamShard(buffer),({symbol,series})=>({symbol,series:{
+    dates:series.dates.slice(),open:series.open.slice(),high:series.high.slice(),
+    low:series.low.slice(),close:series.close.slice(),volume:series.volume.slice()}}));
+}
 function universeRows(rows: SnapshotStock[], request: ScreenerRunRequest) {
   const labels: Record<string, string[]> = {
     nifty50: ['NIFTY 50', 'NIFTY50'],
@@ -68,8 +121,9 @@ export function executionWarnings(leaves:EngineCondition[],missingHistory:number
 
 async function currentRelease(env:Env){const response=await fetch(env.SCANNER_RELEASE_URL,{cf:{cacheTtl:30,cacheEverything:true}});if(!response.ok)throw new Error('Active scanner release is unavailable');const active=await response.json() as {revision:string;sessionDate:string;schemaVersion:number};if(active.schemaVersion===7)assertScannerIdentity(active);return active;}
 // Bump when evaluation semantics change so unchanged data cannot reuse old results.
-const CACHE_VERSION = '4';
-type ScanResult = Omit<ScreenerRunResponse,'page' | 'pageSize'>;
+const CACHE_VERSION = '5';
+interface MatchReference {symbol:string;values:Record<string,string|number|boolean|null>;stock?:SnapshotStock;auxiliaryName?:string;setupMatches?:Record<string,string>}
+type ScanResult = Omit<ScreenerRunResponse,'page' | 'pageSize' | 'rows'> & {rows:MatchReference[];manifest:PrivateManifest};
 const emptySeries:CandleSeries = {dates:new Int32Array(),open:new Float64Array(),high:new Float64Array(),
   low:new Float64Array(),close:new Float64Array(),volume:new Float64Array()};
 
@@ -104,38 +158,45 @@ async function run(request:ScreenerRunRequest,expression:EngineExpression,env:En
   const leaves=walkExpression(expression);
   const metadata=await compressedJson<Metadata>(env,prefix,manifest,'metadata.json.gz');
   const eligible=universeRows(metadata.stocks,request),bySymbol=new Map(eligible.map(row=>[row.symbol,row]));
-  const matched:SnapshotStock[]=[],seen=new Set<string>(),coverage=createCoverage(leaves,eligible.length);
-  const needsHistory=leaves.some(condition=>!conditionCapability(condition as any).browser(condition as any));
+  const matched:MatchReference[]=[],seen=new Set<string>(),coverage=createCoverage(leaves,eligible.length);
+  const needsHistory=leaves.some(condition=>condition.conditionId.startsWith('BASE_')||condition.conditionId.startsWith('lib-nexus-')||!conditionCapability(condition as any).browser(condition as any));
   const benchmarks=needsHistory && eligible.length
     ? await compressedJson<AdvancedContext['benchmarks']>(env,prefix,manifest,'benchmarks.json.gz') : undefined;
   let sharedBreadth:Auxiliary['breadth'];
-  const evaluate=(stock:SnapshotStock,series:CandleSeries,auxiliary?:Auxiliary)=>{
+  const evaluate=(stock:SnapshotStock,series:CandleSeries,auxiliary?:Auxiliary,auxiliaryName?:string)=>{
     const context:AdvancedContext={stock,session:manifest.session,benchmarks,
       delivery:auxiliary?.delivery[stock.symbol],earnings:auxiliary?.earnings[stock.symbol],
-      breadth:auxiliary?.breadth ?? sharedBreadth};
+      breadth:auxiliary?.breadth ?? sharedBreadth,turnover:auxiliary?.turnover?.[stock.symbol],
+      bases:auxiliary?.bases?.[stock.symbol],setupCandidates:auxiliary?.setupCandidates?.[stock.symbol],
+      setupCandidateHistoryComplete:auxiliary?.setupCandidateHistoryComplete?.[stock.symbol],setupMatches:{}};
     const values=new Map(leaves.map(condition=>[condition,evaluateHistoryCondition(series,{...condition,isNegated:false} as any,context)]));
     coverage.account(leaves.map(condition=>condition.isNegated ? negate(values.get(condition)!) : values.get(condition)!));
-    if(evaluateExpression(expression,condition=>values.get(condition) ?? null)===true && Number.isFinite(stock.close))matched.push(stock);
+    if(evaluateExpression(expression,condition=>values.get(condition) ?? null)===true && Number.isFinite(stock.close))matched.push({symbol:stock.symbol,
+      values:Object.fromEntries(Object.entries(stock).filter(([,value])=>value==null||['string','number','boolean'].includes(typeof value))) as MatchReference['values'],
+      ...(auxiliary?.stocks?.[stock.symbol]||auxiliary?.bases?.[stock.symbol]||auxiliary?.setupCandidates?.[stock.symbol]
+        ? {auxiliaryName,setupMatches:Object.fromEntries(Object.entries(context.setupMatches??{})
+          .filter(([key])=>!leaves.some(condition=>condition.isNegated&&(condition.instanceId??condition.conditionId)===key))
+          .map(([key,record])=>[key,String(record.id)]))} : {stock})});
   };
-  if(needsHistory) {
-    const indices=await selectedShards(eligible.map(row=>row.symbol),manifest.shards);
-    for(let batch=0;batch<indices.length;batch+=4) {
-      const decoded=await Promise.all(indices.slice(batch,batch+4).map(async shard=>{
+  if(needsHistory || metadata.nativeRowsInAuxiliary) {
+    const indices=request.universe==='mainboard' ? Array.from({length:manifest.shards},(_,index)=>index) : await selectedShards(eligible.map(row=>row.symbol),manifest.shards);
+    for(let batch=0;batch<indices.length;batch+=1) {
+      const decoded=await Promise.all(indices.slice(batch,batch+1).map(async shard=>{
         const index=String(shard).padStart(2,'0'),name=`shards/${index}.bin.gz`;
         const descriptor=manifest.objects.find(object=>object.key===name);
         if(!descriptor)throw new Error(`Missing shard ${name}`);
         const [history,auxiliary]=await Promise.all([
-          ungzip(await objectBytes(env,`${prefix}/${name}`,descriptor)).then(decodeShard),
+          ungzip(await objectBytes(env,`${prefix}/${name}`,descriptor)).then(streamShard),
           compressedJson<Auxiliary>(env,prefix,manifest,`auxiliary/${index}.json.gz`),
         ]);
-        return {history,auxiliary};
+        return {history,auxiliary,auxiliaryName:`auxiliary/${index}.json.gz`};
       }));
       for(const shard of decoded) {
         sharedBreadth ??= shard.auxiliary.breadth;
         for(const {symbol,series} of shard.history) {
           const stock=bySymbol.get(symbol);
           if(!stock)continue;
-          seen.add(symbol);evaluate(stock,series,shard.auxiliary);
+          seen.add(symbol);evaluate({...stock,...shard.auxiliary.stocks?.[symbol]},series,shard.auxiliary,shard.auxiliaryName);
         }
       }
     }
@@ -144,20 +205,37 @@ async function run(request:ScreenerRunRequest,expression:EngineExpression,env:En
   for(const stock of missing)evaluate(stock,emptySeries);
   return {
     resolvedSession:{date:manifest.session,sessionId:`NSE-${manifest.session.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
-    immutableRevision:manifest.revision,rows:matched,matchCount:matched.length,totalUniverseCount:eligible.length,
+    manifest,immutableRevision:manifest.revision,rows:matched,matchCount:matched.length,totalUniverseCount:eligible.length,
     ...coverage.result(),warnings:executionWarnings(leaves,needsHistory ? missing.length : 0),
   };
 }
 
-function pageResult(result:ScanResult,request:ScreenerRunRequest):ScreenerRunResponse {
+async function pageResult(result:ScanResult,request:ScreenerRunRequest,env:Env):Promise<ScreenerRunResponse> {
   const sort=request.sort ?? {field:'symbol',direction:'asc'},direction=sort.direction==='desc' ? -1 : 1;
-  const rows=[...result.rows].sort((a,b)=>{
-    const x=(a as any)[sort.field],y=(b as any)[sort.field];
+  const matches=[...result.rows].sort((a,b)=>{
+    const x=a.values[sort.field],y=b.values[sort.field];
     if(x==null || y==null)return x==null && y==null ? a.symbol.localeCompare(b.symbol) : x==null ? 1 : -1;
     return (x<y ? -1 : x>y ? 1 : a.symbol.localeCompare(b.symbol))*direction;
-  });
-  return {...result,rows:rows.slice((request.page-1)*request.pageSize,request.page*request.pageSize),
-    page:request.page,pageSize:request.pageSize};
+  }).slice((request.page-1)*request.pageSize,request.page*request.pageSize);
+  const rows=new Map<string,SnapshotStock>();
+  const prefix=`scanner/v1/revisions/${result.immutableRevision}`;
+  // Hydrate only the requested page; keep complete match caches compact.
+  for(const name of new Set(matches.map(item=>item.auxiliaryName))) {
+    const auxiliary=name ? await compressedJson<Auxiliary>(env,prefix,result.manifest,name) : undefined;
+    for(const item of matches.filter(candidate=>candidate.auxiliaryName===name)) {
+      if(item.stock){rows.set(item.symbol,item.stock);continue;}
+      const stock=auxiliary?.stocks?.[item.symbol] ?? item.values as unknown as SnapshotStock;
+      const setupMatches:NonNullable<SnapshotStock['setupMatches']>={};
+      for(const [key,id] of Object.entries(item.setupMatches??{})) {
+        const record=auxiliary?.setupCandidates?.[item.symbol]?.find(candidate=>candidate.id===id);
+        if(!record)throw new Error('Selected setup witness is missing');
+        setupMatches[key]=publicSetupMatch(record);
+      }
+      rows.set(item.symbol,{...stock,setupMatches,bases:publicSelectedBases(detailedSelectedBases(stock.bases,auxiliary?.bases?.[item.symbol]))});
+    }
+  }
+  const {manifest:_,rows:__,...summary}=result;
+  return {...summary,rows:matches.map(item=>rows.get(item.symbol)!),page:request.page,pageSize:request.pageSize};
 }
 
 export default {
@@ -194,14 +272,20 @@ export default {
         : [...new Set(payload.announcementSymbols.map(symbol => symbol.toUpperCase()))].sort();
       const key=await hash(stable([CACHE_VERSION,SCANNER_IDENTITY,payload.datasetRevision,payload.asOfDate,expression,payload.universe,symbols,announcements]));
       const cacheKey=new Request(`https://scanner-cache.invalid/v${CACHE_VERSION}/${key}`),cache=(caches as CacheStorage&{default:Cache}).default;
-      const cached=await cache.match(cacheKey);
+      const pageKey=new Request(`${cacheKey.url}/page/${await hash(stable([payload.sort,payload.page,payload.pageSize]))}`);
+       const cachedPage=await cache.match(pageKey);
+       if(cachedPage){const responseHeaders=new Headers(cachedPage.headers);for(const [key,value] of Object.entries(headers))responseHeaders.set(key,value);return new Response(cachedPage.body,{status:cachedPage.status,headers:responseHeaders});}
+       const cached=await cache.match(cacheKey);
       let result:ScanResult;
       if(cached)result=await cached.json<ScanResult>();
       else {
-        result=await run(payload,expression,env);
+        result=await serializeScan(()=>run(payload,expression,env));
         ctx.waitUntil(cache.put(cacheKey,json(result,200,{'Cache-Control':'public,max-age=2592000,immutable'})));
       }
-      return json(pageResult(result,payload),200,headers);
-    } catch(error) { return json({error:error instanceof Error ? error.message : 'Advanced scanner failed'},400,headers); }
+      const page=await serializeScan(()=>pageResult(result,payload,env));
+       const response=json(page,200,{'Cache-Control':'public,max-age=2592000,immutable'});
+       ctx.waitUntil(cache.put(pageKey,response.clone()));
+       return json(page,200,headers);
+    } catch(error) { return json({error:error instanceof Error ? error.message : 'Advanced scanner failed'},error instanceof ScannerBusyError?503:400,headers); }
   },
 };

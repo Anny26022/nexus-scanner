@@ -1,3 +1,4 @@
+import { updateSetupParameter } from '../engine/basePresets';
 import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
 import React, { memo, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -162,7 +163,7 @@ const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle,
       </label>
 
       {/* Inputs keep their own compact groups and wrap inside this row when needed. */}
-      {showParameters && def.parameters && def.parameters.length > 0 && (
+      {(showParameters || checked) && def.parameters && def.parameters.length > 0 && (
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
           {def.parameters.map(p => (
             <FilterParameter key={p.id} defId={def.id} p={p}
@@ -204,12 +205,12 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
 
   const updateParam = useCallback((condId: string, paramId: string, value: any) => {
     setLocalMap((prev) => {
-      const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === condId);
+      const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === condId) ?? PRESET_CATALOG.find(c=>c.id===condId);
       const existing = prev[condId];
       if (!existing && def) {
         const params: Record<string, any> = {};
         def.parameters.forEach((p) => (params[p.id] = p.defaultValue));
-        params[paramId] = value;
+        Object.assign(params, updateSetupParameter(params,paramId,value));
         if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
           params.value = breadthMetricDefault(value);
         }
@@ -219,7 +220,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         };
       }
       if (!existing) return prev;
-      const parameters = { ...existing.parameters, [paramId]: value };
+      const parameters = updateSetupParameter(existing.parameters,paramId,value);
       if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
         parameters.value = breadthMetricDefault(value);
       }

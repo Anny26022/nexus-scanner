@@ -36,11 +36,14 @@ artifact. Older edits below the overlap page are not guaranteed to be revisited.
 The daily and weekly fetch behavior is identical; no extra weekly full scan is
 introduced by this change.
 
-`build_filing_history_artifact.py` classifies the entire retained history every
-publication, so rule changes also update old records without refetching them.
+`build_filing_history_artifact.py` reuses normalized company histories when their
+filings and document evidence are unchanged. Changed companies reuse individual
+classifications whose evidence still matches; rule changes update old records
+without refetching them.
 The artifact contains the taxonomy, classifier version, filing count and
 unclassified count. Daily and weekly workflows already run this stage before
-chart generation. No additional classified cache is introduced.
+chart generation. Private per-company caches live under
+`filing_history_data/classification`, covered by the enrichment Actions cache.
 
 `build_chart_artifacts.py` publishes announcement summaries and full evidence as
 separate content-addressed objects. The taxonomy is shared once per release;
@@ -131,9 +134,24 @@ conditional and mixed actions, duplicate feed order and official action terms.
 The audit did not replace production artifacts; the next pipeline run after
 merge regenerates classification and publishes through the existing release flow.
 
-The historical archive is large. Publication reclassifies it in memory with the
-existing artifact builder; an incremental classified cache is deferred until
-measured runtime justifies the extra storage and invalidation logic.
+The historical archive is large. Each company cache stores normalized rows with
+document evidence and references to shared classification entries, so repeated
+disclosures do not duplicate classifications in the cache. Its input fingerprint includes
+all filing metadata, so content corrections, merged labels, identity changes and
+PDF evidence updates rebuild that company. Unchanged companies skip duplicate
+merging and per-filing classification lookups. The full archive is still loaded,
+fingerprinted by company, streamed to the publication artifact and validated.
+
+Cache compatibility follows classifier `VERSION`, the source-label file hash and
+the builder's `CACHE_VERSION`. Any classification behavior change must increment
+`VERSION`; normalization/layout changes must increment `CACHE_VERSION`.
+Implementation-only performance edits do not invalidate history. Existing entry
+caches migrate without new rule calculations only when their source hashes match
+the running code. Missing, malformed or incompatible caches rebuild from raw
+history; writes are atomic and optional. Progress reports distinguish unchanged
+and rebuilt companies, rule-invalidated companies, reused filings and fresh
+classification calculations. The existing post-build `always()` cache-save step
+preserves completed work even when a later build/publication stage fails.
 
 ## Version 5 event model and selective documents
 

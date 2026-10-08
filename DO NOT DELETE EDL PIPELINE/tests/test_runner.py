@@ -137,7 +137,7 @@ class RunnerTests(unittest.TestCase):
                                 )
 
         self.assertEqual(code, 0)
-        expected_fetches = set(PHASE2_SCRIPTS) | set(OHLCV_FETCH_LANE) | {"fetch_indices_ohlcv.py"}
+        expected_fetches = set(PHASE2_SCRIPTS) | set(OHLCV_FETCH_LANE) | {"fetch_indices_ohlcv.py", "fetch_nse_delivery_data.py"}
         for script in expected_fetches:
             self.assertEqual(calls.count(script), 1, script)
         self.assertLess(calls.index('fetch_nse_delivery_data.py'), calls.index('filter_mainboard_universe.py'))
@@ -146,6 +146,27 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(lane_positions, sorted(lane_positions))
         self.assertGreater(calls.index("fetch_indices_ohlcv.py"), calls.index("fetch_all_indices.py"))
         self.assertGreater(calls.index("fetch_indices_ohlcv.py"), calls.index("fetch_all_ohlcv.py"))
+
+    def test_no_ohlcv_fetches_session_once_before_filter_and_stops_if_it_fails(self):
+        for succeeds in (True, False):
+            calls = []
+            def run(script, phase_label='', required=False):
+                calls.append(script)
+                if script == 'fetch_nse_delivery_data.py':
+                    self.assertTrue(required)
+                return ScriptResult(succeeds or script != 'fetch_nse_delivery_data.py', required)
+            with self.subTest(succeeds=succeeds), tempfile.TemporaryDirectory() as directory, \
+                    mock.patch('edl_pipeline.runner.BASE_DIR', directory), \
+                    mock.patch('edl_pipeline.runner.run_script', side_effect=run), \
+                    mock.patch('edl_pipeline.runner.download_nse_listing_dates', return_value=True), \
+                    mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(PipelineConfig(fetch_ohlcv=False), phase='fetch'), int(not succeeds))
+            self.assertEqual(calls.count('fetch_nse_delivery_data.py'), 1)
+            if succeeds:
+                self.assertLess(calls.index('fetch_nse_delivery_data.py'), calls.index('filter_mainboard_universe.py'))
+            else:
+                self.assertNotIn('filter_mainboard_universe.py', calls)
 
     def test_split_refresh_executes_the_same_scripts_once_and_resumes_checks(self):
         calls = []

@@ -94,9 +94,12 @@ def main():
         raise ValueError("NSE SME source did not match any canonical securities")
 
     staged = load_json('nse_delivery_data.json', default={})
-    session_date = staged.get('as_of_date') if str(staged.get('retrieved_at', '')).startswith(nse_calendar_date()) else None
-    if session_date:
-        session_date = datetime.strptime(session_date, '%Y-%m-%d').date().isoformat()
+    session_date = staged.get('as_of_date')
+    if not session_date or not str(staged.get('retrieved_at', '')).startswith(nse_calendar_date()):
+        raise ValueError('Universe filtering requires a freshly fetched completed NSE session')
+    session_date = datetime.strptime(session_date, '%Y-%m-%d').date().isoformat()
+    if session_date > nse_calendar_date():
+        raise ValueError('NSE session cannot be in the future')
     candidate_count = len(mainboard_rows)
     with resolve_path('nse_equity_list.csv').open(encoding='utf-8-sig', newline='') as handle:
         mainboard_rows, excluded, mismatches = reconcile_listed_universe(mainboard_rows, list(csv.DictReader(handle)), session_date)

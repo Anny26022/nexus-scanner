@@ -63,9 +63,11 @@ class MainboardUniverseTests(unittest.TestCase):
             path = Path(folder) / 'nse_equity_list.csv'
             for missing in (50, 6, 5):
                 with self.subTest(missing=missing):
-                    path.write_text('SYMBOL,ISIN NUMBER\n' + ''.join(
-                        f"{row['Symbol']},{row['ISIN']}\n" for row in master[:100 - missing]))
-                    with patch('filter_mainboard_universe.load_json', side_effect=[master, [{'Symbol': 'SME'}], raw, {}]), \
+                    path.write_text('SYMBOL,ISIN NUMBER,DATE OF LISTING\n' + ''.join(
+                        f"{row['Symbol']},{row['ISIN']},01-JAN-2000\n" for row in master[:100 - missing]))
+                    with patch('filter_mainboard_universe.nse_calendar_date', return_value='2026-10-08'), \
+                            patch('filter_mainboard_universe.load_json', side_effect=[master, [{'Symbol': 'SME'}], raw,
+                                  {'as_of_date': '2026-10-07', 'retrieved_at': '2026-10-08T09:33:00+05:30'}]), \
                             patch('filter_mainboard_universe.resolve_path', return_value=path), \
                             patch('filter_mainboard_universe.save_json') as save:
                         if missing > 5:
@@ -106,6 +108,22 @@ class MainboardUniverseTests(unittest.TestCase):
                             {'symbol': 'NITYAS', 'isin': 'INE3', 'listing_date': '2026-10-08', 'reason': 'listing_after_session'},
                             {'symbol': 'VNL', 'isin': 'INE4', 'listing_date': '2026-10-08', 'reason': 'listing_after_session'},
                         ])
+
+    def test_stale_or_missing_session_stops_filtering_before_any_output(self):
+        master = [{'Symbol': symbol} for symbol in ('NITYAS', 'SME')]
+        for staged in ({}, {'as_of_date': '2026-10-07'},
+                       {'as_of_date': '2026-10-07', 'retrieved_at': '2026-10-07T09:33:00+05:30'},
+                       {'as_of_date': '2026-10-09', 'retrieved_at': '2026-10-08T09:33:00+05:30'}):
+            with self.subTest(staged=staged), \
+                    patch('filter_mainboard_universe.nse_calendar_date', return_value='2026-10-08'), \
+                    patch('filter_mainboard_universe.load_json', side_effect=[master, [{'Symbol': 'SME'}],
+                          [{'Sym': 'NITYAS'}, {'Sym': 'SME'}], staged]), \
+                    patch('filter_mainboard_universe.resolve_path') as resolve, \
+                    patch('filter_mainboard_universe.save_json') as save:
+                with self.assertRaises(ValueError):
+                    main()
+                resolve.assert_not_called()
+                save.assert_not_called()
 
     def test_invalid_listing_date_does_not_silently_defer_or_admit_stock(self):
         with self.assertRaises(ValueError):

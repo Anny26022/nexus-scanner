@@ -148,8 +148,6 @@ PHASE4_SCRIPTS = [
 POST_STANDARDIZATION_SCRIPTS = [
     "build_filing_history_artifact.py",
     "build_quarterly_financial_ledger.py",
-    "fetch_ipo_provider_data.py",
-    "fetch_scanx_ipo_data.py",
     "build_ipo_screener_artifact.py",
     # Capture temporary news/filings before compression and cleanup.
     "build_chart_artifacts.py",

@@ -41,6 +41,44 @@ The same flags can be overridden without editing source:
 EDL_FETCH_OHLCV=0 EDL_CLEANUP_INTERMEDIATE=0 python3 run_full_pipeline.py
 ```
 
+### Refresh checkpoints and runtime
+
+Daily and weekly Actions use the same runner in two phases:
+
+```bash
+python3 run_full_pipeline.py --phase fetch --stage /tmp/edl-refresh-example
+python3 run_full_pipeline.py --phase build --stage /tmp/edl-refresh-example
+```
+
+Use a new stage directory and the same configuration for both commands. Fetch
+writes a validated checkpoint without publishing; build resumes it, validates
+all final artifacts, publishes, and removes the stage on success. The default
+command still runs both phases together. Failed stages remain available for
+inspection; start a new fetch for a new trading session.
+
+Actions restore separate price and enrichment caches, with a one-time fallback
+to the previous combined cache. They save validated fetch results before build,
+then save updated enrichment caches even if build fails. Cache-save failures do
+not block publication. Eviction or an interrupted save can still require a
+backfill; these caches are an optimization, not durable storage.
+
+Filing classifications are cached per symbol after merging duplicate source
+labels, keyed by classifier inputs and classifier/mapping content. EOD2 skips
+imports only when source CSVs, ISIN mappings, importer code and destination
+OHLCV/delivery contents match. Missing or changed data is recomputed. Both caches
+live in existing ignored history directories. Full indicator/count history is
+retained; only breadth contribution lists outside the published date window are
+omitted. IPO/reference fetches overlap the existing fetch lanes, while stock
+artifact writers remain ordered. Per-thread HTTP sessions reuse connections
+without increasing request concurrency or changing pagination.
+
+`pipeline_report.json` includes per-script validation time. Filing logs report
+load, PDF enrichment, classification and serialization times plus process peak
+RSS. Publication keeps rollback copies on disk instead of loading all old and
+new artifacts into RAM. The filing archive and validators still load JSON in
+memory; this does not eliminate every memory cost. Measure the next full Actions
+run before claiming an overall speedup.
+
 ### Optional EOD2 historical bootstrap
 
 The normal daily refresh uses the official NSE full bhavcopy for the latest

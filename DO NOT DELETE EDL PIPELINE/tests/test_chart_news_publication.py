@@ -16,6 +16,47 @@ from edl_pipeline.artifacts import FINAL_ARTIFACT_SPECS, POST_STANDARDIZATION_SC
 
 
 class ChartNewsPublicationTests(unittest.TestCase):
+    def test_fetch_preserves_stage_without_publishing_then_build_promotes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            destination = Path(folder) / 'output'; destination.mkdir()
+            stage = Path(folder) / 'stage'
+            def worker(command, cwd, env):
+                current = Path(cwd)
+                if env['EDL_PIPELINE_PHASE'] == 'build':
+                    self.assertTrue((current / 'fetch_checkpoint.json').exists())
+                    for spec in FINAL_ARTIFACT_SPECS:
+                        (current / spec.path).write_bytes(b'fixture')
+                    (current / 'chart_artifacts').mkdir()
+                    (current / 'chart_artifacts/TEST.json').write_text('{}')
+                else:
+                    (current / 'fetch_checkpoint.json').write_text('{"exit_code":0}')
+                (current / 'pipeline_report.json').write_text('{"exit_code":0}')
+                return mock.Mock(returncode=0)
+            with mock.patch.object(publication.pipeline_utils, 'BASE_DIR', str(destination)), \
+                    mock.patch.object(publication.subprocess, 'run', side_effect=worker), \
+                    mock.patch.object(publication, 'inspect_publication', return_value={'errors': []}) as inspect, \
+                    mock.patch.object(publication, 'publish_frontend') as frontend:
+                self.assertEqual(publication.main(phase='fetch', stage_path=stage), 0)
+                self.assertTrue(stage.is_dir())
+                self.assertFalse((destination / 'pipeline_report.json').exists())
+                inspect.assert_not_called()
+                frontend.assert_not_called()
+                self.assertEqual(publication.main(phase='build', stage_path=stage), 0)
+                self.assertFalse(stage.exists())
+                self.assertTrue((destination / 'chart_artifacts/TEST.json').exists())
+                frontend.assert_called_once_with(destination)
+
+    def test_promotion_does_not_load_artifacts_with_read_bytes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            stage = root / 'stage'; stage.mkdir()
+            destination = root / 'destination'; destination.mkdir()
+            (stage / 'large').write_text('new')
+            (destination / 'large').write_text('old')
+            with mock.patch.object(Path, 'read_bytes', side_effect=AssertionError('unbounded read')):
+                publication.promote(stage, destination, ['large'])
+            self.assertEqual((destination / 'large').read_text(), 'new')
+
     def test_news_reaches_published_charts_after_stage_is_discarded(self):
         with tempfile.TemporaryDirectory() as folder:
             destination=Path(folder)

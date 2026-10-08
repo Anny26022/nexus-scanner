@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import requests
+from pipeline_utils import http_session
 
 from pipeline_utils import ensure_dir, get_headers, load_json, resolve_path, save_json
 
@@ -35,7 +36,7 @@ def fetch_page(url, isin, headers, page=1):
     """Return records, endpoint page count and an error string when unavailable."""
     payload = {"data": {"isin": isin, "pg_no": page, "count": PAGE_SIZE}}
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=15)
+        response = http_session().post(url, json=payload, headers=headers, timeout=15)
         response.raise_for_status()
         payload = response.json()
     except (requests.RequestException, ValueError) as error:

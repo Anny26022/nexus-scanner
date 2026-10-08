@@ -374,7 +374,7 @@ def classify_corporate_action(action):
     return {'version': VERSION, 'topics': sorted(topics) or ['unclassified'], 'terms': terms,
             'source': 'NSE corporate actions', 'method': 'official_subject_rules'}
 
-def classify_filings(filings):
+def classify_filings(filings, classify=classify_filing):
     """Merge identical same-time documents across feeds; preserve revisions."""
     result, seen = [], {}
     for raw in filings:
@@ -393,9 +393,7 @@ def classify_filings(filings):
             if source_labels not in existing["sourceLabels"]:
                 existing["sourceLabels"].append(source_labels)
             existing["sourceLabels"].sort(key=lambda labels: tuple(str(labels.get(k) or '') for k in ('descriptor', 'ann_type', 'cat', 'source_endpoint')))
-            existing["classification"] = classify_filing(existing)
             continue
-        row["classification"] = classify_filing(row)
         row.setdefault("sourceEndpoints", [source] if source else [])
         row.setdefault("sourceLabels", [{k: row.get(k) for k in ("source_endpoint", "descriptor", "ann_type", "cat")}])
         row["filingId"] = hashlib.sha256(repr(identity).encode()).hexdigest()[:24]
@@ -404,4 +402,6 @@ def classify_filings(filings):
             row['documentGroupId'] = hashlib.sha256(url_key.encode()).hexdigest()[:24]
         result.append(row)
         seen[identity] = row
+    for row in result:
+        row["classification"] = classify(row)
     return result

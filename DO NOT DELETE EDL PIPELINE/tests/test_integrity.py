@@ -33,6 +33,44 @@ from build_corporate_action_ledger import build_ledger
 
 
 class IntegrityTests(unittest.TestCase):
+    def test_eod2_cache_preserves_report_and_rechecks_changed_inputs_and_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / 'source'; (source / 'daily').mkdir(parents=True)
+            mapping_path = source / 'isin_symbol_map.json'
+            mapping_path.write_text(json.dumps({'sym2isin': {'ABC': 'INE1'}, 'isin2hist': {}}))
+            csv_path = source / 'daily/abc.csv'
+            csv_path.write_text('Date,Open,High,Low,Close,Volume,DLV_QTY\n2025-01-01,10,12,9,11,100,70\n')
+            output = root / 'ohlcv'; delivery = root / 'delivery'
+            def refresh():
+                return import_eod2_ohlcv.import_eod2_ohlcv(source, [{'Symbol': 'ABC', 'ISIN': 'INE1'}], output, delivery)
+            first = refresh()
+            before = (output / 'ABC.csv').read_bytes()
+            with mock.patch.object(import_eod2_ohlcv, 'source_rows', side_effect=AssertionError('unchanged source parsed')), \
+                    mock.patch.object(import_eod2_ohlcv, 'write_ohlcv_csv', side_effect=AssertionError('unchanged output rewritten')):
+                self.assertEqual(refresh(), first)
+            self.assertEqual((output / 'ABC.csv').read_bytes(), before)
+            # Each invalidation must read the source again, even if dates are unchanged.
+            for change in ('source', 'mapping', 'destination', 'delivery', 'rules', 'broken_checkpoint'):
+                if change == 'source':
+                    csv_path.write_text(csv_path.read_text().replace(',11,100,', ',10,100,'))
+                elif change == 'mapping':
+                    mapping_path.write_text(json.dumps({'sym2isin': {'ABC': 'INE1'}, 'isin2hist': {'INE1': []}}))
+                    # Adding a valid segment changes semantics, not only map formatting.
+                    mapping_path.write_text(json.dumps({'sym2isin': {'ABC': 'INE1'}, 'isin2hist': {'INE1': [{'symbol': 'ABC', 'from_date': '2020-01-01', 'to_date': '2026-01-01'}]}}))
+                elif change == 'destination':
+                    (output / 'ABC.csv').unlink()
+                elif change == 'delivery':
+                    (delivery / 'ABC.csv').unlink()
+                else:
+                    checkpoint = delivery / '.import-checkpoints.json'
+                    checkpoint.write_text('{broken' if change == 'broken_checkpoint' else '{"rules": [], "entries": {}}')
+                with mock.patch.object(import_eod2_ohlcv, 'source_rows', wraps=import_eod2_ohlcv.source_rows) as read:
+                    refresh()
+                    self.assertGreater(read.call_count, 0, change)
+                self.assertTrue((output / 'ABC.csv').is_file())
+                self.assertTrue((delivery / 'ABC.csv').is_file())
+
     def test_eod2_bootstrap_joins_by_isin_overlays_history_and_keeps_newer_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -370,14 +408,14 @@ class IntegrityTests(unittest.TestCase):
             root=Path(tmp);stage=root/'stage';stage.mkdir();dest=root/'dest';dest.mkdir()
             for name in ('a','b'):
                 (stage/name).write_text('new');(dest/name).write_text('old')
-            from pipeline_utils import atomic_replace_bytes
+            from edl_pipeline.publication import atomic_copy
             calls=0
-            def failing(path, data):
+            def failing(source, path):
                 nonlocal calls
                 calls+=1
                 if calls==2:raise OSError('disk failure')
-                atomic_replace_bytes(path,data)
-            with mock.patch('edl_pipeline.publication.atomic_replace_bytes',side_effect=failing):
+                atomic_copy(source,path)
+            with mock.patch('edl_pipeline.publication.atomic_copy',side_effect=failing):
                 with self.assertRaises(OSError):promote(stage,dest,['a','b'])
             self.assertEqual([(dest/name).read_text() for name in ('a','b')], ['old','old'])
 

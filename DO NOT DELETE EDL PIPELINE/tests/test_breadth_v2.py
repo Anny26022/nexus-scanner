@@ -90,6 +90,18 @@ def blank_aggregate(date):
 
 
 class BreadthV2Tests(unittest.TestCase):
+    def test_bounded_contributions_match_full_history_tail_without_changing_counts(self):
+        method = BreadthMethodology()
+        full = BreadthAccumulator(replace(method, output_sessions=10000), include_contributions=True)
+        bounded = BreadthAccumulator(replace(method, output_sessions=10), include_contributions=True)
+        for symbol, start, count in [('A', '2023-01-01', 320), ('B', '2024-01-01', 100), ('C', '2022-01-01', 40), ('D', '2023-12-01', 130)]:
+            history = prepare_history(make_ohlcv([100 + (i % 13) for i in range(count)], start), method)
+            full.update(history, symbol)
+            bounded.update(history, symbol)
+        self.assertEqual(bounded.records(), full.records())
+        self.assertEqual(bounded.contribution_records(), full.contribution_records()[-10:])
+        self.assertEqual(len(bounded._contributions), 10)
+
     def test_breadth_writers_use_lossless_compact_json(self):
         from edl_pipeline.breadth.indices import _save_json as indices_writer
         from edl_pipeline.breadth.pipeline import _save_json as breadth_writer

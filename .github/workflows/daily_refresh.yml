@@ -27,8 +27,35 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
 
-      - name: Cache OHLCV Data  
-        uses: actions/cache@v4
+      - name: Restore prices history
+        id: prices-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            DO NOT DELETE EDL PIPELINE/ohlcv_data
+            DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
+            DO NOT DELETE EDL PIPELINE/delivery_history_data
+            DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
+          key: scanner-prices-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-fetch
+          restore-keys: |
+            scanner-prices-v1-${{ runner.os }}-
+
+      - name: Restore enrichment history
+        id: enrichment-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            DO NOT DELETE EDL PIPELINE/scanner_history_data
+            DO NOT DELETE EDL PIPELINE/filing_history_data
+            DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
+            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
+          key: scanner-enrichment-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-fetch
+          restore-keys: |
+            scanner-enrichment-v1-${{ runner.os }}-
+
+      - name: Bootstrap from the previous combined cache
+        if: steps.prices-cache.outputs.cache-matched-key == '' && steps.enrichment-cache.outputs.cache-matched-key == ''
+        uses: actions/cache/restore@v4
         with:
           path: |
             DO NOT DELETE EDL PIPELINE/ohlcv_data
@@ -83,7 +110,38 @@ jobs:
       - name: Install R2 uploader
         run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
 
-      - name: Run Pipeline
+      - name: Fetch refresh inputs
+        id: fetch
+        env:
+          PYTHONUNBUFFERED: '1'
+          EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
+        run: |
+          cd "DO NOT DELETE EDL PIPELINE"
+          python run_full_pipeline.py --phase fetch --stage "${{ runner.temp }}/edl-refresh-${{ github.run_id }}-${{ github.run_attempt }}"
+
+      - name: Save prices history
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            DO NOT DELETE EDL PIPELINE/ohlcv_data
+            DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
+            DO NOT DELETE EDL PIPELINE/delivery_history_data
+            DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
+          key: scanner-prices-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-fetch
+
+      - name: Save enrichment history
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            DO NOT DELETE EDL PIPELINE/scanner_history_data
+            DO NOT DELETE EDL PIPELINE/filing_history_data
+            DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
+            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
+          key: scanner-enrichment-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-fetch
+
+      - name: Build and publish validated data
         env:
           PYTHONUNBUFFERED: '1'
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
@@ -95,7 +153,19 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
-          python run_full_pipeline.py
+          python run_full_pipeline.py --phase build --stage "${{ runner.temp }}/edl-refresh-${{ github.run_id }}-${{ github.run_attempt }}"
+
+      - name: Save enrichment history
+        if: always() && steps.fetch.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            DO NOT DELETE EDL PIPELINE/scanner_history_data
+            DO NOT DELETE EDL PIPELINE/filing_history_data
+            DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
+            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
+          key: scanner-enrichment-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-build
 
       - name: Commit and Push Results
         run: |

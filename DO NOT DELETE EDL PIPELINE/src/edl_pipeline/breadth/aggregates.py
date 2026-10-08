@@ -1,6 +1,7 @@
 """Cross-sectional aggregation with metric-specific denominators and audit flags."""
 
 from collections import defaultdict
+import heapq
 import math
 import pandas as pd
 
@@ -32,24 +33,38 @@ class BreadthAccumulator:
     def __init__(self, methodology, include_contributions=False):
         self.methodology = methodology
         self._records = defaultdict(dict)
+        self._contribution_days = []
         self._contributions = defaultdict(lambda: defaultdict(list)) if include_contributions else None
 
     def _record(self, date):
         if not self._records[date]: self._records[date] = _blank_record(date)
         return self._records[date]
 
+    def _retain_contribution_date(self, day):
+        if self._contributions is None or day in self._contributions:
+            return
+        limit = self.methodology.output_sessions
+        if limit and len(self._contribution_days) >= limit:
+            if day <= self._contribution_days[0]:
+                return
+            del self._contributions[heapq.heapreplace(self._contribution_days, day)]
+        else:
+            heapq.heappush(self._contribution_days, day)
+        self._contributions[day]  # Admit only dates in the final output window.
+
     def _add(self, record, field, symbol):
         record[field] += 1
-        if self._contributions is not None and symbol: self._contributions[record["date"]][field].append(symbol)
+        if self._contributions is not None and symbol and record["date"] in self._contributions: self._contributions[record["date"]][field].append(symbol)
 
     def update(self, history, symbol=None):
         for row in history.itertuples(index=False):
             record = self._record(row.Date)
+            self._retain_contribution_date(row.Date)
             self._add(record, "eligible_with_candle", symbol)
             daily_return = row.Daily_Return
             if _present(row.Volume):
                 record["total_volume"] += float(row.Volume)
-                if self._contributions is not None and symbol:
+                if self._contributions is not None and symbol and record["date"] in self._contributions:
                     self._contributions[record["date"]]["total_volume"].append(symbol)
             if _present(daily_return):
                 self._add(record, "valid_return", symbol)
@@ -63,11 +78,11 @@ class BreadthAccumulator:
                 if _present(row.Volume):
                     if daily_return > 0:
                         record["advance_volume"] += float(row.Volume)
-                        if self._contributions is not None and symbol:
+                        if self._contributions is not None and symbol and record["date"] in self._contributions:
                             self._contributions[record["date"]]["advance_volume"].append(symbol)
                     elif daily_return < 0:
                         record["decline_volume"] += float(row.Volume)
-                        if self._contributions is not None and symbol:
+                        if self._contributions is not None and symbol and record["date"] in self._contributions:
                             self._contributions[record["date"]]["decline_volume"].append(symbol)
             for ma_type in ("SMA", "EMA"):
                 for period in self.methodology.ma_periods:

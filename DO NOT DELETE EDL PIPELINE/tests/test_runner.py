@@ -2,6 +2,8 @@ import contextlib
 import io
 import sys
 import threading
+import tempfile
+from collections import Counter
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -121,6 +123,38 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(lane_positions, sorted(lane_positions))
         self.assertGreater(calls.index("fetch_indices_ohlcv.py"), calls.index("fetch_all_indices.py"))
         self.assertGreater(calls.index("fetch_indices_ohlcv.py"), calls.index("fetch_all_ohlcv.py"))
+
+    def test_split_refresh_executes_the_same_scripts_once_and_resumes_checks(self):
+        calls = []
+        def run(script, phase_label='', required=False):
+            calls.append(script)
+            return ScriptResult(True, required, validations=[ArtifactCheck('fixture', 'json', True)])
+        config = PipelineConfig(cleanup_intermediate=False)
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch('edl_pipeline.runner.BASE_DIR', directory), \
+                mock.patch('edl_pipeline.runner.run_script', side_effect=run), \
+                mock.patch('edl_pipeline.runner.download_nse_listing_dates'), \
+                mock.patch('edl_pipeline.runner.compress_output', return_value=(100, 10)), \
+                mock.patch('edl_pipeline.runner.validate_final_artifacts', return_value=[]), \
+                mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(config), 0)
+            expected = Counter(calls)
+            calls.clear()
+            self.assertEqual(main(config, phase='fetch'), 0)
+            self.assertNotIn('bulk_market_analyzer.py', calls)
+            self.assertTrue((Path(directory) / 'fetch_checkpoint.json').exists())
+            self.assertEqual(main(config, phase='build'), 0)
+            self.assertEqual(Counter(calls), expected)
+            self.assertTrue(all(count == 1 for count in expected.values()))
+
+    def test_build_rejects_failed_fetch_checkpoint(self):
+        with mock.patch('edl_pipeline.runner.pipeline_utils.load_json', return_value={
+                'config': {'fetch_ohlcv': True, 'fetch_optional': False, 'cleanup_intermediate': True},
+                'exit_code': 1}), mock.patch('edl_pipeline.runner.run_script') as run:
+            with self.assertRaises(ValueError):
+                main(phase='build')
+            run.assert_not_called()
 
     def test_required_output_validation_failure_marks_script_failed(self):
         completed = mock.Mock(returncode=0)

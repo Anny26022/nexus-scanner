@@ -1,4 +1,5 @@
 import requests
+from pipeline_utils import http_session
 import os
 import sys
 import time
@@ -112,7 +113,7 @@ def fetch_history_chunk(payload):
     last_error = None
     for attempt in range(FETCH_ATTEMPTS):
         try:
-            response = requests.post(
+            response = http_session().post(
                 TICK_API_URL,
                 json=payload,
                 headers=get_headers(include_origin=True),

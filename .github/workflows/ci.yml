@@ -32,5 +32,9 @@ jobs:
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
 
+      - name: Test cache retention policy
+        working-directory: .
+        run: python -m unittest discover -s tools -p test_prune_actions_caches.py -v
+
       - name: Compile Python files
         run: python -m compileall -q .

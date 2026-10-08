@@ -56,9 +56,10 @@ all final artifacts, publishes, and removes the stage on success. The default
 command still runs both phases together. Failed stages remain available for
 inspection; start a new fetch for a new trading session.
 
-Actions restore separate price and enrichment caches, with a one-time fallback
-to the previous combined cache. They save validated fetch results before build,
-then save updated enrichment caches even if build fails. Cache-save failures do
+Actions restore the previous combined cache first, then overlay the separate
+price and enrichment caches, so a partial cache hit retains the missing category.
+They save incremental history after successful or failed fetch attempts before
+build, then save updated enrichment caches even if build fails. Cache-save failures do
 not block publication. Eviction or an interrupted save can still require a
 backfill; these caches are an optimization, not durable storage.
 

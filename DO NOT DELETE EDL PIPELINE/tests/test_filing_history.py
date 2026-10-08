@@ -21,6 +21,26 @@ from pipeline_utils import load_json, save_json
 
 
 class FilingHistoryTests(unittest.TestCase):
+    def test_cache_ignores_attempt_time_and_survives_empty_inputs_or_write_errors(self):
+        filings = [{'caption': 'Dividend approved', 'documentExtraction': {
+            'status': 'failed', 'attemptedAt': 'old', 'pages': []}}]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            expected = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            saved = path.read_bytes()
+            self.assertEqual(build_filing_history_artifact.classify_cached([], path, ['rules']), [])
+            self.assertEqual(path.read_bytes(), saved)
+            revised = copy.deepcopy(filings)
+            revised[0]['documentExtraction']['attemptedAt'] = 'new'
+            with mock.patch.object(build_filing_history_artifact, 'classify_filing') as classify:
+                observed = build_filing_history_artifact.classify_cached(revised, path, ['rules'])
+                self.assertEqual(observed[0]['classification'], expected[0]['classification'])
+                classify.assert_not_called()
+            with mock.patch.object(build_filing_history_artifact, 'save_json', side_effect=OSError('disk full')):
+                observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['new rules'])
+                self.assertEqual(observed, expected)
+            self.assertEqual(path.read_bytes(), saved)
+
     def test_classification_cache_preserves_merged_labels_and_invalidates_inputs(self):
         filings = [
             {'news_id': 'one', 'caption': 'Dividend approved', 'descriptor': 'Dividend', 'file_url': 'https://example.com/a.pdf'},

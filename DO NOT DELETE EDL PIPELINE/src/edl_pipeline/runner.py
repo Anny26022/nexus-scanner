@@ -319,9 +319,12 @@ def main(config=None, phase="all"):
     results = {}
     checkpoint_path = Path(BASE_DIR) / 'fetch_checkpoint.json'
     if phase == 'build':
-        checkpoint = pipeline_utils.load_json(checkpoint_path)
-        if checkpoint['config'] != config_to_dict(config) or checkpoint['exit_code'] != 0:
-            raise ValueError('Cannot build from a failed or incompatible fetch checkpoint')
+        try:
+            checkpoint = pipeline_utils.load_json(checkpoint_path, default={})
+        except (OSError, ValueError):
+            checkpoint = {}
+        if not isinstance(checkpoint, dict) or checkpoint.get('config') != config_to_dict(config) or checkpoint.get('exit_code') != 0:
+            raise ValueError('Cannot build from a missing, failed or incompatible fetch checkpoint')
         for script, data in checkpoint['scripts'].items():
             results[script] = ScriptResult(**{**data, 'validations': [ArtifactCheck(**v) for v in data['validations']]})
         overall_start -= checkpoint['total_time_seconds']

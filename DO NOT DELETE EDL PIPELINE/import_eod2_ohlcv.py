@@ -187,12 +187,14 @@ def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
                           if isinstance(segment, dict) and segment.get('symbol')}
         if symbols.get(symbol) == isin:
             source_symbols.add(symbol.lower())
+        cached = previous.get(symbol, {})
+        has_prior = isinstance(cached, dict) and bool(cached.get('signature'))
         signature = {
             'isin': isin, 'segments': segments, 'current_isin': symbols.get(symbol),
             'sources': {name: file_fingerprint(data_dir / 'daily' / f'{name}.csv') for name in sorted(source_symbols)},
-            'destination': file_fingerprint(destination), 'delivery': file_fingerprint(delivery_path),
+            'destination': file_fingerprint(destination) if has_prior else None,
+            'delivery': file_fingerprint(delivery_path) if has_prior else None,
         }
-        cached = previous.get(symbol, {})
         if isinstance(cached, dict) and cached.get('signature') == signature and isinstance(cached.get('summary'), dict):
             summary = cached['summary']
             reused += 1
@@ -225,7 +227,10 @@ def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
         report['verified_symbol_history_additional_rows'] += summary['additional_rows']
     current = {'rules': rules, 'entries': entries}
     if current != checkpoint:
-        save_json(checkpoint_path, current)
+        try:
+            save_json(checkpoint_path, current)
+        except OSError as error:
+            print(f'WARNING: EOD2 checkpoint not saved: {error}', flush=True)
     print(f'EOD2 reused {reused}/{len(entries)} unchanged imports.')
     return report
 

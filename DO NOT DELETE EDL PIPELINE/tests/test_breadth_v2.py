@@ -102,6 +102,15 @@ class BreadthV2Tests(unittest.TestCase):
         self.assertEqual(bounded.contribution_records(), full.contribution_records()[-10:])
         self.assertEqual(len(bounded._contributions), 10)
 
+    def test_symbol_less_updates_do_not_admit_or_evict_contributions(self):
+        method = replace(BreadthMethodology(), output_sessions=2)
+        accumulator = BreadthAccumulator(method, include_contributions=True)
+        accumulator.update(prepare_history(make_ohlcv([100, 101], '2023-01-01'), method), 'A')
+        before = accumulator.contribution_records()
+        accumulator.update(prepare_history(make_ohlcv([100, 101, 102], '2024-01-01'), method))
+        self.assertEqual(accumulator.contribution_records(), before)
+        self.assertEqual(len(accumulator.records()), 5)
+
     def test_breadth_writers_use_lossless_compact_json(self):
         from edl_pipeline.breadth.indices import _save_json as indices_writer
         from edl_pipeline.breadth.pipeline import _save_json as breadth_writer

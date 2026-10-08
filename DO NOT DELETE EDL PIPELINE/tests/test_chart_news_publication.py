@@ -35,7 +35,8 @@ class ChartNewsPublicationTests(unittest.TestCase):
             with mock.patch.object(publication.pipeline_utils, 'BASE_DIR', str(destination)), \
                     mock.patch.object(publication.subprocess, 'run', side_effect=worker), \
                     mock.patch.object(publication, 'inspect_publication', return_value={'errors': []}) as inspect, \
-                    mock.patch.object(publication, 'publish_frontend') as frontend:
+                    mock.patch.object(publication, 'publish_frontend') as frontend, \
+                    mock.patch.dict('os.environ', {'EDL_FETCH_OHLCV': '1'}):
                 self.assertEqual(publication.main(phase='fetch', stage_path=stage), 0)
                 self.assertTrue(stage.is_dir())
                 self.assertFalse((destination / 'pipeline_report.json').exists())

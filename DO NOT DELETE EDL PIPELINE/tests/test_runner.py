@@ -153,8 +153,17 @@ class RunnerTests(unittest.TestCase):
                 'config': {'fetch_ohlcv': True, 'fetch_optional': False, 'cleanup_intermediate': True},
                 'exit_code': 1}), mock.patch('edl_pipeline.runner.run_script') as run:
             with self.assertRaises(ValueError):
-                main(phase='build')
+                main(PipelineConfig(fetch_ohlcv=True, fetch_optional=False, cleanup_intermediate=True), phase='build')
             run.assert_not_called()
+
+    def test_build_rejects_missing_or_malformed_checkpoint_clearly(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch('edl_pipeline.runner.BASE_DIR', directory):
+            for content in (None, '{broken', '[]'):
+                path = Path(directory) / 'fetch_checkpoint.json'
+                if content is not None:
+                    path.write_text(content)
+                with self.assertRaisesRegex(ValueError, 'Cannot build from a missing'):
+                    main(PipelineConfig(), phase='build')
 
     def test_required_fetch_failure_stops_before_index_and_build(self):
         failed = ScriptResult(False, True, error='missing sessions')

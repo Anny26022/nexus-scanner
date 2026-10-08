@@ -17,4 +17,6 @@ if __name__ == "__main__":
     parser.add_argument('--phase', choices=('all', 'fetch', 'build'), default='all')
     parser.add_argument('--stage', type=Path)
     args = parser.parse_args()
+    if args.phase != 'all' and args.stage is None:
+        parser.error('--phase fetch/build requires --stage')
     sys.exit(main(phase=args.phase, stage_path=args.stage))

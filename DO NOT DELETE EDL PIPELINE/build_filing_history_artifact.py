@@ -27,6 +27,8 @@ def progress(label, started):
 
 
 def classify_cached(filings, path, rules):
+    if not filings:
+        return []
     try:
         old = load_json(path, default={})
     except (OSError, ValueError):
@@ -38,7 +40,9 @@ def classify_cached(filings, path, rules):
     entries = {}
     def classify(row):
         inputs = {key: row.get(key) for key in
-                  ('caption', 'news_body', 'descriptor', 'ann_type', 'cat', 'sourceLabels', 'documentExtraction')}
+                  ('caption', 'news_body', 'descriptor', 'ann_type', 'cat', 'sourceLabels')}
+        document = row.get('documentExtraction') or {}
+        inputs['documentExtraction'] = {key: document.get(key) for key in ('status', 'pages')}
         key = hashlib.sha256(json.dumps(inputs, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         value = cached.get(key)
         if not isinstance(value, dict) or value.get('version') != VERSION or not {
@@ -50,7 +54,10 @@ def classify_cached(filings, path, rules):
     result = classify_filings(filings, classify=classify)
     current = {'rules': rules, 'entries': entries}
     if current != old:
-        save_json(path, current, ensure_ascii=False)
+        try:
+            save_json(path, current, ensure_ascii=False)
+        except OSError as error:
+            print(f'WARNING: Classification cache not saved: {error}', flush=True)
     return result
 
 

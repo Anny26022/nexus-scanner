@@ -59,7 +59,8 @@ class BreadthAccumulator:
     def update(self, history, symbol=None):
         for row in history.itertuples(index=False):
             record = self._record(row.Date)
-            self._retain_contribution_date(row.Date)
+            if symbol:
+                self._retain_contribution_date(row.Date)
             self._add(record, "eligible_with_candle", symbol)
             daily_return = row.Daily_Return
             if _present(row.Volume):

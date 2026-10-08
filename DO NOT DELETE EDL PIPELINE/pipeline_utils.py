@@ -11,6 +11,7 @@ import json
 import math
 import os
 import random
+import shutil
 import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -131,9 +132,9 @@ def finite_json(data):
     return data
 
 
-def save_json(path, data, indent=4, ensure_ascii=True):
+def save_json(path, data, indent=None, ensure_ascii=True):
     """Write JSON atomically to a pipeline-relative path and create parent dirs."""
-    text = json.dumps(finite_json(data), indent=indent, ensure_ascii=ensure_ascii, allow_nan=False)
+    text = json.dumps(finite_json(data), indent=indent, separators=(',', ':') if indent is None else None, ensure_ascii=ensure_ascii, allow_nan=False)
     atomic_replace_text(path, text)
 
 
@@ -150,7 +151,7 @@ def compress_file(src, dst, compresslevel=9):
         tmp_path = Path(tmp.name)
     try:
         with src_path.open("rb") as f_in, gzip.open(tmp_path, "wb", compresslevel=compresslevel) as f_out:
-            f_out.write(f_in.read())
+            shutil.copyfileobj(f_in, f_out, length=1024 * 1024)
         tmp_path.replace(dst_path)
     except Exception:
         tmp_path.unlink(missing_ok=True)

@@ -8,8 +8,9 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
-from .financials import financial_value
+from .financials import financial_value, historical_field_value
 from .turnover import average_turnover_crore
+from ..breadth.gates import MARKET_BREADTH_METRICS
 
 
 CONTEXT_CONDITION_REGISTRY = {
@@ -37,7 +38,7 @@ CONTEXT_CONDITION_REGISTRY = {
     "series": {"inputs": {"values": "string[]"}, "definition": "NSE listing series."},
     "listing_age_days": {"inputs": {"comparison": "comparison", "days": "integer"}, "definition": "Trading sessions since NSE listing date."},
     "index_membership": {"inputs": {"index_name": "string"}, "definition": "Current canonical index membership."},
-    "market_breadth": {"inputs": {"universe": "all_active|nifty50|niftymidsmall400", "metric": "pct_above_sma10|pct_above_sma20|pct_above_sma50|pct_above_sma200|ad_ratio_sma10|volume_ratio20", "comparison": "comparison", "value": "number"}, "definition": "Date-aligned market breadth for a named universe."},
+    "market_breadth": {"inputs": {"universe": "all_active|nifty50|nifty500|niftymidsmall400", "metric": "|".join(MARKET_BREADTH_METRICS), "comparison": "comparison", "value": "number"}, "definition": "Date-aligned published breadth metric for a named universe."},
     "fno_ban": {"inputs": {"mode": "exclude|only"}, "definition": "Current official NSE F&O security-ban report."},
     "exclude_surveillance": {"inputs": {}, "definition": "Excludes stocks in the latest ASM or GSM surveillance lists. Both lists must be available for the screen session."},
     "absolute_volume": {"inputs": {"comparison": "comparison", "value": "number"}, "definition": "Latest session traded volume in shares."},
@@ -98,7 +99,7 @@ def normalize_condition_spec(raw: dict[str, Any]) -> dict[str, Any]:
     metric_aliases = {
         "pctabovesma10": "pct_above_sma10", "pctabovesma20": "pct_above_sma20",
         "pctabovesma50": "pct_above_sma50", "pctabovesma200": "pct_above_sma200",
-        "adratiosma10": "ad_ratio_sma10", "volratio20": "volume_ratio20",
+        "adratiosma10": "ad_ratio_sma10", "volratio20": "volume_ratio_20", "volume_ratio20": "volume_ratio_20",
     }
     if condition == "market_breadth":
         spec["metric"] = metric_aliases.get(spec.get("metric"), spec.get("metric"))
@@ -149,6 +150,8 @@ def _stock_snapshot_is_aligned(stock, as_of_date):
 def _published_field_value(frame, stock, field, as_of_date):
     """Read a query field without silently using a future financial snapshot."""
     field = str(field).lower()
+    if field.startswith("financial:") or field in {"ttm_revenue_growth_percent", "ttm_net_profit_growth_percent", "ttm_sales_growth_percent", "opm_5_years_ago_percent"}:
+        return historical_field_value(stock, field, as_of_date)
     latest = {
         "close": "Close", "open": "Open", "high": "High", "low": "Low",
     }

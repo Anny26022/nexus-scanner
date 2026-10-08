@@ -1,6 +1,7 @@
 """Generate the versioned MBI/XP market-breadth artifacts."""
 
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -25,6 +26,8 @@ METHODOLOGY_FILE = BASE_DIR / "breadth_methodology.json"
 OUTPUT_FILE = BASE_DIR / "market_breadth_v2.json"
 SNAPSHOT_FILE = BASE_DIR / "breadth_universe_snapshot.json"
 ALL_INDICES_OUTPUT_FILE = BASE_DIR / "all_indices_history_v2.json"
+SECTOR_OUTPUT_FILE = BASE_DIR / "sector_breadth_v2.json"
+CONTRIBUTION_OUTPUT_FILE = BASE_DIR / "market_breadth_contributions_v2.json"
 MINIMUM_HISTORY_COVERAGE = 0.90
 
 
@@ -60,23 +63,24 @@ def main():
         f"Mcap > {methodology.minimum_market_cap_crore:g} crore..."
     )
 
+    generated_at = datetime.now(timezone.utc).isoformat()
+    index_artifact = generate_all_index_history(
+        index_rows=load_json(INDEX_LIST_FILE), indices_dir=INDICES_DIR,
+        output_path=ALL_INDICES_OUTPUT_FILE, output_sessions=methodology.output_sessions,
+        rounding_digits=methodology.rounding_digits, generated_at=generated_at,
+    )
+    panels = {item["symbol"]: item["records"] for item in index_artifact.get("indices", []) if item["symbol"] in {"NIFTY", "NIFTY 50", "NIFTY 500", "NIFTY MIDSMALLCAP 400"}}
     artifact, snapshot = generate_market_breadth(
         universe_rows=universe_rows,
         ohlcv_dir=OHLCV_DIR,
         index_csv=INDEX_FILE,
         methodology=methodology,
         output_path=OUTPUT_FILE,
-        snapshot_path=SNAPSHOT_FILE,
+        snapshot_path=SNAPSHOT_FILE, sector_output_path=SECTOR_OUTPUT_FILE,
+        contribution_output_path=CONTRIBUTION_OUTPUT_FILE, benchmark_panels=panels,
+        generated_at=generated_at,
     )
     quality = artifact["quality"]
-    index_artifact = generate_all_index_history(
-        index_rows=load_json(INDEX_LIST_FILE),
-        indices_dir=INDICES_DIR,
-        output_path=ALL_INDICES_OUTPUT_FILE,
-        output_sessions=methodology.output_sessions,
-        rounding_digits=methodology.rounding_digits,
-        generated_at=artifact["generated_at"],
-    )
     index_quality = index_artifact["quality"]
     print(
         f"Eligible: {snapshot['eligible_count']} | "
@@ -106,6 +110,8 @@ def main():
         return 1
     print(f"Saved: {OUTPUT_FILE}")
     print(f"Saved: {SNAPSHOT_FILE}")
+    print(f"Saved: {SECTOR_OUTPUT_FILE}")
+    print(f"Saved: {CONTRIBUTION_OUTPUT_FILE}")
     print(
         f"Indices: {index_quality['processed_indices']}/"
         f"{index_quality['available_indices']} processed"

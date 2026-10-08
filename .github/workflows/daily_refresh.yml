@@ -38,6 +38,8 @@ jobs:
             DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
             DO NOT DELETE EDL PIPELINE/scanner_history_data
             DO NOT DELETE EDL PIPELINE/filing_history_data
+            DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
+            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
           key: scanner-history-v1-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             scanner-history-v1-${{ runner.os }}-
@@ -84,6 +86,7 @@ jobs:
 
       - name: Run Pipeline
         env:
+          PYTHONUNBUFFERED: '1'
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
           EDL_CHART_STORAGE: r2
           EDL_SCANNER_STORAGE: r2
@@ -111,6 +114,8 @@ jobs:
           git add "DO NOT DELETE EDL PIPELINE/sector_analytics.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/market_breadth.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/market_breadth_v2.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/sector_breadth_v2.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/market_breadth_contributions_v2.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/breadth_universe_snapshot.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/all_indices_history_v2.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/all_indices_list.json"
@@ -123,10 +128,17 @@ jobs:
           git add "DO NOT DELETE EDL PIPELINE/mainboard_universe_report.json"
           git add "DO NOT DELETE EDL PIPELINE/sme_market_data.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/nse_fno_ban.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/earnings_calendar.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/rs_rating_daily.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/ipo_screener.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/ipo_provider_listed_archive.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/ipo_provider_details_archive.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_listed_archive.json.gz"
+          git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_details_archive.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/shareholding_history.json.gz"
           git add "DO NOT DELETE EDL PIPELINE/quarterly_financial_history.json.gz"
+          git add reference/index-constituent-mappings.json.gz
+          git add reference/index-constituent-mappings.manifest.json
           git add frontend/public/data/current.json frontend/public/data/revisions
           git commit -m "Automated Daily Data Refresh [skip ci]" || echo "No changes to commit"
           git push

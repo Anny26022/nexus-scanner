@@ -41,7 +41,7 @@ const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
       {id:'maType',label:'Average',type:'select',defaultValue:'EMA',options:[{label:'EMA',value:'EMA'},{label:'SMA',value:'SMA'},{label:'WMA',value:'WMA'}]},
       {id:'comparison',label:'Comparison',type:'select',defaultValue:'BELOW',options:[{label:'At most (tight convergence)',value:'BELOW'},{label:'At least (minimum spread)',value:'ABOVE'}]},
       {id:'maxSpreadPct',label:'Spread threshold',type:'number',defaultValue:1.5,min:0,max:100,step:.1,unit:'%'},
-      {id:'withinDays',label:'Within',type:'number',defaultValue:1,min:1,max:250,unit:'d'},
+      {id:'withinDays',label:'Within',type:'number',defaultValue:1,min:1,max:250,step:1,unit:'d'},
     ],
   },
   {

@@ -6,6 +6,8 @@ import sys
 import math
 
 from pipeline_utils import BASE_DIR, load_json, save_json
+from edl_pipeline.schemas import SCREEN_METRICS
+from edl_pipeline.scanner.financials import normalize_statement_history, statement_summary
 
 
 FUNDAMENTAL_FILE = os.path.join(BASE_DIR, "fundamental_data.json")
@@ -161,12 +163,12 @@ def published_financial_fields(quarterly, annual, balance):
             "interest_coverage_formula": "(annual profit before tax + interest) / interest",
             "non_current_assets_formula": "total assets - current assets",
             "total_liabilities_formula": "current liabilities + non-current liabilities",
-            "debt_to_equity_formula": "reported total borrowings / total equity; unavailable without borrowings",
+            "debt_to_equity_formula": "ScanX Debt2Eq, otherwise reported total borrowings / total equity",
         },
     }
 
 
-def valuation_fields(cv, ttm_cy, roce_roe, bs_c, eps_latest, yoy_eps):
+def valuation_fields(cv, ttm_cy, roce_roe, bs_c, eps_latest, yoy_eps, tech=None):
     roe = get_float(roce_roe.get("ROE"))
     roce = get_float(roce_roe.get("ROCE"))
     pe = get_float(cv.get("STOCK_PE"))
@@ -174,6 +176,9 @@ def valuation_fields(cv, ttm_cy, roce_roe, bs_c, eps_latest, yoy_eps):
     borrowings = get_value_from_pipe_string(bs_c.get("TOTAL_BORROWINGS"), 0)
     total_equity = get_value_from_pipe_string(bs_c.get("TOTAL_EQUITY"), 0)
     de_ratio = borrowings / total_equity if borrowings is not None and borrowings >= 0 and positive(total_equity) else None
+    reported = get_optional_float((tech or {}).get("Debt2Eq"))
+    if reported is not None:
+        de_ratio = reported
 
     peg = pe / yoy_eps if positive(yoy_eps) and positive(pe) else None
 
@@ -187,7 +192,8 @@ def valuation_fields(cv, ttm_cy, roce_roe, bs_c, eps_latest, yoy_eps):
     return {
         "ROE(%)": roe,
         "ROCE(%)": roce,
-        "D/E": rounded(de_ratio),
+        "D/E": de_ratio if reported is not None else rounded(de_ratio),
+        "debt_to_equity_source": "SCANX_Debt2Eq" if reported is not None else ("TOTAL_BORROWINGS/TOTAL_EQUITY" if de_ratio is not None else None),
         "OPM TTM(%)": get_float(ttm_cy.get("OPM")),
         "P/E": pe,
         "PEG": rounded(peg),
@@ -324,8 +330,9 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
         **quarterly_metric_fields("PBT", cq, "PROFIT_BEFORE_TAX"),
         "Sales Growth 5 Years(%)": rounded(calculate_cagr(sales_current_annual, sales_5_years_ago, 5)),
         **opm,
-        **valuation_fields(cv, ttm_cy, roce_roe, bs_c, eps["EPS Latest Quarter"], eps["YoY % EPS Latest"]),
+        **valuation_fields(cv, ttm_cy, roce_roe, bs_c, eps["EPS Latest Quarter"], eps["YoY % EPS Latest"], tech),
         **ownership,
+        "financial_units_version": 1,
         **published_financial_fields(cq, cy, bs_c),
         # ScanX statement amounts are ₹ crore. Convert them to the advertised
         # ₹ lakh units; retain null when the source amount is missing.
@@ -347,6 +354,21 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
         "Net Cash Flow(in Lakhs)": lakhs(cf_c.get("NET_CASH_FLOW")),
         "% from 52W High": rounded(pct_from_52w_high),
     }
+
+    for tag, (canonical, _public) in SCREEN_METRICS.items():
+        stock_analysis[canonical] = stock_analysis["D/E"] if canonical == "debt_to_equity" else get_optional_float(tech.get(tag))
+    statement_history = normalize_statement_history(item, item.get("financial_observed_on"))
+    stock_analysis["financial_statement_history"] = statement_history
+    stock_analysis.update(statement_summary(statement_history))
+    # These annual amounts are also available in the fundamental response.
+    for canonical, source in (("cwip_crore", "CWIP"), ("fixed_assets_crore", "FIXED_ASSETS"), ("borrowings_crore", "TOTAL_BORROWINGS")):
+        if stock_analysis[canonical] is None:
+            stock_analysis[canonical] = get_value_from_pipe_string(bs_c.get(source), 0)
+    if stock_analysis["financing_cash_flow_crore"] is None:
+        stock_analysis["financing_cash_flow_crore"] = get_value_from_pipe_string(cf_c.get("FINANCING_ACTIVITIES"), 0)
+    for canonical, source in (("fii_holding_percent", "FII"), ("dii_holding_percent", "DII")):
+        if stock_analysis[canonical] is None:
+            stock_analysis[canonical] = get_value_from_pipe_string(shp.get(source), 0)
 
     rsi_14 = get_float(tech.get("DayRSI14CurrentCandle"))
     sma_signals = average_status(advanced_tech.get("SMA", []), "-SMA", ltp)

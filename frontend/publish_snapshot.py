@@ -4,13 +4,14 @@ import hashlib
 import json
 import os
 import tempfile
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 
 import scanner_bridge as bridge
 from scanner_cache import ScannerCache
+from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
 from scanner_pack_publication import BaseHistoryArchive, build_private_scanner_pack, publish_private_pack
 from scanner_identity import checked_identity
@@ -171,7 +172,8 @@ def _publish(root, output, archive_directory):
         rows.append(row)
     cache.save_frames(root)
     code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),
-                Path(__file__).with_name('scanner_pack_publication.py'),Path(bridge.__file__)]
+                Path(__file__).with_name('scanner_pack_publication.py'),Path(bridge.__file__),
+                Path(__file__).with_name('packed_snapshot.py')]
     digest=hashlib.sha256()
     digest.update(json.dumps(checked_identity(), sort_keys=True).encode())
     for name, data in {**source_bytes,**delivery_bytes}.items():
@@ -212,13 +214,32 @@ def _publish(root, output, archive_directory):
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
     payload={'schemaVersion':7,'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'referenceCounts':{'rvol15Sma50':default_count}}
     stock_bytes=write_json(generation/'stocks.json',payload)
+    # Keep the full financial series out of every lightweight scanner row.
+    histories = {symbol: stock["financial_statement_history"] for symbol, stock in context['stocks'].items()
+                 if stock.get("financial_statement_history")}
+    history_path = generation/'financial-history.json.gz'
+    history_temporary = history_path.with_name(history_path.name+'.tmp')
+    history_temporary.write_bytes(gzip.compress(json.dumps(histories, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
+    history_temporary.replace(history_path)
     compressed=gzip.compress(stock_bytes,compresslevel=6,mtime=0)
     compressed_path=generation/'stocks.json.gz'
     temporary=compressed_path.with_name(compressed_path.name+'.tmp')
     temporary.write_bytes(compressed); temporary.replace(compressed_path)
+    packed_bytes = json.dumps(pack_snapshot(payload), separators=(',', ':'), allow_nan=False).encode()
+    packed_path = generation/'stocks.packed.json.gz'
+    temporary = packed_path.with_name(packed_path.name+'.tmp')
+    temporary.write_bytes(gzip.compress(packed_bytes, compresslevel=9, mtime=0))
+    temporary.replace(packed_path)
     with gzip.open(root/'ipo_screener.json.gz','rt') as handle:
         ipos=json.load(handle)
-    write_json(generation/'ipos.json',ipos.get('records',[]) if isinstance(ipos,dict) else ipos)
+    ipo_payload=ipos if isinstance(ipos,dict) else {'records':ipos}
+    ipo_bytes=json.dumps(ipo_payload,separators=(',', ':'),allow_nan=False).encode()
+    (generation/'ipos.json.gz').write_bytes(gzip.compress(ipo_bytes,compresslevel=9,mtime=0))
+    calendar_bytes=source_bytes.get('earnings_calendar.json.gz')
+    if calendar_bytes is not None:
+        calendar_path=generation/'earnings-calendar.json.gz'
+        temporary=calendar_path.with_name(calendar_path.name+'.tmp')
+        temporary.write_bytes(calendar_bytes); temporary.replace(calendar_path)
     all_fields=set().union(*(row.keys() for row in rows)) if rows else set()
     fundamental_fields=(all_fields-CORE_FIELDS-TECHNICAL_FIELDS)|{'symbol'}
     packs={
@@ -237,11 +258,15 @@ def _publish(root, output, archive_directory):
     advanced_published = publish_private_pack(private_root, revision, active_revision=active_revision)
     manifest={'revision':revision,'sessionDate':session,'publishedAt':datetime.now(timezone.utc).isoformat(),
               'schemaVersion':7,**checked_identity(),'totalStocks':len(rows),
-              'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json',
+              'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz',
               'datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz','packs':packs}
     if advanced_published:
         manifest['advanced']={'revision':revision,'session':session,'shards':private_manifest['shards'],
                               'maxSessions':private_manifest['maxSessions']}
+    if calendar_bytes is not None:
+        manifest['earningsCalendarUrl']=f'/data/revisions/{revision}/earnings-calendar.json.gz'
+    manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'
+    manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'
     manifest = complete_release(chart_root, output, manifest)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest

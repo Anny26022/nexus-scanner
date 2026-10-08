@@ -13,6 +13,7 @@ import {
 import type { SelectedBases,BaseRecord } from '../engine/baseConditions';
 import { BaseChartDialog } from './BaseChart';
 import { SymbolWithLogo } from './SymbolWithLogo';
+import { AnnouncementsPanel } from './AnnouncementsPanel';
 
 interface ResultsTableProps {
   data?: ScreenerRunResponse;
@@ -42,6 +43,7 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
   const [stageChoice,setStageChoice]=useState<keyof SelectedBases|undefined>();
   const stage=stageChoice&&baseStages.includes(stageChoice)?stageChoice:baseStages[0];
   const chartTrigger=useRef<HTMLButtonElement|null>(null);
+  const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -118,6 +120,8 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
       </div>
 
       {/* Main Results Table */}
+      {filingSymbol && <AnnouncementsPanel key={`${filingSymbol}:${data.immutableRevision}`} symbol={filingSymbol}
+        revision={data.immutableRevision} onClose={() => setFilingSymbol(null)} />}
       <div className="flex max-h-[calc(100svh-9rem)] min-h-[24rem] flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs">
         <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full text-left text-xs text-slate-800">
@@ -184,6 +188,8 @@ export const ResultsTable: React.FC<ResultsTableProps> = ({
                     <td className="py-3.5 px-4 font-sans">
                       <div className="flex items-center gap-1.5">
                         <button onClick={event=>{chartTrigger.current=event.currentTarget;setChartSymbol(row.symbol);}} aria-label={`Open ${row.symbol} chart`} className="rounded text-left hover:underline focus-visible:outline-2 focus-visible:outline-teal-600"><SymbolWithLogo symbol={row.symbol} name={row.name} /></button>
+                        <button type="button" aria-label={`View ${row.symbol} announcements`} onClick={() => setFilingSymbol(row.symbol)}
+                          className="text-[10px] text-teal-700 underline">Filings</button>
                         {row.isFno && (
                           <span className="text-[9px] font-semibold px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
                             F&O

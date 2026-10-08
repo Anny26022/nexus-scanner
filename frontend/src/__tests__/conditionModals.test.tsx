@@ -1,0 +1,116 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { ConditionCatalogModal } from '../components/ConditionCatalogModal';
+import { ScreenerModal } from '../components/ScreenerModal';
+import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+
+afterEach(cleanup);
+function active(conditionId: string) {
+  const definition = NEXUS_CONDITION_CATALOG.find(item => item.id === conditionId)!;
+  return {[conditionId]: {instanceId:'test', conditionId,
+    parameters:Object.fromEntries(definition.parameters.map(p => [p.id, p.defaultValue]))}};
+}
+
+it('lets a user edit and apply a valid convergence list in the catalog modal', () => {
+  const apply = vi.fn();
+  render(<ConditionCatalogModal isOpen onClose={vi.fn()} matchMode="all"
+    activeConditionsMap={active('MA_CONVERGENCE')} onApplyConditions={apply} />);
+  fireEvent.change(screen.getByPlaceholderText(/Search indicator/), {target:{value:'MA Convergence'}});
+  const periods = screen.getByRole('textbox', {name:'Periods'});
+  fireEvent.change(periods, {target:{value:'9,20,50'}});
+  const button = screen.getByRole('button', {name:/Apply Filters/});
+  expect(button).toBeEnabled();
+  fireEvent.click(button);
+  expect(apply.mock.calls[0][0].MA_CONVERGENCE.parameters.periods).toBe('9,20,50');
+});
+
+it.each(['catalog', 'screener'])('blocks a cleared zero-minimum field in the %s modal and allows recovery', modal => {
+  const apply = vi.fn();
+  const props = {isOpen:true, onClose:vi.fn(), matchMode:'all' as const,
+    activeConditionsMap:active('DIVERGENCE')};
+  if (modal === 'catalog') {
+    render(<ConditionCatalogModal {...props} onApplyConditions={apply} />);
+    fireEvent.change(screen.getByPlaceholderText(/Search indicator/), {target:{value:'Divergence'}});
+  } else {
+    render(<ScreenerModal {...props} onApply={apply} />);
+  }
+  const input = screen.getByRole('spinbutton', {name:'Pivot gap'});
+  fireEvent.change(input, {target:{value:''}});
+  const button = screen.getByRole('button', {name:modal === 'catalog' ? /Apply Filters/ : 'Apply'});
+  expect(button).toBeDisabled();
+  fireEvent.click(button);
+  expect(apply).not.toHaveBeenCalled();
+  fireEvent.change(input, {target:{value:'0'}});
+  expect(button).toBeEnabled();
+  fireEvent.click(button);
+  expect(apply.mock.calls[0][0].DIVERGENCE.parameters.maxBarDifference).toBe(0);
+});
+
+
+it.each([
+  ['DIVERGENCE', 'invalidateOnBreak', true],
+  ['DIVERGENCE', 'invalidateOnBreak', false],
+] as const)('edits %s boolean parameters and submits a boolean', (conditionId, parameterId, initial) => {
+  const apply = vi.fn();
+  const map = active(conditionId);
+  map[conditionId].parameters[parameterId] = initial;
+  const definition = NEXUS_CONDITION_CATALOG.find(item => item.id === conditionId)!;
+  const parameter = definition.parameters.find(item => item.id === parameterId)!;
+  render(<ConditionCatalogModal isOpen onClose={vi.fn()} matchMode="all"
+    activeConditionsMap={map} onApplyConditions={apply} />);
+  fireEvent.change(screen.getByPlaceholderText(/Search indicator/), {target:{value:definition.label}});
+  const input = screen.getByRole('checkbox', {name:parameter.label});
+  expect((input as HTMLInputElement).checked).toBe(initial);
+  fireEvent.click(input);
+  expect((input as HTMLInputElement).checked).toBe(!initial);
+  fireEvent.click(screen.getByRole('button', {name:/Apply Filters/}));
+  expect(apply.mock.calls[0][0][conditionId].parameters[parameterId]).toBe(!initial);
+});
+
+
+it('preserves the existing F&O select parameter contract', () => {
+  const apply = vi.fn();
+  const definition = NEXUS_CONDITION_CATALOG.find(item => item.id === 'misc_fno_only')!;
+  render(<ConditionCatalogModal isOpen onClose={vi.fn()} matchMode="all"
+    activeConditionsMap={active('misc_fno_only')} onApplyConditions={apply} />);
+  fireEvent.change(screen.getByPlaceholderText(/Search indicator/), {target:{value:definition.label}});
+  fireEvent.change(screen.getByRole('combobox', {name:'Status'}), {target:{value:'false'}});
+  fireEvent.click(screen.getByRole('button', {name:/Apply Filters/}));
+  expect(apply.mock.calls[0][0].misc_fno_only.parameters.isFno).toBe('false');
+});
+
+it('keeps independently edited screener rows across category switches and resets to defaults', () => {
+  const apply = vi.fn();
+  render(<ScreenerModal isOpen onClose={vi.fn()} matchMode="all"
+    activeConditionsMap={{}} onApply={apply} />);
+  // Editing an unchecked row still activates it, and editing another row must retain it.
+  fireEvent.change(screen.getByRole('spinbutton', {name:'Max P/E'}), {target:{value:'20'}});
+  fireEvent.change(screen.getByRole('spinbutton', {name:'Min RVOL Multiple'}), {target:{value:'2'}});
+  fireEvent.click(screen.getByRole('button', {name:'Fundamentals'}));
+  expect(screen.getByRole('spinbutton', {name:'Max P/E'})).toHaveValue(20);
+  fireEvent.click(screen.getByRole('button', {name:'All'}));
+  expect(screen.getByRole('spinbutton', {name:'Min RVOL Multiple'})).toHaveValue(2);
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  const submitted = apply.mock.calls[0][0];
+  expect(submitted.fund_pe_ratio.parameters.maxPe).toBe(20);
+  expect(submitted.mom_rvol.parameters.minRvol).toBe(2);
+  fireEvent.click(screen.getByRole('button', {name:'Reset'}));
+  expect(screen.getByRole('spinbutton', {name:'Max P/E'})).toHaveValue(30);
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  expect(apply.mock.calls[1][0]).toEqual({});
+});
+
+it('updates the linked breadth threshold when its memoized metric control changes', () => {
+  const apply = vi.fn();
+  render(<ScreenerModal isOpen onClose={vi.fn()} matchMode="all"
+    activeConditionsMap={active('MARKET_BREADTH')} onApply={apply} />);
+  const row = screen.getByRole('checkbox', {name:'Market Breadth Gate:'}).closest('div')!;
+  const threshold = within(row).getByRole('spinbutton', {name:'Value'});
+  expect(threshold).toHaveValue(50);
+  const metric = within(row).getAllByRole('combobox')[1];
+  fireEvent.change(metric, {target:{value:'advance_decline_ratio_5d'}});
+  expect(threshold).toHaveValue(1);
+  fireEvent.change(threshold, {target:{value:'2'}});
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  expect(apply.mock.calls[0][0].MARKET_BREADTH.parameters).toMatchObject({metric:'advance_decline_ratio_5d', value:2});
+});

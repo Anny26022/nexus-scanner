@@ -1,5 +1,9 @@
 import math
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+from edl_pipeline.schemas import SCREEN_METRICS
 
 from pipeline_utils import SCANX_FETCH_URL, fetch_scanx_data, resolve_path, save_json
 
@@ -17,6 +21,7 @@ DASHBOARD_FIELDS = [
     "Min15SMA100CurrentCandle", "Open", "High", "Low", "Volume", "BcClose", "Rmp", "PledgeBenefit",
     "PricePerchng6mon", "Sector", "TotalShares", "ShareCapital", "Exch", "Inst", "Seg", "idxlist", "Sid", "FnoFlag"
 ]
+DASHBOARD_FIELDS = list(dict.fromkeys([*DASHBOARD_FIELDS, *SCREEN_METRICS]))
 
 
 def build_master_map(stocks):

@@ -1,5 +1,8 @@
+import { unpackSnapshot } from './packedSnapshot';
 import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
+import { compileTextQuery } from '../engine/queryCompiler';
+import type { ExpressionNode } from '../types/screener';
 import { expressionPlan } from './capabilityRegistry';
 import { mergePacks, type PublicPackName, type PublicPacks } from './packStore';
 
@@ -25,7 +28,8 @@ async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
       data = JSON.parse(new TextDecoder().decode(bytes));
     } else throw new Error('Invalid compressed scanner snapshot');
   } else data = await response.json();
-  if (data.revision !== source.revision || !Array.isArray(data.stocks)
+  data = unpackSnapshot(data) as Snapshot;
+  if (!data || data.revision !== source.revision || !Array.isArray(data.stocks)
       || data.totalStocks !== data.stocks.length || !/^\d{4}-\d{2}-\d{2}$/.test(data.asOfDate)
       || (source.sessionDate && data.asOfDate !== source.sessionDate)) {
     throw new Error('Scanner snapshot revision/session mismatch');
@@ -54,8 +58,10 @@ export function createSnapshotEngine(loader = readSnapshot) {
     return promise;
   }
   return async (task: SnapshotTask): Promise<SnapshotResult> => {
+    if (task.type === 'screen' && task.request.textQuery?.trim()) task = {...task,request:{...task.request,
+      expressionTree:compileTextQuery(task.request.textQuery) as ExpressionNode,textQuery:undefined}};
     const names:PublicPackName[] = task.type === 'compare' ? ['core','technical','fundamentals']
-      : expressionPlan(task.request.expressionTree,Boolean(task.request.textQuery?.trim())).dependencies
+      : expressionPlan(task.request.expressionTree).dependencies
           .filter((name):name is PublicPackName => name !== 'advanced');
     const data = await load(task.source,names);
     if (task.type === 'screen') return {type:'screen',result:screenSnapshot(data,task.request),revision:data.revision,sessionDate:data.asOfDate};

@@ -363,6 +363,18 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
     condition = spec.get("condition") or spec.get("id")
     if condition not in CONDITION_REGISTRY and condition != "field_comparison":
         raise ValueError(f"Unsupported trend condition: {condition!r}")
+    if condition in {"indicator_compare", "ma_convergence", "supertrend", "divergence"}:
+        for key, kind in CONDITION_REGISTRY[condition]["inputs"].items():
+            if kind != "integer" or key not in spec:
+                continue
+            raw = spec[key]
+            try:
+                value = float(raw)
+                parsed = int(raw)
+            except (TypeError, ValueError, OverflowError):
+                raise ValueError(f"{key} must be an integer.") from None
+            if isinstance(raw, bool) or not np.isfinite(value) or not value.is_integer() or parsed != value:
+                raise ValueError(f"{key} must be an integer.")
     if frame.empty:
         return _unavailable(condition, "no_ohlcv_history")
 
@@ -384,7 +396,10 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         if right_name:
             right = indicator_series(frame, right_name, int(spec.get("right_period", 20)), float(spec.get("right_multiplier", 3))).shift(right_offset)
         else:
-            right = pd.Series(float(spec.get("right_value", 0)), index=frame.index)
+            fixed_value = float(spec.get("right_value", 0))
+            if not np.isfinite(fixed_value):
+                raise ValueError("Indicator Compare fixed target must be finite.")
+            right = pd.Series(fixed_value, index=frame.index)
         operation = str(spec.get("op", "ABOVE")).upper()
         valid = left.notna() & right.notna()
         if operation == "GREATER":
@@ -410,7 +425,10 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
     if condition == "ma_convergence":
         periods = spec.get("periods", (9, 20, 50, 200))
         if isinstance(periods, str):
-            periods = [part.strip() for part in periods.split(",") if part.strip()]
+            periods = [part.strip() for part in periods.split(",")]
+        if not isinstance(periods, (list, tuple)) or any(isinstance(period, bool) or not str(period).strip().isdigit()
+               or int(period) <= 0 for period in periods):
+            raise ValueError("MA convergence periods must be positive integers.")
         periods = [int(period) for period in periods]
         if len(periods) < 2 or len(set(periods)) != len(periods):
             raise ValueError("MA convergence needs at least two distinct periods.")
@@ -454,7 +472,8 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         if oscillator_name not in OSCILLATORS:
             raise ValueError(f"Unsupported divergence oscillator: {oscillator_name}")
         oscillator = indicator_series(frame, oscillator_name, int(spec.get("oscillator_period", 14)))
-        if oscillator.notna().sum() == 0:
+        oscillator = oscillator.where(np.isfinite(oscillator.to_numpy(dtype=float)))
+        if oscillator.notna().sum() < int(spec.get("pivot_left", 5)) + int(spec.get("pivot_right", 3)) + 1:
             return _unavailable(condition, "insufficient_history")
         flags, metadata = _divergence_events(frame, oscillator, spec)
         outcome = _event_result(condition, flags, spec.get("fired_within", 8), oscillator, frame=frame,

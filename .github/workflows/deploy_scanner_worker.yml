@@ -7,9 +7,9 @@ on:
       - 'cloudflare/scanner-worker/**'
       - 'frontend/src/engine/**'
       - 'frontend/src/api/snapshotScreen.ts'
+      - 'frontend/src/api/capabilityRegistry.ts'
       - 'frontend/src/data/**'
       - 'frontend/src/types/**'
-      - 'frontend/src/api/capabilityRegistry.ts'
       - 'frontend/scanner_bridge.py'
       - 'DO NOT DELETE EDL PIPELINE/src/edl_pipeline/scanner/**'
       - 'DO NOT DELETE EDL PIPELINE/screen_trend_conditions.py'
@@ -46,6 +46,6 @@ jobs:
           ALLOWED_FRONTEND_ORIGINS: ${{ vars.ALLOWED_FRONTEND_ORIGINS }}
           SCANNER_RELEASE_URL: ${{ vars.SCANNER_RELEASE_URL }}
         run: |
-          npx wrangler deploy \
+          npx wrangler deploy --config wrangler.toml \
             --var "ALLOWED_ORIGINS:${ALLOWED_FRONTEND_ORIGINS}" \
             --var "SCANNER_RELEASE_URL:${SCANNER_RELEASE_URL}"

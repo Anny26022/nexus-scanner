@@ -66,7 +66,7 @@ describe('scanner worker boundary',()=>{
     const env=environment() as any;
     env.SCANNER_DATA.get=vi.fn(async()=>({json:async()=>({...SCANNER_IDENTITY,engineVersion:'old',schemaVersion:7,revision:'a'.repeat(64),session:'2026-10-01'})}));
     vi.stubGlobal('caches',{default:{match:vi.fn(async()=>undefined)}});
-    const response=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',body:JSON.stringify({...SCANNER_IDENTITY,datasetRevision:'a'.repeat(64),asOfDate:'2026-10-01'})}),env,execution);
+    const response=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',body:JSON.stringify({...SCANNER_IDENTITY,datasetRevision:'a'.repeat(64),asOfDate:'2026-10-01',page:1,pageSize:15,universe:'mainboard',expressionTree:{type:'condition',condition:{conditionId:'FIELD_COMPARISON',parameters:{field:'close',comparison:'GREATER',value:100}}}})}),env,execution);
     expect(response.status).toBe(400);
     expect(env.SCANNER_DATA.get).toHaveBeenCalledTimes(1);
   });
@@ -134,7 +134,7 @@ it('runs a complete nested base preset and private metric through verified R2 sh
   expect(body.rows[0].bases.FORMING.current.rsRating).toBe(90);
   expect(body.rows[0].bases.FORMING.current.distanceEMA150).toBeUndefined();
   expect(get.mock.calls.some(([key])=>key.includes('base-history/'))).toBe(false);
-  expect(put).toHaveBeenCalledOnce();const reads=get.mock.calls.length;
+  expect(put).toHaveBeenCalledTimes(2);const reads=get.mock.calls.length;
   match.mockImplementation(async()=>response.clone() as any);
   const cached=await worker.fetch(request(),env,execution);expect(cached.status).toBe(200);expect(get).toHaveBeenCalledTimes(reads);
   match.mockImplementation(async()=>undefined);
@@ -151,6 +151,9 @@ it('runs a complete nested base preset and private metric through verified R2 sh
   expect(pageBody.matchCount).toBe(2);
   expect(pageBody.rows).toHaveLength(1);
   expect(pageBody.rows[0]).toMatchObject({symbol:'OTHER',close:80,marketCap:500,bases:{FORMING:{base:{depthPct:20}}}});
+  const baseOnlyResponse=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',body:JSON.stringify({...payload,expressionTree:leaf('BASE_METRIC',{stage:'FORMING',metric:'base.depthPct',comparison:'GREATER',value:10})})}),env,execution);
+  expect(baseOnlyResponse.status).toBe(200);
+  expect((await baseOnlyResponse.json() as any).rows.map((row:any)=>row.symbol)).toEqual(['OTHER','TEST']);
   const familyResponse=await worker.fetch(new Request('https://worker.example/v1/screens/run',{method:'POST',headers:{origin:'https://app.example'},body:JSON.stringify({...payload,expressionTree:{type:'group',operator:'any',children:[leaf('lib-nexus-multi-year-setup',{}),leaf('PRICE_CHANGE_PCT',{overDays:21,comparison:'ABOVE',pct:1000})]}})}),env,execution);
   expect(familyResponse.status).toBe(200);
   const familyBody=await familyResponse.json() as any;expect(familyBody.matchCount).toBe(2);

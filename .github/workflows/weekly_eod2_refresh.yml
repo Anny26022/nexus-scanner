@@ -279,6 +279,7 @@ jobs:
             DO NOT DELETE EDL PIPELINE/eod2_ohlcv_import_report.json
             DO NOT DELETE EDL PIPELINE/pipeline_report.json
             DO NOT DELETE EDL PIPELINE/pipeline_failure_report.json
+            DO NOT DELETE EDL PIPELINE/price_validation_report.json
             DO NOT DELETE EDL PIPELINE/data_quality.json
             DO NOT DELETE EDL PIPELINE/data_quality_failure.json
             reference/tijori/summary.json

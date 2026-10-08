@@ -47,10 +47,7 @@ def build_master_map(stocks):
             })
     return sorted(master_map, key=lambda x: x["Symbol"])
 
-def fetch_all_dhan_data():
-    output_file = resolve_path("dhan_data_response.json")
-    master_map_file = resolve_path("master_isin_map.json")
-
+def fetch_market_snapshot():
     # Payload as specified by the user
     # Trying a large count to get "all available" in one call as requested
     payload = {
@@ -68,10 +65,15 @@ def fetch_all_dhan_data():
             "sort": "Mcap"
         }
     }
+    return fetch_scanx_data(payload, timeout=30)
 
+
+def fetch_all_dhan_data():
+    output_file = resolve_path("dhan_data_response.json")
+    master_map_file = resolve_path("master_isin_map.json")
     print(f"Fetching data from {SCANX_FETCH_URL}...")
     try:
-        cleaned_data = fetch_scanx_data(payload, timeout=30)
+        cleaned_data = fetch_market_snapshot()
 
         if cleaned_data:
             save_json(output_file, cleaned_data)

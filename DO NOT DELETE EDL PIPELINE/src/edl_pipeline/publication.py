@@ -154,6 +154,10 @@ def main(phase="all", stage_path=None):
             cwd=stage, env=env,
         )
         report_path = stage / "pipeline_report.json"
+        # Preserve rejected raw quotes even when the temporary refresh fails.
+        price_report = stage / 'price_validation_report.json'
+        if price_report.is_file():
+            atomic_copy(price_report, destination / price_report.name)
         report = pipeline_utils.load_json(report_path, default={})
         if result.returncode != 0 or not config.fetch_ohlcv:
             report["published"] = False

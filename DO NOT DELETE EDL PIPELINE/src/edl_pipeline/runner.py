@@ -377,6 +377,11 @@ def main(config=None, phase="all"):
             )
             return 1
 
+        results['validate_market_quotes.py'] = run_script('validate_market_quotes.py', 'Phase 1', required=True)
+        if not results['validate_market_quotes.py'].ok:
+            write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
+            return 1
+
         results["fetch_fundamental_data.py"] = run_script("fetch_fundamental_data.py", "Phase 1", required=True)
         if not results["fetch_fundamental_data.py"].ok:
             print("\nCRITICAL: fetch_fundamental_data.py failed. Cannot continue.")

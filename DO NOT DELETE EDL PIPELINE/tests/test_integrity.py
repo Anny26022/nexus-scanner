@@ -391,10 +391,15 @@ class IntegrityTests(unittest.TestCase):
     def test_failed_worker_keeps_published_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/'all_indices_list.json').write_text('old')
-            with mock.patch('edl_pipeline.publication.pipeline_utils.BASE_DIR',str(root)), mock.patch('edl_pipeline.publication.subprocess.run',return_value=mock.Mock(returncode=1)):
+            def failed_worker(*args, **kwargs):
+                stage = Path(kwargs['env']['EDL_BASE_DIR'])
+                (stage / 'price_validation_report.json').write_text('{"errors":[{"symbol":"BI"}]}')
+                return mock.Mock(returncode=1)
+            with mock.patch('edl_pipeline.publication.pipeline_utils.BASE_DIR',str(root)), mock.patch('edl_pipeline.publication.subprocess.run',side_effect=failed_worker):
                 self.assertEqual(publish(),1)
             self.assertEqual((root/'all_indices_list.json').read_text(),'old')
             self.assertFalse(json.loads((root/'pipeline_failure_report.json').read_text())['published'])
+            self.assertEqual(json.loads((root/'price_validation_report.json').read_text())['errors'], [{'symbol':'BI'}])
 
     def test_quality_rejection_keeps_published_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:

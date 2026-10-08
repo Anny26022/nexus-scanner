@@ -81,6 +81,19 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("refresh_official_index_constituents.py", calls)
         self.assertIn("bulk_market_analyzer.py", calls)
 
+    def test_missing_completed_session_stops_before_universe_consumers(self):
+        def run(script, phase_label='', required=False):
+            return ScriptResult(script != 'fetch_nse_delivery_data.py', required)
+        with mock.patch('edl_pipeline.runner.run_script', side_effect=run) as scripts, \
+                mock.patch('edl_pipeline.runner.download_nse_listing_dates', return_value=True), \
+                mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(PipelineConfig()), 1)
+        called = [call.args[0] for call in scripts.call_args_list]
+        self.assertNotIn('filter_mainboard_universe.py', called)
+        self.assertNotIn('fetch_all_ohlcv.py', called)
+        self.assertTrue(scripts.call_args_list[-1].kwargs['required'])
+
     def test_fetch_lanes_overlap_but_keep_each_lane_ordered(self):
         barrier = threading.Barrier(2)
         completed = []
@@ -127,6 +140,8 @@ class RunnerTests(unittest.TestCase):
         expected_fetches = set(PHASE2_SCRIPTS) | set(OHLCV_FETCH_LANE) | {"fetch_indices_ohlcv.py", "fetch_nse_delivery_data.py"}
         for script in expected_fetches:
             self.assertEqual(calls.count(script), 1, script)
+        self.assertLess(calls.index('fetch_nse_delivery_data.py'), calls.index('filter_mainboard_universe.py'))
+        self.assertLess(calls.index('filter_mainboard_universe.py'), calls.index('fetch_fundamental_data.py'))
         lane_positions = [calls.index(script) for script in OHLCV_FETCH_LANE]
         self.assertEqual(lane_positions, sorted(lane_positions))
         self.assertGreater(calls.index("fetch_indices_ohlcv.py"), calls.index("fetch_all_indices.py"))
@@ -163,6 +178,27 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(set(seen), expected)
         self.assertEqual(len(seen), len(expected))
         self.assertEqual(len(captured), 3)
+
+    def test_no_ohlcv_fetches_session_once_before_filter_and_stops_if_it_fails(self):
+        for succeeds in (True, False):
+            calls = []
+            def run(script, phase_label='', required=False):
+                calls.append(script)
+                if script == 'fetch_nse_delivery_data.py':
+                    self.assertTrue(required)
+                return ScriptResult(succeeds or script != 'fetch_nse_delivery_data.py', required)
+            with self.subTest(succeeds=succeeds), tempfile.TemporaryDirectory() as directory, \
+                    mock.patch('edl_pipeline.runner.BASE_DIR', directory), \
+                    mock.patch('edl_pipeline.runner.run_script', side_effect=run), \
+                    mock.patch('edl_pipeline.runner.download_nse_listing_dates', return_value=True), \
+                    mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(PipelineConfig(fetch_ohlcv=False), phase='fetch'), int(not succeeds))
+            self.assertEqual(calls.count('fetch_nse_delivery_data.py'), 1)
+            if succeeds:
+                self.assertLess(calls.index('fetch_nse_delivery_data.py'), calls.index('filter_mainboard_universe.py'))
+            else:
+                self.assertNotIn('filter_mainboard_universe.py', calls)
 
     def test_split_refresh_executes_the_same_scripts_once_and_resumes_checks(self):
         calls = []

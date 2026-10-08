@@ -15,6 +15,7 @@ interface Manifest {
   sessionDate: string;
   datasetUrl: string;
   datasetGzipUrl?: string;
+  datasetPackedGzipUrl?: string;
   iposUrl: string;
   totalStocks: number;
   schemaVersion: number;
@@ -152,6 +153,7 @@ function validateManifest(value: unknown): Manifest {
   if (!manifest || !/^[a-f0-9]{64}$/.test(manifest.revision) || ![4, 5, 6, 7].includes(manifest.schemaVersion)
       || (manifest.datasetGzipUrl !== undefined && (!validUrl(manifest.datasetGzipUrl) || !manifest.datasetGzipUrl.endsWith('.json.gz')))
       || (manifest.earningsCalendarUrl !== undefined && (!validUrl(manifest.earningsCalendarUrl) || !manifest.earningsCalendarUrl.endsWith('.json.gz')))
+      || (manifest.datasetPackedGzipUrl !== undefined && (!validUrl(manifest.datasetPackedGzipUrl) || !manifest.datasetPackedGzipUrl.endsWith('.json.gz')))
       || !validDate(manifest.sessionDate) || !validUrl(manifest.datasetUrl) || !validUrl(manifest.iposUrl)
       || !Number.isInteger(manifest.totalStocks) || manifest.totalStocks < 0
       || (manifest.chartRevision !== undefined && !/^[a-f0-9]{64}$/.test(manifest.chartRevision))
@@ -179,7 +181,7 @@ async function snapshotSource(revision?: string): Promise<SnapshotSource> {
   if (!/^[a-f0-9]{64}$/.test(selected)) throw new Error('Invalid dataset revision');
   // Older revisions retain their original JSON URL; current releases advertise gzip.
   return { revision:selected,
-    url:selected === manifest.revision ? (typeof DecompressionStream !== 'undefined' ? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
+    url:selected === manifest.revision ? (typeof DecompressionStream !== 'undefined' ? manifest.datasetPackedGzipUrl ?? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
       : `/data/revisions/${selected}/stocks.json`,
     sessionDate:selected === manifest.revision ? manifest.sessionDate : undefined,
     packs:selected === manifest.revision && manifest.schemaVersion === 7 && typeof DecompressionStream !== 'undefined' ? manifest.packs : undefined };

@@ -90,6 +90,19 @@ def blank_aggregate(date):
 
 
 class BreadthV2Tests(unittest.TestCase):
+    def test_breadth_writers_use_lossless_compact_json(self):
+        from edl_pipeline.breadth.indices import _save_json as indices_writer
+        from edl_pipeline.breadth.pipeline import _save_json as breadth_writer
+        payload = {'name': '₹ index', 'records': [0, None, False, {'value': 1.25}]}
+        with tempfile.TemporaryDirectory() as folder:
+            for writer in (indices_writer, breadth_writer):
+                with self.subTest(writer=writer.__module__):
+                    path = Path(folder)/'output.json'
+                    writer(path, payload)
+                    raw = path.read_text()
+                    self.assertNotIn('\n', raw)
+                    self.assertEqual(json.loads(raw), payload)
+
     def setUp(self):
         self.methodology = BreadthMethodology()
 

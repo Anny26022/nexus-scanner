@@ -1,3 +1,4 @@
+import { unpackSnapshot } from './packedSnapshot';
 import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
 import { compileTextQuery } from '../engine/queryCompiler';
@@ -27,7 +28,8 @@ async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
       data = JSON.parse(new TextDecoder().decode(bytes));
     } else throw new Error('Invalid compressed scanner snapshot');
   } else data = await response.json();
-  if (data.revision !== source.revision || !Array.isArray(data.stocks)
+  data = unpackSnapshot(data) as Snapshot;
+  if (!data || data.revision !== source.revision || !Array.isArray(data.stocks)
       || data.totalStocks !== data.stocks.length || !/^\d{4}-\d{2}-\d{2}$/.test(data.asOfDate)
       || (source.sessionDate && data.asOfDate !== source.sessionDate)) {
     throw new Error('Scanner snapshot revision/session mismatch');

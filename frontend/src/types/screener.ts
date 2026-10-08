@@ -111,6 +111,10 @@ export interface StockRow {
   rocePct?: number | null;
   opmTtmPct?: number | null;
   debtToEquity?: number | null;
+  promoterHoldingPct?: number | null;
+  // Quarter-on-quarter changes in percentage points, not relative growth.
+  fiiChangePctQoq?: number | null;
+  diiChangePctQoq?: number | null;
   totalRevenueLakh?: number | null;
   nonCurrentAssetsLakh?: number | null;
   totalLiabilitiesLakh?: number | null;
@@ -124,7 +128,6 @@ export interface StockRow {
   historyMetadata?: Record<string, unknown> | null;
   financialMetadata?: Record<string, unknown> | null;
   dividendExDate?: string | null;
-  promoterHoldingPct?: number | null;
   publicHoldingPct?: number | null;
   numberOfShareholders?: number | null;
   faceValue?: number | null;
@@ -142,6 +145,35 @@ export interface StockRow {
   investingCashFlowLakh?: number | null;
   netCashFlowLakh?: number | null;
 
+  financialUnitsVersion?: number | null;
+  financialHistoryObservedOn?: string | null;
+  ttmRevenueCrore?: number | null;
+  ttmSalesCrore?: number | null;
+  ttmNetProfitCrore?: number | null;
+  ttmRevenueGrowthPct?: number | null;
+  ttmSalesGrowthPct?: number | null;
+  ttmNetProfitGrowthPct?: number | null;
+  opm5YearsAgoPct?: number | null;
+  debtToEquitySource?: string | null;
+  pbRatio?: number | null;
+  evEbitda?: number | null;
+  currentRatio?: number | null;
+  roaPct?: number | null;
+  cwipCrore?: number | null;
+  fixedAssetsCrore?: number | null;
+  borrowingsCrore?: number | null;
+  freeCashFlowCrore?: number | null;
+  financingCashFlowCrore?: number | null;
+  averageRoe3yPct?: number | null;
+  averageRoa3yPct?: number | null;
+  averageOpm5yPct?: number | null;
+  medianSalesGrowth5yPct?: number | null;
+  epsGrowth1yPct?: number | null;
+  epsCagr3yPct?: number | null;
+  revenueCagr3yPct?: number | null;
+  fiiHoldingPct?: number | null;
+  diiHoldingPct?: number | null;
+  industryPeRatio?: number | null;
   pegRatio?: number | null;
   salesGrowth5yPct?: number | null;
   epsLastYear?: number | null;

@@ -19,7 +19,8 @@ if str(SRC) not in sys.path:
 from fetch_bulk_block_deals import date_chunks, dedupe_deals
 from fetch_company_filings import dedupe_filings
 from fetch_corporate_actions import flatten_actions
-from fetch_dhan_data import build_master_map
+from fetch_dhan_data import build_master_map, DASHBOARD_FIELDS
+from fetch_fno_data import FNO_FIELDS
 from fetch_fno_expiry import flatten_expiry_data
 from enrich_fno_data import fetch_next_expiry, lookup_expiry, normalized_symbol
 from fetch_fno_lot_sizes import clean_lot_size_item
@@ -42,7 +43,7 @@ from edl_pipeline.transforms.events import (
     collect_upcoming_action_events,
 )
 from edl_pipeline.transforms.historical_breadth import build_breadth_rows, empty_breadth_arrays
-from edl_pipeline.schemas import REQUIRED_FINAL_FIELDS
+from edl_pipeline.schemas import REQUIRED_FINAL_FIELDS, SCREEN_METRICS
 
 
 class TransformTests(unittest.TestCase):
@@ -149,6 +150,7 @@ class TransformTests(unittest.TestCase):
             "bs_c": {"NON_CURRENT_LIABILITIES": "50", "TOTAL_EQUITY": "100"},
         }
         tech = {
+            "Debt2Eq": "0.44",
             "Ltp": "100",
             "Open": "98",
             "High": "102",
@@ -188,7 +190,7 @@ class TransformTests(unittest.TestCase):
         self.assertEqual(result["YoY % Net Profit Latest"], 400.0)
         self.assertEqual(result["QoQ % PBT Latest"], 100.0)
         self.assertAlmostEqual(result["Sales Growth 5 Years(%)"], 14.87, places=2)
-        self.assertIsNone(result["D/E"])
+        self.assertEqual(result["D/E"], 0.44)
         self.assertEqual(result["Profit Before Tax(in Lakhs)"], 4000)
         self.assertEqual(result["Total Tax Expenses(in Lakhs)"], 1000)
         self.assertEqual(result["PEG"], 0.2)
@@ -730,6 +732,81 @@ class EarningsCalendarTests(unittest.TestCase):
             self.assertEqual(fetch_calendar(session), {"records": []})
         self.assertEqual(session.get.call_count, 2)
         sleep.assert_called_once()
+
+class ScanxMetricsTests(unittest.TestCase):
+    def fixture(self):
+        # Captured ScanX Reliance values. Amounts are crore; TAX is percent.
+        return {
+            "Symbol": "RELIANCE", "incomeStat_cq": {
+                "YEAR": "202606", "REVENUE": "316018", "SALES": "309468", "EXPENSES": "261951",
+                "PROFIT_BEFORE_TAX": "30630", "NET_PROFIT": "23196",
+                "TAX": "24.27", "TAX_PAYMENT_ABSOLUTE": "7434", "EPS": "17.14",
+            },
+            "TTM_cy": {"EPS": "59.69", "OPM": "16.4"},
+            "bs_c": {"TOTAL_ASSETS": "2178140", "TOTAL_EQUITY": "1085866",
+                     "NON_CURRENT_LIABILITIES": "551020", "CWIP": "237686", "FIXED_ASSETS": "1124795"},
+            "cF_c": {"OPERATING_ACTIVITIES": "192113", "INVESTING_ACTIVITIES": "-101089",
+                     "FINANCING_ACTIVITIES": "-51549", "NET_CASH_FLOW": "39475"},
+            "sHp": {"PROMOTER": "50.48", "FII": "17.20|18.67", "DII": "21.19|20.55"},
+        }
+
+    def test_statement_amounts_are_lakh_and_tax_uses_absolute_amount(self):
+        stock = canonicalize_stock(analyze_stock(self.fixture(), {"Debt2Eq": 0.44}, {}, {}))
+        self.assertEqual(stock["total_income_in_lakhs"], 31601800)
+        self.assertEqual(stock["total_tax_expenses_in_lakhs"], 743400)
+        self.assertEqual(stock["total_assets_in_lakhs"], 217814000)
+        self.assertEqual(stock["operating_cash_flow_in_lakhs"], 19211300)
+        self.assertEqual(stock["investing_cash_flow_in_lakhs"], -10108900)
+        self.assertEqual(stock["eps_ttm"], 59.69)
+        self.assertEqual(stock["operating_margin_ttm_percent"], 16.4)
+        self.assertEqual(stock["cwip_crore"], 237686)
+        self.assertEqual(stock["fixed_assets_crore"], 1124795)
+        self.assertEqual(stock["fii_holding_percent"], 17.2)
+        self.assertEqual(stock["financial_units_version"], 1)
+
+    def test_debt_equity_uses_provider_value_or_stays_unavailable(self):
+        for source, expected in ((0.44, 0.44), (0, 0), (None, None), (float('inf'), None)):
+            stock = canonicalize_stock(analyze_stock(self.fixture(), {"Debt2Eq": source}, {}, {}))
+            self.assertEqual(stock["debt_to_equity"], expected)
+            self.assertEqual(stock["debt_to_equity_source"], "SCANX_Debt2Eq" if expected is not None else None)
+        # Missing absolute tax must not fall back to the percentage field.
+        item = self.fixture(); item["incomeStat_cq"].pop("TAX_PAYMENT_ABSOLUTE")
+        self.assertIsNone(analyze_stock(item, {}, {}, {})["Total Tax Expenses(in Lakhs)"])
+
+    def test_reported_borrowings_fallback_remains_available(self):
+        item = self.fixture()
+        item["bs_c"]["TOTAL_BORROWINGS"] = "108586.6"
+        raw = analyze_stock(item, {}, {}, {})
+        self.assertEqual(raw["debt_to_equity"], raw["D/E"])
+        fallback = canonicalize_stock(raw)
+        self.assertEqual(fallback["debt_to_equity"], 0.1)
+        self.assertEqual(fallback["borrowings_crore"], 108586.6)
+        self.assertEqual(fallback["debt_to_equity_source"], "TOTAL_BORROWINGS/TOTAL_EQUITY")
+        reported = analyze_stock(item, {"Debt2Eq": 0.441234, "Borrowings": 999}, {}, {})
+        self.assertEqual(reported["debt_to_equity"], reported["D/E"])
+        self.assertEqual(canonicalize_stock(reported)["debt_to_equity"], 0.441234)
+        self.assertEqual(reported["borrowings_crore"], 999)
+
+    def test_financing_cash_flow_uses_verified_provider_spelling(self):
+        item = self.fixture()
+        item["cF_c"] = {}
+        stock = analyze_stock(item, {"FinanacingCashFlow": -51549}, {}, {})
+        self.assertEqual(stock["financing_cash_flow_crore"], -51549)
+
+    def test_verified_fields_survive_fetch_and_normalization(self):
+        for fields in (DASHBOARD_FIELDS, FNO_FIELDS):
+            self.assertTrue(set(SCREEN_METRICS).issubset(fields))
+            self.assertEqual(len(fields), len(set(fields)))
+        stock = canonicalize_stock(analyze_stock(self.fixture(), {
+            "Pb": 1.8247, "EVEBITDA": 24.91, "CurrentRto": 0.76,
+            "FreeCashFlow": 69197, "Year3CAGREPSGrowth": 5.07645,
+        }, {}, {}))
+        self.assertEqual(stock["pb_ratio"], 1.8247)
+        self.assertEqual(stock["ev_ebitda"], 24.91)
+        self.assertEqual(stock["current_ratio"], 0.76)
+        self.assertEqual(stock["free_cash_flow_crore"], 69197)
+        self.assertEqual(stock["eps_cagr_3y_percent"], 5.07645)
+        self.assertIsNone(stock["average_roe_3y_percent"])
 
 
 if __name__ == "__main__":

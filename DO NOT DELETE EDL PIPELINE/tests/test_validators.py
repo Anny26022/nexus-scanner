@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -85,6 +86,9 @@ class ValidatorTests(unittest.TestCase):
             json_path = Path(tmp) / "sample.json"
             gzip_path = Path(tmp) / "sample.json.gz"
             save_json(json_path, {"a": 1})
+            self.assertEqual(json_path.read_text(), '{"a":1}')
+            save_json(json_path, {"a": 1}, indent=4)
+            self.assertIn('\n', json_path.read_text())
             raw_size, gz_size = compress_file(json_path, gzip_path)
 
             self.assertEqual(load_json(json_path), {"a": 1})
@@ -93,6 +97,40 @@ class ValidatorTests(unittest.TestCase):
 
         self.assertGreater(raw_size, 0)
         self.assertGreater(gz_size, 0)
+
+    def test_compression_uses_bounded_reads_and_preserves_every_byte(self):
+        payload = b'0123456789abcdef' * (160 * 1024)
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'large.json'
+            destination = Path(tmp) / 'large.json.gz'
+            source.write_bytes(payload)
+            original_open = Path.open
+            reads = []
+
+            def bounded_open(path, *args, **kwargs):
+                handle = original_open(path, *args, **kwargs)
+                if path != source:
+                    return handle
+                guarded = mock.MagicMock(wraps=handle)
+                guarded.__enter__.return_value = guarded
+                guarded.__exit__.side_effect = lambda *args: handle.close()
+
+                def read(size=-1):
+                    self.assertGreater(size, 0)
+                    self.assertLessEqual(size, 1024 * 1024)
+                    reads.append(size)
+                    return handle.read(size)
+
+                guarded.read.side_effect = read
+                return guarded
+
+            with mock.patch.object(Path, 'open', bounded_open):
+                raw_size, gz_size = compress_file(source, destination)
+            self.assertEqual(gzip.decompress(destination.read_bytes()), payload)
+            self.assertEqual(raw_size, len(payload))
+            self.assertEqual(gz_size, destination.stat().st_size)
+            self.assertGreater(len(reads), 2)
+            self.assertEqual(list(Path(tmp).glob('*.tmp')), [])
 
 
 if __name__ == "__main__":

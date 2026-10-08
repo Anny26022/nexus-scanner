@@ -85,6 +85,7 @@ jobs:
 
       - name: Run Pipeline
         env:
+          PYTHONUNBUFFERED: '1'
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
           EDL_CHART_STORAGE: r2
           EDL_SCANNER_STORAGE: r2

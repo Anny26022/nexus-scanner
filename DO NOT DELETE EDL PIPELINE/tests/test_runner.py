@@ -189,6 +189,21 @@ class RunnerTests(unittest.TestCase):
         self.assertNotIn('filter_mainboard_universe.py', [call.args[0] for call in run.call_args_list])
         self.assertTrue(run.call_args.kwargs['required'])
 
+    def test_invalid_quotes_stop_before_enrichment_and_classification(self):
+        def result(script, phase_label='', required=False):
+            return ScriptResult(script != 'validate_market_quotes.py', required)
+        with mock.patch('edl_pipeline.runner.run_script', side_effect=result) as run, \
+                mock.patch('edl_pipeline.runner.download_nse_listing_dates', return_value=True), \
+                mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(PipelineConfig()), 1)
+        scripts = [call.args[0] for call in run.call_args_list]
+        self.assertLess(scripts.index('filter_mainboard_universe.py'), scripts.index('validate_market_quotes.py'))
+        for script in ('fetch_fundamental_data.py', 'fetch_company_filings.py',
+                       'bulk_market_analyzer.py', 'build_filing_history_artifact.py', 'build_chart_artifacts.py'):
+            self.assertNotIn(script, scripts)
+        self.assertTrue(run.call_args.kwargs['required'])
+
     def test_rebalanced_lanes_keep_filings_separate_and_fetches_unique(self):
         captured = {}
         def lanes(groups):

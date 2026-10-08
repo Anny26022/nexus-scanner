@@ -93,6 +93,7 @@ jobs:
 
       - name: Run Pipeline with adjusted-history bootstrap
         env:
+          PYTHONUNBUFFERED: '1'
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
           EDL_CHART_STORAGE: r2
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}

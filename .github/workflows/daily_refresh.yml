@@ -212,7 +212,8 @@ jobs:
           git add reference/index-constituent-mappings.json.gz
           git add reference/index-constituent-mappings.manifest.json
           git add frontend/public/data/current.json frontend/public/data/revisions
-          git commit -m "Automated Daily Data Refresh [skip ci]" || echo "No changes to commit"
+          # Published frontend data needs a Cloudflare build; do not suppress it with [skip ci].
+          git commit -m "Automated Daily Data Refresh" || echo "No changes to commit"
           git push
 
       - name: Upload Refresh Diagnostics

@@ -235,7 +235,9 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
     metadata_rows = [{key: row[key] for key in index_keys if key in row}
                      if row.get('historyAligned') is True and row['symbol'] in symbols
                      else row for row in rows or []]
-    metadata_data = gzip.compress(_json_bytes({"stocks": metadata_rows}), compresslevel=6, mtime=0)
+    metadata_data = gzip.compress(_json_bytes({"stocks": metadata_rows,
+        "nativeRowsInAuxiliary": any(row.get('historyAligned') is True and row['symbol'] in symbols
+                                     for row in rows or [])}), compresslevel=6, mtime=0)
     _write(target / "metadata.json.gz", metadata_data)
     objects.append({"key": "metadata.json.gz", "bytes": len(metadata_data), "sha256": _sha(metadata_data), "encoding": "gzip"})
 

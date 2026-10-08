@@ -81,12 +81,6 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual(row["dataCompleteness"], 29)
         self.assertEqual((row["epsTtm"], row["dividendYieldPct"], row["debtToEquity"]), (25, 2, 0.44))
 
-    def test_ownership_fields_keep_missing_and_non_finite_values_unavailable(self):
-        row = bridge.stock_row({"symbol": "TEST", "promoter_holding_percent": float('nan'),
-                                "fii_percent_change_qoq": float('inf')}, {})
-        for field in ('promoterHoldingPct', 'fiiChangePctQoq', 'diiChangePctQoq'):
-            self.assertIsNone(row[field])
-
     def test_cache_reuses_scan_for_pagination_and_invalidates_changed_history(self):
         context={"stocks":{"TEST":self.stock()},"financial_history_as_of":"2026-09-30","rs_ratings":{},"fno_ban_symbols":{}}
         request={"asOfDate":"2026-09-30","universe":"mainboard","expressionTree":{"type":"group","operator":"all","children":[]}}

@@ -14,7 +14,7 @@ import { NEXUS_CONDITION_CATALOG } from '../../../frontend/src/data/conditionCat
 
 interface Env { SCANNER_DATA:R2Bucket; ALLOWED_ORIGINS:string; SCANNER_RELEASE_URL:string }
 interface PrivateManifest {schemaVersion:number;engineVersion:string;conditionContractHash:string;revision:string;session:string;symbols:number;shards:number;maxSessions:number;limits:{maxLeaves:number;maxDepth:number;maxPageSize:number;maxRequestBytes:number};objects:Array<{key:string;bytes:number;sha256:string;symbols?:number}>}
-interface Metadata {stocks:SnapshotStock[]}
+interface Metadata {stocks:SnapshotStock[];nativeRowsInAuxiliary?:boolean}
 interface Auxiliary {setupCandidates?:Record<string,import('../../../frontend/src/engine/baseConditions').BaseRecord[]>;setupCandidateHistoryComplete?:Record<string,boolean>;turnover?:Record<string,NonNullable<AdvancedContext['turnover']>>;stocks?:Record<string,SnapshotStock>;bases?:Record<string,import('../../../frontend/src/engine/baseConditions').BaseRecord[]>;delivery:Record<string,NonNullable<AdvancedContext['delivery']>>;earnings:Record<string,Array<Record<string,unknown>>>;breadth?:Record<string,Record<string,number|null>>}
 
 class ScannerBusyError extends Error {}
@@ -178,7 +178,7 @@ async function run(request:ScreenerRunRequest,expression:EngineExpression,env:En
           .filter(([key])=>!leaves.some(condition=>condition.isNegated&&(condition.instanceId??condition.conditionId)===key))
           .map(([key,record])=>[key,String(record.id)]))} : {stock})});
   };
-  if(needsHistory) {
+  if(needsHistory || metadata.nativeRowsInAuxiliary) {
     const indices=request.universe==='mainboard' ? Array.from({length:manifest.shards},(_,index)=>index) : await selectedShards(eligible.map(row=>row.symbol),manifest.shards);
     for(let batch=0;batch<indices.length;batch+=1) {
       const decoded=await Promise.all(indices.slice(batch,batch+1).map(async shard=>{

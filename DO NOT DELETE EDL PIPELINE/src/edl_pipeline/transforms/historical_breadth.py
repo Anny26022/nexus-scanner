@@ -61,6 +61,7 @@ def empty_breadth_arrays(num_days):
 
 def prepare_stock_history(csv_path, timeline):
     df = pd.read_csv(csv_path)
+    original = df
     if df.empty or len(df) < 5:
         return None
 
@@ -68,7 +69,7 @@ def prepare_stock_history(csv_path, timeline):
     if df.empty:
         return None
 
-    full_df = pd.read_csv(csv_path)
+    full_df = original
     full_df["SMA_10"] = full_df["Close"].rolling(10).mean()
     full_df["SMA_20"] = full_df["Close"].rolling(20).mean()
     full_df["SMA_50"] = full_df["Close"].rolling(50).mean()
@@ -82,36 +83,36 @@ def prepare_stock_history(csv_path, timeline):
 
 
 def update_breadth_arrays(analysis_df, date_to_idx, arrays):
-    for _, row in analysis_df.iterrows():
-        idx = date_to_idx.get(row["Date"])
+    for row in analysis_df.itertuples(index=False):
+        idx = date_to_idx.get(row.Date)
         if idx is None:
             continue
 
-        if row["Close"] > row["Prev_Close"]:
+        if row.Close > row.Prev_Close:
             arrays["advances"][idx] += 1
-        if row["Close"] < row["Prev_Close"]:
+        if row.Close < row.Prev_Close:
             arrays["declines"][idx] += 1
 
-        if row["Close"] > row["SMA_200"]:
+        if row.Close > row.SMA_200:
             arrays["above_200ma"][idx] += 1
-        if row["Close"] > row["SMA_50"]:
+        if row.Close > row.SMA_50:
             arrays["above_50ma"][idx] += 1
-        if row["Close"] > row["SMA_20"]:
+        if row.Close > row.SMA_20:
             arrays["above_20ma"][idx] += 1
-        if row["Close"] > row["SMA_10"]:
+        if row.Close > row.SMA_10:
             arrays["above_10ma"][idx] += 1
 
-        if row["Daily_Ret"] >= 4:
+        if row.Daily_Ret >= 4:
             arrays["up_4pc"][idx] += 1
-        if row["Daily_Ret"] <= -4:
+        if row.Daily_Ret <= -4:
             arrays["down_4pc"][idx] += 1
 
-        if row["High"] >= row["H_52W"]:
+        if row.High >= row.H_52W:
             arrays["high_52w"][idx] += 1
-        if row["Low"] <= row["L_52W"]:
+        if row.Low <= row.L_52W:
             arrays["low_52w"][idx] += 1
 
-        if row["Volume"] > row["Vol_SMA_20"]:
+        if row.Volume > row.Vol_SMA_20:
             arrays["vol_plus"][idx] += 1
         else:
             arrays["vol_minus"][idx] += 1

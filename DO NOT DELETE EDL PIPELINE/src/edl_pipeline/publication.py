@@ -9,6 +9,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 
 import pipeline_utils
@@ -168,7 +169,9 @@ def main(phase="all", stage_path=None):
             return result.returncode
         if phase == "fetch":
             return 0
+        started = time.perf_counter()
         quality = inspect_publication(stage)
+        print(f'Publication quality elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         save_json(stage / "data_quality.json", quality)
         report["quality_errors"] = quality["errors"]
         report["published"] = not quality["errors"]
@@ -180,8 +183,10 @@ def main(phase="all", stage_path=None):
             return 1
         save_json(report_path, report)
         names = [spec.path for spec in FINAL_ARTIFACT_SPECS] + ["data_quality.json", "pipeline_report.json"]
+        started = time.perf_counter()
         promote(stage, destination, names, directories=("chart_artifacts",),
                 after=lambda: publish_frontend(destination))
+        print(f'Promotion and frontend publication elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         print("Published validated dataset and per-symbol data_quality.json.")
         if stage_path is not None:
             shutil.rmtree(stage)

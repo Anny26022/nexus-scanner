@@ -15,6 +15,10 @@ import json
 from pathlib import Path
 import shutil
 import sys
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, wait, FIRST_COMPLETED
+import os
+from multiprocessing import get_context
+from functools import lru_cache
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -24,6 +28,7 @@ if str(SRC) not in sys.path:
 from pipeline_utils import BASE_DIR, load_json, save_json
 from filing_classification import VERSION, classify_filings, classify_corporate_action
 from announcement_artifacts import build_announcements, put_object
+from json_records import record_artifact
 
 
 # HVE is the one all-history record.  Twenty quarters gives five years of
@@ -51,7 +56,11 @@ def _artifact(root: Path, name: str, default):
 
 
 def _date(value):
-    value = str(value or "")[:10]
+    return _parsed_date(str(value or "")[:10])
+
+
+@lru_cache(maxsize=16384)
+def _parsed_date(value):
     try:
         return datetime.strptime(value, "%Y-%m-%d").date().isoformat()
     except ValueError:
@@ -166,6 +175,70 @@ def _market_news(root, as_of):
     return events
 
 
+def _chart_object(task):
+    root, objects, symbol, as_of, actions, earnings, news = task
+    candles = _load_candles(root / "ohlcv_data" / f"{symbol}.csv", as_of)
+    payload = {
+        "schemaVersion": 2, "symbol": symbol,
+        "historyStartDate": candles[0]["date"] if candles else None,
+        "candles": candles, "volumeEvents": _volume_events(candles),
+        "corporateActions": [{**row, "classification": classify_corporate_action(row)} for row in actions if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
+        "earnings": [row for row in earnings if _date(row.get("filing_date")) and row["filing_date"] <= as_of],
+        "marketNews": sorted(news, key=lambda row: row["date"], reverse=True)[:50],
+    }
+    return symbol, put_object(objects, payload)
+
+
+def _chart_chunk(tasks):
+    return [_chart_object(task) for task in tasks]
+
+
+def _parallel_chart_objects(tasks, workers, announcement=None):
+    """Bound queued work and notice failures independently of result order."""
+    executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'))
+    chunks = iter(enumerate(tasks[start:start + 8] for start in range(0, len(tasks), 8)))
+    pending, completed = {}, {}
+    def refill():
+        while len(pending) < 2 * workers:
+            if announcement is not None and announcement.done():
+                announcement.result()
+            item = next(chunks, None)
+            if item is None:
+                break
+            index, chunk = item
+            pending[executor.submit(_chart_chunk, chunk)] = index
+    try:
+        refill()
+        while pending:
+            waiting = set(pending)
+            if announcement is not None:
+                if announcement.done():
+                    announcement.result()
+                else:
+                    waiting.add(announcement)
+            done, _ = wait(waiting, return_when=FIRST_COMPLETED)
+            if announcement is not None and announcement.done():
+                announcement.result()
+                done.discard(announcement)
+            for future in done:
+                index = pending.pop(future)
+                completed[index] = future.result()
+            refill()
+    except BaseException:
+        for future in pending:
+            future.cancel()
+        # Running chunks cannot be cancelled safely: await only this bounded
+        # window, not the whole universe, before allowing a retry to reuse tmp.
+        executor.shutdown(wait=True, cancel_futures=True)
+        for future in pending:
+            if not future.cancelled() and future.exception() is not None:
+                print(f'Additional chart worker failure: {future.exception()}', file=sys.stderr)
+        raise
+    else:
+        executor.shutdown(wait=True)
+    return [item for index in sorted(completed) for item in completed[index]]
+
+
 def main() -> int:
     root = Path(BASE_DIR)
     stocks = _artifact(root, "all_stocks_fundamental_analysis.json", [])
@@ -178,7 +251,8 @@ def main() -> int:
         return 1
     actions = _by_symbol(_records(_artifact(root, "corporate_action_ledger.json", {})))
     earnings = _by_symbol(_records(_artifact(root, "quarterly_financial_history.json", {})))
-    filing_history = _artifact(root, "filing_history.json", {})
+    filing_path = root / 'filing_history.json'
+    filing_history = record_artifact(filing_path) if filing_path.exists() else _artifact(root, "filing_history.json", {})
     news = _market_news(root, as_of)
     output = root / "chart_artifacts"
     temporary = root / ".chart_artifacts.tmp"
@@ -187,24 +261,32 @@ def main() -> int:
     objects = temporary / "objects"
     symbols = {str(stock.get("Symbol") or stock.get("symbol") or "").upper() for stock in stocks}
     symbols.discard("")
-    announcements = build_announcements(filing_history, objects, symbols, as_of)
     chart_objects = {}
     count = 0
+    tasks = []
     for stock in stocks:
         symbol = str(stock.get("Symbol") or stock.get("symbol") or "").upper()
         if not symbol:
             continue
-        candles = _load_candles(root / "ohlcv_data" / f"{symbol}.csv", as_of)
-        payload = {
-            "schemaVersion": 2, "symbol": symbol,
-            "historyStartDate": candles[0]["date"] if candles else None,
-            "candles": candles, "volumeEvents": _volume_events(candles),
-            "corporateActions": [{**row, "classification": classify_corporate_action(row)} for row in actions[symbol] if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
-            "earnings": [row for row in earnings[symbol] if _date(row.get("filing_date")) and row["filing_date"] <= as_of],
-            "marketNews": sorted(news[symbol], key=lambda row: row["date"], reverse=True)[:50],
-        }
-        chart_objects[symbol] = put_object(objects, payload)
-        count += 1
+        tasks.append((root, objects, symbol, as_of, actions[symbol], earnings[symbol], news[symbol]))
+    # Reserve one core for announcement processing instead of stacking two
+    # unrestricted pools. Parent assembly stays ordered and publication waits
+    # for both branches, including any exception in the announcement iterator.
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix='announcements') as background:
+        announcement = background.submit(build_announcements, filing_history, objects, symbols, as_of,
+                                          cache=root / 'filing_history_data/object_cache')
+        cpus = os.cpu_count() or 1
+        workers = max(1, min(2, cpus - 1))
+        if cpus > 1 and len(tasks) >= 32:
+            chart_objects.update(_parallel_chart_objects(tasks, workers, announcement))
+        else:
+            for task in tasks:
+                if announcement.done():
+                    announcement.result()
+                symbol, digest = _chart_object(task)
+                chart_objects[symbol] = digest
+        announcements = announcement.result()
+    count = len(tasks)
     index = {"schemaVersion": 2, "asOfDate": as_of, "symbols": count,
              "chartObjects": chart_objects, "announcements": announcements,
              "retention": {"highestEver": "all available history", "quarterlyQuarters": QUARTERLY_EVENT_LIMIT}}

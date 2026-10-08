@@ -24,6 +24,20 @@ from pipeline_utils import load_json, save_json
 
 
 class FilingHistoryTests(unittest.TestCase):
+    def test_streamed_history_fingerprint_keeps_existing_cache_keys(self):
+        rows = [{'caption': '₹😃', 'value': -0.0, 'nested': [1e100, None]},
+                {'documentExtraction': {'status': 'failed', 'attemptedAt': 'today', 'error': 'offline',
+                                        'pages': [{'page': 1, 'text': 'Evidence'}]}}]
+        original = [{**row, 'documentExtraction': {key: value for key, value in row['documentExtraction'].items()
+                                                  if key not in {'attemptedAt', 'error'}}}
+                    if isinstance(row.get('documentExtraction'), dict) else row for row in rows]
+        before = copy.deepcopy(rows)
+        self.assertEqual(build_filing_history_artifact.history_fingerprint(rows),
+                         build_filing_history_artifact.fingerprint(original))
+        self.assertEqual(build_filing_history_artifact.history_fingerprint([]),
+                         build_filing_history_artifact.fingerprint([]))
+        self.assertEqual(rows, before)
+
     def test_classifier_matches_frozen_version_contract(self):
         fixture = load_json(ROOT / 'tests/fixtures/filing_classification_contract.json')
         self.assertEqual(build_filing_history_artifact.VERSION, fixture['version'],

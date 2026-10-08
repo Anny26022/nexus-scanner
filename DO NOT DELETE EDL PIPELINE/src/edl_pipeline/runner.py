@@ -17,6 +17,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from pipeline_utils import BASE_DIR, compress_file, save_json
+from filing_archives import prepare_filing_archives
 import pipeline_utils
 
 from .artifacts import (
@@ -141,22 +142,26 @@ def run_script_lanes(lanes):
         return {name: futures[name].result() for name in lanes}
 
 
-def compress_output(include_ohlcv_derived=True):
+def compress_output(include_ohlcv_derived=True, prepared=None):
     """Compress final JSONs to .json.gz and return raw/gz byte sizes."""
     total_raw = 0
     total_gz = 0
 
-    for filename, output_name in FILES_TO_COMPRESS.items():
-        if not include_ohlcv_derived and filename in OHLCV_DERIVED_FILES:
-            continue
-        print(f"  Compressing {filename}...", flush=True)
-        raw_size, gz_size = compress_file(filename, output_name)
-        if raw_size:
-            total_raw += raw_size
-            total_gz += gz_size
-            print(f"  OK {output_name} ({gz_size / (1024 * 1024):.1f} MB)", flush=True)
-        else:
-            print(f"  WARNING: {filename} not found to compress.")
+    files = [(name, output) for name, output in FILES_TO_COMPRESS.items()
+             if include_ohlcv_derived or name not in OHLCV_DERIVED_FILES]
+    # Independent files retain their serializer, compression level and atomic
+    # replacement. Report results in declaration order.
+    with ThreadPoolExecutor(max_workers=min(2, os.cpu_count() or 1)) as executor:
+        futures = [(prepared or {}).get(name) or executor.submit(compress_file, name, output)
+                   for name, output in files]
+        for (filename, output_name), future in zip(files, futures):
+            raw_size, gz_size = future.result()
+            if raw_size:
+                total_raw += raw_size
+                total_gz += gz_size
+                print(f"  OK {output_name} ({gz_size / (1024 * 1024):.1f} MB)", flush=True)
+            else:
+                print(f"  WARNING: {filename} not found to compress.")
 
     ratio = (1 - total_gz / total_raw) * 100 if total_raw > 0 else 0
     print(
@@ -164,6 +169,15 @@ def compress_output(include_ohlcv_derived=True):
         f"{total_gz / (1024 * 1024):.1f} MB ({ratio:.0f}% reduction)"
     )
     return total_raw, total_gz
+
+
+def prepare_filing_output():
+    """Hide filing compression/archival behind independent stock enrichment."""
+    started = time.perf_counter()
+    sizes = compress_file('filing_history.json', FILES_TO_COMPRESS['filing_history.json'])
+    prepare_filing_archives(Path(BASE_DIR), Path(BASE_DIR) / '.filing_archives')
+    print(f'  Filing compression and archives elapsed: {time.perf_counter() - started:.2f}s', flush=True)
+    return sizes
 
 
 def download_nse_listing_dates():
@@ -489,19 +503,34 @@ def main(config=None, phase="all"):
 
     # Start best-effort work only after the fail-fast base build succeeds;
     # executor shutdown cannot then delay reporting a base-build failure.
-    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="edl-reference") as executor:
+    prepared = {}
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="edl-prepare") as preparation, \
+            ThreadPoolExecutor(max_workers=2, thread_name_prefix="edl-build") as executor:
+        # Both consume completed fetch inputs and write separate artifacts.
+        # Neither reads or mutates the stock snapshot being enriched below.
+        def build_independent(name):
+            result = run_script(name, "Build / independent", required=True)
+            if name == 'build_filing_history_artifact.py' and result.ok and (Path(BASE_DIR) / 'filing_history.json').is_file():
+                prepared['filing_history.json'] = preparation.submit(prepare_filing_output)
+            return result
+        independent = {
+            name: executor.submit(build_independent, name)
+            for name in ("build_filing_history_artifact.py", OHLCV_DERIVED_SCRIPT)
+        } if config.fetch_ohlcv else {}
+        # Optional network activity must not occupy capacity needed by either
+        # required build. Queue it only after both required branches.
         reference = None if reference_name in results else executor.submit(
             run_script, reference_name, "Build / standalone reference", required=False)
 
         print("\nPHASE 4: Enrichment (Injecting into Master JSON)")
         print("-" * 40)
         for script in PHASE4_SCRIPTS:
-            results[script] = run_script(script, "Phase 4", required=True)
+            results[script] = independent[script].result() if script in independent else run_script(script, "Phase 4", required=True)
 
         print("\nPHASE 4.5: Canonical consumers")
         print("-" * 40)
         for script in POST_STANDARDIZATION_SCRIPTS:
-            results[script] = run_script(script, "Phase 4.5", required=True)
+            results[script] = independent[script].result() if script in independent else run_script(script, "Phase 4.5", required=True)
         if reference is not None:
             results[reference_name] = reference.result()
 
@@ -509,9 +538,19 @@ def main(config=None, phase="all"):
         write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
         return 1
 
+    # Prepared objects remain private until every required build has succeeded.
+    # Promotion carries them with the chart directory; frontend publication
+    # verifies their hashes before moving them into the public object set.
+    archive_source = Path(BASE_DIR) / '.filing_archives'
+    chart_root = Path(BASE_DIR) / 'chart_artifacts'
+    if prepared and archive_source.is_dir() and chart_root.is_dir():
+        archive_source.replace(chart_root / '.prepared_archives')
+
     print("\nPHASE 5: Compression (.json -> .json.gz)")
     print("-" * 40)
-    raw_size, gz_size = compress_output(include_ohlcv_derived=config.fetch_ohlcv)
+    started = time.perf_counter()
+    raw_size, gz_size = compress_output(include_ohlcv_derived=config.fetch_ohlcv, prepared=prepared)
+    print(f"  Compression elapsed: {time.perf_counter() - started:.2f}s", flush=True)
 
     print("\nPHASE 5.5: Scanner point-in-time context")
     print("-" * 40)
@@ -523,9 +562,11 @@ def main(config=None, phase="all"):
         for script in OPTIONAL_SCRIPTS:
             results[script] = run_script(script, "Phase 6")
 
+    started = time.perf_counter()
     final_checks = validate_final_artifacts(
         include_ohlcv_derived=config.fetch_ohlcv
     )
+    print(f"  Final validation elapsed: {time.perf_counter() - started:.2f}s", flush=True)
     required_failed = any(result.required and not result.ok for result in results.values())
     final_failed = any(not check.ok for check in final_checks)
     exit_code = 1 if required_failed or final_failed else 0

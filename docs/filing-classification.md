@@ -137,14 +137,21 @@ merge regenerates classification and publishes through the existing release flow
 The historical archive is large. Each company cache stores normalized rows with
 document evidence and references to shared classification entries, so repeated
 disclosures do not duplicate classifications in the cache. Its input fingerprint includes
-all filing metadata, so content corrections, merged labels, identity changes and
-PDF evidence updates rebuild that company. Unchanged companies skip duplicate
+filing metadata except PDF retry `attemptedAt` and `error`, so content corrections, merged
+labels, identity changes and PDF evidence updates rebuild that company.
+Warm rows receive current document metadata from the first retained source
+observation; timestamp-only retries do not trigger normalization or cache writes.
+Unchanged companies skip duplicate
 merging and per-filing classification lookups. The full archive is still loaded,
 fingerprinted by company, streamed to the publication artifact and validated.
 
 Cache compatibility follows classifier `VERSION`, the source-label file hash and
 the builder's `CACHE_VERSION`. Any classification behavior change must increment
 `VERSION`; normalization/layout changes must increment `CACHE_VERSION`.
+CI compares full fresh classifications for 72 frozen disclosures (all 64 topics
+plus ambiguous, mixed-label and PDF cases) with a committed output digest.
+Behavior changes fail this guard until `VERSION` is bumped and the frozen
+contract is reviewed and regenerated for that version.
 Implementation-only performance edits do not invalidate history. Existing entry
 caches migrate without new rule calculations only when their source hashes match
 the running code. Missing, malformed or incompatible caches rebuild from raw

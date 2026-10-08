@@ -20,13 +20,20 @@ from filing_classification import VERSION, TAXONOMY, classify_filing, classify_f
 from filing_documents import enrich_documents
 
 # Bump for changes to filing normalization/cache layout; classifier semantics use VERSION.
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 CLASSIFICATION_FIELDS = {'interpretation', 'topics', 'events', 'subtypes', 'documentType',
                          'status', 'matchedRuleIds', 'method', 'basis'}
 
 
 def fingerprint(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+def history_fingerprint(filings):
+    # Retry timestamps/errors are publication metadata, not identity or evidence.
+    return fingerprint([{**row, 'documentExtraction': {
+        key: value for key, value in row['documentExtraction'].items() if key not in {'attemptedAt', 'error'}
+    }} if isinstance(row.get('documentExtraction'), dict) else row for row in filings])
 
 
 def classification_key(row):
@@ -67,19 +74,29 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
     if old and old.get('rules') != rules and (legacy_rules is None or old.get('rules') != legacy_rules):
         stats['invalidated_companies'] += 1
         old = {}
-    history_key = fingerprint(filings)
+    history_key = history_fingerprint(filings)
     previous = old.get('filings')
+    sources = old.get('document_sources')
     cached = old.get('entries', {})
     if not isinstance(cached, dict):
         cached = {}
     if (old.get('rules') == rules and old.get('history_key') == history_key
             and isinstance(previous, list) and previous
+            and isinstance(sources, list) and len(sources) == len(previous)
             and all(isinstance(row, dict) and row.get('filingId')
                     and isinstance(row.get('classification'), str)
-                    and valid_classification(cached.get(row['classification'])) for row in previous)):
+                    and valid_classification(cached.get(row['classification'])) for row in previous)
+            and all((source is None and not isinstance(row.get('documentExtraction'), dict))
+                    or (isinstance(source, int) and 0 <= source < len(filings)
+                        and isinstance(filings[source].get('documentExtraction'), dict))
+                    for row, source in zip(previous, sources))):
         stats['unchanged_companies'] += 1
         stats['reused_filings'] += len(previous)
-        return [{**row, 'classification': cached[row['classification']]} for row in previous]
+        result = [{**row, 'classification': cached[row['classification']]} for row in previous]
+        for row, source in zip(result, sources):
+            if source is not None:
+                row['documentExtraction'] = filings[source]['documentExtraction']
+        return result
     stats['rebuilt_companies'] += 1
     entries, keys = {}, []
     def classify(row):
@@ -96,9 +113,16 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
         entries[key] = value
         return value
     result = classify_filings(filings, classify=classify)
+    # Normalization shallow-copies rows and retains the first observation's PDF
+    # object. Remember its input position so warm rows receive current metadata.
+    document_sources = {}
+    for index, row in enumerate(filings):
+        if isinstance(row.get('documentExtraction'), dict):
+            document_sources.setdefault(id(row['documentExtraction']), index)
     # Repeated disclosures share one classification; normalized rows reference its key.
     current = {'rules': rules, 'history_key': history_key, 'entries': entries,
-               'filings': [{**row, 'classification': key} for row, key in zip(result, keys)]}
+               'filings': [{**row, 'classification': key} for row, key in zip(result, keys)],
+               'document_sources': [document_sources.get(id(row.get('documentExtraction'))) for row in result]}
     if current != old:
         try:
             save_json(path, current, ensure_ascii=False)

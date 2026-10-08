@@ -1,5 +1,7 @@
 import sys
 import copy
+import hashlib
+import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
@@ -22,6 +24,16 @@ from pipeline_utils import load_json, save_json
 
 
 class FilingHistoryTests(unittest.TestCase):
+    def test_classifier_matches_frozen_version_contract(self):
+        fixture = load_json(ROOT / 'tests/fixtures/filing_classification_contract.json')
+        self.assertEqual(build_filing_history_artifact.VERSION, fixture['version'],
+                         'Review and regenerate the frozen contract for the new classifier VERSION.')
+        outputs = [build_filing_history_artifact.classify_filing(row) for row in fixture['filings']]
+        digest = hashlib.sha256(json.dumps(outputs, sort_keys=True, ensure_ascii=False,
+                                          separators=(',', ':')).encode()).hexdigest()
+        self.assertEqual(digest, fixture['classification_sha256'],
+                         'Classification behavior changed: bump VERSION before updating the frozen contract.')
+
     def test_unchanged_company_skips_normalization_and_classification(self):
         filings = [
             {'news_date': '2026-10-07', 'caption': 'Dividend approved', 'file_url': 'https://example.com/a.pdf'},
@@ -114,16 +126,47 @@ class FilingHistoryTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), saved)
             revised = copy.deepcopy(filings)
             revised[0]['documentExtraction']['attemptedAt'] = 'new'
-            with mock.patch.object(build_filing_history_artifact, 'classify_filing') as classify:
-                observed = build_filing_history_artifact.classify_cached(revised, path, ['rules'])
+            revised[0]['documentExtraction']['error'] = 'TimeoutExpired'
+            stats = Counter()
+            with mock.patch.object(build_filing_history_artifact, 'classify_filing') as classify, \
+                    mock.patch.object(build_filing_history_artifact, 'classify_filings', side_effect=AssertionError('retry normalized history')):
+                observed = build_filing_history_artifact.classify_cached(revised, path, ['rules'], stats)
                 self.assertEqual(observed[0]['classification'], expected[0]['classification'])
                 self.assertEqual(observed[0]['documentExtraction']['attemptedAt'], 'new')
                 classify.assert_not_called()
-            saved = path.read_bytes()
+            self.assertEqual(observed, classify_filings(copy.deepcopy(revised)))
+            self.assertEqual(stats['unchanged_companies'], 1)
+            self.assertEqual(stats['rebuilt_companies'], 0)
+            self.assertEqual(path.read_bytes(), saved)
             with mock.patch.object(build_filing_history_artifact, 'save_json', side_effect=OSError('disk full')):
                 observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['new rules'])
                 self.assertEqual(observed, expected)
             self.assertEqual(path.read_bytes(), saved)
+
+    def test_retry_metadata_uses_first_merged_observation_and_new_evidence_rebuilds(self):
+        filings = [
+            {'caption': 'Dividend approved'},
+            {'caption': 'Regulation 30 disclosure', 'file_url': 'https://example.com/a.pdf',
+             'source_endpoint': 'lodr', 'documentExtraction': {'status': 'failed', 'attemptedAt': 'first'}},
+            {'caption': 'Regulation 30 disclosure', 'file_url': 'https://example.com/a.pdf',
+             'source_endpoint': 'company', 'documentExtraction': {'status': 'failed', 'attemptedAt': 'second'}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            filings[1]['documentExtraction']['attemptedAt'] = 'new first'
+            filings[2]['documentExtraction']['attemptedAt'] = 'new second'
+            with mock.patch.object(build_filing_history_artifact, 'classify_filings', side_effect=AssertionError('retry normalized history')):
+                observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            self.assertEqual(observed, classify_filings(copy.deepcopy(filings)))
+            self.assertEqual(observed[1]['documentExtraction']['attemptedAt'], 'new first')
+            filings[1]['documentExtraction'] = {'status': 'extracted', 'pages': [
+                {'page': 1, 'text': 'Company wins supply order worth Rs 200 crore'}]}
+            stats = Counter()
+            observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'], stats)
+            self.assertEqual(observed, classify_filings(copy.deepcopy(filings)))
+            self.assertEqual(stats['rebuilt_companies'], 1)
+            self.assertEqual(stats['fresh_filings'], 1)
 
     def test_classification_cache_preserves_merged_labels_and_invalidates_inputs(self):
         filings = [

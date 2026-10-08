@@ -258,7 +258,7 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(Counter(calls), expected)
             self.assertTrue(all(count == 1 for count in expected.values()))
 
-    def test_reference_overlaps_build_and_is_joined_and_reported_on_failure(self):
+    def test_reference_overlaps_enrichment_but_does_not_delay_base_failure(self):
         for fail_base, fail_reference in ((False, False), (True, False), (False, True)):
             started = threading.Event()
             release = threading.Event()
@@ -272,11 +272,12 @@ class RunnerTests(unittest.TestCase):
                     self.assertTrue(release.wait(timeout=5))
                     return ScriptResult(not fail_reference, required)
                 if script == 'bulk_market_analyzer.py':
+                    self.assertFalse(started.is_set())
+                    if fail_base:
+                        return ScriptResult(False, required)
+                if script == PHASE4_SCRIPTS[0]:
                     self.assertTrue(started.wait(timeout=5))
                     self.assertFalse(release.is_set())
-                    if fail_base:
-                        release.set()
-                        return ScriptResult(False, required)
                 if script == 'build_chart_artifacts.py':
                     release.set()
                 return ScriptResult(True, required)
@@ -290,13 +291,15 @@ class RunnerTests(unittest.TestCase):
                     mock.patch('edl_pipeline.runner.write_pipeline_report', side_effect=reported.append), \
                     contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(main(PipelineConfig(cleanup_intermediate=False)), int(fail_base))
-            self.assertEqual(calls.count('refresh_official_index_constituents.py'), 1)
-            result = reported[-1]['scripts']['refresh_official_index_constituents.py']
-            self.assertEqual(result['ok'], not fail_reference)
-            self.assertFalse(result['required'])
             if fail_base:
+                self.assertNotIn('refresh_official_index_constituents.py', calls)
+                self.assertNotIn('refresh_official_index_constituents.py', reported[-1]['scripts'])
                 self.assertNotIn(PHASE4_SCRIPTS[0], calls)
             else:
+                self.assertEqual(calls.count('refresh_official_index_constituents.py'), 1)
+                result = reported[-1]['scripts']['refresh_official_index_constituents.py']
+                self.assertEqual(result['ok'], not fail_reference)
+                self.assertFalse(result['required'])
                 positions = [calls.index(script) for script in PHASE4_SCRIPTS]
                 self.assertEqual(positions, sorted(positions))
 

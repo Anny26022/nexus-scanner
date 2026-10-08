@@ -21,7 +21,7 @@ from types import ModuleType
 REPO = Path(__file__).resolve().parents[1]
 ROOT = REPO / 'DO NOT DELETE EDL PIPELINE'
 sys.path[:0] = [str(ROOT), str(ROOT / 'src')]
-BASELINE = 'c9abf8b6ba752a6de8c44f541d21cc834df5f64c'
+BASELINE = '3f346e45045d50d413ea3f75d8b2f87fc721074d'
 
 
 def baseline_module(relative, package=''):
@@ -47,7 +47,7 @@ def selected(values, limit):
     return values if not limit or len(values) <= limit else [values[i * len(values) // limit] for i in range(limit)]
 
 
-def benchmark_filings(path, limit):
+def benchmark_filings(path, limit, serializer_limit=0):
     import build_filing_history_artifact as current
     previous = baseline_module('DO NOT DELETE EDL PIPELINE/build_filing_history_artifact.py')
     original_classifier = baseline_module('DO NOT DELETE EDL PIPELINE/filing_classification.py')
@@ -73,7 +73,7 @@ def benchmark_filings(path, limit):
                     sha.update(name.encode())
                     sha.update(json.dumps(output, ensure_ascii=False, separators=(',', ':')).encode())
                     total += len(output)
-                    if state == 'cold' and label == 'after' and len(serializer_records) < 80:
+                    if state == 'cold' and label == 'after' and (not serializer_limit or len(serializer_records) < serializer_limit):
                         serializer_records.append({'symbol': name, 'filings': output})
                     if (index + 1) % 100 == 0:
                         print(f'Filings {state} {label}: {index + 1}/{len(names)}', file=sys.stderr, flush=True)
@@ -90,7 +90,7 @@ def benchmark_filings(path, limit):
         if workers[0]['sha256'] != workers[1]['sha256']:
             raise AssertionError('Serialized artifact bytes differ')
         summary['serialization'] = comparison(workers[0]['seconds'], workers[1]['seconds'],
-            bytes=workers[0]['bytes'], before_peak_mib=workers[0]['peak_mib'], after_peak_mib=workers[1]['peak_mib'],
+            fixture_symbols=len(serializer_records), bytes=workers[0]['bytes'], before_peak_mib=workers[0]['peak_mib'], after_peak_mib=workers[1]['peak_mib'],
             output_sha256=workers[0]['sha256'])
     return summary
 
@@ -129,6 +129,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data-root', type=Path, help='Local pipeline cache directory (read-only)')
     parser.add_argument('--limit', type=int, default=100, help='Evenly sampled symbols; 0 means all')
+    parser.add_argument('--serializer-limit', type=int, default=0,
+                        help='Cap serializer fixture symbols; 0 includes all symbols selected by --limit')
     parser.add_argument('--only', choices=('filings', 'breadth', 'both'), default='both')
     parser.add_argument('--serializer', choices=('before', 'after'), help=argparse.SUPPRESS)
     parser.add_argument('--fixture', type=Path, help=argparse.SUPPRESS)
@@ -144,8 +146,8 @@ def main():
             peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024 if sys.platform == 'darwin' else 1024)
             print(json.dumps({'seconds': seconds, 'peak_mib': round(peak, 1), 'bytes': target.stat().st_size, 'sha256': digest(target)}))
         return
-    if args.data_root is None or args.limit < 0:
-        parser.error('--data-root is required and --limit must be nonnegative')
+    if args.data_root is None or args.limit < 0 or args.serializer_limit < 0:
+        parser.error('--data-root is required and limits must be nonnegative')
     # Refuse to give a false equivalence verdict after an unrelated formula
     # edit: baseline/current breadth must share these unchanged dependencies.
     for relative in ('DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/indicators.py',
@@ -158,7 +160,7 @@ def main():
             raise RuntimeError('Benchmark dependency changed; refresh the baseline: ' + relative)
     report = {'baseline': BASELINE, 'local_python': sys.version.split()[0], 'live_requests': 0}
     if args.only in ('filings', 'both'):
-        report['filings'] = benchmark_filings(args.data_root / 'filing_history_data/filing_history.json', args.limit)
+        report['filings'] = benchmark_filings(args.data_root / 'filing_history_data/filing_history.json', args.limit, args.serializer_limit)
     if args.only in ('breadth', 'both'):
         report['breadth'] = benchmark_breadth(args.data_root, args.limit)
     print(json.dumps(report, indent=2))

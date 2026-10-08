@@ -471,21 +471,22 @@ def main(config=None, phase="all"):
     # the refresh and its result, but hide network waits behind the build.
     # Older fetch checkpoints may already include it: never execute it twice.
     reference_name = "refresh_official_index_constituents.py"
+    print("\nPHASE 3: Base Analysis (Building Master JSON)")
+    print("-" * 40)
+    results["bulk_market_analyzer.py"] = run_script("bulk_market_analyzer.py", "Phase 3", required=True)
+    if not results["bulk_market_analyzer.py"].ok:
+        print("\nCRITICAL: bulk_market_analyzer.py failed.")
+        print("   Cannot produce all_stocks_fundamental_analysis.json.")
+        write_pipeline_report(
+            build_pipeline_report(results, time.time() - overall_start, raw_size, gz_size, final_checks, config, 1)
+        )
+        return 1
+
+    # Start best-effort work only after the fail-fast base build succeeds;
+    # executor shutdown cannot then delay reporting a base-build failure.
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix="edl-reference") as executor:
         reference = None if reference_name in results else executor.submit(
             run_script, reference_name, "Build / standalone reference", required=False)
-        print("\nPHASE 3: Base Analysis (Building Master JSON)")
-        print("-" * 40)
-        results["bulk_market_analyzer.py"] = run_script("bulk_market_analyzer.py", "Phase 3", required=True)
-        if not results["bulk_market_analyzer.py"].ok:
-            print("\nCRITICAL: bulk_market_analyzer.py failed.")
-            print("   Cannot produce all_stocks_fundamental_analysis.json.")
-            if reference is not None:
-                results[reference_name] = reference.result()
-            write_pipeline_report(
-                build_pipeline_report(results, time.time() - overall_start, raw_size, gz_size, final_checks, config, 1)
-            )
-            return 1
 
         print("\nPHASE 4: Enrichment (Injecting into Master JSON)")
         print("-" * 40)

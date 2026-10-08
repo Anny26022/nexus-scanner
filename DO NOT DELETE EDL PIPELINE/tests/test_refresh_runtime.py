@@ -1,8 +1,8 @@
 """Runtime optimizations must preserve bytes, counts and atomic publication."""
 
 import copy
-import gzip
 import math
+import runpy
 import sys
 import tempfile
 import unittest
@@ -25,6 +25,21 @@ from test_breadth_v2 import make_ohlcv
 
 
 class RefreshRuntimeTests(unittest.TestCase):
+    def test_benchmark_full_serializer_fixture_and_explicit_cap(self):
+        benchmark = runpy.run_path(str(ROOT.parent / 'tools/benchmark_refresh_runtime.py'))
+        # Fixture-sizing coverage must also run in shallow CI checkouts;
+        # baseline Git/source equivalence is checked by the CLI itself.
+        benchmark['benchmark_filings'].__globals__['baseline_module'] = lambda *args: filings_builder
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'filings.json'
+            save_json(path, {'symbols': {f'SYM{i:03d}': {'filings': []} for i in range(81)}})
+            full = benchmark['benchmark_filings'](path, 0)
+            capped = benchmark['benchmark_filings'](path, 0, 2)
+            self.assertEqual(full['serialization']['fixture_symbols'], 81)
+            self.assertEqual(capped['serialization']['fixture_symbols'], 2)
+            self.assertGreater(full['serialization']['bytes'], capped['serialization']['bytes'])
+            self.assertEqual(full['cold']['output_sha256'], capped['cold']['output_sha256'])
+
     def test_rule_memoization_preserves_order_and_bounds_memory(self):
         _cached_rule_matches.cache_clear()
         texts = ('', 'financial results dividend approved',
@@ -39,7 +54,7 @@ class RefreshRuntimeTests(unittest.TestCase):
         self.assertEqual(_cached_rule_matches.cache_info().currsize, 2048)
         _cached_rule_matches.cache_clear()
 
-    def test_streamed_records_are_byte_identical_and_losslessly_compressible(self):
+    def test_streamed_records_are_byte_identical(self):
         cases = [
             {}, {'records': []}, {'records': [None, False, 0, -0.0]},
             {'before': '₹ café \n " \\', 'records': [
@@ -57,8 +72,6 @@ class RefreshRuntimeTests(unittest.TestCase):
                         save_json(before, data, ensure_ascii=ascii_only)
                         save_json_records(after, data, ensure_ascii=ascii_only)
                         self.assertEqual(after.read_bytes(), before.read_bytes())
-                        self.assertEqual(gzip.compress(after.read_bytes(), mtime=0),
-                                         gzip.compress(before.read_bytes(), mtime=0))
                         self.assertEqual(repr(data), repr(frozen))
 
     def test_streaming_failure_keeps_previous_artifact_and_cleans_temp_file(self):

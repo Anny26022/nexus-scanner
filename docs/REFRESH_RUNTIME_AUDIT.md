@@ -169,7 +169,7 @@ for the audited CI runner. All four complete output files had identical bytes:
 
 Both full cold/warm filing comparisons returned SHA-256
 `c2f132c63a619eb1085c0eae8249dc63a38fd08924aa1825ca523bdb19993d10`,
-and the full-check serializer fixture returned identical byte hash
+and a separate serializer measurement (not the original capped benchmark fixture) returned identical byte hash
 `c91d489ed80a58542dfc6c074dc8643b2efea1bb81b342073d86d076a663af89`.
 The breadth and filing full checks ran alongside each other; these local
 elapsed times are not isolated-run medians or GitHub-hosted timings. The larger
@@ -194,10 +194,26 @@ cd 'DO NOT DELETE EDL PIPELINE'
 PYTHONPATH='.:src:tests' python3 -m unittest discover -s tests
 ```
 
-The baseline Git object must be present. The benchmark verifies unchanged
+The baseline is the repository's published pre-optimization parent commit
+`3f346e45045d50d413ea3f75d8b2f87fc721074d`. Its compared filing/breadth sources
+are byte-identical to the audited revision. A shallow checkout must fetch that
+revision before running the benchmark (`git fetch origin 3f346e45045d50d413ea3f75d8b2f87fc721074d`).
+The benchmark verifies unchanged
 formula dependencies and refuses to report equivalence if those have changed.
 Benchmark files and classification caches are disposable temporary files, not
 the input histories.
+
+The serializer now includes every selected symbol by default; `--limit 0`
+therefore exercises the full filing payload. `--serializer-limit N` explicitly
+caps it, and output reports fixture symbol count and byte size. Memory/timing
+fields describe that fixture only, not a projected full-artifact result. The
+historical 55,739,099-byte measurement above used a separate fixture; fresh
+measurements need not have the same byte size or timings.
+
+Review follow-up: the optional reference refresh starts after the base build
+succeeds and still overlaps enrichment. Base-build failures now report and
+exit without starting or waiting for optional reference work; successful-run
+calculations, publication and reference-result reporting remain unchanged.
 
 Validation also covers disk-full/encode/replace failures (previous artifact
 preserved, temporary file removed), Unicode/control characters, non-finite

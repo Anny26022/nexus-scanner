@@ -17,7 +17,9 @@ from ohlcv_utils import (
     missing_history_sessions,
     is_nse_cash_session,
     nse_calendar_date,
+    NSE_TIMEZONE,
     plan_history_ranges,
+    parse_history_date,
     read_ohlcv_csv,
     rows_from_tick_data,
     symbol_csv_path,
@@ -55,7 +57,7 @@ def has_official_history(existing_rows, session, desired_start, expected_session
     dates = []
     for row in existing_rows:
         try:
-            dates.append(datetime.strptime(row["Date"], "%Y-%m-%d").timestamp())
+            dates.append(parse_history_date(row["Date"]).timestamp())
         except (KeyError, TypeError, ValueError):
             continue
     return (bool(dates) and any(row.get("Date") == session for row in existing_rows)
@@ -136,6 +138,8 @@ def fetch_single_stock(sym, details, live_snapshot=None, official_nse_session=No
     # and a stable EMA-200 warm-up.
     current_end = int(time.time())
     desired_start = current_end - (HISTORY_CALENDAR_DAYS * 86400)
+    if details.get("ListingDate"):
+        desired_start = max(desired_start, int(parse_history_date(details["ListingDate"]).replace(tzinfo=NSE_TIMEZONE).timestamp()))
     original_rows = read_ohlcv_csv(output_path)
     # Dhan occasionally returns a malformed historical candle.  Remove it
     # before deciding whether the cache is ready, then persist the repaired
@@ -209,6 +213,7 @@ def main():
             "Exch": item.get("Exchange", "NSE"),
             "Inst": item.get("Instrument", "EQUITY"),
             "Seg": item.get("Segment", "E"),
+            "ListingDate": item.get("ListingDate"),
         }
         for item in master_rows
         if item.get("Symbol") and item.get("Sid") is not None

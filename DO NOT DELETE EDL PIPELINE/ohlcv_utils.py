@@ -82,12 +82,22 @@ def merge_rows_by_date(rows):
     return sorted({row["Date"]: row for row in rows}.values(), key=lambda row: row["Date"])
 
 
+def parse_history_date(value):
+    """Fast path for canonical CSV dates; retain legacy strptime compatibility."""
+    if isinstance(value, str) and len(value) == 10 and value[4] == value[7] == "-":
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            pass
+    return datetime.strptime(value, "%Y-%m-%d")
+
+
 def discard_weekend_rows(rows):
     """Remove impossible NSE daily bars left by an older live-snapshot run."""
     valid = []
     for row in rows:
         try:
-            if datetime.strptime(row["Date"], "%Y-%m-%d").weekday() < 5:
+            if parse_history_date(row["Date"]).weekday() < 5:
                 valid.append(row)
         except (KeyError, TypeError, ValueError):
             valid.append(row)
@@ -130,7 +140,7 @@ def plan_history_ranges(existing_rows, desired_start_ts, desired_end_ts, expecte
     parsed = []
     for row in existing_rows:
         try:
-            parsed.append(int(datetime.strptime(row["Date"], "%Y-%m-%d").timestamp()))
+            parsed.append(int(parse_history_date(row["Date"]).timestamp()))
         except (KeyError, TypeError, ValueError):
             continue
     if not parsed:
@@ -147,8 +157,8 @@ def plan_history_ranges(existing_rows, desired_start_ts, desired_end_ts, expecte
     missing = missing_history_sessions(existing_rows, expected_sessions)
     if missing:
         # A bounded repair range also covers non-consecutive missing sessions.
-        ranges.append((int(datetime.strptime(missing[0], "%Y-%m-%d").timestamp()),
-                       int(datetime.strptime(missing[-1], "%Y-%m-%d").timestamp()) + one_day))
+        ranges.append((int(parse_history_date(missing[0]).timestamp()),
+                       int(parse_history_date(missing[-1]).timestamp()) + one_day))
     return ranges
 
 

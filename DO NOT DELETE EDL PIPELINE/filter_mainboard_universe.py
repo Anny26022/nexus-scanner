@@ -69,6 +69,7 @@ def reconcile_listed_universe(master_rows, nse_rows, session_date=None):
                 excluded.append({'symbol': symbol, 'isin': isin, 'listing_date': listing_date,
                                  'reason': 'listing_after_session'})
                 continue
+            row = {**row, 'ListingDate': listing_date}
         retained.append(row)
         if isin != listing['ISIN NUMBER'].strip().upper():
             mismatches.append({'symbol': symbol, 'isin': isin, 'nse_isin': listing['ISIN NUMBER'].strip().upper(),

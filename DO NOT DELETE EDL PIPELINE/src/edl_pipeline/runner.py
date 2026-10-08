@@ -359,9 +359,10 @@ def main(config=None, phase="all"):
             write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
             return 1
 
-        # Establish the completed session before any consumer sees the universe.
-        results['fetch_nse_delivery_data.py'] = run_script('fetch_nse_delivery_data.py', 'Phase 1', required=True)
-        if not results['fetch_nse_delivery_data.py'].ok:
+        # The canonical universe must use the completed session, including
+        # when today's new listings already appear in the provider snapshot.
+        results["fetch_nse_delivery_data.py"] = run_script("fetch_nse_delivery_data.py", "Phase 1", required=True)
+        if not results["fetch_nse_delivery_data.py"].ok:
             write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
             return 1
 
@@ -396,6 +397,7 @@ def main(config=None, phase="all"):
             enrichment_scripts = [
                 (script, "Phase 2 / enrichment lane", script in REQUIRED_PHASE2_SCRIPTS)
                 for script in PHASE2_SCRIPTS
+                if script == "fetch_company_filings.py"
             ]
             ohlcv_scripts = [
                 (
@@ -405,6 +407,10 @@ def main(config=None, phase="all"):
                 )
                 for script in OHLCV_FETCH_LANE
             ]
+            # Keep the filing catch-up off the smaller independent fetches'
+            # path, reusing the reference lane without adding concurrency.
+            reference_scripts += [(script, "Phase 2 / reference lane", script in REQUIRED_PHASE2_SCRIPTS)
+                                  for script in PHASE2_SCRIPTS if script != "fetch_company_filings.py"]
             lane_results = run_script_lanes(
                 {
                     "enrichment": enrichment_scripts,

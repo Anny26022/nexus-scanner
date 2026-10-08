@@ -98,6 +98,7 @@ class MainboardUniverseTests(unittest.TestCase):
                     self.assertTrue(main())
                     kept = ['OLD', 'BOUNDARY'] if session == '2026-10-07' else ['OLD', 'BOUNDARY', 'NITYAS', 'VNL']
                     self.assertEqual([r['Symbol'] for r in save.call_args_list[0].args[1]], kept)
+                    self.assertEqual(save.call_args_list[0].args[1][0], {**master[0], 'ListingDate': '2026-10-06'})
                     self.assertEqual([r['Sym'] for r in save.call_args_list[1].args[1]], kept)
                     report = save.call_args_list[-1].args[1]
                     self.assertEqual(report['session_date'], session)
@@ -112,6 +113,7 @@ class MainboardUniverseTests(unittest.TestCase):
     def test_stale_or_missing_session_stops_filtering_before_any_output(self):
         master = [{'Symbol': symbol} for symbol in ('NITYAS', 'SME')]
         for staged in ({}, {'as_of_date': '2026-10-07'},
+                       {'as_of_date': 'invalid', 'retrieved_at': '2026-10-08T09:33:00+05:30'},
                        {'as_of_date': '2026-10-07', 'retrieved_at': '2026-10-07T09:33:00+05:30'},
                        {'as_of_date': '2026-10-09', 'retrieved_at': '2026-10-08T09:33:00+05:30'}):
             with self.subTest(staged=staged), \

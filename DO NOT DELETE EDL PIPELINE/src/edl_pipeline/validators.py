@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 
 from pipeline_utils import resolve_path
+from json_records import object_members
 
 
 @dataclass(frozen=True)
@@ -83,7 +84,7 @@ def _check_nested_min_counts(data, nested_min_counts):
     return ""
 
 
-def strict_json_load(handle):
+def strict_json_decoder():
     def reject(value):
         raise ValueError(f"non-finite number: {value}")
 
@@ -93,7 +94,12 @@ def strict_json_load(handle):
             reject(value)
         return number
 
-    return json.load(handle, parse_constant=reject, parse_float=finite_float)
+    return json.JSONDecoder(parse_constant=reject, parse_float=finite_float)
+
+
+def strict_json_load(handle):
+    decoder = strict_json_decoder()
+    return json.load(handle, parse_constant=decoder.parse_constant, parse_float=decoder.parse_float)
 
 
 def validate_json(path, min_count=1, required_fields=(), nested_min_counts=()):
@@ -105,7 +111,27 @@ def validate_json(path, min_count=1, required_fields=(), nested_min_counts=()):
         return _bad(resolved, "json", "empty file", size)
     try:
         with resolved.open("r", encoding="utf-8") as f:
-            data = strict_json_load(f)
+            prefix = f.read(4096) if resolved.name == 'filing_history.json' else ''
+            f.seek(0)
+            if resolved.name == 'filing_history.json' and prefix.lstrip().startswith('{'):
+                data = {}
+                record_count = 0
+                for key, value, is_record in object_members(f, strict_json_decoder()):
+                    if is_record:
+                        record_count += 1
+                    else:
+                        data[key] = value
+                        if key == 'records':
+                            record_count = len(value) if isinstance(value, (list, dict)) else 0
+                # Only counts are needed here; every record has already passed
+                # the same strict JSON decoder as the full-file validator.
+                nested_min_counts = tuple((key, minimum) for key, minimum in nested_min_counts)
+                for key, minimum in nested_min_counts:
+                    if key == 'records' and isinstance(data.get(key), list) and record_count < minimum:
+                        return _bad(resolved, 'json', f'field records count {record_count} < {minimum}', size, len(data))
+                nested_min_counts = tuple((key, minimum) for key, minimum in nested_min_counts if key != 'records' or not isinstance(data.get(key), list))
+            else:
+                data = strict_json_load(f)
     except Exception as e:
         return _bad(resolved, "json", f"invalid JSON: {e}", size)
 

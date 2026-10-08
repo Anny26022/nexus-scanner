@@ -21,7 +21,7 @@ from types import ModuleType
 REPO = Path(__file__).resolve().parents[1]
 ROOT = REPO / 'DO NOT DELETE EDL PIPELINE'
 sys.path[:0] = [str(ROOT), str(ROOT / 'src')]
-BASELINE = '3f346e45045d50d413ea3f75d8b2f87fc721074d'
+BASELINE = '9868bdeeb75a1e76dc9cf394d4e6133d20a7d179'
 
 
 def baseline_module(relative, package=''):

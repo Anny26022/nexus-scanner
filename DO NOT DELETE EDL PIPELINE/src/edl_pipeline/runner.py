@@ -146,17 +146,20 @@ def compress_output(include_ohlcv_derived=True):
     total_raw = 0
     total_gz = 0
 
-    for filename, output_name in FILES_TO_COMPRESS.items():
-        if not include_ohlcv_derived and filename in OHLCV_DERIVED_FILES:
-            continue
-        print(f"  Compressing {filename}...", flush=True)
-        raw_size, gz_size = compress_file(filename, output_name)
-        if raw_size:
-            total_raw += raw_size
-            total_gz += gz_size
-            print(f"  OK {output_name} ({gz_size / (1024 * 1024):.1f} MB)", flush=True)
-        else:
-            print(f"  WARNING: {filename} not found to compress.")
+    files = [(name, output) for name, output in FILES_TO_COMPRESS.items()
+             if include_ohlcv_derived or name not in OHLCV_DERIVED_FILES]
+    # Independent files retain their serializer, compression level and atomic
+    # replacement. Report results in declaration order.
+    with ThreadPoolExecutor(max_workers=min(2, os.cpu_count() or 1)) as executor:
+        futures = [executor.submit(compress_file, name, output) for name, output in files]
+        for (filename, output_name), future in zip(files, futures):
+            raw_size, gz_size = future.result()
+            if raw_size:
+                total_raw += raw_size
+                total_gz += gz_size
+                print(f"  OK {output_name} ({gz_size / (1024 * 1024):.1f} MB)", flush=True)
+            else:
+                print(f"  WARNING: {filename} not found to compress.")
 
     ratio = (1 - total_gz / total_raw) * 100 if total_raw > 0 else 0
     print(
@@ -489,19 +492,26 @@ def main(config=None, phase="all"):
 
     # Start best-effort work only after the fail-fast base build succeeds;
     # executor shutdown cannot then delay reporting a base-build failure.
-    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="edl-reference") as executor:
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="edl-build") as executor:
         reference = None if reference_name in results else executor.submit(
             run_script, reference_name, "Build / standalone reference", required=False)
+
+        # Both consume completed fetch inputs and write separate artifacts.
+        # Neither reads or mutates the stock snapshot being enriched below.
+        independent = {
+            name: executor.submit(run_script, name, "Build / independent", required=True)
+            for name in ("build_filing_history_artifact.py", OHLCV_DERIVED_SCRIPT)
+        } if config.fetch_ohlcv else {}
 
         print("\nPHASE 4: Enrichment (Injecting into Master JSON)")
         print("-" * 40)
         for script in PHASE4_SCRIPTS:
-            results[script] = run_script(script, "Phase 4", required=True)
+            results[script] = independent[script].result() if script in independent else run_script(script, "Phase 4", required=True)
 
         print("\nPHASE 4.5: Canonical consumers")
         print("-" * 40)
         for script in POST_STANDARDIZATION_SCRIPTS:
-            results[script] = run_script(script, "Phase 4.5", required=True)
+            results[script] = independent[script].result() if script in independent else run_script(script, "Phase 4.5", required=True)
         if reference is not None:
             results[reference_name] = reference.result()
 
@@ -511,7 +521,9 @@ def main(config=None, phase="all"):
 
     print("\nPHASE 5: Compression (.json -> .json.gz)")
     print("-" * 40)
+    started = time.perf_counter()
     raw_size, gz_size = compress_output(include_ohlcv_derived=config.fetch_ohlcv)
+    print(f"  Compression elapsed: {time.perf_counter() - started:.2f}s", flush=True)
 
     print("\nPHASE 5.5: Scanner point-in-time context")
     print("-" * 40)
@@ -523,9 +535,11 @@ def main(config=None, phase="all"):
         for script in OPTIONAL_SCRIPTS:
             results[script] = run_script(script, "Phase 6")
 
+    started = time.perf_counter()
     final_checks = validate_final_artifacts(
         include_ohlcv_derived=config.fetch_ohlcv
     )
+    print(f"  Final validation elapsed: {time.perf_counter() - started:.2f}s", flush=True)
     required_failed = any(result.required and not result.ok for result in results.values())
     final_failed = any(not check.ok for check in final_checks)
     exit_code = 1 if required_failed or final_failed else 0

@@ -12,6 +12,8 @@ import shutil
 import subprocess
 import tempfile
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 
@@ -136,9 +138,10 @@ def prepare_archives(chart_root):
     archives = {}
     inputs = {'classified': root / 'filing_history.json.gz',
               'raw': root / 'filing_history_data' / 'filing_history.json'}
-    for name, source in inputs.items():
+    def pack(item):
+        name, source = item
         if not source.is_file():
-            continue  # Small diagnostic/fixture builds may have no retained archive.
+            return name, None  # Diagnostic/fixture builds may lack an archive.
         with tempfile.TemporaryDirectory(dir=chart_root) as folder:
             temporary = Path(folder) / 'archive.json.gz'
             opener = gzip.open if source.suffix == '.gz' else open
@@ -150,7 +153,11 @@ def prepare_archives(chart_root):
             if not destination.exists():
                 destination.parent.mkdir(exist_ok=True)
                 temporary.replace(destination)
-            archives[name] = digest
+            return name, digest
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        for name, digest in executor.map(pack, inputs.items()):
+            if digest is not None:
+                archives[name] = digest
     return archives
 
 
@@ -286,7 +293,9 @@ def complete_release(chart_root, output, manifest, store=None):
 
 
 def complete_object_release(chart_root, output, manifest, store=None):
+    started = time.perf_counter()
     revision = chart_revision(chart_root, manifest['sessionDate'])
+    print(f'Chart validation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = json.loads((chart_root / 'index.json').read_text())
     previous_path = output / 'current.json'
     previous = json.loads(previous_path.read_text()) if previous_path.exists() else None
@@ -302,11 +311,15 @@ def complete_object_release(chart_root, output, manifest, store=None):
             manifest['publishedAt'] = existing['publishedAt']
     if store is None and os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':
         store = R2Store()
+    started = time.perf_counter()
     archives = prepare_archives(chart_root)
+    print(f'Archive preparation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = dict(index, archives=archives)
     if store:
         base = store.base_url
+        started = time.perf_counter()
         store.upload_objects(chart_root / 'objects')
+        print(f'Object upload and verification elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         manifest['publishedAt'] = manifest['sessionDate'] + 'T00:00:00Z'
         manifest['dataIndexUrl'] = f"{base}/releases/{manifest['revision']}/index.json"
         manifest['objectUrlTemplate'] = f'{base}/objects/{{hash}}.json.gz'

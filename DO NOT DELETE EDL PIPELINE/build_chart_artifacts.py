@@ -15,6 +15,8 @@ import json
 from pathlib import Path
 import shutil
 import sys
+from concurrent.futures import ProcessPoolExecutor
+import os
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -24,6 +26,7 @@ if str(SRC) not in sys.path:
 from pipeline_utils import BASE_DIR, load_json, save_json
 from filing_classification import VERSION, classify_filings, classify_corporate_action
 from announcement_artifacts import build_announcements, put_object
+from json_records import record_artifact
 
 
 # HVE is the one all-history record.  Twenty quarters gives five years of
@@ -166,6 +169,20 @@ def _market_news(root, as_of):
     return events
 
 
+def _chart_object(task):
+    root, objects, symbol, as_of, actions, earnings, news = task
+    candles = _load_candles(root / "ohlcv_data" / f"{symbol}.csv", as_of)
+    payload = {
+        "schemaVersion": 2, "symbol": symbol,
+        "historyStartDate": candles[0]["date"] if candles else None,
+        "candles": candles, "volumeEvents": _volume_events(candles),
+        "corporateActions": [{**row, "classification": classify_corporate_action(row)} for row in actions if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
+        "earnings": [row for row in earnings if _date(row.get("filing_date")) and row["filing_date"] <= as_of],
+        "marketNews": sorted(news, key=lambda row: row["date"], reverse=True)[:50],
+    }
+    return symbol, put_object(objects, payload)
+
+
 def main() -> int:
     root = Path(BASE_DIR)
     stocks = _artifact(root, "all_stocks_fundamental_analysis.json", [])
@@ -178,7 +195,8 @@ def main() -> int:
         return 1
     actions = _by_symbol(_records(_artifact(root, "corporate_action_ledger.json", {})))
     earnings = _by_symbol(_records(_artifact(root, "quarterly_financial_history.json", {})))
-    filing_history = _artifact(root, "filing_history.json", {})
+    filing_path = root / 'filing_history.json'
+    filing_history = record_artifact(filing_path) if filing_path.exists() else _artifact(root, "filing_history.json", {})
     news = _market_news(root, as_of)
     output = root / "chart_artifacts"
     temporary = root / ".chart_artifacts.tmp"
@@ -187,24 +205,23 @@ def main() -> int:
     objects = temporary / "objects"
     symbols = {str(stock.get("Symbol") or stock.get("symbol") or "").upper() for stock in stocks}
     symbols.discard("")
-    announcements = build_announcements(filing_history, objects, symbols, as_of)
+    announcements = build_announcements(filing_history, objects, symbols, as_of,
+                                        cache=root / 'filing_history_data/object_cache')
     chart_objects = {}
     count = 0
+    tasks = []
     for stock in stocks:
         symbol = str(stock.get("Symbol") or stock.get("symbol") or "").upper()
         if not symbol:
             continue
-        candles = _load_candles(root / "ohlcv_data" / f"{symbol}.csv", as_of)
-        payload = {
-            "schemaVersion": 2, "symbol": symbol,
-            "historyStartDate": candles[0]["date"] if candles else None,
-            "candles": candles, "volumeEvents": _volume_events(candles),
-            "corporateActions": [{**row, "classification": classify_corporate_action(row)} for row in actions[symbol] if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
-            "earnings": [row for row in earnings[symbol] if _date(row.get("filing_date")) and row["filing_date"] <= as_of],
-            "marketNews": sorted(news[symbol], key=lambda row: row["date"], reverse=True)[:50],
-        }
-        chart_objects[symbol] = put_object(objects, payload)
-        count += 1
+        tasks.append((root, objects, symbol, as_of, actions[symbol], earnings[symbol], news[symbol]))
+    workers = min(2, os.cpu_count() or 1)
+    if workers > 1 and len(tasks) >= 32:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            chart_objects.update(executor.map(_chart_object, tasks, chunksize=8))
+    else:
+        chart_objects.update(map(_chart_object, tasks))
+    count = len(tasks)
     index = {"schemaVersion": 2, "asOfDate": as_of, "symbols": count,
              "chartObjects": chart_objects, "announcements": announcements,
              "retention": {"highestEver": "all available history", "quarterlyQuarters": QUARTERLY_EVENT_LIMIT}}

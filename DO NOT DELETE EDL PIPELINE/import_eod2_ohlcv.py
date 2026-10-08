@@ -6,12 +6,13 @@ also keeps renamed securities attached to their own history.
 """
 
 import csv
+import io
 import json
 import os
 from datetime import date
 from pathlib import Path
 
-from ohlcv_utils import merge_rows_by_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
+from ohlcv_utils import OHLCV_FIELDS, merge_rows_by_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
 from pipeline_utils import BASE_DIR, load_json, save_json
 
 
@@ -77,7 +78,7 @@ def source_rows(path, start_date, end_date):
     return rows
 
 
-def eod2_rows_for_isin(data_dir, history, isin):
+def eod2_rows_for_isin(data_dir, history, isin, parsed=None):
     """Collect renamed-file segments for one ISIN, with later segments winning."""
     rows = []
     for item in history.get(isin, []):
@@ -89,25 +90,49 @@ def eod2_rows_for_isin(data_dir, history, isin):
         except (KeyError, TypeError, ValueError):
             continue
         path = data_dir / "daily" / f"{str(item['symbol']).lower()}.csv"
-        rows.extend(source_rows(path, start_date, end_date))
+        if parsed is None:
+            rows.extend(source_rows(path, start_date, end_date))
+        else:
+            if path not in parsed:
+                parsed[path] = source_rows(path, date.min, date.max)
+            rows.extend(row for row in parsed[path] if start_date.isoformat() <= row['Date'] <= end_date.isoformat())
     return merge_rows_by_date(rows)
 
 
 def eod2_rows_for_security(data_dir, mapping, symbol, isin):
     """Return verified current-symbol history plus any renamed ISIN segments."""
     history = mapping.get("isin2hist", {})
-    mapped = eod2_rows_for_isin(data_dir, history, isin)
+    # A current ticker is commonly also an ISIN segment. Parse its CSV once,
+    # while preserving segment precedence and the unbounded fallback.
+    parsed = {}
+    mapped = eod2_rows_for_isin(data_dir, history, isin, parsed)
     if mapping.get("sym2isin", {}).get(symbol) != isin:
         return mapped, 0
 
     current_file = data_dir / "daily" / f"{symbol.lower()}.csv"
-    current = source_rows(current_file, date.min, date.max)
+    current = parsed.get(current_file)
+    if current is None:
+        current = source_rows(current_file, date.min, date.max)
     mapped_dates = {row["Date"] for row in mapped}
     additional_rows = sum(row["Date"] not in mapped_dates for row in current)
     return merge_rows_by_date([*current, *mapped]), additional_rows
 
 
+def same_csv(path, rows, fields):
+    """Skip a write only when the original writer would emit identical bytes."""
+    buffer = io.StringIO(newline='')
+    writer = csv.DictWriter(buffer, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(rows)
+    try:
+        return path.read_bytes() == buffer.getvalue().encode()
+    except FileNotFoundError:
+        return False
+
+
 def write_delivery_csv(path, rows):
+    if same_csv(path, rows, DELIVERY_FIELDS):
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=DELIVERY_FIELDS)
@@ -177,11 +202,15 @@ def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
         # Imported rows intentionally come last: when EOD2 republishes a split
         # adjustment it replaces the overlapping historical rows.  Any local
         # sessions newer than EOD2's weekly snapshot remain in place.
+        existing = read_ohlcv_csv(destination)
         merged = merge_rows_by_date([
-            *read_ohlcv_csv(destination),
+            *existing,
             *({field: row[field] for field in ("Date", "Open", "High", "Low", "Close", "Volume")} for row in imported),
         ])
-        write_ohlcv_csv(destination, merged)
+        # Still perform the overlay every run: unchanged source data may need
+        # to replace locally modified historical rows.
+        if not same_csv(destination, merged, OHLCV_FIELDS):
+            write_ohlcv_csv(destination, merged)
         report["symbol_history"][symbol] = {"isin": isin, "start_date": imported[0]["Date"], "end_date": imported[-1]["Date"], "sessions": len(imported)}
         delivery = delivery_rows(imported)
         if delivery:

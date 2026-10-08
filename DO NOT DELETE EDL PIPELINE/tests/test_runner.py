@@ -315,8 +315,55 @@ class RunnerTests(unittest.TestCase):
                 result = reported[-1]['scripts']['refresh_official_index_constituents.py']
                 self.assertEqual(result['ok'], not fail_reference)
                 self.assertFalse(result['required'])
-                positions = [calls.index(script) for script in PHASE4_SCRIPTS]
+                positions = [calls.index(script) for script in PHASE4_SCRIPTS if script != OHLCV_DERIVED_SCRIPT]
                 self.assertEqual(positions, sorted(positions))
+
+    def test_independent_builds_overlap_without_racing_consumers_or_skipping_failure(self):
+        for fail_filing in (False, True):
+            filing_started, breadth_started = threading.Event(), threading.Event()
+            release_filing, release_breadth = threading.Event(), threading.Event()
+            filing_done, breadth_done = threading.Event(), threading.Event()
+            calls = []
+            def run(script, phase_label='', required=False):
+                calls.append(script)
+                if script == 'build_filing_history_artifact.py':
+                    filing_started.set()
+                    self.assertTrue(release_filing.wait(5))
+                    filing_done.set()
+                    return ScriptResult(not fail_filing, required)
+                if script == OHLCV_DERIVED_SCRIPT:
+                    breadth_started.set()
+                    self.assertTrue(release_breadth.wait(5))
+                    breadth_done.set()
+                if script == PHASE4_SCRIPTS[0]:
+                    self.assertTrue(filing_started.wait(5))
+                    self.assertTrue(breadth_started.wait(5))
+                    self.assertFalse(filing_done.is_set())
+                    self.assertFalse(breadth_done.is_set())
+                if script == 'process_historical_market_breadth.py':
+                    release_breadth.set()
+                if script == 'standardize_stock_artifact.py':
+                    release_filing.set()
+                if script == 'build_rs_ratings.py':
+                    self.assertTrue(breadth_done.is_set())
+                if script == 'build_chart_artifacts.py':
+                    self.assertTrue(filing_done.is_set())
+                return ScriptResult(True, required)
+            config = PipelineConfig(cleanup_intermediate=False)
+            checkpoint = {'config': {'fetch_ohlcv': True, 'fetch_optional': False, 'cleanup_intermediate': False},
+                          'exit_code': 0, 'total_time_seconds': 0, 'scripts': {}}
+            with self.subTest(fail_filing=fail_filing), \
+                    mock.patch('edl_pipeline.runner.pipeline_utils.load_json', return_value=checkpoint), \
+                    mock.patch('edl_pipeline.runner.run_script', side_effect=run), \
+                    mock.patch('edl_pipeline.runner.compress_output', return_value=(100, 10)) as compress, \
+                    mock.patch('edl_pipeline.runner.validate_final_artifacts', return_value=[]), \
+                    mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(main(config, phase='build'), int(fail_filing))
+            self.assertEqual(calls.count(OHLCV_DERIVED_SCRIPT), 1)
+            self.assertEqual(calls.count('build_filing_history_artifact.py'), 1)
+            if fail_filing:
+                compress.assert_not_called()
 
     def test_old_fetch_checkpoint_does_not_repeat_completed_reference(self):
         config = PipelineConfig(cleanup_intermediate=False)

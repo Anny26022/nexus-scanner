@@ -144,10 +144,12 @@ def compress_output(include_ohlcv_derived=True):
     for filename, output_name in FILES_TO_COMPRESS.items():
         if not include_ohlcv_derived and filename in OHLCV_DERIVED_FILES:
             continue
+        print(f"  Compressing {filename}...", flush=True)
         raw_size, gz_size = compress_file(filename, output_name)
         if raw_size:
             total_raw += raw_size
             total_gz += gz_size
+            print(f"  OK {output_name} ({gz_size / (1024 * 1024):.1f} MB)", flush=True)
         else:
             print(f"  WARNING: {filename} not found to compress.")
 

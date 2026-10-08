@@ -115,6 +115,32 @@ class FilingHistoryTests(unittest.TestCase):
             self.assertEqual(build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'], stats), expected)
             self.assertEqual(stats['fresh_filings'], 1)
 
+    def test_boolean_document_indexes_rebuild_without_cross_filing_metadata(self):
+        filings = [
+            {'news_id': 'first', 'caption': 'Dividend approved',
+             'documentExtraction': {'status': 'failed', 'attemptedAt': 'first'}},
+            {'news_id': 'second', 'caption': 'Stock split approved',
+             'documentExtraction': {'status': 'failed', 'attemptedAt': 'second'}},
+        ]
+        expected = classify_filings(copy.deepcopy(filings))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            checkpoint = load_json(path)
+            for malformed in (True, False):
+                with self.subTest(source=malformed):
+                    corrupted = copy.deepcopy(checkpoint)
+                    # true aliases index 1 and false aliases index 0; both would
+                    # pass a loose integer check and copy the wrong PDF metadata.
+                    corrupted['document_sources'] = [True, 1] if malformed else [0, False]
+                    save_json(path, corrupted)
+                    stats = Counter()
+                    observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'], stats)
+                    self.assertEqual(observed, expected)
+                    self.assertEqual(stats['rebuilt_companies'], 1)
+                    self.assertEqual(stats['unchanged_companies'], 0)
+                    self.assertEqual(load_json(path)['document_sources'], [0, 1])
+
     def test_cache_ignores_attempt_time_and_survives_empty_inputs_or_write_errors(self):
         filings = [{'caption': 'Dividend approved', 'documentExtraction': {
             'status': 'failed', 'attemptedAt': 'old', 'pages': []}}]

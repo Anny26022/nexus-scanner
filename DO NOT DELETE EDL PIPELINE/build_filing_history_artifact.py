@@ -87,7 +87,7 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
                     and isinstance(row.get('classification'), str)
                     and valid_classification(cached.get(row['classification'])) for row in previous)
             and all((source is None and not isinstance(row.get('documentExtraction'), dict))
-                    or (isinstance(source, int) and 0 <= source < len(filings)
+                    or (type(source) is int and 0 <= source < len(filings)
                         and isinstance(filings[source].get('documentExtraction'), dict))
                     for row, source in zip(previous, sources))):
         stats['unchanged_companies'] += 1

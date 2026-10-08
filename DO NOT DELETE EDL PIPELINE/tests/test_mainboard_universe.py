@@ -79,6 +79,22 @@ class MainboardUniverseTests(unittest.TestCase):
                             self.assertEqual(len(save.call_args_list[0].args[1]), 95)
                             self.assertEqual(save.call_args_list[-1].args[1]['excluded_unlisted_count'], 5)
 
+    def test_invalid_or_stale_bhavcopy_never_writes_filtered_outputs(self):
+        master = [{'Symbol': symbol} for symbol in ('NITYAS', 'SME')]
+        for staged in ({'as_of_date': '2026-10-07', 'retrieved_at': '2026-10-07T16:00:00+05:30'},
+                       {'as_of_date': 'invalid', 'retrieved_at': '2026-10-08T16:00:00+05:30'},
+                       {'as_of_date': '2026-10-09', 'retrieved_at': '2026-10-08T16:00:00+05:30'}):
+            with self.subTest(staged=staged), \
+                    patch('filter_mainboard_universe.load_json', side_effect=[master, [{'Symbol': 'SME'}],
+                          [{'Sym': 'NITYAS'}, {'Sym': 'SME'}], staged]), \
+                    patch('filter_mainboard_universe.nse_calendar_date', return_value='2026-10-08'), \
+                    patch('filter_mainboard_universe.resolve_path') as resolve, \
+                    patch('filter_mainboard_universe.save_json') as save:
+                with self.assertRaises(ValueError):
+                    main()
+                resolve.assert_not_called()
+                save.assert_not_called()
+
     def test_new_listings_follow_completed_session_and_fail_closed_without_dates(self):
         master = [{'Symbol': symbol, 'ISIN': isin, 'Sid': index}
                   for index, (symbol, isin) in enumerate([('OLD', 'I1'), ('NITYAS', 'I2'), ('VNL', 'I3'), ('SME', 'I4')])]

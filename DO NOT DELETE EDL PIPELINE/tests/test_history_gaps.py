@@ -1,6 +1,8 @@
 """A healthy latest candle must not hide missing intermediate sessions."""
 from datetime import datetime, timedelta
 import json
+import os
+import time
 from pathlib import Path
 import tempfile
 import unittest
@@ -11,7 +13,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 from apply_nse_daily_ohlcv import repair_official_history
 from fetch_all_ohlcv import expected_sessions_by_symbol, fetch_single_stock, has_official_history
-from ohlcv_utils import missing_history_sessions, parse_history_date, plan_history_ranges, read_ohlcv_csv, write_ohlcv_csv
+from ohlcv_utils import NSE_TIMEZONE, missing_history_sessions, parse_history_date, plan_history_ranges, read_ohlcv_csv, write_ohlcv_csv
 from edl_pipeline.quality import inspect_breadth_history
 from edl_pipeline.artifacts import OHLCV_FETCH_LANE, PHASE2_SCRIPTS
 
@@ -50,9 +52,29 @@ class HistoryGapTests(unittest.TestCase):
                             ListingDate='2026-10-05'), official_nse_session='2026-10-07', expected_sessions=['2026-10-06', '2026-10-07'])
                     self.assertEqual(result, 'success')
                     self.assertTrue(fetch.called)
-                    self.assertTrue(all(call.args[0]['START'] >= datetime(2026,10,5).timestamp() for call in fetch.call_args_list))
+                    self.assertTrue(all(call.args[0]['START'] >= datetime(2026,10,5,tzinfo=NSE_TIMEZONE).timestamp() for call in fetch.call_args_list))
                     if existing:
                         self.assertEqual(read_ohlcv_csv(root / 'TEST.csv')[0]['Date'], existing[0]['Date'])
+
+    @unittest.skipUnless(hasattr(time, 'tzset'), 'Host timezone switching is unavailable')
+    def test_listing_request_starts_at_exchange_midnight_in_every_host_timezone(self):
+        expected_start = int(datetime(2026,10,5,tzinfo=NSE_TIMEZONE).timestamp())
+        for timezone in ('UTC', 'America/Los_Angeles', 'Asia/Kolkata'):
+            try:
+                with self.subTest(timezone=timezone), patch.dict(os.environ, {'TZ': timezone}), \
+                        tempfile.TemporaryDirectory() as folder:
+                    time.tzset()
+                    with patch('fetch_all_ohlcv.resolve_path', return_value=Path(folder)), \
+                            patch('fetch_all_ohlcv.is_nse_cash_session', return_value=False), \
+                            patch('fetch_all_ohlcv.time.time', return_value=datetime(2026,10,8,18,tzinfo=NSE_TIMEZONE).timestamp()), \
+                            patch('fetch_all_ohlcv.fetch_history_chunk', return_value=[candle('2026-10-05'), candle('2026-10-07')]) as fetch:
+                        self.assertEqual(fetch_single_stock('TEST', dict(Exch='NSE', Seg='E', Inst='EQUITY', Sid=1,
+                            ListingDate='2026-10-05'), official_nse_session='2026-10-07',
+                            expected_sessions=['2026-10-05', '2026-10-07']), 'success')
+                    self.assertEqual(fetch.call_args_list[0].args[0]['START'], expected_start)
+                    self.assertEqual(read_ohlcv_csv(Path(folder) / 'TEST.csv')[0]['Date'], '2026-10-05')
+            finally:
+                time.tzset()
 
     def test_latest_official_candle_does_not_hide_internal_gaps(self):
         expected=['2026-09-25','2026-09-28','2026-09-29','2026-10-05','2026-10-06']

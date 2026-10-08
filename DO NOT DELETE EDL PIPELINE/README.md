@@ -173,7 +173,7 @@ series are reported separately and never treated as IPO candidates.
 ### Pipeline Phases
 ```
 PHASE 1 (Core):       Dhan + SME → fresh NSE listings + bhavcopy → universe filter → fundamentals
-PHASE 2 (3 lanes):    filings | delivery history → EOD2 → NSE close → ScanX sync | references + other enrichment
+PHASE 2 (3 lanes):    filings | delivery history → EOD2 → NSE close → Dhan history fallback + live ScanX | references + other enrichment
 PHASE 2.5 (Indices): index history sync after all fetch lanes finish
 PHASE 3 (Analysis):   bulk_market_analyzer.py (creates base JSON)
 PHASE 4 (Injection):  advanced_metrics_processor.py → process_market_breadth.py → add_corporate_events.py (LAST!)

@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 
 from ohlcv_utils import merge_rows_by_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
-from pipeline_utils import BASE_DIR, file_fingerprint, load_json, save_json
+from pipeline_utils import BASE_DIR, load_json, save_json
 
 
 MASTER_FILE = "master_isin_map.json"
@@ -141,17 +141,6 @@ def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
 
     output_dir.mkdir(parents=True, exist_ok=True)
     delivery_output_dir = delivery_output_dir or output_dir.parent / "eod2_delivery_history_data"
-    checkpoint_path = delivery_output_dir / '.import-checkpoints.json'
-    try:
-        checkpoint = load_json(checkpoint_path, default={})
-    except (OSError, ValueError):
-        checkpoint = {}
-    rules = [file_fingerprint(Path(__file__)), file_fingerprint(Path(__file__).with_name('ohlcv_utils.py'))]
-    previous = checkpoint.get('entries', {}) if isinstance(checkpoint, dict) and checkpoint.get('rules') == rules else {}
-    if not isinstance(previous, dict):
-        previous = {}
-    entries = {}
-    reused = 0
     report = {
         "enabled": True,
         "source": "EOD2 adjusted daily CSV bootstrap",
@@ -180,58 +169,30 @@ def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
         if isin not in history and symbols.get(symbol) != isin:
             report["unmapped_isins"] += 1
             continue
+        imported, additional_rows = eod2_rows_for_security(data_dir, mapping, symbol, isin)
+        if not imported:
+            report["empty_or_invalid_sources"] += 1
+            continue
         destination = symbol_csv_path(output_dir, symbol)
-        delivery_path = delivery_output_dir / f"{symbol}.csv"
-        segments = history.get(isin, [])
-        source_symbols = {str(segment['symbol']).lower() for segment in segments
-                          if isinstance(segment, dict) and segment.get('symbol')}
-        if symbols.get(symbol) == isin:
-            source_symbols.add(symbol.lower())
-        cached = previous.get(symbol, {})
-        has_prior = isinstance(cached, dict) and bool(cached.get('signature'))
-        signature = {
-            'isin': isin, 'segments': segments, 'current_isin': symbols.get(symbol),
-            'sources': {name: file_fingerprint(data_dir / 'daily' / f'{name}.csv') for name in sorted(source_symbols)},
-            'destination': file_fingerprint(destination) if has_prior else None,
-            'delivery': file_fingerprint(delivery_path) if has_prior else None,
-        }
-        if isinstance(cached, dict) and cached.get('signature') == signature and isinstance(cached.get('summary'), dict):
-            summary = cached['summary']
-            reused += 1
-        else:
-            imported, additional_rows = eod2_rows_for_security(data_dir, mapping, symbol, isin)
-            if not imported:
-                report["empty_or_invalid_sources"] += 1
-                continue
-            # EOD2 corrections replace overlapping rows; newer provider rows remain.
-            merged = merge_rows_by_date([
-                *read_ohlcv_csv(destination),
-                *({field: row[field] for field in ("Date", "Open", "High", "Low", "Close", "Volume")} for row in imported),
-            ])
-            write_ohlcv_csv(destination, merged)
-            delivery = delivery_rows(imported)
-            if delivery:
-                write_delivery_csv(delivery_path, delivery)
-            summary = {
-                'history': {"isin": isin, "start_date": imported[0]["Date"], "end_date": imported[-1]["Date"], "sessions": len(imported)},
-                'delivery_rows': len(delivery), 'additional_rows': additional_rows,
-            }
-            signature.update(destination=file_fingerprint(destination), delivery=file_fingerprint(delivery_path))
-        entries[symbol] = {'signature': signature, 'summary': summary}
-        report['symbol_history'][symbol] = summary['history']
-        report['imported_symbols'] += 1
-        report['imported_rows'] += summary['history']['sessions']
-        report['delivery_symbols'] += bool(summary['delivery_rows'])
-        report['delivery_rows'] += summary['delivery_rows']
-        report['verified_symbol_history_symbols'] += bool(summary['additional_rows'])
-        report['verified_symbol_history_additional_rows'] += summary['additional_rows']
-    current = {'rules': rules, 'entries': entries}
-    if current != checkpoint:
-        try:
-            save_json(checkpoint_path, current)
-        except OSError as error:
-            print(f'WARNING: EOD2 checkpoint not saved: {error}', flush=True)
-    print(f'EOD2 reused {reused}/{len(entries)} unchanged imports.')
+        # Imported rows intentionally come last: when EOD2 republishes a split
+        # adjustment it replaces the overlapping historical rows.  Any local
+        # sessions newer than EOD2's weekly snapshot remain in place.
+        merged = merge_rows_by_date([
+            *read_ohlcv_csv(destination),
+            *({field: row[field] for field in ("Date", "Open", "High", "Low", "Close", "Volume")} for row in imported),
+        ])
+        write_ohlcv_csv(destination, merged)
+        report["symbol_history"][symbol] = {"isin": isin, "start_date": imported[0]["Date"], "end_date": imported[-1]["Date"], "sessions": len(imported)}
+        delivery = delivery_rows(imported)
+        if delivery:
+            write_delivery_csv(delivery_output_dir / f"{symbol}.csv", delivery)
+            report["delivery_symbols"] += 1
+            report["delivery_rows"] += len(delivery)
+        report["imported_symbols"] += 1
+        report["imported_rows"] += len(imported)
+        if additional_rows:
+            report["verified_symbol_history_symbols"] += 1
+            report["verified_symbol_history_additional_rows"] += additional_rows
     return report
 
 

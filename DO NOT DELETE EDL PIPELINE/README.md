@@ -63,11 +63,15 @@ build, then save updated enrichment caches even if build fails. Cache-save failu
 not block publication. Eviction or an interrupted save can still require a
 backfill; these caches are an optimization, not durable storage.
 
+Historical Actions cache-save steps for October 4 and 6 took 4–6 seconds for
+the combined history cache and 0–4 seconds for the EOD2 checkout (a cache hit
+can skip upload). These step times include packaging and upload. New split-cache
+upload times remain unmeasured until a full refresh runs with this configuration.
+
 Filing classifications are cached per symbol after merging duplicate source
-labels, keyed by classifier inputs and classifier/mapping content. EOD2 skips
-imports only when source CSVs, ISIN mappings, importer code and destination
-OHLCV/delivery contents match. Missing or changed data is recomputed. Both caches
-live in existing ignored history directories. Full indicator/count history is
+labels, keyed by classifier inputs and classifier/mapping content. EOD2 retains
+the existing import behavior without a separate fingerprint checkpoint. The
+classification cache lives in the existing ignored history directory. Full indicator/count history is
 retained; only breadth contribution lists outside the published date window are
 omitted. IPO/reference fetches overlap the existing fetch lanes, while stock
 artifact writers remain ordered. Per-thread HTTP sessions reuse connections
@@ -129,6 +133,13 @@ fundamentals, OHLCV, breadth, rankings, or scanner artifacts. The retained
 `sme_market_data.json.gz` is source coverage only; no SME symbol appears in
 the scanner universe. `mainboard_universe_report.json` records the raw,
 excluded, and final counts for each refresh.
+
+Membership requires a symbol in the freshly validated NSE equity list after
+SME exclusion. Absent symbols are reported under `excluded_unlisted`. Listed
+symbols with different provider/NSE ISINs remain eligible and are reported under
+`isin_mismatches`; reconciliation does not overwrite their ISIN or security ID.
+A listing download/validation failure stops the refresh instead of filtering
+against stale data. NSE-only listings still require provider enrichment.
 
 `nse_universe_reconciliation.json` reports NSE
 `EQ` listings that are absent from ScanX; they remain pending until ScanX

@@ -51,6 +51,14 @@ class RunnerTests(unittest.TestCase):
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(main(PipelineConfig(fetch_ohlcv=False, fetch_optional=False, cleanup_intermediate=False)), 1)
 
+    def test_listing_download_failure_stops_before_universe_filter(self):
+        with mock.patch('edl_pipeline.runner.run_script', return_value=ScriptResult(True, True)) as run, \
+                mock.patch('edl_pipeline.runner.download_nse_listing_dates', return_value=False), \
+                mock.patch('edl_pipeline.runner.write_pipeline_report'), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(PipelineConfig()), 1)
+        self.assertNotIn('filter_mainboard_universe.py', [call.args[0] for call in run.call_args_list])
+
     def test_main_respects_ohlcv_and_optional_flags(self):
         calls = []
 

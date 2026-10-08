@@ -31,7 +31,7 @@ class MainboardUniverseTests(unittest.TestCase):
         result = filter_rows_by_symbol(rows, {"MAIN"}, "Sym")
         self.assertEqual(result, [{"Sym": "MAIN", "Mcap": 10}])
 
-    def test_reconciliation_excludes_stale_or_mismatched_provider_rows(self):
+    def test_reconciliation_excludes_unlisted_but_retains_listed_identity_mismatches(self):
         master = [
             {'Symbol': 'LIVE', 'ISIN': 'INE000A01001'},
             {'Symbol': 'STALE', 'ISIN': 'INE000A01002'},
@@ -41,12 +41,12 @@ class MainboardUniverseTests(unittest.TestCase):
             {'SYMBOL': 'LIVE', 'ISIN NUMBER': 'INE000A01001'},
             {'SYMBOL': 'CHANGED', 'ISIN NUMBER': 'INE000A01004'},
         ]
-        retained, excluded = reconcile_listed_universe(master, nse)
-        self.assertEqual(retained, [master[0]])
+        retained, excluded, mismatches = reconcile_listed_universe(master, nse)
+        self.assertEqual(retained, [master[0], master[2]])
         self.assertEqual(excluded, [
-            {'symbol': 'STALE', 'isin': 'INE000A01002', 'nse_isin': None, 'reason': 'absent_from_nse_equity_list'},
-            {'symbol': 'CHANGED', 'isin': 'INE000A01003', 'nse_isin': 'INE000A01004', 'reason': 'isin_mismatch'},
+            {'symbol': 'STALE', 'isin': 'INE000A01002', 'reason': 'absent_from_nse_equity_list'},
         ])
+        self.assertEqual(mismatches, [{'symbol': 'CHANGED', 'isin': 'INE000A01003', 'nse_isin': 'INE000A01004'}])
 
 
 if __name__ == "__main__":

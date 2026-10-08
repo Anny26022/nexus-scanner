@@ -46,23 +46,27 @@ def filter_rows_by_symbol(rows, allowed_symbols, symbol_key):
 
 
 def reconcile_listed_universe(master_rows, nse_rows):
-    """Require a matching NSE symbol and ISIN; report unsupported provider rows."""
-    listings = {normalise_symbol(row.get('SYMBOL')): normalise_symbol(row.get('ISIN NUMBER'))
-                for raw in nse_rows for row in [{key.strip(): value for key, value in raw.items()}]
-                if row.get('SYMBOL') and row.get('ISIN NUMBER')}
+    """Require current NSE membership; report identity differences without rewriting them."""
+    listings = {}
+    for raw in nse_rows:
+        row = {key.strip(): value for key, value in raw.items()}
+        symbol, isin = normalise_symbol(row.get('SYMBOL')), normalise_symbol(row.get('ISIN NUMBER'))
+        if symbol and isin:
+            listings[symbol] = isin
     if not listings:
         raise ValueError('NSE equity list has no usable symbol/ISIN pairs')
-    retained, excluded = [], []
+    retained, excluded, mismatches = [], [], []
     for row in master_rows:
         symbol, isin = normalise_symbol(row.get('Symbol')), normalise_symbol(row.get('ISIN'))
-        if symbol in listings and isin and listings[symbol] == isin:
-            retained.append(row)
-        else:
-            excluded.append({'symbol': symbol, 'isin': isin, 'nse_isin': listings.get(symbol),
-                             'reason': 'absent_from_nse_equity_list' if symbol not in listings else 'isin_mismatch'})
+        if symbol not in listings:
+            excluded.append({'symbol': symbol, 'isin': isin, 'reason': 'absent_from_nse_equity_list'})
+            continue
+        retained.append(row)
+        if isin != listings[symbol]:
+            mismatches.append({'symbol': symbol, 'isin': isin, 'nse_isin': listings[symbol]})
     if not retained:
         raise ValueError('NSE listing reconciliation removed every canonical security')
-    return retained, excluded
+    return retained, excluded, mismatches
 
 
 def main():
@@ -81,7 +85,7 @@ def main():
         raise ValueError("NSE SME source did not match any canonical securities")
 
     with resolve_path('nse_equity_list.csv').open(encoding='utf-8-sig', newline='') as handle:
-        mainboard_rows, unsupported = reconcile_listed_universe(mainboard_rows, list(csv.DictReader(handle)))
+        mainboard_rows, unsupported, mismatches = reconcile_listed_universe(mainboard_rows, list(csv.DictReader(handle)))
 
     canonical_symbols = {normalise_symbol(row.get("Symbol")) for row in mainboard_rows}
     mainboard_scanx_rows = filter_rows_by_symbol(raw_scanx_rows, canonical_symbols, "Sym")
@@ -92,9 +96,11 @@ def main():
     save_json(MAINBOARD_SCANX_FILE, mainboard_scanx_rows)
     save_json(REPORT_FILE, {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "source": "NSE SME market watch and EQUITY_L symbol/ISIN reconciliation",
-        "excluded_unlisted_or_mismatched": unsupported,
-        "excluded_unlisted_or_mismatched_count": len(unsupported),
+        "source": "NSE SME market watch and EQUITY_L membership",
+        "excluded_unlisted": unsupported,
+        "excluded_unlisted_count": len(unsupported),
+        "isin_mismatches": mismatches,
+        "isin_mismatch_count": len(mismatches),
         "raw_scanx_count": len(master_rows),
         "nse_sme_symbol_count": len(sme_symbols),
         "excluded_sme_count": excluded_rows,
@@ -108,7 +114,8 @@ def main():
     })
     print(
         f"Canonical universe: {len(mainboard_rows)} mainboard symbols "
-        f"({excluded_rows} current SME symbols excluded)."
+        f"({excluded_rows} current SME and {len(unsupported)} unlisted symbols excluded; "
+        f"{len(mismatches)} ISIN discrepancies reported)."
     )
     return True
 

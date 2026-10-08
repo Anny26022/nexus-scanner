@@ -1,7 +1,10 @@
 import sys
 import copy
+import hashlib
+import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from collections import Counter
 import pipeline_utils
 from filing_classification import classify_filings
 import tempfile
@@ -21,6 +24,123 @@ from pipeline_utils import load_json, save_json
 
 
 class FilingHistoryTests(unittest.TestCase):
+    def test_classifier_matches_frozen_version_contract(self):
+        fixture = load_json(ROOT / 'tests/fixtures/filing_classification_contract.json')
+        self.assertEqual(build_filing_history_artifact.VERSION, fixture['version'],
+                         'Review and regenerate the frozen contract for the new classifier VERSION.')
+        outputs = [build_filing_history_artifact.classify_filing(row) for row in fixture['filings']]
+        digest = hashlib.sha256(json.dumps(outputs, sort_keys=True, ensure_ascii=False,
+                                          separators=(',', ':')).encode()).hexdigest()
+        self.assertEqual(digest, fixture['classification_sha256'],
+                         'Classification behavior changed: bump VERSION before updating the frozen contract.')
+
+    def test_unchanged_company_skips_normalization_and_classification(self):
+        filings = [
+            {'news_date': '2026-10-07', 'caption': 'Dividend approved', 'file_url': 'https://example.com/a.pdf'},
+            {'news_date': '2026-10-07', 'caption': 'Dividend approved', 'file_url': 'https://example.com/a.pdf',
+             'descriptor': 'Dividend', 'source_endpoint': 'lodr'},
+        ]
+        expected = classify_filings(copy.deepcopy(filings))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            stats = Counter()
+            with mock.patch.object(build_filing_history_artifact, 'classify_filings', side_effect=AssertionError('normalized again')):
+                observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'], stats)
+            self.assertEqual(observed, expected)
+            self.assertEqual(stats['unchanged_companies'], 1)
+            self.assertEqual(stats['reused_filings'], 1)
+            self.assertEqual(stats['fresh_filings'], 0)
+            cached = load_json(path)
+            self.assertIsInstance(cached['filings'][0]['classification'], str)
+            self.assertEqual(len(cached['entries']), 1)
+
+    def test_changed_company_reuses_old_classifications_and_updates_identity(self):
+        filings = [{'news_date': '2026-10-07', 'caption': 'Dividend approved', 'file_url': 'https://example.com/a.pdf'}]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            original = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            # A metadata revision changes identity/output without changing topic evidence.
+            filings[0]['news_date'] = '2026-10-08'
+            filings.append({'caption': 'Board approves stock split', 'news_id': 'new'})
+            stats = Counter()
+            with mock.patch.object(build_filing_history_artifact, 'classify_filing', wraps=build_filing_history_artifact.classify_filing) as classify:
+                observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'], stats)
+            self.assertEqual(observed, classify_filings(copy.deepcopy(filings)))
+            self.assertNotEqual(observed[0]['filingId'], original[0]['filingId'])
+            self.assertEqual(classify.call_count, 1)
+            self.assertEqual(stats['reused_filings'], 1)
+            self.assertEqual(stats['fresh_filings'], 1)
+
+    def test_entry_cache_migrates_only_when_legacy_rules_match(self):
+        filings = [{'caption': 'Dividend approved'}]
+        expected = classify_filings(copy.deepcopy(filings))
+        entries = {build_filing_history_artifact.classification_key(row): row['classification'] for row in expected}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            save_json(path, {'rules': ['old source hash'], 'entries': entries})
+            with mock.patch.object(build_filing_history_artifact, 'classify_filing', side_effect=AssertionError('reclassified migration')):
+                self.assertEqual(build_filing_history_artifact.classify_cached(
+                    copy.deepcopy(filings), path, ['semantic rules'], legacy_rules=['old source hash']), expected)
+            stats = Counter()
+            build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['changed rules'], stats)
+            self.assertEqual(stats['invalidated_companies'], 1)
+            self.assertEqual(stats['fresh_filings'], 1)
+
+    def test_semantic_contract_ignores_python_hash_but_tracks_rules(self):
+        with mock.patch.object(build_filing_history_artifact, 'file_fingerprint', return_value='labels') as fingerprint:
+            original = build_filing_history_artifact.classification_rules()
+            fingerprint.assert_called_once_with(ROOT / 'filing_source_labels.json')
+            with mock.patch.object(build_filing_history_artifact, 'VERSION', build_filing_history_artifact.VERSION + 1):
+                self.assertNotEqual(build_filing_history_artifact.classification_rules(), original)
+            with mock.patch.object(build_filing_history_artifact, 'CACHE_VERSION', build_filing_history_artifact.CACHE_VERSION + 1):
+                self.assertNotEqual(build_filing_history_artifact.classification_rules(), original)
+        with mock.patch.object(build_filing_history_artifact, 'file_fingerprint', return_value='new labels'):
+            self.assertNotEqual(build_filing_history_artifact.classification_rules(), original)
+
+    def test_malformed_company_checkpoint_rebuilds_from_raw_history(self):
+        filings = [{'caption': 'Company wins supply order worth Rs 200 crore'}]
+        expected = classify_filings(copy.deepcopy(filings))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            saved = load_json(path)
+            del saved['filings'][0]['classification']
+            save_json(path, saved)
+            self.assertEqual(build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules']), expected)
+            saved = load_json(path)
+            saved['entries'] = {}
+            save_json(path, saved)
+            stats = Counter()
+            self.assertEqual(build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'], stats), expected)
+            self.assertEqual(stats['fresh_filings'], 1)
+
+    def test_boolean_document_indexes_rebuild_without_cross_filing_metadata(self):
+        filings = [
+            {'news_id': 'first', 'caption': 'Dividend approved',
+             'documentExtraction': {'status': 'failed', 'attemptedAt': 'first'}},
+            {'news_id': 'second', 'caption': 'Stock split approved',
+             'documentExtraction': {'status': 'failed', 'attemptedAt': 'second'}},
+        ]
+        expected = classify_filings(copy.deepcopy(filings))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            checkpoint = load_json(path)
+            for malformed in (True, False):
+                with self.subTest(source=malformed):
+                    corrupted = copy.deepcopy(checkpoint)
+                    # true aliases index 1 and false aliases index 0; both would
+                    # pass a loose integer check and copy the wrong PDF metadata.
+                    corrupted['document_sources'] = [True, 1] if malformed else [0, False]
+                    save_json(path, corrupted)
+                    stats = Counter()
+                    observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'], stats)
+                    self.assertEqual(observed, expected)
+                    self.assertEqual(stats['rebuilt_companies'], 1)
+                    self.assertEqual(stats['unchanged_companies'], 0)
+                    self.assertEqual(load_json(path)['document_sources'], [0, 1])
+
     def test_cache_ignores_attempt_time_and_survives_empty_inputs_or_write_errors(self):
         filings = [{'caption': 'Dividend approved', 'documentExtraction': {
             'status': 'failed', 'attemptedAt': 'old', 'pages': []}}]
@@ -32,14 +152,47 @@ class FilingHistoryTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), saved)
             revised = copy.deepcopy(filings)
             revised[0]['documentExtraction']['attemptedAt'] = 'new'
-            with mock.patch.object(build_filing_history_artifact, 'classify_filing') as classify:
-                observed = build_filing_history_artifact.classify_cached(revised, path, ['rules'])
+            revised[0]['documentExtraction']['error'] = 'TimeoutExpired'
+            stats = Counter()
+            with mock.patch.object(build_filing_history_artifact, 'classify_filing') as classify, \
+                    mock.patch.object(build_filing_history_artifact, 'classify_filings', side_effect=AssertionError('retry normalized history')):
+                observed = build_filing_history_artifact.classify_cached(revised, path, ['rules'], stats)
                 self.assertEqual(observed[0]['classification'], expected[0]['classification'])
+                self.assertEqual(observed[0]['documentExtraction']['attemptedAt'], 'new')
                 classify.assert_not_called()
+            self.assertEqual(observed, classify_filings(copy.deepcopy(revised)))
+            self.assertEqual(stats['unchanged_companies'], 1)
+            self.assertEqual(stats['rebuilt_companies'], 0)
+            self.assertEqual(path.read_bytes(), saved)
             with mock.patch.object(build_filing_history_artifact, 'save_json', side_effect=OSError('disk full')):
                 observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['new rules'])
                 self.assertEqual(observed, expected)
             self.assertEqual(path.read_bytes(), saved)
+
+    def test_retry_metadata_uses_first_merged_observation_and_new_evidence_rebuilds(self):
+        filings = [
+            {'caption': 'Dividend approved'},
+            {'caption': 'Regulation 30 disclosure', 'file_url': 'https://example.com/a.pdf',
+             'source_endpoint': 'lodr', 'documentExtraction': {'status': 'failed', 'attemptedAt': 'first'}},
+            {'caption': 'Regulation 30 disclosure', 'file_url': 'https://example.com/a.pdf',
+             'source_endpoint': 'company', 'documentExtraction': {'status': 'failed', 'attemptedAt': 'second'}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            filings[1]['documentExtraction']['attemptedAt'] = 'new first'
+            filings[2]['documentExtraction']['attemptedAt'] = 'new second'
+            with mock.patch.object(build_filing_history_artifact, 'classify_filings', side_effect=AssertionError('retry normalized history')):
+                observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+            self.assertEqual(observed, classify_filings(copy.deepcopy(filings)))
+            self.assertEqual(observed[1]['documentExtraction']['attemptedAt'], 'new first')
+            filings[1]['documentExtraction'] = {'status': 'extracted', 'pages': [
+                {'page': 1, 'text': 'Company wins supply order worth Rs 200 crore'}]}
+            stats = Counter()
+            observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'], stats)
+            self.assertEqual(observed, classify_filings(copy.deepcopy(filings)))
+            self.assertEqual(stats['rebuilt_companies'], 1)
+            self.assertEqual(stats['fresh_filings'], 1)
 
     def test_classification_cache_preserves_merged_labels_and_invalidates_inputs(self):
         filings = [
@@ -209,11 +362,16 @@ class FilingHistoryTests(unittest.TestCase):
             root = Path(directory)
             save_json(root / "filing_history_data" / "filing_history.json", {
                 "updated_at": "2026-09-25T10:00:00Z",
-                "symbols": {"ABC": {"isin": "INE000000001", "lodr_backfill_complete": True, "fetch_status":{"lodr":{"refresh_complete":False,"last_success_at":"previous"}}, "filings": [{"news_id": "one"}]}},
+                "symbols": {"ABC": {"isin": "INE000000001", "lodr_backfill_complete": True, "fetch_status":{"lodr":{"refresh_complete":False,"last_success_at":"previous"}}, "filings": [{"news_id": "one", "caption": "Dividend approved"}]}},
             })
             with mock.patch.object(build_filing_history_artifact, "BASE_DIR", str(root)):
                 self.assertEqual(build_filing_history_artifact.main(), 0)
             payload = load_json(root / "filing_history.json")
+            published = (root / 'filing_history.json').read_bytes()
+            with mock.patch.object(build_filing_history_artifact, 'BASE_DIR', str(root)), \
+                    mock.patch.object(build_filing_history_artifact, 'classify_filings', side_effect=AssertionError('reprocessed history')):
+                self.assertEqual(build_filing_history_artifact.main(), 0)
+            self.assertEqual((root / 'filing_history.json').read_bytes(), published)
         self.assertEqual(payload["coverage"]["lodr_backfill_complete"], 1)
         self.assertEqual(payload["records"][0]["symbol"], "ABC")
         self.assertFalse(payload["records"][0]["fetch_status"]["lodr"]["refresh_complete"])

@@ -14,7 +14,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from pipeline_utils import BASE_DIR, file_fingerprint, load_json, save_json
+from pipeline_utils import BASE_DIR, file_fingerprint, load_json, save_json, save_json_records
 from filing_classification import VERSION, TAXONOMY, classify_filing, classify_filings
 from filing_documents import enrich_documents
 
@@ -44,7 +44,9 @@ def classify_cached(filings, path, rules):
         document = row.get('documentExtraction') or {}
         inputs['documentExtraction'] = {key: document.get(key) for key in ('status', 'pages')}
         key = hashlib.sha256(json.dumps(inputs, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-        value = cached.get(key)
+        # Repeated text at different filing dates also shares classification on
+        # a cold cache. Identity, dates and source observations stay separate.
+        value = entries.get(key, cached.get(key))
         if not isinstance(value, dict) or value.get('version') != VERSION or not {
                 'interpretation', 'topics', 'events', 'subtypes', 'documentType', 'status',
                 'matchedRuleIds', 'method', 'basis'}.issubset(value):
@@ -92,7 +94,7 @@ def main() -> int:
         print("No usable filing-history records found.")
         return 1
     complete = sum(bool(item.get("lodr_backfill_complete")) for item in records)
-    save_json(root / "filing_history.json", {
+    save_json_records(root / "filing_history.json", {
         "schema_version": 1,
         "classification_version": VERSION,
         "classification_interpretation": "evidence_based_topic_tags",

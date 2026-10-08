@@ -12,13 +12,14 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1] / "DO NOT DELETE EDL PIPELINE"
 sys.path[:0] = [str(ROOT), str(ROOT / "src")]
-from screen_trend_conditions import _load_context, _load_delivery_history, _resolve_universe
+from screen_trend_conditions import _load_context, _load_delivery_history, _resolve_universe, _requires_delivery as _needs_delivery
 from edl_pipeline.scanner.context import normalize_condition_spec
 from edl_pipeline.scanner.context import CONTEXT_CONDITION_REGISTRY
 from edl_pipeline.scanner.presets import get_preset
 from edl_pipeline.scanner.query import compile_query
 from edl_pipeline.scanner.trend import evaluate_history, normalize_history, _comparison, _evaluate_expression, _leaf_results
 from edl_pipeline.scanner.financials import finite_number, financial_value
+from edl_pipeline.schemas import PUBLIC_FINANCIAL_FIELDS
 
 
 LEGACY_PRESETS = {
@@ -279,8 +280,16 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
     return outcome["status"] == "match"
 
 
+def data_completeness(row):
+    # Preserve the denominator used before the optional ScanX fields were added.
+    added = set(PUBLIC_FINANCIAL_FIELDS.values()) - {"epsTtm", "dividendYieldPct", "debtToEquity"}
+    added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness"})
+    values = [value for key, value in row.items() if key not in added]
+    return round(100 * sum(value is not None for value in values) / len(values)) if values else 0
+
+
 def stock_row(s, ratings):
-    fields = {"listingDate":"listing_date", "series":"listing_series", "changePct":"change_percent", "rvol":"relative_volume_20", "marketCapCrore":"market_cap_crore", "peRatio":"pe_ratio", "epsTtm":"eps_ttm", "dividendYieldPct":"dividend_yield_percent", "rsi14":"rsi14", "adr20Pct":"adr_percent_20", "atr14":"atr14", "dist52wHighPct":"distance_from_52w_high_percent", "dist52wLowPct":"distance_from_52w_low_percent", "distAthPct":"percent_from_ath", "earningsDate":"latest_earnings_date", "deliveryPct":"delivery_percent", "isFno":"fno_eligible", "circuitLimit":"circuit_limit", "roePct":"roe_percent", "rocePct":"roce_percent", "opmTtmPct":"operating_margin_ttm_percent", "debtToEquity":"debt_to_equity", "pegRatio":"peg_ratio", "salesGrowth5yPct":"sales_growth_5_years_percent", "epsLastYear":"eps_last_year", "epsTwoYearsBack":"eps_2_years_back", "surveillanceAvailable":"surveillance_available", "surveillanceAsOfDate":"surveillance_as_of_date", "surveillanceFetchedAt":"surveillance_fetched_at", "isAsm":"is_asm", "asmStage":"asm_stage", "isGsm":"is_gsm", "gsmStage":"gsm_stage"}
+    fields = {"listingDate":"listing_date", "series":"listing_series", "changePct":"change_percent", "rvol":"relative_volume_20", "marketCapCrore":"market_cap_crore", "peRatio":"pe_ratio", "rsi14":"rsi14", "adr20Pct":"adr_percent_20", "atr14":"atr14", "dist52wHighPct":"distance_from_52w_high_percent", "dist52wLowPct":"distance_from_52w_low_percent", "distAthPct":"percent_from_ath", "earningsDate":"latest_earnings_date", "deliveryPct":"delivery_percent", "isFno":"fno_eligible", "circuitLimit":"circuit_limit", "roePct":"roe_percent", "rocePct":"roce_percent", "opmTtmPct":"operating_margin_ttm_percent", "pegRatio":"peg_ratio", "salesGrowth5yPct":"sales_growth_5_years_percent", "epsLastYear":"eps_last_year", "epsTwoYearsBack":"eps_2_years_back", "surveillanceAvailable":"surveillance_available", "surveillanceAsOfDate":"surveillance_as_of_date", "surveillanceFetchedAt":"surveillance_fetched_at", "isAsm":"is_asm", "asmStage":"asm_stage", "isGsm":"is_gsm", "gsmStage":"gsm_stage"}
     fields["vwapAsOfDate"] = "vwap_as_of_date"
     fields.update({
         "totalRevenueLakh": "total_revenue_in_lakhs",
@@ -294,11 +303,18 @@ def stock_row(s, ratings):
         "return5yPct": "return_5y",
     })
     row = {k:s.get(v) for k,v in fields.items()}
+    # Ownership levels are percentages; QoQ changes are percentage points.
+    # Keep absent/non-finite values unavailable rather than fabricating zero.
+    for source, output in PUBLIC_FINANCIAL_FIELDS.items():
+        row[output] = finite_number(s.get(source))
+    row["financialUnitsVersion"] = s.get("financial_units_version")
+    row["debtToEquitySource"] = s.get("debt_to_equity_source")
+    row["financialHistoryObservedOn"] = (s.get("financial_statement_history") or {}).get("observed_on")
     row.update({k:s.get(k) for k in ("symbol","name","open","high","low","close","volume")})
     row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7, rsRating=ratings.get(s["symbol"],{}).get("front_weighted"), daysSinceEarnings=None, fnoBan=False)
     for ma in ("sma20","sma50","sma200","ema20","ema50","ema200"):
         row[ma]=s.get(ma)
-    row["dataCompleteness"] = round(100 * sum(v is not None for v in row.values()) / len(row))
+    row["dataCompleteness"] = data_completeness(row)
     return row
 
 
@@ -345,11 +361,19 @@ def run(request, root=ROOT, cache=None):
     selected = _resolve_universe(context, universe, explicit)
     wanted = set(selected) if selected is not None else None
     stocks = [s for symbol,s in context["stocks"].items() if (wanted is None or symbol in wanted) and s.get("default_screener_eligible",True)]
+    if "announcementSymbols" in request:
+        announcement_symbols = request["announcementSymbols"]
+        if not isinstance(announcement_symbols, list) or any(not isinstance(s, str) for s in announcement_symbols):
+            raise ValueError("Invalid announcement symbol filter")
+        allowed_announcements = set(announcement_symbols)
+        stocks = [s for s in stocks if s.get("symbol") in allowed_announcements]
     text_query = str(request.get("textQuery") or "").strip()
     expression = compile_query(text_query) if text_query else frontend_expression(request["expressionTree"])
-    # Only collect delivery if a translated condition asks for it.
-    serialized_expression = json.dumps(expression).lower()
-    delivery = _load_delivery_history(root/"delivery_history_data", selected, root/"eod2_delivery_history_data") if "delivery_percent" in serialized_expression else {}
+    # Both public delivery conditions need dated history.  The spike condition
+    # is named ``DELIVERY_PCT_SPIKE`` while the latest-session condition uses
+    # ``DELIVERY_PERCENT``; checking only the latter quietly made spike
+    # screens unavailable.
+    delivery = _load_delivery_history(root/"delivery_history_data", selected, root/"eod2_delivery_history_data") if _needs_delivery(expression) else {}
     matched, counts, unresolved = [], Counter(), 0
     for s in stocks:
         path = root/"ohlcv_data"/f"{s['symbol']}.csv"
@@ -389,13 +413,15 @@ def run(request, root=ROOT, cache=None):
                         "epsTwoYearsBack","totalRevenueLakh","nonCurrentAssetsLakh",
                         "totalLiabilitiesLakh","interestCoverage","dividendPerShare",
                         "vwap","vwapAsOfDate","allTimeHigh","allTimeLow","return5yPct",
+                        *PUBLIC_FINANCIAL_FIELDS.values(),
+                        "financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn",
                     ):
                         row[field]=None
             # stock_row starts from the current snapshot. Recalculate after
             # history substitution and current-only field sanitization so the
             # percentage describes the row that is actually returned.
             row.pop("dataCompleteness", None)
-            row["dataCompleteness"] = round(100 * sum(value is not None for value in row.values()) / len(row))
+            row["dataCompleteness"] = data_completeness(row)
             matched.append(row)
     sort=request.get("sort") or {}
     field=sort.get("field","symbol")

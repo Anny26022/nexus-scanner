@@ -132,3 +132,17 @@ it('keeps newer pending tasks alive when one worker task times out',async()=>{
  await expect(second).resolves.toEqual(result);
  expect(vi.getTimerCount()).toBe(0);
 });
+
+it.each(['compressed', 'decompressed'])('screens packed gzip with %s HTTP delivery identically', async delivery => {
+ const {stocks, ...metadata} = snapshot;
+ const keys = Object.keys(stocks[0]);
+ const packed = {...metadata, stockEncoding:'columnar-v1', nestedTables:{},
+  stocksTable:{keys, values:stocks.map(stock => keys.map(key => (stock as any)[key])), missing:stocks.map(() => [])}};
+ const json = JSON.stringify(packed);
+ vi.stubGlobal('DecompressionStream',(await import('node:stream/web')).DecompressionStream);
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(delivery === 'compressed'
+  ? new Response(gzipSync(json)) : new Response(json, {headers:{'Content-Encoding':'gzip'}})));
+ const packedResult = await createSnapshotEngine()({type:'screen',source:{...source,url:'/stocks.packed.json.gz'},request});
+ const originalResult = await createSnapshotEngine(async () => snapshot)({type:'screen',source,request});
+ expect(packedResult).toStrictEqual(originalResult);
+});

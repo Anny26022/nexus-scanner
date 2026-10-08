@@ -15,6 +15,8 @@ import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown } from 'lucide-react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import { AnnouncementFilterControl } from './AnnouncementFilterControl';
+import type { AnnouncementFilter } from '../api/announcements';
 
 interface ExploreTabProps {
   selectedAsOfDate: string;
@@ -46,6 +48,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   const [activeConditionsMap, setActiveConditionsMap] =
     useLocalStorageState<Record<string, ActiveCondition>>('nexus-scanner.screener.conditions.v1', DEFAULT_CONDITIONS);
   const [page, setPage] = useState(1);
+  const [announcementFilter, setAnnouncementFilter] = useState<AnnouncementFilter>();
   const [sort, setSort] = useLocalStorageState<{ field: string; direction: 'asc' | 'desc' }>('nexus-scanner.screener.sort.v1', {
     field: 'rvol',
     direction: 'desc',
@@ -70,6 +73,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   const runRequest: ScreenerRunRequest = useMemo(
     () => ({
       expressionTree,
+      announcementFilter,
       textQuery: activeQuery || undefined,
       universe,
       asOfDate,
@@ -78,7 +82,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       page,
       pageSize: 15,
     }),
-    [expressionTree, activeQuery, universe, asOfDate, datasetRevision, sort, page]
+    [expressionTree, activeQuery, universe, asOfDate, datasetRevision, sort, page, announcementFilter]
   );
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -106,6 +110,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
 
   const handleReset = () => {
     setActiveConditionsMap({});
+    setAnnouncementFilter(undefined);
     setActiveQuery('');
     setQueryText('');
     setPage(1);
@@ -113,12 +118,15 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
 
   const handleRun = async () => {
     const nextQuery = queryText.trim();
+    // Refresh before changing query state.  Otherwise the render caused by a
+    // new query can submit the revision captured before this button press.
+    const refreshedRevision = await onRefreshRevision();
     if (nextQuery !== activeQuery) {
       setActiveQuery(nextQuery);
       setPage(1);
       return;
     }
-    if (await onRefreshRevision() === datasetRevision) await refetch();
+    if (refreshedRevision === datasetRevision) await refetch();
   };
 
   const filterCount = activeConditionsArray.length;
@@ -149,6 +157,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
 
           </div>
 
+          <AnnouncementFilterControl key={datasetRevision} revision={datasetRevision} value={announcementFilter}
+            onChange={value => {setAnnouncementFilter(value); setPage(1);}} />
           <div className="ml-auto flex items-center gap-2">
             <input
               aria-label="Scanner query"

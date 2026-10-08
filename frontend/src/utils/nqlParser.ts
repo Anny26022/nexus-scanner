@@ -32,16 +32,16 @@ export function explainCondition(condition: ActiveCondition): {
 
   switch (condition.conditionId) {
     case 'INDICATOR_COMPARE':
-      explanation = `${p.leftIndicator}(${p.leftPeriod}) ${String(p.op).replaceAll('_', ' ')} ${p.rightIndicator ? `${p.rightIndicator}(${p.rightPeriod})` : p.rightValue}${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
+      explanation = `${p.leftIndicator}(${p.leftPeriod}${p.leftOffset ? `, offset ${p.leftOffset}` : ''}) ${String(p.op).replaceAll('_', ' ')} ${p.rightIndicator ? `${p.rightIndicator}(${p.rightPeriod}${p.rightOffset ? `, offset ${p.rightOffset}` : ''})` : p.rightValue}${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
       break;
     case 'MA_CONVERGENCE':
       explanation = `${p.maType} ${p.periods} are within ${p.maxSpreadPct}% of close${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
       break;
     case 'DIVERGENCE':
-      explanation = `${p.variant} ${p.direction} price / ${p.oscillator}(${p.oscPeriod}) divergence, confirmed with ${p.pivotRight} right bars`;
+      explanation = `${p.variant} ${p.direction} price / ${p.oscillator}(${p.oscPeriod}) divergence, confirmed with ${p.pivotRight} right bars${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
       break;
     case 'SUPERTREND':
-      explanation = `Supertrend(${p.period}, ${p.multiplier}) is ${p.direction}${p.signal === 'TURN' ? ` after turning within ${p.withinDays} sessions` : ''}`;
+      explanation = `Supertrend(${p.period}, ${p.multiplier}) is ${p.direction}${p.signal === 'TURN' ? ' after turning' : ''}${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
       break;
     case 'trend_price_vs_ma':
       explanation = `Price is ${p.operator === 'above' ? 'ABOVE' : p.operator === 'below' ? 'BELOW' : 'WITHIN % RANGE OF'} ${p.maType} ${p.maPeriod}${p.thresholdPct ? ` (threshold: ${p.thresholdPct}%)` : ''}`;
@@ -73,7 +73,7 @@ export function explainCondition(condition: ActiveCondition): {
     case 'mom_gap_up_down':
       explanation = `${p.gapType === 'gap_up' ? 'Gapped UP' : 'Gapped DOWN'} by AT LEAST ${p.minGapPct}% today`;
       break;
-    case 'mom_delivery_pct':
+    case 'mom_delivery_vol':
       explanation = `NSE Delivery Volume is AT LEAST ${p.minDeliveryPct}% of total volume`;
       break;
     case 'range_52w_high_low':

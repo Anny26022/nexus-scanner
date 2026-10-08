@@ -21,6 +21,24 @@ def history(length=300):
 
 
 class ScannerQueryTests(unittest.TestCase):
+    def test_rejects_equivalent_periods_and_empty_elements_during_compilation(self):
+        for periods in ['09,9', '9,,20', ',9,20', '9,20,']:
+            with self.subTest(periods=periods), self.assertRaisesRegex(ValueError, 'positive integer periods'):
+                compile_query(f'MA Convergence("{periods}") < 2')
+
+    def test_rejects_nonfinite_fixed_targets_in_both_query_forms(self):
+        for value in ['NaN', 'Inf', '-Inf']:
+            for target in [value, f'"", {value}']:
+                with self.subTest(target=target), self.assertRaisesRegex(ValueError, 'fixed target must be finite'):
+                    compile_query(f'Indicator Compare(RSI, 14, 0, ABOVE, {target})')
+
+    def test_fixed_indicator_comparison_retains_the_legacy_explicit_blank_form(self):
+        legacy = compile_query('Indicator Compare(RSI, 14, 0, ABOVE, "", 30, 2)')
+        short = compile_query('Indicator Compare(RSI, 14, 0, ABOVE, 30, 2)')
+        self.assertEqual(legacy, short)
+        with self.assertRaisesRegex(ValueError, "numeric fixed target"):
+            compile_query('Indicator Compare(RSI, 14, 0, ABOVE, "")')
+
     def test_compiles_and_or_with_the_documented_precedence(self):
         tree = compile_query("Market Cap (in Cr) > 2000 OR Close Price > 50 DMA AND Close Price > 100")
         self.assertEqual(tree["op"], "OR")
@@ -48,6 +66,18 @@ class ScannerQueryTests(unittest.TestCase):
         ])
         result = evaluate_history(history(), tree)
         self.assertEqual(result["status"], "match")
+
+    def test_function_defaults_and_indicator_compare_fixed_target_are_safe(self):
+        supertrend = compile_query("Supertrend()")
+        self.assertEqual((supertrend["params"]["period"], supertrend["params"]["multiplier"]), (10, 3))
+        fixed = compile_query("Indicator Compare(RSI, 14, 0, ABOVE, 60)")
+        self.assertEqual((fixed["params"]["rightIndicator"], fixed["params"]["rightValue"]), ("", 60))
+        underscored = compile_query("MACD_SIGNAL(26) > 0")
+        self.assertEqual(underscored["params"]["leftIndicator"], "MACD_SIGNAL")
+        with self.assertRaisesRegex(ValueError, "offsets"):
+            compile_query("Indicator Compare(RSI, 14, -1, ABOVE, 60)")
+        with self.assertRaisesRegex(ValueError, "Divergence requires"):
+            compile_query("Divergence(RSI, 14)")
 
     def test_ma_convergence_preserves_operator_and_requires_quoted_periods(self):
         tree = compile_query('MA Convergence("9,20,50", EMA) > 2')

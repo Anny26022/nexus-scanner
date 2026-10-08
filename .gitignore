@@ -1,5 +1,6 @@
 # EDL Pipeline generated intermediates
 DO NOT DELETE EDL PIPELINE/*.json
+!DO NOT DELETE EDL PIPELINE/filing_source_labels.json
 DO NOT DELETE EDL PIPELINE/*.csv
 DO NOT DELETE EDL PIPELINE/company_filings/
 DO NOT DELETE EDL PIPELINE/market_news/
@@ -64,3 +65,13 @@ DO NOT DELETE EDL PIPELINE/.scanner_cache/
 DO NOT DELETE EDL PIPELINE/chart_artifacts/
 frontend/public/data/charts/
 frontend/public/data/revisions/*/charts/
+
+# Shared immutable browser objects are delivered through R2.
+frontend/public/data/objects/
+
+# Keep the weekly Tijori cache and summary; omit local intermediates.
+reference/tijori/*
+!reference/tijori/tijori-overviews.json.gz
+!reference/tijori/summary.json
+# Exclude interrupted atomic publication writes.
+frontend/public/data/tijori/**/*.tmp

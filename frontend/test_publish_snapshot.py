@@ -12,6 +12,33 @@ from scanner_cache import ScannerCache
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def test_publishes_ownership_values_and_preserves_old_revision(self):
+        with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl';root.mkdir();output=Path(folder)/'public';self.fixture(root)
+            source=root/'all_stocks_fundamental_analysis.json.gz'
+            with gzip.open(source,'rt') as handle:
+                stocks=json.load(handle)
+            stocks[0].update(promoter_holding_percent=50.48,fii_percent_change_qoq=-1.47,dii_percent_change_qoq=0.0)
+            with gzip.open(source,'wt') as handle:
+                json.dump(stocks,handle)
+            first=publish(root,output)
+            original=output/'revisions'/first['revision']/'stocks.json'
+            original_bytes=original.read_bytes()
+            row=json.loads(original_bytes)['stocks'][0]
+            self.assertEqual(row['promoterHoldingPct'],50.48)
+            self.assertEqual(row['fiiChangePctQoq'],-1.47)
+            self.assertEqual(row['diiChangePctQoq'],0.0)
+            stocks[0].update(promoter_holding_percent=None,fii_percent_change_qoq=None,dii_percent_change_qoq=2.25)
+            with gzip.open(source,'wt') as handle:
+                json.dump(stocks,handle)
+            second=publish(root,output)
+            row=json.loads((output/'revisions'/second['revision']/'stocks.json').read_text())['stocks'][0]
+            self.assertIsNone(row['promoterHoldingPct'])
+            self.assertIsNone(row['fiiChangePctQoq'])
+            self.assertEqual(row['diiChangePctQoq'],2.25)
+            self.assertNotEqual(first['revision'],second['revision'])
+            self.assertEqual(original.read_bytes(),original_bytes)
+
     def fixture(self, root, cap=5000):
         stocks=[{'symbol':'TEST','name':'Test','close':100,'open':99,'high':101,'low':98,'volume':200,'as_of_date':'2026-09-30',
                  'market_cap_crore':cap,'daily_rupee_turnover_50_cr':10,'circuit_limit':'20','listing_series':'EQ','index_memberships':[]}]
@@ -30,6 +57,54 @@ class SnapshotPublicationTests(unittest.TestCase):
         frame=pd.DataFrame({'Date':pd.bdate_range(end='2026-09-30',periods=60),'Open':99.,'High':101.,'Low':98.,'Close':100.,'Volume':100.})
         frame.to_csv(root/'ohlcv_data/TEST.csv',index=False)
 
+    def test_publishes_ownership_values_and_preserves_old_revision(self):
+        with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl';root.mkdir();output=Path(folder)/'public';self.fixture(root)
+            source=root/'all_stocks_fundamental_analysis.json.gz'
+            with gzip.open(source,'rt') as handle:
+                stocks=json.load(handle)
+            stocks[0].update(promoter_holding_percent=50.48,fii_percent_change_qoq=-1.47,dii_percent_change_qoq=0.0)
+            stocks[0].update(cwip_crore=237686,pb_ratio=1.8247,ev_ebitda=24.91,
+                             total_income_in_lakhs=31601800,total_tax_expenses_in_lakhs=743400,
+                             debt_to_equity=0.44,financial_units_version=1,debt_to_equity_source='SCANX_Debt2Eq')
+            stocks[0]['financial_statement_history'] = {'source': 'ScanX', 'observed_on': '2026-09-30',
+                'quarterly': [{'period_end': '2026-06-30', 'revenue': 120}], 'annual': []}
+            stocks[0]['ttm_revenue_growth_percent'] = 20
+            with gzip.open(source,'wt') as handle:
+                json.dump(stocks,handle)
+            first=publish(root,output)
+            original=output/'revisions'/first['revision']/'stocks.json'
+            original_bytes=original.read_bytes()
+            row=json.loads(original_bytes)['stocks'][0]
+            self.assertEqual(row['promoterHoldingPct'],50.48)
+            self.assertEqual(row['fiiChangePctQoq'],-1.47)
+            self.assertEqual(row['diiChangePctQoq'],0.0)
+            self.assertEqual(row['cwipCrore'],237686)
+            self.assertEqual(row['pbRatio'],1.8247)
+            self.assertEqual(row['evEbitda'],24.91)
+            self.assertEqual(row['totalIncomeLakh'],31601800)
+            self.assertEqual(row['totalTaxExpensesLakh'],743400)
+            self.assertEqual(row['debtToEquity'],0.44)
+            self.assertEqual(row['financialUnitsVersion'],1)
+            self.assertEqual(row['debtToEquitySource'],'SCANX_Debt2Eq')
+            self.assertEqual(row['ttmRevenueGrowthPct'],20)
+            self.assertEqual(row['financialHistoryObservedOn'],'2026-09-30')
+            self.assertNotIn('financialStatementHistory',row)
+            self.assertEqual(json.loads((output/'current.json').read_text())['financialHistoryUrl'],first['financialHistoryUrl'])
+            history_file=output/first['financialHistoryUrl'].removeprefix('/data/')
+            with gzip.open(history_file,'rt') as handle:
+                self.assertEqual(json.load(handle)['TEST'],stocks[0]['financial_statement_history'])
+            stocks[0].update(promoter_holding_percent=None,fii_percent_change_qoq=None,dii_percent_change_qoq=2.25)
+            with gzip.open(source,'wt') as handle:
+                json.dump(stocks,handle)
+            second=publish(root,output)
+            row=json.loads((output/'revisions'/second['revision']/'stocks.json').read_text())['stocks'][0]
+            self.assertIsNone(row['promoterHoldingPct'])
+            self.assertIsNone(row['fiiChangePctQoq'])
+            self.assertEqual(row['diiChangePctQoq'],2.25)
+            self.assertNotEqual(first['revision'],second['revision'])
+            self.assertEqual(original.read_bytes(),original_bytes)
+
     def test_same_session_correction_creates_new_revision_and_old_backend_stays_frozen(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
@@ -44,6 +119,10 @@ class SnapshotPublicationTests(unittest.TestCase):
             second=publish(root,output)
             compressed=(output/'revisions'/second['revision']/'stocks.json.gz').read_bytes()
             self.assertEqual(gzip.decompress(compressed),(output/'revisions'/second['revision']/'stocks.json').read_bytes())
+            self.assertEqual(second['datasetPackedGzipUrl'], f"/data/revisions/{second['revision']}/stocks.packed.json.gz")
+            from test_packed_snapshot import decode_packed_snapshot
+            packed = json.loads(gzip.decompress((output/'revisions'/second['revision']/'stocks.packed.json.gz').read_bytes()))
+            self.assertEqual(decode_packed_snapshot(packed), json.loads((output/'revisions'/second['revision']/'stocks.json').read_text()))
             self.assertEqual(second['datasetGzipUrl'],f"/data/revisions/{second['revision']}/stocks.json.gz")
             self.assertNotEqual(first['revision'],second['revision'])
             self.assertEqual(json.loads((output/'current.json').read_text())['revision'],second['revision'])

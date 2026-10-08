@@ -1,0 +1,18 @@
+{
+  "source": "Tijori Finance public company pages",
+  "exportedAt": "2026-10-07T14:29:54.049865+00:00",
+  "universeSessionDate": "2026-10-06",
+  "universeRevision": "607232c0519cc32fc36001959c85af7c23b0146b9df7342780516bf1be743478",
+  "totalSymbols": 2609,
+  "counts": {
+    "available": 2425,
+    "no_overview": 177,
+    "unmapped": 6,
+    "http_error": 1
+  },
+  "attemptedSymbols": 2609,
+  "withBothSections": 2389,
+  "refreshErrors": 0,
+  "complete": false,
+  "note": "Source symbols are verified against the NSE list; as_of dates belong to Tijori. Narrative claims have not been independently verified."
+}

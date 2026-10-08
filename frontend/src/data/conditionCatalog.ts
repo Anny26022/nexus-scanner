@@ -4,7 +4,7 @@ import nativeConditions from './nativeConditions.json';
 const INDICATOR_OPTIONS = [
   'CLOSE','OPEN','HIGH','LOW','VOLUME','HL2','HLC3','OHLC4','SMA','EMA','WMA','VOLUME_SMA',
   'RSI','MACD','MACD_SIGNAL','MACD_HIST','STOCH_K','STOCH_D','CCI','WILLIAMS_R','MFI','ROC','OBV',
-  'ADX','PLUS_DI','MINUS_DI','ATR','SUPERTREND','BB_UPPER','BB_MIDDLE','BB_LOWER','BB_PCTB','BB_WIDTH',
+  'ADX','PLUS_DI','MINUS_DI','ATR','SUPERTREND','SUPERTREND_DIRECTION','BB_UPPER','BB_MIDDLE','BB_LOWER','BB_PCTB','BB_WIDTH',
   'DONCHIAN_UPPER','DONCHIAN_LOWER',
 ].map(value => ({ label: value.replaceAll('_', ' '), value }));
 
@@ -17,8 +17,8 @@ const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
     description: 'Compare any supported indicator with a fixed value or another indicator, including recent crossovers and offsets.',
     parameters: [
       { id:'leftIndicator', label:'Indicator', type:'select', defaultValue:'RSI', options:INDICATOR_OPTIONS },
-      { id:'leftPeriod', label:'Period', type:'number', defaultValue:14, min:1, max:500 },
-      { id:'leftOffset', label:'Offset', type:'number', defaultValue:0, min:0, max:250, unit:'bars' },
+      { id:'leftPeriod', label:'Period', type:'number', defaultValue:14, min:1, max:500, step:1 },
+      { id:'leftOffset', label:'Offset', type:'number', defaultValue:0, min:0, max:250, step:1, unit:'bars' },
       { id:'op', label:'Test', type:'select', defaultValue:'ABOVE', options:[
         {label:'> Greater',value:'GREATER'},{label:'≥ At or above',value:'ABOVE'},
         {label:'= Equal',value:'EQUAL'},{label:'≤ At or below',value:'BELOW'},{label:'< Less',value:'LESS'},
@@ -26,9 +26,9 @@ const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
       ]},
       { id:'rightIndicator', label:'Against', type:'select', defaultValue:'', options:[{label:'Fixed value',value:''},...INDICATOR_OPTIONS] },
       { id:'rightValue', label:'Value', type:'number', defaultValue:60 },
-      { id:'rightPeriod', label:'Its period', type:'number', defaultValue:20, min:1, max:500 },
-      { id:'rightOffset', label:'Its offset', type:'number', defaultValue:0, min:0, max:250, unit:'bars' },
-      { id:'withinDays', label:'Fired within', type:'number', defaultValue:1, min:1, max:250, unit:'d' },
+      { id:'rightPeriod', label:'Its period', type:'number', defaultValue:20, min:1, max:500, step:1 },
+      { id:'rightOffset', label:'Its offset', type:'number', defaultValue:0, min:0, max:250, step:1, unit:'bars' },
+      { id:'withinDays', label:'Fired within', type:'number', defaultValue:1, min:1, max:250, step:1, unit:'d' },
     ],
   },
   {
@@ -38,7 +38,7 @@ const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
       {id:'periods',label:'Periods',type:'string',defaultValue:'9,20,50,200'},
       {id:'maType',label:'Average',type:'select',defaultValue:'EMA',options:[{label:'EMA',value:'EMA'},{label:'SMA',value:'SMA'}]},
       {id:'maxSpreadPct',label:'Max spread',type:'number',defaultValue:1.5,min:0,max:100,step:.1,unit:'%'},
-      {id:'withinDays',label:'Within',type:'number',defaultValue:1,min:1,max:250,unit:'d'},
+      {id:'withinDays',label:'Within',type:'number',defaultValue:1,min:1,max:250,step:1,unit:'d'},
     ],
   },
   {
@@ -46,14 +46,14 @@ const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
     description:'Confirmed regular or hidden bullish/bearish divergence between price and oscillator fractal pivots.',
     parameters:[
       {id:'oscillator',label:'Oscillator',type:'select',defaultValue:'RSI',options:OSCILLATOR_OPTIONS},
-      {id:'oscPeriod',label:'Period',type:'number',defaultValue:14,min:1,max:250},
+      {id:'oscPeriod',label:'Period',type:'number',defaultValue:14,min:1,max:250,step:1},
       {id:'direction',label:'Direction',type:'select',defaultValue:'BULLISH',options:[{label:'Bullish',value:'BULLISH'},{label:'Bearish',value:'BEARISH'}]},
       {id:'variant',label:'Type',type:'select',defaultValue:'REGULAR',options:[{label:'Regular',value:'REGULAR'},{label:'Hidden',value:'HIDDEN'}]},
-      {id:'maxBarDifference',label:'Pivot gap',type:'number',defaultValue:1,min:0,max:20,unit:'bars'},
-      {id:'pivotLeft',label:'Pivot left',type:'number',defaultValue:5,min:1,max:30,unit:'bars'},
-      {id:'pivotRight',label:'Confirm right',type:'number',defaultValue:3,min:1,max:30,unit:'bars'},
-      {id:'lookbackDays',label:'Lookback',type:'number',defaultValue:120,min:20,max:1000,unit:'d'},
-      {id:'withinDays',label:'Fired within',type:'number',defaultValue:8,min:1,max:250,unit:'d'},
+      {id:'maxBarDifference',label:'Pivot gap',type:'number',defaultValue:1,min:0,max:20,step:1,unit:'bars'},
+      {id:'pivotLeft',label:'Pivot left',type:'number',defaultValue:5,min:1,max:30,step:1,unit:'bars'},
+      {id:'pivotRight',label:'Confirm right',type:'number',defaultValue:3,min:1,max:30,step:1,unit:'bars'},
+      {id:'lookbackDays',label:'Lookback',type:'number',defaultValue:120,min:20,max:1000,step:1,unit:'d'},
+      {id:'withinDays',label:'Fired within',type:'number',defaultValue:8,min:1,max:250,step:1,unit:'d'},
       {id:'invalidateOnBreak',label:'Invalidate if broken',type:'boolean',defaultValue:true},
     ],
   },
@@ -61,11 +61,11 @@ const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
     id:'SUPERTREND', label:'Supertrend Direction', category:'trend',
     description:'Wilder-ATR Supertrend is bullish or bearish, or turned into that direction recently.',
     parameters:[
-      {id:'period',label:'ATR period',type:'number',defaultValue:10,min:1,max:100},
+      {id:'period',label:'ATR period',type:'number',defaultValue:10,min:1,max:100,step:1},
       {id:'multiplier',label:'Multiplier',type:'number',defaultValue:3,min:.1,max:20,step:.1},
       {id:'direction',label:'Direction',type:'select',defaultValue:'BULLISH',options:[{label:'Bullish (green)',value:'BULLISH'},{label:'Bearish (red)',value:'BEARISH'}]},
       {id:'signal',label:'Match',type:'select',defaultValue:'STATE',options:[{label:'Current state',value:'STATE'},{label:'Recent turn',value:'TURN'}]},
-      {id:'withinDays',label:'Within',type:'number',defaultValue:1,min:1,max:250,unit:'d'},
+      {id:'withinDays',label:'Within',type:'number',defaultValue:1,min:1,max:250,step:1,unit:'d'},
     ],
   },
 ];

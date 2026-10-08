@@ -182,3 +182,15 @@ def fetch_delivery_file_for_date(session_date: date, session: requests.Session) 
         return None
     response.raise_for_status()
     return [item for row in csv.DictReader(StringIO(response.content.decode("utf-8-sig"))) if (item := normalize_row(row))]
+
+
+def fetch_ohlcv_file_for_date(session_date: date, session: requests.Session) -> list[dict]:
+    """Fetch official prices for one session; never turn missing data into candles."""
+    url = HISTORICAL_FILE_URL.format(date=session_date.strftime("%d%m%Y"))
+    response = session.get(url, headers=NSE_HEADERS, timeout=60)
+    response.raise_for_status()
+    rows = [item for row in csv.DictReader(StringIO(response.content.decode("utf-8-sig")))
+            if (item := normalize_ohlcv_row(row)) and item['date'] == session_date.isoformat()]
+    if not rows:
+        raise ValueError(f"NSE full bhavcopy has no valid OHLCV for {session_date}")
+    return rows

@@ -11,6 +11,47 @@ from edl_pipeline.scanner.presets import list_presets
 
 
 class BridgeTests(unittest.TestCase):
+    def test_ownership_fields_keep_missing_and_non_finite_values_unavailable(self):
+        row = bridge.stock_row({"symbol": "TEST", "promoter_holding_percent": float('nan'),
+                                "fii_percent_change_qoq": float('inf')}, {})
+        for field in ('promoterHoldingPct', 'fiiChangePctQoq', 'diiChangePctQoq'):
+            self.assertIsNone(row[field])
+
+    def test_announcement_filter_intersects_before_pagination_and_isolates_cache(self):
+        context = {"stocks": {symbol: {**self.stock(), "symbol": symbol} for symbol in ("AAA", "BBB")},
+                   "financial_history_as_of": "2026-09-30", "rs_ratings": {}, "fno_ban_symbols": {}}
+        request = {"asOfDate": "2026-09-30", "universe": "mainboard", "pageSize": 1,
+                   "expressionTree": {"type": "group", "operator": "all", "children": []}}
+        with tempfile.TemporaryDirectory() as folder, patch.object(bridge, "_load_context", return_value=context):
+            root = Path(folder)
+            cache = ScannerCache()
+            self.assertEqual(bridge.run(request, root, cache)["matchCount"], 2)
+            filtered = bridge.run({**request, "announcementSymbols": ["BBB"]}, root, cache)
+            self.assertEqual(filtered["matchCount"], 1)
+            self.assertEqual(filtered["rows"][0]["symbol"], "BBB")
+            self.assertEqual(bridge.run({**request, "announcementSymbols": []}, root, cache)["matchCount"], 0)
+            self.assertEqual(bridge.run(request, root, cache)["matchCount"], 2)
+            with self.assertRaises(ValueError):
+                bridge.run({**request, "announcementSymbols": "BBB"}, root, cache)
+
+    def test_optional_financial_fields_do_not_change_legacy_completeness(self):
+        stock = self.stock()
+        self.assertEqual(bridge.stock_row(stock, {})["dataCompleteness"], 24)
+        stock.update({source: 1 for source, output in bridge.PUBLIC_FINANCIAL_FIELDS.items()
+                      if output not in {"epsTtm", "dividendYieldPct", "debtToEquity"}})
+        stock.update(financial_units_version=1, debt_to_equity_source="SCANX_Debt2Eq")
+        self.assertEqual(bridge.stock_row(stock, {})["dataCompleteness"], 24)
+        stock.update(eps_ttm=25, dividend_yield_percent=2, debt_to_equity=0.44)
+        row = bridge.stock_row(stock, {})
+        self.assertEqual(row["dataCompleteness"], 29)
+        self.assertEqual((row["epsTtm"], row["dividendYieldPct"], row["debtToEquity"]), (25, 2, 0.44))
+
+    def test_ownership_fields_keep_missing_and_non_finite_values_unavailable(self):
+        row = bridge.stock_row({"symbol": "TEST", "promoter_holding_percent": float('nan'),
+                                "fii_percent_change_qoq": float('inf')}, {})
+        for field in ('promoterHoldingPct', 'fiiChangePctQoq', 'diiChangePctQoq'):
+            self.assertIsNone(row[field])
+
     def test_cache_reuses_scan_for_pagination_and_invalidates_changed_history(self):
         context={"stocks":{"TEST":self.stock()},"financial_history_as_of":"2026-09-30","rs_ratings":{},"fno_ban_symbols":{}}
         request={"asOfDate":"2026-09-30","universe":"mainboard","expressionTree":{"type":"group","operator":"all","children":[]}}
@@ -114,6 +155,15 @@ class BridgeTests(unittest.TestCase):
         self.assertTrue(bridge.evaluate(bridge.translate("ABSOLUTE_EPS",{"comparison":"GREATER","value":20}),stock,frame,{},"2026-09-30",set(),[]))
         self.assertTrue(bridge.evaluate(bridge.translate("DIVIDEND_YIELD",{"comparison":"GREATER","value":2}),stock,frame,{},"2026-09-30",set(),[]))
 
+    def test_delivery_spike_loads_history_for_the_contract_kind(self):
+        expression = {"type":"condition","kind":"DELIVERY_PCT_SPIKE","params":{"minDeliverablePct":60,"withinDays":1}}
+        self.assertTrue(bridge._needs_delivery(expression))
+        self.assertTrue(bridge._needs_delivery({"type":"condition","kind":"DELIVERY_PERCENT","params":{}}))
+        self.assertFalse(bridge._needs_delivery({"type":"condition","kind":"PE_RATIO","params":{}}))
+        self.assertTrue(bridge._needs_delivery({"type":"not","child":expression}))
+        self.assertFalse(bridge._needs_delivery({"type":"not","child":{"kind":"PE_RATIO","params":{}}}))
+        self.assertFalse(bridge._needs_delivery({"kind":"SECTOR","params":{"sector":"delivery_percent"}}))
+
     def test_snapshot_field_query_without_history_has_stable_diagnostics(self):
         node=bridge.compile_query("Earning Per Share (EPS) > 20")
         stock={**self.stock(),"eps_ttm":25}
@@ -187,17 +237,23 @@ class BridgeTests(unittest.TestCase):
                "interest_coverage":5,"dividend_per_share_latest":2,"vwap":100,
                "vwap_as_of_date":"2026-09-30","all_time_high":150,"all_time_low":20,
                "return_5y":80,"roe_percent":18,"eps_last_year":12}
+        stock.update({source: 123 for source in bridge.PUBLIC_FINANCIAL_FIELDS})
+        stock.update(financial_units_version=1, debt_to_equity_source="SCANX_Debt2Eq")
         context={"stocks":{"TEST":stock},"financial_history_as_of":"2026-09-30",
                  "rs_ratings":{},"fno_ban_symbols":{}}
         request={"asOfDate":"2026-09-29","universe":"mainboard",
                  "expressionTree":{"type":"group","operator":"all","children":[]}}
         with tempfile.TemporaryDirectory() as folder, patch.object(bridge,"_load_context",return_value=context):
             root=Path(folder); (root/'ohlcv_data').mkdir()
-            self.history(latest="2026-09-29").to_csv(root/'ohlcv_data/TEST.csv',index=False)
+            self.history().to_csv(root/'ohlcv_data/TEST.csv',index=False)
             row=bridge.run(request,root)["rows"][0]
             for field in ("totalRevenueLakh","nonCurrentAssetsLakh","totalLiabilitiesLakh",
                           "interestCoverage","dividendPerShare","vwap","vwapAsOfDate",
-                          "allTimeHigh","allTimeLow","return5yPct","roePct","epsLastYear"):
+                          "allTimeHigh","allTimeLow","return5yPct","roePct","epsLastYear",
+                          *bridge.PUBLIC_FINANCIAL_FIELDS.values(), "financialUnitsVersion", "debtToEquitySource"):
                 self.assertIsNone(row[field], field)
-            values = [value for field, value in row.items() if field != "dataCompleteness"]
-            self.assertEqual(row["dataCompleteness"], round(100 * sum(value is not None for value in values) / len(values)))
+            self.assertEqual(row["dataCompleteness"], bridge.data_completeness(row))
+            current = bridge.run({**request, "asOfDate": "2026-09-30"}, root)["rows"][0]
+            for field in bridge.PUBLIC_FINANCIAL_FIELDS.values():
+                self.assertEqual(current[field], 123, field)
+            self.assertEqual(current["debtToEquitySource"], "SCANX_Debt2Eq")

@@ -56,6 +56,8 @@ export interface ExpressionConditionNode {
 export type ExpressionNode = ExpressionGroupNode | ExpressionConditionNode;
 
 export interface ScreenerRunRequest {
+  announcementFilter?: import("../api/announcements").AnnouncementFilter;
+  announcementSymbols?: string[];
   datasetRevision?: string;
   expressionTree: ExpressionNode;
   textQuery?: string;
@@ -109,6 +111,10 @@ export interface StockRow {
   rocePct?: number | null;
   opmTtmPct?: number | null;
   debtToEquity?: number | null;
+  promoterHoldingPct?: number | null;
+  // Quarter-on-quarter changes in percentage points, not relative growth.
+  fiiChangePctQoq?: number | null;
+  diiChangePctQoq?: number | null;
   totalRevenueLakh?: number | null;
   nonCurrentAssetsLakh?: number | null;
   totalLiabilitiesLakh?: number | null;
@@ -123,6 +129,51 @@ export interface StockRow {
   financialMetadata?: Record<string, unknown> | null;
   dividendExDate?: string | null;
 
+  financialUnitsVersion?: number | null;
+  financialHistoryObservedOn?: string | null;
+  ttmRevenueCrore?: number | null;
+  ttmSalesCrore?: number | null;
+  ttmNetProfitCrore?: number | null;
+  ttmRevenueGrowthPct?: number | null;
+  ttmSalesGrowthPct?: number | null;
+  ttmNetProfitGrowthPct?: number | null;
+  opm5YearsAgoPct?: number | null;
+  debtToEquitySource?: string | null;
+  pbRatio?: number | null;
+  evEbitda?: number | null;
+  currentRatio?: number | null;
+  roaPct?: number | null;
+  cwipCrore?: number | null;
+  fixedAssetsCrore?: number | null;
+  borrowingsCrore?: number | null;
+  freeCashFlowCrore?: number | null;
+  financingCashFlowCrore?: number | null;
+  averageRoe3yPct?: number | null;
+  averageRoa3yPct?: number | null;
+  averageOpm5yPct?: number | null;
+  medianSalesGrowth5yPct?: number | null;
+  epsGrowth1yPct?: number | null;
+  epsCagr3yPct?: number | null;
+  revenueCagr3yPct?: number | null;
+  fiiHoldingPct?: number | null;
+  diiHoldingPct?: number | null;
+  industryPeRatio?: number | null;
+  publicHoldingPct?: number | null;
+  numberOfShareholders?: number | null;
+  faceValue?: number | null;
+  totalIncomeLakh?: number | null;
+  totalExpenseLakh?: number | null;
+  profitBeforeTaxLakh?: number | null;
+  totalTaxExpensesLakh?: number | null;
+  netProfitLakh?: number | null;
+  totalEquityLakh?: number | null;
+  totalAssetsLakh?: number | null;
+  currentAssetsLakh?: number | null;
+  currentLiabilitiesLakh?: number | null;
+  nonCurrentLiabilitiesLakh?: number | null;
+  operatingCashFlowLakh?: number | null;
+  investingCashFlowLakh?: number | null;
+  netCashFlowLakh?: number | null;
   pegRatio?: number | null;
   salesGrowth5yPct?: number | null;
   epsLastYear?: number | null;
@@ -168,6 +219,14 @@ export interface ScreenerRunResponse {
   warnings: string[];
 }
 
+export interface IpoCatalogue {
+  records: IPORow[];
+  providerStatus?: {
+    checkedAt: string | null;
+    state: 'complete' | 'partial' | 'retained' | 'unavailable' | 'unknown';
+  };
+}
+
 export interface IPORow {
   symbol: string;
   name: string;
@@ -178,6 +237,7 @@ export interface IPORow {
   sector: string;
   industry: string;
   marketCapCrore: number;
+  ipoDetailStatus?: { lastSuccessAt: string | null; failedEndpoints: string[] };
   // Retained for the mock fixture; the live catalogue does not publish IPO terms.
   issuePrice?: number | null;
   listingPrice?: number | null;

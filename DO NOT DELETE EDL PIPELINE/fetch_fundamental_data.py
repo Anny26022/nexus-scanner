@@ -1,5 +1,7 @@
 import sys
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from pipeline_utils import chunked, post_json, load_json, save_json
 
@@ -24,6 +26,7 @@ def attach_symbol_metadata(rows, isin_lookup):
         metadata = isin_lookup.get(item.get("isin"))
         if metadata:
             item.update(metadata)
+        item["financial_observed_on"] = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
     return rows
 
 def fetch_fundamental_data():

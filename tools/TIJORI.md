@@ -1,0 +1,80 @@
+# Tijori export
+
+Run these commands from the repository root. Output and sitemap paths, and the
+default `--public-root frontend/public`, resolve relative to the current directory.
+
+Install the dependencies:
+
+```sh
+python3 -m pip install -r tools/requirements-tijori.txt
+```
+
+Refresh the saved universe and reuse known company URLs:
+
+```sh
+python3 tools/export_tijori_overviews.py \
+  --output reference/tijori \
+  --sitemap reference/tijori/sitemap.xml \
+  --refresh
+```
+
+One shared async HTTP connection pool starts at two requests in flight. Successful
+requests gradually increase concurrency and throughput up to eight each by default.
+`--concurrency` and `--rate` set ceilings. HTTP 429, server errors, and network
+failures reduce both limits and pause requests. Retry-After is respected; persistent
+429s stop the run. Good cached reports survive refresh failures.
+
+Refresh downloads a fresh sitemap for URL discovery, then uses saved ETags and
+Last-Modified headers for conditional requests. A 304 reuses the existing report.
+Old exports need one refresh to save their HTTP validators. Savings depend on
+whether Tijori supports those validators.
+
+Without `--refresh`, the command resumes missing/failed records. Unmapped symbols
+are retried only with `--retry-unmapped`. `--finalize-only` rebuilds exports without
+network requests. Refresh reads the latest published NSE universe; resume and
+finalize-only use the saved universe.json.
+
+The weekly adjusted-history workflow runs this refresh after the data publication,
+including scheduled Sunday runs and manual dispatch. It commits
+`reference/tijori/tijori-overviews.json.gz` and `summary.json`. Fresh checkouts load
+the compressed cache, so source URLs, reports and HTTP validators survive between
+runs. The initial cache is seeded from the completed local NSE export. Per-company
+errors preserve existing reports and appear in the summary/diagnostics; a failed
+Tijori step does not block the market-data publication. A hard failure or step
+timeout is recorded in `exceptions.json`, emits a workflow warning, and appears
+in the job summary; the diagnostics artifact includes this failure record.
+Local `reference/tijori/` intermediates, including `sitemap.xml`, `universe.json`,
+`responses.jsonl`, and `exceptions.json`, are excluded from Git. Only the compressed
+cache and `summary.json` are committed from that directory. Atomic publication
+`.tmp` files under `frontend/public/data/tijori/` are also excluded.
+
+Offline tests: `python3 -m unittest discover -s tools -p test_export_tijori_overviews.py`.
+
+## Public dataset
+
+The exporter also publishes `frontend/public/data/tijori/current.json` and
+`revisions/<content-sha256>/overviews.json.gz`. The gzip JSON is an object keyed by
+NSE symbol, containing only available company reports with source URLs and content
+dates. Fetch metadata, checkpoints, validators, and failure diagnostics remain in
+`reference/tijori/`. The dataset is written before the manifest; unchanged report
+content reuses its revision. Weekly commits include the public manifest/revisions.
+
+The manifest declares `encoding: gzip`. Consumers must explicitly decode gzip
+bytes, unless the host supplies `Content-Encoding: gzip` and the browser already
+decoded the response. The filename extension does not set that header.
+
+A successful HTTP response missing valid embedded company data is an
+`extraction_error`, not an unmapped company. The candidate URL is retained for
+retry; company-symbol verification is still required before publication. HTTP
+403 remains an HTTP error. These failures are retried on subsequent runs and
+never replace a previously saved report.
+
+The parser supports both embedded company JSON and the visible snapshot/watch
+HTML used by some pages. The visible NSE symbol must match before saving either
+format.
+
+A failed sitemap refresh retains an existing valid sitemap. On a fresh checkout
+without one, collection can still use saved company URLs and search. Sitemap
+failures are recorded as `discoveryError` and make the export incomplete;
+persistent throttling still stops all requests. Unmapped symbols also keep
+`complete` false.

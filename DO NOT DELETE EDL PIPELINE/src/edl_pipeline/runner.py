@@ -37,7 +37,7 @@ from .artifacts import (
     SCRIPT_OUTPUT_SPECS,
 )
 from .config import PipelineConfig
-from .validators import validate_many
+from .validators import ArtifactCheck, validate_many
 
 
 @dataclass
@@ -48,6 +48,7 @@ class ScriptResult:
     returncode: int = 0
     error: str = ""
     validations: list = field(default_factory=list)
+    validation_elapsed: float = 0.0
 
     def to_dict(self):
         data = asdict(self)
@@ -91,13 +92,16 @@ def run_script(script_name, phase_label="", required=False):
         elapsed = time.time() - start
 
         if result.returncode == 0:
+            validation_start = time.time()
             validations = validate_script_outputs(script_name)
+            validation_elapsed = time.time() - validation_start
+            print(f"  Validation {script_name}: {validation_elapsed:.2f}s", flush=True)
             failed_validations = [check for check in validations if not check.ok]
             if required and failed_validations:
                 print(f"  FAILED {script_name} ({elapsed:.1f}s, output validation failed)")
-                return ScriptResult(False, required, elapsed=elapsed, error="validation", validations=validations)
+                return ScriptResult(False, required, elapsed=elapsed, error="validation", validations=validations, validation_elapsed=validation_elapsed)
             print(f"  OK {script_name} ({elapsed:.1f}s)")
-            return ScriptResult(True, required, elapsed=elapsed, validations=validations)
+            return ScriptResult(True, required, elapsed=elapsed, validations=validations, validation_elapsed=validation_elapsed)
 
         print(f"  FAILED {script_name} ({elapsed:.1f}s, exit {result.returncode})")
         return ScriptResult(False, required, elapsed=elapsed, returncode=result.returncode)
@@ -144,10 +148,12 @@ def compress_output(include_ohlcv_derived=True):
     for filename, output_name in FILES_TO_COMPRESS.items():
         if not include_ohlcv_derived and filename in OHLCV_DERIVED_FILES:
             continue
+        print(f"  Compressing {filename}...", flush=True)
         raw_size, gz_size = compress_file(filename, output_name)
         if raw_size:
             total_raw += raw_size
             total_gz += gz_size
+            print(f"  OK {output_name} ({gz_size / (1024 * 1024):.1f} MB)", flush=True)
         else:
             print(f"  WARNING: {filename} not found to compress.")
 
@@ -177,7 +183,7 @@ def download_nse_listing_dates():
             reader = csv.DictReader(handle)
             headers = {header.strip() for header in reader.fieldnames or []}
             valid_rows = sum(1 for _ in reader)
-        if result.returncode == 0 and {"SYMBOL", "NAME OF COMPANY"} <= headers and valid_rows >= 1000:
+        if result.returncode == 0 and {"SYMBOL", "NAME OF COMPANY", "ISIN NUMBER", "DATE OF LISTING"} <= headers and valid_rows >= 1000:
             temporary_path.replace(csv_path)
             print("  OK NSE Listing Dates downloaded.")
             return True
@@ -299,8 +305,10 @@ def print_final_report(results, total_time, raw_size, cleanup_intermediate_enabl
     return failed
 
 
-def main(config=None):
-    """Run the full pipeline and return a process exit code."""
+def main(config=None, phase="all"):
+    """Run all stages or resume validated fetch results in the same staging directory."""
+    if phase not in {"all", "fetch", "build"}:
+        raise ValueError("Unknown pipeline phase")
     config = config or PipelineConfig.from_env()
     overall_start = time.time()
 
@@ -309,103 +317,143 @@ def main(config=None):
     print("=" * 60)
 
     results = {}
+    checkpoint_path = Path(BASE_DIR) / 'fetch_checkpoint.json'
+    if phase == 'build':
+        try:
+            checkpoint = pipeline_utils.load_json(checkpoint_path, default={})
+        except (OSError, ValueError):
+            checkpoint = {}
+        if not isinstance(checkpoint, dict) or checkpoint.get('config') != config_to_dict(config) or checkpoint.get('exit_code') != 0:
+            raise ValueError('Cannot build from a missing, failed or incompatible fetch checkpoint')
+        for script, data in checkpoint['scripts'].items():
+            results[script] = ScriptResult(**{**data, 'validations': [ArtifactCheck(**v) for v in data['validations']]})
+        overall_start -= checkpoint['total_time_seconds']
     raw_size = 0
     gz_size = 0
     final_checks = []
 
-    print("\nPHASE 1: Core Data (Foundation)")
-    print("-" * 40)
-    results["fetch_dhan_data.py"] = run_script("fetch_dhan_data.py", "Phase 1", required=True)
-    if not results["fetch_dhan_data.py"].ok:
-        print("\nCRITICAL: fetch_dhan_data.py failed. Cannot continue.")
-        print("   This script produces master_isin_map.json which ALL other scripts need.")
-        write_pipeline_report(
-            build_pipeline_report(results, time.time() - overall_start, raw_size, gz_size, final_checks, config, 1)
-        )
-        return 1
-
-    # The raw ScanX response includes current SME listings.  Fetch the
-    # authoritative NSE SME universe before any stage reads the canonical map.
-    results["fetch_sme_data.py"] = run_script("fetch_sme_data.py", "Phase 1", required=True)
-    if not results["fetch_sme_data.py"].ok:
-        print("\nCRITICAL: fetch_sme_data.py failed. Cannot safely publish a mainboard-only universe.")
-        write_pipeline_report(
-            build_pipeline_report(results, time.time() - overall_start, raw_size, gz_size, final_checks, config, 1)
-        )
-        return 1
-
-    results["filter_mainboard_universe.py"] = run_script(
-        "filter_mainboard_universe.py", "Phase 1", required=True
-    )
-    if not results["filter_mainboard_universe.py"].ok:
-        print("\nCRITICAL: mainboard universe filter failed. Cannot continue.")
-        write_pipeline_report(
-            build_pipeline_report(results, time.time() - overall_start, raw_size, gz_size, final_checks, config, 1)
-        )
-        return 1
-
-    results["fetch_fundamental_data.py"] = run_script("fetch_fundamental_data.py", "Phase 1", required=True)
-    if not results["fetch_fundamental_data.py"].ok:
-        print("\nCRITICAL: fetch_fundamental_data.py failed. Cannot continue.")
-        print("   This script produces fundamental_data.json for the base analyzer.")
-        write_pipeline_report(
-            build_pipeline_report(results, time.time() - overall_start, raw_size, gz_size, final_checks, config, 1)
-        )
-        return 1
-
-    download_nse_listing_dates()
-    results["reconcile_nse_equity_universe.py"] = run_script(
-        "reconcile_nse_equity_universe.py", "Phase 1", required=False
-    )
-
-    if config.fetch_ohlcv:
-        print("\nPHASE 2: Independent fetch lanes (Enrichment + OHLCV)")
+    if phase != 'build':
+        print("\nPHASE 1: Core Data (Foundation)")
         print("-" * 40)
-        enrichment_scripts = [
-            (script, "Phase 2 / enrichment lane", script in REQUIRED_PHASE2_SCRIPTS)
-            for script in PHASE2_SCRIPTS
-            if script != "fetch_nse_delivery_data.py"
-        ]
-        ohlcv_scripts = [
-            (
-                script,
-                "Phase 2 / OHLCV lane",
-                script != "fetch_nse_delivery_data.py",
+        results["fetch_dhan_data.py"] = run_script("fetch_dhan_data.py", "Phase 1", required=True)
+        if not results["fetch_dhan_data.py"].ok:
+            print("\nCRITICAL: fetch_dhan_data.py failed. Cannot continue.")
+            print("   This script produces master_isin_map.json which ALL other scripts need.")
+            write_pipeline_report(
+                build_pipeline_report(results, time.time() - overall_start, raw_size, gz_size, final_checks, config, 1)
             )
-            for script in OHLCV_FETCH_LANE
-        ]
-        lane_results = run_script_lanes(
-            {
-                "enrichment": enrichment_scripts,
-                "ohlcv": ohlcv_scripts,
-            }
-        )
-        results.update(lane_results["enrichment"])
-        results.update(lane_results["ohlcv"])
+            return 1
 
-        print("\nPHASE 2.5: Index OHLCV (after index-list fetch)")
-        print("-" * 40)
-        results["fetch_indices_ohlcv.py"] = run_script(
-            "fetch_indices_ohlcv.py", "Phase 2.5", required=True
-        )
-    else:
-        print("\nPHASE 2: Data Enrichment (Fetching)")
-        print("-" * 40)
-        for script in PHASE2_SCRIPTS:
-            results[script] = run_script(
-                script,
-                "Phase 2",
-                required=script in REQUIRED_PHASE2_SCRIPTS,
+        # The raw ScanX response includes current SME listings.  Fetch the
+        # authoritative NSE SME universe before any stage reads the canonical map.
+        results["fetch_sme_data.py"] = run_script("fetch_sme_data.py", "Phase 1", required=True)
+        if not results["fetch_sme_data.py"].ok:
+            print("\nCRITICAL: fetch_sme_data.py failed. Cannot safely publish a mainboard-only universe.")
+            write_pipeline_report(
+                build_pipeline_report(results, time.time() - overall_start, raw_size, gz_size, final_checks, config, 1)
             )
+            return 1
 
-    print("\nPHASE 2.75: Standalone official index constituents")
-    print("-" * 40)
-    # This preserves a separate official reference only.  It is intentionally
-    # not consumed by the scanner or publication path, and a temporary public
-    # source failure must not block the core market-data refresh.
-    results["refresh_official_index_constituents.py"] = run_script(
-        "refresh_official_index_constituents.py", "Phase 2.75", required=False
-    )
+        if not download_nse_listing_dates():
+            results['nse_equity_list.csv'] = ScriptResult(False, True, error='Fresh NSE listing validation failed')
+            write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
+            return 1
+
+        # The canonical universe must use the completed session, including
+        # when today's new listings already appear in the provider snapshot.
+        results["fetch_nse_delivery_data.py"] = run_script("fetch_nse_delivery_data.py", "Phase 1", required=True)
+        if not results["fetch_nse_delivery_data.py"].ok:
+            write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
+            return 1
+
+        results["filter_mainboard_universe.py"] = run_script(
+            "filter_mainboard_universe.py", "Phase 1", required=True
+        )
+        if not results["filter_mainboard_universe.py"].ok:
+            print("\nCRITICAL: mainboard universe filter failed. Cannot continue.")
+            write_pipeline_report(
+                build_pipeline_report(results, time.time() - overall_start, raw_size, gz_size, final_checks, config, 1)
+            )
+            return 1
+
+        results["fetch_fundamental_data.py"] = run_script("fetch_fundamental_data.py", "Phase 1", required=True)
+        if not results["fetch_fundamental_data.py"].ok:
+            print("\nCRITICAL: fetch_fundamental_data.py failed. Cannot continue.")
+            print("   This script produces fundamental_data.json for the base analyzer.")
+            write_pipeline_report(
+                build_pipeline_report(results, time.time() - overall_start, raw_size, gz_size, final_checks, config, 1)
+            )
+            return 1
+
+        results["reconcile_nse_equity_universe.py"] = run_script(
+            "reconcile_nse_equity_universe.py", "Phase 1", required=False
+        )
+
+        reference_scripts = [(name, "Phase 2 / reference lane", name != "refresh_official_index_constituents.py")
+                             for name in ("fetch_ipo_provider_data.py", "fetch_scanx_ipo_data.py", "refresh_official_index_constituents.py")]
+        if config.fetch_ohlcv:
+            print("\nPHASE 2: Independent fetch lanes (Enrichment + OHLCV)")
+            print("-" * 40)
+            enrichment_scripts = [
+                (script, "Phase 2 / enrichment lane", script in REQUIRED_PHASE2_SCRIPTS)
+                for script in PHASE2_SCRIPTS
+                if script == "fetch_company_filings.py"
+            ]
+            ohlcv_scripts = [
+                (
+                    script,
+                    "Phase 2 / OHLCV lane",
+                    True,
+                )
+                for script in OHLCV_FETCH_LANE
+            ]
+            # Keep the filing catch-up off the smaller independent fetches'
+            # path, reusing the reference lane without adding concurrency.
+            reference_scripts += [(script, "Phase 2 / reference lane", script in REQUIRED_PHASE2_SCRIPTS)
+                                  for script in PHASE2_SCRIPTS if script != "fetch_company_filings.py"]
+            lane_results = run_script_lanes(
+                {
+                    "enrichment": enrichment_scripts,
+                    "ohlcv": ohlcv_scripts,
+                    "reference": reference_scripts,
+                }
+            )
+            results.update(lane_results["enrichment"])
+            results.update(lane_results["ohlcv"])
+            results.update(lane_results["reference"])
+
+            # A required fetch failure cannot produce a valid dataset. Stop
+            # here instead of spending the build phase on outputs that will be
+            # rejected, while retaining the report for the next retry.
+            if any(result.required and not result.ok for result in results.values()):
+                report = build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1)
+                save_json(checkpoint_path, report)
+                write_pipeline_report(report)
+                return 1
+
+            print("\nPHASE 2.5: Index OHLCV (after index-list fetch)")
+            print("-" * 40)
+            results["fetch_indices_ohlcv.py"] = run_script(
+                "fetch_indices_ohlcv.py", "Phase 2.5", required=True
+            )
+        else:
+            print("\nPHASE 2: Data Enrichment (Fetching)")
+            print("-" * 40)
+            for script in PHASE2_SCRIPTS:
+                results[script] = run_script(
+                    script,
+                    "Phase 2",
+                    required=script in REQUIRED_PHASE2_SCRIPTS,
+                )
+
+            results.update(run_script_sequence(reference_scripts))
+
+        failed = any(result.required and not result.ok for result in results.values())
+        if phase == 'fetch' or failed:
+            report = build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, int(failed))
+            save_json(checkpoint_path, report)
+            write_pipeline_report(report)
+            return int(failed)
 
     print("\nPHASE 3: Base Analysis (Building Master JSON)")
     print("-" * 40)

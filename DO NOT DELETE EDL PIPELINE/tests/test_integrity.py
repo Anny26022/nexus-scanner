@@ -269,7 +269,7 @@ class IntegrityTests(unittest.TestCase):
                 {'symbol':'NIFTY','records':[bar]},
                 {'symbol':'NIFTY 500','records':[bar]},
             ]},
-            'market_breadth_v2.json.gz':{'generated_at':stamp,'records':[{'date':'2026-09-24'}]},
+            'market_breadth_v2.json.gz':{'generated_at':stamp,'quality':{'eligible_symbols':1},'records':[{'date':(date(2026,9,24)-timedelta(days=offset)).isoformat(), 'eligible_with_candle':1} for offset in reversed(range(30))]},
             'breadth_universe_snapshot.json.gz':{'generated_at':stamp},
             'corporate_action_ledger.json.gz':{'source':'test','price_adjusted':False,'records':[]},
             'nse_fno_ban.json.gz':{'source':'test','available':False,'trade_date':None,'symbols':[]},
@@ -329,6 +329,16 @@ class IntegrityTests(unittest.TestCase):
                     for name,value in data.items():self.write(root,name,value)
                     self.assertTrue(inspect_publication(root,today=date(2026,9,24))['errors'])
 
+    def test_missing_historical_breadth_blocks_current_publication(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            files = self.fixture(root)
+            files['market_breadth_v2.json.gz']['records'][-2]['eligible_with_candle'] = 0
+            self.write(root, 'market_breadth_v2.json.gz', files['market_breadth_v2.json.gz'])
+            report = inspect_publication(root, today=date(2026,9,24))
+            self.assertTrue(any('breadth candle coverage below 90%' in error for error in report['errors']))
+            self.assertEqual(report['breadth_history']['low_coverage_sessions'][0]['date'], '2026-09-23')
+
     def test_exact_session_gate(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);self.fixture(root)
@@ -360,14 +370,14 @@ class IntegrityTests(unittest.TestCase):
             root=Path(tmp);stage=root/'stage';stage.mkdir();dest=root/'dest';dest.mkdir()
             for name in ('a','b'):
                 (stage/name).write_text('new');(dest/name).write_text('old')
-            from pipeline_utils import atomic_replace_bytes
+            from edl_pipeline.publication import atomic_copy
             calls=0
-            def failing(path, data):
+            def failing(source, path):
                 nonlocal calls
                 calls+=1
                 if calls==2:raise OSError('disk failure')
-                atomic_replace_bytes(path,data)
-            with mock.patch('edl_pipeline.publication.atomic_replace_bytes',side_effect=failing):
+                atomic_copy(source,path)
+            with mock.patch('edl_pipeline.publication.atomic_copy',side_effect=failing):
                 with self.assertRaises(OSError):promote(stage,dest,['a','b'])
             self.assertEqual([(dest/name).read_text() for name in ('a','b')], ['old','old'])
 

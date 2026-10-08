@@ -54,7 +54,7 @@ def _save_json(path, data):
         prefix=f".{resolved.name}.",
         suffix=".tmp",
     ) as handle:
-        json.dump(data, handle, indent=2, ensure_ascii=False, allow_nan=False)
+        json.dump(data, handle, separators=(',', ':'), ensure_ascii=False, allow_nan=False)
         temporary = Path(handle.name)
     try:
         temporary.replace(resolved)

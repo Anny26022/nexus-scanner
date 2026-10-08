@@ -194,12 +194,14 @@ cd 'DO NOT DELETE EDL PIPELINE'
 PYTHONPATH='.:src:tests' python3 -m unittest discover -s tests
 ```
 
-The baseline is the audited daily-run revision
+The benchmark baseline is the later audited run [37816745334](https://github.com/Anny26022/nexus-scanner/actions/runs/37816745334)'s revision,
 `9868bdeeb75a1e76dc9cf394d4e6133d20a7d179`, matching the benchmark tool's
-`BASELINE`. A shallow checkout must fetch that revision before running the
+`BASELINE`, not the earlier run documented above. A shallow checkout must fetch that revision before running the
 benchmark (`git fetch origin 9868bdeeb75a1e76dc9cf394d4e6133d20a7d179`).
-The benchmark verifies unchanged
-formula dependencies and refuses to report equivalence if those have changed.
+The benchmark loads baseline breadth aggregation and decoration independently,
+verifies the remaining unchanged formula dependencies, and refuses to report
+equivalence if those have changed. `--baseline REV` selects an explicit earlier
+PR revision when measuring incremental improvements.
 Benchmark files and classification caches are disposable temporary files, not
 the input histories.
 

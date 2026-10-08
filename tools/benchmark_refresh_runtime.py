@@ -100,6 +100,7 @@ def benchmark_breadth(root, limit):
     from edl_pipeline.breadth.config import load_methodology
     previous = baseline_module('DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/pipeline.py', 'edl_pipeline.breadth')
     previous.BreadthAccumulator = baseline_module('DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/aggregates.py').BreadthAccumulator
+    previous.enrich_records = baseline_module('DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/mbi.py', 'edl_pipeline.breadth').enrich_records
     stocks = json.load(gzip.open(root / 'all_stocks_fundamental_analysis.json.gz'))
     stocks = selected(sorted(stocks, key=lambda row: row['symbol']), limit)
     universe = [{'Sym': r['symbol'], 'Isin': r['isin'], 'Sid': r['security_id'],
@@ -126,7 +127,9 @@ def benchmark_breadth(root, limit):
 
 
 def main():
+    global BASELINE
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--baseline', default=BASELINE, help='Frozen Git revision for the comparison')
     parser.add_argument('--data-root', type=Path, help='Local pipeline cache directory (read-only)')
     parser.add_argument('--limit', type=int, default=100, help='Evenly sampled symbols; 0 means all')
     parser.add_argument('--serializer-limit', type=int, default=0,
@@ -135,6 +138,7 @@ def main():
     parser.add_argument('--serializer', choices=('before', 'after'), help=argparse.SUPPRESS)
     parser.add_argument('--fixture', type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()
+    BASELINE = args.baseline
     if args.serializer:
         from pipeline_utils import save_json, save_json_records
         data = json.loads(args.fixture.read_text())
@@ -151,7 +155,6 @@ def main():
     # Refuse to give a false equivalence verdict after an unrelated formula
     # edit: baseline/current breadth must share these unchanged dependencies.
     for relative in ('DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/indicators.py',
-                     'DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/mbi.py',
                      'DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/config.py',
                      'DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/universe.py',
                      'DO NOT DELETE EDL PIPELINE/filing_source_labels.json'):

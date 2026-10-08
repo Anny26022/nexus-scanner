@@ -14,6 +14,7 @@ from chart_publication import chart_preflight, charts_enabled, complete_release
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
 from edl_pipeline.scanner.calculation_cache import calculation_cache
+from screen_trend_conditions import _delivery_records
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
 
@@ -27,28 +28,77 @@ def write_json(path, payload):
     return data
 
 
+def delivery_lookback(expressions):
+    """Derive the view from actual rules; fall back to full history if unsure."""
+    maximum = 0
+    pending = list(expressions)
+    while pending:
+        node = pending.pop()
+        if isinstance(node, list):
+            pending.extend(node)
+            continue
+        if not isinstance(node, dict):
+            return None
+        for key in ('children', 'conditions', 'expression', 'child'):
+            if key in node:
+                pending.append(node[key])
+        try:
+            spec = bridge.normalize_condition_spec(node)
+            if spec['condition'] in {'delivery_percent_spike', 'delivery_percent'}:
+                window = int(spec.get('fired_within', 1)) if spec['condition'] == 'delivery_percent_spike' else 1
+                if window <= 0:
+                    return None
+                maximum = max(maximum, window)
+        except (TypeError, ValueError, OverflowError):
+            return None
+    return maximum
+
+
 def publish(root=bridge.ROOT, output=OUTPUT):
     cache=ScannerCache(); cache.refresh(root)
     starting_revision=cache.revision
     source_files=[p for p in sorted(root.glob('*.json.gz')) if p.name!='filing_history.json.gz']
     source_bytes={p.name:p.read_bytes() for p in source_files}
+    context=bridge._load_context(root)
+    session=context['financial_history_as_of']
+    presets={p['id']:bridge.translate(p['id'],{}) for p in list_presets()}
+    default=bridge.group('AND',bridge.translate('mom_rvol',{'minRvol':1.5,'maxRvol':20}),bridge.translate('trend_price_vs_ma',{'maType':'SMA','maPeriod':50,'operator':'above','thresholdPct':0}))
+    lookback=delivery_lookback([*presets.values(),default])
+    windows={} if lookback is not None else None
+    if windows is not None:
+        # Preserve original stock/frame insertion order in the frozen NPZ.
+        for stock in context['stocks'].values():
+            if not stock.get('default_screener_eligible',True):
+                continue
+            symbol=stock['symbol']; frame=cache.frame(root,symbol,session)
+            if lookback and frame is not None and not frame.empty and frame['Date'].iloc[-1].strftime('%Y-%m-%d')==session:
+                windows[symbol]=set(frame.tail(lookback)['Date'].dt.strftime('%Y-%m-%d'))
     delivery_bytes={}
+    cached_records={}
+    csv_payloads={}
     for folder in ('delivery_history_data','eod2_delivery_history_data'):
         for p in (root/folder).glob('*.json'):
             # The official daily payloads compress well.  Freeze their content
             # without adding another full raw archive to every revision.
-            delivery_bytes[f'{p.relative_to(root)}.gz']=gzip.compress(p.read_bytes(),mtime=0)
+            raw=p.read_bytes()
+            delivery_bytes[f'{p.relative_to(root)}.gz']=gzip.compress(raw,mtime=0)
+            if windows is not None and folder=='delivery_history_data' and p.match('????-??-??.json'):
+                try:
+                    records=json.loads(raw.decode('utf-8')).get('records',[])
+                except (ValueError,AttributeError):
+                    records=[]
+                cached_records[p]=list(_delivery_records(records,windows=windows))
+                del records
         for p in (root/folder).glob('*.csv'):
             delivery_bytes[str(p.relative_to(root))]=p.read_bytes()
-    context=bridge._load_context(root)
-    session=context['financial_history_as_of']
+            if folder=='eod2_delivery_history_data':
+                csv_payloads[p]=delivery_bytes[str(p.relative_to(root))]
     chart_root = root / 'chart_artifacts'
     include_charts = charts_enabled()
     if include_charts:
         chart_preflight(chart_root, session)
-    presets={p['id']:bridge.translate(p['id'],{}) for p in list_presets()}
-    default=bridge.group('AND',bridge.translate('mom_rvol',{'minRvol':1.5,'maxRvol':20}),bridge.translate('trend_price_vs_ma',{'maType':'SMA','maPeriod':50,'operator':'above','thresholdPct':0}))
-    delivery=bridge._load_delivery_history(root/'delivery_history_data',None,root/'eod2_delivery_history_data')
+    delivery=bridge._load_delivery_history(root/'delivery_history_data',None,root/'eod2_delivery_history_data',
+                                          windows=windows,cached_records=cached_records,csv_payloads=csv_payloads)
     rows=[]; default_count=0
     for stock in context['stocks'].values():
         if not stock.get('default_screener_eligible',True):

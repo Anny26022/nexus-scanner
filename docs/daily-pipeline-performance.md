@@ -82,13 +82,63 @@ separate compression, validation, promotion, archive preparation and upload.
 
 No earlier scanner-history scheduling was added: it writes into the retained
 history cache shared with the published checkout. Moving those writes before
-existing failure gates would require rollback handling. Additional EOD2 worker
-pools, publication concurrency, breadth rewrites and filing-storage changes are
-deferred until profiling demonstrates sufficient benefit for their complexity.
+existing failure gates would require rollback handling. Broader publication
+concurrency and filing-storage changes remain deferred.
+
+## Remaining CPU/I/O follow-up
+
+- Derive delivery evaluation windows from the actual nested preset inputs,
+  including legacy aliases and future lookbacks. Reuse official rows parsed
+  while freezing the complete backend payloads, and construct EOD2 fallback
+  dictionaries only for uncovered required dates. Frozen CSV bytes are reused;
+  even fully covered files keep UTF-8 and CSV parser validation. Official
+  duplicate precedence, null-value
+  precedence and first-row CSV fallback remain unchanged. Invalid/uncertain
+  lookbacks fall back to full loading; no retained history or 252-session quality
+  check is shortened.
+- Count integer breadth predicates in compact native arrays. Floating volumes
+  still add one candle at a time in original order, and audited contributions
+  retain their original membership/order. Repeated dates use explicit repeated
+  addition; counters promote to Python integers before native overflow.
+- Decorate only published breadth rows while replaying the full XP recurrence,
+  previous ratios, rolling inputs and previous available index close. All formula
+  bodies, thresholds, rounding and JSON field order remain unchanged.
+- Use at most two spawned EOD2 preparation workers and four queued tasks. Workers
+  only read/merge/render; the parent commits CSVs and reports errors/results in
+  master order. Duplicate/aliased destinations and overlapping cache directories
+  retain serial read-after-write behavior. Every overlay is still recomputed.
+
+Compared with preceding PR head `49963db`, full frozen breadth generation took
+108.9676s versus 67.8735s (**37.71% lower elapsed time**), covering 2,597 input
+stocks, 2,308 eligible and 2,302 processed. All four artifact hashes and quality
+records matched, including the same six missing local histories. This is the
+incremental improvement from this round, not a comparison to the original job.
+Reproduce with:
+
+```sh
+python tools/benchmark_refresh_runtime.py --only breadth --baseline 49963db1620efc734bc7f47e669e8c811599574b --limit 0 --data-root '/path/to/frozen/DO NOT DELETE EDL PIPELINE'
+```
+
+A generated EOD2 fixture with 200 securities, renamed segments and 3,000 sessions
+per security took 6.8975s serial versus 3.4934s with two workers. All 400 generated
+CSV files and the complete ordered report were identical. This is a synthetic
+local preparation/import comparison, not a live EOD2 or whole-job forecast.
+The fixture helper is `eod2_fixture` in `tests/test_remaining_performance.py`.
+
+Full local delivery freeze/loading for a one-session evaluation view took
+9.7165s versus 6.2901s. The original view held 3,379,325 rows; the bounded view
+held 2,312. Filtering the full view produced exactly the bounded rows, and the
+complete frozen history bytes retained SHA-256
+`3e08403beb0d19e0cb967a22b4178c09c229b65513cd3f2915c68d29944cf283`.
+UTF-8/CSV validation and compression settings were retained. This excludes
+scanner calculations and is not a whole-publication measurement.
+
+These local runs are not isolated-run medians; short verification tasks overlapped.
+Do not add component savings to claim an observed whole-pipeline reduction.
 
 ## Evidence and limits
 
-Python 3.12.14: 424 pipeline tests (one existing macOS skip), 49 frontend Python
+Python 3.12.14: 434 pipeline tests (one existing macOS skip), 51 frontend Python
 tests and 68 JavaScript tests pass; the production frontend build also succeeds.
 Coverage includes cache corruption, chunk boundaries, malformed/non-finite JSON,
 gzip CRC/truncation/extra-member failures, EOD2 re-overlay, real process workers,

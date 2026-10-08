@@ -1,6 +1,7 @@
 """Runtime optimizations must preserve bytes, counts and atomic publication."""
 
 import copy
+import json
 import math
 import runpy
 import sys
@@ -21,10 +22,27 @@ from filing_classification import classify_filings, RULES, _rule_matches, _cache
 from edl_pipeline.breadth.aggregates import BreadthAccumulator
 from edl_pipeline.breadth.config import BreadthMethodology
 from edl_pipeline.breadth.indicators import prepare_history
+from edl_pipeline.breadth.mbi import enrich_records
 from test_breadth_v2 import make_ohlcv
 
 
 class RefreshRuntimeTests(unittest.TestCase):
+    def test_tail_decoration_replays_full_recursive_and_rolling_state(self):
+        method = BreadthMethodology()
+        accumulator = BreadthAccumulator(method)
+        accumulator.update(prepare_history(make_ohlcv(
+            [100 + i % 29 for i in range(600)], '2020-01-01'), method))
+        records = accumulator.records()
+        # Missing index sessions must retain the previous available close.
+        closes = {row['date']: 100 + i for i, row in enumerate(records) if i % 7 == 0}
+        full = enrich_records(records, method, closes)
+        for limit in (0, 1, 2, 10, 250, 600, 1000):
+            with self.subTest(limit=limit):
+                expected = full[-limit:] if limit else full
+                actual = enrich_records(records, method, closes, output_sessions=limit)
+                self.assertEqual(json.dumps(actual), json.dumps(expected))
+        self.assertEqual(enrich_records([], method, output_sessions=10), [])
+
     def test_benchmark_full_serializer_fixture_and_explicit_cap(self):
         benchmark = runpy.run_path(str(ROOT.parent / 'tools/benchmark_refresh_runtime.py'))
         # Fixture-sizing coverage must also run in shallow CI checkouts;

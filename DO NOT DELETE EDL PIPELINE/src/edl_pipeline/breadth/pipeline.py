@@ -179,8 +179,8 @@ def generate_market_breadth(
         accumulators["all_active"].update(prepared,symbol,peers=peers)
     closes=load_index_closes(index_csv)
     def enriched(accumulator):
-        rows=enrich_records(accumulator.records(),methodology,closes)
-        return _round_records(rows[-methodology.output_sessions:] if methodology.output_sessions else rows, methodology.rounding_digits)
+        rows=enrich_records(accumulator.records(),methodology,closes,output_sessions=methodology.output_sessions)
+        return _round_records(rows, methodology.rounding_digits)
     universe_records={key: enriched(value) for key,value in accumulators.items()}
     records=universe_records["all_active"]
     universe_payload={key:{"label": {"all_active":"All Active","nifty50":"Nifty 50","nifty500":"Nifty 500","niftymidsmall400":"Nifty MidSmall 400"}[key],"records":value,"available":bool(value)} for key,value in universe_records.items()}

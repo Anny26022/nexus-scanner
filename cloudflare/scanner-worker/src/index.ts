@@ -1,3 +1,4 @@
+import { SCANNER_IDENTITY, assertScannerIdentity } from '../../../frontend/src/engine/compatibility';
 import type { ScreenerRunRequest, ScreenerRunResponse } from '../../../frontend/src/types/screener';
 import type { SnapshotStock } from '../../../frontend/src/api/snapshotScreen';
 import { evaluateExpression, expressionDepth, negate, walkExpression, type EngineCondition, type EngineExpression, type Truth } from '../../../frontend/src/engine/expression';
@@ -8,7 +9,7 @@ import { conditionCapability } from '../../../frontend/src/api/capabilityRegistr
 import { NEXUS_CONDITION_CATALOG } from '../../../frontend/src/data/conditionCatalog';
 
 interface Env { SCANNER_DATA:R2Bucket; ALLOWED_ORIGINS:string; SCANNER_RELEASE_URL:string }
-interface PrivateManifest {schemaVersion:number;engineVersion:string;revision:string;session:string;symbols:number;shards:number;maxSessions:number;limits:{maxLeaves:number;maxDepth:number;maxPageSize:number;maxRequestBytes:number};objects:Array<{key:string;bytes:number;sha256:string;symbols?:number}>}
+interface PrivateManifest {schemaVersion:number;engineVersion:string;conditionContractHash:string;revision:string;session:string;symbols:number;shards:number;maxSessions:number;limits:{maxLeaves:number;maxDepth:number;maxPageSize:number;maxRequestBytes:number};objects:Array<{key:string;bytes:number;sha256:string;symbols?:number}>}
 interface Metadata {stocks:SnapshotStock[]}
 interface Auxiliary {delivery:Record<string,Array<Record<string,unknown>>>;earnings:Record<string,Array<Record<string,unknown>>>;breadth?:Record<string,Record<string,number|null>>}
 
@@ -65,7 +66,7 @@ function universeRows(rows: SnapshotStock[], request: ScreenerRunRequest) {
 }
 export function executionWarnings(leaves:EngineCondition[],missingHistory:number){const warnings:string[]=[];if(leaves.some(condition=>condition.conditionId==='INSIDE_BAR'&&String(condition.parameters.timeframe).toUpperCase()==='WEEKLY'&&String(condition.parameters.weeklyMode).toUpperCase()==='CURRENT'))warnings.push('Weekly inside-bar current mode includes a provisional week.');if(missingHistory)warnings.push(`${missingHistory} equities have no aligned history in this revision.`);return warnings;}
 
-async function currentRelease(env:Env){const response=await fetch(env.SCANNER_RELEASE_URL,{cf:{cacheTtl:30,cacheEverything:true}});if(!response.ok)throw new Error('Active scanner release is unavailable');return response.json() as Promise<{revision:string;sessionDate:string;schemaVersion:number}>;}
+async function currentRelease(env:Env){const response=await fetch(env.SCANNER_RELEASE_URL,{cf:{cacheTtl:30,cacheEverything:true}});if(!response.ok)throw new Error('Active scanner release is unavailable');const active=await response.json() as {revision:string;sessionDate:string;schemaVersion:number};if(active.schemaVersion===7)assertScannerIdentity(active);return active;}
 // Bump when evaluation semantics change so unchanged data cannot reuse old results.
 const CACHE_VERSION = '4';
 type ScanResult = Omit<ScreenerRunResponse,'page' | 'pageSize'>;
@@ -97,6 +98,7 @@ async function run(request:ScreenerRunRequest,expression:EngineExpression,env:En
   const manifestObject=await env.SCANNER_DATA.get(`${prefix}/manifest.json`);
   if(!manifestObject)throw new Error('Advanced scanner revision is not fully published.');
   const manifest=await manifestObject.json<PrivateManifest>();
+  assertScannerIdentity(manifest);
   if(manifest.revision!==request.datasetRevision || manifest.session!==request.asOfDate || manifest.schemaVersion!==7 || manifest.shards!==32)
     throw new Error('Advanced scanner manifest is incompatible.');
   const leaves=walkExpression(expression);
@@ -168,9 +170,10 @@ export default {
         let ready=false;
         if(object) {
           const marker=await object.json<PrivateManifest>();
+          assertScannerIdentity(marker);
           ready=active.schemaVersion===7 && marker.schemaVersion===7 && marker.revision===active.revision && marker.session===active.sessionDate;
         }
-        return json({ok:ready,ready,revision:active.revision,session:active.sessionDate},ready ? 200 : 503,headers);
+        return json({ok:ready,ready,revision:active.revision,session:active.sessionDate,...SCANNER_IDENTITY},ready ? 200 : 503,headers);
       } catch(error) { return json({ok:false,error:error instanceof Error ? error.message : 'Unavailable'},503,headers); }
     }
     if(url.pathname!=='/v1/screens/run' || request.method!=='POST')return json({error:'Not found'},404,headers);
@@ -181,6 +184,7 @@ export default {
       const payload=JSON.parse(text) as ScreenerRunRequest,active=await currentRelease(env);
       if(active.schemaVersion!==7 || payload.datasetRevision!==active.revision || payload.asOfDate!==active.sessionDate)
         throw new Error('Scanner revision is stale or incompatible. Refresh and run again.');
+      assertScannerIdentity(payload);
       const expression=(payload.textQuery?.trim() ? compileTextQuery(payload.textQuery) : payload.expressionTree) as EngineExpression;
       if(!expression || typeof expression!=='object')throw new Error('A valid screen expression is required.');
       validateRequest(payload,expression);
@@ -188,7 +192,7 @@ export default {
       const symbols=payload.universe==='custom' ? [...new Set(payload.customSymbols?.map(symbol=>symbol.toUpperCase()))].sort() : undefined;
       const announcements = payload.announcementSymbols === undefined ? undefined
         : [...new Set(payload.announcementSymbols.map(symbol => symbol.toUpperCase()))].sort();
-      const key=await hash(stable([CACHE_VERSION,payload.datasetRevision,payload.asOfDate,expression,payload.universe,symbols,announcements]));
+      const key=await hash(stable([CACHE_VERSION,SCANNER_IDENTITY,payload.datasetRevision,payload.asOfDate,expression,payload.universe,symbols,announcements]));
       const cacheKey=new Request(`https://scanner-cache.invalid/v${CACHE_VERSION}/${key}`),cache=(caches as CacheStorage&{default:Cache}).default;
       const cached=await cache.match(cacheKey);
       let result:ScanResult;

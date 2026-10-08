@@ -13,6 +13,7 @@ from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
 from scanner_pack_publication import build_private_scanner_pack, publish_private_pack
+from scanner_identity import checked_identity
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
 
@@ -149,6 +150,7 @@ def publish(root=bridge.ROOT, output=OUTPUT):
                 Path(__file__).with_name('scanner_pack_publication.py'),Path(bridge.__file__),
                 Path(__file__).with_name('packed_snapshot.py')]
     digest=hashlib.sha256()
+    digest.update(json.dumps(checked_identity(), sort_keys=True).encode())
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
     for file in code_files:
@@ -228,7 +230,7 @@ def publish(root=bridge.ROOT, output=OUTPUT):
         root, root/'scanner_artifacts', revision, session, cache, context, delivery, rows)
     advanced_published = publish_private_pack(private_root, revision)
     manifest={'revision':revision,'sessionDate':session,'publishedAt':datetime.now(timezone.utc).isoformat(),
-              'schemaVersion':7,'engineVersion':private_manifest['engineVersion'],'totalStocks':len(rows),
+              'schemaVersion':7,**checked_identity(),'totalStocks':len(rows),
               'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz',
               'datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz','packs':packs}
     if advanced_published:

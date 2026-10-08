@@ -16,12 +16,14 @@ import shutil
 import struct
 import subprocess
 import tempfile
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from scanner_identity import checked_identity
 
 import numpy as np
 
 
 SCHEMA_VERSION = 7
-ENGINE_VERSION = "1"
 SHARD_COUNT = 32
 MAX_SESSIONS = 1500
 MAGIC = b"NSPK0001"
@@ -138,7 +140,7 @@ def build_private_scanner_pack(root, output, revision, session, cache, context, 
 
     manifest = {
         "schemaVersion": SCHEMA_VERSION,
-        "engineVersion": ENGINE_VERSION,
+        **checked_identity(),
         "revision": revision,
         "session": session,
         "symbols": len(symbols),

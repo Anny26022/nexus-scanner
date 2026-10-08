@@ -1,12 +1,16 @@
 import gzip
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 import hashlib
 
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
+from scanner_identity import checked_identity
 import scanner_bridge as bridge
 from publish_snapshot import publish
 from scanner_cache import ScannerCache
@@ -132,6 +136,7 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(decode_packed_snapshot(packed), json.loads((output/'revisions'/second['revision']/'stocks.json').read_text()))
             self.assertEqual(second['datasetGzipUrl'],f"/data/revisions/{second['revision']}/stocks.json.gz")
             self.assertEqual(set(second['packs']),{'core','technical','fundamentals'})
+            for key,value in checked_identity().items(): self.assertEqual(second[key],value)
             for name,descriptor in second['packs'].items():
                 packed=(output/descriptor['url'].removeprefix('/data/')).read_bytes()
                 self.assertEqual(descriptor['bytes'],len(packed),name)
@@ -147,6 +152,25 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(old['rows'][0]['marketCapCrore'],5000)
             self.assertEqual(new['rows'][0]['marketCapCrore'],6000)
             self.assertTrue((root/'.scanner_cache/revisions'/second['revision']/'delivery_history_data/2026-09-30.json.gz').exists())
+
+    def test_local_bridge_validates_identity_before_loading_data(self):
+        request = {'asOfDate':'2026-09-30','universe':'mainboard','expressionTree':{'type':'group','operator':'all','children':[]},
+                   'page':1,'pageSize':50,'datasetRevision':'a' * 64}
+        # A valid-looking request targets a missing cached revision. Identity
+        # rejection must win, proving the bridge does not attempt data access.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for key in ('engineVersion', 'conditionContractHash'):
+                with patch('scanner_bridge._load_context') as load:
+                    with self.assertRaisesRegex(ValueError, 'incompatible'):
+                        bridge.run({**request, **checked_identity(), key: 'old'}, root=root)
+                    load.assert_not_called()
+            with self.assertRaisesRegex(ValueError, 'revision is unavailable'):
+                bridge.run({**request, **checked_identity()}, root=root)
+        compatible_request = {key: value for key, value in request.items() if key != 'datasetRevision'}
+        with patch('scanner_bridge._load_context', side_effect=RuntimeError('data loaded')):
+            with self.assertRaisesRegex(RuntimeError, 'data loaded'):
+                bridge.run({**compatible_request, **checked_identity()})
 
     def test_failure_does_not_replace_current_manifest(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):

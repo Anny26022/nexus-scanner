@@ -1,9 +1,10 @@
+import { SCANNER_IDENTITY } from '../engine/compatibility';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ScreenerRunRequest } from '../types/screener';
 const snapshotTask=vi.hoisted(()=>vi.fn());
 vi.mock('../api/snapshotClient',()=>({runSnapshotTask:snapshotTask}));
 const revision='a'.repeat(64),session='2026-10-01';
-const manifest={revision,schemaVersion:7,sessionDate:session,totalStocks:1,
+const manifest={revision,schemaVersion:7,...SCANNER_IDENTITY,sessionDate:session,totalStocks:1,
   datasetUrl:'/data/stocks.json',iposUrl:'/data/ipos.json',
   packs:Object.fromEntries(['core','technical','fundamentals'].map(name=>[name,{
     schemaVersion:7,encoding:'gzip',url:`/data/${name}.json.gz`,bytes:100,sha256:'b'.repeat(64),

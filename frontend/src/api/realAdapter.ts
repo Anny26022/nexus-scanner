@@ -1,3 +1,4 @@
+import { SCANNER_IDENTITY, assertScannerIdentity } from '../engine/compatibility';
 import type { ScreenerRunRequest, ScreenerRunResponse, IPORow, ExplainRequest, ExplainResponse,
   SymbolComparisonRequest, SymbolComparisonResponse, RevisionCurrentResponse } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
@@ -23,6 +24,7 @@ interface Manifest {
   chartRevision?: string;
   earningsCalendarUrl?: string;
   engineVersion?: string;
+  conditionContractHash?: string;
   packs?: PublicPacks;
   advanced?: { revision:string; session:string; shards:number; maxSessions:number };
   dataIndexUrl?: string;
@@ -166,6 +168,7 @@ function validateManifest(value: unknown): Manifest {
           || manifest.chartUrlTemplate.split('{symbol}').length !== 2))) {
     throw new Error('Invalid scanner dataset manifest');
   }
+  if (manifest.schemaVersion === 7) assertScannerIdentity(manifest);
   return manifest;
 }
 
@@ -179,12 +182,13 @@ async function snapshotSource(revision?: string): Promise<SnapshotSource> {
   const manifest = current ?? await refreshManifest();
   const selected = revision ?? manifest.revision;
   if (!/^[a-f0-9]{64}$/.test(selected)) throw new Error('Invalid dataset revision');
-  // Older revisions retain their original JSON URL; current releases advertise gzip.
+  const release = selected === manifest.revision ? manifest
+    : validateManifest(await getJson<unknown>(`/data/revisions/${selected}/release.json`));
+  if (release.revision !== selected) throw new Error('Scanner release revision mismatch');
   return { revision:selected,
-    url:selected === manifest.revision ? (typeof DecompressionStream !== 'undefined' ? manifest.datasetPackedGzipUrl ?? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
-      : `/data/revisions/${selected}/stocks.json`,
-    sessionDate:selected === manifest.revision ? manifest.sessionDate : undefined,
-    packs:selected === manifest.revision && manifest.schemaVersion === 7 && typeof DecompressionStream !== 'undefined' ? manifest.packs : undefined };
+    url:(typeof DecompressionStream !== 'undefined' ? release.datasetPackedGzipUrl ?? release.datasetGzipUrl : undefined) ?? release.datasetUrl,
+    sessionDate:release.sessionDate,
+    packs:release.schemaVersion === 7 && typeof DecompressionStream !== 'undefined' ? release.packs : undefined };
 }
 
 class RealDataAdapter {
@@ -207,7 +211,7 @@ class RealDataAdapter {
     const source = await snapshotSource(req.datasetRevision);
     const plan = expressionPlan(expressionTree);
     if (plan.browser) {
-      const snapshot = await runSnapshotTask({type:'screen',source,request:{...req,expressionTree,textQuery:undefined}});
+      const snapshot = await runSnapshotTask({type:'screen',source,request:{...req,...SCANNER_IDENTITY,expressionTree,textQuery:undefined}});
       if (snapshot.type !== 'screen') throw new Error('Unexpected scanner response');
       if (snapshot.result) return snapshot.result;
     }
@@ -215,7 +219,7 @@ class RealDataAdapter {
     const manifest = current ?? await refreshManifest();
     if (!manifest.advanced && base !== '/api') throw new Error('This screen needs the advanced scanner data service.');
     const response = await fetch(`${base}/screens/run`, { method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({...req,asOfDate:source.sessionDate ?? req.asOfDate,datasetRevision:source.revision}) });
+      body:JSON.stringify({...req,...SCANNER_IDENTITY,asOfDate:source.sessionDate ?? req.asOfDate,datasetRevision:source.revision}) });
     const payload = await response.json().catch(() => null);
     if (!response.ok || payload?.error) throw new Error(payload?.error || `Scanner request failed (HTTP ${response.status})`);
     if (payload?.immutableRevision !== source.revision || !Array.isArray(payload.rows)) throw new Error('Scanner returned a different dataset revision');

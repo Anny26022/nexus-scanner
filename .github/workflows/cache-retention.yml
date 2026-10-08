@@ -19,7 +19,9 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: cache-retention
+  # Serialize deletion with both refresh workflows, including manual dispatches.
+  group: daily-data-refresh
+  queue: max
   cancel-in-progress: false
 
 jobs:

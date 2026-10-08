@@ -1,6 +1,8 @@
 import contextlib
 from datetime import datetime, timedelta, timezone
 import io
+from pathlib import Path
+import subprocess
 import unittest
 from unittest import mock
 
@@ -69,18 +71,20 @@ class CacheRetentionTests(unittest.TestCase):
                   cache(4, 'node-cache-a', ref=MAIN)]
         self.assertEqual(selected(caches, closed=[12]), {1})
 
-    def run_cli(self, delete=False, active_status=None):
+    def run_cli(self, delete=False, active_status=None, workflow='Daily Data Refresh',
+                cache_count=3, failures=None, active_after=None):
         caches = [cache(i, f'scanner-prices-v1-Linux-{i}-1-fetch', days=6-i)
-                  for i in range(1, 4)]
+                  for i in range(1, cache_count + 1)]
         def api(repository, suffix):
             if not suffix:
                 return [{'default_branch': 'main'}]
             if suffix.startswith('actions/caches'):
                 return [{'actions_caches': caches[:2]}, {'actions_caches': caches[2:]}]
-            return [{'workflow_runs': [{'name': 'Daily Data Refresh'}] if f'status={active_status}&' in suffix else []}]
+            status = 'in_progress' if active_after is not None and remove.call_count >= active_after else active_status
+            return [{'workflow_runs': [{'name': workflow}] if f'status={status}&' in suffix else []}]
         argv = ['prune', '--repo', 'owner/repo'] + (['--delete'] if delete else [])
         with mock.patch('sys.argv', argv), mock.patch.object(retention, 'api', side_effect=api), \
-                mock.patch.object(retention.subprocess, 'run') as remove, \
+                mock.patch.object(retention.subprocess, 'run', side_effect=failures) as remove, \
                 mock.patch.object(retention, 'datetime', wraps=datetime) as clock, contextlib.redirect_stdout(io.StringIO()):
             clock.now.return_value = NOW
             retention.main()
@@ -88,11 +92,41 @@ class CacheRetentionTests(unittest.TestCase):
 
     def test_cli_dry_run_and_active_refresh_never_delete(self):
         self.assertEqual(self.run_cli(), [])
-        for status in ('in_progress', 'queued', 'waiting', 'pending', 'requested'):
-            with self.subTest(status=status):
-                self.assertEqual(self.run_cli(delete=True, active_status=status), [])
+        for workflow in ('Daily Data Refresh', 'Weekly Adjusted OHLCV Refresh'):
+            for status in ('in_progress', 'queued', 'waiting', 'pending', 'requested'):
+                with self.subTest(workflow=workflow, status=status):
+                    self.assertEqual(self.run_cli(delete=True, active_status=status, workflow=workflow), [])
 
     def test_cli_delete_targets_only_selected_id(self):
         calls = self.run_cli(delete=True)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0].args[0][-1], 'repos/owner/repo/actions/caches/1')
+        self.assertEqual(calls[0].kwargs['timeout'], 60)
+
+    def test_new_refresh_stops_remaining_deletions(self):
+        for workflow in ('Daily Data Refresh', 'Weekly Adjusted OHLCV Refresh'):
+            with self.subTest(workflow=workflow):
+                calls = self.run_cli(delete=True, cache_count=4, workflow=workflow, active_after=1)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(calls[0].args[0][-1], 'repos/owner/repo/actions/caches/1')
+
+    def test_failed_or_timed_out_delete_does_not_abort_remaining_candidates(self):
+        for error in (subprocess.CalledProcessError(1, ['gh']), subprocess.TimeoutExpired(['gh'], 60)):
+            with self.subTest(error=type(error).__name__):
+                calls = self.run_cli(delete=True, cache_count=4, failures=[error, None])
+                self.assertEqual([call.args[0][-1] for call in calls],
+                                 ['repos/owner/repo/actions/caches/1', 'repos/owner/repo/actions/caches/2'])
+
+    def test_api_calls_are_bounded_and_fail_closed(self):
+        with mock.patch.object(retention.subprocess, 'check_output', side_effect=subprocess.TimeoutExpired(['gh'], 60)) as api:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                retention.api('owner/repo', 'actions/runs?status=in_progress')
+            self.assertEqual(api.call_args.kwargs['timeout'], 60)
+
+    def test_cleanup_and_refresh_workflows_share_concurrency_group(self):
+        root = Path(__file__).resolve().parents[1] / '.github/workflows'
+        for name in ('cache-retention.yml', 'daily_refresh.yml', 'weekly_eod2_refresh.yml'):
+            with self.subTest(workflow=name):
+                self.assertIn('  group: daily-data-refresh\n', (root / name).read_text())
+                self.assertIn('  queue: max\n', (root / name).read_text())
+                self.assertIn('  cancel-in-progress: false\n', (root / name).read_text())

@@ -77,7 +77,7 @@ def deletion_candidates(caches, default_ref, closed_prs, now):
 def api(repository, suffix):
     # Slurping pagination avoids silently ignoring older caches or running jobs.
     output = subprocess.check_output(
-        ["gh", "api", "--paginate", "--slurp", f"repos/{repository}/{suffix}".rstrip("/")], text=True)
+        ["gh", "api", "--paginate", "--slurp", f"repos/{repository}/{suffix}".rstrip("/")], text=True, timeout=60)
     return json.loads(output)
 
 
@@ -96,13 +96,18 @@ def main():
         print(f"{cache['id']}: {cache['key']} ({cache['ref']})")
     if not args.delete or not candidates:
         return
-    for status in ("in_progress", "queued", "waiting", "pending", "requested"):
-        runs = api(args.repo, f"actions/runs?status={status}&per_page=100")
-        if any(run["name"] in REFRESH_WORKFLOWS for page in runs for run in page["workflow_runs"]):
-            print("Refresh is active; skipping all cache deletion.")
-            return
     for cache in candidates:
-        subprocess.run(["gh", "api", "--method", "DELETE", f"repos/{args.repo}/actions/caches/{cache['id']}"], check=True)
+        # The workflow shares the refresh concurrency group. Recheck here too
+        # so direct CLI runs stop if a refresh appears during a long cleanup.
+        for status in ("in_progress", "queued", "waiting", "pending", "requested"):
+            runs = api(args.repo, f"actions/runs?status={status}&per_page=100")
+            if any(run["name"] in REFRESH_WORKFLOWS for page in runs for run in page["workflow_runs"]):
+                print("Refresh is active; skipping remaining cache deletion.")
+                return
+        try:
+            subprocess.run(["gh", "api", "--method", "DELETE", f"repos/{args.repo}/actions/caches/{cache['id']}"], check=True, timeout=60)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            print(f"Deleting cache {cache['id']} failed ({error}); continuing with remaining candidates.")
 
 
 if __name__ == "__main__":

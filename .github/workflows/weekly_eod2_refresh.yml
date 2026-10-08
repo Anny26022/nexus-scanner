@@ -13,6 +13,7 @@ permissions:
 concurrency:
   # Do not let the long-history overlay race the normal daily publication.
   group: daily-data-refresh
+  queue: max
   cancel-in-progress: false
 
 jobs:

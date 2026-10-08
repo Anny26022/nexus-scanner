@@ -109,7 +109,7 @@ concurrency and filing-storage changes remain deferred.
   retain serial read-after-write behavior. Every overlay is still recomputed.
 
 Compared with preceding PR head `49963db`, full frozen breadth generation took
-108.9676s versus 67.8735s (**37.71% lower elapsed time**), covering 2,597 input
+67.8735s versus 108.9676s (**37.71% lower elapsed time**), covering 2,597 input
 stocks, 2,308 eligible and 2,302 processed. All four artifact hashes and quality
 records matched, including the same six missing local histories. This is the
 incremental improvement from this round, not a comparison to the original job.

@@ -23,8 +23,9 @@ Copy `.env.example` only if your shell tooling automatically loads env files. Th
 When using the installed `edl-pipeline` command outside this folder, set `EDL_BASE_DIR` to the absolute pipeline directory.
 
 The wheel includes the scanner, runtime scripts, and byte-identical copies of
-the pinned breadth methodology and filing-label mapping. Repository inputs keep
-precedence; installed copies are used only when those source files are absent.
+the pinned breadth methodology and filing-label mapping. Canonical inputs beside
+checkout scripts keep precedence. Installed wheels use inputs in `EDL_BASE_DIR`
+when present, otherwise their bundled copies.
 `edl-pipeline --help` and split-phase argument validation match the script.
 The wheel does not bundle the frontend publisher or repository-level optional
 index-reference tooling; use the checkout for the complete repository refresh.

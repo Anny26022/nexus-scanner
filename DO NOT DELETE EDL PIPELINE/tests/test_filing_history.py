@@ -1,6 +1,7 @@
 import sys
 import copy
 import hashlib
+import importlib.util
 import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +25,18 @@ from pipeline_utils import load_json, save_json
 
 
 class FilingHistoryTests(unittest.TestCase):
+    def test_memory_telemetry_is_optional_without_changing_processing(self):
+        spec = importlib.util.spec_from_file_location('filing_history_without_resource',
+                                                    ROOT / 'build_filing_history_artifact.py')
+        module = importlib.util.module_from_spec(spec)
+        with mock.patch.dict(sys.modules, {'resource': None}):
+            spec.loader.exec_module(module)
+        self.assertIsNone(module.resource)
+        with mock.patch.object(module.time, 'perf_counter', side_effect=[10, 11]), mock.patch('builtins.print') as output:
+            self.assertEqual(module.progress('load', 8), 11)
+        output.assert_called_once_with('Filings load: 2.00s; peak RSS unavailable', flush=True)
+        self.assertEqual(module.classification_rules(), build_filing_history_artifact.classification_rules())
+
     def test_streamed_history_fingerprint_keeps_existing_cache_keys(self):
         rows = [{'caption': '₹😃', 'value': -0.0, 'nested': [1e100, None]},
                 {'documentExtraction': {'status': 'failed', 'attemptedAt': 'today', 'error': 'offline',

@@ -5,11 +5,15 @@ from __future__ import annotations
 import sys
 import hashlib
 import json
-import resource
 import time
 from collections import Counter
 from pathlib import Path
 from tempfile import TemporaryFile
+
+try:
+    import resource
+except ImportError:
+    resource = None  # RSS telemetry is unavailable on Windows; calculations are unchanged.
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
@@ -65,9 +69,12 @@ def classification_rules():
 
 
 def progress(label, started):
-    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    mib = peak / (1024 * 1024 if sys.platform == 'darwin' else 1024)
-    print(f"Filings {label}: {time.perf_counter() - started:.2f}s; peak RSS {mib:.1f} MiB", flush=True)
+    usage = 'unavailable'
+    if resource is not None:
+        peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        mib = peak / (1024 * 1024 if sys.platform == 'darwin' else 1024)
+        usage = f'{mib:.1f} MiB'
+    print(f"Filings {label}: {time.perf_counter() - started:.2f}s; peak RSS {usage}", flush=True)
     return time.perf_counter()
 
 

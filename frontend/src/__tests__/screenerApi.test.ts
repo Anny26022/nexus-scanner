@@ -11,12 +11,18 @@ const fixtures = vi.hoisted(() => {
     getAnnouncements: vi.fn(async () => ({})), getAnnouncementHistory: vi.fn(async () => ({})),
     getAnnouncementDetail: vi.fn(async () => ({})),
   });
-  return {real: adapter(), mock: adapter(), mockLoads: 0};
+  return {real: adapter(), mock: adapter(), mockLoads: 0, failMockRead: false};
 });
 vi.mock('../api/realAdapter', () => ({realAdapter: fixtures.real}));
-vi.mock('../api/mockAdapter', () => {fixtures.mockLoads++; return {mockAdapter: fixtures.mock};});
+vi.mock('../api/mockAdapter', () => {
+  fixtures.mockLoads++;
+  return {get mockAdapter() {
+    if (fixtures.failMockRead) {fixtures.failMockRead = false; throw new Error('Transient mock load failure');}
+    return fixtures.mock;
+  }};
+});
 
-beforeEach(() => {vi.resetModules(); vi.clearAllMocks(); fixtures.mockLoads = 0;});
+beforeEach(() => {vi.resetModules(); vi.clearAllMocks(); fixtures.mockLoads = 0; fixtures.failMockRead = false;});
 afterEach(() => vi.unstubAllEnvs());
 
 it('never loads mocks in real mode and preserves the real catalogue metadata', async () => {
@@ -45,4 +51,15 @@ it('loads mocks once on demand while keeping announcements real and restrictions
   expect(fixtures.mock.getCatalog).toHaveBeenCalledOnce();
   expect(fixtures.mock.getCurrentRevision).toHaveBeenCalledOnce();
   expect(fixtures.real.getCatalog).not.toHaveBeenCalled();
+});
+
+it('shares a rejected adapter-load promise and allows the next call to retry', async () => {
+  vi.stubEnv('VITE_USE_MOCK', 'true');
+  fixtures.failMockRead = true;
+  const {screenerApi} = await import('../api/screenerApi');
+  const failed = await Promise.allSettled([screenerApi.getCatalog(), screenerApi.getCurrentRevision()]);
+  expect(failed.every(result => result.status === 'rejected')).toBe(true);
+  expect(fixtures.mock.getCatalog).not.toHaveBeenCalled();
+  await expect(screenerApi.getCatalog()).resolves.toEqual([]);
+  expect(fixtures.mock.getCatalog).toHaveBeenCalledOnce();
 });

@@ -16,7 +16,7 @@ import { realAdapter, type ChartSnapshot } from './realAdapter';
 const USE_MOCK_API = import.meta.env.VITE_USE_MOCK === 'true';
 let mock: Promise<typeof import('./mockAdapter')['mockAdapter']> | undefined;
 const getAdapter = () => USE_MOCK_API
-  ? mock ??= import('./mockAdapter').then(module => module.mockAdapter)
+  ? mock ??= import('./mockAdapter').then(module => module.mockAdapter).catch(error => {mock = undefined; throw error;})
   : Promise.resolve(realAdapter);
 
 export const screenerApi = {

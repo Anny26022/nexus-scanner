@@ -44,7 +44,10 @@ def file_fingerprint(path):
 def resource_path(name):
     """Use the canonical checkout input, or its unchanged installed-wheel copy."""
     source = Path(__file__).resolve().with_name(name)
-    return source if source.is_file() else source.parent / "edl_pipeline" / "data" / name
+    if source.is_file():
+        return source
+    configured = BASE_PATH / name
+    return configured if configured.is_file() else source.parent / "edl_pipeline" / "data" / name
 
 
 def _default_base_path():

@@ -43,11 +43,22 @@ for script in SCRIPT_OUTPUT_SPECS:
 assert load_methodology(pipeline_utils.resource_path('breadth_methodology.json'))
 assert source_label_mapping() == json.loads(Path('filing_source_labels.json').read_text())['fields']
 assert classification_rules()[-1] == pipeline_utils.file_fingerprint(Path('filing_source_labels.json'))
+for name in ('breadth_methodology.json', 'filing_source_labels.json'):
+    assert pipeline_utils.resource_path(name).is_relative_to(installed / 'edl_pipeline' / 'data')
+configured = Path(pipeline_utils.BASE_DIR)
+configured.mkdir(parents=True, exist_ok=True)
+for name in ('breadth_methodology.json', 'filing_source_labels.json'):
+    # Different bytes, same policy: verify explicit checkout precedence and hashing.
+    (configured / name).write_bytes(Path(name).read_bytes() + b'\n')
+    assert pipeline_utils.resource_path(name) == configured / name
+source_label_mapping.cache_clear()
+assert source_label_mapping() == json.loads((configured / 'filing_source_labels.json').read_text())['fields']
+assert classification_rules()[-1] == pipeline_utils.file_fingerprint(configured / 'filing_source_labels.json')
 stage = Path.cwd() / 'stage'
 with patch.object(publication.subprocess, 'run', return_value=SimpleNamespace(returncode=1)) as run:
     assert publication.main(phase='fetch', stage_path=stage) == 1
     run.assert_called_once()
-assert (stage / 'breadth_methodology.json').read_bytes() == Path('breadth_methodology.json').read_bytes()
+assert (stage / 'breadth_methodology.json').read_bytes() == (configured / 'breadth_methodology.json').read_bytes()
 import run_full_pipeline
 with patch.object(run_full_pipeline, 'main', return_value=7) as main:
     assert run_full_pipeline.cli(['--phase', 'build', '--stage', str(stage)]) == 7

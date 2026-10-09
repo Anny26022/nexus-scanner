@@ -104,18 +104,53 @@ def discard_weekend_rows(rows):
     return valid
 
 
-def has_valid_ohlcv(row):
-    """Accept only finite daily bars whose OHLC values agree with each other."""
+def valid_ohlcv_values(row):
+    """Return parsed values only for finite, internally consistent daily bars."""
     try:
         opening, high, low, close = (float(row[key]) for key in ("Open", "High", "Low", "Close"))
         volume = float(row["Volume"])
     except (KeyError, TypeError, ValueError):
-        return False
-    return (
+        return None
+    valid = (
         all(isfinite(value) and value > 0 for value in (opening, high, low, close))
         and isfinite(volume) and volume >= 0
         and low <= min(opening, close) <= max(opening, close) <= high
     )
+    return (opening, high, low, close, volume) if valid else None
+
+
+def has_valid_ohlcv(row):
+    """Accept only finite daily bars whose OHLC values agree with each other."""
+    return valid_ohlcv_values(row) is not None
+
+
+def evidenced_history_gaps(rows, expected_sessions):
+    """Match full cleaning/gap detection without validating irrelevant candles.
+
+    Only the earliest valid date and evidenced sessions affect recovery. The
+    subsequent provider sync still validates every candle before publication.
+    """
+    expected = set(expected_sessions)
+    first, present = None, set()
+    for row in rows:
+        day = row.get('Date')
+        # Missing keys/types retain the original cleaner's failure behavior.
+        if not isinstance(day, str):
+            return missing_history_sessions(discard_invalid_ohlcv_rows(discard_weekend_rows(rows)), expected)
+        if first is not None and day >= first and day not in expected:
+            continue
+        try:
+            if parse_history_date(row['Date']).weekday() >= 5:
+                continue
+        except (KeyError, TypeError, ValueError):
+            pass
+        if not has_valid_ohlcv(row):
+            continue
+        day = row['Date']
+        first = day if first is None else min(first, day)
+        if day in expected:
+            present.add(day)
+    return sorted(day for day in expected if (first is None or day >= first) and day not in present)
 
 
 def discard_invalid_ohlcv_rows(rows):

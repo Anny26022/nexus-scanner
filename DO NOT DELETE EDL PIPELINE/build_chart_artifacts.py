@@ -17,6 +17,7 @@ import shutil
 import sys
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, wait, FIRST_COMPLETED
 import os
+import time
 from multiprocessing import get_context
 from functools import lru_cache
 
@@ -106,7 +107,12 @@ def _highest(rows):
 
 def _lowest(rows):
     # Equal volume selects the latest session.
-    return min(rows, key=lambda row: (row["volume"], -int(row["date"].replace("-", "")))) if rows else None
+    return min(rows, key=lambda row: (row["volume"], _reverse_date(row["date"]))) if rows else None
+
+
+@lru_cache(maxsize=16384)
+def _reverse_date(value):
+    return -int(value.replace('-', ''))
 
 
 def _volume_events(candles):
@@ -193,6 +199,13 @@ def _chart_chunk(tasks):
     return [_chart_object(task) for task in tasks]
 
 
+def _timed_announcements(*args, **kwargs):
+    started = time.perf_counter()
+    result = build_announcements(*args, **kwargs)
+    print(f'Chart announcements elapsed: {time.perf_counter() - started:.2f}s', flush=True)
+    return result
+
+
 def _parallel_chart_objects(tasks, workers, announcement=None):
     """Bound queued work and notice failures independently of result order."""
     executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'))
@@ -273,10 +286,11 @@ def main() -> int:
     # unrestricted pools. Parent assembly stays ordered and publication waits
     # for both branches, including any exception in the announcement iterator.
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix='announcements') as background:
-        announcement = background.submit(build_announcements, filing_history, objects, symbols, as_of,
+        announcement = background.submit(_timed_announcements, filing_history, objects, symbols, as_of,
                                           cache=root / 'filing_history_data/object_cache')
         cpus = os.cpu_count() or 1
         workers = max(1, min(2, cpus - 1))
+        candle_started = time.perf_counter()
         if cpus > 1 and len(tasks) >= 32:
             chart_objects.update(_parallel_chart_objects(tasks, workers, announcement))
         else:
@@ -285,6 +299,7 @@ def main() -> int:
                     announcement.result()
                 symbol, digest = _chart_object(task)
                 chart_objects[symbol] = digest
+        print(f'Chart candles elapsed: {time.perf_counter() - candle_started:.2f}s', flush=True)
         announcements = announcement.result()
     count = len(tasks)
     index = {"schemaVersion": 2, "asOfDate": as_of, "symbols": count,

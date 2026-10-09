@@ -6,6 +6,10 @@ import math
 import numbers
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
+import os
 
 import pandas as pd
 
@@ -41,6 +45,56 @@ TRADINGVIEW_TABLE_SCHEMA = [
     {"label": "200+", "field": "above_200_pct", "available": True},
     {"label": "Index", "field": "index_change_pct", "available": True},
 ]
+
+
+def _prepare_stock(task):
+    symbol, root, methodology = task
+    csv_path = symbol_csv_path(root, symbol)
+    if not csv_path.exists():
+        return symbol, None, None
+    try:
+        prepared = prepare_history(pd.read_csv(csv_path), methodology)
+    except Exception as error:
+        return symbol, None, str(error)
+    return symbol, prepared, 'empty normalized history' if prepared.empty else None
+
+
+def _prepared_histories(stocks, root, methodology, workers):
+    """Prepare independently, but admit results in the original symbol order."""
+    tasks = ((stock['symbol'], root, methodology) for stock in stocks)
+    if not workers:
+        yield from map(_prepare_stock, tasks)
+        return
+    executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'))
+    pending = deque()
+    try:
+        for _ in range(2 * workers):
+            task = next(tasks, None)
+            if task is None:
+                break
+            pending.append((task, executor.submit(_prepare_stock, task)))
+        while pending:
+            task, future = pending.popleft()
+            try:
+                yield future.result()
+            except Exception:
+                # Preparation is read-only. A broken worker/pickling failure
+                # must retain the serial loop's per-symbol degradation rather
+                # than losing the entire breadth artifact.
+                remaining = [task, *(queued for queued, _ in pending)]
+                for _, queued_future in pending:
+                    queued_future.cancel()
+                for queued in remaining:
+                    yield _prepare_stock(queued)
+                yield from map(_prepare_stock, tasks)
+                return
+            task = next(tasks, None)
+            if task is not None:
+                pending.append((task, executor.submit(_prepare_stock, task)))
+    finally:
+        for _, future in pending:
+            future.cancel()
+        executor.shutdown(wait=True, cancel_futures=True)
 
 
 def _save_json(path, data):
@@ -152,6 +206,7 @@ def _round_records(records, digits):
 def generate_market_breadth(
     universe_rows, ohlcv_dir, index_csv, methodology, output_path, snapshot_path,
     generated_at=None, sector_output_path=None, contribution_output_path=None, benchmark_panels=None,
+    preparation_workers=0,
 ):
     """Generate all-active, named-universe, sector and audit breadth artifacts."""
     methodology.validate(); generated_at = generated_at or datetime.now(timezone.utc).isoformat()
@@ -161,22 +216,27 @@ def generate_market_breadth(
     for key in UNIVERSE_MEMBERSHIPS: accumulators[key] = BreadthAccumulator(methodology, include_contributions=True)
     sectors = {}
     missing_history=[]; invalid_history=[]; processed_symbols=[]; root=Path(ohlcv_dir)
-    for stock in snapshot["eligible"]:
-        symbol=stock["symbol"]; csv_path=symbol_csv_path(root,symbol)
-        if not csv_path.exists(): missing_history.append(symbol); continue
-        try: prepared=prepare_history(pd.read_csv(csv_path), methodology)
-        except Exception as error: invalid_history.append({"symbol":symbol,"error":str(error)}); continue
-        if prepared.empty: invalid_history.append({"symbol":symbol,"error":"empty normalized history"}); continue
-        processed_symbols.append(symbol)
-        peers=[]
-        info=metadata.get(symbol,{})
-        memberships=info.get("memberships",set())
-        for key, required in UNIVERSE_MEMBERSHIPS.items():
-            if memberships & required: peers.append(accumulators[key])
-        sector=info.get("sector") or "Unclassified"
-        if sector != "Unclassified":
-            peers.append(sectors.setdefault(sector,BreadthAccumulator(methodology)))
-        accumulators["all_active"].update(prepared,symbol,peers=peers)
+    if preparation_workers is None:
+        # The runner already overlaps filings and foreground enrichment. Use
+        # only spare cores, and bound resident histories to two per worker.
+        preparation_workers = min(2, max(0, (os.cpu_count() or 1) - 3)) if len(snapshot['eligible']) >= 64 else 0
+    histories = _prepared_histories(snapshot['eligible'], root, methodology, preparation_workers)
+    try:
+        for symbol, prepared, error in histories:
+            if prepared is None and error is None: missing_history.append(symbol); continue
+            if error is not None: invalid_history.append({"symbol":symbol,"error":error}); continue
+            processed_symbols.append(symbol)
+            peers=[]
+            info=metadata.get(symbol,{})
+            memberships=info.get("memberships",set())
+            for key, required in UNIVERSE_MEMBERSHIPS.items():
+                if memberships & required: peers.append(accumulators[key])
+            sector=info.get("sector") or "Unclassified"
+            if sector != "Unclassified":
+                peers.append(sectors.setdefault(sector,BreadthAccumulator(methodology)))
+            accumulators["all_active"].update(prepared,symbol,peers=peers)
+    finally:
+        histories.close()
     closes=load_index_closes(index_csv)
     def enriched(accumulator):
         rows=enrich_records(accumulator.records(),methodology,closes,output_sessions=methodology.output_sessions)

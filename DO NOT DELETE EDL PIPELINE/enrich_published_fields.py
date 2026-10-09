@@ -1,12 +1,14 @@
 """Connect staged NSE prices/dividends and verified history to published stock records."""
 from datetime import date, datetime
 from pathlib import Path
+from functools import lru_cache
 
-from ohlcv_utils import read_ohlcv_csv, symbol_csv_path, discard_invalid_ohlcv_rows
+from ohlcv_utils import read_ohlcv_csv, symbol_csv_path, valid_ohlcv_values
 from pipeline_utils import BASE_DIR, load_json, save_json
 
 
-def listing_day(value):
+@lru_cache(maxsize=16384)
+def _listing_day(value):
     try:
         return date.fromisoformat(str(value).strip())
     except ValueError:
@@ -17,6 +19,11 @@ def listing_day(value):
         except ValueError:
             pass
     return None
+
+
+def listing_day(value):
+    # Dates repeat across the entire universe; cache only the immutable text.
+    return _listing_day(str(value))
 
 
 def enrich(stocks, bhavcopy, ledger, history_report, history_dir):
@@ -41,14 +48,19 @@ def enrich(stocks, bhavcopy, ledger, history_report, history_dir):
         stock["dividend_ex_date"] = latest.get("ex_date") if unambiguous_dividend else None
         stock["dividend_basis"] = "latest ex-date declaration; rupees per share on that date" if unambiguous_dividend else None
         stock["dividend_source_range"] = ledger.get("range") if unambiguous_dividend else None
-        rows = discard_invalid_ohlcv_rows(read_ohlcv_csv(symbol_csv_path(Path(history_dir), symbol)))
+        rows = read_ohlcv_csv(symbol_csv_path(Path(history_dir), symbol))
         normalized_rows = []
         for row in rows:
+            values = valid_ohlcv_values(row)
+            if values is None:
+                continue
             row_date = listing_day(row.get("Date"))
             if row_date is None:
                 continue
-            normalized_rows.append({**row, "Date": row_date.isoformat(),
-                                    **{key: float(row[key]) for key in ("Open", "High", "Low", "Close", "Volume")}})
+            # Only these fields are consumed below. Keep the same validated
+            # floats without converting or copying the whole candle twice.
+            normalized_rows.append({"Date": row_date.isoformat(),
+                                    "High": values[1], "Low": values[2], "Close": values[3]})
         # Canonicalization can collapse differently formatted source dates onto
         # one exchange session. Keep the last source row for that session so a
         # duplicate cannot inflate lookbacks or history coverage counts.

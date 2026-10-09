@@ -3,7 +3,11 @@ import gzip
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
 
 import numpy as np
 
@@ -54,7 +58,128 @@ def delivery_lookback(expressions):
     return maximum
 
 
-def publish(root=bridge.ROOT, output=OUTPUT):
+def primitive_keys(expressions):
+    """Canonical memo keys depend on the rules, not the security."""
+    keys = {}
+    pending = list(expressions)
+    while pending:
+        node = pending.pop()
+        if node['type'] == 'group':
+            pending.extend(node['children'])
+        elif node['type'] == 'preset':
+            pending.append(node['expression'])
+        else:
+            keys[id(node)] = json.dumps(node, sort_keys=True)
+    return keys
+
+
+def elapsed(label, started):
+    now = time.perf_counter()
+    print(f'Snapshot {label} elapsed: {now - started:.2f}s', flush=True)
+    return now
+
+def _stock_row(task, context, session, presets, default, memo_keys):
+    stock, frame, stock_delivery = task
+    symbol = stock['symbol']
+    row=bridge.stock_row(stock,context['rs_ratings'] if context.get('rs_ratings_as_of')==session else {})
+    aligned=frame is not None and not frame.empty and frame['Date'].iloc[-1].strftime('%Y-%m-%d')==session
+    row['asOfDate']=session if aligned else stock.get('as_of_date')
+    row['metadataAsOfDate']=stock.get('as_of_date')
+    row['historyAligned']=bool(aligned)
+    row['indexMemberships']=stock.get('index_memberships') or []
+    metrics={}
+    if aligned:
+        last=frame.iloc[-1]
+        for field in ('open','high','low','close','volume'):
+            row[field]=float(last[field.title()])
+        for period in (10,20,50,200):
+            metrics[f'sma{period}']=float(frame['Close'].tail(period).mean()) if len(frame)>=period else None
+        avg=frame['Volume'].iloc[-21:-1].mean() if len(frame)>=21 else None
+        row['rvol']=float(last['Volume']/avg) if avg is not None and avg>0 else None
+        row['changePct']=float((last['Close']/frame['Close'].iloc[-2]-1)*100) if len(frame)>=2 else None
+        for field in ('sma20','sma50','sma200'):
+            row[field]=metrics[field]
+        for period in (5,21,63,126,252):
+            metrics[f'return{period}']=float((last['Close']/frame['Close'].iloc[-1-period]-1)*100) if len(frame)>period else None
+        metrics['gapPct']=float((last['Open']/frame['Close'].iloc[-2]-1)*100) if len(frame)>1 else None
+        turnover = frame['Close'] * frame['Volume'] if len(frame) >= 20 else None
+        for period in (20,50,100):
+            metrics[f'turnover{period}']=float(turnover.tail(period).mean()/1e7) if len(frame)>=period else None
+    row['metrics']=metrics
+    row['historyMetadata']=stock.get('history_metadata')
+    row['financialMetadata']=stock.get('financial_metadata')
+    row['dividendExDate']=stock.get('dividend_ex_date')
+    row['vwapAsOfDate']=stock.get('vwap_as_of_date')
+    row['peRatio']=financial_value(context,stock,{'condition':'pe_ratio'},bridge.date.fromisoformat(session),finite_number(stock.get('market_cap_crore')))[0]
+    row['fnoBan']=bool(context['fno_ban_symbols'].get(symbol)) if context.get('fno_ban_available') and context.get('fno_ban_trade_date')==session else None
+    row['roePct']=finite_number(stock.get('roe_percent'))
+    row['freeFloatPct']=finite_number(stock.get('free_float_percent'))
+    # Each distinct primitive is calculated only once per security.
+    memo={}
+    def evaluate(node):
+        if node['type']=='group':
+            return bridge.combine([evaluate(n) for n in node['children']],node['op'])
+        if node['type']=='preset':
+            baseline=bridge.preset_baseline(stock) if stock.get('as_of_date')==session else None
+            return False if baseline is False else bridge.combine([baseline,evaluate(node['expression'])],'AND')
+        key=memo_keys[id(node)]
+        if key not in memo:
+            memo[key]=bridge.evaluate(node,stock,frame,context,session,set(),stock_delivery)
+        return memo[key]
+    # Frames/benchmarks remain immutable while all presets for this stock
+    # reuse their underlying series, alignment and persistence state.
+    with calculation_cache():
+        row['presetMatches']={key:evaluate(node) for key,node in presets.items()}
+        default_match = evaluate(default) is True
+    return row, default_match
+
+
+def _initialize_rows(context, session, presets, default):
+    global _ROW_INPUTS
+    _ROW_INPUTS = (context, session, presets, default, primitive_keys([*presets.values(), default]))
+
+
+def _row_chunk(tasks):
+    try:
+        return [_stock_row(task, *_ROW_INPUTS) for task in tasks]
+    except Exception as error:
+        symbols = ', '.join(str(task[0].get('symbol')) for task in tasks)
+        raise RuntimeError(f'Frontend row preparation failed for symbols: {symbols}') from error
+
+
+def stock_rows(tasks, context, session, presets, default, workers=0):
+    if not workers:
+        keys = primitive_keys([*presets.values(), default])
+        for task in tasks:
+            yield _stock_row(task, context, session, presets, default, keys)
+        return
+    executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'),
+                                   initializer=_initialize_rows, initargs=(context, session, presets, default))
+    tasks = iter(tasks)
+    pending = deque()
+    def submit():
+        chunk = []
+        for _ in range(8):
+            task = next(tasks, None)
+            if task is None:
+                break
+            chunk.append(task)
+        if chunk:
+            pending.append(executor.submit(_row_chunk, chunk))
+    try:
+        for _ in range(2 * workers):
+            submit()
+        while pending:
+            yield from pending.popleft().result()
+            submit()
+    finally:
+        for future in pending:
+            future.cancel()
+        executor.shutdown(wait=True, cancel_futures=True)
+
+
+def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
+    started = time.perf_counter()
     cache=ScannerCache(); cache.refresh(root)
     starting_revision=cache.revision
     source_files=[p for p in sorted(root.glob('*.json.gz')) if p.name!='filing_history.json.gz']
@@ -73,6 +198,7 @@ def publish(root=bridge.ROOT, output=OUTPUT):
             symbol=stock['symbol']; frame=cache.frame(root,symbol,session)
             if lookback and frame is not None and not frame.empty and frame['Date'].iloc[-1].strftime('%Y-%m-%d')==session:
                 windows[symbol]=set(frame.tail(lookback)['Date'].dt.strftime('%Y-%m-%d'))
+    started = elapsed('context and frames', started)
     delivery_bytes={}
     cached_records={}
     csv_payloads={}
@@ -99,62 +225,24 @@ def publish(root=bridge.ROOT, output=OUTPUT):
         chart_preflight(chart_root, session)
     delivery=bridge._load_delivery_history(root/'delivery_history_data',None,root/'eod2_delivery_history_data',
                                           windows=windows,cached_records=cached_records,csv_payloads=csv_payloads)
+    started = elapsed('delivery freezing and loading', started)
     rows=[]; default_count=0
-    for stock in context['stocks'].values():
-        if not stock.get('default_screener_eligible',True):
-            continue
-        symbol=stock['symbol']; frame=cache.frame(root,symbol,session)
-        row=bridge.stock_row(stock,context['rs_ratings'] if context.get('rs_ratings_as_of')==session else {})
-        aligned=frame is not None and not frame.empty and frame['Date'].iloc[-1].strftime('%Y-%m-%d')==session
-        row['asOfDate']=session if aligned else stock.get('as_of_date')
-        row['metadataAsOfDate']=stock.get('as_of_date')
-        row['historyAligned']=bool(aligned)
-        row['indexMemberships']=stock.get('index_memberships') or []
-        metrics={}
-        if aligned:
-            last=frame.iloc[-1]
-            for field in ('open','high','low','close','volume'):
-                row[field]=float(last[field.title()])
-            for period in (10,20,50,200):
-                metrics[f'sma{period}']=float(frame['Close'].tail(period).mean()) if len(frame)>=period else None
-            avg=frame['Volume'].iloc[-21:-1].mean() if len(frame)>=21 else None
-            row['rvol']=float(last['Volume']/avg) if avg is not None and avg>0 else None
-            row['changePct']=float((last['Close']/frame['Close'].iloc[-2]-1)*100) if len(frame)>=2 else None
-            for field in ('sma20','sma50','sma200'):
-                row[field]=metrics[field]
-            for period in (5,21,63,126,252):
-                metrics[f'return{period}']=float((last['Close']/frame['Close'].iloc[-1-period]-1)*100) if len(frame)>period else None
-            metrics['gapPct']=float((last['Open']/frame['Close'].iloc[-2]-1)*100) if len(frame)>1 else None
-            for period in (20,50,100):
-                metrics[f'turnover{period}']=float((frame['Close']*frame['Volume']).tail(period).mean()/1e7) if len(frame)>=period else None
-        row['metrics']=metrics
-        row['historyMetadata']=stock.get('history_metadata')
-        row['financialMetadata']=stock.get('financial_metadata')
-        row['dividendExDate']=stock.get('dividend_ex_date')
-        row['vwapAsOfDate']=stock.get('vwap_as_of_date')
-        row['peRatio']=financial_value(context,stock,{'condition':'pe_ratio'},bridge.date.fromisoformat(session),finite_number(stock.get('market_cap_crore')))[0]
-        row['fnoBan']=bool(context['fno_ban_symbols'].get(symbol)) if context.get('fno_ban_available') and context.get('fno_ban_trade_date')==session else None
-        row['roePct']=finite_number(stock.get('roe_percent'))
-        row['freeFloatPct']=finite_number(stock.get('free_float_percent'))
-        # Each distinct primitive is calculated only once per security.
-        memo={}
-        def evaluate(node):
-            if node['type']=='group':
-                return bridge.combine([evaluate(n) for n in node['children']],node['op'])
-            if node['type']=='preset':
-                baseline=bridge.preset_baseline(stock) if stock.get('as_of_date')==session else None
-                return False if baseline is False else bridge.combine([baseline,evaluate(node['expression'])],'AND')
-            key=json.dumps(node,sort_keys=True)
-            if key not in memo:
-                memo[key]=bridge.evaluate(node,stock,frame,context,session,set(),delivery.get(symbol,[]))
-            return memo[key]
-        # Frames/benchmarks remain immutable while all presets for this stock
-        # reuse their underlying series, alignment and persistence state.
-        with calculation_cache():
-            row['presetMatches']={key:evaluate(node) for key,node in presets.items()}
-            default_count += evaluate(default) is True
-        rows.append(row)
+    if workers is None:
+        # Programmatic callers stay serial by default. The guarded CLI opts in
+        # only for large universes, leaving a core for parent I/O and packing.
+        workers = min(2, max(0, (os.cpu_count() or 1) - 1)) if len(context['stocks']) >= 256 else 0
+    tasks = ((stock, cache.frame(root, stock['symbol'], session), delivery.get(stock['symbol'], []))
+             for stock in context['stocks'].values() if stock.get('default_screener_eligible', True))
+    prepared_rows = stock_rows(tasks, context, session, presets, default, workers)
+    try:
+        for row, default_match in prepared_rows:
+            rows.append(row)
+            default_count += default_match
+    finally:
+        prepared_rows.close()
+    started = elapsed('stock metrics and presets', started)
     cache.save_frames(root)
+    started = elapsed('history packing', started)
     code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py")]
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
@@ -193,6 +281,7 @@ def publish(root=bridge.ROOT, output=OUTPUT):
             history_revision=str(data['revision'])
     if not (backend/'scanner_revision.json').exists():
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
+    started = elapsed('revision hashing and backend freezing', started)
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'referenceCounts':{'rvol15Sma50':default_count}}
     stock_bytes=write_json(generation/'stocks.json',payload)
     # Keep the full financial series out of every lightweight scanner row.
@@ -226,10 +315,12 @@ def publish(root=bridge.ROOT, output=OUTPUT):
         manifest['earningsCalendarUrl']=f'/data/revisions/{revision}/earnings-calendar.json.gz'
     manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'
     manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'
+    started = elapsed('serialization and compression', started)
     manifest = complete_release(chart_root, output, manifest)
+    elapsed('release completion', started)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest
 
 
 if __name__=='__main__':
-    publish(Path(os.environ.get('EDL_BASE_DIR',bridge.ROOT)))
+    publish(Path(os.environ.get('EDL_BASE_DIR',bridge.ROOT)), workers=None)

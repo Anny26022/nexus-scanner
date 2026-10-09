@@ -182,7 +182,9 @@ def fetch_single_stock(sym, details, live_snapshot=None, official_nse_session=No
     # 3. Merge, deduplicate and repair old weekend snapshot rows even when
     # the history provider has no new trading-day candle to contribute.
     official_rows = [row for row in existing_rows if row["Date"] == official_nse_session]
-    final_rows = merge_rows_by_date(discard_invalid_ohlcv_rows(existing_rows + new_rows + official_rows))
+    # Existing/official rows were already validated above. Validate only new
+    # provider/live rows; precedence and the original string values stay intact.
+    final_rows = merge_rows_by_date(existing_rows + discard_invalid_ohlcv_rows(new_rows) + official_rows)
 
     missing = missing_history_sessions(final_rows, expected_sessions)
     if missing:
@@ -222,16 +224,20 @@ def main():
     # One bulk ScanX snapshot is used only while a daily candle is forming.
     live_snapshots = get_live_snapshots() if is_nse_cash_session() else {}
     nse_session = official_session()
+    prepared_at = time.perf_counter()
     expected_sessions = expected_sessions_by_symbol(
         resolve_path("delivery_history_data"), stocks, nse_session or nse_calendar_date()
     )
+    print(f'OHLCV session ledger elapsed: {time.perf_counter() - prepared_at:.2f}s', flush=True)
 
+    prepared_at = time.perf_counter()
     try:
         eod2 = load_json('eod2_ohlcv_import_report.json', default={})
         adjusted_through = {symbol: item['end_date'] for symbol, item in eod2.get('symbol_history', {}).items()}
         repair_official_history(expected_sessions, resolve_path(OUTPUT_DIR), adjusted_through=adjusted_through)
     except (OSError, requests.RequestException, ValueError, TypeError, KeyError, AttributeError) as error:
         print(f'Official gap recovery skipped: {error}; continuing with provider sync.', flush=True)
+    print(f'OHLCV official recovery elapsed: {time.perf_counter() - prepared_at:.2f}s', flush=True)
 
     print(f"Syncing OHLCV for {len(stocks)} stocks (Hybrid Multi-Chunk Mode)...")
     counts = {"success": 0, "uptodate": 0, "error": 0}

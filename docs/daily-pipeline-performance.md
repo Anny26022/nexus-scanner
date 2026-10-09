@@ -198,3 +198,84 @@ levels, dropping retained archives and unbounded provider concurrency were
 excluded because they can change behavior or output. No live fetch, pipeline
 deployment or R2 publication was performed during verification; the next daily
 run is needed to establish the overall improvement under actual runner load.
+
+## Post-merge six-area follow-up
+
+The merged PR #50 ran in [job 113600619251](https://github.com/Anny26022/nexus-scanner/actions/runs/37862291799/job/113600619251):
+19m09s versus the original 33m44s, an observed 14m35s / 43.2% reduction.
+Both jobs published scanner-only because R2 configuration was missing; this
+comparison does not measure chart-object upload or remote verification.
+
+This follow-up addresses the six remaining areas without relaxing safeguards:
+
+1. Official gap recovery validates only dates that can affect evidenced gaps
+   or the earliest valid candle. Histories with actionable gaps still receive
+   full cleaning before repair, and provider sync validates every candle. Sync
+   validates only new rows a second time, not already-clean existing/official
+   rows. CSV reads remain bounded per security; no universe-sized row cache is
+   retained. Transport, requests, retries, adjusted-price boundaries and final
+   official precedence are unchanged.
+2. Chart announcements and candle workers report separate elapsed times.
+   Bounded caches reuse immutable filing timestamps and lowest-volume date
+   ranks. The original bucket calculation, ties, retention and serializers stay
+   intact. A slower single-pass chart rewrite was benchmarked and excluded.
+3. Frontend stock rows use at most two spawned workers for large CLI builds,
+   with four queued chunks of eight rows. Inputs/frames remain frozen; results
+   return in original stock order. Parent packing, revision hashing, validation,
+   upload and promotion remain ordered. Rule memo keys and turnover products
+   are computed once, without changing any formula. Programmatic callers remain
+   serial by default. Stage logs expose the remaining publication costs.
+4. Breadth preparation uses spare cores only: one worker on a four-core runner,
+   at most two on larger runners, and no pool for small universes. Only per-stock
+   preparation runs in workers; all accumulation and floating-point additions
+   retain original symbol/date order. Queues are bounded and closed on failures.
+   Library callers remain serial by default. Index/equity timings are separate.
+5. Published fields parse valid OHLCV numbers once and reuse bounded date
+   parsing. Only consumed candle fields are materialized. Duplicate-date,
+   listing-coverage, dividend, ATH and five-year-return rules are unchanged.
+   Standardization and shared stock-file mutations remain ordered.
+6. Filing output classifications are encoded one company at a time into a
+   temporary spool, then assembled in the same sorted output order. This avoids
+   retaining every company's expanded cache in memory. Global PDF selection,
+   classification traversal, cache keys and exact finite JSON bytes are retained.
+   The spool is closed on success/failure; it temporarily requires approximately
+   one additional uncompressed filing artifact's worth of disk space.
+
+Offline macOS / Python 3.12 comparisons against merged `40e0254`:
+
+| Frozen workload | Baseline | Follow-up | Equivalence |
+| --- | ---: | ---: | --- |
+| Recovery cleaning, 200 stocks / 479,148 candles; excludes CSV reads | 0.588s | 0.034s | Same evidenced gaps |
+| Published fields, same 200 histories | 1.437s | 1.186s | Same serialized stock fields |
+| Full local breadth, 2,597 input / 2,308 eligible stocks, serial / one worker / two workers | 72.285s | 59.586s / 53.103s | All four artifacts byte-identical |
+| Chart volume events, 300 local histories | 0.514s | 0.445s | Same records and ties |
+| Filing stress fixture, 36,000 filings, warm | 1.869s | 1.609s | Same artifact SHA-256 |
+| Filing stress fixture, isolated process peak RSS | 648.6 MiB | 452.9 MiB | Cold/warm cache and artifact bytes match |
+
+Snapshot benchmarks freeze producer-code fingerprint inputs as well as data.
+Real code edits still change the existing code-derived revision identity;
+the revision algorithm and content remain unchanged. Cold snapshot comparisons
+use separate cloned inputs, not a warm cache left by the baseline. The benchmark
+uses local chart storage and validates chart objects as part of every snapshot
+comparison. Earlier scanner-only frontend timing samples are intentionally not
+reported here; rerun the corrected benchmark for chart-enabled throughput.
+These component samples are not whole-job forecasts or isolated-run medians;
+they must not be added to the previously observed 14m35s saving.
+
+Reproduce with:
+
+```sh
+python tools/benchmark_pipeline_followup.py --data-root '/path/to/frozen/DO NOT DELETE EDL PIPELINE' --count 2600 --component breadth
+```
+
+Use `--component snapshot --count 400` for the complete frontend comparison.
+For isolated filing memory measurements, run `--component filings --filing-count 1500 --filing-companies 24 --filing-implementation old_filings`
+and then `new_filings` in separate processes. All writes are temporary and no
+provider fetch or live R2 publication is performed.
+
+Regression coverage includes spawned worker equivalence, ordering, bounded
+queues/cancellation, missing/stale/invalid histories, malformed dates,
+fractional/NaN volumes, atomic output failures and one-company classification
+lifetime. Local verification: 444 pipeline tests (one existing macOS skip),
+55 publication tests, 68 JavaScript tests, production frontend build and
+wheel-only imports of the changed packaged modules.

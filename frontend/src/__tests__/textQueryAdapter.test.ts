@@ -9,6 +9,6 @@ it('preserves the requested historical session when its source lacks a manifest 
   })}).mockResolvedValueOnce({ok:true,json:async()=>({immutableRevision:revision,rows:[]})});
   vi.stubGlobal('fetch',fetch);
   const {realAdapter} = await import('../api/realAdapter');
-  await realAdapter.runScreen({datasetRevision:revision,asOfDate:'2026-09-30',textQuery:'Close Price > 100'} as any);
+  await realAdapter.runScreen({datasetRevision:revision,asOfDate:'2026-09-30',textQuery:'RSI(14) > 50'} as any);
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({asOfDate:'2026-09-30',datasetRevision:revision});
 });

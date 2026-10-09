@@ -128,6 +128,22 @@ export interface StockRow {
   historyMetadata?: Record<string, unknown> | null;
   financialMetadata?: Record<string, unknown> | null;
   dividendExDate?: string | null;
+  publicHoldingPct?: number | null;
+  numberOfShareholders?: number | null;
+  faceValue?: number | null;
+  totalIncomeLakh?: number | null;
+  totalExpenseLakh?: number | null;
+  profitBeforeTaxLakh?: number | null;
+  totalTaxExpensesLakh?: number | null;
+  netProfitLakh?: number | null;
+  totalEquityLakh?: number | null;
+  totalAssetsLakh?: number | null;
+  currentAssetsLakh?: number | null;
+  currentLiabilitiesLakh?: number | null;
+  nonCurrentLiabilitiesLakh?: number | null;
+  operatingCashFlowLakh?: number | null;
+  investingCashFlowLakh?: number | null;
+  netCashFlowLakh?: number | null;
 
   financialUnitsVersion?: number | null;
   financialHistoryObservedOn?: string | null;
@@ -158,22 +174,6 @@ export interface StockRow {
   fiiHoldingPct?: number | null;
   diiHoldingPct?: number | null;
   industryPeRatio?: number | null;
-  publicHoldingPct?: number | null;
-  numberOfShareholders?: number | null;
-  faceValue?: number | null;
-  totalIncomeLakh?: number | null;
-  totalExpenseLakh?: number | null;
-  profitBeforeTaxLakh?: number | null;
-  totalTaxExpensesLakh?: number | null;
-  netProfitLakh?: number | null;
-  totalEquityLakh?: number | null;
-  totalAssetsLakh?: number | null;
-  currentAssetsLakh?: number | null;
-  currentLiabilitiesLakh?: number | null;
-  nonCurrentLiabilitiesLakh?: number | null;
-  operatingCashFlowLakh?: number | null;
-  investingCashFlowLakh?: number | null;
-  netCashFlowLakh?: number | null;
   pegRatio?: number | null;
   salesGrowth5yPct?: number | null;
   epsLastYear?: number | null;
@@ -186,6 +186,10 @@ export interface StockRow {
   isGsm?: boolean | null;
   gsmStage?: string | null;
   rsRating: number | null;
+  rsRating1m?: number | null;
+  rsRating3m?: number | null;
+  rsRating6m?: number | null;
+  rsRating12m?: number | null;
   dataCompleteness: number; // 0 to 100
 }
 

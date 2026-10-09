@@ -54,7 +54,9 @@ class SnapshotPerformanceTests(unittest.TestCase):
                 if stock['symbol'] != 'MISSING':
                     frame.iloc[:-1 if stock['symbol'] == 'STALE' else None].to_csv(root / 'ohlcv_data' / f"{stock['symbol']}.csv",index=False)
             outputs = []
-            with mock.patch.dict('os.environ', {'EDL_CHART_STORAGE':'r2'},clear=True):
+            with mock.patch.dict('os.environ', {'EDL_CHART_STORAGE':'r2'},clear=True), \
+                    mock.patch.object(snapshot, 'datetime') as clock:
+                clock.now.return_value.isoformat.return_value = '2026-10-09T00:00:00+00:00'
                 for workers in (0, 1, 2):
                     output = Path(directory) / str(workers)
                     manifest = snapshot.publish(root,output,workers=workers)

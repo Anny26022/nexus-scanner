@@ -265,7 +265,7 @@ def complete_release(chart_root, output, manifest, store=None):
     """Failed uploads/archival leave the previous browser pointer intact."""
     if store is None and not charts_enabled():
         print('WARNING: R2 configuration missing (' + ', '.join(missing_r2_settings()) + '); publishing scanner data without charts.', flush=True)
-        manifest = dict(manifest, schemaVersion=4)
+        manifest = dict(manifest, schemaVersion=max(4, int(manifest.get('schemaVersion', 4))) if manifest.get('packs') else 4)
         for key in ('chartRevision', 'chartUrlTemplate', 'chartObjectPrefix', 'dataIndexUrl', 'objectUrlTemplate'):
             manifest.pop(key, None)
         write_json(output / 'revisions' / manifest['revision'] / 'release.json', manifest)
@@ -275,7 +275,7 @@ def complete_release(chart_root, output, manifest, store=None):
     if index.get('schemaVersion') == 2:
         return complete_object_release(chart_root, output, manifest, store)
     revision = chart_revision(chart_root, manifest['sessionDate'])
-    manifest = dict(manifest, schemaVersion=6, chartRevision=revision)
+    manifest = dict(manifest, schemaVersion=max(6, int(manifest.get('schemaVersion', 6))), chartRevision=revision)
     existing_release = output / 'revisions' / manifest['revision'] / 'release.json'
     if existing_release.exists():
         existing = json.loads(existing_release.read_text())

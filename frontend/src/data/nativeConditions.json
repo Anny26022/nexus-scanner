@@ -446,6 +446,16 @@
         "unit": "x"
       },
       {
+        "id": "comparison",
+        "label": "Comparison",
+        "type": "select",
+        "defaultValue": "ABOVE",
+        "options": [
+          {"label": "At least", "value": "ABOVE"},
+          {"label": "At most", "value": "BELOW"}
+        ]
+      },
+      {
         "id": "withinDays",
         "label": "Fired within",
         "type": "number",
@@ -1091,6 +1101,10 @@
           {
             "value": "THREE_MONTH",
             "label": "3 month"
+          },
+          {
+            "value": "SIX_MONTH",
+            "label": "6 month"
           },
           {
             "value": "TWELVE_MONTH",

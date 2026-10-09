@@ -281,9 +281,10 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
 
 
 def data_completeness(row):
-    # Preserve the denominator used before the optional ScanX fields were added.
+    # Preserve the denominator used before optional financial and RS fields were added.
     added = set(PUBLIC_FINANCIAL_FIELDS.values()) - {"epsTtm", "dividendYieldPct", "debtToEquity"}
     added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness"})
+    added.update({"rsRating1m", "rsRating3m", "rsRating6m", "rsRating12m"})
     values = [value for key, value in row.items() if key not in added]
     return round(100 * sum(value is not None for value in values) / len(values)) if values else 0
 
@@ -292,6 +293,23 @@ def stock_row(s, ratings):
     fields = {"listingDate":"listing_date", "series":"listing_series", "changePct":"change_percent", "rvol":"relative_volume_20", "marketCapCrore":"market_cap_crore", "peRatio":"pe_ratio", "rsi14":"rsi14", "adr20Pct":"adr_percent_20", "atr14":"atr14", "dist52wHighPct":"distance_from_52w_high_percent", "dist52wLowPct":"distance_from_52w_low_percent", "distAthPct":"percent_from_ath", "earningsDate":"latest_earnings_date", "deliveryPct":"delivery_percent", "isFno":"fno_eligible", "circuitLimit":"circuit_limit", "roePct":"roe_percent", "rocePct":"roce_percent", "opmTtmPct":"operating_margin_ttm_percent", "pegRatio":"peg_ratio", "salesGrowth5yPct":"sales_growth_5_years_percent", "epsLastYear":"eps_last_year", "epsTwoYearsBack":"eps_2_years_back", "surveillanceAvailable":"surveillance_available", "surveillanceAsOfDate":"surveillance_as_of_date", "surveillanceFetchedAt":"surveillance_fetched_at", "isAsm":"is_asm", "asmStage":"asm_stage", "isGsm":"is_gsm", "gsmStage":"gsm_stage"}
     fields["vwapAsOfDate"] = "vwap_as_of_date"
     fields.update({
+        "promoterHoldingPct": "promoter_holding_percent",
+        "publicHoldingPct": "public_holding_percent",
+        "numberOfShareholders": "number_of_shareholders",
+        "faceValue": "face_value",
+        "totalIncomeLakh": "total_income_in_lakhs",
+        "totalExpenseLakh": "total_expense_in_lakhs",
+        "profitBeforeTaxLakh": "profit_before_tax_in_lakhs",
+        "totalTaxExpensesLakh": "total_tax_expenses_in_lakhs",
+        "netProfitLakh": "net_profit_in_lakhs",
+        "totalEquityLakh": "total_equity_in_lakhs",
+        "totalAssetsLakh": "total_assets_in_lakhs",
+        "currentAssetsLakh": "current_assets_in_lakhs",
+        "currentLiabilitiesLakh": "current_liabilities_in_lakhs",
+        "nonCurrentLiabilitiesLakh": "non_current_liabilities_in_lakhs",
+        "operatingCashFlowLakh": "operating_cash_flow_in_lakhs",
+        "investingCashFlowLakh": "investing_cash_flow_in_lakhs",
+        "netCashFlowLakh": "net_cash_flow_in_lakhs",
         "totalRevenueLakh": "total_revenue_in_lakhs",
         "nonCurrentAssetsLakh": "non_current_assets_in_lakhs",
         "totalLiabilitiesLakh": "total_liabilities_in_lakhs",
@@ -311,7 +329,12 @@ def stock_row(s, ratings):
     row["debtToEquitySource"] = s.get("debt_to_equity_source")
     row["financialHistoryObservedOn"] = (s.get("financial_statement_history") or {}).get("observed_on")
     row.update({k:s.get(k) for k in ("symbol","name","open","high","low","close","volume")})
-    row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7, rsRating=ratings.get(s["symbol"],{}).get("front_weighted"), daysSinceEarnings=None, fnoBan=False)
+    symbol_ratings = ratings.get(s["symbol"], {})
+    row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7,
+               rsRating=symbol_ratings.get("front_weighted"), rsRating1m=symbol_ratings.get("one_month"),
+               rsRating3m=symbol_ratings.get("three_month"), rsRating6m=symbol_ratings.get("six_month"),
+               rsRating12m=symbol_ratings.get("twelve_month"),
+               daysSinceEarnings=None, fnoBan=False)
     for ma in ("sma20","sma50","sma200","ema20","ema50","ema200"):
         row[ma]=s.get(ma)
     row["dataCompleteness"] = data_completeness(row)
@@ -413,6 +436,11 @@ def run(request, root=ROOT, cache=None):
                         "epsTwoYearsBack","totalRevenueLakh","nonCurrentAssetsLakh",
                         "totalLiabilitiesLakh","interestCoverage","dividendPerShare",
                         "vwap","vwapAsOfDate","allTimeHigh","allTimeLow","return5yPct",
+                        "promoterHoldingPct","publicHoldingPct","numberOfShareholders","faceValue",
+                        "totalIncomeLakh","totalExpenseLakh","profitBeforeTaxLakh","totalTaxExpensesLakh",
+                        "netProfitLakh","totalEquityLakh","totalAssetsLakh","currentAssetsLakh",
+                        "currentLiabilitiesLakh","nonCurrentLiabilitiesLakh","operatingCashFlowLakh",
+                        "investingCashFlowLakh","netCashFlowLakh","epsTtm","dividendYieldPct",
                         *PUBLIC_FINANCIAL_FIELDS.values(),
                         "financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn",
                     ):

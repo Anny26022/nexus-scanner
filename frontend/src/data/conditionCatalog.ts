@@ -33,11 +33,12 @@ const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
   },
   {
     id:'MA_CONVERGENCE', label:'MA Convergence', category:'trend',
-    description:'Selected moving averages are within a maximum percentage spread of the close.',
+    description:'Compare the normalized spread between selected moving averages with a percentage threshold of the close.',
     parameters:[
       {id:'periods',label:'Periods',type:'string',defaultValue:'9,20,50,200'},
-      {id:'maType',label:'Average',type:'select',defaultValue:'EMA',options:[{label:'EMA',value:'EMA'},{label:'SMA',value:'SMA'}]},
-      {id:'maxSpreadPct',label:'Max spread',type:'number',defaultValue:1.5,min:0,max:100,step:.1,unit:'%'},
+      {id:'maType',label:'Average',type:'select',defaultValue:'EMA',options:[{label:'EMA',value:'EMA'},{label:'SMA',value:'SMA'},{label:'WMA',value:'WMA'}]},
+      {id:'comparison',label:'Comparison',type:'select',defaultValue:'BELOW',options:[{label:'At most (tight convergence)',value:'BELOW'},{label:'At least (minimum spread)',value:'ABOVE'}]},
+      {id:'maxSpreadPct',label:'Spread threshold',type:'number',defaultValue:1.5,min:0,max:100,step:.1,unit:'%'},
       {id:'withinDays',label:'Within',type:'number',defaultValue:1,min:1,max:250,step:1,unit:'d'},
     ],
   },

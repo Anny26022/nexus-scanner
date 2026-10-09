@@ -3,6 +3,7 @@ import gzip
 import hashlib
 import json
 import os
+from datetime import datetime, timezone
 import time
 from pathlib import Path
 from collections import deque
@@ -15,6 +16,7 @@ import scanner_bridge as bridge
 from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
+from scanner_pack_publication import build_private_scanner_pack, publish_private_pack
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
 from edl_pipeline.scanner.calculation_cache import calculation_cache
@@ -30,6 +32,33 @@ def write_json(path, payload):
     temporary.write_bytes(data)
     temporary.replace(path)
     return data
+
+
+CORE_FIELDS = {
+    'symbol','name','listingDate','sector','industry','series','close','changePct','open','high','low','volume',
+    'rupeeVolumeCrore','marketCapCrore','indexMemberships','asOfDate','metadataAsOfDate','historyAligned',
+    'dataCompleteness','historyMetadata','financialMetadata','rvol','rsi14','rsRating','deliveryPct','isFno','peRatio',
+}
+TECHNICAL_FIELDS = {
+    'symbol','rvol','rsi14','adr20Pct','atr14','sma20','sma50','sma200','ema20','ema50','ema200',
+    'dist52wHighPct','dist52wLowPct','distAthPct','rsRating','rsRating1m','rsRating3m','rsRating6m','rsRating12m','metrics','presetMatches','allTimeHigh',
+    'allTimeLow','return5yPct',
+}
+
+
+def _pack_payload(revision, session, rows, fields):
+    return {'schemaVersion':7,'revision':revision,'asOfDate':session,'totalStocks':len(rows),
+            'stocks':[{key:row.get(key) for key in fields if key in row} for row in rows]}
+
+
+def _write_pack(generation, name, payload):
+    raw=json.dumps(payload,separators=(',',':'),sort_keys=True,allow_nan=False).encode()
+    compressed=gzip.compress(raw,compresslevel=6,mtime=0)
+    path=generation/f'{name}.json.gz'
+    temporary=path.with_name(path.name+'.tmp');temporary.write_bytes(compressed);temporary.replace(path)
+    return {'url':f'/data/revisions/{payload["revision"]}/{name}.json.gz','bytes':len(compressed),
+            'sha256':hashlib.sha256(compressed).hexdigest(),'uncompressedBytes':len(raw),
+            'uncompressedSha256':hashlib.sha256(raw).hexdigest(),'encoding':'gzip','schemaVersion':7}
 
 
 def delivery_lookback(expressions):
@@ -94,6 +123,8 @@ def _stock_row(task, context, session, presets, default, memo_keys):
             row[field]=float(last[field.title()])
         for period in (10,20,50,200):
             metrics[f'sma{period}']=float(frame['Close'].tail(period).mean()) if len(frame)>=period else None
+        for period in (20,50,200):
+            row[f'ema{period}']=float(frame['Close'].ewm(span=period,adjust=False,min_periods=period).mean().iloc[-1]) if len(frame)>=period else None
         avg=frame['Volume'].iloc[-21:-1].mean() if len(frame)>=21 else None
         row['rvol']=float(last['Volume']/avg) if avg is not None and avg>0 else None
         row['changePct']=float((last['Close']/frame['Close'].iloc[-2]-1)*100) if len(frame)>=2 else None
@@ -105,6 +136,19 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         turnover = frame['Close'] * frame['Volume'] if len(frame) >= 20 else None
         for period in (20,50,100):
             metrics[f'turnover{period}']=float(turnover.tail(period).mean()/1e7) if len(frame)>=period else None
+        for period in (20,50,252):
+            metrics[f'newHigh{period}']=bool(last['High'] >= frame['High'].tail(period).max()) if len(frame)>=period else None
+            metrics[f'newLow{period}']=bool(last['Low'] <= frame['Low'].tail(period).min()) if len(frame)>=period else None
+        for period in (14,20):
+            if len(frame)>=period:
+                metrics[f'adr{period}']=float(((frame['High']-frame['Low'])/frame['Close']*100).tail(period).mean())
+        if len(frame)>=15:
+            previous=frame['Close'].shift(1)
+            true_range=np.maximum.reduce([(frame['High']-frame['Low']).to_numpy(),
+                (frame['High']-previous).abs().to_numpy(),(frame['Low']-previous).abs().to_numpy()])
+            atr=float(np.nanmean(true_range[1:15]))
+            for value in true_range[15:]: atr=(atr*13+float(value))/14
+            metrics['atrPct14']=atr/float(last['Close'])*100 if last['Close']>0 else None
     row['metrics']=metrics
     row['historyMetadata']=stock.get('history_metadata')
     row['financialMetadata']=stock.get('financial_metadata')
@@ -243,7 +287,9 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = elapsed('stock metrics and presets', started)
     cache.save_frames(root)
     started = elapsed('history packing', started)
-    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py")]
+    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),
+                Path(__file__).with_name('scanner_pack_publication.py'),Path(bridge.__file__),
+                Path(__file__).with_name('packed_snapshot.py')]
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
@@ -282,7 +328,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     if not (backend/'scanner_revision.json').exists():
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
     started = elapsed('revision hashing and backend freezing', started)
-    payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'referenceCounts':{'rvol15Sma50':default_count}}
+    payload={'schemaVersion':7,'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'referenceCounts':{'rvol15Sma50':default_count}}
     stock_bytes=write_json(generation/'stocks.json',payload)
     # Keep the full financial series out of every lightweight scanner row.
     histories = {symbol: stock["financial_statement_history"] for symbol, stock in context['stocks'].items()
@@ -310,7 +356,30 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         calendar_path=generation/'earnings-calendar.json.gz'
         temporary=calendar_path.with_name(calendar_path.name+'.tmp')
         temporary.write_bytes(calendar_bytes); temporary.replace(calendar_path)
-    manifest={'revision':revision,'sessionDate':session,'publishedAt':f'{session}T00:00:00Z','schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz','datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz'}
+    all_fields=set().union(*(row.keys() for row in rows)) if rows else set()
+    fundamental_fields=(all_fields-CORE_FIELDS-TECHNICAL_FIELDS)|{'symbol'}
+    packs={
+        'core':_write_pack(generation,'core',_pack_payload(revision,session,rows,CORE_FIELDS)),
+        'technical':_write_pack(generation,'technical',_pack_payload(revision,session,rows,TECHNICAL_FIELDS)),
+        'fundamentals':_write_pack(generation,'fundamentals',_pack_payload(revision,session,rows,fundamental_fields)),
+    }
+    if packs['core']['bytes'] > 1_250_000:
+        raise RuntimeError('Schema-7 core pack exceeds the 1.25 MB compressed performance budget')
+    if sum(pack['bytes'] for pack in packs.values()) > 4_000_000:
+        raise RuntimeError('Schema-7 public packs exceed the 4 MB compressed performance budget')
+    private_root, private_manifest = build_private_scanner_pack(
+        root, root/'scanner_artifacts', revision, session, cache, context, delivery, rows)
+    advanced_published = publish_private_pack(private_root, revision)
+    existing_release = generation / 'release.json'
+    existing = json.loads(existing_release.read_text()) if existing_release.exists() else {}
+    published_at = existing.get('publishedAt') if existing.get('revision') == revision else None
+    manifest={'revision':revision,'sessionDate':session,'publishedAt':published_at or datetime.now(timezone.utc).isoformat(),
+              'schemaVersion':7,'engineVersion':private_manifest['engineVersion'],'totalStocks':len(rows),
+              'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz',
+              'datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz','packs':packs}
+    if advanced_published:
+        manifest['advanced']={'revision':revision,'session':session,'shards':private_manifest['shards'],
+                              'maxSessions':private_manifest['maxSessions']}
     if calendar_bytes is not None:
         manifest['earningsCalendarUrl']=f'/data/revisions/{revision}/earnings-calendar.json.gz'
     manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'

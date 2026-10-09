@@ -161,7 +161,7 @@ def save_json(path, data, indent=None, ensure_ascii=True):
     atomic_replace_text(path, text)
 
 
-def save_json_records(path, data, ensure_ascii=True):
+def save_json_records(path, data, ensure_ascii=True, *, encoded_records=None):
     """Write a string-keyed artifact with the same compact bytes as save_json.
 
     Keep sanitization and encoding bounded to one record rather than cloning
@@ -182,12 +182,12 @@ def save_json_records(path, data, ensure_ascii=True):
                 if index:
                     handle.write(b',')
                 handle.write(encoded(key) + b':')
-                if key == 'records' and isinstance(value, (list, tuple)):
+                if key == 'records' and (encoded_records is not None or isinstance(value, (list, tuple))):
                     handle.write(b'[')
-                    for record_index, record in enumerate(value):
+                    for record_index, record in enumerate(value if encoded_records is None else encoded_records):
                         if record_index:
                             handle.write(b',')
-                        handle.write(encoded(record))
+                        handle.write(encoded(record) if encoded_records is None else record)
                     handle.write(b']')
                 else:
                     handle.write(encoded(value))

@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import date
 import requests
 
-from ohlcv_utils import discard_invalid_ohlcv_rows, discard_weekend_rows, missing_history_sessions, merge_rows_by_date, nse_calendar_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
+from ohlcv_utils import discard_invalid_ohlcv_rows, discard_weekend_rows, evidenced_history_gaps, merge_rows_by_date, nse_calendar_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
 from nse_delivery import fetch_ohlcv_file_for_date
 from pipeline_utils import BASE_DIR, load_json, save_json
 
@@ -45,9 +45,11 @@ def repair_official_history(expected, output_dir, fetcher=fetch_ohlcv_file_for_d
     adjusted_through = adjusted_through or {}
     skipped = 0
     for symbol, sessions in expected.items():
-        rows = discard_invalid_ohlcv_rows(discard_weekend_rows(read_ohlcv_csv(symbol_csv_path(output_dir, symbol))))
+        original_rows = read_ohlcv_csv(symbol_csv_path(output_dir, symbol))
         boundary = adjusted_through.get(symbol)
-        gaps = missing_history_sessions(rows, sessions)
+        gaps = evidenced_history_gaps(original_rows, sessions)
+        # Full rows are needed only when a repair can actually be attempted.
+        rows = discard_invalid_ohlcv_rows(discard_weekend_rows(original_rows)) if gaps else []
         if rows and not boundary:
             skipped += len(gaps)
             continue  # Previously restored CSVs may be adjusted; do not infer their basis.

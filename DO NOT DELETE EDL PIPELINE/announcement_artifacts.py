@@ -8,6 +8,7 @@ import sys
 import zlib
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from functools import lru_cache
 
 from filing_classification import TAXONOMY, VERSION, classify_filings
 
@@ -63,6 +64,11 @@ def publication_time(value, reference_session):
 
 
 def filing_time(value):
+    return _filing_time(str(value))
+
+
+@lru_cache(maxsize=16384)
+def _filing_time(value):
     try:
         stamp = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
     except ValueError:

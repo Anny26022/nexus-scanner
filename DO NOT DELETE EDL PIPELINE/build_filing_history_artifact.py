@@ -9,13 +9,14 @@ import resource
 import time
 from collections import Counter
 from pathlib import Path
+from tempfile import TemporaryFile
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from pipeline_utils import BASE_DIR, file_fingerprint, load_json, save_json, save_json_records
+from pipeline_utils import BASE_DIR, file_fingerprint, finite_json, load_json, save_json, save_json_records
 from filing_classification import VERSION, TAXONOMY, classify_filing, classify_filings
 from filing_documents import enrich_documents
 
@@ -159,40 +160,54 @@ def main() -> int:
     # Upgrade the deployed entry cache without rerunning rules when its source hash matches.
     legacy_rules = [file_fingerprint(ROOT / name) for name in ('filing_classification.py', 'filing_source_labels.json')]
     stats = Counter()
-    for index, record in enumerate(records, 1):
-        key = hashlib.sha256(record['symbol'].encode()).hexdigest()
-        record["filings"] = classify_cached(record.get("filings") or [],
-                                            root / 'filing_history_data/classification' / f'{key}.json', rules,
-                                            stats, legacy_rules)
-        if index % 100 == 0:
-            print(f"Filing companies processed: {index}/{len(records)}; "
-                  f"unchanged: {stats['unchanged_companies']}; fresh classifications: {stats['fresh_filings']}", flush=True)
-        for filing in record['filings']:
-            if 'documentExtraction' in filing:
-                filing['documentExtraction'] = {k: v for k, v in filing['documentExtraction'].items() if k != 'pages'}
-    started = progress("classification", started)
+    # Keep only one company's expanded classifications resident. Spool its
+    # exact finite JSON bytes, then assemble them in the original sorted output
+    # order. PDF selection and classification-cache traversal stay unchanged.
+    with TemporaryFile(dir=root) as spool:
+        offsets, filing_count, unclassified = [], 0, 0
+        for index, record in enumerate(records, 1):
+            key = hashlib.sha256(record['symbol'].encode()).hexdigest()
+            filings = classify_cached(record.get("filings") or [],
+                                      root / 'filing_history_data/classification' / f'{key}.json', rules,
+                                      stats, legacy_rules)
+            if index % 100 == 0:
+                print(f"Filing companies processed: {index}/{len(records)}; "
+                      f"unchanged: {stats['unchanged_companies']}; fresh classifications: {stats['fresh_filings']}", flush=True)
+            for filing in filings:
+                if 'documentExtraction' in filing:
+                    filing['documentExtraction'] = {k: v for k, v in filing['documentExtraction'].items() if k != 'pages'}
+            filing_count += len(filings)
+            unclassified += sum(f['classification']['topics'] == ['unclassified'] for f in filings)
+            data = json.dumps(finite_json({**record, 'filings': filings}), separators=(',', ':'),
+                              ensure_ascii=False, allow_nan=False).encode('utf-8')
+            offsets.append((record['symbol'], spool.tell(), len(data)))
+            spool.write(data)
+            del filings, data
+        started = progress("classification and record encoding", started)
+        if not records or not filing_count:
+            print("No usable filing-history records found.")
+            return 1
+        complete = sum(bool(item.get("lodr_backfill_complete")) for item in records)
+        def encoded_records():
+            for _, offset, size in sorted(offsets, key=lambda item: item[0]):
+                spool.seek(offset)
+                yield spool.read(size)
+        save_json_records(root / "filing_history.json", {
+            "schema_version": 1,
+            "classification_version": VERSION,
+            "classification_interpretation": "evidence_based_topic_tags",
+            "pdf_extraction": pdf_coverage,
+            "taxonomy": TAXONOMY,
+            "source": "ScanX static company_filings and LODR endpoints",
+            "updated_at": cache.get("updated_at"),
+            "coverage": {"symbols": len(records), "lodr_backfill_complete": complete, "lodr_backfill_pending": len(records) - complete,
+                         "filings": filing_count, "unclassified": unclassified},
+            "records": [],
+        }, ensure_ascii=False, encoded_records=encoded_records())
     print(f"Filing cache: unchanged companies={stats['unchanged_companies']}; "
           f"rebuilt companies={stats['rebuilt_companies']}; "
           f"invalidated companies={stats['invalidated_companies']}; "
           f"reused filings={stats['reused_filings']}; fresh classifications={stats['fresh_filings']}", flush=True)
-    records.sort(key=lambda item: item["symbol"])
-    if not records or not any(item.get("filings") for item in records):
-        print("No usable filing-history records found.")
-        return 1
-    complete = sum(bool(item.get("lodr_backfill_complete")) for item in records)
-    save_json_records(root / "filing_history.json", {
-        "schema_version": 1,
-        "classification_version": VERSION,
-        "classification_interpretation": "evidence_based_topic_tags",
-        "pdf_extraction": pdf_coverage,
-        "taxonomy": TAXONOMY,
-        "source": "ScanX static company_filings and LODR endpoints",
-        "updated_at": cache.get("updated_at"),
-        "coverage": {"symbols": len(records), "lodr_backfill_complete": complete, "lodr_backfill_pending": len(records) - complete,
-                     "filings": sum(len(row["filings"]) for row in records),
-                     "unclassified": sum(f["classification"]["topics"] == ["unclassified"] for row in records for f in row["filings"])},
-        "records": records,
-    }, ensure_ascii=False)
     progress("serialization", started)
     print(f"Published filing history for {len(records)} symbols ({complete} LODR backfills complete).")
     return 0

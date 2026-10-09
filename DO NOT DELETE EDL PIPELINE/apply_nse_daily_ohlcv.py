@@ -67,6 +67,8 @@ def repair_official_history(expected, output_dir, fetcher=fetch_ohlcv_file_for_d
         if boundary and not eligible_gaps:
             skipped += len(gaps)
             continue
+        if boundary:
+            skipped += len(gaps) - len(eligible_gaps)
         if not boundary and has_retained_row(original_rows):
             skipped += len(gaps)
             continue  # Previously restored CSVs may be adjusted; do not infer their basis.

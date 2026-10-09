@@ -57,6 +57,19 @@ def artifact_bytes(root):
 
 
 class RemainingPerformanceTests(unittest.TestCase):
+    def test_native_predicates_match_nullable_pandas_for_missing_and_boundary_values(self):
+        method = BreadthMethodology()
+        history = prepare_history(make_ohlcv([100 + i % 29 for i in range(300)]), method)
+        history.loc[history.index[-10:], 'Daily_Return'] = [0, 4, -4, 4.5, -4.5, np.nan, np.inf, -np.inf, .1, -.1]
+        native = _increment_flags(history, method)
+        nullable = history.copy()
+        for name in nullable:
+            if name != 'Date':
+                nullable[name] = nullable[name].astype('boolean' if nullable[name].dtype == bool else 'Float64')
+        fallback = _increment_flags(nullable, method)
+        self.assertEqual(native[0], fallback[0])
+        np.testing.assert_array_equal(native[1], fallback[1])
+
     def test_integer_counters_match_original_scalar_replay_and_float_order(self):
         method = BreadthMethodology()
         actual = BreadthAccumulator(method, include_contributions=True)

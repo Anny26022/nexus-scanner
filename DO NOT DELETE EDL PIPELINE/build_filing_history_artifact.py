@@ -151,6 +151,10 @@ def main() -> int:
         return 1
     started = progress("load", started)
     records = [{"symbol": symbol, **entry} for symbol, entry in symbols.items() if isinstance(entry, dict)]
+    # The shallow records now own the source lists. Drop the original mapping
+    # so spooling each record can actually release its raw filings/PDF pages.
+    cache.pop('symbols')
+    del symbols
     session = str(cache.get('updated_at') or '')[:10]
     if not session:
         session = max((str(f.get('news_date') or '')[:10] for row in records for f in row.get('filings', []) if f.get('news_date')), default='1970-01-01')

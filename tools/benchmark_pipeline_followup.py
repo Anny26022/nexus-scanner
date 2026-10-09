@@ -1,4 +1,4 @@
-"""Offline, frozen-input comparisons against the merged PR #50 implementation.
+"""Offline, frozen-input comparisons against a selected Git baseline (default PR #51).
 
 Run with the pipeline's Python environment. All writes are temporary; optional
 --data-root histories are read only. No provider requests or publication upload.
@@ -10,6 +10,7 @@ import gzip
 import hashlib
 import io
 import json
+import os
 import resource
 import shutil
 from pathlib import Path
@@ -23,14 +24,35 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 EDL = ROOT / 'DO NOT DELETE EDL PIPELINE'
 sys.path[:0] = [str(EDL), str(EDL / 'src'), str(ROOT / 'frontend')]
-BASELINE = '40e02547e91300b917b61a014af413360fb44592'
+BASELINE = 'fa997041b047200a845e7840ef066f8f19f1f70b'
 
 
 def baseline(relative):
-    module = types.ModuleType('baseline_' + Path(relative).stem)
+    name = 'baseline_' + Path(relative).stem
+    package = None
+    if '/breadth/' in relative:
+        package = '_benchmark_breadth_' + hashlib.sha256(BASELINE.encode()).hexdigest()[:12]
+        if package not in sys.modules:
+            namespace = types.ModuleType(package)
+            namespace.__path__ = []
+            sys.modules[package] = namespace
+        name = package + '.' + Path(relative).stem
+        if name in sys.modules:
+            return sys.modules[name]
+        if Path(relative).stem == 'mbi':
+            baseline(str(Path(relative).with_name('aggregates.py')))
+    module = types.ModuleType(name)
     module.__file__ = str(ROOT / relative)
+    module.__package__ = package
     source = subprocess.check_output(['git', 'show', f'{BASELINE}:{relative}'], cwd=ROOT, text=True)
-    exec(compile(source, module.__file__, 'exec'), module.__dict__)
+    if package:
+        sys.modules[name] = module
+    try:
+        exec(compile(source, module.__file__, 'exec'), module.__dict__)
+    except BaseException:
+        if package:
+            sys.modules.pop(name, None)
+        raise
     return module
 
 
@@ -95,6 +117,7 @@ def chart_checks(data_root, count, temporary):
 
 
 def breadth_checks(data_root, count, temporary):
+    from edl_pipeline.breadth import pipeline
     from edl_pipeline.breadth.pipeline import generate_market_breadth
     from edl_pipeline.breadth.config import load_methodology
     method = load_methodology(EDL / 'breadth_methodology.json')
@@ -106,14 +129,20 @@ def breadth_checks(data_root, count, temporary):
             stocks = json.load(handle)[:count]
         rows = [{**s, 'Sym': s['symbol'], 'ISIN': s['isin'], 'Sid': s['security_id'],
                  'Ltp': s['close'], 'Mcap': s['market_cap_crore']} for s in stocks]
+    old_aggregates = baseline('DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/aggregates.py')
+    old_mbi = baseline('DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/mbi.py')
     reference = None
-    for workers in (0, 1, 2):
-        output = temporary / f'breadth{workers}'; output.mkdir()
-        _, _ = measure(f'Breadth preparation workers={workers}', lambda: generate_market_breadth(
-            rows, data_root / 'ohlcv_data', data_root / 'indices_ohlcv_data/NIFTY.csv', method,
-            output / 'breadth.json', output / 'snapshot.json', generated_at='2026-10-08T00:00:00+00:00',
-            sector_output_path=output / 'sectors.json', contribution_output_path=output / 'contributions.json',
-            preparation_workers=workers))
+    for label, workers in (('baseline', 2), ('current_serial', 0), ('current_parallel', 2)):
+        output = temporary / label; output.mkdir()
+        with contextlib.ExitStack() as stack:
+            if label == 'baseline':
+                stack.enter_context(mock.patch.object(pipeline, 'BreadthAccumulator', old_aggregates.BreadthAccumulator))
+                stack.enter_context(mock.patch.object(pipeline, 'enrich_records', old_mbi.enrich_records))
+            _, _ = measure(f'Breadth {label} workers={workers}', lambda: generate_market_breadth(
+                rows, data_root / 'ohlcv_data', data_root / 'indices_ohlcv_data/NIFTY.csv', method,
+                output / 'breadth.json', output / 'snapshot.json', generated_at='2026-10-08T00:00:00+00:00',
+                sector_output_path=output / 'sectors.json', contribution_output_path=output / 'contributions.json',
+                preparation_workers=workers))
         result = files(output)
         if reference is None:
             reference = result
@@ -158,6 +187,37 @@ def snapshot_checks(temporary, count=64):
     print('Snapshot: full revisions and compressed files byte-identical', flush=True)
 
 
+def cache_checks(data_root, count, temporary):
+    from scanner_cache import ScannerCache
+    root = temporary / 'numeric'; (root / 'ohlcv_data').mkdir(parents=True)
+    paths = sorted((data_root / 'ohlcv_data').glob('*.csv'))[:count]
+    for path in paths:
+        shutil.copy2(path, root / 'ohlcv_data' / path.name)
+    symbols = [path.stem for path in paths]
+    def prepare(cache_type):
+        cache = cache_type(); cache.refresh(root)
+        for symbol in symbols:
+            cache.frame(root, symbol, '2030-01-01')
+        return cache
+    cold, _ = measure('Numeric histories cold CSV', lambda: prepare(ScannerCache))
+    cold.save_frames(root)
+    def digest(cache):
+        result = hashlib.sha256()
+        for symbol, frame in cache.frames.items():
+            result.update(symbol.encode())
+            result.update(frame['Date'].to_numpy(dtype='datetime64[ns]').tobytes())
+            result.update(frame[['Open','High','Low','Close','Volume']].to_numpy(dtype='float64').tobytes())
+        return result.hexdigest()
+    expected = digest(cold)
+    for changed_fraction in (0, .85):
+        for path in paths[:int(len(paths) * changed_fraction)]:
+            staged = root / 'ohlcv_data' / path.name
+            stat = staged.stat(); os.utime(staged, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1))
+        cache, _ = measure(f'Numeric histories restored; changed={changed_fraction:.0%}', lambda: prepare(ScannerCache))
+        assert digest(cache) == expected, 'Numeric frames/order changed'
+    print(f'Numeric cache: {len(paths)} histories; arrays and symbol order identical', flush=True)
+
+
 def filing_checks(temporary, count=200, companies=3, implementation=None):
     import build_filing_history_artifact as current
     from pipeline_utils import save_json
@@ -181,19 +241,31 @@ def filing_checks(temporary, count=200, companies=3, implementation=None):
     if len(digests) == 2:
         assert digests[0] == digests[1], 'Filing artifact or classification cache changed'
         print('Filings: cold/warm artifact and classification-cache bytes identical', flush=True)
+        from pipeline_utils import compress_file
+        from filing_archives import prepare_filing_archives
+        root = temporary / 'new_filings'
+        compress_file(root / 'filing_history.json', root / 'filing_history.json.gz')
+        before, _ = measure('Archives original compression', lambda: prepare_filing_archives(root, temporary / 'old_archives'))
+        after, _ = measure('Archives fresh payload reuse', lambda: prepare_filing_archives(root, temporary / 'new_archives',
+            compressed_classified=root / 'filing_history.json.gz'))
+        assert before == after and files(temporary / 'old_archives') == files(temporary / 'new_archives')
+        print('Archives: both retained gzip streams and hashes byte-identical', flush=True)
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     print(f'Process peak RSS: {peak / (1024 * 1024 if sys.platform == "darwin" else 1024):.1f} MiB', flush=True)
 
 
 def main():
+    global BASELINE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data-root', type=Path)
+    parser.add_argument('--baseline-ref', default=BASELINE)
     parser.add_argument('--count', type=int, default=200)
-    parser.add_argument('--component', choices=['all', 'history', 'charts', 'breadth', 'snapshot', 'filings'], default='all')
+    parser.add_argument('--component', choices=['all', 'history', 'charts', 'breadth', 'snapshot', 'filings', 'cache'], default='all')
     parser.add_argument('--filing-count', type=int, default=200)
     parser.add_argument('--filing-companies', type=int, default=3)
     parser.add_argument('--filing-implementation', choices=['old_filings', 'new_filings'])
     args = parser.parse_args()
+    BASELINE = args.baseline_ref
     with tempfile.TemporaryDirectory(prefix='nexus-followup-benchmark-') as directory:
         temporary = Path(directory)
         for name, function in [('history', history_checks), ('charts', chart_checks), ('breadth', breadth_checks)]:
@@ -204,6 +276,8 @@ def main():
                     function(args.data_root, args.count, temporary)
         if args.component in ('all', 'snapshot'):
             snapshot_checks(temporary, args.count)
+        if args.component in ('all', 'cache') and args.data_root:
+            cache_checks(args.data_root, args.count, temporary)
         if args.component in ('all', 'filings'):
             filing_checks(temporary, args.filing_count, args.filing_companies, args.filing_implementation)
 

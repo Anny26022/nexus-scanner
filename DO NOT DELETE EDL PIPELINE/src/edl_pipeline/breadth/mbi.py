@@ -52,18 +52,23 @@ def enrich_records(records, methodology, index_closes=None, output_sessions=None
     first_output = max(0, len(records) - output_sessions) if output_sessions else 0
     for position, raw in enumerate(records):
         row = dict(raw)
+        emit = position >= first_output
+        # Changes on the first output row need the immediately preceding ratios.
+        needs_ratios = emit or position == first_output - 1
         return_denominator = row["valid_return"]
-        row["up_4_pct"] = percentage(row["up_4"], return_denominator)
-        row["down_4_pct"] = percentage(row["down_4"], return_denominator)
-        row["up_4_5_pct"] = percentage(row["up_4_5"], return_denominator)
-        row["down_4_5_pct"] = percentage(row["down_4_5"], return_denominator)
-        row["net_4_pct"] = (
-            row["up_4_pct"] - row["down_4_pct"]
-            if row["up_4_pct"] is not None and row["down_4_pct"] is not None
-            else None
-        )
-        row["ratio_4"] = scaled_ratio(row["up_4"], row["down_4"])
-        row["ratio_4_5"] = scaled_ratio(row["up_4_5"], row["down_4_5"])
+        if emit:
+            row["up_4_pct"] = percentage(row["up_4"], return_denominator)
+            row["down_4_pct"] = percentage(row["down_4"], return_denominator)
+            row["up_4_5_pct"] = percentage(row["up_4_5"], return_denominator)
+            row["down_4_5_pct"] = percentage(row["down_4_5"], return_denominator)
+            row["net_4_pct"] = (
+                row["up_4_pct"] - row["down_4_pct"]
+                if row["up_4_pct"] is not None and row["down_4_pct"] is not None
+                else None
+            )
+        if needs_ratios:
+            row["ratio_4"] = scaled_ratio(row["up_4"], row["down_4"])
+            row["ratio_4_5"] = scaled_ratio(row["up_4_5"], row["down_4_5"])
 
         for period in methodology.ma_periods:
             above = row[f"above_{ma_prefix}_{period}"]
@@ -72,8 +77,10 @@ def enrich_records(records, methodology, index_closes=None, output_sessions=None
             # A missing MA population remains unavailable in the published record.
             # XP handles its own neutral fallback below; it must not redefine the
             # public percentage as zero.
-            row[f"above_{period}_pct"] = percentage(above, valid)
-            row[f"ratio_{period}"] = scaled_ratio(above, not_above)
+            if emit or period in (10, 20):
+                row[f"above_{period}_pct"] = percentage(above, valid)
+            if emit or (needs_ratios and period in (20, 50)):
+                row[f"ratio_{period}"] = scaled_ratio(above, not_above)
 
         if position < first_output:
             # Retain every input to the first published row and the XP recurrence.

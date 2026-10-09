@@ -175,7 +175,8 @@ def prepare_filing_output():
     """Hide filing compression/archival behind independent stock enrichment."""
     started = time.perf_counter()
     sizes = compress_file('filing_history.json', FILES_TO_COMPRESS['filing_history.json'])
-    prepare_filing_archives(Path(BASE_DIR), Path(BASE_DIR) / '.filing_archives')
+    prepare_filing_archives(Path(BASE_DIR), Path(BASE_DIR) / '.filing_archives',
+                            compressed_classified=Path(BASE_DIR) / 'filing_history.json.gz')
     print(f'  Filing compression and archives elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     return sizes
 

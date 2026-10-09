@@ -19,6 +19,7 @@ COUNT_FIELDS = (
     "valid_return_34", "up_13_34d", "down_13_34d", "valid_return_63", "up_25_quarter", "down_25_quarter",
 )
 VOLUME_FIELDS = frozenset(('total_volume', 'advance_volume', 'decline_volume'))
+VOLUME_COLUMNS = {field: index for index, field in enumerate(field for field in COUNT_FIELDS if field in VOLUME_FIELDS)}
 INTEGER_FIELDS = tuple(field for field in (
     *COUNT_FIELDS,
     *(f"{state}_{ma_type}_{period}" for ma_type in ("sma", "ema")
@@ -42,7 +43,8 @@ class BreadthAccumulator:
         self.methodology = methodology
         self._dates = {}
         self._counts = np.zeros((0, len(INTEGER_FIELDS)), dtype=np.int64)
-        self._volumes = {}
+        self._volumes = np.zeros((0, len(VOLUME_COLUMNS)))
+        self._volume_seen = np.zeros((0, len(VOLUME_COLUMNS)), dtype=bool)
         self._total_updates = 0
         self._contribution_days = []
         self._contributions = defaultdict(lambda: defaultdict(list)) if include_contributions else None
@@ -51,13 +53,17 @@ class BreadthAccumulator:
         for day in dates:
             if day not in self._dates:
                 self._dates[day] = len(self._dates)
-                self._volumes[day] = dict.fromkeys(VOLUME_FIELDS, 0)
         size = len(self._dates)
         if size > len(self._counts):
             counts = np.zeros((max(size, 2 * len(self._counts)), len(INTEGER_FIELDS)),
                               dtype=self._counts.dtype)
             counts[:len(self._counts)] = self._counts
             self._counts = counts
+            volumes = np.zeros((len(counts), len(VOLUME_COLUMNS)))
+            seen = np.zeros(volumes.shape, dtype=bool)
+            volumes[:len(self._volumes)] = self._volumes
+            seen[:len(self._volume_seen)] = self._volume_seen
+            self._volumes, self._volume_seen = volumes, seen
         self._total_updates += len(dates)
         # Each counter is bounded by the number of updates. Promote rather than
         # allowing native overflow to change Python's unbounded integer behavior.
@@ -71,6 +77,7 @@ class BreadthAccumulator:
             # Direct callers can repeat dates; fancy-index addition alone
             # would lose those repeated increments.
             np.add.at(self._counts, indices, flags)
+        return positions
 
     def _retain_contribution_date(self, day):
         if self._contributions is None or day in self._contributions:
@@ -98,32 +105,44 @@ class BreadthAccumulator:
         volume_indices = [i for i, name in enumerate(names) if name in VOLUME_FIELDS]
         columns = np.asarray([INTEGER_COLUMNS[names[i]] for i in integer_indices])
         dates = history['Date'].tolist()
+        unique_dates = len(set(dates)) == len(dates)
+        volume = history['Volume'].to_numpy()
         for target in targets:
-            target._count_history(dates, columns, flags[:, integer_indices])
-        for day, volume, mask in zip(history['Date'], history['Volume'], flags):
-            if symbol:
-                for target in targets:
+            positions = target._count_history(dates, columns, flags[:, integer_indices])
+            for index in volume_indices:
+                selected = flags[:, index]
+                rows = positions[selected]
+                column = VOLUME_COLUMNS[names[index]]
+                amounts = np.asarray(volume[selected], dtype=float)
+                # Each cell receives the same additions in symbol/date order.
+                # add.at also preserves repeated-date additions; never sum them.
+                with np.errstate(over='ignore', invalid='ignore'):
+                    if unique_dates:
+                        target._volumes[rows, column] += amounts
+                    else:
+                        np.add.at(target._volumes[:, column], rows, amounts)
+                target._volume_seen[rows, column] = True
+        audit_targets = [target for target in targets if target._contributions is not None] if symbol else []
+        if audit_targets:
+            for day, mask in zip(dates, flags):
+                for target in audit_targets:
                     target._retain_contribution_date(day)
-            audits = [target._contributions.get(day) if symbol and target._contributions is not None else None
-                      for target in targets]
-            active = np.flatnonzero(mask) if any(audit is not None for audit in audits) else [i for i in volume_indices if mask[i]]
-            increments = [(names[index], float(volume) if names[index] in VOLUME_FIELDS else 1)
-                          for index in active]
-            volume_increments = [(field, amount) for field, amount in increments if field in VOLUME_FIELDS]
-            # Never regroup floating-point volumes, and preserve contribution
-            # membership even for zero-volume candles.
-            for target, audit in zip(targets, audits):
-                for field, amount in increments if audit is not None else volume_increments:
-                    if field in VOLUME_FIELDS:
-                        target._volumes[day][field] += amount
+                audits = [target._contributions.get(day) for target in audit_targets]
+                active = np.flatnonzero(mask) if any(audit is not None for audit in audits) else ()
+                for audit in audits:
                     if audit is not None:
-                        audit[field].append(symbol)
+                        for index in active:
+                            audit[names[index]].append(symbol)
     def records(self):
         output = []
         for day in sorted(self._dates):
             record = _blank_record(day)
             record.update(zip(INTEGER_FIELDS, map(int, self._counts[self._dates[day]])))
-            record.update(self._volumes[day])
+            position = self._dates[day]
+            # Untouched fields remain integer zero, as in the scalar accumulator.
+            record.update((field, float(self._volumes[position, index])
+                           if self._volume_seen[position, index] else 0)
+                          for field, index in VOLUME_COLUMNS.items())
             output.append(record)
         return output
     def contribution_records(self):
@@ -131,11 +150,20 @@ class BreadthAccumulator:
 
 def _increment_flags(history, methodology):
     names, masks = [], []
+    source = history
+    boolean_columns = ('Breakout_20d', 'Breakdown_20d', *(f'New_{label}_{side}'
+                       for label in ('Monthly', 'Quarterly', 'Yearly') for side in ('High', 'Low')))
+    # Prepared histories contain native numeric/bool columns. Keep pandas'
+    # nullable/object semantics for direct callers with other dtypes.
+    if (all(isinstance(dtype, np.dtype) and dtype.kind in 'biuf'
+            for name, dtype in history.dtypes.items() if name != 'Date')
+            and all(history[name].dtype == np.dtype(bool) for name in boolean_columns)):
+        source = {name: history[name].to_numpy() for name in history if name != 'Date'}
     def add(name, mask):
         names.append(name)
         masks.append(np.asarray(mask.fillna(False) if isinstance(mask, pd.Series) else mask, dtype=bool))
-    present = lambda column: history[column].notna()
-    close, volume, returns = history['Close'], history['Volume'], history['Daily_Return']
+    present = lambda column: pd.notna(source[column])
+    close, volume, returns = source['Close'], source['Volume'], source['Daily_Return']
     add('eligible_with_candle', np.ones(len(history), dtype=bool))
     add('total_volume', present('Volume'))
     valid = present('Daily_Return')
@@ -154,7 +182,7 @@ def _increment_flags(history, methodology):
             column = f'{ma_type}_{period}'
             valid = present(column)
             prefix = f'{ma_type.lower()}_{period}'
-            above, below = close > history[column], close < history[column]
+            above, below = close > source[column], close < source[column]
             add('valid_' + prefix, valid)
             add('above_' + prefix, valid & above)
             add('below_' + prefix, valid & below)
@@ -165,18 +193,18 @@ def _increment_flags(history, methodology):
         ('Yearly', 'valid_yearly_extrema', 'new_52w_high', 'new_52w_low')):
         valid = present(label + '_Reference_High') & present(label + '_Reference_Low')
         add(valid_name, valid)
-        add(high, valid & history['New_' + label + '_High'])
-        add(low, valid & history['New_' + label + '_Low'])
+        add(high, valid & source['New_' + label + '_High'])
+        add(low, valid & source['New_' + label + '_Low'])
     valid = present('Volume_SMA_20') & present('Volume')
     add('valid_volume_20', valid)
-    add('volume_above_20', valid & (volume > history['Volume_SMA_20']))
-    add('volume_below_or_equal_20', valid & ~(volume > history['Volume_SMA_20']))
+    add('volume_above_20', valid & (volume > source['Volume_SMA_20']))
+    add('volume_below_or_equal_20', valid & ~(volume > source['Volume_SMA_20']))
     valid = present('Prior_20_High') & present('Prior_20_Low')
     add('valid_breakout_20', valid)
-    add('breakout_20d', valid & history['Breakout_20d'])
-    add('breakdown_20d', valid & history['Breakdown_20d'])
-    valid = present('Yearly_Range_High') & present('Yearly_Range_Low') & (history['Yearly_Range_High'] > history['Yearly_Range_Low'])
-    midpoint = (history['Yearly_Range_High'] + history['Yearly_Range_Low']) / 2
+    add('breakout_20d', valid & source['Breakout_20d'])
+    add('breakdown_20d', valid & source['Breakdown_20d'])
+    valid = present('Yearly_Range_High') & present('Yearly_Range_Low') & (source['Yearly_Range_High'] > source['Yearly_Range_Low'])
+    midpoint = (source['Yearly_Range_High'] + source['Yearly_Range_Low']) / 2
     add('valid_yearly_range', valid)
     add('upper_half_52w', valid & (close >= midpoint))
     add('lower_half_52w', valid & ~(close >= midpoint))
@@ -187,7 +215,7 @@ def _increment_flags(history, methodology):
         valid = present(column)
         add(valid_name, valid)
         for name, threshold, above in rules:
-            add(name, valid & ((history[column] >= threshold) if above else (history[column] <= threshold)))
+            add(name, valid & ((source[column] >= threshold) if above else (source[column] <= threshold)))
     return names, np.column_stack(masks)
 
 def percentage(numerator, denominator): return None if denominator <= 0 else 100.0 * numerator / denominator

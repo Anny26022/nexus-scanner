@@ -11,11 +11,13 @@ import {
   ConditionDef,
 } from '../types/screener';
 import { realAdapter, type ChartSnapshot } from './realAdapter';
-import { mockAdapter } from './mockAdapter';
 
 // Use real data by default. Set VITE_USE_MOCK=true to fall back to mock data.
 const USE_MOCK_API = import.meta.env.VITE_USE_MOCK === 'true';
-const adapter = USE_MOCK_API ? mockAdapter : realAdapter;
+let mock: Promise<typeof import('./mockAdapter')['mockAdapter']> | undefined;
+const getAdapter = () => USE_MOCK_API
+  ? mock ??= import('./mockAdapter').then(module => module.mockAdapter).catch(error => {mock = undefined; throw error;})
+  : Promise.resolve(realAdapter);
 
 export const screenerApi = {
   getAnnouncementIndex: realAdapter.getAnnouncementIndex.bind(realAdapter),
@@ -29,31 +31,31 @@ export const screenerApi = {
   },
 
   async getCatalog(): Promise<ConditionDef[]> {
-    return adapter.getCatalog();
+    return (await getAdapter()).getCatalog();
   },
 
   async explainScreen(req: ExplainRequest): Promise<ExplainResponse> {
-    return adapter.explainScreen(req);
+    return (await getAdapter()).explainScreen(req);
   },
 
   async runScreen(req: ScreenerRunRequest): Promise<ScreenerRunResponse> {
     if (USE_MOCK_API && req.announcementFilter) throw new Error('Announcement filters are unavailable in mock mode');
-    return adapter.runScreen(req);
+    return (await getAdapter()).runScreen(req);
   },
 
   async getIpos(): Promise<IPORow[]> {
-    return adapter.getIpos();
+    return (await getAdapter()).getIpos();
   },
 
   async getIpoCatalogue(): Promise<IpoCatalogue> {
-    return USE_MOCK_API ? {records: await mockAdapter.getIpos()} : realAdapter.getIpoCatalogue();
+    return USE_MOCK_API ? {records: await (await getAdapter()).getIpos()} : realAdapter.getIpoCatalogue();
   },
 
   async compareSymbols(req: SymbolComparisonRequest): Promise<SymbolComparisonResponse> {
-    return adapter.compareSymbols(req);
+    return (await getAdapter()).compareSymbols(req);
   },
 
   async getCurrentRevision(): Promise<RevisionCurrentResponse> {
-    return adapter.getCurrentRevision();
+    return (await getAdapter()).getCurrentRevision();
   },
 };

@@ -1,3 +1,5 @@
+import gzip
+import json
 import sys
 import tempfile
 import unittest
@@ -9,12 +11,43 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from edl_pipeline.scanner.history import build_snapshot, load_snapshot
+from edl_pipeline.scanner.history import _write_gzip_json, build_snapshot, load_snapshot
 from edl_pipeline.scanner.earnings import merge_observations, select_observation
 from edl_pipeline.scanner.shareholding import observations_from_fundamentals, select_observation as select_shareholding_observation
 
 
 class ScannerHistoryTests(unittest.TestCase):
+    def test_snapshot_nonfinite_numbers_are_missing_not_zero(self):
+        stocks = [{"symbol": "TEST", "as_of_date": "2026-10-07", "close": float('nan'),
+                   "market_cap_crore": float('inf'), "pe_ratio": float('-inf'),
+                   "debt_to_equity": 0.0, "promoter_holding_percent": None}]
+        breadth = {"records": [{"date": "2026-10-07", "nested": [float('nan'), 1.25, None]}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = build_snapshot(Path(directory), stocks, breadth, {}, "2026-10-07")
+            raw = gzip.decompress(path.read_bytes()).decode()
+            def reject_constant(value):
+                self.fail(f"Nonstandard JSON constant: {value}")
+            saved = json.loads(raw, parse_constant=reject_constant)
+        item = saved['stocks'][0]
+        for field in ('close', 'market_cap_crore', 'pe_ratio', 'promoter_holding_percent'):
+            self.assertIsNone(item[field])
+        self.assertEqual(item['debt_to_equity'], 0.0)
+        self.assertEqual(saved['breadth']['nested'], [None, 1.25, None])
+        self.assertNotEqual(stocks[0]['close'], stocks[0]['close'])
+
+    def test_snapshot_writer_keeps_finite_json_bytes_and_atomic_failure(self):
+        payload = {"symbol": "TÉST", "values": [None, 0.0, -1.25, True]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'snapshot.json.gz'
+            _write_gzip_json(path, payload)
+            self.assertEqual(gzip.decompress(path.read_bytes()),
+                             json.dumps(payload, ensure_ascii=False, separators=(',', ':')).encode())
+            previous = path.read_bytes()
+            with self.assertRaises(TypeError):
+                _write_gzip_json(path, {'unsupported': object()})
+            self.assertEqual(path.read_bytes(), previous)
+            self.assertEqual(list(path.parent.glob('*.tmp')), [])
+
     def test_statement_history_is_not_backfilled_before_observation(self):
         stocks = [{"symbol": "TEST", "ttm_revenue_growth_percent": 20,
                    "financial_statement_history": {"observed_on": "2026-10-07", "annual": [], "quarterly": []}}]

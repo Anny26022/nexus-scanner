@@ -32,6 +32,12 @@ jobs:
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
 
+      - name: Check installed wheel and entrypoint
+        working-directory: .
+        run: |
+          python -m pip install 'setuptools>=69' wheel build
+          python tools/check_pipeline_wheel.py
+
       - name: Test cache retention policy
         working-directory: .
         run: python -m unittest discover -s tools -p test_prune_actions_caches.py -v

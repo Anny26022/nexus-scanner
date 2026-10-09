@@ -133,7 +133,7 @@ def main(phase="all", stage_path=None):
                 (stage / name).symlink_to(cache, target_is_directory=True)
             methodology = destination / "breadth_methodology.json"
             if not methodology.exists():
-                methodology = source / "breadth_methodology.json"
+                methodology = pipeline_utils.resource_path("breadth_methodology.json")
             shutil.copy2(methodology, stage / methodology.name)
             listed_archive = destination / "ipo_provider_listed_archive.json.gz"
             if listed_archive.exists():

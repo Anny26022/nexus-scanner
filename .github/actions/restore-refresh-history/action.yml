@@ -1,0 +1,49 @@
+name: Restore refresh history
+description: Restore split caches, falling back to the combined cache only if both miss.
+runs:
+  using: composite
+  steps:
+    - name: Restore prices history
+      id: prices-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          DO NOT DELETE EDL PIPELINE/ohlcv_data
+          DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
+          DO NOT DELETE EDL PIPELINE/delivery_history_data
+          DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
+        key: scanner-prices-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-fetch
+        restore-keys: |
+          scanner-prices-v1-${{ runner.os }}-
+
+    - name: Restore enrichment history
+      id: enrichment-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          DO NOT DELETE EDL PIPELINE/scanner_history_data
+          DO NOT DELETE EDL PIPELINE/filing_history_data
+          DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
+          DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
+        key: scanner-enrichment-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-fetch
+        restore-keys: |
+          scanner-enrichment-v1-${{ runner.os }}-
+
+    # Never merge old combined files into a newer split cache. A partial
+    # split miss rebuilds only the missing group from its sources.
+    - name: Bootstrap from the previous combined cache
+      if: steps.prices-cache.outputs.cache-matched-key == '' && steps.enrichment-cache.outputs.cache-matched-key == ''
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          DO NOT DELETE EDL PIPELINE/ohlcv_data
+          DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
+          DO NOT DELETE EDL PIPELINE/delivery_history_data
+          DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
+          DO NOT DELETE EDL PIPELINE/scanner_history_data
+          DO NOT DELETE EDL PIPELINE/filing_history_data
+          DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
+          DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
+        key: scanner-history-v1-${{ runner.os }}-${{ github.run_id }}
+        restore-keys: |
+          scanner-history-v1-${{ runner.os }}-

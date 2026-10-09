@@ -370,14 +370,14 @@ class IntegrityTests(unittest.TestCase):
             root=Path(tmp);stage=root/'stage';stage.mkdir();dest=root/'dest';dest.mkdir()
             for name in ('a','b'):
                 (stage/name).write_text('new');(dest/name).write_text('old')
-            from pipeline_utils import atomic_replace_bytes
+            from edl_pipeline.publication import atomic_copy
             calls=0
-            def failing(path, data):
+            def failing(source, path):
                 nonlocal calls
                 calls+=1
                 if calls==2:raise OSError('disk failure')
-                atomic_replace_bytes(path,data)
-            with mock.patch('edl_pipeline.publication.atomic_replace_bytes',side_effect=failing):
+                atomic_copy(source,path)
+            with mock.patch('edl_pipeline.publication.atomic_copy',side_effect=failing):
                 with self.assertRaises(OSError):promote(stage,dest,['a','b'])
             self.assertEqual([(dest/name).read_text() for name in ('a','b')], ['old','old'])
 
@@ -391,10 +391,15 @@ class IntegrityTests(unittest.TestCase):
     def test_failed_worker_keeps_published_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);(root/'all_indices_list.json').write_text('old')
-            with mock.patch('edl_pipeline.publication.pipeline_utils.BASE_DIR',str(root)), mock.patch('edl_pipeline.publication.subprocess.run',return_value=mock.Mock(returncode=1)):
+            def failed_worker(*args, **kwargs):
+                stage = Path(kwargs['env']['EDL_BASE_DIR'])
+                (stage / 'price_validation_report.json').write_text('{"errors":[{"symbol":"BI"}]}')
+                return mock.Mock(returncode=1)
+            with mock.patch('edl_pipeline.publication.pipeline_utils.BASE_DIR',str(root)), mock.patch('edl_pipeline.publication.subprocess.run',side_effect=failed_worker):
                 self.assertEqual(publish(),1)
             self.assertEqual((root/'all_indices_list.json').read_text(),'old')
             self.assertFalse(json.loads((root/'pipeline_failure_report.json').read_text())['published'])
+            self.assertEqual(json.loads((root/'price_validation_report.json').read_text())['errors'], [{'symbol':'BI'}])
 
     def test_quality_rejection_keeps_published_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:

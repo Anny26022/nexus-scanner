@@ -12,6 +12,8 @@ import shutil
 import subprocess
 import tempfile
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 
@@ -134,11 +136,27 @@ def prepare_archives(chart_root):
     """Back up complete histories without loading another full archive in memory."""
     root = chart_root.parent
     archives = {}
+    prepared = chart_root / '.prepared_archives'
+    if (prepared / 'index.json').is_file():
+        archives = json.loads((prepared / 'index.json').read_text())
+        if not isinstance(archives, dict) or set(archives) - {'classified', 'raw'}:
+            raise RuntimeError('Invalid prepared filing archives')
+        for digest in archives.values():
+            if not re.fullmatch(r'[a-f0-9]{64}', str(digest)):
+                raise RuntimeError('Invalid prepared archive hash')
+            source = prepared / (digest + '.json.gz')
+            if file_digest(source) != digest:
+                raise RuntimeError('Prepared archive content does not match its hash')
+        for digest in archives.values():
+            destination = chart_root / 'objects' / (digest + '.json.gz')
+            destination.parent.mkdir(exist_ok=True)
+            shutil.copyfile(prepared / destination.name, destination)
     inputs = {'classified': root / 'filing_history.json.gz',
               'raw': root / 'filing_history_data' / 'filing_history.json'}
-    for name, source in inputs.items():
+    def pack(item):
+        name, source = item
         if not source.is_file():
-            continue  # Small diagnostic/fixture builds may have no retained archive.
+            return name, None  # Diagnostic/fixture builds may lack an archive.
         with tempfile.TemporaryDirectory(dir=chart_root) as folder:
             temporary = Path(folder) / 'archive.json.gz'
             opener = gzip.open if source.suffix == '.gz' else open
@@ -150,7 +168,21 @@ def prepare_archives(chart_root):
             if not destination.exists():
                 destination.parent.mkdir(exist_ok=True)
                 temporary.replace(destination)
-            archives[name] = digest
+            return name, digest
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [(name, executor.submit(pack, (name, source)))
+                   for name, source in inputs.items() if name not in archives]
+        errors = []
+        for name, future in futures:
+            try:
+                _, digest = future.result()
+                if digest is not None:
+                    archives[name] = digest
+            except Exception as error:
+                print(f'Filing archive {name} failed: {error}', flush=True)
+                errors.append(error)
+        if errors:
+            raise errors[0]
     return archives
 
 
@@ -286,7 +318,9 @@ def complete_release(chart_root, output, manifest, store=None):
 
 
 def complete_object_release(chart_root, output, manifest, store=None):
+    started = time.perf_counter()
     revision = chart_revision(chart_root, manifest['sessionDate'])
+    print(f'Chart validation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = json.loads((chart_root / 'index.json').read_text())
     previous_path = output / 'current.json'
     previous = json.loads(previous_path.read_text()) if previous_path.exists() else None
@@ -302,11 +336,15 @@ def complete_object_release(chart_root, output, manifest, store=None):
             manifest['publishedAt'] = existing['publishedAt']
     if store is None and os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':
         store = R2Store()
+    started = time.perf_counter()
     archives = prepare_archives(chart_root)
+    print(f'Archive preparation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = dict(index, archives=archives)
     if store:
         base = store.base_url
+        started = time.perf_counter()
         store.upload_objects(chart_root / 'objects')
+        print(f'Object upload and verification elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         manifest['publishedAt'] = manifest['sessionDate'] + 'T00:00:00Z'
         manifest['dataIndexUrl'] = f"{base}/releases/{manifest['revision']}/index.json"
         manifest['objectUrlTemplate'] = f'{base}/objects/{{hash}}.json.gz'

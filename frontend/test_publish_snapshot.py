@@ -1,24 +1,116 @@
 import gzip
+from contextlib import ExitStack, nullcontext
+import hashlib
 import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
-import hashlib
+from unittest.mock import Mock, patch
 
 import pandas as pd
 import scanner_bridge as bridge
-from publish_snapshot import publish
+from publish_snapshot import publish, delivery_lookback
 from scanner_cache import ScannerCache
+from edl_pipeline.scanner import context, trend
+from edl_pipeline.scanner.calculation_cache import memoized
 
 
 class SnapshotPublicationTests(unittest.TestCase):
     def setUp(self):
         self.storage = patch.dict('os.environ', {'EDL_SCANNER_STORAGE':'local'}, clear=False)
         self.storage.start()
+        self.clock = patch('publish_snapshot.datetime')
+        self.clock.start().now.return_value.isoformat.return_value = '2026-10-09T00:00:00+00:00'
 
     def tearDown(self):
+        self.clock.stop()
         self.storage.stop()
+
+    def test_delivery_window_is_derived_from_nested_and_legacy_rule_inputs(self):
+        expressions = [bridge.group('AND',
+            bridge.leaf('DELIVERY_PCT_SPIKE', withinDays=3, minDeliverablePct=60),
+            {'type': 'not', 'child': {'type': 'preset', 'expression':
+                {'condition': 'delivery_percent_spike', 'fired_within': 8, 'minimum_delivery_percent': 60}}},
+            bridge.leaf('DELIVERY_PERCENT', value=50, comparison='ABOVE'))]
+        self.assertEqual(delivery_lookback(expressions), 8)
+        self.assertEqual(delivery_lookback([bridge.leaf('DELIVERY_PERCENT', fired_within=99)]), 1)
+        self.assertEqual(delivery_lookback([bridge.leaf('NEW_HIGH')]), 0)
+        for invalid in (0, -1, None, 'invalid', float('inf')):
+            self.assertIsNone(delivery_lookback([bridge.leaf('DELIVERY_PCT_SPIKE', fired_within=invalid)]))
+
+    def test_bounded_delivery_preserves_complete_publication_and_frozen_history(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'edl'; root.mkdir(); self.fixture(root)
+            official = root / 'delivery_history_data'
+            # Old files can contain current dates, and gzip rows can override JSON rows.
+            historical = {'records': [
+                {'symbol': 'TEST', 'date': '2020-01-01', 'delivery_percent': 30},
+                {'symbol': 'OTHER', 'date': '2026-09-30', 'delivery_percent': 55},
+                {'symbol': 'TEST', 'date': '2026-09-29', 'delivery_percent': 65},
+            ]}
+            (official / '2000-01-01.json').write_text(json.dumps(historical))
+            (official / '2026-09-30.json.gz').write_bytes(gzip.compress(json.dumps({'records': [
+                {'symbol': 'TEST', 'date': '2026-09-30', 'delivery_percent': None},
+            ]}).encode(), mtime=0))
+            (official / '2000-01-02.json').write_bytes(b'\xef\xbb\xbf{"records":[]}')
+            fallback = root / 'eod2_delivery_history_data'; fallback.mkdir()
+            (fallback / 'TEST.csv').write_text('Date,delivery_percent\n2020-01-01,99\n2026-09-28,71\n2026-09-30,99\n')
+            original_loader = bridge._load_delivery_history
+            histories = []
+            def observe(*args, **kwargs):
+                result = original_loader(*args, **kwargs); histories.append(result)
+                return result
+            baseline_output, bounded_output = Path(folder) / 'baseline', Path(folder) / 'bounded'
+            with patch.object(bridge, '_load_delivery_history', side_effect=observe):
+                with patch('publish_snapshot.delivery_lookback', return_value=None):
+                    baseline = publish(root, baseline_output)
+                bounded = publish(root, bounded_output)
+            self.assertLess(sum(map(len, histories[1].values())), sum(map(len, histories[0].values())))
+            self.assertEqual(bounded, baseline)
+            def files(output):
+                return {str(path.relative_to(output)): path.read_bytes()
+                        for path in output.rglob('*') if path.is_file()}
+            self.assertEqual(files(bounded_output), files(baseline_output))
+            backend = root / '.scanner_cache/revisions' / bounded['revision']
+            self.assertEqual((backend / 'eod2_delivery_history_data/TEST.csv').read_bytes(), (fallback / 'TEST.csv').read_bytes())
+            self.assertEqual(gzip.decompress((backend / 'delivery_history_data/2000-01-01.json.gz').read_bytes()),
+                             (official / '2000-01-01.json').read_bytes())
+
+    def test_calculation_reuse_preserves_all_presets_and_publication_bytes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'edl'; root.mkdir()
+            self.fixture(root)
+            # Include sufficient full history and non-flat candles to exercise
+            # all 45 presets, moving averages and persistence modes.
+            import numpy as np
+            close = 100 + np.arange(300) / 10 + np.sin(np.arange(300) / 7) * 5
+            frame = pd.DataFrame({'Date': pd.bdate_range(end='2026-09-30', periods=300),
+                                  'Open': close, 'High': close + 2, 'Low': close - 2,
+                                  'Close': close, 'Volume': 100.})
+            frame.to_csv(root / 'ohlcv_data/TEST.csv', index=False)
+            baseline_output, cached_output = Path(folder) / 'baseline', Path(folder) / 'cached'
+            with ExitStack() as stack:
+                calculations = {}
+                for module, name in ((trend, '_ma'), (trend, '_extreme_run'),
+                                     (context, '_aligned_relative_strength')):
+                    implementation = Mock(wraps=getattr(module, name).__wrapped__)
+                    stack.enter_context(patch.object(module, name, memoized(implementation)))
+                    calculations[name] = implementation
+                with patch('publish_snapshot.calculation_cache', side_effect=nullcontext):
+                    baseline = publish(root, baseline_output)
+                baseline_calls = {name: spy.call_count for name, spy in calculations.items()}
+                for spy in calculations.values():
+                    spy.reset_mock()
+                cached = publish(root, cached_output)
+                for name, spy in calculations.items():
+                    self.assertGreater(spy.call_count, 0, name)
+                    self.assertLess(spy.call_count, baseline_calls[name], name)
+            self.assertEqual(cached, baseline)
+            def files(output):
+                return {str(path.relative_to(output)): path.read_bytes()
+                        for path in output.rglob('*') if path.is_file()}
+            self.assertEqual(files(cached_output), files(baseline_output))
+
     def test_publishes_ownership_values_and_preserves_old_revision(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir();output=Path(folder)/'public';self.fixture(root)

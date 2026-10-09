@@ -11,6 +11,7 @@ sys.path.insert(0, str(ROOT))
 from announcement_artifacts import put_object
 import build_chart_artifacts as builder
 from chart_publication import complete_release, R2Store, prepare_archives
+from filing_archives import prepare_filing_archives
 
 
 class ObjectStore:
@@ -87,6 +88,26 @@ class ObjectPublicationTests(unittest.TestCase):
             first = prepare_archives(charts)
             (root / 'filing_history.json.gz').write_bytes(gzip.compress(b'{"records":[]}', mtime=20))
             self.assertEqual(first, prepare_archives(charts))
+
+    def test_prepared_raw_input_archives_keep_original_gzip_bytes_and_reject_corruption(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); charts = root / 'chart_artifacts'; charts.mkdir()
+            classified = json.dumps({'records': [{'text': '₹😃' * 10000}]}).encode()
+            (root / 'filing_history.json').write_bytes(classified)
+            (root / 'filing_history.json.gz').write_bytes(gzip.compress(classified, mtime=20))
+            (root / 'filing_history_data').mkdir()
+            (root / 'filing_history_data/filing_history.json').write_bytes(b'{"symbols":{}}')
+            expected = prepare_archives(charts)
+            before = {digest: (charts / 'objects' / (digest + '.json.gz')).read_bytes() for digest in expected.values()}
+            prepared = charts / '.prepared_archives'
+            self.assertEqual(prepare_filing_archives(root, prepared), expected)
+            with patch('chart_publication.gzip.GzipFile', side_effect=AssertionError('recompressed')):
+                self.assertEqual(prepare_archives(charts), expected)
+            for digest, data in before.items():
+                self.assertEqual((charts / 'objects' / (digest + '.json.gz')).read_bytes(), data)
+            (prepared / (expected['classified'] + '.json.gz')).write_bytes(b'corrupt')
+            with self.assertRaisesRegex(RuntimeError, 'content does not match'):
+                prepare_archives(charts)
 
     def test_r2_transfers_and_verifies_only_missing_objects(self):
         with tempfile.TemporaryDirectory() as folder:

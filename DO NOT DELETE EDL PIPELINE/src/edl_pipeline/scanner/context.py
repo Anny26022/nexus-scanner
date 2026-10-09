@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from .financials import financial_value, historical_field_value
+from .calculation_cache import memoized
 from ..breadth.gates import MARKET_BREADTH_METRICS
 
 
@@ -115,6 +116,7 @@ def _float(stock, key):
         return None
 
 
+@memoized
 def _aligned_relative_strength(frame, benchmark):
     if benchmark is None or benchmark.empty:
         return None

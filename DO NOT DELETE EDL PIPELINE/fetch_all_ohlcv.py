@@ -1,4 +1,5 @@
 import requests
+from apply_nse_daily_ohlcv import repair_official_history
 import os
 import sys
 import time
@@ -16,13 +17,15 @@ from ohlcv_utils import (
     missing_history_sessions,
     is_nse_cash_session,
     nse_calendar_date,
+    NSE_TIMEZONE,
     plan_history_ranges,
+    parse_history_date,
     read_ohlcv_csv,
     rows_from_tick_data,
     symbol_csv_path,
     write_ohlcv_csv,
 )
-from pipeline_utils import ensure_dir, fetch_scanx_data, get_headers, load_json, resolve_path
+from pipeline_utils import ensure_dir, fetch_scanx_data, get_headers, http_session, load_json, resolve_path
 
 # --- Configuration ---
 MASTER_FILE = "master_isin_map.json"
@@ -54,7 +57,7 @@ def has_official_history(existing_rows, session, desired_start, expected_session
     dates = []
     for row in existing_rows:
         try:
-            dates.append(datetime.strptime(row["Date"], "%Y-%m-%d").timestamp())
+            dates.append(parse_history_date(row["Date"]).timestamp())
         except (KeyError, TypeError, ValueError):
             continue
     return (bool(dates) and any(row.get("Date") == session for row in existing_rows)
@@ -112,7 +115,7 @@ def fetch_history_chunk(payload):
     last_error = None
     for attempt in range(FETCH_ATTEMPTS):
         try:
-            response = requests.post(
+            response = http_session().post(
                 TICK_API_URL,
                 json=payload,
                 headers=get_headers(include_origin=True),
@@ -135,6 +138,8 @@ def fetch_single_stock(sym, details, live_snapshot=None, official_nse_session=No
     # and a stable EMA-200 warm-up.
     current_end = int(time.time())
     desired_start = current_end - (HISTORY_CALENDAR_DAYS * 86400)
+    if details.get("ListingDate"):
+        desired_start = max(desired_start, int(parse_history_date(details["ListingDate"]).replace(tzinfo=NSE_TIMEZONE).timestamp()))
     original_rows = read_ohlcv_csv(output_path)
     # Dhan occasionally returns a malformed historical candle.  Remove it
     # before deciding whether the cache is ready, then persist the repaired
@@ -177,7 +182,9 @@ def fetch_single_stock(sym, details, live_snapshot=None, official_nse_session=No
     # 3. Merge, deduplicate and repair old weekend snapshot rows even when
     # the history provider has no new trading-day candle to contribute.
     official_rows = [row for row in existing_rows if row["Date"] == official_nse_session]
-    final_rows = merge_rows_by_date(discard_invalid_ohlcv_rows(existing_rows + new_rows + official_rows))
+    # Existing/official rows were already validated above. Validate only new
+    # provider/live rows; precedence and the original string values stay intact.
+    final_rows = merge_rows_by_date(existing_rows + discard_invalid_ohlcv_rows(new_rows) + official_rows)
 
     missing = missing_history_sessions(final_rows, expected_sessions)
     if missing:
@@ -208,6 +215,7 @@ def main():
             "Exch": item.get("Exchange", "NSE"),
             "Inst": item.get("Instrument", "EQUITY"),
             "Seg": item.get("Segment", "E"),
+            "ListingDate": item.get("ListingDate"),
         }
         for item in master_rows
         if item.get("Symbol") and item.get("Sid") is not None
@@ -216,12 +224,26 @@ def main():
     # One bulk ScanX snapshot is used only while a daily candle is forming.
     live_snapshots = get_live_snapshots() if is_nse_cash_session() else {}
     nse_session = official_session()
+    prepared_at = time.perf_counter()
+    prepared_cpu = time.process_time()
     expected_sessions = expected_sessions_by_symbol(
         resolve_path("delivery_history_data"), stocks, nse_session or nse_calendar_date()
     )
+    print(f'OHLCV session ledger elapsed: {time.perf_counter() - prepared_at:.2f}s; CPU: {time.process_time() - prepared_cpu:.2f}s', flush=True)
+
+    prepared_at = time.perf_counter()
+    prepared_cpu = time.process_time()
+    try:
+        eod2 = load_json('eod2_ohlcv_import_report.json', default={})
+        adjusted_through = {symbol: item['end_date'] for symbol, item in eod2.get('symbol_history', {}).items()}
+        repair_official_history(expected_sessions, resolve_path(OUTPUT_DIR), adjusted_through=adjusted_through)
+    except (OSError, requests.RequestException, ValueError, TypeError, KeyError, AttributeError) as error:
+        print(f'Official gap recovery skipped: {error}; continuing with provider sync.', flush=True)
+    print(f'OHLCV official recovery elapsed: {time.perf_counter() - prepared_at:.2f}s; CPU: {time.process_time() - prepared_cpu:.2f}s', flush=True)
 
     print(f"Syncing OHLCV for {len(stocks)} stocks (Hybrid Multi-Chunk Mode)...")
     counts = {"success": 0, "uptodate": 0, "error": 0}
+    prepared_at, prepared_cpu = time.perf_counter(), time.process_time()
     
     with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
         futures = {
@@ -237,6 +259,7 @@ def main():
                 logger.exception("OHLCV history failed for %s", futures[future])
 
     print(f"Done! Updated: {counts['success']} | UpToDate: {counts['uptodate']} | Errors: {counts['error']}")
+    print(f'OHLCV symbol sync elapsed: {time.perf_counter() - prepared_at:.2f}s; CPU: {time.process_time() - prepared_cpu:.2f}s', flush=True)
     return counts["error"] == 0
 
 if __name__ == "__main__":

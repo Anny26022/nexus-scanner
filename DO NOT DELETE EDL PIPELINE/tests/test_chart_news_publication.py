@@ -1,5 +1,7 @@
 """News must survive temporary-input cleanup and staged publication."""
 import gzip
+import contextlib
+import io
 import json
 from pathlib import Path
 import sys
@@ -16,6 +18,87 @@ from edl_pipeline.artifacts import FINAL_ARTIFACT_SPECS, POST_STANDARDIZATION_SC
 
 
 class ChartNewsPublicationTests(unittest.TestCase):
+    def test_optional_price_report_copy_failure_does_not_block_publication_or_failure_report(self):
+        for worker_code in (0, 7):
+            with self.subTest(worker_code=worker_code), tempfile.TemporaryDirectory() as folder:
+                destination = Path(folder)
+                previous = destination / FINAL_ARTIFACT_SPECS[0].path
+                previous.write_bytes(b'previous')
+                def worker(command, cwd, env):
+                    stage = Path(cwd)
+                    (stage / 'price_validation_report.json').write_text('{}')
+                    (stage / 'pipeline_report.json').write_text(json.dumps({'exit_code': worker_code}))
+                    for spec in FINAL_ARTIFACT_SPECS:
+                        (stage / spec.path).write_bytes(b'new')
+                    (stage / 'chart_artifacts').mkdir()
+                    return mock.Mock(returncode=worker_code)
+                real_copy = publication.atomic_copy
+                def copy(source, target):
+                    if source.name == 'price_validation_report.json':
+                        raise OSError('diagnostics destination locked')
+                    return real_copy(source, target)
+                output = io.StringIO()
+                with mock.patch.object(publication.pipeline_utils, 'BASE_DIR', str(destination)), \
+                        mock.patch.object(publication.subprocess, 'run', side_effect=worker), \
+                        mock.patch.object(publication, 'atomic_copy', side_effect=copy), \
+                        mock.patch.object(publication, 'inspect_publication', return_value={'errors': []}), \
+                        mock.patch.object(publication, 'publish_frontend') as frontend, \
+                        mock.patch.dict('os.environ', {'EDL_FETCH_OHLCV': '1'}), \
+                        contextlib.redirect_stdout(output):
+                    self.assertEqual(publication.main(), worker_code)
+                self.assertIn('could not preserve optional price diagnostics', output.getvalue())
+                if worker_code:
+                    self.assertEqual(previous.read_bytes(), b'previous')
+                    report = json.loads((destination / 'pipeline_failure_report.json').read_text())
+                    self.assertEqual(report['exit_code'], worker_code)
+                    self.assertFalse(report['published'])
+                    frontend.assert_not_called()
+                else:
+                    self.assertEqual(previous.read_bytes(), b'new')
+                    frontend.assert_called_once_with(destination)
+
+    def test_fetch_preserves_stage_without_publishing_then_build_promotes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            destination = Path(folder) / 'output'; destination.mkdir()
+            stage = Path(folder) / 'stage'
+            def worker(command, cwd, env):
+                current = Path(cwd)
+                if env['EDL_PIPELINE_PHASE'] == 'build':
+                    self.assertTrue((current / 'fetch_checkpoint.json').exists())
+                    for spec in FINAL_ARTIFACT_SPECS:
+                        (current / spec.path).write_bytes(b'fixture')
+                    (current / 'chart_artifacts').mkdir()
+                    (current / 'chart_artifacts/TEST.json').write_text('{}')
+                else:
+                    (current / 'fetch_checkpoint.json').write_text('{"exit_code":0}')
+                (current / 'pipeline_report.json').write_text('{"exit_code":0}')
+                return mock.Mock(returncode=0)
+            with mock.patch.object(publication.pipeline_utils, 'BASE_DIR', str(destination)), \
+                    mock.patch.object(publication.subprocess, 'run', side_effect=worker), \
+                    mock.patch.object(publication, 'inspect_publication', return_value={'errors': []}) as inspect, \
+                    mock.patch.object(publication, 'publish_frontend') as frontend, \
+                    mock.patch.dict('os.environ', {'EDL_FETCH_OHLCV': '1'}):
+                self.assertEqual(publication.main(phase='fetch', stage_path=stage), 0)
+                self.assertTrue(stage.is_dir())
+                self.assertFalse((destination / 'pipeline_report.json').exists())
+                inspect.assert_not_called()
+                frontend.assert_not_called()
+                self.assertEqual(publication.main(phase='build', stage_path=stage), 0)
+                self.assertFalse(stage.exists())
+                self.assertTrue((destination / 'chart_artifacts/TEST.json').exists())
+                frontend.assert_called_once_with(destination)
+
+    def test_promotion_does_not_load_artifacts_with_read_bytes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            stage = root / 'stage'; stage.mkdir()
+            destination = root / 'destination'; destination.mkdir()
+            (stage / 'large').write_text('new')
+            (destination / 'large').write_text('old')
+            with mock.patch.object(Path, 'read_bytes', side_effect=AssertionError('unbounded read')):
+                publication.promote(stage, destination, ['large'])
+            self.assertEqual((destination / 'large').read_text(), 'new')
+
     def test_news_reaches_published_charts_after_stage_is_discarded(self):
         with tempfile.TemporaryDirectory() as folder:
             destination=Path(folder)

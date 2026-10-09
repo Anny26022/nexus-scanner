@@ -67,6 +67,20 @@ class ReviewRegressionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "no usable sessions"):
                     expected_sessions_by_symbol(root, {"ABC": {}}, "2026-09-23")
 
+    def test_recovery_read_failure_still_runs_provider_sync(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch('fetch_all_ohlcv.ensure_dir'), patch(
+                'fetch_all_ohlcv.load_json', side_effect=[[{'Symbol': 'ABC', 'Sid': 1}], {}]
+            ), patch('fetch_all_ohlcv.resolve_path', return_value=Path(folder)), patch(
+                'fetch_all_ohlcv.is_nse_cash_session', return_value=False
+            ), patch('fetch_all_ohlcv.official_session', return_value='2026-09-23'), patch(
+                'fetch_all_ohlcv.expected_sessions_by_symbol', return_value={'ABC': {'2026-09-22'}}
+            ), patch('apply_nse_daily_ohlcv.read_ohlcv_csv', side_effect=OSError('locked')), patch(
+                'fetch_all_ohlcv.fetch_single_stock', return_value='success'
+            ) as provider:
+                self.assertTrue(main())
+            provider.assert_called_once()
+
     def test_provider_overlap_preserves_adjusted_history(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

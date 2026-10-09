@@ -249,15 +249,16 @@ Offline macOS / Python 3.12 comparisons against merged `40e0254`:
 | Published fields, same 200 histories | 1.437s | 1.186s | Same serialized stock fields |
 | Full local breadth, 2,597 input / 2,308 eligible stocks, serial / one worker / two workers | 72.285s | 59.586s / 53.103s | All four artifacts byte-identical |
 | Chart volume events, 300 local histories | 0.514s | 0.445s | Same records and ties |
-| Complete frontend fixture, 400 stocks / all 45 presets, cold | 8.223s | 4.570s | Every public revision file byte-identical |
-| Complete frontend fixture, warm | 7.796s | 4.198s | Same revision and compressed payloads |
 | Filing stress fixture, 36,000 filings, warm | 1.869s | 1.609s | Same artifact SHA-256 |
 | Filing stress fixture, isolated process peak RSS | 648.6 MiB | 452.9 MiB | Cold/warm cache and artifact bytes match |
 
 Snapshot benchmarks freeze producer-code fingerprint inputs as well as data.
 Real code edits still change the existing code-derived revision identity;
 the revision algorithm and content remain unchanged. Cold snapshot comparisons
-use separate cloned inputs, not a warm cache left by the baseline.
+use separate cloned inputs, not a warm cache left by the baseline. The benchmark
+uses local chart storage and validates chart objects as part of every snapshot
+comparison. Earlier scanner-only frontend timing samples are intentionally not
+reported here; rerun the corrected benchmark for chart-enabled throughput.
 These component samples are not whole-job forecasts or isolated-run medians;
 they must not be added to the previously observed 14m35s saving.
 

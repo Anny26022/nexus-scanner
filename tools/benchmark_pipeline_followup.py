@@ -54,12 +54,15 @@ def files(root):
 def history_checks(data_root, count):
     import ohlcv_utils as utils
     import enrich_published_fields as current
+    old_utils = baseline('DO NOT DELETE EDL PIPELINE/ohlcv_utils.py')
     old = baseline('DO NOT DELETE EDL PIPELINE/enrich_published_fields.py')
     paths = sorted((data_root / 'ohlcv_data').glob('*.csv'))[:count]
     histories = [utils.read_ohlcv_csv(path) for path in paths]
     expected = sorted({row['Date'] for rows in histories for row in rows})[-30:]
-    before, _ = measure('Recovery full cleaning', lambda: [utils.missing_history_sessions(
-        utils.discard_invalid_ohlcv_rows(utils.discard_weekend_rows(rows)), expected) for rows in histories], 3)
+    if not expected:
+        raise ValueError('No history dates available for the selected histories')
+    before, _ = measure('Recovery full cleaning', lambda: [old_utils.missing_history_sessions(
+        old_utils.discard_invalid_ohlcv_rows(old_utils.discard_weekend_rows(rows)), expected) for rows in histories], 3)
     after, _ = measure('Recovery evidenced scan', lambda: [utils.evidenced_history_gaps(rows, expected) for rows in histories], 3)
     assert before == after
     stocks = [{'Symbol': p.stem, 'Listing Date': '2020-01-01'} for p in paths]
@@ -144,7 +147,7 @@ def snapshot_checks(temporary, count=64):
         original = Path.read_bytes
         def read_bytes(path):
             return b'frozen producer code' if path.suffix == '.py' else original(path)
-        with mock.patch.object(Path, 'read_bytes', read_bytes), mock.patch.dict('os.environ', {'EDL_CHART_STORAGE': 'r2'}, clear=True):
+        with mock.patch.object(Path, 'read_bytes', read_bytes), mock.patch.dict('os.environ', {'EDL_CHART_STORAGE': 'local'}, clear=True):
             kwargs = {} if workers is None else {'workers': workers}
             result, _ = measure(f'Snapshot {label} cold', lambda: module.publish(source, temporary / label, **kwargs))
             result, _ = measure(f'Snapshot {label} warm', lambda: module.publish(source, temporary / label, **kwargs), 2)

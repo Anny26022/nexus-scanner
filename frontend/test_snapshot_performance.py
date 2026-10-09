@@ -77,7 +77,7 @@ class SnapshotPerformanceTests(unittest.TestCase):
                     return {'type':'snapshot','field':[]} if identifier == 'broken' else translate(identifier,parameters)
                 with mock.patch.object(snapshot, 'list_presets',return_value=[{'id':'broken'}]), \
                         mock.patch.object(snapshot.bridge, 'translate',side_effect=invalid):
-                    with self.assertRaises(TypeError):
+                    with self.assertRaisesRegex(RuntimeError, 'TEST'):
                         snapshot.publish(root,output,workers=2)
             self.assertEqual((output / 'current.json').read_bytes(),previous)
 
@@ -98,6 +98,13 @@ class SnapshotPerformanceTests(unittest.TestCase):
         self.assertEqual(len(submitted),4)
         self.assertTrue(all(future.cancelled() for future in submitted[1:]))
         executor.shutdown.assert_called_once_with(wait=True,cancel_futures=True)
+
+    def test_row_worker_error_names_the_chunk_symbols(self):
+        snapshot._ROW_INPUTS = ({}, 'unused', {}, {}, {})
+        tasks = [({'symbol':'FIRST'}, None, []), ({'symbol':'SECOND'}, None, [])]
+        with mock.patch.object(snapshot, '_stock_row', side_effect=ValueError('bad candle')):
+            with self.assertRaisesRegex(RuntimeError, 'FIRST, SECOND'):
+                snapshot._row_chunk(tasks)
 
 
 if __name__ == '__main__':

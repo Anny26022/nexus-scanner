@@ -182,6 +182,9 @@ def main() -> int:
                               ensure_ascii=False, allow_nan=False).encode('utf-8')
             offsets.append((record['symbol'], spool.tell(), len(data)))
             spool.write(data)
+            # The raw cache can include PDF extraction pages. It is no longer
+            # needed once the reduced record is spooled.
+            record.pop('filings', None)
             del filings, data
         started = progress("classification and record encoding", started)
         if not records or not filing_count:

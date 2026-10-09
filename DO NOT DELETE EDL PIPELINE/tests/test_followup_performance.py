@@ -168,6 +168,20 @@ class FollowupPerformanceTests(unittest.TestCase):
         self.assertTrue(all(future.cancelled() for future in submitted[1:]))
         executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
 
+    def test_breadth_worker_failure_falls_back_to_serial_preparation(self):
+        executor = mock.Mock()
+        def submit(*_):
+            future = Future()
+            future.set_exception(RuntimeError('worker stopped'))
+            return future
+        executor.submit.side_effect = submit
+        stocks = [{'symbol':str(index)} for index in range(5)]
+        with mock.patch.object(breadth, 'ProcessPoolExecutor', return_value=executor):
+            result = list(breadth._prepared_histories(stocks, Path('unused'), BreadthMethodology(), 2))
+        self.assertEqual([symbol for symbol, _, _ in result], [str(index) for index in range(5)])
+        self.assertTrue(all(prepared is None and error is None for _, prepared, error in result))
+        executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+
     def test_encoded_record_writer_keeps_exact_bytes_and_atomic_failure(self):
         records = [{'symbol':'₹','value':float('nan')}, {'symbol':'A','value':-0.0}]
         with tempfile.TemporaryDirectory() as directory:

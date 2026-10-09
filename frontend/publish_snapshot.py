@@ -140,7 +140,11 @@ def _initialize_rows(context, session, presets, default):
 
 
 def _row_chunk(tasks):
-    return [_stock_row(task, *_ROW_INPUTS) for task in tasks]
+    try:
+        return [_stock_row(task, *_ROW_INPUTS) for task in tasks]
+    except Exception as error:
+        symbols = ', '.join(str(task[0].get('symbol')) for task in tasks)
+        raise RuntimeError(f'Frontend row preparation failed for symbols: {symbols}') from error
 
 
 def stock_rows(tasks, context, session, presets, default, workers=0):

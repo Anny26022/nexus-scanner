@@ -72,14 +72,27 @@ def _prepared_histories(stocks, root, methodology, workers):
             task = next(tasks, None)
             if task is None:
                 break
-            pending.append(executor.submit(_prepare_stock, task))
+            pending.append((task, executor.submit(_prepare_stock, task)))
         while pending:
-            yield pending.popleft().result()
+            task, future = pending.popleft()
+            try:
+                yield future.result()
+            except Exception:
+                # Preparation is read-only. A broken worker/pickling failure
+                # must retain the serial loop's per-symbol degradation rather
+                # than losing the entire breadth artifact.
+                remaining = [task, *(queued for queued, _ in pending)]
+                for _, queued_future in pending:
+                    queued_future.cancel()
+                for queued in remaining:
+                    yield _prepare_stock(queued)
+                yield from map(_prepare_stock, tasks)
+                return
             task = next(tasks, None)
             if task is not None:
-                pending.append(executor.submit(_prepare_stock, task))
+                pending.append((task, executor.submit(_prepare_stock, task)))
     finally:
-        for future in pending:
+        for _, future in pending:
             future.cancel()
         executor.shutdown(wait=True, cancel_futures=True)
 

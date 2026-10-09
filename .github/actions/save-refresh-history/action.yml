@@ -7,8 +7,20 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Validate cache phase
+      id: phase
+      if: always()
+      shell: bash
+      env:
+        CACHE_SAVE_PHASE: ${{ inputs.phase }}
+      run: |
+        case "$CACHE_SAVE_PHASE" in
+          fetch|build) ;;
+          *) echo "::error::Cache phase must be fetch or build"; exit 1 ;;
+        esac
+
     - name: Save prices history
-      if: always() && inputs.phase == 'fetch'
+      if: always() && steps.phase.outcome == 'success' && inputs.phase == 'fetch'
       continue-on-error: true
       uses: actions/cache/save@v4
       with:
@@ -20,7 +32,7 @@ runs:
         key: scanner-prices-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.phase }}
 
     - name: Save enrichment history
-      if: always()
+      if: always() && steps.phase.outcome == 'success'
       continue-on-error: true
       uses: actions/cache/save@v4
       with:

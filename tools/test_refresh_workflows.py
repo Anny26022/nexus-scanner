@@ -39,6 +39,11 @@ class RefreshWorkflowTests(unittest.TestCase):
         for name, expected in BASELINES.items():
             with self.subTest(workflow=name):
                 workflow = document('.github/workflows/' + name)
+                cron = '30 10 * * 1-5' if name == 'daily_refresh.yml' else '30 3 * * 0'
+                # PyYAML YAML 1.1 treats the unquoted GitHub "on" key as True.
+                self.assertEqual(workflow.get('on', workflow.get(True)), {
+                    'schedule': [{'cron': cron}], 'workflow_dispatch': None,
+                })
                 self.assertEqual(workflow['concurrency'], {'group': 'daily-data-refresh', 'cancel-in-progress': False})
                 self.assertEqual(workflow['permissions'], {'contents': 'write'})
                 job, = workflow['jobs'].values()
@@ -56,7 +61,15 @@ class RefreshWorkflowTests(unittest.TestCase):
                             phase = caller['with']['phase']
                             self.assertIn(phase, ('fetch', 'build'))
                             self.assertTrue(caller['continue-on-error'])
-                            condition = "always() && inputs.phase == 'fetch'" if step['name'] == 'Save prices history' else 'always()'
+                            if step['name'] == 'Validate cache phase':
+                                self.assertEqual(step['id'], 'phase')
+                                self.assertEqual(step['if'], 'always()')
+                                self.assertEqual(step['shell'], 'bash')
+                                self.assertEqual(step['env'], {'CACHE_SAVE_PHASE': '${{ inputs.phase }}'})
+                                continue
+                            condition = "always() && steps.phase.outcome == 'success'"
+                            if step['name'] == 'Save prices history':
+                                condition += " && inputs.phase == 'fetch'"
                             self.assertEqual(step.pop('if'), condition)
                             if phase == 'build' and step['name'] == 'Save prices history':
                                 continue
@@ -82,6 +95,20 @@ class RefreshWorkflowTests(unittest.TestCase):
                         expanded.append(step)
                 actual = hashlib.sha256(json.dumps(normalized(expanded), sort_keys=True).encode()).hexdigest()
                 self.assertEqual(actual, expected, json.dumps(normalized(expanded), indent=2))
+
+    def test_phase_guard_rejects_invalid_inputs_before_cache_writes(self):
+        action = document('.github/actions/save-refresh-history/action.yml')
+        validation, *saves = action['runs']['steps']
+        for step in saves:
+            self.assertIn("steps.phase.outcome == 'success'", step['if'])
+        for phase in ('fetch', 'build', '', 'fetxh', 'FETCH', 'fetch; false'):
+            with self.subTest(phase=phase):
+                result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', validation['run']],
+                                        env=dict(os.environ, CACHE_SAVE_PHASE=phase),
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0 if phase in ('fetch', 'build') else 1)
+                if result.returncode:
+                    self.assertIn('::error::Cache phase must be fetch or build', result.stdout)
 
     def test_commit_shell_preserves_allowlist_without_running_git(self):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']

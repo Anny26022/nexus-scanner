@@ -153,8 +153,11 @@ def stock_rows(tasks, context, session, presets, default, workers=0):
         for task in tasks:
             yield _stock_row(task, context, session, presets, default, keys)
         return
+    # Each task already carries its stock. Evaluators receive that stock
+    # explicitly; copying the complete universe into every worker is redundant.
+    worker_context = {key: value for key, value in context.items() if key != 'stocks'}
     executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'),
-                                   initializer=_initialize_rows, initargs=(context, session, presets, default))
+                                   initializer=_initialize_rows, initargs=(worker_context, session, presets, default))
     tasks = iter(tasks)
     pending = deque()
     def submit():

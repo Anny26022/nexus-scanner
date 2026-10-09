@@ -2,6 +2,7 @@
 
 import os
 import re
+from functools import lru_cache
 
 from pipeline_utils import BASE_DIR, apply_sma_fields, load_json, save_json
 
@@ -25,6 +26,7 @@ REPLACED_LEGACY_FIELDS = {
 }
 
 
+@lru_cache(maxsize=4096)
 def snake_case(name):
     name = name.replace("%", " percent ").replace("₹", " rupee ").replace("&", " and ")
     name = re.sub(r"\(([^)]*)\)", r" \1 ", name)

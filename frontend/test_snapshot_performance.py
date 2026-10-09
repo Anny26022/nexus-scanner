@@ -99,6 +99,17 @@ class SnapshotPerformanceTests(unittest.TestCase):
         self.assertTrue(all(future.cancelled() for future in submitted[1:]))
         executor.shutdown.assert_called_once_with(wait=True,cancel_futures=True)
 
+    def test_workers_do_not_receive_the_redundant_full_stock_universe(self):
+        context = {'stocks': {'UNUSED': {'large_history': [1, 2, 3]}},
+                   'financial_history': {'TEST': []}, 'benchmarks': {}, 'rs_ratings': {}}
+        executor = mock.Mock()
+        with mock.patch.object(snapshot, 'ProcessPoolExecutor', return_value=executor) as pool:
+            self.assertEqual(list(snapshot.stock_rows([], context, '2026-09-30', {}, {}, workers=2)), [])
+        received = pool.call_args.kwargs['initargs'][0]
+        self.assertNotIn('stocks', received)
+        self.assertEqual(received, {key: value for key, value in context.items() if key != 'stocks'})
+        self.assertIn('stocks', context)
+
     def test_row_worker_error_names_the_chunk_symbols(self):
         snapshot._ROW_INPUTS = ({}, 'unused', {}, {}, {})
         tasks = [({'symbol':'FIRST'}, None, []), ({'symbol':'SECOND'}, None, [])]

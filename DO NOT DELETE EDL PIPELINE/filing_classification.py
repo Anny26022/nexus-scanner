@@ -81,7 +81,14 @@ _GROUPS = {
 }
 
 def _text(value):
-    return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+    text = str(value or "")
+    normalize = _normalized_text if len(text) <= 4096 else _normalized_text.__wrapped__
+    return normalize(text)
+
+
+@lru_cache(maxsize=2048)
+def _normalized_text(text):
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 RULES = tuple((key, group, name, re.compile(pattern))
               for group, rows in _GROUPS.items() for key, name, pattern in rows)

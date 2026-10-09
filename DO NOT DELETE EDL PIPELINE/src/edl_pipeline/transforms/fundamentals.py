@@ -31,6 +31,19 @@ def get_optional_float(value):
         return None
 
 
+def unavailable_session_candle(row):
+    """Whether provider data cannot establish a session candle."""
+    volume = row.get("Volume", row.get("volume"))
+    return (all(row.get(key) is None for key in ("Open", "High", "Low"))
+            and (volume is None or get_optional_float(volume) == 0))
+
+
+def unavailable_candle(row):
+    """A positive retained LTP may be kept only when its session candle is unavailable."""
+    ltp = get_optional_float(row.get("Ltp"))
+    return unavailable_session_candle(row) and ltp is not None and ltp > 0
+
+
 def calculate_change(current, previous):
     if current is None or previous in (None, 0):
         return None
@@ -288,8 +301,8 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
     ltp = get_float(tech.get("Ltp"))
     total_shares = get_optional_float(tech.get("TotalShares")) or 0.0
     volume = get_optional_float(tech.get("Volume", tech.get("volume")))
-    # Retained LTP has no verified session when zero volume accompanies absent OHLC.
-    session_close = None if volume == 0 and all(tech.get(key) is None for key in ("Open", "High", "Low")) else ltp
+    # Missing/zero volume with absent OHLC cannot establish a session close.
+    session_close = None if unavailable_session_candle(tech) else ltp
     sme_record = sme_map.get(symbol) if sme_map is not None else None
 
     net_profit = quarterly_metric_fields("Net Profit", cq, "NET_PROFIT")

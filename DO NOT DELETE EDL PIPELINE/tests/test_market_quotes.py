@@ -148,8 +148,47 @@ class MarketQuoteTests(unittest.TestCase):
             self.assertEqual(stock['close'], 11)
             self.assertEqual(stock['rupee_volume'], 11 * volume)
 
+    def test_unavailable_session_candle_never_promotes_nonpositive_ltp_to_session_close(self):
+        from edl_pipeline.transforms.fundamentals import analyze_stock
+        for ltp in (0, -1):
+            with self.subTest(ltp=ltp):
+                row = quote(Ltp=ltp, Open=None, High=None, Low=None, Volume=0)
+                stock = analyze_stock({'Symbol': 'BI'}, row, {}, {})
+                self.assertIsNone(stock['close'])
+                self.assertIsNone(stock['rupee_volume'])
+
+    def test_wholly_missing_session_fields_preserve_price_without_inventing_a_candle(self):
+        from edl_pipeline.transforms.fundamentals import analyze_stock
+        from edl_pipeline.quality import ohlc_error
+        # Reduced quotes from failed run 37931823057, unchanged by its retry.
+        for null_fields in (False, True):
+            with self.subTest(null_fields=null_fields):
+                original = [quote('SAB', Isin='INE137M01017', Sid=764860, Ltp=171),
+                            quote('MPDL', Isin='INE493H01014', Sid=765138, Ltp=25.87)]
+                for row in original:
+                    for field in ('Open', 'High', 'Low', 'Volume'):
+                        if null_fields:
+                            row[field] = None
+                        else:
+                            row.pop(field)
+                code, rows, report, calls = self.run_validation(original, original)
+                self.assertEqual(code, 0)
+                self.assertEqual(calls, 0)
+                self.assertEqual(rows, original)
+                self.assertEqual(report['errors'], [])
+                self.assertEqual([entry['raw_quote'] for entry in report['unavailable_candles']], original)
+                for entry, row in zip(report['unavailable_candles'], rows):
+                    self.assertEqual(entry['reason'], 'missing volume with no session OHLC')
+                    self.assertFalse(entry['ltp_session_verified'])
+                    stock = analyze_stock({'Symbol': row['Sym']}, row, {}, {})
+                    self.assertEqual(stock['Stock Price(₹)'], row['Ltp'])
+                    for field in ('open', 'high', 'low', 'close', 'volume', 'rupee_volume'):
+                        self.assertIsNone(stock[field])
+                    self.assertIsNone(ohlc_error(stock))
+
     def test_unavailable_candle_exception_does_not_accept_malformed_or_traded_quotes(self):
-        for values in ({'Volume': 1}, {'Volume': None}, {'Volume': -1}, {'Ltp': 0},
+        for values in ({'Volume': 1}, {'Volume': 'invalid'}, {'Volume': ''},
+                       {'Volume': 'NaN'}, {'Volume': 'inf'}, {'Volume': -1}, {'Ltp': 0},
                        {'Ltp': None}, {'Open': 10}, {'High': 'invalid'}, {'Low': 0}):
             with self.subTest(values=values):
                 row = quote(Open=None, High=None, Low=None, Volume=0)

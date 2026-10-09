@@ -1,5 +1,5 @@
 """Scheduling changes preserve ordered work, bytes and publication gates."""
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 import contextlib
 import gzip
 import io
@@ -15,11 +15,13 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT), str(ROOT / 'src')]
 import announcement_artifacts as announcements
+import build_chart_artifacts as charts
 import filing_classification as classification
 import standardize_stock_artifact as standardize
 import enrich_published_fields as enrichment
 import copy
 from edl_pipeline import runner
+from edl_pipeline.artifacts import BULK_FETCH_SCRIPTS, OHLCV_FETCH_LANE, PHASE2_SCRIPTS
 from edl_pipeline.validators import ArtifactCheck, ArtifactSpec
 from pipeline_utils import file_fingerprint
 from test_announcement_artifacts import filing
@@ -33,23 +35,45 @@ class CriticalPathTests(unittest.TestCase):
     def test_long_lane_yields_worker_between_scripts(self):
         started = threading.Barrier(3)
         independent = threading.Event()
-        calls = []
+        calls, submissions = [], []
+        lock = threading.Lock()
+        active = peak = 0
+        class RecordingPool(ThreadPoolExecutor):
+            def submit(pool, function, *args, **kwargs):
+                submissions.append((function, args))
+                return super().submit(function, *args, **kwargs)
         def run(script, phase='', required=False):
-            if script in ('filings', 'delivery', 'ipo'):
-                started.wait(timeout=5)
-                if script != 'delivery':
-                    self.assertTrue(independent.wait(timeout=5))
-            if script == 'independent':
-                independent.set()
-            if script == 'overlay':
-                self.assertTrue(independent.is_set())
-            calls.append(script)
-            return runner.ScriptResult(script != 'overlay', required)
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+            try:
+                if script in ('filings', 'delivery', 'ipo'):
+                    started.wait(timeout=5)
+                    if script != 'delivery':
+                        self.assertTrue(independent.wait(timeout=5))
+                if script == 'independent':
+                    independent.set()
+                with lock:
+                    calls.append(script)
+                return runner.ScriptResult(script != 'overlay', required)
+            finally:
+                with lock:
+                    active -= 1
         lanes = {'filings': [('filings', '', True)],
                  'prices': [('delivery', '', True), ('overlay', '', True), ('daily', '', True)],
                  'ipo': [('ipo', '', True)], 'other': [('independent', '', False)]}
-        with mock.patch.object(runner, 'run_script', side_effect=run):
+        with mock.patch.object(runner, 'run_script', side_effect=run) as script_call, \
+                mock.patch.object(runner, 'ThreadPoolExecutor', RecordingPool):
             results = runner.run_script_lanes(lanes)
+        # Capacity is released at script boundaries; no assertion depends on
+        # whether the other lane or the next prices script wins that capacity.
+        self.assertTrue(all(function is script_call and isinstance(args[0], str)
+                            for function, args in submissions))
+        self.assertEqual(len(submissions), 6)
+        self.assertEqual(peak, 3)
+        self.assertEqual([name for name in calls if name in ('delivery', 'overlay', 'daily')],
+                         ['delivery', 'overlay', 'daily'])
         self.assertEqual(list(results), list(lanes))
         self.assertEqual(list(results['prices']), ['delivery', 'overlay', 'daily'])
         self.assertFalse(results['prices']['overlay'].ok)
@@ -72,11 +96,41 @@ class CriticalPathTests(unittest.TestCase):
             with lock:
                 active.remove(script)
             return runner.ScriptResult(True, required)
-        lanes = {name: [(name, '', False)] for name in
-                 ('fetch_all_ohlcv.py', 'fetch_market_news.py',
-                  'fetch_new_announcements.py', 'fetch_advanced_indicators.py')}
+        self.assertTrue(BULK_FETCH_SCRIPTS <= set(PHASE2_SCRIPTS) | set(OHLCV_FETCH_LANE))
+        lanes = {name: [(name, '', False)] for name in sorted(BULK_FETCH_SCRIPTS)}
         with mock.patch.object(runner, 'run_script', side_effect=run):
-            self.assertEqual(len(runner.run_script_lanes(lanes)), 4)
+            self.assertEqual(len(runner.run_script_lanes(lanes)), len(BULK_FETCH_SCRIPTS))
+
+    def test_chart_worker_budget_reserves_parent_and_avoids_small_spawns(self):
+        for cpus in range(1, 9):
+            for symbols in (1, 31, 32, 255, 256, 2600):
+                with self.subTest(cpus=cpus, symbols=symbols):
+                    candles, announcements = charts._chart_worker_counts(cpus, symbols)
+                    spawned_candles = candles if cpus > 1 and symbols >= 32 else 0
+                    self.assertLessEqual(spawned_candles + announcements, max(0, cpus - 1))
+                    if symbols < 256:
+                        self.assertEqual(announcements, 0)
+        self.assertEqual(charts._chart_worker_counts(4, 2600), (2, 0))
+        self.assertEqual(charts._chart_worker_counts(5, 2600), (2, 2))
+        self.assertEqual(charts._chart_worker_counts(8, 2600), (2, 2))
+
+    def test_budgeted_chart_build_matches_serial_release_bytes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            stocks = [{'symbol': f'S{i:03d}', 'as_of_date': '2026-10-07'} for i in range(256)]
+            (root / 'all_stocks_fundamental_analysis.json').write_text(json.dumps(stocks))
+            rows = [{'symbol': stock['symbol'], 'filings': [filing('2026-10-07T10:00:00', stock['symbol'])]}
+                    for stock in stocks]
+            (root / 'filing_history.json').write_text(json.dumps({'updated_at': '2026-10-07T12:00:00', 'records': rows}))
+            releases = []
+            for cpus in (1, 4, 5):
+                with mock.patch.object(charts, 'BASE_DIR', str(root)), \
+                        mock.patch.object(charts.os, 'cpu_count', return_value=cpus), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(charts.main(), 0)
+                releases.append({str(path.relative_to(root / 'chart_artifacts')): path.read_bytes()
+                                 for path in (root / 'chart_artifacts').rglob('*') if path.is_file()})
+            self.assertTrue(all(release == releases[0] for release in releases))
 
     def test_early_validation_reused_only_for_identical_bytes_and_order(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -133,7 +187,7 @@ class CriticalPathTests(unittest.TestCase):
                                  for n in range(205)] + [filing('2026-10-07T10:00:00', symbol)]}
                     for symbol in ('Z', 'A')]
             outputs = []
-            for workers, streamed in ((0, False), (2, False), (2, True)):
+            for workers, streamed in ((0, False), (1, True), (2, False), (2, True)):
                 directory = root / f'{workers}-{streamed}'
                 cache = directory / 'cache'
                 for warm in (False, True):

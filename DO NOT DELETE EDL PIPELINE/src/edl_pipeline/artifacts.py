@@ -122,6 +122,13 @@ OHLCV_FETCH_LANE = (
     "fetch_all_ohlcv.py",
 )
 
+# High-fanout quote/news pools must stay disjoint across the fetch lanes.
+# Update this policy alongside the lane definitions when adding a bulk fetch.
+BULK_FETCH_SCRIPTS = frozenset({
+    "fetch_all_ohlcv.py", "fetch_new_announcements.py",
+    "fetch_advanced_indicators.py", "fetch_market_news.py",
+})
+
 PHASE4_SCRIPTS = [
     "advanced_metrics_processor.py",
     "process_earnings_performance.py",

@@ -34,10 +34,12 @@ jobs:
 
       - name: Check critical-path byte equivalence and timings
         if: github.event_name == 'pull_request'
+        timeout-minutes: 15
         working-directory: .
         env:
           BENCHMARK_BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: |
+          python -m unittest discover -s tools -p test_benchmark_critical_path.py -v
           git fetch --no-tags --depth=1 origin "$BENCHMARK_BASE_REF"
           python tools/benchmark_critical_path.py --baseline-ref "$BENCHMARK_BASE_REF"
 

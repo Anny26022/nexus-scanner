@@ -16,7 +16,9 @@ or suppressing required chart construction.
 - Normalize repeated field names and short filing text through bounded pure
   caches. Long filing text is not retained; classification inputs/rules remain intact.
 - Build independent company announcement objects with two bounded process workers
-  on sufficiently large, four-core chart builds. Retain ordered parent assembly,
+  on builds with at least 256 symbols and two spare worker slots after reserving
+  a core for the parent and up to two candle workers (at least five CPUs).
+  Four-core runners retain the original in-process announcement path. Retain ordered parent assembly,
   exact JSON/gzip settings, object hashes and cache verification/pruning rules.
 - Enrich published fields in bounded, ordered chunks using two workers on large
   builds. Existing formulas and history filtering are reused; only the parent writes.
@@ -48,6 +50,15 @@ These are samples, not full-stage savings. Earlier local cold spawned runs took
 96.207s and 34.258s versus serial 4.526s and 3.054s; startup variability must not
 be hidden. PR CI also runs the synthetic byte/timing comparison on Ubuntu. A
 comparable full daily run is required before claiming total production savings.
+The table records the original two-announcement-worker experiment; the benchmark
+now checks both one- and two-worker configurations. A review-follow-up sample
+measured serial cold/warm 2.529s/1.094s, one worker 2.552s/1.232s, and two workers
+1.467s/0.738s. Because one worker added overhead, the production budget does not
+enable a one-worker announcement pool. These isolated timings do not establish
+combined chart-stage performance on a four-core runner; its existing path stays intact.
+Equivalence checks remain
+active under Python `-O`. Scheduling replay rejects diagnostic/incomplete reports
+with a clear message rather than assuming missing OHLCV script durations.
 
 ## Reproduce
 

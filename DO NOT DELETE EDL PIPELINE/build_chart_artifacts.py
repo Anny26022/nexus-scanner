@@ -252,6 +252,15 @@ def _parallel_chart_objects(tasks, workers, announcement=None):
     return [item for index in sorted(completed) for item in completed[index]]
 
 
+def _chart_worker_counts(cpus, symbols):
+    candles = max(1, min(2, cpus - 1))
+    # Reserve a core for streamed input, IPC and parent assembly. One extra
+    # worker adds IPC without the measured two-worker speedup; use the existing
+    # in-process path unless a large build has room for both workers.
+    announcements = 2 if symbols >= 256 and cpus - candles - 1 >= 2 else 0
+    return candles, announcements
+
+
 def main() -> int:
     root = Path(BASE_DIR)
     stocks = _artifact(root, "all_stocks_fundamental_analysis.json", [])
@@ -286,11 +295,10 @@ def main() -> int:
     # Small builds keep announcements in-process. Parent assembly stays ordered
     # and publication waits for both branches, including iterator failures.
     cpus = os.cpu_count() or 1
-    announcement_workers = 2 if cpus >= 4 and len(tasks) >= 32 else 0
+    workers, announcement_workers = _chart_worker_counts(cpus, len(tasks))
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix='announcements') as background:
         announcement = background.submit(_timed_announcements, filing_history, objects, symbols, as_of,
                                           cache=root / 'filing_history_data/object_cache', workers=announcement_workers)
-        workers = max(1, min(2, cpus - max(1, announcement_workers)))
         candle_started = time.perf_counter()
         if cpus > 1 and len(tasks) >= 32:
             chart_objects.update(_parallel_chart_objects(tasks, workers, announcement))

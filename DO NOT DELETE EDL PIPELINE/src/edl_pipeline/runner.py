@@ -22,6 +22,7 @@ from filing_archives import prepare_filing_archives
 import pipeline_utils
 
 from .artifacts import (
+    BULK_FETCH_SCRIPTS,
     FILES_TO_COMPRESS,
     FINAL_ARTIFACT_SPECS,
     INTERMEDIATE_DIRS,
@@ -135,8 +136,6 @@ def run_script_lanes(lanes):
     # Yield capacity between scripts, not only when a whole lane finishes.
     # Keep the formerly disjoint high-fanout quote/news fetches disjoint;
     # interleaving their CPU-only preparation must not stack provider pools.
-    bulk_fetches = {'fetch_all_ohlcv.py', 'fetch_new_announcements.py',
-                    'fetch_advanced_indicators.py', 'fetch_market_news.py'}
     sequences = {name: iter(scripts) for name, scripts in lanes.items()}
     ready = deque((name, next(scripts, None)) for name, scripts in sequences.items())
     results = {name: {} for name in lanes}
@@ -149,7 +148,7 @@ def run_script_lanes(lanes):
                 name, script = ready.popleft()
                 if script is None:
                     continue
-                if script[0] in bulk_fetches and any(item[1][0] in bulk_fetches for item in pending.values()):
+                if script[0] in BULK_FETCH_SCRIPTS and any(item[1][0] in BULK_FETCH_SCRIPTS for item in pending.values()):
                     ready.append((name, script))
                     continue
                 pending[executor.submit(run_script, *script)] = (name, script)

@@ -65,36 +65,53 @@ def _prepared_histories(stocks, root, methodology, workers):
     if not workers:
         yield from map(_prepare_stock, tasks)
         return
-    executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'))
+    try:
+        executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'))
+    except Exception:
+        yield from map(_prepare_stock, tasks)
+        return
     pending = deque()
+    failed = False
+    def submit(task):
+        # Retain the task even if submission fails, for ordered serial replay.
+        pending.append((task, None))
+        try:
+            pending[-1] = (task, executor.submit(_prepare_stock, task))
+        except Exception:
+            return False
+        return True
     try:
         for _ in range(2 * workers):
             task = next(tasks, None)
             if task is None:
                 break
-            pending.append((task, executor.submit(_prepare_stock, task)))
-        while pending:
-            task, future = pending.popleft()
+            if not submit(task):
+                failed = True
+                break
+        while pending and not failed:
+            task, future = pending[0]
             try:
-                yield future.result()
+                result = future.result()
             except Exception:
-                # Preparation is read-only. A broken worker/pickling failure
-                # must retain the serial loop's per-symbol degradation rather
-                # than losing the entire breadth artifact.
-                remaining = [task, *(queued for queued, _ in pending)]
-                for _, queued_future in pending:
-                    queued_future.cancel()
-                for queued in remaining:
-                    yield _prepare_stock(queued)
-                yield from map(_prepare_stock, tasks)
-                return
+                failed = True
+                break
+            pending.popleft()
+            # Consumer/aggregation exceptions must propagate, not trigger a
+            # preparation retry or duplicate an already-admitted history.
+            yield result
             task = next(tasks, None)
-            if task is not None:
-                pending.append((task, executor.submit(_prepare_stock, task)))
+            if task is not None and not submit(task):
+                failed = True
     finally:
         for _, future in pending:
-            future.cancel()
+            if future is not None:
+                future.cancel()
         executor.shutdown(wait=True, cancel_futures=True)
+    if failed:
+        print('Breadth preparation pool unavailable; continuing in original order serially.', flush=True)
+        for task, _ in pending:
+            yield _prepare_stock(task)
+        yield from map(_prepare_stock, tasks)
 
 
 def _save_json(path, data):

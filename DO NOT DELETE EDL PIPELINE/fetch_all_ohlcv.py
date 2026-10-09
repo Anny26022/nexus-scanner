@@ -225,22 +225,25 @@ def main():
     live_snapshots = get_live_snapshots() if is_nse_cash_session() else {}
     nse_session = official_session()
     prepared_at = time.perf_counter()
+    prepared_cpu = time.process_time()
     expected_sessions = expected_sessions_by_symbol(
         resolve_path("delivery_history_data"), stocks, nse_session or nse_calendar_date()
     )
-    print(f'OHLCV session ledger elapsed: {time.perf_counter() - prepared_at:.2f}s', flush=True)
+    print(f'OHLCV session ledger elapsed: {time.perf_counter() - prepared_at:.2f}s; CPU: {time.process_time() - prepared_cpu:.2f}s', flush=True)
 
     prepared_at = time.perf_counter()
+    prepared_cpu = time.process_time()
     try:
         eod2 = load_json('eod2_ohlcv_import_report.json', default={})
         adjusted_through = {symbol: item['end_date'] for symbol, item in eod2.get('symbol_history', {}).items()}
         repair_official_history(expected_sessions, resolve_path(OUTPUT_DIR), adjusted_through=adjusted_through)
     except (OSError, requests.RequestException, ValueError, TypeError, KeyError, AttributeError) as error:
         print(f'Official gap recovery skipped: {error}; continuing with provider sync.', flush=True)
-    print(f'OHLCV official recovery elapsed: {time.perf_counter() - prepared_at:.2f}s', flush=True)
+    print(f'OHLCV official recovery elapsed: {time.perf_counter() - prepared_at:.2f}s; CPU: {time.process_time() - prepared_cpu:.2f}s', flush=True)
 
     print(f"Syncing OHLCV for {len(stocks)} stocks (Hybrid Multi-Chunk Mode)...")
     counts = {"success": 0, "uptodate": 0, "error": 0}
+    prepared_at, prepared_cpu = time.perf_counter(), time.process_time()
     
     with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
         futures = {
@@ -256,6 +259,7 @@ def main():
                 logger.exception("OHLCV history failed for %s", futures[future])
 
     print(f"Done! Updated: {counts['success']} | UpToDate: {counts['uptodate']} | Errors: {counts['error']}")
+    print(f'OHLCV symbol sync elapsed: {time.perf_counter() - prepared_at:.2f}s; CPU: {time.process_time() - prepared_cpu:.2f}s', flush=True)
     return counts["error"] == 0
 
 if __name__ == "__main__":

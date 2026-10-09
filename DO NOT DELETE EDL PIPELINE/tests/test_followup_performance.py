@@ -2,7 +2,9 @@
 from collections import defaultdict
 from concurrent.futures import Future
 from datetime import datetime
+import gzip
 import json
+import os
 from pathlib import Path
 import random
 import sys
@@ -21,6 +23,7 @@ import build_chart_artifacts as charts
 import build_filing_history_artifact as filings
 import enrich_published_fields as published
 import fetch_all_ohlcv as fetch
+import filing_archives as archives
 import ohlcv_utils as ohlcv
 import pipeline_utils as utils
 from edl_pipeline.breadth.config import BreadthMethodology
@@ -182,6 +185,59 @@ class FollowupPerformanceTests(unittest.TestCase):
         self.assertTrue(all(prepared is None and error is None for _, prepared, error in result))
         executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
 
+    def test_breadth_pool_start_and_submission_failures_preserve_order(self):
+        stocks = [{'symbol':str(i)} for i in range(7)]
+        for failure in ('start', 1, 5):
+            with self.subTest(failure=failure):
+                executor = mock.Mock()
+                calls = 0
+                def submit(_, task):
+                    nonlocal calls
+                    calls += 1
+                    if calls == failure:
+                        raise RuntimeError('pool unavailable')
+                    future = Future(); future.set_result((task[0], None, None))
+                    return future
+                executor.submit.side_effect = submit
+                options = {'side_effect':RuntimeError('start failed')} if failure == 'start' else {'return_value':executor}
+                with mock.patch.object(breadth, 'ProcessPoolExecutor', **options):
+                    result = list(breadth._prepared_histories(stocks, Path('unused'), BreadthMethodology(), 2))
+                self.assertEqual([row[0] for row in result], [str(i) for i in range(7)])
+                if failure != 'start':
+                    executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+
+    def test_breadth_consumer_failure_does_not_retry_preparation(self):
+        executor = mock.Mock()
+        def submit(_, task):
+            future = Future(); future.set_result((task[0], None, None)); return future
+        executor.submit.side_effect = submit
+        with mock.patch.object(breadth, 'ProcessPoolExecutor', return_value=executor), \
+                mock.patch.object(breadth, '_prepare_stock', side_effect=AssertionError('must not retry')):
+            iterator = breadth._prepared_histories([{'symbol':str(i)} for i in range(5)],
+                                                  Path('unused'), BreadthMethodology(), 2)
+            self.assertEqual(next(iterator)[0], '0')
+            with self.assertRaisesRegex(ValueError, 'consumer failed'):
+                iterator.throw(ValueError('consumer failed'))
+        executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+
+    def test_archive_reuses_compression_without_changing_gzip_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); (root / 'filing_history_data').mkdir()
+            for content in (b'{"records":[]}', b'filing ' * 400000, os.urandom(2200000)):
+                (root / 'filing_history.json').write_bytes(content)
+                (root / 'filing_history_data/filing_history.json').write_bytes(content[:1000])
+                compressed = root / 'filing_history.json.gz'
+                utils.compress_file(root / 'filing_history.json', compressed)
+                expected = archives.prepare_filing_archives(root, root / 'old')
+                actual = archives.prepare_filing_archives(root, root / 'new', compressed_classified=compressed)
+                self.assertEqual(actual, expected)
+                self.assertEqual(tree_bytes(root / 'new'), tree_bytes(root / 'old'))
+                self.assertEqual(gzip.decompress((root / 'new' / (actual['classified'] + '.json.gz')).read_bytes()), content)
+                # An unsupported producer header uses the existing writer.
+                compressed.write_bytes(b'unsupported')
+                self.assertEqual(archives.prepare_filing_archives(root, root / 'fallback',
+                    compressed_classified=compressed), expected)
+
     def test_encoded_record_writer_keeps_exact_bytes_and_atomic_failure(self):
         records = [{'symbol':'₹','value':float('nan')}, {'symbol':'A','value':-0.0}]
         with tempfile.TemporaryDirectory() as directory:
@@ -229,6 +285,37 @@ class FollowupPerformanceTests(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError, 'classification failed'):
                         filings.main()
                 self.assertEqual((root / 'filing_history.json').read_bytes(), first)
+
+    def test_filing_spool_releases_raw_cache_aliases_before_next_company(self):
+        class RawFilings(list):
+            pass
+        references = []
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = {'updated_at':'2026-10-08','symbols':{symbol:{'filings':[
+                {'news_date':'2020-01-01','caption':'Corporate guarantee'}]} for symbol in ['A','B','C']}}
+            utils.save_json(root / 'filing_history_data/filing_history.json', source)
+            load = filings.load_json
+            classify = filings.classify_cached
+            def tracked_load(path, **kwargs):
+                value = load(path, **kwargs)
+                if 'symbols' in value:
+                    for record in value['symbols'].values():
+                        record['filings'] = RawFilings(record['filings'])
+                        references.append(weakref.ref(record['filings']))
+                return value
+            count = 0
+            def tracked_classify(*args, **kwargs):
+                nonlocal count
+                self.assertTrue(all(reference() is None for reference in references[:count]))
+                count += 1
+                return classify(*args, **kwargs)
+            with mock.patch.object(filings, 'BASE_DIR', str(root)), \
+                    mock.patch.object(filings, 'load_json', new=tracked_load), \
+                    mock.patch.object(filings, 'classify_cached', new=tracked_classify):
+                self.assertEqual(filings.main(), 0)
+            self.assertEqual(count, 3)
+            self.assertTrue(all(reference() is None for reference in references))
 
 
 if __name__ == '__main__':

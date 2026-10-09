@@ -1,21 +1,13 @@
-"""Retry invalid ScanX quotes; retain zero-volume quotes with unavailable candles."""
+"""Retry invalid ScanX quotes; retain quotes with wholly unavailable candles."""
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'src'))
 from edl_pipeline.quality import ohlc_error
-from edl_pipeline.transforms.fundamentals import get_optional_float
+from edl_pipeline.transforms.fundamentals import get_optional_float, unavailable_candle
 from fetch_dhan_data import fetch_market_snapshot
 from pipeline_utils import load_json, resolve_path, save_json
-
-
-def unavailable_candle(row):
-    """A retained LTP is not a session candle when OHLC is absent and volume is zero."""
-    ltp = get_optional_float(row.get('Ltp'))
-    return (all(row.get(key) is None for key in ('Open', 'High', 'Low'))
-            and get_optional_float(row.get('Volume', row.get('volume'))) == 0
-            and ltp is not None and ltp > 0)
 
 
 def quote_errors(rows, symbols):
@@ -65,7 +57,8 @@ def main():
             report['retry_error'] = str(error)
         report['errors'] = quote_errors(rows, symbols)
     report['unavailable_candles'] = [
-        {'symbol': row['Sym'], 'reason': 'zero volume with no session OHLC',
+        {'symbol': row['Sym'], 'reason': ('missing volume with no session OHLC'
+         if row.get('Volume', row.get('volume')) is None else 'zero volume with no session OHLC'),
          'ltp_session_verified': False, 'raw_quote': row}
         for row in rows if row.get('Sym') in symbols and unavailable_candle(row)]
     save_json('price_validation_report.json', report)

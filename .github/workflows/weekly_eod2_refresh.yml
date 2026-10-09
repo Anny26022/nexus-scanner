@@ -32,50 +32,8 @@ jobs:
             DO NOT DELETE EDL PIPELINE/requirements.txt
             tools/requirements-tijori.txt
 
-      - name: Restore prices history
-        id: prices-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            DO NOT DELETE EDL PIPELINE/ohlcv_data
-            DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
-            DO NOT DELETE EDL PIPELINE/delivery_history_data
-            DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
-          key: scanner-prices-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-fetch
-          restore-keys: |
-            scanner-prices-v1-${{ runner.os }}-
-
-      - name: Restore enrichment history
-        id: enrichment-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            DO NOT DELETE EDL PIPELINE/scanner_history_data
-            DO NOT DELETE EDL PIPELINE/filing_history_data
-            DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
-            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
-          key: scanner-enrichment-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-fetch
-          restore-keys: |
-            scanner-enrichment-v1-${{ runner.os }}-
-
-      # Never merge old combined files into a newer split cache. A partial
-      # split miss rebuilds only the missing group from its sources.
-      - name: Bootstrap from the previous combined cache
-        if: steps.prices-cache.outputs.cache-matched-key == '' && steps.enrichment-cache.outputs.cache-matched-key == ''
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            DO NOT DELETE EDL PIPELINE/ohlcv_data
-            DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
-            DO NOT DELETE EDL PIPELINE/delivery_history_data
-            DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
-            DO NOT DELETE EDL PIPELINE/scanner_history_data
-            DO NOT DELETE EDL PIPELINE/filing_history_data
-            DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
-            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
-          key: scanner-history-v1-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: |
-            scanner-history-v1-${{ runner.os }}-
+      - name: Restore refresh history
+        uses: ./.github/actions/restore-refresh-history
 
       - name: Select weekly EOD2 cache key
         id: eod2-cache-key
@@ -129,29 +87,12 @@ jobs:
           cd "DO NOT DELETE EDL PIPELINE"
           python run_full_pipeline.py --phase fetch --stage "${{ runner.temp }}/edl-refresh-${{ github.run_id }}-${{ github.run_attempt }}"
 
-      - name: Save prices history
+      - name: Save history after fetch
         if: always() && (steps.fetch.outcome == 'success' || steps.fetch.outcome == 'failure')
         continue-on-error: true
-        uses: actions/cache/save@v4
+        uses: ./.github/actions/save-refresh-history
         with:
-          path: |
-            DO NOT DELETE EDL PIPELINE/ohlcv_data
-            DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
-            DO NOT DELETE EDL PIPELINE/delivery_history_data
-            DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
-          key: scanner-prices-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-fetch
-
-      - name: Save enrichment history
-        if: always() && (steps.fetch.outcome == 'success' || steps.fetch.outcome == 'failure')
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            DO NOT DELETE EDL PIPELINE/scanner_history_data
-            DO NOT DELETE EDL PIPELINE/filing_history_data
-            DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
-            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
-          key: scanner-enrichment-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-fetch
+          phase: fetch
 
       - name: Build and publish validated data
         env:
@@ -167,17 +108,12 @@ jobs:
           cd "DO NOT DELETE EDL PIPELINE"
           python run_full_pipeline.py --phase build --stage "${{ runner.temp }}/edl-refresh-${{ github.run_id }}-${{ github.run_attempt }}"
 
-      - name: Save enrichment history
+      - name: Save history after build
         if: always() && steps.fetch.outcome == 'success'
         continue-on-error: true
-        uses: actions/cache/save@v4
+        uses: ./.github/actions/save-refresh-history
         with:
-          path: |
-            DO NOT DELETE EDL PIPELINE/scanner_history_data
-            DO NOT DELETE EDL PIPELINE/filing_history_data
-            DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
-            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
-          key: scanner-enrichment-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-build
+          phase: build
 
       - name: Refresh Tijori company overviews
         id: tijori_refresh
@@ -223,51 +159,10 @@ jobs:
           PYTHON
 
       - name: Commit and Push Results
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          # A refresh can run long enough for main to receive a merge.  Start
-          # the generated-data commit from that latest tip rather than
-          # rebasing binary artifacts after they have been committed.
-          git fetch origin main
-          # Mixed reset retains the generated working files while refreshing
-          # the index too, so unrelated code merged during this run is kept.
-          git reset --mixed origin/main
-          git add "DO NOT DELETE EDL PIPELINE/all_stocks_fundamental_analysis.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/sector_analytics.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/market_breadth.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/market_breadth_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/sector_breadth_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/market_breadth_contributions_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/breadth_universe_snapshot.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/all_indices_history_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/all_indices_list.json"
-          git add "DO NOT DELETE EDL PIPELINE/corporate_action_ledger.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/nse_corporate_actions.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/nse_corporate_action_adjustments.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/data_quality.json"
-          git add "DO NOT DELETE EDL PIPELINE/pipeline_report.json"
-          git add "DO NOT DELETE EDL PIPELINE/nse_universe_reconciliation.json"
-          git add "DO NOT DELETE EDL PIPELINE/mainboard_universe_report.json"
-          git add "DO NOT DELETE EDL PIPELINE/sme_market_data.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/nse_fno_ban.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/earnings_calendar.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/rs_rating_daily.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/ipo_screener.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/ipo_provider_listed_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/ipo_provider_details_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_listed_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_details_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/shareholding_history.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/quarterly_financial_history.json.gz"
-          git add reference/index-constituent-mappings.json.gz
-          git add reference/index-constituent-mappings.manifest.json
-          git add frontend/public/data/current.json frontend/public/data/revisions
-          git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
-          git add frontend/public/data/tijori/current.json frontend/public/data/tijori/revisions
-          # Published frontend data needs a Cloudflare build; do not suppress it with [skip ci].
-          git commit -m "Automated weekly adjusted OHLCV refresh" || echo "No changes to commit"
-          git push
+        uses: ./.github/actions/commit-refresh-outputs
+        with:
+          weekly: 'true'
+          commit-message: 'Automated weekly adjusted OHLCV refresh'
 
       - name: Upload Refresh Diagnostics
         if: always()

@@ -148,6 +148,15 @@ class MarketQuoteTests(unittest.TestCase):
             self.assertEqual(stock['close'], 11)
             self.assertEqual(stock['rupee_volume'], 11 * volume)
 
+    def test_unavailable_session_candle_never_promotes_nonpositive_ltp_to_session_close(self):
+        from edl_pipeline.transforms.fundamentals import analyze_stock
+        for ltp in (0, -1):
+            with self.subTest(ltp=ltp):
+                row = quote(Ltp=ltp, Open=None, High=None, Low=None, Volume=0)
+                stock = analyze_stock({'Symbol': 'BI'}, row, {}, {})
+                self.assertIsNone(stock['close'])
+                self.assertIsNone(stock['rupee_volume'])
+
     def test_wholly_missing_session_fields_preserve_price_without_inventing_a_candle(self):
         from edl_pipeline.transforms.fundamentals import analyze_stock
         from edl_pipeline.quality import ohlc_error

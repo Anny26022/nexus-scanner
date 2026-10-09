@@ -1,5 +1,6 @@
 """Small announcement summaries, paged evidence, and reusable immutable objects."""
-from collections import defaultdict
+from collections import defaultdict, deque
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timedelta, timezone
 import gzip
 import hashlib
@@ -9,6 +10,7 @@ import zlib
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from functools import lru_cache
+from multiprocessing import get_context
 
 from filing_classification import TAXONOMY, VERSION, classify_filings
 
@@ -86,11 +88,70 @@ def summary(filing, detail_page, stamp=None):
             'status': classification['status'], 'detailPage': detail_page}
 
 
-def build_announcements(payload, directory, symbols, reference_session, cache=None):
-    """Index filings through fetch time, independently of the EOD price cutoff."""
-    cutoff = publication_time(payload.get('updated_at'), reference_session)
+def _company_announcements(task):
+    symbol, entry, directory, cache, cutoff = task
     oldest = cutoff - timedelta(days=RECENT_DAYS)
     index_oldest = cutoff - timedelta(days=7)
+    used = set()
+    put = lambda value: put_object(directory, value, cache, used)
+    filings = entry.get('filings') or []
+    if any(not f.get('filingId') or f.get('classification', {}).get('version') != VERSION for f in filings):
+        filings = classify_filings(filings)
+    years = defaultdict(list)
+    for filing in filings:
+        stamp = filing_time(filing.get('news_date'))
+        if stamp and stamp <= cutoff:
+            years[stamp.astimezone(IST).year].append((filing, stamp))
+    recent, history, recent_index = [], {}, []
+    for year, rows in sorted(years.items(), reverse=True):
+        # Ascending pages keep old pages reusable as new filings arrive.
+        rows.sort(key=lambda item: (item[1], item[0]['filingId']))
+        pages = []
+        for start in range(0, len(rows), PAGE_SIZE):
+            page = rows[start:start + PAGE_SIZE]
+            details = put({'symbol': symbol, 'records': {f['filingId']: f for f, stamp in page}})
+            summaries = [summary(f, details, stamp) for f, stamp in page]
+            page_hash = put({'symbol': symbol, 'year': year, 'records': summaries})
+            pages.append({'summary': page_hash, 'details': details, 'count': len(page)})
+            for item, (_, stamp) in zip(summaries, page):
+                if stamp >= oldest:
+                    recent.append(item)
+                if stamp >= index_oldest:
+                    recent_index.append({'symbol': symbol, **item})
+        history[str(year)] = pages
+    recent.sort(key=lambda row: (row['publishedAt'], row['id']), reverse=True)
+    manifest = {'recent': put({'symbol': symbol, 'records': recent}),
+                'years': history, 'fetchStatus': entry.get('fetch_status', {})}
+    return symbol, manifest, recent_index, used
+
+
+def _company_results(tasks, workers):
+    if not workers:
+        yield from map(_company_announcements, tasks)
+        return
+    executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'))
+    pending = deque()
+    tasks = iter(tasks)
+    try:
+        for _ in range(2 * workers):
+            task = next(tasks, None)
+            if task is None:
+                break
+            pending.append(executor.submit(_company_announcements, task))
+        while pending:
+            yield pending.popleft().result()
+            task = next(tasks, None)
+            if task is not None:
+                pending.append(executor.submit(_company_announcements, task))
+    finally:
+        for future in pending:
+            future.cancel()
+        executor.shutdown(wait=True, cancel_futures=True)
+
+
+def build_announcements(payload, directory, symbols, reference_session, cache=None, *, workers=0):
+    """Index filings through fetch time, independently of the EOD price cutoff."""
+    cutoff = publication_time(payload.get('updated_at'), reference_session)
     used = set()
     put = lambda value: put_object(directory, value, cache, used)
     taxonomy = put({'version': VERSION, 'topics': TAXONOMY})
@@ -113,35 +174,15 @@ def build_announcements(payload, directory, symbols, reference_session, cache=No
                 yield symbol, {}
         entries = streamed_entries()
     recent_index, manifests = [], {}
-    for symbol, entry in entries:
-        filings = entry.get('filings') or []
-        if any(not f.get('filingId') or f.get('classification', {}).get('version') != VERSION for f in filings):
-            filings = classify_filings(filings)
-        years = defaultdict(list)
-        for filing in filings:
-            stamp = filing_time(filing.get('news_date'))
-            if stamp and stamp <= cutoff:
-                years[stamp.astimezone(IST).year].append((filing, stamp))
-        recent, history = [], {}
-        for year, rows in sorted(years.items(), reverse=True):
-            # Ascending pages keep old pages reusable as new filings arrive.
-            rows.sort(key=lambda item: (item[1], item[0]['filingId']))
-            pages = []
-            for start in range(0, len(rows), PAGE_SIZE):
-                page = rows[start:start + PAGE_SIZE]
-                details = put({'symbol': symbol, 'records': {f['filingId']: f for f, stamp in page}})
-                summaries = [summary(f, details, stamp) for f, stamp in page]
-                page_hash = put({'symbol': symbol, 'year': year, 'records': summaries})
-                pages.append({'summary': page_hash, 'details': details, 'count': len(page)})
-                for item, (_, stamp) in zip(summaries, page):
-                    if stamp >= oldest:
-                        recent.append(item)
-                    if stamp >= index_oldest:
-                        recent_index.append({'symbol': symbol, **item})
-            history[str(year)] = pages
-        recent.sort(key=lambda row: (row['publishedAt'], row['id']), reverse=True)
-        manifests[symbol] = {'recent': put({'symbol': symbol, 'records': recent}),
-                             'years': history, 'fetchStatus': entry.get('fetch_status', {})}
+    tasks = ((symbol, entry, directory, cache, cutoff) for symbol, entry in entries)
+    companies = _company_results(tasks, workers)
+    try:
+        for symbol, manifest, recent, company_used in companies:
+            manifests[symbol] = manifest
+            recent_index.extend(recent)
+            used.update(company_used)
+    finally:
+        companies.close()
     recent_index.sort(key=lambda row: (row['publishedAt'], row['id'], row['symbol']), reverse=True)
     index = put({'referenceSession': reference_session, 'publishedAt': cutoff.isoformat(),
                                    'sinceLastClose': reference_session + 'T15:30:00+05:30',

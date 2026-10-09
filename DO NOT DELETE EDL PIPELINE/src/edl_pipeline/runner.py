@@ -4,7 +4,8 @@ The public script entrypoint delegates here so the orchestration can be tested
 without shelling out to the full live pipeline.
 """
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from collections import deque
 import csv
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -16,7 +17,7 @@ import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from pipeline_utils import BASE_DIR, compress_file, save_json
+from pipeline_utils import BASE_DIR, compress_file, file_fingerprint, save_json
 from filing_archives import prepare_filing_archives
 import pipeline_utils
 
@@ -131,15 +132,36 @@ def run_script_lanes(lanes):
         name, scripts = next(iter(lanes.items()))
         return {name: run_script_sequence(scripts)}
 
-    # More logical chains must not increase top-level provider concurrency.
+    # Yield capacity between scripts, not only when a whole lane finishes.
+    # Keep the formerly disjoint high-fanout quote/news fetches disjoint;
+    # interleaving their CPU-only preparation must not stack provider pools.
+    bulk_fetches = {'fetch_all_ohlcv.py', 'fetch_new_announcements.py',
+                    'fetch_advanced_indicators.py', 'fetch_market_news.py'}
+    sequences = {name: iter(scripts) for name, scripts in lanes.items()}
+    ready = deque((name, next(scripts, None)) for name, scripts in sequences.items())
+    results = {name: {} for name in lanes}
     with ThreadPoolExecutor(max_workers=min(3, len(lanes)), thread_name_prefix="edl-fetch") as executor:
-        futures = {
-            name: executor.submit(run_script_sequence, scripts)
-            for name, scripts in lanes.items()
-        }
-        # Preserve lane declaration order in reports even if completion order
-        # differs. Script output itself remains visible live in Actions logs.
-        return {name: futures[name].result() for name in lanes}
+        pending = {}
+        while ready or pending:
+            for _ in range(len(ready)):
+                if len(pending) == min(3, len(lanes)):
+                    break
+                name, script = ready.popleft()
+                if script is None:
+                    continue
+                if script[0] in bulk_fetches and any(item[1][0] in bulk_fetches for item in pending.values()):
+                    ready.append((name, script))
+                    continue
+                pending[executor.submit(run_script, *script)] = (name, script)
+            if not pending:
+                continue
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                name, script = pending.pop(future)
+                results[name][script[0]] = future.result()
+                ready.append((name, next(sequences[name], None)))
+    # Reports retain lane and script declaration order, not completion order.
+    return results
 
 
 def compress_output(include_ohlcv_derived=True, prepared=None):
@@ -265,13 +287,18 @@ def write_pipeline_report(report):
     print("  Report: pipeline_report.json")
 
 
-def validate_final_artifacts(include_ohlcv_derived=True):
+def validate_final_artifacts(include_ohlcv_derived=True, prepared=None):
     specs = [
         spec
         for spec in FINAL_ARTIFACT_SPECS
         if include_ohlcv_derived or spec.path not in OHLCV_DERIVED_FINAL_PATHS
     ]
-    checks = validate_many(specs)
+    prepared = prepared or {}
+    reusable = {spec.path: prepared[spec.path][1] for spec in specs
+                if spec.path in prepared and prepared[spec.path][0] is not None
+                and file_fingerprint(Path(BASE_DIR) / spec.path) == prepared[spec.path][0]}
+    remaining = iter(validate_many([spec for spec in specs if spec.path not in reusable]))
+    checks = [reusable[spec.path] if spec.path in reusable else next(remaining) for spec in specs]
     failed = [check for check in checks if not check.ok]
     if failed:
         print("\nFINAL ARTIFACT VALIDATION")
@@ -505,14 +532,25 @@ def main(config=None, phase="all"):
     # Start best-effort work only after the fail-fast base build succeeds;
     # executor shutdown cannot then delay reporting a base-build failure.
     prepared = {}
+    prepared_checks = {}
     with ThreadPoolExecutor(max_workers=1, thread_name_prefix="edl-prepare") as preparation, \
             ThreadPoolExecutor(max_workers=2, thread_name_prefix="edl-build") as executor:
         # Both consume completed fetch inputs and write separate artifacts.
         # Neither reads or mutates the stock snapshot being enriched below.
+        def prepare_and_validate_filings():
+            sizes = prepare_filing_output()
+            spec = next(spec for spec in FINAL_ARTIFACT_SPECS if spec.path == 'filing_history.json.gz')
+            started = time.perf_counter()
+            digest = file_fingerprint(Path(BASE_DIR) / spec.path)
+            checks = validate_many([spec])
+            prepared_checks[spec.path] = (digest, checks[0])
+            print(f'  Early filing gzip validation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
+            return sizes
+
         def build_independent(name):
             result = run_script(name, "Build / independent", required=True)
             if name == 'build_filing_history_artifact.py' and result.ok and (Path(BASE_DIR) / 'filing_history.json').is_file():
-                prepared['filing_history.json'] = preparation.submit(prepare_filing_output)
+                prepared['filing_history.json'] = preparation.submit(prepare_and_validate_filings)
             return result
         independent = {
             name: executor.submit(build_independent, name)
@@ -565,7 +603,7 @@ def main(config=None, phase="all"):
 
     started = time.perf_counter()
     final_checks = validate_final_artifacts(
-        include_ohlcv_derived=config.fetch_ohlcv
+        include_ohlcv_derived=config.fetch_ohlcv, prepared=prepared_checks
     )
     print(f"  Final validation elapsed: {time.perf_counter() - started:.2f}s", flush=True)
     required_failed = any(result.required and not result.ok for result in results.values())

@@ -2,6 +2,10 @@
 from datetime import date, datetime
 from pathlib import Path
 from functools import lru_cache
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
+import os
 
 from ohlcv_utils import read_ohlcv_csv, symbol_csv_path, valid_ohlcv_values
 from pipeline_utils import BASE_DIR, load_json, save_json
@@ -26,13 +30,19 @@ def listing_day(value):
     return _listing_day(str(value))
 
 
-def enrich(stocks, bhavcopy, ledger, history_report, history_dir):
+def _price_inputs(bhavcopy, ledger):
     session = bhavcopy.get("as_of_date")
     prices = {(row["symbol"], row["date"]): row for row in bhavcopy.get("ohlcv_records", [])}
     dividends = {}
     for row in ledger.get("records", []):
         if "DIVIDEND" in row.get("action_type", "") and session and row["ex_date"] <= session:
             dividends.setdefault(row["symbol"], []).append(row)
+    return prices, dividends
+
+
+def enrich(stocks, bhavcopy, ledger, history_report, history_dir, *, prepared=None):
+    session = bhavcopy.get("as_of_date")
+    prices, dividends = _price_inputs(bhavcopy, ledger) if prepared is None else prepared
     for stock in stocks:
         symbol = stock.get("Symbol") or stock.get("symbol")
         price = prices.get((symbol, session), {})
@@ -100,14 +110,57 @@ def enrich(stocks, bhavcopy, ledger, history_report, history_dir):
     return stocks
 
 
+def _initialize_enrichment(bhavcopy, ledger, history_report, history_dir):
+    global _ENRICHMENT_INPUTS
+    _ENRICHMENT_INPUTS = (bhavcopy, ledger, history_report, history_dir, _price_inputs(bhavcopy, ledger))
+
+
+def _enrich_chunk(stocks):
+    bhavcopy, ledger, history_report, history_dir, prepared = _ENRICHMENT_INPUTS
+    return enrich(stocks, bhavcopy, ledger, history_report, history_dir, prepared=prepared)
+
+
+def enrich_parallel(stocks, bhavcopy, ledger, history_report, history_dir, workers):
+    """Workers compute only; the parent retains stock order and the sole write."""
+    chunks = iter(stocks[start:start + 8] for start in range(0, len(stocks), 8))
+    pending = deque()
+    with ProcessPoolExecutor(max_workers=workers, mp_context=get_context('spawn'),
+                             initializer=_initialize_enrichment,
+                             initargs=(bhavcopy, ledger, history_report, history_dir)) as executor:
+        try:
+            for _ in range(2 * workers):
+                chunk = next(chunks, None)
+                if chunk is not None:
+                    pending.append(executor.submit(_enrich_chunk, chunk))
+            offset = 0
+            while pending:
+                for result in pending.popleft().result():
+                    stock = stocks[offset]
+                    stock.clear()
+                    stock.update(result)
+                    offset += 1
+                chunk = next(chunks, None)
+                if chunk is not None:
+                    pending.append(executor.submit(_enrich_chunk, chunk))
+        finally:
+            for future in pending:
+                future.cancel()
+    return stocks
+
+
 def main():
     root = Path(BASE_DIR)
     def optional(name):
         path = root / name
         return load_json(path) if path.exists() else {}
     stocks = load_json(root / "all_stocks_fundamental_analysis.json")
-    enrich(stocks, optional("nse_delivery_data.json"), optional("corporate_action_ledger.json"),
-           optional("eod2_ohlcv_import_report.json"), root / "ohlcv_data")
+    inputs = (stocks, optional("nse_delivery_data.json"), optional("corporate_action_ledger.json"),
+              optional("eod2_ohlcv_import_report.json"), root / "ohlcv_data")
+    workers = min(2, os.cpu_count() or 1)
+    if workers > 1 and len(stocks) >= 256:
+        enrich_parallel(*inputs, workers)
+    else:
+        enrich(*inputs)
     save_json(root / "all_stocks_fundamental_analysis.json", stocks, ensure_ascii=False)
     return True
 

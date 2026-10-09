@@ -31,8 +31,8 @@ from edl_pipeline.breadth.config import load_methodology
 from filing_classification import source_label_mapping
 from build_filing_history_artifact import classification_rules
 
-installed = Path(pipeline_utils.__file__).parent
-assert installed.is_relative_to(Path(__import__('sys').prefix)), installed
+installed = Path(pipeline_utils.__file__).resolve().parent
+assert installed.is_relative_to(Path(__import__('sys').prefix).resolve()), installed
 for module in pkgutil.walk_packages(edl_pipeline.__path__, edl_pipeline.__name__ + '.'):
     importlib.import_module(module.name)
 for module in ('announcement_artifacts', 'build_chart_artifacts', 'nse_delivery',

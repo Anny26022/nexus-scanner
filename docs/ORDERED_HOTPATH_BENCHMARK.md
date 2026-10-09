@@ -68,18 +68,19 @@ is needed to measure the actual critical-path reduction on the hosted runner.
 
 ## Reproduce
 
-Verification: 450 pipeline tests (one existing skip), 56 publication tests,
+Verification: 452 pipeline tests (one existing skip), 56 publication tests,
 13 cache-retention tests, 68 frontend tests, frontend build, Python compilation,
 and wheel-only pipeline/breadth/filing imports. Added regressions cover nullable
 predicate boundaries, ordered volume replay, archive byte identity/fallback,
-raw filing-list release, mixed adjustment counts, and all pool failure points.
+raw filing-list release, mixed adjustment counts, all pool failure points,
+and isolation of selected benchmark revisions and their relative imports.
 
 ```sh
-python tools/benchmark_pipeline_followup.py --baseline-ref fa997041 \
+python3 tools/benchmark_pipeline_followup.py --baseline-ref fa997041 \
   --component breadth --data-root '/path/to/read-only/EDL data' --count 100000
-python tools/benchmark_pipeline_followup.py --baseline-ref fa997041 \
+python3 tools/benchmark_pipeline_followup.py --baseline-ref fa997041 \
   --component filings --filing-count 1000 --filing-companies 40
-python tools/benchmark_pipeline_followup.py --component cache \
+python3 tools/benchmark_pipeline_followup.py --component cache \
   --data-root '/path/to/read-only/EDL data' --count 100000
 ```
 

@@ -27,6 +27,39 @@ from test_breadth_v2 import make_ohlcv
 
 
 class RefreshRuntimeTests(unittest.TestCase):
+    def test_followup_benchmark_default_matches_documented_baseline(self):
+        benchmark = runpy.run_path(str(ROOT.parent / 'tools/benchmark_pipeline_followup.py'))
+        self.assertEqual(benchmark['BASELINE'], 'fa997041b047200a845e7840ef066f8f19f1f70b')
+
+    def test_followup_benchmark_isolates_relative_helpers_and_selected_revisions(self):
+        benchmark = runpy.run_path(str(ROOT.parent / 'tools/benchmark_pipeline_followup.py'))
+        loader = benchmark['baseline']
+        from edl_pipeline.breadth import aggregates as current
+        relative = 'DO NOT DELETE EDL PIPELINE/src/edl_pipeline/breadth/'
+        def source(command, **kwargs):
+            ref, path = command[-1].split(':', 1)
+            if path.endswith('/aggregates.py'):
+                return f'def percentage(*args): return {ref!r}\n'
+            self.assertTrue(path.endswith('/mbi.py'))
+            return 'from .aggregates import percentage\ndef probe(): return percentage(1, 2)\n'
+        with mock.patch.dict(sys.modules), \
+                mock.patch.object(benchmark['subprocess'], 'check_output', side_effect=source) as read, \
+                mock.patch.dict(loader.__globals__, {'BASELINE':'frozen-a'}):
+            # Loading MBI first must load its selected aggregate helpers too.
+            first = loader(relative + 'mbi.py')
+            aggregates = loader(relative + 'aggregates.py')
+            self.assertIs(first.percentage, aggregates.percentage)
+            self.assertEqual(first.probe(), 'frozen-a')
+            self.assertIsNot(first.percentage, current.percentage)
+            self.assertIs(sys.modules['edl_pipeline.breadth.aggregates'], current)
+            self.assertEqual(read.call_count, 2)
+            loader.__globals__['BASELINE'] = 'frozen-b'
+            second = loader(relative + 'mbi.py')
+            self.assertEqual(second.probe(), 'frozen-b')
+            self.assertNotEqual(first.__package__, second.__package__)
+            self.assertEqual(first.probe(), 'frozen-a')
+            self.assertEqual(read.call_count, 4)
+
     def test_tail_decoration_replays_full_recursive_and_rolling_state(self):
         method = BreadthMethodology()
         accumulator = BreadthAccumulator(method)

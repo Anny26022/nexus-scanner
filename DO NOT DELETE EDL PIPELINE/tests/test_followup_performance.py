@@ -196,13 +196,22 @@ class FollowupPerformanceTests(unittest.TestCase):
                     calls += 1
                     if calls == failure:
                         raise RuntimeError('pool unavailable')
-                    future = Future(); future.set_result((task[0], None, None))
+                    future = Future(); future.set_result((task[0], 'worker', None))
                     return future
                 executor.submit.side_effect = submit
                 options = {'side_effect':RuntimeError('start failed')} if failure == 'start' else {'return_value':executor}
-                with mock.patch.object(breadth, 'ProcessPoolExecutor', **options):
+                def serial(task):
+                    if failure != 'start':
+                        executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
+                    return (task[0], 'serial', None)
+                with mock.patch.object(breadth, 'ProcessPoolExecutor', **options), \
+                        mock.patch.object(breadth, '_prepare_stock', side_effect=serial) as prepare:
                     result = list(breadth._prepared_histories(stocks, Path('unused'), BreadthMethodology(), 2))
                 self.assertEqual([row[0] for row in result], [str(i) for i in range(7)])
+                first_serial = 1 if failure == 5 else 0
+                self.assertEqual([row[1] for row in result], ['worker'] * first_serial + ['serial'] * (7 - first_serial))
+                self.assertEqual([call.args[0][0] for call in prepare.call_args_list],
+                                 [str(i) for i in range(first_serial, 7)])
                 if failure != 'start':
                     executor.shutdown.assert_called_once_with(wait=True, cancel_futures=True)
 

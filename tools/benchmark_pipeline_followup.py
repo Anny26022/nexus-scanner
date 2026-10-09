@@ -1,4 +1,4 @@
-"""Offline, frozen-input comparisons against a selected Git baseline (default PR #50).
+"""Offline, frozen-input comparisons against a selected Git baseline (default PR #51).
 
 Run with the pipeline's Python environment. All writes are temporary; optional
 --data-root histories are read only. No provider requests or publication upload.
@@ -24,16 +24,35 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 EDL = ROOT / 'DO NOT DELETE EDL PIPELINE'
 sys.path[:0] = [str(EDL), str(EDL / 'src'), str(ROOT / 'frontend')]
-BASELINE = '40e02547e91300b917b61a014af413360fb44592'
+BASELINE = 'fa997041b047200a845e7840ef066f8f19f1f70b'
 
 
 def baseline(relative):
-    module = types.ModuleType('baseline_' + Path(relative).stem)
-    module.__file__ = str(ROOT / relative)
+    name = 'baseline_' + Path(relative).stem
+    package = None
     if '/breadth/' in relative:
-        module.__package__ = 'edl_pipeline.breadth'
+        package = '_benchmark_breadth_' + hashlib.sha256(BASELINE.encode()).hexdigest()[:12]
+        if package not in sys.modules:
+            namespace = types.ModuleType(package)
+            namespace.__path__ = []
+            sys.modules[package] = namespace
+        name = package + '.' + Path(relative).stem
+        if name in sys.modules:
+            return sys.modules[name]
+        if Path(relative).stem == 'mbi':
+            baseline(str(Path(relative).with_name('aggregates.py')))
+    module = types.ModuleType(name)
+    module.__file__ = str(ROOT / relative)
+    module.__package__ = package
     source = subprocess.check_output(['git', 'show', f'{BASELINE}:{relative}'], cwd=ROOT, text=True)
-    exec(compile(source, module.__file__, 'exec'), module.__dict__)
+    if package:
+        sys.modules[name] = module
+    try:
+        exec(compile(source, module.__file__, 'exec'), module.__dict__)
+    except BaseException:
+        if package:
+            sys.modules.pop(name, None)
+        raise
     return module
 
 

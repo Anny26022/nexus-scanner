@@ -48,18 +48,25 @@ def require_equal(actual, expected, label):
 
 def fetch_schedule(report):
     """Replay measured durations without sleeping or sending provider requests."""
-    from edl_pipeline import runner
-    from edl_pipeline.artifacts import OHLCV_FETCH_LANE, PHASE2_SCRIPTS, REQUIRED_PHASE2_SCRIPTS
     data = json.loads(report.read_text())
+    if data.get('config', {}).get('fetch_ohlcv') is False:
+        raise SystemExit('--run-report requires a completed full OHLCV fetch report; '
+                         'diagnostic reports cannot replay these lanes.')
+    from edl_pipeline.artifacts import OHLCV_FETCH_LANE, PHASE2_SCRIPTS
     scripts = data.get('scripts', {})
     lanes = {'enrichment': ['fetch_company_filings.py'], 'ohlcv': list(OHLCV_FETCH_LANE),
              'reference': ['fetch_ipo_provider_data.py', 'fetch_scanx_ipo_data.py'],
              'independent': [name for name in PHASE2_SCRIPTS if name != 'fetch_company_filings.py']}
     missing = [name for names in lanes.values() for name in names if name not in scripts]
-    if data.get('config', {}).get('fetch_ohlcv') is False or missing:
+    if missing:
         raise SystemExit('--run-report requires a completed full OHLCV fetch report; '
                          'diagnostic or incomplete reports cannot replay these lanes.'
-                         + (f' Missing scripts: {", ".join(missing)}' if missing else ''))
+                         + f' Missing scripts: {", ".join(missing)}')
+    failed = [name for names in lanes.values() for name in names
+              if scripts[name].get('required') and not scripts[name].get('ok', False)]
+    if failed:
+        raise SystemExit('--run-report cannot replay failed required fetch scripts: ' + ', '.join(failed))
+    from edl_pipeline import runner
     durations = {name: scripts[name]['elapsed'] + scripts[name].get('validation_elapsed', 0)
                  for names in lanes.values() for name in names}
     availability = [0.] * 3
@@ -77,17 +84,17 @@ def fetch_schedule(report):
             pass
         def submit(self, function, name, phase, required):
             future = Future()
-            ends[future] = (clock + durations[name], required)
+            ends[future] = (clock + durations[name], required, scripts[name].get('ok', False))
             return future
     def wait(pending, **kwargs):
         nonlocal clock
         clock = min(ends[future][0] for future in pending)
         done = {future for future in pending if ends[future][0] <= clock}
         for future in done:
-            future.set_result(runner.ScriptResult(True, ends[future][1]))
+            future.set_result(runner.ScriptResult(ends[future][2], ends[future][1]))
         return done, set(pending) - done
     with mock.patch.object(runner, 'ThreadPoolExecutor', Executor), mock.patch.object(runner, 'wait', wait):
-        results = runner.run_script_lanes({lane: [(name, '', name in REQUIRED_PHASE2_SCRIPTS) for name in names]
+        results = runner.run_script_lanes({lane: [(name, '', scripts[name].get('required', False)) for name in names]
                                           for lane, names in lanes.items()})
     require_equal([(lane, list(names)) for lane, names in results.items()], list(lanes.items()), 'Fetch lane order')
     print(f'Fetch scheduling fixed-duration model: {max(availability):.3f}s -> {clock:.3f}s '
@@ -105,12 +112,12 @@ def main():
     args = parser.parse_args()
     if min(args.symbols, args.announcement_symbols, args.filings) < 1:
         parser.error('sample sizes must be positive')
+    if args.run_report:
+        fetch_schedule(args.run_report)
     import announcement_artifacts as announcements
     import filing_classification as classification
     import standardize_stock_artifact as standardize
     import enrich_published_fields as enrichment
-    if args.run_report:
-        fetch_schedule(args.run_report)
     old_standardize = baseline(args.baseline_ref, 'standardize_stock_artifact')
     old_classification = baseline(args.baseline_ref, 'filing_classification')
     with gzip.open(EDL / 'all_stocks_fundamental_analysis.json.gz', 'rt') as handle:

@@ -18,8 +18,9 @@ or suppressing required chart construction.
 - Build independent company announcement objects with two bounded process workers
   on builds with at least 256 symbols and two spare worker slots after reserving
   a core for the parent and up to two candle workers (at least five CPUs).
-  Four-core runners retain the original in-process announcement path. Retain ordered parent assembly,
-  exact JSON/gzip settings, object hashes and cache verification/pruning rules.
+  Four-core runners retain the original in-process announcement path; all builds
+  preserve ordered parent assembly, exact JSON/gzip settings, object hashes and
+  cache verification/pruning rules.
 - Enrich published fields in bounded, ordered chunks using two workers on large
   builds. Existing formulas and history filtering are reused; only the parent writes.
 - Validate the finalized filing gzip during chart construction. Reuse the exact
@@ -58,7 +59,7 @@ enable a one-worker announcement pool. These isolated timings do not establish
 combined chart-stage performance on a four-core runner; its existing path stays intact.
 Equivalence checks remain
 active under Python `-O`. Scheduling replay rejects diagnostic/incomplete reports
-with a clear message rather than assuming missing OHLCV script durations.
+and failed required fetches with a clear message before computing durations.
 
 ## Reproduce
 

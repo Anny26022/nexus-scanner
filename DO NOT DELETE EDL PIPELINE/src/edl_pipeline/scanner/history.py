@@ -9,6 +9,8 @@ from datetime import date
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from pipeline_utils import finite_json
+
 from .earnings import EARNINGS_FIELDS, select_observation
 from .shareholding import SHAREHOLDING_FIELDS, SHAREHOLDING_CHANGE_FIELDS, select_observation as select_shareholding_observation
 from edl_pipeline.schemas import PUBLIC_FINANCIAL_FIELDS
@@ -52,7 +54,7 @@ def _write_gzip_json(path: Path, payload: dict) -> None:
         temporary = Path(handle.name)
     try:
         with gzip.open(temporary, "wt", encoding="utf-8") as handle:
-            json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
+            json.dump(finite_json(payload), handle, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
         temporary.replace(path)
     finally:
         temporary.unlink(missing_ok=True)

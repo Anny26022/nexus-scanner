@@ -8,6 +8,8 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
+from pipeline_utils import resource_path
+
 VERSION = 5
 
 # Stable IDs, group, display name, and deliberately specific text rules.
@@ -99,7 +101,7 @@ def _rule_matches(text):
 
 @lru_cache(maxsize=1)
 def source_label_mapping():
-    return json.loads(Path(__file__).with_name("filing_source_labels.json").read_text())["fields"]
+    return json.loads(resource_path("filing_source_labels.json").read_text())["fields"]
 
 
 _WRAPPERS = {"board_intimation", "board_outcome", "board_change", "press_release", "general_announcement"}

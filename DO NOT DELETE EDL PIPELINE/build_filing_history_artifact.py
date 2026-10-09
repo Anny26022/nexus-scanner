@@ -16,7 +16,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from pipeline_utils import BASE_DIR, file_fingerprint, finite_json, load_json, save_json, save_json_records
+from pipeline_utils import BASE_DIR, file_fingerprint, finite_json, load_json, resource_path, save_json, save_json_records
 from filing_classification import VERSION, TAXONOMY, classify_filing, classify_filings
 from filing_documents import enrich_documents
 
@@ -61,7 +61,7 @@ def valid_classification(value):
 
 def classification_rules():
     # Implementation-only edits must not invalidate the historical archive.
-    return [CACHE_VERSION, VERSION, file_fingerprint(ROOT / 'filing_source_labels.json')]
+    return [CACHE_VERSION, VERSION, file_fingerprint(resource_path('filing_source_labels.json'))]
 
 
 def progress(label, started):
@@ -162,7 +162,7 @@ def main() -> int:
     started = progress("document enrichment", started)
     rules = classification_rules()
     # Upgrade the deployed entry cache without rerunning rules when its source hash matches.
-    legacy_rules = [file_fingerprint(ROOT / name) for name in ('filing_classification.py', 'filing_source_labels.json')]
+    legacy_rules = [file_fingerprint(resource_path(name)) for name in ('filing_classification.py', 'filing_source_labels.json')]
     stats = Counter()
     # Keep only one company's expanded classifications resident. Spool its
     # exact finite JSON bytes, then assemble them in the original sorted output

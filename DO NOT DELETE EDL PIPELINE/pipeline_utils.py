@@ -41,6 +41,12 @@ def file_fingerprint(path):
     return digest.hexdigest()
 
 
+def resource_path(name):
+    """Use the canonical checkout input, or its unchanged installed-wheel copy."""
+    source = Path(__file__).resolve().with_name(name)
+    return source if source.is_file() else source.parent / "edl_pipeline" / "data" / name
+
+
 def _default_base_path():
     module_dir = Path(__file__).resolve().parent
     cwd = Path.cwd()

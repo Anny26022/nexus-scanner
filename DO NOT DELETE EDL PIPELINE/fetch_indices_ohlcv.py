@@ -4,15 +4,16 @@ Merges deep history with Today's live snapshot from ScanX API.
 """
 
 import requests
+import csv
 from pipeline_utils import http_session
 import sys
 import time
 from collections import Counter
-from datetime import datetime
+from datetime import date, datetime, time as clock_time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from ohlcv_utils import discard_weekend_rows, is_nse_cash_session, merge_rows_by_date, nse_calendar_date, read_ohlcv_csv, rows_from_tick_data, write_ohlcv_csv
+from ohlcv_utils import discard_weekend_rows, merge_rows_by_date, nse_now, read_ohlcv_csv, rows_from_tick_data, write_ohlcv_csv
 from pipeline_utils import ensure_dir, get_headers, load_json, resolve_path
 
 # --- Configuration ---
@@ -24,6 +25,7 @@ CHUNK_DAYS = 120
 MAX_THREADS = 60
 FETCH_ATTEMPTS = 3
 MIN_CURRENT_EQUITY_COVERAGE = 0.90
+NSE_DAILY_REPORT_FILE = "nse_daily_ohlcv_report.json"
 
 def get_safe_sym(sym, index_id=None, disambiguate=False):
     safe_symbol = "".join(c if c.isalnum() else "_" for c in str(sym))
@@ -55,26 +57,74 @@ def fetch_chunk(payload):
     raise RuntimeError("Index OHLCV chunk failed after retries") from last_error
 
 
-def has_current_equity_session(directory, session, symbols=None):
-    """Whether the stock feed has a trustworthy current NSE session.
+def _last_equity_date(path):
+    """Read the header and bounded tail of a pipeline-owned, sorted daily CSV."""
+    try:
+        with Path(path).open("rb") as handle:
+            header = next(csv.reader([handle.readline(4096).decode("utf-8-sig")], strict=True), [])
+            date_column = header.index("Date")
+            handle.seek(0, 2)
+            start = max(0, handle.tell() - 4096)
+            handle.seek(start)
+            lines = handle.read(4096).decode("utf-8").splitlines()
+        if start:
+            lines = lines[1:]  # The first tail line may be truncated.
+        lines = [line for line in lines if line.strip()]
+        if not lines:
+            return None
+        row = next(csv.reader([lines[-1]], strict=True), [])
+        value = row[date_column]
+        return value if date.fromisoformat(value).isoformat() == value else None
+    except (OSError, UnicodeError, csv.Error, ValueError, IndexError):
+        return None
 
-    The index tick-history endpoint can lag its cash-market snapshot after
-    close.  We only label that snapshot as today's index candle when the same
-    provider has already produced today's daily candle for almost the complete
-    equity universe.  This prevents a prior close becoming a holiday candle.
-    """
+
+def _equity_session_coverage(directory, symbols=None):
     paths = (
         [Path(directory) / f"{symbol}.csv" for symbol in symbols]
         if symbols is not None else list(Path(directory).glob("*.csv"))
     )
-    if not paths:
-        return False
-    current = 0
-    for path in paths:
-        rows = read_ohlcv_csv(path)
-        if rows and rows[-1].get("Date") == session:
-            current += 1
-    return current / len(paths) >= MIN_CURRENT_EQUITY_COVERAGE
+    return Counter(_last_equity_date(path) for path in paths), len(paths)
+
+
+def has_current_equity_session(directory, session, symbols=None):
+    """Require observed coverage for at least 90% of the current equity master."""
+    counts, total = _equity_session_coverage(directory, symbols)
+    return bool(total) and counts[session] / total >= MIN_CURRENT_EQUITY_COVERAGE
+
+def index_snapshot_session(directory, symbols=None, official_report=None, now=None):
+    """Choose the snapshot date from observed equity sessions, never midnight alone.
+
+    Before the cash open, an undated vendor snapshot still describes the latest
+    completed session. Accept the official report's date only when the report
+    was retrieved today, is no more than seven calendar days old, and at least
+    90% of current-master histories end on that session. This also covers
+    weekends and short exchange holidays without trusting a stale cache.
+    """
+    instant = nse_now(now)
+    today = instant.date().isoformat()
+    counts, total = _equity_session_coverage(directory, symbols)
+    def covered(session):
+        return bool(total) and counts[session] / total >= MIN_CURRENT_EQUITY_COVERAGE
+
+    if covered(today):
+        return today
+    report = official_report if isinstance(official_report, dict) else {}
+    candidate = str(report.get("as_of_date") or "")
+    try:
+        candidate_date = date.fromisoformat(candidate)
+    except ValueError:
+        candidate_date = None
+    age_days = (instant.date() - candidate_date).days if candidate_date else None
+    if (instant.time() < clock_time(9, 15)
+        and report.get("available") is True
+        and age_days is not None
+        and 1 <= age_days <= 7
+        and str(report.get("retrieved_at") or "").startswith(today)
+        and covered(candidate)):
+        return candidate
+    return None
+
 
 def main():
     ensure_dir(OUTPUT_DIR)
@@ -88,7 +138,6 @@ def main():
     tasks = []
     global_start_ts = 215634600 # 1976
     global_end_ts = int(time.time())
-    today_str = nse_calendar_date()
     try:
         current_symbols = {
             str(item.get("Symbol") or "") for item in load_json(MASTER_FILE)
@@ -96,9 +145,14 @@ def main():
         }
     except (OSError, ValueError, TypeError):
         current_symbols = None
-    append_live_snapshot = is_nse_cash_session() or has_current_equity_session(
-        resolve_path("ohlcv_data"), today_str, current_symbols
+    try:
+        official_report = load_json(NSE_DAILY_REPORT_FILE)
+    except (OSError, ValueError, TypeError):
+        official_report = {}
+    snapshot_session = index_snapshot_session(
+        resolve_path("ohlcv_data"), current_symbols, official_report
     )
+    print(f"Index snapshot session: {snapshot_session or 'unconfirmed; using dated history only'}")
     
     existing_data_cache = {}
     safe_symbol_counts = Counter(
@@ -171,12 +225,12 @@ def main():
         fetched_rows = new_data.get(safe_sym, [])
         all_rows = base_rows + fetched_rows
         
-        # 2. Add TODAY'S snapshot from all_indices_list.json
-        # Ltp is Close for the running day
+        # 2. Overlay the undated snapshot only for the confirmed session.
+        # Before the cash open this can be the preceding day's close.
         live_rows = []
-        if append_live_snapshot:
+        if snapshot_session:
             live_rows.append({
-                'Date': today_str,
+                'Date': snapshot_session,
                 'Open': idx.get('Open'),
                 'High': idx.get('High'),
                 'Low': idx.get('Low'),
@@ -190,7 +244,7 @@ def main():
     if failed_chunks:
         print(f"Error: {failed_chunks} index history chunk(s) failed after retries.")
         return False
-    print("Successfully updated all index CSVs with Today's Live data.")
+    print("Successfully updated index CSVs with dated history and confirmed snapshots.")
     return True
 
 if __name__ == "__main__":

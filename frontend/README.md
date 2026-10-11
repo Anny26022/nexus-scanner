@@ -392,6 +392,29 @@ The backend needs the requested frozen revision, condition implementation, and s
 
 Publish through the shared R2 publisher and permit browser access from the app origin. Scanner-only releases have no chart URL template. Report chart unavailability instead of silently using unrelated older data.
 
+Announcements use the same object store. A schema-4 scanner-only release cannot
+provide announcement summaries, history, or category filters. Configure the
+Actions secrets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and the
+repository variable `R2_PUBLIC_BASE_URL`, then run the full refresh to publish a
+schema-7 release. The public base must serve the uploaded objects with CORS for
+the frontend origin. Do not put storage credentials into `VITE_*` variables.
+
+For a missing-file error in a schema-7 release, verify the exact `dataIndexUrl`
+and content-addressed `objectUrlTemplate` references, HTTP status and CORS.
+Do not redirect a missing JSON/gzip asset to the SPA or substitute an older
+revision. The UI distinguishes unpublished data, failed downloads and a genuine
+empty period; deliberate retries evict failed reads from the object cache.
+
+### Workspace layout
+
+The app uses system typography, shared light/dark tokens and native modal dialogs.
+Desktop results fill the remaining workspace height; narrow screens keep a stable,
+horizontally scrollable table instead of dropping columns. Pagination and column
+widths stay mounted across loading, errors, empty results and short final pages.
+Previous-page data is retained only for page-only changes to the same screen and
+revision; exports are disabled while it updates. Appearance choices are stored
+locally alongside existing screen preferences. Screening formulas are unchanged.
+
 ## Local history recovery
 
 Git does not contain full raw OHLCV, delivery, or filings caches. Actions cache speeds up runners but can be evicted. Durable private R2 raw-history backups and automatic restoration remain planned; derived chart files are not a complete raw backup.

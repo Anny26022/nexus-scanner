@@ -36,7 +36,7 @@ it('keeps loaded listings and their count visible after a failed refetch', async
   await act(async () => { await client.refetchQueries({queryKey: ['ipos', revision]}); });
   await waitFor(() => expect(client.getQueryState(['ipos', revision])?.status).toBe('error'));
   expect(screen.getByText('Example Industries')).toBeInTheDocument();
-  expect(screen.getByText('1 listings')).toBeInTheDocument();
+  expect(screen.getByRole('region', {name: 'IPO listings'}).querySelector('.result-count')).toHaveTextContent(/^1new listings$/);
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(screen.queryByText(/No new listings/)).not.toBeInTheDocument();
 });

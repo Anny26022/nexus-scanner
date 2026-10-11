@@ -3,6 +3,12 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { ConditionCatalogModal } from '../components/ConditionCatalogModal';
 import { ScreenerModal } from '../components/ScreenerModal';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+vi.mock('../data/conditionCatalog', async importOriginal => {
+  const original = await importOriginal<typeof import('../data/conditionCatalog')>();
+  // This fixture deliberately restores advanced rows to exercise their editors.
+  return {...original, isRetiredTechnicalCondition: () => false,
+    NEXUS_CONDITION_CATALOG: [...original.ADVANCED_TECHNICAL_CONDITIONS, ...original.NEXUS_CONDITION_CATALOG]};
+});
 
 afterEach(cleanup);
 function active(conditionId: string) {

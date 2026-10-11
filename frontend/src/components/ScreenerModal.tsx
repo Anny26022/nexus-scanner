@@ -1,7 +1,8 @@
 import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
-import React, { memo, useCallback, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { X, SlidersHorizontal, Library } from 'lucide-react';
+import React, { memo, useCallback, useRef, useState } from 'react';
+import { Dialog } from './Dialog';
+import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
+import { X, SlidersHorizontal, Library, ChevronDown } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
@@ -35,8 +36,9 @@ const readableUnit = (unit?: string) => {
   return unit ? (labels[unit] ?? unit) : '';
 };
 
-const MultiSelectDropdown = ({ options, value, onChange }: any) => {
+const MultiSelectDropdown = ({ options, value, onChange, label }: {options: NonNullable<ParameterSpec['options']>; value: string[]; onChange: (value: string[]) => void; label: string}) => {
   const [isOpen, setIsOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   const toggle = (val: string) => {
     const arr = value || [];
@@ -48,13 +50,21 @@ const MultiSelectDropdown = ({ options, value, onChange }: any) => {
   };
   
   return (
-    <div className="relative">
+    <div className="relative" onKeyDown={event => {
+      if (event.key === 'Escape' && isOpen) {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsOpen(false);
+        trigger.current?.focus();
+      }
+    }}>
       <button 
+        ref={trigger} type="button" aria-label={`${label}: ${value?.length ? `${value.length} selected` : 'Select options'}`} aria-expanded={isOpen}
         onClick={() => setIsOpen(!isOpen)}
         className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none max-w-[120px] shrink-0 truncate transition-colors cursor-pointer flex items-center gap-1"
       >
         <span className="truncate">{value?.length ? `${value.length} selected` : 'Select...'}</span>
-        <svg className="w-2.5 h-2.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+        <ChevronDown size={12} />
       </button>
       
       {isOpen && (
@@ -64,14 +74,13 @@ const MultiSelectDropdown = ({ options, value, onChange }: any) => {
              {options.map((o: any) => {
                const selected = value?.includes(o.value);
                return (
-                 <div
+                 <label
                    key={o.value}
-                   onClick={() => toggle(o.value)}
                    className={`flex items-center gap-1.5 px-2 py-1 cursor-pointer transition-colors ${selected ? 'bg-teal-50 text-teal-800' : 'text-gray-700 hover:bg-gray-50'}`}
                  >
-                   <input type="checkbox" checked={selected} readOnly className="w-3 h-3 rounded border-gray-300 text-teal-600 pointer-events-none" />
+                   <input type="checkbox" checked={selected} onChange={() => toggle(o.value)} className="w-3 h-3 rounded border-gray-300 text-teal-600" />
                    <span className="truncate font-medium">{o.label}</span>
-                 </div>
+                 </label>
                );
              })}
           </div>
@@ -108,11 +117,12 @@ const FilterParameter = memo(function FilterParameter({ defId, p, val, updatePar
       onChange={e => updateParam(defId, p.id, e.target.value)}
       className="w-24 bg-white border border-gray-200 rounded-md px-1.5 py-0.5 text-[11px]" />;
   } else if (p.type === 'multiselect') {
-    control = <MultiSelectDropdown options={p.options || []} value={val}
+    control = <MultiSelectDropdown label={p.label} options={p.options || []} value={val}
       onChange={(newVal: string[]) => updateParam(defId, p.id, newVal)} />;
   } else if (p.type === 'select') {
     control = <select
         value={val}
+        aria-label={p.label}
         onChange={(e) => updateParam(defId, p.id, e.target.value)}
         className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 max-w-[110px] shrink-0 truncate transition-colors cursor-pointer"
       >
@@ -136,9 +146,11 @@ const FilterParameter = memo(function FilterParameter({ defId, p, val, updatePar
   }
 
   return (
-    <div key={p.id} title={p.description ?? p.label} className="flex items-center shrink-0">
-      {control}
-      {p.unit && <span className="ml-1 text-[10px] text-gray-400 whitespace-nowrap">{readableUnit(p.unit)}</span>}
+    <div key={p.id} title={p.description ?? p.label} className="parameter-control">
+      <span className="parameter-label">{p.label}</span>
+      <div className="flex items-center gap-1">{control}
+        {p.unit && <span className="text-[10px] text-gray-400 whitespace-nowrap">{readableUnit(p.unit)}</span>}
+      </div>
     </div>
   );
 });
@@ -148,7 +160,7 @@ const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle,
   const checked = !!active;
 
   return (
-    <div className="grid grid-cols-[minmax(10rem,1fr)_minmax(0,auto)] items-start gap-x-3 py-2 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 px-2 -mx-2 rounded transition-colors group">
+    <div className="filter-row group" data-active={checked}>
       <label className="flex items-center gap-2.5 cursor-pointer min-w-0 pt-1">
         <input
           type="checkbox"
@@ -156,7 +168,7 @@ const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle,
           onChange={() => toggle(def)}
           className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
         />
-        <span title={def.description} className={`text-[12px] font-semibold truncate ${checked ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-800'}`}>
+        <span title={def.description} className={`text-[12px] font-semibold ${checked ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-800'}`}>
           {def.label}:
         </span>
       </label>
@@ -184,6 +196,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const [category, setCategory] = useState<ConditionCategory | 'all'>('all');
   const [localMap, setLocalMap] = useState<Record<string, ActiveCondition>>(activeConditionsMap);
   const [localMode, setLocalMode] = useState<MatchMode>(matchMode);
+  const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
 
   const toggle = useCallback((def: ConditionDef) => {
@@ -235,141 +248,44 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const catalogToUse = activeTab === 'custom' ? NEXUS_CONDITION_CATALOG : PRESET_CATALOG;
 
   const filtered = catalogToUse.filter((c) => {
-    return activeTab === 'presets' || category === 'all' || c.category === category;
+    return (activeTab === 'presets' || category === 'all' || c.category === category)
+      && (!search.trim() || `${c.label} ${c.description}`.toLowerCase().includes(search.trim().toLowerCase()));
   });
 
   const handleReset = () => setLocalMap({});
 
-  const validationError = conditionValidationError(localMap);
+  const validationError = hasUnavailableConditions(localMap) ? UNAVAILABLE_CONDITIONS_MESSAGE : conditionValidationError(localMap);
   const handleApply = () => {
     if (validationError) return;
     onApply(localMap, localMode);
     onClose();
   };
 
-  return createPortal(
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[100] bg-gray-900/60 backdrop-blur-sm transition-opacity"
-      />
-
-      {/* Modal Panel Container */}
-      <div className="fixed inset-0 z-[101] flex items-center justify-center p-4 sm:p-6" onClick={onClose}>
-        <div
-          className="bg-white rounded-xl shadow-2xl flex flex-col w-full max-w-7xl overflow-hidden border border-gray-200"
-          style={{ maxHeight: '90vh' }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* ── Top Control Bar ── */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 bg-white">
-            {/* Left: Mode Toggle */}
-            <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
-              <button
-                onClick={() => setActiveTab('custom')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
-                  activeTab === 'custom' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <SlidersHorizontal className="w-3 h-3" />
-                Custom Filters
-              </button>
-              <button
-                onClick={() => setActiveTab('presets')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors ${
-                  activeTab === 'presets' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Library className="w-3 h-3" />
-                Pre-built Scans
-              </button>
-            </div>
-
-            {/* Right: Close */}
-            <div className="flex items-center">
-              <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-md text-gray-400 hover:text-gray-600 transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* ── Categories & Match Mode ── */}
-          {activeTab === 'custom' && (
-            <div className="px-5 py-2.5 flex items-center justify-between border-b border-gray-100 bg-[#f8fcfb]">
-              {/* Compact condition categories */}
-              <div className="flex flex-wrap items-center rounded-md border border-teal-600 overflow-hidden bg-white shadow-sm">
-                {CATEGORY_TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setCategory(tab.id)}
-                    className={`px-4 py-1 text-[11px] font-semibold transition-colors ${
-                      category === tab.id
-                        ? 'bg-teal-600 text-white'
-                        : 'text-gray-600 hover:bg-teal-50 hover:text-teal-700'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Match Mode (AND/OR) */}
-              <div className="flex items-center gap-2 text-[11px] font-semibold text-gray-500">
-                Match:
-                <div className="flex bg-gray-200 rounded border border-gray-300 p-0.5 overflow-hidden">
-                  <button
-                    onClick={() => setLocalMode('all')}
-                    className={`px-3 py-0.5 transition-colors ${localMode === 'all' ? 'bg-white text-gray-900 rounded-sm shadow-sm' : 'hover:text-gray-900'}`}
-                  >
-                    AND (All)
-                  </button>
-                  <button
-                    onClick={() => setLocalMode('any')}
-                    className={`px-3 py-0.5 transition-colors ${localMode === 'any' ? 'bg-white text-gray-900 rounded-sm shadow-sm' : 'hover:text-gray-900'}`}
-                  >
-                    OR (Any)
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto p-5 bg-white overflow-x-hidden">
-            <div className={`grid gap-x-8 gap-y-1 ${activeTab === 'presets' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 xl:grid-cols-2'}`}>
-              {filtered.map(def => (
-                <FilterRow key={def.id} def={def} active={localMap[def.id]}
-                  showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />
-              ))}
-            </div>
-            
-            {filtered.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <p className="text-sm font-semibold text-gray-500">No {activeTab === 'custom' ? 'filters' : 'scans'} in this category</p>
-                <p className="text-xs text-gray-400 mt-1">Try selecting a different tab</p>
-              </div>
-            )}
-          </div>
-
-        {validationError && <p role="alert" className="px-6 py-2 text-sm text-red-600">{validationError}</p>}
-          {/* ── Footer ── */}
-          <div className="flex items-center justify-center gap-6 px-6 py-4 border-t border-gray-100 bg-white">
-            <button
-              onClick={handleReset}
-              className="px-8 py-2 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50 text-[12px] font-bold transition-colors shadow-sm"
-            >
-              Reset
-            </button>
-            <button
-              onClick={handleApply}
-              disabled={Boolean(validationError)}
-              className="px-8 py-2 rounded-full bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-bold transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-teal-600"
-            >
-              Apply
-            </button>
-          </div>
-        </div>
+  return <Dialog label="Screen filters" onClose={onClose}>
+    <div className="dialog-header"><div><h2>Refine your screen</h2><p>Select conditions and adjust their parameters.</p></div><button type="button" className="icon-button" aria-label="Close filters" onClick={onClose}><X size={20} /></button></div>
+    <div className="filter-modal-tabs" role="group" aria-label="Filter source">
+      <button aria-pressed={activeTab === 'custom'} onClick={() => {setActiveTab('custom'); setSearch('');}}><SlidersHorizontal className="inline mr-2" size={14} />Custom Filters</button>
+      <button aria-pressed={activeTab === 'presets'} onClick={() => {setActiveTab('presets'); setSearch('');}}><Library className="inline mr-2" size={14} />Pre-built Scans</button>
+      <div className="match-mode" role="group" aria-label="Match mode"><span>Match</span><button aria-pressed={localMode === 'all'} onClick={() => setLocalMode('all')}>AND (All)</button><button aria-pressed={localMode === 'any'} onClick={() => setLocalMode('any')}>OR (Any)</button></div>
+    </div>
+    <div className="filter-modal-options">
+      <label className="query-input"><input aria-label="Search filters" placeholder="Search filters" value={search} onChange={event => setSearch(event.target.value)} /></label>
+      {activeTab === 'custom' && <div className="filter-categories" role="group" aria-label="Filter categories">{CATEGORY_TABS.map(tab => <button key={tab.id} aria-pressed={category === tab.id} onClick={() => setCategory(tab.id)}>{tab.label}</button>)}</div>}
+    </div>
+    <div className="filter-modal-content">
+      <UnavailableConditions conditions={localMap} onRemove={key => setLocalMap(current => {
+        const next = {...current};
+        delete next[key];
+        return next;
+      })} />
+      <div className="grid grid-cols-1 gap-x-8 xl:grid-cols-2">
+        {filtered.map(def => <FilterRow key={def.id} def={def} active={localMap[def.id]} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}
       </div>
-    </>,
-    document.body
-  );
+      {!filtered.length && <div className="data-state"><h2>No matching {activeTab === 'custom' ? 'filters' : 'scans'}</h2><p>Try a different category or search.</p></div>}
+    </div>
+    {validationError && !hasUnavailableConditions(localMap) && <p role="alert" className="px-6 py-2 text-sm text-red-600">{validationError}</p>}
+    <div className="dialog-footer"><span className="cell-muted text-xs">{Object.keys(localMap).length} selected</span>
+      <div className="flex gap-2"><button onClick={handleReset} className="button button-secondary">Reset</button><button onClick={handleApply} disabled={Boolean(validationError)} className="button button-primary">Apply</button></div>
+    </div>
+  </Dialog>;
 };

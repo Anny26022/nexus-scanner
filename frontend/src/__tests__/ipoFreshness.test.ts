@@ -1,6 +1,38 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { gzipSync } from 'node:zlib';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
+
+it('accepts browser-decoded gzip catalogues without decompressing them twice', async () => {
+  const manifest = {revision: 'c'.repeat(64), schemaVersion: 4, sessionDate: '2026-10-09', totalStocks: 1,
+    datasetUrl: '/stocks.json', iposUrl: '/ipos.json.gz'};
+  const payload = {records: [{symbol: 'AVTNPL', name: 'Avt Natural Products', close: 94.78}]};
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ok: true, json: async () => manifest})
+    .mockResolvedValueOnce({ok: true, arrayBuffer: async () => bytes.buffer, headers: new Headers({'Content-Encoding': 'gzip'})}));
+  const {realAdapter} = await import('../api/realAdapter');
+  expect((await realAdapter.getIpoCatalogue()).records[0]).toMatchObject({symbol: 'AVTNPL', currentPrice: 94.78});
+});
+
+it('still accepts raw gzip catalogues', async () => {
+  const manifest = {revision: 'd'.repeat(64), schemaVersion: 4, sessionDate: '2026-10-09', totalStocks: 0,
+    datasetUrl: '/stocks.json', iposUrl: '/ipos.json.gz'};
+  const bytes = Uint8Array.from(gzipSync(JSON.stringify({records: []})));
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ok: true, json: async () => manifest})
+    .mockResolvedValueOnce({ok: true, arrayBuffer: async () => bytes.buffer, headers: new Headers()}));
+  const {realAdapter} = await import('../api/realAdapter');
+  expect((await realAdapter.getIpoCatalogue()).records).toEqual([]);
+});
+
+it('rejects uncompressed JSON without gzip encoding at a gzip URL', async () => {
+  const manifest = {revision: 'e'.repeat(64), schemaVersion: 4, sessionDate: '2026-10-09', totalStocks: 0,
+    datasetUrl: '/stocks.json', iposUrl: '/ipos.json.gz'};
+  const bytes = new TextEncoder().encode('{"records":[]}');
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ok: true, json: async () => manifest})
+    .mockResolvedValueOnce({ok: true, arrayBuffer: async () => bytes.buffer, headers: new Headers()}));
+  const {realAdapter} = await import('../api/realAdapter');
+  await expect(realAdapter.getIpoCatalogue()).rejects.toThrow('IPO catalogue unavailable');
+});
 
 it('maps detail freshness by matched provider ID and exposes only endpoint names', async () => {
   const revision = 'a'.repeat(64);

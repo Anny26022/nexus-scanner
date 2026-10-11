@@ -82,3 +82,44 @@ it('reads paginated history and taxonomy without downloading evidence', async ()
   expect(fetcher.mock.calls.some(([url]) => url.includes(hash('f')))).toBe(false);
   await expect(realAdapter.getAnnouncementHistory('TEST', 2026, 1)).rejects.toThrow('page unavailable');
 });
+
+it('reports a scanner-only release as unpublished without requesting invented file paths', async () => {
+  const {fetcher, values} = fixture();
+  const {dataIndexUrl: _index, objectUrlTemplate: _objects, ...scannerOnly} = manifest;
+  values['/data/current.json'] = {...scannerOnly, schemaVersion: 4};
+  const {realAdapter} = await import('../api/realAdapter');
+  await expect(realAdapter.getAnnouncements('TEST')).rejects.toMatchObject({reason: 'not_published'});
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it('classifies announcement index body read failures as retryable downloads', async () => {
+  const {fetcher, values} = fixture();
+  fetcher.mockImplementation(async url => url === '/index.json'
+    ? {...response(null), json: async () => {throw new TypeError('body stream failed');}}
+    : response(values[url]));
+  const {realAdapter} = await import('../api/realAdapter');
+  await expect(realAdapter.getAnnouncements('TEST')).rejects.toMatchObject({reason: 'download_failed'});
+});
+
+it('identifies missing announcement objects and retries cleanly without a poisoned cache', async () => {
+  const {fetcher, values} = fixture();
+  const target = `https://cdn.example.com/objects/${hash('e')}.json.gz`;
+  let missing = true;
+  fetcher.mockImplementation(async url => {
+    if (url === target && missing) return {...response(null), ok: false, status: 404};
+    return response(values[url]);
+  });
+  const {realAdapter} = await import('../api/realAdapter');
+  await expect(realAdapter.getAnnouncements('TEST')).rejects.toMatchObject({reason: 'not_found', message: expect.stringContaining('announcement file is missing')});
+  missing = false;
+  await expect(realAdapter.getAnnouncements('TEST')).resolves.toMatchObject({records: [row]});
+});
+
+it('does not parse an HTML SPA fallback as an announcement index', async () => {
+  const {fetcher, values} = fixture();
+  fetcher.mockImplementation(async url => url === '/index.json'
+    ? {...response(null), json: async () => {throw new SyntaxError('Unexpected <');}}
+    : response(values[url]));
+  const {realAdapter} = await import('../api/realAdapter');
+  await expect(realAdapter.getAnnouncements('TEST')).rejects.toMatchObject({reason: 'not_found', message: expect.stringContaining('host may be returning a page')});
+});

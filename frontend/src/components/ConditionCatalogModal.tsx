@@ -121,7 +121,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
   const activeCount = Object.keys(localConditionsMap).length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/40 backdrop-blur-xs animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-xs animate-fade-in">
       <div className="bg-white border border-slate-200/90 rounded-2xl w-full max-w-4xl lg:max-w-5xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         {/* Normal Standard Header Bar with Title & Close (X) Button */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white">

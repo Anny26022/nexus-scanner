@@ -73,7 +73,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
               : !rows.length ? <tr><td colSpan={8}><div className="data-state"><SearchX size={28} /><h2>No equities matched</h2><p>Adjust your filters or choose a broader universe.</p></div></td></tr>
               : rows.map(row => <tr key={row.symbol}>
                 <td><div className="company-cell"><SymbolWithLogo symbol={row.symbol} name={row.name} />
-                  <div className="company-tools">{row.isFno && <span className="fno-label">F&O</span>}<button type="button" className="icon-button filing-button" aria-label={`View ${row.symbol} announcements`} title="View announcements" onClick={() => setFilingSymbol(row.symbol)} disabled={busy}><FileText size={15} /></button></div></div></td>
+                  <div className="company-tools">{row.isFno && <span className="fno-label">F&amp;O</span>}<button type="button" className="icon-button filing-button" aria-label={`View ${row.symbol} announcements`} title="View announcements" onClick={() => setFilingSymbol(row.symbol)} disabled={busy}><FileText size={14} strokeWidth={1.8} /></button></div></div></td>
                 <td><div className={row.sector === 'Unclassified' ? 'cell-muted truncate' : 'cell-label truncate'} title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></td>
                 <td className="numeric cell-strong">₹{row.close.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                 <td className={`numeric ${row.changePct == null ? 'cell-muted' : row.changePct >= 0 ? 'positive' : 'negative'}`}>{row.changePct == null ? 'N/A' : `${row.changePct >= 0 ? '+' : ''}${row.changePct.toFixed(2)}%`}</td>

@@ -176,6 +176,8 @@
 .result-count strong { font-size: 17px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -.4px; }
 .result-universe { color: var(--muted); }
 .results-actions { display: flex; align-items: center; gap: 7px; }
+.results-actions .button { min-height: 28px; padding-inline: 8px; gap: 5px; border-radius: 5px; font-size: 11px; }
+.results-actions .button svg { width: 14px; height: 14px; }
 .fetch-status { font-size: 10px; color: var(--muted); min-width: 90px; }
 .table-viewport { display: flex; flex-direction: column; height: clamp(360px, calc(100dvh - 345px), 780px); min-width: 0; }
 .table-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }

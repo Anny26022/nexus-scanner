@@ -66,7 +66,7 @@ const ipoColumns: IpoColumn[] = [
   {id:'gmp',label:'GMP',group:'Performance',value:row=>rupees(row.ipoResearch?.provider?.gmp)},
   {id:'gmpPct',label:'GMP %',group:'Performance',value:row=>{const value=row.ipoResearch?.provider?.gmpPct; return value == null ? '—' : `${amount(value,'%')}`;}},
   {id:'anchorLockInEnd',label:'Anchor lock-in end',group:'Performance',value:row=>text(row.anchorLockInEnd)},
-  {id:'anchorLockInDays',label:'Anchor lock-in days',group:'Performance',value:row=>amount(row.anchorLockInCalendar)},
+  {id:'anchorLockInDays',label:'Anchor unlock dates',group:'Performance',value:row=>row.anchorLockInCalendar?.filter(item=>item.unlockDate).map(item=>dateOnly(item.unlockDate)).join(', ') || '—'},
   {id:'nextAnchorLockIn',label:'Next anchor lock-in',group:'Performance',value:row=>text(row.nextAnchorLockInDate)},
   {id:'allotmentStatus',label:'Allotment status',group:'Allotment',value:row=>text(row.ipoResearch?.ipoDecode?.allotmentStatus)},
   {id:'allotmentDate',label:'Allotment date',group:'Allotment',value:row=>dateOnly(row.ipoResearch?.ipoDecode?.allotmentDate ?? row.ipoResearch?.scanx?.allotmentDate)},

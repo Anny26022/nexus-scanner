@@ -265,6 +265,16 @@ class RealDataAdapter {
           const decodedIssue = detailData.issue?.ipo;
           return {
             symbol:r.symbol, name:r.name || r.company_name || '', listingDate:r.listing_date || '',
+            isin: r.isin ?? undefined,
+            securityId: r.security_id ?? undefined,
+            listingAgeCalendarDays: finiteAmount(r.listing_age_calendar_days),
+            anchorLockInEnd: r.anchor_lock_in_end ?? null,
+            nextAnchorLockInDate: r.next_anchor_lock_in_date ?? null,
+            anchorLockInCalendar: Array.isArray(r.anchor_lock_in_calendar) ? r.anchor_lock_in_calendar.map((item: any) => ({
+              listingDate: item.listing_date ?? null,
+              unlockDate: item.unlock_date ?? null,
+              tranche: finiteAmount(item.tranche),
+            })) : null,
             currentPrice:r.close ?? 0, turnoverCrore:r.rupee_volume == null ? 0 : r.rupee_volume / 10_000_000,
             deliveryPct:r.delivery_percent ?? null,
             sector:r.sector || 'Unclassified', industry:r.industry || 'Unclassified', marketCapCrore:r.market_cap_crore ?? 0,

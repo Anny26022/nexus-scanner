@@ -8,7 +8,7 @@ import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterS
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 import { PRESET_CATALOG } from '../data/presetCatalog';
-import { isAvailableCondition, isAvailableFilter } from '../utils/filterAvailability';
+import { availableFilterParameters, isAvailableCondition } from '../utils/filterAvailability';
 
 interface ScreenerModalProps {
   isOpen: boolean;
@@ -187,8 +187,10 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
 const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle, updateParam }: FilterRowProps) {
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const checked = !!active;
-  const available = isAvailableFilter(def) || Boolean(active && isAvailableCondition(active));
-  const parameters = active?.parameters ?? Object.fromEntries(def.parameters.map(p => [p.id, p.defaultValue]));
+  const supportedParameters = availableFilterParameters(def);
+  const editable = supportedParameters !== null || Boolean(active && isAvailableCondition(active));
+  const available = active ? isAvailableCondition(active) : editable;
+  const parameters = active?.parameters ?? supportedParameters ?? Object.fromEntries(def.parameters.map(p => [p.id, p.defaultValue]));
 
   return (
     <div className="filter-row group" data-active={checked} data-unavailable={!available} data-preset={!showParameters}>
@@ -196,7 +198,7 @@ const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle,
         <input
           type="checkbox"
           checked={checked}
-          disabled={!available}
+          disabled={!editable && !checked}
           onChange={() => toggle(def)}
           className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
         />
@@ -212,11 +214,11 @@ const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle,
       </button>}
 
       {/* Inputs keep their own compact groups and wrap inside this row when needed. */}
-      {available && showParameters && def.parameters && def.parameters.length > 0 && (
+      {editable && showParameters && def.parameters && def.parameters.length > 0 && (
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
           {def.parameters.map(p => (
             <FilterParameter key={p.id} defId={def.id} parameters={parameters} p={p}
-              val={active ? active.parameters[p.id] : p.defaultValue} updateParam={updateParam} />
+              val={parameters[p.id]} updateParam={updateParam} />
           ))}
         </div>
       )}
@@ -245,9 +247,8 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         delete next[def.id];
         return next;
       }
-      if (!isAvailableFilter(def)) return prev;
-      const params: Record<string, any> = {};
-      def.parameters?.forEach((p) => (params[p.id] = p.defaultValue));
+      const params = availableFilterParameters(def);
+      if (!params) return prev;
       return {
         ...prev,
         [def.id]: { instanceId: `${def.id}_${Date.now()}`, conditionId: def.id, parameters: params },
@@ -260,8 +261,8 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === condId);
       const existing = prev[condId];
       if (!existing && def) {
-        const params: Record<string, any> = {};
-        def.parameters.forEach((p) => (params[p.id] = p.defaultValue));
+        const params = availableFilterParameters(def);
+        if (!params) return prev;
         params[paramId] = value;
         if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
           params.value = breadthMetricDefault(value);

@@ -233,7 +233,7 @@ export interface IPORow {
   isin?: string;
   securityId?: string | number;
   listingDate: string;
-  listingAgeCalendarDays?: number;
+  listingAgeCalendarDays?: number | null;
   currentPrice: number;
   turnoverCrore: number;
   deliveryPct?: number | null;
@@ -242,7 +242,7 @@ export interface IPORow {
   marketCapCrore: number;
   ipoDetailStatus?: { lastSuccessAt: string | null; failedEndpoints: string[] };
   anchorLockInEnd?: string | null;
-  anchorLockInCalendar?: number | null;
+  anchorLockInCalendar?: Array<{listingDate: string | null; unlockDate: string | null; tranche: number | null}> | null;
   nextAnchorLockInDate?: string | null;
   ipoResearch?: {
     issuePrice?: number | null;

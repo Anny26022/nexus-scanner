@@ -1,4 +1,7 @@
 import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
+import { PRESET_CATALOG } from '../data/presetCatalog';
+
+const presetIds = new Set(PRESET_CATALOG.map(preset => preset.id));
 
 type Truth = boolean | null;
 export interface SnapshotStock extends StockRow {
@@ -110,7 +113,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'misc_exclude_circuit': metadata = true; fn = s => !s.circuitLimit ? null : !p.circuitBands.includes(s.circuitLimit.trim().replace('%','')); break;
     case 'misc_fno_only': metadata = true; fn = s => s.isFno == null ? null : s.isFno === (p.isFno === 'true'); break;
     default:
-      if (!c.conditionId.startsWith('lib-')) return null;
+      if (!presetIds.has(c.conditionId)) return null;
       fn = s => s.presetMatches[c.conditionId] ?? null;
       return c.isNegated ? s => { const v = fn(s); return v == null ? null : !v; } : fn;
   }

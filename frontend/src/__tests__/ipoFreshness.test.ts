@@ -3,6 +3,25 @@ import { gzipSync } from 'node:zlib';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
 
+it('maps IPO identity, listing age, and the anchor unlock schedule from live catalogue keys', async () => {
+  const manifest = {revision: '9'.repeat(64), schemaVersion: 4, sessionDate: '2026-10-09', totalStocks: 2,
+    datasetUrl: '/stocks.json', iposUrl: '/ipos.json'};
+  const payload = {records: [{symbol: 'TEST', isin: 'INE123', security_id: 1234,
+    listing_age_calendar_days: 14, anchor_lock_in_end: null, next_anchor_lock_in_date: '2026-12-25',
+    anchor_lock_in_calendar: [{listing_date: '2026-09-25', unlock_date: '2026-12-25', tranche: '30'}],
+  }, {symbol: 'MISSING'}]};
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ok: true, json: async () => manifest})
+    .mockResolvedValueOnce({ok: true, json: async () => payload}));
+  const {realAdapter} = await import('../api/realAdapter');
+  const [row, missing] = (await realAdapter.getIpoCatalogue()).records;
+  expect(row).toMatchObject({isin: 'INE123', securityId: 1234, listingAgeCalendarDays: 14,
+    anchorLockInEnd: null, nextAnchorLockInDate: '2026-12-25',
+    anchorLockInCalendar: [{listingDate: '2026-09-25', unlockDate: '2026-12-25', tranche: 30}],
+  });
+  expect(missing.anchorLockInCalendar).toBeNull();
+  expect(missing.listingAgeCalendarDays).toBeNull();
+});
+
 it('keeps the issue registrar and converts ScanX financial strings to finite amounts', async () => {
   const manifest = {revision: 'f'.repeat(64), schemaVersion: 4, sessionDate: '2026-10-09', totalStocks: 1,
     datasetUrl: '/stocks.json', iposUrl: '/ipos.json'};

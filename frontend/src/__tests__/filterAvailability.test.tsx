@@ -9,11 +9,12 @@ import { isAvailableCondition, isAvailableFilter } from '../utils/filterAvailabi
 afterEach(cleanup);
 
 it('keeps published filters and presets available but disables backend-only defaults', () => {
-  expect(NEXUS_CONDITION_CATALOG.filter(isAvailableFilter)).toHaveLength(24);
+  expect(NEXUS_CONDITION_CATALOG.filter(isAvailableFilter)).toHaveLength(25);
   expect(PRESET_CATALOG).toHaveLength(45);
   expect(PRESET_CATALOG.every(isAvailableFilter)).toBe(true);
   expect(isAvailableCondition({instanceId:'ma', conditionId:'MA_STACK', parameters:{periods:'50,150,200',maType:'EMA',priceAbove:false}})).toBe(false);
   expect(hasUnavailableConditions({unknown:{instanceId:'unknown',conditionId:'UNKNOWN',parameters:{}}})).toBe(true);
+  expect(hasUnavailableConditions({stale:{instanceId:'stale',conditionId:'lib-removed-preset',parameters:{}}})).toBe(true);
 });
 
 it('disables backend rows, hides their parameters and leaves supported filters selectable', () => {
@@ -38,12 +39,39 @@ it('blocks backend-only parameter settings and allows correction without losing 
   const period = within(screen.getByRole('checkbox', {name:'RVOL (Volume vs Average):'}).closest('.filter-row') as HTMLElement)
     .getByRole('spinbutton', {name:'Avg days'});
   fireEvent.change(period, {target:{value:'50'}});
+  expect(period.closest('.filter-row')).toHaveAttribute('data-unavailable', 'true');
+  expect(period).toBeEnabled();
   expect(screen.getByRole('button', {name:'Apply'})).toBeDisabled();
   expect(screen.getByRole('alert')).toHaveTextContent('Backend-dependent filters are temporarily disabled');
   fireEvent.change(period, {target:{value:'20'}});
+  expect(period.closest('.filter-row')).toHaveAttribute('data-unavailable', 'false');
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', {name:'Apply'}));
   expect(apply.mock.calls[0][0].VOLUME_VS_AVG.parameters.avgDays).toBe(20);
+});
+
+it('offers a supported SMA period and keeps stale SMA settings editable for recovery', () => {
+  const apply = vi.fn();
+  const view = render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={apply} />);
+  const checkbox = screen.getByRole('checkbox', {name: 'Price vs SMA:'});
+  const row = checkbox.closest('.filter-row') as HTMLElement;
+  expect(checkbox).toBeEnabled();
+  expect(within(row).getByRole('spinbutton', {name: 'SMA period'})).toHaveValue(50);
+  fireEvent.click(checkbox);
+  fireEvent.click(screen.getByRole('button', {name: 'Apply'}));
+  expect(apply.mock.calls[0][0].PRICE_VS_SMA.parameters.period).toBe(50);
+  view.unmount();
+  render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{PRICE_VS_SMA: {
+    instanceId: 'saved', conditionId: 'PRICE_VS_SMA', parameters: {period: 150, persistDays: 1, comparison: 'ABOVE'},
+  }}} matchMode="all" onApply={apply} />);
+  const savedRow = screen.getByRole('checkbox', {name: 'Price vs SMA:'}).closest('.filter-row') as HTMLElement;
+  expect(savedRow).toHaveAttribute('data-unavailable', 'true');
+  const period = within(savedRow).getByRole('spinbutton', {name: 'SMA period'});
+  expect(period).toHaveValue(150);
+  expect(screen.getByRole('button', {name: 'Apply'})).toBeDisabled();
+  fireEvent.change(period, {target: {value: '200'}});
+  expect(savedRow).toHaveAttribute('data-unavailable', 'false');
+  expect(screen.getByRole('button', {name: 'Apply'})).toBeEnabled();
 });
 
 it('keeps pre-built scans enabled in the same dialog', () => {

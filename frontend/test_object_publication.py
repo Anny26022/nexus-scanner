@@ -126,3 +126,10 @@ class ObjectPublicationTests(unittest.TestCase):
             with patch('chart_publication.subprocess.run', return_value=Mock(stdout=f'{old}.json.gz\t1\n')):
                 with self.assertRaisesRegex(RuntimeError, 'different size'):
                     store.upload_objects(root)
+
+    def test_r2_upload_avoids_post_put_head(self):
+        store = R2Store.__new__(R2Store); store.env = {}
+        with patch('chart_publication.subprocess.run') as run:
+            store.run('copyto', 'source', 'charts:test/object')
+        self.assertIn('--s3-no-head', run.call_args.args[0])
+        self.assertIn('--s3-no-check-bucket', run.call_args.args[0])

@@ -15,7 +15,6 @@ import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search } from 'lucide-react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
-import { AnnouncementFilterControl } from './AnnouncementFilterControl';
 import type { AnnouncementFilter } from '../api/announcements';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
 
@@ -146,8 +145,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
           <input aria-label="Scanner query" value={queryText} onChange={event => setQueryText(event.target.value)}
             onKeyDown={event => { if (event.key === 'Enter') void handleRun(); }} placeholder="e.g. P/E < 20 AND EPS > 10" /></span></label>
         <div className="screen-buttons">
-          {(filterCount > 0 || activeQuery || announcementFilter) && <button className="button button-ghost" onClick={handleReset}><RotateCcw size={14} />Reset</button>}
-          <AnnouncementFilterControl key={datasetRevision} revision={datasetRevision} value={announcementFilter} onChange={value => {setAnnouncementFilter(value); setPage(1);}} />
+          {(filterCount > 0 || activeQuery) && <button className="button button-ghost" onClick={handleReset}><RotateCcw size={14} />Reset</button>}
           <button onClick={() => setIsModalOpen(true)} className="button button-secondary"><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</button>
           <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching} className="button button-primary"><Play size={14} />Run</button>
         </div>

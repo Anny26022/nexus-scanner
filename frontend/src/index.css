@@ -238,6 +238,7 @@
 .match-mode button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .announcement-filter { position: relative; }
 .announcement-filter > summary { list-style: none; }
+.announcement-filter > summary::marker { display: none; }
 .announcement-filter > summary::-webkit-details-marker { display: none; }
 .announcement-popover { position: absolute; right: 0; top: calc(100% + 10px); z-index: 10; width: 340px; padding: 18px; border: 1px solid var(--line-strong); background: var(--surface); border-radius: 12px; box-shadow: var(--shadow); font-size: 12px; }
 .announcement-popover input:not([type="checkbox"]), .announcement-popover select { width: 100%; min-height: 36px; border: 1px solid var(--line-strong); padding: 8px; border-radius: 7px; }

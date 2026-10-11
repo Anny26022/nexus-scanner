@@ -153,6 +153,8 @@
 .query-input input { width: 100%; min-width: 0; font-size: 12px; outline: none; background: transparent; }
 .query-input input:focus-visible { outline: none; }
 .screen-buttons { display: flex; align-items: center; gap: 8px; }
+.screen-buttons .button { min-height: 30px; padding-inline: 8px; gap: 5px; font-size: 11px; border-radius: 5px; }
+.screen-buttons .button-primary { padding-inline: 12px; }
 .button { display: inline-flex; justify-content: center; align-items: center; gap: 6px; min-height: 32px; border-radius: 6px; padding: 0 10px; font-size: 12px; font-weight: 550; border: 1px solid transparent; }
 .button-secondary { border-color: var(--line); background: var(--surface); color: var(--secondary); }
 .button-secondary:not(:disabled):hover { background: var(--surface-subtle); border-color: var(--line-strong); color: var(--text); }

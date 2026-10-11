@@ -27,10 +27,12 @@ it('keeps table, column definitions and pagination mounted across loading, resul
 });
 
 it('disables exports and page changes while previous-page data is updating', () => {
-  render(<ResultsTable {...props} data={data} isFetching onAddToWatchlist={vi.fn()} />);
+  const view = render(<ResultsTable {...props} data={data} isFetching onAddToWatchlist={vi.fn()} />);
   expect(screen.getByText('AVTNPL')).toBeInTheDocument();
   expect(screen.getByRole('status')).toHaveTextContent('Updating results');
   for (const name of ['Copy TradingView', 'Watchlist', 'Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
+  view.rerender(<ResultsTable {...props} data={{...data, page: 2, matchCount: 45}} isFetching />);
+  for (const name of ['Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
 });
 
 it('uses keyboard-accessible sorting and preserves missing values rather than converting them to zero', () => {
@@ -71,4 +73,8 @@ it('keeps empty and single-page pagination visible without offering invalid navi
   fireEvent.click(screen.getByRole('button', {name: 'Previous'}));
   expect(change).toHaveBeenCalledWith(1);
   expect(screen.getByRole('button', {name: 'Next'})).toBeDisabled();
+  view.rerender(<Pagination page={4} pageSize={15} total={40} onPageChange={change} />);
+  expect(screen.getByText('31-40', {exact: false})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', {name: 'Previous'}));
+  expect(change).toHaveBeenLastCalledWith(2);
 });

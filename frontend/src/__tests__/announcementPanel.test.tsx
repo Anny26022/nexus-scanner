@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AnnouncementsPanel } from '../components/AnnouncementsPanel';
@@ -10,7 +10,7 @@ vi.mock('../api/screenerApi', () => ({screenerApi: {getAnnouncements: vi.fn(), g
 afterEach(() => {cleanup(); vi.clearAllMocks();});
 const filing: Announcement = {id: '1', headline: 'New supply order', publishedAt: '2026-10-09T10:00:00Z', topics: ['order_win'], status: 'approved', detailPage: 'f'.repeat(64), url: 'https://example.com/filing.pdf'};
 function open(onClose = vi.fn()) {
-  const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
+  const client = new QueryClient({defaultOptions: {queries: {retry: 2, retryDelay: 10}}});
   render(<QueryClientProvider client={client}><AnnouncementsPanel symbol="TEST" revision={'a'.repeat(64)} onClose={onClose} /></QueryClientProvider>);
   return onClose;
 }
@@ -21,6 +21,7 @@ it('distinguishes unpublished data from an empty filing period and does not retr
   expect(await screen.findByRole('alert')).toHaveTextContent('Announcements not published');
   expect(screen.queryByText('No filings in this period')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', {name: 'Retry'})).not.toBeInTheDocument();
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
   expect(screenerApi.getAnnouncements).toHaveBeenCalledTimes(1);
   fireEvent(screen.getByRole('dialog'), new Event('cancel', {bubbles: true}));
   expect(close).toHaveBeenCalledTimes(1);
@@ -42,7 +43,9 @@ it('loads summaries first, then fetches evidence on selection and pages history'
   vi.mocked(screenerApi.getAnnouncementDetail).mockResolvedValue({classification: {events: [{topic: 'order_win', evidence: {excerpt: 'Signed supply contract'}}]}});
   vi.mocked(screenerApi.getAnnouncementHistory).mockResolvedValue({records: [filing], pages: 2});
   open();
-  fireEvent.click(await screen.findByRole('button', {name: filing.headline}));
+  const summary = await screen.findByRole('button', {name: filing.headline});
+  expect(screenerApi.getAnnouncementDetail).not.toHaveBeenCalled();
+  fireEvent.click(summary);
   expect(await screen.findByText('Signed supply contract')).toBeInTheDocument();
   expect(screen.getByRole('link', {name: 'Open source document'})).toHaveAttribute('href', filing.url);
   expect(screenerApi.getAnnouncementDetail).toHaveBeenCalledTimes(1);

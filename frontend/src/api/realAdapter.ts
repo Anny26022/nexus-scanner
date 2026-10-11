@@ -41,7 +41,10 @@ async function getJson<T>(url: string, fresh = false, resource = 'Dataset'): Pro
   const response = await fetch(url, fresh ? { cache:'no-store' } : undefined);
   if (!response.ok) throw new DataUnavailableError(`${resource} request failed (HTTP ${response.status})`, response.status === 404 ? 'not_found' : 'download_failed');
   try { return await response.json(); }
-  catch { throw new DataUnavailableError(`${resource} file is missing or invalid. The host may be returning a page instead of data.`, 'not_found'); }
+  catch (error) {
+    if (error instanceof SyntaxError) throw new DataUnavailableError(`${resource} file is missing or invalid. The host may be returning a page instead of data.`, 'not_found');
+    throw new DataUnavailableError(`${resource} download failed. Please retry.`, 'download_failed');
+  }
 }
 
 async function getChartJson<T>(url: string, resource = 'Chart'): Promise<T> {

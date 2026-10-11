@@ -42,7 +42,7 @@ const ScreenerAppContent: React.FC = () => {
       <a href="#workspace" className="skip-link">Skip to results workspace</a>
       <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <main id="workspace" className="workspace">
+      <main id="workspace" className="workspace" tabIndex={-1}>
         <div className="workspace-heading">
           <div className="session-label"><CalendarDays size={16} /><span>{selectedAsOfDate ? <>Session <strong>{new Date(`${selectedAsOfDate}T00:00:00`).toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}</strong></> : 'Checking latest session'}</span></div>
         </div>

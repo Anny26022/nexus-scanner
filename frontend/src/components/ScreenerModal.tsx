@@ -1,5 +1,5 @@
 import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
-import React, { memo, useCallback, useState } from 'react';
+import React, { memo, useCallback, useRef, useState } from 'react';
 import { Dialog } from './Dialog';
 import { X, SlidersHorizontal, Library, ChevronDown } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
@@ -37,6 +37,7 @@ const readableUnit = (unit?: string) => {
 
 const MultiSelectDropdown = ({ options, value, onChange, label }: {options: NonNullable<ParameterSpec['options']>; value: string[]; onChange: (value: string[]) => void; label: string}) => {
   const [isOpen, setIsOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   const toggle = (val: string) => {
     const arr = value || [];
@@ -48,9 +49,16 @@ const MultiSelectDropdown = ({ options, value, onChange, label }: {options: NonN
   };
   
   return (
-    <div className="relative">
+    <div className="relative" onKeyDown={event => {
+      if (event.key === 'Escape' && isOpen) {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsOpen(false);
+        trigger.current?.focus();
+      }
+    }}>
       <button 
-        type="button" aria-label={label} aria-expanded={isOpen}
+        ref={trigger} type="button" aria-label={`${label}: ${value?.length ? `${value.length} selected` : 'Select options'}`} aria-expanded={isOpen}
         onClick={() => setIsOpen(!isOpen)}
         className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none max-w-[120px] shrink-0 truncate transition-colors cursor-pointer flex items-center gap-1"
       >

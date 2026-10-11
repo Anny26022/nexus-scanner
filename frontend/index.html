@@ -2,6 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (() => {
+        let choice = 'system';
+        try { choice = JSON.parse(localStorage.getItem('nexus-scanner.ui.theme.v1')) || 'system'; } catch {}
+        document.documentElement.dataset.theme = choice === 'light' || choice === 'dark'
+          ? choice : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nexus Research Screener — NSE Mainboard Quantitative Equity Screener</title>

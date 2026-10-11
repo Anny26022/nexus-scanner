@@ -92,6 +92,15 @@ it('reports a scanner-only release as unpublished without requesting invented fi
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
+it('classifies announcement index body read failures as retryable downloads', async () => {
+  const {fetcher, values} = fixture();
+  fetcher.mockImplementation(async url => url === '/index.json'
+    ? {...response(null), json: async () => {throw new TypeError('body stream failed');}}
+    : response(values[url]));
+  const {realAdapter} = await import('../api/realAdapter');
+  await expect(realAdapter.getAnnouncements('TEST')).rejects.toMatchObject({reason: 'download_failed'});
+});
+
 it('identifies missing announcement objects and retries cleanly without a poisoned cache', async () => {
   const {fetcher, values} = fixture();
   const target = `https://cdn.example.com/objects/${hash('e')}.json.gz`;

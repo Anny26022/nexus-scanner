@@ -187,7 +187,7 @@
 .company-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .company-cell > span { flex: 1; }
 .company-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.fno-label { font-size: 9px; color: var(--muted); background: var(--surface-hover); padding: 3px 4px; border-radius: 4px; }
+.fno-label { font-size: 10px; color: var(--secondary); background: var(--surface-hover); padding: 2px 5px; border-radius: 4px; }
 .icon-button { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 7px; color: var(--muted); }
 .icon-button:hover { background: var(--surface-hover); color: var(--accent); }
 .numeric { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -217,7 +217,7 @@
 .dialog-header p { margin: 2px 0 0; font-size: 11px; color: var(--muted); }
 .dialog-content { overflow: auto; padding: 24px; }
 .dialog-footer { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); padding: 16px 24px; gap: 12px; }
-.filter-modal-tabs { display: flex; align-items: center; gap: 3px; padding: 6px 16px; border-bottom: 1px solid var(--line); }
+.filter-modal-tabs { display: flex; flex-wrap: wrap; flex-shrink: 0; align-items: center; gap: 3px; padding: 6px 16px; border-bottom: 1px solid var(--line); }
 .filter-modal-tabs > .match-mode { margin-left: auto; }
 .filter-modal-tabs button { padding: 6px 10px; color: var(--muted); font-size: 11px; border-radius: 6px; }
 .filter-modal-tabs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
@@ -225,10 +225,11 @@
 .filter-categories::-webkit-scrollbar { display: none; }
 .filter-categories button { padding: 5px 8px; border-radius: 5px; font-size: 11px; color: var(--secondary); white-space: nowrap; }
 .filter-categories button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); font-weight: 600; }
-.filter-modal-options { display: grid; grid-template-columns: 180px max-content minmax(0, 1fr); align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.filter-modal-options { display: grid; flex-shrink: 0; grid-template-columns: 180px minmax(0, 1fr); align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
 .filter-modal-options > .query-input { height: 32px; }
 .filter-modal-options > .query-input input { font-size: 11px; }
-.filter-modal-content { overflow: auto; min-height: 260px; padding: 8px 24px 20px; }
+.filter-modal-content { flex: 1 1 auto; overflow: auto; min-height: 0; padding: 8px 24px 20px; }
+.dialog-header, .dialog-footer { flex-shrink: 0; }
 .filter-row { display: flex; flex-direction: column; align-items: stretch; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .filter-row > div { justify-content: flex-start; align-items: flex-end; gap: 12px; }
 .filter-row[data-active="true"] > label > span { color: var(--accent); }
@@ -313,6 +314,8 @@
   .dialog-header, .dialog-footer { padding: 16px; }
   .dialog-content, .filter-modal-content { padding: 16px; }
   .filter-modal-tabs, .filter-modal-options { padding: 10px 16px; }
+  .filter-modal-options { grid-template-columns: minmax(0, 1fr); }
+  .filter-modal-options > .query-input { width: min(180px, 100%); }
   .filter-row { grid-template-columns: 1fr; gap: 10px; }
   .filter-row > div { justify-content: flex-start; }
   .filter-categories { flex-wrap: nowrap; overflow: auto; width: 100%; padding-bottom: 4px; }
@@ -320,6 +323,11 @@
   .screen-buttons { position: relative; }
   .announcement-popover { left: 0; right: auto; width: min(340px, calc(100vw - 66px)); }
 }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fadeIn .18s cubic-bezier(.16, 1, .3, 1) forwards; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   button:not(:disabled):active { transform: none; }

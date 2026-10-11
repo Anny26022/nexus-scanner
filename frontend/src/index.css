@@ -190,9 +190,11 @@
 .data-table tbody tr:not(.skeleton-row):hover { background: var(--surface-subtle); }
 .company-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .company-cell > span { flex: 1; }
-.company-tools { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-.fno-label { font-size: 10px; color: var(--secondary); background: var(--surface-hover); padding: 2px 5px; border-radius: 4px; }
+.company-symbol-line { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.company-tools { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.fno-label { flex-shrink: 0; padding: 1px 4px; border-radius: 3px; background: var(--accent-soft); color: var(--accent); font-size: 8px; font-weight: 600; line-height: 1.4; white-space: nowrap; }
 .icon-button { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 7px; color: var(--muted); }
+.filing-button { width: 24px; height: 24px; border-radius: 5px; }
 .icon-button:hover { background: var(--surface-hover); color: var(--accent); }
 .numeric { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cell-label { color: var(--secondary); font-size: 12px; font-weight: 500; }

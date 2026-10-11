@@ -231,6 +231,26 @@ class BridgeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"Unsupported query field"):
                 bridge.run({**request,"textQuery":"Unknown Metric > 5"},root)
 
+    def test_symbol_search_filters_text_query_matches_before_pagination(self):
+        context={"stocks":{
+            "AAA":{**self.stock(),"symbol":"AAA","name":"Other Company"},
+            "BBB":{**self.stock(),"symbol":"BBB","name":"Pharmaceutical Company"},
+            "BBX":{**self.stock(),"symbol":"BBX","name":"Another Company"},
+        },"financial_history_as_of":"2026-09-30","rs_ratings":{},"fno_ban_symbols":{}}
+        request={"asOfDate":"2026-09-30","universe":"mainboard",
+                 "expressionTree":{"type":"group","operator":"all","children":[]},
+                 "textQuery":"Close Price > 50","page":1,"pageSize":1}
+        with tempfile.TemporaryDirectory() as folder, patch.object(bridge,"_load_context",return_value=context):
+            root=Path(folder)
+            searched=bridge.run({**request,"symbolSearch":" bb "},root)
+            self.assertEqual(searched["matchCount"],2)
+            self.assertEqual(searched["rows"][0]["symbol"],"BBB")
+            second=bridge.run({**request,"symbolSearch":"bb","page":2},root)
+            self.assertEqual(second["rows"][0]["symbol"],"BBX")
+            named=bridge.run({**request,"symbolSearch":"pharmaceutical"},root)
+            self.assertEqual(named["rows"][0]["symbol"],"BBB")
+            self.assertEqual(bridge.run({**request,"symbolSearch":"no match"},root)["matchCount"],0)
+
     def test_historical_rows_do_not_reuse_current_snapshot_enrichments(self):
         stock={**self.stock(),"as_of_date":"2026-09-30","total_revenue_in_lakhs":1000,
                "non_current_assets_in_lakhs":2000,"total_liabilities_in_lakhs":800,

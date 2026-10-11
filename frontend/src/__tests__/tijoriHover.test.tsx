@@ -59,3 +59,16 @@ it('offers a contextual empty state for an uncovered symbol', async () => {
   fireEvent.pointerDown(document.body);
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
+
+it.each(['ArrowDown', 'Enter', ' '])('enters the portal with %s and restores trigger focus on close', async key => {
+  vi.mocked(getTijoriOverviews).mockResolvedValue({TEST:report});
+  mount();
+  const trigger = screen.getByRole('button', {name:'View TEST company snapshot'});
+  fireEvent.keyDown(trigger, {key});
+  const close = await screen.findByRole('button', {name:'Close company snapshot'});
+  expect(close).toHaveFocus();
+  await screen.findByText('Makes industrial equipment.');
+  fireEvent.click(close);
+  expect(trigger).toHaveFocus();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});

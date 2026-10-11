@@ -5,6 +5,7 @@ export function useSymbolHoverCard<T extends {symbol: string}>() {
   const [active, setActive] = useState<(ReturnType<typeof companyPopoverPosition> & {row: T; pinned: boolean}) | null>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const keyboardEntry = useRef(false);
   const cancelClose = useCallback(() => clearTimeout(timer.current), []);
   const dismiss = useCallback(() => { cancelClose(); setActive(null); }, [cancelClose]);
   const close = useCallback(() => { trigger.current?.focus(); dismiss(); }, [dismiss]);
@@ -14,6 +15,15 @@ export function useSymbolHoverCard<T extends {symbol: string}>() {
     trigger.current = button;
     setActive(current => ({row, ...companyPopoverPosition(button),
       pinned: pinned || Boolean(current?.row.symbol === row.symbol && current.pinned)}));
+  };
+  const enter = (row: T, button: HTMLButtonElement) => {
+    keyboardEntry.current = true;
+    open(row, button);
+    const panel = document.getElementById(`company-overview-${row.symbol}`);
+    if (panel) {
+      keyboardEntry.current = false;
+      panel.querySelector<HTMLElement>('button')?.focus();
+    }
   };
   const scheduleClose = () => {
     cancelClose();
@@ -25,6 +35,10 @@ export function useSymbolHoverCard<T extends {symbol: string}>() {
   // External listeners belong to the reusable hook and are removed on dismissal.
   useEffect(() => {
     if (!id) return;
+    if (keyboardEntry.current) {
+      keyboardEntry.current = false;
+      document.getElementById(id)?.querySelector<HTMLElement>('button')?.focus();
+    }
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (!document.getElementById(id)?.contains(target) && !trigger.current?.contains(target)) dismiss();
@@ -47,5 +61,5 @@ export function useSymbolHoverCard<T extends {symbol: string}>() {
       window.removeEventListener('resize', dismiss);
     };
   }, [id, cancelClose, close, dismiss]);
-  return {active, id, open, close, dismiss, scheduleClose, cancelClose};
+  return {active, id, open, enter, close, dismiss, scheduleClose, cancelClose};
 }

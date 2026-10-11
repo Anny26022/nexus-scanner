@@ -476,6 +476,7 @@ export class MockScreenerAdapter {
     }
 
     // Pagination
+    const conditionMatchCount = filtered.length;
     const search = req.symbolSearch?.trim().toLowerCase();
     if (search) filtered = filtered.filter(row => row.symbol.toLowerCase().includes(search) || row.name.toLowerCase().includes(search));
     const totalCount = filtered.length;
@@ -505,7 +506,7 @@ export class MockScreenerAdapter {
         mom_rvol: {
           conditionId: 'mom_rvol',
           evaluated: MOCK_NSE_MAINBOARD_STOCKS.length,
-          matched: filtered.length,
+          matched: conditionMatchCount,
           coveragePct: 100.0,
         },
       },

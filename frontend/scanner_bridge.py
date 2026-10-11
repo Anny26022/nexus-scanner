@@ -434,6 +434,10 @@ def run(request, root=ROOT, cache=None):
             row.pop("dataCompleteness", None)
             row["dataCompleteness"] = data_completeness(row)
             matched.append(row)
+    symbol_search = str(request.get("symbolSearch") or "").strip().casefold()
+    if symbol_search:
+        matched = [row for row in matched if symbol_search in str(row.get("symbol") or "").casefold()
+                   or symbol_search in str(row.get("name") or "").casefold()]
     sort=request.get("sort") or {}
     field=sort.get("field","symbol")
     matched.sort(key=lambda r:(r.get(field) is not None,r.get(field) if r.get(field) is not None else 0),reverse=sort.get("direction")=="desc")

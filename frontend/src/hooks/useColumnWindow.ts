@@ -1,8 +1,21 @@
-import { useState, type UIEvent } from 'react';
+import { useEffect, useState, type RefObject, type UIEvent } from 'react';
 
 /** Keep wide tables bounded in both directions; gaps retain exact scroll width. */
-export function useColumnWindow<T>(columns: T[], widthOf: (column: T) => number, enabled: boolean) {
+export function useColumnWindow<T>(columns: T[], widthOf: (column: T) => number, enabled: boolean, container?: RefObject<HTMLDivElement | null>) {
   const [viewport, setViewport] = useState({left: 0, width: typeof window === 'undefined' ? 1920 : window.innerWidth});
+  useEffect(() => {
+    const element = container?.current;
+    if (!enabled || !element) return;
+    const measure = () => {
+      const left = element.scrollLeft, width = element.clientWidth;
+      setViewport(current => current.left === left && current.width === width ? current : {left, width});
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [enabled, container]);
   let offset = 0;
   const bounds = columns.map(column => {
     const left = offset;

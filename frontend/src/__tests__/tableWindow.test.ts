@@ -16,10 +16,18 @@ it('bounds wide tables, reaches the last row, and resets on a different page', (
   expect(result.current.first).toBe(0);
 });
 
-it('leaves ordinary narrow tables and short pages fully rendered', () => {
+it('leaves ordinary narrow tables fully rendered', () => {
   const rows = Array.from({length: 100}, (_, index) => index);
   const {result} = renderHook(() => useTableWindow(rows, 1, 8));
   expect(result.current.enabled).toBe(false);
   expect(result.current.rows).toHaveLength(100);
+  expect(result.current.top + result.current.bottom).toBe(0);
+});
+
+it.each([0, 15, 22])('fully renders a short wide page with %i rows', count => {
+  const rows = Array.from({length: count}, (_, index) => index);
+  const {result} = renderHook(() => useTableWindow(rows, 1, 115));
+  expect(result.current.enabled).toBe(false);
+  expect(result.current.rows).toEqual(rows);
   expect(result.current.top + result.current.bottom).toBe(0);
 });

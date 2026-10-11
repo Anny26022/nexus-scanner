@@ -151,7 +151,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const scrollRef = useRef<HTMLDivElement>(null);
   const columnWindow = useColumnWindow(visibleColumns,
     column => column.id === 'company' ? 240 : column.id === 'sector' ? 180 : 150,
-    usingCustomColumns && visibleColumns.length > 20);
+    usingCustomColumns && visibleColumns.length > 20, scrollRef);
   const renderedColumns = columnWindow.columns;
   const columnSpan = renderedColumns.length + Number(columnWindow.left > 0) + Number(columnWindow.right > 0);
   const overview = useSymbolHoverCard<ScreenerRunResponse['rows'][number]>();
@@ -223,6 +223,11 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
                   aria-controls={overview.active?.row.symbol === row.symbol ? overview.id : undefined}
                   onMouseEnter={event => overview.open(row, event.currentTarget)} onMouseLeave={overview.scheduleClose}
                   onFocus={event => overview.open(row, event.currentTarget)}
+                  onKeyDown={event => {
+                    if (['ArrowDown', 'Enter', ' '].includes(event.key)) {
+                      event.preventDefault(); overview.enter(row, event.currentTarget);
+                    }
+                  }}
                   onBlur={event => {if (!document.getElementById(`company-overview-${row.symbol}`)?.contains(event.relatedTarget)) overview.scheduleClose();}}
                   onClick={event => overview.active?.row.symbol === row.symbol && overview.active.pinned
                     ? overview.dismiss() : overview.open(row, event.currentTarget, true)}>

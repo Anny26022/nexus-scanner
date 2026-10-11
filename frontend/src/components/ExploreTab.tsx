@@ -23,7 +23,6 @@ interface ExploreTabProps {
   selectedAsOfDate: string;
   datasetRevision?: string;
   onRefreshRevision: () => Promise<string | undefined>;
-  onAddToWatchlist?: (symbols: string[]) => void;
 }
 
 const DEFAULT_CONDITIONS: Record<string, ActiveCondition> = {
@@ -39,7 +38,7 @@ const DEFAULT_CONDITIONS: Record<string, ActiveCondition> = {
   },
 };
 
-export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datasetRevision, onRefreshRevision, onAddToWatchlist }) => {
+export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datasetRevision, onRefreshRevision }) => {
   const [universe, setUniverse] = useLocalStorageState<UniverseType>('nexus-scanner.screener.universe.v1', 'mainboard');
   const asOfDate = selectedAsOfDate;
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.screener.match-mode.v1', 'all');
@@ -167,7 +166,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       {!hasUnavailable && !activeQuery && explanationResult.compiledExplanations.length > 0 && <p className="criteria-summary">{explanationResult.compiledExplanations.map(e => e.humanReadableText).join(matchMode === 'all' ? '; ' : ' OR ')}</p>}
     </section>
     {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
-      onRetry={() => void refetch()} onPageChange={setPage} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onAddToWatchlist={onAddToWatchlist} />}
+      onRetry={() => void refetch()} onPageChange={setPage} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
     <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} activeConditionsMap={activeConditionsMap} matchMode={matchMode} onApply={handleApply} />
   </div>;
 };

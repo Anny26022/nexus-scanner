@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { screenerApi } from './api/screenerApi';
 import { Navbar } from './components/Navbar';
 import { ExploreTab } from './components/ExploreTab';
 import { NewListingsTab } from './components/NewListingsTab';
-import { BookmarkPlus, CalendarDays } from 'lucide-react';
+import { CalendarDays } from 'lucide-react';
 import { useLocalStorageState } from './hooks/useLocalStorageState';
 
 const queryClient = new QueryClient({
@@ -18,7 +18,6 @@ const queryClient = new QueryClient({
 
 const ScreenerAppContent: React.FC = () => {
   const [activeTab, setActiveTab] = useLocalStorageState<'screener' | 'ipo'>('nexus-scanner.ui.active-tab.v1', 'screener');
-  const [watchlistToast, setWatchlistToast] = useState<string | null>(null);
 
   const { data: revisionData, isError: revisionFailed, refetch: refreshRevision } = useQuery({
     queryKey: ['revisionCurrent'],
@@ -29,13 +28,6 @@ const ScreenerAppContent: React.FC = () => {
   });
 
   const selectedAsOfDate = revisionData?.latestSessionDate || '';
-
-  const handleAddToWatchlist = (symbols: string[]) => {
-    setWatchlistToast(
-      `Added ${symbols.length} symbol${symbols.length !== 1 ? 's' : ''} to watchlist`
-    );
-    setTimeout(() => setWatchlistToast(null), 2500);
-  };
 
   return (
     <div className="app-frame">
@@ -52,19 +44,11 @@ const ScreenerAppContent: React.FC = () => {
             selectedAsOfDate={selectedAsOfDate}
             datasetRevision={revisionData?.immutableRevision}
             onRefreshRevision={async () => (await refreshRevision()).data?.immutableRevision}
-            onAddToWatchlist={handleAddToWatchlist}
           />
         ) : (
           <NewListingsTab key={revisionData?.immutableRevision} datasetRevision={revisionData?.immutableRevision} selectedAsOfDate={selectedAsOfDate} />
         )}
       </main>
-
-      {watchlistToast && (
-        <div role="status" className="toast">
-          <BookmarkPlus className="w-4 h-4 text-emerald-400" />
-          <span>{watchlistToast}</span>
-        </div>
-      )}
     </div>
   );
 };

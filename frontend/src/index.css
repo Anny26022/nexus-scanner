@@ -207,7 +207,7 @@
 .column-search-empty { grid-column: 1 / -1; padding: 14px 0; color: var(--muted); font-size: 11px; }
 .results-actions .button { min-height: 28px; padding-inline: 8px; gap: 5px; border-radius: 5px; font-size: 11px; }
 .results-actions .button svg { width: 14px; height: 14px; }
-.results-actions .results-copy-button { width: 28px; height: 28px; min-height: 28px; padding: 0; }
+.results-actions .button.results-copy-button { width: 28px; height: 28px; min-height: 28px; padding: 0; flex: 0 0 28px; }
 .fetch-status { font-size: 10px; color: var(--muted); min-width: 90px; }
 .table-viewport { display: flex; flex-direction: column; height: clamp(360px, calc(100dvh - 345px), 780px); min-width: 0; }
 .table-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }

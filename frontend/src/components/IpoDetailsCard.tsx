@@ -47,7 +47,6 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
   const scanx = research?.scanx;
   const provider = research?.provider;
   const decode = research?.ipoDecode;
-  const isFreshnessKnown = Boolean(row.ipoDetailStatus?.lastSuccessAt);
   const hasSubscription = research?.subscription && [research.subscription.total, research.subscription.retail,
     research.subscription.nii, research.subscription.institutional].some(value => value != null);
   const hasOverview = [research?.issuePrice, provider?.listingPrice, row.currentPrice, provider?.listingGainPct,
@@ -64,7 +63,7 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
     decode.issue?.about || decode.gmpHistory?.length || decode.documents?.length ||
     Object.values(decode.valuation ?? {}).some(value => value != null && value !== '') ||
     Object.values(decode.peerAvailability ?? {}).some(value => value != null && value !== '')));
-  const hasResearch = Boolean(scanx?.companyDetail?.trim() || scanx?.financials?.length || scanx?.purpose?.length ||
+  const hasResearch = Boolean(scanx?.allotmentDate || scanx?.companyDetail?.trim() || scanx?.financials?.length || scanx?.purpose?.length ||
     scanx?.strengths?.length || scanx?.risks?.length || scanx?.management?.length || externalUrl(scanx?.drhpUrl) || research?.conflicts?.length);
   const tabs = [
     ...(hasOverview ? [{id: 'overview' as const, label: 'Overview'}] : []),
@@ -76,17 +75,31 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
 
   return createPortal(<section id={id} className="ipo-details-card" role="dialog" aria-label={`${row.name || row.symbol} IPO details`}
     style={{left, top, transformOrigin: placement === 'left' ? 'right 24px' : placement === 'sheet' ? 'center bottom' : 'left 24px'}}
-    onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onKeyDown={event => {if (event.key === 'Escape') onClose();}}>
+    onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onFocus={onMouseEnter}
+    onBlur={event => {if (!event.currentTarget.contains(event.relatedTarget)) onMouseLeave();}}
+    onKeyDown={event => {if (event.key === 'Escape') {event.stopPropagation(); onClose();}}}>
     <header className="ipo-details-header">
       <div className="ipo-details-company"><SymbolWithLogo symbol={row.symbol} name={row.name} /></div>
       <button type="button" className="icon-button ipo-details-close" onClick={onClose} aria-label="Close IPO details"><X size={16} /></button>
     </header>
     {tabs.length > 0 && <div className="ipo-details-tabs" role="tablist" aria-label="IPO detail sections">
       {tabs.map(tab => <button key={tab.id} type="button" role="tab" id={`${id}-${tab.id}-tab`}
-        aria-selected={activeTab === tab.id} aria-controls={`${id}-${tab.id}-panel`}
+        aria-selected={activeTab === tab.id} aria-controls={`${id}-${tab.id}-panel`} tabIndex={activeTab === tab.id ? 0 : -1}
+        onKeyDown={event => {
+          const index = tabs.findIndex(item => item.id === tab.id);
+          const nextIndex = event.key === 'ArrowRight' ? (index + 1) % tabs.length
+            : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length
+              : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : null;
+          if (nextIndex == null) return;
+          event.preventDefault();
+          setRequestedTab(tabs[nextIndex].id);
+          document.getElementById(`${id}-${tabs[nextIndex].id}-tab`)?.focus();
+        }}
         className={activeTab === tab.id ? 'active' : ''} onClick={() => setRequestedTab(tab.id)}>{tab.label}</button>)}
     </div>}
     <div className="ipo-details-content">
+      {!hasDecode && row.ipoDetailStatus?.lastSuccessAt && <p className="ipo-details-note">Last updated: {new Date(row.ipoDetailStatus.lastSuccessAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST</p>}
+      {row.ipoDetailStatus?.failedEndpoints.length ? <p className="ipo-details-note">Refresh errors: {row.ipoDetailStatus.failedEndpoints.join(', ')}. Previously available data is retained.</p> : null}
       {tabs.length > 0 && <div role="tabpanel" id={`${id}-${activeTab}-panel`} aria-labelledby={`${id}-${activeTab}-tab`}>
       {activeTab === 'overview' && <>
       <section className="ipo-details-section">
@@ -106,7 +119,7 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
         </div>
       </section>
 
-      {(research?.offer || scanx?.offer) && <section className="ipo-details-section">
+      {(research?.offer || scanx?.offer || scanx?.issueSize != null || [decode?.issue?.priceBandLow, decode?.issue?.priceBandHigh, decode?.issue?.lotSize, decode?.issue?.minInvestment].some(value => value != null)) && <section className="ipo-details-section">
         <h3>Offer</h3>
         <div className="ipo-details-grid">
           <Detail label="Issue size" value={crore(research?.offer?.issueSizeCrore ?? scanx?.issueSize)} />
@@ -145,6 +158,7 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
         <div className="ipo-details-grid">
           <Detail label="Last updated" value={decode.fetchedAt ? `${date(decode.fetchedAt)}, ${new Date(decode.fetchedAt).toLocaleTimeString('en-IN', {hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata'})} IST` : null} />
           <Detail label="Allotment" value={decode.allotmentStatus ? `${decode.allotmentStatus}${decode.registrar ? `, ${decode.registrar}` : ''}` : null} />
+          {!decode.allotmentStatus && <Detail label="Registrar" value={decode.registrar} />}
           <Detail label="Allotment date" value={date(decode.allotmentDate)} />
           <Detail label="Refund date" value={date(decode.refundDate)} />
           <Detail label="Demat credit" value={date(decode.dematCreditDate)} />
@@ -179,12 +193,11 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
               <span><strong>{item.label ?? item.kind ?? 'Document'}</strong>{item.note && <small>{item.note}</small>}</span><ExternalLink size={13} />
             </a>
           : <p className="ipo-details-copy" key={`${item.kind ?? 'document'}-${index}`}>{item.label ?? item.kind}</p>)}</details> : null}
-        {!isFreshnessKnown && <p className="ipo-details-note">No company-specific detail timestamp is recorded. Catalogue figures may still be available.</p>}
-        {row.ipoDetailStatus?.failedEndpoints.length ? <p className="ipo-details-note">Refresh errors: {row.ipoDetailStatus.failedEndpoints.join(', ')}. Previously available data is retained.</p> : null}
       </section>
       </>}
-      {activeTab === 'research' && scanx && (scanx.companyDetail || scanx.financials?.length || scanx.purpose?.length || scanx.strengths?.length || scanx.risks?.length || scanx.management?.length || scanx.drhpUrl) && <section className="ipo-details-section">
+      {activeTab === 'research' && scanx && hasResearch && <section className="ipo-details-section">
         <h3>ScanX research</h3>
+        {scanx.allotmentDate && <div className="ipo-details-grid"><Detail label="Allotment date" value={date(scanx.allotmentDate)} /></div>}
         {scanx.companyDetail && <details className="ipo-detail-disclosure"><summary>Company overview</summary><p className="ipo-details-copy">{scanx.companyDetail}</p></details>}
         {scanx.financials?.length ? <details className="ipo-detail-disclosure"><summary>Financials <span>{scanx.financials.length} periods</span></summary><div className="ipo-details-grid">
           {scanx.financials.map((item, index) => <React.Fragment key={`${item.date ?? 'period'}-${index}`}>

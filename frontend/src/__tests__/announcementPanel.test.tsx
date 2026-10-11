@@ -47,7 +47,7 @@ it('loads summaries first, then fetches evidence on selection and pages history'
   expect(screenerApi.getAnnouncementDetail).not.toHaveBeenCalled();
   fireEvent.click(summary);
   expect(await screen.findByText('Signed supply contract')).toBeInTheDocument();
-  expect(screen.getByRole('link', {name: 'Open source document'})).toHaveAttribute('href', filing.url);
+  expect(screen.getByRole('link', {name: 'Document'})).toHaveAttribute('href', filing.url);
   expect(screenerApi.getAnnouncementDetail).toHaveBeenCalledTimes(1);
   fireEvent.change(screen.getByRole('combobox', {name: 'Announcement history'}), {target: {value: '2026'}});
   fireEvent.click(await screen.findByRole('button', {name: 'Older'}));

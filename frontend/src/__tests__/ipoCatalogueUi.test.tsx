@@ -9,6 +9,26 @@ import { NewListingsTab } from '../components/NewListingsTab';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
 
+it('lets keyboard users enter the IPO card and returns focus on Escape', async () => {
+  vi.mocked(screenerApi.getIpoCatalogue).mockResolvedValueOnce({records: [{
+    symbol: 'TEST', name: 'Test IPO', listingDate: '2026-10-01', currentPrice: 100,
+    turnoverCrore: 1, marketCapCrore: 200, sector: 'Industrials', industry: 'Equipment',
+  }]});
+  const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
+  render(<QueryClientProvider client={client}><NewListingsTab datasetRevision={'d'.repeat(64)} selectedAsOfDate="2026-10-09" /></QueryClientProvider>);
+  const company = await screen.findByRole('button', {name: 'IPO details for Test IPO'});
+  act(() => company.focus());
+  fireEvent.keyDown(company, {key: 'Tab'});
+  expect(screen.getByRole('button', {name: 'Close IPO details'})).toHaveFocus();
+  fireEvent.mouseLeave(company);
+  await act(() => new Promise(resolve => setTimeout(resolve, 220)));
+  const card = screen.getByRole('dialog', {name: 'Test IPO IPO details'});
+  expect(card).toBeInTheDocument();
+  fireEvent.keyDown(card, {key: 'Escape'});
+  expect(screen.queryByRole('dialog', {name: 'Test IPO IPO details'})).not.toBeInTheDocument();
+  expect(company).toHaveFocus();
+});
+
 it('shows fetch failure and allows retry instead of reporting no listings', async () => {
   vi.mocked(screenerApi.getIpoCatalogue).mockRejectedValueOnce(new Error('network unavailable'))
     .mockResolvedValueOnce({records: [], providerStatus: {checkedAt: null, state: 'retained'}});

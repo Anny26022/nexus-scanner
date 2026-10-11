@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
-import { ArrowUpDown, Play, SlidersHorizontal, X, ChevronDown, Search, SearchX } from 'lucide-react';
+import { ArrowUpDown, Play, SlidersHorizontal, X, ChevronDown, Search, SearchX, Copy, Check } from 'lucide-react';
 import { ActiveCondition, ExpressionNode, MatchMode, ScreenerRunRequest } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { isAvailableCondition } from '../utils/filterAvailability';
@@ -23,6 +23,13 @@ const IPO_SORT_FIELDS = ['listingDate','currentPrice','turnoverCrore','marketCap
 const IPO_COLUMN_GROUPS: IpoColumnGroup[] = ['Company','Listing','Offer','Subscription','Performance','Allotment','Research'];
 const IPO_DEFAULT_COLUMNS = ['company','listingDate','currentPrice','turnoverCrore','marketCapCrore','deliveryPct','sectorIndustry'];
 const text = (value: unknown) => value == null || value === '' ? '—' : String(value);
+const dateOnly = (value: string | null | undefined) => {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata',
+  });
+};
 const amount = (value: number | null | undefined, suffix = '') => value == null ? '—'
   : `${value.toLocaleString('en-IN', {maximumFractionDigits: 2})}${suffix}`;
 const rupees = (value: number | null | undefined, suffix = '') => value == null ? '—'
@@ -62,7 +69,7 @@ const ipoColumns: IpoColumn[] = [
   {id:'anchorLockInDays',label:'Anchor lock-in days',group:'Performance',value:row=>amount(row.anchorLockInCalendar)},
   {id:'nextAnchorLockIn',label:'Next anchor lock-in',group:'Performance',value:row=>text(row.nextAnchorLockInDate)},
   {id:'allotmentStatus',label:'Allotment status',group:'Allotment',value:row=>text(row.ipoResearch?.ipoDecode?.allotmentStatus)},
-  {id:'allotmentDate',label:'Allotment date',group:'Allotment',value:row=>text(row.ipoResearch?.ipoDecode?.allotmentDate ?? row.ipoResearch?.scanx?.allotmentDate)},
+  {id:'allotmentDate',label:'Allotment date',group:'Allotment',value:row=>dateOnly(row.ipoResearch?.ipoDecode?.allotmentDate ?? row.ipoResearch?.scanx?.allotmentDate)},
   {id:'refundDate',label:'Refund date',group:'Allotment',value:row=>text(row.ipoResearch?.ipoDecode?.refundDate)},
   {id:'dematCreditDate',label:'Demat credit date',group:'Allotment',value:row=>text(row.ipoResearch?.ipoDecode?.dematCreditDate)},
   {id:'registrar',label:'Registrar',group:'Allotment',value:row=>text(row.ipoResearch?.ipoDecode?.registrar)},
@@ -100,6 +107,8 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const [search, setSearch] = useLocalStorageState('nexus-scanner.ipo.search.v1', '');
   const [sort, setSort] = useLocalStorageState<{ field: 'listingDate' | 'currentPrice' | 'turnoverCrore' | 'marketCapCrore' | 'deliveryPct'; direction: 'asc' | 'desc' }>('nexus-scanner.ipo.sort.v1', { field: 'listingDate', direction: 'desc' });
   const [page, setPage] = useState(1);
+  const [copiedIpoSymbols, setCopiedIpoSymbols] = useState(false);
+  const [ipoCopyError, setIpoCopyError] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
@@ -115,8 +124,10 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIpo, setActiveIpo] = useState<{row: typeof ipoData[number]; left: number; top: number; placement: 'right' | 'left' | 'sheet'; pinned: boolean} | null>(null);
   const ipoCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ipoTrigger = useRef<HTMLButtonElement | null>(null);
   const openIpoDetails = (row: typeof ipoData[number], trigger: HTMLButtonElement, pinned: boolean) => {
     if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);
+    ipoTrigger.current = trigger;
     const rect = trigger.getBoundingClientRect();
     const cardWidth = Math.min(440, window.innerWidth - 24);
     const cardHeight = Math.min(window.innerHeight * 0.78, 680);
@@ -133,11 +144,17 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   };
   const scheduleIpoDetailsClose = () => {
     if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);
-    ipoCloseTimer.current = setTimeout(() => setActiveIpo(current => current?.pinned ? current : null), 180);
+    ipoCloseTimer.current = setTimeout(() => setActiveIpo(current => current?.pinned ||
+      (current && document.getElementById(`ipo-details-${current.row.symbol}`)?.contains(document.activeElement))
+      ? current : null), 180);
   };
   const dismissIpoDetails = () => {
     if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);
     setActiveIpo(null);
+  };
+  const closeIpoDetails = () => {
+    ipoTrigger.current?.focus();
+    dismissIpoDetails();
   };
 
   const ipoQuery = useQuery({
@@ -216,6 +233,16 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     });
     setScreenPage(1);
   };
+  const copyIpoSymbols = async () => {
+    try {
+      await navigator.clipboard.writeText(filteredIpos.map(row => `NSE:${row.symbol}`).join(', '));
+      setIpoCopyError(false);
+      setCopiedIpoSymbols(true);
+      setTimeout(() => setCopiedIpoSymbols(false), 1800);
+    } catch {
+      setIpoCopyError(true);
+    }
+  };
 
   return <div className="research-view">
     <section className="screen-controls" aria-label="IPO criteria">
@@ -242,8 +269,12 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
       onSortChange={(field, direction) => {setScreenSort({field, direction}); setScreenPage(1);}} currentSort={screenSort} />
       : <section className="results-surface" aria-label="IPO listings">
         <div className="results-toolbar"><div className="result-count"><strong>{!isLoading && (!ipoQuery.isError || ipoQuery.data) ? filteredIpos.length.toLocaleString('en-IN') : '-'}</strong><span>new listings</span></div>
-          <div className="results-actions"><button type="button" className="button button-secondary" aria-label="Customize IPO columns" onClick={() => setIsColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button></div>
+          <div className="results-actions">
+            <button type="button" onClick={() => void copyIpoSymbols()} disabled={!filteredIpos.length || isLoading} className="button button-secondary results-copy-button" aria-label={copiedIpoSymbols ? 'Copied IPO symbols' : 'Copy IPO symbols'} title={copiedIpoSymbols ? 'Copied!' : 'Copy IPO symbols'}><span role="status" className="sr-only">{copiedIpoSymbols ? 'IPO symbols copied' : ''}</span>{copiedIpoSymbols ? <Check size={15} /> : <Copy size={15} />}</button>
+            <button type="button" className="button button-secondary" aria-label="Customize IPO columns" onClick={() => setIsColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
+          </div>
         </div>
+        {ipoCopyError && <p role="alert" className="notice">Could not access the clipboard. Check browser permissions and try again.</p>}
         <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns" onScroll={dismissIpoDetails}>
           <table className="data-table ipo-table" style={{width:customIpoColumns ? `${Math.max(1120, visibleIpoColumns.reduce((sum,column)=>sum+(column.id==='company'?240:170),0))}px` : '100%', minWidth:customIpoColumns ? '1120px' : '1080px'}}><caption className="sr-only">Newly listed companies</caption>
             <colgroup>{visibleIpoColumns.map(column => <col key={column.id} style={{width:customIpoColumns ? column.id==='company'?'240px':column.id==='sectorIndustry'?'190px':'170px' : column.id==='company'?'26%':column.id==='sectorIndustry'?'17%':column.id==='deliveryPct'?'9%':'12%'}} />)}</colgroup>
@@ -259,10 +290,16 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
                   onMouseEnter={event => openIpoDetails(row, event.currentTarget, false)}
                   onMouseLeave={scheduleIpoDetailsClose}
                   onFocus={event => openIpoDetails(row, event.currentTarget, false)}
-                  onBlur={scheduleIpoDetailsClose}
+                  onBlur={event => {if (!document.getElementById(`ipo-details-${row.symbol}`)?.contains(event.relatedTarget)) scheduleIpoDetailsClose();}}
                   onClick={event => activeIpo?.row.symbol === row.symbol && activeIpo.pinned
                     ? dismissIpoDetails() : openIpoDetails(row, event.currentTarget, true)}
-                  onKeyDown={event => {if (event.key === 'Escape') dismissIpoDetails();}}>
+                  onKeyDown={event => {
+                    if (event.key === 'Escape') dismissIpoDetails();
+                    if ((event.key === 'Tab' && !event.shiftKey) || event.key === 'ArrowDown') {
+                      const firstControl = document.getElementById(`ipo-details-${row.symbol}`)?.querySelector<HTMLButtonElement>('button');
+                      if (firstControl) {event.preventDefault(); firstControl.focus();}
+                    }
+                  }}>
                   <SymbolWithLogo symbol={row.symbol} name={row.name} />
                 </button> : column.id === 'sectorIndustry' ? <><div className="cell-label truncate" title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></>
                   : <span className={column.id==='currentPrice'?'cell-strong':''} title={column.value(row)}>{column.value(row)}</span>}</td>)}
@@ -295,7 +332,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     </Dialog>}
     <ScreenerModal key={isFilterModalOpen ? 'open' : 'closed'} isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} activeConditionsMap={conditions} matchMode={matchMode} onApply={applyFilters} />
     {activeIpo && <IpoDetailsCard key={activeIpo.row.symbol} row={activeIpo.row} id={`ipo-details-${activeIpo.row.symbol}`} left={activeIpo.left} top={activeIpo.top} placement={activeIpo.placement}
-      onClose={dismissIpoDetails} onMouseEnter={() => {if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);}}
+      onClose={closeIpoDetails} onMouseEnter={() => {if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);}}
       onMouseLeave={scheduleIpoDetailsClose} />}
   </div>;
 };

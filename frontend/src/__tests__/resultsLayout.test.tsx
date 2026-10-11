@@ -47,20 +47,23 @@ it('uses keyboard-accessible sorting and preserves missing values rather than co
   expect(screen.getByText('₹94.78')).toBeInTheDocument();
 });
 
-it('lets users add a fundamental result column and keeps the choice between renders', () => {
+it('persists an added fundamental result column across fresh mounts', () => {
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
   const view = render(<ResultsTable {...props} data={data} />);
   fireEvent.click(screen.getByRole('button', {name: 'Customize columns'}));
   expect(screen.getByRole('dialog', {name: 'Customize columns'})).toBeInTheDocument();
   expect(screen.getByRole('heading', {name: 'Customize columns'})).toBeInTheDocument();
-  expect(screen.getByText(/8 selected · choose fields for your results table/)).toBeInTheDocument();
+  expect(screen.getByText(/7 selected · choose fields for your results table/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', {name: 'Fundamental'}));
   const pe = screen.getByRole('checkbox', {name: 'P/E'});
   expect(pe).not.toBeChecked();
   fireEvent.click(pe);
   expect(screen.getByRole('columnheader', {name: 'P/E'})).toBeInTheDocument();
   expect(view.container.querySelector('colgroup col:nth-child(3)')).toHaveStyle({width: '150px'});
-  view.rerender(<ResultsTable {...props} data={data} />);
+  view.unmount();
+  render(<ResultsTable {...props} data={data} />);
+  fireEvent.click(screen.getByRole('button', {name: 'Customize columns'}));
+  fireEvent.click(screen.getByRole('tab', {name: 'Fundamental'}));
   expect(screen.getByRole('checkbox', {name: 'P/E'})).toBeChecked();
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
 });

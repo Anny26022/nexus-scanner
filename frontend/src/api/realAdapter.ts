@@ -23,6 +23,11 @@ interface Manifest {
 }
 let current: Manifest | undefined;
 const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
+const finiteAmount = (value: unknown): number | null => {
+  if (value == null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 export interface ChartSnapshot {
   schemaVersion: number;
@@ -286,7 +291,7 @@ class RealDataAdapter {
               ipoDecode: r.provider?.id ? {
                 fetchedAt: lastSuccessAt,
                 endpoints: endpointNames,
-                registrar: detailData.allotment?.registrar ?? detailData.allotment_check?.registrar ?? null,
+                registrar: detailData.allotment?.registrar ?? detailData.allotment_check?.registrar ?? decodedIssue?.registrar ?? null,
                 allotmentStatus: detailData.allotment?.status ?? detailData.allotment_check?.status ?? null,
                 allotmentDate: detailData.allotment?.allotment_date ?? null,
                 refundDate: detailData.allotment?.refund_date ?? null,
@@ -332,8 +337,8 @@ class RealDataAdapter {
                 companyDetail: r.scanx.details?.company_detail ?? null,
                 financials: Array.isArray(r.scanx.details?.financials) ? r.scanx.details.financials.map((item: any) => ({
                   date: item.date, unit: item.unit,
-                  revenue: item.pl?.revenue_from_operations ?? item.pl?.total_revenue ?? null,
-                  profit: item.pl?.total_profit ?? null,
+                  revenue: finiteAmount(item.pl?.revenue_from_operations ?? item.pl?.total_revenue),
+                  profit: finiteAmount(item.pl?.total_profit),
                 })) : [],
                 purpose: Array.isArray(r.scanx.details?.ipoPurpose) ? r.scanx.details.ipoPurpose.map((item: any) => ({
                   title: item.title, description: item.description, amount: item.total_amount, unit: item.unit,

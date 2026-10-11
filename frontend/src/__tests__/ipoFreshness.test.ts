@@ -3,6 +3,23 @@ import { gzipSync } from 'node:zlib';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
 
+it('keeps the issue registrar and converts ScanX financial strings to finite amounts', async () => {
+  const manifest = {revision: 'f'.repeat(64), schemaVersion: 4, sessionDate: '2026-10-09', totalStocks: 1,
+    datasetUrl: '/stocks.json', iposUrl: '/ipos.json'};
+  const payload = {records: [{symbol: 'TEST', provider: {id: 'test'}, scanx: {details: {financials: [
+    {pl: {total_revenue: '50.25', total_profit: '4.5'}},
+    {pl: {total_revenue: 'not available', total_profit: ''}},
+  ]}}}], provider_data: {details: {test: {data: {issue: {ipo: {registrar: 'Issue Registrar'}}}}}}};
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ok: true, json: async () => manifest})
+    .mockResolvedValueOnce({ok: true, json: async () => payload}));
+  const {realAdapter} = await import('../api/realAdapter');
+  const [row] = (await realAdapter.getIpoCatalogue()).records;
+  expect(row.ipoResearch?.ipoDecode?.registrar).toBe('Issue Registrar');
+  expect(row.ipoResearch?.scanx?.financials).toMatchObject([
+    {revenue: 50.25, profit: 4.5}, {revenue: null, profit: null},
+  ]);
+});
+
 it('accepts browser-decoded gzip catalogues without decompressing them twice', async () => {
   const manifest = {revision: 'c'.repeat(64), schemaVersion: 4, sessionDate: '2026-10-09', totalStocks: 1,
     datasetUrl: '/stocks.json', iposUrl: '/ipos.json.gz'};

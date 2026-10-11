@@ -149,6 +149,16 @@ def _company_results(tasks, workers):
         executor.shutdown(wait=True, cancel_futures=True)
 
 
+def announcement_lookup(directory, catalog_hash):
+    """Resolve recent filings directly; keep full history metadata per company."""
+    with gzip.open(directory / f'{catalog_hash}.json.gz', 'rt') as handle:
+        catalog = json.load(handle)
+    return {'publishedAt': catalog['publishedAt'], 'taxonomy': catalog['taxonomy'], 'index': catalog['index'],
+            'symbols': {symbol: {'recent': entry['recent'], 'years': sorted(map(int, entry['years']), reverse=True),
+                                 'history': put_object(directory, {'symbol': symbol, **entry})}
+                        for symbol, entry in catalog['symbols'].items()}}
+
+
 def build_announcements(payload, directory, symbols, reference_session, cache=None, *, workers=0):
     """Index filings through fetch time, independently of the EOD price cutoff."""
     cutoff = publication_time(payload.get('updated_at'), reference_session)

@@ -230,7 +230,10 @@ export interface IpoCatalogue {
 export interface IPORow {
   symbol: string;
   name: string;
+  isin?: string;
+  securityId?: string | number;
   listingDate: string;
+  listingAgeCalendarDays?: number | null;
   currentPrice: number;
   turnoverCrore: number;
   deliveryPct?: number | null;
@@ -238,6 +241,38 @@ export interface IPORow {
   industry: string;
   marketCapCrore: number;
   ipoDetailStatus?: { lastSuccessAt: string | null; failedEndpoints: string[] };
+  anchorLockInEnd?: string | null;
+  anchorLockInCalendar?: Array<{listingDate: string | null; unlockDate: string | null; tranche: number | null}> | null;
+  nextAnchorLockInDate?: string | null;
+  ipoResearch?: {
+    issuePrice?: number | null;
+    offer?: { issueSizeCrore?: number | null; freshIssueCrore?: number | null; offerForSaleCrore?: number | null };
+    subscription?: { total?: number | null; retail?: number | null; nii?: number | null; institutional?: number | null };
+    provider?: { listingPrice?: number | null; listingGainPct?: number | null; gmp?: number | null; gmpPct?: number | null };
+    ipoDecode?: {
+      fetchedAt?: string | null; endpoints?: string[]; registrar?: string | null; allotmentStatus?: string | null;
+      allotmentDate?: string | null; refundDate?: string | null; dematCreditDate?: string | null;
+      documentCount?: number | null; timelineStatus?: string | null;
+      issue?: { priceBandLow?: number | null; priceBandHigh?: number | null; lotSize?: number | null; minInvestment?: number | null; leadManagers?: string | null; totalApplications?: number | null; revenueCrore?: number | null; profitCrore?: number | null; roePct?: number | null; peAtUpper?: number | null; about?: string | null; qualityGrade?: string | null; issueType?: string | null };
+      gmpHistory?: Array<{ date?: string; gmp?: number | null; gmpPct?: number | null }>;
+      documents?: Array<{ label?: string; kind?: string; url?: string; note?: string }>;
+      valuation?: { pe?: number | null; pb?: number | null; evEbitda?: number | null; peerMedianPe?: number | null; verdict?: string | null };
+      peerAvailability?: { available?: boolean; reason?: string | null };
+    };
+    scanx?: {
+      offer?: { floorPrice?: number | null; ceilingPrice?: number | null; lotSize?: number | null; startDate?: string | null; endDate?: string | null };
+      issueSize?: number | null;
+      allotmentDate?: string | null;
+      companyDetail?: string | null;
+      financials?: Array<{ date?: string; unit?: string; revenue?: number | null; profit?: number | null }>;
+      purpose?: Array<{ title?: string; description?: string; amount?: string | number; unit?: string }>;
+      strengths?: Array<{ title?: string; description?: string }>;
+      risks?: Array<{ title?: string; description?: string }>;
+      management?: Array<{ name?: string; designation?: string }>;
+      drhpUrl?: string | null;
+    };
+    conflicts?: Array<{ field: string; provider?: number | null; scanx?: number | null }>;
+  };
   // Retained for the mock fixture; the live catalogue does not publish IPO terms.
   issuePrice?: number | null;
   listingPrice?: number | null;

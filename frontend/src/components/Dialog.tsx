@@ -12,7 +12,11 @@ export function Dialog({ label, onClose, children, className = '' }: {
   }, []);
   return createPortal(<dialog ref={mount} aria-label={label} className={`dialog ${className}`}
     onCancel={event => { event.preventDefault(); onClose(); }}
-    onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
+    onClick={event => {
+      if (event.target !== event.currentTarget) return;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose();
+    }}>
     <div className="dialog-surface">{children}</div>
   </dialog>, document.body);
 }

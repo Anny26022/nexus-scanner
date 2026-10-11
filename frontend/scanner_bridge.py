@@ -283,7 +283,7 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
 def data_completeness(row):
     # Preserve the denominator used before the optional ScanX fields were added.
     added = set(PUBLIC_FINANCIAL_FIELDS.values()) - {"epsTtm", "dividendYieldPct", "debtToEquity"}
-    added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness"})
+    added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness", "metrics"})
     values = [value for key, value in row.items() if key not in added]
     return round(100 * sum(value is not None for value in values) / len(values)) if values else 0
 
@@ -388,6 +388,7 @@ def run(request, root=ROOT, cache=None):
             unresolved += 1
         if value is True:
             row=stock_row(s,context["rs_ratings"] if context.get("rs_ratings_as_of")==as_of else {})
+            row["metrics"] = {}
             row["fnoBan"]=bool(context["fno_ban_symbols"].get(s["symbol"])) if context.get("fno_ban_trade_date")==as_of else None
             if "financial_history" in context:
                 row["peRatio"] = financial_value(context, s, {"condition":"pe_ratio"}, date.fromisoformat(as_of), finite_number(s.get("market_cap_crore")))[0]
@@ -417,6 +418,16 @@ def run(request, root=ROOT, cache=None):
                         "financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn",
                     ):
                         row[field]=None
+                # Match the published snapshot's metrics, using only history
+                # ending at the requested session, never today's snapshot.
+                for period in (10, 20, 50, 200):
+                    row["metrics"][f"sma{period}"] = finite_number(history["Close"].tail(period).mean()) if len(history) >= period else None
+                for period in (5, 21, 63, 126, 252):
+                    row["metrics"][f"return{period}"] = finite_number((last["Close"] / history["Close"].iloc[-1-period] - 1) * 100) if len(history) > period else None
+                row["metrics"]["gapPct"] = finite_number((last["Open"] / history["Close"].iloc[-2] - 1) * 100) if len(history) > 1 else None
+                turnover = history["Close"] * history["Volume"]
+                for period in (20, 50, 100):
+                    row["metrics"][f"turnover{period}"] = finite_number(turnover.tail(period).mean() / 1e7) if len(history) >= period else None
             # stock_row starts from the current snapshot. Recalculate after
             # history substitution and current-only field sanitization so the
             # percentage describes the row that is actually returned.

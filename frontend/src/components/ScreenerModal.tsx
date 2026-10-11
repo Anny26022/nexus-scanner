@@ -1,12 +1,14 @@
 import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
 import React, { memo, useCallback, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Dialog } from './Dialog';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
-import { X, SlidersHorizontal, Library, ChevronDown } from 'lucide-react';
+import { X, SlidersHorizontal, Library, ChevronDown, Info } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 import { PRESET_CATALOG } from '../data/presetCatalog';
+import { availableFilterParameters, isAvailableCondition } from '../utils/filterAvailability';
 
 interface ScreenerModalProps {
   isOpen: boolean;
@@ -38,7 +40,29 @@ const readableUnit = (unit?: string) => {
 
 const MultiSelectDropdown = ({ options, value, onChange, label }: {options: NonNullable<ParameterSpec['options']>; value: string[]; onChange: (value: string[]) => void; label: string}) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{top: number; left: number; maxHeight: number} | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+
+  const toggleMenu = () => {
+    if (isOpen) {
+      setIsOpen(false);
+      return;
+    }
+    const rect = trigger.current?.getBoundingClientRect();
+    if (!rect) return;
+    const menuHeight = Math.min(options.length * 32 + 8, 180);
+    const below = window.innerHeight - rect.bottom - 8;
+    const above = rect.top - 8;
+    const opensAbove = below < Math.min(menuHeight, 100) && above > below;
+    const maxHeight = Math.max(48, Math.min(menuHeight, opensAbove ? above : below));
+    const width = Math.min(200, window.innerWidth - 24);
+    setMenuPosition({
+      top: opensAbove ? rect.top - maxHeight - 4 : rect.bottom + 4,
+      left: Math.min(Math.max(12, rect.right - width), window.innerWidth - width - 12),
+      maxHeight,
+    });
+    setIsOpen(true);
+  };
 
   const toggle = (val: string) => {
     const arr = value || [];
@@ -60,7 +84,7 @@ const MultiSelectDropdown = ({ options, value, onChange, label }: {options: NonN
     }}>
       <button 
         ref={trigger} type="button" aria-label={`${label}: ${value?.length ? `${value.length} selected` : 'Select options'}`} aria-expanded={isOpen}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={toggleMenu}
         className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none max-w-[120px] shrink-0 truncate transition-colors cursor-pointer flex items-center gap-1"
       >
         <span className="truncate">{value?.length ? `${value.length} selected` : 'Select...'}</span>
@@ -68,9 +92,10 @@ const MultiSelectDropdown = ({ options, value, onChange, label }: {options: NonN
       </button>
       
       {isOpen && (
-        <>
+        createPortal(<>
           <div className="fixed inset-0 z-[120]" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-[121] bg-white rounded-md shadow-lg py-0.5 border border-gray-200 min-w-[140px] text-[11px]">
+          <div className="fixed z-[121] overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 text-[12px] shadow-lg"
+            role="group" aria-label={label} style={{top:menuPosition?.top,left:menuPosition?.left,maxHeight:menuPosition?.maxHeight,width:200}}>
              {options.map((o: any) => {
                const selected = value?.includes(o.value);
                return (
@@ -84,7 +109,7 @@ const MultiSelectDropdown = ({ options, value, onChange, label }: {options: NonN
                );
              })}
           </div>
-        </>
+        </>, trigger.current?.closest('dialog') ?? document.body)
       )}
     </div>
   );
@@ -100,12 +125,13 @@ interface FilterRowProps {
 
 interface FilterParameterProps {
   defId: string;
+  parameters: ActiveCondition['parameters'];
   p: ParameterSpec;
   val: any;
   updateParam: FilterRowProps['updateParam'];
 }
 
-const FilterParameter = memo(function FilterParameter({ defId, p, val, updateParam }: FilterParameterProps) {
+const FilterParameter = memo(function FilterParameter({ defId, parameters, p, val, updateParam }: FilterParameterProps) {
   // The row title and each control's accessible label provide the context;
   // keeping the inputs compact makes dense filter groups easier to scan.
   let control: React.ReactNode;
@@ -127,7 +153,9 @@ const FilterParameter = memo(function FilterParameter({ defId, p, val, updatePar
         className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 max-w-[110px] shrink-0 truncate transition-colors cursor-pointer"
       >
         {(p.options || []).map((opt) => (
-          <option key={opt.value} value={opt.value}>
+          <option key={opt.value} value={opt.value} disabled={!isAvailableCondition({
+            instanceId: defId, conditionId: defId, parameters: {...parameters, [p.id]: opt.value},
+          })}>
             {opt.label}
           </option>
         ))}
@@ -157,31 +185,44 @@ const FilterParameter = memo(function FilterParameter({ defId, p, val, updatePar
 
 // Unchanged rows retain the same definition, condition and callback references.
 const FilterRow = memo(function FilterRow({ def, active, showParameters, toggle, updateParam }: FilterRowProps) {
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
   const checked = !!active;
+  const supportedParameters = availableFilterParameters(def);
+  const editable = supportedParameters !== null || Boolean(active && isAvailableCondition(active));
+  const available = active ? isAvailableCondition(active) : editable;
+  const parameters = active?.parameters ?? supportedParameters ?? Object.fromEntries(def.parameters.map(p => [p.id, p.defaultValue]));
 
   return (
-    <div className="filter-row group" data-active={checked}>
+    <div className="filter-row group" data-active={checked} data-unavailable={!available} data-preset={!showParameters}>
       <label className="flex items-center gap-2.5 cursor-pointer min-w-0 pt-1">
         <input
           type="checkbox"
           checked={checked}
+          disabled={!editable && !checked}
           onChange={() => toggle(def)}
           className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
         />
         <span title={def.description} className={`text-[12px] font-semibold ${checked ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-800'}`}>
-          {def.label}:
+          {def.label}{showParameters ? ':' : ''}
         </span>
       </label>
 
+      {!showParameters && <button type="button" className="preset-info-button" data-tooltip={def.description}
+        aria-label={`${descriptionOpen ? 'Hide' : 'Show'} ${def.label} description`}
+        aria-expanded={descriptionOpen} onClick={() => setDescriptionOpen(open => !open)}>
+        <Info size={15} strokeWidth={1.8} />
+      </button>}
+
       {/* Inputs keep their own compact groups and wrap inside this row when needed. */}
-      {showParameters && def.parameters && def.parameters.length > 0 && (
+      {editable && showParameters && def.parameters && def.parameters.length > 0 && (
         <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
           {def.parameters.map(p => (
-            <FilterParameter key={p.id} defId={def.id} p={p}
-              val={active ? active.parameters[p.id] : p.defaultValue} updateParam={updateParam} />
+            <FilterParameter key={p.id} defId={def.id} parameters={parameters} p={p}
+              val={parameters[p.id]} updateParam={updateParam} />
           ))}
         </div>
       )}
+      {!showParameters && descriptionOpen && <p className="preset-description">{def.description}</p>}
     </div>
   );
 });
@@ -206,8 +247,8 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         delete next[def.id];
         return next;
       }
-      const params: Record<string, any> = {};
-      def.parameters?.forEach((p) => (params[p.id] = p.defaultValue));
+      const params = availableFilterParameters(def);
+      if (!params) return prev;
       return {
         ...prev,
         [def.id]: { instanceId: `${def.id}_${Date.now()}`, conditionId: def.id, parameters: params },
@@ -220,8 +261,8 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === condId);
       const existing = prev[condId];
       if (!existing && def) {
-        const params: Record<string, any> = {};
-        def.parameters.forEach((p) => (params[p.id] = p.defaultValue));
+        const params = availableFilterParameters(def);
+        if (!params) return prev;
         params[paramId] = value;
         if (condId === 'MARKET_BREADTH' && paramId === 'metric') {
           params.value = breadthMetricDefault(value);
@@ -278,7 +319,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         delete next[key];
         return next;
       })} />
-      <div className="grid grid-cols-1 gap-x-8 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-8 xl:grid-cols-2" data-preset-list={activeTab === 'presets'}>
         {filtered.map(def => <FilterRow key={def.id} def={def} active={localMap[def.id]} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}
       </div>
       {!filtered.length && <div className="data-state"><h2>No matching {activeTab === 'custom' ? 'filters' : 'scans'}</h2><p>Try a different category or search.</p></div>}

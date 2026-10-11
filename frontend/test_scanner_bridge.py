@@ -253,6 +253,14 @@ class BridgeTests(unittest.TestCase):
                           *bridge.PUBLIC_FINANCIAL_FIELDS.values(), "financialUnitsVersion", "debtToEquitySource"):
                 self.assertIsNone(row[field], field)
             self.assertEqual(row["dataCompleteness"], bridge.data_completeness(row))
+            self.assertEqual(row["dataCompleteness"], bridge.data_completeness({key: value for key, value in row.items() if key != "metrics"}))
+            history = self.history()
+            history = history[pd.to_datetime(history["Date"]) <= pd.Timestamp("2026-09-29")]
+            self.assertAlmostEqual(row["metrics"]["sma10"], history["Close"].tail(10).mean())
+            self.assertAlmostEqual(row["metrics"]["return5"], (history["Close"].iloc[-1] / history["Close"].iloc[-6] - 1) * 100)
+            self.assertAlmostEqual(row["metrics"]["gapPct"], (history["Open"].iloc[-1] / history["Close"].iloc[-2] - 1) * 100)
+            self.assertAlmostEqual(row["metrics"]["turnover20"], (history["Close"] * history["Volume"]).tail(20).mean() / 1e7)
+            self.assertIsNone(row["metrics"]["return252"])
             current = bridge.run({**request, "asOfDate": "2026-09-30"}, root)["rows"][0]
             for field in bridge.PUBLIC_FINANCIAL_FIELDS.values():
                 self.assertEqual(current[field], 123, field)

@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent / 'DO NOT DELETE EDL PIPELINE'
 sys.path.insert(0, str(ROOT))
 from announcement_artifacts import put_object
 import build_chart_artifacts as builder
-from chart_publication import complete_release, R2Store, prepare_archives
+from chart_publication import complete_release, R2Store, prepare_archives, validate_announcement_objects
 from filing_archives import prepare_filing_archives
 
 
@@ -56,6 +56,19 @@ class ObjectPublicationTests(unittest.TestCase):
             index = store.references['releases/' + 'a'*64 + '/index.json']
             self.assertEqual(set(index['archives']), {'raw', 'classified'})
             chart_hash = index['chartObjects']['TEST']
+            lookup = index['filingLookup']
+            catalog = json.loads(gzip.decompress(store.objects[index['announcements'] + '.json.gz']))
+            self.assertEqual(lookup['publishedAt'], catalog['publishedAt'])
+            self.assertEqual(lookup['symbols']['TEST']['recent'], catalog['symbols']['TEST']['recent'])
+            history = json.loads(gzip.decompress(store.objects[lookup['symbols']['TEST']['history'] + '.json.gz']))
+            self.assertEqual(history, {'symbol': 'TEST', **catalog['symbols']['TEST']})
+            for field, digest in [('recent', '0' * 64), ('history', index['announcements'])]:
+                with self.subTest(invalid_reference=field):
+                    invalid = json.loads(json.dumps(lookup))
+                    invalid['symbols']['TEST'][field] = digest
+                    with self.assertRaisesRegex(RuntimeError, 'Filing lookup history mismatch'):
+                        validate_announcement_objects(root / 'chart_artifacts/objects', index['announcements'],
+                                                      '2026-10-06', {'TEST'}, invalid)
             before = store.uploaded.count(chart_hash + '.json.gz')
             second = complete_release(self.build(root, '2026-10-07'), output, {'revision': 'b'*64, 'sessionDate': '2026-10-07'}, store)
             self.assertEqual(store.uploaded.count(chart_hash + '.json.gz'), before)

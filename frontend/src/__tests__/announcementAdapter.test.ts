@@ -28,6 +28,23 @@ function fixture() {
   return {fetcher, values};
 }
 afterEach(() => {vi.unstubAllGlobals(); vi.resetModules();});
+it('uses compact references for recent filings, categories, history and evidence without the global catalog', async () => {
+  const {fetcher, values} = fixture();
+  values['/index.json'] = {...values['/index.json'] as object, filingLookup: {
+    publishedAt: catalog.publishedAt, taxonomy: catalog.taxonomy, index: catalog.index,
+    symbols: {TEST: {recent: hash('e'), years: [2026], history: hash('5')}}}};
+  values[`https://cdn.example.com/objects/${hash('5')}.json.gz`] = {symbol: 'TEST', ...catalog.symbols.TEST};
+  const {realAdapter} = await import('../api/realAdapter');
+  expect(await realAdapter.getAnnouncements('TEST')).toEqual({symbol: 'TEST', records: [row], years: [2026], publishedAt: catalog.publishedAt});
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect(fetcher.mock.calls.some(([url]) => url.includes(hash('5')))).toBe(false);
+  expect((await realAdapter.getAnnouncementTopics())[0].label).toBe('Order win');
+  expect((await realAdapter.getAnnouncementIndex()).records).toEqual([{symbol: 'TEST', ...row}]);
+  expect(await realAdapter.getAnnouncementHistory('TEST', 2026)).toEqual({records: [row], pages: 1});
+  expect((await realAdapter.getAnnouncementDetail('TEST', row)).news_body).toBe('Evidence');
+  await expect(realAdapter.getAnnouncementDetail('TEST', {...row, detailPage: hash('0')})).rejects.toThrow('not part of this release');
+  expect(fetcher.mock.calls.some(([url]) => url.includes(hash('d')))).toBe(false);
+});
 it('opens only chart data and reuses the parsed object across release changes', async () => {
   const {fetcher, values} = fixture();
   const {realAdapter, refreshManifest} = await import('../api/realAdapter');

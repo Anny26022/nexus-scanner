@@ -27,10 +27,11 @@ it('keeps table, column definitions and pagination mounted across loading, resul
 });
 
 it('disables exports and page changes while previous-page data is updating', () => {
-  const view = render(<ResultsTable {...props} data={data} isFetching onAddToWatchlist={vi.fn()} />);
+  const view = render(<ResultsTable {...props} data={data} isFetching />);
   expect(screen.getByText('AVTNPL')).toBeInTheDocument();
   expect(screen.getByRole('status')).toHaveTextContent('Updating results');
-  for (const name of ['Copy TradingView', 'Watchlist', 'Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
+  expect(screen.queryByRole('button', {name: 'Watchlist'})).not.toBeInTheDocument();
+  for (const name of ['Copy TradingView symbols', 'Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
   view.rerender(<ResultsTable {...props} data={{...data, page: 2, matchCount: 45}} isFetching />);
   for (const name of ['Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
 });
@@ -39,10 +40,78 @@ it('uses keyboard-accessible sorting and preserves missing values rather than co
   const sort = vi.fn();
   render(<ResultsTable {...props} data={data} onSortChange={sort} currentSort={{field: 'close', direction: 'asc'}} />);
   expect(screen.getByRole('columnheader', {name: 'Close price'})).toHaveAttribute('aria-sort', 'ascending');
+  expect(screen.getByRole('button', {name: 'View AVTNPL announcements'}).closest('.company-tools')).not.toBeNull();
   fireEvent.click(screen.getByRole('button', {name: 'Close price'}));
   expect(sort).toHaveBeenCalledWith('close', 'desc');
   expect(screen.getByText('Unavailable')).toBeInTheDocument();
   expect(screen.getByText('₹94.78')).toBeInTheDocument();
+});
+
+it('persists an added fundamental result column across fresh mounts', () => {
+  window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+  const view = render(<ResultsTable {...props} data={data} />);
+  fireEvent.click(screen.getByRole('button', {name: 'Customize columns'}));
+  expect(screen.getByRole('dialog', {name: 'Customize columns'})).toBeInTheDocument();
+  expect(screen.getByRole('heading', {name: 'Customize columns'})).toBeInTheDocument();
+  expect(screen.getByText(/7 selected · choose fields for your results table/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', {name: 'Fundamental'}));
+  const pe = screen.getByRole('checkbox', {name: 'P/E'});
+  expect(pe).not.toBeChecked();
+  fireEvent.click(pe);
+  expect(screen.getByRole('columnheader', {name: 'P/E'})).toBeInTheDocument();
+  expect(view.container.querySelector('colgroup col:nth-child(3)')).toHaveStyle({width: '150px'});
+  view.unmount();
+  render(<ResultsTable {...props} data={data} />);
+  fireEvent.click(screen.getByRole('button', {name: 'Customize columns'}));
+  fireEvent.click(screen.getByRole('tab', {name: 'Fundamental'}));
+  expect(screen.getByRole('checkbox', {name: 'P/E'})).toBeChecked();
+  window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+});
+
+it('selects all available columns from the compact column chooser', () => {
+  window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+  const view = render(<ResultsTable {...props} data={data} />);
+  fireEvent.click(screen.getByRole('button', {name: 'Customize columns'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Select all'}));
+  fireEvent.click(screen.getByRole('tab', {name: 'Technical'}));
+  expect(screen.getByRole('checkbox', {name: 'SMA10'})).toBeChecked();
+  fireEvent.click(screen.getByRole('tab', {name: 'Fundamental'}));
+  expect(screen.getByRole('checkbox', {name: 'Revenue (TTM, Cr)'})).toBeChecked();
+  expect(screen.getByRole('columnheader', {name: 'Data completeness'})).toBeInTheDocument();
+  view.unmount();
+  window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+});
+
+it('lets the default table fill its viewport again after resetting a custom column layout', () => {
+  window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+  render(<ResultsTable {...props} data={data} />);
+  const table = screen.getByRole('table');
+  fireEvent.click(screen.getByRole('button', {name: 'Customize columns'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Select all'}));
+  expect(table.style.width).toMatch(/px$/);
+  fireEvent.click(screen.getByRole('button', {name: 'Reset'}));
+  expect(table).toHaveStyle({width: '100%', minWidth: '1120px'});
+  window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+});
+
+it('searches the full column catalogue across groups', () => {
+  window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+  render(<ResultsTable {...props} data={data} />);
+  fireEvent.click(screen.getByRole('button', {name: 'Customize columns'}));
+  fireEvent.input(screen.getByRole('searchbox', {name: 'Search columns'}), {target: {value: 'P/E'}});
+  expect(screen.getAllByRole('checkbox', {name: /P\/E/})).toHaveLength(2);
+  expect(screen.queryByRole('tablist', {name: 'Column categories'})).not.toBeInTheDocument();
+  window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+});
+
+it('omits surveillance date and refresh-time fields from the column catalogue', () => {
+  render(<ResultsTable {...props} data={data} />);
+  fireEvent.click(screen.getByRole('button', {name: 'Customize columns'}));
+  const search = screen.getByRole('searchbox', {name: 'Search columns'});
+  for (const term of ['Surveillance date', 'Surveillance refreshed']) {
+    fireEvent.change(search, {target: {value: term}});
+    expect(screen.getByText('No matching columns.')).toBeInTheDocument();
+  }
 });
 
 it('starts a new page at the top of the internal table, without scrolling the workspace', () => {

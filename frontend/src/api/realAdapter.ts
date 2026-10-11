@@ -23,6 +23,11 @@ interface Manifest {
 }
 let current: Manifest | undefined;
 const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
+const finiteAmount = (value: unknown): number | null => {
+  if (value == null || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 export interface ChartSnapshot {
   schemaVersion: number;
@@ -94,7 +99,11 @@ function cached<T>(cache: Map<string, Promise<unknown>>, key: string, load: () =
   }
   return promise as Promise<T>;
 }
-interface DataIndex { revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string }
+interface FilingLookup {
+  publishedAt: string; taxonomy: string; index: string;
+  symbols: Record<string, {recent: string; years: number[]; history: string}>;
+}
+interface DataIndex { revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string; filingLookup?: FilingLookup }
 async function releaseFor(revision?: string): Promise<Manifest> {
   const latest = current ?? await refreshManifest();
   const selected = revision ?? latest.revision;
@@ -123,6 +132,20 @@ async function announcementCatalog(release: Manifest): Promise<AnnouncementCatal
   const catalog = await object<AnnouncementCatalog>(release, index.announcements);
   if (catalog.referenceSession !== release.sessionDate) throw new Error('Announcement release mismatch');
   return catalog;
+}
+
+async function announcementReferences(release: Manifest) {
+  return (await dataIndex(release)).filingLookup ?? announcementCatalog(release);
+}
+
+async function companyAnnouncements(release: Manifest, symbol: string) {
+  const lookup = (await dataIndex(release)).filingLookup;
+  if (!lookup) return (await announcementCatalog(release)).symbols[symbol];
+  const entry = lookup.symbols[symbol];
+  if (!entry) throw new Error('Announcement history unavailable for this symbol');
+  const history = await object<AnnouncementCatalog['symbols'][string] & {symbol: string}>(release, entry.history);
+  if (history.symbol !== symbol || history.recent !== entry.recent) throw new Error('Announcement history mismatch');
+  return history;
 }
 
 async function getIpoJson<T>(url: string): Promise<T> {
@@ -237,12 +260,108 @@ class RealDataAdapter {
             ? [...new Set<string>(detail.errors.filter((error: unknown) => typeof error === 'string')
                 .map((error: string) => error.split(':', 1)[0]).map((name: string) => /^[a-z_]+$/.test(name) ? name : 'unknown'))]
             : [];
+          const detailData = detail?.data ?? {};
+          const endpointNames = Object.keys(detailData).filter(name => /^[a-z_]+$/.test(name));
+          const decodedIssue = detailData.issue?.ipo;
           return {
             symbol:r.symbol, name:r.name || r.company_name || '', listingDate:r.listing_date || '',
+            isin: r.isin ?? undefined,
+            securityId: r.security_id ?? undefined,
+            listingAgeCalendarDays: finiteAmount(r.listing_age_calendar_days),
+            anchorLockInEnd: r.anchor_lock_in_end ?? null,
+            nextAnchorLockInDate: r.next_anchor_lock_in_date ?? null,
+            anchorLockInCalendar: Array.isArray(r.anchor_lock_in_calendar) ? r.anchor_lock_in_calendar.map((item: any) => ({
+              listingDate: item.listing_date ?? null,
+              unlockDate: item.unlock_date ?? null,
+              tranche: finiteAmount(item.tranche),
+            })) : null,
             currentPrice:r.close ?? 0, turnoverCrore:r.rupee_volume == null ? 0 : r.rupee_volume / 10_000_000,
             deliveryPct:r.delivery_percent ?? null,
             sector:r.sector || 'Unclassified', industry:r.industry || 'Unclassified', marketCapCrore:r.market_cap_crore ?? 0,
             ipoDetailStatus: r.provider?.id ? {lastSuccessAt, failedEndpoints} : undefined,
+            ipoResearch: {
+              issuePrice: r.issue_price ?? null,
+              offer: r.offer_structure ? {
+                issueSizeCrore: r.offer_structure.issue_size_crore ?? null,
+                freshIssueCrore: r.offer_structure.fresh_issue_crore ?? null,
+                offerForSaleCrore: r.offer_structure.offer_for_sale_crore ?? null,
+              } : undefined,
+              subscription: {
+                total: r.provider?.total_subscription_multiple ?? null,
+                retail: r.retail_subscription_multiple ?? null,
+                nii: r.provider?.nii_subscription_multiple ?? null,
+                institutional: r.institutional_subscription_multiple ?? null,
+              },
+              provider: {
+                listingPrice: r.provider?.listing_price ?? null,
+                listingGainPct: r.provider?.listing_gain_percent ?? null,
+                gmp: r.provider?.gmp ?? null,
+                gmpPct: r.provider?.gmp_percent ?? null,
+              },
+              ipoDecode: r.provider?.id ? {
+                fetchedAt: lastSuccessAt,
+                endpoints: endpointNames,
+                registrar: detailData.allotment?.registrar ?? detailData.allotment_check?.registrar ?? decodedIssue?.registrar ?? null,
+                allotmentStatus: detailData.allotment?.status ?? detailData.allotment_check?.status ?? null,
+                allotmentDate: detailData.allotment?.allotment_date ?? null,
+                refundDate: detailData.allotment?.refund_date ?? null,
+                dematCreditDate: detailData.allotment?.demat_credit_date ?? null,
+                documentCount: Array.isArray(detailData.documents?.documents) ? detailData.documents.documents.length : detailData.documents?.count ?? null,
+                timelineStatus: detailData.timeline?.status ?? null,
+                issue: decodedIssue ? {
+                  priceBandLow: decodedIssue.price_band_low ?? null,
+                  priceBandHigh: decodedIssue.price_band_high ?? null,
+                  lotSize: decodedIssue.lot_size ?? null,
+                  minInvestment: decodedIssue.min_investment ?? null,
+                  leadManagers: decodedIssue.lead_managers ?? null,
+                  totalApplications: decodedIssue.total_applications ?? null,
+                  revenueCrore: decodedIssue.revenue_cr ?? null,
+                  profitCrore: decodedIssue.pat_cr ?? null,
+                  roePct: decodedIssue.ronw_pct ?? null,
+                  peAtUpper: decodedIssue.pe_at_upper ?? null,
+                  about: decodedIssue.about ?? null,
+                  qualityGrade: decodedIssue.quality_grade ?? null,
+                  issueType: decodedIssue.ipo_type ?? null,
+                } : undefined,
+                gmpHistory: Array.isArray(detailData.gmp_history) ? detailData.gmp_history.map((item: any) => ({date: item.ts, gmp: item.gmp ?? null, gmpPct: item.gmp_pct ?? null})) : [],
+                documents: Array.isArray(detailData.documents?.documents) ? detailData.documents.documents.map((item: any) => ({label: item.label, kind: item.kind, url: item.url, note: item.note})) : [],
+                valuation: detailData.prospectus?.valuation ? {
+                  pe: detailData.prospectus.valuation.pe ?? null,
+                  pb: detailData.prospectus.valuation.pb ?? null,
+                  evEbitda: detailData.prospectus.valuation.ev_ebitda ?? null,
+                  peerMedianPe: detailData.prospectus.valuation.peer_median_pe ?? null,
+                  verdict: detailData.prospectus.valuation.verdict ?? null,
+                } : undefined,
+                peerAvailability: detailData.peer_valuation ? {available: detailData.peer_valuation.available, reason: detailData.peer_valuation.reason ?? null} : undefined,
+              } : undefined,
+              scanx: r.scanx ? {
+                offer: r.scanx.listed ? {
+                  floorPrice: r.scanx.details?.floor_price ?? null,
+                  ceilingPrice: r.scanx.details?.ceiling_price ?? null,
+                  lotSize: r.scanx.details?.trading_lot ?? null,
+                  startDate: r.scanx.listed.ipo_start_date ?? null,
+                  endDate: r.scanx.listed.ipo_end_date ?? null,
+                } : undefined,
+                issueSize: r.scanx.details?.issue_size ?? null,
+                allotmentDate: r.scanx.details?.allotment_date ?? null,
+                companyDetail: r.scanx.details?.company_detail ?? null,
+                financials: Array.isArray(r.scanx.details?.financials) ? r.scanx.details.financials.map((item: any) => ({
+                  date: item.date, unit: item.unit,
+                  revenue: finiteAmount(item.pl?.revenue_from_operations ?? item.pl?.total_revenue),
+                  profit: finiteAmount(item.pl?.total_profit),
+                })) : [],
+                purpose: Array.isArray(r.scanx.details?.ipoPurpose) ? r.scanx.details.ipoPurpose.map((item: any) => ({
+                  title: item.title, description: item.description, amount: item.total_amount, unit: item.unit,
+                })) : [],
+                strengths: Array.isArray(r.scanx.details?.strengths) ? r.scanx.details.strengths.map((item: any) => ({title: item.title, description: item.description})) : [],
+                risks: Array.isArray(r.scanx.details?.riskFactors) ? r.scanx.details.riskFactors.map((item: any) => ({title: item.title, description: item.description})) : [],
+                management: Array.isArray(r.scanx.details?.managementTeam) ? r.scanx.details.managementTeam.map((item: any) => ({name: item.name, designation: item.designation})) : [],
+                drhpUrl: r.scanx.details?.drhp_doc ?? r.scanx.details?.sym_doc_url ?? null,
+              } : undefined,
+              conflicts: Array.isArray(r.enrichment_conflicts) ? r.enrichment_conflicts
+                .filter((item: any) => typeof item?.field === 'string')
+                .map((item: any) => ({field: item.field, provider: item.provider ?? null, scanx: item.scanx ?? null})) : [],
+            },
           };
         });
         const provider = 'provider_data' in payload ? payload.provider_data : undefined;
@@ -278,7 +397,7 @@ class RealDataAdapter {
 
   async getAnnouncementIndex(revision?: string): Promise<AnnouncementIndex> {
     const release = await releaseFor(revision);
-    const catalog = await announcementCatalog(release);
+    const catalog = await announcementReferences(release);
     const index = await object<AnnouncementIndex>(release, catalog.index);
     if (index.referenceSession !== release.sessionDate || index.publishedAt !== catalog.publishedAt) throw new Error('Announcement index mismatch');
     return index;
@@ -286,13 +405,21 @@ class RealDataAdapter {
 
   async getAnnouncementTopics(revision?: string): Promise<FilingTopic[]> {
     const release = await releaseFor(revision);
-    const catalog = await announcementCatalog(release);
+    const catalog = await announcementReferences(release);
     return (await object<{topics: FilingTopic[]}>(release, catalog.taxonomy)).topics;
   }
 
   async getAnnouncements(symbol: string, revision?: string): Promise<{records: Announcement[]; years: number[]; publishedAt: string}> {
     validSymbol(symbol);
     const release = await releaseFor(revision);
+    const lookup = (await dataIndex(release)).filingLookup;
+    if (lookup) {
+      const entry = lookup.symbols[symbol];
+      if (!entry) throw new Error('Announcement history unavailable for this symbol');
+      const recent = await object<{symbol: string; records: Announcement[]}>(release, entry.recent);
+      if (recent.symbol !== symbol) throw new Error('Announcement symbol mismatch');
+      return {...recent, years: entry.years, publishedAt: lookup.publishedAt};
+    }
     const catalog = await announcementCatalog(release);
     const entry = catalog.symbols[symbol];
     if (!entry) throw new Error('Announcement history unavailable for this symbol');
@@ -304,8 +431,8 @@ class RealDataAdapter {
   async getAnnouncementHistory(symbol: string, year: number, page = 0, revision?: string): Promise<{records: Announcement[]; pages: number}> {
     validSymbol(symbol);
     const release = await releaseFor(revision);
-    const catalog = await announcementCatalog(release);
-    const pages = catalog.symbols[symbol]?.years[String(year)];
+    const entry = await companyAnnouncements(release, symbol);
+    const pages = entry?.years[String(year)];
     if (!Number.isInteger(page) || page < 0 || !pages?.[page]) throw new Error('Announcement page unavailable');
     const result = await object<{symbol: string; records: Announcement[]}>(release, pages[pages.length - 1 - page].summary);
     if (result.symbol !== symbol) throw new Error('Announcement symbol mismatch');
@@ -315,8 +442,8 @@ class RealDataAdapter {
   async getAnnouncementDetail(symbol: string, row: Announcement, revision?: string): Promise<Record<string, unknown>> {
     validSymbol(symbol);
     const release = await releaseFor(revision);
-    const catalog = await announcementCatalog(release);
-    const allowed = Object.values(catalog.symbols[symbol]?.years ?? {}).flat().some(page => page.details === row.detailPage);
+    const entry = await companyAnnouncements(release, symbol);
+    const allowed = Object.values(entry?.years ?? {}).flat().some(page => page.details === row.detailPage);
     if (!allowed) throw new Error('Filing is not part of this release');
     const details = await object<{symbol: string; records: Record<string, Record<string, unknown>>}>(release, row.detailPage);
     if (details.symbol !== symbol || !details.records[row.id]) throw new Error('Filing detail unavailable');

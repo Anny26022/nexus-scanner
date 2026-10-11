@@ -167,7 +167,8 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
     cache.set(key,matches);
     if (cache.size > 4) cache.delete(cache.keys().next().value!);
   }
-  const rows = matches.rows;
+  const search = request.symbolSearch?.trim().toLowerCase();
+  const rows = search ? matches.rows.filter(row => row.symbol.toLowerCase().includes(search) || row.name.toLowerCase().includes(search)) : matches.rows;
   const page = Math.max(1,request.page), size = Math.max(1,Math.min(100,request.pageSize));
   return { resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
     immutableRevision:data.revision,rows:rows.slice((page-1)*size,page*size),matchCount:rows.length,totalUniverseCount:matches.universeCount,

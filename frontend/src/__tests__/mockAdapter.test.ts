@@ -3,6 +3,14 @@ import { mockAdapter } from '../api/mockAdapter';
 import { ScreenerRunRequest } from '../types/screener';
 
 describe('MockScreenerAdapter API Engine', () => {
+  it('keeps condition coverage unchanged when symbol search narrows results', async () => {
+    const request: ScreenerRunRequest = {expressionTree:{type:'group', operator:'all', children:[]},
+      universe:'mainboard', asOfDate:'2026-09-28', page:1, pageSize:5};
+    const original = await mockAdapter.runScreen(request);
+    const searched = await mockAdapter.runScreen({...request, symbolSearch:'no-such-symbol'});
+    expect(searched.matchCount).toBe(0);
+    expect(searched.perConditionCoverage).toEqual(original.perConditionCoverage);
+  });
   it('should fetch condition catalog', async () => {
     const catalog = await mockAdapter.getCatalog();
     expect(catalog.length).toBeGreaterThan(0);

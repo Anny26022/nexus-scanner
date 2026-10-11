@@ -12,8 +12,11 @@ import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { Pagination } from './Pagination';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
+import { useNextScreenPage, screenPageStaleTime } from '../hooks/useNextScreenPage';
+import { useTableWindow } from '../hooks/useTableWindow';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 import { IpoDetailsCard } from './IpoDetailsCard';
+import { companyPopoverPosition } from '../utils/companyPopoverPosition';
 import { Dialog } from './Dialog';
 import type { IPORow } from '../types/screener';
 
@@ -30,8 +33,9 @@ const dateOnly = (value: string | null | undefined) => {
     day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata',
   });
 };
+const ipoNumberFormatter = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2});
 const amount = (value: number | null | undefined, suffix = '') => value == null ? '—'
-  : `${value.toLocaleString('en-IN', {maximumFractionDigits: 2})}${suffix}`;
+  : `${ipoNumberFormatter.format(value)}${suffix}`;
 const rupees = (value: number | null | undefined, suffix = '') => value == null ? '—'
   : `₹${amount(value, suffix)}`;
 const multiple = (value: number | null | undefined) => value == null ? '—' : `${amount(value, '×')}`;
@@ -120,7 +124,8 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const hasUnavailable = hasUnavailableConditions(conditions);
   const [screenPage, setScreenPage] = useState(1);
   const [screenSort, setScreenSort] = useState<{ field: string; direction: 'asc' | 'desc' }>({ field: 'rvol', direction: 'desc' });
-  const pageSize = 50;
+  const [pageSize, setPageSize] = useState(50);
+  const [screenPageSize, setScreenPageSize] = useState(15);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIpo, setActiveIpo] = useState<{row: typeof ipoData[number]; left: number; top: number; placement: 'right' | 'left' | 'sheet'; pinned: boolean} | null>(null);
   const ipoCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -128,19 +133,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const openIpoDetails = (row: typeof ipoData[number], trigger: HTMLButtonElement, pinned: boolean) => {
     if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);
     ipoTrigger.current = trigger;
-    const rect = trigger.getBoundingClientRect();
-    const cardWidth = Math.min(440, window.innerWidth - 24);
-    const cardHeight = Math.min(window.innerHeight * 0.78, 680);
-    const rightSide = rect.right + 14;
-    const leftSide = rect.left - cardWidth - 14;
-    const placement = window.innerWidth <= 720 ? 'sheet'
-      : rightSide + cardWidth <= window.innerWidth - 12 ? 'right'
-        : leftSide >= 12 ? 'left' : 'right';
-    const left = placement === 'sheet' ? 12 : placement === 'left' ? leftSide
-      : Math.max(12, Math.min(rightSide, window.innerWidth - cardWidth - 12));
-    const top = window.innerWidth <= 720 ? 0
-      : Math.max(12, Math.min(rect.top - 12, window.innerHeight - cardHeight - 12));
-    setActiveIpo({row, left, top, placement, pinned});
+    setActiveIpo({row, ...companyPopoverPosition(trigger), pinned});
   };
   const scheduleIpoDetailsClose = () => {
     if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);
@@ -183,9 +176,10 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   }, [ipoData, periodFilter, search, sort]);
   const pageCount = Math.max(1, Math.ceil(filteredIpos.length / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const visibleIpos = filteredIpos.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const visibleIpos = useMemo(() => filteredIpos.slice((currentPage - 1) * pageSize, currentPage * pageSize), [filteredIpos, currentPage, pageSize]);
   const selectedIpoColumnIds = Array.isArray(savedIpoColumnIds) ? savedIpoColumnIds : IPO_DEFAULT_COLUMNS;
   const visibleIpoColumns = ipoColumns.filter(column => column.id === 'company' || selectedIpoColumnIds.includes(column.id));
+  const ipoWindow = useTableWindow(visibleIpos, visibleIpos, visibleIpoColumns.length);
   const matchingIpoColumns = ipoColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerIpoColumns = columnSearch.trim() ? matchingIpoColumns : ipoColumns.filter(column => column.group === columnGroup);
   const customIpoColumns = selectedIpoColumnIds.length !== IPO_DEFAULT_COLUMNS.length
@@ -207,8 +201,8 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const listingSymbols = useMemo(() => filteredIpos.map(row => row.symbol), [filteredIpos]);
   const screenRequest: ScreenerRunRequest = useMemo(() => ({
     datasetRevision, asOfDate: selectedAsOfDate, universe: 'custom', customSymbols: listingSymbols,
-    expressionTree, sort: screenSort, page: screenPage, pageSize: 15,
-  }), [datasetRevision, selectedAsOfDate, listingSymbols, expressionTree, screenSort, screenPage]);
+    expressionTree, sort: screenSort, page: screenPage, pageSize: screenPageSize,
+  }), [datasetRevision, selectedAsOfDate, listingSymbols, expressionTree, screenSort, screenPage, screenPageSize]);
   const screenQuery = useQuery({
     queryKey: ['ipoScreen', screenRequest],
     queryFn: () => {
@@ -216,8 +210,11 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
       return screenerApi.runScreen(screenRequest);
     },
     enabled: !hasUnavailable && showScreenResults && Boolean(selectedAsOfDate) && listingSymbols.length > 0,
+    staleTime: screenPageStaleTime(screenRequest),
     placeholderData: (previous, query) => pagePlaceholder(previous, query?.queryKey[1], screenRequest),
   });
+  useNextScreenPage('ipoScreen', screenRequest, screenQuery.data,
+    showScreenResults && !hasUnavailable && !screenQuery.isFetching && !screenQuery.isError);
   const applyFilters = (next: Record<string, ActiveCondition>, mode: MatchMode) => {
     setConditions(next);
     setMatchMode(mode);
@@ -250,7 +247,6 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
         <label className="universe-control"><span className="field-label">Listing period</span><span className="select-wrap"><select aria-label="Listing period" value={periodFilter} onChange={e => {updatePeriod(e.target.value as typeof periodFilter); setScreenPage(1);}}>
           <option value="30d">30 Days</option><option value="90d">90 Days</option><option value="6m">6 Months</option><option value="1y">1 Year</option><option value="all">All Time</option>
         </select><ChevronDown size={14} /></span></label>
-        <label className="query-control"><span className="field-label">Find a listing</span><span className="query-input"><Search size={16} /><input aria-label="Search IPO listings" value={search} onChange={event => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setSearch(event.target.value); setPage(1); setScreenPage(1);}} placeholder="Search symbol or company" /></span></label>
         <div className="screen-buttons">
           {Object.keys(conditions).length > 0 && <button className="button button-ghost" onClick={() => {setConditions({}); setScreenPage(1);}}>Reset</button>}
           {showScreenResults && <button className="button button-secondary" onClick={() => setShowScreenResults(false)}>Listings</button>}
@@ -265,26 +261,29 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
       <UnavailableConditions conditions={conditions} onRemove={removeCondition} />
     </section>
     {showScreenResults && !hasUnavailable && listingSymbols.length > 0 ? <ResultsTable data={screenQuery.data} isLoading={screenQuery.isLoading} isFetching={screenQuery.isFetching}
-      isError={screenQuery.isError} error={screenQuery.error} onRetry={() => void screenQuery.refetch()} onPageChange={setScreenPage}
+      symbolSearch={search} onSymbolSearchChange={value => {setSearch(value); setPage(1); setScreenPage(1);}}
+      isError={screenQuery.isError} error={screenQuery.error} onRetry={() => void screenQuery.refetch()} onPageChange={setScreenPage} onPageSizeChange={size => {setScreenPageSize(size); setScreenPage(1);}}
       onSortChange={(field, direction) => {setScreenSort({field, direction}); setScreenPage(1);}} currentSort={screenSort} />
       : <section className="results-surface" aria-label="IPO listings">
         <div className="results-toolbar"><div className="result-count"><strong>{!isLoading && (!ipoQuery.isError || ipoQuery.data) ? filteredIpos.length.toLocaleString('en-IN') : '-'}</strong><span>new listings</span></div>
+          <label className="results-symbol-search"><Search size={13} aria-hidden="true" /><input type="search" aria-label="Search IPO listings" placeholder="Search symbol" value={search} onChange={event => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setSearch(event.target.value); setPage(1); setScreenPage(1);}} /></label>
           <div className="results-actions">
             <button type="button" onClick={() => void copyIpoSymbols()} disabled={!filteredIpos.length || isLoading} className="button button-secondary results-copy-button" aria-label={copiedIpoSymbols ? 'Copied IPO symbols' : 'Copy IPO symbols'} title={copiedIpoSymbols ? 'Copied!' : 'Copy IPO symbols'}><span role="status" className="sr-only">{copiedIpoSymbols ? 'IPO symbols copied' : ''}</span>{copiedIpoSymbols ? <Check size={15} /> : <Copy size={15} />}</button>
             <button type="button" className="button button-secondary" aria-label="Customize IPO columns" onClick={() => setIsColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
           </div>
         </div>
         {ipoCopyError && <p role="alert" className="notice">Could not access the clipboard. Check browser permissions and try again.</p>}
-        <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns" onScroll={dismissIpoDetails}>
-          <table className="data-table ipo-table" style={{width:customIpoColumns ? `${Math.max(1120, visibleIpoColumns.reduce((sum,column)=>sum+(column.id==='company'?240:170),0))}px` : '100%', minWidth:customIpoColumns ? '1120px' : '1080px'}}><caption className="sr-only">Newly listed companies</caption>
+        <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns" onScroll={event => {dismissIpoDetails(); ipoWindow.onScroll(event);}}>
+          <table className={`data-table ipo-table${ipoWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={visibleIpos.length + 1} style={{width:customIpoColumns ? `${Math.max(1120, visibleIpoColumns.reduce((sum,column)=>sum+(column.id==='company'?240:170),0))}px` : '100%', minWidth:customIpoColumns ? '1120px' : '1080px'}}><caption className="sr-only">Newly listed companies</caption>
             <colgroup>{visibleIpoColumns.map(column => <col key={column.id} style={{width:customIpoColumns ? column.id==='company'?'240px':column.id==='sectorIndustry'?'190px':'170px' : column.id==='company'?'26%':column.id==='sectorIndustry'?'17%':column.id==='deliveryPct'?'9%':'12%'}} />)}</colgroup>
             <thead><tr>{visibleIpoColumns.map(column => <th scope="col" key={column.id} aria-sort={column.sortField && sort.field === column.sortField ? sort.direction === 'asc' ? 'ascending' : 'descending' : column.sortField ? 'none' : undefined}>
               {column.sortField ? <button onClick={() => updateSort(column.sortField!)}>{column.label}<ArrowUpDown size={13} /></button> : column.label}
             </th>)}</tr></thead>
-            <tbody>{isLoading ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{visibleIpoColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}</tr>)
+            <tbody>{ipoWindow.top > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={visibleIpoColumns.length} style={{height: ipoWindow.top}} /></tr>}
+              {isLoading ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{visibleIpoColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}</tr>)
               : ipoQuery.isError && !ipoQuery.data ? <tr><td colSpan={visibleIpoColumns.length}><div role="alert" className="data-state"><h2>IPO catalogue could not be loaded.</h2><button className="button button-secondary" onClick={() => void ipoQuery.refetch()}>Retry</button></div></td></tr>
               : !filteredIpos.length ? <tr><td colSpan={visibleIpoColumns.length}><div className="data-state"><SearchX size={28} /><h2>No new listings recorded for selected period window.</h2><p>Choose a longer period or clear your search.</p></div></td></tr>
-              : visibleIpos.map(row => <tr key={row.symbol}>
+              : ipoWindow.rows.map((row, index) => <tr key={ipoWindow.first + index} aria-rowindex={ipoWindow.first + index + 2}>
                 {visibleIpoColumns.map(column => <td key={column.id} className={column.id === 'company' || column.id === 'sectorIndustry' ? '' : 'numeric'}>{column.id === 'company' ? <button type="button" className="ipo-company-trigger" aria-label={`IPO details for ${row.name || row.symbol}`} title="Hover or click for IPO details"
                   aria-haspopup="dialog" aria-expanded={activeIpo?.row.symbol === row.symbol} aria-controls={`ipo-details-${row.symbol}`}
                   onMouseEnter={event => openIpoDetails(row, event.currentTarget, false)}
@@ -304,10 +303,11 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
                 </button> : column.id === 'sectorIndustry' ? <><div className="cell-label truncate" title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></>
                   : <span className={column.id==='currentPrice'?'cell-strong':''} title={column.value(row)}>{column.value(row)}</span>}</td>)}
               </tr>)}
+              {ipoWindow.bottom > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={visibleIpoColumns.length} style={{height: ipoWindow.bottom}} /></tr>}
             </tbody>
           </table>
         </div>
-        <Pagination page={currentPage} pageSize={pageSize} total={filteredIpos.length} busy={isLoading || (ipoQuery.isError && !ipoQuery.data)} onPageChange={page => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setPage(page);}} />
+        <Pagination page={currentPage} pageSize={pageSize} total={filteredIpos.length} busy={isLoading || (ipoQuery.isError && !ipoQuery.data)} onPageChange={page => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setPage(page);}} onPageSizeChange={size => {dismissIpoDetails(); if (scrollRef.current) scrollRef.current.scrollTop = 0; setPageSize(size); setPage(1);}} />
         </div>
       </section>}
     {isColumnPickerOpen && <Dialog label="Customize IPO columns" className="column-dialog" onClose={() => setIsColumnPickerOpen(false)}>

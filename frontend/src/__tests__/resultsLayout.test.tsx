@@ -13,6 +13,19 @@ const row = {symbol: 'AVTNPL', name: 'Avt Natural Products', sector: 'FMCG', ind
 const data = {rows: [row], matchCount: 16, totalUniverseCount: 2600, page: 1, pageSize: 15, immutableRevision: request.datasetRevision} as ScreenerRunResponse;
 const props = {isLoading: false, isError: false, onPageChange: vi.fn(), onSortChange: vi.fn()};
 
+it('reuses page slots while replacing company identity, actions, and logo fallback state', () => {
+  const view = render(<ResultsTable {...props} data={data} />);
+  const firstRow = screen.getByRole('button', {name: 'View AVTNPL announcements'}).closest('tr');
+  const logo = firstRow!.querySelector('img')!;
+  fireEvent.error(logo);
+  expect(logo.src).toContain('stockscans.in');
+  view.rerender(<ResultsTable {...props} data={{...data, page: 2, rows: [{...row, symbol: 'WORTHPERI', name: 'Worth Peripherals'}]}} />);
+  expect(screen.getByRole('button', {name: 'View WORTHPERI announcements'}).closest('tr')).toBe(firstRow);
+  expect(screen.getByRole('button', {name: 'View WORTHPERI company snapshot'})).toBeInTheDocument();
+  expect(logo.src).toContain('/WORTHPERI.png');
+  expect(screen.queryByRole('button', {name: 'View AVTNPL announcements'})).not.toBeInTheDocument();
+});
+
 it('keeps table, column definitions and pagination mounted across loading, results, short final page, empty and error states', () => {
   const view = render(<ResultsTable {...props} isLoading />);
   const table = screen.getByRole('table');
@@ -77,6 +90,9 @@ it('selects all available columns from the compact column chooser', () => {
   expect(screen.getByRole('checkbox', {name: 'SMA10'})).toBeChecked();
   fireEvent.click(screen.getByRole('tab', {name: 'Fundamental'}));
   expect(screen.getByRole('checkbox', {name: 'Revenue (TTM, Cr)'})).toBeChecked();
+  const tableScroll = screen.getByLabelText('Equity results table, scroll for more columns');
+  Object.defineProperty(tableScroll, 'clientWidth', {value: 1024, configurable: true});
+  fireEvent.scroll(tableScroll, {target: {scrollLeft: 16400}});
   expect(screen.getByRole('columnheader', {name: 'Data completeness'})).toBeInTheDocument();
   view.unmount();
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
@@ -131,6 +147,15 @@ it('retains previous results only for a page-only change, not a changed filter, 
     {expressionTree: {type: 'group' as const, operator: 'any' as const, children: []}}]) {
     expect(pagePlaceholder(data, request, {...request, ...change, page: 2})).toBeUndefined();
   }
+});
+
+it('offers compact page sizes without changing pagination itself', () => {
+  const change = vi.fn();
+  render(<Pagination page={2} pageSize={15} total={200} onPageChange={vi.fn()} onPageSizeChange={change} />);
+  fireEvent.change(screen.getByRole('combobox', {name: 'Rows per page'}), {target: {value: '50'}});
+  expect(change).toHaveBeenLastCalledWith(50);
+  fireEvent.change(screen.getByRole('combobox', {name: 'Rows per page'}), {target: {value: '100'}});
+  expect(change).toHaveBeenLastCalledWith(100);
 });
 
 it('keeps empty and single-page pagination visible without offering invalid navigation', () => {

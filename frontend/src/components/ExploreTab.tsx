@@ -17,6 +17,7 @@ import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search } from 'luci
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import type { AnnouncementFilter } from '../api/announcements';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
+import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 
 interface ExploreTabProps {
   selectedAsOfDate: string;
@@ -57,14 +58,15 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   });
 
   const activeConditionsArray = useMemo(() => Object.values(activeConditionsMap).filter(c => !isRetiredTechnicalCondition(c.conditionId)), [activeConditionsMap]);
+  const hasUnavailable = hasUnavailableConditions(activeConditionsMap);
 
   const expressionTree: ExpressionNode = useMemo(
     () => ({
       type: 'group',
       operator: matchMode,
-      children: activeConditionsArray.map((c) => ({ type: 'condition', condition: c })),
+      children: Object.values(activeConditionsMap).map((c) => ({ type: 'condition', condition: c })),
     }),
-    [matchMode, activeConditionsArray]
+    [matchMode, activeConditionsMap]
   );
 
   const explanationResult = useMemo(
@@ -89,8 +91,11 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['screenRun', runRequest],
-    queryFn: () => screenerApi.runScreen(runRequest),
-    enabled: Boolean(asOfDate),
+    queryFn: () => {
+      if (hasUnavailable) throw new Error(UNAVAILABLE_CONDITIONS_MESSAGE);
+      return screenerApi.runScreen(runRequest);
+    },
+    enabled: Boolean(asOfDate) && !hasUnavailable,
     placeholderData: (previous, query) => pagePlaceholder(previous, query?.queryKey[1], runRequest),
   });
 
@@ -120,6 +125,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   };
 
   const handleRun = async () => {
+    if (hasUnavailable) return;
     const nextQuery = queryText.trim();
     // Refresh before changing query state.  Otherwise the render caused by a
     // new query can submit the revision captured before this button press.
@@ -132,7 +138,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
     if (refreshedRevision === datasetRevision) await refetch();
   };
 
-  const filterCount = activeConditionsArray.length;
+  const filterCount = Object.keys(activeConditionsMap).length;
 
   return <div className="research-view">
     <section className="screen-controls" aria-label="Screen criteria">
@@ -147,7 +153,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
         <div className="screen-buttons">
           {(filterCount > 0 || activeQuery) && <button className="button button-ghost" onClick={handleReset}><RotateCcw size={14} />Reset</button>}
           <button onClick={() => setIsModalOpen(true)} className="button button-secondary"><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</button>
-          <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching} className="button button-primary"><Play size={14} />Run</button>
+          <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable} className="button button-primary"><Play size={14} />Run</button>
         </div>
       </div>
       {(activeQuery || filterCount > 0) && <div className="active-filters">
@@ -157,10 +163,11 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
             return <span key={cond.instanceId} className="filter-chip">{def?.label ?? cond.conditionId}<button aria-label={`Remove ${def?.label ?? cond.conditionId}`} onClick={() => handleRemove(cond.conditionId)}><X size={13} /></button></span>;
           })}
       </div>}
-      {!activeQuery && explanationResult.compiledExplanations.length > 0 && <p className="criteria-summary">{explanationResult.compiledExplanations.map(e => e.humanReadableText).join(matchMode === 'all' ? '; ' : ' OR ')}</p>}
+      <UnavailableConditions conditions={activeConditionsMap} onRemove={handleRemove} />
+      {!hasUnavailable && !activeQuery && explanationResult.compiledExplanations.length > 0 && <p className="criteria-summary">{explanationResult.compiledExplanations.map(e => e.humanReadableText).join(matchMode === 'all' ? '; ' : ' OR ')}</p>}
     </section>
-    <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
-      onRetry={() => void refetch()} onPageChange={setPage} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onAddToWatchlist={onAddToWatchlist} />
+    {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
+      onRetry={() => void refetch()} onPageChange={setPage} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onAddToWatchlist={onAddToWatchlist} />}
     <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} activeConditionsMap={activeConditionsMap} matchMode={matchMode} onApply={handleApply} />
   </div>;
 };

@@ -1,8 +1,13 @@
 import { ConditionDef } from '../types/screener';
 import nativeConditions from './nativeConditions.json';
 
-export const isRetiredTechnicalCondition = (id: string) =>
-  ['INDICATOR_COMPARE', 'MA_CONVERGENCE', 'DIVERGENCE', 'SUPERTREND'].includes(id);
+export const RETIRED_TECHNICAL_LABELS: Record<string, string> = {
+  INDICATOR_COMPARE: 'Indicator Compare / Crossover',
+  MA_CONVERGENCE: 'MA Convergence',
+  DIVERGENCE: 'Price / Oscillator Divergence',
+  SUPERTREND: 'Supertrend Direction',
+};
+export const isRetiredTechnicalCondition = (id: string) => Object.hasOwn(RETIRED_TECHNICAL_LABELS, id);
 
 const INDICATOR_OPTIONS = [
   'CLOSE','OPEN','HIGH','LOW','VOLUME','HL2','HLC3','OHLC4','SMA','EMA','WMA','VOLUME_SMA',

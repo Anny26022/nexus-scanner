@@ -11,6 +11,7 @@ import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { Pagination } from './Pagination';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
+import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 
 export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDate: string }> = ({ datasetRevision, selectedAsOfDate }) => {
   const [periodFilter, setPeriodFilter] = useLocalStorageState<'30d' | '90d' | '6m' | '1y' | 'all'>('nexus-scanner.ipo.period.v1', '1y');
@@ -21,6 +22,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const [showScreenResults, setShowScreenResults] = useState(false);
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.ipo.match-mode.v1', 'all');
   const [conditions, setConditions] = useLocalStorageState<Record<string, ActiveCondition>>('nexus-scanner.ipo.conditions.v1', {});
+  const hasUnavailable = hasUnavailableConditions(conditions);
   const [screenPage, setScreenPage] = useState(1);
   const [screenSort, setScreenSort] = useState<{ field: string; direction: 'asc' | 'desc' }>({ field: 'rvol', direction: 'desc' });
   const pageSize = 50;
@@ -66,7 +68,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   };
   const expressionTree: ExpressionNode = useMemo(() => ({
     type: 'group', operator: matchMode,
-    children: Object.values(conditions).filter(condition => !isRetiredTechnicalCondition(condition.conditionId)).map(condition => ({ type: 'condition', condition })),
+    children: Object.values(conditions).map(condition => ({ type: 'condition', condition })),
   }), [conditions, matchMode]);
   const listingSymbols = useMemo(() => filteredIpos.map(row => row.symbol), [filteredIpos]);
   const screenRequest: ScreenerRunRequest = useMemo(() => ({
@@ -75,8 +77,11 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   }), [datasetRevision, selectedAsOfDate, listingSymbols, expressionTree, screenSort, screenPage]);
   const screenQuery = useQuery({
     queryKey: ['ipoScreen', screenRequest],
-    queryFn: () => screenerApi.runScreen(screenRequest),
-    enabled: showScreenResults && Boolean(selectedAsOfDate) && listingSymbols.length > 0,
+    queryFn: () => {
+      if (hasUnavailable) throw new Error(UNAVAILABLE_CONDITIONS_MESSAGE);
+      return screenerApi.runScreen(screenRequest);
+    },
+    enabled: !hasUnavailable && showScreenResults && Boolean(selectedAsOfDate) && listingSymbols.length > 0,
     placeholderData: (previous, query) => pagePlaceholder(previous, query?.queryKey[1], screenRequest),
   });
   const applyFilters = (next: Record<string, ActiveCondition>, mode: MatchMode) => {
@@ -103,16 +108,17 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
         </select><ChevronDown size={14} /></span></label>
         <label className="query-control"><span className="field-label">Find a listing</span><span className="query-input"><Search size={16} /><input aria-label="Search IPO listings" value={search} onChange={event => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setSearch(event.target.value); setPage(1); setScreenPage(1);}} placeholder="Search symbol or company" /></span></label>
         <div className="screen-buttons">
-          {activeConditions.length > 0 && <button className="button button-ghost" onClick={() => {setConditions({}); setScreenPage(1);}}>Reset</button>}
+          {Object.keys(conditions).length > 0 && <button className="button button-ghost" onClick={() => {setConditions({}); setScreenPage(1);}}>Reset</button>}
           {showScreenResults && <button className="button button-secondary" onClick={() => setShowScreenResults(false)}>Listings</button>}
-          <button className="button button-secondary" onClick={() => setIsFilterModalOpen(true)}><SlidersHorizontal size={15} />Filters{activeConditions.length > 0 && <span className="count-badge">{activeConditions.length}</span>}</button>
-          <button className="button button-primary" onClick={() => {setScreenPage(1); setShowScreenResults(true);}} disabled={!filteredIpos.length || screenQuery.isFetching}><Play size={14} />Run</button>
+          <button className="button button-secondary" onClick={() => setIsFilterModalOpen(true)}><SlidersHorizontal size={15} />Filters{Object.keys(conditions).length > 0 && <span className="count-badge">{Object.keys(conditions).length}</span>}</button>
+          <button className="button button-primary" onClick={() => {if (hasUnavailable) return; setScreenPage(1); setShowScreenResults(true);}} disabled={hasUnavailable || !filteredIpos.length || screenQuery.isFetching}><Play size={14} />Run</button>
         </div>
       </div>
       {activeConditions.length > 0 && <div className="active-filters">{activeConditions.map(condition => {
         const definition = NEXUS_CONDITION_CATALOG.find(item => item.id === condition.conditionId) ?? PRESET_CATALOG.find(item => item.id === condition.conditionId);
         return <span key={condition.instanceId} className="filter-chip">{definition?.label ?? condition.conditionId}<button aria-label={`Remove ${definition?.label ?? condition.conditionId}`} onClick={() => removeCondition(condition.conditionId)}><X size={13} /></button></span>;
       })}</div>}
+      <UnavailableConditions conditions={conditions} onRemove={removeCondition} />
     </section>
     {providerStatus && <p role="status" className="notice">
       IPO Decode: {providerStatus.state === 'complete' ? 'catalogue and analytics refreshed'
@@ -121,7 +127,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
         : providerStatus.state === 'unavailable' ? 'refresh failed; provider data unavailable' : 'refresh completeness not recorded'}.
       {providerStatus.checkedAt && ` Checked ${new Date(providerStatus.checkedAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST.`}
     </p>}
-    {showScreenResults && listingSymbols.length > 0 ? <ResultsTable data={screenQuery.data} isLoading={screenQuery.isLoading} isFetching={screenQuery.isFetching}
+    {showScreenResults && !hasUnavailable && listingSymbols.length > 0 ? <ResultsTable data={screenQuery.data} isLoading={screenQuery.isLoading} isFetching={screenQuery.isFetching}
       isError={screenQuery.isError} error={screenQuery.error} onRetry={() => void screenQuery.refetch()} onPageChange={setScreenPage}
       onSortChange={(field, direction) => {setScreenSort({field, direction}); setScreenPage(1);}} currentSort={screenSort} />
       : <section className="results-surface" aria-label="IPO listings">

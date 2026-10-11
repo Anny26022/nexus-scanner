@@ -1,6 +1,7 @@
 import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
 import React, { memo, useCallback, useRef, useState } from 'react';
 import { Dialog } from './Dialog';
+import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 import { X, SlidersHorizontal, Library, ChevronDown } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
@@ -253,7 +254,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
 
   const handleReset = () => setLocalMap({});
 
-  const validationError = conditionValidationError(localMap);
+  const validationError = hasUnavailableConditions(localMap) ? UNAVAILABLE_CONDITIONS_MESSAGE : conditionValidationError(localMap);
   const handleApply = () => {
     if (validationError) return;
     onApply(localMap, localMode);
@@ -272,12 +273,17 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       {activeTab === 'custom' && <div className="filter-categories" role="group" aria-label="Filter categories">{CATEGORY_TABS.map(tab => <button key={tab.id} aria-pressed={category === tab.id} onClick={() => setCategory(tab.id)}>{tab.label}</button>)}</div>}
     </div>
     <div className="filter-modal-content">
+      <UnavailableConditions conditions={localMap} onRemove={key => setLocalMap(current => {
+        const next = {...current};
+        delete next[key];
+        return next;
+      })} />
       <div className="grid grid-cols-1 gap-x-8 xl:grid-cols-2">
         {filtered.map(def => <FilterRow key={def.id} def={def} active={localMap[def.id]} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}
       </div>
       {!filtered.length && <div className="data-state"><h2>No matching {activeTab === 'custom' ? 'filters' : 'scans'}</h2><p>Try a different category or search.</p></div>}
     </div>
-    {validationError && <p role="alert" className="px-6 py-2 text-sm text-red-600">{validationError}</p>}
+    {validationError && !hasUnavailableConditions(localMap) && <p role="alert" className="px-6 py-2 text-sm text-red-600">{validationError}</p>}
     <div className="dialog-footer"><span className="cell-muted text-xs">{Object.keys(localMap).length} selected</span>
       <div className="flex gap-2"><button onClick={handleReset} className="button button-secondary">Reset</button><button onClick={handleApply} disabled={Boolean(validationError)} className="button button-primary">Apply</button></div>
     </div>

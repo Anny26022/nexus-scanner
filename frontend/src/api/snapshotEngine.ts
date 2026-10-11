@@ -1,8 +1,12 @@
 import { unpackSnapshot } from './packedSnapshot';
 import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
+import { compileTextQuery } from '../engine/queryCompiler';
+import type { ExpressionNode } from '../types/screener';
+import { expressionPlan } from './capabilityRegistry';
+import { mergePacks, type PublicPackName, type PublicPacks } from './packStore';
 
-export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
+export interface SnapshotSource { revision: string; url?: string; sessionDate?: string; packs?: PublicPacks }
 export type SnapshotTask =
   | { type:'screen'; source:SnapshotSource; request:ScreenerRunRequest }
   | { type:'compare'; source:SnapshotSource; symbols:string[] };
@@ -11,6 +15,7 @@ export type SnapshotResult =
   | { type:'compare'; result:SymbolComparisonResponse };
 
 async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
+  if (!source.url) throw new Error('Scanner compatibility snapshot URL is missing');
   const response = await fetch(source.url, {cache:'force-cache'});
   if (!response.ok) throw new Error(`Snapshot request failed (HTTP ${response.status})`);
   let data: Snapshot;
@@ -34,21 +39,31 @@ async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
 
 export function createSnapshotEngine(loader = readSnapshot) {
   const snapshots = new Map<string, Promise<Snapshot>>();
-  async function load(source: SnapshotSource) {
+  async function load(source: SnapshotSource, names: PublicPackName[]) {
     if (!/^[a-f0-9]{64}$/.test(source.revision)) throw new Error('Invalid dataset revision');
-    let promise = snapshots.get(source.revision);
+    const packIdentity = source.packs ? names.map(name => `${name}:${source.packs![name].sha256}`).join(',') : '';
+    const key = `${source.revision}:${source.sessionDate ?? ''}:${packIdentity}`;
+    let promise = snapshots.get(key);
     if (!promise) {
-      promise = loader(source).catch(error => {
-        if (snapshots.get(source.revision) === promise) snapshots.delete(source.revision);
+      promise = (source.packs ? mergePacks(source.revision,source.packs,names) : loader(source)).then(data => {
+        if (source.sessionDate && data.asOfDate !== source.sessionDate) throw new Error('Scanner snapshot revision/session mismatch');
+        return data;
+      }).catch(error => {
+        if (snapshots.get(key) === promise) snapshots.delete(key);
         throw error;
       });
-      snapshots.set(source.revision,promise);
+      snapshots.set(key,promise);
       if (snapshots.size > 2) snapshots.delete(snapshots.keys().next().value!);
     }
     return promise;
   }
   return async (task: SnapshotTask): Promise<SnapshotResult> => {
-    const data = await load(task.source);
+    if (task.type === 'screen' && task.request.textQuery?.trim()) task = {...task,request:{...task.request,
+      expressionTree:compileTextQuery(task.request.textQuery) as ExpressionNode,textQuery:undefined}};
+    const names:PublicPackName[] = task.type === 'compare' ? ['core','technical','fundamentals']
+      : expressionPlan(task.request.expressionTree).dependencies
+          .filter((name):name is PublicPackName => name !== 'advanced');
+    const data = await load(task.source,names);
     if (task.type === 'screen') return {type:'screen',result:screenSnapshot(data,task.request),revision:data.revision,sessionDate:data.asOfDate};
     const bySymbol = new Map(data.stocks.map(stock => [stock.symbol,stock]));
     const validSymbols: SymbolComparisonResponse['validSymbols'] = [], invalidSymbols:string[] = [];

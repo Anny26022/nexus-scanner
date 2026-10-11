@@ -76,6 +76,7 @@ class PublishedFieldsTests(unittest.TestCase):
         self.assertIsNone(dividend_amount('Dividend 200%'))
         self.assertIsNone(dividend_amount('Rs 5 per share and Rs 2 per share'))
         self.assertIsNone(dividend_amount('Dividend Rs Re 1 per share'))
+        self.assertIsNone(dividend_amount('Dividend Rs Re1 per share'))
         self.assertIsNone(dividend_amount('shares are 5 per share'))
         action = {'symbol':'ABC','categories':['dividend'],'exDate':'2026-09-01',
                   'subject':'Dividend - Rs. 5 per share'}

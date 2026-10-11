@@ -1,0 +1,15 @@
+name = "nexus-scanner-engine"
+main = "src/index.ts"
+compatibility_date = "2026-09-27"
+workers_dev = true
+
+[limits]
+cpu_ms = 30000
+
+[[r2_buckets]]
+binding = "SCANNER_DATA"
+bucket_name = "nexus-screener-private-data"
+
+[vars]
+ALLOWED_ORIGINS = "https://nexus-scanner.pages.dev,http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173"
+SCANNER_RELEASE_URL = "https://raw.githubusercontent.com/Anny26022/nexus-scanner/main/frontend/public/data/current.json"

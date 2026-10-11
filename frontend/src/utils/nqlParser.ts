@@ -35,7 +35,7 @@ export function explainCondition(condition: ActiveCondition): {
       explanation = `${p.leftIndicator}(${p.leftPeriod}${p.leftOffset ? `, offset ${p.leftOffset}` : ''}) ${String(p.op).replaceAll('_', ' ')} ${p.rightIndicator ? `${p.rightIndicator}(${p.rightPeriod}${p.rightOffset ? `, offset ${p.rightOffset}` : ''})` : p.rightValue}${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
       break;
     case 'MA_CONVERGENCE':
-      explanation = `${p.maType} ${p.periods} are within ${p.maxSpreadPct}% of close${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
+      explanation = `${p.maType} ${p.periods} spread is ${p.comparison === 'ABOVE' ? 'at least' : 'at most'} ${p.maxSpreadPct}% of close${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
       break;
     case 'DIVERGENCE':
       explanation = `${p.variant} ${p.direction} price / ${p.oscillator}(${p.oscPeriod}) divergence, confirmed with ${p.pivotRight} right bars${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;

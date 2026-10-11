@@ -62,11 +62,13 @@ class ObjectPublicationTests(unittest.TestCase):
             self.assertEqual(lookup['symbols']['TEST']['recent'], catalog['symbols']['TEST']['recent'])
             history = json.loads(gzip.decompress(store.objects[lookup['symbols']['TEST']['history'] + '.json.gz']))
             self.assertEqual(history, {'symbol': 'TEST', **catalog['symbols']['TEST']})
-            invalid = json.loads(json.dumps(lookup))
-            invalid['symbols']['TEST']['recent'] = '0' * 64
-            with self.assertRaisesRegex(RuntimeError, 'Filing lookup history mismatch'):
-                validate_announcement_objects(root / 'chart_artifacts/objects', index['announcements'],
-                                              '2026-10-06', {'TEST'}, invalid)
+            for field, digest in [('recent', '0' * 64), ('history', index['announcements'])]:
+                with self.subTest(invalid_reference=field):
+                    invalid = json.loads(json.dumps(lookup))
+                    invalid['symbols']['TEST'][field] = digest
+                    with self.assertRaisesRegex(RuntimeError, 'Filing lookup history mismatch'):
+                        validate_announcement_objects(root / 'chart_artifacts/objects', index['announcements'],
+                                                      '2026-10-06', {'TEST'}, invalid)
             before = store.uploaded.count(chart_hash + '.json.gz')
             second = complete_release(self.build(root, '2026-10-07'), output, {'revision': 'b'*64, 'sessionDate': '2026-10-07'}, store)
             self.assertEqual(store.uploaded.count(chart_hash + '.json.gz'), before)

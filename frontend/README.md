@@ -396,8 +396,10 @@ Announcements use the same object store. A schema-4 scanner-only release cannot
 provide announcement summaries, history, or category filters. Configure the
 Actions secrets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and the
 repository variable `R2_PUBLIC_BASE_URL`, then run the full refresh to publish a
-schema-7 release. The public base must serve the uploaded objects with CORS for
-the frontend origin. Do not put storage credentials into `VITE_*` variables.
+schema-7 release. Set the public base to the read-only `workers/r2-delivery`
+Worker URL; it serves uploaded objects with CORS while the bucket's `r2.dev`
+endpoint stays disabled. Deploy that Worker before updating the variable or
+release pointers. Do not put storage credentials into `VITE_*` variables.
 
 For a missing-file error in a schema-7 release, verify the exact `dataIndexUrl`
 and content-addressed `objectUrlTemplate` references, HTTP status and CORS.

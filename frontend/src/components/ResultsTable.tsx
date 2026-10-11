@@ -6,8 +6,14 @@ import { AnnouncementsPanel } from './AnnouncementsPanel';
 import { Pagination } from './Pagination';
 import { Dialog } from './Dialog';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import { useSymbolHoverCard } from '../hooks/useSymbolHoverCard';
+import { TijoriDetailsCard } from './TijoriDetailsCard';
+import { useTableWindow } from '../hooks/useTableWindow';
+import { useColumnWindow } from '../hooks/useColumnWindow';
 
 interface ResultsTableProps {
+  symbolSearch?: string;
+  onSymbolSearchChange?: (value: string) => void;
   data?: ScreenerRunResponse;
   isLoading: boolean;
   isError: boolean;
@@ -15,6 +21,7 @@ interface ResultsTableProps {
   error?: Error | null;
   onRetry?: () => void;
   onPageChange: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
   onSortChange: (field: string, direction: 'asc' | 'desc') => void;
   currentSort?: { field: string; direction: 'asc' | 'desc' };
 }
@@ -105,23 +112,26 @@ const columns: ResultColumn[] = [
 ];
 const DEFAULT_COLUMNS = ['company','sector','close','changePct','rvol','marketCapCrore','rsRsi','deliveryPct'];
 const COLUMN_GROUPS: ColumnGroup[] = ['Overview','Technical','Fundamental','Other'];
+const numberFormatter = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2});
+const priceFormatter = new Intl.NumberFormat('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
 const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
   if (value == null || value === '') return <span className="cell-muted">—</span>;
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return <span className="cell-muted">—</span>;
-    if (format === 'percent') return `${value.toLocaleString('en-IN', {maximumFractionDigits: 2})}%`;
-    if (format === 'multiple') return `${value.toLocaleString('en-IN', {maximumFractionDigits: 2})}×`;
-    if (format === 'crore') return `₹${value.toLocaleString('en-IN', {maximumFractionDigits: 2})} Cr`;
-    if (format === 'price') return `₹${value.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    return value.toLocaleString('en-IN', {maximumFractionDigits: 2});
+    if (format === 'price') return `₹${priceFormatter.format(value)}`;
+    const formatted = numberFormatter.format(value);
+    if (format === 'percent') return `${formatted}%`;
+    if (format === 'multiple') return `${formatted}×`;
+    if (format === 'crore') return `₹${formatted} Cr`;
+    return formatted;
   }
   return value;
 };
 
 export function ResultsTable({ data, isLoading, isError, isFetching = false, error, onRetry,
-  onPageChange, onSortChange, currentSort }: ResultsTableProps) {
+  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange }: ResultsTableProps) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
@@ -139,8 +149,15 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
     ? Math.max(1120, visibleColumns.reduce((width, column) => width + (column.id === 'company' ? 240 : column.id === 'sector' ? 180 : 150), 0))
     : 1120;
   const scrollRef = useRef<HTMLDivElement>(null);
-  const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
+  const columnWindow = useColumnWindow(visibleColumns,
+    column => column.id === 'company' ? 240 : column.id === 'sector' ? 180 : 150,
+    usingCustomColumns && visibleColumns.length > 20);
+  const renderedColumns = columnWindow.columns;
+  const columnSpan = renderedColumns.length + Number(columnWindow.left > 0) + Number(columnWindow.right > 0);
+  const overview = useSymbolHoverCard<ScreenerRunResponse['rows'][number]>();
+  const resetScroll = () => { overview.dismiss(); if (scrollRef.current) scrollRef.current.scrollTop = 0; };
   const rows = data?.rows ?? [];
+  const rowWindow = useTableWindow(rows, data, visibleColumns.length);
   const busy = isLoading || isFetching;
   const copy = async () => {
     try {
@@ -153,6 +170,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   return <section className="results-surface" aria-label="Screener results">
     <div className="results-toolbar">
       <div className="result-count"><strong>{data?.matchCount.toLocaleString('en-IN') ?? '-'}</strong><span>matched equities <span className="result-universe">/ {data?.totalUniverseCount.toLocaleString('en-IN') ?? '-'} universe</span></span></div>
+      {onSymbolSearchChange && <label className="results-symbol-search"><Search size={13} aria-hidden="true" /><input type="search" aria-label="Search symbol or company" placeholder="Search symbol" value={symbolSearch} onChange={event => {resetScroll(); onSymbolSearchChange(event.target.value);}} /></label>}
       <div className="results-actions">
         {(isError || busy) && <span role="status" className="fetch-status">{isError ? 'Query failed' : 'Updating results'}</span>}
         <button type="button" onClick={() => void copy()} disabled={!rows.length || busy} className="button button-secondary results-copy-button" aria-label={copied ? 'Copied TradingView symbols' : 'Copy TradingView symbols'} title={copied ? 'Copied!' : 'Copy TradingView'}>{copied ? <Check size={15} /> : <Copy size={15} />}</button>
@@ -183,34 +201,48 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
     </Dialog>}
     {copyError && <p role="alert" className="notice">Clipboard access was denied. Please allow clipboard access and try again.</p>}
     <div className="table-viewport" aria-busy={busy}>
-      <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns">
-        <table className="data-table" style={{width: usingCustomColumns ? `${tableWidth}px` : '100%', minWidth: `${tableWidth}px`}}>
+      <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
+        <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={{width: usingCustomColumns ? `${tableWidth}px` : '100%', minWidth: `${tableWidth}px`}}>
           <caption className="sr-only">Equities matching the current screen</caption>
-          <colgroup>{visibleColumns.map(column => <col key={column.id} style={{width: usingCustomColumns ? column.id === 'company' ? '240px' : column.id === 'sector' ? '180px' : '150px' : column.width}} />)}</colgroup>
-          <thead><tr>{visibleColumns.map(column => <th key={column.id} scope="col"
+          <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: usingCustomColumns ? column.id === 'company' ? '240px' : column.id === 'sector' ? '180px' : '150px' : column.width}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
+          <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
             aria-sort={column.sortField ? currentSort?.field === column.sortField ? currentSort.direction === 'asc' ? 'ascending' : 'descending' : 'none' : undefined}>
             {column.sortField ? <button type="button" disabled={busy} onClick={() => {resetScroll(); onSortChange(column.sortField!, currentSort?.field === column.sortField && currentSort?.direction === 'asc' ? 'desc' : 'asc');}}>
               {column.label}{currentSort?.field === column.sortField ? currentSort?.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} /> : <ArrowUpDown size={13} />}
             </button> : column.label}
-          </th>)}</tr></thead>
+          </th>)}{columnWindow.right > 0 && <th aria-hidden="true" className="column-spacer" />}</tr></thead>
           <tbody>
-            {isError ? <tr><td colSpan={visibleColumns.length}><div className="data-state" role="alert"><AlertTriangle size={28} /><h2>Screener query failed</h2><p>{error?.message || 'The query could not be completed.'}</p>{onRetry && <button className="button button-secondary" onClick={onRetry}>Retry</button>}</div></td></tr>
-              : !data ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{visibleColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}</tr>)
-              : !rows.length ? <tr><td colSpan={visibleColumns.length}><div className="data-state"><SearchX size={28} /><h2>No equities matched</h2><p>Adjust your filters or choose a broader universe.</p></div></td></tr>
-              : rows.map(row => <tr key={row.symbol}>{visibleColumns.map(column => <td key={column.id} className={column.id === 'company' ? '' : 'numeric'}>
-                {column.id === 'company' ? <div className="company-cell"><SymbolWithLogo symbol={row.symbol} name={row.name} badge={row.isFno && <span className="fno-label">F&amp;O</span>} />
+            {rowWindow.top > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={columnSpan} style={{height: rowWindow.top}} /></tr>}
+            {isError ? <tr><td colSpan={columnSpan}><div className="data-state" role="alert"><AlertTriangle size={28} /><h2>Screener query failed</h2><p>{error?.message || 'The query could not be completed.'}</p>{onRetry && <button className="button button-secondary" onClick={onRetry}>Retry</button>}</div></td></tr>
+              : !data ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{columnWindow.left > 0 && <td aria-hidden="true" />}{renderedColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}{columnWindow.right > 0 && <td aria-hidden="true" />}</tr>)
+              : !rows.length ? <tr><td colSpan={columnSpan}><div className="data-state"><SearchX size={28} /><h2>No equities matched</h2><p>Adjust your filters or choose a broader universe.</p></div></td></tr>
+              // Page slots have no company-local state; reuse their cells instead of remounting thousands.
+              : rowWindow.rows.map((row, index) => <tr key={rowWindow.first + index} aria-rowindex={rowWindow.first + index + 2}>{columnWindow.left > 0 && <td aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, columnIndex) => <td key={column.id} aria-colindex={columnWindow.first + columnIndex + 1} className={column.id === 'company' ? '' : 'numeric'}>
+                {column.id === 'company' ? <div className="company-cell"><button type="button" className="ipo-company-trigger" aria-label={`View ${row.symbol} company snapshot`}
+                  aria-haspopup="dialog" aria-expanded={overview.active?.row.symbol === row.symbol}
+                  aria-controls={overview.active?.row.symbol === row.symbol ? overview.id : undefined}
+                  onMouseEnter={event => overview.open(row, event.currentTarget)} onMouseLeave={overview.scheduleClose}
+                  onFocus={event => overview.open(row, event.currentTarget)}
+                  onBlur={event => {if (!document.getElementById(`company-overview-${row.symbol}`)?.contains(event.relatedTarget)) overview.scheduleClose();}}
+                  onClick={event => overview.active?.row.symbol === row.symbol && overview.active.pinned
+                    ? overview.dismiss() : overview.open(row, event.currentTarget, true)}>
+                    <SymbolWithLogo symbol={row.symbol} name={row.name} badge={row.isFno && <span className="fno-label">F&amp;O</span>} /></button>
                   <div className="company-tools"><button type="button" className="icon-button filing-button" aria-label={`View ${row.symbol} announcements`} title="View announcements" onClick={() => setFilingSymbol(row.symbol)} disabled={busy}><FileText size={14} strokeWidth={1.8} /></button></div></div>
                   : column.id === 'sector' ? <><div className={row.sector === 'Unclassified' ? 'cell-muted truncate' : 'cell-label truncate'} title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></>
                   : column.id === 'deliveryPct' && row.deliveryPct == null ? <span className="cell-muted">Unavailable</span>
                   : column.id === 'changePct' && row.changePct != null ? <span className={row.changePct >= 0 ? 'positive' : 'negative'}>{row.changePct >= 0 ? '+' : ''}{displayValue(column.getValue(row), column.format)}</span>
                   : column.id === 'rvol' && row.rvol != null ? <span className={row.rvol >= 2 ? 'volume-badge' : ''}>{displayValue(column.getValue(row), column.format)}</span>
                   : displayValue(column.getValue(row), column.format)}
-              </td>)}</tr>)}
+              </td>)}{columnWindow.right > 0 && <td aria-hidden="true" className="column-spacer" />}</tr>)}
+            {rowWindow.bottom > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={columnSpan} style={{height: rowWindow.bottom}} /></tr>}
           </tbody>
         </table>
       </div>
-      <Pagination page={data?.page ?? 1} pageSize={data?.pageSize ?? 15} total={data?.matchCount ?? 0} busy={busy || isError || !data} onPageChange={page => {resetScroll(); onPageChange(page);}} />
+      <Pagination page={data?.page ?? 1} pageSize={data?.pageSize ?? 15} total={data?.matchCount ?? 0} busy={busy || isError || !data} onPageChange={page => {resetScroll(); onPageChange(page);}} onPageSizeChange={onPageSizeChange && (size => {resetScroll(); onPageSizeChange(size);})} />
     </div>
+    {overview.active && overview.id && !busy && !isError && !columnPickerOpen && !filingSymbol && rows.some(row => row.symbol === overview.active!.row.symbol) &&
+      <TijoriDetailsCard key={overview.active.row.symbol} {...overview.active} id={overview.id}
+        onClose={overview.close} onMouseEnter={overview.cancelClose} onMouseLeave={overview.scheduleClose} />}
     {filingSymbol && data && <AnnouncementsPanel key={`${filingSymbol}:${data.immutableRevision}`} symbol={filingSymbol} revision={data.immutableRevision} onClose={() => setFilingSymbol(null)} />}
   </section>;
 }

@@ -18,6 +18,7 @@ import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search } from 'luci
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import type { AnnouncementFilter } from '../api/announcements';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
+import { useNextScreenPage, screenPageStaleTime } from '../hooks/useNextScreenPage';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 
 interface ExploreTabProps {
@@ -49,6 +50,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   const [activeConditionsMap, setActiveConditionsMap] =
     useLocalStorageState<Record<string, ActiveCondition>>('nexus-scanner.screener.conditions.v1', DEFAULT_CONDITIONS);
   const [pagination, setPagination] = useState({revision: datasetRevision, page: 1});
+  const [pageSize, setPageSize] = useState(15);
+  const [symbolSearch, setSymbolSearch] = useState('');
   const page = pagination.revision === datasetRevision ? pagination.page : 1;
   const setPage = (next: number) => setPagination({revision: datasetRevision, page: next});
   const [announcementFilter, setAnnouncementFilter] = useState<AnnouncementFilter>();
@@ -79,14 +82,15 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       expressionTree,
       announcementFilter,
       textQuery: activeQuery || undefined,
+      symbolSearch: symbolSearch.trim() || undefined,
       universe,
       asOfDate,
       datasetRevision,
       sort,
       page,
-      pageSize: 15,
+      pageSize,
     }),
-    [expressionTree, activeQuery, universe, asOfDate, datasetRevision, sort, page, announcementFilter]
+    [expressionTree, activeQuery, symbolSearch, universe, asOfDate, datasetRevision, sort, page, pageSize, announcementFilter]
   );
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
@@ -96,8 +100,11 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       return screenerApi.runScreen(runRequest);
     },
     enabled: Boolean(asOfDate) && !hasUnavailable,
+    staleTime: screenPageStaleTime(runRequest),
     placeholderData: (previous, query) => pagePlaceholder(previous, query?.queryKey[1], runRequest),
   });
+
+  useNextScreenPage('screenRun', runRequest, data, !hasUnavailable && !isFetching && !isError);
 
   const handleApply = (newMap: Record<string, ActiveCondition>, newMatchMode: MatchMode) => {
     setActiveConditionsMap(newMap);
@@ -117,6 +124,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   };
 
   const handleReset = () => {
+    setSymbolSearch('');
     setActiveConditionsMap({});
     setAnnouncementFilter(undefined);
     setActiveQuery('');
@@ -151,7 +159,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
           <input aria-label="Scanner query" value={queryText} onChange={event => setQueryText(event.target.value)}
             onKeyDown={event => { if (event.key === 'Enter') void handleRun(); }} placeholder="e.g. P/E < 20 AND EPS > 10" /></span></label>
         <div className="screen-buttons">
-          {(filterCount > 0 || activeQuery) && <button className="button button-ghost" onClick={handleReset}><RotateCcw size={14} />Reset</button>}
+          {(filterCount > 0 || activeQuery || symbolSearch) && <button className="button button-ghost" onClick={handleReset}><RotateCcw size={14} />Reset</button>}
           <button onClick={() => setIsModalOpen(true)} className="button button-secondary"><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</button>
           <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable} className="button button-primary"><Play size={14} />Run</button>
         </div>
@@ -167,7 +175,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       {!hasUnavailable && !activeQuery && explanationResult.compiledExplanations.length > 0 && <p className="criteria-summary">{explanationResult.compiledExplanations.map(e => e.humanReadableText).join(matchMode === 'all' ? '; ' : ' OR ')}</p>}
     </section>
     {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
-      onRetry={() => void refetch()} onPageChange={setPage} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
+      symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
+      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
     <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} activeConditionsMap={activeConditionsMap} matchMode={matchMode} onApply={handleApply} />
   </div>;
 };

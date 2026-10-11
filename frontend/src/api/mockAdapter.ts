@@ -476,6 +476,8 @@ export class MockScreenerAdapter {
     }
 
     // Pagination
+    const search = req.symbolSearch?.trim().toLowerCase();
+    if (search) filtered = filtered.filter(row => row.symbol.toLowerCase().includes(search) || row.name.toLowerCase().includes(search));
     const totalCount = filtered.length;
     const startIndex = (req.page - 1) * req.pageSize;
     const paginatedRows = filtered.slice(startIndex, startIndex + req.pageSize);

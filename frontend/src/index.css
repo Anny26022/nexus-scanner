@@ -222,7 +222,7 @@
 .filter-modal-tabs button { padding: 6px 10px; color: var(--muted); font-size: 11px; border-radius: 6px; }
 .filter-modal-tabs button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .filter-categories { display: flex; flex-wrap: nowrap; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.filter-modal-options > .filter-categories { margin-left: 12px; }
+.filter-modal-options > .filter-categories { margin-left: 24px; }
 .filter-categories::-webkit-scrollbar { display: none; }
 .filter-categories button { padding: 5px 8px; border-radius: 5px; font-size: 11px; color: var(--secondary); white-space: nowrap; }
 .filter-categories button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); font-weight: 600; }

@@ -50,7 +50,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
     <div className="results-toolbar">
       <div className="result-count"><strong>{data?.matchCount.toLocaleString('en-IN') ?? '-'}</strong><span>matched equities <span className="result-universe">/ {data?.totalUniverseCount.toLocaleString('en-IN') ?? '-'} universe</span></span></div>
       <div className="results-actions">
-        <span role="status" className="fetch-status">{isError ? 'Query failed' : busy ? 'Updating results' : data ? 'Results ready' : 'Waiting for data'}</span>
+        {(isError || busy) && <span role="status" className="fetch-status">{isError ? 'Query failed' : 'Updating results'}</span>}
         <button type="button" onClick={() => void copy()} disabled={!rows.length || busy} className="button button-secondary">{copied ? <Check size={15} /> : <Copy size={15} />}<span>{copied ? 'Copied!' : 'Copy TradingView'}</span></button>
         {onAddToWatchlist && <button type="button" onClick={() => onAddToWatchlist(rows.map(row => row.symbol))} disabled={!rows.length || busy} className="button button-secondary"><PlusCircle size={15} /><span>Watchlist</span></button>}
       </div>

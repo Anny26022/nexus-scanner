@@ -73,7 +73,7 @@ def chart_revision(root, session):
             chart = json.loads(gzip.decompress((root / 'objects' / f'{digest}.json.gz').read_bytes()))
             if chart.get('symbol') != symbol or chart.get('schemaVersion') != 2:
                 raise RuntimeError('Chart object symbol/schema mismatch')
-        validate_announcement_objects(root / 'objects', index['announcements'], session, set(index['chartObjects']))
+        validate_announcement_objects(root / 'objects', index['announcements'], session, set(index['chartObjects']), index.get('filingLookup'))
         return revision
     digest = hashlib.sha256()
     for file in files:
@@ -89,7 +89,7 @@ def chart_revision(root, session):
     return revision
 
 
-def validate_announcement_objects(objects, catalog_hash, session, symbols):
+def validate_announcement_objects(objects, catalog_hash, session, symbols, lookup=None):
     def read(digest):
         if not re.fullmatch(r'[a-f0-9]{64}', str(digest)):
             raise RuntimeError('Invalid announcement object reference')
@@ -101,6 +101,16 @@ def validate_announcement_objects(objects, catalog_hash, session, symbols):
     catalog = read(catalog_hash)
     if catalog.get('referenceSession') != session or set(catalog.get('symbols', {})) != symbols:
         raise RuntimeError('Announcement catalog universe/session mismatch')
+    if lookup is not None:
+        if (any(lookup.get(key) != catalog[key] for key in ('publishedAt', 'taxonomy', 'index'))
+                or set(lookup.get('symbols', {})) != symbols):
+            raise RuntimeError('Filing lookup does not match announcement catalog')
+        for symbol, entry in catalog['symbols'].items():
+            reference = lookup['symbols'][symbol]
+            if (reference.get('recent') != entry['recent']
+                    or reference.get('years') != sorted(map(int, entry['years']), reverse=True)
+                    or read(reference.get('history')) != {'symbol': symbol, **entry}):
+                raise RuntimeError('Filing lookup history mismatch')
     read(catalog['taxonomy'])
     index = read(catalog['index'])
     if index.get('referenceSession') != session or index.get('publishedAt') != catalog.get('publishedAt'):

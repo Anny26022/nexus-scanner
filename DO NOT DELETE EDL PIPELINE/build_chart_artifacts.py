@@ -28,7 +28,7 @@ if str(SRC) not in sys.path:
 
 from pipeline_utils import BASE_DIR, load_json, save_json
 from filing_classification import VERSION, classify_filings, classify_corporate_action
-from announcement_artifacts import build_announcements, put_object
+from announcement_artifacts import announcement_lookup, build_announcements, put_object
 from json_records import record_artifact
 
 
@@ -313,6 +313,7 @@ def main() -> int:
     count = len(tasks)
     index = {"schemaVersion": 2, "asOfDate": as_of, "symbols": count,
              "chartObjects": chart_objects, "announcements": announcements,
+             "filingLookup": announcement_lookup(objects, announcements),
              "retention": {"highestEver": "all available history", "quarterlyQuarters": QUARTERLY_EVENT_LIMIT}}
     index["revision"] = hashlib.sha256(json.dumps(index, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     save_json(temporary / "index.json", index)

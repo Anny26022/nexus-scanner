@@ -94,7 +94,11 @@ function cached<T>(cache: Map<string, Promise<unknown>>, key: string, load: () =
   }
   return promise as Promise<T>;
 }
-interface DataIndex { revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string }
+interface FilingLookup {
+  publishedAt: string; taxonomy: string; index: string;
+  symbols: Record<string, {recent: string; years: number[]; history: string}>;
+}
+interface DataIndex { revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string; filingLookup?: FilingLookup }
 async function releaseFor(revision?: string): Promise<Manifest> {
   const latest = current ?? await refreshManifest();
   const selected = revision ?? latest.revision;
@@ -123,6 +127,20 @@ async function announcementCatalog(release: Manifest): Promise<AnnouncementCatal
   const catalog = await object<AnnouncementCatalog>(release, index.announcements);
   if (catalog.referenceSession !== release.sessionDate) throw new Error('Announcement release mismatch');
   return catalog;
+}
+
+async function announcementReferences(release: Manifest) {
+  return (await dataIndex(release)).filingLookup ?? announcementCatalog(release);
+}
+
+async function companyAnnouncements(release: Manifest, symbol: string) {
+  const lookup = (await dataIndex(release)).filingLookup;
+  if (!lookup) return (await announcementCatalog(release)).symbols[symbol];
+  const entry = lookup.symbols[symbol];
+  if (!entry) throw new Error('Announcement history unavailable for this symbol');
+  const history = await object<AnnouncementCatalog['symbols'][string] & {symbol: string}>(release, entry.history);
+  if (history.symbol !== symbol || history.recent !== entry.recent) throw new Error('Announcement history mismatch');
+  return history;
 }
 
 async function getIpoJson<T>(url: string): Promise<T> {
@@ -278,7 +296,7 @@ class RealDataAdapter {
 
   async getAnnouncementIndex(revision?: string): Promise<AnnouncementIndex> {
     const release = await releaseFor(revision);
-    const catalog = await announcementCatalog(release);
+    const catalog = await announcementReferences(release);
     const index = await object<AnnouncementIndex>(release, catalog.index);
     if (index.referenceSession !== release.sessionDate || index.publishedAt !== catalog.publishedAt) throw new Error('Announcement index mismatch');
     return index;
@@ -286,13 +304,21 @@ class RealDataAdapter {
 
   async getAnnouncementTopics(revision?: string): Promise<FilingTopic[]> {
     const release = await releaseFor(revision);
-    const catalog = await announcementCatalog(release);
+    const catalog = await announcementReferences(release);
     return (await object<{topics: FilingTopic[]}>(release, catalog.taxonomy)).topics;
   }
 
   async getAnnouncements(symbol: string, revision?: string): Promise<{records: Announcement[]; years: number[]; publishedAt: string}> {
     validSymbol(symbol);
     const release = await releaseFor(revision);
+    const lookup = (await dataIndex(release)).filingLookup;
+    if (lookup) {
+      const entry = lookup.symbols[symbol];
+      if (!entry) throw new Error('Announcement history unavailable for this symbol');
+      const recent = await object<{symbol: string; records: Announcement[]}>(release, entry.recent);
+      if (recent.symbol !== symbol) throw new Error('Announcement symbol mismatch');
+      return {...recent, years: entry.years, publishedAt: lookup.publishedAt};
+    }
     const catalog = await announcementCatalog(release);
     const entry = catalog.symbols[symbol];
     if (!entry) throw new Error('Announcement history unavailable for this symbol');
@@ -304,8 +330,8 @@ class RealDataAdapter {
   async getAnnouncementHistory(symbol: string, year: number, page = 0, revision?: string): Promise<{records: Announcement[]; pages: number}> {
     validSymbol(symbol);
     const release = await releaseFor(revision);
-    const catalog = await announcementCatalog(release);
-    const pages = catalog.symbols[symbol]?.years[String(year)];
+    const entry = await companyAnnouncements(release, symbol);
+    const pages = entry?.years[String(year)];
     if (!Number.isInteger(page) || page < 0 || !pages?.[page]) throw new Error('Announcement page unavailable');
     const result = await object<{symbol: string; records: Announcement[]}>(release, pages[pages.length - 1 - page].summary);
     if (result.symbol !== symbol) throw new Error('Announcement symbol mismatch');
@@ -315,8 +341,8 @@ class RealDataAdapter {
   async getAnnouncementDetail(symbol: string, row: Announcement, revision?: string): Promise<Record<string, unknown>> {
     validSymbol(symbol);
     const release = await releaseFor(revision);
-    const catalog = await announcementCatalog(release);
-    const allowed = Object.values(catalog.symbols[symbol]?.years ?? {}).flat().some(page => page.details === row.detailPage);
+    const entry = await companyAnnouncements(release, symbol);
+    const allowed = Object.values(entry?.years ?? {}).flat().some(page => page.details === row.detailPage);
     if (!allowed) throw new Error('Filing is not part of this release');
     const details = await object<{symbol: string; records: Record<string, Record<string, unknown>>}>(release, row.detailPage);
     if (details.symbol !== symbol || !details.records[row.id]) throw new Error('Filing detail unavailable');

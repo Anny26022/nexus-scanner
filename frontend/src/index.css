@@ -224,8 +224,9 @@
 .filter-categories::-webkit-scrollbar { display: none; }
 .filter-categories button { padding: 5px 8px; border-radius: 5px; font-size: 11px; color: var(--secondary); white-space: nowrap; }
 .filter-categories button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); font-weight: 600; }
-.filter-modal-options { display: grid; grid-template-columns: 240px max-content minmax(0, 1fr); align-items: center; gap: 14px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+.filter-modal-options { display: grid; grid-template-columns: 180px max-content minmax(0, 1fr); align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
 .filter-modal-options > .query-input { height: 32px; }
+.filter-modal-options > .query-input input { font-size: 11px; }
 .filter-modal-content { overflow: auto; min-height: 260px; padding: 8px 24px 20px; }
 .filter-row { display: flex; flex-direction: column; align-items: stretch; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); }
 .filter-row > div { justify-content: flex-start; align-items: flex-end; gap: 12px; }

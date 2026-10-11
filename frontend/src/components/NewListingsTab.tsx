@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
-import { ArrowUpDown, Calendar, Play, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowUpDown, Calendar, Play, SlidersHorizontal, X, ChevronDown, Search, SearchX } from 'lucide-react';
 import { ActiveCondition, ExpressionNode, MatchMode, ScreenerRunRequest } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { PRESET_CATALOG } from '../data/presetCatalog';
@@ -9,6 +9,8 @@ import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { SymbolWithLogo } from './SymbolWithLogo';
+import { Pagination } from './Pagination';
+import { pagePlaceholder } from '../utils/pagePlaceholder';
 
 export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDate: string }> = ({ datasetRevision, selectedAsOfDate }) => {
   const [periodFilter, setPeriodFilter] = useLocalStorageState<'30d' | '90d' | '6m' | '1y' | 'all'>('nexus-scanner.ipo.period.v1', '1y');
@@ -22,6 +24,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const [screenPage, setScreenPage] = useState(1);
   const [screenSort, setScreenSort] = useState<{ field: string; direction: 'asc' | 'desc' }>({ field: 'rvol', direction: 'desc' });
   const pageSize = 50;
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const ipoQuery = useQuery({
     queryKey: ['ipos', datasetRevision],
@@ -49,12 +52,14 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     });
   }, [ipoData, periodFilter, search, sort]);
   const pageCount = Math.max(1, Math.ceil(filteredIpos.length / pageSize));
-  const visibleIpos = filteredIpos.slice((page - 1) * pageSize, page * pageSize);
+  const currentPage = Math.min(page, pageCount);
+  const visibleIpos = filteredIpos.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const updatePeriod = (value: typeof periodFilter) => {
     setPeriodFilter(value);
     setPage(1);
   };
   const updateSort = (field: typeof sort.field) => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
     setSort(current => ({ field, direction: current.field === field && current.direction === 'desc' ? 'asc' : 'desc' }));
     setPage(1);
   };
@@ -71,6 +76,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     queryKey: ['ipoScreen', screenRequest],
     queryFn: () => screenerApi.runScreen(screenRequest),
     enabled: showScreenResults && Boolean(selectedAsOfDate) && listingSymbols.length > 0,
+    placeholderData: (previous, query) => pagePlaceholder(previous, query?.queryKey[1], screenRequest),
   });
   const applyFilters = (next: Record<string, ActiveCondition>, mode: MatchMode) => {
     setConditions(next);
@@ -88,182 +94,63 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     setScreenPage(1);
   };
 
-  return (
-    <div className="space-y-4 animate-fade-in">
-      <div className="rounded-2xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex shrink-0 items-center gap-2.5">
-            <div className="relative">
-            <select
-              value={periodFilter}
-              onChange={(e) => updatePeriod(e.target.value as typeof periodFilter)}
-              className="appearance-none bg-gray-50 border border-gray-200 text-gray-800 text-xs font-semibold rounded-xl pl-3 pr-8 py-2 focus:outline-none focus:border-gray-400 cursor-pointer"
-            >
-              <option value="30d">30 Days</option>
-              <option value="90d">90 Days</option>
-              <option value="6m">6 Months</option>
-              <option value="1y">1 Year</option>
-              <option value="all">All Time</option>
-            </select>
-            <div className="absolute right-2.5 top-2.5 pointer-events-none">
-              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-            </div>
-            </div>
-            {activeConditions.length > 0 && <div className="h-4 w-px bg-gray-200" />}
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            {activeConditions.map(condition => {
-              const definition = NEXUS_CONDITION_CATALOG.find(item => item.id === condition.conditionId) ?? PRESET_CATALOG.find(item => item.id === condition.conditionId);
-              return <span key={condition.instanceId} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">{definition?.label ?? condition.conditionId}<button onClick={() => removeCondition(condition.conditionId)} className="text-emerald-600 hover:text-emerald-900"><X className="w-3 h-3" /></button></span>;
-            })}
-          </div>
-          <div className="ml-auto flex items-center gap-2">
-            <input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search symbol or company" className="h-8 w-44 rounded-lg border border-slate-200 bg-white px-2.5 text-[11px] text-slate-700 outline-none placeholder:text-slate-400 focus:border-slate-400" />
-            {!isLoading && (!ipoQuery.isError || ipoQuery.data) && <span className="whitespace-nowrap text-[11px] text-slate-400">{filteredIpos.length.toLocaleString('en-IN')} listings</span>}
-            {activeConditions.length > 1 && <button onClick={() => { setConditions({}); setScreenPage(1); }} className="whitespace-nowrap text-xs text-gray-400 transition-colors hover:text-gray-600">Reset</button>}
-            {showScreenResults && (
-              <button type="button" onClick={() => setShowScreenResults(false)} className="px-3 py-2 text-xs font-semibold text-slate-500 transition-colors hover:text-slate-900">
-                Listings
-              </button>
-            )}
-            <button type="button" onClick={() => setIsFilterModalOpen(true)} className="group flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-slate-500 transition-colors hover:text-slate-700">
-              <SlidersHorizontal className="h-3 w-3" /> Filters
-              {activeConditions.length > 0 && <span className="flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-teal-500 px-0.5 text-[9px] font-bold leading-none text-white">{activeConditions.length}</span>}
-            </button>
-            <button type="button" onClick={() => { setScreenPage(1); setShowScreenResults(true); }} disabled={filteredIpos.length === 0} className="flex items-center gap-1 rounded-md bg-teal-600 px-2.5 py-1 text-[11px] font-medium text-white transition-all hover:bg-teal-500 disabled:opacity-40">
-              <Play className="h-2.5 w-2.5 fill-current" /> Run
-            </button>
-          </div>
+  return <div className="research-view">
+    <section className="screen-controls" aria-label="IPO criteria">
+      <div className="screen-toolbar">
+        <label className="universe-control"><span className="field-label">Listing period</span><span className="select-wrap"><select aria-label="Listing period" value={periodFilter} onChange={e => {updatePeriod(e.target.value as typeof periodFilter); setScreenPage(1);}}>
+          <option value="30d">30 Days</option><option value="90d">90 Days</option><option value="6m">6 Months</option><option value="1y">1 Year</option><option value="all">All Time</option>
+        </select><ChevronDown size={14} /></span></label>
+        <label className="query-control"><span className="field-label">Find a listing</span><span className="query-input"><Search size={16} /><input aria-label="Search IPO listings" value={search} onChange={event => {setSearch(event.target.value); setPage(1); setScreenPage(1);}} placeholder="Search symbol or company" /></span></label>
+        <div className="screen-buttons">
+          {activeConditions.length > 0 && <button className="button button-ghost" onClick={() => {setConditions({}); setScreenPage(1);}}>Reset</button>}
+          {showScreenResults && <button className="button button-secondary" onClick={() => setShowScreenResults(false)}>Listings</button>}
+          <button className="button button-secondary" onClick={() => setIsFilterModalOpen(true)}><SlidersHorizontal size={15} />Filters{activeConditions.length > 0 && <span className="count-badge">{activeConditions.length}</span>}</button>
+          <button className="button button-primary" onClick={() => {setScreenPage(1); setShowScreenResults(true);}} disabled={!filteredIpos.length || screenQuery.isFetching}><Play size={14} />Run</button>
         </div>
       </div>
-
-      {providerStatus && <p role="status" className={`text-[11px] ${providerStatus.state === 'complete' ? 'text-slate-500' : 'text-amber-700'}`}>
-        IPO Decode: {providerStatus.state === 'complete' ? 'catalogue and analytics refreshed'
-          : providerStatus.state === 'partial' ? 'refresh incomplete; some data may be older'
-          : providerStatus.state === 'retained' ? 'refresh failed; retained data shown'
-          : providerStatus.state === 'unavailable' ? 'refresh failed; provider data unavailable'
-          : 'refresh completeness not recorded'}.
-        {providerStatus.checkedAt && ` Checked ${new Date(providerStatus.checkedAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST.`}
-      </p>}
-
-      {showScreenResults ? (
-        <ResultsTable
-          data={screenQuery.data}
-          isLoading={screenQuery.isLoading}
-          isError={screenQuery.isError}
-          error={screenQuery.error}
-          onPageChange={setScreenPage}
-          onSortChange={(field, direction) => { setScreenSort({ field, direction }); setScreenPage(1); }}
-          currentSort={screenSort}
-        />
-      ) : (
-        <>
-      {/* IPO catalogue */}
-      <div className="flex max-h-[calc(100svh-9rem)] min-h-[24rem] flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-2xs">
-        <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full text-left text-xs text-slate-800">
-            <thead className="sticky top-0 z-10 bg-slate-50/95 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200/90 backdrop-blur-sm">
-              <tr>
-                <th className="py-3 px-4 font-semibold">Symbol & Company</th>
-                {([
-                  ['listingDate', 'Listing Date'], ['currentPrice', 'Current Price'], ['turnoverCrore', 'Daily Turnover'],
-                  ['marketCapCrore', 'Market Cap'], ['deliveryPct', 'Delivery'],
-                ] as const).map(([field, label]) => <th key={field} onClick={() => updateSort(field)} className="cursor-pointer py-3 px-4 font-semibold hover:text-slate-900"><span className="flex items-center gap-1">{label}<ArrowUpDown className="h-3 w-3" /></span></th>)}
-                <th className="py-3 px-4 font-semibold">Sector / Industry</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-mono">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-500 font-sans">
-                    <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-slate-900 border-t-transparent mb-2"></div>
-                    <p className="text-xs font-medium">Loading IPO catalogue...</p>
-                  </td>
-                </tr>
-              ) : ipoQuery.isError && !ipoQuery.data ? (
-                <tr><td colSpan={7} role="alert" className="py-10 text-center font-sans text-slate-600">
-                  IPO catalogue could not be loaded.
-                  <button type="button" onClick={() => void ipoQuery.refetch()} className="ml-2 text-teal-700 underline">Retry</button>
-                </td></tr>
-              ) : filteredIpos.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-10 text-center text-slate-400 font-sans">
-                    No new listings recorded for selected period window.
-                  </td>
-                </tr>
-              ) : (
-                visibleIpos.map((row) => {
-                  return (
-                    <tr key={row.symbol} className="hover:bg-slate-50/70 transition-colors">
-                      {/* Symbol & Name */}
-                      <td className="py-3.5 px-4 font-sans">
-                        <SymbolWithLogo symbol={row.symbol} name={row.name} />
-                        {row.ipoDetailStatus && <div className="mt-1 text-[10px] text-slate-500">
-                          IPO Decode details: {row.ipoDetailStatus.lastSuccessAt
-                            ? `last complete refresh ${new Date(row.ipoDetailStatus.lastSuccessAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST`
-                            : 'no complete refresh recorded'}
-                          {row.ipoDetailStatus.failedEndpoints.length > 0 && <p className="text-amber-700">
-                            Refresh failed: {row.ipoDetailStatus.failedEndpoints.join(', ')}. Available data retained.
-                          </p>}
-                        </div>}
-                      </td>
-
-                      {/* Listing Date */}
-                      <td className="py-3.5 px-4 text-slate-700">
-                        <div className="flex items-center space-x-1.5">
-                          <Calendar className="h-3 w-3 text-slate-400" />
-                          <span>{row.listingDate}</span>
-                        </div>
-                      </td>
-
-                      {/* Current Price */}
-                      <td className="py-3.5 px-4 font-semibold text-slate-900">
-                        ₹{row.currentPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                      </td>
-
-                      {/* Turnover */}
-                      <td className="py-3.5 px-4 text-slate-700">
-                        ₹{row.turnoverCrore.toLocaleString('en-IN')} Cr
-                      </td>
-
-                      <td className="py-3.5 px-4 text-slate-700">₹{row.marketCapCrore.toLocaleString('en-IN')} Cr</td>
-
-                      <td className="py-3.5 px-4 text-slate-700">{row.deliveryPct == null ? '—' : `${row.deliveryPct.toFixed(1)}%`}</td>
-
-                      {/* Sector */}
-                      <td className="py-3.5 px-4 font-sans text-xs">
-                        <div className="text-slate-800 font-medium">{row.sector}</div>
-                        <div className="text-[10px] text-slate-400">{row.industry}</div>
-                      </td>
-
-
-                    </tr>
-                  );
-                })
-              )}
+      {activeConditions.length > 0 && <div className="active-filters">{activeConditions.map(condition => {
+        const definition = NEXUS_CONDITION_CATALOG.find(item => item.id === condition.conditionId) ?? PRESET_CATALOG.find(item => item.id === condition.conditionId);
+        return <span key={condition.instanceId} className="filter-chip">{definition?.label ?? condition.conditionId}<button aria-label={`Remove ${definition?.label ?? condition.conditionId}`} onClick={() => removeCondition(condition.conditionId)}><X size={13} /></button></span>;
+      })}</div>}
+    </section>
+    {providerStatus && <p role="status" className="notice">
+      IPO Decode: {providerStatus.state === 'complete' ? 'catalogue and analytics refreshed'
+        : providerStatus.state === 'partial' ? 'refresh incomplete; some data may be older'
+        : providerStatus.state === 'retained' ? 'refresh failed; retained data shown'
+        : providerStatus.state === 'unavailable' ? 'refresh failed; provider data unavailable' : 'refresh completeness not recorded'}.
+      {providerStatus.checkedAt && ` Checked ${new Date(providerStatus.checkedAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST.`}
+    </p>}
+    {showScreenResults && listingSymbols.length > 0 ? <ResultsTable data={screenQuery.data} isLoading={screenQuery.isLoading} isFetching={screenQuery.isFetching}
+      isError={screenQuery.isError} error={screenQuery.error} onRetry={() => void screenQuery.refetch()} onPageChange={setScreenPage}
+      onSortChange={(field, direction) => {setScreenSort({field, direction}); setScreenPage(1);}} currentSort={screenSort} />
+      : <section className="results-surface" aria-label="IPO listings">
+        <div className="results-toolbar"><div className="result-count"><strong>{!isLoading && (!ipoQuery.isError || ipoQuery.data) ? filteredIpos.length.toLocaleString('en-IN') : '-'}</strong><span>new listings</span></div><span className="cell-muted text-xs">Published catalogue</span></div>
+        <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns">
+          <table className="data-table ipo-table"><caption className="sr-only">Newly listed companies</caption>
+            <colgroup>{['26%', '12%', '12%', '12%', '12%', '9%', '17%'].map((width, i) => <col key={i} style={{width}} />)}</colgroup>
+            <thead><tr><th scope="col">Company</th>{([['listingDate', 'Listing date'], ['currentPrice', 'Current price'], ['turnoverCrore', 'Daily turnover'], ['marketCapCrore', 'Market cap'], ['deliveryPct', 'Delivery']] as const).map(([field, label]) =>
+              <th scope="col" key={field} aria-sort={sort.field === field ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'}><button onClick={() => updateSort(field)}>{label}<ArrowUpDown size={13} /></button></th>)}<th scope="col">Sector / industry</th></tr></thead>
+            <tbody>{isLoading ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{Array.from({length: 7}, (_, j) => <td key={j}><span className="skeleton" /></td>)}</tr>)
+              : ipoQuery.isError && !ipoQuery.data ? <tr><td colSpan={7}><div role="alert" className="data-state"><h2>IPO catalogue could not be loaded.</h2><button className="button button-secondary" onClick={() => void ipoQuery.refetch()}>Retry</button></div></td></tr>
+              : !filteredIpos.length ? <tr><td colSpan={7}><div className="data-state"><SearchX size={28} /><h2>No new listings recorded for selected period window.</h2><p>Choose a longer period or clear your search.</p></div></td></tr>
+              : visibleIpos.map(row => <tr key={row.symbol}>
+                <td><SymbolWithLogo symbol={row.symbol} name={row.name} />
+                  {row.ipoDetailStatus && <details className="ipo-refresh-detail"><summary>IPO Decode details</summary><p>{row.ipoDetailStatus.lastSuccessAt ? `Last complete refresh ${new Date(row.ipoDetailStatus.lastSuccessAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST` : 'No complete refresh recorded'}</p>
+                    {row.ipoDetailStatus.failedEndpoints.length > 0 && <p>Refresh failed: {row.ipoDetailStatus.failedEndpoints.join(', ')}. Available data retained.</p>}</details>}
+                </td>
+                <td className="numeric"><span className="inline-flex items-center gap-1.5"><Calendar size={12} />{row.listingDate}</span></td>
+                <td className="numeric cell-strong">₹{row.currentPrice.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                <td className="numeric">₹{row.turnoverCrore.toLocaleString('en-IN')} Cr</td>
+                <td className="numeric">₹{row.marketCapCrore.toLocaleString('en-IN')} Cr</td>
+                <td className="numeric">{row.deliveryPct == null ? 'N/A' : `${row.deliveryPct.toFixed(1)}%`}</td>
+                <td><div className="cell-label truncate" title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></td>
+              </tr>)}
             </tbody>
           </table>
         </div>
-        {!isLoading && filteredIpos.length > pageSize && (
-          <div className="sticky bottom-0 z-20 flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 text-xs shadow-[0_-6px_16px_rgba(15,23,42,0.05)] backdrop-blur-sm">
-            <span className="text-slate-500">{((page - 1) * pageSize + 1).toLocaleString('en-IN')}–{Math.min(page * pageSize, filteredIpos.length).toLocaleString('en-IN')} of {filteredIpos.length.toLocaleString('en-IN')}</span>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setPage(current => Math.max(1, current - 1))} disabled={page === 1} className="rounded-md border border-slate-200 px-2.5 py-1.5 font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
-              <span className="px-1 py-1.5 text-slate-400">{page} / {pageCount}</span>
-              <button type="button" onClick={() => setPage(current => Math.min(pageCount, current + 1))} disabled={page === pageCount} className="rounded-md border border-slate-200 px-2.5 py-1.5 font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
-            </div>
-          </div>
-        )}
-      </div>
-        </>
-      )}
-      <ScreenerModal
-        isOpen={isFilterModalOpen}
-        onClose={() => setIsFilterModalOpen(false)}
-        activeConditionsMap={conditions}
-        matchMode={matchMode}
-        onApply={applyFilters}
-      />
-    </div>
-  );
+        <Pagination page={currentPage} pageSize={pageSize} total={filteredIpos.length} busy={isLoading || (ipoQuery.isError && !ipoQuery.data)} onPageChange={page => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setPage(page);}} />
+        </div>
+      </section>}
+    <ScreenerModal key={isFilterModalOpen ? 'open' : 'closed'} isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} activeConditionsMap={conditions} matchMode={matchMode} onApply={applyFilters} />
+  </div>;
 };

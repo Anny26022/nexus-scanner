@@ -16,15 +16,16 @@ const logoSources = (sym: string) => [
 
 /** Nexus Ultimate's compact company mark with Dhan, StockScans, and India fallbacks. */
 export const SymbolWithLogo: React.FC<SymbolWithLogoProps> = ({ symbol, name, size = 'sm', showText = true, className = '' }) => {
-  const [sourceIdx, setSourceIdx] = useState(0);
-  const dimension = size === 'md' ? 'h-6 w-6' : 'h-4 w-4';
   const cleanSymbol = symbol.trim().toUpperCase();
+  const [source, setSource] = useState({symbol: cleanSymbol, index: 0});
+  const sourceIdx = source.symbol === cleanSymbol ? source.index : 0;
+  const dimension = size === 'md' ? 'h-8 w-8' : 'h-7 w-7';
   const sources = logoSources(encodeURIComponent(cleanSymbol));
   const src = sources[sourceIdx];
 
   return <span className={`inline-flex min-w-0 items-center gap-2 ${className}`}>
-    {src ? <img src={src} alt="" className={`${dimension} shrink-0 rounded object-contain`} loading="lazy" onError={() => setSourceIdx(i => i + 1)} />
-      : <span className={`${dimension} shrink-0 rounded bg-slate-100 text-center text-[9px] font-bold leading-4 text-slate-500`}>{symbol.slice(0, 1)}</span>}
+    {src ? <img src={src} alt="" className={`${dimension} shrink-0 rounded-md border border-slate-200 bg-white p-0.5 object-contain`} loading="lazy" onError={() => setSource({symbol: cleanSymbol, index: sourceIdx + 1})} />
+      : <span className={`${dimension} grid place-items-center shrink-0 rounded-md bg-slate-100 text-[11px] font-bold text-slate-500`}>{symbol.slice(0, 1)}</span>}
     {showText && <span className="min-w-0"><b className="block truncate text-xs text-slate-900">{symbol}</b>{name && <span className="block truncate text-[11px] text-slate-500">{name}</span>}</span>}
   </span>;
 };

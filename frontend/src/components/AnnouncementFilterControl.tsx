@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
 import { filterAnnouncements, type AnnouncementFilter } from '../api/announcements';
+import { Bell, ChevronDown } from 'lucide-react';
+import { DataUnavailableError, retryAnnouncement } from '../api/dataErrors';
 
 type Props = { revision?: string; value?: AnnouncementFilter; onChange: (value?: AnnouncementFilter) => void };
 export function AnnouncementFilterControl({ revision, value, onChange }: Props) {
@@ -12,14 +14,16 @@ export function AnnouncementFilterControl({ revision, value, onChange }: Props) 
     queryFn: async () => {
       const [index, topics] = await Promise.all([screenerApi.getAnnouncementIndex(revision), screenerApi.getAnnouncementTopics(revision)]);
       return {index, topics};
-    }, enabled: open, staleTime: Infinity });
+    }, enabled: open && Boolean(revision), staleTime: Infinity, retry: retryAnnouncement });
   const records = data.data ? filterAnnouncements(data.data.index, {topics: [], window}) : [];
   const groups = [...new Set(data.data?.topics.map(topic => topic.group) ?? [])];
-  return <details className="relative shrink-0 text-xs text-slate-800" onToggle={event => setOpen(event.currentTarget.open)}>
-    <summary className="cursor-pointer whitespace-nowrap rounded-md border border-slate-200 bg-white px-3 py-1.5 text-slate-700">
-      Announcements{value ? ` · ${value.topics.length || 'All'}` : ''}
+  return <details className="announcement-filter text-xs text-slate-800" onToggle={event => setOpen(event.currentTarget.open)} onKeyDown={event => {
+    if (event.key === 'Escape') {event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus();}
+  }}>
+    <summary className="button button-secondary" aria-label="Filter announcements" title="Filter announcements">
+      <Bell size={14} />{value && <span className="count-badge">{value.topics.length || 'All'}</span>}<ChevronDown size={13} />
     </summary>
-    <div className="absolute left-0 z-30 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+    <div className="announcement-popover">
       <div className="mb-3 flex items-center justify-between"><strong>Filter announcements</strong>
         <button type="button" onClick={() => onChange(undefined)} className="text-teal-700">Clear</button></div>
       <label className="block">Period
@@ -31,7 +35,7 @@ export function AnnouncementFilterControl({ revision, value, onChange }: Props) 
       <input aria-label="Find announcement category" placeholder="Find a category" value={search} onChange={event => setSearch(event.target.value)}
         className="mb-3 w-full rounded border border-slate-200 p-2" />
       {data.isPending && <p role="status">Loading announcements…</p>}
-      {data.isError && <p role="alert">{data.error.message}<button type="button" className="ml-2 text-teal-700" onClick={() => void data.refetch()}>Retry</button></p>}
+      {data.isError && <p role="alert" className="notice">{data.error.message}{!(data.error instanceof DataUnavailableError && data.error.reason === 'not_published') && <button type="button" className="button button-ghost" onClick={() => void data.refetch()}>Retry</button>}</p>}
       {data.data && <>
         <p className="mb-2 text-[11px] text-slate-500">Mainboard filings · snapshot {new Date(data.data.index.publishedAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}</p>
         <label className="flex gap-2 py-2"><input type="checkbox" checked={Boolean(value && !value.topics.length)}

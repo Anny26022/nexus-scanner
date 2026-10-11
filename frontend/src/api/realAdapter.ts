@@ -5,6 +5,7 @@ import type { IpoCatalogue } from '../types/screener';
 import { runSnapshotTask } from './snapshotClient';
 import type { SnapshotSource } from './snapshotEngine';
 import { filterAnnouncements, type Announcement, type AnnouncementCatalog, type AnnouncementIndex, type FilingTopic } from './announcements';
+import { DataUnavailableError } from './dataErrors';
 
 interface Manifest {
   revision: string;
@@ -36,16 +37,22 @@ export interface ChartSnapshot {
   marketNews: Array<Record<string, unknown>>;
 }
 
-async function getJson<T>(url: string, fresh = false): Promise<T> {
+async function getJson<T>(url: string, fresh = false, resource = 'Dataset'): Promise<T> {
   const response = await fetch(url, fresh ? { cache:'no-store' } : undefined);
-  if (!response.ok) throw new Error(`Dataset request failed (HTTP ${response.status})`);
-  return response.json();
+  if (!response.ok) throw new DataUnavailableError(`${resource} request failed (HTTP ${response.status})`, response.status === 404 ? 'not_found' : 'download_failed');
+  try { return await response.json(); }
+  catch { throw new DataUnavailableError(`${resource} file is missing or invalid. The host may be returning a page instead of data.`, 'not_found'); }
 }
 
-async function getChartJson<T>(url: string): Promise<T> {
+async function getChartJson<T>(url: string, resource = 'Chart'): Promise<T> {
   try {
     const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) {
+      if (resource === 'Announcement') throw new DataUnavailableError(response.status === 404
+        ? 'The announcement file is missing from this published release. Please report this deployment issue.'
+        : `Announcement download failed (HTTP ${response.status}). Please retry.`, response.status === 404 ? 'not_found' : 'download_failed');
+      throw new Error(`HTTP ${response.status}`);
+    }
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (!bytes.length) throw new Error('Empty chart');
     let text: string;
@@ -62,7 +69,9 @@ async function getChartJson<T>(url: string): Promise<T> {
     const payload = JSON.parse(text);
     if (!payload || typeof payload !== 'object') throw new Error('Invalid chart');
     return payload as T;
-  } catch {
+  } catch (error) {
+    if (error instanceof DataUnavailableError) throw error;
+    if (resource === 'Announcement') throw new DataUnavailableError('Announcement data could not be downloaded or decoded. Please retry; if this persists, check the release files and storage access.', 'download_failed');
     throw new Error('Chart data unavailable');
   }
 }
@@ -93,15 +102,15 @@ async function releaseFor(revision?: string): Promise<Manifest> {
   return release;
 }
 async function dataIndex(release: Manifest): Promise<DataIndex> {
-  if (!release.dataIndexUrl) throw new Error('Announcements are unavailable in this release');
-  const index = await cached(releaseCache, release.dataIndexUrl, () => getJson<DataIndex>(release.dataIndexUrl!), 6);
+  if (!release.dataIndexUrl) throw new DataUnavailableError('Announcements were not published with this data release. The publisher must configure announcement storage and publish a complete release.', 'not_published');
+  const index = await cached(releaseCache, release.dataIndexUrl, () => getJson<DataIndex>(release.dataIndexUrl!, false, 'Announcement index'), 6);
   if (index.asOfDate !== release.sessionDate || index.revision !== release.chartRevision) throw new Error('Data index release mismatch');
   return index;
 }
-async function object<T>(release: Manifest, hash: string): Promise<T> {
+async function object<T>(release: Manifest, hash: string, resource = 'Announcement'): Promise<T> {
   if (!release.objectUrlTemplate || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid data object reference');
   const url = release.objectUrlTemplate.replace('{hash}', hash);
-  return cached(objectCache, url, () => getChartJson<T>(url), 32);
+  return cached(objectCache, url, () => getChartJson<T>(url, resource), 32);
 }
 function validSymbol(symbol: string) {
   if (!/^[A-Z0-9&_-]+$/.test(symbol)) throw new Error('Invalid symbol');
@@ -119,10 +128,17 @@ async function getIpoJson<T>(url: string): Promise<T> {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (!bytes.length || bytes[0] !== 0x1f || bytes[1] !== 0x8b) throw new Error('Expected gzip');
-    if (typeof DecompressionStream === 'undefined') throw new Error('Gzip unsupported');
-    const stream = new Response(bytes).body!.pipeThrough(new DecompressionStream('gzip'));
-    return JSON.parse(await new Response(stream).text()) as T;
+    if (!bytes.length) throw new Error('Empty IPO catalogue');
+    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
+      if (typeof DecompressionStream === 'undefined') throw new Error('Gzip unsupported');
+      const stream = new Response(bytes).body!.pipeThrough(new DecompressionStream('gzip'));
+      return JSON.parse(await new Response(stream).text()) as T;
+    }
+    // Fetch decodes Content-Encoding before returning bytes (including Vite 8).
+    if (response.headers.get('Content-Encoding')?.toLowerCase() === 'gzip') {
+      return JSON.parse(new TextDecoder().decode(bytes)) as T;
+    }
+    throw new Error('Expected gzip');
   } catch {
     throw new Error('IPO catalogue unavailable');
   }
@@ -246,7 +262,7 @@ class RealDataAdapter {
     const release = await releaseFor(revision);
     if (release.schemaVersion === 7) {
       const index = await dataIndex(release);
-      const chart = await object<ChartSnapshot>(release, index.chartObjects[symbol]);
+      const chart = await object<ChartSnapshot>(release, index.chartObjects[symbol], 'Chart');
       if (chart.symbol !== symbol || chart.schemaVersion !== 2) throw new Error('Chart symbol/schema mismatch');
       return {...chart, asOfDate: release.sessionDate};
     }

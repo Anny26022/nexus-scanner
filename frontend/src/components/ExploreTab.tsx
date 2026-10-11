@@ -13,10 +13,11 @@ import { PRESET_CATALOG } from '../data/presetCatalog';
 import { explainExpressionTree } from '../utils/nqlParser';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
-import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown } from 'lucide-react';
+import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search } from 'lucide-react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { AnnouncementFilterControl } from './AnnouncementFilterControl';
 import type { AnnouncementFilter } from '../api/announcements';
+import { pagePlaceholder } from '../utils/pagePlaceholder';
 
 interface ExploreTabProps {
   selectedAsOfDate: string;
@@ -47,7 +48,9 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   const [queryText, setQueryText] = useState(activeQuery);
   const [activeConditionsMap, setActiveConditionsMap] =
     useLocalStorageState<Record<string, ActiveCondition>>('nexus-scanner.screener.conditions.v1', DEFAULT_CONDITIONS);
-  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({revision: datasetRevision, page: 1});
+  const page = pagination.revision === datasetRevision ? pagination.page : 1;
+  const setPage = (next: number) => setPagination({revision: datasetRevision, page: next});
   const [announcementFilter, setAnnouncementFilter] = useState<AnnouncementFilter>();
   const [sort, setSort] = useLocalStorageState<{ field: string; direction: 'asc' | 'desc' }>('nexus-scanner.screener.sort.v1', {
     field: 'rvol',
@@ -85,10 +88,11 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
     [expressionTree, activeQuery, universe, asOfDate, datasetRevision, sort, page, announcementFilter]
   );
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['screenRun', runRequest],
     queryFn: () => screenerApi.runScreen(runRequest),
     enabled: Boolean(asOfDate),
+    placeholderData: (previous, query) => pagePlaceholder(previous, query?.queryKey[1], runRequest),
   });
 
   const handleApply = (newMap: Record<string, ActiveCondition>, newMatchMode: MatchMode) => {
@@ -131,148 +135,34 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
 
   const filterCount = activeConditionsArray.length;
 
-  return (
-    <div className="space-y-4">
-      {/* ── Sleek Control Strip ── */}
-      <div className="space-y-2">
-        {/* Row 1: Controls */}
-        <div className="flex items-center justify-between gap-3">
-
-          {/* Left: Universe */}
-          <div className="flex items-center gap-2">
-            {/* Universe */}
-            <div className="relative">
-              <select
-                value={universe}
-                onChange={(e) => { setUniverse(e.target.value as UniverseType); setPage(1); }}
-                className="appearance-none bg-white border border-slate-200 text-slate-700 text-[11px] font-medium rounded-md pl-2.5 pr-6 py-1 h-7 focus:outline-none focus:border-teal-400 cursor-pointer hover:border-slate-300 transition-colors"
-              >
-                <option value="mainboard">Mainboard</option>
-                <option value="nifty50">Nifty 50</option>
-                <option value="nifty500">Nifty 500</option>
-                <option value="midsmall400">MidSmall 400</option>
-              </select>
-              <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-            </div>
-
-          </div>
-
-          <AnnouncementFilterControl key={datasetRevision} revision={datasetRevision} value={announcementFilter}
-            onChange={value => {setAnnouncementFilter(value); setPage(1);}} />
-          <div className="ml-auto flex items-center gap-2">
-            <input
-              aria-label="Scanner query"
-              value={queryText}
-              onChange={(event) => setQueryText(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Enter') void handleRun(); }}
-              placeholder="Query, e.g. P/E < 20 AND EPS > 10"
-              className="w-40 sm:w-56 lg:w-72 h-7 rounded-md border border-slate-200 bg-white px-2.5 text-[11px] text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-teal-400"
-            />
-            {filterCount > 0 && (
-              <button
-                onClick={handleReset}
-                className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <RotateCcw className="w-2.5 h-2.5" />
-                Reset
-              </button>
-            )}
-
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="group flex items-center gap-1 px-2 py-1 text-slate-500 hover:text-slate-700 text-[11px] font-medium transition-colors cursor-pointer"
-            >
-              <SlidersHorizontal className="w-3 h-3" />
-              <span>Filters</span>
-              {filterCount > 0 && (
-                <span className="bg-teal-500 text-white text-[9px] font-bold rounded-full min-w-[14px] h-3.5 flex items-center justify-center leading-none px-0.5">
-                  {filterCount}
-                </span>
-              )}
-            </button>
-
-            {/* Run */}
-            <button
-              onClick={() => void handleRun()}
-              disabled={!asOfDate}
-              className="flex items-center gap-1 px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-medium rounded-md transition-all cursor-pointer disabled:opacity-40"
-            >
-              <Play className="w-2.5 h-2.5 fill-current" />
-              Run
-            </button>
-          </div>
+  return <div className="research-view">
+    <section className="screen-controls" aria-label="Screen criteria">
+      <div className="screen-toolbar">
+        <label className="universe-control"><span className="field-label">Universe</span><span className="select-wrap">
+          <select aria-label="Stock universe" value={universe} onChange={e => {setUniverse(e.target.value as UniverseType); setPage(1);}}>
+            <option value="mainboard">Mainboard</option><option value="nifty50">Nifty 50</option><option value="nifty500">Nifty 500</option><option value="midsmall400">MidSmall 400</option>
+          </select><ChevronDown size={14} /></span></label>
+        <label className="query-control"><span className="field-label">Scanner query</span><span className="query-input"><Search size={16} />
+          <input aria-label="Scanner query" value={queryText} onChange={event => setQueryText(event.target.value)}
+            onKeyDown={event => { if (event.key === 'Enter') void handleRun(); }} placeholder="e.g. P/E < 20 AND EPS > 10" /></span></label>
+        <div className="screen-buttons">
+          {(filterCount > 0 || activeQuery || announcementFilter) && <button className="button button-ghost" onClick={handleReset}><RotateCcw size={14} />Reset</button>}
+          <AnnouncementFilterControl key={datasetRevision} revision={datasetRevision} value={announcementFilter} onChange={value => {setAnnouncementFilter(value); setPage(1);}} />
+          <button onClick={() => setIsModalOpen(true)} className="button button-secondary"><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</button>
+          <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching} className="button button-primary"><Play size={14} />Run</button>
         </div>
-
-        {/* Row 2: Active Filter Pills (only show when filters exist) */}
-        {activeQuery && (
-          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
-            <span className="text-teal-700 font-semibold">Query</span>
-            <span className="truncate">{activeQuery}</span>
-            <button onClick={() => { setActiveQuery(''); setQueryText(''); setPage(1); }}
-              aria-label="Clear query" className="text-slate-400 hover:text-slate-700"><X className="w-2.5 h-2.5" /></button>
-          </div>
-        )}
-
-        {!activeQuery && filterCount > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            {activeConditionsArray.map((cond) => {
-              const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === cond.conditionId) || 
-                          PRESET_CATALOG.find((c) => c.id === cond.conditionId);
-              return (
-                <span
-                  key={cond.conditionId}
-                  className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 bg-slate-50 text-slate-600 border border-slate-200 rounded text-[10px] font-medium"
-                >
-                  {def?.label ?? cond.conditionId}
-                  <button
-                    onClick={() => handleRemove(cond.conditionId)}
-                    className="text-slate-400 hover:text-slate-700 cursor-pointer p-0.5"
-                  >
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                </span>
-              );
-            })}
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="text-[10px] text-slate-400 hover:text-teal-600 cursor-pointer font-medium"
-            >
-              + add
-            </button>
-          </div>
-        )}
-
-        {/* Row 3: Query summary (subtle mono readout) */}
-        {!activeQuery && explanationResult.compiledExplanations.length > 0 && (
-          <div className="text-[10px] text-slate-400 font-mono truncate px-0.5">
-            {explanationResult.compiledExplanations
-              .map((e) => e.humanReadableText)
-              .join(matchMode === 'all' ? ' · ' : ' | ')}
-          </div>
-        )}
       </div>
-
-      {/* ── Results Table ── */}
-      <ResultsTable
-        data={data}
-        isLoading={isLoading}
-        isError={isError}
-        error={error}
-        onPageChange={setPage}
-        onSortChange={(field, direction) => setSort({ field, direction })}
-        currentSort={sort}
-        onAddToWatchlist={onAddToWatchlist}
-      />
-
-      {/* ── Screener Modal ── */}
-      <ScreenerModal
-        key={isModalOpen ? 'open' : 'closed'}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        activeConditionsMap={activeConditionsMap}
-        matchMode={matchMode}
-        onApply={handleApply}
-      />
-    </div>
-  );
+      {(activeQuery || filterCount > 0) && <div className="active-filters">
+        {activeQuery ? <span className="filter-chip"><span className="truncate" title={activeQuery}>{activeQuery}</span><button onClick={() => {setActiveQuery(''); setQueryText(''); setPage(1);}} aria-label="Clear query"><X size={13} /></button></span>
+          : activeConditionsArray.map(cond => {
+            const def = NEXUS_CONDITION_CATALOG.find(c => c.id === cond.conditionId) || PRESET_CATALOG.find(c => c.id === cond.conditionId);
+            return <span key={cond.instanceId} className="filter-chip">{def?.label ?? cond.conditionId}<button aria-label={`Remove ${def?.label ?? cond.conditionId}`} onClick={() => handleRemove(cond.conditionId)}><X size={13} /></button></span>;
+          })}
+      </div>}
+      {!activeQuery && explanationResult.compiledExplanations.length > 0 && <p className="criteria-summary">{explanationResult.compiledExplanations.map(e => e.humanReadableText).join(matchMode === 'all' ? '; ' : ' OR ')}</p>}
+    </section>
+    <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
+      onRetry={() => void refetch()} onPageChange={setPage} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onAddToWatchlist={onAddToWatchlist} />
+    <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} activeConditionsMap={activeConditionsMap} matchMode={matchMode} onApply={handleApply} />
+  </div>;
 };

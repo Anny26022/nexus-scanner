@@ -257,10 +257,10 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     <div className="filter-modal-tabs" role="group" aria-label="Filter source">
       <button aria-pressed={activeTab === 'custom'} onClick={() => {setActiveTab('custom'); setSearch('');}}><SlidersHorizontal className="inline mr-2" size={14} />Custom Filters</button>
       <button aria-pressed={activeTab === 'presets'} onClick={() => {setActiveTab('presets'); setSearch('');}}><Library className="inline mr-2" size={14} />Pre-built Scans</button>
+      <div className="match-mode" role="group" aria-label="Match mode"><span>Match</span><button aria-pressed={localMode === 'all'} onClick={() => setLocalMode('all')}>AND (All)</button><button aria-pressed={localMode === 'any'} onClick={() => setLocalMode('any')}>OR (Any)</button></div>
     </div>
     <div className="filter-modal-options">
       <label className="query-input"><input aria-label="Search filters" placeholder="Search filters" value={search} onChange={event => setSearch(event.target.value)} /></label>
-      <div className="match-mode" role="group" aria-label="Match mode"><span>Match</span><button aria-pressed={localMode === 'all'} onClick={() => setLocalMode('all')}>AND (All)</button><button aria-pressed={localMode === 'any'} onClick={() => setLocalMode('any')}>OR (Any)</button></div>
       {activeTab === 'custom' && <div className="filter-categories" role="group" aria-label="Filter categories">{CATEGORY_TABS.map(tab => <button key={tab.id} aria-pressed={category === tab.id} onClick={() => setCategory(tab.id)}>{tab.label}</button>)}</div>}
     </div>
     <div className="filter-modal-content">

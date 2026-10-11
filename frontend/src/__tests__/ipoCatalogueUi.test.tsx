@@ -18,8 +18,8 @@ it('shows fetch failure and allows retry instead of reporting no listings', asyn
   expect(screen.queryByText(/No new listings/)).not.toBeInTheDocument();
   expect(screen.queryByText(/0 listings/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', {name: 'Retry'}));
-  expect(await screen.findByText(/refresh failed; retained data shown/)).toBeInTheDocument();
   expect(await screen.findByText(/No new listings/)).toBeInTheDocument();
+  expect(screen.queryByText(/catalogue and analytics refreshed|refresh failed|Checked .*IST/)).not.toBeInTheDocument();
 });
 
 

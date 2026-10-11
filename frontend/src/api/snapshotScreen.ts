@@ -128,6 +128,11 @@ function compile(node: ExpressionNode, session: string): Predicate | null {
   return s => combine(children.map(fn => fn!(s)), node.operator === 'all');
 }
 
+// Share the evaluator's capability check with the filter UI, without loading data.
+export function supportsSnapshotCondition(condition: ActiveCondition): boolean {
+  return leaf(condition, '') !== null;
+}
+
 interface Matches { rows: SnapshotStock[]; universeCount: number }
 const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 

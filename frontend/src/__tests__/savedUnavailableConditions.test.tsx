@@ -14,7 +14,14 @@ const saved: Record<string, ActiveCondition> = {
   mom_rvol: {instanceId: 'rvol', conditionId: 'mom_rvol', parameters: {minRvol: 2, maxRvol: 20}},
 };
 
-it.each(['screener', 'ipo'] as const)('preserves saved unavailable filters and blocks %s scans until explicit removal', async mode => {
+it.each([
+  ['screener', saved.old, 'MA Convergence'],
+  ['ipo', saved.old, 'MA Convergence'],
+  ['screener', {instanceId:'old', conditionId:'MA_STACK', parameters:{periods:'50,150,200', maType:'EMA', priceAbove:false}}, 'MA Stack (50 > 150 > 200)'],
+  ['ipo', {instanceId:'old', conditionId:'MA_STACK', parameters:{periods:'50,150,200', maType:'EMA', priceAbove:false}}, 'MA Stack (50 > 150 > 200)'],
+  ['screener', {instanceId:'old', conditionId:'trend_price_vs_ma', parameters:{maType:'EMA', maPeriod:50, operator:'above', thresholdPct:0}}, 'Price vs Moving Average'],
+] as const)('preserves saved unavailable filters and blocks %s scans until explicit removal (%s)', async (mode, condition, label) => {
+  const saved = {old: condition, mom_rvol: {instanceId:'rvol',conditionId:'mom_rvol',parameters:{minRvol:2,maxRvol:20}}};
   const storageKey = `nexus-scanner.${mode}.conditions.v1`;
   localStorage.setItem(storageKey, JSON.stringify(saved));
   vi.mocked(screenerApi.runScreen).mockImplementation(async request => ({
@@ -40,7 +47,7 @@ it.each(['screener', 'ipo'] as const)('preserves saved unavailable filters and b
   let dialog = within(screen.getByRole('dialog'));
   expect(screen.getByRole('dialog').querySelector('.dialog-footer')).toHaveTextContent('2 selected');
   expect(dialog.getByRole('button', {name: 'Apply'})).toBeDisabled();
-  fireEvent.click(dialog.getByRole('button', {name: 'Remove unavailable MA Convergence'}));
+  fireEvent.click(dialog.getByRole('button', {name: `Remove unavailable ${label}`}));
   expect(dialog.getByText('1 selected')).toBeInTheDocument();
   // Closing discards the draft removal, preserving the saved constraint.
   fireEvent.click(dialog.getByRole('button', {name: 'Close filters'}));
@@ -48,7 +55,7 @@ it.each(['screener', 'ipo'] as const)('preserves saved unavailable filters and b
   expect(screen.getByRole('button', {name: 'Run'})).toBeDisabled();
   fireEvent.click(screen.getByRole('button', {name: 'Filters 2'}));
   dialog = within(screen.getByRole('dialog'));
-  fireEvent.click(dialog.getByRole('button', {name: 'Remove unavailable MA Convergence'}));
+  fireEvent.click(dialog.getByRole('button', {name: `Remove unavailable ${label}`}));
   fireEvent.click(dialog.getByRole('button', {name: 'Apply'}));
   await waitFor(() => expect(screenerApi.runScreen).toHaveBeenCalled());
   expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual({mom_rvol: saved.mom_rvol});

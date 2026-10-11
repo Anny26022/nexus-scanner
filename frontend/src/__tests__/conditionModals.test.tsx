@@ -9,6 +9,13 @@ vi.mock('../data/conditionCatalog', async importOriginal => {
   return {...original, isRetiredTechnicalCondition: () => false,
     NEXUS_CONDITION_CATALOG: [...original.ADVANCED_TECHNICAL_CONDITIONS, ...original.NEXUS_CONDITION_CATALOG]};
 });
+vi.mock('../api/snapshotScreen', async importOriginal => {
+  const original = await importOriginal<typeof import('../api/snapshotScreen')>();
+  // Restore capabilities only in these editor tests; availability has its own real-path tests.
+  return {...original, supportsSnapshotCondition: (condition: {conditionId: string}) =>
+    ['INDICATOR_COMPARE', 'MA_CONVERGENCE', 'DIVERGENCE', 'SUPERTREND', 'MARKET_BREADTH'].includes(condition.conditionId)
+      || original.supportsSnapshotCondition(condition as Parameters<typeof original.supportsSnapshotCondition>[0])};
+});
 
 afterEach(cleanup);
 function active(conditionId: string) {

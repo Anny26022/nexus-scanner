@@ -230,7 +230,10 @@ export interface IpoCatalogue {
 export interface IPORow {
   symbol: string;
   name: string;
+  isin?: string;
+  securityId?: string | number;
   listingDate: string;
+  listingAgeCalendarDays?: number;
   currentPrice: number;
   turnoverCrore: number;
   deliveryPct?: number | null;
@@ -238,6 +241,9 @@ export interface IPORow {
   industry: string;
   marketCapCrore: number;
   ipoDetailStatus?: { lastSuccessAt: string | null; failedEndpoints: string[] };
+  anchorLockInEnd?: string | null;
+  anchorLockInCalendar?: number | null;
+  nextAnchorLockInDate?: string | null;
   ipoResearch?: {
     issuePrice?: number | null;
     offer?: { issueSizeCrore?: number | null; freshIssueCrore?: number | null; offerForSaleCrore?: number | null };

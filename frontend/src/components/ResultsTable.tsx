@@ -19,7 +19,7 @@ interface ResultsTableProps {
   currentSort?: { field: string; direction: 'asc' | 'desc' };
 }
 
-type ColumnGroup = 'Company' | 'Technical' | 'Fundamental' | 'Other';
+type ColumnGroup = 'Overview' | 'Technical' | 'Fundamental' | 'Other';
 type ColumnValue = string | number | boolean | null | undefined;
 interface ResultColumn {
   id: string;
@@ -40,8 +40,8 @@ const metricColumn = (id: string, label: string, format: ResultColumn['format'] 
 });
 
 const columns: ResultColumn[] = [
-  { id: 'company', label: 'Company', group: 'Company', width: '24%', getValue: row => row.symbol },
-  { id: 'sector', label: 'Sector / industry', group: 'Company', width: '17%', getValue: row => `${row.sector || 'Unclassified'} · ${row.industry || 'Unclassified'}` },
+  { id: 'company', label: 'Company', group: 'Overview', width: '24%', getValue: row => row.symbol },
+  { id: 'sector', label: 'Sector / industry', group: 'Overview', width: '17%', getValue: row => `${row.sector || 'Unclassified'} · ${row.industry || 'Unclassified'}` },
   {...valueColumn('close', 'Close price', 'Technical', 'price', 'close'), width: '12%'},
   {...valueColumn('changePct', '1D return', 'Technical', 'percent', 'changePct'), width: '10%'},
   {...valueColumn('rvol', '20D RVOL', 'Technical', 'multiple', 'rvol'), width: '9%'},
@@ -104,7 +104,7 @@ const columns: ResultColumn[] = [
   valueColumn('surveillanceAvailable', 'Surveillance data available', 'Other', 'boolean'),
 ];
 const DEFAULT_COLUMNS = ['company','sector','close','changePct','rvol','marketCapCrore','rsRsi','deliveryPct'];
-const COLUMN_GROUPS: ColumnGroup[] = ['Company','Technical','Fundamental','Other'];
+const COLUMN_GROUPS: ColumnGroup[] = ['Overview','Technical','Fundamental','Other'];
 
 const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
   if (value == null || value === '') return <span className="cell-muted">—</span>;
@@ -127,12 +127,13 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
-  const [columnGroup, setColumnGroup] = useState<ColumnGroup>('Company');
+  const [columnGroup, setColumnGroup] = useState<ColumnGroup>('Overview');
   const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>('nexus-scanner.screener.columns.v1', DEFAULT_COLUMNS);
   const selectedColumnIds = Array.isArray(savedColumnIds) ? savedColumnIds : DEFAULT_COLUMNS;
   const visibleColumns = columns.filter(column => column.id === 'company' || selectedColumnIds.includes(column.id));
-  const matchingColumns = columns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
-  const pickerColumns = columnSearch.trim() ? matchingColumns : columns.filter(column => column.group === columnGroup);
+  const customizableColumns = columns.filter(column => column.id !== 'company');
+  const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
+  const pickerColumns = columnSearch.trim() ? matchingColumns : customizableColumns.filter(column => column.group === columnGroup);
   const usingCustomColumns = selectedColumnIds.length !== DEFAULT_COLUMNS.length || DEFAULT_COLUMNS.some(id => !selectedColumnIds.includes(id));
   const tableWidth = usingCustomColumns
     ? Math.max(1120, visibleColumns.reduce((width, column) => width + (column.id === 'company' ? 240 : column.id === 'sector' ? 180 : 150), 0))
@@ -159,11 +160,11 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       </div>
     </div>
     {columnPickerOpen && <Dialog label="Customize columns" className="column-dialog" onClose={() => setColumnPickerOpen(false)}>
-      <div className="dialog-header"><div><h2>Customize columns</h2><p>{visibleColumns.length} selected · choose fields for your results table</p></div><button type="button" className="icon-button" aria-label="Close column customization" onClick={() => setColumnPickerOpen(false)}><X size={18} /></button></div>
+      <div className="dialog-header"><div><h2>Customize columns</h2><p>{visibleColumns.length - 1} selected · choose fields for your results table</p></div><button type="button" className="icon-button" aria-label="Close column customization" onClick={() => setColumnPickerOpen(false)}><X size={18} /></button></div>
       <div className="column-dialog-content">
         <label className="column-search"><Search size={14} /><input type="search" aria-label="Search columns" placeholder="Search columns" value={columnSearch} onChange={event => setColumnSearch(event.target.value)} /></label>
-        <div className="column-dialog-toolbar"><span>{columnSearch.trim() ? `${pickerColumns.length} results` : `${pickerColumns.filter(column => column.id === 'company' || selectedColumnIds.includes(column.id)).length} selected in ${columnGroup.toLowerCase()}`}</span><div>
-          <button type="button" className="button button-ghost" onClick={() => { resetScroll(); setSavedColumnIds(columns.map(column => column.id)); }}>Select all</button>
+        <div className="column-dialog-toolbar"><span>{columnSearch.trim() ? `${pickerColumns.length} results` : `${pickerColumns.filter(column => selectedColumnIds.includes(column.id)).length} selected in ${columnGroup.toLowerCase()}`}</span><div>
+          <button type="button" className="button button-ghost" onClick={() => { resetScroll(); setSavedColumnIds(customizableColumns.map(column => column.id)); }}>Select all</button>
           <button type="button" className="button button-ghost" onClick={() => { resetScroll(); setSavedColumnIds(DEFAULT_COLUMNS); }}>Reset</button>
         </div></div>
         {!columnSearch.trim() && <div className="column-category-tabs" role="tablist" aria-label="Column categories">
@@ -171,7 +172,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
         </div>}
         <div className="column-options" role="group" aria-label={columnSearch.trim() ? 'Search results' : `${columnGroup} columns`}>
           {pickerColumns.length ? pickerColumns.map(column => <label key={column.id} className="column-picker-option">
-            <input type="checkbox" aria-label={column.label} checked={column.id === 'company' || selectedColumnIds.includes(column.id)} disabled={column.id === 'company'}
+            <input type="checkbox" aria-label={column.label} checked={selectedColumnIds.includes(column.id)}
               onChange={event => { resetScroll(); setSavedColumnIds(current => event.target.checked
                 ? [...new Set([...(Array.isArray(current) ? current : DEFAULT_COLUMNS), column.id])]
                 : (Array.isArray(current) ? current : DEFAULT_COLUMNS).filter(id => id !== column.id)); }} />

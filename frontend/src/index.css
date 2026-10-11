@@ -271,6 +271,19 @@
 .filter-row { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .filter-row > div { justify-content: flex-start; align-items: flex-end; gap: 12px; }
 .filter-row[data-active="true"] > label > span { color: var(--accent); }
+.filter-row[data-unavailable="true"] > label { opacity: .5; cursor: not-allowed; }
+.filter-row input:disabled { cursor: not-allowed; }
+.filter-row[data-preset="true"] { position: relative; min-height: 48px; flex-direction: row; align-items: center; gap: 8px; padding: 8px 6px; border-radius: 7px; border-bottom-color: transparent; }
+.filter-row[data-preset="true"]:hover { background: var(--surface-subtle); }
+.filter-row[data-preset="true"] > label { flex: 1; align-items: center; padding: 0; }
+.filter-row[data-preset="true"] > label > span { font-size: 13px; font-weight: 550; }
+.preset-info-button { position: relative; display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; color: var(--muted); transition: background-color .16s ease, color .16s ease; }
+.preset-info-button:hover, .preset-info-button[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
+.preset-info-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.preset-info-button::after { position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; width: min(280px, calc(100vw - 48px)); padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 24px rgb(15 23 42 / 12%); color: var(--text); content: attr(data-tooltip); font-size: 12px; font-weight: 400; line-height: 1.5; text-align: left; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-2px); transition: opacity .14s ease, transform .14s ease, visibility .14s ease; }
+.preset-info-button:hover::after, .preset-info-button:focus-visible::after { opacity: 1; visibility: visible; transform: translateY(0); }
+.preset-description { flex: 0 0 100%; margin: 0 34px 2px; color: var(--secondary); font-size: 12px; line-height: 1.5; }
+.filter-row[data-preset="true"]:has(.preset-description) { flex-wrap: wrap; background: var(--surface-subtle); }
 .parameter-control { display: flex; flex-direction: column; gap: 6px; }
 .parameter-label { font-size: 10px; color: var(--muted); }
 .filter-row label > span { white-space: normal; }

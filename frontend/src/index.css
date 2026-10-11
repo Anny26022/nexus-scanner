@@ -211,7 +211,9 @@
 .skeleton-row td:first-child .skeleton { width: 85%; height: 27px; }
 .dialog { padding: 0; border: 0; background: transparent; color: var(--text); max-width: calc(100vw - 32px); width: 1080px; max-height: calc(100dvh - 48px); margin: auto; overflow: visible; }
 .dialog::backdrop { background: rgb(15 23 31 / 48%); }
+.filter-dialog::backdrop { background: rgb(15 23 31 / 38%); backdrop-filter: blur(5px); }
 .dialog-surface { display: flex; flex-direction: column; max-height: calc(100dvh - 48px); overflow: hidden; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow); }
+.filter-dialog, .filter-dialog .dialog-surface { max-height: min(760px, calc(100dvh - 112px)); }
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; gap: 12px; border-bottom: 1px solid var(--line); }
 .dialog-header h2 { font-size: 16px; font-weight: 650; letter-spacing: -.3px; margin: 0; }
 .dialog-header p { margin: 2px 0 0; font-size: 11px; color: var(--muted); }
@@ -228,9 +230,9 @@
 .filter-modal-options { display: grid; flex-shrink: 0; grid-template-columns: 180px minmax(0, 1fr); align-items: center; gap: 12px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
 .filter-modal-options > .query-input { height: 32px; }
 .filter-modal-options > .query-input input { font-size: 11px; }
-.filter-modal-content { flex: 1 1 auto; overflow: auto; min-height: 0; padding: 8px 24px 20px; }
+.filter-modal-content { flex: 1 1 auto; overflow: auto; min-height: 0; padding: 6px 16px 12px; }
 .dialog-header, .dialog-footer { flex-shrink: 0; }
-.filter-row { display: flex; flex-direction: column; align-items: stretch; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.filter-row { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .filter-row > div { justify-content: flex-start; align-items: flex-end; gap: 12px; }
 .filter-row[data-active="true"] > label > span { color: var(--accent); }
 .parameter-control { display: flex; flex-direction: column; gap: 6px; }

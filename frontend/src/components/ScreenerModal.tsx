@@ -261,7 +261,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     onClose();
   };
 
-  return <Dialog label="Screen filters" onClose={onClose}>
+  return <Dialog label="Screen filters" onClose={onClose} className="filter-dialog">
     <div className="dialog-header"><div><h2>Refine your screen</h2><p>Select conditions and adjust their parameters.</p></div><button type="button" className="icon-button" aria-label="Close filters" onClick={onClose}><X size={20} /></button></div>
     <div className="filter-modal-tabs" role="group" aria-label="Filter source">
       <button aria-pressed={activeTab === 'custom'} onClick={() => {setActiveTab('custom'); setSearch('');}}><SlidersHorizontal className="inline mr-2" size={14} />Custom Filters</button>

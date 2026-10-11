@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
 import { ArrowUpDown, Calendar, Play, SlidersHorizontal, X, ChevronDown, Search, SearchX } from 'lucide-react';
 import { ActiveCondition, ExpressionNode, MatchMode, ScreenerRunRequest } from '../types/screener';
-import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { NEXUS_CONDITION_CATALOG, isRetiredTechnicalCondition } from '../data/conditionCatalog';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
@@ -55,6 +55,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const currentPage = Math.min(page, pageCount);
   const visibleIpos = filteredIpos.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const updatePeriod = (value: typeof periodFilter) => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
     setPeriodFilter(value);
     setPage(1);
   };
@@ -65,7 +66,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   };
   const expressionTree: ExpressionNode = useMemo(() => ({
     type: 'group', operator: matchMode,
-    children: Object.values(conditions).map(condition => ({ type: 'condition', condition })),
+    children: Object.values(conditions).filter(condition => !isRetiredTechnicalCondition(condition.conditionId)).map(condition => ({ type: 'condition', condition })),
   }), [conditions, matchMode]);
   const listingSymbols = useMemo(() => filteredIpos.map(row => row.symbol), [filteredIpos]);
   const screenRequest: ScreenerRunRequest = useMemo(() => ({
@@ -84,7 +85,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     setScreenPage(1);
     setShowScreenResults(true);
   };
-  const activeConditions = Object.values(conditions);
+  const activeConditions = Object.values(conditions).filter(condition => !isRetiredTechnicalCondition(condition.conditionId));
   const removeCondition = (id: string) => {
     setConditions(current => {
       const next = { ...current };
@@ -100,7 +101,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
         <label className="universe-control"><span className="field-label">Listing period</span><span className="select-wrap"><select aria-label="Listing period" value={periodFilter} onChange={e => {updatePeriod(e.target.value as typeof periodFilter); setScreenPage(1);}}>
           <option value="30d">30 Days</option><option value="90d">90 Days</option><option value="6m">6 Months</option><option value="1y">1 Year</option><option value="all">All Time</option>
         </select><ChevronDown size={14} /></span></label>
-        <label className="query-control"><span className="field-label">Find a listing</span><span className="query-input"><Search size={16} /><input aria-label="Search IPO listings" value={search} onChange={event => {setSearch(event.target.value); setPage(1); setScreenPage(1);}} placeholder="Search symbol or company" /></span></label>
+        <label className="query-control"><span className="field-label">Find a listing</span><span className="query-input"><Search size={16} /><input aria-label="Search IPO listings" value={search} onChange={event => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setSearch(event.target.value); setPage(1); setScreenPage(1);}} placeholder="Search symbol or company" /></span></label>
         <div className="screen-buttons">
           {activeConditions.length > 0 && <button className="button button-ghost" onClick={() => {setConditions({}); setScreenPage(1);}}>Reset</button>}
           {showScreenResults && <button className="button button-secondary" onClick={() => setShowScreenResults(false)}>Listings</button>}

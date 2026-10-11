@@ -8,7 +8,7 @@ import {
   ScreenerRunRequest,
 } from '../types/screener';
 import { screenerApi } from '../api/screenerApi';
-import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { NEXUS_CONDITION_CATALOG, isRetiredTechnicalCondition } from '../data/conditionCatalog';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 import { explainExpressionTree } from '../utils/nqlParser';
 import { ResultsTable } from './ResultsTable';
@@ -56,7 +56,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
     direction: 'desc',
   });
 
-  const activeConditionsArray = useMemo(() => Object.values(activeConditionsMap), [activeConditionsMap]);
+  const activeConditionsArray = useMemo(() => Object.values(activeConditionsMap).filter(c => !isRetiredTechnicalCondition(c.conditionId)), [activeConditionsMap]);
 
   const expressionTree: ExpressionNode = useMemo(
     () => ({

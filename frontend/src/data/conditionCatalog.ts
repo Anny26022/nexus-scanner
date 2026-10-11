@@ -1,6 +1,9 @@
 import { ConditionDef } from '../types/screener';
 import nativeConditions from './nativeConditions.json';
 
+export const isRetiredTechnicalCondition = (id: string) =>
+  ['INDICATOR_COMPARE', 'MA_CONVERGENCE', 'DIVERGENCE', 'SUPERTREND'].includes(id);
+
 const INDICATOR_OPTIONS = [
   'CLOSE','OPEN','HIGH','LOW','VOLUME','HL2','HLC3','OHLC4','SMA','EMA','WMA','VOLUME_SMA',
   'RSI','MACD','MACD_SIGNAL','MACD_HIST','STOCH_K','STOCH_D','CCI','WILLIAMS_R','MFI','ROC','OBV',
@@ -11,7 +14,7 @@ const INDICATOR_OPTIONS = [
 const OSCILLATOR_OPTIONS = ['RSI','MACD','MACD_HIST','STOCH_K','CCI','MFI','WILLIAMS_R','ROC','OBV']
   .map(value => ({ label: value.replaceAll('_', ' '), value }));
 
-const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
+export const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
   {
     id: 'INDICATOR_COMPARE', label: 'Indicator Compare / Crossover', category: 'trend',
     description: 'Compare any supported indicator with a fixed value or another indicator, including recent crossovers and offsets.',
@@ -71,7 +74,6 @@ const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
 ];
 
 export const NEXUS_CONDITION_CATALOG: ConditionDef[] = [
-  ...ADVANCED_TECHNICAL_CONDITIONS,
   ...nativeConditions as ConditionDef[],
   // --- TREND ---
   {

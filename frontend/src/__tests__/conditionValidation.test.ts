@@ -1,4 +1,8 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+vi.mock('../data/conditionCatalog', async importOriginal => {
+  const original = await importOriginal<typeof import('../data/conditionCatalog')>();
+  return {...original, NEXUS_CONDITION_CATALOG: [...original.ADVANCED_TECHNICAL_CONDITIONS, ...original.NEXUS_CONDITION_CATALOG]};
+});
 import { conditionValidationError, numericInputValue } from '../utils/conditionValidation';
 const rule = (parameters: Record<string, unknown>, conditionId = 'MA_CONVERGENCE') => ({
   test: { instanceId:'test', conditionId, parameters },

@@ -204,7 +204,8 @@ class R2Store:
                         RCLONE_CONFIG_CHARTS_REGION='auto')
 
     def run(self, *args):
-        subprocess.run(['rclone', *args, '--s3-no-check-bucket'], env=self.env, check=True)
+        # R2 can return 501 to rclone's post-PUT HEAD; bulk uploads get a download check.
+        subprocess.run(['rclone', *args, '--s3-no-check-bucket', '--s3-no-head'], env=self.env, check=True)
 
     def remote(self, key):
         return f'charts:{self.bucket}/{key}'

@@ -1,4 +1,4 @@
-import { SlidersHorizontal, Sparkles, Monitor, Sun, Moon, ArrowUpRight } from 'lucide-react';
+import { Monitor, Sun, Moon, ArrowUpRight } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 
 interface NavbarProps {
@@ -18,8 +18,8 @@ export function Navbar({ activeTab, onTabChange }: NavbarProps) {
       <circle cx="12" cy="12" r="6" stroke="currentColor" strokeWidth="0.25" strokeOpacity="0.3" fill="none" />
     </svg><span>Nexus <span className="brand-subtitle">Screener</span></span></div>
     <nav className="primary-nav" aria-label="Main navigation">
-      <button type="button" aria-current={activeTab === 'screener' ? 'page' : undefined} onClick={() => onTabChange('screener')}><SlidersHorizontal size={18} /><span>Screener</span><ArrowUpRight className="nav-arrow" size={14} /></button>
-      <button type="button" aria-current={activeTab === 'ipo' ? 'page' : undefined} onClick={() => onTabChange('ipo')}><Sparkles size={18} /><span>IPO Catalogue</span><ArrowUpRight className="nav-arrow" size={14} /></button>
+      <button type="button" aria-current={activeTab === 'screener' ? 'page' : undefined} onClick={() => onTabChange('screener')}><span>Screener</span><ArrowUpRight className="nav-arrow" size={14} /></button>
+      <button type="button" aria-current={activeTab === 'ipo' ? 'page' : undefined} onClick={() => onTabChange('ipo')}><span>IPO Catalogue</span><ArrowUpRight className="nav-arrow" size={14} /></button>
     </nav>
     <div className="sidebar-footer">
       <p className="sidebar-note">A clearer view of<br />the Indian market.</p>

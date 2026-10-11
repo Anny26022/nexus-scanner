@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
 import { filterAnnouncements, type AnnouncementFilter } from '../api/announcements';
-import { ChevronDown } from 'lucide-react';
 import { DataUnavailableError, retryAnnouncement } from '../api/dataErrors';
 
 type Props = { revision?: string; value?: AnnouncementFilter; onChange: (value?: AnnouncementFilter) => void };
@@ -21,7 +20,7 @@ export function AnnouncementFilterControl({ revision, value, onChange }: Props) 
     if (event.key === 'Escape') {event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus();}
   }}>
     <summary className="button button-secondary" aria-label="Filter announcements" title="Filter announcements">
-      {value && <span className="count-badge">{value.topics.length || 'All'}</span>}<ChevronDown size={13} />
+      {value && <span className="count-badge">{value.topics.length || 'All'}</span>}
     </summary>
     <div className="announcement-popover">
       <div className="mb-3 flex items-center justify-between"><strong>Filter announcements</strong>

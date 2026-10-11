@@ -39,12 +39,16 @@ it('maps detail freshness by matched provider ID and exposes only endpoint names
   const manifest = {revision, schemaVersion: 4, sessionDate: '2026-10-06', totalStocks: 4,
     datasetUrl: '/data/stocks.json', iposUrl: '/data/ipos.json'};
   const payload = {records: [
-    {symbol: 'TEST', provider: {id: 'matched'}},
+    {symbol: 'TEST', issue_price: 302, offer_structure: {issue_size_crore: 365.76}, provider: {id: 'matched', listing_price: 298.95}, scanx: {listed: {ipo_start_date: '2026-09-25'}, details: {floor_price: 300, ceiling_price: 305, trading_lot: 10, drhp_doc: 'https://example.com/rhp.pdf', financials: [{date: '2026', unit: 'crores', pl: {total_revenue: 50, total_profit: 4}}]}}, enrichment_conflicts: [{field: 'issue_price', provider: 302, scanx: 305}]},
     {symbol: 'MISSING', provider: {id: 'not_fetched'}},
     {symbol: 'INVALID', provider: {id: 'invalid'}},
     {symbol: 'NO_PROVIDER'},
   ], provider_data: {details: {
-    matched: {fetched_at: '2026-10-04T06:00:00Z', errors: ['gmp_history: request diagnostic', 'gmp_history: another failure', 'unsafe request diagnostic']},
+    matched: {fetched_at: '2026-10-04T06:00:00Z', errors: ['gmp_history: request diagnostic', 'gmp_history: another failure', 'unsafe request diagnostic'], data: {
+      issue: {ipo: {price_band_low: 290, price_band_high: 302, lot_size: 50, about: 'Example IPO details', quality_grade: 'B+'}},
+      gmp_history: [{ts: '2026-10-03T12:00:00Z', gmp: 4, gmp_pct: 1.3}],
+      documents: {documents: [{label: 'Offer document', kind: 'RHP', url: 'https://example.com/rhp.pdf'}]},
+    }},
     invalid: {fetched_at: 'not-a-date', errors: []},
   }}};
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ok: true, json: async () => manifest})
@@ -52,6 +56,14 @@ it('maps detail freshness by matched provider ID and exposes only endpoint names
   const { realAdapter } = await import('../api/realAdapter');
   const rows = await realAdapter.getIpos();
   expect(rows[0].ipoDetailStatus).toEqual({lastSuccessAt: '2026-10-04T06:00:00Z', failedEndpoints: ['gmp_history', 'unknown']});
+  expect(rows[0].ipoResearch).toMatchObject({
+    issuePrice: 302,
+    offer: {issueSizeCrore: 365.76},
+    provider: {listingPrice: 298.95},
+    ipoDecode: {endpoints: ['issue', 'gmp_history', 'documents'], issue: {priceBandLow: 290, priceBandHigh: 302, qualityGrade: 'B+'}, gmpHistory: [{gmp: 4}], documents: [{url: 'https://example.com/rhp.pdf'}]},
+    scanx: {offer: {floorPrice: 300, ceilingPrice: 305, lotSize: 10}, drhpUrl: 'https://example.com/rhp.pdf', financials: [{revenue: 50, profit: 4}]},
+    conflicts: [{field: 'issue_price', provider: 302, scanx: 305}],
+  });
   expect(rows[1].ipoDetailStatus).toEqual({lastSuccessAt: null, failedEndpoints: []});
   expect(rows[2].ipoDetailStatus?.lastSuccessAt).toBeNull();
   expect(rows[3].ipoDetailStatus).toBeUndefined();

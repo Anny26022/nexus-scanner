@@ -40,3 +40,36 @@ it('keeps loaded listings and their count visible after a failed refetch', async
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(screen.queryByText(/No new listings/)).not.toBeInTheDocument();
 });
+
+it('opens the company IPO research card on hover and allows it to stay open by click', async () => {
+  vi.mocked(screenerApi.getIpoCatalogue).mockResolvedValueOnce({records: [{
+    symbol: 'RUNWALENTR', name: 'Runwal Enterprises', listingDate: '2026-10-05',
+    currentPrice: 262.55, turnoverCrore: 11.2, deliveryPct: 40.54,
+    sector: 'Unclassified', industry: 'Unclassified', marketCapCrore: 3880,
+    issuePrice: 302,
+    ipoDetailStatus: {lastSuccessAt: null, failedEndpoints: []},
+    ipoResearch: {
+      issuePrice: 302,
+      offer: {issueSizeCrore: 365.76, freshIssueCrore: 499.83},
+      subscription: {total: 2.5, retail: 1.12, nii: 3.93},
+      provider: {listingPrice: 298.95, listingGainPct: -1.98, gmp: -5, gmpPct: -1.66},
+      ipoDecode: {fetchedAt: null, endpoints: []},
+      conflicts: [{field: 'issue_price', provider: 302, scanx: 305}],
+    },
+  }]});
+  const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
+  render(<QueryClientProvider client={client}><NewListingsTab datasetRevision={'c'.repeat(64)} selectedAsOfDate="2026-10-06" /></QueryClientProvider>);
+  const company = await screen.findByRole('button', {name: 'IPO details for Runwal Enterprises'});
+  fireEvent.mouseEnter(company);
+  expect(await screen.findByRole('dialog', {name: 'Runwal Enterprises IPO details'})).toBeInTheDocument();
+  expect(screen.getByText('₹302')).toBeInTheDocument();
+  expect(screen.getByText('₹298.95')).toBeInTheDocument();
+  expect(screen.getByText(/issue price differs: IPO Decode 302; ScanX 305/i)).toBeInTheDocument();
+  fireEvent.click(company);
+  fireEvent.mouseLeave(company);
+  const card = screen.getByRole('dialog', {name: 'Runwal Enterprises IPO details'});
+  expect(card).toBeInTheDocument();
+  expect(screen.queryByRole('tab', {name: 'IPO Decode'})).not.toBeInTheDocument();
+  fireEvent.keyDown(card, {key: 'Escape'});
+  expect(screen.queryByRole('dialog', {name: 'Runwal Enterprises IPO details'})).not.toBeInTheDocument();
+});

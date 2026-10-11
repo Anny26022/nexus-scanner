@@ -8,10 +8,11 @@ import { PRESET_CATALOG } from '../data/presetCatalog';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
-import { SymbolWithLogo } from './SymbolWithLogo';
 import { Pagination } from './Pagination';
+import { SymbolWithLogo } from './SymbolWithLogo';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
+import { IpoDetailsCard } from './IpoDetailsCard';
 
 export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDate: string }> = ({ datasetRevision, selectedAsOfDate }) => {
   const [periodFilter, setPeriodFilter] = useLocalStorageState<'30d' | '90d' | '6m' | '1y' | 'all'>('nexus-scanner.ipo.period.v1', '1y');
@@ -27,6 +28,32 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const [screenSort, setScreenSort] = useState<{ field: string; direction: 'asc' | 'desc' }>({ field: 'rvol', direction: 'desc' });
   const pageSize = 50;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeIpo, setActiveIpo] = useState<{row: typeof ipoData[number]; left: number; top: number; placement: 'right' | 'left' | 'sheet'; pinned: boolean} | null>(null);
+  const ipoCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openIpoDetails = (row: typeof ipoData[number], trigger: HTMLButtonElement, pinned: boolean) => {
+    if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);
+    const rect = trigger.getBoundingClientRect();
+    const cardWidth = Math.min(440, window.innerWidth - 24);
+    const cardHeight = Math.min(window.innerHeight * 0.78, 680);
+    const rightSide = rect.right + 14;
+    const leftSide = rect.left - cardWidth - 14;
+    const placement = window.innerWidth <= 720 ? 'sheet'
+      : rightSide + cardWidth <= window.innerWidth - 12 ? 'right'
+        : leftSide >= 12 ? 'left' : 'right';
+    const left = placement === 'sheet' ? 12 : placement === 'left' ? leftSide
+      : Math.max(12, Math.min(rightSide, window.innerWidth - cardWidth - 12));
+    const top = window.innerWidth <= 720 ? 0
+      : Math.max(12, Math.min(rect.top - 12, window.innerHeight - cardHeight - 12));
+    setActiveIpo({row, left, top, placement, pinned});
+  };
+  const scheduleIpoDetailsClose = () => {
+    if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);
+    ipoCloseTimer.current = setTimeout(() => setActiveIpo(current => current?.pinned ? current : null), 180);
+  };
+  const dismissIpoDetails = () => {
+    if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);
+    setActiveIpo(null);
+  };
 
   const ipoQuery = useQuery({
     queryKey: ['ipos', datasetRevision],
@@ -132,7 +159,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
       onSortChange={(field, direction) => {setScreenSort({field, direction}); setScreenPage(1);}} currentSort={screenSort} />
       : <section className="results-surface" aria-label="IPO listings">
         <div className="results-toolbar"><div className="result-count"><strong>{!isLoading && (!ipoQuery.isError || ipoQuery.data) ? filteredIpos.length.toLocaleString('en-IN') : '-'}</strong><span>new listings</span></div><span className="cell-muted text-xs">Published catalogue</span></div>
-        <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns">
+        <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns" onScroll={dismissIpoDetails}>
           <table className="data-table ipo-table"><caption className="sr-only">Newly listed companies</caption>
             <colgroup>{['26%', '12%', '12%', '12%', '12%', '9%', '17%'].map((width, i) => <col key={i} style={{width}} />)}</colgroup>
             <thead><tr><th scope="col">Company</th>{([['listingDate', 'Listing date'], ['currentPrice', 'Current price'], ['turnoverCrore', 'Daily turnover'], ['marketCapCrore', 'Market cap'], ['deliveryPct', 'Delivery']] as const).map(([field, label]) =>
@@ -141,10 +168,17 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
               : ipoQuery.isError && !ipoQuery.data ? <tr><td colSpan={7}><div role="alert" className="data-state"><h2>IPO catalogue could not be loaded.</h2><button className="button button-secondary" onClick={() => void ipoQuery.refetch()}>Retry</button></div></td></tr>
               : !filteredIpos.length ? <tr><td colSpan={7}><div className="data-state"><SearchX size={28} /><h2>No new listings recorded for selected period window.</h2><p>Choose a longer period or clear your search.</p></div></td></tr>
               : visibleIpos.map(row => <tr key={row.symbol}>
-                <td><SymbolWithLogo symbol={row.symbol} name={row.name} />
-                  {row.ipoDetailStatus && <details className="ipo-refresh-detail"><summary>IPO Decode details</summary><p>{row.ipoDetailStatus.lastSuccessAt ? `Last complete refresh ${new Date(row.ipoDetailStatus.lastSuccessAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} IST` : 'No complete refresh recorded'}</p>
-                    {row.ipoDetailStatus.failedEndpoints.length > 0 && <p>Refresh failed: {row.ipoDetailStatus.failedEndpoints.join(', ')}. Available data retained.</p>}</details>}
-                </td>
+                <td><button type="button" className="ipo-company-trigger" aria-label={`IPO details for ${row.name || row.symbol}`} title="Hover or click for IPO details"
+                  aria-haspopup="dialog" aria-expanded={activeIpo?.row.symbol === row.symbol} aria-controls={`ipo-details-${row.symbol}`}
+                  onMouseEnter={event => openIpoDetails(row, event.currentTarget, false)}
+                  onMouseLeave={scheduleIpoDetailsClose}
+                  onFocus={event => openIpoDetails(row, event.currentTarget, false)}
+                  onBlur={scheduleIpoDetailsClose}
+                  onClick={event => activeIpo?.row.symbol === row.symbol && activeIpo.pinned
+                    ? dismissIpoDetails() : openIpoDetails(row, event.currentTarget, true)}
+                  onKeyDown={event => {if (event.key === 'Escape') dismissIpoDetails();}}>
+                  <SymbolWithLogo symbol={row.symbol} name={row.name} />
+                </button></td>
                 <td className="numeric"><span className="inline-flex items-center gap-1.5"><Calendar size={12} />{row.listingDate}</span></td>
                 <td className="numeric cell-strong">₹{row.currentPrice.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                 <td className="numeric">₹{row.turnoverCrore.toLocaleString('en-IN')} Cr</td>
@@ -159,5 +193,8 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
         </div>
       </section>}
     <ScreenerModal key={isFilterModalOpen ? 'open' : 'closed'} isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} activeConditionsMap={conditions} matchMode={matchMode} onApply={applyFilters} />
+    {activeIpo && <IpoDetailsCard key={activeIpo.row.symbol} row={activeIpo.row} id={`ipo-details-${activeIpo.row.symbol}`} left={activeIpo.left} top={activeIpo.top} placement={activeIpo.placement}
+      onClose={dismissIpoDetails} onMouseEnter={() => {if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);}}
+      onMouseLeave={scheduleIpoDetailsClose} />}
   </div>;
 };

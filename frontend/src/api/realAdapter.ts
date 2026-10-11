@@ -255,12 +255,98 @@ class RealDataAdapter {
             ? [...new Set<string>(detail.errors.filter((error: unknown) => typeof error === 'string')
                 .map((error: string) => error.split(':', 1)[0]).map((name: string) => /^[a-z_]+$/.test(name) ? name : 'unknown'))]
             : [];
+          const detailData = detail?.data ?? {};
+          const endpointNames = Object.keys(detailData).filter(name => /^[a-z_]+$/.test(name));
+          const decodedIssue = detailData.issue?.ipo;
           return {
             symbol:r.symbol, name:r.name || r.company_name || '', listingDate:r.listing_date || '',
             currentPrice:r.close ?? 0, turnoverCrore:r.rupee_volume == null ? 0 : r.rupee_volume / 10_000_000,
             deliveryPct:r.delivery_percent ?? null,
             sector:r.sector || 'Unclassified', industry:r.industry || 'Unclassified', marketCapCrore:r.market_cap_crore ?? 0,
             ipoDetailStatus: r.provider?.id ? {lastSuccessAt, failedEndpoints} : undefined,
+            ipoResearch: {
+              issuePrice: r.issue_price ?? null,
+              offer: r.offer_structure ? {
+                issueSizeCrore: r.offer_structure.issue_size_crore ?? null,
+                freshIssueCrore: r.offer_structure.fresh_issue_crore ?? null,
+                offerForSaleCrore: r.offer_structure.offer_for_sale_crore ?? null,
+              } : undefined,
+              subscription: {
+                total: r.provider?.total_subscription_multiple ?? null,
+                retail: r.retail_subscription_multiple ?? null,
+                nii: r.provider?.nii_subscription_multiple ?? null,
+                institutional: r.institutional_subscription_multiple ?? null,
+              },
+              provider: {
+                listingPrice: r.provider?.listing_price ?? null,
+                listingGainPct: r.provider?.listing_gain_percent ?? null,
+                gmp: r.provider?.gmp ?? null,
+                gmpPct: r.provider?.gmp_percent ?? null,
+              },
+              ipoDecode: r.provider?.id ? {
+                fetchedAt: lastSuccessAt,
+                endpoints: endpointNames,
+                registrar: detailData.allotment?.registrar ?? detailData.allotment_check?.registrar ?? null,
+                allotmentStatus: detailData.allotment?.status ?? detailData.allotment_check?.status ?? null,
+                allotmentDate: detailData.allotment?.allotment_date ?? null,
+                refundDate: detailData.allotment?.refund_date ?? null,
+                dematCreditDate: detailData.allotment?.demat_credit_date ?? null,
+                documentCount: Array.isArray(detailData.documents?.documents) ? detailData.documents.documents.length : detailData.documents?.count ?? null,
+                timelineStatus: detailData.timeline?.status ?? null,
+                issue: decodedIssue ? {
+                  priceBandLow: decodedIssue.price_band_low ?? null,
+                  priceBandHigh: decodedIssue.price_band_high ?? null,
+                  lotSize: decodedIssue.lot_size ?? null,
+                  minInvestment: decodedIssue.min_investment ?? null,
+                  leadManagers: decodedIssue.lead_managers ?? null,
+                  totalApplications: decodedIssue.total_applications ?? null,
+                  revenueCrore: decodedIssue.revenue_cr ?? null,
+                  profitCrore: decodedIssue.pat_cr ?? null,
+                  roePct: decodedIssue.ronw_pct ?? null,
+                  peAtUpper: decodedIssue.pe_at_upper ?? null,
+                  about: decodedIssue.about ?? null,
+                  qualityGrade: decodedIssue.quality_grade ?? null,
+                  issueType: decodedIssue.ipo_type ?? null,
+                } : undefined,
+                gmpHistory: Array.isArray(detailData.gmp_history) ? detailData.gmp_history.map((item: any) => ({date: item.ts, gmp: item.gmp ?? null, gmpPct: item.gmp_pct ?? null})) : [],
+                documents: Array.isArray(detailData.documents?.documents) ? detailData.documents.documents.map((item: any) => ({label: item.label, kind: item.kind, url: item.url, note: item.note})) : [],
+                valuation: detailData.prospectus?.valuation ? {
+                  pe: detailData.prospectus.valuation.pe ?? null,
+                  pb: detailData.prospectus.valuation.pb ?? null,
+                  evEbitda: detailData.prospectus.valuation.ev_ebitda ?? null,
+                  peerMedianPe: detailData.prospectus.valuation.peer_median_pe ?? null,
+                  verdict: detailData.prospectus.valuation.verdict ?? null,
+                } : undefined,
+                peerAvailability: detailData.peer_valuation ? {available: detailData.peer_valuation.available, reason: detailData.peer_valuation.reason ?? null} : undefined,
+              } : undefined,
+              scanx: r.scanx ? {
+                offer: r.scanx.listed ? {
+                  floorPrice: r.scanx.details?.floor_price ?? null,
+                  ceilingPrice: r.scanx.details?.ceiling_price ?? null,
+                  lotSize: r.scanx.details?.trading_lot ?? null,
+                  startDate: r.scanx.listed.ipo_start_date ?? null,
+                  endDate: r.scanx.listed.ipo_end_date ?? null,
+                } : undefined,
+                issueSize: r.scanx.details?.issue_size ?? null,
+                allotmentDate: r.scanx.details?.allotment_date ?? null,
+                companyDetail: r.scanx.details?.company_detail ?? null,
+                financials: Array.isArray(r.scanx.details?.financials) ? r.scanx.details.financials.map((item: any) => ({
+                  date: item.date, unit: item.unit,
+                  revenue: item.pl?.revenue_from_operations ?? item.pl?.total_revenue ?? null,
+                  profit: item.pl?.total_profit ?? null,
+                })) : [],
+                purpose: Array.isArray(r.scanx.details?.ipoPurpose) ? r.scanx.details.ipoPurpose.map((item: any) => ({
+                  title: item.title, description: item.description, amount: item.total_amount, unit: item.unit,
+                })) : [],
+                strengths: Array.isArray(r.scanx.details?.strengths) ? r.scanx.details.strengths.map((item: any) => ({title: item.title, description: item.description})) : [],
+                risks: Array.isArray(r.scanx.details?.riskFactors) ? r.scanx.details.riskFactors.map((item: any) => ({title: item.title, description: item.description})) : [],
+                management: Array.isArray(r.scanx.details?.managementTeam) ? r.scanx.details.managementTeam.map((item: any) => ({name: item.name, designation: item.designation})) : [],
+                drhpUrl: r.scanx.details?.drhp_doc ?? r.scanx.details?.sym_doc_url ?? null,
+              } : undefined,
+              conflicts: Array.isArray(r.enrichment_conflicts) ? r.enrichment_conflicts
+                .filter((item: any) => typeof item?.field === 'string')
+                .map((item: any) => ({field: item.field, provider: item.provider ?? null, scanx: item.scanx ?? null})) : [],
+            },
           };
         });
         const provider = 'provider_data' in payload ? payload.provider_data : undefined;

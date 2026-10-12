@@ -516,6 +516,21 @@ Tests verify contracts against fixtures. They do not establish complete live ups
 
 Read the [repository guide](../README.md), [data limitations](../DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/DATA_LIMITATIONS.md), and [R2 publication guide](../docs/r2-chart-publication.md) for wider operational detail.
 
+### Rank-first RS rating
+
+The daily pipeline publishes `nexus_rank_first_v3`: rank each Nifty500-relative
+growth ratio over 21/63/126/252 aligned sessions on the same eligible universe,
+combine those integer 1–99 ratings with 40/20/20/20 weights, then percentile-rank
+the composite again. Ties retain the existing strict-lower rule:
+`1 + round(98 * strictly_lower_scores / eligible_scores)`.
+At least 260 aligned sessions and all four valid horizons are required.
+
+Previously, `nexus_front_weighted_v2` weighted raw relative growth ratios before
+ranking. Ratings and RS filter matches intentionally change after the next
+normal publication following merge; stored older snapshots remain unchanged.
+No frontend field names, rating bounds, benchmark or weights change. This is
+not an exact MarketStrength/IBD replica or a claim of better investment returns.
+
 ### Python dependencies for frontend CI
 
 Frontend CI uses Python 3.12 and `frontend/requirements-ci.lock`, which pins all

@@ -111,7 +111,9 @@ class IpoProviderClient:
                         "--header", f"Referer: {ORIGIN}/", "--header", f"X-IPO-Session: {self.nonce}",
                         "--cookie", str(self.cookie_jar), "--output", str(target),
                         "--write-out", "%{http_code}", f"{ORIGIN}{endpoint}"], capture_output=True, text=True)
-        if result.stdout.strip() in {"401", "403", "429", "500", "502", "503", "504"}:
+        status = result.stdout.strip()
+        if (status in {"401", "403", "408", "429", "000"} or status.startswith("5")
+                or (result.returncode and (not status or result.returncode != 22))):
             raise ProviderBackoff("Provider requested backoff")
         if result.returncode:
             raise subprocess.CalledProcessError(result.returncode, ["curl"])
@@ -267,18 +269,13 @@ def fetch_all(root: Path, detail_limit: int | None = None, *, missing_budget_sec
                 print("IPO missing-detail budget reached; saved progress resumes next run.", flush=True)
                 break
             current = details.get(identifier, {})
-            try:
-                values, detail_errors = _refresh_detail(client, identifier, missing_endpoints(identifier))
-            except ProviderBackoff:
-                errors.append("details: provider requested backoff")
-                print("IPO collection paused by provider; saved progress resumes next run.", flush=True)
-                break
+            values, detail_errors = _refresh_detail(client, identifier, missing_endpoints(identifier))
             # Preserve previous successful endpoints on partial or total failure.
-            # Only complete refreshes advance the freshness timestamp; failures
+            # Only a complete merged collection advances its timestamp; failures
             # remain eligible next run without exceeding this run's request budget.
             details[identifier] = {**current, "data": {**current.get("data", {}), **values},
                                    "errors": detail_errors, "last_attempt_at": now.isoformat()}
-            if not detail_errors and len(values) == len(DETAIL_ENDPOINTS):
+            if not detail_errors and not missing_endpoints(identifier):
                 details[identifier]["fetched_at"] = now.isoformat()
             errors.extend(f"{identifier} {error}" for error in detail_errors)
             attempted += 1

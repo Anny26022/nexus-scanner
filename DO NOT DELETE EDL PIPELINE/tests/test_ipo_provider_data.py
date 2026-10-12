@@ -5,13 +5,14 @@ import gzip
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from fetch_ipo_provider_data import DETAIL_ENDPOINTS, ProviderBackoff, _load_cache, _merge_listed_archive, _refresh_detail, _write_details_archive, fetch_all, main
+from fetch_ipo_provider_data import DETAIL_ENDPOINTS, IpoProviderClient, ProviderBackoff, _load_cache, _merge_listed_archive, _refresh_detail, _write_details_archive, fetch_all, main
 
 
 class FakeClient:
@@ -32,6 +33,21 @@ class FakeClient:
 
 
 class IpoProviderFetchTests(unittest.TestCase):
+    def test_http_and_transport_outages_back_off_but_missing_objects_do_not(self):
+        for status, code in [("000", 7), ("", 28), ("", 22), ("200", 28), ("408", 22),
+                             ("429", 22), ("401", 22), ("403", 22), ("500", 22),
+                             ("501", 22), ("505", 22), ("599", 22), ("404", 22)]:
+            with self.subTest(status=status, code=code):
+                client = IpoProviderClient()
+                try:
+                    result = subprocess.CompletedProcess(["curl"], code, stdout=status, stderr="")
+                    with patch("fetch_ipo_provider_data.subprocess.run", return_value=result):
+                        error = subprocess.CalledProcessError if status == "404" else ProviderBackoff
+                        with self.assertRaises(error):
+                            client.get_json("/api/ipos/TEST")
+                finally:
+                    client.temporary.cleanup()
+
     def test_next_run_collects_a_new_ipo_without_revisiting_completed_details(self):
         class NewIssueClient(FakeClient):
             def get_json(self, endpoint):
@@ -52,8 +68,10 @@ class IpoProviderFetchTests(unittest.TestCase):
             self.assertEqual(payload["detail_coverage"]["incomplete"], 0)
 
     def test_feed_backoff_preserves_completed_feeds_and_stops_requests(self):
+        requested = []
         class LimitedClient(FakeClient):
             def get_json(self, endpoint):
+                requested.append(endpoint)
                 if endpoint == "/api/ipos/upcoming":
                     raise ProviderBackoff()
                 return super().get_json(endpoint)
@@ -64,6 +82,7 @@ class IpoProviderFetchTests(unittest.TestCase):
             self.assertIn("open", payload["feeds"])
             self.assertEqual(payload["analytics"], {})
             self.assertFalse(payload["refresh_complete"])
+            self.assertEqual(requested, ["/api/ipos/open", "/api/ipos/upcoming"])
             refresh.assert_not_called()
 
     def test_detail_backoff_retains_successful_sections_of_current_issue(self):
@@ -89,7 +108,7 @@ class IpoProviderFetchTests(unittest.TestCase):
             _merge_listed_archive(root, [{"id":"COMPLETE"}, {"id":"PARTIAL"}])
             _write_details_archive(root, {
                 "COMPLETE":{"fetched_at":"2099-01-01T00:00:00Z", "data":complete},
-                "PARTIAL":{"data":{key:value for key,value in complete.items() if key != "documents"}},
+                "PARTIAL":{"fetched_at":"2000-01-01T00:00:00Z", "data":{key:value for key,value in complete.items() if key != "documents"}},
             }, "2099-01-01T00:00:00Z")
             def refresh(client, identifier, endpoints=None):
                 return {name:{} for name in (endpoints or DETAIL_ENDPOINTS)}, []
@@ -101,6 +120,7 @@ class IpoProviderFetchTests(unittest.TestCase):
             partial = next(call for call in fetch.call_args_list if call.args[1] == "PARTIAL")
             self.assertEqual(partial.args[2], {"documents"})
             self.assertEqual(payload["detail_coverage"]["incomplete"], 0)
+            self.assertEqual(payload["details"]["PARTIAL"]["fetched_at"], payload["fetched_at"])
             with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
                     patch("fetch_ipo_provider_data._refresh_detail") as fetch:
                 fetch_all(root, missing_budget_seconds=60)
@@ -110,9 +130,14 @@ class IpoProviderFetchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             complete = {name:{} for name in DETAIL_ENDPOINTS}
+            elapsed = {"seconds":0}
+            clock = SimpleNamespace(monotonic=lambda: elapsed["seconds"])
+            def refresh(*args):
+                elapsed["seconds"] += 60
+                return complete, []
             with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
-                    patch("fetch_ipo_provider_data.time.monotonic", side_effect=[0,0,60]), \
-                    patch("fetch_ipo_provider_data._refresh_detail", return_value=(complete, [])) as fetch:
+                    patch("fetch_ipo_provider_data.time", clock), \
+                    patch("fetch_ipo_provider_data._refresh_detail", side_effect=refresh) as fetch:
                 first = fetch_all(root, missing_budget_seconds=30)
             self.assertEqual(fetch.call_count, 1)
             self.assertEqual(first["detail_coverage"]["incomplete"], 1)
@@ -125,14 +150,17 @@ class IpoProviderFetchTests(unittest.TestCase):
     def test_provider_backoff_preserves_progress_without_fetching_remaining_issues(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
+            _merge_listed_archive(root, [{"id":"THIRD"}])
             complete = {name:{} for name in DETAIL_ENDPOINTS}
             with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
-                    patch("fetch_ipo_provider_data._refresh_detail", side_effect=[(complete, []), ProviderBackoff()]) as fetch:
+                    patch("fetch_ipo_provider_data._refresh_detail", side_effect=[(complete, []), ({}, ["issue: provider requested backoff"])]) as fetch:
                 payload = fetch_all(root, missing_budget_seconds=30)
             self.assertEqual(fetch.call_count, 2)
             self.assertEqual(payload["detail_coverage"]["complete"], 1)
-            self.assertEqual(len(_load_cache(root)["details"]), 1)
-            self.assertIn("details: provider requested backoff", payload["errors"])
+            cached = _load_cache(root)["details"]
+            self.assertEqual(len(cached), 2)
+            self.assertNotIn("THIRD", cached)
+            self.assertTrue(any("provider requested backoff" in error for error in payload["errors"]))
 
     def test_request_errors_and_legacy_cache_never_retain_session_headers(self):
         secret = "synthetic-session-token"

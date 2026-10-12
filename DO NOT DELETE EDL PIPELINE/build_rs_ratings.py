@@ -81,14 +81,13 @@ def relative_strength_scores(stock, benchmark, as_of_date):
     return relative_ratios if all(math.isfinite(value) for value in relative_ratios.values()) else None
 
 
-def percentile_ratings(scores):
-    """Map scores to the documented bounded 1–99 strict-lower percentile."""
+def percentile_ranks(scores):
+    """MarketStrength momentum period ranks, kept fractional until aggregation."""
     values = pd.Series(scores, dtype=float)
     if values.empty:
         return {}
     lower_count = values.rank(method="min") - 1
-    ratings = (1 + (lower_count / len(values)) * 98).round().clip(1, 99).astype(int)
-    return {symbol: int(rating) for symbol, rating in ratings.items()}
+    return (1 + 98 * lower_count / max(1, len(values) - 1)).to_dict()
 
 
 def rank_first_ratings(scores):
@@ -96,12 +95,20 @@ def rank_first_ratings(scores):
     symbols = set.intersection(*(set(scores.get(key, {})) for key in FRONT_WEIGHTED_HORIZONS))
     symbols = sorted(symbol for symbol in symbols if all(
         math.isfinite(scores[key][symbol]) and scores[key][symbol] > 0 for key in FRONT_WEIGHTED_HORIZONS))
-    ranked = {key: percentile_ratings({symbol: scores[key][symbol] for symbol in symbols})
+    ranked = {key: percentile_ranks({symbol: scores[key][symbol] for symbol in symbols})
               for key in FRONT_WEIGHTED_HORIZONS}
-    # Integer percentage weights keep mathematically equal composites tied.
+    # Match the reference's percentage-weight arithmetic without rounding ranks.
     composite = {symbol: sum(round(weight * 100) * ranked[key][symbol]
-                             for key, weight in FRONT_WEIGHTED_WEIGHTS.items()) for symbol in symbols}
-    ranked['front_weighted'] = percentile_ratings(composite)
+                             for key, weight in FRONT_WEIGHTED_WEIGHTS.items()) / 100 for symbol in symbols}
+    # Stable symbol order makes equal composites reproducible. The reference
+    # assigns ordinal final ratings (not equal ratings to tied composites).
+    ordered = sorted(symbols, key=lambda symbol: -composite[symbol])
+    ranked = {key: {symbol: math.floor(value + 0.5) for symbol, value in values.items()}
+              for key, values in ranked.items()}
+    ranked['front_weighted'] = {
+        symbol: math.floor(99 - 98 * position / max(1, len(ordered) - 1) + 0.5)
+        for position, symbol in enumerate(ordered)
+    }
     return ranked
 
 
@@ -151,9 +158,12 @@ def main():
             "weights": FRONT_WEIGHTED_WEIGHTS,
             "minimum_aligned_sessions": MINIMUM_ALIGNED_SESSIONS,
             "rating_keys": ["one_month", "three_month", "six_month", "twelve_month", "front_weighted"],
-            "score_formula": "sum(weight_horizon * horizon_percentile_rating)",
+            "score_formula": "sum(weight_horizon * unrounded_horizon_percentile_rank)",
             "horizon_score_formula": "stock_horizon_price_ratio / nifty_500_horizon_price_ratio",
-            "rank_formula": "1 + round(98 * strictly_lower_scores / eligible_scores)",
+            "horizon_rank_formula": "1 + 98 * strictly_lower_scores / max(1, eligible_scores - 1)",
+            "rank_formula": "floor(99 - 98 * descending_position / max(1, eligible_scores - 1) + 0.5)",
+            "composite_ties": "stable symbol ascending order",
+            "horizon_rating_rounding": "floor(unrounded_horizon_percentile_rank + 0.5)",
         },
         "ratings": ratings,
     }, ensure_ascii=False)

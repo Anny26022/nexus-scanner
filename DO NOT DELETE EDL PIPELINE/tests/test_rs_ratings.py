@@ -1,4 +1,6 @@
 import importlib.util
+import bisect
+import math
 import sys
 import unittest
 import tempfile
@@ -56,8 +58,8 @@ class FrontWeightedRsTests(unittest.TestCase):
         scores = {key:{symbol:values[i] for symbol, values in ratios.items()}
                   for i, key in enumerate(rs.FRONT_WEIGHTED_HORIZONS)}
         ranked = rs.rank_first_ratings(scores)
-        self.assertEqual(ranked['one_month'], {'A':50, 'B':1})
-        self.assertEqual(ranked['front_weighted'], {'A':1, 'B':50})
+        self.assertEqual(ranked['one_month'], {'A':99, 'B':1})
+        self.assertEqual(ranked['front_weighted'], {'B':99, 'A':1})
         old = {symbol:sum(weight * value for weight, value in zip(rs.FRONT_WEIGHTED_WEIGHTS.values(), values))
                for symbol, values in ratios.items()}
         self.assertGreater(old['A'], old['B'])
@@ -68,29 +70,50 @@ class FrontWeightedRsTests(unittest.TestCase):
         del scores['one_month']['MISSING']
         ranked = rs.rank_first_ratings(scores)
         for values in ranked.values():
-            self.assertEqual(values, {'A':1, 'B':50})
+            self.assertEqual(values, {'A':1, 'B':99})
         self.assertTrue(all(not values for values in rs.rank_first_ratings({}).values()))
 
-    def test_equal_period_scores_keep_equal_final_ratings(self):
+    def test_equal_period_scores_share_period_rank_but_have_ordinal_final_ratings(self):
         scores = {key:{'A':1., 'B':1., 'C':2.} for key in rs.FRONT_WEIGHTED_HORIZONS}
         ranked = rs.rank_first_ratings(scores)
-        self.assertEqual(ranked['front_weighted']['A'], ranked['front_weighted']['B'])
+        self.assertEqual(ranked['one_month'], {'A':1, 'B':1, 'C':99})
+        self.assertEqual(ranked['front_weighted'], {'C':99, 'A':50, 'B':1})
 
-    def test_equal_weighted_composites_keep_equal_final_ratings(self):
+    def test_equal_weighted_composites_use_stable_symbol_order(self):
         scores = {'one_month':{'A':1., 'B':2.}, 'three_month':{'A':2., 'B':1.},
                   'six_month':{'A':2., 'B':1.}, 'twelve_month':{'A':1., 'B':1.}}
-        self.assertEqual(rs.rank_first_ratings(scores)['front_weighted'], {'A':1, 'B':1})
+        self.assertEqual(rs.rank_first_ratings(scores)['front_weighted'], {'A':99, 'B':1})
+        reversed_scores = {key:dict(reversed(list(values.items()))) for key, values in scores.items()}
+        self.assertEqual(rs.rank_first_ratings(scores), rs.rank_first_ratings(reversed_scores))
 
     def test_matches_independent_weighted_rank_calculation(self):
-        # Synthetic published period ranks can be used directly: check the
-        # 40/20/20/20 aggregation and final strict-lower rank independently.
-        scores = {key:{str(i):float((i * multiplier) % 101 + 1) for i in range(101)}
+        # Independent transcription of momentumScreen.calc from MarketStrength
+        # app.js?v=8f39ec222d: binary-search lower ranks, then ordinal ratings.
+        scores = {key:{str(i):float((i * multiplier) % 101 + 1) for i in range(102)}
                   for key, multiplier in zip(rs.FRONT_WEIGHTED_HORIZONS, (1, 3, 7, 11))}
         ranked = rs.rank_first_ratings(scores)
-        weighted = {symbol:sum(rs.FRONT_WEIGHTED_WEIGHTS[key] * ranked[key][symbol]
-                               for key in rs.FRONT_WEIGHTED_HORIZONS) for symbol in ranked['one_month']}
-        expected = rs.percentile_ratings({symbol:round(value, 8) for symbol, value in weighted.items()})
+        symbols = sorted(scores['one_month'])
+        weighted = dict.fromkeys(symbols, 0.)
+        for key, weight in rs.FRONT_WEIGHTED_WEIGHTS.items():
+            ordered = sorted(scores[key].values())
+            for symbol in symbols:
+                rank = 1 + 98 * bisect.bisect_left(ordered, scores[key][symbol]) / (len(symbols) - 1)
+                weighted[symbol] += round(weight * 100) * rank
+        ordered = sorted(symbols, key=lambda symbol: -weighted[symbol] / 100)
+        expected = {symbol:math.floor(99 - 98 * i / (len(symbols) - 1) + .5)
+                    for i, symbol in enumerate(ordered)}
         self.assertEqual(ranked['front_weighted'], expected)
+        rounded = sorted(symbols, key=lambda symbol: -sum(round(weight * 100) * ranked[key][symbol]
+                         for key, weight in rs.FRONT_WEIGHTED_WEIGHTS.items()))
+        self.assertNotEqual(ordered, rounded, 'Fixture must catch premature period-rank rounding')
+
+    def test_single_stock_and_half_up_rounding(self):
+        single = {key:{'A':1.} for key in rs.FRONT_WEIGHTED_HORIZONS}
+        self.assertEqual(rs.rank_first_ratings(single)['front_weighted'], {'A':99})
+        scores = {key:{str(i):i + 1. for i in range(5)} for key in rs.FRONT_WEIGHTED_HORIZONS}
+        ranked = rs.rank_first_ratings(scores)
+        self.assertEqual(ranked['one_month']['3'], 75)  # 74.5, not Python's round-to-even 74
+        self.assertEqual(ranked['front_weighted']['1'], 26)
 
     def test_publication_versions_methodology_without_changing_rating_fields(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -107,15 +130,15 @@ class FrontWeightedRsTests(unittest.TestCase):
             self.assertEqual(payload['methodology']['version'], 'nexus_rank_first_v3')
             self.assertEqual(payload['as_of_date'], '2026-10-09')
             self.assertEqual(payload['methodology']['weights'], rs.FRONT_WEIGHTED_WEIGHTS)
+            self.assertIn('unrounded', payload['methodology']['score_formula'])
             self.assertEqual(set(payload['ratings']['TEST']), {*rs.FRONT_WEIGHTED_HORIZONS, 'front_weighted'})
 
-    def test_maps_strictly_lower_scores_to_bounded_integer_ratings(self):
-        ratings = rs.percentile_ratings({"A": 1.0, "B": 1.0, "C": 2.0, "D": 3.0})
+    def test_maps_strictly_lower_scores_to_fractional_endpoint_scaled_ranks(self):
+        ratings = rs.percentile_ranks({"A": 1.0, "B": 1.0, "C": 2.0, "D": 3.0})
         self.assertEqual(ratings["A"], 1)
         self.assertEqual(ratings["B"], 1)
-        # The supplied strict-lower / total-universe equation intentionally
-        # reaches 99 only in a sufficiently broad cross-section.
-        self.assertEqual(ratings["D"], 74)
+        self.assertAlmostEqual(ratings['C'], 1 + 196 / 3)
+        self.assertEqual(ratings["D"], 99)
         self.assertTrue(all(1 <= rating <= 99 for rating in ratings.values()))
 
 

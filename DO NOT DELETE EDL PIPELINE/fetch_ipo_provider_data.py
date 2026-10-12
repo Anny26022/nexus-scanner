@@ -1,9 +1,9 @@
 """Ingest permitted IPO provider data without retaining browser credentials.
 
 Each run creates a new provider session, fetches catalogue and analytics feeds,
-then refreshes a bounded rotating set of detailed issue records. The bounded
-detail lane respects the provider rate limit while the history cache converges
-to complete detail coverage over subsequent daily runs.
+then refreshes a bounded rotating set of detailed issue records. The same run
+fills missing sections within a time budget, checkpointing progress for the
+next daily run without repeatedly downloading completed archive records.
 """
 
 from __future__ import annotations
@@ -46,9 +46,14 @@ DETAIL_ENDPOINTS = {
     "peer_valuation": "/api/analytics/peer-valuation/issue/{id}",
 }
 DETAIL_LIMIT = 18
+MISSING_DETAIL_BUDGET_SECONDS = 20 * 60
 DETAIL_DELAY_SECONDS = 0.28
 LISTED_ARCHIVE_NAME = "ipo_provider_listed_archive.json.gz"
 DETAILS_ARCHIVE_NAME = "ipo_provider_details_archive.json.gz"
+
+
+class ProviderBackoff(RuntimeError):
+    """Stop collection on throttling, access denial or a provider outage."""
 
 
 def _safe_error(error):
@@ -104,9 +109,14 @@ class IpoProviderClient:
         target = self.directory / f"{hashlib.sha256(endpoint.encode()).hexdigest()}.json"
         common = ["curl", "--fail", "--silent", "--show-error", "--compressed", "--max-time", str(self.timeout),
                   "--user-agent", USER_AGENT]
-        subprocess.run([*common, "--header", "Accept: application/json, text/plain, */*",
+        result = subprocess.run([*common, "--header", "Accept: application/json, text/plain, */*",
                         "--header", f"Referer: {ORIGIN}/", "--header", f"X-IPO-Session: {self.nonce}",
-                        "--cookie", str(self.cookie_jar), "--output", str(target), f"{ORIGIN}{endpoint}"], check=True)
+                        "--cookie", str(self.cookie_jar), "--output", str(target),
+                        "--write-out", "%{http_code}", f"{ORIGIN}{endpoint}"], capture_output=True, text=True)
+        if result.stdout.strip() in {"401", "403", "429", "500", "502", "503", "504"}:
+            raise ProviderBackoff("Provider requested backoff")
+        if result.returncode:
+            raise subprocess.CalledProcessError(result.returncode, ["curl"])
         return json.loads(target.read_text(encoding="utf-8"))
 
 
@@ -201,33 +211,41 @@ def _age_hours(item: dict, now: datetime) -> float:
         return float("inf")
 
 
-def _refresh_detail(client: IpoProviderClient, identifier: str) -> tuple[dict, list[str]]:
+def _refresh_detail(client: IpoProviderClient, identifier: str, endpoints=None) -> tuple[dict, list[str]]:
     values, errors = {}, []
     for name, template in DETAIL_ENDPOINTS.items():
+        if endpoints is not None and name not in endpoints:
+            continue
         try:
             values[name] = client.get_json(template.format(id=identifier))
+        except ProviderBackoff:
+            errors.append(f"{name}: provider requested backoff")
+            break
         except (subprocess.CalledProcessError, ValueError) as error:
             errors.append(f"{name}: {_safe_error(error)}")
         time.sleep(DETAIL_DELAY_SECONDS)
     return values, errors
 
 
-def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT) -> dict:
+def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT, *, missing_budget_seconds: float = 0) -> dict:
     now = datetime.now(timezone.utc)
     feeds, analytics, errors = {}, {}, []
     cache = _load_cache(root)
     details = cache["details"]
     with IpoProviderClient() as client:
-        for name, endpoint in CATALOGUE_ENDPOINTS.items():
-            try:
-                feeds[name] = client.get_json(endpoint)
-            except (subprocess.CalledProcessError, ValueError) as error:
-                errors.append(f"{name}: {_safe_error(error)}")
-        for name, endpoint in ANALYTICS_ENDPOINTS.items():
-            try:
-                analytics[name] = client.get_json(endpoint)
-            except (subprocess.CalledProcessError, ValueError) as error:
-                errors.append(f"{name}: {_safe_error(error)}")
+        paused = False
+        for target, endpoints in ((feeds, CATALOGUE_ENDPOINTS), (analytics, ANALYTICS_ENDPOINTS)):
+            if paused:
+                break
+            for name, endpoint in endpoints.items():
+                try:
+                    target[name] = client.get_json(endpoint)
+                except ProviderBackoff:
+                    errors.append(f"{name}: provider requested backoff")
+                    paused = True
+                    break
+                except (subprocess.CalledProcessError, ValueError) as error:
+                    errors.append(f"{name}: {_safe_error(error)}")
         active = set(_detail_candidates(feeds, ("open", "upcoming", "closed")))
         records = _merge_listed_archive(root, _records(feeds.get("listed_60d")))
         candidates = set(_detail_candidates(feeds)) | {str(row["id"]) for row in records if row.get("id")}
@@ -244,34 +262,66 @@ def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT) -> dict:
         # Reserve a small share for retained history, then let either lane fill spare slots.
         history_slots = detail_limit // 4 if detail_limit > 1 else 0
         ordered = history_queue[:history_slots] + active_queue + history_queue[history_slots:]
+        def missing_endpoints(identifier):
+            item = details.get(identifier, {})
+            failed = {error.split(":", 1)[0] for error in item.get("errors", [])}
+            return set(DETAIL_ENDPOINTS) - set(item.get("data", {})) | (failed & set(DETAIL_ENDPOINTS))
+
+        regular = ordered[:detail_limit]
+        missing = sorted((identifier for identifier in candidates if missing_endpoints(identifier)
+                          and identifier not in regular), key=priority) if missing_budget_seconds else []
+        ordered = [] if paused else regular + missing
+        deadline = time.monotonic() + missing_budget_seconds
         attempted = 0
         for identifier in ordered:
-            if attempted >= detail_limit:
+            completing = identifier not in regular
+            if completing and time.monotonic() >= deadline:
+                print("IPO missing-detail budget reached; saved progress resumes next run.", flush=True)
                 break
             current = details.get(identifier, {})
-            values, detail_errors = _refresh_detail(client, identifier)
+            try:
+                values, detail_errors = (_refresh_detail(client, identifier, missing_endpoints(identifier))
+                                        if completing else _refresh_detail(client, identifier))
+            except ProviderBackoff:
+                errors.append("details: provider requested backoff")
+                print("IPO collection paused by provider; saved progress resumes next run.", flush=True)
+                break
             # Preserve previous successful endpoints on partial or total failure.
             # Only complete refreshes advance the freshness timestamp; failures
             # remain eligible next run without exceeding this run's request budget.
             details[identifier] = {**current, "data": {**current.get("data", {}), **values},
                                    "errors": detail_errors, "last_attempt_at": now.isoformat()}
-            if not detail_errors:
+            if not detail_errors and len(values) == len(DETAIL_ENDPOINTS):
                 details[identifier]["fetched_at"] = now.isoformat()
             errors.extend(f"{identifier} {error}" for error in detail_errors)
             attempted += 1
+            if any("provider requested backoff" in error for error in detail_errors):
+                print("IPO collection paused by provider; saved progress resumes next run.", flush=True)
+                break
+            if missing_budget_seconds:
+                # Persist each batch, including failures, so an interrupted run resumes.
+                if attempted % 10 == 0:
+                    _write_details_archive(root, details, datetime.now(timezone.utc).isoformat())
+                print(f"IPO details [{attempted}/{len(ordered)}] {identifier}: "
+                      f"{len(values)}/{len(DETAIL_ENDPOINTS)} sections fetched", flush=True)
     _write_details_archive(root, details, now.isoformat())
+    complete = sum(not missing_endpoints(identifier) for identifier in candidates)
+    coverage = {"total": len(candidates), "complete": complete,
+                "incomplete": len(candidates) - complete, "attempted": attempted}
+    print(f"IPO detail coverage: {complete}/{len(candidates)} complete; "
+          f"{coverage['incomplete']} incomplete; {attempted} attempted this run.", flush=True)
     return {"schema_version": 2, "source": "Permitted IPO provider catalogue API", "available": bool(feeds or records),
             "recent_feed_available": "listed_60d" in feeds,
             "refresh_complete": len(feeds) == len(CATALOGUE_ENDPOINTS) and len(analytics) == len(ANALYTICS_ENDPOINTS),
             "fetched_at": now.isoformat(), "feeds": feeds, "analytics": analytics, "details": details,
-            "records": records, "errors": errors}
+            "records": records, "errors": errors, "detail_coverage": coverage}
 
 
 def main() -> int:
     root = Path(BASE_DIR)
     output = root / "ipo_provider_data.json"
     try:
-        payload = fetch_all(root)
+        payload = fetch_all(root, missing_budget_seconds=MISSING_DETAIL_BUDGET_SECONDS)
         print(f"Retained {len(payload['records'])} listed IPOs; {len(payload['details'])} detailed issues.")
     except (subprocess.CalledProcessError, RuntimeError, ValueError, OSError) as error:
         archive = _load_listed_archive(root)

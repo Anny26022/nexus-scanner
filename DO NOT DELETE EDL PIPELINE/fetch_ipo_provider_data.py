@@ -1,9 +1,8 @@
 """Ingest permitted IPO provider data without retaining browser credentials.
 
 Each run creates a new provider session, fetches catalogue and analytics feeds,
-then refreshes a bounded rotating set of detailed issue records. The same run
-fills missing sections within a time budget, checkpointing progress for the
-next daily run without repeatedly downloading completed archive records.
+then fills new/missing detail sections within a time budget, checkpointing
+progress for the next daily run without re-downloading completed sections.
 """
 
 from __future__ import annotations
@@ -45,7 +44,6 @@ DETAIL_ENDPOINTS = {
     "related": "/api/ipos/{id}/related", "timeline": "/api/ipos/{id}/timeline",
     "peer_valuation": "/api/analytics/peer-valuation/issue/{id}",
 }
-DETAIL_LIMIT = 18
 MISSING_DETAIL_BUDGET_SECONDS = 20 * 60
 DETAIL_DELAY_SECONDS = 0.28
 LISTED_ARCHIVE_NAME = "ipo_provider_listed_archive.json.gz"
@@ -227,7 +225,7 @@ def _refresh_detail(client: IpoProviderClient, identifier: str, endpoints=None) 
     return values, errors
 
 
-def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT, *, missing_budget_seconds: float = 0) -> dict:
+def fetch_all(root: Path, detail_limit: int | None = None, *, missing_budget_seconds: float = MISSING_DETAIL_BUDGET_SECONDS) -> dict:
     now = datetime.now(timezone.utc)
     feeds, analytics, errors = {}, {}, []
     cache = _load_cache(root)
@@ -249,39 +247,28 @@ def fetch_all(root: Path, detail_limit: int = DETAIL_LIMIT, *, missing_budget_se
         active = set(_detail_candidates(feeds, ("open", "upcoming", "closed")))
         records = _merge_listed_archive(root, _records(feeds.get("listed_60d")))
         candidates = set(_detail_candidates(feeds)) | {str(row["id"]) for row in records if row.get("id")}
-        # Last attempt rotates repeated failures; success time still controls freshness.
+        # New issues precede retries within each group; live IPOs take priority.
         def priority(identifier):
             item = details.get(identifier, {})
             stamp = item.get("last_attempt_at") or item.get("fetched_at")
-            return (-_age_hours({"fetched_at": stamp}, now), identifier)
-
-        eligible = [identifier for identifier in candidates
-                    if _age_hours(details.get(identifier, {}), now) >= (24 if identifier in active else 24 * 7)]
-        active_queue = sorted((identifier for identifier in eligible if identifier in active), key=priority)
-        history_queue = sorted((identifier for identifier in eligible if identifier not in active), key=priority)
-        # Reserve a small share for retained history, then let either lane fill spare slots.
-        history_slots = detail_limit // 4 if detail_limit > 1 else 0
-        ordered = history_queue[:history_slots] + active_queue + history_queue[history_slots:]
+            return (identifier not in active, -_age_hours({"fetched_at": stamp}, now), identifier)
         def missing_endpoints(identifier):
             item = details.get(identifier, {})
             failed = {error.split(":", 1)[0] for error in item.get("errors", [])}
             return set(DETAIL_ENDPOINTS) - set(item.get("data", {})) | (failed & set(DETAIL_ENDPOINTS))
 
-        regular = ordered[:detail_limit]
-        missing = sorted((identifier for identifier in candidates if missing_endpoints(identifier)
-                          and identifier not in regular), key=priority) if missing_budget_seconds else []
-        ordered = [] if paused else regular + missing
+        ordered = [] if paused else sorted((identifier for identifier in candidates if missing_endpoints(identifier)), key=priority)
+        if detail_limit is not None:
+            ordered = ordered[:detail_limit]
         deadline = time.monotonic() + missing_budget_seconds
         attempted = 0
         for identifier in ordered:
-            completing = identifier not in regular
-            if completing and time.monotonic() >= deadline:
+            if time.monotonic() >= deadline:
                 print("IPO missing-detail budget reached; saved progress resumes next run.", flush=True)
                 break
             current = details.get(identifier, {})
             try:
-                values, detail_errors = (_refresh_detail(client, identifier, missing_endpoints(identifier))
-                                        if completing else _refresh_detail(client, identifier))
+                values, detail_errors = _refresh_detail(client, identifier, missing_endpoints(identifier))
             except ProviderBackoff:
                 errors.append("details: provider requested backoff")
                 print("IPO collection paused by provider; saved progress resumes next run.", flush=True)
@@ -321,7 +308,7 @@ def main() -> int:
     root = Path(BASE_DIR)
     output = root / "ipo_provider_data.json"
     try:
-        payload = fetch_all(root, missing_budget_seconds=MISSING_DETAIL_BUDGET_SECONDS)
+        payload = fetch_all(root)
         print(f"Retained {len(payload['records'])} listed IPOs; {len(payload['details'])} detailed issues.")
     except (subprocess.CalledProcessError, RuntimeError, ValueError, OSError) as error:
         archive = _load_listed_archive(root)

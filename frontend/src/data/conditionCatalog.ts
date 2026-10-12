@@ -1,5 +1,7 @@
 import { ConditionDef } from '../types/screener';
 import nativeConditions from './nativeConditions.json';
+import { snapshotFundamentals } from './snapshotFundamentals';
+import technicalConfigurations from './snapshotTechnicals.json';
 
 export const RETIRED_TECHNICAL_LABELS: Record<string, string> = {
   INDICATOR_COMPARE: 'Indicator Compare / Crossover',
@@ -78,8 +80,25 @@ export const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
   },
 ];
 
-export const NEXUS_CONDITION_CATALOG: ConditionDef[] = [
-  ...nativeConditions as ConditionDef[],
+export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
+  ...(nativeConditions as ConditionDef[]).map(def => ({
+    ...def,
+    label: def.id === 'MA_STACK' ? 'MA Stack' : def.label,
+    parameters: def.parameters.map(parameter => {
+      if (def.id === 'FUNDAMENTAL_METRIC' && parameter.id === 'metric') return {
+        ...parameter, options:[...(parameter.options ?? []), ...snapshotFundamentals.map(({value, label}) => ({value, label}))],
+      };
+      if (def.id === 'RS_RATING' && parameter.id === 'window') return {
+        ...parameter, options:[...(parameter.options ?? []), {value:'FRONT_WEIGHTED', label:'Overall (front-weighted)'}],
+      };
+      const periods = def.id === 'PRICE_CHANGE_PCT' && parameter.id === 'overDays' ? [1,5,21,63,126,252]
+        : def.id === 'ATR_PCT' && parameter.id === 'period' ? [14]
+          : def.id === 'ADR_PCT' && parameter.id === 'lookbackDays' ? [20]
+            : ['GAP_UP','GAP_DOWN'].includes(def.id) && parameter.id === 'withinDays' ? [1] : null;
+      return periods ? {...parameter, type:'select' as const, defaultValue:periods.includes(Number(parameter.defaultValue))
+        ? parameter.defaultValue : periods[0], options:periods.map(value => ({value, label:String(value)}))} : parameter;
+    }),
+  })),
   // --- TREND ---
   {
     id: 'trend_price_vs_ma',
@@ -702,4 +721,10 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = [
       }
     ]
   }
-];
+] as ConditionDef[]).map(def => {
+  const fixed = technicalConfigurations.find(config => config.id === def.id)?.fixed as Record<string, string | number | boolean> | undefined;
+  return {...def, parameters:def.parameters.map(parameter => fixed && Object.hasOwn(fixed, parameter.id) && typeof fixed[parameter.id] !== 'boolean'
+    ? {...parameter, type:'select' as const, options:[{value:fixed[parameter.id] as string | number,
+      label:parameter.options?.find(option => option.value === fixed[parameter.id])?.label ?? String(fixed[parameter.id])}]}
+    : parameter)};
+});

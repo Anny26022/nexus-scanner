@@ -14,10 +14,9 @@ export function availableFilterParameters(definition: ConditionDef): ActiveCondi
     parameters,
   };
   if (isAvailableCondition(condition)) return parameters;
-  // The catalogue's 150-session SMA default is not published, but the same
-  // filter supports the snapshot's other SMA periods. Start on a usable one.
-  if (definition.id === 'PRICE_VS_SMA') {
-    const supported = {...parameters, period: 50, persistDays: 1};
+  // Only the front-weighted RS horizon is published; preserve saved settings.
+  if (definition.id === 'RS_RATING') {
+    const supported = {...parameters, window:'FRONT_WEIGHTED'};
     if (isAvailableCondition({...condition, parameters: supported})) return supported;
   }
   return null;

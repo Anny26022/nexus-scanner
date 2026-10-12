@@ -1,0 +1,32 @@
+import type { StockRow } from '../types/screener';
+
+// One registry keeps the picker and evaluator on the same published fields/units.
+export const snapshotFundamentals: Array<{value: string; label: string; field: keyof StockRow}> = [
+  {value:'PB_RATIO', label:'P/B ratio', field:'pbRatio'},
+  {value:'EV_EBITDA', label:'EV / EBITDA', field:'evEbitda'},
+  {value:'CURRENT_RATIO', label:'Current ratio', field:'currentRatio'},
+  {value:'ROA', label:'ROA (%)', field:'roaPct'},
+  {value:'INDUSTRY_PE', label:'Industry P/E', field:'industryPeRatio'},
+  {value:'PROMOTER_HOLDING', label:'Promoter holding (%)', field:'promoterHoldingPct'},
+  {value:'FII_HOLDING', label:'FII holding (%)', field:'fiiHoldingPct'},
+  {value:'DII_HOLDING', label:'DII holding (%)', field:'diiHoldingPct'},
+  {value:'PUBLIC_HOLDING', label:'Public holding (%)', field:'publicHoldingPct'},
+  {value:'FII_CHANGE_QOQ', label:'FII holding change (QoQ, percentage points)', field:'fiiChangePctQoq'},
+  {value:'DII_CHANGE_QOQ', label:'DII holding change (QoQ, percentage points)', field:'diiChangePctQoq'},
+  {value:'EPS_GROWTH_1Y', label:'EPS growth (1Y, %)', field:'epsGrowth1yPct'},
+  {value:'EPS_CAGR_3Y', label:'EPS CAGR (3Y, %)', field:'epsCagr3yPct'},
+  {value:'REVENUE_CAGR_3Y', label:'Revenue CAGR (3Y, %)', field:'revenueCagr3yPct'},
+  {value:'TTM_REVENUE', label:'Revenue (TTM, ₹ Cr)', field:'ttmRevenueCrore'},
+  {value:'TTM_SALES', label:'Sales (TTM, ₹ Cr)', field:'ttmSalesCrore'},
+  {value:'TTM_NET_PROFIT', label:'Net profit (TTM, ₹ Cr)', field:'ttmNetProfitCrore'},
+  {value:'TTM_REVENUE_GROWTH', label:'Revenue growth (TTM, %)', field:'ttmRevenueGrowthPct'},
+  {value:'TTM_SALES_GROWTH', label:'Sales growth (TTM, %)', field:'ttmSalesGrowthPct'},
+  {value:'TTM_NET_PROFIT_GROWTH', label:'Net profit growth (TTM, %)', field:'ttmNetProfitGrowthPct'},
+  {value:'AVERAGE_ROE_3Y', label:'Average ROE (3Y, %)', field:'averageRoe3yPct'},
+  {value:'AVERAGE_ROA_3Y', label:'Average ROA (3Y, %)', field:'averageRoa3yPct'},
+  {value:'AVERAGE_OPM_5Y', label:'Average OPM (5Y, %)', field:'averageOpm5yPct'},
+  {value:'FREE_CASH_FLOW', label:'Free cash flow (₹ Cr)', field:'freeCashFlowCrore'},
+  {value:'BORROWINGS', label:'Borrowings (₹ Cr)', field:'borrowingsCrore'},
+  {value:'FIXED_ASSETS', label:'Fixed assets (₹ Cr)', field:'fixedAssetsCrore'},
+  {value:'CWIP', label:'Capital work in progress (₹ Cr)', field:'cwipCrore'},
+];

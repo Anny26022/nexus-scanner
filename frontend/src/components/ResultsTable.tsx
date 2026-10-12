@@ -200,6 +200,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       </div>
     </Dialog>}
     {copyError && <p role="alert" className="notice">Clipboard access was denied. Please allow clipboard access and try again.</p>}
+    {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
     <div className="table-viewport" aria-busy={busy}>
       <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
         <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={{width: usingCustomColumns ? `${tableWidth}px` : '100%', minWidth: `${tableWidth}px`}}>

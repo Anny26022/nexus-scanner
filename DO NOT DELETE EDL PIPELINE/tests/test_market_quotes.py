@@ -48,15 +48,15 @@ class MarketQuoteTests(unittest.TestCase):
         self.assertEqual(report['errors'], [])
 
     def test_isolates_persistently_bad_quote_without_inventing_a_candle(self):
-        # Raw BI quote from failed run 38352810698, unchanged on retry.
-        bad = quote(Open=94.86, High=93., Low=93., Ltp=93., Volume=607)
+        # BI quote from failed run 38352810698, with both volume aliases.
+        bad = quote(Open=94.86, High=93., Low=93., Ltp=93., Volume=607, volume=607)
         original = [bad, *[quote(f'VALID{i}') for i in range(9)]]
         code, rows, report, calls = self.run_validation(original, original)
         self.assertEqual(code, 0)
         self.assertEqual(calls, 1)
         self.assertEqual(rows[1:], original[1:])
         self.assertEqual(rows[0]['Ltp'], 93.)
-        for field in ('Open','High','Low','Volume'):
+        for field in ('Open','High','Low','Volume','volume'):
             self.assertIsNone(rows[0][field])
         self.assertEqual(report['errors'], [])
         self.assertEqual(len(report['quarantined']), 1)

@@ -47,6 +47,38 @@ class MarketQuoteTests(unittest.TestCase):
         self.assertEqual(calls, 0)
         self.assertEqual(report['errors'], [])
 
+    def test_isolates_persistently_bad_quote_without_inventing_a_candle(self):
+        # BI quote from failed run 38352810698, with both volume aliases.
+        bad = quote(Open=94.86, High=93., Low=93., Ltp=93., Volume=607, volume=607)
+        original = [bad, *[quote(f'VALID{i}') for i in range(9)]]
+        code, rows, report, calls = self.run_validation(original, original)
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, 1)
+        self.assertEqual(rows[1:], original[1:])
+        self.assertEqual(rows[0]['Ltp'], 93.)
+        for field in ('Open','High','Low','Volume','volume'):
+            self.assertIsNone(rows[0][field])
+        self.assertEqual(report['errors'], [])
+        self.assertEqual(len(report['quarantined']), 1)
+        self.assertEqual(report['quarantined'][0]['raw_quote'], bad)
+        from edl_pipeline.transforms.fundamentals import analyze_stock
+        stock = analyze_stock({'Symbol':'BI'}, rows[0], {}, {})
+        self.assertIsNone(stock['close'])
+        self.assertIsNone(stock['rupee_volume'])
+        self.assertEqual(stock['Stock Price(₹)'], 93.)
+
+    def test_isolation_does_not_hide_widespread_failure_or_invalid_retained_price(self):
+        for bad in (quote(Open=20), quote(Open=20, Ltp=0)):
+            for valid_count in (8, 9):
+                if valid_count == 9 and bad['Ltp'] > 0:
+                    continue
+                original = [bad, *[quote(f'VALID{i}') for i in range(valid_count)]]
+                code, rows, report, calls = self.run_validation(original, original)
+                self.assertEqual(code, 1)
+                self.assertEqual(rows, original)
+                self.assertFalse(report.get('quarantined'))
+
+
     def test_one_retry_recovers_three_invalid_quotes_without_changing_other_stocks(self):
         original = [quote('BI', Ltp=20), quote('EIFFL', Open=20), quote('NRL', Low=15), quote('VALID')]
         retry = [quote('BI'), quote('EIFFL'), quote('NRL'), quote('VALID', Ltp=12)]

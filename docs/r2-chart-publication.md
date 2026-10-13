@@ -49,8 +49,8 @@ Scheduled weekday Actions publish current app objects without full filing backup
 (`EDL_FILING_BACKUPS=0`). The existing Sunday adjusted-history workflow publishes
 both full backups (`EDL_FILING_BACKUPS=1`) and records the filing-catalog cutoff
 timestamp as `archivesAsOf` in that release index (not the prior trading-session
-date on weekends). Daily indexes have an empty `archives` map; previous weekly backup
-objects and indexes remain retained. Manual Actions and local builds default to
+date on weekends). Scheduled weekday release indexes have an empty `archives`
+map; previous weekly backup objects and indexes remain retained. Manual Actions and local builds default to
 backups on. `EDL_FILING_BACKUPS` uses the shared boolean parser: `1/true/yes/y/on`
 enable backups, `0/false/no/n/off` disable them (case/whitespace insensitive);
 invalid values warn and fall back to backups on.

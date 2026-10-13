@@ -324,7 +324,7 @@ def page_response(response, request):
     rows = sorted(response["rows"], key=lambda r:(r.get(field) is not None,r.get(field) if r.get(field) is not None else 0), reverse=sort.get("direction")=="desc")
     page = max(1, int(request.get("page", 1)))
     size = max(1, min(100, int(request.get("pageSize", 15))))
-    return {**response,"rows":rows[(page-1)*size:page*size],"page":page,"pageSize":size}
+    return {**response,"rows":rows[(page-1)*size:page*size],"matchedSymbols":[row["symbol"] for row in rows],"page":page,"pageSize":size}
 
 
 def run(request, root=ROOT, cache=None):

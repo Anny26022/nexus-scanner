@@ -135,7 +135,7 @@ const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
 export function ResultsTable({ data, isLoading, isError, isFetching = false, error, onRetry,
   onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange }: ResultsTableProps) {
   const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState(false);
+  const [copyError, setCopyError] = useState('');
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
@@ -160,12 +160,17 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const rowWindow = useTableWindow(rows, data, visibleColumns.length);
   const busy = isLoading || isFetching;
   const copy = async () => {
+    const symbols = data?.matchedSymbols ?? (rows.length === data?.matchCount ? rows.map(row => row.symbol) : undefined);
+    if (!symbols || symbols.length !== data?.matchCount) {
+      setCopyError('All matching symbols are unavailable. Run the scan again.');
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(rows.map(row => `NSE:${row.symbol}`).join(', '));
-      setCopyError(false);
+      await navigator.clipboard.writeText(symbols.map(symbol => `NSE:${symbol}`).join(', '));
+      setCopyError('');
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { setCopyError(true); }
+    } catch { setCopyError('Clipboard access was denied. Please allow clipboard access and try again.'); }
   };
   return <section className="results-surface" aria-label="Screener results">
     <div className="results-toolbar">
@@ -199,7 +204,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
         </div>
       </div>
     </Dialog>}
-    {copyError && <p role="alert" className="notice">Clipboard access was denied. Please allow clipboard access and try again.</p>}
+    {copyError && <p role="alert" className="notice">{copyError}</p>}
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
     <div className="table-viewport" aria-busy={busy}>
       <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>

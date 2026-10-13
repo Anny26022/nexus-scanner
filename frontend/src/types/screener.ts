@@ -199,6 +199,7 @@ export interface ScreenerRunResponse {
   };
   immutableRevision: string;
   rows: StockRow[];
+  matchedSymbols?: string[];
   matchCount: number;
   totalUniverseCount: number;
   page: number;

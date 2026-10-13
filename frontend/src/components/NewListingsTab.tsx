@@ -11,6 +11,7 @@ import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { useFilterChoices } from '../hooks/useFilterChoices';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
+import { tableLayout } from '../utils/tableLayout';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { Pagination } from './Pagination';
 import { SymbolWithLogo } from './SymbolWithLogo';
@@ -183,19 +184,13 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const visibleIpos = useMemo(() => filteredIpos.slice((currentPage - 1) * pageSize, currentPage * pageSize), [filteredIpos, currentPage, pageSize]);
   const selectedIpoColumnIds = Array.isArray(savedIpoColumnIds) ? savedIpoColumnIds : IPO_DEFAULT_COLUMNS;
   const phone = usePhoneLayout();
-  const visibleIpoColumns = ipoColumns.filter(column => column.id === 'company' || selectedIpoColumnIds.includes(column.id));
-  if (phone) {
-    const priority = ['company','currentPrice','listingDate'];
-    visibleIpoColumns.sort((a,b) => (priority.indexOf(a.id) < 0 ? 3 : priority.indexOf(a.id))
-      - (priority.indexOf(b.id) < 0 ? 3 : priority.indexOf(b.id)));
-  }
-  const phoneColumnWidth = (id: string) => id === 'company' ? 176 : id === 'currentPrice' ? 110 : 150;
-  const phoneTableWidth = visibleIpoColumns.reduce((sum, column) => sum + phoneColumnWidth(column.id), 0);
+  const customIpoColumns = selectedIpoColumnIds.length !== IPO_DEFAULT_COLUMNS.length
+    || IPO_DEFAULT_COLUMNS.some(id => !selectedIpoColumnIds.includes(id));
+  const layout = tableLayout(ipoColumns.filter(column => column.id === 'company' || selectedIpoColumnIds.includes(column.id)), 'ipo', phone, customIpoColumns);
+  const visibleIpoColumns = layout.columns;
   const ipoWindow = useTableWindow(visibleIpos, visibleIpos, visibleIpoColumns.length);
   const matchingIpoColumns = ipoColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerIpoColumns = columnSearch.trim() ? matchingIpoColumns : ipoColumns.filter(column => column.group === columnGroup);
-  const customIpoColumns = selectedIpoColumnIds.length !== IPO_DEFAULT_COLUMNS.length
-    || IPO_DEFAULT_COLUMNS.some(id => !selectedIpoColumnIds.includes(id));
   const updatePeriod = (value: typeof periodFilter) => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
     setPeriodFilter(value);
@@ -288,8 +283,8 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
         </div>
         {ipoCopyError && <p role="alert" className="notice">Could not access the clipboard. Check browser permissions and try again.</p>}
         <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns" onScroll={event => {dismissIpoDetails(); ipoWindow.onScroll(event);}}>
-          <table className={`data-table ipo-table${ipoWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={visibleIpos.length + 1} style={{width:!phone && customIpoColumns ? `${Math.max(1120, visibleIpoColumns.reduce((sum,column)=>sum+(column.id==='company'?240:170),0))}px` : '100%', minWidth:phone ? `${phoneTableWidth}px` : customIpoColumns ? '1120px' : '1080px'}}><caption className="sr-only">Newly listed companies</caption>
-            <colgroup>{visibleIpoColumns.map(column => <col key={column.id} style={{width:phone ? `${phoneColumnWidth(column.id)}px` : customIpoColumns ? column.id==='company'?'240px':column.id==='sectorIndustry'?'190px':'170px' : column.id==='company'?'26%':column.id==='sectorIndustry'?'17%':column.id==='deliveryPct'?'9%':'12%'}} />)}</colgroup>
+          <table className={`data-table ipo-table${ipoWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={visibleIpos.length + 1} style={layout.style}><caption className="sr-only">Newly listed companies</caption>
+            <colgroup>{visibleIpoColumns.map(column => <col key={column.id} style={{width:layout.columnWidth(column)}} />)}</colgroup>
             <thead><tr>{visibleIpoColumns.map(column => <th scope="col" key={column.id} aria-sort={column.sortField && sort.field === column.sortField ? sort.direction === 'asc' ? 'ascending' : 'descending' : column.sortField ? 'none' : undefined}>
               {column.sortField ? <button onClick={() => updateSort(column.sortField!)}>{column.label}<ArrowUpDown size={13} /></button> : column.label}
             </th>)}</tr></thead>

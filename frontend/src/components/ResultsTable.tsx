@@ -11,6 +11,7 @@ import { TijoriDetailsCard } from './TijoriDetailsCard';
 import { useTableWindow } from '../hooks/useTableWindow';
 import { useColumnWindow } from '../hooks/useColumnWindow';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
+import { tableLayout } from '../utils/tableLayout';
 
 interface ResultsTableProps {
   symbolSearch?: string;
@@ -142,24 +143,14 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>('nexus-scanner.screener.columns.v1', DEFAULT_COLUMNS);
   const selectedColumnIds = Array.isArray(savedColumnIds) ? savedColumnIds : DEFAULT_COLUMNS;
   const phone = usePhoneLayout();
-  const visibleColumns = columns.filter(column => column.id === 'company' || selectedColumnIds.includes(column.id));
-  if (phone) {
-    const priority = ['company','close','changePct'];
-    visibleColumns.sort((a,b) => (priority.indexOf(a.id) < 0 ? 3 : priority.indexOf(a.id))
-      - (priority.indexOf(b.id) < 0 ? 3 : priority.indexOf(b.id)));
-  }
+  const usingCustomColumns = selectedColumnIds.length !== DEFAULT_COLUMNS.length || DEFAULT_COLUMNS.some(id => !selectedColumnIds.includes(id));
+  const layout = tableLayout(columns.filter(column => column.id === 'company' || selectedColumnIds.includes(column.id)), 'screener', phone, usingCustomColumns);
+  const visibleColumns = layout.columns;
   const customizableColumns = columns.filter(column => column.id !== 'company');
   const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerColumns = columnSearch.trim() ? matchingColumns : customizableColumns.filter(column => column.group === columnGroup);
-  const usingCustomColumns = selectedColumnIds.length !== DEFAULT_COLUMNS.length || DEFAULT_COLUMNS.some(id => !selectedColumnIds.includes(id));
-  const widthOf = (column: ResultColumn) => phone
-    ? column.id === 'company' ? 176 : column.id === 'close' ? 100 : column.id === 'changePct' ? 88 : column.id === 'sector' ? 180 : 150
-    : column.id === 'company' ? 240 : column.id === 'sector' ? 180 : 150;
-  const tableWidth = phone ? visibleColumns.reduce((width, column) => width + widthOf(column), 0) : usingCustomColumns
-    ? Math.max(1120, visibleColumns.reduce((width, column) => width + (column.id === 'company' ? 240 : column.id === 'sector' ? 180 : 150), 0))
-    : 1120;
   const scrollRef = useRef<HTMLDivElement>(null);
-  const columnWindow = useColumnWindow(visibleColumns, widthOf,
+  const columnWindow = useColumnWindow(visibleColumns, layout.widthOf,
     !phone && usingCustomColumns && visibleColumns.length > 20, scrollRef);
   const renderedColumns = columnWindow.columns;
   const columnSpan = renderedColumns.length + Number(columnWindow.left > 0) + Number(columnWindow.right > 0);
@@ -212,9 +203,9 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
     <div className="table-viewport" aria-busy={busy}>
       <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
-        <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={{width: !phone && usingCustomColumns ? `${tableWidth}px` : '100%', minWidth: `${tableWidth}px`}}>
+        <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
           <caption className="sr-only">Equities matching the current screen</caption>
-          <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: phone || usingCustomColumns ? `${widthOf(column)}px` : column.width}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
+          <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: layout.columnWidth(column)}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
           <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} data-column={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
             aria-sort={column.sortField ? currentSort?.field === column.sortField ? currentSort.direction === 'asc' ? 'ascending' : 'descending' : 'none' : undefined}>
             {column.sortField ? <button type="button" disabled={busy} onClick={() => {resetScroll(); onSortChange(column.sortField!, currentSort?.field === column.sortField && currentSort?.direction === 'asc' ? 'desc' : 'asc');}}>

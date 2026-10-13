@@ -4,9 +4,10 @@ import unittest
 import gzip
 import json
 import subprocess
+import requests
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -97,19 +98,65 @@ class IpoProviderFetchTests(unittest.TestCase):
             self.assertEqual(fetch.call_args.args[2], {'gmp_history'})
 
     def test_http_and_transport_outages_back_off_but_missing_objects_do_not(self):
-        for status, code in [("000", 7), ("", 28), ("", 22), ("200", 28), ("408", 22),
-                             ("429", 22), ("401", 22), ("403", 22), ("500", 22),
-                             ("501", 22), ("505", 22), ("599", 22), ("404", 22)]:
-            with self.subTest(status=status, code=code):
+        for status in (401, 403, 408, 429, 500, 501, 505, 599, 404, 302):
+            with self.subTest(status=status):
                 client = IpoProviderClient()
                 try:
-                    result = subprocess.CompletedProcess(["curl"], code, stdout=status, stderr="")
-                    with patch("fetch_ipo_provider_data.subprocess.run", return_value=result):
-                        error = subprocess.CalledProcessError if status == "404" else ProviderBackoff
+                    with patch.object(client.session, 'get', return_value=Mock(status_code=status)):
+                        error = ValueError if status in (404, 302) else ProviderBackoff
                         with self.assertRaises(error):
                             client.get_json("/api/ipos/TEST")
                 finally:
-                    client.temporary.cleanup()
+                    client.session.close()
+        for error in (requests.Timeout('secret'), requests.ConnectionError('secret')):
+            client = IpoProviderClient()
+            try:
+                with patch.object(client.session, 'get', side_effect=error):
+                    with self.assertRaisesRegex(ProviderBackoff, '^Provider requested backoff$'):
+                        client.get_json('/api/ipos/TEST')
+            finally:
+                client.session.close()
+
+    def test_request_pacing_counts_response_time_without_an_additional_full_delay(self):
+        for elapsed, expected in ((0.10, 0.18), (0.28, None), (0.50, None)):
+            with self.subTest(elapsed=elapsed), patch('fetch_ipo_provider_data.time.perf_counter', side_effect=[0, elapsed]), \
+                    patch('fetch_ipo_provider_data.time.sleep') as sleep:
+                values, errors = _refresh_detail(FakeClient(), 'NSE_TEST', {'issue'})
+            self.assertIn('issue', values)
+            self.assertFalse(errors)
+            if expected is None:
+                sleep.assert_not_called()
+            else:
+                self.assertAlmostEqual(sleep.call_args.args[0], expected)
+        client = Mock(); client.get_json.side_effect = ProviderBackoff()
+        with patch('fetch_ipo_provider_data.time.sleep') as sleep:
+            values, errors = _refresh_detail(client, 'NSE_TEST')
+        client.get_json.assert_called_once()
+        sleep.assert_not_called()
+        self.assertEqual(values, {})
+        self.assertIn('provider requested backoff', errors[0])
+
+    def test_provider_session_reuses_bootstrap_cookies_and_closes_on_exit_or_failure(self):
+        session = requests.Session()
+        session.cookies.set('ipd_nonce', 'ephemeral-secret')
+        response = Mock(status_code=200)
+        response.json.return_value = {'value': 'data'}
+        with patch('fetch_ipo_provider_data.requests.Session', return_value=session), \
+                patch.object(session, 'get', return_value=response) as get, patch.object(session, 'close') as close:
+            with IpoProviderClient() as client:
+                self.assertEqual(client.get_json('/api/ipos/A'), {'value': 'data'})
+                self.assertEqual(client.get_json('/api/ipos/B'), {'value': 'data'})
+                self.assertEqual(client.nonce, 'ephemeral-secret')
+            self.assertEqual(get.call_count, 3)
+            self.assertEqual(get.call_args.kwargs['headers']['X-IPO-Session'], 'ephemeral-secret')
+            self.assertFalse(get.call_args.kwargs['allow_redirects'])
+            close.assert_called_once()
+        with patch('fetch_ipo_provider_data.requests.Session', return_value=session), \
+                patch.object(session, 'get', side_effect=requests.Timeout()), patch.object(session, 'close') as close:
+            with self.assertRaises(ProviderBackoff):
+                with IpoProviderClient():
+                    pass
+            close.assert_called_once()
 
     def test_next_run_collects_a_new_ipo_without_revisiting_completed_details(self):
         class NewIssueClient(FakeClient):

@@ -11,9 +11,10 @@ import { screenerApi } from '../api/screenerApi';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { isAvailableCondition } from '../utils/filterAvailability';
 import { PRESET_CATALOG } from '../data/presetCatalog';
-import { explainExpressionTree } from '../utils/nqlParser';
+import { explainCondition, explainExpressionTree } from '../utils/nqlParser';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
+import { useFilterChoices } from '../hooks/useFilterChoices';
 import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search } from 'lucide-react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import type { AnnouncementFilter } from '../api/announcements';
@@ -45,6 +46,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   const asOfDate = selectedAsOfDate;
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.screener.match-mode.v1', 'all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const filterChoices = useFilterChoices(isModalOpen, datasetRevision);
   const [activeQuery, setActiveQuery] = useLocalStorageState('nexus-scanner.screener.query.v1', '');
   const [queryText, setQueryText] = useState(activeQuery);
   const [activeConditionsMap, setActiveConditionsMap] =
@@ -60,7 +62,6 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
     direction: 'desc',
   });
 
-  const activeConditionsArray = useMemo(() => Object.values(activeConditionsMap).filter(isAvailableCondition), [activeConditionsMap]);
   const hasUnavailable = hasUnavailableConditions(activeConditionsMap);
 
   const expressionTree: ExpressionNode = useMemo(
@@ -166,9 +167,11 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       </div>
       {(activeQuery || filterCount > 0) && <div className="active-filters">
         {activeQuery ? <span className="filter-chip"><span className="truncate" title={activeQuery}>{activeQuery}</span><button onClick={() => {setActiveQuery(''); setQueryText(''); setPage(1);}} aria-label="Clear query"><X size={13} /></button></span>
-          : activeConditionsArray.map(cond => {
+          : Object.entries(activeConditionsMap).filter(([, cond]) => isAvailableCondition(cond)).map(([key, cond]) => {
             const def = NEXUS_CONDITION_CATALOG.find(c => c.id === cond.conditionId) || PRESET_CATALOG.find(c => c.id === cond.conditionId);
-            return <span key={cond.instanceId} className="filter-chip">{def?.label ?? cond.conditionId}<button aria-label={`Remove ${def?.label ?? cond.conditionId}`} onClick={() => handleRemove(cond.conditionId)}><X size={13} /></button></span>;
+            const label = ['FUNDAMENTAL_METRIC', 'mom_return', 'PRICE_CHANGE_PCT'].includes(cond.conditionId)
+              ? explainCondition(cond).explanation : def?.label ?? cond.conditionId;
+            return <span key={key} className="filter-chip">{label}<button aria-label={`Remove ${label}`} onClick={() => handleRemove(key)}><X size={13} /></button></span>;
           })}
       </div>}
       <UnavailableConditions conditions={activeConditionsMap} onRemove={handleRemove} />
@@ -177,6 +180,6 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
     {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
       onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
-    <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} activeConditionsMap={activeConditionsMap} matchMode={matchMode} onApply={handleApply} />
+    <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} activeConditionsMap={activeConditionsMap} matchMode={matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />
   </div>;
 };

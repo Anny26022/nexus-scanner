@@ -9,7 +9,7 @@ import { isAvailableCondition, isAvailableFilter } from '../utils/filterAvailabi
 afterEach(cleanup);
 
 it('keeps published filters and presets available but disables backend-only defaults', () => {
-  expect(NEXUS_CONDITION_CATALOG.filter(isAvailableFilter)).toHaveLength(69);
+  expect(NEXUS_CONDITION_CATALOG.filter(isAvailableFilter)).toHaveLength(70);
   expect(PRESET_CATALOG).toHaveLength(45);
   expect(PRESET_CATALOG.every(isAvailableFilter)).toBe(true);
   expect(isAvailableCondition({instanceId:'ma', conditionId:'MA_STACK', parameters:{periods:'50,173,200',maType:'EMA',priceAbove:false}})).toBe(false);
@@ -88,7 +88,8 @@ it('keeps pre-built scans enabled in the same dialog', () => {
 
 it('offers only supported ADR/ATR/gap windows and a clearly named overall RS horizon', () => {
   const apply = vi.fn();
-  render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={apply} />);
+  render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={apply}
+    choices={{SECTOR:['Healthcare'],INDUSTRY:[],SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:['NIFTY 500']}} />);
   const row = (name: string) => screen.getByRole('checkbox', {name}).closest('.filter-row') as HTMLElement;
   expect(within(row('ADR %:')).getByRole('combobox', {name:'Lookback days'})).toHaveValue('20');
   expect(within(row('ATR %:')).getByRole('combobox', {name:'Period'})).toHaveValue('14');
@@ -96,13 +97,14 @@ it('offers only supported ADR/ATR/gap windows and a clearly named overall RS hor
   const rs = row('RS Rating (percentile):');
   expect(within(rs).getByRole('combobox', {name:'Horizon'})).toHaveValue('FRONT_WEIGHTED');
   expect(within(rs).getByRole('option', {name:'12 month'})).toBeDisabled();
-  expect(within(row('MA Stack:')).getByRole('textbox', {name:'Periods'})).toHaveValue('50, 150, 200');
+  expect(within(row('MA Stack:')).getByRole('button', {name:'Periods: 3 selected'})).toBeEnabled();
   expect(within(row('Fundamental Metric:')).getByRole('option', {name:'P/B ratio'})).toBeEnabled();
   fireEvent.click(screen.getByRole('checkbox', {name:'Sector:'}));
   expect(screen.getByRole('button', {name:'Apply'})).toBeDisabled();
-  fireEvent.change(within(row('Sector:')).getByRole('textbox', {name:'Sectors'}), {target:{value:'Healthcare'}});
+  fireEvent.click(within(row('Sector:')).getByRole('button', {name:'Sectors: Select options'}));
+  fireEvent.click(within(screen.getByRole('group', {name:'Sectors'})).getByRole('checkbox', {name:'Healthcare'}));
   fireEvent.click(screen.getByRole('button', {name:'Apply'}));
-  expect(apply.mock.calls[0][0].SECTOR.parameters.values).toBe('Healthcare');
+  expect(apply.mock.calls[0][0].SECTOR.parameters.values).toEqual(['HEALTHCARE']);
 });
 
 it('reveals and hides a preset explanation from its compact info button', () => {

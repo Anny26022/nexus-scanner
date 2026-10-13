@@ -6,8 +6,10 @@ import { ActiveCondition, ExpressionNode, MatchMode, ScreenerRunRequest } from '
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { isAvailableCondition } from '../utils/filterAvailability';
 import { PRESET_CATALOG } from '../data/presetCatalog';
+import { explainCondition } from '../utils/nqlParser';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
+import { useFilterChoices } from '../hooks/useFilterChoices';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { Pagination } from './Pagination';
 import { SymbolWithLogo } from './SymbolWithLogo';
@@ -114,6 +116,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const [copiedIpoSymbols, setCopiedIpoSymbols] = useState(false);
   const [ipoCopyError, setIpoCopyError] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const filterChoices = useFilterChoices(isFilterModalOpen, datasetRevision);
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
   const [columnGroup, setColumnGroup] = useState<IpoColumnGroup>('Listing');
@@ -254,9 +257,11 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
           <button className="button button-primary" onClick={() => {if (hasUnavailable) return; setScreenPage(1); setShowScreenResults(true);}} disabled={hasUnavailable || !filteredIpos.length || screenQuery.isFetching}><Play size={14} />Run</button>
         </div>
       </div>
-      {activeConditions.length > 0 && <div className="active-filters">{activeConditions.map(condition => {
+      {activeConditions.length > 0 && <div className="active-filters">{Object.entries(conditions).filter(([, condition]) => isAvailableCondition(condition)).map(([key, condition]) => {
         const definition = NEXUS_CONDITION_CATALOG.find(item => item.id === condition.conditionId) ?? PRESET_CATALOG.find(item => item.id === condition.conditionId);
-        return <span key={condition.instanceId} className="filter-chip">{definition?.label ?? condition.conditionId}<button aria-label={`Remove ${definition?.label ?? condition.conditionId}`} onClick={() => removeCondition(condition.conditionId)}><X size={13} /></button></span>;
+        const label = ['FUNDAMENTAL_METRIC', 'mom_return', 'PRICE_CHANGE_PCT'].includes(condition.conditionId)
+          ? explainCondition(condition).explanation : definition?.label ?? condition.conditionId;
+        return <span key={key} className="filter-chip">{label}<button aria-label={`Remove ${label}`} onClick={() => removeCondition(key)}><X size={13} /></button></span>;
       })}</div>}
       <UnavailableConditions conditions={conditions} onRemove={removeCondition} />
     </section>
@@ -330,7 +335,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
         </div>
       </div>
     </Dialog>}
-    <ScreenerModal key={isFilterModalOpen ? 'open' : 'closed'} isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} activeConditionsMap={conditions} matchMode={matchMode} onApply={applyFilters} />
+    <ScreenerModal key={isFilterModalOpen ? 'open' : 'closed'} isOpen={isFilterModalOpen} onClose={() => setIsFilterModalOpen(false)} activeConditionsMap={conditions} matchMode={matchMode} onApply={applyFilters} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />
     {activeIpo && <IpoDetailsCard key={activeIpo.row.symbol} row={activeIpo.row} id={`ipo-details-${activeIpo.row.symbol}`} left={activeIpo.left} top={activeIpo.top} placement={activeIpo.placement}
       onClose={closeIpoDetails} onMouseEnter={() => {if (ipoCloseTimer.current) clearTimeout(ipoCloseTimer.current);}}
       onMouseLeave={scheduleIpoDetailsClose} />}

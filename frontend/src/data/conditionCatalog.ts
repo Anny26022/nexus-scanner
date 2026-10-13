@@ -2,6 +2,7 @@ import { ConditionDef } from '../types/screener';
 import nativeConditions from './nativeConditions.json';
 import { snapshotFundamentals } from './snapshotFundamentals';
 import technicalConfigurations from './snapshotTechnicals.json';
+import { MOVING_AVERAGE_RULES } from './movingAverageRules';
 
 export const RETIRED_TECHNICAL_LABELS: Record<string, string> = {
   INDICATOR_COMPARE: 'Indicator Compare / Crossover',
@@ -81,6 +82,11 @@ export const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
 ];
 
 export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
+  {
+    id:'PRICE_VS_MAS', label:'Price vs moving averages', category:'trend',
+    description:'Latest close must satisfy every selected comparison (AND). These are current-price comparisons, not persistence or moving-average stack rules. Equality does not count as above or below.',
+    parameters:[{id:'rules', label:'Moving average comparisons', type:'multiselect', defaultValue:['ABOVE_EMA_10'], options:MOVING_AVERAGE_RULES}],
+  },
   ...(nativeConditions as ConditionDef[]).map(def => ({
     ...def,
     label: def.id === 'MA_STACK' ? 'MA Stack' : def.label,
@@ -470,7 +476,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
   // --- RELATIVE STRENGTH ---
   {
     id: 'rs_rating',
-    label: 'Overall RS >',
+    label: 'Overall RS Rating',
     category: 'relative_strength',
     description: 'Proprietary 1-99 rating comparing stock performance vs broader market',
     parameters: [
@@ -568,7 +574,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
   },
   {
     id: 'fund_stock_price',
-    label: 'Stock Price (₹) >',
+    label: 'Minimum Stock Price (₹)',
     category: 'fundamentals',
     description: 'Minimum stock price',
     parameters: [
@@ -643,7 +649,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
   // --- LIQUIDITY & MISC ---
   {
     id: 'liq_turnover',
-    label: '50 Days Avg. Turnover (Cr.) >',
+    label: '50-Day Avg. Turnover (Cr.)',
     category: 'liquidity',
     description: 'Minimum 50-day average daily traded value in Crores (INR)',
     parameters: [

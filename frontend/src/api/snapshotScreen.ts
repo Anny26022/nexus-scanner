@@ -2,6 +2,7 @@ import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunRe
 import { PRESET_CATALOG } from '../data/presetCatalog';
 import { snapshotFundamentals } from '../data/snapshotFundamentals';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
+import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
 
 const presetIds = new Set(PRESET_CATALOG.map(preset => preset.id));
 
@@ -52,7 +53,8 @@ const band = (value: unknown) => {
   return numeric && Number.isFinite(Number(numeric)) ? String(Number(numeric)) : null;
 };
 const extraFundamentalFields = Object.fromEntries(snapshotFundamentals.map(metric => [metric.value, metric.field]));
-const maPeriods = [9,10,20,21,50,150,200];
+export const SNAPSHOT_MA_PERIODS = [9,10,20,21,50,150,200];
+const maPeriods = SNAPSHOT_MA_PERIODS;
 
 function leaf(c: ActiveCondition, session: string): Predicate | null {
   const p = c.parameters;
@@ -76,6 +78,16 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     return c.isNegated ? s => { const value = checked(s); return value == null ? null : !value; } : checked;
   }
   switch (c.conditionId) {
+    case 'PRICE_VS_MAS': {
+      if (!Array.isArray(p.rules) || !p.rules.length || new Set(p.rules).size !== p.rules.length) return null;
+      const rules = p.rules.map((value: unknown) => MOVING_AVERAGE_RULES.find(rule => rule.value === value));
+      if (rules.some(rule => !rule)) return null;
+      fn = s => combine(rules.map(rule => {
+        const average = number(s.metrics[rule!.field]), close = number(s.close);
+        return average == null || close == null ? null : rule!.above ? close > average : close < average;
+      }), true);
+      break;
+    }
     case 'PRICE_VS_EMA': case 'trend_persistent_momentum': {
       const period = c.conditionId === 'PRICE_VS_EMA' ? Number(p.period) : 20;
       const days = Number(c.conditionId === 'PRICE_VS_EMA' ? p.persistDays : p.minDaysAboveEMA);
@@ -261,7 +273,7 @@ function compile(node: ExpressionNode, session: string, coverage: Coverage): Pre
 function needsExpandedMetrics(node: ExpressionNode): boolean {
   if (node.type === 'group') return node.children.some(needsExpandedMetrics);
   const {conditionId:id, parameters:p} = node.condition;
-  if (technicalConfigurations.some(config => config.id === id) || ['PRICE_VS_EMA','trend_persistent_momentum'].includes(id)) return true;
+  if (technicalConfigurations.some(config => config.id === id) || ['PRICE_VS_MAS','PRICE_VS_EMA','trend_persistent_momentum'].includes(id)) return true;
   if (id === 'MA_STACK') return p.maType === 'EMA' || list(p.periods).map(Number).some(period => ![10,20,50,200].includes(period));
   if (id === 'trend_ma_stack') return p.stackOrder !== '10_above_20_above_50';
   if (id === 'trend_price_vs_ma') return p.maType === 'EMA' || ![10,20,50,200].includes(Number(p.maPeriod));
@@ -309,9 +321,8 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
       return request.sort?.direction === 'desc' ? -order : order;
     });
     const newerMetricsNeeded = data.technicalMetricsVersion !== 1 && needsExpandedMetrics(request.expressionTree);
-    const warnings = diagnostics.length ? [newerMetricsNeeded
-      ? 'This published snapshot predates the expanded technical filters. A new pipeline release is needed for their results.'
-      : 'Some selected filters have incomplete snapshot data. Stocks with unavailable values are excluded, including under negation.'] : [];
+    const warnings = diagnostics.length && newerMetricsNeeded
+      ? ['This published snapshot predates the expanded technical filters. A new pipeline release is needed for their results.'] : [];
     matches = {rows,universeCount:universe.length,coverage,diagnostics,warnings};
     cache.set(key,matches);
     if (cache.size > 4) cache.delete(cache.keys().next().value!);

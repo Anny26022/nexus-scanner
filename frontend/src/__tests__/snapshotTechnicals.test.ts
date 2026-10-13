@@ -59,9 +59,12 @@ it('blocks unsupported windows rather than reinterpreting their parameters', () 
 it('distinguishes an old snapshot from partial coverage in a new generation', () => {
   const base: ScreenerRunRequest = {universe:'mainboard',asOfDate:data.asOfDate,page:1,pageSize:100,
     expressionTree:{type:'condition',condition:{instanceId:'adx',conditionId:'ADX',parameters:{period:14,comparison:'ABOVE',value:25}}}};
-  const old = {...data,stocks:[{...stock,metrics:{}}]};
+  const old = {...data,technicalMetricsVersion:undefined,stocks:[{...stock,metrics:{}}]};
   expect(screenSnapshot(old,base)!.warnings[0]).toContain('new pipeline release');
-  expect(screenSnapshot({...old,technicalMetricsVersion:1},base)!.warnings[0]).toContain('incomplete snapshot data');
+  const partial = screenSnapshot({...old,technicalMetricsVersion:1},base)!;
+  expect(partial.warnings).toEqual([]);
+  expect(partial.matchCount).toBe(0);
+  expect(partial.unavailableDiagnostics.length).toBeGreaterThan(0);
 });
 
 it('keeps insufficient streak history and undated ban values unavailable', () => {

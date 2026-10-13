@@ -16,6 +16,21 @@ const source={revision:snapshot.revision,url:'/stocks.json'};
 const request:ScreenerRunRequest={asOfDate:snapshot.asOfDate,universe:'mainboard',page:1,pageSize:50,
   expressionTree:{type:'group',operator:'all',children:[]},sort:{field:'symbol',direction:'asc'}};
 afterEach(()=>{vi.unstubAllGlobals();vi.useRealTimers();vi.resetModules();});
+it('derives sorted choices from the same cached revision, without duplicates or empty values', async () => {
+ const data = {...snapshot, stocks:snapshot.stocks.map((stock, index) => ({...stock,
+   sector:index ? ' Technology ' : 'technology', industry:'Software',
+   indexMemberships:index ? ['Nifty 50','NIFTY 500'] : ['nifty 50',''],
+ }))};
+ const loader=vi.fn(async()=>data), run=createSnapshotEngine(loader);
+ await run({type:'screen',source,request});
+ const choices=await run({type:'filterChoices',source});
+ expect(loader).toHaveBeenCalledTimes(1);
+ expect(choices).toEqual({type:'filterChoices', result:{SECTOR:['Technology'],INDUSTRY:['Software'],
+   SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:['Nifty 50','NIFTY 500']}});
+ const changed=await run({type:'filterChoices',source:{...source,revision:'b'.repeat(64)}});
+ expect(changed.type).toBe('filterChoices');
+ expect(loader).toHaveBeenCalledTimes(2);
+});
 it('loads a revision once for concurrent screen and comparison tasks',async()=>{
  const loader=vi.fn(async()=>snapshot),run=createSnapshotEngine(loader);
  const [page,comparison]=await Promise.all([

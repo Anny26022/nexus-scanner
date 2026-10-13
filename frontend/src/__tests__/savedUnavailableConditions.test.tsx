@@ -48,7 +48,7 @@ it.each([
   expect(screen.getByRole('dialog').querySelector('.dialog-footer')).toHaveTextContent('2 selected');
   expect(dialog.getByRole('button', {name: 'Apply'})).toBeDisabled();
   fireEvent.click(dialog.getByRole('button', {name: `Remove unavailable ${label}`}));
-  expect(dialog.getByText('1 selected')).toBeInTheDocument();
+  expect(screen.getByRole('dialog').querySelector('.dialog-footer')).toHaveTextContent('1 selected');
   // Closing discards the draft removal, preserving the saved constraint.
   fireEvent.click(dialog.getByRole('button', {name: 'Close filters'}));
   expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual(saved);

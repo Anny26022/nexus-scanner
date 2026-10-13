@@ -516,6 +516,27 @@ Tests verify contracts against fixtures. They do not establish complete live ups
 
 Read the [repository guide](../README.md), [data limitations](../DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/DATA_LIMITATIONS.md), and [R2 publication guide](../docs/r2-chart-publication.md) for wider operational detail.
 
+### Rank-first RS rating
+
+The daily pipeline publishes `nexus_rank_first_v3`: rank each Nifty500-relative
+growth ratio over 21/63/126/252 aligned sessions on the same eligible universe,
+combine fractional 1–99 ranks with 40/20/20/20 weights, then rank the composite.
+Period ranks use `1 + 98 * strictly_lower_scores / max(1, N - 1)` without rounding.
+Final ratings use `floor(99 - 98 * descending_position / max(1, N - 1) + 0.5)`.
+Equal composites keep stable alphabetical symbol order; period ties share ranks.
+Composite sorting uses exact integer weighted lower counts (the common offset
+and denominator cancel), preventing float roundoff from breaking mathematical ties.
+Published period ratings remain integers, rounded half-up only after aggregation.
+At least 260 aligned sessions and all four valid horizons are required.
+
+Previously, `nexus_front_weighted_v2` weighted raw relative growth ratios before
+ranking. Ratings and RS filter matches intentionally change after the next
+normal publication following merge; stored older snapshots remain unchanged.
+No frontend field names, rating bounds, benchmark or weights change. This is
+the MarketStrength **Momentum rating** aggregation (not its separate RS formula),
+with Nexus's own universe, windows, weights and aligned input history. This does
+not imply numerical parity with MarketStrength or better investment returns.
+
 ### Python dependencies for frontend CI
 
 Frontend CI uses Python 3.12 and `frontend/requirements-ci.lock`, which pins all

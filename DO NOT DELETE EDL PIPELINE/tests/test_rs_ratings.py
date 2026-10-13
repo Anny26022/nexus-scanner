@@ -86,7 +86,25 @@ class FrontWeightedRsTests(unittest.TestCase):
         reversed_scores = {key:dict(reversed(list(values.items()))) for key, values in scores.items()}
         self.assertEqual(rs.rank_first_ratings(scores), rs.rank_first_ratings(reversed_scores))
 
+    def test_equal_composites_ignore_float_roundoff(self):
+        # Lower counts A=(0,0,0,7), B=(0,0,1,6) both weight to 140.
+        # Fractional float aggregation incorrectly puts B slightly above A.
+        scores = {key:{'A':1., 'B':1.} for key in rs.FRONT_WEIGHTED_HORIZONS}
+        scores['six_month']['B'] = 2.
+        scores['twelve_month'].update(A=8., B=7.)
+        remaining = [*range(1, 7), *range(9, 103)]
+        for i in range(100):
+            symbol = f'X{i:03}'
+            for key in ('one_month', 'three_month'):
+                scores[key][symbol] = float(i + 2)
+            scores['six_month'][symbol] = float(i + 3)
+            scores['twelve_month'][symbol] = float(remaining[i])
+        ratings = rs.rank_first_ratings(scores)['front_weighted']
+        self.assertGreater(ratings['A'], ratings['B'])
+
     def test_matches_independent_weighted_rank_calculation(self):
+        weights = {'one_month':.40, 'three_month':.20, 'six_month':.20, 'twelve_month':.20}
+        self.assertEqual(rs.FRONT_WEIGHTED_WEIGHTS, weights)
         # Independent transcription of momentumScreen.calc from MarketStrength
         # app.js?v=8f39ec222d: binary-search lower ranks, then ordinal ratings.
         scores = {key:{str(i):float((i * multiplier) % 101 + 1) for i in range(102)}
@@ -94,7 +112,7 @@ class FrontWeightedRsTests(unittest.TestCase):
         ranked = rs.rank_first_ratings(scores)
         symbols = sorted(scores['one_month'])
         weighted = dict.fromkeys(symbols, 0.)
-        for key, weight in rs.FRONT_WEIGHTED_WEIGHTS.items():
+        for key, weight in weights.items():
             ordered = sorted(scores[key].values())
             for symbol in symbols:
                 rank = 1 + 98 * bisect.bisect_left(ordered, scores[key][symbol]) / (len(symbols) - 1)
@@ -133,13 +151,10 @@ class FrontWeightedRsTests(unittest.TestCase):
             self.assertIn('unrounded', payload['methodology']['score_formula'])
             self.assertEqual(set(payload['ratings']['TEST']), {*rs.FRONT_WEIGHTED_HORIZONS, 'front_weighted'})
 
-    def test_maps_strictly_lower_scores_to_fractional_endpoint_scaled_ranks(self):
-        ratings = rs.percentile_ranks({"A": 1.0, "B": 1.0, "C": 2.0, "D": 3.0})
-        self.assertEqual(ratings["A"], 1)
-        self.assertEqual(ratings["B"], 1)
-        self.assertAlmostEqual(ratings['C'], 1 + 196 / 3)
-        self.assertEqual(ratings["D"], 99)
-        self.assertTrue(all(1 <= rating <= 99 for rating in ratings.values()))
+    def test_counts_strictly_lower_scores_exactly(self):
+        self.assertEqual(rs.strictly_lower_counts({'A':1., 'B':1., 'C':2., 'D':3.}),
+                         {'A':0, 'B':0, 'C':2, 'D':3})
+        self.assertEqual(rs.strictly_lower_counts({}), {})
 
 
 if __name__ == "__main__":

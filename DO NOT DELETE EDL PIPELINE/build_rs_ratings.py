@@ -81,13 +81,12 @@ def relative_strength_scores(stock, benchmark, as_of_date):
     return relative_ratios if all(math.isfinite(value) for value in relative_ratios.values()) else None
 
 
-def percentile_ranks(scores):
-    """MarketStrength momentum period ranks, kept fractional until aggregation."""
+def strictly_lower_counts(scores):
+    """Integer counts underlying the fractional momentum period ranks."""
     values = pd.Series(scores, dtype=float)
     if values.empty:
         return {}
-    lower_count = values.rank(method="min") - 1
-    return (1 + 98 * lower_count / max(1, len(values) - 1)).to_dict()
+    return (values.rank(method="min") - 1).astype(int).to_dict()
 
 
 def rank_first_ratings(scores):
@@ -95,14 +94,17 @@ def rank_first_ratings(scores):
     symbols = set.intersection(*(set(scores.get(key, {})) for key in FRONT_WEIGHTED_HORIZONS))
     symbols = sorted(symbol for symbol in symbols if all(
         math.isfinite(scores[key][symbol]) and scores[key][symbol] > 0 for key in FRONT_WEIGHTED_HORIZONS))
-    ranked = {key: percentile_ranks({symbol: scores[key][symbol] for symbol in symbols})
+    lower_counts = {key: strictly_lower_counts({symbol: scores[key][symbol] for symbol in symbols})
               for key in FRONT_WEIGHTED_HORIZONS}
-    # Match the reference's percentage-weight arithmetic without rounding ranks.
-    composite = {symbol: sum(round(weight * 100) * ranked[key][symbol]
-                             for key, weight in FRONT_WEIGHTED_WEIGHTS.items()) / 100 for symbol in symbols}
+    ranked = {key: {symbol: 1 + 98 * count / max(1, len(symbols) - 1)
+                    for symbol, count in counts.items()} for key, counts in lower_counts.items()}
+    # The additive constant and positive common denominator do not affect order.
+    # Sort exact integer weighted counts to avoid float noise breaking real ties.
+    composite = {symbol: sum(round(weight * 100) * lower_counts[key][symbol]
+                             for key, weight in FRONT_WEIGHTED_WEIGHTS.items()) for symbol in symbols}
     # Stable symbol order makes equal composites reproducible. The reference
     # assigns ordinal final ratings (not equal ratings to tied composites).
-    ordered = sorted(symbols, key=lambda symbol: -composite[symbol])
+    ordered = sorted(symbols, key=lambda symbol: (-composite[symbol], symbol))
     ranked = {key: {symbol: math.floor(value + 0.5) for symbol, value in values.items()}
               for key, values in ranked.items()}
     ranked['front_weighted'] = {
@@ -163,6 +165,7 @@ def main():
             "horizon_rank_formula": "1 + 98 * strictly_lower_scores / max(1, eligible_scores - 1)",
             "rank_formula": "floor(99 - 98 * descending_position / max(1, eligible_scores - 1) + 0.5)",
             "composite_ties": "stable symbol ascending order",
+            "composite_ordering": "exact integer weighted strictly-lower counts",
             "horizon_rating_rounding": "floor(unrounded_horizon_percentile_rank + 0.5)",
         },
         "ratings": ratings,

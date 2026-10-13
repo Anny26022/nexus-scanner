@@ -524,6 +524,8 @@ combine fractional 1–99 ranks with 40/20/20/20 weights, then rank the composit
 Period ranks use `1 + 98 * strictly_lower_scores / max(1, N - 1)` without rounding.
 Final ratings use `floor(99 - 98 * descending_position / max(1, N - 1) + 0.5)`.
 Equal composites keep stable alphabetical symbol order; period ties share ranks.
+Composite sorting uses exact integer weighted lower counts (the common offset
+and denominator cancel), preventing float roundoff from breaking mathematical ties.
 Published period ratings remain integers, rounded half-up only after aggregation.
 At least 260 aligned sessions and all four valid horizons are required.
 

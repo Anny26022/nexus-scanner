@@ -25,6 +25,15 @@ from pipeline_utils import load_json, save_json
 
 
 class FilingHistoryTests(unittest.TestCase):
+    def test_daily_compression_keeps_local_validation_input_without_preparing_full_backups(self):
+        from edl_pipeline import runner
+        with mock.patch.dict('os.environ', {'EDL_FILING_BACKUPS': '0'}), \
+                mock.patch.object(runner, 'compress_file', return_value=(10, 5)) as compress, \
+                mock.patch.object(runner, 'prepare_filing_archives') as archives:
+            self.assertEqual(runner.prepare_filing_output(), (10, 5))
+        compress.assert_called_once()
+        archives.assert_not_called()
+
     def test_memory_telemetry_is_optional_without_changing_processing(self):
         spec = importlib.util.spec_from_file_location('filing_history_without_resource',
                                                     ROOT / 'build_filing_history_artifact.py')
@@ -98,6 +107,24 @@ class FilingHistoryTests(unittest.TestCase):
             self.assertEqual(classify.call_count, 1)
             self.assertEqual(stats['reused_filings'], 1)
             self.assertEqual(stats['fresh_filings'], 1)
+
+    def test_complete_legacy_cache_upgrades_without_rebuilding_unchanged_history(self):
+        filings = [{'news_date': '2026-10-07', 'caption': 'Dividend approved'}]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            expected = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['legacy'])
+            stats = Counter()
+            with mock.patch.object(build_filing_history_artifact, 'classify_filings', side_effect=AssertionError('unnecessary normalization')):
+                observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['current'], stats, ['legacy'])
+            self.assertEqual(observed, expected)
+            self.assertEqual(load_json(path)['rules'], ['current'])
+            self.assertEqual(stats['unchanged_companies'], 1)
+            self.assertEqual(stats['legacy_upgrades'], 1)
+            revised = [*filings, {'news_date': '2026-10-08', 'caption': 'Stock split approved'}]
+            stats = Counter()
+            observed = build_filing_history_artifact.classify_cached(revised, path, ['current'], stats)
+            self.assertEqual(observed, classify_filings(copy.deepcopy(revised)))
+            self.assertEqual(stats['source_changed'], 1)
 
     def test_entry_cache_migrates_only_when_legacy_rules_match(self):
         filings = [{'caption': 'Dividend approved'}]

@@ -97,7 +97,8 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
     cached = old.get('entries', {})
     if not isinstance(cached, dict):
         cached = {}
-    if (old.get('rules') == rules and old.get('history_key') == history_key
+    if ((old.get('rules') == rules or (legacy_rules is not None and old.get('rules') == legacy_rules))
+            and old.get('history_key') == history_key
             and isinstance(previous, list) and previous
             and isinstance(sources, list) and len(sources) == len(previous)
             and all(isinstance(row, dict) and row.get('filingId')
@@ -108,6 +109,13 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
                         and isinstance(filings[source].get('documentExtraction'), dict))
                     for row, source in zip(previous, sources))):
         stats['unchanged_companies'] += 1
+        if old['rules'] != rules:
+            stats['legacy_upgrades'] += 1
+            old['rules'] = rules
+            try:
+                save_json(path, old, ensure_ascii=False)
+            except OSError as error:
+                print(f'WARNING: Classification cache not upgraded: {error}', flush=True)
         stats['reused_filings'] += len(previous)
         result = [{**row, 'classification': cached[row['classification']]} for row in previous]
         for row, source in zip(result, sources):
@@ -115,6 +123,7 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
                 row['documentExtraction'] = filings[source]['documentExtraction']
         return result
     stats['rebuilt_companies'] += 1
+    stats['source_changed' if old.get('history_key') and old['history_key'] != history_key else 'cache_layout_misses'] += 1
     entries, keys = {}, []
     def classify(row):
         key = classification_key(row)
@@ -221,6 +230,8 @@ def main() -> int:
     print(f"Filing cache: unchanged companies={stats['unchanged_companies']}; "
           f"rebuilt companies={stats['rebuilt_companies']}; "
           f"invalidated companies={stats['invalidated_companies']}; "
+          f"source changed={stats['source_changed']}; cache/layout misses={stats['cache_layout_misses']}; "
+          f"legacy upgrades={stats['legacy_upgrades']}; "
           f"reused filings={stats['reused_filings']}; fresh classifications={stats['fresh_filings']}", flush=True)
     progress("serialization", started)
     print(f"Published filing history for {len(records)} symbols ({complete} LODR backfills complete).")

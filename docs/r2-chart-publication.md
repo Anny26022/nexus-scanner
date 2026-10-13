@@ -45,6 +45,26 @@ publication preserves the active pointer. See
 R2 release `publishedAt` remains the deterministic session date at 00:00 UTC;
 the announcement catalog separately records its filing-cache publication time.
 
+Daily Actions publish current app objects without full filing backups
+(`EDL_FILING_BACKUPS=0`). The existing Sunday adjusted-history workflow publishes
+both full backups (`EDL_FILING_BACKUPS=1`) and records `archivesAsOf` in that
+release index. Daily indexes have an empty `archives` map; previous weekly backup
+objects and indexes remain retained. Manual/local builds default to backups on.
+Local classified gzip validation remains enabled on daily runs.
+
+Chart object schema 3 references at most two candle objects: all years before the
+release year, then the release year. A new candle usually changes only the current
+year plus the small chart metadata object. Historical corrections regenerate the
+affected piece; the year boundary rolls the finished year into older history.
+The browser assembles the same full chart response and still reads schema-2
+objects and legacy releases. The first chunked publication uploads a new baseline.
+
+R2 logs show new-object count/bytes and 30-second transfer/check summaries
+(throughput, progress and errors), followed by per-command elapsed times. Retry
+failures remain visible in rclone logs; full download verification stays enabled.
+Filing cache logs distinguish changed source histories, missing/incompatible cache
+layouts and successful legacy upgrades without re-normalization.
+
 ## Current object retention
 
 Schema-7 releases use `objects/<sha256>.json.gz` and

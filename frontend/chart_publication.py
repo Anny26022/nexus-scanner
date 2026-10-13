@@ -71,8 +71,24 @@ def chart_revision(root, session):
                 raise RuntimeError('Object content does not match its hash: ' + file.name)
         for symbol, digest in index['chartObjects'].items():
             chart = json.loads(gzip.decompress((root / 'objects' / f'{digest}.json.gz').read_bytes()))
-            if chart.get('symbol') != symbol or chart.get('schemaVersion') != 2:
+            if chart.get('symbol') != symbol or chart.get('schemaVersion') not in (2, 3):
                 raise RuntimeError('Chart object symbol/schema mismatch')
+            if chart['schemaVersion'] == 3:
+                references = chart.get('candleChunks')
+                if not isinstance(references, list) or len(references) > 2 or len(set(references)) != len(references):
+                    raise RuntimeError('Invalid chart chunk references')
+                candles = []
+                for reference in references:
+                    if not re.fullmatch(r'[a-f0-9]{64}', str(reference)):
+                        raise RuntimeError('Invalid chart chunk hash')
+                    chunk = json.loads(gzip.decompress((root / 'objects' / f'{reference}.json.gz').read_bytes()))
+                    if chunk.get('symbol') != symbol or chunk.get('schemaVersion') != 1 or not isinstance(chunk.get('candles'), list):
+                        raise RuntimeError('Chart chunk symbol/schema mismatch')
+                    candles.extend(chunk['candles'])
+                dates = [row['date'] for row in candles]
+                if (dates != sorted(set(dates)) or any(date > session for date in dates)
+                        or chart.get('historyStartDate') != (dates[0] if dates else None)):
+                    raise RuntimeError('Chart chunk dates do not match release')
         validate_announcement_objects(root / 'objects', index['announcements'], session, set(index['chartObjects']), index.get('filingLookup'))
         return revision
     digest = hashlib.sha256()
@@ -218,7 +234,8 @@ class R2Store:
         # R2 can return 501 to rclone's post-PUT HEAD; bulk uploads get a download check.
         started = time.perf_counter()
         try:
-            subprocess.run(['rclone', *args, '--s3-no-check-bucket', '--s3-no-head'], env=self.env, check=True)
+            subprocess.run(['rclone', *args, '--s3-no-check-bucket', '--s3-no-head',
+                            '--stats', '30s', '--stats-one-line', '--stats-log-level', 'NOTICE'], env=self.env, check=True)
         finally:
             print(f'R2 {args[0]} elapsed: {time.perf_counter() - started:.2f}s', flush=True)
 
@@ -252,7 +269,8 @@ class R2Store:
                     raise RuntimeError('Immutable remote object has a different size: ' + file.name)
             else:
                 new.append(file.name)
-        print(f'R2 objects: {len(new)} new; {len(existing)} already stored', flush=True)
+        total_bytes = sum((source / name).stat().st_size for name in new)
+        print(f'R2 objects: {len(new)} new ({total_bytes:,} bytes); {len(existing)} already stored', flush=True)
         if not new:
             return
         with tempfile.TemporaryDirectory() as folder:
@@ -356,9 +374,11 @@ def complete_object_release(chart_root, output, manifest, store=None):
     if store is None and os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':
         store = R2Store()
     started = time.perf_counter()
-    archives = prepare_archives(chart_root)
+    archives = prepare_archives(chart_root) if os.environ.get('EDL_FILING_BACKUPS', '1') == '1' else {}
     print(f'Archive preparation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = dict(index, archives=archives)
+    if archives:
+        index['archivesAsOf'] = manifest['sessionDate']
     if store:
         base = store.base_url
         started = time.perf_counter()

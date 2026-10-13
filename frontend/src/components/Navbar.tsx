@@ -1,4 +1,4 @@
-import { Monitor, Sun, Moon, ArrowUpRight } from 'lucide-react';
+import { Sun, Moon, ArrowUpRight } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 
 interface NavbarProps {
@@ -23,10 +23,9 @@ export function Navbar({ activeTab, onTabChange, sessionDate }: NavbarProps) {
       <button type="button" aria-current={activeTab === 'ipo' ? 'page' : undefined} onClick={() => onTabChange('ipo')}><span>IPO Catalogue</span><ArrowUpRight className="nav-arrow" size={14} /></button>
     </nav>
     <div className="sidebar-footer">
-      <p className="sidebar-note">A clearer view of<br />the Indian market.</p>
       {sessionDate && <div className="mobile-session-badge"><span>{new Date(`${sessionDate}T00:00:00`).toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}</span></div>}
       <div className="theme-control" role="group" aria-label="Appearance">
-        {([{id: 'light', label: 'Light appearance', Icon: Sun}, {id: 'system', label: 'System appearance', Icon: Monitor}, {id: 'dark', label: 'Dark appearance', Icon: Moon}] as const).map(({id, label, Icon}) =>
+        {([{id: 'light', label: 'Light appearance', Icon: Sun}, {id: 'dark', label: 'Dark appearance', Icon: Moon}] as const).map(({id, label, Icon}) =>
           <button type="button" key={id} aria-label={label} title={label} aria-pressed={choice === id} onClick={() => setChoice(id)}><Icon size={16} /></button>)}
       </div>
     </div>

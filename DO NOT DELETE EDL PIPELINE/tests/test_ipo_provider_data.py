@@ -5,13 +5,14 @@ import gzip
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from fetch_ipo_provider_data import DETAIL_ENDPOINTS, _load_cache, _merge_listed_archive, _refresh_detail, _write_details_archive, fetch_all, main
+from fetch_ipo_provider_data import ACTIVE_DETAIL_REFRESH_LIMIT, DETAIL_ENDPOINTS, IpoProviderClient, ProviderBackoff, _load_cache, _merge_listed_archive, _refresh_detail, _write_details_archive, fetch_all, main
 
 
 class FakeClient:
@@ -32,6 +33,198 @@ class FakeClient:
 
 
 class IpoProviderFetchTests(unittest.TestCase):
+    def test_stale_active_and_recently_listed_details_refresh_but_history_stays_missing_only(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            complete = {name:{} for name in DETAIL_ENDPOINTS}
+            _merge_listed_archive(root, [{'id':'HISTORICAL'}])
+            _write_details_archive(root, {identifier:{'fetched_at':'2000-01-01T00:00:00Z', 'data':complete}
+                                         for identifier in ('NSE_TEST','NSE_LISTED','HISTORICAL')}, 'fixture')
+            updated = {**complete, 'documents':[{'title':'New prospectus'}]}
+            with patch('fetch_ipo_provider_data.IpoProviderClient', FakeClient), \
+                    patch('fetch_ipo_provider_data._refresh_detail', return_value=(updated, [])) as fetch:
+                payload = fetch_all(root)
+                self.assertEqual([call.args[1] for call in fetch.call_args_list], ['NSE_TEST','NSE_LISTED'])
+                self.assertTrue(all(call.args[2] == set(DETAIL_ENDPOINTS) for call in fetch.call_args_list))
+                self.assertEqual(payload['details']['NSE_TEST']['data']['documents'], updated['documents'])
+                fetch.reset_mock()
+                fetch_all(root)
+                fetch.assert_not_called()  # Fresh active records do not refresh twice in a day.
+
+    def test_active_refresh_is_bounded_rotates_and_does_not_cap_missing_history(self):
+        class BusyClient(FakeClient):
+            def get_json(self, endpoint):
+                if endpoint == '/api/ipos/open':
+                    return {'ipos':[{'id':f'ACTIVE_{i}'} for i in range(8)]}
+                if endpoint == '/api/ipos/listed?days=60':
+                    return {'ipos':[{'id':'RECENT'}]}
+                return super().get_json(endpoint)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            complete = {name:{} for name in DETAIL_ENDPOINTS}
+            _merge_listed_archive(root, [{'id':'MISSING_HISTORY'}])
+            _write_details_archive(root, {
+                **{f'ACTIVE_{i}':{'fetched_at':'2000-01-01T00:00:00Z', 'data':complete} for i in range(8)},
+                'RECENT':{'fetched_at':'1999-01-01T00:00:00Z', 'data':complete},
+            }, 'fixture')
+            with patch('fetch_ipo_provider_data.IpoProviderClient', BusyClient), \
+                    patch('fetch_ipo_provider_data._refresh_detail', return_value=(complete, [])) as fetch:
+                fetch_all(root)
+                self.assertEqual(ACTIVE_DETAIL_REFRESH_LIMIT, 6)
+                self.assertEqual([call.args[1] for call in fetch.call_args_list],
+                                 [*[f'ACTIVE_{i}' for i in range(5)], 'MISSING_HISTORY', 'RECENT'])
+                fetch.reset_mock()
+                fetch_all(root)
+                self.assertEqual([call.args[1] for call in fetch.call_args_list], ['ACTIVE_5','ACTIVE_6','ACTIVE_7'])
+
+    def test_active_refresh_failure_preserves_old_sections_then_retries_only_failed_section(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            complete = {name:{'retained':True} for name in DETAIL_ENDPOINTS}
+            _write_details_archive(root, {
+                'NSE_TEST':{'fetched_at':'2000-01-01T00:00:00Z', 'data':complete},
+                'NSE_LISTED':{'fetched_at':'2099-01-01T00:00:00Z', 'data':complete},
+            }, 'fixture')
+            with patch('fetch_ipo_provider_data.IpoProviderClient', FakeClient), \
+                    patch('fetch_ipo_provider_data._refresh_detail', return_value=(
+                        {'documents':[{'title':'Updated'}]}, ['gmp_history: failed'])):
+                payload = fetch_all(root)
+            self.assertEqual(payload['details']['NSE_TEST']['data']['gmp_history'], {'retained':True})
+            self.assertEqual(payload['details']['NSE_TEST']['fetched_at'], '2000-01-01T00:00:00Z')
+            with patch('fetch_ipo_provider_data.IpoProviderClient', FakeClient), \
+                    patch('fetch_ipo_provider_data._refresh_detail', return_value=({'gmp_history':[1]}, [])) as fetch:
+                fetch_all(root)
+            self.assertEqual(fetch.call_args.args[2], {'gmp_history'})
+
+    def test_http_and_transport_outages_back_off_but_missing_objects_do_not(self):
+        for status, code in [("000", 7), ("", 28), ("", 22), ("200", 28), ("408", 22),
+                             ("429", 22), ("401", 22), ("403", 22), ("500", 22),
+                             ("501", 22), ("505", 22), ("599", 22), ("404", 22)]:
+            with self.subTest(status=status, code=code):
+                client = IpoProviderClient()
+                try:
+                    result = subprocess.CompletedProcess(["curl"], code, stdout=status, stderr="")
+                    with patch("fetch_ipo_provider_data.subprocess.run", return_value=result):
+                        error = subprocess.CalledProcessError if status == "404" else ProviderBackoff
+                        with self.assertRaises(error):
+                            client.get_json("/api/ipos/TEST")
+                finally:
+                    client.temporary.cleanup()
+
+    def test_next_run_collects_a_new_ipo_without_revisiting_completed_details(self):
+        class NewIssueClient(FakeClient):
+            def get_json(self, endpoint):
+                if endpoint == "/api/ipos/open":
+                    return {"ipos":[{"id":"NSE_TEST"}, {"id":"NSE_NEW"}]}
+                return super().get_json(endpoint)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            complete = {name:{} for name in DETAIL_ENDPOINTS}
+            with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
+                    patch("fetch_ipo_provider_data._refresh_detail", return_value=(complete, [])):
+                fetch_all(root)
+            with patch("fetch_ipo_provider_data.IpoProviderClient", NewIssueClient), \
+                    patch("fetch_ipo_provider_data._refresh_detail", return_value=(complete, [])) as fetch:
+                payload = fetch_all(root)
+            self.assertEqual(fetch.call_count, 1)
+            self.assertEqual(fetch.call_args.args[1], "NSE_NEW")
+            self.assertEqual(payload["detail_coverage"]["incomplete"], 0)
+
+    def test_feed_backoff_preserves_completed_feeds_and_stops_requests(self):
+        requested = []
+        class LimitedClient(FakeClient):
+            def get_json(self, endpoint):
+                requested.append(endpoint)
+                if endpoint == "/api/ipos/upcoming":
+                    raise ProviderBackoff()
+                return super().get_json(endpoint)
+        with tempfile.TemporaryDirectory() as folder:
+            with patch("fetch_ipo_provider_data.IpoProviderClient", LimitedClient), \
+                    patch("fetch_ipo_provider_data._refresh_detail") as refresh:
+                payload = fetch_all(Path(folder), missing_budget_seconds=60)
+            self.assertIn("open", payload["feeds"])
+            self.assertEqual(payload["analytics"], {})
+            self.assertFalse(payload["refresh_complete"])
+            self.assertEqual(requested, ["/api/ipos/open", "/api/ipos/upcoming"])
+            refresh.assert_not_called()
+
+    def test_detail_backoff_retains_successful_sections_of_current_issue(self):
+        class LimitedClient(FakeClient):
+            def get_json(self, endpoint):
+                if endpoint.endswith("/gmp"):
+                    raise ProviderBackoff()
+                return super().get_json(endpoint)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with patch("fetch_ipo_provider_data.IpoProviderClient", LimitedClient), \
+                    patch("fetch_ipo_provider_data.time.sleep"):
+                payload = fetch_all(root, missing_budget_seconds=60)
+            self.assertEqual(payload["detail_coverage"]["attempted"], 1)
+            item = next(iter(_load_cache(root)["details"].values()))
+            self.assertIn("issue", item["data"])
+            self.assertNotIn("fetched_at", item)
+
+    def test_normal_run_fills_missing_sections_and_skips_complete_history(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            complete = {name: {} for name in DETAIL_ENDPOINTS}
+            _merge_listed_archive(root, [{"id":"COMPLETE"}, {"id":"PARTIAL"}])
+            _write_details_archive(root, {
+                "COMPLETE":{"fetched_at":"2099-01-01T00:00:00Z", "data":complete},
+                "PARTIAL":{"fetched_at":"2000-01-01T00:00:00Z", "data":{key:value for key,value in complete.items() if key != "documents"}},
+            }, "2099-01-01T00:00:00Z")
+            def refresh(client, identifier, endpoints=None):
+                return {name:{} for name in (endpoints or DETAIL_ENDPOINTS)}, []
+            with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
+                    patch("fetch_ipo_provider_data._refresh_detail", side_effect=refresh) as fetch:
+                payload = fetch_all(root, missing_budget_seconds=60)
+            self.assertGreater(fetch.call_count, 1)
+            self.assertNotIn("COMPLETE", [call.args[1] for call in fetch.call_args_list])
+            partial = next(call for call in fetch.call_args_list if call.args[1] == "PARTIAL")
+            self.assertEqual(partial.args[2], {"documents"})
+            self.assertEqual(payload["detail_coverage"]["incomplete"], 0)
+            self.assertEqual(payload["details"]["PARTIAL"]["fetched_at"], payload["fetched_at"])
+            with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
+                    patch("fetch_ipo_provider_data._refresh_detail") as fetch:
+                fetch_all(root, missing_budget_seconds=60)
+            fetch.assert_not_called()
+
+    def test_completion_lane_stops_at_deadline_and_resumes_next_run(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            complete = {name:{} for name in DETAIL_ENDPOINTS}
+            elapsed = {"seconds":0}
+            clock = SimpleNamespace(monotonic=lambda: elapsed["seconds"])
+            def refresh(*args):
+                elapsed["seconds"] += 60
+                return complete, []
+            with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
+                    patch("fetch_ipo_provider_data.time", clock), \
+                    patch("fetch_ipo_provider_data._refresh_detail", side_effect=refresh) as fetch:
+                first = fetch_all(root, missing_budget_seconds=30)
+            self.assertEqual(fetch.call_count, 1)
+            self.assertEqual(first["detail_coverage"]["incomplete"], 1)
+            with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
+                    patch("fetch_ipo_provider_data._refresh_detail", return_value=(complete, [])) as fetch:
+                second = fetch_all(root, missing_budget_seconds=30)
+            self.assertEqual(fetch.call_count, 1)
+            self.assertEqual(second["detail_coverage"]["incomplete"], 0)
+
+    def test_provider_backoff_preserves_progress_without_fetching_remaining_issues(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            _merge_listed_archive(root, [{"id":"THIRD"}])
+            complete = {name:{} for name in DETAIL_ENDPOINTS}
+            with patch("fetch_ipo_provider_data.IpoProviderClient", FakeClient), \
+                    patch("fetch_ipo_provider_data._refresh_detail", side_effect=[(complete, []), ({}, ["issue: provider requested backoff"])]) as fetch:
+                payload = fetch_all(root, missing_budget_seconds=30)
+            self.assertEqual(fetch.call_count, 2)
+            self.assertEqual(payload["detail_coverage"]["complete"], 1)
+            cached = _load_cache(root)["details"]
+            self.assertEqual(len(cached), 2)
+            self.assertNotIn("THIRD", cached)
+            self.assertTrue(any("provider requested backoff" in error for error in payload["errors"]))
+
     def test_request_errors_and_legacy_cache_never_retain_session_headers(self):
         secret = "synthetic-session-token"
         error = subprocess.CalledProcessError(22, ["curl", "--header", "X-IPO-Session: " + secret])
@@ -50,7 +243,7 @@ class IpoProviderFetchTests(unittest.TestCase):
             with gzip.open(root / "ipo_provider_details_archive.json.gz", "rt") as handle:
                 self.assertNotIn(secret, handle.read())
 
-    def test_history_gets_a_slot_even_with_active_backlog_and_outside_recent_feed(self):
+    def test_live_issues_precede_missing_history_outside_recent_feed(self):
         class BusyClient(FakeClient):
             def get_json(self, endpoint):
                 if endpoint == "/api/ipos/open":
@@ -63,9 +256,9 @@ class IpoProviderFetchTests(unittest.TestCase):
             _merge_listed_archive(root, [{"id": "ARCHIVED", "listing_date_iso": "2000-01-01"}])
             with patch("fetch_ipo_provider_data.IpoProviderClient", BusyClient), \
                     patch("fetch_ipo_provider_data._refresh_detail", return_value=({"issue": {}}, [])) as refresh:
-                fetch_all(root, detail_limit=4)
-            self.assertEqual(refresh.call_count, 4)
-            self.assertEqual(refresh.call_args_list[0].args[1], "ARCHIVED")
+                fetch_all(root)
+            self.assertEqual(refresh.call_count, 6)
+            self.assertEqual(refresh.call_args_list[-1].args[1], "ARCHIVED")
 
     def test_failed_attempt_rotates_behind_never_attempted_issue(self):
         class TwoIssues(FakeClient):
@@ -105,7 +298,7 @@ class IpoProviderFetchTests(unittest.TestCase):
             _write_details_archive(root, {
                 "NEWER": {"fetched_at": "2001-01-01T00:00:00Z", "data": {}},
                 "OLDEST": {"fetched_at": "2000-01-01T00:00:00Z", "data": {}},
-                "FRESH": {"fetched_at": "2099-01-01T00:00:00Z", "data": {}},
+                "FRESH": {"fetched_at": "2099-01-01T00:00:00Z", "data": {name:{} for name in DETAIL_ENDPOINTS}},
             }, "2001-01-01T00:00:00Z")
             with patch("fetch_ipo_provider_data.IpoProviderClient", ManyIssues), \
                     patch("fetch_ipo_provider_data._refresh_detail", return_value=({"issue": {}}, [])) as refresh:

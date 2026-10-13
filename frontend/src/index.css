@@ -503,7 +503,7 @@
   .screen-buttons { grid-column: 2; grid-row: 1; width: auto; flex-wrap: nowrap; margin: 0; gap: 4px; }
   .screen-buttons .button { min-height: 44px; padding-inline: 9px; border-radius: 9px; font-size: 13px; }
   .screen-buttons .button > svg { width: 16px; height: 16px; }
-  .screen-buttons .button-ghost { width: 36px; padding: 0; gap: 0; font-size: 0; }
+  .screen-buttons .button-ghost:has(> svg) { width: 36px; padding: 0; gap: 0; font-size: 0; }
   .active-filters { flex-wrap: nowrap; overflow-x: auto; margin-top: 8px; gap: 6px; scrollbar-width: none; }
   .active-filters::-webkit-scrollbar { display: none; }
   .filter-chip { flex-shrink: 0; max-width: 88%; min-height: 36px; padding-block: 0; font-size: 12px; }

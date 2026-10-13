@@ -117,6 +117,30 @@ it('selects all available columns from the compact column chooser', () => {
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
 });
 
+it('keeps company and filing controls mounted when a wide phone table is swiped to its end', () => {
+  localStorage.removeItem('nexus-scanner.screener.columns.v1');
+  vi.stubGlobal('matchMedia', () => ({matches:true,addEventListener:vi.fn(),removeEventListener:vi.fn()}));
+  try {
+    const manyRows = Array.from({length:100}, (_, index) => ({...row,symbol:`STOCK${index}`}));
+    const view = render(<ResultsTable {...props} data={{...data,rows:manyRows,pageSize:100,matchCount:100}} />);
+    fireEvent.click(screen.getByRole('button', {name:'Customize columns'}));
+    fireEvent.click(screen.getByRole('button', {name:'Select all'}));
+    fireEvent.click(screen.getByRole('button', {name:'Close column customization'}));
+    const count = screen.getAllByRole('columnheader').length;
+    expect(count).toBeGreaterThan(20);
+    const tableScroll = screen.getByLabelText('Equity results table, scroll for more columns');
+    Object.defineProperty(tableScroll,'clientWidth',{value:390,configurable:true});
+    fireEvent.scroll(tableScroll, {target:{scrollLeft:16400}});
+    expect(screen.getAllByRole('columnheader')).toHaveLength(count);
+    expect(screen.getByRole('columnheader', {name:'Company'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name:'View STOCK0 company snapshot'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name:'View STOCK0 announcements'})).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', {name:'Data completeness'})).toBeInTheDocument();
+    // Vertical row windowing is still bounded, even with every column selected.
+    expect(view.container.querySelectorAll('tbody tr:not(.table-spacer)')).toHaveLength(22);
+  } finally {cleanup(); vi.unstubAllGlobals(); localStorage.removeItem('nexus-scanner.screener.columns.v1');}
+});
+
 it('lets the default table fill its viewport again after resetting a custom column layout', () => {
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
   render(<ResultsTable {...props} data={data} />);

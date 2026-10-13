@@ -9,8 +9,18 @@ import { NewListingsTab } from '../components/NewListingsTab';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
 
-it('puts company and price first on phones without changing desktop column preferences', async () => {
-  vi.stubGlobal('matchMedia', () => ({matches:true,addEventListener:vi.fn(),removeEventListener:vi.fn()}));
+it.each([
+  {saved:null, desktop:['Company','Sector / industry','Listing date','Last price','Daily turnover','Market cap','Delivery'],
+    phone:['Company','Last price','Listing date','Sector / industry','Daily turnover','Market cap','Delivery']},
+  {saved:['company','currentPrice','issuePrice','listingDate'], desktop:['Company','Listing date','Last price','Issue price'],
+    phone:['Company','Last price','Listing date','Issue price']},
+])('preserves IPO column preferences and desktop order through phone switches ($saved)', async ({saved, desktop, phone}) => {
+  const key = 'nexus-scanner.ipo.columns.v1';
+  if (saved) localStorage.setItem(key, JSON.stringify(saved));
+  const stored = localStorage.getItem(key);
+  let notify = () => {};
+  const media = {matches:false,addEventListener:vi.fn((_type:string,listener:() => void) => {notify=listener;}),removeEventListener:vi.fn()};
+  vi.stubGlobal('matchMedia', () => media);
   try {
     vi.mocked(screenerApi.getIpoCatalogue).mockResolvedValueOnce({records:[{
       symbol:'TEST',name:'Test IPO',listingDate:'2026-10-01',currentPrice:100,
@@ -19,7 +29,15 @@ it('puts company and price first on phones without changing desktop column prefe
     const client = new QueryClient({defaultOptions:{queries:{retry:false}}});
     render(<QueryClientProvider client={client}><NewListingsTab datasetRevision={'d'.repeat(64)} selectedAsOfDate="2026-10-09" /></QueryClientProvider>);
     await screen.findByRole('button', {name:'IPO details for Test IPO'});
-    expect(screen.getAllByRole('columnheader').slice(0,3).map(header=>header.textContent)).toEqual(['Company','Last price','Listing date']);
+    const headings = () => screen.getAllByRole('columnheader').map(header=>header.textContent);
+    expect(headings()).toEqual(desktop);
+    expect(localStorage.getItem(key)).toBe(stored);
+    act(() => {media.matches=true; notify();});
+    expect(headings()).toEqual(phone);
+    expect(localStorage.getItem(key)).toBe(stored);
+    act(() => {media.matches=false; notify();});
+    expect(headings()).toEqual(desktop);
+    expect(localStorage.getItem(key)).toBe(stored);
   } finally {cleanup(); vi.unstubAllGlobals();}
 });
 

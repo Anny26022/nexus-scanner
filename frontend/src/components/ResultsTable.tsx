@@ -160,7 +160,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
     : 1120;
   const scrollRef = useRef<HTMLDivElement>(null);
   const columnWindow = useColumnWindow(visibleColumns, widthOf,
-    usingCustomColumns && visibleColumns.length > 20, scrollRef);
+    !phone && usingCustomColumns && visibleColumns.length > 20, scrollRef);
   const renderedColumns = columnWindow.columns;
   const columnSpan = renderedColumns.length + Number(columnWindow.left > 0) + Number(columnWindow.right > 0);
   const overview = useSymbolHoverCard<ScreenerRunResponse['rows'][number]>();

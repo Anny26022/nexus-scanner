@@ -47,8 +47,9 @@ the announcement catalog separately records its filing-cache publication time.
 
 Daily Actions publish current app objects without full filing backups
 (`EDL_FILING_BACKUPS=0`). The existing Sunday adjusted-history workflow publishes
-both full backups (`EDL_FILING_BACKUPS=1`) and records `archivesAsOf` in that
-release index. Daily indexes have an empty `archives` map; previous weekly backup
+both full backups (`EDL_FILING_BACKUPS=1`) and records the filing-catalog cutoff
+timestamp as `archivesAsOf` in that release index (not the prior trading-session
+date on weekends). Daily indexes have an empty `archives` map; previous weekly backup
 objects and indexes remain retained. Manual/local builds default to backups on.
 Local classified gzip validation remains enabled on daily runs.
 

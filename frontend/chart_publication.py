@@ -378,7 +378,7 @@ def complete_object_release(chart_root, output, manifest, store=None):
     print(f'Archive preparation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = dict(index, archives=archives)
     if archives:
-        index['archivesAsOf'] = manifest['sessionDate']
+        index['archivesAsOf'] = index.get('filingLookup', {}).get('publishedAt', manifest['sessionDate'])
     if store:
         base = store.base_url
         started = time.perf_counter()

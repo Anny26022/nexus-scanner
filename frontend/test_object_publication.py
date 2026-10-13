@@ -81,7 +81,7 @@ class ObjectPublicationTests(unittest.TestCase):
                 complete_release(self.build(root, '2026-10-07'), output,
                                  {'revision': 'b'*64, 'sessionDate': '2026-10-07'}, store)
             weekly = store.references['releases/' + 'b'*64 + '/index.json']
-            self.assertEqual(weekly['archivesAsOf'], '2026-10-07')
+            self.assertEqual(weekly['archivesAsOf'], weekly['filingLookup']['publishedAt'])
             self.assertIn('classified', weekly['archives'])
 
     def test_missing_chunk_prevents_publication_and_preserves_pointer(self):

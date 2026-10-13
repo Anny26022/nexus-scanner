@@ -331,6 +331,6 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
   const rows = search ? matches.rows.filter(row => row.symbol.toLowerCase().includes(search) || row.name.toLowerCase().includes(search)) : matches.rows;
   const page = Math.max(1,request.page), size = Math.max(1,Math.min(100,request.pageSize));
   return { resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
-    immutableRevision:data.revision,rows:rows.slice((page-1)*size,page*size),matchCount:rows.length,totalUniverseCount:matches.universeCount,
+    immutableRevision:data.revision,rows:rows.slice((page-1)*size,page*size),matchedSymbols:rows.map(row=>row.symbol),matchCount:rows.length,totalUniverseCount:matches.universeCount,
     page,pageSize:size,perConditionCoverage:matches.coverage,unavailableDiagnostics:matches.diagnostics,warnings:matches.warnings };
 }

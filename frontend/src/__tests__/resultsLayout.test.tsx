@@ -13,6 +13,29 @@ const row = {symbol: 'AVTNPL', name: 'Avt Natural Products', sector: 'FMCG', ind
 const data = {rows: [row], matchCount: 16, totalUniverseCount: 2600, page: 1, pageSize: 15, immutableRevision: request.datasetRevision} as ScreenerRunResponse;
 const props = {isLoading: false, isError: false, onPageChange: vi.fn(), onSortChange: vi.fn()};
 
+it('copies every matching symbol from a later page without rendering additional rows', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText}});
+  try {
+    render(<ResultsTable {...props} data={{...data, page:2, matchCount:3, matchedSymbols:['FIRST','AVTNPL','LAST']}} />);
+    fireEvent.click(screen.getByRole('button', {name:'Copy TradingView symbols'}));
+    expect(writeText).toHaveBeenCalledWith('NSE:FIRST, NSE:AVTNPL, NSE:LAST');
+    expect(screen.queryByText('FIRST')).not.toBeInTheDocument();
+    expect(screen.queryByText('LAST')).not.toBeInTheDocument();
+    await screen.findByRole('button', {name:'Copied TradingView symbols'});
+  } finally {
+    if (original) Object.defineProperty(navigator, 'clipboard', original);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});
+
+it('reports incomplete legacy results rather than silently copying just the current page', () => {
+  render(<ResultsTable {...props} data={data} />);
+  fireEvent.click(screen.getByRole('button', {name:'Copy TradingView symbols'}));
+  expect(screen.getByRole('alert')).toHaveTextContent('All matching symbols are unavailable');
+});
+
 it('leads with quotes only on phones and restores desktop order without changing saved columns', () => {
   localStorage.removeItem('nexus-scanner.screener.columns.v1');
   let notify = () => {};

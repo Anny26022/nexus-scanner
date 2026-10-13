@@ -522,7 +522,7 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         value = _adx(frame, spec["period"]).iloc[-1]
         if pd.isna(value):
             return _unavailable(condition, "insufficient_history")
-        return _result(condition, _comparison(float(value), spec["comparison"], float(spec["value"])), round(float(value), 6), period=int(spec["period"]), comparison=spec["comparison"], target=float(spec["value"]))
+        return _result(condition, _comparison(float(value), spec["comparison"], float(spec["value"])), round(float(value), 6), raw_value=float(value), period=int(spec["period"]), comparison=spec["comparison"], target=float(spec["value"]))
 
     if condition == "percent_days_above_ma":
         window = int(spec["window"])
@@ -532,7 +532,7 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         if len(values) < window or averages.isna().any():
             return _unavailable(condition, "insufficient_history")
         percentage = float((values["Close"] > averages).mean() * 100)
-        return _result(condition, _comparison(percentage, spec["comparison"], float(spec["value"])), round(percentage, 6), period=int(spec["period"]), ma_type=spec.get("ma_type", "sma"), window=window, comparison=spec["comparison"], target=float(spec["value"]))
+        return _result(condition, _comparison(percentage, spec["comparison"], float(spec["value"])), round(percentage, 6), raw_value=percentage, period=int(spec["period"]), ma_type=spec.get("ma_type", "sma"), window=window, comparison=spec["comparison"], target=float(spec["value"]))
 
     if condition == "ma_stack":
         periods = sorted(int(period) for period in spec["periods"])
@@ -552,7 +552,7 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         if len(average) <= window or pd.isna(average.iloc[-1]) or pd.isna(average.iloc[-1 - window]) or average.iloc[-1 - window] == 0:
             return _unavailable(condition, "insufficient_history")
         slope = float((average.iloc[-1] / average.iloc[-1 - window] - 1) * 100)
-        return _result(condition, _comparison(slope, spec["comparison"], float(spec["value"])), round(slope, 6), period=int(spec["period"]), ma_type=spec.get("ma_type", "sma"), window=window, comparison=spec["comparison"], target=float(spec["value"]))
+        return _result(condition, _comparison(slope, spec["comparison"], float(spec["value"])), round(slope, 6), raw_value=slope, period=int(spec["period"]), ma_type=spec.get("ma_type", "sma"), window=window, comparison=spec["comparison"], target=float(spec["value"]))
 
     if condition == "price_change_percent":
         window = int(spec["window"])

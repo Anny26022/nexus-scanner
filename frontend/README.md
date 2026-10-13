@@ -536,3 +536,34 @@ Add `--upgrade` to deliberately refresh all pinned versions, or
 `--upgrade-package NAME` for one package. Commit the updated lock with the input
 change and verify the frontend Python suite. Python requirement changes also
 trigger Frontend CI.
+
+### Compact technical snapshot facts
+
+`publish_snapshot.py` now publishes `technicalMetricsVersion: 1` and compact
+technical values inside the existing packed `metrics` table. It reuses the
+Python scanner engine, including EMA extreme-reset persistence (not a naive
+consecutive-close rule). No live API or browser candle download is required.
+Numeric facts retain full precision for comparisons; display rounding never
+changes a filter match at its threshold.
+
+Supported configurations are shared in `src/data/snapshotTechnicals.json`.
+Numeric thresholds remain editable; uncomputed windows remain unavailable,
+and saved unsupported settings are preserved for explicit correction.
+
+- SMA/EMA values: 9, 10, 20, 21, 50, 150 and 200 sessions; EMA persistence
+  counters allow variable durations with a separate warmup guard.
+- ADX14, SMA200 slope over 21 sessions, percentage of 125 sessions above SMA50,
+  current up-day streak, 20-session highest volume, 252-session new highs/lows,
+  20-session consolidation, 10/60 nested contraction, daily inside bar,
+  Nifty50-relative 60-session strength and RS new-high signals.
+- Persistent Momentum and EMA21 reclaim use their published default settings.
+  Legacy slope, percentage-above-MA, reclaim, contraction and inside-bar rows
+  retain their distinct calculations rather than borrowing similar values.
+- Listing age and days since earnings count stock trading sessions. Dates
+  predating available stock history remain unknown, never undercounted.
+- F&O ban is only evaluated when `fnoBanAsOfDate` matches the selected session.
+  A report for the next session is not a valid substitute.
+
+Old releases still load, but lack the new facts until the normal pipeline
+publishes a new immutable generation. Coverage and warnings distinguish missing
+data from genuine non-matches; unknown values stay unknown under negation.

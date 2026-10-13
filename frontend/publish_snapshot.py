@@ -19,6 +19,7 @@ from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
 from edl_pipeline.scanner.calculation_cache import calculation_cache
 from screen_trend_conditions import _delivery_records
+from snapshot_technicals import technical_metrics, CONFIG_PATH
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
 
@@ -92,13 +93,9 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         last=frame.iloc[-1]
         for field in ('open','high','low','close','volume'):
             row[field]=float(last[field.title()])
-        for period in (10,20,50,200):
-            metrics[f'sma{period}']=float(frame['Close'].tail(period).mean()) if len(frame)>=period else None
         avg=frame['Volume'].iloc[-21:-1].mean() if len(frame)>=21 else None
         row['rvol']=float(last['Volume']/avg) if avg is not None and avg>0 else None
         row['changePct']=float((last['Close']/frame['Close'].iloc[-2]-1)*100) if len(frame)>=2 else None
-        for field in ('sma20','sma50','sma200'):
-            row[field]=metrics[field]
         for period in (5,21,63,126,252):
             metrics[f'return{period}']=float((last['Close']/frame['Close'].iloc[-1-period]-1)*100) if len(frame)>period else None
         metrics['gapPct']=float((last['Open']/frame['Close'].iloc[-2]-1)*100) if len(frame)>1 else None
@@ -112,6 +109,7 @@ def _stock_row(task, context, session, presets, default, memo_keys):
     row['vwapAsOfDate']=stock.get('vwap_as_of_date')
     row['peRatio']=financial_value(context,stock,{'condition':'pe_ratio'},bridge.date.fromisoformat(session),finite_number(stock.get('market_cap_crore')))[0]
     row['fnoBan']=bool(context['fno_ban_symbols'].get(symbol)) if context.get('fno_ban_available') and context.get('fno_ban_trade_date')==session else None
+    row['fnoBanAsOfDate']=context.get('fno_ban_trade_date') if context.get('fno_ban_available') else None
     row['roePct']=finite_number(stock.get('roe_percent'))
     row['freeFloatPct']=finite_number(stock.get('free_float_percent'))
     # Each distinct primitive is calculated only once per security.
@@ -129,6 +127,10 @@ def _stock_row(task, context, session, presets, default, memo_keys):
     # Frames/benchmarks remain immutable while all presets for this stock
     # reuse their underlying series, alignment and persistence state.
     with calculation_cache():
+        metrics.update(technical_metrics(stock, frame, context, session))
+        for field in ('sma20', 'sma50', 'sma200', 'ema20', 'ema50', 'ema200'):
+            row[field] = metrics.get(field, row.get(field))
+        row['daysSinceEarnings'] = metrics.get('DAYS_SINCE_EARNINGS')
         row['presetMatches']={key:evaluate(node) for key,node in presets.items()}
         default_match = evaluate(default) is True
     return row, default_match
@@ -246,7 +248,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = elapsed('stock metrics and presets', started)
     cache.save_frames(root)
     started = elapsed('history packing', started)
-    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py")]
+    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH]
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
@@ -285,7 +287,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     if not (backend/'scanner_revision.json').exists():
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
     started = elapsed('revision hashing and backend freezing', started)
-    payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'referenceCounts':{'rvol15Sma50':default_count}}
+    payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'technicalMetricsVersion':1,'referenceCounts':{'rvol15Sma50':default_count}}
     stock_bytes=write_json(generation/'stocks.json',payload)
     # Keep the full financial series out of every lightweight scanner row.
     histories = {symbol: stock["financial_statement_history"] for symbol, stock in context['stocks'].items()

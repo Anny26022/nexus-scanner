@@ -251,6 +251,8 @@ def evaluate_context_condition(frame, spec, context, result: Callable[..., Any],
         merged = _aligned_relative_strength(frame, benchmark)
         if merged is None:
             return unavailable(condition, "benchmark_history_unavailable")
+        if merged['Date'].iloc[-1] != frame['Date'].iloc[-1]:
+            return unavailable(condition, "benchmark_not_aligned_to_screen_date")
         window = int(spec.get("window", spec.get("lookback_days", 60)))
         if len(merged) <= window:
             return unavailable(condition, "insufficient_aligned_history")
@@ -259,7 +261,7 @@ def evaluate_context_condition(frame, spec, context, result: Callable[..., Any],
             benchmark_return = merged["benchmark_close"].iloc[-1] / merged["benchmark_close"].iloc[-1-window] - 1
             spread = (stock_return - benchmark_return) * 100
             target = float(spec["value"])
-            return result(condition, comparison(spread, spec["comparison"], target), round(spread, 6), benchmark=str(spec.get("benchmark", "NIFTY_50")), window=window, comparison=spec["comparison"], target=target)
+            return result(condition, comparison(spread, spec["comparison"], target), round(spread, 6), raw_value=spread, benchmark=str(spec.get("benchmark", "NIFTY_50")), window=window, comparison=spec["comparison"], target=target)
         rs = merged["rs"].tail(window)
         own_high = frame["High"].tail(window).max()
         below = (own_high - frame["Close"].iloc[-1]) / own_high * 100 if own_high else np.nan

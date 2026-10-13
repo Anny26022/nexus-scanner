@@ -17,9 +17,9 @@ const saved: Record<string, ActiveCondition> = {
 it.each([
   ['screener', saved.old, 'MA Convergence'],
   ['ipo', saved.old, 'MA Convergence'],
-  ['screener', {instanceId:'old', conditionId:'MA_STACK', parameters:{periods:'50,150,200', maType:'EMA', priceAbove:false}}, 'MA Stack (50 > 150 > 200)'],
-  ['ipo', {instanceId:'old', conditionId:'MA_STACK', parameters:{periods:'50,150,200', maType:'EMA', priceAbove:false}}, 'MA Stack (50 > 150 > 200)'],
-  ['screener', {instanceId:'old', conditionId:'trend_price_vs_ma', parameters:{maType:'EMA', maPeriod:50, operator:'above', thresholdPct:0}}, 'Price vs Moving Average'],
+  ['screener', {instanceId:'old', conditionId:'MA_STACK', parameters:{periods:'50,173,200', maType:'EMA', priceAbove:false}}, 'MA Stack'],
+  ['ipo', {instanceId:'old', conditionId:'MA_STACK', parameters:{periods:'50,173,200', maType:'EMA', priceAbove:false}}, 'MA Stack'],
+  ['screener', {instanceId:'old', conditionId:'trend_price_vs_ma', parameters:{maType:'EMA', maPeriod:173, operator:'above', thresholdPct:0}}, 'Price vs Moving Average'],
 ] as const)('preserves saved unavailable filters and blocks %s scans until explicit removal (%s)', async (mode, condition, label) => {
   const saved = {old: condition, mom_rvol: {instanceId:'rvol',conditionId:'mom_rvol',parameters:{minRvol:2,maxRvol:20}}};
   const storageKey = `nexus-scanner.${mode}.conditions.v1`;

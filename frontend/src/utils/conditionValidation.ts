@@ -2,9 +2,14 @@ import type { ActiveCondition, ParameterSpec } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 
 export function isIntegerParameter(parameter: ParameterSpec): boolean {
-  return parameter.type === 'number' && (parameter.step === 1
+  return isNumericParameter(parameter) && (parameter.step === 1
     || ['d', 'days', 'p', 'bars'].includes(parameter.unit ?? '')
     || ['minDaysAboveEMA', 'reclaimedWithin', 'minConsecutiveDays', 'shortPeriod', 'consecutive', 'minLegs'].includes(parameter.id));
+}
+
+function isNumericParameter(parameter: ParameterSpec): boolean {
+  return parameter.type === 'number' || (parameter.type === 'select'
+    && !!parameter.options?.length && parameter.options.every(option => typeof option.value === 'number'));
 }
 
 export function numericInputValue(value: string): number | string {
@@ -15,6 +20,12 @@ export function conditionValidationError(map: Record<string, ActiveCondition>): 
   for (const condition of Object.values(map)) {
     const def = NEXUS_CONDITION_CATALOG.find(item => item.id === condition.conditionId);
     if (!def) continue;
+    if (['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(condition.conditionId)) {
+      const value = condition.parameters[condition.conditionId === 'INDEX_MEMBERSHIP' ? 'indexName' : 'values'];
+      if (!(Array.isArray(value) ? value : String(value ?? '').split(',')).some(item => String(item).trim())) {
+        return `${def.label}: enter at least one value (comma-separated for multiple values).`;
+      }
+    }
     if (condition.conditionId === 'MA_CONVERGENCE') {
       const parts = String(condition.parameters.periods ?? '').split(',').map(value => value.trim());
       const periods = parts.map(Number);
@@ -25,7 +36,7 @@ export function conditionValidationError(map: Record<string, ActiveCondition>): 
       }
     }
     for (const parameter of def.parameters) {
-      if (parameter.type !== 'number') continue;
+      if (!isNumericParameter(parameter)) continue;
       const value = condition.parameters[parameter.id] ?? parameter.defaultValue;
       const integer = isIntegerParameter(parameter);
       if (String(value).trim() === '' || !Number.isFinite(Number(value))

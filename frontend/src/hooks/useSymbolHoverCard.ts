@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { companyPopoverPosition } from '../utils/companyPopoverPosition';
 
-export function useSymbolHoverCard<T extends {symbol: string}>() {
+export function useSymbolHoverCard<T extends {symbol: string}>(idPrefix = 'company-overview') {
   const [active, setActive] = useState<(ReturnType<typeof companyPopoverPosition> & {row: T; pinned: boolean}) | null>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -9,7 +9,7 @@ export function useSymbolHoverCard<T extends {symbol: string}>() {
   const cancelClose = useCallback(() => clearTimeout(timer.current), []);
   const dismiss = useCallback(() => { cancelClose(); setActive(null); }, [cancelClose]);
   const close = useCallback(() => { trigger.current?.focus(); dismiss(); }, [dismiss]);
-  const id = active ? `company-overview-${active.row.symbol}` : undefined;
+  const id = active ? `${idPrefix}-${active.row.symbol}` : undefined;
   const open = (row: T, button: HTMLButtonElement, pinned = false) => {
     cancelClose();
     trigger.current = button;
@@ -18,8 +18,8 @@ export function useSymbolHoverCard<T extends {symbol: string}>() {
   };
   const enter = (row: T, button: HTMLButtonElement) => {
     keyboardEntry.current = true;
-    open(row, button);
-    const panel = document.getElementById(`company-overview-${row.symbol}`);
+    open(row, button, true);
+    const panel = document.getElementById(`${idPrefix}-${row.symbol}`);
     if (panel) {
       keyboardEntry.current = false;
       panel.querySelector<HTMLElement>('button')?.focus();
@@ -28,7 +28,7 @@ export function useSymbolHoverCard<T extends {symbol: string}>() {
   const scheduleClose = () => {
     cancelClose();
     timer.current = setTimeout(() => setActive(current => current?.pinned ||
-      (current && document.getElementById(`company-overview-${current.row.symbol}`)?.contains(document.activeElement))
+      (current && document.getElementById(`${idPrefix}-${current.row.symbol}`)?.contains(document.activeElement))
       ? current : null), 180);
   };
 
@@ -39,12 +39,17 @@ export function useSymbolHoverCard<T extends {symbol: string}>() {
       keyboardEntry.current = false;
       document.getElementById(id)?.querySelector<HTMLElement>('button')?.focus();
     }
+    const isPinned = active?.pinned;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (!document.getElementById(id)?.contains(target) && !trigger.current?.contains(target)) dismiss();
     };
     const onScroll = (event: Event) => {
+      if (isPinned) return;
       if (!(event.target instanceof Node) || !document.getElementById(id)?.contains(event.target)) dismiss();
+    };
+    const onResize = () => {
+      if (!isPinned) dismiss();
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); close(); }
@@ -52,14 +57,14 @@ export function useSymbolHoverCard<T extends {symbol: string}>() {
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('scroll', onScroll, true);
     document.addEventListener('keydown', onKeyDown);
-    window.addEventListener('resize', dismiss);
+    window.addEventListener('resize', onResize);
     return () => {
       cancelClose();
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('scroll', onScroll, true);
       document.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('resize', dismiss);
+      window.removeEventListener('resize', onResize);
     };
-  }, [id, cancelClose, close, dismiss]);
+  }, [id, active?.pinned, cancelClose, close, dismiss]);
   return {active, id, open, enter, close, dismiss, scheduleClose, cancelClose};
 }

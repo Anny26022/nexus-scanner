@@ -221,15 +221,15 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
               : rowWindow.rows.map((row, index) => <tr key={rowWindow.first + index} aria-rowindex={rowWindow.first + index + 2}>{columnWindow.left > 0 && <td aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, columnIndex) => <td key={column.id} aria-colindex={columnWindow.first + columnIndex + 1} className={column.id === 'company' ? '' : 'numeric'}>
                 {column.id === 'company' ? <div className="company-cell"><button type="button" className="ipo-company-trigger" aria-label={`View ${row.symbol} company snapshot`}
                   aria-haspopup="dialog" aria-expanded={overview.active?.row.symbol === row.symbol}
-                  aria-controls={overview.active?.row.symbol === row.symbol ? overview.id : undefined}
-                  onMouseEnter={event => overview.open(row, event.currentTarget)} onMouseLeave={overview.scheduleClose}
-                  onFocus={event => overview.open(row, event.currentTarget)}
+                  onMouseEnter={event => { if (!phone) overview.open(row, event.currentTarget); }}
+                  onMouseLeave={() => { if (!phone) overview.scheduleClose(); }}
+                  onFocus={event => { if (!phone) overview.open(row, event.currentTarget); }}
                   onKeyDown={event => {
                     if (['ArrowDown', 'Enter', ' '].includes(event.key)) {
                       event.preventDefault(); overview.enter(row, event.currentTarget);
                     }
                   }}
-                  onBlur={event => {if (!document.getElementById(`company-overview-${row.symbol}`)?.contains(event.relatedTarget)) overview.scheduleClose();}}
+                  onBlur={event => {if (!phone && !document.getElementById(`company-overview-${row.symbol}`)?.contains(event.relatedTarget)) overview.scheduleClose();}}
                   onClick={event => overview.active?.row.symbol === row.symbol && overview.active.pinned
                     ? overview.dismiss() : overview.open(row, event.currentTarget, true)}>
                     <SymbolWithLogo symbol={row.symbol} name={row.name} badge={row.isFno && <span className="fno-label">F&amp;O</span>} /></button>

@@ -32,7 +32,7 @@ const ScreenerAppContent: React.FC = () => {
   return (
     <div className="app-frame">
       <a href="#workspace" className="skip-link">Skip to results workspace</a>
-      <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Navbar activeTab={activeTab} onTabChange={setActiveTab} sessionDate={selectedAsOfDate} />
 
       <main id="workspace" className="workspace" tabIndex={-1}>
         <div className="workspace-heading">

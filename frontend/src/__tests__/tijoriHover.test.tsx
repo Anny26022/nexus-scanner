@@ -72,3 +72,19 @@ it.each(['ArrowDown', 'Enter', ' '])('enters the portal with %s and restores tri
   expect(trigger).toHaveFocus();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
+
+it('opens on phone tap and remains visible during table scrolling when pinned', async () => {
+  vi.mocked(getTijoriOverviews).mockResolvedValue({TEST: report});
+  const media = {matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn()};
+  vi.stubGlobal('matchMedia', () => media);
+  try {
+    mount();
+    const trigger = screen.getByRole('button', {name: 'View TEST company snapshot'});
+    fireEvent.click(trigger);
+    expect(await screen.findByText('Makes industrial equipment.')).toBeInTheDocument();
+    fireEvent.scroll(screen.getByLabelText('Equity results table, scroll for more columns'));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

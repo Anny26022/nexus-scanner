@@ -61,7 +61,8 @@ def prepare_filing_archives(root, directory, *, compressed_classified=None):
                       and _copy_archive_payload(compressed_classified, temporary))
             if not reused:
                 with source.open('rb') as incoming, temporary.open('wb') as outgoing:
-                    with gzip.GzipFile(fileobj=outgoing, mode='wb', mtime=0, filename='') as packed:
+                    with gzip.GzipFile(fileobj=outgoing, mode='wb', mtime=0, filename='',
+                                       compresslevel=6 if name == 'raw' else 9) as packed:
                         shutil.copyfileobj(incoming, packed)
             digest = file_digest(temporary)
             temporary.replace(directory / (digest + '.json.gz'))

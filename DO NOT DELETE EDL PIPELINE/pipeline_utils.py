@@ -255,8 +255,8 @@ def post_json(url, payload, include_origin=False, timeout=30, retries=2, backoff
     raise last_error
 
 
-def fetch_scanx_data(payload, timeout=30):
+def fetch_scanx_data(payload, timeout=30, *, retries=2):
     """Fetch a list from the shared ScanX customscan endpoint."""
-    data = post_json(SCANX_FETCH_URL, payload, include_origin=True, timeout=timeout)
+    data = post_json(SCANX_FETCH_URL, payload, include_origin=True, timeout=timeout, retries=retries)
     rows = data.get("data", [])
     return rows if isinstance(rows, list) else []

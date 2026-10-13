@@ -47,7 +47,7 @@ def build_master_map(stocks):
             })
     return sorted(master_map, key=lambda x: x["Symbol"])
 
-def fetch_market_snapshot():
+def fetch_market_snapshot(*, retries=2):
     # Payload as specified by the user
     # Trying a large count to get "all available" in one call as requested
     payload = {
@@ -65,7 +65,7 @@ def fetch_market_snapshot():
             "sort": "Mcap"
         }
     }
-    return fetch_scanx_data(payload, timeout=30)
+    return fetch_scanx_data(payload, timeout=30, retries=retries)
 
 
 def fetch_all_dhan_data():

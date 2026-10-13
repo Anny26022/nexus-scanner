@@ -39,7 +39,7 @@ def main():
         print(f"Retrying one market snapshot for inconsistent quotes: {', '.join(row['symbol'] for row in rejected)}")
         affected = {row['symbol'] for row in rejected}
         try:
-            retry = fetch_market_snapshot()
+            retry = fetch_market_snapshot(retries=0)  # Already a corrective fetch; no nested HTTP retries.
             report['retry_received_at'] = datetime.now(timezone.utc).isoformat()
             report['retry_quotes'] = [row for row in retry if row.get('Sym') in affected]
             # A different listing/security must never replace the original quote.

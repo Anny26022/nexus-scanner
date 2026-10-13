@@ -171,7 +171,8 @@ def prepare_archives(chart_root):
             temporary = Path(folder) / 'archive.json.gz'
             opener = gzip.open if source.suffix == '.gz' else open
             with opener(source, 'rb') as incoming, temporary.open('wb') as outgoing:
-                with gzip.GzipFile(fileobj=outgoing, mode='wb', mtime=0, filename='') as packed:
+                with gzip.GzipFile(fileobj=outgoing, mode='wb', mtime=0, filename='',
+                                   compresslevel=6 if name == 'raw' else 9) as packed:
                     shutil.copyfileobj(incoming, packed)
             digest = file_digest(temporary)
             destination = chart_root / 'objects' / f'{digest}.json.gz'
@@ -215,7 +216,11 @@ class R2Store:
 
     def run(self, *args):
         # R2 can return 501 to rclone's post-PUT HEAD; bulk uploads get a download check.
-        subprocess.run(['rclone', *args, '--s3-no-check-bucket', '--s3-no-head'], env=self.env, check=True)
+        started = time.perf_counter()
+        try:
+            subprocess.run(['rclone', *args, '--s3-no-check-bucket', '--s3-no-head'], env=self.env, check=True)
+        finally:
+            print(f'R2 {args[0]} elapsed: {time.perf_counter() - started:.2f}s', flush=True)
 
     def remote(self, key):
         return f'charts:{self.bucket}/{key}'
@@ -225,15 +230,17 @@ class R2Store:
         self.run('copy', str(source), self.remote(key), '--include', '*.json.gz',
                  '--transfers', '16', '--metadata', '--metadata-set', 'content-type=application/gzip',
                  '--metadata-set', 'cache-control=public,max-age=31536000,immutable', '--immutable', '--checksum')
-        self.run('check', str(source), self.remote(key), '--include', '*.json.gz', '--one-way', '--download')
+        self.run('check', str(source), self.remote(key), '--include', '*.json.gz', '--one-way', '--download', '--checkers', '16')
         self.run('copyto', str(source / 'index.json'), self.remote(key + '/index.json'), '--immutable', '--checksum')
 
     def upload_objects(self, source):
         """List once; transfer and read back only new content-addressed files."""
         remote = self.remote('objects')
+        started = time.perf_counter()
         listing = subprocess.run(['rclone', 'lsf', remote, '--files-only', '--format', 'ps',
                                   '--separator', '\t', '--s3-no-check-bucket'],
                                  env=self.env, check=True, capture_output=True, text=True)
+        print(f'R2 object listing elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         existing = {}
         for line in listing.stdout.splitlines():
             name, size = line.rsplit('\t', 1)
@@ -245,6 +252,7 @@ class R2Store:
                     raise RuntimeError('Immutable remote object has a different size: ' + file.name)
             else:
                 new.append(file.name)
+        print(f'R2 objects: {len(new)} new; {len(existing)} already stored', flush=True)
         if not new:
             return
         with tempfile.TemporaryDirectory() as folder:
@@ -253,13 +261,13 @@ class R2Store:
             self.run('copy', str(source), remote, '--files-from', str(names), '--transfers', '16',
                      '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
                      '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
-            self.run('check', str(source), remote, '--files-from', str(names), '--one-way', '--download')
+            self.run('check', str(source), remote, '--files-from', str(names), '--one-way', '--download', '--checkers', '16')
 
     def archive(self, previous, month):
         source = previous['chartObjectPrefix']
         target = f'monthly/{month}/{previous["chartRevision"]}/charts'
         self.run('copy', self.remote(source), self.remote(target), '--immutable', '--checksum')
-        self.run('check', self.remote(source), self.remote(target), '--one-way', '--download')
+        self.run('check', self.remote(source), self.remote(target), '--one-way', '--download', '--checkers', '16')
         archived = dict(previous, chartObjectPrefix=target,
                         chartUrlTemplate=f'{self.base_url}/{target}/{{symbol}}.json.gz')
         self.write_release(archived, f'monthly/{month}/{previous["chartRevision"]}/releases/{previous["revision"]}.json')

@@ -8,11 +8,11 @@ from pipeline_utils import http_session
 import sys
 import time
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, date, time as day_time, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from ohlcv_utils import discard_weekend_rows, is_nse_cash_session, merge_rows_by_date, nse_calendar_date, read_ohlcv_csv, rows_from_tick_data, write_ohlcv_csv
+from ohlcv_utils import discard_weekend_rows, merge_rows_by_date, nse_calendar_date, nse_now, NSE_TIMEZONE, read_ohlcv_csv, rows_from_tick_data, write_ohlcv_csv
 from pipeline_utils import ensure_dir, get_headers, load_json, resolve_path
 
 # --- Configuration ---
@@ -55,26 +55,39 @@ def fetch_chunk(payload):
     raise RuntimeError("Index OHLCV chunk failed after retries") from last_error
 
 
-def has_current_equity_session(directory, session, symbols=None):
-    """Whether the stock feed has a trustworthy current NSE session.
+def equity_session(directory, symbols, now=None):
+    """Latest stock session, only when >=90% of the current universe covers it."""
+    if not symbols:
+        return None
+    sessions = Counter()
+    today = nse_calendar_date(now)
+    for symbol in symbols:
+        rows = read_ohlcv_csv(Path(directory) / f'{symbol}.csv')
+        try:
+            session = date.fromisoformat(rows[-1]['Date']).isoformat()
+        except (IndexError, KeyError, TypeError, ValueError):
+            continue
+        if session <= today:
+            sessions[session] += 1
+    latest = max(sessions, default=None)
+    return latest if latest and sessions[latest] / len(symbols) >= MIN_CURRENT_EQUITY_COVERAGE else None
 
-    The index tick-history endpoint can lag its cash-market snapshot after
-    close.  We only label that snapshot as today's index candle when the same
-    provider has already produced today's daily candle for almost the complete
-    equity universe.  This prevents a prior close becoming a holiday candle.
-    """
-    paths = (
-        [Path(directory) / f"{symbol}.csv" for symbol in symbols]
-        if symbols is not None else list(Path(directory).glob("*.csv"))
-    )
-    if not paths:
+
+def snapshot_matches_session(fetched_at, session, now=None):
+    """Do not assign a snapshot captured after the next market opening backwards."""
+    try:
+        captured = datetime.fromisoformat(fetched_at)
+        if captured.tzinfo is None:
+            return False
+        captured = nse_now(captured)
+        day = date.fromisoformat(session)
+    except (TypeError, ValueError):
         return False
-    current = 0
-    for path in paths:
-        rows = read_ohlcv_csv(path)
-        if rows and rows[-1].get("Date") == session:
-            current += 1
-    return current / len(paths) >= MIN_CURRENT_EQUITY_COVERAGE
+    next_day = day + timedelta(days=1)
+    while next_day.weekday() >= 5:
+        next_day += timedelta(days=1)
+    return (day.weekday() < 5 and datetime.combine(day, day_time(9, 15), NSE_TIMEZONE) <= captured
+            < datetime.combine(next_day, day_time(9, 15), NSE_TIMEZONE) and captured <= nse_now(now))
 
 def main():
     ensure_dir(OUTPUT_DIR)
@@ -87,18 +100,22 @@ def main():
 
     tasks = []
     global_start_ts = 215634600 # 1976
-    global_end_ts = int(time.time())
-    today_str = nse_calendar_date()
+    now = nse_now()
     try:
         current_symbols = {
             str(item.get("Symbol") or "") for item in load_json(MASTER_FILE)
             if item.get("Symbol")
         }
     except (OSError, ValueError, TypeError):
-        current_symbols = None
-    append_live_snapshot = is_nse_cash_session() or has_current_equity_session(
-        resolve_path("ohlcv_data"), today_str, current_symbols
-    )
+        print('Error: current stock universe unavailable; index sync stopped.')
+        return False
+    session = equity_session(resolve_path("ohlcv_data"), current_symbols, now)
+    if session is None:
+        print('Error: no latest stock session has 90% history coverage; index sync stopped.')
+        return False
+    global_end_ts = min(int(now.timestamp()), int(datetime.combine(
+        date.fromisoformat(session) + timedelta(days=1), day_time(), NSE_TIMEZONE).timestamp()) - 1)
+    print(f'Index target session from stock histories: {session}.')
     
     existing_data_cache = {}
     safe_symbol_counts = Counter(
@@ -127,13 +144,13 @@ def main():
             try:
                 existing_data_cache[safe_sym] = rows
                 last_row_date = rows[-1]["Date"]
-                last_dt = datetime.strptime(last_row_date, "%Y-%m-%d")
+                last_dt = datetime.strptime(last_row_date, "%Y-%m-%d").replace(tzinfo=NSE_TIMEZONE)
                 target_start = int(last_dt.timestamp()) + 86400
             except Exception:
                 pass
 
-        # Only crawl if there's a gap before today
-        if target_start < global_end_ts - 86400:
+        # Include a single missing completed session, not just multi-day gaps.
+        if target_start < global_end_ts:
             current_end = global_end_ts
             while current_end > target_start:
                 c_start = max(target_start, current_end - (CHUNK_DAYS * 86400))
@@ -171,12 +188,13 @@ def main():
         fetched_rows = new_data.get(safe_sym, [])
         all_rows = base_rows + fetched_rows
         
-        # 2. Add TODAY'S snapshot from all_indices_list.json
-        # Ltp is Close for the running day
+        # Dated provider candles win. Undated snapshots need capture-time evidence
+        # that the next market session had not opened yet (including midnight).
         live_rows = []
-        if append_live_snapshot:
+        if snapshot_matches_session(idx.get('SnapshotFetchedAt'), session, now) and not any(
+                row.get('Date') == session for row in fetched_rows):
             live_rows.append({
-                'Date': today_str,
+                'Date': session,
                 'Open': idx.get('Open'),
                 'High': idx.get('High'),
                 'Low': idx.get('Low'),
@@ -190,7 +208,7 @@ def main():
     if failed_chunks:
         print(f"Error: {failed_chunks} index history chunk(s) failed after retries.")
         return False
-    print("Successfully updated all index CSVs with Today's Live data.")
+    print(f"Index sync completed for stock session {session}; publication checks still apply.")
     return True
 
 if __name__ == "__main__":

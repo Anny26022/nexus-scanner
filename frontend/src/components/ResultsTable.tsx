@@ -10,6 +10,8 @@ import { useSymbolHoverCard } from '../hooks/useSymbolHoverCard';
 import { TijoriDetailsCard } from './TijoriDetailsCard';
 import { useTableWindow } from '../hooks/useTableWindow';
 import { useColumnWindow } from '../hooks/useColumnWindow';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
+import { tableLayout } from '../utils/tableLayout';
 
 interface ResultsTableProps {
   symbolSearch?: string;
@@ -140,18 +142,16 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const [columnGroup, setColumnGroup] = useState<ColumnGroup>('Overview');
   const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>('nexus-scanner.screener.columns.v1', DEFAULT_COLUMNS);
   const selectedColumnIds = Array.isArray(savedColumnIds) ? savedColumnIds : DEFAULT_COLUMNS;
-  const visibleColumns = columns.filter(column => column.id === 'company' || selectedColumnIds.includes(column.id));
+  const phone = usePhoneLayout();
+  const usingCustomColumns = selectedColumnIds.length !== DEFAULT_COLUMNS.length || DEFAULT_COLUMNS.some(id => !selectedColumnIds.includes(id));
+  const layout = tableLayout(columns.filter(column => column.id === 'company' || selectedColumnIds.includes(column.id)), 'screener', phone, usingCustomColumns);
+  const visibleColumns = layout.columns;
   const customizableColumns = columns.filter(column => column.id !== 'company');
   const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerColumns = columnSearch.trim() ? matchingColumns : customizableColumns.filter(column => column.group === columnGroup);
-  const usingCustomColumns = selectedColumnIds.length !== DEFAULT_COLUMNS.length || DEFAULT_COLUMNS.some(id => !selectedColumnIds.includes(id));
-  const tableWidth = usingCustomColumns
-    ? Math.max(1120, visibleColumns.reduce((width, column) => width + (column.id === 'company' ? 240 : column.id === 'sector' ? 180 : 150), 0))
-    : 1120;
   const scrollRef = useRef<HTMLDivElement>(null);
-  const columnWindow = useColumnWindow(visibleColumns,
-    column => column.id === 'company' ? 240 : column.id === 'sector' ? 180 : 150,
-    usingCustomColumns && visibleColumns.length > 20, scrollRef);
+  const columnWindow = useColumnWindow(visibleColumns, layout.widthOf,
+    !phone && usingCustomColumns && visibleColumns.length > 20, scrollRef);
   const renderedColumns = columnWindow.columns;
   const columnSpan = renderedColumns.length + Number(columnWindow.left > 0) + Number(columnWindow.right > 0);
   const overview = useSymbolHoverCard<ScreenerRunResponse['rows'][number]>();
@@ -203,10 +203,10 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
     <div className="table-viewport" aria-busy={busy}>
       <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
-        <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={{width: usingCustomColumns ? `${tableWidth}px` : '100%', minWidth: `${tableWidth}px`}}>
+        <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
           <caption className="sr-only">Equities matching the current screen</caption>
-          <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: usingCustomColumns ? column.id === 'company' ? '240px' : column.id === 'sector' ? '180px' : '150px' : column.width}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
-          <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
+          <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: layout.columnWidth(column)}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
+          <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} data-column={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
             aria-sort={column.sortField ? currentSort?.field === column.sortField ? currentSort.direction === 'asc' ? 'ascending' : 'descending' : 'none' : undefined}>
             {column.sortField ? <button type="button" disabled={busy} onClick={() => {resetScroll(); onSortChange(column.sortField!, currentSort?.field === column.sortField && currentSort?.direction === 'asc' ? 'desc' : 'asc');}}>
               {column.label}{currentSort?.field === column.sortField ? currentSort?.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} /> : <ArrowUpDown size={13} />}
@@ -221,15 +221,15 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
               : rowWindow.rows.map((row, index) => <tr key={rowWindow.first + index} aria-rowindex={rowWindow.first + index + 2}>{columnWindow.left > 0 && <td aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, columnIndex) => <td key={column.id} aria-colindex={columnWindow.first + columnIndex + 1} className={column.id === 'company' ? '' : 'numeric'}>
                 {column.id === 'company' ? <div className="company-cell"><button type="button" className="ipo-company-trigger" aria-label={`View ${row.symbol} company snapshot`}
                   aria-haspopup="dialog" aria-expanded={overview.active?.row.symbol === row.symbol}
-                  aria-controls={overview.active?.row.symbol === row.symbol ? overview.id : undefined}
-                  onMouseEnter={event => overview.open(row, event.currentTarget)} onMouseLeave={overview.scheduleClose}
-                  onFocus={event => overview.open(row, event.currentTarget)}
+                  onMouseEnter={event => { if (!phone) overview.open(row, event.currentTarget); }}
+                  onMouseLeave={() => { if (!phone) overview.scheduleClose(); }}
+                  onFocus={event => { if (!phone) overview.open(row, event.currentTarget); }}
                   onKeyDown={event => {
                     if (['ArrowDown', 'Enter', ' '].includes(event.key)) {
                       event.preventDefault(); overview.enter(row, event.currentTarget);
                     }
                   }}
-                  onBlur={event => {if (!document.getElementById(`company-overview-${row.symbol}`)?.contains(event.relatedTarget)) overview.scheduleClose();}}
+                  onBlur={event => {if (!phone && !document.getElementById(`company-overview-${row.symbol}`)?.contains(event.relatedTarget)) overview.scheduleClose();}}
                   onClick={event => overview.active?.row.symbol === row.symbol && overview.active.pinned
                     ? overview.dismiss() : overview.open(row, event.currentTarget, true)}>
                     <SymbolWithLogo symbol={row.symbol} name={row.name} badge={row.isFno && <span className="fno-label">F&amp;O</span>} /></button>

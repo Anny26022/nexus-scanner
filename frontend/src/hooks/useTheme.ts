@@ -1,18 +1,11 @@
-import { useLayoutEffect, useSyncExternalStore } from 'react';
+import { useLayoutEffect } from 'react';
 import { useLocalStorageState } from './useLocalStorageState';
 
-type Theme = 'system' | 'light' | 'dark';
-const media = () => window.matchMedia('(prefers-color-scheme: dark)');
-const subscribe = (notify: () => void) => {
-  const query = media();
-  query.addEventListener('change', notify);
-  return () => query.removeEventListener('change', notify);
-};
+type Theme = 'light' | 'dark';
 export function useTheme() {
-  const [choice, setChoice] = useLocalStorageState<Theme>('nexus-scanner.ui.theme.v1', 'system');
-  const dark = useSyncExternalStore(subscribe, () => media().matches, () => false);
-  const theme = choice === 'system' ? dark ? 'dark' : 'light' : choice;
+  const [savedChoice, setChoice] = useLocalStorageState<Theme>('nexus-scanner.ui.theme.v1', 'light');
+  const choice = savedChoice === 'dark' ? 'dark' : 'light';
   // External DOM synchronization includes portal surfaces as well as the app.
-  useLayoutEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
+  useLayoutEffect(() => { document.documentElement.dataset.theme = choice; }, [choice]);
   return { choice, setChoice };
 }

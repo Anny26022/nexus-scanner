@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ResultsTable } from '../components/ResultsTable';
 import { Pagination } from '../components/Pagination';
@@ -12,6 +12,25 @@ const row = {symbol: 'AVTNPL', name: 'Avt Natural Products', sector: 'FMCG', ind
   close: 94.78, changePct: 10.92, rvol: 19.22, marketCapCrore: 1443, rsRating: 87, rsi14: 57.99, deliveryPct: null} as StockRow;
 const data = {rows: [row], matchCount: 16, totalUniverseCount: 2600, page: 1, pageSize: 15, immutableRevision: request.datasetRevision} as ScreenerRunResponse;
 const props = {isLoading: false, isError: false, onPageChange: vi.fn(), onSortChange: vi.fn()};
+
+it('leads with quotes only on phones and restores desktop order without changing saved columns', () => {
+  localStorage.removeItem('nexus-scanner.screener.columns.v1');
+  let notify = () => {};
+  const media = {matches:true, addEventListener:vi.fn((_type:string, listener:() => void) => {notify=listener;}), removeEventListener:vi.fn()};
+  vi.stubGlobal('matchMedia', () => media);
+  try {
+    const view = render(<ResultsTable {...props} data={data} />);
+    const headings = () => screen.getAllByRole('columnheader').map(header => header.textContent);
+    expect(headings().slice(0,3)).toEqual(['Company','Close price','1D return']);
+    expect(view.container.querySelector('col')).toHaveStyle({width:'176px'});
+    expect(localStorage.getItem('nexus-scanner.screener.columns.v1')).toBeNull();
+    act(() => {media.matches=false; notify();});
+    expect(headings().slice(0,3)).toEqual(['Company','Sector / industry','Close price']);
+    expect(view.container.querySelector('col')).toHaveStyle({width:'24%'});
+    view.unmount();
+    expect(media.removeEventListener).toHaveBeenCalledWith('change', expect.any(Function));
+  } finally {cleanup(); vi.unstubAllGlobals();}
+});
 
 it('reuses page slots while replacing company identity, actions, and logo fallback state', () => {
   const view = render(<ResultsTable {...props} data={data} />);
@@ -96,6 +115,30 @@ it('selects all available columns from the compact column chooser', () => {
   expect(screen.getByRole('columnheader', {name: 'Data completeness'})).toBeInTheDocument();
   view.unmount();
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+});
+
+it('keeps company and filing controls mounted when a wide phone table is swiped to its end', () => {
+  localStorage.removeItem('nexus-scanner.screener.columns.v1');
+  vi.stubGlobal('matchMedia', () => ({matches:true,addEventListener:vi.fn(),removeEventListener:vi.fn()}));
+  try {
+    const manyRows = Array.from({length:100}, (_, index) => ({...row,symbol:`STOCK${index}`}));
+    const view = render(<ResultsTable {...props} data={{...data,rows:manyRows,pageSize:100,matchCount:100}} />);
+    fireEvent.click(screen.getByRole('button', {name:'Customize columns'}));
+    fireEvent.click(screen.getByRole('button', {name:'Select all'}));
+    fireEvent.click(screen.getByRole('button', {name:'Close column customization'}));
+    const count = screen.getAllByRole('columnheader').length;
+    expect(count).toBeGreaterThan(20);
+    const tableScroll = screen.getByLabelText('Equity results table, scroll for more columns');
+    Object.defineProperty(tableScroll,'clientWidth',{value:390,configurable:true});
+    fireEvent.scroll(tableScroll, {target:{scrollLeft:16400}});
+    expect(screen.getAllByRole('columnheader')).toHaveLength(count);
+    expect(screen.getByRole('columnheader', {name:'Company'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name:'View STOCK0 company snapshot'})).toBeInTheDocument();
+    expect(screen.getByRole('button', {name:'View STOCK0 announcements'})).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', {name:'Data completeness'})).toBeInTheDocument();
+    // Vertical row windowing is still bounded, even with every column selected.
+    expect(view.container.querySelectorAll('tbody tr:not(.table-spacer)')).toHaveLength(22);
+  } finally {cleanup(); vi.unstubAllGlobals(); localStorage.removeItem('nexus-scanner.screener.columns.v1');}
 });
 
 it('lets the default table fill its viewport again after resetting a custom column layout', () => {

@@ -17,12 +17,15 @@ HISTORY_SOURCES = {
 }
 
 
-def normalize_statement_history(raw, observed_on):
-    """Retain consolidated period-aligned series; observation is not filing date."""
-    history = {"source": "ScanX", "report_type": "CONSOLIDATED",
+def normalize_statement_history(raw, observed_on, report_type="CONSOLIDATED"):
+    """Retain both bases; existing top-level series remain consolidated."""
+    history = {"source": "ScanX", "report_type": report_type,
                "amount_unit": "INR_CRORE", "metric_units": {"eps": "INR_PER_SHARE", "opm": "PERCENT"},
                "observed_on": observed_on}
     for frequency, source in HISTORY_SOURCES.items():
+        if report_type == "STANDALONE":
+            source = {"incomeStat_cq": "incomeStat_sq", "incomeStat_cy": "incomeStat_sy",
+                      "bs_c": "bs_s", "cF_c": "cF_s"}[source]
         statement = raw.get(source) or {}
         periods = str(statement.get("YEAR") or "").split("|")
         columns = {key: str(value if value is not None else "").split("|") for key, value in statement.items() if key != "YEAR"}
@@ -48,6 +51,9 @@ def normalize_statement_history(raw, observed_on):
                 row[name] = finite_number(values[index]) if len(values) == len(periods) else None
             rows[end] = row
         history[frequency] = sorted(rows.values(), key=lambda row: row["period_end"])
+    if report_type == "CONSOLIDATED" and any(raw.get(key) for key in
+            ("incomeStat_sq", "incomeStat_sy", "bs_s", "cF_s")):
+        history["standalone"] = normalize_statement_history(raw, observed_on, "STANDALONE")
     return history
 
 
@@ -109,7 +115,7 @@ def statement_rows(context, stock, spec, as_of):
     # The ledger contains current numeric revisions. Historical use requires
     # an explicit observation date; a filing timestamp alone is insufficient.
     current = context.get("financial_history_as_of") == as_of.isoformat()
-    eligible = [r for r in rows if str(r.get("filing_date", ""))[:10] <= as_of.isoformat()
+    eligible = [r for r in rows if r.get("filing_date") and str(r["filing_date"])[:10] <= as_of.isoformat()
                 and (current or (r.get("observed_on") and str(r["observed_on"])[:10] <= as_of.isoformat()))]
     requested = str(spec.get("report_type", "PREFER_CONSOLIDATED")).upper()
     if requested not in {"PREFER_CONSOLIDATED", "CONSOLIDATED", "STANDALONE"}:

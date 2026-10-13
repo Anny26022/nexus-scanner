@@ -7,6 +7,7 @@ const fixtures = vi.hoisted(() => {
     getIpoCatalogue: vi.fn(async () => ({records: [], details: {}})),
     compareSymbols: vi.fn(async () => ({})), getCurrentRevision: vi.fn(async () => ({revision: 'test'})),
     getChart: vi.fn(async () => ({symbol: 'TEST'})),
+    getFinancialHistory: vi.fn(async () => ({symbol: 'TEST'})),
     getAnnouncementIndex: vi.fn(async () => ({})), getAnnouncementTopics: vi.fn(async () => []),
     getAnnouncements: vi.fn(async () => ({})), getAnnouncementHistory: vi.fn(async () => ({})),
     getAnnouncementDetail: vi.fn(async () => ({})),

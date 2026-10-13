@@ -336,6 +336,41 @@ def complete_release(chart_root, output, manifest, store=None):
     return manifest
 
 
+def prepare_financial_objects(chart_root, output, manifest):
+    """Reuse unchanged company data; observation dates belong to the release."""
+    from announcement_artifacts import put_object
+    history_path = output / 'revisions' / manifest['revision'] / 'financial-history.json.gz'
+    if not history_path.is_file():
+        return {}
+    with gzip.open(history_path, 'rt') as handle:
+        histories = json.load(handle)
+    frozen = chart_root.parent / '.scanner_cache' / 'revisions' / manifest['revision']
+    ledger_path = frozen / 'quarterly_financial_history.json.gz'
+    filings = {}
+    if ledger_path.is_file():
+        with gzip.open(ledger_path, 'rt') as handle:
+            ledger = json.load(handle)
+        for row in ledger.get('records', []):
+            if row.get('filing_url') or row.get('result_disclosures'):
+                filings.setdefault(row['symbol'], []).append({key: row.get(key) for key in (
+                    'quarter_end', 'report_type', 'filing_date', 'filing_url',
+                    'filing_descriptor', 'filing_caption', 'result_disclosures')})
+    lookup = {}
+    for symbol, history in sorted(histories.items()):
+        values = {key: value for key, value in history.items() if key != 'observed_on'}
+        if 'standalone' in values:
+            values['standalone'] = {key: value for key, value in values['standalone'].items()
+                                    if key != 'observed_on'}
+        payload = {'schemaVersion': 1, 'symbol': symbol, 'history': values,
+                   'resultFilings': filings.get(symbol, [])}
+        digest = put_object(chart_root / 'objects', payload)
+        if file_digest(chart_root / 'objects' / (digest + '.json.gz')) != digest:
+            raise RuntimeError('Financial object content does not match its hash')
+        lookup[symbol] = {'history': digest,
+                          'observedOn': history.get('observed_on')}
+    return lookup
+
+
 def complete_object_release(chart_root, output, manifest, store=None):
     started = time.perf_counter()
     revision = chart_revision(chart_root, manifest['sessionDate'])
@@ -359,6 +394,9 @@ def complete_object_release(chart_root, output, manifest, store=None):
     archives = prepare_archives(chart_root)
     print(f'Archive preparation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = dict(index, archives=archives)
+    financial_lookup = prepare_financial_objects(chart_root, output, manifest)
+    if financial_lookup:
+        index['financialLookup'] = financial_lookup
     if store:
         base = store.base_url
         started = time.perf_counter()

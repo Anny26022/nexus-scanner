@@ -163,8 +163,10 @@ See the [calculation guide](../README.md#calculation-conventions-and-formulas) a
 
 ### ScanX financial history
 
-The existing fundamental fetch and normalization stages retain consolidated annual,
-quarterly, balance-sheet and cash-flow series aligned by period end. Statement
+The existing fundamental fetch and normalization stages retain annual,
+quarterly, balance-sheet and cash-flow series aligned by period end. Consolidated
+series keep their existing top-level keys; available standalone series are retained
+under `standalone`, with their own statement basis. Statement
 amounts in this history are INR crore, EPS is rupees per share, and OPM is percent.
 The recorded `observed_on` is the fetch date in India, not an original filing date.
 Historical queries cannot use a series before its recorded observation date.
@@ -178,7 +180,26 @@ four quarters needed for growth are missing.
 
 Full series are published separately as immutable `financial-history.json.gz`,
 keyed by symbol and linked by the manifest's `financialHistoryUrl`. Lightweight
-stock rows do not embed the full series. Python text-query evaluation supports:
+stock rows do not embed the full series. New object releases additionally expose
+`financialLookup` in the existing data index. Each entry identifies a compressed
+company object plus its observation date. `screenerApi.getFinancialHistory(symbol,
+revision?)` loads that company on demand through the existing immutable object cache;
+older releases fall back to their aggregate history file. Observation dates live in
+the index so unchanged company objects can be reused after another fetch.
+
+Company objects retain statement values/units and result filing references.
+The quarterly ledger keeps numeric quarters independently of filing matches.
+Only an actual results disclosure or an explicit approving board outcome can supply
+a filing date/link, and the statement basis must be stated in the available text.
+Advance notices, trading-window notices and ancillary publications are excluded.
+An explicit results filing takes priority over an accompanying board outcome.
+Multiple distinct primary documents leave the date/link null while retaining
+candidate disclosures, including revisions. Missing dates remain excluded from
+dated scanner calculations. Current provider values are not an original point-in-time
+financial archive. Revenue from operations is `sales`; `revenue` includes other
+income, and `operating_profit` remains distinct from `ebitda`.
+
+Python text-query evaluation supports:
 
 ```text
 TTM Revenue Growth >= 15

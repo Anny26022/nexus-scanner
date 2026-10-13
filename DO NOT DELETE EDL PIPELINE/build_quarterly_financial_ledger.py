@@ -1,9 +1,9 @@
-"""Publish dated quarterly fundamentals without inventing filing dates.
+"""Publish quarterly fundamentals with independently verified filing references.
 
 ScanX's fundamental response supplies the numeric quarterly series while its
 LODR/company-filings feeds supply the time a result was disclosed.  Neither
-source alone is enough for an auditable historical ledger, so this joins only
-unambiguous quarter ends to result disclosures.  The source statement type is
+source alone proves when current numeric revisions became public. Keep numeric
+quarters even when a result disclosure cannot be verified. The statement type is
 kept explicit: a standalone figure never silently substitutes for a missing
 consolidated figure.
 """
@@ -22,10 +22,9 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from pipeline_utils import BASE_DIR, load_json, save_json
+from edl_pipeline.scanner.financials import normalize_statement_history
 
 
-STATEMENTS = (("incomeStat_cq", "CONSOLIDATED"), ("incomeStat_sq", "STANDALONE"))
-METRICS = ("REVENUE", "SALES", "NET_PROFIT", "PROFIT_BEFORE_TAX", "EPS", "OPM", "EBITDA")
 RESULT_TERMS = ("financial results", "financial result", "unaudited financial", "audited financial")
 DATE_PATTERNS = (
     re.compile(r"(?:quarter|quarterly|results?).{0,120}?(?:ended|ending)\s*(?:on\s*)?"
@@ -51,20 +50,33 @@ def _quarter_end(text: str) -> str | None:
 
 def _is_result(filing: dict) -> bool:
     text = " ".join(str(filing.get(key) or "") for key in ("descriptor", "caption", "news_body")).lower()
-    return any(term in text for term in RESULT_TERMS)
+    title = " ".join(str(filing.get(key) or "") for key in ("descriptor", "caption")).lower()
+    excluded = ("trading window", "intimation", "newspaper", "presentation", "conference call",
+                "earnings call", "notice of board", "board meeting notice", "will consider",
+                "to consider", "scheduled to", "proposes to", "prior intimation")
+    if any(term in title for term in excluded) or not any(term in text for term in RESULT_TERMS):
+        return False
+    if "outcome" in title:
+        return re.search(r"\b(?:approved|adopted|taken on record)\b", text) is not None
+    return any(term in title for term in RESULT_TERMS)
 
 
-def _filing_candidates(filings: list[dict]) -> dict[str, dict]:
-    """Return the first actual disclosure for each stated quarter end."""
-    candidates: dict[str, list[dict]] = defaultdict(list)
+def _filing_candidates(filings: list[dict]) -> dict[tuple[str, str], list[dict]]:
+    """Keep actual disclosures by quarter/basis; multiple documents are ambiguous."""
+    candidates = defaultdict(list)
     seen = set()
-    for filing in filings:
-        if not isinstance(filing, dict) or not _is_result(filing):
+    for filing in sorted((row for row in filings if isinstance(row, dict)),
+                         key=lambda row: str(row.get("news_date") or "")):
+        if not _is_result(filing):
             continue
         text = " ".join(str(filing.get(key) or "") for key in ("descriptor", "caption", "news_body"))
         quarter_end = _quarter_end(text)
         published = str(filing.get("news_date") or "")
-        if not quarter_end or not published:
+        try:
+            disclosed = datetime.fromisoformat(published.replace("Z", "+00:00")).date()
+        except ValueError:
+            continue
+        if not quarter_end or disclosed.isoformat() < quarter_end:
             continue
         # LODR and the legacy feed frequently expose the same attachment under
         # different ids.  Its URL is the strongest available duplicate key.
@@ -72,26 +84,11 @@ def _filing_candidates(filings: list[dict]) -> dict[str, dict]:
         if key in seen:
             continue
         seen.add(key)
-        candidates[quarter_end].append(filing)
-    return {
-        quarter: min(rows, key=lambda row: str(row.get("news_date") or ""))
-        for quarter, rows in candidates.items()
-    }
-
-
-def _series(statement: dict, metric: str) -> list[str]:
-    value = statement.get(metric)
-    return str(value).split("|") if value not in (None, "") else []
-
-
-def _value(statement: dict, metric: str, index: int):
-    values = _series(statement, metric)
-    if index >= len(values) or values[index] in ("", "-", "N/A"):
-        return None
-    try:
-        return float(values[index].replace(",", ""))
-    except ValueError:
-        return None
+        # A shared quarter/date does not prove the PDF contains both statements.
+        for basis in ("CONSOLIDATED", "STANDALONE"):
+            if basis.lower() in text.lower() and str(filing.get("file_url") or "").startswith("https://"):
+                candidates[quarter_end, basis].append(filing)
+    return candidates
 
 
 def main() -> int:
@@ -111,34 +108,40 @@ def main() -> int:
         symbol = str(item.get("Symbol") or "").upper()
         filing_entry = symbols.get(symbol, {})
         matches = _filing_candidates(filing_entry.get("filings", []) if isinstance(filing_entry, dict) else [])
-        for statement_key, report_type in STATEMENTS:
-            statement = item.get(statement_key)
-            if not isinstance(statement, dict):
-                continue
-            years = _series(statement, "YEAR")
-            for index, year_month in enumerate(years):
-                if not re.fullmatch(r"\d{6}", year_month):
-                    continue
-                quarter_end = f"{year_month[:4]}-{year_month[4:]}-" + {"03": "31", "06": "30", "09": "30", "12": "31"}.get(year_month[4:], "")
-                if quarter_end.endswith("-"):
-                    continue
-                filing = matches.get(quarter_end)
-                if filing is None:
+        history = normalize_statement_history(item, item.get("financial_observed_on"))
+        for report_type, statement in (("CONSOLIDATED", history),
+                                       ("STANDALONE", history.get("standalone", {}))):
+            for row in statement.get("quarterly", []):
+                quarter_end = row["period_end"]
+                candidates = matches.get((quarter_end, report_type), [])
+                # Prefer a results filing over its accompanying board outcome.
+                primary = [candidate for candidate in candidates
+                           if "outcome" not in " ".join(str(candidate.get(key) or "")
+                               for key in ("descriptor", "caption")).lower()]
+                primary = primary or candidates
+                filing = primary[0] if len(primary) == 1 else {}
+                if not filing:
                     unmatched_quarters += 1
-                    continue
-                values = {metric.lower(): _value(statement, metric, index) for metric in METRICS}
+                values = {key: value for key, value in row.items() if key != "period_end"}
                 if all(value is None for value in values.values()):
                     continue
                 records.append({
                     "symbol": symbol,
                     "isin": item.get("isin") or item.get("ISIN"),
                     "quarter_end": quarter_end,
-                    "filing_date": str(filing.get("news_date")),
+                    "filing_date": filing.get("news_date"),
                     "report_type": report_type,
                     **values,
                     "filing_descriptor": filing.get("descriptor"),
                     "filing_caption": filing.get("caption"),
                     "filing_url": filing.get("file_url"),
+                    "result_disclosures": [{"date": candidate.get("news_date"),
+                                            "url": candidate.get("file_url"),
+                                            "caption": candidate.get("caption")}
+                                           for candidate in candidates],
+                    "observed_on": history["observed_on"],
+                    "amount_unit": "INR_CRORE",
+                    "metric_units": history["metric_units"],
                     "numeric_source": "ScanX fundamental quarterly statement",
                     "filing_source": "ScanX LODR/company_filings",
                 })
@@ -152,13 +155,14 @@ def main() -> int:
         "unmatched_numeric_quarters": unmatched_quarters,
     }
     save_json(root / "quarterly_financial_history.json", {
-        "schema_version": 1,
+        "schema_version": 2,
         "source": "ScanX quarterly statements joined to dated ScanX LODR/company-filings disclosures",
         "temporal_contract": "Filing dates are source disclosure timestamps. Numeric values are current provider series matched by quarter; consumers must not back-project them without accepting that source-observation limitation.",
         "coverage": coverage,
         "records": records,
     }, ensure_ascii=False)
-    print(f"Published {len(records)} dated quarterly financial rows for {coverage['symbols_with_rows']} symbols.")
+    print(f"Published {len(records)} quarterly financial rows for {coverage['symbols_with_rows']} symbols; "
+          f"{unmatched_quarters} without an unambiguous result disclosure.")
     # Filing metadata can be present before a result notice has a parseable
     # quarter end.  Publish that coverage state instead of failing an otherwise
     # healthy market-data refresh.

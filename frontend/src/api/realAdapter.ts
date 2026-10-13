@@ -20,6 +20,7 @@ interface Manifest {
   chartRevision?: string;
   dataIndexUrl?: string;
   objectUrlTemplate?: string;
+  financialHistoryUrl?: string;
 }
 let current: Manifest | undefined;
 const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
@@ -80,7 +81,7 @@ async function getChartJson<T>(url: string, resource = 'Chart'): Promise<T> {
   } catch (error) {
     if (error instanceof DataUnavailableError) throw error;
     if (resource === 'Announcement') throw new DataUnavailableError('Announcement data could not be downloaded or decoded. Please retry; if this persists, check the release files and storage access.', 'download_failed');
-    throw new Error('Chart data unavailable');
+    throw new Error(`${resource} data unavailable`);
   }
 }
 
@@ -103,7 +104,28 @@ interface FilingLookup {
   publishedAt: string; taxonomy: string; index: string;
   symbols: Record<string, {recent: string; years: number[]; history: string}>;
 }
-interface DataIndex { revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string; filingLookup?: FilingLookup }
+interface DataIndex { revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string; filingLookup?: FilingLookup;
+  financialLookup?: Record<string, {history: string; observedOn: string | null}> }
+
+export interface FinancialHistory {
+  source: string;
+  report_type: string;
+  amount_unit: string;
+  metric_units: Record<string, string>;
+  observed_on: string | null;
+  quarterly: Array<{period_end: string; [metric: string]: string | number | null}>;
+  annual?: FinancialHistory['quarterly'];
+  balance_sheet?: FinancialHistory['quarterly'];
+  cash_flow?: FinancialHistory['quarterly'];
+  standalone?: FinancialHistory;
+}
+export interface CompanyFinancialHistory {
+  symbol: string;
+  history: FinancialHistory;
+  resultFilings: Array<{quarter_end: string; report_type: string; filing_date: string | null;
+    filing_url: string | null; filing_caption: string | null; filing_descriptor: string | null;
+    result_disclosures?: Array<{date: string; url: string; caption: string | null}>}>;
+}
 async function releaseFor(revision?: string): Promise<Manifest> {
   const latest = current ?? await refreshManifest();
   const selected = revision ?? latest.revision;
@@ -177,6 +199,7 @@ function validateManifest(value: unknown): Manifest {
   const validDate = (date: unknown) => typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
     && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
   if (!manifest || !/^[a-f0-9]{64}$/.test(manifest.revision) || ![4, 5, 6, 7].includes(manifest.schemaVersion)
+      || (manifest.financialHistoryUrl !== undefined && (!validUrl(manifest.financialHistoryUrl) || !manifest.financialHistoryUrl.endsWith('.json.gz')))
       || (manifest.datasetGzipUrl !== undefined && (!validUrl(manifest.datasetGzipUrl) || !manifest.datasetGzipUrl.endsWith('.json.gz')))
       || (manifest.datasetPackedGzipUrl !== undefined && (!validUrl(manifest.datasetPackedGzipUrl) || !manifest.datasetPackedGzipUrl.endsWith('.json.gz')))
       || !validDate(manifest.sessionDate) || !validUrl(manifest.datasetUrl) || !validUrl(manifest.iposUrl)
@@ -210,6 +233,30 @@ async function snapshotSource(revision?: string): Promise<SnapshotSource> {
 }
 
 class RealDataAdapter {
+  async getFinancialHistory(symbol: string, revision?: string): Promise<CompanyFinancialHistory> {
+    validSymbol(symbol);
+    const release = await releaseFor(revision);
+    const lookup = release.dataIndexUrl ? (await dataIndex(release)).financialLookup : undefined;
+    if (lookup) {
+      const reference = lookup[symbol];
+      if (!reference) throw new DataUnavailableError('Financial history unavailable for this company', 'not_published');
+      const payload = await object<CompanyFinancialHistory & {schemaVersion: number}>(release, reference.history, 'Financial history');
+      if (payload.schemaVersion !== 1 || payload.symbol !== symbol
+          || !Array.isArray(payload.history?.quarterly) || !Array.isArray(payload.resultFilings)) {
+        throw new Error('Financial history symbol/schema mismatch');
+      }
+      const history = {...payload.history, observed_on: reference.observedOn};
+      if (history.standalone) history.standalone = {...history.standalone, observed_on: reference.observedOn};
+      return {symbol, history, resultFilings: payload.resultFilings};
+    }
+    if (!release.financialHistoryUrl) throw new DataUnavailableError('Financial history was not published with this release', 'not_published');
+    const histories = await cached(objectCache, release.financialHistoryUrl,
+      () => getChartJson<Record<string, FinancialHistory>>(release.financialHistoryUrl!, 'Financial history'), 32);
+    const history = histories[symbol];
+    if (!history || !Array.isArray(history.quarterly)) throw new DataUnavailableError('Financial history unavailable for this company', 'not_published');
+    return {symbol, history, resultFilings: []};
+  }
+
   async getCatalog() { return NEXUS_CONDITION_CATALOG; }
 
   async explainScreen(_req: ExplainRequest): Promise<ExplainResponse> {

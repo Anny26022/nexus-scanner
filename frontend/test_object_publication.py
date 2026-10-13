@@ -38,6 +38,41 @@ class ObjectStore:
 
 
 class ObjectPublicationTests(unittest.TestCase):
+    def test_company_financial_objects_reuse_numbers_and_publish_both_bases(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); output = root / 'public'; output.mkdir()
+            store = ObjectStore()
+            history = {'source': 'ScanX', 'report_type': 'CONSOLIDATED', 'observed_on': '2026-10-06',
+                       'amount_unit': 'INR_CRORE', 'metric_units': {'eps': 'INR_PER_SHARE'},
+                       'quarterly': [{'period_end': '2026-06-30', 'sales': 132.9}],
+                       'standalone': {'report_type': 'STANDALONE', 'observed_on': '2026-10-06',
+                                      'quarterly': [{'period_end': '2026-06-30', 'sales': 90}]}}
+            hashes = []
+            for revision, observed, sales in [('a'*64, '2026-10-06', 132.9),
+                                               ('b'*64, '2026-10-07', 132.9),
+                                               ('c'*64, '2026-10-08', 133.1)]:
+                generation = output / 'revisions' / revision; generation.mkdir(parents=True)
+                history['observed_on'] = history['standalone']['observed_on'] = observed
+                history['quarterly'][0]['sales'] = sales
+                (generation / 'financial-history.json.gz').write_bytes(gzip.compress(json.dumps({'TEST': history}).encode()))
+                frozen = root / '.scanner_cache/revisions' / revision; frozen.mkdir(parents=True)
+                (frozen / 'quarterly_financial_history.json.gz').write_bytes(gzip.compress(json.dumps({'records': [
+                    {'symbol': 'TEST', 'quarter_end': '2026-06-30', 'report_type': 'CONSOLIDATED',
+                     'filing_date': '2026-07-20', 'filing_url': 'https://example.com/results.pdf'}]}).encode()))
+                release = complete_release(self.build(root, observed), output,
+                                           {'revision': revision, 'sessionDate': observed}, store)
+                reference = store.references[f'releases/{revision}/index.json']['financialLookup']['TEST']
+                self.assertEqual(reference['observedOn'], observed)
+                hashes.append(reference['history'])
+                payload = json.loads(gzip.decompress(store.objects[reference['history'] + '.json.gz']))
+                self.assertEqual(payload['history']['standalone']['quarterly'][0]['sales'], 90)
+                self.assertNotIn('observed_on', payload['history'])
+                self.assertNotIn('observed_on', payload['history']['standalone'])
+                self.assertEqual(payload['resultFilings'][0]['filing_url'], 'https://example.com/results.pdf')
+            self.assertEqual(hashes[0], hashes[1])
+            self.assertNotEqual(hashes[1], hashes[2])
+            self.assertEqual(store.uploaded.count(hashes[0] + '.json.gz'), 1)
+
     def build(self, root, day):
         (root / 'all_stocks_fundamental_analysis.json').write_text(json.dumps([{'symbol': 'TEST', 'as_of_date': day}]))
         with patch.object(builder, 'BASE_DIR', str(root)):

@@ -12,6 +12,27 @@ from edl_pipeline.scanner.trend import evaluate_history
 
 
 class FinancialScannerTests(unittest.TestCase):
+    def test_standalone_is_separate_and_missing_columns_do_not_shift(self):
+        raw = self.raw_history()
+        raw["incomeStat_sq"] = {"YEAR": "202606|202603", "SALES": "80.1234|70",
+                               "NET_PROFIT": "0", "EPS": "0|0.02"}
+        history = normalize_statement_history(raw, "2026-10-11")
+        self.assertEqual(history["quarterly"][-1]["revenue"], 120)
+        standalone = history["standalone"]
+        self.assertEqual(standalone["report_type"], "STANDALONE")
+        self.assertEqual(standalone["quarterly"][-1]["sales"], 80.1234)
+        self.assertEqual(standalone["quarterly"][-1]["eps"], 0)
+        self.assertIsNone(standalone["quarterly"][-1]["net_profit"])
+        self.assertEqual(standalone["observed_on"], "2026-10-11")
+
+    def test_unverified_rows_never_become_dated_scanner_inputs(self):
+        context = self.context()
+        for row in context["financial_history"]["TEST"]:
+            row["filing_date"] = None
+        result = financial_value(context, {"symbol": "TEST"}, {"condition": "pe_ratio"},
+                                 date(2026, 9, 30), 1000)
+        self.assertEqual(result[2], "dated_financial_statement_unavailable")
+
     def raw_history(self):
         return {
             "incomeStat_cq": {"YEAR": "202606|202603|202512|202509|202506|202503|202412|202409",

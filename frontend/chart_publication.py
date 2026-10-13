@@ -239,7 +239,12 @@ class R2Store:
         started = time.perf_counter()
         try:
             subprocess.run(['rclone', *args, '--s3-no-check-bucket', '--s3-no-head',
-                            '--stats', '30s', '--stats-one-line', '--stats-log-level', 'NOTICE'], env=self.env, check=True)
+                            '--contimeout', '15s', '--timeout', '1m', '--retries', '3', '--low-level-retries', '5',
+                            '--max-duration', '40m', '--cutoff-mode', 'HARD',
+                            '--stats', '30s', '--stats-one-line', '--stats-log-level', 'NOTICE'],
+                           env=self.env, check=True, timeout=2700)
+        except subprocess.TimeoutExpired as error:
+            raise RuntimeError(f'R2 {args[0]} exceeded the 45-minute subprocess limit; release was not completed') from error
         finally:
             print(f'R2 {args[0]} elapsed: {time.perf_counter() - started:.2f}s', flush=True)
 
@@ -259,8 +264,9 @@ class R2Store:
         remote = self.remote('objects')
         started = time.perf_counter()
         listing = subprocess.run(['rclone', 'lsf', remote, '--files-only', '--format', 'ps',
-                                  '--separator', '\t', '--s3-no-check-bucket'],
-                                 env=self.env, check=True, capture_output=True, text=True)
+                                  '--separator', '\t', '--s3-no-check-bucket',
+                                  '--contimeout', '15s', '--timeout', '1m', '--low-level-retries', '5'],
+                                 env=self.env, check=True, capture_output=True, text=True, timeout=300)
         print(f'R2 object listing elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         existing = {}
         for line in listing.stdout.splitlines():

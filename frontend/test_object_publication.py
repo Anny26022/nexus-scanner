@@ -219,6 +219,10 @@ class ObjectPublicationTests(unittest.TestCase):
             store.run('copyto', 'source', 'charts:test/object')
         self.assertIn('--s3-no-head', run.call_args.args[0])
         self.assertIn('--s3-no-check-bucket', run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs['timeout'], 2700)
+        args = run.call_args.args[0]
+        self.assertEqual(args[args.index('--max-duration') + 1], '40m')
+        self.assertEqual(args[args.index('--timeout') + 1], '1m')
         self.assertEqual(run.call_args.args[0][-5:], ['--stats', '30s', '--stats-one-line', '--stats-log-level', 'NOTICE'])
 
     def test_r2_check_failure_still_propagates(self):
@@ -226,3 +230,10 @@ class ObjectPublicationTests(unittest.TestCase):
         with patch('chart_publication.subprocess.run', side_effect=RuntimeError('verification failed')):
             with self.assertRaisesRegex(RuntimeError, 'verification failed'):
                 store.run('check', 'source', 'charts:test/object', '--download', '--checkers', '16')
+
+    def test_r2_hung_command_fails_closed_with_a_bounded_subprocess(self):
+        import subprocess
+        store = R2Store.__new__(R2Store); store.env = {}
+        with patch('chart_publication.subprocess.run', side_effect=subprocess.TimeoutExpired('rclone', 2700)):
+            with self.assertRaisesRegex(RuntimeError, '45-minute subprocess limit'):
+                store.run('check', 'source', 'charts:test/object', '--download')

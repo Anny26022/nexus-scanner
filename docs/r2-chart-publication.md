@@ -70,6 +70,13 @@ Filing rebuild reasons partition into cold caches, invalidated rules, changed
 source histories and incompatible/unreadable cache layouts. Legacy upgrades
 count only successful checkpoint writes and do not require re-normalization.
 
+R2 connections time out after 15 seconds; stalled I/O after one minute. Commands
+retain three high-level attempts and five low-level retries, with a hard
+40-minute rclone duration and a 45-minute Python subprocess backstop. The initial
+object listing has a five-minute subprocess limit. Timeouts fail publication;
+they never bypass download verification or promote an incomplete release.
+Successfully uploaded immutable objects are retained for a later retry.
+
 ## Current object retention
 
 Schema-7 releases use `objects/<sha256>.json.gz` and

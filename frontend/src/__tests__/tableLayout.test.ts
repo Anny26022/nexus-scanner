@@ -10,8 +10,8 @@ it('preserves desktop table order and percentage sizing', () => {
 });
 
 it('prioritizes phone quotes without mutating input or the remaining column order', () => {
-  const columns = Object.freeze([{id:'company'},{id:'sector'},{id:'rvol'},{id:'close'},{id:'changePct'}]);
-  const layout = tableLayout([...columns],'screener',true,false);
+  const columns = [{id:'company'},{id:'sector'},{id:'rvol'},{id:'close'},{id:'changePct'}];
+  const layout = tableLayout(columns,'screener',true,false);
   expect(layout.columns.map(column=>column.id)).toEqual(['company','close','changePct','sector','rvol']);
   expect(columns.map(column=>column.id)).toEqual(['company','sector','rvol','close','changePct']);
   expect(layout.columns.map(layout.columnWidth)).toEqual(['176px','100px','88px','180px','150px']);

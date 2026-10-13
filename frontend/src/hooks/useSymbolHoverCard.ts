@@ -50,6 +50,10 @@ export function useSymbolHoverCard<T extends {symbol: string}>(idPrefix = 'compa
     };
     const onResize = () => {
       if (!isPinned) dismiss();
+      else if (trigger.current?.isConnected) {
+        const position = companyPopoverPosition(trigger.current);
+        setActive(current => current ? {...current, ...position} : current);
+      } else dismiss();
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); close(); }

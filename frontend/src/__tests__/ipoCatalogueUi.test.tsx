@@ -126,7 +126,7 @@ it('opens the company IPO research card on hover and allows it to stay open by c
   expect(screen.queryByRole('dialog', {name: 'Runwal Enterprises IPO details'})).not.toBeInTheDocument();
 });
 
-it('opens IPO details on phone tap and remains open during table scroll', async () => {
+it.each(['tap', 'Tab', 'ArrowDown'])('opens IPO details on phone %s and remains open during table scroll', async input => {
   vi.mocked(screenerApi.getIpoCatalogue).mockResolvedValueOnce({records: [{
     symbol: 'RUNWALENTR', name: 'Runwal Enterprises', listingDate: '2026-10-05',
     currentPrice: 262.55, turnoverCrore: 11.2, deliveryPct: 40.54,
@@ -139,8 +139,10 @@ it('opens IPO details on phone tap and remains open during table scroll', async 
     const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
     render(<QueryClientProvider client={client}><NewListingsTab datasetRevision={'c'.repeat(64)} selectedAsOfDate="2026-10-06" /></QueryClientProvider>);
     const trigger = await screen.findByRole('button', {name: 'IPO details for Runwal Enterprises'});
-    fireEvent.click(trigger);
+    if (input === 'tap') fireEvent.click(trigger);
+    else fireEvent.keyDown(trigger, {key: input});
     expect(await screen.findByRole('dialog', {name: 'Runwal Enterprises IPO details'})).toBeInTheDocument();
+    if (input !== 'tap') expect(screen.getByRole('dialog').querySelector('button')).toHaveFocus();
     fireEvent.scroll(screen.getByLabelText('IPO table, scroll for more columns'));
     expect(screen.getByRole('dialog', {name: 'Runwal Enterprises IPO details'})).toBeInTheDocument();
   } finally {

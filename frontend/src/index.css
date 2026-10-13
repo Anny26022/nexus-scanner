@@ -663,10 +663,10 @@
     gap: 5px;
   }
   .filter-chip button {
-    min-width: 18px;
-    min-height: 18px;
-    width: 18px;
-    height: 18px;
+    min-width: 24px;
+    min-height: 24px;
+    width: 24px;
+    height: 24px;
     border-radius: 3px;
     display: grid;
     place-items: center;
@@ -843,7 +843,7 @@
     white-space: nowrap;
   }
   .pagination-controls { gap: 4px; min-width: 0; display: flex; align-items: center; }
-  .pagination-size { gap: 3px; font-size: 10px; color: var(--muted); display: flex; align-items: center; }
+  .pagination-size { gap: 0; font-size: 0; color: var(--muted); display: flex; align-items: center; }
   .pagination-size select {
     min-height: 28px;
     height: 28px;
@@ -862,11 +862,12 @@
     text-align: center;
   }
   .pagination .button {
+    width: 28px;
     min-height: 28px;
     height: 28px;
-    padding: 0 7px;
-    gap: 3px;
-    font-size: 11px;
+    padding: 0;
+    gap: 0;
+    font-size: 0;
     border-radius: 5px;
   }
   .pagination .button svg { width: 13px; height: 13px; }

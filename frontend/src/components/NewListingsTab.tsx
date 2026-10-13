@@ -283,8 +283,8 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
                   onKeyDown={event => {
                     if (event.key === 'Escape') ipoOverview.dismiss();
                     if ((event.key === 'Tab' && !event.shiftKey) || event.key === 'ArrowDown') {
-                      const firstControl = document.getElementById(`ipo-details-${row.symbol}`)?.querySelector<HTMLButtonElement>('button');
-                      if (firstControl) {event.preventDefault(); firstControl.focus();}
+                      event.preventDefault();
+                      ipoOverview.enter(row, event.currentTarget);
                     }
                   }}>
                   <SymbolWithLogo symbol={row.symbol} name={row.name} />

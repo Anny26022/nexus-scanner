@@ -73,10 +73,11 @@ it.each(['ArrowDown', 'Enter', ' '])('enters the portal with %s and restores tri
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
-it('opens on phone tap and remains visible during table scrolling when pinned', async () => {
+it('keeps tapped cards open during scrolling and repositions them after resize', async () => {
   vi.mocked(getTijoriOverviews).mockResolvedValue({TEST: report});
   const media = {matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn()};
   vi.stubGlobal('matchMedia', () => media);
+  vi.stubGlobal('innerWidth', 390);
   try {
     mount();
     const trigger = screen.getByRole('button', {name: 'View TEST company snapshot'});
@@ -84,6 +85,12 @@ it('opens on phone tap and remains visible during table scrolling when pinned', 
     expect(await screen.findByText('Makes industrial equipment.')).toBeInTheDocument();
     fireEvent.scroll(screen.getByLabelText('Equity results table, scroll for more columns'));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('dialog').style.left).toBe('12px');
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({left: 200, right: 350, top: 100} as DOMRect);
+    vi.stubGlobal('innerWidth', 1024);
+    fireEvent.resize(window);
+    expect(screen.getByRole('dialog').style.left).toBe('364px');
+    expect(screen.getByRole('dialog').style.top).toBe('88px');
   } finally {
     vi.unstubAllGlobals();
   }

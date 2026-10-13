@@ -9,6 +9,20 @@ import { NewListingsTab } from '../components/NewListingsTab';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
 
+it('puts company and price first on phones without changing desktop column preferences', async () => {
+  vi.stubGlobal('matchMedia', () => ({matches:true,addEventListener:vi.fn(),removeEventListener:vi.fn()}));
+  try {
+    vi.mocked(screenerApi.getIpoCatalogue).mockResolvedValueOnce({records:[{
+      symbol:'TEST',name:'Test IPO',listingDate:'2026-10-01',currentPrice:100,
+      turnoverCrore:1,marketCapCrore:200,sector:'Industrials',industry:'Equipment',
+    }]});
+    const client = new QueryClient({defaultOptions:{queries:{retry:false}}});
+    render(<QueryClientProvider client={client}><NewListingsTab datasetRevision={'d'.repeat(64)} selectedAsOfDate="2026-10-09" /></QueryClientProvider>);
+    await screen.findByRole('button', {name:'IPO details for Test IPO'});
+    expect(screen.getAllByRole('columnheader').slice(0,3).map(header=>header.textContent)).toEqual(['Company','Last price','Listing date']);
+  } finally {cleanup(); vi.unstubAllGlobals();}
+});
+
 it('lets keyboard users enter the IPO card and returns focus on Escape', async () => {
   vi.mocked(screenerApi.getIpoCatalogue).mockResolvedValueOnce({records: [{
     symbol: 'TEST', name: 'Test IPO', listingDate: '2026-10-01', currentPrice: 100,

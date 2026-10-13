@@ -72,7 +72,8 @@ it('uses supported SMA periods and leaves absent richer snapshot values unknown'
     const result = run('MA_STACK', parameters, data)!;
     expect(result.matchCount).toBe(0);
     expect(result.perConditionCoverage.MA_STACK.evaluated).toBe(0);
-    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings).toEqual([]);
+    expect(result.unavailableDiagnostics.length).toBeGreaterThan(0);
   }
 });
 

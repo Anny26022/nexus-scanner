@@ -210,6 +210,11 @@ async function snapshotSource(revision?: string): Promise<SnapshotSource> {
 }
 
 class RealDataAdapter {
+  async getFilterChoices(revision?: string) {
+    const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision)});
+    if (response.type !== 'filterChoices') throw new Error('Unexpected filter choices response');
+    return response.result;
+  }
   async getCatalog() { return NEXUS_CONDITION_CATALOG; }
 
   async explainScreen(_req: ExplainRequest): Promise<ExplainResponse> {

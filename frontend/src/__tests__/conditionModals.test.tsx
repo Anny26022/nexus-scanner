@@ -120,7 +120,7 @@ it('updates the linked breadth threshold when its memoized metric control change
   const row = screen.getByRole('checkbox', {name:'Market Breadth Gate:'}).closest('div')!;
   const threshold = within(row).getByRole('spinbutton', {name:'Value'});
   expect(threshold).toHaveValue(50);
-  const metric = within(row).getAllByRole('combobox')[1];
+  const metric = within(row).getByRole('combobox', {name:'Metric'});
   fireEvent.change(metric, {target:{value:'advance_decline_ratio_5d'}});
   expect(threshold).toHaveValue(1);
   fireEvent.change(threshold, {target:{value:'2'}});

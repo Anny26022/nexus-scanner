@@ -9,12 +9,11 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import gzip
-import hashlib
 import json
 from pathlib import Path
 import subprocess
-from tempfile import TemporaryDirectory
 import time
+import requests
 
 from pipeline_utils import BASE_DIR, load_json, save_json
 
@@ -76,50 +75,50 @@ def _clean_detail_errors(details):
     return details
 
 
-def _read_nonce(cookie_jar: Path) -> str:
-    for line in cookie_jar.read_text(encoding="utf-8").splitlines():
-        columns = line.split("\t")
-        if len(columns) == 7 and columns[5] == "ipd_nonce":
-            return columns[6]
-    raise RuntimeError("IPO provider bootstrap did not issue its session nonce.")
-
-
 class IpoProviderClient:
-    """A short-lived curl-backed provider client using one fresh nonce."""
+    """One short-lived connection pool; cookies and nonce never leave memory."""
 
     def __init__(self, timeout: int = 30):
         self.timeout = timeout
-        self.temporary = TemporaryDirectory(prefix="ipo-provider-")
-        self.directory = Path(self.temporary.name)
-        self.cookie_jar = self.directory / "cookies.txt"
+        self.session = requests.Session()
+        self.session.headers.update({'User-Agent': USER_AGENT})
         self.nonce = ""
 
     def __enter__(self):
-        common = ["curl", "--fail", "--silent", "--show-error", "--compressed", "--max-time", str(self.timeout),
-                  "--user-agent", USER_AGENT]
-        subprocess.run([*common, "--header", "Accept: text/html", "--cookie-jar", str(self.cookie_jar), f"{ORIGIN}/"],
-                       check=True, stdout=subprocess.DEVNULL)
-        self.nonce = _read_nonce(self.cookie_jar)
-        return self
+        try:
+            self._get('/', {'Accept': 'text/html'}).close()
+            self.nonce = next((cookie.value for cookie in self.session.cookies if cookie.name == 'ipd_nonce'), '')
+            if not self.nonce:
+                raise RuntimeError('IPO provider bootstrap did not issue its session nonce.')
+            return self
+        except Exception:
+            self.session.close()
+            raise
 
     def __exit__(self, *_):
-        self.temporary.cleanup()
+        self.session.close()
+
+    def _get(self, endpoint, headers):
+        try:
+            response = self.session.get(ORIGIN + endpoint, headers=headers, timeout=self.timeout,
+                                        allow_redirects=False)
+        except requests.RequestException:
+            raise ProviderBackoff('Provider requested backoff') from None
+        if response.status_code in {401, 403, 408, 429} or response.status_code >= 500:
+            response.close()
+            raise ProviderBackoff('Provider requested backoff')
+        if response.status_code >= 300:
+            response.close()
+            raise ValueError('Provider request failed')
+        return response
 
     def get_json(self, endpoint: str):
-        target = self.directory / f"{hashlib.sha256(endpoint.encode()).hexdigest()}.json"
-        common = ["curl", "--fail", "--silent", "--show-error", "--compressed", "--max-time", str(self.timeout),
-                  "--user-agent", USER_AGENT]
-        result = subprocess.run([*common, "--header", "Accept: application/json, text/plain, */*",
-                        "--header", f"Referer: {ORIGIN}/", "--header", f"X-IPO-Session: {self.nonce}",
-                        "--cookie", str(self.cookie_jar), "--output", str(target),
-                        "--write-out", "%{http_code}", f"{ORIGIN}{endpoint}"], capture_output=True, text=True)
-        status = result.stdout.strip()
-        if (status in {"401", "403", "408", "429", "000"} or status.startswith("5")
-                or (result.returncode and (not status or result.returncode != 22))):
-            raise ProviderBackoff("Provider requested backoff")
-        if result.returncode:
-            raise subprocess.CalledProcessError(result.returncode, ["curl"])
-        return json.loads(target.read_text(encoding="utf-8"))
+        response = self._get(endpoint, {'Accept': 'application/json, text/plain, */*',
+                                       'Referer': ORIGIN + '/', 'X-IPO-Session': self.nonce})
+        try:
+            return response.json()
+        finally:
+            response.close()
 
 
 def _records(payload) -> list[dict]:
@@ -218,6 +217,7 @@ def _refresh_detail(client: IpoProviderClient, identifier: str, endpoints=None) 
     for name, template in DETAIL_ENDPOINTS.items():
         if endpoints is not None and name not in endpoints:
             continue
+        started = time.perf_counter()
         try:
             values[name] = client.get_json(template.format(id=identifier))
         except ProviderBackoff:
@@ -225,7 +225,9 @@ def _refresh_detail(client: IpoProviderClient, identifier: str, endpoints=None) 
             break
         except (subprocess.CalledProcessError, ValueError) as error:
             errors.append(f"{name}: {_safe_error(error)}")
-        time.sleep(DETAIL_DELAY_SECONDS)
+        remaining = DETAIL_DELAY_SECONDS - (time.perf_counter() - started)
+        if remaining > 0:
+            time.sleep(remaining)
     return values, errors
 
 

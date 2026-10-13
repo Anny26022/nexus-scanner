@@ -23,7 +23,7 @@ export function conditionValidationError(map: Record<string, ActiveCondition>): 
     if (['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(condition.conditionId)) {
       const value = condition.parameters[condition.conditionId === 'INDEX_MEMBERSHIP' ? 'indexName' : 'values'];
       if (!(Array.isArray(value) ? value : String(value ?? '').split(',')).some(item => String(item).trim())) {
-        return `${def.label}: enter at least one value (comma-separated for multiple values).`;
+        return `${def.label}: select at least one value.`;
       }
     }
     if (condition.conditionId === 'MA_CONVERGENCE') {

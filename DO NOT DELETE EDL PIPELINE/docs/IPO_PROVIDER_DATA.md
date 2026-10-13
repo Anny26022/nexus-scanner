@@ -1,5 +1,15 @@
 # IPO provider enrichment
 
+The IPO Decode collector uses one in-memory Requests session per run, reusing
+HTTP connections for catalogue, analytics and detail requests. Its nonce and
+cookies are not written to disk. Detail requests use a minimum 0.28-second start
+interval, counting response time instead of adding a full delay afterwards. The
+20-minute catch-up budget, ten-IPO checkpoints and provider-backoff policy remain
+unchanged. Completed historical sections are reused; only missing/failed sections
+and the existing stale live-IPO lane are requested. Redirects are rejected so the
+session header is never forwarded to another origin. No concurrent fan-out or
+extra transport retries are introduced.
+
 `ipo_provider_listed_archive.json.gz` begins with a user-supplied listing archive captured on 4 October 2026. It contains 2,652 provider issue records from 2003 through 1 October 2026. It is not a live feed. Its compressed size is about 280 KB.
 
 `fetch_ipo_provider_data.py` fetches the permitted `listed?days=60` window on each pipeline run. It replaces matching archive records by provider issue ID and publishes the compact, growing `ipo_provider_listed_archive.json.gz` and `ipo_provider_details_archive.json.gz` with the other validated pipeline artifacts. Working copies also live in the Actions cache. If that cache is lost, the published archives are restored before recent records are merged. The live open, upcoming, closed, analytics and issue detail feeds are fetched separately. The full `days=all` API responds with HTTP 403 and is not called by the pipeline.

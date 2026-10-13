@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const fixtures = vi.hoisted(() => {
   const adapter = () => ({
     getCatalog: vi.fn(async () => []), explainScreen: vi.fn(async () => ({})),
+    getFilterChoices: vi.fn(async () => ({})),
     runScreen: vi.fn(async () => ({})), getIpos: vi.fn(async () => [{symbol: 'TEST'}]),
     getIpoCatalogue: vi.fn(async () => ({records: [], details: {}})),
     compareSymbols: vi.fn(async () => ({})), getCurrentRevision: vi.fn(async () => ({revision: 'test'})),
@@ -31,6 +32,8 @@ it('never loads mocks in real mode and preserves the real catalogue metadata', a
   await screenerApi.getCatalog();
   expect(await screenerApi.getIpoCatalogue()).toEqual({records: [], details: {}});
   await screenerApi.getChart('TEST', 'revision');
+  await screenerApi.getFilterChoices('revision');
+  expect(fixtures.real.getFilterChoices).toHaveBeenCalledWith('revision');
   expect(fixtures.real.getChart).toHaveBeenCalledWith('TEST', 'revision');
   expect(fixtures.mockLoads).toBe(0);
 });

@@ -38,6 +38,18 @@ it.each(snapshotFundamentals)('compares published $value without new data', ({va
   expect(run('FUNDAMENTAL_METRIC', {metric:value, comparison:'ABOVE', value:1})!.matchCount).toBe(expected.length);
 });
 
+it.each([1,5,21,63,126,252])('interprets Price Change Below as a decline over %s sessions', overDays => {
+  const data = {...snapshot, stocks:[7,3,-2,-5,-7,null].map((value, index) => ({...snapshot.stocks[0],
+    symbol:`S${index}`, historyAligned:true, asOfDate:snapshot.asOfDate,
+    changePct:value ?? Number.NaN, metrics:{[`return${overDays}`]:value}}))};
+  for (const pct of [5,-5]) {
+    const parameters = {overDays, comparison:'BELOW', pct};
+    expect(run('PRICE_CHANGE_PCT', parameters, data)!.rows.map(s => s.symbol)).toEqual(['S3','S4']);
+    expect(run('PRICE_CHANGE_PCT', parameters, data, true)!.rows.map(s => s.symbol)).toEqual(['S0','S1','S2']);
+  }
+  expect(run('PRICE_CHANGE_PCT', {overDays, comparison:'ABOVE', pct:5}, data)!.rows.map(s => s.symbol)).toEqual(['S0']);
+});
+
 it('preserves unavailable values under negation and rejects stale scalar data', () => {
   const stock = {...snapshot.stocks[0], historyAligned:true, asOfDate:snapshot.asOfDate, metadataAsOfDate:snapshot.asOfDate,
     close:100, atr14:null, rsRating:null, freeFloatPct:null, pbRatio:null};

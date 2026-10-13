@@ -119,7 +119,9 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'PRICE_CHANGE_PCT': {
       const period = Number(p.overDays);
       if (![1,5,21,63,126,252].includes(period)) return null;
-      fn = s => compare(period === 1 ? s.changePct : s.metrics[`return${period}`], p.comparison, p.pct); break;
+      // Match the Python scanner: "Below 5%" means a decline of at least 5%.
+      const target = p.comparison === 'BELOW' ? -Math.abs(p.pct) : p.pct;
+      fn = s => compare(period === 1 ? s.changePct : s.metrics[`return${period}`], p.comparison, target); break;
     }
     case 'GAP_UP': case 'GAP_DOWN':
       if (Number(p.withinDays) !== 1) return null;

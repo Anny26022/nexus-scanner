@@ -69,6 +69,104 @@ class PublishedFieldsTests(unittest.TestCase):
         row['AVG_PRICE'] = 'NaN'
         self.assertNotIn('vwap', normalize_ohlcv_row(row))
 
+    def test_nse_auction_open_expands_the_daily_envelope(self):
+        row = normalize_ohlcv_row({
+            'SYMBOL':'EIFFL', 'SERIES':'BE', 'DATE1':'05-Oct-2026',
+            'OPEN_PRICE':'267.75', 'HIGH_PRICE':'262.40',
+            'LOW_PRICE':'262.40', 'CLOSE_PRICE':'262.40',
+            'TTL_TRD_QNTY':'573',
+        })
+        self.assertEqual(
+            {key: row[key] for key in ('open', 'high', 'low', 'close')},
+            {'open':267.75, 'high':267.75, 'low':262.4, 'close':262.4},
+        )
+        self.assertEqual(row['reported_high'], 262.4)
+        self.assertTrue(row['ohlc_envelope_adjusted'])
+
+    def test_auction_envelope_does_not_repair_malformed_close_or_range(self):
+        row = {'SYMBOL':'BAD', 'SERIES':'EQ', 'DATE1':'05-Oct-2026',
+               'OPEN_PRICE':'100', 'HIGH_PRICE':'102', 'LOW_PRICE':'99',
+               'CLOSE_PRICE':'103', 'TTL_TRD_QNTY':'10'}
+        self.assertIsNone(normalize_ohlcv_row(row))
+        self.assertIsNone(normalize_ohlcv_row({**row, 'LOW_PRICE':'104'}))
+        self.assertIsNone(normalize_ohlcv_row({**row, 'CLOSE_PRICE':'100', 'OPEN_PRICE':'nan'}))
+
+    def test_official_bhavcopy_replaces_live_snapshot_ohlcv(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            stock = {
+                'Symbol':'EIFFL', 'open':267.75, 'high':262.4,
+                'low':262.4, 'close':262.4, 'volume':1,
+            }
+            bhavcopy = {
+                'as_of_date':'2026-10-05',
+                'ohlcv_records':[{
+                    'symbol':'EIFFL', 'date':'2026-10-05',
+                    'open':267.75, 'high':267.75, 'low':262.4,
+                    'close':262.4, 'volume':573,
+                    'ohlc_envelope_adjusted':True,
+                }],
+            }
+            enrich([stock], bhavcopy, {}, {}, Path(tmp))
+            self.assertEqual(
+                [stock[key] for key in ('open', 'high', 'low', 'close', 'volume')],
+                [267.75, 267.75, 262.4, 262.4, 573],
+            )
+            self.assertEqual(stock['rupee_volume'], 150355.2)
+            self.assertEqual(stock['as_of_date'], '2026-10-05')
+            self.assertTrue(stock['ohlc_envelope_adjusted'])
+            from edl_pipeline.quality import ohlc_error
+            self.assertIsNone(ohlc_error(canonicalize_stock(stock)))
+
+    def test_missing_or_different_session_bhavcopy_preserves_live_ohlcv(self):
+        snapshot={'Symbol':'ABC','as_of_date':'2026-10-05','open':100,'high':105,'low':99,'close':104,'volume':123,'change_percent':4}
+        for session,records in (
+            ('2026-10-05',[]),
+            ('2026-10-02',[{'symbol':'ABC','date':'2026-10-02','open':80,'high':85,'low':79,'close':84,'volume':900}]),
+            ('2026-10-06',[{'symbol':'ABC','date':'2026-10-06','open':80,'high':85,'low':79,'close':84,'volume':900}]),
+            ('2026-10-05',[{'symbol':'ABC','date':'2026-10-02','open':80,'high':85,'low':79,'close':84,'volume':900}]),
+        ):
+            with self.subTest(session=session,records=records),tempfile.TemporaryDirectory() as tmp:
+                stock=dict(snapshot)
+                enrich([stock],{'as_of_date':session,'ohlcv_records':records},{},{},Path(tmp))
+                self.assertEqual({key:stock[key] for key in snapshot},snapshot)
+                self.assertNotIn('ohlcv_source',stock)
+
+    def test_official_close_and_change_use_one_return_basis(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            write_ohlcv_csv(root/'ABC.csv',[{'Date':'2026-10-02','Open':99,'High':101,'Low':98,'Close':100,'Volume':100}])
+            price={'symbol':'ABC','date':'2026-10-05','open':103,'high':106,'low':101,'close':105,'volume':200}
+            for previous,expected in ((None,5),(50,110)):
+                stock={'Symbol':'ABC','as_of_date':'2026-10-05','close':104,'change_percent':4}
+                row={**price,**({'previous_close':previous} if previous is not None else {})}
+                enrich([stock],{'as_of_date':'2026-10-05','ohlcv_records':[row]},{},{},root)
+                self.assertEqual(stock['close'],105)
+                self.assertAlmostEqual(stock['change_percent'],expected)
+                self.assertAlmostEqual(canonicalize_stock(stock)['change_percent'],expected)
+            stock={'Symbol':'ABC','as_of_date':'2026-10-05','change_percent':4}
+            enrich([stock],{'as_of_date':'2026-10-05','ohlcv_records':[price]},{},{},root/'missing')
+            self.assertIsNone(stock['change_percent'])
+
+    def test_extreme_auction_opens_are_rejected_and_reference_close_is_retained(self):
+        row={'SYMBOL':'ABC','SERIES':'EQ','DATE1':'05-Oct-2026','OPEN_PRICE':'90','HIGH_PRICE':'90','LOW_PRICE':'80','CLOSE_PRICE':'85','TTL_TRD_QNTY':'10','PREV_CLOSE':'82'}
+        self.assertEqual(normalize_ohlcv_row(row)['previous_close'],82)
+        for opened in ('9000','.8','95','75'):
+            self.assertIsNone(normalize_ohlcv_row({**row,'OPEN_PRICE':opened}))
+        upper=normalize_ohlcv_row({**row,'OPEN_PRICE':'94.5'})
+        lower=normalize_ohlcv_row({**row,'OPEN_PRICE':'76'})
+        self.assertEqual(upper['high'],94.5);self.assertEqual(upper['reported_high'],90)
+        self.assertEqual(lower['low'],76);self.assertEqual(lower['reported_low'],80)
+        self.assertNotIn('previous_close',normalize_ohlcv_row({**row,'PREV_CLOSE':'nan'}))
+        with tempfile.TemporaryDirectory() as tmp:
+            stock={'Symbol':'ABC','as_of_date':'2026-10-05'}
+            enrich([stock],{'as_of_date':'2026-10-05','ohlcv_records':[upper]},{},{},Path(tmp))
+            self.assertEqual(stock['ohlcv_reported_high'],90)
+            self.assertEqual(stock['ohlcv_reported_low'],80)
+            canonical=canonicalize_stock(stock)
+            self.assertEqual(canonical['ohlcv_reported_high'],90)
+            self.assertEqual(canonical['ohlcv_reported_low'],80)
+            self.assertTrue(canonical['ohlc_envelope_adjusted'])
+
     def test_dividend_source_details_and_ambiguity(self):
         self.assertEqual(dividend_amount('Dividend - Rs. 5/- per share'), 5)
         self.assertEqual(dividend_amount('Interim Dividend Re 0.50 Per Share'), .5)

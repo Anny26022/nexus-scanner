@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from fetch_ipo_provider_data import DETAIL_ENDPOINTS, IpoProviderClient, ProviderBackoff, _load_cache, _merge_listed_archive, _refresh_detail, _write_details_archive, fetch_all, main
+from fetch_ipo_provider_data import ACTIVE_DETAIL_REFRESH_LIMIT, DETAIL_ENDPOINTS, IpoProviderClient, ProviderBackoff, _load_cache, _merge_listed_archive, _refresh_detail, _write_details_archive, fetch_all, main
 
 
 class FakeClient:
@@ -33,6 +33,69 @@ class FakeClient:
 
 
 class IpoProviderFetchTests(unittest.TestCase):
+    def test_stale_active_and_recently_listed_details_refresh_but_history_stays_missing_only(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            complete = {name:{} for name in DETAIL_ENDPOINTS}
+            _merge_listed_archive(root, [{'id':'HISTORICAL'}])
+            _write_details_archive(root, {identifier:{'fetched_at':'2000-01-01T00:00:00Z', 'data':complete}
+                                         for identifier in ('NSE_TEST','NSE_LISTED','HISTORICAL')}, 'fixture')
+            updated = {**complete, 'documents':[{'title':'New prospectus'}]}
+            with patch('fetch_ipo_provider_data.IpoProviderClient', FakeClient), \
+                    patch('fetch_ipo_provider_data._refresh_detail', return_value=(updated, [])) as fetch:
+                payload = fetch_all(root)
+                self.assertEqual([call.args[1] for call in fetch.call_args_list], ['NSE_TEST','NSE_LISTED'])
+                self.assertTrue(all(call.args[2] == set(DETAIL_ENDPOINTS) for call in fetch.call_args_list))
+                self.assertEqual(payload['details']['NSE_TEST']['data']['documents'], updated['documents'])
+                fetch.reset_mock()
+                fetch_all(root)
+                fetch.assert_not_called()  # Fresh active records do not refresh twice in a day.
+
+    def test_active_refresh_is_bounded_rotates_and_does_not_cap_missing_history(self):
+        class BusyClient(FakeClient):
+            def get_json(self, endpoint):
+                if endpoint == '/api/ipos/open':
+                    return {'ipos':[{'id':f'ACTIVE_{i}'} for i in range(8)]}
+                if endpoint == '/api/ipos/listed?days=60':
+                    return {'ipos':[{'id':'RECENT'}]}
+                return super().get_json(endpoint)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            complete = {name:{} for name in DETAIL_ENDPOINTS}
+            _merge_listed_archive(root, [{'id':'MISSING_HISTORY'}])
+            _write_details_archive(root, {
+                **{f'ACTIVE_{i}':{'fetched_at':'2000-01-01T00:00:00Z', 'data':complete} for i in range(8)},
+                'RECENT':{'fetched_at':'1999-01-01T00:00:00Z', 'data':complete},
+            }, 'fixture')
+            with patch('fetch_ipo_provider_data.IpoProviderClient', BusyClient), \
+                    patch('fetch_ipo_provider_data._refresh_detail', return_value=(complete, [])) as fetch:
+                fetch_all(root)
+                self.assertEqual(ACTIVE_DETAIL_REFRESH_LIMIT, 6)
+                self.assertEqual([call.args[1] for call in fetch.call_args_list],
+                                 [*[f'ACTIVE_{i}' for i in range(5)], 'MISSING_HISTORY', 'RECENT'])
+                fetch.reset_mock()
+                fetch_all(root)
+                self.assertEqual([call.args[1] for call in fetch.call_args_list], ['ACTIVE_5','ACTIVE_6','ACTIVE_7'])
+
+    def test_active_refresh_failure_preserves_old_sections_then_retries_only_failed_section(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            complete = {name:{'retained':True} for name in DETAIL_ENDPOINTS}
+            _write_details_archive(root, {
+                'NSE_TEST':{'fetched_at':'2000-01-01T00:00:00Z', 'data':complete},
+                'NSE_LISTED':{'fetched_at':'2099-01-01T00:00:00Z', 'data':complete},
+            }, 'fixture')
+            with patch('fetch_ipo_provider_data.IpoProviderClient', FakeClient), \
+                    patch('fetch_ipo_provider_data._refresh_detail', return_value=(
+                        {'documents':[{'title':'Updated'}]}, ['gmp_history: failed'])):
+                payload = fetch_all(root)
+            self.assertEqual(payload['details']['NSE_TEST']['data']['gmp_history'], {'retained':True})
+            self.assertEqual(payload['details']['NSE_TEST']['fetched_at'], '2000-01-01T00:00:00Z')
+            with patch('fetch_ipo_provider_data.IpoProviderClient', FakeClient), \
+                    patch('fetch_ipo_provider_data._refresh_detail', return_value=({'gmp_history':[1]}, [])) as fetch:
+                fetch_all(root)
+            self.assertEqual(fetch.call_args.args[2], {'gmp_history'})
+
     def test_http_and_transport_outages_back_off_but_missing_objects_do_not(self):
         for status, code in [("000", 7), ("", 28), ("", 22), ("200", 28), ("408", 22),
                              ("429", 22), ("401", 22), ("403", 22), ("500", 22),

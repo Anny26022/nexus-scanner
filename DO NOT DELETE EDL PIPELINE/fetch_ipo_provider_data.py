@@ -1,8 +1,8 @@
 """Ingest permitted IPO provider data without retaining browser credentials.
 
 Each run creates a new provider session, fetches catalogue and analytics feeds,
-then fills new/missing detail sections within a time budget, checkpointing
-progress for the next daily run without re-downloading completed sections.
+then fills missing detail sections and refreshes a small stale active-IPO lane
+within a time budget, checkpointing progress for the next daily run.
 """
 
 from __future__ import annotations
@@ -45,6 +45,8 @@ DETAIL_ENDPOINTS = {
     "peer_valuation": "/api/analytics/peer-valuation/issue/{id}",
 }
 MISSING_DETAIL_BUDGET_SECONDS = 20 * 60
+ACTIVE_DETAIL_REFRESH_LIMIT = 6
+ACTIVE_DETAIL_REFRESH_HOURS = 24
 DETAIL_DELAY_SECONDS = 0.28
 LISTED_ARCHIVE_NAME = "ipo_provider_listed_archive.json.gz"
 DETAILS_ARCHIVE_NAME = "ipo_provider_details_archive.json.gz"
@@ -259,7 +261,15 @@ def fetch_all(root: Path, detail_limit: int | None = None, *, missing_budget_sec
             failed = {error.split(":", 1)[0] for error in item.get("errors", [])}
             return set(DETAIL_ENDPOINTS) - set(item.get("data", {})) | (failed & set(DETAIL_ENDPOINTS))
 
-        ordered = [] if paused else sorted((identifier for identifier in candidates if missing_endpoints(identifier)), key=priority)
+        # Recently listed issues can still gain documents, GMP and allotment data.
+        refreshable = active | set(_detail_candidates(feeds, ("listed_60d",)))
+        refresh = set(sorted((identifier for identifier in refreshable
+                              if not missing_endpoints(identifier)
+                              and _age_hours(details.get(identifier, {}), now) >= ACTIVE_DETAIL_REFRESH_HOURS),
+                             key=lambda identifier: (-_age_hours(details.get(identifier, {}), now), identifier))
+                      [:ACTIVE_DETAIL_REFRESH_LIMIT])
+        ordered = [] if paused else sorted((identifier for identifier in candidates
+                                           if missing_endpoints(identifier) or identifier in refresh), key=priority)
         if detail_limit is not None:
             ordered = ordered[:detail_limit]
         deadline = time.monotonic() + missing_budget_seconds
@@ -269,7 +279,8 @@ def fetch_all(root: Path, detail_limit: int | None = None, *, missing_budget_sec
                 print("IPO missing-detail budget reached; saved progress resumes next run.", flush=True)
                 break
             current = details.get(identifier, {})
-            values, detail_errors = _refresh_detail(client, identifier, missing_endpoints(identifier))
+            endpoints = set(DETAIL_ENDPOINTS) if identifier in refresh else missing_endpoints(identifier)
+            values, detail_errors = _refresh_detail(client, identifier, endpoints)
             # Preserve previous successful endpoints on partial or total failure.
             # Only a complete merged collection advances its timestamp; failures
             # remain eligible next run without exceeding this run's request budget.

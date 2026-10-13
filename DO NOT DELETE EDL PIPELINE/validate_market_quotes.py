@@ -1,4 +1,4 @@
-"""Retry invalid ScanX quotes; retain quotes with wholly unavailable candles."""
+"""Retry invalid quotes; isolate sparse failures as unavailable candles."""
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,7 +34,7 @@ def main():
               'snapshot_received_at': datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),
               'checked_at': datetime.now(timezone.utc).isoformat(),
               'rejected': rejected, 'retry_received_at': None, 'retry_quotes': [],
-              'retry_error': None, 'errors': []}
+              'retry_error': None, 'errors': [], 'quarantined': []}
     if rejected:
         print(f"Retrying one market snapshot for inconsistent quotes: {', '.join(row['symbol'] for row in rejected)}")
         affected = {row['symbol'] for row in rejected}
@@ -56,6 +56,14 @@ def main():
         except Exception as error:
             report['retry_error'] = str(error)
         report['errors'] = quote_errors(rows, symbols)
+    failed = {entry['symbol'] for entry in report['errors']}
+    if (failed and len(symbols) and (len(symbols) - len(failed)) / len(symbols) >= 0.90
+            and all((get_optional_float(entry['raw_quote'].get('Ltp')) or 0) > 0 for entry in report['errors'])):
+        # Keep identity/fundamentals and the undated LTP, never the invalid bar.
+        report['quarantined'], report['errors'] = report['errors'], []
+        rows = [{**row, 'Open':None, 'High':None, 'Low':None, 'Volume':None, 'volume':None}
+                if row.get('Sym') in failed else row for row in rows]
+        print(f"Unavailable after retry (raw quotes retained in diagnostics): {', '.join(sorted(failed))}")
     report['unavailable_candles'] = [
         {'symbol': row['Sym'], 'reason': ('missing volume with no session OHLC'
          if row.get('Volume', row.get('volume')) is None else 'zero volume with no session OHLC'),

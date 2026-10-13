@@ -38,13 +38,13 @@ it.each<{schemaVersion:number; invalid?:string}>([
     ...Object.fromEntries(['d','e'].map((letter, i) => [`https://charts.example.com/${hash(letter)}.json.gz`,
       {schemaVersion:1, symbol:'TEST', candles:[candles[i]]}]))
   };
-  if (invalid === 'symbol') values[`https://charts.example.com/${hash('d')}.json.gz`] = {schemaVersion:1, symbol:'OTHER', candles:[]};
+  if (invalid === 'symbol') values[`https://charts.example.com/${hash('d')}.json.gz`] = {schemaVersion:1, symbol:'OTHER', candles:[candles[0]]};
   if (invalid === 'future') candles[1].date = '2027-01-01';
   if (invalid === 'missing') delete values[`https://charts.example.com/${hash('d')}.json.gz`];
   if (invalid === 'duplicate') candles[1].date = candles[0].date;
   vi.stubGlobal('fetch', vi.fn(async (url: string) => ({ok:true, json:async()=>values[url],
     arrayBuffer:async()=>new TextEncoder().encode(JSON.stringify(values[url])).buffer, headers:new Headers({'Content-Encoding':'gzip'})})));
   const {realAdapter} = await import('../api/realAdapter');
-  if (invalid) await expect(realAdapter.getChart('TEST')).rejects.toThrow();
+  if (invalid) await expect(realAdapter.getChart('TEST')).rejects.toThrow(invalid === 'symbol' ? 'Chart chunk symbol/schema mismatch' : undefined);
   else await expect(realAdapter.getChart('TEST')).resolves.toEqual({schemaVersion:2, ...metadata, candles, asOfDate:'2026-10-01'});
 });

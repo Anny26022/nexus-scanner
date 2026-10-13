@@ -82,13 +82,15 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
     stats = Counter() if stats is None else stats
     if not filings:
         return []
+    cache_exists = path.is_file()
     try:
         old = load_json(path, default={})
     except (OSError, ValueError):
         old = {}
     if not isinstance(old, dict):
         old = {}
-    if old and old.get('rules') != rules and (legacy_rules is None or old.get('rules') != legacy_rules):
+    invalidated = bool(old) and old.get('rules') != rules and (legacy_rules is None or old.get('rules') != legacy_rules)
+    if invalidated:
         stats['invalidated_companies'] += 1
         old = {}
     history_key = history_fingerprint(filings)
@@ -110,10 +112,10 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
                     for row, source in zip(previous, sources))):
         stats['unchanged_companies'] += 1
         if old['rules'] != rules:
-            stats['legacy_upgrades'] += 1
             old['rules'] = rules
             try:
                 save_json(path, old, ensure_ascii=False)
+                stats['legacy_upgrades'] += 1
             except OSError as error:
                 print(f'WARNING: Classification cache not upgraded: {error}', flush=True)
         stats['reused_filings'] += len(previous)
@@ -123,7 +125,10 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
                 row['documentExtraction'] = filings[source]['documentExtraction']
         return result
     stats['rebuilt_companies'] += 1
-    stats['source_changed' if old.get('history_key') and old['history_key'] != history_key else 'cache_layout_misses'] += 1
+    if not invalidated:
+        reason = ('cold_companies' if not cache_exists else
+                  'source_changed' if old.get('history_key') and old['history_key'] != history_key else 'cache_layout_misses')
+        stats[reason] += 1
     entries, keys = {}, []
     def classify(row):
         key = classification_key(row)
@@ -230,6 +235,7 @@ def main() -> int:
     print(f"Filing cache: unchanged companies={stats['unchanged_companies']}; "
           f"rebuilt companies={stats['rebuilt_companies']}; "
           f"invalidated companies={stats['invalidated_companies']}; "
+          f"cold companies={stats['cold_companies']}; "
           f"source changed={stats['source_changed']}; cache/layout misses={stats['cache_layout_misses']}; "
           f"legacy upgrades={stats['legacy_upgrades']}; "
           f"reused filings={stats['reused_filings']}; fresh classifications={stats['fresh_filings']}", flush=True)

@@ -39,7 +39,7 @@ from .artifacts import (
     SCANNER_HISTORY_SCRIPT,
     SCRIPT_OUTPUT_SPECS,
 )
-from .config import PipelineConfig
+from .config import PipelineConfig, env_bool
 from .validators import ArtifactCheck, validate_many
 
 
@@ -196,7 +196,7 @@ def prepare_filing_output():
     """Hide filing compression/archival behind independent stock enrichment."""
     started = time.perf_counter()
     sizes = compress_file('filing_history.json', FILES_TO_COMPRESS['filing_history.json'])
-    if os.environ.get('EDL_FILING_BACKUPS', '1') == '1':
+    if env_bool('EDL_FILING_BACKUPS', True):
         prepare_filing_archives(Path(BASE_DIR), Path(BASE_DIR) / '.filing_archives',
                                 compressed_classified=Path(BASE_DIR) / 'filing_history.json.gz')
     print(f'  Filing compression and archives elapsed: {time.perf_counter() - started:.2f}s', flush=True)

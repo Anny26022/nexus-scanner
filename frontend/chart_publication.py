@@ -13,8 +13,12 @@ import subprocess
 import tempfile
 import re
 import time
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'DO NOT DELETE EDL PIPELINE' / 'src'))
+from edl_pipeline.config import env_bool
 
 
 def write_json(path, payload):
@@ -374,7 +378,7 @@ def complete_object_release(chart_root, output, manifest, store=None):
     if store is None and os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':
         store = R2Store()
     started = time.perf_counter()
-    archives = prepare_archives(chart_root) if os.environ.get('EDL_FILING_BACKUPS', '1') == '1' else {}
+    archives = prepare_archives(chart_root) if env_bool('EDL_FILING_BACKUPS', True) else {}
     print(f'Archive preparation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = dict(index, archives=archives)
     if archives:

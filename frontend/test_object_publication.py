@@ -70,14 +70,14 @@ class ObjectPublicationTests(unittest.TestCase):
             root = Path(folder); output = root / 'public'; output.mkdir()
             (root / 'filing_history.json.gz').write_bytes(gzip.compress(b'{"records":[]}'))
             store = ObjectStore()
-            with patch.dict('os.environ', {'EDL_FILING_BACKUPS': '0'}), \
+            with patch.dict('os.environ', {'EDL_FILING_BACKUPS': ' false '}), \
                     patch('chart_publication.prepare_archives', side_effect=AssertionError('daily backup work')):
                 complete_release(self.build(root, '2026-10-06'), output,
                                  {'revision': 'a'*64, 'sessionDate': '2026-10-06'}, store)
             daily = store.references['releases/' + 'a'*64 + '/index.json']
             self.assertEqual(daily['archives'], {})
             self.assertNotIn('archivesAsOf', daily)
-            with patch.dict('os.environ', {'EDL_FILING_BACKUPS': '1'}):
+            with patch.dict('os.environ', {'EDL_FILING_BACKUPS': ' YES '}):
                 complete_release(self.build(root, '2026-10-07'), output,
                                  {'revision': 'b'*64, 'sessionDate': '2026-10-07'}, store)
             weekly = store.references['releases/' + 'b'*64 + '/index.json']

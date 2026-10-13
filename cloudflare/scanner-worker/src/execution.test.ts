@@ -1,3 +1,4 @@
+import { SCANNER_IDENTITY } from '../../../frontend/src/engine/compatibility';
 /// <reference types="node" />
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
@@ -30,20 +31,20 @@ function fixture() {
     add(`shards/${name}.bin.gz`,binary(groups.get(index)??[]));
     add(`auxiliary/${name}.json.gz`,gzipSync(JSON.stringify({delivery:{},earnings:{},breadth:{}})));
   }
-  const manifest={revision,session,schemaVersion:7,engineVersion:'1',shards:32,objects:descriptors};
+  const manifest={revision,session,schemaVersion:7,...SCANNER_IDENTITY,shards:32,objects:descriptors};
   const get=vi.fn(async(key:string)=>{
     if(key===`${prefix}/manifest.json`)return {json:async()=>manifest};
     const bytes=objects.get(key);return bytes ? {arrayBuffer:async()=>Uint8Array.from(bytes).buffer} : null;
   });
   let active=revision;
-  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({revision:active,sessionDate:session,schemaVersion:7}))));
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({revision:active,sessionDate:session,schemaVersion:7,...SCANNER_IDENTITY}))));
   const entries=new Map<string,Response>();
   vi.stubGlobal('caches',{default:{match:vi.fn(async(key:Request)=>entries.get(key.url)?.clone()),
     put:vi.fn(async(key:Request,response:Response)=>{entries.set(key.url,response.clone());})}});
   const pending:Promise<unknown>[]=[];
   const context={waitUntil:(promise:Promise<unknown>)=>{pending.push(promise);}} as unknown as ExecutionContext;
   const env={ALLOWED_ORIGINS:'https://app.example',SCANNER_RELEASE_URL:'https://app.example/data/current.json',SCANNER_DATA:{get}} as any;
-  const request={datasetRevision:revision,asOfDate:session,universe:'custom',customSymbols:['AAA'],
+  const request={...SCANNER_IDENTITY,datasetRevision:revision,asOfDate:session,universe:'custom',customSymbols:['AAA'],
     expressionTree:{type:'condition',condition:{conditionId:'ADX',parameters:{period:14,comparison:'ABOVE',value:1}}},page:1,pageSize:1};
   return {get,setActive:(value:string)=>{active=value;},
     async run(overrides:Record<string,unknown>={},origin='https://app.example') {

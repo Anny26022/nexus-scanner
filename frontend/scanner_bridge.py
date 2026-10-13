@@ -11,7 +11,8 @@ import re
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1] / "DO NOT DELETE EDL PIPELINE"
-sys.path[:0] = [str(ROOT), str(ROOT / "src")]
+sys.path[:0] = [str(ROOT), str(ROOT / "src"), str(ROOT.parent / "scripts")]
+from scanner_identity import checked_identity
 from screen_trend_conditions import _load_context, _load_delivery_history, _resolve_universe, _requires_delivery as _needs_delivery
 from edl_pipeline.scanner.context import normalize_condition_spec
 from edl_pipeline.scanner.context import CONTEXT_CONDITION_REGISTRY
@@ -21,6 +22,7 @@ from edl_pipeline.scanner.trend import evaluate_history, normalize_history, _com
 from edl_pipeline.scanner.financials import finite_number, financial_value
 from edl_pipeline.schemas import PUBLIC_FINANCIAL_FIELDS
 
+LOCAL_SCANNER_IDENTITY = checked_identity()
 
 LEGACY_PRESETS = {
     "preset_persistent_momentum": "lib-persistent-momentum", "preset_easy_money": "lib-easy-money",
@@ -351,6 +353,9 @@ def page_response(response, request):
 
 
 def run(request, root=ROOT, cache=None):
+    if 'engineVersion' in request or 'conditionContractHash' in request:
+        if any(request.get(key) != value for key, value in LOCAL_SCANNER_IDENTITY.items()):
+            raise ValueError('Scanner engine or condition contract is incompatible. Refresh after the matching release is deployed.')
     dataset_revision = request.get('datasetRevision')
     if dataset_revision:
         if not isinstance(dataset_revision,str) or not re.fullmatch(r'[a-f0-9]{64}',dataset_revision):

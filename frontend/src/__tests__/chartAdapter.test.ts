@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { SCANNER_IDENTITY } from '../engine/compatibility';
 const revision = 'a'.repeat(64);
 const manifest = { revision, schemaVersion:6, sessionDate:'2026-10-01', totalStocks:1,
   datasetUrl:'/data/stocks.json', iposUrl:'/data/ipos.json', chartRevision:'b'.repeat(64),
@@ -22,4 +23,24 @@ it('reports corrupt chart data consistently',async()=>{
     .mockResolvedValueOnce({ok:true,arrayBuffer:async()=>new TextEncoder().encode('<html>error</html>').buffer,headers:new Headers()}));
   const { realAdapter }=await import('../api/realAdapter');
   await expect(realAdapter.getChart('TEST')).rejects.toThrow('Chart data unavailable');
+});
+it('rejects incompatible schema-7 releases before using their packs',async()=>{
+  const descriptor={url:'/data/core.json.gz',bytes:1,sha256:'a'.repeat(64),schemaVersion:7,encoding:'gzip'};
+  vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({...manifest,schemaVersion:7,
+    engineVersion:'old',conditionContractHash:'b'.repeat(64),
+    packs:{core:descriptor,technical:descriptor,fundamentals:descriptor}})}));
+  const { refreshManifest }=await import('../api/realAdapter');
+  await expect(refreshManifest()).rejects.toThrow('incompatible');
+});
+it('rejects incompatible historical schema-7 releases before loading stocks',async()=>{
+  const descriptor={url:'/data/core.json.gz',bytes:1,sha256:'a'.repeat(64),schemaVersion:7,encoding:'gzip'};
+  const current={...manifest,schemaVersion:7,...SCANNER_IDENTITY,packs:{core:descriptor,technical:descriptor,fundamentals:descriptor}};
+  const historical={...current,revision:'c'.repeat(64),engineVersion:'old'};
+  const fetcher=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>current})
+    .mockResolvedValueOnce({ok:true,json:async()=>historical});
+  vi.stubGlobal('fetch',fetcher);
+  const { realAdapter }=await import('../api/realAdapter');
+  await expect(realAdapter.runScreen({asOfDate:'2026-10-01',datasetRevision:historical.revision,universe:'mainboard',page:1,pageSize:50,
+    expressionTree:{type:'group',operator:'all',children:[]}})).rejects.toThrow('incompatible');
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });

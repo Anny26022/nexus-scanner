@@ -58,6 +58,8 @@ export type ExpressionNode = ExpressionGroupNode | ExpressionConditionNode;
 export interface ScreenerRunRequest {
   announcementFilter?: import("../api/announcements").AnnouncementFilter;
   announcementSymbols?: string[];
+  engineVersion?: string;
+  conditionContractHash?: string;
   datasetRevision?: string;
   expressionTree: ExpressionNode;
   textQuery?: string;

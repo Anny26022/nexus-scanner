@@ -108,3 +108,37 @@ The local Vite server continues to use the Python bridge when `VITE_API_BASE_URL
 7. Set the frontend API base URL to the Worker.
 
 Rollback restores the previous immutable `current.json` pointer and, when needed, the previous Worker deployment. Seven private scanner revisions are retained for this purpose.
+
+## Engine and condition compatibility
+
+Schema-7 public releases and private manifests include `engineVersion` and
+`conditionContractHash`. Every browser scan and advanced API request carries the
+compiled identity. Schema-7 clients reject releases whose identity is missing or
+different before local evaluation. The Worker checks the active release, request,
+and private manifest; it checks the request before response-cache lookup. Health
+checks remain unavailable when the release or private marker is incompatible.
+Legacy schema-4/5/6 releases retain their previous compatibility path.
+
+The identity is generated from source, rather than relying on a manual version
+bump. `engineVersion` fingerprints Python scanner modules/bridge and shared
+TypeScript formulas, query compiler, scalar evaluator and capability routing.
+`conditionContractHash` fingerprints the condition catalog, request/response types
+and reference contract. Filenames and byte lengths are framed in the SHA-256 input.
+Source-only changes conservatively require a coordinated release, even when their
+semantics are unchanged. This detects incompatible builds; parity tests remain
+necessary to prove matching calculations.
+
+After changing a covered source file, run:
+
+```sh
+python3 scripts/scanner_identity.py
+```
+
+Commit the generated `frontend/src/engine/compatibility.ts` with the source change.
+Frontend and Worker tests/builds check it for drift; publication refuses stale
+identities and includes the identity in the immutable revision digest. Deploy the
+matching frontend and Worker, then publish the matching schema-7 release. During
+rollout, incompatible combinations fail explicitly rather than run different rules.
+Rollback must restore matching code and data identities together.
+The local Python bridge validates identity-bearing requests too; legacy internal
+requests without identity fields remain supported for development tooling.

@@ -9,7 +9,9 @@
     "build": "wrangler deploy --config wrangler.toml --dry-run --outdir dist",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "deploy": "wrangler deploy --config wrangler.toml"
+    "deploy": "python3 ../../scripts/scanner_identity.py --check && wrangler deploy --config wrangler.toml",
+    "pretest": "python3 ../../scripts/scanner_identity.py --check",
+    "prebuild": "python3 ../../scripts/scanner_identity.py --check"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261002.1",

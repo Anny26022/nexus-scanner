@@ -1,8 +1,9 @@
+import { SCANNER_IDENTITY } from '../engine/compatibility';
 import { afterEach, expect, it, vi } from 'vitest';
 import { filterAnnouncements, type Announcement } from '../api/announcements';
 const hash = (value: string) => value.repeat(64);
 const revision = hash('a');
-const manifest = {revision, schemaVersion: 7, chartRevision: hash('b'), sessionDate: '2026-10-06', totalStocks: 1,
+const manifest = {revision, schemaVersion: 7,...SCANNER_IDENTITY, chartRevision: hash('b'), sessionDate: '2026-10-06', totalStocks: 1,
   datasetUrl: '/stocks.json', iposUrl: '/ipos.json', dataIndexUrl: '/index.json', objectUrlTemplate: 'https://cdn.example.com/objects/{hash}.json.gz'};
 const row: Announcement = {id: 'filing-1', publishedAt: '2026-10-07T04:30:00Z', headline: 'Order win', topics: ['order_win'], status: 'approved', detailPage: hash('f')};
 const catalog = {referenceSession: '2026-10-06', publishedAt: '2026-10-07T06:30:00Z', taxonomy: hash('1'), index: hash('2'),

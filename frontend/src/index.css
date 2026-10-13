@@ -222,7 +222,7 @@
 .data-table th button { display: flex; align-items: center; gap: 5px; min-height: 34px; }
 .data-table th button:hover, .data-table th[aria-sort="ascending"], .data-table th[aria-sort="descending"] { color: var(--accent); }
 .data-table td { height: 46px; padding: 5px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; overflow: hidden; }
-.windowed-table tbody tr:not(.table-spacer), .windowed-table tbody tr:not(.table-spacer) > td { height: 47px; }
+.windowed-table tbody tr:not(.table-spacer), .windowed-table tbody tr:not(.table-spacer) > td { height: 50px; }
 .data-table .table-spacer > td { padding: 0; border: 0; }
 .data-table .column-spacer { padding-inline: 0; }
 .data-table { overflow-anchor: none; }

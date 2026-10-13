@@ -170,12 +170,13 @@ async function getIpoJson<T>(url: string): Promise<T> {
   }
 }
 
+const validDate = (date: unknown) => typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
+  && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
+
 function validateManifest(value: unknown): Manifest {
   const manifest = value as Manifest | null;
   const validUrl = (url: unknown) => typeof url === 'string' && !/\s/.test(url)
     && (/^\/(?!\/).+/.test(url) || /^https:\/\/[^/]+\/.+/.test(url));
-  const validDate = (date: unknown) => typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
-    && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
   if (!manifest || !/^[a-f0-9]{64}$/.test(manifest.revision) || ![4, 5, 6, 7].includes(manifest.schemaVersion)
       || (manifest.datasetGzipUrl !== undefined && (!validUrl(manifest.datasetGzipUrl) || !manifest.datasetGzipUrl.endsWith('.json.gz')))
       || (manifest.datasetPackedGzipUrl !== undefined && (!validUrl(manifest.datasetPackedGzipUrl) || !manifest.datasetPackedGzipUrl.endsWith('.json.gz')))
@@ -384,8 +385,20 @@ class RealDataAdapter {
     const release = await releaseFor(revision);
     if (release.schemaVersion === 7) {
       const index = await dataIndex(release);
-      const chart = await object<ChartSnapshot>(release, index.chartObjects[symbol], 'Chart');
-      if (chart.symbol !== symbol || chart.schemaVersion !== 2) throw new Error('Chart symbol/schema mismatch');
+      const chart = await object<ChartSnapshot & {candleChunks?: string[]}>(release, index.chartObjects[symbol], 'Chart');
+      if (chart.symbol !== symbol || ![2, 3].includes(chart.schemaVersion)) throw new Error('Chart symbol/schema mismatch');
+      if (chart.schemaVersion === 3) {
+        const {candleChunks, ...metadata} = chart;
+        if (!Array.isArray(candleChunks) || candleChunks.length > 2 || new Set(candleChunks).size !== candleChunks.length)
+          throw new Error('Invalid chart chunk references');
+        const chunks = await Promise.all(candleChunks.map(hash => object<{schemaVersion:number;symbol:string;candles:ChartSnapshot['candles']}>(release, hash, 'Chart')));
+        if (chunks.some(chunk => chunk.symbol !== symbol || chunk.schemaVersion !== 1 || !Array.isArray(chunk.candles)))
+          throw new Error('Chart chunk symbol/schema mismatch');
+        const candles = chunks.flatMap(chunk => chunk.candles);
+        if (candles.some((row, i) => !validDate(row.date) || row.date > release.sessionDate || (i > 0 && row.date <= candles[i - 1].date))
+            || chart.historyStartDate !== (candles[0]?.date ?? null)) throw new Error('Chart chunk dates do not match release');
+        return {...metadata, schemaVersion: 2, candles, asOfDate: release.sessionDate};
+      }
       return {...chart, asOfDate: release.sessionDate};
     }
     if (!release.chartUrlTemplate) throw new Error('Chart release unavailable');

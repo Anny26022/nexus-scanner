@@ -184,10 +184,15 @@ def _market_news(root, as_of):
 def _chart_object(task):
     root, objects, symbol, as_of, actions, earnings, news = task
     candles = _load_candles(root / "ohlcv_data" / f"{symbol}.csv", as_of)
+    # Two stable pieces avoid one object per day/year and retain corrected history.
+    chunks = [[row for row in candles if (row['date'][:4] == as_of[:4]) == current]
+              for current in (False, True)]
     payload = {
-        "schemaVersion": 2, "symbol": symbol,
+        "schemaVersion": 3, "symbol": symbol,
         "historyStartDate": candles[0]["date"] if candles else None,
-        "candles": candles, "volumeEvents": _volume_events(candles),
+        "candleChunks": [put_object(objects, {'schemaVersion': 1, 'symbol': symbol, 'candles': chunk})
+                         for chunk in chunks if chunk],
+        "volumeEvents": _volume_events(candles),
         "corporateActions": [{**row, "classification": classify_corporate_action(row)} for row in actions if _date(row.get("ex_date")) and row["ex_date"] <= as_of],
         "earnings": [row for row in earnings if _date(row.get("filing_date")) and row["filing_date"] <= as_of],
         "marketNews": sorted(news, key=lambda row: row["date"], reverse=True)[:50],

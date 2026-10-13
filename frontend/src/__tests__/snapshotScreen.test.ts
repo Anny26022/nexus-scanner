@@ -89,9 +89,10 @@ describe('published snapshots', () => {
     const corrected = {...data,revision:next,stocks:[{...data.stocks[0],rvol:1}]};
     let current = revision;
     const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
-      if (url === '/data/current.json') return new Response(JSON.stringify({...manifest,datasetGzipUrl:undefined,datasetUrl:`/data/revisions/${current}/stocks.json`,revision:current}));
+      if (url === '/data/current.json') return new Response(JSON.stringify({...manifest,datasetGzipUrl:undefined,datasetPackedGzipUrl:undefined,datasetUrl:`/data/revisions/${current}/stocks.json`,revision:current}));
       if (url.includes(`/revisions/${revision}/stocks.json`)) return new Response(JSON.stringify(data));
       if (url.includes(`/revisions/${next}/stocks.json`)) return new Response(JSON.stringify(corrected));
+      expect(options?.method).toBe('POST');
       const body = JSON.parse(options!.body as string);
       expect(body.datasetRevision).toBe(next);
       expect(body.asOfDate).toBe(snapshot.asOfDate);

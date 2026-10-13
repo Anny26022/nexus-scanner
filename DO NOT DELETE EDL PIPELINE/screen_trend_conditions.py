@@ -3,7 +3,9 @@
 import argparse
 import csv
 import gzip
+import io
 import json
+from collections import deque
 from pathlib import Path
 import sys
 
@@ -141,8 +143,22 @@ def _requires_delivery(expression):
     return any(_requires_delivery(value) for key, value in expression.items() if key in {"conditions", "children", "expression", "child"})
 
 
-def _load_delivery_history(path, symbols=None, eod2_path=None):
-    """Load official delivery first; EOD2 fills only historical gaps by date."""
+def _delivery_records(records, allowed=None, windows=None):
+    """Filter an evaluation view; never infer record dates from filenames."""
+    for item in records:
+        symbol = str(item.get("symbol") or "").upper() if isinstance(item, dict) else ""
+        day = str(item.get("date") or "") if isinstance(item, dict) else ""
+        if (symbol and day and (allowed is None or symbol in allowed)
+                and (windows is None or day in windows.get(symbol, ()))):
+            yield item
+
+
+def _load_delivery_history(path, symbols=None, eod2_path=None, *, windows=None, cached_records=None, csv_payloads=None):
+    """Load official delivery first; EOD2 fills only historical gaps by date.
+
+    Optional windows bound evaluation only. Cached records reuse payloads
+    already read while freezing the complete, unchanged backend history.
+    """
     allowed = set(symbols) if symbols else None
     history = {}
     paths = (
@@ -153,30 +169,42 @@ def _load_delivery_history(path, symbols=None, eod2_path=None):
         if not item_path.exists():
             continue
         try:
-            opener = gzip.open if item_path.suffix == ".gz" else open
-            with opener(item_path, "rt", encoding="utf-8") as handle:
-                records = json.load(handle).get("records", [])
+            if cached_records is not None and item_path in cached_records:
+                records = cached_records[item_path]
+            else:
+                opener = gzip.open if item_path.suffix == ".gz" else open
+                with opener(item_path, "rt", encoding="utf-8") as handle:
+                    records = json.load(handle).get("records", [])
         except (OSError, ValueError, AttributeError):
             continue
-        for item in records:
-            symbol = str(item.get("symbol") or "").upper() if isinstance(item, dict) else ""
-            day = str(item.get("date") or "") if isinstance(item, dict) else ""
-            if symbol and day and (allowed is None or symbol in allowed):
-                history.setdefault(symbol, {})[day] = item
+        for item in _delivery_records(records, allowed, windows):
+            symbol = str(item["symbol"]).upper()
+            history.setdefault(symbol, {})[str(item["date"])] = item
     # The EOD2 bootstrap is weekly and historical.  It never replaces a date
     # for which the direct official NSE cache has a record.
     if eod2_path and eod2_path.is_dir():
         files = ([eod2_path / f"{symbol}.csv" for symbol in allowed] if allowed else eod2_path.glob("*.csv"))
         for item_path in files:
+            symbol = item_path.stem.upper()
             if not item_path.exists():
                 continue
             try:
-                with item_path.open(newline="", encoding="utf-8") as handle:
+                source = (io.StringIO(csv_payloads[item_path].decode("utf-8"), newline="")
+                          if csv_payloads is not None and item_path in csv_payloads
+                          else item_path.open(newline="", encoding="utf-8"))
+                with source as handle:
+                    if windows is not None and all(day in history.get(symbol, {}) for day in windows.get(symbol, ())):
+                        # Keep UTF-8/parser failures fatal even when no fallback
+                        # row is needed. Avoid Python dictionaries, not checks.
+                        deque(csv.reader(handle), maxlen=0)
+                        continue
                     for row in csv.DictReader(handle):
                         symbol = item_path.stem.upper()
                         day = str(row.get("Date") or "")
                         value = row.get("delivery_percent")
                         if not day or value in {None, ""}:
+                            continue
+                        if windows is not None and day not in windows.get(symbol, ()):
                             continue
                         history.setdefault(symbol, {}).setdefault(day, {
                             "symbol": symbol, "date": day, "series": row.get("Series") or "EQ",

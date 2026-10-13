@@ -31,6 +31,19 @@ def get_optional_float(value):
         return None
 
 
+def unavailable_session_candle(row):
+    """Whether provider data cannot establish a session candle."""
+    volume = row.get("Volume", row.get("volume"))
+    return (all(row.get(key) is None for key in ("Open", "High", "Low"))
+            and (volume is None or get_optional_float(volume) == 0))
+
+
+def unavailable_candle(row):
+    """A positive retained LTP may be kept only when its session candle is unavailable."""
+    ltp = get_optional_float(row.get("Ltp"))
+    return unavailable_session_candle(row) and ltp is not None and ltp > 0
+
+
 def calculate_change(current, previous):
     if current is None or previous in (None, 0):
         return None
@@ -288,6 +301,8 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
     ltp = get_float(tech.get("Ltp"))
     total_shares = get_optional_float(tech.get("TotalShares")) or 0.0
     volume = get_optional_float(tech.get("Volume", tech.get("volume")))
+    # Missing/zero volume with absent OHLC cannot establish a session close.
+    session_close = None if unavailable_session_candle(tech) else ltp
     sme_record = sme_map.get(symbol) if sme_map is not None else None
 
     net_profit = quarterly_metric_fields("Net Profit", cq, "NET_PROFIT")
@@ -384,12 +399,12 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
             "listing_board": "SME" if sme_record else "MAINBOARD" if sme_map is not None else "UNKNOWN",
             "is_sme": True if sme_record else False if sme_map is not None else None,
             "listing_series": sme_record.get("Series") if sme_record else listing.get("series"),
-            "close": ltp,
+            "close": session_close,
             "open": get_optional_float(tech.get("Open")),
             "high": get_optional_float(tech.get("High")),
             "low": get_optional_float(tech.get("Low")),
             "volume": volume,
-            "rupee_volume": round(ltp * volume, 2) if positive(ltp) and volume is not None else None,
+            "rupee_volume": round(session_close * volume, 2) if positive(session_close) and volume is not None else None,
             "change_percent": get_optional_float(tech.get("PPerchange")),
             "market_cap_crore": market_cap_cr,
             "shares_outstanding": int(total_shares) if total_shares > 0 else None,

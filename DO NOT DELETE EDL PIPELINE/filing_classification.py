@@ -8,6 +8,8 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
+from pipeline_utils import resource_path
+
 VERSION = 5
 
 # Stable IDs, group, display name, and deliberately specific text rules.
@@ -85,9 +87,21 @@ RULES = tuple((key, group, name, re.compile(pattern))
               for group, rows in _GROUPS.items() for key, name, pattern in rows)
 TAXONOMY = [{"id": key, "group": group, "label": name} for key, group, name, _ in RULES]
 
+@lru_cache(maxsize=2048)
+def _cached_rule_matches(text):
+    return tuple(key for key, _, _, rx in RULES if rx.search(text))
+
+
+def _rule_matches(text):
+    # Repeated empty labels and standard disclosure clauses need not search
+    # every regex again. Long document text is evaluated but never retained.
+    evaluate = _cached_rule_matches if len(text) <= 4096 else _cached_rule_matches.__wrapped__
+    return evaluate(text)
+
+
 @lru_cache(maxsize=1)
 def source_label_mapping():
-    return json.loads(Path(__file__).with_name("filing_source_labels.json").read_text())["fields"]
+    return json.loads(resource_path("filing_source_labels.json").read_text())["fields"]
 
 
 _WRAPPERS = {"board_intimation", "board_outcome", "board_change", "press_release", "general_announcement"}
@@ -240,7 +254,7 @@ def classify_filing(filing):
             mapped = mapping.get(field, {}).get(value)
             # Unseen labels can use specific rules; known ambiguous labels map to [].
             if mapped is None:
-                mapped = [key for key, _, _, rx in RULES if rx.search(value)]
+                mapped = list(_rule_matches(value))
             else:
                 mapped = list(mapped)
             # Narrow old source-label mappings without claiming a MoU is a JV.
@@ -256,7 +270,7 @@ def classify_filing(filing):
     # Presentations describe many historical achievements. Refine their explicit
     # topic evidence only; do not interpret every discussed achievement as news.
     for field, raw, text in clauses:
-        candidates = [key for key, _, _, rx in RULES if rx.search(text)]
+        candidates = list(_rule_matches(text))
         if "fraud" in candidates:
             candidates = [key for key in candidates if key not in {"business_update", "order_win"}]
         if _LEGAL_ORDER.search(text):
@@ -374,7 +388,7 @@ def classify_corporate_action(action):
     return {'version': VERSION, 'topics': sorted(topics) or ['unclassified'], 'terms': terms,
             'source': 'NSE corporate actions', 'method': 'official_subject_rules'}
 
-def classify_filings(filings):
+def classify_filings(filings, classify=classify_filing):
     """Merge identical same-time documents across feeds; preserve revisions."""
     result, seen = [], {}
     for raw in filings:
@@ -393,9 +407,7 @@ def classify_filings(filings):
             if source_labels not in existing["sourceLabels"]:
                 existing["sourceLabels"].append(source_labels)
             existing["sourceLabels"].sort(key=lambda labels: tuple(str(labels.get(k) or '') for k in ('descriptor', 'ann_type', 'cat', 'source_endpoint')))
-            existing["classification"] = classify_filing(existing)
             continue
-        row["classification"] = classify_filing(row)
         row.setdefault("sourceEndpoints", [source] if source else [])
         row.setdefault("sourceLabels", [{k: row.get(k) for k in ("source_endpoint", "descriptor", "ann_type", "cat")}])
         row["filingId"] = hashlib.sha256(repr(identity).encode()).hexdigest()[:24]
@@ -404,4 +416,6 @@ def classify_filings(filings):
             row['documentGroupId'] = hashlib.sha256(url_key.encode()).hexdigest()[:24]
         result.append(row)
         seen[identity] = row
+    for row in result:
+        row["classification"] = classify(row)
     return result

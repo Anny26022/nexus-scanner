@@ -1,0 +1,246 @@
+{
+  "version": 5,
+  "classification_sha256": "077d2ee7aa2d9205eda9928d2a1316fde67980b15ac58ac5098f34582fd1064c",
+  "filings": [
+    {
+      "descriptor": "Financial Results"
+    },
+    {
+      "descriptor": "Reg. 34 (1) Annual Report"
+    },
+    {
+      "descriptor": "Voluntary revision of financial statements"
+    },
+    {
+      "descriptor": "Board Meeting"
+    },
+    {
+      "descriptor": "Outcome of Board Meeting"
+    },
+    {
+      "descriptor": "Board Meeting Rescheduled"
+    },
+    {
+      "descriptor": "General"
+    },
+    {
+      "descriptor": "Award of Order / Receipt of Order"
+    },
+    {
+      "descriptor": "Press Release / Media Release"
+    },
+    {
+      "descriptor": "Monthly Business Updates"
+    },
+    {
+      "descriptor": "Investor Presentation"
+    },
+    {
+      "descriptor": "Capacity addition"
+    },
+    {
+      "descriptor": "Commencement of commercial production"
+    },
+    {
+      "descriptor": "Regulatory approval"
+    },
+    {
+      "descriptor": "Product launch"
+    },
+    {
+      "descriptor": "USFDA warning letter"
+    },
+    {
+      "descriptor": "Received industry award"
+    },
+    {
+      "descriptor": "Acquisition"
+    },
+    {
+      "descriptor": "Scheme of Arrangement"
+    },
+    {
+      "descriptor": "Joint Venture"
+    },
+    {
+      "descriptor": "Sale or disposal"
+    },
+    {
+      "descriptor": "Incorporation"
+    },
+    {
+      "descriptor": "Sub-division / Stock Split"
+    },
+    {
+      "descriptor": "Buy back"
+    },
+    {
+      "descriptor": "Delisting"
+    },
+    {
+      "descriptor": "Dividend"
+    },
+    {
+      "descriptor": "Open Offer"
+    },
+    {
+      "descriptor": "Qualified Institutional Placement"
+    },
+    {
+      "descriptor": "Allotment of Equity Shares"
+    },
+    {
+      "descriptor": "Record Date"
+    },
+    {
+      "descriptor": "Borrowing"
+    },
+    {
+      "descriptor": "Corporate guarantee"
+    },
+    {
+      "descriptor": "Binding term sheet"
+    },
+    {
+      "descriptor": "Letter of intent"
+    },
+    {
+      "descriptor": "Allotment of ESOP / ESPS"
+    },
+    {
+      "descriptor": "Offer for Sale"
+    },
+    {
+      "descriptor": "Intimation of Repayment of Commercial Paper"
+    },
+    {
+      "descriptor": "Monitoring Agency Report"
+    },
+    {
+      "descriptor": "Disclosures under SEBI SAST"
+    },
+    {
+      "descriptor": "Pledge disclosure"
+    },
+    {
+      "descriptor": "Credit Rating"
+    },
+    {
+      "descriptor": "ESG rating"
+    },
+    {
+      "descriptor": "Shareholding"
+    },
+    {
+      "descriptor": "Form C continual disclosure"
+    },
+    {
+      "descriptor": "Trading Plan under SEBI PIT"
+    },
+    {
+      "descriptor": "Clarification sought"
+    },
+    {
+      "descriptor": "Strikes / Lockouts / Disturbances"
+    },
+    {
+      "descriptor": "Defaults on Payment of Interest"
+    },
+    {
+      "descriptor": "Appointment of Interim Resolution Professional"
+    },
+    {
+      "descriptor": "Pendency of Litigation"
+    },
+    {
+      "descriptor": "Workforce restructuring"
+    },
+    {
+      "descriptor": "Frauds Initial Disclosure"
+    },
+    {
+      "descriptor": "Resignation of Chief Financial Officer CFO"
+    },
+    {
+      "descriptor": "Appointment of Statutory Auditor"
+    },
+    {
+      "descriptor": "Change in Directorate"
+    },
+    {
+      "descriptor": "Appointment of Company Secretary"
+    },
+    {
+      "descriptor": "Related Party Transactions"
+    },
+    {
+      "descriptor": "Postal Ballot"
+    },
+    {
+      "descriptor": "Earnings Call Transcript"
+    },
+    {
+      "descriptor": "Analyst Investor Meet"
+    },
+    {
+      "descriptor": "Change of Name"
+    },
+    {
+      "descriptor": "Certificate under Reg 74 5"
+    },
+    {
+      "descriptor": "Daily Buy Back of equity shares"
+    },
+    {
+      "descriptor": "Newspaper Publication"
+    },
+    {
+      "caption": "Order received from State Tax Officer",
+      "descriptor": "Award_of_Order_Receipt_of_Order"
+    },
+    {
+      "caption": "To consider financial results",
+      "descriptor": "Board Meeting"
+    },
+    {
+      "caption": "Board approves dividend of Rs 5 per share and stock split from Rs 10 to Rs 2"
+    },
+    {
+      "caption": "Company wins supply order worth Rs 200 crore"
+    },
+    {
+      "caption": "Memorandum of understanding for proposed joint venture, subject to approvals"
+    },
+    {
+      "caption": "Compliance disclosure",
+      "sourceLabels": [
+        {
+          "descriptor": "Dividend"
+        },
+        {
+          "descriptor": "Board Meeting"
+        }
+      ]
+    },
+    {
+      "caption": "Intimation under Regulation 30",
+      "documentExtraction": {
+        "status": "extracted",
+        "pages": [
+          {
+            "page": 1,
+            "text": "The company has received a supply order worth Rs 200 crore."
+          }
+        ]
+      }
+    },
+    {
+      "caption": "Intimation under Regulation 30",
+      "documentExtraction": {
+        "status": "failed",
+        "pages": [],
+        "attemptedAt": "2026-10-08T00:00:00Z"
+      }
+    }
+  ]
+}

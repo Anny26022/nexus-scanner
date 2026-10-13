@@ -7,6 +7,8 @@
 """
 
 import gzip
+import hashlib
+import threading
 import json
 import math
 import os
@@ -17,6 +19,36 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import requests
+
+_http_local = threading.local()
+
+
+def http_session():
+    """Reuse connections within each fetch thread without sharing mutable sessions."""
+    if not hasattr(_http_local, "session"):
+        _http_local.session = requests.Session()
+    return _http_local.session
+
+
+def file_fingerprint(path):
+    path = Path(path)
+    if not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def resource_path(name):
+    """Use the canonical checkout input, or its unchanged installed-wheel copy."""
+    source = Path(__file__).resolve().with_name(name)
+    if source.is_file():
+        return source
+    configured = BASE_PATH / name
+    return configured if configured.is_file() else source.parent / "edl_pipeline" / "data" / name
+
 
 def _default_base_path():
     module_dir = Path(__file__).resolve().parent
@@ -136,6 +168,43 @@ def save_json(path, data, indent=None, ensure_ascii=True):
     """Write JSON atomically to a pipeline-relative path and create parent dirs."""
     text = json.dumps(finite_json(data), indent=indent, separators=(',', ':') if indent is None else None, ensure_ascii=ensure_ascii, allow_nan=False)
     atomic_replace_text(path, text)
+
+
+def save_json_records(path, data, ensure_ascii=True, *, encoded_records=None):
+    """Write a string-keyed artifact with the same compact bytes as save_json.
+
+    Keep sanitization and encoding bounded to one record rather than cloning
+    and encoding a multi-gigabyte artifact in memory. Publish only on success.
+    """
+    resolved = resolve_path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    def encoded(value):
+        return json.dumps(finite_json(value), separators=(',', ':'),
+                          ensure_ascii=ensure_ascii, allow_nan=False).encode('utf-8')
+    temporary = None
+    try:
+        with NamedTemporaryFile('wb', delete=False, dir=resolved.parent,
+                                prefix=f'.{resolved.name}.', suffix='.tmp') as handle:
+            temporary = Path(handle.name)
+            handle.write(b'{')
+            for index, (key, value) in enumerate(data.items()):
+                if index:
+                    handle.write(b',')
+                handle.write(encoded(key) + b':')
+                if key == 'records' and (encoded_records is not None or isinstance(value, (list, tuple))):
+                    handle.write(b'[')
+                    for record_index, record in enumerate(value if encoded_records is None else encoded_records):
+                        if record_index:
+                            handle.write(b',')
+                        handle.write(encoded(record) if encoded_records is None else record)
+                    handle.write(b']')
+                else:
+                    handle.write(encoded(value))
+            handle.write(b'}')
+        temporary.replace(resolved)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def compress_file(src, dst, compresslevel=9):

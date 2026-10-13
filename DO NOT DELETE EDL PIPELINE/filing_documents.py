@@ -89,6 +89,8 @@ def enrich_documents(records, root, as_of):
         key = document_key(row)
         cached = cache.get(key)
         if cached is None:
+            if fetched >= limit:
+                continue
             topics = set(classify_filing(row)['topics'])
             if not topics <= _WRAPPERS | {'unclassified', 'strategic_agreement', 'corporate_guarantee', 'letter_of_intent'}:
                 continue

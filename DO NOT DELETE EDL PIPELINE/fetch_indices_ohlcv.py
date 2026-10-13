@@ -4,6 +4,7 @@ Merges deep history with Today's live snapshot from ScanX API.
 """
 
 import requests
+from pipeline_utils import http_session
 import sys
 import time
 from collections import Counter
@@ -39,7 +40,7 @@ def fetch_chunk(payload):
     last_error = None
     for attempt in range(FETCH_ATTEMPTS):
         try:
-            r = requests.post(
+            r = http_session().post(
                 TICK_API_URL,
                 json=payload,
                 headers=get_headers(),

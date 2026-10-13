@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 import requests
+from pipeline_utils import http_session
 
 from pipeline_utils import ensure_dir, get_headers, load_json, resolve_path, save_json
 
@@ -35,7 +36,7 @@ def fetch_page(url, isin, headers, page=1):
     """Return records, endpoint page count and an error string when unavailable."""
     payload = {"data": {"isin": isin, "pg_no": page, "count": PAGE_SIZE}}
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=15)
+        response = http_session().post(url, json=payload, headers=headers, timeout=15)
         response.raise_for_status()
         payload = response.json()
     except (requests.RequestException, ValueError) as error:
@@ -182,6 +183,7 @@ def has_pending_backfill(existing, canonical_symbols):
 
 
 def main():
+    wall_started, cpu_started = time.perf_counter(), time.process_time()
     ensure_dir(OUTPUT_DIR)
     ensure_dir(HISTORY_DIR)
     try:
@@ -228,6 +230,7 @@ def main():
     succeeded = sum(result.get("status") == "success" for result in results)
     caught_up = sum(result.get("refresh_complete", False) for result in results)
     print(f"Filings fetched: {succeeded}/{len(results)}; both feeds caught up: {caught_up}/{len(results)}; LODR histories complete: {completed}/{len(history)}.")
+    print(f'Filings total elapsed (including cache load/save): {time.perf_counter() - wall_started:.2f}s; CPU: {time.process_time() - cpu_started:.2f}s', flush=True)
     return succeeded > 0
 
 

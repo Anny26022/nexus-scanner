@@ -27,21 +27,8 @@ jobs:
           cache: 'pip'
           cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
 
-      - name: Cache OHLCV Data  
-        uses: actions/cache@v4
-        with:
-          path: |
-            DO NOT DELETE EDL PIPELINE/ohlcv_data
-            DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
-            DO NOT DELETE EDL PIPELINE/delivery_history_data
-            DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
-            DO NOT DELETE EDL PIPELINE/scanner_history_data
-            DO NOT DELETE EDL PIPELINE/filing_history_data
-            DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
-            DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
-          key: scanner-history-v1-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: |
-            scanner-history-v1-${{ runner.os }}-
+      - name: Restore refresh history
+        uses: ./.github/actions/restore-refresh-history
 
       - name: Select weekly EOD2 cache key
         id: eod2-cache-key
@@ -83,7 +70,23 @@ jobs:
       - name: Install R2 uploader
         run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
 
-      - name: Run Pipeline
+      - name: Fetch refresh inputs
+        id: fetch
+        env:
+          PYTHONUNBUFFERED: '1'
+          EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
+        run: |
+          cd "DO NOT DELETE EDL PIPELINE"
+          python run_full_pipeline.py --phase fetch --stage "${{ runner.temp }}/edl-refresh-${{ github.run_id }}-${{ github.run_attempt }}"
+
+      - name: Save history after fetch
+        if: always() && (steps.fetch.outcome == 'success' || steps.fetch.outcome == 'failure')
+        continue-on-error: true
+        uses: ./.github/actions/save-refresh-history
+        with:
+          phase: fetch
+
+      - name: Build and publish validated data
         env:
           PYTHONUNBUFFERED: '1'
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
@@ -96,51 +99,20 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
-          python run_full_pipeline.py
+          python run_full_pipeline.py --phase build --stage "${{ runner.temp }}/edl-refresh-${{ github.run_id }}-${{ github.run_attempt }}"
+
+      - name: Save history after build
+        if: always() && steps.fetch.outcome == 'success'
+        continue-on-error: true
+        uses: ./.github/actions/save-refresh-history
+        with:
+          phase: build
 
       - name: Commit and Push Results
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          # A refresh can run long enough for main to receive a merge.  Start
-          # the generated-data commit from that latest tip rather than
-          # rebasing binary artifacts after they have been committed.
-          git fetch origin main
-          # Mixed reset retains the generated working files while refreshing
-          # the index too, so unrelated code merged during this run is kept.
-          git reset --mixed origin/main
-          git add "DO NOT DELETE EDL PIPELINE/all_stocks_fundamental_analysis.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/sector_analytics.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/market_breadth.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/market_breadth_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/sector_breadth_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/market_breadth_contributions_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/breadth_universe_snapshot.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/all_indices_history_v2.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/all_indices_list.json"
-          git add "DO NOT DELETE EDL PIPELINE/corporate_action_ledger.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/nse_corporate_actions.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/nse_corporate_action_adjustments.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/data_quality.json"
-          git add "DO NOT DELETE EDL PIPELINE/pipeline_report.json"
-          git add "DO NOT DELETE EDL PIPELINE/nse_universe_reconciliation.json"
-          git add "DO NOT DELETE EDL PIPELINE/mainboard_universe_report.json"
-          git add "DO NOT DELETE EDL PIPELINE/sme_market_data.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/nse_fno_ban.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/earnings_calendar.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/rs_rating_daily.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/ipo_screener.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/ipo_provider_listed_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/ipo_provider_details_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_listed_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_details_archive.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/shareholding_history.json.gz"
-          git add "DO NOT DELETE EDL PIPELINE/quarterly_financial_history.json.gz"
-          git add reference/index-constituent-mappings.json.gz
-          git add reference/index-constituent-mappings.manifest.json
-          git add frontend/public/data/current.json frontend/public/data/revisions
-          git commit -m "Automated Daily Data Refresh [skip ci]" || echo "No changes to commit"
-          git push
+        uses: ./.github/actions/commit-refresh-outputs
+        with:
+          weekly: 'false'
+          commit-message: 'Automated Daily Data Refresh'
 
       - name: Upload Refresh Diagnostics
         if: always()
@@ -151,5 +123,6 @@ jobs:
           path: |
             DO NOT DELETE EDL PIPELINE/pipeline_report.json
             DO NOT DELETE EDL PIPELINE/pipeline_failure_report.json
+            DO NOT DELETE EDL PIPELINE/price_validation_report.json
             DO NOT DELETE EDL PIPELINE/data_quality.json
             DO NOT DELETE EDL PIPELINE/data_quality_failure.json

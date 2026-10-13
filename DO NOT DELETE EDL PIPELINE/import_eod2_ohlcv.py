@@ -6,12 +6,16 @@ also keeps renamed securities attached to their own history.
 """
 
 import csv
+import io
 import json
 import os
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
 from datetime import date
+from multiprocessing import get_context
 from pathlib import Path
 
-from ohlcv_utils import merge_rows_by_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
+from ohlcv_utils import OHLCV_FIELDS, merge_rows_by_date, read_ohlcv_csv, symbol_csv_path
 from pipeline_utils import BASE_DIR, load_json, save_json
 
 
@@ -77,7 +81,7 @@ def source_rows(path, start_date, end_date):
     return rows
 
 
-def eod2_rows_for_isin(data_dir, history, isin):
+def eod2_rows_for_isin(data_dir, history, isin, parsed=None):
     """Collect renamed-file segments for one ISIN, with later segments winning."""
     rows = []
     for item in history.get(isin, []):
@@ -89,30 +93,59 @@ def eod2_rows_for_isin(data_dir, history, isin):
         except (KeyError, TypeError, ValueError):
             continue
         path = data_dir / "daily" / f"{str(item['symbol']).lower()}.csv"
-        rows.extend(source_rows(path, start_date, end_date))
+        if parsed is None:
+            rows.extend(source_rows(path, start_date, end_date))
+        else:
+            if path not in parsed:
+                parsed[path] = source_rows(path, date.min, date.max)
+            rows.extend(row for row in parsed[path] if start_date.isoformat() <= row['Date'] <= end_date.isoformat())
     return merge_rows_by_date(rows)
 
 
 def eod2_rows_for_security(data_dir, mapping, symbol, isin):
     """Return verified current-symbol history plus any renamed ISIN segments."""
     history = mapping.get("isin2hist", {})
-    mapped = eod2_rows_for_isin(data_dir, history, isin)
+    # A current ticker is commonly also an ISIN segment. Parse its CSV once,
+    # while preserving segment precedence and the unbounded fallback.
+    parsed = {}
+    mapped = eod2_rows_for_isin(data_dir, history, isin, parsed)
     if mapping.get("sym2isin", {}).get(symbol) != isin:
         return mapped, 0
 
     current_file = data_dir / "daily" / f"{symbol.lower()}.csv"
-    current = source_rows(current_file, date.min, date.max)
+    current = parsed.get(current_file)
+    if current is None:
+        current = source_rows(current_file, date.min, date.max)
     mapped_dates = {row["Date"] for row in mapped}
     additional_rows = sum(row["Date"] not in mapped_dates for row in current)
     return merge_rows_by_date([*current, *mapped]), additional_rows
 
 
-def write_delivery_csv(path, rows):
+def _csv_bytes(rows, fields):
+    buffer = io.StringIO(newline='')
+    writer = csv.DictWriter(buffer, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(rows)
+    return buffer.getvalue().encode()
+
+
+def _write_csv_bytes_if_changed(path, data):
+    try:
+        if path.read_bytes() == data:
+            return
+    except FileNotFoundError:
+        pass
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=DELIVERY_FIELDS)
-        writer.writeheader()
-        writer.writerows(rows)
+    path.write_bytes(data)
+
+
+def write_csv_if_changed(path, rows, fields):
+    """Render once; use those same bytes for comparison and any required write."""
+    _write_csv_bytes_if_changed(path, _csv_bytes(rows, fields))
+
+
+def write_delivery_csv(path, rows):
+    write_csv_if_changed(path, rows, DELIVERY_FIELDS)
 
 
 def delivery_rows(imported):
@@ -131,7 +164,54 @@ def delivery_rows(imported):
     return rows
 
 
-def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
+def _prepare_security(task):
+    """Read and render one overlay without mutating any persistent cache."""
+    data_dir, mapping, output_dir, symbol, isin = task
+    imported, additional = eod2_rows_for_security(data_dir, mapping, symbol, isin)
+    if not imported:
+        return None
+    existing = read_ohlcv_csv(symbol_csv_path(output_dir, symbol))
+    merged = merge_rows_by_date([
+        # EOD2 split corrections win overlaps; newer local sessions remain.
+        *existing,
+        *({field: row[field] for field in OHLCV_FIELDS} for row in imported),
+    ])
+    delivery = delivery_rows(imported)
+    return (
+        {"isin": isin, "start_date": imported[0]["Date"], "end_date": imported[-1]["Date"], "sessions": len(imported)},
+        additional, _csv_bytes(merged, OHLCV_FIELDS),
+        _csv_bytes(delivery, DELIVERY_FIELDS) if delivery else None, len(delivery),
+    )
+
+
+def _ordered_preparations(tasks, workers):
+    if workers <= 1:
+        yield from map(_prepare_security, tasks)
+        return
+    # Bound both IPC payloads and speculative reads. Only the parent writes,
+    # consumes exceptions and updates reports in the original master order.
+    executor = ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn"))
+    pending = deque()
+    tasks = iter(tasks)
+    try:
+        for _ in range(2 * workers):
+            task = next(tasks, None)
+            if task is None:
+                break
+            pending.append(executor.submit(_prepare_security, task))
+        while pending:
+            result = pending.popleft().result()
+            yield result
+            task = next(tasks, None)
+            if task is not None:
+                pending.append(executor.submit(_prepare_security, task))
+    finally:
+        for future in pending:
+            future.cancel()
+        executor.shutdown(wait=True, cancel_futures=True)
+
+
+def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None, *, workers=1):
     """Overlay adjusted EOD2 history and retain any newer local provider rows."""
     mapping = json.loads((data_dir / "isin_symbol_map.json").read_text(encoding="utf-8"))
     history = mapping.get("isin2hist", {}) if isinstance(mapping, dict) else {}
@@ -162,6 +242,40 @@ def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
     except (OSError, ValueError, AttributeError):
         pass
 
+    workers = max(1, min(2, workers))
+    # Aliases/duplicate master entries can share a destination. Retain their
+    # serial read-after-write semantics rather than speculating on stale bytes.
+    if workers > 1:
+        try:
+            destinations = [str(item.get("Symbol")).strip().casefold() for item in master if item.get("Symbol") and item.get("ISIN")]
+            if (len(destinations) != len(set(destinations))
+                    or any(not isinstance(item.get(key), (str, type(None)))
+                           for item in master for key in ("Symbol", "ISIN"))
+                    or output_dir.resolve() == (data_dir / "daily").resolve()
+                    or Path(delivery_output_dir).resolve() in {output_dir.resolve(), (data_dir / "daily").resolve()}
+                    or any((output_dir / f"{item.get('Symbol')}.csv").is_symlink()
+                           or (Path(delivery_output_dir) / f"{item.get('Symbol')}.csv").is_symlink()
+                           for item in master)):
+                workers = 1
+        except (AttributeError, TypeError):
+            workers = 1  # Let the ordered path surface malformed master rows.
+    def tasks():
+        for item in master:
+            symbol, isin = item.get("Symbol"), item.get("ISIN")
+            if not symbol or not isin or (isin not in history and symbols.get(symbol) != isin):
+                continue
+            # Do not pickle the entire security map for every company.
+            security_map = {"isin2hist": {isin: history.get(isin, [])},
+                            "sym2isin": {symbol: symbols.get(symbol)}}
+            yield data_dir, security_map, output_dir, symbol, isin
+    prepared = _ordered_preparations(tasks(), workers)
+    try:
+        return _commit_preparations(master, history, symbols, output_dir, delivery_output_dir, report, prepared)
+    finally:
+        prepared.close()
+
+
+def _commit_preparations(master, history, symbols, output_dir, delivery_output_dir, report, prepared):
     for item in master:
         symbol, isin = item.get("Symbol"), item.get("ISIN")
         if not symbol or not isin:
@@ -169,27 +283,22 @@ def import_eod2_ohlcv(data_dir, master, output_dir, delivery_output_dir=None):
         if isin not in history and symbols.get(symbol) != isin:
             report["unmapped_isins"] += 1
             continue
-        imported, additional_rows = eod2_rows_for_security(data_dir, mapping, symbol, isin)
-        if not imported:
+        result = next(prepared)
+        if result is None:
             report["empty_or_invalid_sources"] += 1
             continue
         destination = symbol_csv_path(output_dir, symbol)
-        # Imported rows intentionally come last: when EOD2 republishes a split
-        # adjustment it replaces the overlapping historical rows.  Any local
-        # sessions newer than EOD2's weekly snapshot remain in place.
-        merged = merge_rows_by_date([
-            *read_ohlcv_csv(destination),
-            *({field: row[field] for field in ("Date", "Open", "High", "Low", "Close", "Volume")} for row in imported),
-        ])
-        write_ohlcv_csv(destination, merged)
-        report["symbol_history"][symbol] = {"isin": isin, "start_date": imported[0]["Date"], "end_date": imported[-1]["Date"], "sessions": len(imported)}
-        delivery = delivery_rows(imported)
-        if delivery:
-            write_delivery_csv(delivery_output_dir / f"{symbol}.csv", delivery)
+        symbol_history, additional_rows, ohlcv_bytes, delivery_bytes, delivery_count = result
+        # Still perform the overlay every run: unchanged source data may need
+        # to replace locally modified historical rows.
+        _write_csv_bytes_if_changed(destination, ohlcv_bytes)
+        report["symbol_history"][symbol] = symbol_history
+        if delivery_bytes is not None:
+            _write_csv_bytes_if_changed(delivery_output_dir / f"{symbol}.csv", delivery_bytes)
             report["delivery_symbols"] += 1
-            report["delivery_rows"] += len(delivery)
+            report["delivery_rows"] += delivery_count
         report["imported_symbols"] += 1
-        report["imported_rows"] += len(imported)
+        report["imported_rows"] += symbol_history["sessions"]
         if additional_rows:
             report["verified_symbol_history_symbols"] += 1
             report["verified_symbol_history_additional_rows"] += additional_rows
@@ -211,6 +320,7 @@ def main():
         report = import_eod2_ohlcv(
             data_dir, load_json(MASTER_FILE), Path(BASE_DIR) / "ohlcv_data",
             Path(BASE_DIR) / "eod2_delivery_history_data",
+            workers=min(2, os.cpu_count() or 1),
         )
         save_json(REPORT_FILE, report)
         print(

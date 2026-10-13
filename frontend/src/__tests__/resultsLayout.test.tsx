@@ -18,11 +18,15 @@ it('copies every matching symbol from a later page without rendering additional 
   const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
   Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText}});
   try {
-    render(<ResultsTable {...props} data={{...data, page:2, matchCount:3, matchedSymbols:['FIRST','AVTNPL','LAST']}} />);
+    const matchedSymbols = [...Array.from({length:15}, (_, index) => `MATCH${index + 1}`), 'AVTNPL'];
+    render(<ResultsTable {...props} data={{...data, page:2, matchCount:16, matchedSymbols}} />);
+    expect(screen.getByRole('button', {name:'Next'})).toBeDisabled();
+    expect(screen.getByRole('button', {name:'Previous'})).toBeEnabled();
     fireEvent.click(screen.getByRole('button', {name:'Copy TradingView symbols'}));
-    expect(writeText).toHaveBeenCalledWith('NSE:FIRST, NSE:AVTNPL, NSE:LAST');
-    expect(screen.queryByText('FIRST')).not.toBeInTheDocument();
-    expect(screen.queryByText('LAST')).not.toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith(matchedSymbols.map(symbol => `NSE:${symbol}`).join(', '));
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+    expect(screen.getByText('AVTNPL')).toBeInTheDocument();
+    expect(screen.queryByText('MATCH1')).not.toBeInTheDocument();
     await screen.findByRole('button', {name:'Copied TradingView symbols'});
   } finally {
     if (original) Object.defineProperty(navigator, 'clipboard', original);

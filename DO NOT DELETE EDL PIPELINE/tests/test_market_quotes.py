@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 
 import pipeline_utils
+from fetch_dhan_data import fetch_market_snapshot
 from pipeline_utils import load_json, save_json
 import validate_market_quotes as quotes
 
@@ -33,6 +34,8 @@ class MarketQuoteTests(unittest.TestCase):
                         {'side_effect': retry} if isinstance(retry, Exception) else {'return_value': retry})) as fetch, \
                     contextlib.redirect_stdout(io.StringIO()):
                 code = quotes.main()
+            if fetch.called:
+                fetch.assert_called_once_with(retries=0)
             self.assertEqual((root / 'all_stocks_fundamental_analysis.json.gz').read_bytes(), b'previous publication')
             self.assertEqual(history.read_bytes(), historical)
             saved = load_json(root / 'dhan_data_response.json')
@@ -46,6 +49,16 @@ class MarketQuoteTests(unittest.TestCase):
         self.assertEqual(rows, original)
         self.assertEqual(calls, 0)
         self.assertEqual(report['errors'], [])
+
+    def test_corrective_fetch_has_no_nested_http_retries(self):
+        for retries, attempts in ((0, 1), (2, 3)):
+            with self.subTest(retries=retries), \
+                    mock.patch.object(pipeline_utils.requests, 'post', side_effect=pipeline_utils.requests.Timeout) as post, \
+                    mock.patch.object(pipeline_utils.time, 'sleep'):
+                with self.assertRaises(pipeline_utils.requests.Timeout):
+                    fetch_market_snapshot(**({'retries': 0} if retries == 0 else {}))
+                self.assertEqual(post.call_count, attempts)
+                self.assertEqual(post.call_args.kwargs['timeout'], 30)
 
     def test_isolates_persistently_bad_quote_without_inventing_a_candle(self):
         # BI quote from failed run 38352810698, with both volume aliases.

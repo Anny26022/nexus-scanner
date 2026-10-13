@@ -111,6 +111,10 @@ class ObjectPublicationTests(unittest.TestCase):
             (root / 'filing_history_data').mkdir()
             (root / 'filing_history_data/filing_history.json').write_bytes(b'{"symbols":{}}')
             expected = prepare_archives(charts)
+            raw = (root / 'filing_history_data/filing_history.json').read_bytes()
+            packed_raw = (charts / 'objects' / (expected['raw'] + '.json.gz')).read_bytes()
+            self.assertEqual(gzip.decompress(packed_raw), raw)
+            self.assertEqual(packed_raw[8], 0)  # Level 6, not the level-9 XFL marker.
             before = {digest: (charts / 'objects' / (digest + '.json.gz')).read_bytes() for digest in expected.values()}
             prepared = charts / '.prepared_archives'
             self.assertEqual(prepare_filing_archives(root, prepared), expected)
@@ -130,6 +134,13 @@ class ObjectPublicationTests(unittest.TestCase):
             calls = []
             def run(*args):
                 names = Path(args[args.index('--files-from') + 1]).read_text().splitlines()
+                if args[0] == 'check':
+                    self.assertIn('--download', args)
+                    self.assertIn('--one-way', args)
+                    self.assertEqual(args[args.index('--checkers') + 1], '16')
+                else:
+                    self.assertIn('--immutable', args)
+                    self.assertIn('--checksum', args)
                 calls.append((args[0], names))
             store.run = run
             listing = f'{old}.json.gz\t{(root / (old + ".json.gz")).stat().st_size}\n'
@@ -146,3 +157,9 @@ class ObjectPublicationTests(unittest.TestCase):
             store.run('copyto', 'source', 'charts:test/object')
         self.assertIn('--s3-no-head', run.call_args.args[0])
         self.assertIn('--s3-no-check-bucket', run.call_args.args[0])
+
+    def test_r2_check_failure_still_propagates(self):
+        store = R2Store.__new__(R2Store); store.env = {}
+        with patch('chart_publication.subprocess.run', side_effect=RuntimeError('verification failed')):
+            with self.assertRaisesRegex(RuntimeError, 'verification failed'):
+                store.run('check', 'source', 'charts:test/object', '--download', '--checkers', '16')

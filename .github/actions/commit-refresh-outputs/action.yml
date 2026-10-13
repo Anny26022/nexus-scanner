@@ -1,0 +1,64 @@
+name: Commit refresh outputs
+description: Stage only the existing published artifact allowlist and preserve the caller commit message.
+inputs:
+  weekly:
+    description: Include the weekly Tijori publication artifacts.
+    default: 'false'
+  commit-message:
+    description: Generated data commit message.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Commit and Push Results
+      shell: bash
+      env:
+        WEEKLY_REFRESH: ${{ inputs.weekly }}
+        REFRESH_COMMIT_MESSAGE: ${{ inputs.commit-message }}
+      run: |
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
+        # A refresh can run long enough for main to receive a merge.  Start
+        # the generated-data commit from that latest tip rather than
+        # rebasing binary artifacts after they have been committed.
+        git fetch origin main
+        # Mixed reset retains the generated working files while refreshing
+        # the index too, so unrelated code merged during this run is kept.
+        git reset --mixed origin/main
+        git add "DO NOT DELETE EDL PIPELINE/all_stocks_fundamental_analysis.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/sector_analytics.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/market_breadth.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/market_breadth_v2.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/sector_breadth_v2.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/market_breadth_contributions_v2.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/breadth_universe_snapshot.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/all_indices_history_v2.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/all_indices_list.json"
+        git add "DO NOT DELETE EDL PIPELINE/corporate_action_ledger.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/nse_corporate_actions.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/nse_corporate_action_adjustments.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/data_quality.json"
+        git add "DO NOT DELETE EDL PIPELINE/pipeline_report.json"
+        git add "DO NOT DELETE EDL PIPELINE/nse_universe_reconciliation.json"
+        git add "DO NOT DELETE EDL PIPELINE/mainboard_universe_report.json"
+        git add "DO NOT DELETE EDL PIPELINE/sme_market_data.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/nse_fno_ban.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/earnings_calendar.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/rs_rating_daily.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/ipo_screener.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/ipo_provider_listed_archive.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/ipo_provider_details_archive.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_listed_archive.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_details_archive.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/shareholding_history.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/quarterly_financial_history.json.gz"
+        git add reference/index-constituent-mappings.json.gz
+        git add reference/index-constituent-mappings.manifest.json
+        git add frontend/public/data/current.json frontend/public/data/revisions
+        if [ "$WEEKLY_REFRESH" = "true" ]; then
+          git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
+          git add frontend/public/data/tijori/current.json frontend/public/data/tijori/revisions
+        fi
+        # Published frontend data needs a Cloudflare build; do not suppress it with [skip ci].
+        git commit -m "$REFRESH_COMMIT_MESSAGE" || echo "No changes to commit"
+        git push

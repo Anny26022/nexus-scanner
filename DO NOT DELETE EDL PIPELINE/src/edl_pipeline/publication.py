@@ -9,6 +9,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 from tempfile import TemporaryDirectory, NamedTemporaryFile
 
 import pipeline_utils
@@ -132,7 +133,7 @@ def main(phase="all", stage_path=None):
                 (stage / name).symlink_to(cache, target_is_directory=True)
             methodology = destination / "breadth_methodology.json"
             if not methodology.exists():
-                methodology = source / "breadth_methodology.json"
+                methodology = pipeline_utils.resource_path("breadth_methodology.json")
             shutil.copy2(methodology, stage / methodology.name)
             listed_archive = destination / "ipo_provider_listed_archive.json.gz"
             if listed_archive.exists():
@@ -154,6 +155,13 @@ def main(phase="all", stage_path=None):
             cwd=stage, env=env,
         )
         report_path = stage / "pipeline_report.json"
+        # Preserve rejected raw quotes even when the temporary refresh fails.
+        price_report = stage / 'price_validation_report.json'
+        if price_report.is_file():
+            try:
+                atomic_copy(price_report, destination / price_report.name)
+            except OSError as error:
+                print(f'Warning: could not preserve optional price diagnostics: {error}')
         report = pipeline_utils.load_json(report_path, default={})
         if result.returncode != 0 or not config.fetch_ohlcv:
             report["published"] = False
@@ -161,7 +169,9 @@ def main(phase="all", stage_path=None):
             return result.returncode
         if phase == "fetch":
             return 0
+        started = time.perf_counter()
         quality = inspect_publication(stage)
+        print(f'Publication quality elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         save_json(stage / "data_quality.json", quality)
         report["quality_errors"] = quality["errors"]
         report["published"] = not quality["errors"]
@@ -173,8 +183,10 @@ def main(phase="all", stage_path=None):
             return 1
         save_json(report_path, report)
         names = [spec.path for spec in FINAL_ARTIFACT_SPECS] + ["data_quality.json", "pipeline_report.json"]
+        started = time.perf_counter()
         promote(stage, destination, names, directories=("chart_artifacts",),
                 after=lambda: publish_frontend(destination))
+        print(f'Promotion and frontend publication elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         print("Published validated dataset and per-symbol data_quality.json.")
         if stage_path is not None:
             shutil.rmtree(stage)

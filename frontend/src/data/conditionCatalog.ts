@@ -1,5 +1,16 @@
 import { ConditionDef } from '../types/screener';
 import nativeConditions from './nativeConditions.json';
+import { snapshotFundamentals } from './snapshotFundamentals';
+import technicalConfigurations from './snapshotTechnicals.json';
+import { MOVING_AVERAGE_RULES } from './movingAverageRules';
+
+export const RETIRED_TECHNICAL_LABELS: Record<string, string> = {
+  INDICATOR_COMPARE: 'Indicator Compare / Crossover',
+  MA_CONVERGENCE: 'MA Convergence',
+  DIVERGENCE: 'Price / Oscillator Divergence',
+  SUPERTREND: 'Supertrend Direction',
+};
+export const isRetiredTechnicalCondition = (id: string) => Object.hasOwn(RETIRED_TECHNICAL_LABELS, id);
 
 const INDICATOR_OPTIONS = [
   'CLOSE','OPEN','HIGH','LOW','VOLUME','HL2','HLC3','OHLC4','SMA','EMA','WMA','VOLUME_SMA',
@@ -11,7 +22,7 @@ const INDICATOR_OPTIONS = [
 const OSCILLATOR_OPTIONS = ['RSI','MACD','MACD_HIST','STOCH_K','CCI','MFI','WILLIAMS_R','ROC','OBV']
   .map(value => ({ label: value.replaceAll('_', ' '), value }));
 
-const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
+export const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
   {
     id: 'INDICATOR_COMPARE', label: 'Indicator Compare / Crossover', category: 'trend',
     description: 'Compare any supported indicator with a fixed value or another indicator, including recent crossovers and offsets.',
@@ -70,9 +81,30 @@ const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
   },
 ];
 
-export const NEXUS_CONDITION_CATALOG: ConditionDef[] = [
-  ...ADVANCED_TECHNICAL_CONDITIONS,
-  ...nativeConditions as ConditionDef[],
+export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
+  {
+    id:'PRICE_VS_MAS', label:'Price vs moving averages', category:'trend',
+    description:'Latest close must satisfy every selected comparison (AND). These are current-price comparisons, not persistence or moving-average stack rules. Equality does not count as above or below.',
+    parameters:[{id:'rules', label:'Moving average comparisons', type:'multiselect', defaultValue:['ABOVE_EMA_10'], options:MOVING_AVERAGE_RULES}],
+  },
+  ...(nativeConditions as ConditionDef[]).map(def => ({
+    ...def,
+    label: def.id === 'MA_STACK' ? 'MA Stack' : def.label,
+    parameters: def.parameters.map(parameter => {
+      if (def.id === 'FUNDAMENTAL_METRIC' && parameter.id === 'metric') return {
+        ...parameter, options:[...(parameter.options ?? []), ...snapshotFundamentals.map(({value, label}) => ({value, label}))],
+      };
+      if (def.id === 'RS_RATING' && parameter.id === 'window') return {
+        ...parameter, options:[...(parameter.options ?? []), {value:'FRONT_WEIGHTED', label:'Overall (front-weighted)'}],
+      };
+      const periods = def.id === 'PRICE_CHANGE_PCT' && parameter.id === 'overDays' ? [1,5,21,63,126,252]
+        : def.id === 'ATR_PCT' && parameter.id === 'period' ? [14]
+          : def.id === 'ADR_PCT' && parameter.id === 'lookbackDays' ? [20]
+            : ['GAP_UP','GAP_DOWN'].includes(def.id) && parameter.id === 'withinDays' ? [1] : null;
+      return periods ? {...parameter, type:'select' as const, defaultValue:periods.includes(Number(parameter.defaultValue))
+        ? parameter.defaultValue : periods[0], options:periods.map(value => ({value, label:String(value)}))} : parameter;
+    }),
+  })),
   // --- TREND ---
   {
     id: 'trend_price_vs_ma',
@@ -444,7 +476,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = [
   // --- RELATIVE STRENGTH ---
   {
     id: 'rs_rating',
-    label: 'Overall RS >',
+    label: 'Overall RS Rating',
     category: 'relative_strength',
     description: 'Proprietary 1-99 rating comparing stock performance vs broader market',
     parameters: [
@@ -542,7 +574,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = [
   },
   {
     id: 'fund_stock_price',
-    label: 'Stock Price (₹) >',
+    label: 'Minimum Stock Price (₹)',
     category: 'fundamentals',
     description: 'Minimum stock price',
     parameters: [
@@ -617,7 +649,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = [
   // --- LIQUIDITY & MISC ---
   {
     id: 'liq_turnover',
-    label: '50 Days Avg. Turnover (Cr.) >',
+    label: '50-Day Avg. Turnover (Cr.)',
     category: 'liquidity',
     description: 'Minimum 50-day average daily traded value in Crores (INR)',
     parameters: [
@@ -695,4 +727,10 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = [
       }
     ]
   }
-];
+] as ConditionDef[]).map(def => {
+  const fixed = technicalConfigurations.find(config => config.id === def.id)?.fixed as Record<string, string | number | boolean> | undefined;
+  return {...def, parameters:def.parameters.map(parameter => fixed && Object.hasOwn(fixed, parameter.id) && typeof fixed[parameter.id] !== 'boolean'
+    ? {...parameter, type:'select' as const, options:[{value:fixed[parameter.id] as string | number,
+      label:parameter.options?.find(option => option.value === fixed[parameter.id])?.label ?? String(fixed[parameter.id])}]}
+    : parameter)};
+});

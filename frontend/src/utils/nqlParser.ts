@@ -5,6 +5,7 @@ import {
 } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { PRESET_CATALOG } from '../data/presetCatalog';
+import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
 
 /**
  * Compiles a condition into a clear human-readable explanation string.
@@ -31,6 +32,24 @@ export function explainCondition(condition: ActiveCondition): {
   let explanation = '';
 
   switch (condition.conditionId) {
+    case 'FUNDAMENTAL_METRIC': {
+      const metric = def.parameters.find(parameter => parameter.id === 'metric')?.options?.find(option => option.value === p.metric);
+      const operator = ({ABOVE:'≥', BELOW:'≤', GREATER:'>', LESS:'<', EQUAL:'='} as Record<string, string>)[p.comparison] ?? p.comparison;
+      explanation = `${metric?.label ?? p.metric} ${operator} ${p.value}`;
+      break;
+    }
+    case 'mom_return':
+      explanation = `${p.period} return: ${p.minReturn}% ≤ return ≤ ${p.maxReturn}%`;
+      break;
+    case 'PRICE_CHANGE_PCT':
+      explanation = `${p.overDays}-session return ${p.comparison === 'BELOW' ? '≤' : '≥'} ${p.comparison === 'BELOW' ? -Math.abs(p.pct) : p.pct}%`;
+      break;
+    case 'PRICE_VS_MAS':
+      explanation = (Array.isArray(p.rules) ? p.rules : []).map((value: string) => {
+        const rule = MOVING_AVERAGE_RULES.find(rule => rule.value === value);
+        return rule ? `Close ${rule.above ? '>' : '<'} ${rule.field.toUpperCase()}` : `Unknown MA rule (${value})`;
+      }).join(' AND ');
+      break;
     case 'INDICATOR_COMPARE':
       explanation = `${p.leftIndicator}(${p.leftPeriod}${p.leftOffset ? `, offset ${p.leftOffset}` : ''}) ${String(p.op).replaceAll('_', ' ')} ${p.rightIndicator ? `${p.rightIndicator}(${p.rightPeriod}${p.rightOffset ? `, offset ${p.rightOffset}` : ''})` : p.rightValue}${p.withinDays > 1 ? ` within ${p.withinDays} sessions` : ''}`;
       break;
@@ -104,7 +123,7 @@ export function explainCondition(condition: ActiveCondition): {
       explanation = `Securities universe restricted to: ${p.fnoFilter === 'fno_only' ? 'F&O Segment Equities' : p.fnoFilter === 'in_fno_ban' ? 'Equities under F&O Ban' : 'Non-F&O Segment Equities'}`;
       break;
     case 'liq_turnover':
-      explanation = `20-Day Average Daily Turnover is AT LEAST ₹${p.minTurnoverCr} Cr.`;
+      explanation = `50-Day Average Daily Turnover is AT LEAST ₹${p.minTurnoverCr} Cr.`;
       break;
     case 'liq_adr_pct':
       explanation = `20-Day Average Daily Range (ADR %) is AT LEAST ${p.minAdrPct}%`;

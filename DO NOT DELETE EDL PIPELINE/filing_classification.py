@@ -8,6 +8,8 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
+from pipeline_utils import resource_path
+
 VERSION = 5
 
 # Stable IDs, group, display name, and deliberately specific text rules.
@@ -79,15 +81,34 @@ _GROUPS = {
 }
 
 def _text(value):
-    return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+    text = str(value or "")
+    normalize = _normalized_text if len(text) <= 4096 else _normalized_text.__wrapped__
+    return normalize(text)
+
+
+@lru_cache(maxsize=2048)
+def _normalized_text(text):
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 RULES = tuple((key, group, name, re.compile(pattern))
               for group, rows in _GROUPS.items() for key, name, pattern in rows)
 TAXONOMY = [{"id": key, "group": group, "label": name} for key, group, name, _ in RULES]
 
+@lru_cache(maxsize=2048)
+def _cached_rule_matches(text):
+    return tuple(key for key, _, _, rx in RULES if rx.search(text))
+
+
+def _rule_matches(text):
+    # Repeated empty labels and standard disclosure clauses need not search
+    # every regex again. Long document text is evaluated but never retained.
+    evaluate = _cached_rule_matches if len(text) <= 4096 else _cached_rule_matches.__wrapped__
+    return evaluate(text)
+
+
 @lru_cache(maxsize=1)
 def source_label_mapping():
-    return json.loads(Path(__file__).with_name("filing_source_labels.json").read_text())["fields"]
+    return json.loads(resource_path("filing_source_labels.json").read_text())["fields"]
 
 
 _WRAPPERS = {"board_intimation", "board_outcome", "board_change", "press_release", "general_announcement"}
@@ -240,7 +261,7 @@ def classify_filing(filing):
             mapped = mapping.get(field, {}).get(value)
             # Unseen labels can use specific rules; known ambiguous labels map to [].
             if mapped is None:
-                mapped = [key for key, _, _, rx in RULES if rx.search(value)]
+                mapped = list(_rule_matches(value))
             else:
                 mapped = list(mapped)
             # Narrow old source-label mappings without claiming a MoU is a JV.
@@ -256,7 +277,7 @@ def classify_filing(filing):
     # Presentations describe many historical achievements. Refine their explicit
     # topic evidence only; do not interpret every discussed achievement as news.
     for field, raw, text in clauses:
-        candidates = [key for key, _, _, rx in RULES if rx.search(text)]
+        candidates = list(_rule_matches(text))
         if "fraud" in candidates:
             candidates = [key for key in candidates if key not in {"business_update", "order_win"}]
         if _LEGAL_ORDER.search(text):

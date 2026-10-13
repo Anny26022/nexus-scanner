@@ -22,6 +22,23 @@ edl-pipeline
 Copy `.env.example` only if your shell tooling automatically loads env files. The scripts read normal environment variables directly.
 When using the installed `edl-pipeline` command outside this folder, set `EDL_BASE_DIR` to the absolute pipeline directory.
 
+The wheel includes the scanner, runtime scripts, and byte-identical copies of
+the pinned breadth methodology and filing-label mapping. Canonical inputs beside
+checkout scripts keep precedence. Installed wheels use inputs in `EDL_BASE_DIR`
+when present, otherwise their bundled copies.
+`edl-pipeline --help` and split-phase argument validation match the script.
+The wheel does not bundle the frontend publisher or repository-level optional
+index-reference tooling; use the checkout for the complete repository refresh.
+
+CI builds an sdist, builds its wheel, installs into a fresh environment, and
+checks imports, resource consumers, stage preparation and the installed CLI
+outside the checkout. It does not fetch or publish live data. Reproduce with:
+
+```bash
+python3 -m pip install 'setuptools>=69' wheel build
+python3 ../tools/check_pipeline_wheel.py
+```
+
 ## 🚀 Master Pipeline Runner
 
 ```bash

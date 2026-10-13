@@ -41,6 +41,15 @@ def file_fingerprint(path):
     return digest.hexdigest()
 
 
+def resource_path(name):
+    """Use the canonical checkout input, or its unchanged installed-wheel copy."""
+    source = Path(__file__).resolve().with_name(name)
+    if source.is_file():
+        return source
+    configured = BASE_PATH / name
+    return configured if configured.is_file() else source.parent / "edl_pipeline" / "data" / name
+
+
 def _default_base_path():
     module_dir = Path(__file__).resolve().parent
     cwd = Path.cwd()
@@ -161,6 +170,43 @@ def save_json(path, data, indent=None, ensure_ascii=True):
     atomic_replace_text(path, text)
 
 
+def save_json_records(path, data, ensure_ascii=True, *, encoded_records=None):
+    """Write a string-keyed artifact with the same compact bytes as save_json.
+
+    Keep sanitization and encoding bounded to one record rather than cloning
+    and encoding a multi-gigabyte artifact in memory. Publish only on success.
+    """
+    resolved = resolve_path(path)
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    def encoded(value):
+        return json.dumps(finite_json(value), separators=(',', ':'),
+                          ensure_ascii=ensure_ascii, allow_nan=False).encode('utf-8')
+    temporary = None
+    try:
+        with NamedTemporaryFile('wb', delete=False, dir=resolved.parent,
+                                prefix=f'.{resolved.name}.', suffix='.tmp') as handle:
+            temporary = Path(handle.name)
+            handle.write(b'{')
+            for index, (key, value) in enumerate(data.items()):
+                if index:
+                    handle.write(b',')
+                handle.write(encoded(key) + b':')
+                if key == 'records' and (encoded_records is not None or isinstance(value, (list, tuple))):
+                    handle.write(b'[')
+                    for record_index, record in enumerate(value if encoded_records is None else encoded_records):
+                        if record_index:
+                            handle.write(b',')
+                        handle.write(encoded(record) if encoded_records is None else record)
+                    handle.write(b']')
+                else:
+                    handle.write(encoded(value))
+            handle.write(b'}')
+        temporary.replace(resolved)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def compress_file(src, dst, compresslevel=9):
     """Atomically gzip one file and return raw/gz byte sizes."""
     src_path = resolve_path(src)
@@ -209,8 +255,8 @@ def post_json(url, payload, include_origin=False, timeout=30, retries=2, backoff
     raise last_error
 
 
-def fetch_scanx_data(payload, timeout=30):
+def fetch_scanx_data(payload, timeout=30, *, retries=2):
     """Fetch a list from the shared ScanX customscan endpoint."""
-    data = post_json(SCANX_FETCH_URL, payload, include_origin=True, timeout=timeout)
+    data = post_json(SCANX_FETCH_URL, payload, include_origin=True, timeout=timeout, retries=retries)
     rows = data.get("data", [])
     return rows if isinstance(rows, list) else []

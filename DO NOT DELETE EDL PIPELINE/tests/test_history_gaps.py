@@ -152,9 +152,11 @@ class HistoryGapTests(unittest.TestCase):
                         for symbol in expected]
 
             with patch('apply_nse_daily_ohlcv.read_ohlcv_csv', wraps=read_ohlcv_csv) as read, \
-                    patch('apply_nse_daily_ohlcv.write_ohlcv_csv', wraps=write_ohlcv_csv) as write:
+                    patch('apply_nse_daily_ohlcv.write_ohlcv_csv', wraps=write_ohlcv_csv) as write, \
+                    patch('builtins.print') as output:
                 self.assertEqual(repair_official_history(expected, root, official,
                     adjusted_through={'ADJUSTED': '2026-09-28'}), 5)
+            self.assertIn('4 gaps deferred', output.call_args.args[0])
             self.assertEqual(read.call_count, 3)
             self.assertEqual(write.call_count, 2)
             adjusted = read_ohlcv_csv(root / 'ADJUSTED.csv')

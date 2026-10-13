@@ -8,6 +8,7 @@ import math
 from pathlib import Path
 
 from pipeline_utils import resolve_path
+from json_records import object_members
 
 
 @dataclass(frozen=True)
@@ -68,7 +69,7 @@ def _check_required_fields(rows, required_fields):
     return f"missing fields: {', '.join(missing)}" if missing else ""
 
 
-def _check_nested_min_counts(data, nested_min_counts):
+def _check_nested_min_counts(data, nested_min_counts, counts=None):
     if not nested_min_counts:
         return ""
     if not isinstance(data, dict):
@@ -77,13 +78,13 @@ def _check_nested_min_counts(data, nested_min_counts):
         value = data.get(field)
         if not isinstance(value, (list, dict)):
             return f"field {field} is not a collection"
-        count = len(value)
+        count = (counts or {}).get(field, len(value))
         if count < minimum:
             return f"field {field} count {count} < {minimum}"
     return ""
 
 
-def strict_json_load(handle):
+def strict_json_decoder():
     def reject(value):
         raise ValueError(f"non-finite number: {value}")
 
@@ -93,7 +94,31 @@ def strict_json_load(handle):
             reject(value)
         return number
 
-    return json.load(handle, parse_constant=reject, parse_float=finite_float)
+    return json.JSONDecoder(parse_constant=reject, parse_float=finite_float)
+
+
+def strict_json_load(handle):
+    decoder = strict_json_decoder()
+    return json.load(handle, parse_constant=decoder.parse_constant, parse_float=decoder.parse_float)
+
+
+def validation_payload(handle, stream_records=False):
+    """Decode every byte, retaining only the filing header and record count."""
+    if not stream_records:
+        return strict_json_load(handle), {}
+    prefix = handle.read(4096)
+    handle.seek(0)
+    if not prefix.lstrip().startswith('{'):
+        return strict_json_load(handle), {}
+    data, counts = {}, {}
+    for key, value, is_record in object_members(handle, strict_json_decoder()):
+        if is_record:
+            counts['records'] += 1
+        else:
+            data[key] = value
+            if key == 'records':
+                counts[key] = len(value) if isinstance(value, (list, dict)) else 0
+    return data, counts
 
 
 def validate_json(path, min_count=1, required_fields=(), nested_min_counts=()):
@@ -105,7 +130,7 @@ def validate_json(path, min_count=1, required_fields=(), nested_min_counts=()):
         return _bad(resolved, "json", "empty file", size)
     try:
         with resolved.open("r", encoding="utf-8") as f:
-            data = strict_json_load(f)
+            data, counts = validation_payload(f, resolved.name == 'filing_history.json')
     except Exception as e:
         return _bad(resolved, "json", f"invalid JSON: {e}", size)
 
@@ -115,7 +140,7 @@ def validate_json(path, min_count=1, required_fields=(), nested_min_counts=()):
     field_error = _check_required_fields(data, required_fields)
     if field_error:
         return _bad(resolved, "json", field_error, size, count)
-    nested_count_error = _check_nested_min_counts(data, nested_min_counts)
+    nested_count_error = _check_nested_min_counts(data, nested_min_counts, counts)
     if nested_count_error:
         return _bad(resolved, "json", nested_count_error, size, count)
     return _good(resolved, "json", size=size, count=count)
@@ -130,7 +155,7 @@ def validate_gzip_json(path, min_count=1, required_fields=(), nested_min_counts=
         return _bad(resolved, "gzip_json", "empty file", size)
     try:
         with gzip.open(resolved, "rt", encoding="utf-8") as f:
-            data = strict_json_load(f)
+            data, counts = validation_payload(f, resolved.name == 'filing_history.json.gz')
     except Exception as e:
         return _bad(resolved, "gzip_json", f"invalid gzip JSON: {e}", size)
 
@@ -140,7 +165,7 @@ def validate_gzip_json(path, min_count=1, required_fields=(), nested_min_counts=
     field_error = _check_required_fields(data, required_fields)
     if field_error:
         return _bad(resolved, "gzip_json", field_error, size, count)
-    nested_count_error = _check_nested_min_counts(data, nested_min_counts)
+    nested_count_error = _check_nested_min_counts(data, nested_min_counts, counts)
     if nested_count_error:
         return _bad(resolved, "gzip_json", nested_count_error, size, count)
     return _good(resolved, "gzip_json", size=size, count=count)

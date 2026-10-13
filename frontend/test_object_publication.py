@@ -10,7 +10,8 @@ ROOT = Path(__file__).resolve().parent.parent / 'DO NOT DELETE EDL PIPELINE'
 sys.path.insert(0, str(ROOT))
 from announcement_artifacts import put_object
 import build_chart_artifacts as builder
-from chart_publication import complete_release, R2Store, prepare_archives
+from chart_publication import complete_release, R2Store, prepare_archives, validate_announcement_objects
+from filing_archives import prepare_filing_archives
 
 
 class ObjectStore:
@@ -55,6 +56,19 @@ class ObjectPublicationTests(unittest.TestCase):
             index = store.references['releases/' + 'a'*64 + '/index.json']
             self.assertEqual(set(index['archives']), {'raw', 'classified'})
             chart_hash = index['chartObjects']['TEST']
+            lookup = index['filingLookup']
+            catalog = json.loads(gzip.decompress(store.objects[index['announcements'] + '.json.gz']))
+            self.assertEqual(lookup['publishedAt'], catalog['publishedAt'])
+            self.assertEqual(lookup['symbols']['TEST']['recent'], catalog['symbols']['TEST']['recent'])
+            history = json.loads(gzip.decompress(store.objects[lookup['symbols']['TEST']['history'] + '.json.gz']))
+            self.assertEqual(history, {'symbol': 'TEST', **catalog['symbols']['TEST']})
+            for field, digest in [('recent', '0' * 64), ('history', index['announcements'])]:
+                with self.subTest(invalid_reference=field):
+                    invalid = json.loads(json.dumps(lookup))
+                    invalid['symbols']['TEST'][field] = digest
+                    with self.assertRaisesRegex(RuntimeError, 'Filing lookup history mismatch'):
+                        validate_announcement_objects(root / 'chart_artifacts/objects', index['announcements'],
+                                                      '2026-10-06', {'TEST'}, invalid)
             before = store.uploaded.count(chart_hash + '.json.gz')
             second = complete_release(self.build(root, '2026-10-07'), output, {'revision': 'b'*64, 'sessionDate': '2026-10-07'}, store)
             self.assertEqual(store.uploaded.count(chart_hash + '.json.gz'), before)
@@ -88,6 +102,30 @@ class ObjectPublicationTests(unittest.TestCase):
             (root / 'filing_history.json.gz').write_bytes(gzip.compress(b'{"records":[]}', mtime=20))
             self.assertEqual(first, prepare_archives(charts))
 
+    def test_prepared_raw_input_archives_keep_original_gzip_bytes_and_reject_corruption(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); charts = root / 'chart_artifacts'; charts.mkdir()
+            classified = json.dumps({'records': [{'text': '₹😃' * 10000}]}).encode()
+            (root / 'filing_history.json').write_bytes(classified)
+            (root / 'filing_history.json.gz').write_bytes(gzip.compress(classified, mtime=20))
+            (root / 'filing_history_data').mkdir()
+            (root / 'filing_history_data/filing_history.json').write_bytes(b'{"symbols":{}}')
+            expected = prepare_archives(charts)
+            raw = (root / 'filing_history_data/filing_history.json').read_bytes()
+            packed_raw = (charts / 'objects' / (expected['raw'] + '.json.gz')).read_bytes()
+            self.assertEqual(gzip.decompress(packed_raw), raw)
+            self.assertEqual(packed_raw[8], 0)  # Level 6, not the level-9 XFL marker.
+            before = {digest: (charts / 'objects' / (digest + '.json.gz')).read_bytes() for digest in expected.values()}
+            prepared = charts / '.prepared_archives'
+            self.assertEqual(prepare_filing_archives(root, prepared), expected)
+            with patch('chart_publication.gzip.GzipFile', side_effect=AssertionError('recompressed')):
+                self.assertEqual(prepare_archives(charts), expected)
+            for digest, data in before.items():
+                self.assertEqual((charts / 'objects' / (digest + '.json.gz')).read_bytes(), data)
+            (prepared / (expected['classified'] + '.json.gz')).write_bytes(b'corrupt')
+            with self.assertRaisesRegex(RuntimeError, 'content does not match'):
+                prepare_archives(charts)
+
     def test_r2_transfers_and_verifies_only_missing_objects(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -96,6 +134,13 @@ class ObjectPublicationTests(unittest.TestCase):
             calls = []
             def run(*args):
                 names = Path(args[args.index('--files-from') + 1]).read_text().splitlines()
+                if args[0] == 'check':
+                    self.assertIn('--download', args)
+                    self.assertIn('--one-way', args)
+                    self.assertEqual(args[args.index('--checkers') + 1], '16')
+                else:
+                    self.assertIn('--immutable', args)
+                    self.assertIn('--checksum', args)
                 calls.append((args[0], names))
             store.run = run
             listing = f'{old}.json.gz\t{(root / (old + ".json.gz")).stat().st_size}\n'
@@ -105,3 +150,16 @@ class ObjectPublicationTests(unittest.TestCase):
             with patch('chart_publication.subprocess.run', return_value=Mock(stdout=f'{old}.json.gz\t1\n')):
                 with self.assertRaisesRegex(RuntimeError, 'different size'):
                     store.upload_objects(root)
+
+    def test_r2_upload_avoids_post_put_head(self):
+        store = R2Store.__new__(R2Store); store.env = {}
+        with patch('chart_publication.subprocess.run') as run:
+            store.run('copyto', 'source', 'charts:test/object')
+        self.assertIn('--s3-no-head', run.call_args.args[0])
+        self.assertIn('--s3-no-check-bucket', run.call_args.args[0])
+
+    def test_r2_check_failure_still_propagates(self):
+        store = R2Store.__new__(R2Store); store.env = {}
+        with patch('chart_publication.subprocess.run', side_effect=RuntimeError('verification failed')):
+            with self.assertRaisesRegex(RuntimeError, 'verification failed'):
+                store.run('check', 'source', 'charts:test/object', '--download', '--checkers', '16')

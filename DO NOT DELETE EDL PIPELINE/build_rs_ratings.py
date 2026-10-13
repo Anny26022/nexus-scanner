@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -53,7 +54,7 @@ def close_history(path):
 
 
 def relative_strength_scores(stock, benchmark, as_of_date):
-    """Return Nifty 500-relative one-month and front-weighted scores.
+    """Return the four date-aligned Nifty 500-relative horizon scores.
 
     A rating is only valid when all four horizon endpoints are aligned to the
     benchmark's current completed session.  This prevents a stale stock file
@@ -70,32 +71,47 @@ def relative_strength_scores(stock, benchmark, as_of_date):
     relative_ratios = {}
     for name, horizon in FRONT_WEIGHTED_HORIZONS.items():
         start, end = merged.iloc[-1 - horizon], merged.iloc[-1]
-        if min(start.Close_stock, end.Close_stock, start.Close_benchmark, end.Close_benchmark) <= 0:
+        if any(not math.isfinite(value) or value <= 0 for value in
+               (start.Close_stock, end.Close_stock, start.Close_benchmark, end.Close_benchmark)):
             return None
         stock_ratio = end.Close_stock / start.Close_stock
         benchmark_ratio = end.Close_benchmark / start.Close_benchmark
         relative_ratios[name] = stock_ratio / benchmark_ratio
 
-    # Compare each horizon with its matching benchmark horizon before applying
-    # the weights.  Dividing one aggregate score by one market-wide constant
-    # would not affect the cross-sectional rank.
-    return {
-        **relative_ratios,
-        "front_weighted": sum(
-            FRONT_WEIGHTED_WEIGHTS[name] * relative_ratios[name]
-            for name in FRONT_WEIGHTED_HORIZONS
-        ),
-    }
+    return relative_ratios if all(math.isfinite(value) for value in relative_ratios.values()) else None
 
 
-def percentile_ratings(scores):
-    """Map scores to the documented bounded 1–99 strict-lower percentile."""
+def strictly_lower_counts(scores):
+    """Integer counts underlying the fractional momentum period ranks."""
     values = pd.Series(scores, dtype=float)
     if values.empty:
         return {}
-    lower_count = values.rank(method="min") - 1
-    ratings = (1 + (lower_count / len(values)) * 98).round().clip(1, 99).astype(int)
-    return {symbol: int(rating) for symbol, rating in ratings.items()}
+    return (values.rank(method="min") - 1).astype(int).to_dict()
+
+
+def rank_first_ratings(scores):
+    """Rank each horizon on one complete universe, weight its ranks, rank again."""
+    symbols = set.intersection(*(set(scores.get(key, {})) for key in FRONT_WEIGHTED_HORIZONS))
+    symbols = sorted(symbol for symbol in symbols if all(
+        math.isfinite(scores[key][symbol]) and scores[key][symbol] > 0 for key in FRONT_WEIGHTED_HORIZONS))
+    lower_counts = {key: strictly_lower_counts({symbol: scores[key][symbol] for symbol in symbols})
+              for key in FRONT_WEIGHTED_HORIZONS}
+    ranked = {key: {symbol: 1 + 98 * count / max(1, len(symbols) - 1)
+                    for symbol, count in counts.items()} for key, counts in lower_counts.items()}
+    # The additive constant and positive common denominator do not affect order.
+    # Sort exact integer weighted counts to avoid float noise breaking real ties.
+    composite = {symbol: sum(round(weight * 100) * lower_counts[key][symbol]
+                             for key, weight in FRONT_WEIGHTED_WEIGHTS.items()) for symbol in symbols}
+    # Stable symbol order makes equal composites reproducible. The reference
+    # assigns ordinal final ratings (not equal ratings to tied composites).
+    ordered = sorted(symbols, key=lambda symbol: (-composite[symbol], symbol))
+    ranked = {key: {symbol: math.floor(value + 0.5) for symbol, value in values.items()}
+              for key, values in ranked.items()}
+    ranked['front_weighted'] = {
+        symbol: math.floor(99 - 98 * position / max(1, len(ordered) - 1) + 0.5)
+        for position, symbol in enumerate(ordered)
+    }
+    return ranked
 
 
 def main():
@@ -110,7 +126,7 @@ def main():
         return False
     as_of_date = front_weighted_benchmark["Date"].iloc[-1].date()
     eligible, universe_generated_at = liquid_universe(root)
-    scores = {rating_key: {} for rating_key in (*FRONT_WEIGHTED_HORIZONS, "front_weighted")}
+    scores = {rating_key: {} for rating_key in FRONT_WEIGHTED_HORIZONS}
     for path in sorted((root / "ohlcv_data").glob("*.csv")):
         if path.stem.upper() not in eligible:
             continue
@@ -120,7 +136,7 @@ def main():
             for rating_key, score in relative_scores.items():
                 scores[rating_key][path.stem] = score
 
-    ranked = {rating_key: percentile_ratings(values) for rating_key, values in scores.items()}
+    ranked = rank_first_ratings(scores)
     ratings = {
         symbol: {rating_key: values[symbol] for rating_key, values in ranked.items()}
         for symbol in ranked["front_weighted"]
@@ -137,16 +153,20 @@ def main():
         "universe_generated_at": universe_generated_at,
         "liquid_universe_count": len(ratings),
         "methodology": {
-            "version": "nexus_front_weighted_v2",
+            "version": "nexus_rank_first_v3",
             "benchmark": "NIFTY 500",
             "benchmark_file": FRONT_WEIGHTED_BENCHMARK_FILENAME,
             "windows": FRONT_WEIGHTED_HORIZONS,
             "weights": FRONT_WEIGHTED_WEIGHTS,
             "minimum_aligned_sessions": MINIMUM_ALIGNED_SESSIONS,
             "rating_keys": ["one_month", "three_month", "six_month", "twelve_month", "front_weighted"],
-            "score_formula": "sum(weight_horizon * (stock_price_ratio_horizon / nifty_500_price_ratio_horizon))",
+            "score_formula": "sum(weight_horizon * unrounded_horizon_percentile_rank)",
             "horizon_score_formula": "stock_horizon_price_ratio / nifty_500_horizon_price_ratio",
-            "rank_formula": "1 + round(98 * strictly_lower_scores / eligible_scores)",
+            "horizon_rank_formula": "1 + 98 * strictly_lower_scores / max(1, eligible_scores - 1)",
+            "rank_formula": "floor(99 - 98 * descending_position / max(1, eligible_scores - 1) + 0.5)",
+            "composite_ties": "stable symbol ascending order",
+            "composite_ordering": "exact integer weighted strictly-lower counts",
+            "horizon_rating_rounding": "floor(unrounded_horizon_percentile_rank + 0.5)",
         },
         "ratings": ratings,
     }, ensure_ascii=False)

@@ -4,7 +4,8 @@ The public script entrypoint delegates here so the orchestration can be tested
 without shelling out to the full live pipeline.
 """
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+from collections import deque
 import csv
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -16,10 +17,12 @@ import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from pipeline_utils import BASE_DIR, compress_file, save_json
+from pipeline_utils import BASE_DIR, compress_file, file_fingerprint, save_json
+from filing_archives import prepare_filing_archives
 import pipeline_utils
 
 from .artifacts import (
+    BULK_FETCH_SCRIPTS,
     FILES_TO_COMPRESS,
     FINAL_ARTIFACT_SPECS,
     INTERMEDIATE_DIRS,
@@ -130,32 +133,56 @@ def run_script_lanes(lanes):
         name, scripts = next(iter(lanes.items()))
         return {name: run_script_sequence(scripts)}
 
-    with ThreadPoolExecutor(max_workers=len(lanes), thread_name_prefix="edl-fetch") as executor:
-        futures = {
-            name: executor.submit(run_script_sequence, scripts)
-            for name, scripts in lanes.items()
-        }
-        # Preserve lane declaration order in reports even if completion order
-        # differs. Script output itself remains visible live in Actions logs.
-        return {name: futures[name].result() for name in lanes}
+    # Yield capacity between scripts, not only when a whole lane finishes.
+    # Keep the formerly disjoint high-fanout quote/news fetches disjoint;
+    # interleaving their CPU-only preparation must not stack provider pools.
+    sequences = {name: iter(scripts) for name, scripts in lanes.items()}
+    ready = deque((name, next(scripts, None)) for name, scripts in sequences.items())
+    results = {name: {} for name in lanes}
+    with ThreadPoolExecutor(max_workers=min(3, len(lanes)), thread_name_prefix="edl-fetch") as executor:
+        pending = {}
+        while ready or pending:
+            for _ in range(len(ready)):
+                if len(pending) == min(3, len(lanes)):
+                    break
+                name, script = ready.popleft()
+                if script is None:
+                    continue
+                if script[0] in BULK_FETCH_SCRIPTS and any(item[1][0] in BULK_FETCH_SCRIPTS for item in pending.values()):
+                    ready.append((name, script))
+                    continue
+                pending[executor.submit(run_script, *script)] = (name, script)
+            if not pending:
+                continue
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                name, script = pending.pop(future)
+                results[name][script[0]] = future.result()
+                ready.append((name, next(sequences[name], None)))
+    # Reports retain lane and script declaration order, not completion order.
+    return results
 
 
-def compress_output(include_ohlcv_derived=True):
+def compress_output(include_ohlcv_derived=True, prepared=None):
     """Compress final JSONs to .json.gz and return raw/gz byte sizes."""
     total_raw = 0
     total_gz = 0
 
-    for filename, output_name in FILES_TO_COMPRESS.items():
-        if not include_ohlcv_derived and filename in OHLCV_DERIVED_FILES:
-            continue
-        print(f"  Compressing {filename}...", flush=True)
-        raw_size, gz_size = compress_file(filename, output_name)
-        if raw_size:
-            total_raw += raw_size
-            total_gz += gz_size
-            print(f"  OK {output_name} ({gz_size / (1024 * 1024):.1f} MB)", flush=True)
-        else:
-            print(f"  WARNING: {filename} not found to compress.")
+    files = [(name, output) for name, output in FILES_TO_COMPRESS.items()
+             if include_ohlcv_derived or name not in OHLCV_DERIVED_FILES]
+    # Independent files retain their serializer, compression level and atomic
+    # replacement. Report results in declaration order.
+    with ThreadPoolExecutor(max_workers=min(2, os.cpu_count() or 1)) as executor:
+        futures = [(prepared or {}).get(name) or executor.submit(compress_file, name, output)
+                   for name, output in files]
+        for (filename, output_name), future in zip(files, futures):
+            raw_size, gz_size = future.result()
+            if raw_size:
+                total_raw += raw_size
+                total_gz += gz_size
+                print(f"  OK {output_name} ({gz_size / (1024 * 1024):.1f} MB)", flush=True)
+            else:
+                print(f"  WARNING: {filename} not found to compress.")
 
     ratio = (1 - total_gz / total_raw) * 100 if total_raw > 0 else 0
     print(
@@ -163,6 +190,16 @@ def compress_output(include_ohlcv_derived=True):
         f"{total_gz / (1024 * 1024):.1f} MB ({ratio:.0f}% reduction)"
     )
     return total_raw, total_gz
+
+
+def prepare_filing_output():
+    """Hide filing compression/archival behind independent stock enrichment."""
+    started = time.perf_counter()
+    sizes = compress_file('filing_history.json', FILES_TO_COMPRESS['filing_history.json'])
+    prepare_filing_archives(Path(BASE_DIR), Path(BASE_DIR) / '.filing_archives',
+                            compressed_classified=Path(BASE_DIR) / 'filing_history.json.gz')
+    print(f'  Filing compression and archives elapsed: {time.perf_counter() - started:.2f}s', flush=True)
+    return sizes
 
 
 def download_nse_listing_dates():
@@ -249,13 +286,18 @@ def write_pipeline_report(report):
     print("  Report: pipeline_report.json")
 
 
-def validate_final_artifacts(include_ohlcv_derived=True):
+def validate_final_artifacts(include_ohlcv_derived=True, prepared=None):
     specs = [
         spec
         for spec in FINAL_ARTIFACT_SPECS
         if include_ohlcv_derived or spec.path not in OHLCV_DERIVED_FINAL_PATHS
     ]
-    checks = validate_many(specs)
+    prepared = prepared or {}
+    reusable = {spec.path: prepared[spec.path][1] for spec in specs
+                if spec.path in prepared and prepared[spec.path][0] is not None
+                and file_fingerprint(Path(BASE_DIR) / spec.path) == prepared[spec.path][0]}
+    remaining = iter(validate_many([spec for spec in specs if spec.path not in reusable]))
+    checks = [reusable[spec.path] if spec.path in reusable else next(remaining) for spec in specs]
     failed = [check for check in checks if not check.ok]
     if failed:
         print("\nFINAL ARTIFACT VALIDATION")
@@ -376,6 +418,11 @@ def main(config=None, phase="all"):
             )
             return 1
 
+        results['validate_market_quotes.py'] = run_script('validate_market_quotes.py', 'Phase 1', required=True)
+        if not results['validate_market_quotes.py'].ok:
+            write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
+            return 1
+
         results["fetch_fundamental_data.py"] = run_script("fetch_fundamental_data.py", "Phase 1", required=True)
         if not results["fetch_fundamental_data.py"].ok:
             print("\nCRITICAL: fetch_fundamental_data.py failed. Cannot continue.")
@@ -389,8 +436,8 @@ def main(config=None, phase="all"):
             "reconcile_nse_equity_universe.py", "Phase 1", required=False
         )
 
-        reference_scripts = [(name, "Phase 2 / reference lane", name != "refresh_official_index_constituents.py")
-                             for name in ("fetch_ipo_provider_data.py", "fetch_scanx_ipo_data.py", "refresh_official_index_constituents.py")]
+        reference_scripts = [(name, "Phase 2 / reference lane", True)
+                             for name in ("fetch_ipo_provider_data.py", "fetch_scanx_ipo_data.py")]
         if config.fetch_ohlcv:
             print("\nPHASE 2: Independent fetch lanes (Enrichment + OHLCV)")
             print("-" * 40)
@@ -398,6 +445,11 @@ def main(config=None, phase="all"):
                 (script, "Phase 2 / enrichment lane", script in REQUIRED_PHASE2_SCRIPTS)
                 for script in PHASE2_SCRIPTS
                 if script == "fetch_company_filings.py"
+            ]
+            independent_scripts = [
+                (script, "Phase 2 / independent lane", script in REQUIRED_PHASE2_SCRIPTS)
+                for script in PHASE2_SCRIPTS
+                if script != "fetch_company_filings.py"
             ]
             ohlcv_scripts = [
                 (
@@ -407,20 +459,23 @@ def main(config=None, phase="all"):
                 )
                 for script in OHLCV_FETCH_LANE
             ]
-            # Keep the filing catch-up off the smaller independent fetches'
-            # path, reusing the reference lane without adding concurrency.
-            reference_scripts += [(script, "Phase 2 / reference lane", script in REQUIRED_PHASE2_SCRIPTS)
-                                  for script in PHASE2_SCRIPTS if script != "fetch_company_filings.py"]
+            # These smaller fetches consume foundation files, not the official
+            # constituent refresh. Queue them on the first free worker rather
+            # than behind that slow refresh (still at most three subprocesses).
+            # Their internal order retains the corporate-actions/calendar and
+            # price-band dependencies; index OHLCV still waits for all lanes.
             lane_results = run_script_lanes(
                 {
                     "enrichment": enrichment_scripts,
                     "ohlcv": ohlcv_scripts,
                     "reference": reference_scripts,
+                    "independent": independent_scripts,
                 }
             )
             results.update(lane_results["enrichment"])
             results.update(lane_results["ohlcv"])
             results.update(lane_results["reference"])
+            results.update(lane_results["independent"])
 
             # A required fetch failure cannot produce a valid dataset. Stop
             # here instead of spending the build phase on outputs that will be
@@ -446,7 +501,9 @@ def main(config=None, phase="all"):
                     required=script in REQUIRED_PHASE2_SCRIPTS,
                 )
 
-            results.update(run_script_sequence(reference_scripts))
+            # Preserve the no-OHLCV diagnostic path's existing stage order.
+            results.update(run_script_sequence(reference_scripts + [
+                ("refresh_official_index_constituents.py", "Phase 2 / reference lane", False)]))
 
         failed = any(result.required and not result.ok for result in results.values())
         if phase == 'fetch' or failed:
@@ -455,6 +512,11 @@ def main(config=None, phase="all"):
             write_pipeline_report(report)
             return int(failed)
 
+    # The official constituent reference writes only repository/reference/.
+    # No scanner, index-history or publication calculation consumes it. Retain
+    # the refresh and its result, but hide network waits behind the build.
+    # Older fetch checkpoints may already include it: never execute it twice.
+    reference_name = "refresh_official_index_constituents.py"
     print("\nPHASE 3: Base Analysis (Building Master JSON)")
     print("-" * 40)
     results["bulk_market_analyzer.py"] = run_script("bulk_market_analyzer.py", "Phase 3", required=True)
@@ -466,27 +528,67 @@ def main(config=None, phase="all"):
         )
         return 1
 
-    print("\nPHASE 4: Enrichment (Injecting into Master JSON)")
-    print("-" * 40)
-    for script in PHASE4_SCRIPTS:
-        results[script] = run_script(
-            script,
-            "Phase 4",
-            required=True,
-        )
+    # Start best-effort work only after the fail-fast base build succeeds;
+    # executor shutdown cannot then delay reporting a base-build failure.
+    prepared = {}
+    prepared_checks = {}
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="edl-prepare") as preparation, \
+            ThreadPoolExecutor(max_workers=2, thread_name_prefix="edl-build") as executor:
+        # Both consume completed fetch inputs and write separate artifacts.
+        # Neither reads or mutates the stock snapshot being enriched below.
+        def prepare_and_validate_filings():
+            sizes = prepare_filing_output()
+            spec = next(spec for spec in FINAL_ARTIFACT_SPECS if spec.path == 'filing_history.json.gz')
+            started = time.perf_counter()
+            digest = file_fingerprint(Path(BASE_DIR) / spec.path)
+            checks = validate_many([spec])
+            prepared_checks[spec.path] = (digest, checks[0])
+            print(f'  Early filing gzip validation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
+            return sizes
 
-    print("\nPHASE 4.5: Canonical consumers")
-    print("-" * 40)
-    for script in POST_STANDARDIZATION_SCRIPTS:
-        results[script] = run_script(script, "Phase 4.5", required=True)
+        def build_independent(name):
+            result = run_script(name, "Build / independent", required=True)
+            if name == 'build_filing_history_artifact.py' and result.ok and (Path(BASE_DIR) / 'filing_history.json').is_file():
+                prepared['filing_history.json'] = preparation.submit(prepare_and_validate_filings)
+            return result
+        independent = {
+            name: executor.submit(build_independent, name)
+            for name in ("build_filing_history_artifact.py", OHLCV_DERIVED_SCRIPT)
+        } if config.fetch_ohlcv else {}
+        # Optional network activity must not occupy capacity needed by either
+        # required build. Queue it only after both required branches.
+        reference = None if reference_name in results else executor.submit(
+            run_script, reference_name, "Build / standalone reference", required=False)
+
+        print("\nPHASE 4: Enrichment (Injecting into Master JSON)")
+        print("-" * 40)
+        for script in PHASE4_SCRIPTS:
+            results[script] = independent[script].result() if script in independent else run_script(script, "Phase 4", required=True)
+
+        print("\nPHASE 4.5: Canonical consumers")
+        print("-" * 40)
+        for script in POST_STANDARDIZATION_SCRIPTS:
+            results[script] = independent[script].result() if script in independent else run_script(script, "Phase 4.5", required=True)
+        if reference is not None:
+            results[reference_name] = reference.result()
 
     if any(result.required and not result.ok for result in results.values()):
         write_pipeline_report(build_pipeline_report(results, time.time() - overall_start, 0, 0, [], config, 1))
         return 1
 
+    # Prepared objects remain private until every required build has succeeded.
+    # Promotion carries them with the chart directory; frontend publication
+    # verifies their hashes before moving them into the public object set.
+    archive_source = Path(BASE_DIR) / '.filing_archives'
+    chart_root = Path(BASE_DIR) / 'chart_artifacts'
+    if prepared and archive_source.is_dir() and chart_root.is_dir():
+        archive_source.replace(chart_root / '.prepared_archives')
+
     print("\nPHASE 5: Compression (.json -> .json.gz)")
     print("-" * 40)
-    raw_size, gz_size = compress_output(include_ohlcv_derived=config.fetch_ohlcv)
+    started = time.perf_counter()
+    raw_size, gz_size = compress_output(include_ohlcv_derived=config.fetch_ohlcv, prepared=prepared)
+    print(f"  Compression elapsed: {time.perf_counter() - started:.2f}s", flush=True)
 
     print("\nPHASE 5.5: Scanner point-in-time context")
     print("-" * 40)
@@ -498,9 +600,11 @@ def main(config=None, phase="all"):
         for script in OPTIONAL_SCRIPTS:
             results[script] = run_script(script, "Phase 6")
 
+    started = time.perf_counter()
     final_checks = validate_final_artifacts(
-        include_ohlcv_derived=config.fetch_ohlcv
+        include_ohlcv_derived=config.fetch_ohlcv, prepared=prepared_checks
     )
+    print(f"  Final validation elapsed: {time.perf_counter() - started:.2f}s", flush=True)
     required_failed = any(result.required and not result.ok for result in results.values())
     final_failed = any(not check.ok for check in final_checks)
     exit_code = 1 if required_failed or final_failed else 0

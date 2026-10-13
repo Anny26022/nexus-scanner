@@ -11,6 +11,21 @@ const request: ScreenerRunRequest = {asOfDate:snapshot.asOfDate,universe:'mainbo
 
 afterEach(() => vi.unstubAllGlobals());
 describe('published snapshots', () => {
+  it('searches symbols and company names across all matches before pagination', () => {
+    const stocks = [
+      {...snapshot.stocks[0], symbol:'OTHER', name:'Other Company'},
+      {...snapshot.stocks[0], symbol:'GLAXO', name:'GlaxoSmithKline Pharmaceuticals'},
+      {...snapshot.stocks[0], symbol:'GLAXONEW', name:'New Company'},
+    ];
+    const data = {...snapshot, stocks};
+    const base = {...request, expressionTree:{type:'group' as const, operator:'all' as const, children:[]}, pageSize:1};
+    const result = screenSnapshot(data, {...base, symbolSearch:' glaxo '})!;
+    expect(result.matchCount).toBe(2);
+    expect(result.rows[0].symbol).toBe('GLAXO');
+    expect(screenSnapshot(data, {...base, symbolSearch:'pharmaceuticals'})!.rows[0].symbol).toBe('GLAXO');
+    expect(screenSnapshot(data, {...base, symbolSearch:'no match'})!.matchCount).toBe(0);
+    expect(screenSnapshot(data, base)!.matchCount).toBe(3);
+  });
   it('matches the verified history screen without rounding RVOL at the threshold', () => {
     const response = screenSnapshot(snapshot,request)!;
     expect(response.matchCount).toBe(snapshot.referenceCounts!.rvol15Sma50);
@@ -89,9 +104,10 @@ describe('published snapshots', () => {
     const corrected = {...data,revision:next,stocks:[{...data.stocks[0],rvol:1}]};
     let current = revision;
     const fetcher = vi.fn(async (url: string, options?: RequestInit) => {
-      if (url === '/data/current.json') return new Response(JSON.stringify({...manifest,datasetGzipUrl:undefined,datasetUrl:`/data/revisions/${current}/stocks.json`,revision:current}));
+      if (url === '/data/current.json') return new Response(JSON.stringify({...manifest,datasetGzipUrl:undefined,datasetPackedGzipUrl:undefined,datasetUrl:`/data/revisions/${current}/stocks.json`,revision:current}));
       if (url.includes(`/revisions/${revision}/stocks.json`)) return new Response(JSON.stringify(data));
       if (url.includes(`/revisions/${next}/stocks.json`)) return new Response(JSON.stringify(corrected));
+      expect(options?.method).toBe('POST');
       const body = JSON.parse(options!.body as string);
       expect(body.datasetRevision).toBe(next);
       expect(body.asOfDate).toBe(snapshot.asOfDate);

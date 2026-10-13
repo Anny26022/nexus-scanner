@@ -202,7 +202,7 @@ def _evaluate_patterns(
         range_percent = _range_percent(base)
         if range_percent is None:
             return unavailable(condition, "invalid_base_close")
-        return result(condition, range_percent <= threshold, round(range_percent, 6), lookback_days=lookback, exclude_latest=exclude_latest, max_range_percent=threshold, base_end_date=base["Date"].iloc[-1].strftime("%Y-%m-%d"))
+        return result(condition, range_percent <= threshold, round(range_percent, 6), raw_value=range_percent, lookback_days=lookback, exclude_latest=exclude_latest, max_range_percent=threshold, base_end_date=base["Date"].iloc[-1].strftime("%Y-%m-%d"))
 
     if condition == "atr_percent":
         period = int(spec["period"])
@@ -232,7 +232,7 @@ def _evaluate_patterns(
         if recent_range is None or prior_range is None or prior_range <= 0:
             return unavailable(condition, "invalid_range")
         ratio = recent_range / prior_range
-        return result(condition, ratio <= max_ratio, round(ratio, 6), recent_days=recent_days, prior_days=prior_days, prior_mode=mode, max_ratio=max_ratio, recent_range_width=round(recent_range, 6), prior_range_width=round(prior_range, 6))
+        return result(condition, ratio <= max_ratio, round(ratio, 6), raw_value=ratio, recent_days=recent_days, prior_days=prior_days, prior_mode=mode, max_ratio=max_ratio, recent_range_width=round(recent_range, 6), prior_range_width=round(prior_range, 6))
 
     if condition == "inside_bar":
         timeframe = str(_pick(spec, "timeframe", None, "daily")).lower()

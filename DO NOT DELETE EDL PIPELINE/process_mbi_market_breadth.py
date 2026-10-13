@@ -1,6 +1,7 @@
 """Generate the versioned MBI/XP market-breadth artifacts."""
 
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -64,11 +65,14 @@ def main():
     )
 
     generated_at = datetime.now(timezone.utc).isoformat()
+    started = time.perf_counter()
     index_artifact = generate_all_index_history(
         index_rows=load_json(INDEX_LIST_FILE), indices_dir=INDICES_DIR,
         output_path=ALL_INDICES_OUTPUT_FILE, output_sessions=methodology.output_sessions,
         rounding_digits=methodology.rounding_digits, generated_at=generated_at,
     )
+    print(f'Index history elapsed: {time.perf_counter() - started:.2f}s', flush=True)
+    started = time.perf_counter()
     panels = {item["symbol"]: item["records"] for item in index_artifact.get("indices", []) if item["symbol"] in {"NIFTY", "NIFTY 50", "NIFTY 500", "NIFTY MIDSMALLCAP 400"}}
     artifact, snapshot = generate_market_breadth(
         universe_rows=universe_rows,
@@ -79,7 +83,9 @@ def main():
         snapshot_path=SNAPSHOT_FILE, sector_output_path=SECTOR_OUTPUT_FILE,
         contribution_output_path=CONTRIBUTION_OUTPUT_FILE, benchmark_panels=panels,
         generated_at=generated_at,
+        preparation_workers=None,
     )
+    print(f'Equity breadth elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     quality = artifact["quality"]
     index_quality = index_artifact["quality"]
     print(

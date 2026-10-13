@@ -18,6 +18,7 @@ import pandas as pd
 from .patterns import PATTERN_CONDITION_REGISTRY, evaluate_pattern
 from .context import CONTEXT_CONDITION_REGISTRY, evaluate_context_condition, normalize_condition_spec
 from .indicators import OSCILLATORS, indicator_series, supertrend
+from .calculation_cache import memoized
 
 
 REQUIRED_COLUMNS = ("Date", "Open", "High", "Low", "Close", "Volume")
@@ -168,6 +169,7 @@ def normalize_history(rows: pd.DataFrame, as_of_date: str | None = None):
     return frame.sort_values("Date").drop_duplicates("Date", keep="last").reset_index(drop=True)
 
 
+@memoized
 def _ma(frame, ma_type, period):
     period = int(period)
     if period <= 0:
@@ -279,6 +281,28 @@ def _divergence_events(frame, oscillator, spec):
     return events, metadata
 
 
+@memoized
+def _extreme_run(frame, average, comparison):
+    run = 0
+    anchor = None
+    for close, low, high, value in zip(frame["Close"], frame["Low"], frame["High"], average):
+        if pd.isna(value):
+            run, anchor = 0, None
+            continue
+        on_side = close > value if comparison == "above" else close < value
+        crossed = anchor is not None and (low < anchor if comparison == "above" else high > anchor)
+        if crossed:
+            run, anchor = 0, None
+        if run == 0:
+            if on_side:
+                run = 1
+        else:
+            run += 1
+            if not on_side and anchor is None:
+                anchor = low if comparison == "above" else high
+    return run
+
+
 def _persisted(frame, average, comparison, days, mode):
     days = int(days)
     if days <= 0:
@@ -297,24 +321,7 @@ def _persisted(frame, average, comparison, days, mode):
         # (below run). Only a later trade through that extreme resets the run.
         # Keep the anchor outside the requested tail: a reset in today's
         # window may have been armed by a candle before that window.
-        run = 0
-        anchor = None
-        for close, low, high, value in zip(frame["Close"], frame["Low"], frame["High"], average):
-            if pd.isna(value):
-                run, anchor = 0, None
-                continue
-            on_side = close > value if comparison == "above" else close < value
-            crossed = anchor is not None and (low < anchor if comparison == "above" else high > anchor)
-            if crossed:
-                run, anchor = 0, None
-            if run == 0:
-                if on_side:
-                    run = 1
-            else:
-                run += 1
-                if not on_side and anchor is None:
-                    anchor = low if comparison == "above" else high
-        return run >= days
+        return _extreme_run(frame, average, comparison) >= days
     if mode != "reclaim_by_extreme":
         raise ValueError("persistence_mode must be strict_close, extreme_reset or reclaim_by_extreme.")
 
@@ -515,7 +522,7 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         value = _adx(frame, spec["period"]).iloc[-1]
         if pd.isna(value):
             return _unavailable(condition, "insufficient_history")
-        return _result(condition, _comparison(float(value), spec["comparison"], float(spec["value"])), round(float(value), 6), period=int(spec["period"]), comparison=spec["comparison"], target=float(spec["value"]))
+        return _result(condition, _comparison(float(value), spec["comparison"], float(spec["value"])), round(float(value), 6), raw_value=float(value), period=int(spec["period"]), comparison=spec["comparison"], target=float(spec["value"]))
 
     if condition == "percent_days_above_ma":
         window = int(spec["window"])
@@ -525,7 +532,7 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         if len(values) < window or averages.isna().any():
             return _unavailable(condition, "insufficient_history")
         percentage = float((values["Close"] > averages).mean() * 100)
-        return _result(condition, _comparison(percentage, spec["comparison"], float(spec["value"])), round(percentage, 6), period=int(spec["period"]), ma_type=spec.get("ma_type", "sma"), window=window, comparison=spec["comparison"], target=float(spec["value"]))
+        return _result(condition, _comparison(percentage, spec["comparison"], float(spec["value"])), round(percentage, 6), raw_value=percentage, period=int(spec["period"]), ma_type=spec.get("ma_type", "sma"), window=window, comparison=spec["comparison"], target=float(spec["value"]))
 
     if condition == "ma_stack":
         periods = sorted(int(period) for period in spec["periods"])
@@ -545,7 +552,7 @@ def _evaluate(frame, spec, delivery_history=None, context=None):
         if len(average) <= window or pd.isna(average.iloc[-1]) or pd.isna(average.iloc[-1 - window]) or average.iloc[-1 - window] == 0:
             return _unavailable(condition, "insufficient_history")
         slope = float((average.iloc[-1] / average.iloc[-1 - window] - 1) * 100)
-        return _result(condition, _comparison(slope, spec["comparison"], float(spec["value"])), round(slope, 6), period=int(spec["period"]), ma_type=spec.get("ma_type", "sma"), window=window, comparison=spec["comparison"], target=float(spec["value"]))
+        return _result(condition, _comparison(slope, spec["comparison"], float(spec["value"])), round(slope, 6), raw_value=slope, period=int(spec["period"]), ma_type=spec.get("ma_type", "sma"), window=window, comparison=spec["comparison"], target=float(spec["value"]))
 
     if condition == "price_change_percent":
         window = int(spec["window"])

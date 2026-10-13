@@ -1,51 +1,79 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { X, FileText, ExternalLink } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import type { Announcement } from '../api/announcements';
+import { DataUnavailableError, retryAnnouncement } from '../api/dataErrors';
+import { Dialog } from './Dialog';
 
 type Props = { symbol: string; revision: string; onClose: () => void };
 export function AnnouncementsPanel({ symbol, revision, onClose }: Props) {
   const [year, setYear] = useState<number | 'recent'>('recent');
   const [page, setPage] = useState(0);
+  const [topic, setTopic] = useState('');
   const [selected, setSelected] = useState<Announcement | null>(null);
-  const recent = useQuery({queryKey: ['announcements', symbol, revision], queryFn: () => screenerApi.getAnnouncements(symbol, revision), staleTime: Infinity});
+  const recent = useQuery({queryKey: ['announcements', symbol, revision], queryFn: () => screenerApi.getAnnouncements(symbol, revision), staleTime: Infinity, retry: retryAnnouncement});
   const history = useQuery({queryKey: ['announcementHistory', symbol, year, page, revision],
-    queryFn: () => screenerApi.getAnnouncementHistory(symbol, Number(year), page, revision), enabled: year !== 'recent', staleTime: Infinity});
+    queryFn: () => screenerApi.getAnnouncementHistory(symbol, Number(year), page, revision), enabled: year !== 'recent', staleTime: Infinity, retry: retryAnnouncement});
   const detail = useQuery({queryKey: ['filingDetail', symbol, selected?.id, selected?.detailPage, revision],
-    queryFn: () => screenerApi.getAnnouncementDetail(symbol, selected!, revision), enabled: Boolean(selected), staleTime: Infinity});
-  const topics = useQuery({queryKey: ['announcementTopics', revision], queryFn: () => screenerApi.getAnnouncementTopics(revision), staleTime: Infinity});
+    queryFn: () => screenerApi.getAnnouncementDetail(symbol, selected!, revision), enabled: Boolean(selected), staleTime: Infinity, retry: retryAnnouncement});
+  const topics = useQuery({queryKey: ['announcementTopics', revision], queryFn: () => screenerApi.getAnnouncementTopics(revision),
+    enabled: Boolean(recent.data), staleTime: Infinity, retry: retryAnnouncement});
   const labels = new Map(topics.data?.map(topic => [topic.id, topic.label]));
-  const rows = year === 'recent' ? recent.data?.records : history.data?.records;
+  const allRows = year === 'recent' ? recent.data?.records : history.data?.records;
+  const rows = allRows?.filter(row => !topic || row.topics.includes(topic));
   const active = year === 'recent' ? recent : history;
   const events = (detail.data?.classification as {events?: Array<{topic: string; evidence?: {excerpt?: string}}> } | undefined)?.events ?? [];
-  return <section aria-label={`${symbol} announcements`} className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-800">
-    <div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">{symbol} announcements</h3>
-      <button type="button" onClick={onClose} className="text-slate-600">Close</button></div>
-    <label>History <select aria-label="Announcement history" value={year} className="ml-2 rounded border border-slate-200 p-1.5"
-      onChange={event => {setYear(event.target.value === 'recent' ? 'recent' : Number(event.target.value)); setPage(0); setSelected(null);}}>
-      <option value="recent">Last 90 days</option>{recent.data?.years.map(value => <option key={value} value={value}>{value}</option>)}
-    </select></label>
-    {recent.data && <p className="mt-2 text-slate-500">Snapshot {new Date(recent.data.publishedAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}</p>}
-    {active.isPending && <p role="status" className="py-4">Loading filings…</p>}
-    {active.isError && <p role="alert" className="py-4">{active.error.message} <button type="button" onClick={() => void active.refetch()}>Retry</button></p>}
-    {rows && !rows.length && <p className="py-4 text-slate-500">No filings in this period.</p>}
-    <ul className="mt-3 max-h-80 divide-y divide-slate-100 overflow-auto">
-      {rows?.map(row => <li key={row.id} className="py-3">
-        <button type="button" onClick={() => setSelected(row)} className="text-left font-medium text-teal-800">{row.headline}</button>
-        <p className="mt-1 text-slate-500">{new Date(row.publishedAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})} · {row.topics.map(id => labels.get(id) ?? id).join(', ')}</p>
-      </li>)}
-    </ul>
-    {year !== 'recent' && history.data && <div className="mt-3 flex items-center gap-3">
-      <button type="button" disabled={!page} onClick={() => {setPage(page - 1); setSelected(null);}}>Newer</button>
-      <span>Page {page + 1} of {history.data.pages}</span>
-      <button type="button" disabled={page + 1 >= history.data.pages} onClick={() => {setPage(page + 1); setSelected(null);}}>Older</button>
-    </div>}
-    {selected && <div className="mt-4 rounded-lg bg-slate-50 p-3" aria-live="polite">
-      <strong>{selected.headline}</strong><p className="mt-1 capitalize">Status: {selected.status.replaceAll('_', ' ')}</p>
-      {detail.isPending && <p className="mt-2">Loading evidence…</p>}
-      {detail.isError && <p role="alert" className="mt-2">{detail.error.message} <button type="button" onClick={() => void detail.refetch()}>Retry</button></p>}
-      {events.map((event, index) => event.evidence?.excerpt && <p key={index} className="mt-2"><span className="font-medium">{labels.get(event.topic) ?? event.topic}: </span>{event.evidence.excerpt}</p>)}
-      {selected.url && /^https?:\/\//i.test(selected.url) && <a href={selected.url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-block text-teal-700 underline">Open source document</a>}
-    </div>}
-  </section>;
+  const unavailable = active.error instanceof DataUnavailableError && active.error.reason === 'not_published';
+  return <Dialog label={`${symbol} announcements`} className="announcement-dialog" onClose={onClose}>
+    <div className="dialog-header"><div><h2>{symbol} announcements</h2><p>Official company filings and supporting evidence.</p></div>
+      <button type="button" className="icon-button" aria-label="Close announcements" onClick={onClose}><X size={20} /></button></div>
+    <div className="dialog-content">
+      <div className="announcement-toolbar">
+        <label className="announcement-history"><span>History</span><select aria-label="Announcement history" value={year}
+          onChange={event => {setYear(event.target.value === 'recent' ? 'recent' : Number(event.target.value)); setPage(0); setSelected(null);}}>
+          <option value="recent">Last 90 days</option>{recent.data?.years.map(value => <option key={value} value={value}>{value}</option>)}
+        </select></label>
+        <label className="announcement-topic"><span>Classification</span><select aria-label="Filter filings by classification" value={topic}
+          onChange={event => {setTopic(event.target.value); setSelected(null);}}>
+          <option value="">All</option>{topics.data?.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+        </select></label>
+        {recent.data && <p className="announcement-snapshot">Snapshot {new Date(recent.data.publishedAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}</p>}
+      </div>
+      {active.isPending && <div className="data-state" role="status"><FileText size={28} /><h2>Loading filings</h2><span className="skeleton" /></div>}
+      {active.isError && <div className="data-state" role="alert"><FileText size={28} /><h2>{unavailable ? 'Announcements not published' : 'Announcements could not be loaded'}</h2><p>{active.error.message}</p>
+        {!unavailable && <button type="button" className="button button-secondary" onClick={() => void active.refetch()}>Retry</button>}</div>}
+      {rows && !rows.length && <div className="data-state"><FileText size={28} /><h2>{topic ? 'No filings in this classification' : 'No filings in this period'}</h2><p>{topic ? 'Choose another classification to see matching filings.' : 'Choose another year to view earlier announcements.'}</p></div>}
+      {rows && rows.length > 0 && <ul className="announcement-list">
+        {rows.map(row => {
+          const expanded = selected?.id === row.id;
+          return <li className="announcement-row" key={row.id}>
+            <div className="announcement-row-heading">
+              <button type="button" className="announcement-title" aria-expanded={expanded}
+                onClick={() => setSelected(expanded ? null : row)}>{row.headline}</button>
+              <div className="announcement-row-actions">
+                {row.url && /^https?:\/\//i.test(row.url) && <a href={row.url} target="_blank" rel="noopener noreferrer" className="announcement-document">
+                  <FileText size={14} /> Document <ExternalLink size={12} />
+                </a>}
+              </div>
+            </div>
+            <p className="cell-secondary">{new Date(row.publishedAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}</p>
+            <p className="cell-secondary">{row.topics.map(id => labels.get(id) ?? id).join(', ')}</p>
+            {expanded && <section className="announcement-evidence-inline" aria-label={`${row.headline} evidence`} aria-live="polite">
+              <p className="announcement-status">Classification status: {row.status.replaceAll('_', ' ')}</p>
+              {detail.isPending && <p>Loading evidence…</p>}
+              {detail.isError && <p role="alert">{detail.error.message} <button type="button" className="button button-ghost" onClick={() => void detail.refetch()}>Retry</button></p>}
+              {events.map((event, index) => event.evidence?.excerpt && <p key={index}><span className="font-medium">{labels.get(event.topic) ?? event.topic}: </span>{event.evidence.excerpt}</p>)}
+            </section>}
+          </li>;
+        })}
+      </ul>}
+      {topics.isError && <p role="alert" className="notice">Category labels could not be loaded. Filing topic IDs are shown. <button className="button button-ghost" onClick={() => void topics.refetch()}>Retry categories</button></p>}
+      {year !== 'recent' && history.data && <div className="pagination">
+        <button type="button" className="button button-secondary" disabled={!page || history.isFetching} onClick={() => {setPage(page - 1); setSelected(null);}}>Newer</button>
+        <span className="pagination-page">Page {page + 1} of {history.data.pages}</span>
+        <button type="button" className="button button-secondary" disabled={page + 1 >= history.data.pages || history.isFetching} onClick={() => {setPage(page + 1); setSelected(null);}}>Older</button>
+      </div>}
+    </div>
+  </Dialog>;
 }

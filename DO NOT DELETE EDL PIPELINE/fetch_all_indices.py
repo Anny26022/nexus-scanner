@@ -1,4 +1,5 @@
 import sys
+from ohlcv_utils import nse_now
 
 from pipeline_utils import fetch_scanx_data, save_json
 
@@ -56,7 +57,9 @@ def fetch_all_indices():
     print("Fetching NSE Indices & Today's Volume via ScanX Pro API...")
 
     try:
-        final_indices = [clean_index(item) for item in fetch_scanx_data(build_payload(), timeout=15)]
+        items = fetch_scanx_data(build_payload(), timeout=15)
+        fetched_at = nse_now().isoformat()
+        final_indices = [{**clean_index(item), 'SnapshotFetchedAt': fetched_at} for item in items]
         if not final_indices:
             print("No indices returned from ScanX.")
             return False

@@ -1,0 +1,44 @@
+name: Save refresh history
+description: Persist fetch inputs or build enrichment without blocking publication on cache failures.
+inputs:
+  phase:
+    description: fetch saves prices and enrichment; build saves enrichment only.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Validate cache phase
+      id: phase
+      if: always()
+      shell: bash
+      env:
+        CACHE_SAVE_PHASE: ${{ inputs.phase }}
+      run: |
+        case "$CACHE_SAVE_PHASE" in
+          fetch|build) ;;
+          *) echo "::error::Cache phase must be fetch or build"; exit 1 ;;
+        esac
+
+    - name: Save prices history
+      if: always() && steps.phase.outcome == 'success' && inputs.phase == 'fetch'
+      continue-on-error: true
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          DO NOT DELETE EDL PIPELINE/ohlcv_data
+          DO NOT DELETE EDL PIPELINE/indices_ohlcv_data
+          DO NOT DELETE EDL PIPELINE/delivery_history_data
+          DO NOT DELETE EDL PIPELINE/eod2_delivery_history_data
+        key: scanner-prices-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.phase }}
+
+    - name: Save enrichment history
+      if: always() && steps.phase.outcome == 'success'
+      continue-on-error: true
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          DO NOT DELETE EDL PIPELINE/scanner_history_data
+          DO NOT DELETE EDL PIPELINE/filing_history_data
+          DO NOT DELETE EDL PIPELINE/ipo_provider_history_data
+          DO NOT DELETE EDL PIPELINE/scanx_ipo_history_data
+        key: scanner-enrichment-v1-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.phase }}

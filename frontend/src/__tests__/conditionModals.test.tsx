@@ -3,6 +3,19 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { ConditionCatalogModal } from '../components/ConditionCatalogModal';
 import { ScreenerModal } from '../components/ScreenerModal';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+vi.mock('../data/conditionCatalog', async importOriginal => {
+  const original = await importOriginal<typeof import('../data/conditionCatalog')>();
+  // This fixture deliberately restores advanced rows to exercise their editors.
+  return {...original, isRetiredTechnicalCondition: () => false,
+    NEXUS_CONDITION_CATALOG: [...original.ADVANCED_TECHNICAL_CONDITIONS, ...original.NEXUS_CONDITION_CATALOG]};
+});
+vi.mock('../api/snapshotScreen', async importOriginal => {
+  const original = await importOriginal<typeof import('../api/snapshotScreen')>();
+  // Restore capabilities only in these editor tests; availability has its own real-path tests.
+  return {...original, supportsSnapshotCondition: (condition: {conditionId: string}) =>
+    ['INDICATOR_COMPARE', 'MA_CONVERGENCE', 'DIVERGENCE', 'SUPERTREND', 'MARKET_BREADTH'].includes(condition.conditionId)
+      || original.supportsSnapshotCondition(condition as Parameters<typeof original.supportsSnapshotCondition>[0])};
+});
 
 afterEach(cleanup);
 function active(conditionId: string) {
@@ -107,7 +120,7 @@ it('updates the linked breadth threshold when its memoized metric control change
   const row = screen.getByRole('checkbox', {name:'Market Breadth Gate:'}).closest('div')!;
   const threshold = within(row).getByRole('spinbutton', {name:'Value'});
   expect(threshold).toHaveValue(50);
-  const metric = within(row).getAllByRole('combobox')[1];
+  const metric = within(row).getByRole('combobox', {name:'Metric'});
   fireEvent.change(metric, {target:{value:'advance_decline_ratio_5d'}});
   expect(threshold).toHaveValue(1);
   fireEvent.change(threshold, {target:{value:'2'}});

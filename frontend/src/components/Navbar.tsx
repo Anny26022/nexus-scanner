@@ -1,49 +1,33 @@
-import React from 'react';
-import { SlidersHorizontal, Sparkles } from 'lucide-react';
+import { Sun, Moon, ArrowUpRight } from 'lucide-react';
+import { useTheme } from '../hooks/useTheme';
 
 interface NavbarProps {
   activeTab: 'screener' | 'ipo';
   onTabChange: (tab: 'screener' | 'ipo') => void;
+  sessionDate?: string;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => (
-  <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-    <div className="max-w-screen-xl mx-auto px-6 h-14 flex items-center justify-between">
-      {/* Logo */}
-      <div className="flex items-center gap-2.5">
-        <div className="w-7 h-7 rounded-lg bg-gray-900 flex items-center justify-center text-white text-[11px] font-black tracking-tight">
-          NX
-        </div>
-        <span className="text-sm font-bold text-gray-900">
-          Nexus <span className="font-normal text-gray-500">Screener</span>
-        </span>
+export function Navbar({ activeTab, onTabChange, sessionDate }: NavbarProps) {
+  const { choice, setChoice } = useTheme();
+  return <header className="app-sidebar">
+    <div className="brand"><svg className="brand-mark" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="12" cy="12" r="11" stroke="currentColor" strokeWidth="0.5" fill="none" />
+      <path d="M12 4L16 12L12 20L8 12L12 4Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M8 12H16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+      <path d="M12 7L14 12L12 17" stroke="currentColor" strokeWidth="0.75" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <circle cx="12" cy="12" r="6" stroke="currentColor" strokeWidth="0.25" strokeOpacity="0.3" fill="none" />
+    </svg><span>Nexus <span className="brand-subtitle">Screener</span></span></div>
+    <nav className="primary-nav" aria-label="Main navigation">
+      <button type="button" aria-current={activeTab === 'screener' ? 'page' : undefined} onClick={() => onTabChange('screener')}><span>Screener</span><ArrowUpRight className="nav-arrow" size={14} /></button>
+      <button type="button" aria-current={activeTab === 'ipo' ? 'page' : undefined} onClick={() => onTabChange('ipo')}><span>IPO Catalogue</span><ArrowUpRight className="nav-arrow" size={14} /></button>
+    </nav>
+    <div className="sidebar-footer">
+      {sessionDate && <div className="mobile-session-badge"><span>{new Date(`${sessionDate}T00:00:00`).toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}</span></div>}
+      <div className="theme-control" role="group" aria-label="Appearance">
+        {([{id: 'light', label: 'Light appearance', Icon: Sun}, {id: 'dark', label: 'Dark appearance', Icon: Moon}] as const).map(({id, label, Icon}) =>
+          <button type="button" key={id} aria-label={label} title={label} aria-pressed={choice === id} onClick={() => setChoice(id)}><Icon size={16} /></button>)}
       </div>
-
-      {/* Tab Navigation */}
-      <nav className="flex items-center bg-gray-100 rounded-xl p-1 gap-0.5">
-        <button
-          onClick={() => onTabChange('screener')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-            activeTab === 'screener'
-              ? 'bg-white text-gray-900 shadow-sm font-semibold'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          Screener
-        </button>
-        <button
-          onClick={() => onTabChange('ipo')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-            activeTab === 'ipo'
-              ? 'bg-white text-gray-900 shadow-sm font-semibold'
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-          IPO Catalogue
-        </button>
-      </nav>
     </div>
-  </header>
-);
+  </header>;
+}

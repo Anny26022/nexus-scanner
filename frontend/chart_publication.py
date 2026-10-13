@@ -12,6 +12,8 @@ import shutil
 import subprocess
 import tempfile
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 
@@ -71,7 +73,7 @@ def chart_revision(root, session):
             chart = json.loads(gzip.decompress((root / 'objects' / f'{digest}.json.gz').read_bytes()))
             if chart.get('symbol') != symbol or chart.get('schemaVersion') != 2:
                 raise RuntimeError('Chart object symbol/schema mismatch')
-        validate_announcement_objects(root / 'objects', index['announcements'], session, set(index['chartObjects']))
+        validate_announcement_objects(root / 'objects', index['announcements'], session, set(index['chartObjects']), index.get('filingLookup'))
         return revision
     digest = hashlib.sha256()
     for file in files:
@@ -87,7 +89,7 @@ def chart_revision(root, session):
     return revision
 
 
-def validate_announcement_objects(objects, catalog_hash, session, symbols):
+def validate_announcement_objects(objects, catalog_hash, session, symbols, lookup=None):
     def read(digest):
         if not re.fullmatch(r'[a-f0-9]{64}', str(digest)):
             raise RuntimeError('Invalid announcement object reference')
@@ -99,6 +101,16 @@ def validate_announcement_objects(objects, catalog_hash, session, symbols):
     catalog = read(catalog_hash)
     if catalog.get('referenceSession') != session or set(catalog.get('symbols', {})) != symbols:
         raise RuntimeError('Announcement catalog universe/session mismatch')
+    if lookup is not None:
+        if (any(lookup.get(key) != catalog[key] for key in ('publishedAt', 'taxonomy', 'index'))
+                or set(lookup.get('symbols', {})) != symbols):
+            raise RuntimeError('Filing lookup does not match announcement catalog')
+        for symbol, entry in catalog['symbols'].items():
+            reference = lookup['symbols'][symbol]
+            if (reference.get('recent') != entry['recent']
+                    or reference.get('years') != sorted(map(int, entry['years']), reverse=True)
+                    or read(reference.get('history')) != {'symbol': symbol, **entry}):
+                raise RuntimeError('Filing lookup history mismatch')
     read(catalog['taxonomy'])
     index = read(catalog['index'])
     if index.get('referenceSession') != session or index.get('publishedAt') != catalog.get('publishedAt'):
@@ -134,23 +146,54 @@ def prepare_archives(chart_root):
     """Back up complete histories without loading another full archive in memory."""
     root = chart_root.parent
     archives = {}
+    prepared = chart_root / '.prepared_archives'
+    if (prepared / 'index.json').is_file():
+        archives = json.loads((prepared / 'index.json').read_text())
+        if not isinstance(archives, dict) or set(archives) - {'classified', 'raw'}:
+            raise RuntimeError('Invalid prepared filing archives')
+        for digest in archives.values():
+            if not re.fullmatch(r'[a-f0-9]{64}', str(digest)):
+                raise RuntimeError('Invalid prepared archive hash')
+            source = prepared / (digest + '.json.gz')
+            if file_digest(source) != digest:
+                raise RuntimeError('Prepared archive content does not match its hash')
+        for digest in archives.values():
+            destination = chart_root / 'objects' / (digest + '.json.gz')
+            destination.parent.mkdir(exist_ok=True)
+            shutil.copyfile(prepared / destination.name, destination)
     inputs = {'classified': root / 'filing_history.json.gz',
               'raw': root / 'filing_history_data' / 'filing_history.json'}
-    for name, source in inputs.items():
+    def pack(item):
+        name, source = item
         if not source.is_file():
-            continue  # Small diagnostic/fixture builds may have no retained archive.
+            return name, None  # Diagnostic/fixture builds may lack an archive.
         with tempfile.TemporaryDirectory(dir=chart_root) as folder:
             temporary = Path(folder) / 'archive.json.gz'
             opener = gzip.open if source.suffix == '.gz' else open
             with opener(source, 'rb') as incoming, temporary.open('wb') as outgoing:
-                with gzip.GzipFile(fileobj=outgoing, mode='wb', mtime=0, filename='') as packed:
+                with gzip.GzipFile(fileobj=outgoing, mode='wb', mtime=0, filename='',
+                                   compresslevel=6 if name == 'raw' else 9) as packed:
                     shutil.copyfileobj(incoming, packed)
             digest = file_digest(temporary)
             destination = chart_root / 'objects' / f'{digest}.json.gz'
             if not destination.exists():
                 destination.parent.mkdir(exist_ok=True)
                 temporary.replace(destination)
-            archives[name] = digest
+            return name, digest
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [(name, executor.submit(pack, (name, source)))
+                   for name, source in inputs.items() if name not in archives]
+        errors = []
+        for name, future in futures:
+            try:
+                _, digest = future.result()
+                if digest is not None:
+                    archives[name] = digest
+            except Exception as error:
+                print(f'Filing archive {name} failed: {error}', flush=True)
+                errors.append(error)
+        if errors:
+            raise errors[0]
     return archives
 
 
@@ -172,7 +215,12 @@ class R2Store:
                         RCLONE_CONFIG_CHARTS_REGION='auto')
 
     def run(self, *args):
-        subprocess.run(['rclone', *args, '--s3-no-check-bucket'], env=self.env, check=True)
+        # R2 can return 501 to rclone's post-PUT HEAD; bulk uploads get a download check.
+        started = time.perf_counter()
+        try:
+            subprocess.run(['rclone', *args, '--s3-no-check-bucket', '--s3-no-head'], env=self.env, check=True)
+        finally:
+            print(f'R2 {args[0]} elapsed: {time.perf_counter() - started:.2f}s', flush=True)
 
     def remote(self, key):
         return f'charts:{self.bucket}/{key}'
@@ -182,15 +230,17 @@ class R2Store:
         self.run('copy', str(source), self.remote(key), '--include', '*.json.gz',
                  '--transfers', '16', '--metadata', '--metadata-set', 'content-type=application/gzip',
                  '--metadata-set', 'cache-control=public,max-age=31536000,immutable', '--immutable', '--checksum')
-        self.run('check', str(source), self.remote(key), '--include', '*.json.gz', '--one-way', '--download')
+        self.run('check', str(source), self.remote(key), '--include', '*.json.gz', '--one-way', '--download', '--checkers', '16')
         self.run('copyto', str(source / 'index.json'), self.remote(key + '/index.json'), '--immutable', '--checksum')
 
     def upload_objects(self, source):
         """List once; transfer and read back only new content-addressed files."""
         remote = self.remote('objects')
+        started = time.perf_counter()
         listing = subprocess.run(['rclone', 'lsf', remote, '--files-only', '--format', 'ps',
                                   '--separator', '\t', '--s3-no-check-bucket'],
                                  env=self.env, check=True, capture_output=True, text=True)
+        print(f'R2 object listing elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         existing = {}
         for line in listing.stdout.splitlines():
             name, size = line.rsplit('\t', 1)
@@ -202,6 +252,7 @@ class R2Store:
                     raise RuntimeError('Immutable remote object has a different size: ' + file.name)
             else:
                 new.append(file.name)
+        print(f'R2 objects: {len(new)} new; {len(existing)} already stored', flush=True)
         if not new:
             return
         with tempfile.TemporaryDirectory() as folder:
@@ -210,13 +261,13 @@ class R2Store:
             self.run('copy', str(source), remote, '--files-from', str(names), '--transfers', '16',
                      '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
                      '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
-            self.run('check', str(source), remote, '--files-from', str(names), '--one-way', '--download')
+            self.run('check', str(source), remote, '--files-from', str(names), '--one-way', '--download', '--checkers', '16')
 
     def archive(self, previous, month):
         source = previous['chartObjectPrefix']
         target = f'monthly/{month}/{previous["chartRevision"]}/charts'
         self.run('copy', self.remote(source), self.remote(target), '--immutable', '--checksum')
-        self.run('check', self.remote(source), self.remote(target), '--one-way', '--download')
+        self.run('check', self.remote(source), self.remote(target), '--one-way', '--download', '--checkers', '16')
         archived = dict(previous, chartObjectPrefix=target,
                         chartUrlTemplate=f'{self.base_url}/{target}/{{symbol}}.json.gz')
         self.write_release(archived, f'monthly/{month}/{previous["chartRevision"]}/releases/{previous["revision"]}.json')
@@ -286,7 +337,9 @@ def complete_release(chart_root, output, manifest, store=None):
 
 
 def complete_object_release(chart_root, output, manifest, store=None):
+    started = time.perf_counter()
     revision = chart_revision(chart_root, manifest['sessionDate'])
+    print(f'Chart validation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = json.loads((chart_root / 'index.json').read_text())
     previous_path = output / 'current.json'
     previous = json.loads(previous_path.read_text()) if previous_path.exists() else None
@@ -302,11 +355,15 @@ def complete_object_release(chart_root, output, manifest, store=None):
             manifest['publishedAt'] = existing['publishedAt']
     if store is None and os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':
         store = R2Store()
+    started = time.perf_counter()
     archives = prepare_archives(chart_root)
+    print(f'Archive preparation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = dict(index, archives=archives)
     if store:
         base = store.base_url
+        started = time.perf_counter()
         store.upload_objects(chart_root / 'objects')
+        print(f'Object upload and verification elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         manifest['publishedAt'] = manifest['sessionDate'] + 'T00:00:00Z'
         manifest['dataIndexUrl'] = f"{base}/releases/{manifest['revision']}/index.json"
         manifest['objectUrlTemplate'] = f'{base}/objects/{{hash}}.json.gz'

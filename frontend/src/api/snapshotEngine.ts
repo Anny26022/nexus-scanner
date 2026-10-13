@@ -3,10 +3,13 @@ import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
 
 export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
+export type FilterChoices = Record<'SECTOR' | 'INDUSTRY' | 'SERIES' | 'PRICE_BAND' | 'INDEX_MEMBERSHIP', string[]>;
 export type SnapshotTask =
+  | { type:'filterChoices'; source:SnapshotSource }
   | { type:'screen'; source:SnapshotSource; request:ScreenerRunRequest }
   | { type:'compare'; source:SnapshotSource; symbols:string[] };
 export type SnapshotResult =
+  | { type:'filterChoices'; result:FilterChoices }
   | { type:'screen'; result:ScreenerRunResponse | null; revision:string; sessionDate:string }
   | { type:'compare'; result:SymbolComparisonResponse };
 
@@ -49,6 +52,20 @@ export function createSnapshotEngine(loader = readSnapshot) {
   }
   return async (task: SnapshotTask): Promise<SnapshotResult> => {
     const data = await load(task.source);
+    if (task.type === 'filterChoices') {
+      const fields = {SECTOR:'sector', INDUSTRY:'industry', SERIES:'series', PRICE_BAND:'circuitLimit', INDEX_MEMBERSHIP:'indexMemberships'} as const;
+      const result = Object.fromEntries(Object.entries(fields).map(([id, field]) => {
+        const values = new Map<string, string>();
+        for (const stock of data.stocks) {
+          const raw = stock[field];
+          for (const value of Array.isArray(raw) ? raw : [raw]) {
+            if (typeof value === 'string' && value.trim()) values.set(value.trim().toUpperCase(), value.trim());
+          }
+        }
+        return [id, [...values.values()].sort((a,b) => a.localeCompare(b))];
+      })) as FilterChoices;
+      return {type:'filterChoices', result};
+    }
     if (task.type === 'screen') return {type:'screen',result:screenSnapshot(data,task.request),revision:data.revision,sessionDate:data.asOfDate};
     const bySymbol = new Map(data.stocks.map(stock => [stock.symbol,stock]));
     const validSymbols: SymbolComparisonResponse['validSymbols'] = [], invalidSymbols:string[] = [];

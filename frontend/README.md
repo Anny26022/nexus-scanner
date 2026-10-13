@@ -392,6 +392,31 @@ The backend needs the requested frozen revision, condition implementation, and s
 
 Publish through the shared R2 publisher and permit browser access from the app origin. Scanner-only releases have no chart URL template. Report chart unavailability instead of silently using unrelated older data.
 
+Announcements use the same object store. A schema-4 scanner-only release cannot
+provide announcement summaries, history, or category filters. Configure the
+Actions secrets `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and the
+repository variable `R2_PUBLIC_BASE_URL`, then run the full refresh to publish a
+schema-7 release. Set the public base to the read-only `workers/r2-delivery`
+Worker URL; it serves uploaded objects with CORS while the bucket's `r2.dev`
+endpoint stays disabled. Deploy that Worker before updating the variable or
+release pointers. Do not put storage credentials into `VITE_*` variables.
+
+For a missing-file error in a schema-7 release, verify the exact `dataIndexUrl`
+and content-addressed `objectUrlTemplate` references, HTTP status and CORS.
+Do not redirect a missing JSON/gzip asset to the SPA or substitute an older
+revision. The UI distinguishes unpublished data, failed downloads and a genuine
+empty period; deliberate retries evict failed reads from the object cache.
+
+### Workspace layout
+
+The app uses system typography, shared light/dark tokens and native modal dialogs.
+Desktop results fill the remaining workspace height; narrow screens keep a stable,
+horizontally scrollable table instead of dropping columns. Pagination and column
+widths stay mounted across loading, errors, empty results and short final pages.
+Previous-page data is retained only for page-only changes to the same screen and
+revision; exports are disabled while it updates. Appearance choices are stored
+locally alongside existing screen preferences. Screening formulas are unchanged.
+
 ## Local history recovery
 
 Git does not contain full raw OHLCV, delivery, or filings caches. Actions cache speeds up runners but can be evicted. Durable private R2 raw-history backups and automatic restoration remain planned; derived chart files are not a complete raw backup.
@@ -491,6 +516,27 @@ Tests verify contracts against fixtures. They do not establish complete live ups
 
 Read the [repository guide](../README.md), [data limitations](../DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/DATA_LIMITATIONS.md), and [R2 publication guide](../docs/r2-chart-publication.md) for wider operational detail.
 
+### Rank-first RS rating
+
+The daily pipeline publishes `nexus_rank_first_v3`: rank each Nifty500-relative
+growth ratio over 21/63/126/252 aligned sessions on the same eligible universe,
+combine fractional 1–99 ranks with 40/20/20/20 weights, then rank the composite.
+Period ranks use `1 + 98 * strictly_lower_scores / max(1, N - 1)` without rounding.
+Final ratings use `floor(99 - 98 * descending_position / max(1, N - 1) + 0.5)`.
+Equal composites keep stable alphabetical symbol order; period ties share ranks.
+Composite sorting uses exact integer weighted lower counts (the common offset
+and denominator cancel), preventing float roundoff from breaking mathematical ties.
+Published period ratings remain integers, rounded half-up only after aggregation.
+At least 260 aligned sessions and all four valid horizons are required.
+
+Previously, `nexus_front_weighted_v2` weighted raw relative growth ratios before
+ranking. Ratings and RS filter matches intentionally change after the next
+normal publication following merge; stored older snapshots remain unchanged.
+No frontend field names, rating bounds, benchmark or weights change. This is
+the MarketStrength **Momentum rating** aggregation (not its separate RS formula),
+with Nexus's own universe, windows, weights and aligned input history. This does
+not imply numerical parity with MarketStrength or better investment returns.
+
 ### Python dependencies for frontend CI
 
 Frontend CI uses Python 3.12 and `frontend/requirements-ci.lock`, which pins all
@@ -511,3 +557,34 @@ Add `--upgrade` to deliberately refresh all pinned versions, or
 `--upgrade-package NAME` for one package. Commit the updated lock with the input
 change and verify the frontend Python suite. Python requirement changes also
 trigger Frontend CI.
+
+### Compact technical snapshot facts
+
+`publish_snapshot.py` now publishes `technicalMetricsVersion: 1` and compact
+technical values inside the existing packed `metrics` table. It reuses the
+Python scanner engine, including EMA extreme-reset persistence (not a naive
+consecutive-close rule). No live API or browser candle download is required.
+Numeric facts retain full precision for comparisons; display rounding never
+changes a filter match at its threshold.
+
+Supported configurations are shared in `src/data/snapshotTechnicals.json`.
+Numeric thresholds remain editable; uncomputed windows remain unavailable,
+and saved unsupported settings are preserved for explicit correction.
+
+- SMA/EMA values: 9, 10, 20, 21, 50, 150 and 200 sessions; EMA persistence
+  counters allow variable durations with a separate warmup guard.
+- ADX14, SMA200 slope over 21 sessions, percentage of 125 sessions above SMA50,
+  current up-day streak, 20-session highest volume, 252-session new highs/lows,
+  20-session consolidation, 10/60 nested contraction, daily inside bar,
+  Nifty50-relative 60-session strength and RS new-high signals.
+- Persistent Momentum and EMA21 reclaim use their published default settings.
+  Legacy slope, percentage-above-MA, reclaim, contraction and inside-bar rows
+  retain their distinct calculations rather than borrowing similar values.
+- Listing age and days since earnings count stock trading sessions. Dates
+  predating available stock history remain unknown, never undercounted.
+- F&O ban is only evaluated when `fnoBanAsOfDate` matches the selected session.
+  A report for the next session is not a valid substitute.
+
+Old releases still load, but lack the new facts until the normal pipeline
+publishes a new immutable generation. Coverage and warnings distinguish missing
+data from genuine non-matches; unknown values stay unknown under negation.

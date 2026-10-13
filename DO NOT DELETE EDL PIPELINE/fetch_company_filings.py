@@ -183,6 +183,7 @@ def has_pending_backfill(existing, canonical_symbols):
 
 
 def main():
+    wall_started, cpu_started = time.perf_counter(), time.process_time()
     ensure_dir(OUTPUT_DIR)
     ensure_dir(HISTORY_DIR)
     try:
@@ -229,6 +230,7 @@ def main():
     succeeded = sum(result.get("status") == "success" for result in results)
     caught_up = sum(result.get("refresh_complete", False) for result in results)
     print(f"Filings fetched: {succeeded}/{len(results)}; both feeds caught up: {caught_up}/{len(results)}; LODR histories complete: {completed}/{len(history)}.")
+    print(f'Filings total elapsed (including cache load/save): {time.perf_counter() - wall_started:.2f}s; CPU: {time.process_time() - cpu_started:.2f}s', flush=True)
     return succeeded > 0
 
 

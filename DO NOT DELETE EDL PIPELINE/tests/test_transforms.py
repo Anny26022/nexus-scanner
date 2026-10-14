@@ -67,6 +67,22 @@ class TransformTests(unittest.TestCase):
         self.assertEqual(legacy['sector'], 'Diamond Gems and Jewellery')
         self.assertEqual(item, original)
 
+    def test_extract_aliases_and_missing_fields_use_existing_normalization_and_fallback(self):
+        manual = json.loads((ROOT/'taxonomy_overrides.json').read_text())
+        manual['overrides']['PARTIAL'] = {'sector':'Fallback Sector','industry':'Fallback Industry','nicheTags':['Keep']}
+        classifications = {str(i): {'sector':sector,'industry':'Source Industry'}
+                           for i, sector in enumerate(manual['sectorAliases'])}
+        classifications['PARTIAL'] = {'sector':None, 'industry':None}
+        classifications['EXACT'] = {'sector':'Distinct Sector', 'industry':'Distinct Industry'}
+        with mock.patch('edl_pipeline.transforms.fundamentals.load_json',
+                        side_effect=[manual, {'classifications':classifications}]):
+            resolved, aliases, _ = load_taxonomy_overrides()
+        for i, (raw, canonical) in enumerate(aliases.items()):
+            self.assertEqual(resolved[str(i)]['sector'], canonical)
+            self.assertEqual(resolved[str(i)]['industry'], 'Source Industry')
+        self.assertEqual(resolved['PARTIAL'], {'sector':'Fallback Sector', 'industry':'Fallback Industry', 'niche_tags':['Keep']})
+        self.assertEqual(resolved['EXACT']['sector'], 'Distinct Sector')
+
     def test_stockscans_precedes_provider_with_missing_symbol_fallback(self):
         manual, aliases, _ = load_taxonomy_overrides()
         for symbol, sector, industry in (

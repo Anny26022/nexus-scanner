@@ -91,3 +91,14 @@ and continue to support the existing Theme Tracker bridge. Nexus Journal themes
 and source-backed niche tags are independent and unchanged. This is a pinned
 extract, not a new daily StockScans scraper; new listings use the fallback until
 the resource is updated. Resource changes participate in the snapshot revision.
+
+The resolver applies the same four explicit sector spelling aliases to extract
+rows, reviewed corrections, and provider fallbacks. It does not merge broader
+business categories. Raw audit extracts are archived under
+`reference/stockscans/*.json.gz`; these are not runtime inputs.
+
+The consolidated public preview is deliberately retained as a requested review
+artifact, not regenerated in place each day. It is not fetched by the screener
+on startup. Daily consumers should follow `universeClassificationUrl` in the
+manifest. Do not ignore all of `frontend/public/data`: the existing release
+workflow intentionally commits and serves versioned snapshots there.

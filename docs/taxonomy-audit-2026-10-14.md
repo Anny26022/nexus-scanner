@@ -9,7 +9,10 @@ This audit compares the active 2,604-stock universe with the available 4,800-row
 Final precedence update: the pinned StockScans extract now takes priority over
 the earlier remediation below. Exact NSE matches cover 2,251 of 2,604 stocks;
 353 retain reviewed corrections or provider classifications. A full offline replay
-changes 2,215 primary pairs and yields 109 sectors and 480 industries. Nexus
+originally changed 2,215 primary pairs and yielded 109 sectors and 480 industries.
+Applying the existing four spelling aliases consistently to extract rows further
+normalizes 28 current-universe entries and reduces the sector count to 105;
+industry coverage remains 480. Nexus
 Journal theme records remain identical. AUGMONT therefore uses StockScans'
 `Trading` primary sector while retaining its researched bullion/refining tags.
 The counts and outcomes below document the earlier remediation stage, not this

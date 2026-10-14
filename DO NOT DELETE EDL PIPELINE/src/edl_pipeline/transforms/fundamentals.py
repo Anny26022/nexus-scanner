@@ -31,8 +31,9 @@ def load_taxonomy_overrides():
     extracted = load_json(resource_path("stockscans_classification.json"))
     for symbol, entry in extracted["classifications"].items():
         prior = overrides.get(symbol, {})
+        sector = entry.get("sector") or prior.get("sector")
         overrides[symbol] = {
-            "sector": entry.get("sector") or prior.get("sector"),
+            "sector": aliases.get(sector, sector),
             "industry": entry.get("industry") or prior.get("industry"),
             "niche_tags": prior.get("niche_tags", []),
         }

@@ -1,0 +1,2615 @@
+{
+  "schemaVersion": 1,
+  "asOfDate": "2026-10-14",
+  "scope": {
+    "ourUniverse": 2604,
+    "stockscansExtractedRecords": 4800,
+    "stockscansReportedTotal": 6725,
+    "extractStatus": "partial_due_to_source_rate_limit",
+    "matchedSymbols": 2558,
+    "ownSymbolsAbsentFromExtract": 46,
+    "stockscansOnlySymbols": 2239
+  },
+  "applied": {
+    "stockscansSectorOverrides": 529,
+    "manualTaxonomyOverrides": 1
+  },
+  "completeness": {
+    "unclassifiedCount": 91,
+    "unclassifiedWithSpecificStockscansClassification": 79,
+    "unclassifiedWithAmbiguousStockscansClassification": 11,
+    "unclassifiedMissingFromExtract": 1,
+    "records": [
+      {
+        "symbol": "AASTHA",
+        "name": "Aastha Spintex",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:AASTHA",
+          "name": "Aastha Spintex Ltd",
+          "industry": "Textiles Others",
+          "sector": "Textiles",
+          "last_result_date": "2026-08-14",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "ACEVECTOR",
+        "name": "AceVector",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:ACEVECTOR",
+          "name": "AceVector Ltd",
+          "industry": "E-Services",
+          "sector": "E-Commerce/App based Aggregator",
+          "last_result_date": "2026-09-29",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "ADROITIND",
+        "name": "Adroit Industries",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:ADROITIND",
+          "name": "Adroit Industries (India) Ltd",
+          "industry": "Auto Ancillaries - Others",
+          "sector": "Auto Ancillaries",
+          "last_result_date": "2026-10-12",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "AGL",
+        "name": "Allcargo Global",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:AGL",
+          "name": "Allcargo Global Ltd",
+          "industry": "Miscellaneous",
+          "sector": "Logistics",
+          "last_result_date": "2026-08-15",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "ALPINETEX",
+        "name": "Alpine Texworld",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:ALPINETEX",
+          "name": "Alpine Texworld Ltd",
+          "industry": "Textiles Others",
+          "sector": "Textiles",
+          "last_result_date": "2026-08-14",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "ANNU",
+        "name": "Annu Projects",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:ANNU",
+          "name": "Annu Projects Ltd",
+          "industry": "Construction Civil and Turnkey",
+          "sector": "Infrastructure Developers and Operators",
+          "last_result_date": "2026-09-23",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "AONESTEELS",
+        "name": "A One Steels",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:AONESTEELS",
+          "name": "A-One Steels India Ltd",
+          "industry": "Steel - Medium / Small",
+          "sector": "Steel",
+          "last_result_date": "2026-09-16",
+          "next_result_date": "2026-10-19"
+        }
+      },
+      {
+        "symbol": "ARCIL",
+        "name": "Asset Reconstruction Company",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:ARCIL",
+          "name": "Asset Reconstruction Company (India) Ltd",
+          "industry": "Finance Investment and Others",
+          "sector": "Finance",
+          "last_result_date": "2026-10-06",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "ARDEE",
+        "name": "Ardee Industries",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:ARDEE",
+          "name": "Ardee Industries Ltd",
+          "industry": "Metal Others",
+          "sector": "Non Ferrous Metals",
+          "last_result_date": "2026-08-25",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "ARMEE",
+        "name": "ArMee Infotech",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:ARMEE",
+          "name": "Armee Infotech Ltd",
+          "industry": "Computers - Software - Medium / Small",
+          "sector": "IT - Software",
+          "last_result_date": "2026-09-18",
+          "next_result_date": "2026-10-15"
+        }
+      },
+      {
+        "symbol": "BUILDPRO",
+        "name": "Shankara Buildpro",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:BUILDPRO",
+          "name": "Shankara Buildpro Ltd",
+          "industry": "Trading",
+          "sector": "Trading",
+          "last_result_date": "2026-08-06",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "BURNPUR",
+        "name": "Burnpur Cement",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:BURNPUR",
+          "name": "Burnpur Cement Ltd",
+          "industry": "Cement",
+          "sector": "Cement",
+          "last_result_date": "2026-07-30",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "CAPILLARY",
+        "name": "Capillary Technologies",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:CAPILLARY",
+          "name": "Capillary Technologies India Ltd",
+          "industry": "IT Services",
+          "sector": "IT Software",
+          "last_result_date": "2026-08-04",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "CMLL",
+        "name": "Caliber Mining & Logistics",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:CMLL",
+          "name": "Caliber Mining and Logistics Ltd",
+          "industry": "Mining and Minerals",
+          "sector": "Mining and Mineral Products",
+          "last_result_date": "2026-08-12",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "CMPDI",
+        "name": "Central Mine P & D Institute",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:CMPDI",
+          "name": "Central Mine Planning & Design Institute Ltd",
+          "industry": "Miscellaneous",
+          "sector": "Miscellaneous",
+          "last_result_date": "2026-07-21",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "CMRGREEN",
+        "name": "CMR Green Technologies",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:CMRGREEN",
+          "name": "CMR Green Technologies Ltd",
+          "industry": "Miscellaneous",
+          "sector": "Miscellaneous",
+          "last_result_date": "2026-08-10",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "CORDELIA",
+        "name": "Waterways Leisure Tourism",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:CORDELIA",
+          "name": "Waterways Leisure Tourism Limited",
+          "industry": "Travel Agencies",
+          "sector": "E Commerce and App based Aggregator",
+          "last_result_date": "2026-10-09",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "CSM",
+        "name": "CSM Technologies",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:CSM",
+          "name": "CSM Technologies Ltd",
+          "industry": "IT Services",
+          "sector": "IT Software",
+          "last_result_date": "2026-08-14",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "DCMSIL",
+        "name": "DCM Shriram International",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:DCMSIL",
+          "name": "DCM Shriram International Ltd",
+          "industry": "Textiles Rayon",
+          "sector": "Textiles",
+          "last_result_date": "2026-08-14",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "DEEPA",
+        "name": "Deepa Jewellers",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:DEEPA",
+          "name": "Deepa Jewellers Ltd",
+          "industry": "Diamond Gems and Jewellery",
+          "sector": "Diamond Gems and Jewellery",
+          "last_result_date": "2026-09-28",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "DHOOTTRANS",
+        "name": "Dhoot Transmission",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:DHOOTTRANS",
+          "name": "Dhoot Transmission Ltd",
+          "industry": "Electric Equipment General",
+          "sector": "Capital Goods Electrical Equipment",
+          "last_result_date": "2026-09-04",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "DSFCL",
+        "name": "DCM Shriram Fine Chemicals",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:DSFCL",
+          "name": "DCM Shriram Fine Chemicals Ltd",
+          "industry": "Chemicals Organic",
+          "sector": "Chemicals",
+          "last_result_date": "2026-08-14",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "DSKULKARNI",
+        "name": "DS Kulkarni Developers",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:DSKULKARNI",
+          "name": "D S Kulkarni Developers Ltd",
+          "industry": "Construction Housing",
+          "sector": "Realty",
+          "last_result_date": "2026-08-15",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "EASTSILK",
+        "name": "Eastern Silk Industries",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:EASTSILK",
+          "name": "Eastern Silk Industries Ltd",
+          "industry": "Textiles Silk",
+          "sector": "Textiles",
+          "last_result_date": "2026-08-07",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "ELEVATE",
+        "name": "Elevate Campuses",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:ELEVATE",
+          "name": "Elevate Campuses Ltd",
+          "industry": "Miscellaneous - Medium / Small",
+          "sector": "Miscellaneous",
+          "last_result_date": "2026-09-19",
+          "next_result_date": "2026-10-19"
+        }
+      },
+      {
+        "symbol": "ESDS",
+        "name": "ESDS Software Solution",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:ESDS",
+          "name": "ESDS Software Solution Ltd",
+          "industry": "IT Services",
+          "sector": "IT Software",
+          "last_result_date": "2026-09-25",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "GAJA",
+        "name": "Gaja Alternative Asset Management",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:GAJA",
+          "name": "Gaja Alternative Asset Management Ltd",
+          "industry": "Finance Investment and Others",
+          "sector": "Finance",
+          "last_result_date": "2026-09-10",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "GERMAN",
+        "name": "German Green Steel and Power ",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:GERMAN",
+          "name": "German Green Steel & Power Ltd",
+          "industry": "Steel - Medium / Small",
+          "sector": "Steel",
+          "last_result_date": "2026-09-23",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "GLASSWALL",
+        "name": "Glass Wall Systems",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:GLASSWALL",
+          "name": "Glass Wall Systems (India) Ltd",
+          "industry": "Construction Civil and Turnkey",
+          "sector": "Construction",
+          "last_result_date": "2026-10-06",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "GRADIENTE",
+        "name": "Gradiente Infotainment",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": null
+      },
+      {
+        "symbol": "GSPLTRANS",
+        "name": "GSPL Transmission",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:GSPLTRANS",
+          "name": "GSPL Transmission Ltd",
+          "industry": "Gas Distribution",
+          "sector": "Gas Distribution",
+          "last_result_date": null,
+          "next_result_date": "2026-11-03"
+        }
+      },
+      {
+        "symbol": "HEROMOTORS",
+        "name": "Hero Motors",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:HEROMOTORS",
+          "name": "Hero Motors Ltd",
+          "industry": "Auto Ancillaries - Others",
+          "sector": "Auto Ancillaries",
+          "last_result_date": "2026-10-14",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "HEXAGON",
+        "name": "Hexagon Nutrition",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:HEXAGON",
+          "name": "Hexagon Nutrition Ltd",
+          "industry": "Food Processing Others",
+          "sector": "FMCG",
+          "last_result_date": "2026-08-13",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "HORIZONIND",
+        "name": "Horizon Industrial Parks",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:HORIZONIND",
+          "name": "Horizon Industrial Parks Ltd",
+          "industry": "Miscellaneous",
+          "sector": "Miscellaneous",
+          "last_result_date": "2026-09-12",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "HTEL",
+        "name": "Hy-Tech Engineers",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:HTEL",
+          "name": "Hy-Tech Engineers Ltd",
+          "industry": "Hydraulics",
+          "sector": "Capital Goods Non Electrical Equipment",
+          "last_result_date": "2026-09-18",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "INDOMIM",
+        "name": "Indo-MIM",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:INDOMIM",
+          "name": "Indo-MIM Ltd",
+          "industry": "Engineering Light General",
+          "sector": "Capital Goods Non Electrical Equipment",
+          "last_result_date": "2026-08-18",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "JNPR",
+        "name": "Juniper Green Energy",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:JNPR",
+          "name": "Juniper Green Energy Ltd",
+          "industry": "Power Generation and Distribution",
+          "sector": "Power Generation and Distribution",
+          "last_result_date": "2026-08-26",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "JSIPL",
+        "name": "Jindal Supreme",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:JSIPL",
+          "name": "Jindal Supreme (India) Ltd",
+          "industry": "Steel - Tubes / Pipes",
+          "sector": "Steel",
+          "last_result_date": "2026-09-23",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "KANOHAR",
+        "name": "Kanohar Electricals",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:KANOHAR",
+          "name": "Kanohar Electricals Ltd",
+          "industry": "Capital Goods Transformers",
+          "sector": "Capital Goods Electrical Equipment",
+          "last_result_date": "2026-10-06",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "KARAMTARA",
+        "name": "Karamtara Engineering",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:KARAMTARA",
+          "name": "Karamtara Engineering Ltd",
+          "industry": "Transmission Line Towers and Equipment",
+          "sector": "Capital Goods Electrical Equipment",
+          "last_result_date": "2026-10-06",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "KNACK",
+        "name": "Knack Packaging",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:KNACK",
+          "name": "Knack Packaging Ltd",
+          "industry": "Packaging FMCG and Consumers",
+          "sector": "Packaging",
+          "last_result_date": "2026-08-10",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "KSR",
+        "name": "KSR Footwear",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:KSR",
+          "name": "KSR Footwear Ltd",
+          "industry": "Leather and Synthetic Footwear",
+          "sector": "Leather",
+          "last_result_date": "2026-08-05",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "KUSUMGAR",
+        "name": "Kusumgar",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:KUSUMGAR",
+          "name": "Kusumgar Ltd",
+          "industry": "Textiles Manmade PFY and PSF",
+          "sector": "Textiles",
+          "last_result_date": "2026-08-11",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "LALITHAA",
+        "name": "Lalithaa Jewellery Mart",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:LALITHAA",
+          "name": "Lalithaa Jewellery Mart Ltd",
+          "industry": "Diamond Gems and Jewellery",
+          "sector": "Diamond Gems and Jewellery",
+          "last_result_date": "2026-09-12",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "LASERPOWER",
+        "name": "Laser Power & Infra",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:LASERPOWER",
+          "name": "Laser Power & Infra Ltd",
+          "industry": "Cables Power",
+          "sector": "Cables",
+          "last_result_date": "2026-08-10",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "LCCPROJECT",
+        "name": "LCC Projects",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:LCCPROJECT",
+          "name": "LCC Projects Ltd",
+          "industry": "Construction Civil and Turnkey",
+          "sector": "Infrastructure Developers and Operators",
+          "last_result_date": "2026-10-05",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "LCL",
+        "name": "Lohia Corp",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:LCL",
+          "name": "Lohia Corp Ltd",
+          "industry": "Textile Machinery",
+          "sector": "Engineering",
+          "last_result_date": "2026-08-19",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "LEAPIND",
+        "name": "LEAP",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:LEAPIND",
+          "name": "Leap India Ltd",
+          "industry": "Miscellaneous",
+          "sector": "Miscellaneous",
+          "last_result_date": "2026-08-31",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "LUMINO",
+        "name": "Lumino Industries",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:LUMINO",
+          "name": "Lumino Industries Ltd",
+          "industry": "Engineering Turnkey Services",
+          "sector": "Infrastructure Developers and Operators",
+          "last_result_date": "2026-09-21",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "MANIKA",
+        "name": "Manika Plastech",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:MANIKA",
+          "name": "Manika Plastech Ltd",
+          "industry": "Plastics Others",
+          "sector": "Plastic Products",
+          "last_result_date": "2026-09-09",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "MANIPALHOS",
+        "name": "Manipal Health Enterprises",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:MANIPALHOS",
+          "name": "Manipal Health Enterprises Ltd",
+          "industry": "Hospitals",
+          "sector": "Healthcare",
+          "last_result_date": "2026-08-21",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "MBECL",
+        "name": "McNally Bharat Engineering Comp",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:MBECL",
+          "name": "McNally Bharat Engineering Company Ltd",
+          "industry": "Engineering Turnkey Services",
+          "sector": "Infrastructure Developers and Operators",
+          "last_result_date": "2026-08-13",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "MILKYMIST",
+        "name": "Milky Mist Dairy Food",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:MILKYMIST",
+          "name": "Milky Mist Dairy Food Ltd",
+          "industry": "FMCG Dairy Products",
+          "sector": "FMCG",
+          "last_result_date": "2026-08-31",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "MOLBIO",
+        "name": "Molbio Diagnostics",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:MOLBIO",
+          "name": "Molbio Diagnostics Ltd",
+          "industry": "Medical Equipment",
+          "sector": "Healthcare",
+          "last_result_date": "2026-09-05",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "MOMSBELIEF",
+        "name": "Rays of Belief",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:MOMSBELIEF",
+          "name": "Rays of Belief Ltd",
+          "industry": "Miscellaneous",
+          "sector": "Miscellaneous",
+          "last_result_date": "2026-09-29",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "MONEYVIEW",
+        "name": "Moneyview",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:MONEYVIEW",
+          "name": "Moneyview Ltd",
+          "industry": "Computers - Software - Medium / Small",
+          "sector": "E-Commerce/App based Aggregator",
+          "last_result_date": "2026-10-01",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "MPIMANIPAL",
+        "name": "Manipal Payment and Identity Solutions",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:MPIMANIPAL",
+          "name": "Manipal Payment and Identity Solutions Ltd",
+          "industry": "IT Services",
+          "sector": "IT Software",
+          "last_result_date": "2026-10-04",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "MVELECTRO",
+        "name": "MV Electrosystems",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:MVELECTRO",
+          "name": "MV Electrosystems Ltd",
+          "industry": "Electronics Power Devices and Equipment",
+          "sector": "Consumer Durables",
+          "last_result_date": "2026-08-25",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "NEUEON",
+        "name": "Neueon Corporation",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:NEUEON",
+          "name": "Neueon Corporation Ltd",
+          "industry": "Trading",
+          "sector": "Trading",
+          "last_result_date": "2026-08-03",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "NITYAS",
+        "name": "Nityas Gems & Jewellery",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:NITYAS",
+          "name": "Nityas Gems & Jewellery Ltd",
+          "industry": "Diamond Cutting / Jewellery - Medium / Small",
+          "sector": "Diamond, Gems and Jewellery",
+          "last_result_date": "2026-10-08",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "ORIENTCABL",
+        "name": "Orient Cables",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:ORIENTCABL",
+          "name": "Orient Cables (India) Ltd",
+          "industry": "Cables - Telephone",
+          "sector": "Cables",
+          "last_result_date": "2026-10-04",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "PERNIASPOP",
+        "name": "Purple Style Labs",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:PERNIASPOP",
+          "name": "Purple Style Labs Ltd",
+          "industry": "Trading",
+          "sector": "Trading",
+          "last_result_date": "2026-09-25",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "PRANAV",
+        "name": "Pranav Constructions",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:PRANAV",
+          "name": "Pranav Constructions Ltd",
+          "industry": "Construction Housing",
+          "sector": "Construction",
+          "last_result_date": "2026-10-04",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "PRASOLCHEM",
+        "name": "Prasol Chemicals",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:PRASOLCHEM",
+          "name": "Prasol Chemicals Ltd",
+          "industry": "Specialty Chemicals",
+          "sector": "Chemicals",
+          "last_result_date": "2026-09-29",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "PRIORITY",
+        "name": "Priority Jewels",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:PRIORITY",
+          "name": "Priority Jewels Ltd",
+          "industry": "Diamond Gems and Jewellery",
+          "sector": "Diamond Gems and Jewellery",
+          "last_result_date": "2026-08-25",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "RAMBHAJO",
+        "name": "Advit Jewels",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:RAMBHAJO",
+          "name": "Advit Jewels Ltd",
+          "industry": "Diamond Gems and Jewellery",
+          "sector": "Diamond Gems and Jewellery",
+          "last_result_date": "2026-08-10",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "RENTOMOJO",
+        "name": "Rentomojo",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:RENTOMOJO",
+          "name": "Rentomojo Ltd",
+          "industry": "Miscellaneous",
+          "sector": "Miscellaneous",
+          "last_result_date": "2026-10-06",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "RUNWALENTR",
+        "name": "Runwal Enterprises",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:RUNWALENTR",
+          "name": "Runwal Enterprises Ltd",
+          "industry": "Construction - Housing - Medium / Small",
+          "sector": "Realty",
+          "last_result_date": "2026-10-05",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SBIFUNDS",
+        "name": "SBI Funds Management",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SBIFUNDS",
+          "name": "SBI Funds Management Ltd",
+          "industry": "Finance AMC",
+          "sector": "Finance",
+          "last_result_date": "2026-08-03",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SHAHINVEST",
+        "name": "Shah Investors Home",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SHAHINVEST",
+          "name": "Shah Investors Home Ltd",
+          "industry": "Securities/Commodities Trading Services",
+          "sector": "Stock/ Commodity Brokers",
+          "last_result_date": "2026-09-24",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SHANKESH",
+        "name": "Shankesh Jewellers",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SHANKESH",
+          "name": "Shankesh Jewellers Ltd",
+          "industry": "Diamond Gems and Jewellery",
+          "sector": "Diamond Gems and Jewellery",
+          "last_result_date": "2026-09-10",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SKFINDUS",
+        "name": "SKF India Industrial",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SKFINDUS",
+          "name": "SKF India (Industrial) Ltd",
+          "industry": "Bearings",
+          "sector": "Bearings",
+          "last_result_date": "2026-08-12",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SKYWAYS",
+        "name": "Skyways Air Services",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SKYWAYS",
+          "name": "Skyways Air Services Ltd",
+          "industry": "Miscellaneous",
+          "sector": "Logistics",
+          "last_result_date": "2026-09-17",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SONA",
+        "name": "Sonaselection",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SONA",
+          "name": "Sonaselection India Ltd",
+          "industry": "Textiles - Spinning - Synthetic / Blended",
+          "sector": "Textiles",
+          "last_result_date": "2026-10-14",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SRIT",
+        "name": "SRIT",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SRIT",
+          "name": "SRIT India Ltd",
+          "industry": "Computers - Software - Medium / Small",
+          "sector": "IT - Software",
+          "last_result_date": "2026-10-06",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SSRETAIL",
+        "name": "SS Retail",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SSRETAIL",
+          "name": "SS Retail Ltd",
+          "industry": "Trading - Medium / Small",
+          "sector": "Retail",
+          "last_result_date": "2026-10-14",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "STEAMHOUSE",
+        "name": "Steamhouse",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:STEAMHOUSE",
+          "name": "Steamhouse India Ltd",
+          "industry": "Miscellaneous",
+          "sector": "Miscellaneous",
+          "last_result_date": "2026-10-05",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SUNSHINE",
+        "name": "Sunshine Pictures",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SUNSHINE",
+          "name": "Sunshine Pictures Ltd",
+          "industry": "Entertainment Electronic Media",
+          "sector": "Entertainment",
+          "last_result_date": "2026-09-15",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SWASTIKAIN",
+        "name": "Swastika Infra",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SWASTIKAIN",
+          "name": "Swastika Infra Ltd",
+          "industry": "Engineering - Turnkey Services",
+          "sector": "Power Infrastructure",
+          "last_result_date": "2026-09-18",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "SYMBIOTEC",
+        "name": "Symbiotec Pharmalab",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:SYMBIOTEC",
+          "name": "Symbiotec Pharmalab Ltd",
+          "industry": "Pharma API",
+          "sector": "Pharmaceuticals",
+          "last_result_date": "2026-09-22",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "TECHNOCRAF",
+        "name": "Technocraft Ventures",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:TECHNOCRAF",
+          "name": "Technocraft Ventures Ltd",
+          "industry": "Construction Civil and Turnkey",
+          "sector": "Infrastructure Developers and Operators",
+          "last_result_date": "2026-09-02",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "TEMPSENS",
+        "name": "Tempsens Instruments",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:TEMPSENS",
+          "name": "Tempsens Instruments (India) Ltd",
+          "industry": "Engineering Light General",
+          "sector": "Engineering",
+          "last_result_date": "2026-09-16",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "TENNIND",
+        "name": "Tenneco Clean Air",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:TENNIND",
+          "name": "Tenneco Clean Air India Ltd",
+          "industry": "Auto Others",
+          "sector": "Auto Ancillaries",
+          "last_result_date": "2026-08-05",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "TRIVENIPT",
+        "name": "Triveni Power Transmission",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:TRIVENIPT",
+          "name": "Triveni Power Transmission Ltd",
+          "industry": "Engineering - Heavy - General - Medium / Small",
+          "sector": "Engineering",
+          "last_result_date": "2026-10-14",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "TURTLEMINT",
+        "name": "Turtlemint Fintech Solutions",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:TURTLEMINT",
+          "name": "Turtlemint Fintech Solutions Ltd",
+          "industry": "Insurance Distribution",
+          "sector": "Insurance",
+          "last_result_date": "2026-08-14",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "UTLSOLAR",
+        "name": "Fujiyama Power Systems",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:UTLSOLAR",
+          "name": "Fujiyama Power Systems Ltd",
+          "industry": "Electric Equipment General",
+          "sector": "Capital Goods Electrical Equipment",
+          "last_result_date": "2026-08-13",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "VARMORA",
+        "name": "Varmora Granito",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:VARMORA",
+          "name": "Varmora Granito Ltd",
+          "industry": "Ceramics - Tiles",
+          "sector": "Ceramic Products",
+          "last_result_date": "2026-09-18",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "VEEGALAND",
+        "name": "Veegaland Developers",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:VEEGALAND",
+          "name": "Veegaland Developers Ltd",
+          "industry": "Realty Regional",
+          "sector": "Realty",
+          "last_result_date": "2026-10-06",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "VNL",
+        "name": "Vishal Nirmiti",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:VNL",
+          "name": "Vishal Nirmiti Ltd",
+          "industry": "Construction - Civil / Turnkey - Large",
+          "sector": "Infrastructure Developers & Operators",
+          "last_result_date": "2026-09-26",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "WAAREEINDO",
+        "name": "Indosolar",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:WAAREEINDO",
+          "name": "Indosolar Ltd",
+          "industry": "Electric Equipment General",
+          "sector": "Capital Goods Electrical Equipment",
+          "last_result_date": "2026-07-23",
+          "next_result_date": null
+        }
+      },
+      {
+        "symbol": "XTRANET",
+        "name": "Xtranet Technologies",
+        "sector": "Unclassified",
+        "industry": "Unclassified",
+        "stockscans": {
+          "company_id": "NSE:XTRANET",
+          "name": "Xtranet Technologies Ltd",
+          "industry": "IT Services",
+          "sector": "IT Software",
+          "last_result_date": "2026-08-19",
+          "next_result_date": null
+        }
+      }
+    ]
+  },
+  "agreement": {
+    "exactSector": 802,
+    "exactIndustry": 142,
+    "exactBoth": 53
+  },
+  "ambiguousSourceMappings": [
+    {
+      "sourceSector": "Miscellaneous",
+      "matched": 60,
+      "targetCount": 24,
+      "topTargets": [
+        {
+          "sector": "Commercial Services",
+          "count": 16
+        },
+        {
+          "sector": "Unclassified",
+          "count": 8
+        },
+        {
+          "sector": "Utilities",
+          "count": 4
+        },
+        {
+          "sector": "Construction",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "sourceSector": "Trading",
+      "matched": 74,
+      "targetCount": 23,
+      "topTargets": [
+        {
+          "sector": "Commercial Services",
+          "count": 22
+        },
+        {
+          "sector": "Metals & Mining",
+          "count": 7
+        },
+        {
+          "sector": "Consumer Goods",
+          "count": 7
+        },
+        {
+          "sector": "Construction",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "sourceSector": "Finance",
+      "matched": 186,
+      "targetCount": 12,
+      "topTargets": [
+        {
+          "sector": "Financial Services",
+          "count": 156
+        },
+        {
+          "sector": "Capital Markets",
+          "count": 16
+        },
+        {
+          "sector": "Unclassified",
+          "count": 3
+        },
+        {
+          "sector": "Commercial Services",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "sourceSector": "Textiles",
+      "matched": 134,
+      "targetCount": 12,
+      "topTargets": [
+        {
+          "sector": "Textiles",
+          "count": 115
+        },
+        {
+          "sector": "Unclassified",
+          "count": 6
+        },
+        {
+          "sector": "Industrial Products",
+          "count": 3
+        },
+        {
+          "sector": "Forest Materials",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "sourceSector": "Infrastructure Developers and Operators",
+      "matched": 104,
+      "targetCount": 11,
+      "topTargets": [
+        {
+          "sector": "Construction",
+          "count": 74
+        },
+        {
+          "sector": "Capital Goods",
+          "count": 7
+        },
+        {
+          "sector": "Unclassified",
+          "count": 5
+        },
+        {
+          "sector": "Utilities",
+          "count": 5
+        }
+      ]
+    },
+    {
+      "sourceSector": "Steel",
+      "matched": 87,
+      "targetCount": 10,
+      "topTargets": [
+        {
+          "sector": "Industrial Products",
+          "count": 51
+        },
+        {
+          "sector": "Metals & Mining",
+          "count": 21
+        },
+        {
+          "sector": "Capital Goods",
+          "count": 6
+        },
+        {
+          "sector": "Unclassified",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "sourceSector": "Realty",
+      "matched": 88,
+      "targetCount": 9,
+      "topTargets": [
+        {
+          "sector": "Realty",
+          "count": 71
+        },
+        {
+          "sector": "Commercial Services",
+          "count": 6
+        },
+        {
+          "sector": "Unclassified",
+          "count": 3
+        },
+        {
+          "sector": "Media",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "sourceSector": "IT Software",
+      "matched": 138,
+      "targetCount": 8,
+      "topTargets": [
+        {
+          "sector": "IT Software",
+          "count": 117
+        },
+        {
+          "sector": "Commercial Services",
+          "count": 10
+        },
+        {
+          "sector": "Unclassified",
+          "count": 5
+        },
+        {
+          "sector": "Financial Services",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "sourceSector": "Chemicals",
+      "matched": 129,
+      "targetCount": 8,
+      "topTargets": [
+        {
+          "sector": "Chemicals",
+          "count": 118
+        },
+        {
+          "sector": "Petroleum Products",
+          "count": 4
+        },
+        {
+          "sector": "Unclassified",
+          "count": 2
+        },
+        {
+          "sector": "Consumer Goods",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "FMCG",
+      "matched": 89,
+      "targetCount": 8,
+      "topTargets": [
+        {
+          "sector": "Food Products",
+          "count": 41
+        },
+        {
+          "sector": "FMCG",
+          "count": 30
+        },
+        {
+          "sector": "Consumer Goods",
+          "count": 11
+        },
+        {
+          "sector": "Unclassified",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "sourceSector": "Capital Goods Electrical Equipment",
+      "matched": 65,
+      "targetCount": 8,
+      "topTargets": [
+        {
+          "sector": "Capital Goods",
+          "count": 51
+        },
+        {
+          "sector": "Unclassified",
+          "count": 5
+        },
+        {
+          "sector": "Consumer Goods",
+          "count": 3
+        },
+        {
+          "sector": "Power",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "sourceSector": "E Commerce and App based Aggregator",
+      "matched": 25,
+      "targetCount": 8,
+      "topTargets": [
+        {
+          "sector": "Retail",
+          "count": 9
+        },
+        {
+          "sector": "Financial Services",
+          "count": 7
+        },
+        {
+          "sector": "Leisure Services",
+          "count": 4
+        },
+        {
+          "sector": "Unclassified",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Diversified",
+      "matched": 21,
+      "targetCount": 8,
+      "topTargets": [
+        {
+          "sector": "Diversified",
+          "count": 6
+        },
+        {
+          "sector": "Commercial Services",
+          "count": 6
+        },
+        {
+          "sector": "Textiles",
+          "count": 2
+        },
+        {
+          "sector": "Logistics & Cargo",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "sourceSector": "Power Generation and Distribution",
+      "matched": 34,
+      "targetCount": 7,
+      "topTargets": [
+        {
+          "sector": "Power",
+          "count": 26
+        },
+        {
+          "sector": "Metals & Mining",
+          "count": 2
+        },
+        {
+          "sector": "Utilities",
+          "count": 2
+        },
+        {
+          "sector": "Transport",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Mining and Mineral Products",
+      "matched": 16,
+      "targetCount": 7,
+      "topTargets": [
+        {
+          "sector": "Metals & Mining",
+          "count": 9
+        },
+        {
+          "sector": "Energy",
+          "count": 2
+        },
+        {
+          "sector": "Oil & Gas",
+          "count": 1
+        },
+        {
+          "sector": "Unclassified",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Logistics",
+      "matched": 39,
+      "targetCount": 6,
+      "topTargets": [
+        {
+          "sector": "Logistics & Cargo",
+          "count": 33
+        },
+        {
+          "sector": "Unclassified",
+          "count": 2
+        },
+        {
+          "sector": "Oil & Gas",
+          "count": 1
+        },
+        {
+          "sector": "Retail",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Diamond Gems and Jewellery",
+      "matched": 36,
+      "targetCount": 6,
+      "topTargets": [
+        {
+          "sector": "Consumer Goods",
+          "count": 27
+        },
+        {
+          "sector": "Unclassified",
+          "count": 5
+        },
+        {
+          "sector": "Commercial Services",
+          "count": 1
+        },
+        {
+          "sector": "Trading",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Packaging",
+      "matched": 35,
+      "targetCount": 6,
+      "topTargets": [
+        {
+          "sector": "Industrial Products",
+          "count": 30
+        },
+        {
+          "sector": "Healthcare",
+          "count": 1
+        },
+        {
+          "sector": "Capital Goods",
+          "count": 1
+        },
+        {
+          "sector": "Unclassified",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Aerospace and Defence",
+      "matched": 34,
+      "targetCount": 6,
+      "topTargets": [
+        {
+          "sector": "Aerospace & Defense",
+          "count": 24
+        },
+        {
+          "sector": "Capital Goods",
+          "count": 5
+        },
+        {
+          "sector": "Telecom",
+          "count": 2
+        },
+        {
+          "sector": "Information Technology",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Retail",
+      "matched": 31,
+      "targetCount": 6,
+      "topTargets": [
+        {
+          "sector": "Retail",
+          "count": 22
+        },
+        {
+          "sector": "Consumer Goods",
+          "count": 4
+        },
+        {
+          "sector": "Automobiles",
+          "count": 2
+        },
+        {
+          "sector": "Unclassified",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Capital Goods Non Electrical Equipment",
+      "matched": 73,
+      "targetCount": 5,
+      "topTargets": [
+        {
+          "sector": "Capital Goods",
+          "count": 34
+        },
+        {
+          "sector": "Industrial Products",
+          "count": 30
+        },
+        {
+          "sector": "Automobiles",
+          "count": 6
+        },
+        {
+          "sector": "Unclassified",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "sourceSector": "Healthcare",
+      "matched": 45,
+      "targetCount": 5,
+      "topTargets": [
+        {
+          "sector": "Healthcare Services",
+          "count": 31
+        },
+        {
+          "sector": "Healthcare",
+          "count": 10
+        },
+        {
+          "sector": "Unclassified",
+          "count": 2
+        },
+        {
+          "sector": "Chemicals",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Plastic Products",
+      "matched": 33,
+      "targetCount": 5,
+      "topTargets": [
+        {
+          "sector": "Industrial Products",
+          "count": 21
+        },
+        {
+          "sector": "Consumer Goods",
+          "count": 9
+        },
+        {
+          "sector": "Capital Goods",
+          "count": 1
+        },
+        {
+          "sector": "Unclassified",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Castings Forgings and Fasteners",
+      "matched": 24,
+      "targetCount": 5,
+      "topTargets": [
+        {
+          "sector": "Industrial Products",
+          "count": 11
+        },
+        {
+          "sector": "Automobiles",
+          "count": 9
+        },
+        {
+          "sector": "Castings, Forgings & Fastners",
+          "count": 2
+        },
+        {
+          "sector": "Information Technology",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Construction",
+      "matched": 15,
+      "targetCount": 5,
+      "topTargets": [
+        {
+          "sector": "Realty",
+          "count": 7
+        },
+        {
+          "sector": "Construction",
+          "count": 4
+        },
+        {
+          "sector": "Unclassified",
+          "count": 2
+        },
+        {
+          "sector": "Financial Services",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Engineering",
+      "matched": 14,
+      "targetCount": 5,
+      "topTargets": [
+        {
+          "sector": "Capital Goods",
+          "count": 8
+        },
+        {
+          "sector": "Unclassified",
+          "count": 3
+        },
+        {
+          "sector": "Industrial Products",
+          "count": 1
+        },
+        {
+          "sector": "Aviation",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Pharmaceuticals",
+      "matched": 130,
+      "targetCount": 4,
+      "topTargets": [
+        {
+          "sector": "Pharmaceuticals",
+          "count": 127
+        },
+        {
+          "sector": "Retail",
+          "count": 1
+        },
+        {
+          "sector": "Healthcare Services",
+          "count": 1
+        },
+        {
+          "sector": "Unclassified",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Entertainment",
+      "matched": 30,
+      "targetCount": 4,
+      "topTargets": [
+        {
+          "sector": "Media",
+          "count": 25
+        },
+        {
+          "sector": "Leisure Services",
+          "count": 3
+        },
+        {
+          "sector": "Unclassified",
+          "count": 1
+        },
+        {
+          "sector": "Consumer Services",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Non Ferrous Metals",
+      "matched": 25,
+      "targetCount": 4,
+      "topTargets": [
+        {
+          "sector": "Metals & Mining",
+          "count": 15
+        },
+        {
+          "sector": "Industrial Products",
+          "count": 7
+        },
+        {
+          "sector": "Capital Goods",
+          "count": 2
+        },
+        {
+          "sector": "Unclassified",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Plantation and Plantation Products",
+      "matched": 23,
+      "targetCount": 4,
+      "topTargets": [
+        {
+          "sector": "Consumer Goods",
+          "count": 13
+        },
+        {
+          "sector": "Industrial Products",
+          "count": 7
+        },
+        {
+          "sector": "Capital Goods",
+          "count": 2
+        },
+        {
+          "sector": "Aerospace & Defense",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Cables",
+      "matched": 18,
+      "targetCount": 4,
+      "topTargets": [
+        {
+          "sector": "Industrial Products",
+          "count": 11
+        },
+        {
+          "sector": "Telecom",
+          "count": 4
+        },
+        {
+          "sector": "Unclassified",
+          "count": 2
+        },
+        {
+          "sector": "Cables",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Education",
+      "matched": 13,
+      "targetCount": 4,
+      "topTargets": [
+        {
+          "sector": "Consumer Services",
+          "count": 10
+        },
+        {
+          "sector": "Retail",
+          "count": 1
+        },
+        {
+          "sector": "Education",
+          "count": 1
+        },
+        {
+          "sector": "Financial Services",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Glass and Glass Products",
+      "matched": 12,
+      "targetCount": 4,
+      "topTargets": [
+        {
+          "sector": "Industrial Products",
+          "count": 4
+        },
+        {
+          "sector": "Consumer Goods",
+          "count": 3
+        },
+        {
+          "sector": "Capital Goods",
+          "count": 3
+        },
+        {
+          "sector": "Automobiles",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "sourceSector": "Printing and Stationery",
+      "matched": 11,
+      "targetCount": 4,
+      "topTargets": [
+        {
+          "sector": "Consumer Goods",
+          "count": 5
+        },
+        {
+          "sector": "Media",
+          "count": 4
+        },
+        {
+          "sector": "Printing & Stationery",
+          "count": 1
+        },
+        {
+          "sector": "Financial Services",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Bearings",
+      "matched": 9,
+      "targetCount": 4,
+      "topTargets": [
+        {
+          "sector": "Automobiles",
+          "count": 4
+        },
+        {
+          "sector": "Industrial Products",
+          "count": 3
+        },
+        {
+          "sector": "Capital Goods",
+          "count": 1
+        },
+        {
+          "sector": "Unclassified",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "sourceSector": "Electronics",
+      "matched": 7,
+      "targetCount": 4,
+      "topTargets": [
+        {
+          "sector": "Capital Goods",
+          "count": 4
+        },
+        {
+          "sector": "Information Technology",
+          "count": 1
+        },
+        {
+          "sector": "Telecom",
+          "count": 1
+        },
+        {
+          "sector": "Automobiles",
+          "count": 1
+        }
+      ]
+    }
+  ],
+  "largestSectorDivergences": [
+    {
+      "stockscansSector": "Finance",
+      "ourSector": "Financial Services",
+      "count": 156,
+      "examples": [
+        "3PLAND",
+        "AADHARHFC",
+        "AAVAS",
+        "ABCAPITAL",
+        "ADVIKCA"
+      ]
+    },
+    {
+      "stockscansSector": "Infrastructure Developers and Operators",
+      "ourSector": "Construction",
+      "count": 74,
+      "examples": [
+        "A2ZINFRA",
+        "ABINFRA",
+        "AFCONS",
+        "AKASH",
+        "ASHOKA"
+      ]
+    },
+    {
+      "stockscansSector": "Capital Goods Electrical Equipment",
+      "ourSector": "Capital Goods",
+      "count": 51,
+      "examples": [
+        "AARTECH",
+        "ABB",
+        "AEPL",
+        "APARINDS",
+        "ATLANTAELE"
+      ]
+    },
+    {
+      "stockscansSector": "Steel",
+      "ourSector": "Industrial Products",
+      "count": 51,
+      "examples": [
+        "AEROENTER",
+        "AEROFLEX",
+        "BANSALWIRE",
+        "BEEKAY",
+        "BHARATWIRE"
+      ]
+    },
+    {
+      "stockscansSector": "Consumer Durables",
+      "ourSector": "Consumer Goods",
+      "count": 44,
+      "examples": [
+        "AMBER",
+        "AROGRANITE",
+        "ATLASCYCLE",
+        "BAJAJELEC",
+        "BLUESTARCO"
+      ]
+    },
+    {
+      "stockscansSector": "FMCG",
+      "ourSector": "Food Products",
+      "count": 41,
+      "examples": [
+        "ADFFOODS",
+        "ANNAPURNA",
+        "APEX",
+        "AVANTIFEED",
+        "BBTC"
+      ]
+    },
+    {
+      "stockscansSector": "Capital Goods Non Electrical Equipment",
+      "ourSector": "Capital Goods",
+      "count": 34,
+      "examples": [
+        "AARON",
+        "ANUP",
+        "ATAM",
+        "BAJAJINDEF",
+        "BAJAJST"
+      ]
+    },
+    {
+      "stockscansSector": "Logistics",
+      "ourSector": "Logistics & Cargo",
+      "count": 33,
+      "examples": [
+        "ACCURACY",
+        "ALLCARGO",
+        "ARSHIYA",
+        "AVG",
+        "BLACKBUCK"
+      ]
+    },
+    {
+      "stockscansSector": "Healthcare",
+      "ourSector": "Healthcare Services",
+      "count": 31,
+      "examples": [
+        "3BBLACKBIO",
+        "AGARWALEYE",
+        "APOLLOHOSP",
+        "ARTEMISMED",
+        "ASTERDM"
+      ]
+    },
+    {
+      "stockscansSector": "Capital Goods Non Electrical Equipment",
+      "ourSector": "Industrial Products",
+      "count": 30,
+      "examples": [
+        "ADOR",
+        "APLAPOLLO",
+        "CARBORUNIV",
+        "CUMMINSIND",
+        "DENORA"
+      ]
+    },
+    {
+      "stockscansSector": "Packaging",
+      "ourSector": "Industrial Products",
+      "count": 30,
+      "examples": [
+        "AERONEU",
+        "AGI",
+        "AMDIND",
+        "BALAJEE",
+        "BBTCL"
+      ]
+    },
+    {
+      "stockscansSector": "Cement",
+      "ourSector": "Construction",
+      "count": 28,
+      "examples": [
+        "ACC",
+        "ACL",
+        "AMBUJACEM",
+        "APCL",
+        "BIRLACORPN"
+      ]
+    },
+    {
+      "stockscansSector": "Diamond Gems and Jewellery",
+      "ourSector": "Consumer Goods",
+      "count": 27,
+      "examples": [
+        "AGOL",
+        "ASTAR",
+        "AUSOMENT",
+        "BLUESTONE",
+        "DPABHUSHAN"
+      ]
+    },
+    {
+      "stockscansSector": "Sugar",
+      "ourSector": "Consumer Goods",
+      "count": 27,
+      "examples": [
+        "AVADHSUGAR",
+        "BAJAJHIND",
+        "BALRAMCHIN",
+        "BANARISUG",
+        "DALMIASUG"
+      ]
+    },
+    {
+      "stockscansSector": "Power Generation and Distribution",
+      "ourSector": "Power",
+      "count": 26,
+      "examples": [
+        "ACMESOLAR",
+        "ADANIENSOL",
+        "ADANIGREEN",
+        "ADANIPOWER",
+        "CESC"
+      ]
+    },
+    {
+      "stockscansSector": "Stock and Commodity Brokers",
+      "ourSector": "Capital Markets",
+      "count": 25,
+      "examples": [
+        "360ONE",
+        "5PAISA",
+        "ALMONDZ",
+        "ANGELONE",
+        "ARIHANTCAP"
+      ]
+    },
+    {
+      "stockscansSector": "Entertainment",
+      "ourSector": "Media",
+      "count": 25,
+      "examples": [
+        "AQYLON",
+        "BAGFILMS",
+        "BALAJITELE",
+        "BTML",
+        "CINELINE"
+      ]
+    },
+    {
+      "stockscansSector": "Agro Chemicals",
+      "ourSector": "Chemicals",
+      "count": 24,
+      "examples": [
+        "ADVANCE",
+        "ASTEC",
+        "BAYERCROP",
+        "BESTAGRO",
+        "BHAGCHEM"
+      ]
+    },
+    {
+      "stockscansSector": "Aerospace and Defence",
+      "ourSector": "Aerospace & Defense",
+      "count": 24,
+      "examples": [
+        "AEQUS",
+        "APOLLO",
+        "ASTRAMICRO",
+        "AVANTEL",
+        "BDL"
+      ]
+    },
+    {
+      "stockscansSector": "Trading",
+      "ourSector": "Commercial Services",
+      "count": 22,
+      "examples": [
+        "ABMINTLLTD",
+        "AKG",
+        "ANIKINDS",
+        "ASIANTNE",
+        "BNAGROCHEM"
+      ]
+    },
+    {
+      "stockscansSector": "Steel",
+      "ourSector": "Metals & Mining",
+      "count": 21,
+      "examples": [
+        "ANKITMETAL",
+        "ASHOKAMET",
+        "JAIBALAJI",
+        "JINDALSTEL",
+        "JSL"
+      ]
+    },
+    {
+      "stockscansSector": "Plastic Products",
+      "ourSector": "Industrial Products",
+      "count": 21,
+      "examples": [
+        "APOLLOPIPE",
+        "ARROWGREEN",
+        "ASTRAL",
+        "BEARDSELL",
+        "BRIGHTBR"
+      ]
+    },
+    {
+      "stockscansSector": "Automobile",
+      "ourSector": "Automobiles",
+      "count": 20,
+      "examples": [
+        "ASHOKLEY",
+        "ATHERENERG",
+        "ATULAUTO",
+        "BAJAJ-AUTO",
+        "EICHERMOT"
+      ]
+    },
+    {
+      "stockscansSector": "Fertilizers",
+      "ourSector": "Chemicals",
+      "count": 19,
+      "examples": [
+        "AGROPHOS",
+        "ARIES",
+        "BOHRAIND",
+        "CHAMBLFERT",
+        "COROMANDEL"
+      ]
+    },
+    {
+      "stockscansSector": "Paper",
+      "ourSector": "Forest Materials",
+      "count": 19,
+      "examples": [
+        "ANDHRAPAP",
+        "EMAMIPAP",
+        "GENUSPAPER",
+        "JKPAPER",
+        "KUANTUM"
+      ]
+    },
+    {
+      "stockscansSector": "Finance",
+      "ourSector": "Capital Markets",
+      "count": 16,
+      "examples": [
+        "21STCENMGM",
+        "ABSLAMC",
+        "ANANDRATHI",
+        "CRAMC",
+        "DAMCAPITAL"
+      ]
+    },
+    {
+      "stockscansSector": "Miscellaneous",
+      "ourSector": "Commercial Services",
+      "count": 16,
+      "examples": [
+        "AARVI",
+        "CMSINFO",
+        "DHRUV",
+        "EKI",
+        "FMNL"
+      ]
+    },
+    {
+      "stockscansSector": "Non Ferrous Metals",
+      "ourSector": "Metals & Mining",
+      "count": 15,
+      "examples": [
+        "ARFIN",
+        "GRAVITA",
+        "HINDALCO",
+        "HINDCOPPER",
+        "HINDZINC"
+      ]
+    },
+    {
+      "stockscansSector": "Leather",
+      "ourSector": "Consumer Goods",
+      "count": 14,
+      "examples": [
+        "AKI",
+        "BATAINDIA",
+        "BIL",
+        "CAMPUS",
+        "KHADIM"
+      ]
+    },
+    {
+      "stockscansSector": "Media Print and Television and Radio",
+      "ourSector": "Media",
+      "count": 14,
+      "examples": [
+        "CYBERMEDIA",
+        "DBCORP",
+        "DNAMEDIA",
+        "HMVL",
+        "HTMEDIA"
+      ]
+    },
+    {
+      "stockscansSector": "Readymade Garments and Apparel",
+      "ourSector": "Textiles",
+      "count": 13,
+      "examples": [
+        "BELLACASA",
+        "CELEBRITY",
+        "DOLLAR",
+        "GOKEX",
+        "IRISDOREME"
+      ]
+    },
+    {
+      "stockscansSector": "Plantation and Plantation Products",
+      "ourSector": "Consumer Goods",
+      "count": 13,
+      "examples": [
+        "BNALTD",
+        "CCL",
+        "DTIL",
+        "GILLANDERS",
+        "GROBTEA"
+      ]
+    },
+    {
+      "stockscansSector": "Alcoholic Beverages",
+      "ourSector": "Beverages",
+      "count": 12,
+      "examples": [
+        "ABDL",
+        "ASALCBR",
+        "GLOBUSSPR",
+        "GMBREW",
+        "IFBAGRO"
+      ]
+    },
+    {
+      "stockscansSector": "Plywood Boards and Laminates",
+      "ourSector": "Consumer Goods",
+      "count": 11,
+      "examples": [
+        "ADL",
+        "AIROLAM",
+        "ARCHIDPLY",
+        "CENTURYPLY",
+        "EUROPRATIK"
+      ]
+    },
+    {
+      "stockscansSector": "Cables",
+      "ourSector": "Industrial Products",
+      "count": 11,
+      "examples": [
+        "ADVAIT",
+        "CORDSCABLE",
+        "DYCL",
+        "FINCABLES",
+        "KEI"
+      ]
+    },
+    {
+      "stockscansSector": "Castings Forgings and Fasteners",
+      "ourSector": "Industrial Products",
+      "count": 11,
+      "examples": [
+        "AIAENG",
+        "BALUFORGE",
+        "ELECTCAST",
+        "HAPPYFORGE",
+        "HILTON"
+      ]
+    },
+    {
+      "stockscansSector": "FMCG",
+      "ourSector": "Consumer Goods",
+      "count": 11,
+      "examples": [
+        "BAJAJCON",
+        "COLPAL",
+        "CUPID",
+        "DABUR",
+        "EMAMILTD"
+      ]
+    },
+    {
+      "stockscansSector": "IT Hardware",
+      "ourSector": "Information Technology",
+      "count": 11,
+      "examples": [
+        "CONTROLPR",
+        "DCI",
+        "DLINKINDIA",
+        "HCL-INSYS",
+        "IVALUE"
+      ]
+    },
+    {
+      "stockscansSector": "IT Software",
+      "ourSector": "Commercial Services",
+      "count": 10,
+      "examples": [
+        "AAATECH",
+        "ALANKIT",
+        "ALLDIGI",
+        "ECLERX",
+        "FSL"
+      ]
+    },
+    {
+      "stockscansSector": "Telecom Service",
+      "ourSector": "Telecom",
+      "count": 10,
+      "examples": [
+        "BHARTIARTL",
+        "BHARTIHEXA",
+        "GTL",
+        "IDEA",
+        "MTNL"
+      ]
+    }
+  ],
+  "recommendations": [
+    "Review the 79 unclassified records with specific StockScans classifications; source values are evidence, not automatic replacements.",
+    "Keep Trading and Miscellaneous classifications in a manual-review queue because each maps across many distinct primary sectors.",
+    "Use primary sector and industry for screening, with optional niche tags for cross-cutting themes such as jewellery, bullion, and fintech.",
+    "Maintain the StockScans universe separately: the partial extract includes 2,239 symbols not in this 2,604-stock universe."
+  ]
+}

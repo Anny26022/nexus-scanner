@@ -45,6 +45,14 @@ class BridgeTests(unittest.TestCase):
         row = bridge.stock_row(stock, {})
         self.assertEqual(row["dataCompleteness"], 29)
         self.assertEqual((row["epsTtm"], row["dividendYieldPct"], row["debtToEquity"]), (25, 2, 0.44))
+        stock.update(niche_tags=['Enterprise Services'], provider_sector='Information Technology',
+                     provider_industry='IT Enabled Services')
+        stock['niche_evidence'] = {'tags': ['Enterprise Services'], 'source_urls': ['https://example.com/annual-report'],
+                                  'reviewed_on': '2026-10-15', 'exposure': 'direct'}
+        self.assertEqual(bridge.stock_row(stock, {})['nicheEvidence'], {
+            'tags': ['Enterprise Services'], 'sourceUrls': ['https://example.com/annual-report'],
+            'reviewedOn': '2026-10-15', 'exposure': 'direct'})
+        self.assertEqual(bridge.stock_row(stock, {})['dataCompleteness'], row['dataCompleteness'])
 
     def test_ownership_fields_keep_missing_and_non_finite_values_unavailable(self):
         row = bridge.stock_row({"symbol": "TEST", "promoter_holding_percent": float('nan'),

@@ -289,7 +289,7 @@ class R2Store:
             self.run('copy', str(source), remote, '--files-from', str(names), '--no-traverse', '--transfers', '16',
                      '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
                      '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
-            self.run('check', str(source), remote, '--files-from', str(names), '--one-way', '--download', '--checkers', '16')
+            self.run('check', str(source), remote, '--files-from', str(names), '--no-traverse', '--one-way', '--download', '--checkers', '16')
 
     def archive(self, previous, month):
         source = previous['chartObjectPrefix']

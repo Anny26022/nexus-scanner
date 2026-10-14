@@ -197,6 +197,7 @@ class ObjectPublicationTests(unittest.TestCase):
             def run(*args):
                 names = Path(args[args.index('--files-from') + 1]).read_text().splitlines()
                 if args[0] == 'check':
+                    self.assertIn('--no-traverse', args)
                     self.assertIn('--download', args)
                     self.assertIn('--one-way', args)
                     self.assertEqual(args[args.index('--checkers') + 1], '16')

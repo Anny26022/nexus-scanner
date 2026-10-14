@@ -13,6 +13,8 @@ interface Manifest {
   datasetUrl: string;
   datasetGzipUrl?: string;
   datasetPackedGzipUrl?: string;
+  themeClassificationUrl?: string;
+  themeClassificationVersion?: string;
   iposUrl: string;
   totalStocks: number;
   schemaVersion: number;
@@ -179,6 +181,8 @@ function validateManifest(value: unknown): Manifest {
   if (!manifest || !/^[a-f0-9]{64}$/.test(manifest.revision) || ![4, 5, 6, 7].includes(manifest.schemaVersion)
       || (manifest.datasetGzipUrl !== undefined && (!validUrl(manifest.datasetGzipUrl) || !manifest.datasetGzipUrl.endsWith('.json.gz')))
       || (manifest.datasetPackedGzipUrl !== undefined && (!validUrl(manifest.datasetPackedGzipUrl) || !manifest.datasetPackedGzipUrl.endsWith('.json.gz')))
+      || (manifest.themeClassificationUrl !== undefined && (!validUrl(manifest.themeClassificationUrl) || !manifest.themeClassificationUrl.endsWith('.json.gz')
+          || !/^[a-f0-9]{64}$/.test(manifest.themeClassificationVersion ?? '')))
       || !validDate(manifest.sessionDate) || !validUrl(manifest.datasetUrl) || !validUrl(manifest.iposUrl)
       || !Number.isInteger(manifest.totalStocks) || manifest.totalStocks < 0
       || (manifest.chartRevision !== undefined && !/^[a-f0-9]{64}$/.test(manifest.chartRevision))
@@ -210,6 +214,16 @@ async function snapshotSource(revision?: string): Promise<SnapshotSource> {
 }
 
 class RealDataAdapter {
+  async getThemeClassification(revision?: string) {
+    const release = await releaseFor(revision);
+    if (!release.themeClassificationUrl || !release.themeClassificationVersion) throw new Error('Theme classifications are unavailable in this release.');
+    const data = await cached(releaseCache, release.themeClassificationUrl,
+      () => getIpoJson<import('../utils/copyResults').ThemeClassification>(release.themeClassificationUrl!), 6);
+    if (data.schemaVersion !== 1 || data.version !== release.themeClassificationVersion || data.asOfDate !== release.sessionDate || !data.records) {
+      throw new Error('Theme classification release mismatch');
+    }
+    return data;
+  }
   async getFilterChoices(revision?: string) {
     const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision)});
     if (response.type !== 'filterChoices') throw new Error('Unexpected filter choices response');
@@ -221,7 +235,7 @@ class RealDataAdapter {
     return { isValid:true, errors:[], compiledExplanations:[], warnings:[] };
   }
 
-  async runScreen(req: ScreenerRunRequest): Promise<ScreenerRunResponse> {
+  async runScreen(req: ScreenerRunRequest, allRows = false): Promise<ScreenerRunResponse> {
     const announcementFilter = req.announcementFilter;
     if (announcementFilter) {
       const release = await releaseFor(req.datasetRevision);
@@ -233,7 +247,7 @@ class RealDataAdapter {
     const source = await snapshotSource(req.datasetRevision);
     const snapshot = req.textQuery?.trim()
       ? {type:'screen' as const, source, revision:source.revision, sessionDate:source.sessionDate ?? req.asOfDate, result:null}
-      : await runSnapshotTask({type:'screen',source,request:req});
+      : await runSnapshotTask({type:'screen',source,request:req,allRows});
     if (snapshot.type !== 'screen') throw new Error('Unexpected scanner response');
     if (snapshot.result) return snapshot.result;
     const base = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');

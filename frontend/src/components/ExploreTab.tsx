@@ -178,6 +178,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       {!hasUnavailable && !activeQuery && explanationResult.compiledExplanations.length > 0 && <p className="criteria-summary">{explanationResult.compiledExplanations.map(e => e.humanReadableText).join(matchMode === 'all' ? '; ' : ' OR ')}</p>}
     </section>
     {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
+      loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
       onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
     <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} activeConditionsMap={activeConditionsMap} matchMode={matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />

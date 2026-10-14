@@ -20,6 +20,23 @@ const getAdapter = () => USE_MOCK_API
   : Promise.resolve(realAdapter);
 
 export const screenerApi = {
+  getThemeClassification: realAdapter.getThemeClassification.bind(realAdapter),
+  async getExportRows(request: ScreenerRunRequest) {
+    const req = {...request, page:1, pageSize:100};
+    const adapter = await getAdapter();
+    const first = USE_MOCK_API ? await adapter.runScreen(req) : await realAdapter.runScreen(req, true);
+    const rows = [...first.rows];
+    // API-backed queries and mock screens retain pagination; snapshot screens
+    // return their cached full match set in one worker operation.
+    for (let page = 2; rows.length < first.matchCount; page++) {
+      const next = await adapter.runScreen({...req, page});
+      if (next.immutableRevision !== first.immutableRevision || next.matchCount !== first.matchCount || !next.rows.length) {
+        throw new Error('Results changed during export. Run the scan again.');
+      }
+      rows.push(...next.rows);
+    }
+    return rows;
+  },
   getFilterChoices: realAdapter.getFilterChoices.bind(realAdapter),
   getAnnouncementIndex: realAdapter.getAnnouncementIndex.bind(realAdapter),
   getAnnouncementTopics: realAdapter.getAnnouncementTopics.bind(realAdapter),

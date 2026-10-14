@@ -182,6 +182,9 @@
 .result-count strong { font-size: 16px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -.4px; }
 .result-universe { color: var(--muted); }
 .results-actions { display: flex; align-items: center; gap: 6px; }
+.copy-results { position: relative; display: flex; align-items: center; gap: 4px; }
+.copy-format { max-width: 110px; min-height: 28px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--secondary); font: inherit; font-size: 11px; }
+.copy-error { position: absolute; top: calc(100% + 6px); right: 0; z-index: 25; width: 240px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 12px; }
 .results-symbol-search { display: flex; align-items: center; gap: 6px; flex: 0 1 180px; min-width: 130px; height: 28px; margin-inline: auto; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); }
 .results-symbol-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .results-symbol-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 12px; }

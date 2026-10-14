@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { ScreenerRunResponse } from '../types/screener';
-import { ArrowUpDown, ArrowUp, ArrowDown, Copy, Check, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, X } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, X } from 'lucide-react';
+import {CopyResults} from './CopyResults';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { AnnouncementsPanel } from './AnnouncementsPanel';
 import { Pagination } from './Pagination';
@@ -14,6 +15,7 @@ import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { tableLayout } from '../utils/tableLayout';
 
 interface ResultsTableProps {
+  loadExportRows?:()=>Promise<ScreenerRunResponse['rows']>;
   symbolSearch?: string;
   onSymbolSearchChange?: (value: string) => void;
   data?: ScreenerRunResponse;
@@ -133,9 +135,7 @@ const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
 };
 
 export function ResultsTable({ data, isLoading, isError, isFetching = false, error, onRetry,
-  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange }: ResultsTableProps) {
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState(false);
+  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows }: ResultsTableProps) {
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
@@ -159,21 +159,13 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const rows = data?.rows ?? [];
   const rowWindow = useTableWindow(rows, data, visibleColumns.length);
   const busy = isLoading || isFetching;
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(rows.map(row => `NSE:${row.symbol}`).join(', '));
-      setCopyError(false);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { setCopyError(true); }
-  };
   return <section className="results-surface" aria-label="Screener results">
     <div className="results-toolbar">
       <div className="result-count"><strong>{data?.matchCount.toLocaleString('en-IN') ?? '-'}</strong><span>matched equities <span className="result-universe">/ {data?.totalUniverseCount.toLocaleString('en-IN') ?? '-'} universe</span></span></div>
       {onSymbolSearchChange && <label className="results-symbol-search"><Search size={13} aria-hidden="true" /><input type="search" aria-label="Search symbol or company" placeholder="Search symbol" value={symbolSearch} onChange={event => {resetScroll(); onSymbolSearchChange(event.target.value);}} /></label>}
       <div className="results-actions">
         {(isError || busy) && <span role="status" className="fetch-status">{isError ? 'Query failed' : 'Updating results'}</span>}
-        <button type="button" onClick={() => void copy()} disabled={!rows.length || busy} className="button button-secondary results-copy-button" aria-label={copied ? 'Copied TradingView symbols' : 'Copy TradingView symbols'} title={copied ? 'Copied!' : 'Copy TradingView'}>{copied ? <Check size={15} /> : <Copy size={15} />}</button>
+        <CopyResults loadRows={loadExportRows ?? (()=>Promise.resolve(rows))} revision={data?.immutableRevision} disabled={!rows.length || busy || isError}/>
         <button type="button" className="button button-secondary" aria-label="Customize columns" title="Customize columns" onClick={() => setColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
       </div>
     </div>
@@ -199,7 +191,6 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
         </div>
       </div>
     </Dialog>}
-    {copyError && <p role="alert" className="notice">Clipboard access was denied. Please allow clipboard access and try again.</p>}
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
     <div className="table-viewport" aria-busy={busy}>
       <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>

@@ -1,7 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
-import { ArrowUpDown, Play, SlidersHorizontal, X, ChevronDown, Search, SearchX, Copy, Check } from 'lucide-react';
+import { ArrowUpDown, Play, SlidersHorizontal, X, ChevronDown, Search, SearchX } from 'lucide-react';
+import {CopyResults} from './CopyResults';
 import { ActiveCondition, ExpressionNode, MatchMode, ScreenerRunRequest } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { isAvailableCondition } from '../utils/filterAvailability';
@@ -115,8 +116,6 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const [search, setSearch] = useLocalStorageState('nexus-scanner.ipo.search.v1', '');
   const [sort, setSort] = useLocalStorageState<{ field: 'listingDate' | 'currentPrice' | 'turnoverCrore' | 'marketCapCrore' | 'deliveryPct'; direction: 'asc' | 'desc' }>('nexus-scanner.ipo.sort.v1', { field: 'listingDate', direction: 'desc' });
   const [page, setPage] = useState(1);
-  const [copiedIpoSymbols, setCopiedIpoSymbols] = useState(false);
-  const [ipoCopyError, setIpoCopyError] = useState(false);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const filterChoices = useFilterChoices(isFilterModalOpen, datasetRevision);
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
@@ -216,16 +215,6 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     });
     setScreenPage(1);
   };
-  const copyIpoSymbols = async () => {
-    try {
-      await navigator.clipboard.writeText(filteredIpos.map(row => `NSE:${row.symbol}`).join(', '));
-      setIpoCopyError(false);
-      setCopiedIpoSymbols(true);
-      setTimeout(() => setCopiedIpoSymbols(false), 1800);
-    } catch {
-      setIpoCopyError(true);
-    }
-  };
 
   return <div className="research-view">
     <section className="screen-controls" aria-label="IPO criteria">
@@ -249,6 +238,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
       <UnavailableConditions conditions={conditions} onRemove={removeCondition} />
     </section>
     {showScreenResults && !hasUnavailable && listingSymbols.length > 0 ? <ResultsTable data={screenQuery.data} isLoading={screenQuery.isLoading} isFetching={screenQuery.isFetching}
+      loadExportRows={()=>screenerApi.getExportRows({...screenRequest,datasetRevision:screenQuery.data?.immutableRevision ?? datasetRevision})}
       symbolSearch={search} onSymbolSearchChange={value => {setSearch(value); setPage(1); setScreenPage(1);}}
       isError={screenQuery.isError} error={screenQuery.error} onRetry={() => void screenQuery.refetch()} onPageChange={setScreenPage} onPageSizeChange={size => {setScreenPageSize(size); setScreenPage(1);}}
       onSortChange={(field, direction) => {setScreenSort({field, direction}); setScreenPage(1);}} currentSort={screenSort} />
@@ -256,11 +246,10 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
         <div className="results-toolbar"><div className="result-count"><strong>{!isLoading && (!ipoQuery.isError || ipoQuery.data) ? filteredIpos.length.toLocaleString('en-IN') : '-'}</strong><span>new listings</span></div>
           <label className="results-symbol-search"><Search size={13} aria-hidden="true" /><input type="search" aria-label="Search IPO listings" placeholder="Search symbol" value={search} onChange={event => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setSearch(event.target.value); setPage(1); setScreenPage(1);}} /></label>
           <div className="results-actions">
-            <button type="button" onClick={() => void copyIpoSymbols()} disabled={!filteredIpos.length || isLoading} className="button button-secondary results-copy-button" aria-label={copiedIpoSymbols ? 'Copied IPO symbols' : 'Copy IPO symbols'} title={copiedIpoSymbols ? 'Copied!' : 'Copy IPO symbols'}><span role="status" className="sr-only">{copiedIpoSymbols ? 'IPO symbols copied' : ''}</span>{copiedIpoSymbols ? <Check size={15} /> : <Copy size={15} />}</button>
+            <CopyResults loadRows={()=>Promise.resolve(filteredIpos)} revision={datasetRevision} disabled={!filteredIpos.length || isLoading}/>
             <button type="button" className="button button-secondary" aria-label="Customize IPO columns" onClick={() => setIsColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
           </div>
         </div>
-        {ipoCopyError && <p role="alert" className="notice">Could not access the clipboard. Check browser permissions and try again.</p>}
         <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns" onScroll={event => {if (!ipoOverview.active?.pinned) ipoOverview.dismiss(); ipoWindow.onScroll(event);}}>
           <table className={`data-table ipo-table${ipoWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={visibleIpos.length + 1} style={layout.style}><caption className="sr-only">Newly listed companies</caption>
             <colgroup>{visibleIpoColumns.map(column => <col key={column.id} style={{width:layout.columnWidth(column)}} />)}</colgroup>

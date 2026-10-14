@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from functools import lru_cache
 from multiprocessing import get_context
 
-from filing_classification import TAXONOMY, VERSION, classify_filings
+from filing_classification import TAXONOMY, VERSION, classify_filings, filing_evidence
 
 RECENT_DAYS = 90
 PAGE_SIZE = 100
@@ -109,7 +109,7 @@ def _company_announcements(task):
         pages = []
         for start in range(0, len(rows), PAGE_SIZE):
             page = rows[start:start + PAGE_SIZE]
-            details = put({'symbol': symbol, 'records': {f['filingId']: f for f, stamp in page}})
+            details = put({'symbol': symbol, 'records': {f['filingId']: filing_evidence(f) for f, stamp in page}})
             summaries = [summary(f, details, stamp) for f, stamp in page]
             page_hash = put({'symbol': symbol, 'year': year, 'records': summaries})
             pages.append({'summary': page_hash, 'details': details, 'count': len(page)})

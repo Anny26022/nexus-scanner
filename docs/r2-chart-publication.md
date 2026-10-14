@@ -56,6 +56,20 @@ enable backups, `0/false/no/n/off` disable them (case/whitespace insensitive);
 invalid values warn and fall back to backups on.
 Local classified gzip validation remains enabled on daily runs.
 
+Daily and weekly Actions restore the latest EOD2 checkout and save a new
+commit-keyed cache only after a successful pull/clone changes HEAD. This replaces
+the immutable weekly baseline that repeatedly pulled the same historical update.
+Existing v1 caches remain usable during migration; unchanged checkouts are not
+saved again, and failed updates never create a cache.
+
+ScanX's live `ltp` is excluded from historical filing fingerprints and published
+detail records, including preclassified inputs. Price-only changes no longer
+rebuild old filing pages; disclosure content, dates, documents and classifications
+still invalidate them. Raw provider data retains `ltp` for diagnostics. Existing
+classification entries are reused during migration without changing rule versions.
+The first publication without `ltp` creates replacement detail/summary objects
+once; existing immutable releases remain untouched.
+
 Chart object schema 3 references at most two candle objects: all years before the
 release year, then the release year. A new candle usually changes only the current
 year plus the small chart metadata object. Historical corrections regenerate the

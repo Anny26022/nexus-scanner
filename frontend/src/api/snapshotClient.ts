@@ -23,14 +23,14 @@ function runFallback(task: SnapshotTask): Promise<SnapshotResult> {
     }).finally(() => clearTimeout(timer));
   });
 }
-export function runSnapshotTask(task: SnapshotTask): Promise<SnapshotResult> {
-  if (typeof Worker === 'undefined' || workerUnavailable) return runFallback(task);
+export function startSnapshotWorker() {
+  if (typeof Worker === 'undefined' || workerUnavailable) return;
   if (!worker) {
     try {
       worker = new Worker(new URL('./snapshot.worker.ts',import.meta.url),{type:'module'});
     } catch {
       workerUnavailable = true;
-      return runFallback(task);
+      return;
     }
     worker.onmessage = (event: MessageEvent<{id:number;result:SnapshotResult;error?:string}>) => {
       const item = pending.get(event.data.id);
@@ -42,6 +42,11 @@ export function runSnapshotTask(task: SnapshotTask): Promise<SnapshotResult> {
     worker.onerror = () => stop('Scanner worker failed. Please try again.');
     worker.onmessageerror = () => stop('Scanner worker returned an invalid response.');
   }
+}
+export function runSnapshotTask(task: SnapshotTask): Promise<SnapshotResult> {
+  startSnapshotWorker();
+  // Speculative warm-up must never compete with UI startup on the main thread.
+  if (!worker) return task.type === 'warm' ? Promise.resolve({type:'warm'}) : runFallback(task);
   return new Promise((resolve,reject) => {
     const id = ++sequence;
     const timer = setTimeout(() => {

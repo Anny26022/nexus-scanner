@@ -39,6 +39,21 @@ it('loads a revision once for concurrent screen and comparison tasks',async()=>{
  expect(page.type).toBe('screen');
  if(comparison.type==='compare') expect(comparison.result.invalidSymbols).toEqual(['NOT_A_STOCK']);
 });
+it('shares a pending startup warm-up with the first screen, and retries failed warm-ups', async () => {
+ let resolve!: (data:Snapshot) => void;
+ const loader = vi.fn().mockRejectedValueOnce(new Error('offline'))
+   .mockImplementationOnce(() => new Promise<Snapshot>(done => { resolve = done; }));
+ const run = createSnapshotEngine(loader);
+ await expect(run({type:'warm',source})).rejects.toThrow('offline');
+ const warm = run({type:'warm',source});
+ const screen = run({type:'screen',source,request});
+ expect(loader).toHaveBeenCalledTimes(2);
+ resolve(snapshot);
+ await expect(warm).resolves.toEqual({type:'warm'});
+ await expect(screen).resolves.toMatchObject({type:'screen',result:{matchCount:60}});
+ await run({type:'screen',source,request:{...request,page:2}});
+ expect(loader).toHaveBeenCalledTimes(2);
+});
 it('reuses matches when only pagination changes',async()=>{
  const stocks=[...snapshot.stocks];
  const filter=vi.spyOn(stocks,'filter');
@@ -92,7 +107,9 @@ it('routes concurrent worker replies by id and rejects pending tasks on failure'
   postMessage(message:any){this.tasks.push(message);}
  }
  vi.stubGlobal('Worker',TestWorker);
- const {runSnapshotTask}=await import('../api/snapshotClient');
+ const {runSnapshotTask,startSnapshotWorker}=await import('../api/snapshotClient');
+ startSnapshotWorker();
+ expect(TestWorker.last.tasks).toHaveLength(0);
  const first=runSnapshotTask({type:'screen',source,request});
  const second=runSnapshotTask({type:'screen',source,request:{...request,page:2}});
  const worker=TestWorker.last;
@@ -110,6 +127,20 @@ it('uses fallback when module-worker construction is blocked',async()=>{
  await expect(runSnapshotTask({type:'screen',source,request})).resolves.toMatchObject({type:'screen'});
  await expect(runSnapshotTask({type:'compare',source,symbols:['TEST00']})).resolves.toMatchObject({type:'compare'});
  expect(constructor).toHaveBeenCalledTimes(1);
+});
+it.each(['missing','blocked'])('skips main-thread warm-up when workers are %s but retains scan fallback', async mode => {
+ vi.useFakeTimers();
+ const constructor = vi.fn(function(){throw new Error('CSP blocked');});
+ vi.stubGlobal('Worker',mode === 'missing' ? undefined : constructor);
+ const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot)));
+ vi.stubGlobal('fetch',fetcher);
+ const {runSnapshotTask} = await import('../api/snapshotClient');
+ await expect(runSnapshotTask({type:'warm',source})).resolves.toEqual({type:'warm'});
+ expect(fetcher).not.toHaveBeenCalled();
+ expect(vi.getTimerCount()).toBe(0);
+ await expect(runSnapshotTask({type:'screen',source,request})).resolves.toMatchObject({type:'screen',result:{matchCount:60}});
+ expect(fetcher).toHaveBeenCalledTimes(1);
+ expect(constructor).toHaveBeenCalledTimes(mode === 'blocked' ? 1 : 0);
 });
 it('times out stalled fallback and loads a fresh engine on retry',async()=>{
  vi.useFakeTimers();vi.stubGlobal('Worker',undefined);

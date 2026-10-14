@@ -13,5 +13,13 @@ it('omits mock fixture code from a real production build but retains opt-in mock
     const included = outputs.some(output => output.type === 'chunk' &&
       Object.entries(output.modules).some(([id, module]) => id.endsWith('/api/mockAdapter.ts') && module.renderedLength > 0));
     expect(included, `VITE_USE_MOCK=${mock}`).toBe(mock === 'true');
+    const entry = outputs.find(output => output.type === 'chunk' && output.isEntry);
+    expect(entry?.type).toBe('chunk');
+    if (entry?.type === 'chunk') {
+      expect(entry.code.length).toBeLessThan(12_000);
+      expect(entry.dynamicImports.some(file => outputs.some(output => output.type === 'chunk'
+        && output.fileName === file && output.facadeModuleId?.endsWith('/src/renderApp.tsx')))).toBe(true);
+      expect(Object.keys(entry.modules).some(id => id.includes('/node_modules/react-dom/'))).toBe(false);
+    }
   }
 }, 60_000);

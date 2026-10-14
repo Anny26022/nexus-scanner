@@ -7,10 +7,10 @@ export interface ThemeClassification {
   records:Record<string, {theme:string|null; subIndustry:string|null; block:string|null; macro:string|null}>;
 }
 export const copyFormats: Array<{value:CopyGroup; label:string}> = [
-  {value:'symbols',label:'TradingView symbols'}, {value:'sector',label:'By sector'},
-  {value:'industry',label:'By industry'}, {value:'theme',label:'By theme'},
-  {value:'subIndustry',label:'By sub-industry'}, {value:'block',label:'By thematic block'},
-  {value:'macro',label:'By macro pillar'},
+  {value:'symbols',label:'Symbols'}, {value:'sector',label:'Sector'},
+  {value:'industry',label:'Industry'}, {value:'theme',label:'Theme'},
+  {value:'subIndustry',label:'Sub-industry'}, {value:'block',label:'Thematic block'},
+  {value:'macro',label:'Macro pillar'},
 ];
 export function formatCopyResults(rows:CopyRow[], group:CopyGroup, taxonomy?:ThemeClassification):string {
   const unique = [...new Map(rows.map(row => [row.symbol,row])).values()];

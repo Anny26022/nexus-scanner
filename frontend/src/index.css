@@ -183,7 +183,10 @@
 .result-universe { color: var(--muted); }
 .results-actions { display: flex; align-items: center; gap: 6px; }
 .copy-results { position: relative; display: flex; align-items: center; gap: 4px; }
-.copy-format { max-width: 110px; min-height: 28px; padding: 3px 5px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--secondary); font: inherit; font-size: 11px; }
+.copy-dismiss { position: fixed; inset: 0; z-index: 24; }
+.copy-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 25; width: 160px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
+.copy-menu > button { display: block; width: 100%; min-height: 36px; padding: 7px 10px; border: 0; border-radius: 5px; background: transparent; color: var(--text); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.copy-menu > button:hover, .copy-menu > button:focus-visible { background: var(--surface-hover); outline: 2px solid var(--accent); outline-offset: -2px; }
 .copy-error { position: absolute; top: calc(100% + 6px); right: 0; z-index: 25; width: 240px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font-size: 12px; }
 .results-symbol-search { display: flex; align-items: center; gap: 6px; flex: 0 1 180px; min-width: 130px; height: 28px; margin-inline: auto; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); }
 .results-symbol-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

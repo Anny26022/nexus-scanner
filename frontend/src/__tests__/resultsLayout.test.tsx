@@ -22,12 +22,13 @@ it('copies every matching symbol from a later page without rendering additional 
     render(<ResultsTable {...props} data={{...data, page:2, matchCount:16, matchedSymbols}} />);
     expect(screen.getByRole('button', {name:'Next'})).toBeDisabled();
     expect(screen.getByRole('button', {name:'Previous'})).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', {name:'Copy TradingView symbols'}));
+    fireEvent.click(screen.getByRole('button', {name:'Copy results'}));
+    fireEvent.click(screen.getByRole('menuitem', {name:'Symbols'}));
     await waitFor(()=>expect(writeText).toHaveBeenCalledWith(matchedSymbols.map(symbol => `NSE:${symbol}`).join(', ')));
     expect(screen.getAllByRole('row')).toHaveLength(2);
     expect(screen.getByText('AVTNPL')).toBeInTheDocument();
     expect(screen.queryByText('MATCH1')).not.toBeInTheDocument();
-    await screen.findByRole('button', {name:'Copied TradingView symbols'});
+    await screen.findByRole('button', {name:'Results copied'});
   } finally {
     if (original) Object.defineProperty(navigator, 'clipboard', original);
     else Reflect.deleteProperty(navigator, 'clipboard');
@@ -36,7 +37,8 @@ it('copies every matching symbol from a later page without rendering additional 
 
 it('reports incomplete legacy results rather than silently copying just the current page', async () => {
   render(<ResultsTable {...props} data={data} />);
-  fireEvent.click(screen.getByRole('button', {name:'Copy TradingView symbols'}));
+  fireEvent.click(screen.getByRole('button', {name:'Copy results'}));
+  fireEvent.click(screen.getByRole('menuitem', {name:'Symbols'}));
   expect(await screen.findByRole('alert')).toHaveTextContent('All matching symbols are unavailable');
 });
 
@@ -90,7 +92,7 @@ it('disables exports and page changes while previous-page data is updating', () 
   expect(screen.getByText('AVTNPL')).toBeInTheDocument();
   expect(screen.getByRole('status')).toHaveTextContent('Updating results');
   expect(screen.queryByRole('button', {name: 'Watchlist'})).not.toBeInTheDocument();
-  for (const name of ['Copy TradingView symbols', 'Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
+  for (const name of ['Copy results', 'Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
   view.rerender(<ResultsTable {...props} data={{...data, page: 2, matchCount: 45}} isFetching />);
   for (const name of ['Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
 });

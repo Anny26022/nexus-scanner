@@ -23,13 +23,29 @@ it('copies the full loader output and allows repeating the same group',async()=>
   const writeText=vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal('navigator',{clipboard:{writeText}});
   render(<CopyResults loadRows={async()=>[{symbol:'FIRST',sector:'Tech'},{symbol:'LAST',sector:'Tech'}]}/>);
-  fireEvent.click(screen.getByRole('button',{name:'Copy TradingView symbols'}));
+  fireEvent.click(screen.getByRole('button',{name:'Copy results'}));
+  expect(writeText).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('menuitem',{name:'Symbols'}));
   await waitFor(()=>expect(writeText).toHaveBeenCalledWith('NSE:FIRST, NSE:LAST'));
-  const select=screen.getByLabelText('Copy results grouped by');
-  await waitFor(()=>expect(select).not.toBeDisabled());
-  fireEvent.change(select,{target:{value:'sector'}});
+  const trigger=screen.getByRole('button',{name:'Results copied'});
+  await waitFor(()=>expect(trigger).not.toBeDisabled());
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole('menuitem',{name:'Sector'}));
   await waitFor(()=>expect(writeText).toHaveBeenCalledWith('###Tech(2),NSE:FIRST,NSE:LAST'));
-  await waitFor(()=>expect(select).not.toBeDisabled());
-  fireEvent.change(select,{target:{value:'sector'}});
+  await waitFor(()=>expect(trigger).not.toBeDisabled());
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole('menuitem',{name:'Sector'}));
   await waitFor(()=>expect(writeText).toHaveBeenCalledTimes(3));
+});
+
+it('dismisses the format menu with Escape and returns focus to the icon',()=>{
+  render(<CopyResults loadRows={async()=>[]}/>);
+  const trigger=screen.getByRole('button',{name:'Copy results'});
+  fireEvent.click(trigger);
+  expect(screen.getByRole('menuitem',{name:'Symbols'})).toHaveFocus();
+  fireEvent.keyDown(screen.getByRole('menu'),{key:'ArrowDown'});
+  expect(screen.getByRole('menuitem',{name:'Sector'})).toHaveFocus();
+  fireEvent.keyDown(screen.getByRole('menu'),{key:'Escape'});
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
 });

@@ -77,6 +77,10 @@ export interface StockRow {
   listingDate: string;
   sector: string; // "Unclassified" if missing
   industry: string; // "Unclassified" if missing
+  nicheTags?: string[];
+  nicheEvidence?: {tags:string[]; sourceUrls:string[]; reviewedOn:string; exposure:'direct'|'joint_venture'|'mixed'};
+  providerSector?: string | null;
+  providerIndustry?: string | null;
   series: string;
   close: number;
   changePct: number;

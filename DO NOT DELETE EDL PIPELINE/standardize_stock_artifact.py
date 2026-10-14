@@ -72,6 +72,7 @@ def canonicalize_stock(stock):
         "default_screener_eligible": stock.get("is_sme") is not True,
         "sector": stock.get("sector", stock.get("Sector")),
         "industry": stock.get("industry", stock.get("Basic Industry")),
+        "niche_tags": stock.get("niche_tags", stock.get("Niche Tags")) or [],
         "index_memberships": stock.get("Index Memberships") or [item.strip() for item in (stock.get("Index") or "").split(",") if item.strip() and item.strip() != "N/A"],
         "index_memberships_as_of": stock.get("Index Membership As Of"),
         "as_of_date": stock.get("as_of_date"),

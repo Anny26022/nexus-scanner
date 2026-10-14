@@ -44,9 +44,87 @@ from edl_pipeline.transforms.events import (
 )
 from edl_pipeline.transforms.historical_breadth import build_breadth_rows, empty_breadth_arrays
 from edl_pipeline.schemas import REQUIRED_FINAL_FIELDS, SCREEN_METRICS
+from edl_pipeline.transforms.fundamentals import load_taxonomy_overrides
 
 
 class TransformTests(unittest.TestCase):
+    def test_taxonomy_resources_work_with_staged_data_and_preserve_provider_labels(self):
+        with tempfile.TemporaryDirectory() as folder, mock.patch('pipeline_utils.BASE_PATH', Path(folder)):
+            manual, aliases, niches = load_taxonomy_overrides()
+        self.assertEqual(manual['CSM']['sector'], 'IT Software')
+        item = {'Symbol': 'ABMKNO', 'CV': {'SECTOR': 'Information Technology', 'INDUSTRY_NAME': 'IT Enabled Services'}}
+        original = json.loads(json.dumps(item))
+        stock = canonicalize_stock(analyze_stock(item, {}, {}, {}, None, manual, aliases))
+        self.assertEqual((stock['sector'], stock['industry']), ('Information Technology', 'IT Enabled Services'))
+        self.assertEqual((stock['provider_sector'], stock['provider_industry']),
+                         ('Information Technology', 'IT Enabled Services'))
+        augmont = canonicalize_stock(analyze_stock({'Symbol': 'AUGMONT'}, {}, {}, {}, None, manual, aliases, niches))
+        self.assertEqual(augmont['sector'], 'Trading')
+        self.assertEqual(augmont['niche_tags'], ['Jewellery & Watches', 'Bullion Trading',
+                                              'Precious Metals Refining', 'Digital Gold Platform'])
+        legacy = canonicalize_stock(analyze_stock({'Symbol': 'UNKNOWN', 'CV': {
+            'SECTOR': 'Diamond, Gems and Jewellery'}}, {}, {}, {}, None, manual, aliases))
+        self.assertEqual(legacy['sector'], 'Diamond Gems and Jewellery')
+        self.assertEqual(item, original)
+
+    def test_extract_aliases_and_missing_fields_use_existing_normalization_and_fallback(self):
+        manual = json.loads((ROOT/'taxonomy_overrides.json').read_text())
+        manual['overrides']['PARTIAL'] = {'sector':'Fallback Sector','industry':'Fallback Industry','nicheTags':['Keep']}
+        classifications = {str(i): {'sector':sector,'industry':'Source Industry'}
+                           for i, sector in enumerate(manual['sectorAliases'])}
+        classifications['PARTIAL'] = {'sector':None, 'industry':None}
+        classifications['EXACT'] = {'sector':'Distinct Sector', 'industry':'Distinct Industry'}
+        with mock.patch('edl_pipeline.transforms.fundamentals.load_json',
+                        side_effect=[manual, {'classifications':classifications}]):
+            resolved, aliases, _ = load_taxonomy_overrides()
+        for i, (raw, canonical) in enumerate(aliases.items()):
+            self.assertEqual(resolved[str(i)]['sector'], canonical)
+            self.assertEqual(resolved[str(i)]['industry'], 'Source Industry')
+        self.assertEqual(resolved['PARTIAL'], {'sector':'Fallback Sector', 'industry':'Fallback Industry', 'niche_tags':['Keep']})
+        self.assertEqual(resolved['EXACT']['sector'], 'Distinct Sector')
+
+    def test_stockscans_precedes_provider_with_missing_symbol_fallback(self):
+        manual, aliases, _ = load_taxonomy_overrides()
+        for symbol, sector, industry in (
+            ('AARTIDRUGS', 'Healthcare', 'Pharmaceuticals'),
+            ('ABMKNO', 'Information Technology', 'Software Products'),
+            ('ADVANIHOTR', 'Leisure Services', 'Hotels & Resorts'),
+            ('ACGL', 'Automobiles', 'Auto Components'),
+            ('AARTIIND', 'Chemicals', 'Specialty Chemicals'),
+            ('SBIN', 'Banks', 'Public Sector Bank'),
+        ):
+            with self.subTest(symbol=symbol):
+                item = {'Symbol': symbol, 'CV': {'SECTOR': sector, 'INDUSTRY_NAME': industry}}
+                row = canonicalize_stock(analyze_stock(item, {}, {}, {}, None, manual, aliases))
+                expected = manual.get(symbol, {'sector': sector, 'industry': industry})
+                self.assertEqual((row['sector'], row['industry']), (expected['sector'], expected['industry']))
+                self.assertEqual((row['provider_sector'], row['provider_industry']), (sector, industry))
+        self.assertEqual((manual['AARTIDRUGS']['sector'], manual['AARTIDRUGS']['industry']),
+                         ('Pharmaceuticals', 'Pharma API'))
+        self.assertEqual((manual['SBIN']['sector'], manual['SBIN']['industry']), ('Banks', 'PSU Banks'))
+
+    def test_verified_bullion_tags_preserve_primary_classifications_and_joint_venture_scope(self):
+        config = load_taxonomy_overrides()
+        for symbol, tags in (
+            ('RAJESHEXPO', ['Bullion Trading', 'Precious Metals Refining']),
+            ('AUSOMENT', ['Bullion Trading', 'Precious Metals Refining (JV)']),
+            ('ABANSENT', ['Bullion Trading']),
+            ('MMTC', ['Precious Metals Refining (JV)']),
+            ('LGHL', []),
+        ):
+            with self.subTest(symbol=symbol):
+                item = {'Symbol': symbol, 'CV': {'SECTOR': 'Original Sector', 'INDUSTRY_NAME': 'Original Industry'}}
+                row = canonicalize_stock(analyze_stock(item, {}, {}, {}, None, *config))
+                baseline = canonicalize_stock(analyze_stock(item, {}, {}, {}, None, *config[:2]))
+                self.assertEqual((row['sector'], row['industry']), (baseline['sector'], baseline['industry']))
+                self.assertEqual(row['niche_tags'], tags)
+                if tags:
+                    self.assertTrue(row['niche_evidence']['source_urls'])
+                    self.assertEqual(row['niche_evidence']['reviewed_on'], '2026-10-15')
+                else:
+                    self.assertNotIn('niche_evidence', row)
+        self.assertEqual(config[2]['MMTC']['exposure'], 'joint_venture')
+
     def test_nse_full_bhavcopy_normalizes_closed_session_ohlcv(self):
         self.assertEqual(normalize_ohlcv_row({
             "SYMBOL": "RELIANCE", " SERIES": " EQ", " DATE1": " 25-Sep-2026",
@@ -224,6 +302,14 @@ class TransformTests(unittest.TestCase):
         self.assertEqual(result["perf_6m"], 4.5)
         self.assertEqual(result["ISIN"], "INE000000001")
         self.assertEqual(result["Security ID"], 123)
+
+        manual = analyze_stock(
+            item, tech, advanced, {"ABC": "2020-01-01"}, None,
+            {"ABC": {"sector": "Bullion & Precious Metals", "industry": "Bullion Platform, Refining & Precious Metals", "niche_tags": ["Jewellery & Watches"]}},
+        )
+        self.assertEqual(manual["sector"], "Bullion & Precious Metals")
+        self.assertEqual(manual["industry"], "Bullion Platform, Refining & Precious Metals")
+        self.assertEqual(manual["niche_tags"], ["Jewellery & Watches"])
 
     def test_analyze_stock_does_not_use_standalone_statement(self):
         item = {

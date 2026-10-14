@@ -32,6 +32,17 @@ class ThemeClassificationTests(unittest.TestCase):
         self.assertEqual(record['mappingConfidence'], 'medium')
         self.assertEqual(result['coverage']['unmapped'], [])
 
+    def test_reviewed_sector_names_preserve_provider_based_theme_memberships(self):
+        source = [{'symbol': 'ABMKNO', 'sector': 'Information Technology', 'industry': 'IT Enabled Services'}]
+        baseline = classify(source, '2026-10-13')
+        reviewed = [{**source[0], 'sector': 'IT Software',
+                     'providerSector': source[0]['sector'], 'providerIndustry': source[0]['industry']}]
+        self.assertEqual(classify(reviewed, '2026-10-13'), baseline)
+        # Unknown raw industries must not acquire a guessed business exposure.
+        unknown = [{'symbol': 'UNREVIEWED', 'sector': 'Financial Services', 'industry': 'NBFC',
+                    'providerSector': None, 'providerIndustry': None}]
+        self.assertEqual(classify(unknown, '2026-10-13')['coverage']['unmapped'], ['UNREVIEWED'])
+
     def test_issuer_mapping_and_niche_overlay_are_distinct(self):
         record = classify([{'symbol': 'AASTHA'}], '2026-10-13')['records']['AASTHA']
         self.assertEqual(record['theme'], 'Spinning & Yarn Processing')

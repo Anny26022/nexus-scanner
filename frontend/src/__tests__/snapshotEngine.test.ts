@@ -31,6 +31,31 @@ it('derives sorted choices from the same cached revision, without duplicates or 
  expect(changed.type).toBe('filterChoices');
  expect(loader).toHaveBeenCalledTimes(2);
 });
+it('preserves historical classifications instead of rewriting a loaded revision', async () => {
+ const data:Snapshot = {...snapshot,stocks:[
+   {...snapshot.stocks[0],symbol:'AARTIDRUGS',sector:'Healthcare'},
+   {...snapshot.stocks[1],symbol:'AARTIPHARM',sector:'Consumer Goods'},
+ ]};
+ data.totalStocks = data.stocks.length;
+ const run=createSnapshotEngine(async()=>data);
+ const result=await run({type:'filterChoices',source});
+ expect(result).toEqual({type:'filterChoices',result:{
+   SECTOR:['Consumer Goods','Healthcare'],INDUSTRY:['Test'],SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:[],
+ }});
+ expect(data.stocks[0].sector).toBe('Healthcare');
+});
+it('uses published classifications and secondary niche tags without changing them', async () => {
+ const data:Snapshot = {...snapshot,stocks:[
+   {...snapshot.stocks[0],symbol:'AUGMONT',sector:'Bullion & Precious Metals',
+     industry:'Bullion Platform, Refining & Precious Metals',nicheTags:['Jewellery & Watches']},
+ ]};
+ data.totalStocks = data.stocks.length;
+ const run=createSnapshotEngine(async()=>data);
+ const result=await run({type:'compare',source,symbols:['AUGMONT']});
+ expect(result).toMatchObject({type:'compare',result:{validSymbols:[{
+   sector:'Bullion & Precious Metals',industry:'Bullion Platform, Refining & Precious Metals',nicheTags:['Jewellery & Watches'],
+ }]}});
+});
 it('loads a revision once for concurrent screen and comparison tasks',async()=>{
  const loader=vi.fn(async()=>snapshot),run=createSnapshotEngine(loader);
  const [page,comparison]=await Promise.all([

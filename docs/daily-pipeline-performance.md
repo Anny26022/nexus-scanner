@@ -357,3 +357,19 @@ fractional/NaN volumes, atomic output failures and one-company classification
 lifetime. Local verification: 444 pipeline tests (one existing macOS skip),
 55 publication tests, 68 JavaScript tests, production frontend build and
 wheel-only imports of the changed packaged modules.
+
+## R2 publication follow-up
+
+Run [38588069574](https://github.com/Anny26022/nexus-scanner/actions/runs/38588069574)
+spent 624.08s in chart-object publication: 119.92s listing the object prefix,
+278.65s uploading 3,613 new objects (9.2 MB), and 225.03s downloading those
+objects for verification. These timings identify remote listing and per-object
+operations as optimization candidates; they do not isolate their individual costs.
+
+PR #78 addresses live-price churn in historical filing objects and repeated
+EOD2 checkout updates. Manual backup policy and R2 transfer commands retain
+their existing behavior. `--no-traverse` is deferred pending a comparison:
+it replaces a destination listing with a lookup per selected object, so large
+migrations may cost more. Retain full download verification in any benchmark.
+The first filing publication creates replacement objects once; measure a later
+comparable warm run to establish steady-state savings.

@@ -3,12 +3,7 @@ name: Daily Data Refresh
 on:
   schedule:
     - cron: '30 10 * * 1-5' # Runs at 4:00 PM IST (10:30 UTC) Mon-Fri
-  workflow_dispatch:
-    inputs:
-      full_backups:
-        description: 'Publish complete raw and classified filing backups'
-        type: boolean
-        default: false
+  workflow_dispatch: # Allows manual trigger from GitHub UI
 
 permissions:
   contents: write
@@ -108,7 +103,7 @@ jobs:
           PYTHONUNBUFFERED: '1'
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
           EDL_CHART_STORAGE: r2
-          EDL_FILING_BACKUPS: ${{ inputs.full_backups && '1' || '0' }}
+          EDL_FILING_BACKUPS: ${{ github.event_name == 'schedule' && '0' || '1' }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

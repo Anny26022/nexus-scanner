@@ -286,7 +286,7 @@ class R2Store:
         with tempfile.TemporaryDirectory() as folder:
             names = Path(folder) / 'new.txt'
             names.write_text('\n'.join(sorted(new)) + '\n')
-            self.run('copy', str(source), remote, '--files-from', str(names), '--no-traverse', '--transfers', '16',
+            self.run('copy', str(source), remote, '--files-from', str(names), '--transfers', '16',
                      '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
                      '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
             self.run('check', str(source), remote, '--files-from', str(names), '--one-way', '--download', '--checkers', '16')

@@ -134,7 +134,7 @@ async function companyAnnouncements(release: Manifest, symbol: string) {
   return history;
 }
 
-async function getIpoJson<T>(url: string): Promise<T> {
+async function getIpoJson<T>(url: string, resource = 'IPO catalogue'): Promise<T> {
   if (!url.endsWith('.gz')) return getJson<T>(url);
   try {
     const response = await fetch(url);
@@ -152,7 +152,7 @@ async function getIpoJson<T>(url: string): Promise<T> {
     }
     throw new Error('Expected gzip');
   } catch {
-    throw new Error('IPO catalogue unavailable');
+    throw new Error(`${resource} unavailable`);
   }
 }
 
@@ -165,7 +165,7 @@ class RealDataAdapter {
     const release = await releaseFor(revision);
     if (!release.themeClassificationUrl || !release.themeClassificationVersion) throw new Error('Theme classifications are unavailable in this release.');
     const data = await cached(releaseCache, release.themeClassificationUrl,
-      () => getIpoJson<import('../utils/copyResults').ThemeClassification>(release.themeClassificationUrl!), 6);
+      () => getIpoJson<import('../utils/copyResults').ThemeClassification>(release.themeClassificationUrl!, 'Theme classification'), 6);
     if (data.schemaVersion !== 1 || data.version !== release.themeClassificationVersion || data.asOfDate !== release.sessionDate || !data.records) {
       throw new Error('Theme classification release mismatch');
     }

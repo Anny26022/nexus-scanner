@@ -35,6 +35,9 @@ export const screenerApi = {
       }
       rows.push(...next.rows);
     }
+    if (rows.length !== first.matchCount || new Set(rows.map(row=>row.symbol)).size !== first.matchCount) {
+      throw new Error('Incomplete export results. Run the scan again.');
+    }
     return rows;
   },
   getFilterChoices: realAdapter.getFilterChoices.bind(realAdapter),

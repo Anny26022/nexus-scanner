@@ -4,6 +4,7 @@ const fixtures = vi.hoisted(() => {
   const adapter = () => ({
     getCatalog: vi.fn(async () => []), explainScreen: vi.fn(async () => ({})),
     getFilterChoices: vi.fn(async () => ({})),
+    getThemeClassification: vi.fn(async () => ({})),
     runScreen: vi.fn(async () => ({})), getIpos: vi.fn(async () => [{symbol: 'TEST'}]),
     getIpoCatalogue: vi.fn(async () => ({records: [], details: {}})),
     compareSymbols: vi.fn(async () => ({})), getCurrentRevision: vi.fn(async () => ({revision: 'test'})),

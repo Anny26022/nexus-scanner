@@ -316,6 +316,12 @@
 .preset-info-button:hover::after, .preset-info-button:focus-visible::after { opacity: 1; visibility: visible; transform: translateY(0); }
 .preset-description { flex: 0 0 calc(100% - 68px); min-width: 0; overflow-wrap: anywhere; margin: 0 34px 2px; color: var(--secondary); font-size: 11.5px; line-height: 1.5; }
 .filter-row[data-preset="true"]:has(.preset-description) { flex-wrap: wrap; background: var(--surface-subtle); }
+.filter-row[data-preset="true"]:has(.preset-eligibility) { flex-wrap: wrap; }
+.preset-eligibility { flex: 0 0 100%; min-width: 0; margin: 8px 0 0; padding: 8px 0; border: 0; }
+.preset-eligibility legend { color: var(--secondary); font-size: 12px; }
+.preset-eligibility > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 36px; font-size: 12px; }
+.preset-eligibility label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.preset-eligibility input[type="number"] { width: 80px; min-width: 0; padding: 4px 6px; }
 .parameter-control { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 100%; }
 .parameter-label { font-size: 11.5px; color: var(--secondary); }
 .parameter-value { display: flex; align-items: center; gap: 6px; }

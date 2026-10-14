@@ -5,6 +5,7 @@ import {
 } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { PRESET_CATALOG } from '../data/presetCatalog';
+import { presetEligibilitySummary } from '../data/presetEligibility';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
 
 /**
@@ -130,7 +131,7 @@ export function explainCondition(condition: ActiveCondition): {
       break;
     default:
       if (condition.conditionId.startsWith('preset_') || condition.conditionId.startsWith('lib-')) {
-        explanation = `Pre-built Scan: ${def.label} (${def.description})`;
+        explanation = `Pre-built Scan: ${def.label} (${def.description}). Eligibility: ${presetEligibilitySummary(p)}.`;
       } else {
         explanation = `${def.label} evaluated with parameters: ${JSON.stringify(p)}`;
       }

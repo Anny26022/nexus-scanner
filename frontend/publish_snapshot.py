@@ -120,7 +120,7 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         if node['type']=='group':
             return bridge.combine([evaluate(n) for n in node['children']],node['op'])
         if node['type']=='preset':
-            baseline=bridge.preset_baseline(stock) if stock.get('as_of_date')==session else None
+            baseline=bridge.preset_baseline(stock, node.get('eligibility')) if stock.get('as_of_date')==session else None
             return False if baseline is False else bridge.combine([baseline,evaluate(node['expression'])],'AND')
         key=memo_keys[id(node)]
         if key not in memo:
@@ -133,6 +133,7 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         for field in ('sma20', 'sma50', 'sma200', 'ema20', 'ema50', 'ema200'):
             row[field] = metrics.get(field, row.get(field))
         row['daysSinceEarnings'] = metrics.get('DAYS_SINCE_EARNINGS')
+        row['presetRuleMatches']={key:evaluate(node['expression']) for key,node in presets.items()}
         row['presetMatches']={key:evaluate(node) for key,node in presets.items()}
         default_match = evaluate(default) is True
     return row, default_match
@@ -250,7 +251,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = elapsed('stock metrics and presets', started)
     cache.save_frames(root)
     started = elapsed('history packing', started)
-    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH,Path(__file__).with_name('theme_classification.py'),THEME_SOURCE_PATH,THEME_WEB_OVERRIDES_PATH]
+    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH,Path(__file__).with_name('theme_classification.py'),THEME_SOURCE_PATH,THEME_WEB_OVERRIDES_PATH,Path(__file__).parent/'src/data/presetEligibility.json']
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
@@ -290,6 +291,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
     started = elapsed('revision hashing and backend freezing', started)
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'technicalMetricsVersion':1,'referenceCounts':{'rvol15Sma50':default_count}}
+    payload['presetRuleMatchesVersion'] = 1
     taxonomy = classify(rows, session)
     taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
     (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))

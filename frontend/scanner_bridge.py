@@ -29,6 +29,8 @@ LEGACY_PRESETS = {
     "preset_vcp_contraction": "lib-vcp", "preset_earnings_growth_momentum": "lib-earnings-momentum",
 }
 
+PRESET_ELIGIBILITY = json.loads((Path(__file__).parent / 'src/data/presetEligibility.json').read_text())
+
 
 def leaf(kind, **params):
     return {"type": "condition", "kind": kind, "params": params}
@@ -46,7 +48,7 @@ def band(kind, field, low, high, **params):
 def translate(identifier, p):
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
-        return {"type": "preset", "expression": preset["expression"]}
+        return {"type": "preset", "expression": preset["expression"], "eligibility": p}
     if identifier.isupper():
         p = dict(p)
         for field in ("values", "periods"):
@@ -167,15 +169,17 @@ def snapshot_rule(s, spec, as_of):
     return None
 
 
-def preset_baseline(s):
-    cap, price, turnover = [finite_number(s.get(k)) for k in ("market_cap_crore", "close", "daily_rupee_turnover_50_cr")]
-    if cap is not None and cap <= 1000:
-        return False
-    if price is not None and price <= 10:
-        return False
-    if turnover is not None and turnover <= 5:
-        return False
-    return None if any(v is None for v in (cap,price,turnover)) else True
+def preset_baseline(s, parameters=None):
+    outcomes = []
+    for rule in PRESET_ELIGIBILITY:
+        target = (parameters or {}).get(rule['id'], rule['defaultValue'])
+        if target is None:
+            continue
+        if isinstance(target, bool) or not isinstance(target, (int, float)) or finite_number(target) is None or target < 0:
+            raise ValueError('Preset eligibility thresholds must be non-negative numbers or null.')
+        value = finite_number(s.get(rule['backendField']))
+        outcomes.append(None if value is None else value > target)
+    return combine(outcomes, 'AND')
 
 
 def combine(values, op):
@@ -193,7 +197,7 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
         value = evaluate(node["child"],s,frame,context,as_of,diagnostics,delivery)
         return None if value is None else not value
     if node["type"] == "preset":
-        baseline = preset_baseline(s) if s.get("as_of_date") == as_of else None
+        baseline = preset_baseline(s, node.get('eligibility')) if s.get("as_of_date") == as_of else None
         if baseline is False:
             return False
         if baseline is None:

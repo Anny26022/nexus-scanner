@@ -5,9 +5,10 @@ import { Dialog } from './Dialog';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 import { X, SlidersHorizontal, Library, ChevronDown, Info } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
-import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 import { PRESET_CATALOG } from '../data/presetCatalog';
+import { PRESET_ELIGIBILITY, presetEligibilitySummary } from '../data/presetEligibility';
 import { availableFilterParameters, isAvailableCondition } from '../utils/filterAvailability';
 import { comparisonLabel, filterLogicHint, parameterPresentation, RANGE_FILTERS } from '../utils/filterPresentation';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
@@ -278,7 +279,8 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
   const available = active ? isAvailableCondition(active) : editable;
   const parameters = active?.parameters ?? supportedParameters ?? Object.fromEntries(def.parameters.map(p => [p.id, p.defaultValue]));
   const logicHint = filterLogicHint(def.id, parameters);
-  const description = showParameters && logicHint ? `${def.description} ${logicHint}` : def.description;
+  const description = !showParameters ? `${def.description}. Eligibility: ${presetEligibilitySummary(parameters)}.`
+    : logicHint ? `${def.description} ${logicHint}` : def.description;
 
   return (
     <div className="filter-row group" data-condition-id={def.id} data-active={checked} data-unavailable={!available} data-preset={!showParameters}>
@@ -305,6 +307,20 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
         <FilterRule def={def} parameters={parameters} updateParam={updateRule} />
       )}
       {editable && showParameters && def.id === 'MA_STACK' && logicHint && <p className="filter-logic-hint">{logicHint}</p>}
+      {checked && !showParameters && <fieldset className="preset-eligibility">
+        <legend>Eligibility · AND</legend>
+        {PRESET_ELIGIBILITY.map(rule => {
+          const value = parameters[rule.id] === undefined ? rule.defaultValue : parameters[rule.id];
+          return <div key={rule.id}>
+            <label><input type="checkbox" aria-label={`Use ${rule.label}`} checked={value !== null}
+              onChange={event => updateRule(def.id, rule.id, event.target.checked ? rule.defaultValue : null)} />{rule.label}</label>
+            <span aria-hidden="true">&gt;</span>
+            <input type="number" min="0" step="any" aria-label={`${rule.label} minimum`} disabled={value === null}
+              value={value ?? ''} onChange={event => updateRule(def.id, rule.id, numericInputValue(event.target.value))} />
+            <span>{rule.unit}</span>
+          </div>;
+        })}
+      </fieldset>}
       {descriptionOpen && <p className={showParameters ? 'filter-logic-hint' : 'preset-description'}>{description}</p>}
     </div>
   );
@@ -326,7 +342,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const [localMode, setLocalMode] = useState<MatchMode>(matchMode);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
-  const customCatalog = useMemo(() => NEXUS_CONDITION_CATALOG.map(def => {
+  const customCatalog = useMemo(() => FILTER_CONDITION_CATALOG.map(def => {
     const values = def.id === 'MA_STACK' ? SNAPSHOT_MA_PERIODS.map(String) : choices?.[def.id as keyof FilterChoices];
     if (def.id !== 'MA_STACK' && !['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(def.id)) return def;
     return {...def, parameters:def.parameters.map(parameter => parameter.type === 'string'

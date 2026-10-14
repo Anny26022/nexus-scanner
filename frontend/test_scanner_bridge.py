@@ -119,6 +119,26 @@ class BridgeTests(unittest.TestCase):
         self.assertTrue(bridge.preset_baseline({**self.stock(),"circuit_limit":"5%"}))
         self.assertIsNone(bridge.preset_baseline({**self.stock(),"daily_rupee_turnover_50_cr":None}))
 
+    def test_preset_eligibility_is_editable_removable_and_strict(self):
+        removed = {'minMarketCapCr': None, 'minPrice': None, 'minTurnoverCr': None}
+        self.assertTrue(bridge.preset_baseline({}, removed))
+        for rule in bridge.PRESET_ELIGIBILITY:
+            with self.subTest(rule=rule['id']):
+                parameters = {**removed, rule['id']: 5}
+                self.assertFalse(bridge.preset_baseline({rule['backendField']: 5}, parameters))
+                self.assertTrue(bridge.preset_baseline({rule['backendField']: 5.01}, parameters))
+                self.assertIsNone(bridge.preset_baseline({}, parameters))
+                for invalid in ('', -1, True, float('inf')):
+                    with self.assertRaises(ValueError):
+                        bridge.preset_baseline({}, {rule['id']: invalid})
+        node = bridge.translate('lib-easy-money', removed)
+        self.assertEqual(node['eligibility'], removed)
+        node['expression'] = {'type':'snapshot','field':'close','strict_min':0}
+        stock = {**self.stock(), 'close': 1, 'market_cap_crore': 1, 'daily_rupee_turnover_50_cr':None}
+        self.assertTrue(bridge.evaluate(node, stock, None, {}, '2026-09-30', set(), []))
+        node['eligibility'] = {}
+        self.assertFalse(bridge.evaluate(node, stock, None, {}, '2026-09-30', set(), []))
+
     def test_financial_leaf_uses_ledger_instead_of_snapshot(self):
         rows=[{"quarter_end":q,"filing_date":"2026-08-01","report_type":"CONSOLIDATED","net_profit":100}
               for q in ["2025-09-30","2025-12-31","2026-03-31","2026-06-30"]]

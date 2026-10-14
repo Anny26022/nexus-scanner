@@ -7,6 +7,7 @@ vi.mock('../data/conditionCatalog', async importOriginal => {
   const original = await importOriginal<typeof import('../data/conditionCatalog')>();
   // This fixture deliberately restores advanced rows to exercise their editors.
   return {...original, isRetiredTechnicalCondition: () => false,
+    FILTER_CONDITION_CATALOG: [...original.ADVANCED_TECHNICAL_CONDITIONS, ...original.FILTER_CONDITION_CATALOG],
     NEXUS_CONDITION_CATALOG: [...original.ADVANCED_TECHNICAL_CONDITIONS, ...original.NEXUS_CONDITION_CATALOG]};
 });
 vi.mock('../api/snapshotScreen', async importOriginal => {

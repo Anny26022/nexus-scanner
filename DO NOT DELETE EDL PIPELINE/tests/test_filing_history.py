@@ -25,6 +25,17 @@ from pipeline_utils import load_json, save_json
 
 
 class FilingHistoryTests(unittest.TestCase):
+    def test_daily_compression_keeps_local_validation_input_without_preparing_full_backups(self):
+        from edl_pipeline import runner
+        for value, expected in [('0', False), ('false', False), ('no', False), ('off', False),
+                                ('1', True), (' YES ', True), ('true', True), ('on', True), ('invalid', True)]:
+            with self.subTest(value=value), mock.patch.dict('os.environ', {'EDL_FILING_BACKUPS': value}), \
+                    mock.patch.object(runner, 'compress_file', return_value=(10, 5)) as compress, \
+                    mock.patch.object(runner, 'prepare_filing_archives') as archives:
+                self.assertEqual(runner.prepare_filing_output(), (10, 5))
+            compress.assert_called_once()
+            self.assertEqual(archives.called, expected)
+
     def test_memory_telemetry_is_optional_without_changing_processing(self):
         spec = importlib.util.spec_from_file_location('filing_history_without_resource',
                                                     ROOT / 'build_filing_history_artifact.py')
@@ -98,6 +109,55 @@ class FilingHistoryTests(unittest.TestCase):
             self.assertEqual(classify.call_count, 1)
             self.assertEqual(stats['reused_filings'], 1)
             self.assertEqual(stats['fresh_filings'], 1)
+
+    def test_complete_legacy_cache_upgrades_without_rebuilding_unchanged_history(self):
+        filings = [{'news_date': '2026-10-07', 'caption': 'Dividend approved'}]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            expected = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['legacy'])
+            stats = Counter()
+            with mock.patch.object(build_filing_history_artifact, 'classify_filings', side_effect=AssertionError('unnecessary normalization')):
+                observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['current'], stats, ['legacy'])
+            self.assertEqual(observed, expected)
+            self.assertEqual(load_json(path)['rules'], ['current'])
+            self.assertEqual(stats['unchanged_companies'], 1)
+            self.assertEqual(stats['legacy_upgrades'], 1)
+            revised = [*filings, {'news_date': '2026-10-08', 'caption': 'Stock split approved'}]
+            stats = Counter()
+            observed = build_filing_history_artifact.classify_cached(revised, path, ['current'], stats)
+            self.assertEqual(observed, classify_filings(copy.deepcopy(revised)))
+            self.assertEqual(stats['source_changed'], 1)
+
+    def test_failed_legacy_write_is_not_counted_as_a_persisted_upgrade(self):
+        filings = [{'news_date': '2026-10-07', 'caption': 'Dividend approved'}]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            expected = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['legacy'])
+            stats = Counter()
+            with mock.patch.object(build_filing_history_artifact, 'save_json', side_effect=OSError('disk full')):
+                observed = build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['current'], stats, ['legacy'])
+            self.assertEqual(observed, expected)
+            self.assertEqual(stats['legacy_upgrades'], 0)
+            self.assertEqual(load_json(path)['rules'], ['legacy'])
+
+    def test_rebuild_reasons_are_a_partition_including_cold_and_invalidated_caches(self):
+        filings = [{'news_date': '2026-10-07', 'caption': 'Dividend approved'}]
+        reasons = ('cold_companies', 'invalidated_companies', 'source_changed', 'cache_layout_misses')
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            for reason in reasons:
+                with self.subTest(reason=reason):
+                    path.unlink(missing_ok=True)
+                    if reason != 'cold_companies':
+                        build_filing_history_artifact.classify_cached(copy.deepcopy(filings), path, ['rules'])
+                    if reason == 'cache_layout_misses':
+                        saved = load_json(path); saved.pop('document_sources'); save_json(path, saved)
+                    rows = filings + [{'caption': 'Stock split approved'}] if reason == 'source_changed' else filings
+                    rules = ['new rules'] if reason == 'invalidated_companies' else ['rules']
+                    stats = Counter()
+                    build_filing_history_artifact.classify_cached(copy.deepcopy(rows), path, rules, stats)
+                    self.assertEqual(stats[reason], 1)
+                    self.assertEqual(sum(stats[key] for key in reasons), stats['rebuilt_companies'])
 
     def test_entry_cache_migrates_only_when_legacy_rules_match(self):
         filings = [{'caption': 'Dividend approved'}]

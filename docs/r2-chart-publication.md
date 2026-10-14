@@ -45,6 +45,39 @@ publication preserves the active pointer. See
 R2 release `publishedAt` remains the deterministic session date at 00:00 UTC;
 the announcement catalog separately records its filing-cache publication time.
 
+Scheduled weekday Actions publish current app objects without full filing backups
+(`EDL_FILING_BACKUPS=0`). The existing Sunday adjusted-history workflow publishes
+both full backups (`EDL_FILING_BACKUPS=1`) and records the filing-catalog cutoff
+timestamp as `archivesAsOf` in that release index (not the prior trading-session
+date on weekends). Scheduled weekday release indexes have an empty `archives`
+map; previous weekly backup objects and indexes remain retained. Manual Actions and local builds default to
+backups on. `EDL_FILING_BACKUPS` uses the shared boolean parser: `1/true/yes/y/on`
+enable backups, `0/false/no/n/off` disable them (case/whitespace insensitive);
+invalid values warn and fall back to backups on.
+Local classified gzip validation remains enabled on daily runs.
+
+Chart object schema 3 references at most two candle objects: all years before the
+release year, then the release year. A new candle usually changes only the current
+year plus the small chart metadata object. Historical corrections regenerate the
+affected piece; the year boundary rolls the finished year into older history.
+The browser assembles the same full chart response and still reads schema-2
+objects and legacy releases. The first chunked publication uploads a new baseline.
+
+R2 logs show new-object count/bytes and 30-second transfer/check summaries
+(throughput, progress and errors), followed by per-command elapsed times. Retry
+failures remain visible in rclone logs; full download verification stays enabled.
+Filing rebuild reasons partition into cold caches, invalidated rules, changed
+source histories and incompatible/unreadable cache layouts. Legacy upgrades
+count only successful checkpoint writes and do not require re-normalization.
+
+R2 connections time out after 15 seconds; stalled I/O after one minute. Commands
+use `--retries 3` (up to three total high-level attempts for retryable commands,
+including the initial attempt) and `--low-level-retries 5`, with a hard
+40-minute rclone duration and a 45-minute Python subprocess backstop. The initial
+object listing has a five-minute subprocess limit. Timeouts fail publication;
+they never bypass download verification or promote an incomplete release.
+Successfully uploaded immutable objects are retained for a later retry.
+
 ## Current object retention
 
 Schema-7 releases use `objects/<sha256>.json.gz` and

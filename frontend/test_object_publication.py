@@ -38,6 +38,68 @@ class ObjectStore:
 
 
 class ObjectPublicationTests(unittest.TestCase):
+    def test_chart_chunks_reuse_history_and_refresh_corrections_and_year_rollover(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); (root / 'ohlcv_data').mkdir()
+            source = root / 'ohlcv_data/TEST.csv'; objects = root / 'objects'
+            rows = ['2025-12-31,10,12,9,11,100', '2026-10-06,11,13,10,12,200']
+            def chart(day):
+                source.write_text('Date,Open,High,Low,Close,Volume\n' + '\n'.join(rows) + '\n')
+                _, digest = builder._chart_object((root, objects, 'TEST', day, [], [], []))
+                return json.loads(gzip.decompress((objects / (digest + '.json.gz')).read_bytes()))
+            first = chart('2026-10-06')
+            before = {p.name: p.read_bytes() for p in objects.iterdir()}
+            rows.append('2026-10-07,12,14,11,13,300')
+            second = chart('2026-10-07')
+            self.assertEqual(first['candleChunks'][0], second['candleChunks'][0])
+            self.assertNotEqual(first['candleChunks'][1], second['candleChunks'][1])
+            rows[0] = '2025-12-31,10,13,9,12,100'  # Correct historical prices, not just append.
+            corrected = chart('2026-10-07')
+            self.assertNotEqual(second['candleChunks'][0], corrected['candleChunks'][0])
+            self.assertEqual(second['candleChunks'][1], corrected['candleChunks'][1])
+            rows.append('2027-01-04,13,15,12,14,400')
+            rollover = chart('2027-01-04')
+            candles = [row for digest in rollover['candleChunks']
+                       for row in json.loads(gzip.decompress((objects / (digest + '.json.gz')).read_bytes()))['candles']]
+            self.assertEqual([row['date'] for row in candles], ['2025-12-31', '2026-10-06', '2026-10-07', '2027-01-04'])
+            self.assertEqual(candles[0]['close'], 12)
+            self.assertTrue(all((objects / name).read_bytes() == data for name, data in before.items()))
+
+    def test_daily_release_omits_backups_and_weekly_release_dates_them(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); output = root / 'public'; output.mkdir()
+            (root / 'filing_history.json.gz').write_bytes(gzip.compress(b'{"records":[]}'))
+            store = ObjectStore()
+            with patch.dict('os.environ', {'EDL_FILING_BACKUPS': ' false '}), \
+                    patch('chart_publication.prepare_archives', side_effect=AssertionError('daily backup work')):
+                complete_release(self.build(root, '2026-10-06'), output,
+                                 {'revision': 'a'*64, 'sessionDate': '2026-10-06'}, store)
+            daily = store.references['releases/' + 'a'*64 + '/index.json']
+            self.assertEqual(daily['archives'], {})
+            self.assertNotIn('archivesAsOf', daily)
+            with patch.dict('os.environ', {'EDL_FILING_BACKUPS': ' YES '}):
+                complete_release(self.build(root, '2026-10-07'), output,
+                                 {'revision': 'b'*64, 'sessionDate': '2026-10-07'}, store)
+            weekly = store.references['releases/' + 'b'*64 + '/index.json']
+            self.assertEqual(weekly['archivesAsOf'], weekly['filingLookup']['publishedAt'])
+            self.assertIn('classified', weekly['archives'])
+
+    def test_missing_chunk_prevents_publication_and_preserves_pointer(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); output = root / 'public'; output.mkdir()
+            (root / 'ohlcv_data').mkdir()
+            (root / 'ohlcv_data/TEST.csv').write_text('Date,Open,High,Low,Close,Volume\n2026-10-06,10,12,9,11,100\n')
+            charts = self.build(root, '2026-10-06'); store = ObjectStore()
+            manifest = {'revision': 'a'*64, 'sessionDate': '2026-10-06'}
+            complete_release(charts, output, manifest, store)
+            before = (output / 'current.json').read_bytes()
+            index = json.loads((charts / 'index.json').read_text())
+            chart = json.loads(gzip.decompress((charts / 'objects' / (index['chartObjects']['TEST'] + '.json.gz')).read_bytes()))
+            (charts / 'objects' / (chart['candleChunks'][0] + '.json.gz')).unlink()
+            with self.assertRaises(FileNotFoundError):
+                complete_release(charts, output, {'revision': 'b'*64, 'sessionDate': '2026-10-06'}, store)
+            self.assertEqual((output / 'current.json').read_bytes(), before)
+
     def build(self, root, day):
         (root / 'all_stocks_fundamental_analysis.json').write_text(json.dumps([{'symbol': 'TEST', 'as_of_date': day}]))
         with patch.object(builder, 'BASE_DIR', str(root)):
@@ -157,9 +219,21 @@ class ObjectPublicationTests(unittest.TestCase):
             store.run('copyto', 'source', 'charts:test/object')
         self.assertIn('--s3-no-head', run.call_args.args[0])
         self.assertIn('--s3-no-check-bucket', run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs['timeout'], 2700)
+        args = run.call_args.args[0]
+        self.assertEqual(args[args.index('--max-duration') + 1], '40m')
+        self.assertEqual(args[args.index('--timeout') + 1], '1m')
+        self.assertEqual(run.call_args.args[0][-5:], ['--stats', '30s', '--stats-one-line', '--stats-log-level', 'NOTICE'])
 
     def test_r2_check_failure_still_propagates(self):
         store = R2Store.__new__(R2Store); store.env = {}
         with patch('chart_publication.subprocess.run', side_effect=RuntimeError('verification failed')):
             with self.assertRaisesRegex(RuntimeError, 'verification failed'):
                 store.run('check', 'source', 'charts:test/object', '--download', '--checkers', '16')
+
+    def test_r2_hung_command_fails_closed_with_a_bounded_subprocess(self):
+        import subprocess
+        store = R2Store.__new__(R2Store); store.env = {}
+        with patch('chart_publication.subprocess.run', side_effect=subprocess.TimeoutExpired('rclone', 2700)):
+            with self.assertRaisesRegex(RuntimeError, '45-minute subprocess limit'):
+                store.run('check', 'source', 'charts:test/object', '--download')

@@ -498,6 +498,7 @@ export class MockScreenerAdapter {
       },
       immutableRevision: `rev_${req.asOfDate.replace(/-/g, '')}_c8f39a`,
       rows: paginatedRows,
+      matchedSymbols: filtered.map(row => row.symbol),
       matchCount: totalCount,
       totalUniverseCount: MOCK_NSE_MAINBOARD_STOCKS.length,
       page: req.page,

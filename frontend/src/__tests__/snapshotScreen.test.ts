@@ -22,6 +22,10 @@ describe('published snapshots', () => {
     const result = screenSnapshot(data, {...base, symbolSearch:' glaxo '})!;
     expect(result.matchCount).toBe(2);
     expect(result.rows[0].symbol).toBe('GLAXO');
+    expect(result.matchedSymbols).toEqual(['GLAXO','GLAXONEW']);
+    const second = screenSnapshot(data, {...base, symbolSearch:'glaxo', page:2})!;
+    expect(second.rows[0].symbol).toBe('GLAXONEW');
+    expect(second.matchedSymbols).toEqual(result.matchedSymbols);
     expect(screenSnapshot(data, {...base, symbolSearch:'pharmaceuticals'})!.rows[0].symbol).toBe('GLAXO');
     expect(screenSnapshot(data, {...base, symbolSearch:'no match'})!.matchCount).toBe(0);
     expect(screenSnapshot(data, base)!.matchCount).toBe(3);
@@ -42,6 +46,8 @@ describe('published snapshots', () => {
     const result = screenSnapshot(snapshot, {...base, announcementSymbols:wanted})!;
     expect(result.matchCount).toBe(2);
     expect(result.rows).toHaveLength(1);
+    expect(result.matchedSymbols).toHaveLength(2);
+    expect(new Set(result.matchedSymbols)).toEqual(new Set(wanted));
     expect(screenSnapshot(snapshot, {...base, announcementSymbols:[]})!.matchCount).toBe(0);
     expect(screenSnapshot(snapshot, base)!.matchCount).toBe(snapshot.stocks.filter(stock => stock.close != null).length);
   });

@@ -34,6 +34,20 @@ class FakeClient:
 
 
 class IpoProviderFetchTests(unittest.TestCase):
+    def test_default_limit_is_18_and_remaining_details_resume_next_run(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            _merge_listed_archive(root, [{'id': f'HISTORY_{i}'} for i in range(20)])
+            complete = {name: {} for name in DETAIL_ENDPOINTS}
+            with patch('fetch_ipo_provider_data.IpoProviderClient', FakeClient), \
+                    patch('fetch_ipo_provider_data._refresh_detail', return_value=(complete, [])):
+                first = fetch_all(root)
+                self.assertEqual(first['detail_coverage']['attempted'], 18)
+                self.assertEqual(first['detail_coverage']['incomplete'], 4)
+                second = fetch_all(root)
+                self.assertEqual(second['detail_coverage']['attempted'], 4)
+                self.assertEqual(second['detail_coverage']['incomplete'], 0)
+
     def test_stale_active_and_recently_listed_details_refresh_but_history_stays_missing_only(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

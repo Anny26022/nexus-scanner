@@ -12,12 +12,12 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-# Full ordered step dictionaries on main 94ec5fc8, excluding shell comments/blank lines.
+# Full ordered step dictionaries, including the intentional weekly/manual backup policy.
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "4f23f0e7b618b07702beee56fe51c49dc1707e7f4336ba646b07db05dce74786",
-    "weekly_eod2_refresh.yml": "70b65be786e36af9b8b3c4bb441ba9c3d44729f0ceb636d572113b8f19df4649",
+    "daily_refresh.yml": "b0280037677f31d9808f0242c2a65fd6714fa4e056cba251fa360b62fdf7b693",
+    "weekly_eod2_refresh.yml": "41a512552a6b00da1c730adb5f7ec2cb3073b064b440e9de087d903d52ee6128",
 }
 
 
@@ -35,6 +35,13 @@ def normalized(steps):
 
 
 class RefreshWorkflowTests(unittest.TestCase):
+    def test_backup_policy_preserves_manual_runs_and_weekly_archives(self):
+        for name, expected in [('daily_refresh.yml', "${{ github.event_name == 'schedule' && '0' || '1' }}"),
+                               ('weekly_eod2_refresh.yml', '1')]:
+            job, = document('.github/workflows/' + name)['jobs'].values()
+            build, = [step for step in job['steps'] if step['name'] == 'Build and publish validated data']
+            self.assertEqual(build['env']['EDL_FILING_BACKUPS'], expected)
+
     def test_expanded_steps_preserve_both_original_contracts(self):
         for name, expected in BASELINES.items():
             with self.subTest(workflow=name):

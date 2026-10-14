@@ -3,8 +3,8 @@ import {Copy, Check} from 'lucide-react';
 import {screenerApi} from '../api/screenerApi';
 import {copyFormats, formatCopyResults, type CopyGroup, type CopyRow} from '../utils/copyResults';
 
-export function CopyResults({loadRows, revision, disabled = false}: {
-  loadRows:()=>Promise<CopyRow[]>; revision?:string; disabled?:boolean;
+export function CopyResults({loadRows, symbols, revision, disabled = false}: {
+  loadRows:()=>Promise<CopyRow[]>; symbols?:string[]; revision?:string; disabled?:boolean;
 }) {
   const [busy,setBusy] = useState(false);
   const [copied,setCopied] = useState(false);
@@ -12,7 +12,7 @@ export function CopyResults({loadRows, revision, disabled = false}: {
   const copy = async (group:CopyGroup) => {
     setBusy(true); setError('');
     try {
-      const [rows,taxonomy] = await Promise.all([loadRows(),
+      const [rows,taxonomy] = await Promise.all([group === 'symbols' && symbols ? symbols.map(symbol=>({symbol})) : loadRows(),
         ['symbols','sector','industry'].includes(group) ? undefined : screenerApi.getThemeClassification(revision)]);
       await navigator.clipboard.writeText(formatCopyResults(rows,group,taxonomy));
       setCopied(true); setTimeout(()=>setCopied(false),2000);

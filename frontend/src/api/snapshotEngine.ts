@@ -5,10 +5,12 @@ import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse 
 export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
 export type FilterChoices = Record<'SECTOR' | 'INDUSTRY' | 'SERIES' | 'PRICE_BAND' | 'INDEX_MEMBERSHIP', string[]>;
 export type SnapshotTask =
+  | { type:'warm'; source:SnapshotSource }
   | { type:'filterChoices'; source:SnapshotSource }
   | { type:'screen'; source:SnapshotSource; request:ScreenerRunRequest; allRows?:boolean }
   | { type:'compare'; source:SnapshotSource; symbols:string[] };
 export type SnapshotResult =
+  | { type:'warm' }
   | { type:'filterChoices'; result:FilterChoices }
   | { type:'screen'; result:ScreenerRunResponse | null; revision:string; sessionDate:string }
   | { type:'compare'; result:SymbolComparisonResponse };
@@ -52,6 +54,7 @@ export function createSnapshotEngine(loader = readSnapshot) {
   }
   return async (task: SnapshotTask): Promise<SnapshotResult> => {
     const data = await load(task.source);
+    if (task.type === 'warm') return {type:'warm'};
     if (task.type === 'filterChoices') {
       const fields = {SECTOR:'sector', INDUSTRY:'industry', SERIES:'series', PRICE_BAND:'circuitLimit', INDEX_MEMBERSHIP:'indexMemberships'} as const;
       const result = Object.fromEntries(Object.entries(fields).map(([id, field]) => {

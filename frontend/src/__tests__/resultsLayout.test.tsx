@@ -13,6 +13,33 @@ const row = {symbol: 'AVTNPL', name: 'Avt Natural Products', sector: 'FMCG', ind
 const data = {rows: [row], matchCount: 16, totalUniverseCount: 2600, page: 1, pageSize: 15, immutableRevision: request.datasetRevision} as ScreenerRunResponse;
 const props = {isLoading: false, isError: false, onPageChange: vi.fn(), onSortChange: vi.fn()};
 
+it('copies every matching symbol from a later page without rendering additional rows', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{writeText}});
+  try {
+    const matchedSymbols = [...Array.from({length:15}, (_, index) => `MATCH${index + 1}`), 'AVTNPL'];
+    render(<ResultsTable {...props} data={{...data, page:2, matchCount:16, matchedSymbols}} />);
+    expect(screen.getByRole('button', {name:'Next'})).toBeDisabled();
+    expect(screen.getByRole('button', {name:'Previous'})).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', {name:'Copy TradingView symbols'}));
+    await waitFor(()=>expect(writeText).toHaveBeenCalledWith(matchedSymbols.map(symbol => `NSE:${symbol}`).join(', ')));
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+    expect(screen.getByText('AVTNPL')).toBeInTheDocument();
+    expect(screen.queryByText('MATCH1')).not.toBeInTheDocument();
+    await screen.findByRole('button', {name:'Copied TradingView symbols'});
+  } finally {
+    if (original) Object.defineProperty(navigator, 'clipboard', original);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  }
+});
+
+it('reports incomplete legacy results rather than silently copying just the current page', async () => {
+  render(<ResultsTable {...props} data={data} />);
+  fireEvent.click(screen.getByRole('button', {name:'Copy TradingView symbols'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('All matching symbols are unavailable');
+});
+
 it('leads with quotes only on phones and restores desktop order without changing saved columns', () => {
   localStorage.removeItem('nexus-scanner.screener.columns.v1');
   let notify = () => {};

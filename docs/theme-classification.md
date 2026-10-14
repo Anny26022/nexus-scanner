@@ -36,5 +36,12 @@ affect the mapping version and release revision. Source updates are deliberate:
 verify the Ready Vercel production deployment, re-import its public asset and the
 matching commit's catalogue/overlays together, review coverage and tests, then
 commit the pinned input. Never silently update it from an unverified master branch.
-Existing immutable releases are unchanged. This adds a data contract only; theme
-filters, hover-card presentation and a Theme Tracker screen are separate UI work.
+Existing immutable releases are unchanged. The copy menu loads this artifact once
+per release to group full matching results by theme, sub-industry, thematic block
+or macro pillar. Sector/industry and flat symbol exports use stock rows directly.
+Grouped output follows `###Theme(count),NSE:SYMBOL,...`, with missing assignments
+under `Unclassified`. Groups are sorted by name; symbols retain scan order within
+each group. Niche exports are omitted until issuer niche coverage is meaningful.
+Older releases without the artifact report its absence when a theme export is
+requested. Theme filters, hover-card presentation and a Theme Tracker screen
+remain separate UI work.

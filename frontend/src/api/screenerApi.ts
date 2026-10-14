@@ -29,7 +29,7 @@ export const screenerApi = {
     // API-backed queries and mock screens retain pagination; snapshot screens
     // return their cached full match set in one worker operation.
     for (let page = 2; rows.length < first.matchCount; page++) {
-      const next = await adapter.runScreen({...req, page});
+      const next = await adapter.runScreen({...req, page, datasetRevision:first.immutableRevision});
       if (next.immutableRevision !== first.immutableRevision || next.matchCount !== first.matchCount || !next.rows.length) {
         throw new Error('Results changed during export. Run the scan again.');
       }

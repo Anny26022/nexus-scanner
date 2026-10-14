@@ -165,7 +165,11 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       {onSymbolSearchChange && <label className="results-symbol-search"><Search size={13} aria-hidden="true" /><input type="search" aria-label="Search symbol or company" placeholder="Search symbol" value={symbolSearch} onChange={event => {resetScroll(); onSymbolSearchChange(event.target.value);}} /></label>}
       <div className="results-actions">
         {(isError || busy) && <span role="status" className="fetch-status">{isError ? 'Query failed' : 'Updating results'}</span>}
-        <CopyResults loadRows={loadExportRows ?? (()=>Promise.resolve(rows))} revision={data?.immutableRevision} disabled={!rows.length || busy || isError}/>
+        <CopyResults symbols={data?.matchedSymbols?.length === data?.matchCount ? data?.matchedSymbols : undefined}
+          loadRows={loadExportRows ?? (async()=>{
+            if (rows.length !== data?.matchCount) throw new Error('All matching symbols are unavailable. Run the scan again.');
+            return rows;
+          })} revision={data?.immutableRevision} disabled={!rows.length || busy || isError}/>
         <button type="button" className="button button-secondary" aria-label="Customize columns" title="Customize columns" onClick={() => setColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
       </div>
     </div>

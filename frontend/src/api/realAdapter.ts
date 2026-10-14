@@ -6,24 +6,8 @@ import { runSnapshotTask } from './snapshotClient';
 import type { SnapshotSource } from './snapshotEngine';
 import { filterAnnouncements, type Announcement, type AnnouncementCatalog, type AnnouncementIndex, type FilingTopic } from './announcements';
 import { DataUnavailableError } from './dataErrors';
-
-interface Manifest {
-  revision: string;
-  sessionDate: string;
-  datasetUrl: string;
-  datasetGzipUrl?: string;
-  datasetPackedGzipUrl?: string;
-  themeClassificationUrl?: string;
-  themeClassificationVersion?: string;
-  iposUrl: string;
-  totalStocks: number;
-  schemaVersion: number;
-  chartUrlTemplate?: string;
-  chartRevision?: string;
-  dataIndexUrl?: string;
-  objectUrlTemplate?: string;
-}
-let current: Manifest | undefined;
+import { getManifest, refreshManifest, validateManifest, validDate, manifestSnapshotSource, type Manifest } from './manifest';
+export { refreshManifest } from './manifest';
 const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
 const finiteAmount = (value: unknown): number | null => {
   if (value == null || value === '') return null;
@@ -107,7 +91,7 @@ interface FilingLookup {
 }
 interface DataIndex { revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string; filingLookup?: FilingLookup }
 async function releaseFor(revision?: string): Promise<Manifest> {
-  const latest = current ?? await refreshManifest();
+  const latest = await getManifest();
   const selected = revision ?? latest.revision;
   if (!/^[a-f0-9]{64}$/.test(selected)) throw new Error('Invalid dataset revision');
   const release = selected === latest.revision ? latest : validateManifest(await cached(
@@ -172,45 +156,8 @@ async function getIpoJson<T>(url: string): Promise<T> {
   }
 }
 
-function validateManifest(value: unknown): Manifest {
-  const manifest = value as Manifest | null;
-  const validUrl = (url: unknown) => typeof url === 'string' && !/\s/.test(url)
-    && (/^\/(?!\/).+/.test(url) || /^https:\/\/[^/]+\/.+/.test(url));
-  const validDate = (date: unknown) => typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)
-    && !Number.isNaN(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
-  if (!manifest || !/^[a-f0-9]{64}$/.test(manifest.revision) || ![4, 5, 6, 7].includes(manifest.schemaVersion)
-      || (manifest.datasetGzipUrl !== undefined && (!validUrl(manifest.datasetGzipUrl) || !manifest.datasetGzipUrl.endsWith('.json.gz')))
-      || (manifest.datasetPackedGzipUrl !== undefined && (!validUrl(manifest.datasetPackedGzipUrl) || !manifest.datasetPackedGzipUrl.endsWith('.json.gz')))
-      || (manifest.themeClassificationUrl !== undefined && (!validUrl(manifest.themeClassificationUrl) || !manifest.themeClassificationUrl.endsWith('.json.gz')
-          || !/^[a-f0-9]{64}$/.test(manifest.themeClassificationVersion ?? '')))
-      || !validDate(manifest.sessionDate) || !validUrl(manifest.datasetUrl) || !validUrl(manifest.iposUrl)
-      || !Number.isInteger(manifest.totalStocks) || manifest.totalStocks < 0
-      || (manifest.chartRevision !== undefined && !/^[a-f0-9]{64}$/.test(manifest.chartRevision))
-      || (manifest.schemaVersion === 6 && !manifest.chartUrlTemplate)
-      || (manifest.schemaVersion === 7 && (!validUrl(manifest.dataIndexUrl) || !manifest.chartRevision
-          || !validUrl(manifest.objectUrlTemplate) || manifest.objectUrlTemplate?.split('{hash}').length !== 2))
-      || (manifest.chartUrlTemplate !== undefined && (!validUrl(manifest.chartUrlTemplate)
-          || manifest.chartUrlTemplate.split('{symbol}').length !== 2))) {
-    throw new Error('Invalid scanner dataset manifest');
-  }
-  return manifest;
-}
-
-export async function refreshManifest(): Promise<Manifest> {
-  const manifest = validateManifest(await getJson<unknown>('/data/current.json', true));
-  current = manifest;
-  return manifest;
-}
-
 async function snapshotSource(revision?: string): Promise<SnapshotSource> {
-  const manifest = current ?? await refreshManifest();
-  const selected = revision ?? manifest.revision;
-  if (!/^[a-f0-9]{64}$/.test(selected)) throw new Error('Invalid dataset revision');
-  // Older revisions retain their original JSON URL; current releases advertise gzip.
-  return { revision:selected,
-    url:selected === manifest.revision ? (typeof DecompressionStream !== 'undefined' ? manifest.datasetPackedGzipUrl ?? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
-      : `/data/revisions/${selected}/stocks.json`,
-    sessionDate:selected === manifest.revision ? manifest.sessionDate : undefined };
+  return manifestSnapshotSource(await getManifest(), revision);
 }
 
 class RealDataAdapter {
@@ -264,7 +211,7 @@ class RealDataAdapter {
   }
 
   async getIpoCatalogue(): Promise<IpoCatalogue> {
-    const manifest = current ?? await refreshManifest();
+    const manifest = await getManifest();
     if (!ipoSnapshots.has(manifest.revision)) {
       const revision = manifest.revision;
       const promise = getIpoJson<Record<string, any> | {records:Record<string, any>[]}>(manifest.iposUrl).then(payload => {
@@ -403,8 +350,20 @@ class RealDataAdapter {
     const release = await releaseFor(revision);
     if (release.schemaVersion === 7) {
       const index = await dataIndex(release);
-      const chart = await object<ChartSnapshot>(release, index.chartObjects[symbol], 'Chart');
-      if (chart.symbol !== symbol || chart.schemaVersion !== 2) throw new Error('Chart symbol/schema mismatch');
+      const chart = await object<ChartSnapshot & {candleChunks?: string[]}>(release, index.chartObjects[symbol], 'Chart');
+      if (chart.symbol !== symbol || ![2, 3].includes(chart.schemaVersion)) throw new Error('Chart symbol/schema mismatch');
+      if (chart.schemaVersion === 3) {
+        const {candleChunks, ...metadata} = chart;
+        if (!Array.isArray(candleChunks) || candleChunks.length > 2 || new Set(candleChunks).size !== candleChunks.length)
+          throw new Error('Invalid chart chunk references');
+        const chunks = await Promise.all(candleChunks.map(hash => object<{schemaVersion:number;symbol:string;candles:ChartSnapshot['candles']}>(release, hash, 'Chart')));
+        if (chunks.some(chunk => chunk.symbol !== symbol || chunk.schemaVersion !== 1 || !Array.isArray(chunk.candles)))
+          throw new Error('Chart chunk symbol/schema mismatch');
+        const candles = chunks.flatMap(chunk => chunk.candles);
+        if (candles.some((row, i) => !validDate(row.date) || row.date > release.sessionDate || (i > 0 && row.date <= candles[i - 1].date))
+            || chart.historyStartDate !== (candles[0]?.date ?? null)) throw new Error('Chart chunk dates do not match release');
+        return {...metadata, schemaVersion: 2, candles, asOfDate: release.sessionDate};
+      }
       return {...chart, asOfDate: release.sessionDate};
     }
     if (!release.chartUrlTemplate) throw new Error('Chart release unavailable');

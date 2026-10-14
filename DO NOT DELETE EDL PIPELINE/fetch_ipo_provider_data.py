@@ -1,8 +1,8 @@
 """Ingest permitted IPO provider data without retaining browser credentials.
 
 Each run creates a new provider session, fetches catalogue and analytics feeds,
-then fills missing detail sections and refreshes a small stale active-IPO lane
-within a time budget, checkpointing progress for the next daily run.
+then refreshes up to 18 IPO details within a time budget, prioritizing missing
+sections and checkpointing progress for the next daily run.
 """
 
 from __future__ import annotations
@@ -44,6 +44,7 @@ DETAIL_ENDPOINTS = {
     "peer_valuation": "/api/analytics/peer-valuation/issue/{id}",
 }
 MISSING_DETAIL_BUDGET_SECONDS = 20 * 60
+DETAIL_REFRESH_LIMIT = 18
 ACTIVE_DETAIL_REFRESH_LIMIT = 6
 ACTIVE_DETAIL_REFRESH_HOURS = 24
 DETAIL_DELAY_SECONDS = 0.28
@@ -231,7 +232,7 @@ def _refresh_detail(client: IpoProviderClient, identifier: str, endpoints=None) 
     return values, errors
 
 
-def fetch_all(root: Path, detail_limit: int | None = None, *, missing_budget_seconds: float = MISSING_DETAIL_BUDGET_SECONDS) -> dict:
+def fetch_all(root: Path, detail_limit: int | None = DETAIL_REFRESH_LIMIT, *, missing_budget_seconds: float = MISSING_DETAIL_BUDGET_SECONDS) -> dict:
     now = datetime.now(timezone.utc)
     feeds, analytics, errors = {}, {}, []
     cache = _load_cache(root)

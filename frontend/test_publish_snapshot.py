@@ -227,6 +227,35 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(new['rows'][0]['marketCapCrore'],6000)
             self.assertTrue((root/'.scanner_cache/revisions'/second['revision']/'delivery_history_data/2026-09-30.json.gz').exists())
 
+    def test_taxonomy_metadata_preserves_themes_and_resource_changes_version_the_release(self):
+        from pipeline_utils import resource_path
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'edl'; root.mkdir()
+            output = Path(folder) / 'public'; self.fixture(root)
+            source = root / 'all_stocks_fundamental_analysis.json.gz'
+            with gzip.open(source, 'rt') as handle:
+                stocks = json.load(handle)
+            stocks[0].update(sector='IT Software', industry='IT Enabled Services', niche_tags=['Enterprise Services'],
+                             provider_sector='Information Technology', provider_industry='IT Enabled Services')
+            with gzip.open(source, 'wt') as handle:
+                json.dump(stocks, handle)
+            resource = Path(folder) / 'taxonomy_overrides.json'
+            resource.write_bytes(resource_path(resource.name).read_bytes())
+            with patch('publish_snapshot.resource_path', side_effect=lambda name: resource if name == resource.name else resource_path(name)):
+                first = publish(root, output)
+                original = output / 'revisions' / first['revision'] / 'stocks.json'
+                original_bytes = original.read_bytes()
+                row = json.loads(original_bytes)['stocks'][0]
+                self.assertEqual(row['sector'], 'IT Software')
+                self.assertEqual(row['nicheTags'], ['Enterprise Services'])
+                self.assertEqual(row['providerSector'], 'Information Technology')
+                with gzip.open(output / 'revisions' / first['revision'] / 'theme-classification.json.gz', 'rt') as handle:
+                    self.assertEqual(json.load(handle)['records']['TEST']['theme'], 'IT Enabled Services')
+                resource.write_bytes(resource.read_bytes() + b'\n')
+                second = publish(root, output)
+            self.assertNotEqual(first['revision'], second['revision'])
+            self.assertEqual(original.read_bytes(), original_bytes)
+
     def test_failure_does_not_replace_current_manifest(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)

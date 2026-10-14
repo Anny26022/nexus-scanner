@@ -3,7 +3,29 @@
 Scanner publication now emits `theme-classification.json.gz` beside each immutable
 stock snapshot. `current.json` advertises `themeClassificationUrl` and
 `themeClassificationVersion`. Vite/Workers publish it through the existing public
-data assets flow; it does not add per-stock requests or alter stock sector/industry.
+data assets flow; it does not add per-stock requests.
+
+Primary sector/basic-industry classifications and optional `nicheTags` are resolved
+once in the fundamentals pipeline, using the pinned `taxonomy_overrides.json`
+resource. It ships in the pipeline wheel and is available when Actions builds in
+a temporary data directory. Provider sectors remain broad; reviewed company
+overrides supply missing or corrected primary classifications. Four
+equivalent sector spellings are normalized without merging distinct businesses.
+Original provider labels remain in `provider_sector`/`provider_industry` and are
+published as `providerSector`/`providerIndustry`. The theme bridge uses those
+original labels so reviewed display classifications cannot remove existing themes.
+The browser consumes the published values without applying another override layer.
+Resource bytes affect release revisions; existing snapshots keep their original
+classifications. These additional metadata fields do not alter completeness scores.
+
+Bullion/refining niches are separate from primary classifications: AUGMONT,
+RAJESHEXPO, AUSOMENT and ABANSENT have `Bullion Trading` tags. Direct refining
+is tagged separately from `Precious Metals Refining (JV)` for AUSOMENT and MMTC.
+`nicheAssignments` records the evidence URLs, review date and exposure scope;
+these publish as `nicheEvidence` alongside `nicheTags`. Existing company tags
+are retained. LGHL remains in the review queue because current issuer evidence
+does not corroborate the cached bullion description. These assignments do not
+replace the pinned Tracker theme or infer tags from jewellery labels.
 
 The pinned `frontend/theme_tracker_source.json` contains the production public
 asset's taxonomy fields plus the reviewed listing overrides and ordered catalogue
@@ -45,3 +67,16 @@ each group. Niche exports are omitted until issuer niche coverage is meaningful.
 Older releases without the artifact report its absence when a theme export is
 requested. Theme filters, hover-card presentation and a Theme Tracker screen
 remain separate UI work.
+
+## Primary sector and basic industry
+
+The pinned `stockscans_classification.json` is the primary classification source,
+using exact NSE symbols from the extracted StockScans JSON (14 October 2026).
+It contains 2,859 NSE entries and covers 2,251 of the current 2,604 stocks.
+The extract is partial: the other 353 stocks retain reviewed company corrections
+where present, otherwise their daily provider classification. Missing individual
+fields retain the same fallback. Raw provider labels remain available as metadata
+and continue to support the existing Theme Tracker bridge. Nexus Journal themes
+and source-backed niche tags are independent and unchanged. This is a pinned
+extract, not a new daily StockScans scraper; new listings use the fallback until
+the resource is updated. Resource changes participate in the snapshot revision.

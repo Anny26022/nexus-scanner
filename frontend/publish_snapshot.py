@@ -22,6 +22,7 @@ from screen_trend_conditions import _delivery_records
 from snapshot_technicals import technical_metrics, CONFIG_PATH
 from theme_classification import (classify, SOURCE_PATH as THEME_SOURCE_PATH,
                                   WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
+from pipeline_utils import resource_path
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
 
@@ -251,6 +252,8 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     cache.save_frames(root)
     started = elapsed('history packing', started)
     code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH,Path(__file__).with_name('theme_classification.py'),THEME_SOURCE_PATH,THEME_WEB_OVERRIDES_PATH]
+    code_files.append(resource_path('taxonomy_overrides.json'))
+    code_files.append(resource_path('stockscans_classification.json'))
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)

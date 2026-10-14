@@ -139,7 +139,8 @@ def classify(stocks, as_of, source_path=SOURCE_PATH):
         if not memberships and web_override:
             assign(web_override['theme'], 'web-research')
         if not memberships:
-            bridge_theme = SCANNER_INDUSTRY_THEMES.get((stock.get('sector'), stock.get('industry')))
+            bridge_theme = SCANNER_INDUSTRY_THEMES.get((stock.get('providerSector', stock.get('sector')),
+                                                      stock.get('providerIndustry', stock.get('industry'))))
             if bridge_theme:
                 assign(bridge_theme, 'scanner-industry-bridge')
         # Mirror groups are aliases/aggregations, not extra business exposures.

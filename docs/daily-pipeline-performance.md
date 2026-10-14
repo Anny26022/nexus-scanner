@@ -1,5 +1,83 @@
 # Daily pipeline performance changes
 
+## 2026-10-14: next optimization plan (paused pending user follow-up)
+
+Status correction (15 October): PR #78 merged with EOD2 cache retention and
+historical filing `ltp` exclusion only. The proposed manual-backup policy change
+and `--no-traverse` flags were removed before merge; they are not deployed by
+that PR. The original investigation below is retained as a historical plan.
+
+The user wants a faster complete daily job with the same outputs, intent,
+formulas and behavior. Record the plan here; do not implement the remaining
+candidates or trigger a production refresh until the user resumes this work.
+
+Baseline: [run 38588069574](https://github.com/Anny26022/nexus-scanner/actions/runs/38588069574),
+job `115935292525`, revision `96f79f2af8c4282c35bf3530ff0dc4131a446104`.
+The job took **33m02s**, excluding its initial scheduling delay. This is an
+observed run, not a minimum runtime.
+
+| Non-overlapping work | Observed time |
+| --- | ---: |
+| EOD2 checkout update | 4m01s |
+| Fetch inputs | 5m58s |
+| Build, charts, snapshot, local validation | 9m41s |
+| R2 inventory, copy and download verification | 10m24s |
+| Remaining setup, caches, Git and cleanup | 2m58s |
+
+R2 had 133,529 existing objects and uploaded 3,613 new objects totaling
+9,229,413 bytes. Inventory took 119.92s, copy 278.65s and check 225.03s.
+Copy and check each logged roughly 90 seconds with no transferred bytes before
+progress appeared. This is consistent with listing/metadata overhead; it is not
+proof that all of that interval is avoidable. Small-object request overhead,
+not payload bandwidth alone, is the primary investigation target.
+
+### Priorities when resuming
+
+1. Check the merge/rollout status of [PR #78](https://github.com/Anny26022/nexus-scanner/pull/78)
+   and measure a comparable warm-cache run. It saves changed EOD2 checkouts,
+   excludes live `ltp` from historical filing artifacts, makes manual daily full
+   backups opt-in, and adds `--no-traverse` to copy only. Its first publication
+   needs a one-time filing-page migration; do not use that run as the steady-state
+   benchmark. These already-authorized changes are distinct from the proposed
+   execution-only follow-up; do not remove more fields or outputs.
+2. Benchmark `--no-traverse` for the exact new-object verification list too,
+   retaining `--one-way --download`. Both current rclone and
+   [v1.60.1 CheckFn](https://github.com/rclone/rclone/blob/v1.60.1/fs/operations/check.go#L199-L222)
+   pass this option into the directory marcher. Keep the authoritative initial
+   inventory, immutable/size checks and full byte verification.
+3. Compare upload/check concurrency of 16 versus 32 under equivalent conditions.
+   Retain retry policies and timeouts; adopt higher concurrency only if measured
+   throughput improves without increased errors or resource pressure.
+4. Profile repeated parsing/encoding before adding caches. Filing preparation
+   took 166.8s, chart announcements 120.20s and snapshot metrics/presets 95.07s.
+   Some work already overlaps: do not add these durations or component savings.
+   Prefer reuse of existing parsed inputs and unchanged serialized artifacts,
+   with input/configuration/runtime invalidation and bounded memory.
+
+The first proposed target is **20–25 minutes for a comparable warm-cache day**,
+not a measured result or guarantee. Below 20 minutes needs more evidence.
+The earlier 45–55-minute potential saving concerned the separate 78-minute
+manual run, not this 33-minute scheduled run.
+
+### Invariants and verification
+
+Preserve formula bodies, thresholds, floating-point accumulation order,
+rounding, null/missing/stale semantics, universe coverage, historical corrections,
+date alignment, output schemas, retention and the existing backup policy.
+Keep download verification, required-failure gates and atomic publication.
+Do not skip the EOD2 overlay merely because its source HEAD is unchanged:
+changed destination histories can still require repair. Do not truncate history,
+lower gzip levels, drop outputs or loosen freshness checks to claim a speedup.
+
+Compare frozen inputs on the same runtime, including cold/warm caches, ties,
+missing/stale values, corrections and failures. Require artifact-byte equivalence
+where applicable; freeze producer-code fingerprint inputs for revision comparisons.
+Real implementation edits can intentionally change the code-derived revision ID.
+Measure the complete job after component tests; retain per-stage and R2
+object/byte/error timings. The next follow-up has not been implemented or deployed.
+
+## Earlier audits and implemented improvements
+
 Audited run: [37816745334](https://github.com/Anny26022/nexus-scanner/actions/runs/37816745334/job/113447207170).
 Executed revision: `9868bdeeb75a1e76dc9cf394d4e6133d20a7d179`.
 

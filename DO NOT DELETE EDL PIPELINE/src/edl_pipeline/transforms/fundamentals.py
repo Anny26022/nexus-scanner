@@ -5,7 +5,7 @@ import os
 import sys
 import math
 
-from pipeline_utils import BASE_DIR, load_json, save_json
+from pipeline_utils import BASE_DIR, load_json, save_json, resource_path
 from edl_pipeline.schemas import SCREEN_METRICS
 from edl_pipeline.scanner.financials import normalize_statement_history, statement_summary
 
@@ -16,6 +16,27 @@ DHAN_DATA_FILE = os.path.join(BASE_DIR, "dhan_data_response.json")
 SME_DATA_FILE = os.path.join(BASE_DIR, "sme_market_data.json")
 LISTING_DATES_FILE = os.path.join(BASE_DIR, "nse_equity_list.csv")
 OUTPUT_FILE = os.path.join(BASE_DIR, "all_stocks_fundamental_analysis.json")
+
+def load_taxonomy_overrides():
+    """Read pinned checkout/wheel resources, independently of the staged data root."""
+    manual = load_json(resource_path("taxonomy_overrides.json"))
+    aliases = manual["sectorAliases"]
+    overrides = {
+        symbol: {"sector": aliases.get(entry["sector"], entry["sector"]),
+                 "industry": entry["industry"], "niche_tags": entry.get("nicheTags", [])}
+        for symbol, entry in manual["overrides"].items()
+    }
+    # Exact NSE matches from the pinned extract take precedence; reviewed
+    # corrections and daily provider labels cover symbols absent from it.
+    extracted = load_json(resource_path("stockscans_classification.json"))
+    for symbol, entry in extracted["classifications"].items():
+        prior = overrides.get(symbol, {})
+        overrides[symbol] = {
+            "sector": entry.get("sector") or prior.get("sector"),
+            "industry": entry.get("industry") or prior.get("industry"),
+            "niche_tags": prior.get("niche_tags", []),
+        }
+    return overrides, aliases, manual["nicheAssignments"]
 
 def get_float(value_str):
     return get_optional_float(value_str)
@@ -284,7 +305,8 @@ def classic_pivot(advanced_tech):
     return "N/A"
 
 
-def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
+def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None,
+                  manual_taxonomy_overrides=None, sector_aliases=None, niche_assignments=None):
     symbol = item.get("Symbol", "UNKNOWN")
     cq, earnings_report_type, earnings_source = select_quarterly_statement(item.get("incomeStat_cq", {}))
     cy = item.get("incomeStat_cy", {})
@@ -297,6 +319,8 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
 
     industry = cv.get("INDUSTRY_NAME", "N/A")
     sector = cv.get("SECTOR", "N/A")
+    primary_sector = tech.get("Sector") or sector
+    classified_sector = (sector_aliases or {}).get(primary_sector, primary_sector)
     market_cap_cr = get_float(tech.get("Mcap") or cv.get("MARKET_CAP"))
     ltp = get_float(tech.get("Ltp"))
     total_shares = get_optional_float(tech.get("TotalShares")) or 0.0
@@ -332,7 +356,9 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
         "ISIN": item.get("ISIN") or item.get("isin"),
         "Security ID": item.get("Sid") or item.get("security_id"),
         "Basic Industry": industry,
-        "Sector": sector,
+        "Sector": classified_sector,
+        "provider_sector": primary_sector,
+        "provider_industry": industry,
         "Market Cap(Cr.)": market_cap_cr,
         "Latest Quarter": cq.get("YEAR", "").split("|")[0] if cq.get("YEAR") else "N/A",
         "Earnings Report Type": earnings_report_type,
@@ -409,7 +435,7 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
             "market_cap_crore": market_cap_cr,
             "shares_outstanding": int(total_shares) if total_shares > 0 else None,
             "share_capital": get_float(tech.get("ShareCapital", 0)) or None,
-            "sector": tech.get("Sector") or sector,
+            "sector": classified_sector,
             "industry": industry,
             "free_float_percent": free_float_pct,
             "float_shares": round(total_shares * (free_float_pct / 100.0))
@@ -440,6 +466,24 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None):
             "Pivot Point": classic_pivot(advanced_tech),
         }
     )
+    manual_override = (manual_taxonomy_overrides or {}).get(symbol)
+    if manual_override:
+        stock_analysis.update(
+            {
+                "Sector": manual_override["sector"] or classified_sector,
+                "Basic Industry": manual_override["industry"] or industry,
+                "sector": manual_override["sector"] or classified_sector,
+                "industry": manual_override["industry"] or industry,
+                "niche_tags": manual_override["niche_tags"],
+            }
+        )
+    niche = (niche_assignments or {}).get(symbol)
+    if niche:
+        stock_analysis["niche_tags"] = list(dict.fromkeys([*stock_analysis.get("niche_tags", []), *niche["tags"]]))
+        stock_analysis["niche_evidence"] = {
+            "tags": niche["tags"], "source_urls": niche["sourceUrls"],
+            "reviewed_on": niche["reviewedOn"], "exposure": niche["exposure"],
+        }
     return stock_analysis
 
 
@@ -453,6 +497,8 @@ def analyze_all_stocks():
 
     listing_date_map = load_listing_dates()
     sme_map = load_sme_map()
+    manual_taxonomy_overrides, sector_aliases, niche_assignments = load_taxonomy_overrides()
+    print(f"Loaded {len(manual_taxonomy_overrides)} manual taxonomy overrides.")
     dhan_tech_map = map_scan_rows_by_symbol(DHAN_DATA_FILE, "Sym", "technical data", f"Warning: {DHAN_DATA_FILE} not found.")
     advanced_tech_map = map_scan_rows_by_symbol(
         ADVANCED_FILE,
@@ -472,6 +518,9 @@ def analyze_all_stocks():
             advanced_tech_map.get(item.get("Symbol", "UNKNOWN"), {}),
             listing_date_map,
             sme_map,
+            manual_taxonomy_overrides,
+            sector_aliases,
+            niche_assignments,
         )
         for item in data
     ]

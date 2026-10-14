@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "asOfDate": "2026-10-15",
+  "scope": {
+    "universeRevision": "87e74006d7b6ce2a4a55b19a25f7af106990c9c57e2c818079ebd24d108d900b",
+    "universeStocks": 2604,
+    "stockscansExtractRecords": 4800,
+    "stockscansReportedTotal": 6725,
+    "extractStatus": "partial_due_to_source_rate_limit",
+    "matchedSymbols": 2558
+  },
+  "remediation": {
+    "stockscansSpecificOverrides": 79,
+    "externallyResearchedOverrides": 11,
+    "priorAugmontOverride": 1,
+    "totalOverrides": 91,
+    "remainingUnclassified": 1,
+    "reviewQueue": [
+      {
+        "symbol": "NEUEON",
+        "status": "needs_review",
+        "reason": "Conflicting current descriptions of the primary operating business."
+      }
+    ]
+  },
+  "agreementAgainstPartialStockscansExtract": {
+    "exactSector": 881,
+    "exactIndustry": 221,
+    "exactBoth": 132,
+    "note": "Tailored externally researched classifications can be more precise than the source taxonomy and therefore need not be exact-label matches."
+  }
+}

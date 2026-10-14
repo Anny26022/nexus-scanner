@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import build_chart_artifacts as builder
 from announcement_artifacts import build_announcements
+from filing_classification import classify_filings
 
 
 def read(root, digest):
@@ -23,6 +24,28 @@ def filing(day, identifier):
 
 
 class AnnouncementArtifactsTests(unittest.TestCase):
+    def test_quotes_do_not_change_raw_or_preclassified_pages_but_revisions_do(self):
+        for preclassified in (False, True):
+            with self.subTest(preclassified=preclassified), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                rows = [filing('2025-01-01', 'old')]
+                if preclassified:
+                    rows = classify_filings(rows)
+                rows[0]['ltp'] = 100
+                payload = {'updated_at': '2026-10-07', 'records': [{'symbol': 'TEST', 'filings': rows}]}
+                first = build_announcements(payload, root, {'TEST'}, '2026-10-06')
+                catalog = read(root, first)
+                page, = catalog['symbols']['TEST']['years']['2025']
+                detail, = read(root, page['details'])['records'].values()
+                self.assertNotIn('ltp', detail)
+                self.assertEqual(rows[0]['ltp'], 100)
+                rows[0]['ltp'] = 120
+                self.assertEqual(build_announcements(payload, root, {'TEST'}, '2026-10-06'), first)
+                rows[0]['news_body'] += ' Corrected amount: Rs. 12 crore.'
+                revised = read(root, build_announcements(payload, root, {'TEST'}, '2026-10-06'))
+                self.assertNotEqual(revised['symbols']['TEST']['years']['2025'][0]['details'], page['details'])
+                self.assertNotEqual(revised['symbols']['TEST']['years']['2025'][0]['summary'], page['summary'])
+
     def test_recent_index_includes_next_day_filings_without_changing_price_cutoff(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

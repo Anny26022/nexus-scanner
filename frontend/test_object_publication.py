@@ -203,6 +203,7 @@ class ObjectPublicationTests(unittest.TestCase):
                 else:
                     self.assertIn('--immutable', args)
                     self.assertIn('--checksum', args)
+                    self.assertIn('--no-traverse', args)
                 calls.append((args[0], names))
             store.run = run
             listing = f'{old}.json.gz\t{(root / (old + ".json.gz")).stat().st_size}\n'

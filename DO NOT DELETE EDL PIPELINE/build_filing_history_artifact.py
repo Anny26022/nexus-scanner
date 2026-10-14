@@ -21,7 +21,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from pipeline_utils import BASE_DIR, file_fingerprint, finite_json, load_json, resource_path, save_json, save_json_records
-from filing_classification import VERSION, TAXONOMY, classify_filing, classify_filings
+from filing_classification import VERSION, TAXONOMY, classify_filing, classify_filings, filing_evidence
 from filing_documents import enrich_documents
 
 # Bump for changes to filing normalization/cache layout; classifier semantics use VERSION.
@@ -35,13 +35,15 @@ def fingerprint(value):
 
 
 def history_fingerprint(filings):
-    # Retry timestamps/errors are publication metadata, not identity or evidence.
-    # Hash the identical canonical array bytes without cloning/encoding another
-    # complete company history. Existing classification-cache keys stay valid.
+    # Live quotes and retry timestamps/errors are not disclosure evidence.
+    # Stream the canonical array without encoding another complete company
+    # history. Classification entry keys are unchanged; quote-bearing histories
+    # normalize once when migrating, reusing their existing classifications.
     digest = hashlib.sha256(b'[')
     for index, row in enumerate(filings):
         if index:
             digest.update(b', ')
+        row = filing_evidence(row)
         if isinstance(row.get('documentExtraction'), dict):
             row = {**row, 'documentExtraction': {
                 key: value for key, value in row['documentExtraction'].items() if key not in {'attemptedAt', 'error'}}}
@@ -121,6 +123,7 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
         stats['reused_filings'] += len(previous)
         result = [{**row, 'classification': cached[row['classification']]} for row in previous]
         for row, source in zip(result, sources):
+            row.pop('ltp', None)
             if source is not None:
                 row['documentExtraction'] = filings[source]['documentExtraction']
         return result

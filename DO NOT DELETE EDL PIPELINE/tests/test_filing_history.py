@@ -72,6 +72,40 @@ class FilingHistoryTests(unittest.TestCase):
         self.assertEqual(digest, fixture['classification_sha256'],
                          'Classification behavior changed: bump VERSION before updating the frozen contract.')
 
+    def test_live_quote_changes_reuse_history_but_disclosure_revisions_rebuild(self):
+        filings = [{'news_date': '2026-10-07', 'caption': 'Dividend approved',
+                    'news_body': 'Dividend of Rs. 10 per share.', 'ltp': 100}]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            first = build_filing_history_artifact.classify_cached(filings, path, ['rules'])
+            self.assertNotIn('ltp', first[0])
+            self.assertEqual(filings[0]['ltp'], 100)  # Raw provider cache remains intact.
+            filings[0]['ltp'] = 120
+            stats = Counter()
+            with mock.patch.object(build_filing_history_artifact, 'classify_filings', side_effect=AssertionError('normalized again')):
+                self.assertEqual(build_filing_history_artifact.classify_cached(filings, path, ['rules'], stats), first)
+            self.assertEqual(stats['unchanged_companies'], 1)
+            filings[0]['news_body'] = 'Dividend of Rs. 12 per share.'
+            revised = build_filing_history_artifact.classify_cached(filings, path, ['rules'])
+            self.assertNotEqual(revised[0]['filingId'], first[0]['filingId'])
+            self.assertEqual(revised[0]['news_body'], filings[0]['news_body'])
+
+    def test_quote_bearing_old_cache_reuses_classifications_on_migration(self):
+        filings = [{'news_date': '2026-10-07', 'caption': 'Dividend approved', 'ltp': 100}]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cache.json'
+            expected = build_filing_history_artifact.classify_cached(filings, path, ['rules'])
+            old = load_json(path)
+            old['history_key'] = build_filing_history_artifact.fingerprint(filings)
+            old['filings'][0]['ltp'] = 100
+            save_json(path, old)
+            stats = Counter()
+            with mock.patch.object(build_filing_history_artifact, 'classify_filing', side_effect=AssertionError('classified again')):
+                self.assertEqual(build_filing_history_artifact.classify_cached(filings, path, ['rules'], stats), expected)
+            self.assertEqual(stats['source_changed'], 1)
+            self.assertEqual(stats['reused_filings'], 1)
+            self.assertNotIn('ltp', load_json(path)['filings'][0])
+
     def test_unchanged_company_skips_normalization_and_classification(self):
         filings = [
             {'news_date': '2026-10-07', 'caption': 'Dividend approved', 'file_url': 'https://example.com/a.pdf'},

@@ -128,6 +128,20 @@ it('uses fallback when module-worker construction is blocked',async()=>{
  await expect(runSnapshotTask({type:'compare',source,symbols:['TEST00']})).resolves.toMatchObject({type:'compare'});
  expect(constructor).toHaveBeenCalledTimes(1);
 });
+it.each(['missing','blocked'])('skips main-thread warm-up when workers are %s but retains scan fallback', async mode => {
+ vi.useFakeTimers();
+ const constructor = vi.fn(function(){throw new Error('CSP blocked');});
+ vi.stubGlobal('Worker',mode === 'missing' ? undefined : constructor);
+ const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot)));
+ vi.stubGlobal('fetch',fetcher);
+ const {runSnapshotTask} = await import('../api/snapshotClient');
+ await expect(runSnapshotTask({type:'warm',source})).resolves.toEqual({type:'warm'});
+ expect(fetcher).not.toHaveBeenCalled();
+ expect(vi.getTimerCount()).toBe(0);
+ await expect(runSnapshotTask({type:'screen',source,request})).resolves.toMatchObject({type:'screen',result:{matchCount:60}});
+ expect(fetcher).toHaveBeenCalledTimes(1);
+ expect(constructor).toHaveBeenCalledTimes(mode === 'blocked' ? 1 : 0);
+});
 it('times out stalled fallback and loads a fresh engine on retry',async()=>{
  vi.useFakeTimers();vi.stubGlobal('Worker',undefined);
  const fetcher=vi.fn().mockImplementationOnce(()=>new Promise(()=>{}))

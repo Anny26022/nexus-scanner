@@ -45,7 +45,8 @@ export function startSnapshotWorker() {
 }
 export function runSnapshotTask(task: SnapshotTask): Promise<SnapshotResult> {
   startSnapshotWorker();
-  if (!worker) return runFallback(task);
+  // Speculative warm-up must never compete with UI startup on the main thread.
+  if (!worker) return task.type === 'warm' ? Promise.resolve({type:'warm'}) : runFallback(task);
   return new Promise((resolve,reject) => {
     const id = ++sequence;
     const timer = setTimeout(() => {

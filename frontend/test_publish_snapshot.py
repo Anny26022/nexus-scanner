@@ -197,6 +197,12 @@ class SnapshotPublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
             first=publish(root,output)
+            self.assertEqual(first['themeClassificationUrl'], f"/data/revisions/{first['revision']}/theme-classification.json.gz")
+            with gzip.open(output/'revisions'/first['revision']/'theme-classification.json.gz', 'rt') as handle:
+                taxonomy = json.load(handle)
+            self.assertEqual(taxonomy['version'], first['themeClassificationVersion'])
+            self.assertEqual(taxonomy['asOfDate'], first['sessionDate'])
+            self.assertIn('TEST', taxonomy['records'])
             with gzip.open(output/'revisions'/first['revision']/'ipos.json.gz','rt') as handle:
                 self.assertEqual(json.load(handle)['provider_data']['analytics']['year_summary']['year'], '2026')
             self.assertTrue((output/'revisions'/first['revision']/'earnings-calendar.json.gz').exists())

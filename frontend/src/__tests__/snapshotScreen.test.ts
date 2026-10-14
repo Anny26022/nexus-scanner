@@ -29,6 +29,9 @@ describe('published snapshots', () => {
     expect(screenSnapshot(data, {...base, symbolSearch:'pharmaceuticals'})!.rows[0].symbol).toBe('GLAXO');
     expect(screenSnapshot(data, {...base, symbolSearch:'no match'})!.matchCount).toBe(0);
     expect(screenSnapshot(data, base)!.matchCount).toBe(3);
+    const exported = screenSnapshot(data, {...base,page:2,symbolSearch:'glaxo'}, true)!;
+    expect(exported.rows.map(row=>row.symbol)).toEqual(['GLAXO','GLAXONEW']);
+    expect(screenSnapshot(data, {...base,page:2,symbolSearch:'glaxo'})!.rows).toHaveLength(1);
   });
   it('matches the verified history screen without rounding RVOL at the threshold', () => {
     const response = screenSnapshot(snapshot,request)!;

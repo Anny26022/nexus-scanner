@@ -288,7 +288,7 @@ export function supportsSnapshotCondition(condition: ActiveCondition): boolean {
 interface Matches { rows: SnapshotStock[]; universeCount: number; coverage:Coverage; diagnostics:ScreenerRunResponse['unavailableDiagnostics']; warnings:string[] }
 const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
-export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): ScreenerRunResponse | null {
+export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allRows = false): ScreenerRunResponse | null {
   if (request.textQuery?.trim()) return null;
   const key = JSON.stringify([request.expressionTree,request.universe,request.customSymbols,request.sort,request.announcementSymbols]);
   let cache = matchCache.get(data);
@@ -331,6 +331,6 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
   const rows = search ? matches.rows.filter(row => row.symbol.toLowerCase().includes(search) || row.name.toLowerCase().includes(search)) : matches.rows;
   const page = Math.max(1,request.page), size = Math.max(1,Math.min(100,request.pageSize));
   return { resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
-    immutableRevision:data.revision,rows:rows.slice((page-1)*size,page*size),matchedSymbols:rows.map(row=>row.symbol),matchCount:rows.length,totalUniverseCount:matches.universeCount,
+    immutableRevision:data.revision,rows:allRows ? rows : rows.slice((page-1)*size,page*size),matchedSymbols:rows.map(row=>row.symbol),matchCount:rows.length,totalUniverseCount:matches.universeCount,
     page,pageSize:size,perConditionCoverage:matches.coverage,unavailableDiagnostics:matches.diagnostics,warnings:matches.warnings };
 }

@@ -7,7 +7,7 @@ export type FilterChoices = Record<'SECTOR' | 'INDUSTRY' | 'SERIES' | 'PRICE_BAN
 export type SnapshotTask =
   | { type:'warm'; source:SnapshotSource }
   | { type:'filterChoices'; source:SnapshotSource }
-  | { type:'screen'; source:SnapshotSource; request:ScreenerRunRequest }
+  | { type:'screen'; source:SnapshotSource; request:ScreenerRunRequest; allRows?:boolean }
   | { type:'compare'; source:SnapshotSource; symbols:string[] };
 export type SnapshotResult =
   | { type:'warm' }
@@ -69,7 +69,7 @@ export function createSnapshotEngine(loader = readSnapshot) {
       })) as FilterChoices;
       return {type:'filterChoices', result};
     }
-    if (task.type === 'screen') return {type:'screen',result:screenSnapshot(data,task.request),revision:data.revision,sessionDate:data.asOfDate};
+    if (task.type === 'screen') return {type:'screen',result:screenSnapshot(data,task.request,task.allRows),revision:data.revision,sessionDate:data.asOfDate};
     const bySymbol = new Map(data.stocks.map(stock => [stock.symbol,stock]));
     const validSymbols: SymbolComparisonResponse['validSymbols'] = [], invalidSymbols:string[] = [];
     for (const input of task.symbols) {

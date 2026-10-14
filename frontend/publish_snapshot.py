@@ -20,6 +20,8 @@ from edl_pipeline.scanner.financials import financial_value, finite_number
 from edl_pipeline.scanner.calculation_cache import calculation_cache
 from screen_trend_conditions import _delivery_records
 from snapshot_technicals import technical_metrics, CONFIG_PATH
+from theme_classification import (classify, SOURCE_PATH as THEME_SOURCE_PATH,
+                                  WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
 
@@ -248,7 +250,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = elapsed('stock metrics and presets', started)
     cache.save_frames(root)
     started = elapsed('history packing', started)
-    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH]
+    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH,Path(__file__).with_name('theme_classification.py'),THEME_SOURCE_PATH,THEME_WEB_OVERRIDES_PATH]
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
@@ -288,6 +290,9 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
     started = elapsed('revision hashing and backend freezing', started)
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'technicalMetricsVersion':1,'referenceCounts':{'rvol15Sma50':default_count}}
+    taxonomy = classify(rows, session)
+    taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
+    (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
     stock_bytes=write_json(generation/'stocks.json',payload)
     # Keep the full financial series out of every lightweight scanner row.
     histories = {symbol: stock["financial_statement_history"] for symbol, stock in context['stocks'].items()
@@ -320,6 +325,8 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         manifest['earningsCalendarUrl']=f'/data/revisions/{revision}/earnings-calendar.json.gz'
     manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'
     manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'
+    manifest['themeClassificationUrl'] = f'/data/revisions/{revision}/theme-classification.json.gz'
+    manifest['themeClassificationVersion'] = taxonomy['version']
     started = elapsed('serialization and compression', started)
     manifest = complete_release(chart_root, output, manifest)
     elapsed('release completion', started)

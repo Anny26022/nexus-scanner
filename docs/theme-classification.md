@@ -70,6 +70,17 @@ remain separate UI work.
 
 ## Primary sector and basic industry
 
+`frontend/public/data/universe-classification.json` is a checked-in local preview
+of the consolidated output, labelled with its input revision and session date.
+Each normal publication generates its own immutable
+`/data/revisions/<revision>/universe-classification.json`, referenced by
+`universeClassificationUrl` in the current manifest. Use that manifest URL for
+the latest published data rather than the static preview. Records include primary
+sector/basic industry, original provider labels, niche tags and evidence, plus
+the full nested `thematic` record (theme, sub-industry, block, macro, memberships,
+aliases, mapping confidence, evidence and issuer niche overlay). These separate
+fields preserve the distinction between business industry and thematic taxonomy.
+
 The pinned `stockscans_classification.json` is the primary classification source,
 using exact NSE symbols from the extracted StockScans JSON (14 October 2026).
 It contains 2,859 NSE entries and covers 2,251 of the current 2,604 stocks.

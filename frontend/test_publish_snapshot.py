@@ -203,6 +203,12 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(taxonomy['version'], first['themeClassificationVersion'])
             self.assertEqual(taxonomy['asOfDate'], first['sessionDate'])
             self.assertIn('TEST', taxonomy['records'])
+            self.assertEqual(first['universeClassificationUrl'], f"/data/revisions/{first['revision']}/universe-classification.json")
+            combined = json.loads((output/'revisions'/first['revision']/'universe-classification.json').read_text())
+            self.assertEqual(combined['asOfDate'], first['sessionDate'])
+            self.assertEqual(combined['records']['TEST']['thematic'], taxonomy['records']['TEST'])
+            self.assertIn('basicIndustry', combined['records']['TEST'])
+            self.assertEqual(combined['records']['TEST']['nicheTags'], [])
             with gzip.open(output/'revisions'/first['revision']/'ipos.json.gz','rt') as handle:
                 self.assertEqual(json.load(handle)['provider_data']['analytics']['year_summary']['year'], '2026')
             self.assertTrue((output/'revisions'/first['revision']/'earnings-calendar.json.gz').exists())

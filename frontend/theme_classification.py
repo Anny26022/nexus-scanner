@@ -86,6 +86,23 @@ SCANNER_INDUSTRY_THEMES = {
 }
 
 
+def consolidated_classification(stocks, taxonomy):
+    """Export primary taxonomy and thematic detail without conflating industries."""
+    return {
+        'schemaVersion': 1, 'asOfDate': taxonomy['asOfDate'],
+        'themeVersion': taxonomy['version'], 'totalStocks': len(stocks),
+        'records': {stock['symbol']: {
+            'name': stock.get('name'), 'sector': stock.get('sector'),
+            'basicIndustry': stock.get('industry'),
+            'providerSector': stock.get('providerSector'),
+            'providerIndustry': stock.get('providerIndustry'),
+            'nicheTags': stock.get('nicheTags', []),
+            'nicheEvidence': stock.get('nicheEvidence'),
+            'thematic': taxonomy['records'][stock['symbol']],
+        } for stock in sorted(stocks, key=lambda row: row['symbol'])},
+    }
+
+
 def classify(stocks, as_of, source_path=SOURCE_PATH):
     raw = source_path.read_bytes()
     source = json.loads(raw)

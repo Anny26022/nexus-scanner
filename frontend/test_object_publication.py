@@ -197,14 +197,12 @@ class ObjectPublicationTests(unittest.TestCase):
             def run(*args):
                 names = Path(args[args.index('--files-from') + 1]).read_text().splitlines()
                 if args[0] == 'check':
-                    self.assertIn('--no-traverse', args)
                     self.assertIn('--download', args)
                     self.assertIn('--one-way', args)
                     self.assertEqual(args[args.index('--checkers') + 1], '16')
                 else:
                     self.assertIn('--immutable', args)
                     self.assertIn('--checksum', args)
-                    self.assertIn('--no-traverse', args)
                 calls.append((args[0], names))
             store.run = run
             listing = f'{old}.json.gz\t{(root / (old + ".json.gz")).stat().st_size}\n'

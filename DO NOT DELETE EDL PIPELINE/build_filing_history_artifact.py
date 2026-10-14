@@ -123,7 +123,6 @@ def classify_cached(filings, path, rules, stats=None, legacy_rules=None):
         stats['reused_filings'] += len(previous)
         result = [{**row, 'classification': cached[row['classification']]} for row in previous]
         for row, source in zip(result, sources):
-            row.pop('ltp', None)
             if source is not None:
                 row['documentExtraction'] = filings[source]['documentExtraction']
         return result

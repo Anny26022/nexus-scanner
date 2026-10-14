@@ -35,8 +35,7 @@ publication; the workflows upload these files without rebuilding them after news
 inputs have been discarded. Scanner data is exported from the same pipeline run.
 They verify chart count, symbol, content hashes, and announcement references before
 uploading. Content-addressed objects are shared across releases. One R2 listing
-identifies existing objects; copy uses `--no-traverse` to avoid listing the entire
-destination again. Only new objects transfer and receive download-based
+identifies existing objects; only new objects transfer and receive download-based
 verification. Existing immutable objects must have the expected byte size.
 Charts, announcements and complete raw/classified backups stay outside Git;
 Git retains small release references and scanner data. The shared current manifest
@@ -51,9 +50,8 @@ Scheduled weekday Actions publish current app objects without full filing backup
 both full backups (`EDL_FILING_BACKUPS=1`) and records the filing-catalog cutoff
 timestamp as `archivesAsOf` in that release index (not the prior trading-session
 date on weekends). Scheduled weekday release indexes have an empty `archives`
-map; previous weekly backup objects and indexes remain retained. Manual daily
-Actions also omit backups unless `full_backups` is selected. Weekly Actions and
-local builds still default to backups on. `EDL_FILING_BACKUPS` uses the shared boolean parser: `1/true/yes/y/on`
+map; previous weekly backup objects and indexes remain retained. Manual Actions and local builds default to
+backups on. `EDL_FILING_BACKUPS` uses the shared boolean parser: `1/true/yes/y/on`
 enable backups, `0/false/no/n/off` disable them (case/whitespace insensitive);
 invalid values warn and fall back to backups on.
 Local classified gzip validation remains enabled on daily runs.

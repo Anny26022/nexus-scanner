@@ -12,11 +12,11 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-# Full ordered step dictionaries, including opt-in daily backups and updated EOD2 caching.
+# Full ordered step dictionaries, including the existing backup policy and updated EOD2 caching.
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "04cafe0cef70815f33e59a838853c6ebea7138f49bc79345008364cea1151212",
+    "daily_refresh.yml": "1e9496b1a871260bcf771b6d0c931319d3b7dd33ffacccee08b9941424bb9e71",
     "weekly_eod2_refresh.yml": "2f05129bb7add64b66e0e79e12fa40748a4b0561db341ac4f1bfe405d06386e9",
 }
 
@@ -35,8 +35,8 @@ def normalized(steps):
 
 
 class RefreshWorkflowTests(unittest.TestCase):
-    def test_daily_backups_are_opt_in_and_weekly_archives_remain_enabled(self):
-        for name, expected in [('daily_refresh.yml', "${{ inputs.full_backups && '1' || '0' }}"),
+    def test_backup_policy_preserves_manual_runs_and_weekly_archives(self):
+        for name, expected in [('daily_refresh.yml', "${{ github.event_name == 'schedule' && '0' || '1' }}"),
                                ('weekly_eod2_refresh.yml', '1')]:
             job, = document('.github/workflows/' + name)['jobs'].values()
             build, = [step for step in job['steps'] if step['name'] == 'Build and publish validated data']
@@ -49,10 +49,7 @@ class RefreshWorkflowTests(unittest.TestCase):
                 cron = '30 10 * * 1-5' if name == 'daily_refresh.yml' else '30 3 * * 0'
                 # PyYAML YAML 1.1 treats the unquoted GitHub "on" key as True.
                 self.assertEqual(workflow.get('on', workflow.get(True)), {
-                    'schedule': [{'cron': cron}], 'workflow_dispatch': {'inputs': {'full_backups': {
-                        'description': 'Publish complete raw and classified filing backups',
-                        'type': 'boolean', 'default': False,
-                    }}} if name == 'daily_refresh.yml' else None,
+                    'schedule': [{'cron': cron}], 'workflow_dispatch': None,
                 })
                 self.assertEqual(workflow['concurrency'], {'group': 'daily-data-refresh', 'cancel-in-progress': False})
                 self.assertEqual(workflow['permissions'], {'contents': 'write'})

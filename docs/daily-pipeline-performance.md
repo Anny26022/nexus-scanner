@@ -285,13 +285,13 @@ wheel-only imports of the changed packaged modules.
 Run [38588069574](https://github.com/Anny26022/nexus-scanner/actions/runs/38588069574)
 spent 624.08s in chart-object publication: 119.92s listing the object prefix,
 278.65s uploading 3,613 new objects (9.2 MB), and 225.03s downloading those
-objects for verification. The small payload and large existing prefix showed
-that remote-object traversal, rather than bytes alone, was material.
+objects for verification. These timings identify remote listing and per-object
+operations as optimization candidates; they do not isolate their individual costs.
 
-PR #78 keeps the authoritative initial listing and immutable size guard, then
-uses its resulting exact new-object list for both upload and byte-for-byte
-download verification. `--no-traverse` prevents the verification command from
-walking the full immutable object prefix a second time. The initial inventory,
-download verification, retries, timeouts, immutable upload policy, object
-format, release promotion and all scanner calculations are unchanged. The next
-comparable R2-enabled run is required to measure the live saving.
+PR #78 addresses live-price churn in historical filing objects and repeated
+EOD2 checkout updates. Manual backup policy and R2 transfer commands retain
+their existing behavior. `--no-traverse` is deferred pending a comparison:
+it replaces a destination listing with a lookup per selected object, so large
+migrations may cost more. Retain full download verification in any benchmark.
+The first filing publication creates replacement objects once; measure a later
+comparable warm run to establish steady-state savings.

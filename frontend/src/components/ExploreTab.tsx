@@ -152,27 +152,31 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   return <div className="research-view">
     <section className="screen-controls" aria-label="Screen criteria">
       <div className="screen-toolbar">
-        <div className="universe-control-group">
-          <label className="universe-control"><span className="field-label">Universe</span><span className="select-wrap">
+        <div className="universe-control">
+          <div className="universe-label-row">
+            <span className="field-label">Universe</span>
+            <button
+              type="button"
+              className="universe-info-button"
+              data-tooltip={
+                universe === 'mainboard'
+                  ? 'Mainboard: All active NSE mainboard listed equities (excludes SME, debt, and suspended listings).'
+                  : universe === 'nifty50'
+                  ? 'Nifty 50: The 50 largest, most liquid blue-chip equities representing the benchmark Indian index.'
+                  : universe === 'nifty500'
+                  ? 'Nifty 500: Top 500 companies by market capitalization and liquidity across NSE sectors.'
+                  : 'MidSmall 400: Nifty Midcap 150 and Smallcap 250 universe combined (excludes Nifty 100 large caps).'
+              }
+              aria-label="Universe filter details"
+            >
+              <Info size={11} strokeWidth={2.2} />
+            </button>
+          </div>
+          <span className="select-wrap">
             <select aria-label="Stock universe" value={universe} onChange={e => {setUniverse(e.target.value as UniverseType); setPage(1);}}>
               <option value="mainboard">Mainboard</option><option value="nifty50">Nifty 50</option><option value="nifty500">Nifty 500</option><option value="midsmall400">MidSmall 400</option>
-            </select><ChevronDown size={14} /></span></label>
-          <button
-            type="button"
-            className="universe-info-button"
-            data-tooltip={
-              universe === 'mainboard'
-                ? 'Mainboard universe: All active NSE mainboard listed equities (excludes SME, debt, and suspended listings).'
-                : universe === 'nifty50'
-                ? 'Nifty 50: The 50 largest, most liquid blue-chip equities representing the benchmark Indian index.'
-                : universe === 'nifty500'
-                ? 'Nifty 500: Top 500 companies by market capitalization and liquidity across NSE sectors.'
-                : 'MidSmall 400: Nifty Midcap 150 and Smallcap 250 universe combined (excludes Nifty 100 large caps).'
-            }
-            aria-label="Universe filter details"
-          >
-            <Info size={14} strokeWidth={2} />
-          </button>
+            </select><ChevronDown size={14} />
+          </span>
         </div>
         <label className="query-control"><span className="field-label">Scanner query</span><span className="query-input"><Search size={16} />
           <input aria-label="Scanner query" value={queryText} onChange={event => setQueryText(event.target.value)}

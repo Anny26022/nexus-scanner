@@ -307,20 +307,48 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
         <FilterRule def={def} parameters={parameters} updateParam={updateRule} />
       )}
       {editable && showParameters && def.id === 'MA_STACK' && logicHint && <p className="filter-logic-hint">{logicHint}</p>}
-      {checked && !showParameters && <fieldset className="preset-eligibility">
-        <legend>Eligibility · AND</legend>
-        {PRESET_ELIGIBILITY.map(rule => {
-          const value = parameters[rule.id] === undefined ? rule.defaultValue : parameters[rule.id];
-          return <div key={rule.id}>
-            <label><input type="checkbox" aria-label={`Use ${rule.label}`} checked={value !== null}
-              onChange={event => updateRule(def.id, rule.id, event.target.checked ? rule.defaultValue : null)} />{rule.label}</label>
-            <span aria-hidden="true">&gt;</span>
-            <input type="number" min="0" step="any" aria-label={`${rule.label} minimum`} disabled={value === null}
-              value={value ?? ''} onChange={event => updateRule(def.id, rule.id, numericInputValue(event.target.value))} />
-            <span>{rule.unit}</span>
-          </div>;
-        })}
-      </fieldset>}
+      {checked && !showParameters && <div className="preset-eligibility-card">
+        <div className="preset-eligibility-header">
+          <span className="preset-eligibility-title">Eligibility Criteria</span>
+          <span className="preset-eligibility-badge">ALL REQUIRED (AND)</span>
+        </div>
+        <div className="preset-eligibility-list">
+          {PRESET_ELIGIBILITY.map(rule => {
+            const value = parameters[rule.id] === undefined ? rule.defaultValue : parameters[rule.id];
+            const isEnabled = value !== null;
+            return (
+              <div key={rule.id} className={`preset-eligibility-row ${isEnabled ? 'is-active' : 'is-disabled'}`}>
+                <label className="preset-eligibility-toggle">
+                  <input
+                    type="checkbox"
+                    aria-label={`Use ${rule.label}`}
+                    checked={isEnabled}
+                    onChange={event => updateRule(def.id, rule.id, event.target.checked ? rule.defaultValue : null)}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
+                  />
+                  <span className="preset-eligibility-name">{rule.label}</span>
+                </label>
+                <div className="preset-eligibility-inputs">
+                  <span className="preset-eligibility-op" aria-hidden="true">&gt;</span>
+                  <div className="preset-eligibility-input-wrap">
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      aria-label={`${rule.label} minimum`}
+                      disabled={!isEnabled}
+                      value={value ?? ''}
+                      onChange={event => updateRule(def.id, rule.id, numericInputValue(event.target.value))}
+                      className="preset-eligibility-input"
+                    />
+                    <span className="preset-eligibility-unit">{rule.unit}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>}
       {descriptionOpen && <p className={showParameters ? 'filter-logic-hint' : 'preset-description'}>{description}</p>}
     </div>
   );

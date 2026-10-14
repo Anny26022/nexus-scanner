@@ -315,13 +315,23 @@
 .preset-info-button::after { position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; width: min(280px, calc(100vw - 48px)); padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 8px 24px rgb(0 0 0 / 0.12); color: var(--text); content: attr(data-tooltip); font-size: 11.5px; font-weight: 400; line-height: 1.5; text-align: left; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-2px); transition: opacity .14s ease, transform .14s ease, visibility .14s ease; }
 .preset-info-button:hover::after, .preset-info-button:focus-visible::after { opacity: 1; visibility: visible; transform: translateY(0); }
 .preset-description { flex: 0 0 calc(100% - 68px); min-width: 0; overflow-wrap: anywhere; margin: 0 34px 2px; color: var(--secondary); font-size: 11.5px; line-height: 1.5; }
-.filter-row[data-preset="true"]:has(.preset-description) { flex-wrap: wrap; background: var(--surface-subtle); }
-.filter-row[data-preset="true"]:has(.preset-eligibility) { flex-wrap: wrap; }
-.preset-eligibility { flex: 0 0 100%; min-width: 0; margin: 8px 0 0; padding: 8px 0; border: 0; }
-.preset-eligibility legend { color: var(--secondary); font-size: 12px; }
-.preset-eligibility > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 36px; font-size: 12px; }
-.preset-eligibility label { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.preset-eligibility input[type="number"] { width: 80px; min-width: 0; padding: 4px 6px; }
+.filter-row[data-preset="true"]:has(.preset-eligibility-card) { flex-wrap: wrap; }
+.preset-eligibility-card { flex: 0 0 100%; min-width: 0; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle); display: flex; flex-direction: column; gap: 8px; }
+.preset-eligibility-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.preset-eligibility-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.preset-eligibility-badge { font-size: 9.5px; font-weight: 600; padding: 1.5px 6px; border-radius: 4px; background: var(--line); color: var(--secondary); letter-spacing: 0.04em; }
+.preset-eligibility-list { display: flex; flex-direction: column; gap: 6px; }
+.preset-eligibility-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 6px; border-radius: 6px; transition: opacity .15s ease, background-color .15s ease; }
+.preset-eligibility-row.is-disabled { opacity: 0.55; }
+.preset-eligibility-toggle { display: inline-flex; align-items: center; gap: 8px; min-width: 0; cursor: pointer; user-select: none; }
+.preset-eligibility-name { font-size: 12px; color: var(--text); font-weight: 500; }
+.preset-eligibility-inputs { display: inline-flex; align-items: center; gap: 6px; }
+.preset-eligibility-op { font-size: 12px; font-weight: 600; color: var(--muted); }
+.preset-eligibility-input-wrap { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); transition: border-color .14s ease, box-shadow .14s ease; }
+.preset-eligibility-input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.preset-eligibility-input { width: 54px; height: 100%; border: 0; outline: 0; background: transparent; padding: 0; font-size: 11.5px; font-weight: 550; font-family: var(--font-mono); color: var(--text); text-align: right; }
+.preset-eligibility-input:disabled { cursor: not-allowed; color: var(--muted); }
+.preset-eligibility-unit { font-size: 11px; color: var(--muted); white-space: nowrap; user-select: none; }
 .parameter-control { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 100%; }
 .parameter-label { font-size: 11.5px; color: var(--secondary); }
 .parameter-value { display: flex; align-items: center; gap: 6px; }

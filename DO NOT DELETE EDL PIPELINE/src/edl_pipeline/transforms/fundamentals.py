@@ -292,6 +292,8 @@ def technical_sentiment(advanced_tech):
     for item in advanced_tech.get("TechnicalIndicators", []):
         name = item.get("Indicator", "")
         action = item.get("Action", "")
+        if not action:
+            continue
         if "RSI" in name:
             sentiment_summary.append(f"RSI: {action}")
         elif "MACD" in name:

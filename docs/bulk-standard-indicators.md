@@ -33,6 +33,8 @@ amounts are converted to crore once; non-INR sections remain unavailable.
 The two field registries in the fetcher enumerate the exact wire/output mappings.
 TradingView `relative_volume_10d_calc` is retained as `market.rvol10` without unit
 conversion. It is distinct from Nexus's existing preceding-20-session RVOL.
+Performance fields cover 5D, 1W, 1M, 3M, 6M, 1Y, YTD, 3Y, 5Y, 10Y and all time.
+Percentage values are retained as returned, including negatives and nulls.
 
 Expanded market/financial data is retained as `tradingview_snapshot` in the
 canonical backend stock artifact, with its own source and candle/fetch dates.

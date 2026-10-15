@@ -300,7 +300,16 @@ comparable warm run to establish steady-state savings.
 
 This audit compares the merged code and actual Actions logs rather than treating
 all R2-labelled PRs as upload speed improvements. The PR is based directly on
-`main` at `f9c78b29`; chart UI work and other open PRs are excluded.
+`main` at `f9c78b29`; chart UI work and other open PRs are excluded from the implementation.
+
+The first pass covered ten selected PRs; that was not an exhaustive inventory.
+The expanded pass screened all **81 earlier PRs** available before #84, from #1
+through #83 (there are no #15/#16 entries), including each PR's changed files and
+commit list, 704 review records and 1,180 inline review comments. File/keyword
+screening was followed by reading relevant findings, tracing their fix commits
+and checking their presence in current main code. Review records/comments are
+not counts of unique bugs or auto-fixes. Full main history was also checked so
+reverted intermediate changes were not hidden by final net PR diffs.
 
 | Earlier change | What it solved | Decision |
 | --- | --- | --- |
@@ -311,6 +320,33 @@ all R2-labelled PRs as upload speed improvements. The PR is based directly on
 | [#69](https://github.com/Anny26022/nexus-scanner/pull/69), [#74](https://github.com/Anny26022/nexus-scanner/pull/74) | Reusable historical candle chunks, weekday/weekly backup policy, bounded stalled commands | Keep. #69 initially landed on the performance branch; #74 explicitly ported it to main. The initial migration costs more than later warm runs. |
 | [#78](https://github.com/Anny26022/nexus-scanner/pull/78) | Live `ltp` stopped changing historical filing hashes; updated EOD2 checkouts were saved | Keep. The first publication intentionally replaces historical objects once. Its final merged scope explicitly deferred traversal tuning. |
 | `163cfb09` then `10cbb888` in #78 | Added `--no-traverse`, then reverted it before merge | The linked job never ran that traversal optimization. Reintroduce it with a cold/bulk guard, actual-rclone tests and reproducible request measurements. |
+
+Additional earlier work identified by the expanded review:
+
+| Earlier PRs | Relevant fixes or improvements | Current assessment |
+| --- | --- | --- |
+| [#3](https://github.com/Anny26022/nexus-scanner/pull/3), [#6](https://github.com/Anny26022/nexus-scanner/pull/6) | Validated staged publication/rollback; stopped committing oversized filing archives | Safety/history changes, not repeated R2 discovery fixes. |
+| [#28](https://github.com/Anny26022/nexus-scanner/pull/28) | Review fix `82eddf9c` excluded PDF retry `attemptedAt` from old chart events | The helper `_filing_events` remains, but its only repository callers are tests. Today's producer uses `build_announcements`; this historical fix must not be credited as optimizing the current upload loop or every modern evidence object. Removing the helper would not speed the job. |
+| [#40](https://github.com/Anny26022/nexus-scanner/pull/40), [#45](https://github.com/Anny26022/nexus-scanner/pull/45) | Bounded compression/serialization memory and logs; changed fetch/build scheduling | Upstream runtime and memory improvements, not R2 request optimizations. Their motivating runs did not establish a live R2 speedup. |
+| [#41](https://github.com/Anny26022/nexus-scanner/pull/41), [#46](https://github.com/Anny26022/nexus-scanner/pull/46) | Optional classification-cache write failures warn; empty inputs preserve prior caches; normalized company checkpoints and transient-metadata exclusions | Still active. These reduce repeated classification, but do not eliminate object listing/copy/download requests. |
+| [#47](https://github.com/Anny26022/nexus-scanner/pull/47), [#55](https://github.com/Anny26022/nexus-scanner/pull/55) | Guarded Actions-cache cleanup, per-delete failure handling, validated fetch/build cache phases | These manage GitHub Actions caches, not R2 bucket objects. Preserve recovery/concurrency guards. |
+| [#44](https://github.com/Anny26022/nexus-scanner/pull/44), [#48](https://github.com/Anny26022/nexus-scanner/pull/48) | Removed deployment-suppressing commit markers; early quote rejection and nonblocking optional diagnostics | Prevent skipped deployment or wasted work on rejected inputs. They do not speed successful R2 publication. |
+| [#50](https://github.com/Anny26022/nexus-scanner/pull/50) | Prepared archive hash checks; review fixes consumed both archive failures, wrote archive indexes atomically and canceled queued charts on announcement failure | Directly relevant earlier publication work omitted from the first pass. `de7d959d` and `49963db1` are on main; current code retains these checks and has regression coverage. |
+| [#51](https://github.com/Anny26022/nexus-scanner/pull/51), [#52](https://github.com/Anny26022/nexus-scanner/pull/52) | Ordered row/chart work, better worker failures, reuse of finalized classified gzip; corrected benchmark scope/baselines | Retain. A prior benchmark accidentally exercised scanner-only output; its review correction matters when assessing historical performance claims. These do not change R2 transfer semantics. |
+| [#54](https://github.com/Anny26022/nexus-scanner/pull/54) | Packaged filing/archive helpers and installed-resource checks | Required packaging/reliability work, not upload latency tuning. |
+
+Two additional PRs have net changes in `chart_publication.py` but are still open:
+[#20](https://github.com/Anny26022/nexus-scanner/pull/20) adds private scanner-pack
+storage, and [#70](https://github.com/Anny26022/nexus-scanner/pull/70) adds financial
+objects. Their implementation commits `c610b5b2` and `4bdabd83` are not ancestors
+of main and cannot explain the linked job. Likewise, #69's original commits are
+not on main; the reviewed implementation reached main through #74's `f047a1a3`.
+
+The expanded review changes the coverage statement, not the transport patch.
+It does not support deleting existing validation/cache/rollback code as a speed
+fix. Targeted reruns passed the earlier review-feedback, filing-history,
+chart/news publication, dual-archive-failure, cache-phase and cache-retention
+regressions. No additional runtime code changes were made for this audit.
 
 No obsolete R2 workaround was found that could simply be deleted to fix the
 slow run. Legacy publication/archival paths remain supported. Removing them,

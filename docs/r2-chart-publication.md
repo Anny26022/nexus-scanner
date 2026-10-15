@@ -80,6 +80,11 @@ objects and legacy releases. The first chunked publication uploads a new baselin
 R2 logs show new-object count/bytes and 30-second transfer/check summaries
 (throughput, progress and errors), followed by per-command elapsed times. Retry
 failures remain visible in rclone logs; full download verification stays enabled.
+Object uploads and checks use 32 workers. When new objects number at most 10%
+of the existing remote inventory, copy and check use `--no-traverse` to look up
+the selected names instead of listing the entire prefix twice more. Cold and
+bulk uploads retain normal traversal. The initial size comparison, immutable
+copy, metadata, download verification and release ordering remain unchanged.
 Filing rebuild reasons partition into cold caches, invalidated rules, changed
 source histories and incompatible/unreadable cache layouts. Legacy upgrades
 count only successful checkpoint writes and do not require re-normalization.

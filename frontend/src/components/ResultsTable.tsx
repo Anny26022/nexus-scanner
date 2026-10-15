@@ -13,6 +13,7 @@ import { useTableWindow } from '../hooks/useTableWindow';
 import { useColumnWindow } from '../hooks/useColumnWindow';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { tableLayout } from '../utils/tableLayout';
+import { tradingViewMetrics } from '../data/tradingViewMetrics';
 
 interface ResultsTableProps {
   loadExportRows?:()=>Promise<ScreenerRunResponse['rows']>;
@@ -113,6 +114,9 @@ const columns: ResultColumn[] = [
   valueColumn('isAsm', 'ASM', 'Other', 'boolean'), valueColumn('asmStage', 'ASM stage', 'Other'),
   valueColumn('isGsm', 'GSM', 'Other', 'boolean'), valueColumn('gsmStage', 'GSM stage', 'Other'),
   valueColumn('surveillanceAvailable', 'Surveillance data available', 'Other', 'boolean'),
+  ...tradingViewMetrics.map((metric):ResultColumn => ({id:`tv.${metric.id}`, label:`TV ${metric.label}`,
+    group:metric.category === 'fundamentals' ? 'Fundamental' : 'Technical',
+    getValue:row => row.tradingview?.values[metric.id]})),
 ];
 const DEFAULT_COLUMNS = ['company','sector','close','changePct','rvol','marketCapCrore','rsRsi','deliveryPct'];
 const COLUMN_GROUPS: ColumnGroup[] = ['Overview','Technical','Fundamental','Other'];
@@ -146,7 +150,9 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const usingCustomColumns = selectedColumnIds.length !== DEFAULT_COLUMNS.length || DEFAULT_COLUMNS.some(id => !selectedColumnIds.includes(id));
   const layout = tableLayout(columns.filter(column => column.id === 'company' || selectedColumnIds.includes(column.id)), 'screener', phone, usingCustomColumns);
   const visibleColumns = layout.columns;
-  const customizableColumns = columns.filter(column => column.id !== 'company');
+  const hasTradingView = data?.rows.some(row => row.tradingview);
+  const customizableColumns = columns.filter(column => column.id !== 'company'
+    && (!column.id.startsWith('tv.') || hasTradingView || selectedColumnIds.includes(column.id)));
   const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerColumns = columnSearch.trim() ? matchingColumns : customizableColumns.filter(column => column.group === columnGroup);
   const scrollRef = useRef<HTMLDivElement>(null);

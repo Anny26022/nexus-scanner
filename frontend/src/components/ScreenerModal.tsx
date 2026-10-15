@@ -13,6 +13,7 @@ import { availableFilterParameters, isAvailableCondition } from '../utils/filter
 import { comparisonLabel, filterLogicHint, parameterPresentation, RANGE_FILTERS } from '../utils/filterPresentation';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
+import {isTradingViewCondition, tradingViewMetrics} from '../data/tradingViewMetrics';
 import type { FilterChoices } from '../api/snapshotEngine';
 import { SNAPSHOT_MA_PERIODS } from '../api/snapshotScreen';
 
@@ -203,7 +204,7 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
   }
 
   return (
-    <div key={p.id} title={p.description ?? p.label} className="parameter-control">
+    <div key={p.id} title={p.type === 'select' ? p.options?.find(option => String(option.value) === String(val))?.label ?? p.label : p.description ?? p.label} className="parameter-control">
       {visibleLabel && <span className="parameter-label">{visibleLabel}</span>}
       <div className="parameter-value">{visiblePrefix && <span className="parameter-sign" aria-hidden="true">{visiblePrefix}</span>}{control}
         {visibleUnit && <span className="parameter-unit">{readableUnit(visibleUnit)}</span>}
@@ -217,8 +218,14 @@ const FilterRule = memo(function FilterRule({def, parameters, updateParam}: {
 }) {
   const fixed = technicalConfigurations.find(config => config.id === def.id)?.fixed ?? {};
   if (def.parameters.every(parameter => Object.hasOwn(fixed, parameter.id))) return null;
-  const field = (p: ParameterSpec, display: Pick<FilterParameterProps, 'label' | 'prefix' | 'unit'> = {}) =>
-    Object.hasOwn(fixed, p.id) ? null : <FilterParameter key={p.id} defId={def.id} parameters={parameters} p={p} val={parameters[p.id]} updateParam={updateParam} {...display} />;
+  const field = (p: ParameterSpec, display: Pick<FilterParameterProps, 'label' | 'prefix' | 'unit'> = {}) => {
+    if (Object.hasOwn(fixed, p.id)) return null;
+    const savedMetric = isTradingViewCondition(def.id) && p.id === 'metric'
+      ? tradingViewMetrics.find(metric => metric.id === parameters.metric) : undefined;
+    const parameter = savedMetric && !p.options?.some(option => option.value === savedMetric.id)
+      ? {...p, options:[...(p.options ?? []), {value:savedMetric.id,label:savedMetric.label}]} : p;
+    return <FilterParameter key={p.id} defId={def.id} parameters={parameters} p={parameter} val={parameters[p.id]} updateParam={updateParam} {...display} />;
+  };
   const byId = (id: string, display: Pick<FilterParameterProps, 'label' | 'prefix' | 'unit'> = {}) => {
     const p = def.parameters.find(p => p.id === id);
     return p ? field(p, display) : null;
@@ -374,6 +381,11 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
   const customCatalog = useMemo(() => FILTER_CONDITION_CATALOG.map(def => {
+    if (isTradingViewCondition(def.id)) return {...def, parameters:def.parameters.map(parameter => {
+      if (parameter.id !== 'metric') return parameter;
+      const options = parameter.options?.filter(option => choices?.TRADINGVIEW_METRIC?.includes(option.value)) ?? [];
+      return {...parameter, options, defaultValue:options[0]?.value ?? parameter.defaultValue};
+    })};
     const values = def.id === 'MA_STACK' ? SNAPSHOT_MA_PERIODS.map(String) : choices?.[def.id as keyof FilterChoices];
     if (def.id !== 'MA_STACK' && !['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(def.id)) return def;
     return {...def, parameters:def.parameters.map(parameter => parameter.type === 'string'
@@ -442,10 +454,12 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const catalogToUse = activeTab === 'custom' ? customCatalog : PRESET_CATALOG;
 
   const filtered = catalogToUse.filter((c) => {
+    if (isTradingViewCondition(c.id) && !c.parameters.find(p => p.id === 'metric')?.options?.length
+        && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
     // ROE is editable through Fundamental Metric; keep saved legacy rules visible.
     if (c.id === 'fund_roe' && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
     return (activeTab === 'presets' || category === 'all' || c.category === category)
-      && (!search.trim() || `${c.label} ${c.description}`.toLowerCase().includes(search.trim().toLowerCase()));
+      && (!search.trim() || `${c.label} ${c.description} ${c.parameters.flatMap(p => p.options?.map(o => o.label) ?? []).join(' ')}`.toLowerCase().includes(search.trim().toLowerCase()));
   });
 
   const handleReset = () => setLocalMap({});
@@ -480,7 +494,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         {filtered.map(def => {
           const instances = Object.entries(localMap).filter(([, condition]) => condition.conditionId === def.id);
           const repeatable = activeTab === 'custom' && (def.category === 'fundamentals' && def.parameters.length > 0
-            || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id));
+            || isTradingViewCondition(def.id) || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id));
           return <div key={def.id} className="filter-family">
             {(instances.length ? instances : [[def.id, undefined] as const]).map(([key, condition]) =>
               <FilterRow key={key} ruleKey={key} def={def} active={condition} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}

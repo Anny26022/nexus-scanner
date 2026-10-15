@@ -15,6 +15,41 @@ from edl_pipeline.scanner.calculation_cache import memoized
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def test_daily_publication_carries_aligned_tradingview_fields_through_both_wire_formats(self):
+        from test_packed_snapshot import decode_packed_snapshot
+        with tempfile.TemporaryDirectory() as folder, patch('publish_snapshot.list_presets', return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl'; root.mkdir(); output=Path(folder)/'public'; self.fixture(root)
+            source=root/'all_stocks_fundamental_analysis.json.gz'
+            stocks=json.loads(gzip.decompress(source.read_bytes()))
+            stocks[0]['tradingview_snapshot'] = {'source':'https://scanner.tradingview.com/india/scan',
+                'as_of_date':'2026-09-30', 'fetched_at':'2026-09-30T12:00:00Z',
+                'update_mode':'delayed_streaming_900','currency':'INR','financial_currency':'INR',
+                'market':{'rvol10':2.5,'turnover30_crore':5,'performance_1m_pct':0},
+                'financials':{'roe_fy_pct':17.5},'technicals':{'ema10':99}}
+            source.write_bytes(gzip.compress(json.dumps(stocks).encode()))
+            manifest=publish(root,output)
+            path=output/'revisions'/manifest['revision']
+            payload=json.loads((path/'stocks.json').read_text())
+            self.assertEqual(payload['tradingViewMetricsVersion'],1)
+            values=payload['stocks'][0]['tradingview']['values']
+            self.assertEqual(values['market.rvol10'],2.5)
+            self.assertEqual(values['market.turnover30_crore'],5)
+            self.assertEqual(values['market.performance_1m_pct'],0)
+            self.assertEqual(values['financials.roe_fy_pct'],17.5)
+            self.assertEqual(values['technicals.ema10'],99)
+            self.assertIsNone(values['financials.pe_ttm'])
+            with gzip.open(path/'stocks.packed.json.gz','rt') as handle:
+                self.assertEqual(decode_packed_snapshot(json.load(handle)),payload)
+
+    def test_tradingview_publication_never_relabels_stale_dates_or_foreign_amounts(self):
+        from publish_snapshot import tradingview_row
+        source={'source':'https://scanner.tradingview.com/india/scan','as_of_date':'2026-09-29',
+                'currency':'INR','financial_currency':'USD','financials':{'revenue_ttm_crore':100}}
+        self.assertIsNone(tradingview_row({'tradingview_snapshot':source},'2026-09-30'))
+        source['as_of_date']='2026-09-30'
+        result=tradingview_row({'tradingview_snapshot':source},'2026-09-30')
+        self.assertIsNone(result['values']['financials.revenue_ttm_crore'])
+
     def test_delivery_window_is_derived_from_nested_and_legacy_rule_inputs(self):
         expressions = [bridge.group('AND',
             bridge.leaf('DELIVERY_PCT_SPIKE', withinDays=3, minDeliverablePct=60),

@@ -25,6 +25,21 @@ from theme_classification import (classify, consolidated_classification, SOURCE_
 from pipeline_utils import resource_path
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
+TRADINGVIEW_FIELDS_PATH = resource_path('tradingview_fields.json')
+TRADINGVIEW_FIELDS = json.loads(TRADINGVIEW_FIELDS_PATH.read_text())
+
+
+def tradingview_row(stock, session):
+    source = stock.get('tradingview_snapshot')
+    if not isinstance(source, dict) or source.get('as_of_date') != session or source.get('source') != 'https://scanner.tradingview.com/india/scan':
+        return None
+    values = {}
+    for field in TRADINGVIEW_FIELDS:
+        currency = source.get('financial_currency' if field['section'] == 'financials' else 'currency')
+        section = source.get(field['section']) or {}
+        values[f"{field['section']}.{field['key']}"] = finite_number(section.get(field['key'])) if currency == 'INR' else None
+    return {'source':source['source'], 'asOfDate':source['as_of_date'],
+            'fetchedAt':source.get('fetched_at'), 'updateMode':source.get('update_mode'), 'values':values}
 
 
 def write_json(path, payload):
@@ -106,6 +121,9 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         for period in (20,50,100):
             metrics[f'turnover{period}']=float(turnover.tail(period).mean()/1e7) if len(frame)>=period else None
     row['metrics']=metrics
+    tradingview = tradingview_row(stock, session)
+    if tradingview is not None:
+        row['tradingview'] = tradingview
     row['historyMetadata']=stock.get('history_metadata')
     row['financialMetadata']=stock.get('financial_metadata')
     row['dividendExDate']=stock.get('dividend_ex_date')
@@ -255,6 +273,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH,Path(__file__).with_name('theme_classification.py'),THEME_SOURCE_PATH,THEME_WEB_OVERRIDES_PATH,Path(__file__).parent/'src/data/presetEligibility.json']
     code_files.append(resource_path('taxonomy_overrides.json'))
     code_files.append(resource_path('stockscans_classification.json'))
+    code_files.append(TRADINGVIEW_FIELDS_PATH)
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
@@ -294,6 +313,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
     started = elapsed('revision hashing and backend freezing', started)
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'technicalMetricsVersion':1,'referenceCounts':{'rvol15Sma50':default_count}}
+    payload['tradingViewMetricsVersion'] = 1
     payload['presetRuleMatchesVersion'] = 1
     taxonomy = classify(rows, session)
     taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()

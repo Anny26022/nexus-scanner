@@ -1,9 +1,10 @@
 import { unpackSnapshot } from './packedSnapshot';
 import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
+import {tradingViewMetrics} from '../data/tradingViewMetrics';
 
 export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
-export type FilterChoices = Record<'SECTOR' | 'INDUSTRY' | 'SERIES' | 'PRICE_BAND' | 'INDEX_MEMBERSHIP', string[]>;
+export type FilterChoices = Record<'SECTOR' | 'INDUSTRY' | 'SERIES' | 'PRICE_BAND' | 'INDEX_MEMBERSHIP', string[]> & {TRADINGVIEW_METRIC?:string[]};
 export type SnapshotTask =
   | { type:'warm'; source:SnapshotSource }
   | { type:'filterChoices'; source:SnapshotSource }
@@ -67,6 +68,11 @@ export function createSnapshotEngine(loader = readSnapshot) {
         }
         return [id, [...values.values()].sort((a,b) => a.localeCompare(b))];
       })) as FilterChoices;
+      if (data.tradingViewMetricsVersion === 1) {
+        result.TRADINGVIEW_METRIC = tradingViewMetrics.filter(metric => data.stocks.some(stock =>
+          stock.tradingview?.asOfDate === data.asOfDate && typeof stock.tradingview.values[metric.id] === 'number'
+          && Number.isFinite(stock.tradingview.values[metric.id]))).map(metric => metric.id);
+      }
       return {type:'filterChoices', result};
     }
     if (task.type === 'screen') return {type:'screen',result:screenSnapshot(data,task.request,task.allRows),revision:data.revision,sessionDate:data.asOfDate};

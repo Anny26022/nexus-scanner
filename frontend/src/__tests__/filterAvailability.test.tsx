@@ -9,7 +9,7 @@ import { isAvailableCondition, isAvailableFilter } from '../utils/filterAvailabi
 afterEach(cleanup);
 
 it('keeps published filters and presets available but disables backend-only defaults', () => {
-  expect(NEXUS_CONDITION_CATALOG.filter(isAvailableFilter)).toHaveLength(70);
+  expect(NEXUS_CONDITION_CATALOG.filter(isAvailableFilter)).toHaveLength(74);
   expect(PRESET_CATALOG).toHaveLength(45);
   expect(PRESET_CATALOG.every(isAvailableFilter)).toBe(true);
   expect(isAvailableCondition({instanceId:'ma', conditionId:'MA_STACK', parameters:{periods:'50,173,200',maType:'EMA',priceAbove:false}})).toBe(false);

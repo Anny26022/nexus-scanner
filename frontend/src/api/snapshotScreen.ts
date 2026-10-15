@@ -4,6 +4,7 @@ import { PRESET_ELIGIBILITY, presetEligibilityTargets, hasCustomPresetEligibilit
 import { snapshotFundamentals } from '../data/snapshotFundamentals';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
+import { isTradingViewCondition, tradingViewFilterGroups, tradingViewMetrics } from '../data/tradingViewMetrics';
 
 const presetIds = new Set(PRESET_CATALOG.map(preset => preset.id));
 
@@ -21,6 +22,7 @@ export interface SnapshotStock extends StockRow {
   freeFloatPct: number | null;
 }
 export interface Snapshot {
+  tradingViewMetricsVersion?: number;
   presetRuleMatchesVersion?: number;
   technicalMetricsVersion?: number;
   referenceCounts?: Record<string, number>;
@@ -61,6 +63,17 @@ const maPeriods = SNAPSHOT_MA_PERIODS;
 
 function leaf(c: ActiveCondition, session: string): Predicate | null {
   const p = c.parameters;
+  if (isTradingViewCondition(c.conditionId)) {
+    const metric = tradingViewMetrics.find(metric => metric.id === p.metric
+      && metric.category === tradingViewFilterGroups[c.conditionId].category);
+    if (!metric || !['ABOVE','BELOW','GREATER','LESS','EQUAL'].includes(p.comparison)
+        || String(p.value ?? '').trim() === '' || !Number.isFinite(Number(p.value))) return null;
+    return s => {
+      const value = s.tradingview?.asOfDate === session ? s.tradingview.values[metric.id] : null;
+      const result = compare(value, p.comparison, Number(p.value));
+      return result == null ? null : c.isNegated ? !result : result;
+    };
+  }
   let fn: Predicate;
   let metadata = false;
   const config = technicalConfigurations.find(config => config.id === c.conditionId);
@@ -304,6 +317,11 @@ const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
 export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allRows = false): ScreenerRunResponse | null {
   if (request.textQuery?.trim()) return null;
+  const usesTradingView = (node:ExpressionNode):boolean => node.type === 'group'
+    ? node.children.some(usesTradingView) : isTradingViewCondition(node.condition.conditionId);
+  if (data.tradingViewMetricsVersion !== 1 && usesTradingView(request.expressionTree)) {
+    throw new Error('TradingView filters need a newer dataset. Try after the next daily data refresh.');
+  }
   const customPreset = (node: ExpressionNode): boolean => node.type === 'group'
     ? node.children.some(customPreset) : presetIds.has(node.condition.conditionId) && hasCustomPresetEligibility(node.condition.parameters);
   if (data.presetRuleMatchesVersion !== 1 && customPreset(request.expressionTree)) {

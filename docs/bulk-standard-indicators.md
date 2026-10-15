@@ -30,19 +30,38 @@ extremes, calendar-period performance, ADR14/ATR14 percentages, market cap, floa
 30-day average volume and 10/30/60/90-day average traded value, plus financial ratios/statements. Annual,
 TTM and current financial fields keep their period in the mapped name. INR
 amounts are converted to crore once; non-INR sections remain unavailable.
-The two field registries in the fetcher enumerate the exact wire/output mappings.
+`tradingview_fields.json` is the shared registry for all 81 numeric fields and
+their wire keys, labels, units, categories and divisors. The five remaining
+requested fields carry identity, timing and currency metadata. The registry is
+included in pipeline wheels and immutable snapshot revision hashing.
 TradingView `relative_volume_10d_calc` is retained as `market.rvol10` without unit
 conversion. It is distinct from Nexus's existing preceding-20-session RVOL.
 Performance fields cover 5D, 1W, 1M, 3M, 6M, 1Y, YTD, 3Y, 5Y, 10Y and all time.
 Percentage values are retained as returned, including negatives and nulls.
 
-Expanded market/financial data is retained as `tradingview_snapshot` in the
+Expanded technical/market/financial data is retained as `tradingview_snapshot` in the
 canonical backend stock artifact, with its own source and candle/fetch dates.
+Daily publication carries date-aligned fields into `stocks.json`, its gzip and
+packed variants under `tradingview`, with `tradingViewMetricsVersion: 1`.
 It is not substituted into existing frontend fields or financial history:
 the observation date does not establish a financial statement's reporting date,
 and calendar-period returns are not our exact trading-session return windows.
-There is no new historical ledger or frontend payload duplication. Unsupported
+There is no new historical ledger. Unsupported
 20/50/100-day average traded-value keys are not requested.
+
+In Custom Filters, the existing Technicals, Momentum & Volume, Market & Liquidity
+and Fundamentals tabs each gain one TradingView metric selector using the shared
+editor. Select a named metric, comparison and threshold; Add rule supports
+multiple metrics combined through the existing AND/OR logic. The units and
+annual/TTM/performance window remain explicit in the metric name. Optional
+`TV ...` result columns display the same values. No browser request to TradingView
+is made: screens evaluate the immutable daily CDN snapshot.
+
+Selectors are offered only when the loaded release contains populated, aligned
+source values. Missing or stale values stay unavailable, including under negation.
+Saved TradingView filters against an older release report that a newer daily
+dataset is required. Merge/deploy and the next successful normal pipeline run
+publish the data needed to use the new filters; no manual scrape is required.
 
 The request is an explicit selection, not the entire TradingView catalogue.
 A further live audit confirmed average volume 10/60/90,

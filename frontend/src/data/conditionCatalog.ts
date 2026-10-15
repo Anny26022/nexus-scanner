@@ -3,6 +3,7 @@ import nativeConditions from './nativeConditions.json';
 import { snapshotFundamentals } from './snapshotFundamentals';
 import technicalConfigurations from './snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from './movingAverageRules';
+import { tradingViewConditionCatalog } from './tradingViewMetrics';
 
 export const RETIRED_TECHNICAL_LABELS: Record<string, string> = {
   INDICATOR_COMPARE: 'Indicator Compare / Crossover',
@@ -82,6 +83,7 @@ export const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
 ];
 
 export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
+  ...tradingViewConditionCatalog,
   {
     id:'PRICE_VS_MAS', label:'Price vs moving averages', category:'trend',
     description:'Latest close must satisfy every selected comparison (AND). These are current-price comparisons, not persistence or moving-average stack rules. Equality does not count as above or below.',

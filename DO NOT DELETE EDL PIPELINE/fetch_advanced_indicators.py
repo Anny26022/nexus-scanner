@@ -20,7 +20,7 @@ FIELD_DEFINITIONS = load_json(resource_path("tradingview_fields.json"))
 MARKET_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "market"}
 FINANCIAL_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "financials"}
 TECHNICAL_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "technicals"}
-COLUMNS = ["isin", "time", "update_mode", "currency", "fundamental_currency_code",
+COLUMNS = ["isin", "time", "update_mode", "currency", "fundamental_currency_code", "exchange", "is_primary",
            *[f["wire"] for f in FIELD_DEFINITIONS]]
 LIMIT = 10000
 
@@ -44,6 +44,9 @@ def normalize_rows(response, master, fetched_at):
         if not isinstance(row, dict) or not str(row.get("s", "")).startswith("NSE:") or not isinstance(row.get("d"), list) or len(row["d"]) != len(COLUMNS):
             raise ValueError("Unexpected TradingView scanner row/column alignment")
         values = dict(zip(COLUMNS, row["d"]))
+        if values["exchange"] != "NSE" or values["is_primary"] is not True:
+            raise ValueError("TradingView response contains a non-NSE or non-primary listing")
+        values["listingSymbol"] = row["s"]
         isin = values["isin"]
         if not isin:
             continue
@@ -60,6 +63,8 @@ def normalize_rows(response, master, fetched_at):
             continue
         result.append({
             "Symbol": item["Symbol"], "ISIN": item["ISIN"], "source": API_URL,
+            "exchange": values["exchange"], "isPrimary": values["is_primary"],
+            "primaryExchange": values["exchange"], "listingSymbol": values["listingSymbol"],
             "asOfDate": datetime.fromtimestamp(timestamp, ZoneInfo("Asia/Kolkata")).date().isoformat(),
             "fetchedAt": fetched_at, "updateMode": values["update_mode"], "close": values["close"],
             "currency": values["currency"], "financialCurrency": values["fundamental_currency_code"],

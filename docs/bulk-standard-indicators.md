@@ -13,6 +13,11 @@ values stay null. Partial responses, ambiguous ISINs and column misalignment
 fail the fetch. Coverage, unavailable symbols and elapsed time are logged.
 
 Each row retains its source, source candle date, fetch timestamp and update mode.
+It also requests `exchange` and `is_primary`, retaining the qualified TradingView
+symbol and primary exchange. A row is accepted only when its exchange is NSE
+and `is_primary` is exactly true. Therefore `primaryExchange: NSE` is derived
+from verified listing metadata, not guessed from the canonical symbol. The
+daily universe remains NSE primary stocks; it does not add BSE-only listings.
 Only the latest observed session in the matched stock universe is retained;
 the machine's calendar date is not used as the market session. A date describes
 the provider candle, not proof that the market has closed; unauthenticated
@@ -31,8 +36,8 @@ extremes, calendar-period performance, ADR14/ATR14 percentages, market cap, floa
 TTM and current financial fields keep their period in the mapped name. INR
 amounts are converted to crore once; non-INR sections remain unavailable.
 `tradingview_fields.json` is the shared registry for all 81 numeric fields and
-their wire keys, labels, units, categories and divisors. The five remaining
-requested fields carry identity, timing and currency metadata. The registry is
+their wire keys, labels, units, categories and divisors. The seven remaining
+requested fields carry identity, listing, timing and currency metadata. The registry is
 included in pipeline wheels and immutable snapshot revision hashing.
 TradingView `relative_volume_10d_calc` is retained as `market.rvol10` without unit
 conversion. It is distinct from Nexus's existing preceding-20-session RVOL.

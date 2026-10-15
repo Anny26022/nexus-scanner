@@ -476,7 +476,9 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None,
             (("source", "source"), ("as_of_date", "asOfDate"), ("fetched_at", "fetchedAt"),
              ("update_mode", "updateMode"), ("currency", "currency"),
              ("financial_currency", "financialCurrency"), ("market", "market"),
-             ("financials", "financials"), ("technicals", "technicals"))
+             ("financials", "financials"), ("technicals", "technicals"),
+             ("exchange", "exchange"), ("is_primary", "isPrimary"),
+             ("primary_exchange", "primaryExchange"), ("listing_symbol", "listingSymbol"))
         }
     manual_override = (manual_taxonomy_overrides or {}).get(symbol)
     if manual_override:

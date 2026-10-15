@@ -24,6 +24,7 @@ class SnapshotPublicationTests(unittest.TestCase):
             stocks[0]['tradingview_snapshot'] = {'source':'https://scanner.tradingview.com/india/scan',
                 'as_of_date':'2026-09-30', 'fetched_at':'2026-09-30T12:00:00Z',
                 'update_mode':'delayed_streaming_900','currency':'INR','financial_currency':'INR',
+                'exchange':'NSE','is_primary':True,'primary_exchange':'NSE','listing_symbol':'NSE:TEST',
                 'market':{'rvol10':2.5,'turnover30_crore':5,'performance_1m_pct':0},
                 'financials':{'roe_fy_pct':17.5},'technicals':{'ema10':99}}
             source.write_bytes(gzip.compress(json.dumps(stocks).encode()))
@@ -31,6 +32,10 @@ class SnapshotPublicationTests(unittest.TestCase):
             path=output/'revisions'/manifest['revision']
             payload=json.loads((path/'stocks.json').read_text())
             self.assertEqual(payload['tradingViewMetricsVersion'],1)
+            self.assertEqual(payload['stocks'][0]['tradingview']['exchange'],'NSE')
+            self.assertIs(payload['stocks'][0]['tradingview']['isPrimary'],True)
+            self.assertEqual(payload['stocks'][0]['tradingview']['primaryExchange'],'NSE')
+            self.assertEqual(payload['stocks'][0]['tradingview']['listingSymbol'],'NSE:TEST')
             values=payload['stocks'][0]['tradingview']['values']
             self.assertEqual(values['market.rvol10'],2.5)
             self.assertEqual(values['market.turnover30_crore'],5)

@@ -39,7 +39,9 @@ def tradingview_row(stock, session):
         section = source.get(field['section']) or {}
         values[f"{field['section']}.{field['key']}"] = finite_number(section.get(field['key'])) if currency == 'INR' else None
     return {'source':source['source'], 'asOfDate':source['as_of_date'],
-            'fetchedAt':source.get('fetched_at'), 'updateMode':source.get('update_mode'), 'values':values}
+            'fetchedAt':source.get('fetched_at'), 'updateMode':source.get('update_mode'),
+            'exchange':source.get('exchange'), 'isPrimary':source.get('is_primary'),
+            'primaryExchange':source.get('primary_exchange'), 'listingSymbol':source.get('listing_symbol'), 'values':values}
 
 
 def write_json(path, payload):

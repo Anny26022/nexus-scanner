@@ -9,7 +9,7 @@ import fetch_advanced_indicators as indicators
 def row(symbol="PROVIDER_ALIAS", isin="ISIN-A", timestamp=1792035900, **values):
     data = {field: 100.0 for field in indicators.COLUMNS}
     data.update(isin=isin, time=timestamp, update_mode="delayed_streaming_900",
-                currency="INR", fundamental_currency_code="INR")
+                currency="INR", fundamental_currency_code="INR", exchange="NSE", is_primary=True)
     data.update(values)
     return {"s": f"NSE:{symbol}", "d": [data[field] for field in indicators.COLUMNS]}
 
@@ -24,6 +24,10 @@ class AdvancedIndicatorTests(unittest.TestCase):
     def test_joins_by_isin_and_preserves_nulls_units_and_provenance(self):
         result = self.normalize([row(SMA200=None, EMA200=float("nan"), ATR=5.5)])[0]
         self.assertEqual(result["Symbol"], "CANONICAL-A")
+        self.assertEqual(result["exchange"], "NSE")
+        self.assertIs(result["isPrimary"], True)
+        self.assertEqual(result["primaryExchange"], "NSE")
+        self.assertEqual(result["listingSymbol"], "NSE:PROVIDER_ALIAS")
         self.assertEqual(result["asOfDate"], "2026-10-15")
         self.assertEqual(result["fetchedAt"], "observed")
         self.assertEqual(result["updateMode"], "delayed_streaming_900")
@@ -79,12 +83,16 @@ class AdvancedIndicatorTests(unittest.TestCase):
         self.assertIsNone(canonical["market_cap_crore"])
         self.assertEqual(canonical["tradingview_snapshot"]["market"]["market_cap_crore"], 123)
         self.assertEqual(canonical["tradingview_snapshot"]["as_of_date"], "2026-10-15")
+        self.assertEqual(canonical["tradingview_snapshot"]["primary_exchange"], "NSE")
+        self.assertIs(canonical["tradingview_snapshot"]["is_primary"], True)
 
     def test_rejects_partial_malformed_ambiguous_or_unmatched_responses(self):
         cases = [([], {}), ([row()], {"totalCount": 2}),
                  ([{"s": "NSE:A", "d": []}], {}),
                  ([row(), row("DUPLICATE")], {}),
                  ([row(isin="UNRELATED")], {}),
+                 ([row(exchange="BSE")], {}), ([row(is_primary=False)], {}),
+                 ([row(is_primary=None)], {}),
                  ([row(time=None)], {}), ([row(close=None)], {})]
         for rows, extra in cases:
             with self.subTest(rows=rows, extra=extra), self.assertRaises(ValueError):

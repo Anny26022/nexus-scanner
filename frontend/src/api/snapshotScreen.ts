@@ -1,5 +1,6 @@
 import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 import { PRESET_CATALOG } from '../data/presetCatalog';
+import { PRESET_ELIGIBILITY, presetEligibilityTargets, hasCustomPresetEligibility } from '../data/presetEligibility';
 import { snapshotFundamentals } from '../data/snapshotFundamentals';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
@@ -15,10 +16,12 @@ export interface SnapshotStock extends StockRow {
   metrics: Record<string, number | null>;
   fnoBanAsOfDate?: string | null;
   presetMatches: Record<string, Truth>;
+  presetRuleMatches?: Record<string, Truth>;
   roePct: number | null;
   freeFloatPct: number | null;
 }
 export interface Snapshot {
+  presetRuleMatchesVersion?: number;
   technicalMetricsVersion?: number;
   referenceCounts?: Record<string, number>;
   revision: string;
@@ -242,7 +245,18 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'misc_fno_only': metadata = true; fn = s => s.isFno == null ? null : s.isFno === (p.isFno === 'true'); break;
     default:
       if (!presetIds.has(c.conditionId)) return null;
-      fn = s => s.presetMatches[c.conditionId] ?? null;
+      const targets = presetEligibilityTargets(p);
+      if (!targets) return null;
+      fn = s => {
+        if (!hasCustomPresetEligibility(p)) return s.presetMatches[c.conditionId] ?? null;
+        const eligibility = PRESET_ELIGIBILITY.map((rule, i): Truth => {
+          if (targets[i] === null) return true;
+          const value = rule.field === 'turnover50' ? s.metrics.turnover50 : s[rule.field as keyof SnapshotStock];
+          return s.asOfDate !== session || s.metadataAsOfDate !== session ? null : compare(value, 'GREATER', targets[i]!);
+        });
+        const ruleMatch = s.historyAligned && s.asOfDate === session ? s.presetRuleMatches?.[c.conditionId] ?? null : null;
+        return combine([...eligibility, ruleMatch], true);
+      };
       return c.isNegated ? s => { const v = fn(s); return v == null ? null : !v; } : fn;
   }
   const checked: Predicate = s => metadata
@@ -290,6 +304,11 @@ const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
 export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allRows = false): ScreenerRunResponse | null {
   if (request.textQuery?.trim()) return null;
+  const customPreset = (node: ExpressionNode): boolean => node.type === 'group'
+    ? node.children.some(customPreset) : presetIds.has(node.condition.conditionId) && hasCustomPresetEligibility(node.condition.parameters);
+  if (data.presetRuleMatchesVersion !== 1 && customPreset(request.expressionTree)) {
+    throw new Error('Preset eligibility edits need a newer dataset. Restore the default thresholds or try after the next data refresh.');
+  }
   const key = JSON.stringify([request.expressionTree,request.universe,request.customSymbols,request.sort,request.announcementSymbols]);
   let cache = matchCache.get(data);
   if (!cache) { cache = new Map(); matchCache.set(data,cache); }

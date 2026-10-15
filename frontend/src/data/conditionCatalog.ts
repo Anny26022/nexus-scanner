@@ -734,3 +734,9 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
       label:parameter.options?.find(option => option.value === fixed[parameter.id])?.label ?? String(fixed[parameter.id])}]}
     : parameter)};
 });
+
+// Keep internal/saved condition definitions evaluable, but offer momentum only
+// as the complete preset (EMA persistence AND average turnover).
+export const FILTER_CONDITION_CATALOG = NEXUS_CONDITION_CATALOG.filter(
+  def => !['PERSISTENT_MOMENTUM', 'trend_persistent_momentum'].includes(def.id),
+);

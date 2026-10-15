@@ -5,9 +5,10 @@ import { Dialog } from './Dialog';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 import { X, SlidersHorizontal, Library, ChevronDown, Info } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
-import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 import { PRESET_CATALOG } from '../data/presetCatalog';
+import { PRESET_ELIGIBILITY, presetEligibilitySummary } from '../data/presetEligibility';
 import { availableFilterParameters, isAvailableCondition } from '../utils/filterAvailability';
 import { comparisonLabel, filterLogicHint, parameterPresentation, RANGE_FILTERS } from '../utils/filterPresentation';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
@@ -276,9 +277,10 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
   const supportedParameters = availableFilterParameters(def);
   const editable = supportedParameters !== null || Boolean(active && isAvailableCondition(active));
   const available = active ? isAvailableCondition(active) : editable;
-  const parameters = active?.parameters ?? supportedParameters ?? Object.fromEntries(def.parameters.map(p => [p.id, p.defaultValue]));
+  const parameters = active?.parameters ?? (def.id === 'PRICE_VS_MAS' ? {rules:[]} : supportedParameters) ?? Object.fromEntries(def.parameters.map(p => [p.id, p.defaultValue]));
   const logicHint = filterLogicHint(def.id, parameters);
-  const description = showParameters && logicHint ? `${def.description} ${logicHint}` : def.description;
+  const description = !showParameters ? `${def.description}. Eligibility: ${presetEligibilitySummary(parameters)}.`
+    : logicHint ? `${def.description} ${logicHint}` : def.description;
 
   return (
     <div className="filter-row group" data-condition-id={def.id} data-active={checked} data-unavailable={!available} data-preset={!showParameters}>
@@ -305,6 +307,48 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
         <FilterRule def={def} parameters={parameters} updateParam={updateRule} />
       )}
       {editable && showParameters && def.id === 'MA_STACK' && logicHint && <p className="filter-logic-hint">{logicHint}</p>}
+      {checked && !showParameters && <div className="preset-eligibility-card">
+        <div className="preset-eligibility-header">
+          <span className="preset-eligibility-title">Eligibility Criteria</span>
+          <span className="preset-eligibility-badge">ALL REQUIRED (AND)</span>
+        </div>
+        <div className="preset-eligibility-list">
+          {PRESET_ELIGIBILITY.map(rule => {
+            const value = parameters[rule.id] === undefined ? rule.defaultValue : parameters[rule.id];
+            const isEnabled = value !== null;
+            return (
+              <div key={rule.id} className={`preset-eligibility-row ${isEnabled ? 'is-active' : 'is-disabled'}`}>
+                <label className="preset-eligibility-toggle">
+                  <input
+                    type="checkbox"
+                    aria-label={`Use ${rule.label}`}
+                    checked={isEnabled}
+                    onChange={event => updateRule(def.id, rule.id, event.target.checked ? rule.defaultValue : null)}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
+                  />
+                  <span className="preset-eligibility-name">{rule.label}</span>
+                </label>
+                <div className="preset-eligibility-inputs">
+                  <span className="preset-eligibility-op" aria-hidden="true">&gt;</span>
+                  <div className="preset-eligibility-input-wrap">
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      aria-label={`${rule.label} minimum`}
+                      disabled={!isEnabled}
+                      value={value ?? ''}
+                      onChange={event => updateRule(def.id, rule.id, numericInputValue(event.target.value))}
+                      className="preset-eligibility-input"
+                    />
+                    <span className="preset-eligibility-unit">{rule.unit}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>}
       {descriptionOpen && <p className={showParameters ? 'filter-logic-hint' : 'preset-description'}>{description}</p>}
     </div>
   );
@@ -322,11 +366,14 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   retryChoices,
 }) => {
   const [category, setCategory] = useState<ConditionCategory | 'all'>('all');
-  const [localMap, setLocalMap] = useState<Record<string, ActiveCondition>>(activeConditionsMap);
+  const [localMap, setLocalMap] = useState<Record<string, ActiveCondition>>(() => Object.fromEntries(
+    Object.entries(activeConditionsMap).filter(([, condition]) => !(condition.conditionId === 'PRICE_VS_MAS'
+      && Array.isArray(condition.parameters.rules) && condition.parameters.rules.length === 0)),
+  ));
   const [localMode, setLocalMode] = useState<MatchMode>(matchMode);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
-  const customCatalog = useMemo(() => NEXUS_CONDITION_CATALOG.map(def => {
+  const customCatalog = useMemo(() => FILTER_CONDITION_CATALOG.map(def => {
     const values = def.id === 'MA_STACK' ? SNAPSHOT_MA_PERIODS.map(String) : choices?.[def.id as keyof FilterChoices];
     if (def.id !== 'MA_STACK' && !['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(def.id)) return def;
     return {...def, parameters:def.parameters.map(parameter => parameter.type === 'string'
@@ -353,6 +400,11 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     setLocalMap((prev) => {
       const existing = prev[condId];
       const definitionId = existing?.conditionId ?? condId;
+      if (definitionId === 'PRICE_VS_MAS' && paramId === 'rules' && Array.isArray(value) && value.length === 0) {
+        const next = {...prev};
+        delete next[condId];
+        return next;
+      }
       const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === definitionId);
       if (!existing && def) {
         const params = availableFilterParameters(def);

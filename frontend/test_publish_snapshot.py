@@ -100,6 +100,23 @@ class SnapshotPublicationTests(unittest.TestCase):
                         for path in output.rglob('*') if path.is_file()}
             self.assertEqual(files(cached_output), files(baseline_output))
 
+    def test_publishes_rule_only_signal_even_when_eligibility_fails(self):
+        with tempfile.TemporaryDirectory() as folder, patch('publish_snapshot.list_presets', return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl'; root.mkdir(); output=Path(folder)/'public'; self.fixture(root, cap=100)
+            path = root/'ohlcv_data/TEST.csv'
+            frame = pd.read_csv(path)
+            frame.loc[frame.index[-1], ['Open','High','Low','Close']] = [110,113,109,112]
+            frame.to_csv(path, index=False)
+            manifest = publish(root, output)
+            payload = json.loads((output/'revisions'/manifest['revision']/'stocks.json').read_text())
+            row = payload['stocks'][0]
+            self.assertTrue(row['presetRuleMatches']['lib-easy-money'])
+            self.assertFalse(row['presetMatches']['lib-easy-money'])
+            # The packed wire format retains the new results without changing schemas.
+            from test_packed_snapshot import decode_packed_snapshot
+            with gzip.open(output/'revisions'/manifest['revision']/'stocks.packed.json.gz', 'rt') as handle:
+                self.assertEqual(decode_packed_snapshot(json.load(handle)), payload)
+
     def test_publishes_ownership_values_and_preserves_old_revision(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir();output=Path(folder)/'public';self.fixture(root)
@@ -197,6 +214,9 @@ class SnapshotPublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
             first=publish(root,output)
+            payload = json.loads((output/'revisions'/first['revision']/'stocks.json').read_text())
+            self.assertEqual(payload['presetRuleMatchesVersion'], 1)
+            self.assertEqual(set(payload['stocks'][0]['presetRuleMatches']), set(payload['stocks'][0]['presetMatches']))
             self.assertEqual(first['themeClassificationUrl'], f"/data/revisions/{first['revision']}/theme-classification.json.gz")
             with gzip.open(output/'revisions'/first['revision']/'theme-classification.json.gz', 'rt') as handle:
                 taxonomy = json.load(handle)

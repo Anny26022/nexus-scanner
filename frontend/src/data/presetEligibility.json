@@ -1,0 +1,5 @@
+[
+  {"id":"minMarketCapCr","label":"Market cap","defaultValue":1000,"unit":"₹ Cr","field":"marketCapCrore","backendField":"market_cap_crore"},
+  {"id":"minPrice","label":"Close price","defaultValue":10,"unit":"₹","field":"close","backendField":"close"},
+  {"id":"minTurnoverCr","label":"50-session avg turnover","defaultValue":5,"unit":"₹ Cr","field":"turnover50","backendField":"daily_rupee_turnover_50_cr"}
+]

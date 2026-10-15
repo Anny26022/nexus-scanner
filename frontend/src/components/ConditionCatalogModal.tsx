@@ -2,7 +2,7 @@ import { conditionValidationError, isIntegerParameter, numericInputValue } from 
 import React, { useState } from 'react';
 import { X, Search, Sliders, RotateCcw, Check, Play, Info } from 'lucide-react';
 import { ConditionDef, ConditionCategory, ActiveCondition, MatchMode } from '../types/screener';
-import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 
 interface ConditionCatalogModalProps {
@@ -42,7 +42,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
 
   if (!isOpen) return null;
 
-  const filteredConditions = NEXUS_CONDITION_CATALOG.filter((cond) => {
+  const filteredConditions = FILTER_CONDITION_CATALOG.filter((cond) => {
     const matchesCategory = selectedCategory === 'all' || cond.category === selectedCategory;
     const matchesSearch =
       cond.label.toLowerCase().includes(searchQuery.toLowerCase()) ||

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { screenSnapshot, type Snapshot } from '../api/snapshotScreen';
+import { supportsSnapshotCondition } from '../api/snapshotScreen';
 import type { ScreenerRunRequest } from '../types/screener';
 
 const manifest = JSON.parse(readFileSync('public/data/current.json','utf8'));
@@ -57,6 +58,38 @@ describe('published snapshots', () => {
     for (const id of presets) {
       const result = screenSnapshot(snapshot,{...request,expressionTree:condition(id)})!;
       expect(result.matchCount).toBe(snapshot.stocks.filter(s => s.presetMatches[id] === true).length);
+    }
+  });
+  it('applies optional eligibility to rule-only matches, including removals, strict boundaries and unknowns', () => {
+    const id = 'lib-easy-money';
+    const stock = {...snapshot.stocks[0],symbol:'LOW',close:5,marketCapCrore:100,
+      metrics:{turnover50:1},historyAligned:true,asOfDate:snapshot.asOfDate,metadataAsOfDate:snapshot.asOfDate,
+      presetMatches:{[id]:false},presetRuleMatches:{[id]:true}};
+    const data: Snapshot = {...snapshot,presetRuleMatchesVersion:1,stocks:[stock]};
+    const run = (parameters = {}, input: Snapshot = data, negated = false) => {
+      const expression = condition(id, parameters);
+      return screenSnapshot(input,{...request,expressionTree:{...expression,condition:{...expression.condition,isNegated:negated}}})!;
+    };
+    expect(run().matchCount).toBe(0);
+    expect(run({minMarketCapCr:50,minPrice:0,minTurnoverCr:0}).matchedSymbols).toEqual(['LOW']);
+    expect(run({minMarketCapCr:100,minPrice:null,minTurnoverCr:null}).matchCount).toBe(0);
+    expect(run({minMarketCapCr:null,minPrice:5,minTurnoverCr:null}).matchCount).toBe(0);
+    expect(run({minMarketCapCr:null,minPrice:null,minTurnoverCr:1}).matchCount).toBe(0);
+    const removed = {minMarketCapCr:null,minPrice:null,minTurnoverCr:null};
+    expect(run(removed).matchCount).toBe(1);
+    const missing = {...data,stocks:[{...stock,metrics:{turnover50:null}}]};
+    expect(run({minMarketCapCr:null,minPrice:null}, missing).matchCount).toBe(0);
+    expect(run({minMarketCapCr:null,minPrice:null}, missing, true).matchCount).toBe(0);
+    expect(run(removed, missing).matchCount).toBe(1);
+    const noSignal = {...data,stocks:[{...stock,presetRuleMatches:{[id]:false}}]};
+    expect(run(removed, noSignal).matchCount).toBe(0);
+    expect(run(removed, noSignal, true).matchCount).toBe(1);
+    const stale = {...data,stocks:[{...stock,asOfDate:'2000-01-01'}]};
+    expect(run(removed, stale, true).matchCount).toBe(0);
+    expect(() => run(removed, {...data,presetRuleMatchesVersion:undefined})).toThrow('newer dataset');
+    expect(run({}, {...data,presetRuleMatchesVersion:undefined}).matchCount).toBe(0);
+    for (const minPrice of ['',-1,Infinity,true]) {
+      expect(supportsSnapshotCondition({instanceId:id,conditionId:id,parameters:{minPrice}})).toBe(false);
     }
   });
   it('falls back for custom history settings and preserves unknown under negation', () => {

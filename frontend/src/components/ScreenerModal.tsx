@@ -277,7 +277,7 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
   const supportedParameters = availableFilterParameters(def);
   const editable = supportedParameters !== null || Boolean(active && isAvailableCondition(active));
   const available = active ? isAvailableCondition(active) : editable;
-  const parameters = active?.parameters ?? supportedParameters ?? Object.fromEntries(def.parameters.map(p => [p.id, p.defaultValue]));
+  const parameters = active?.parameters ?? (def.id === 'PRICE_VS_MAS' ? {rules:[]} : supportedParameters) ?? Object.fromEntries(def.parameters.map(p => [p.id, p.defaultValue]));
   const logicHint = filterLogicHint(def.id, parameters);
   const description = !showParameters ? `${def.description}. Eligibility: ${presetEligibilitySummary(parameters)}.`
     : logicHint ? `${def.description} ${logicHint}` : def.description;
@@ -366,7 +366,10 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   retryChoices,
 }) => {
   const [category, setCategory] = useState<ConditionCategory | 'all'>('all');
-  const [localMap, setLocalMap] = useState<Record<string, ActiveCondition>>(activeConditionsMap);
+  const [localMap, setLocalMap] = useState<Record<string, ActiveCondition>>(() => Object.fromEntries(
+    Object.entries(activeConditionsMap).filter(([, condition]) => !(condition.conditionId === 'PRICE_VS_MAS'
+      && Array.isArray(condition.parameters.rules) && condition.parameters.rules.length === 0)),
+  ));
   const [localMode, setLocalMode] = useState<MatchMode>(matchMode);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
@@ -397,6 +400,11 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     setLocalMap((prev) => {
       const existing = prev[condId];
       const definitionId = existing?.conditionId ?? condId;
+      if (definitionId === 'PRICE_VS_MAS' && paramId === 'rules' && Array.isArray(value) && value.length === 0) {
+        const next = {...prev};
+        delete next[condId];
+        return next;
+      }
       const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === definitionId);
       if (!existing && def) {
         const params = availableFilterParameters(def);

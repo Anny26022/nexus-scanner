@@ -31,17 +31,42 @@ it('preserves unknown values under negation and rejects empty or stale selection
 it('selects several EMA comparisons in one control and saves them together', () => {
   const apply = vi.fn();
   render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={apply} />);
-  fireEvent.click(screen.getByRole('button', {name:'Moving average comparisons: 1 selected'}));
+  fireEvent.click(screen.getByRole('button', {name:'Moving average comparisons: Select options'}));
   const menu = screen.getByRole('group', {name:'Moving average comparisons'});
+  fireEvent.click(within(menu).getByRole('checkbox', {name:'Above 10 EMA'}));
   fireEvent.click(within(menu).getByRole('checkbox', {name:'Above 50 EMA'}));
   fireEvent.click(within(menu).getByRole('checkbox', {name:'Above 200 EMA'}));
   fireEvent.click(screen.getByRole('button', {name:'Apply'}));
   expect(apply.mock.calls[0][0].PRICE_VS_MAS.parameters.rules).toEqual(rules);
 });
 
-it('can remove rules and blocks an active empty selection', () => {
+it('removes the filter when its last comparison is removed', () => {
+  const apply = vi.fn();
   render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{PRICE_VS_MAS:{instanceId:'ma',conditionId:'PRICE_VS_MAS',parameters:{rules:['ABOVE_EMA_10']}}}}
-    matchMode="all" onApply={vi.fn()} />);
+    matchMode="all" onApply={apply} />);
   fireEvent.click(screen.getByRole('button', {name:'Remove Above 10 EMA'}));
-  expect(screen.getByRole('button', {name:'Apply'})).toBeDisabled();
+  expect(screen.queryByRole('button', {name:'Remove Above 10 EMA'})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  expect(apply.mock.calls[0][0]).toEqual({});
+});
+
+it('clears a previously saved empty comparison filter on apply', () => {
+  const apply = vi.fn();
+  render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{ma:{instanceId:'ma',conditionId:'PRICE_VS_MAS',parameters:{rules:[]}}}}
+    matchMode="all" onApply={apply} />);
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  expect(apply.mock.calls[0][0]).toEqual({});
+});
+
+it('shows the selected universe when no conditions remain in either match mode', () => {
+  const data = {...snapshot, stocks:[
+    {...snapshot.stocks[0],symbol:'IN',close:100,indexMemberships:['NIFTY 50']},
+    {...snapshot.stocks[0],symbol:'OUT',close:100,indexMemberships:[]},
+  ]};
+  for (const operator of ['all','any'] as const) {
+    const request = {universe:'nifty50' as const,asOfDate:snapshot.asOfDate,page:1,pageSize:15,
+      expressionTree:{type:'group' as const,operator,children:[]}};
+    expect(screenSnapshot(data,request)!.matchedSymbols).toEqual(['IN']);
+    expect(screenSnapshot(data,{...request,universe:'mainboard'})!.matchCount).toBe(2);
+  }
 });

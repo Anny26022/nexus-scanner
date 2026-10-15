@@ -27,7 +27,7 @@ silently substituted into those calculations.
 
 The same request also collects OHLC/volume, change/gap, VWAP, 52-week/all-time
 extremes, calendar-period performance, ADR14/ATR14 percentages, market cap, float,
-30-day average volume and traded value, plus financial ratios/statements. Annual,
+30-day average volume and 10/30/60/90-day average traded value, plus financial ratios/statements. Annual,
 TTM and current financial fields keep their period in the mapped name. INR
 amounts are converted to crore once; non-INR sections remain unavailable.
 The two field registries in the fetcher enumerate the exact wire/output mappings.
@@ -39,6 +39,15 @@ the observation date does not establish a financial statement's reporting date,
 and calendar-period returns are not our exact trading-session return windows.
 There is no new historical ledger or frontend payload duplication. Unsupported
 20/50/100-day average traded-value keys are not requested.
+
+The request is an explicit selection, not the entire TradingView catalogue.
+A further live audit confirmed average volume 10/60/90, relative volume 10,
+SMA/EMA30, RSI7, Stochastic and Stochastic RSI K/D, CCI20, Williams %R, Momentum,
+ROC, Awesome Oscillator, ADX +/-DI, Bollinger basis/upper/lower, quarterly
+revenue/net income, annual operating/investing/financing cash flow and equity.
+These are candidates for later mappings, not collected production fields.
+Quarterly revenue had only 1,019 populated values across 3,183 NSE stocks in
+that probe; a catalogue entry is not proof of complete coverage or formula parity.
 
 Provider-specific RSI/MACD action labels are not fabricated from numeric values.
 These legacy sentiment labels are already excluded from the canonical published

@@ -44,10 +44,15 @@ class AdvancedIndicatorTests(unittest.TestCase):
 
     def test_expanded_fields_preserve_reporting_periods_and_convert_rupees_once(self):
         result = self.normalize([row(**{"market_cap_basic": 1230000000,
-            "AvgValue.Traded_30d": 50000000, "total_revenue_ttm": 970000000,
+            "AvgValue.Traded_10d": 20000000, "AvgValue.Traded_30d": 50000000,
+            "AvgValue.Traded_60d": 70000000, "AvgValue.Traded_90d": None,
+            "total_revenue_ttm": 970000000,
             "return_on_equity_fy": 15.2, "total_assets_fy": None})])[0]
         self.assertEqual(result["market"]["market_cap_crore"], 123)
         self.assertEqual(result["market"]["turnover30_crore"], 5)
+        self.assertEqual(result["market"]["turnover10_crore"], 2)
+        self.assertEqual(result["market"]["turnover60_crore"], 7)
+        self.assertIsNone(result["market"]["turnover90_crore"])
         self.assertEqual(result["financials"]["revenue_ttm_crore"], 97)
         self.assertEqual(result["financials"]["roe_fy_pct"], 15.2)
         self.assertIsNone(result["financials"]["total_assets_fy_crore"])

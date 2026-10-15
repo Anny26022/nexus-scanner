@@ -469,6 +469,14 @@ def analyze_stock(item, tech, advanced_tech, listing_date_map, sme_map=None,
             "Pivot Point": classic_pivot(advanced_tech),
         }
     )
+    if advanced_tech.get("source") == "https://scanner.tradingview.com/india/scan":
+        # Retain comparison data with its own provenance, not canonical aliases.
+        stock_analysis["tradingview_snapshot"] = {
+            target: advanced_tech.get(source) for target, source in
+            (("source", "source"), ("as_of_date", "asOfDate"), ("fetched_at", "fetchedAt"),
+             ("update_mode", "updateMode"), ("currency", "currency"),
+             ("financial_currency", "financialCurrency"), ("market", "market"), ("financials", "financials"))
+        }
     manual_override = (manual_taxonomy_overrides or {}).get(symbol)
     if manual_override:
         stock_analysis.update(

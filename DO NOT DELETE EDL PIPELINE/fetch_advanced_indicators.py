@@ -12,17 +12,61 @@ from pipeline_utils import load_json, post_json, save_json
 INPUT_FILE = "master_isin_map.json"
 OUTPUT_FILE = "advanced_indicator_data.json"
 API_URL = "https://scanner.tradingview.com/india/scan"
-PERIODS = (5, 10, 20, 50, 100, 200)
+PERIODS = (5, 9, 10, 20, 21, 50, 100, 150, 200)
 INDICATORS = {"RSI": "RSI(14)", "ATR": "ATR(14)", "ADX": "ADX(14)",
               "MACD.macd": "MACD(12,26)", "MACD.signal": "MACD Signal(9)"}
-COLUMNS = ["isin", "time", "update_mode", "close",
+# Wire field -> (explicit output name, divisor). Reporting periods stay in names.
+MARKET_FIELDS = {
+    "open": ("open", 1), "high": ("high", 1), "low": ("low", 1),
+    "volume": ("volume", 1), "change": ("change_pct", 1), "gap": ("gap_pct", 1),
+    "Value.Traded": ("turnover_crore", 1e7),
+    "AvgValue.Traded_30d": ("turnover30_crore", 1e7),
+    "average_volume_30d_calc": ("average_volume30", 1), "VWAP": ("vwap", 1),
+    "price_52_week_high": ("high52w", 1), "price_52_week_low": ("low52w", 1),
+    "High.All": ("all_time_high", 1), "Low.All": ("all_time_low", 1),
+    "Perf.5D": ("performance_5d_pct", 1), "Perf.1M": ("performance_1m_pct", 1),
+    "Perf.3M": ("performance_3m_pct", 1), "Perf.6M": ("performance_6m_pct", 1),
+    "Perf.Y": ("performance_1y_pct", 1), "Perf.5Y": ("performance_5y_pct", 1),
+    "ADRP": ("adr14_pct", 1), "ATRP": ("atr14_pct", 1),
+    "market_cap_basic": ("market_cap_crore", 1e7),
+    "float_shares_percent_current": ("free_float_pct", 1),
+}
+FINANCIAL_FIELDS = {
+    "price_earnings_ttm": ("pe_ttm", 1), "price_book_current": ("pb_current", 1),
+    "price_earnings_growth_ttm": ("peg_ttm", 1),
+    "enterprise_value_ebitda_ttm": ("ev_ebitda_ttm", 1),
+    "earnings_per_share_diluted_ttm": ("eps_diluted_ttm", 1),
+    "dividends_yield_current": ("dividend_yield_current_pct", 1),
+    "return_on_equity_fy": ("roe_fy_pct", 1), "return_on_assets_fy": ("roa_fy_pct", 1),
+    "return_on_capital_employed_fy": ("roce_fy_pct", 1),
+    "operating_margin": ("operating_margin_ttm_pct", 1),
+    "current_ratio_fy": ("current_ratio_fy", 1), "debt_to_equity_fy": ("debt_equity_fy", 1),
+    "total_revenue_ttm": ("revenue_ttm_crore", 1e7), "net_income_ttm": ("net_income_ttm_crore", 1e7),
+    "total_revenue_yoy_growth_ttm": ("revenue_growth_ttm_pct", 1),
+    "net_income_yoy_growth_ttm": ("net_income_growth_ttm_pct", 1),
+    "earnings_per_share_diluted_yoy_growth_ttm": ("eps_diluted_growth_ttm_pct", 1),
+    "total_assets_fy": ("total_assets_fy_crore", 1e7),
+    "total_current_assets_fy": ("current_assets_fy_crore", 1e7),
+    "total_current_liabilities_fy": ("current_liabilities_fy_crore", 1e7),
+    "total_liabilities_fy": ("total_liabilities_fy_crore", 1e7),
+    "free_cash_flow_fy": ("free_cash_flow_fy_crore", 1e7),
+    "total_debt_fy": ("total_debt_fy_crore", 1e7),
+    "number_of_shareholders": ("shareholder_count", 1),
+}
+COLUMNS = ["isin", "time", "update_mode", "currency", "fundamental_currency_code", "close",
            *[f"{kind}{period}" for kind in ("SMA", "EMA") for period in PERIODS],
-           *INDICATORS]
+           *INDICATORS, *MARKET_FIELDS, *FINANCIAL_FIELDS]
 LIMIT = 10000
 
 
 def number(value):
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
+
+
+def mapped_values(values, fields, currency):
+    # Crore/price outputs are only valid for INR. Do not label other currencies INR.
+    return {name: number(values[field]) / divisor if currency == "INR" and number(values[field]) is not None else None
+            for field, (name, divisor) in fields.items()}
 
 
 def normalize_rows(response, master, fetched_at):
@@ -52,6 +96,9 @@ def normalize_rows(response, master, fetched_at):
             "Symbol": item["Symbol"], "ISIN": item["ISIN"], "source": API_URL,
             "asOfDate": datetime.fromtimestamp(timestamp, ZoneInfo("Asia/Kolkata")).date().isoformat(),
             "fetchedAt": fetched_at, "updateMode": values["update_mode"], "close": values["close"],
+            "currency": values["currency"], "financialCurrency": values["fundamental_currency_code"],
+            "market": mapped_values(values, MARKET_FIELDS, values["currency"]),
+            "financials": mapped_values(values, FINANCIAL_FIELDS, values["fundamental_currency_code"]),
             **{kind: [{"Indicator": f"{period}-{kind}", "Value": number(values[f"{kind}{period}"])}
                       for period in PERIODS] for kind in ("SMA", "EMA")},
             "TechnicalIndicators": [{"Indicator": label, "Value": number(values[field])}

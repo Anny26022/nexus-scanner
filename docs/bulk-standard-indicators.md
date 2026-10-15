@@ -6,7 +6,7 @@ the existing HTTP helper; no package, login cookie, secret or workflow change
 is required.
 
 The payload requests NSE primary stocks, excluding funds, and fetches daily
-SMA/EMA 5/10/20/50/100/200 plus RSI14, ATR14, ADX14 and MACD values. The existing
+SMA/EMA 5/9/10/20/21/50/100/150/200 plus RSI14, ATR14, ADX14 and MACD values. The existing
 `advanced_indicator_data.json` list/array contract is retained. Rows join to
 the master universe by exact ISIN; symbols are never guessed. Missing numeric
 values stay null. Partial responses, ambiguous ISINs and column misalignment
@@ -24,6 +24,21 @@ and RS still use the existing date-aligned history engine. This PR removes the
 per-security enrichment fan-out, not the historical fetch or snapshot calculation
 stage. Formula parity has not been established, so TradingView values are not
 silently substituted into those calculations.
+
+The same request also collects OHLC/volume, change/gap, VWAP, 52-week/all-time
+extremes, calendar-period performance, ADR14/ATR14 percentages, market cap, float,
+30-day average volume and traded value, plus financial ratios/statements. Annual,
+TTM and current financial fields keep their period in the mapped name. INR
+amounts are converted to crore once; non-INR sections remain unavailable.
+The two field registries in the fetcher enumerate the exact wire/output mappings.
+
+Expanded market/financial data is retained as `tradingview_snapshot` in the
+canonical backend stock artifact, with its own source and candle/fetch dates.
+It is not substituted into existing frontend fields or financial history:
+the observation date does not establish a financial statement's reporting date,
+and calendar-period returns are not our exact trading-session return windows.
+There is no new historical ledger or frontend payload duplication. Unsupported
+20/50/100-day average traded-value keys are not requested.
 
 Provider-specific RSI/MACD action labels are not fabricated from numeric values.
 These legacy sentiment labels are already excluded from the canonical published

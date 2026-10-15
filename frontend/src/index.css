@@ -142,6 +142,8 @@
 .controls-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
 .controls-heading h2 { font-size: 13px; font-weight: 650; margin: 0; }
 .controls-heading p { color: var(--muted); font-size: 11px; margin: 4px 0 0; }
+.screen-toolbar { display: flex; align-items: flex-end; gap: 10px; }
+.field-label { display: block; font-size: 10px; font-weight: 550; color: var(--secondary); margin-bottom: 4px; }
 .universe-control { width: 140px; flex-shrink: 0; }
 .universe-label-row { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; }
 .universe-label-row .field-label { margin-bottom: 0; }

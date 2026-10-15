@@ -129,6 +129,14 @@ it('persists an added fundamental result column across fresh mounts', () => {
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
 });
 
+it('clips long custom column headers within their cells while retaining the full label', () => {
+  window.localStorage.setItem('nexus-scanner.screener.columns.v1', JSON.stringify(['company', 'currentLiabilitiesLakh', 'nonCurrentLiabilitiesLakh']));
+  render(<ResultsTable {...props} data={data} />);
+  expect(screen.getByRole('columnheader', {name: 'Current liabilities (Lakh)'})).toHaveAttribute('title', 'Current liabilities (Lakh)');
+  expect(screen.getByRole('columnheader', {name: 'Non-current liabilities (Lakh)'})).toHaveAttribute('title', 'Non-current liabilities (Lakh)');
+  window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+});
+
 it('selects all available columns from the compact column chooser', () => {
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
   const view = render(<ResultsTable {...props} data={data} />);

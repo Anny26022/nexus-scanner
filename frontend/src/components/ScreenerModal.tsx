@@ -249,6 +249,12 @@ const FilterRule = memo(function FilterRule({def, parameters, updateParam}: {
     <span className="rule-word">for ≥</span>{byId('persistDays', {label:'', unit:'sessions'})}
   </div>;
 
+  if (def.id === 'AVG_TURNOVER') return <div className="filter-parameters">
+    <span className="rule-word">Avg. daily turnover</span>{byId('comparison', {label:''})}
+    {byId('valueCr', {label:'', unit:'₹ Cr'})}<span className="rule-word">over</span>
+    {byId('lookbackDays', {label:'', unit:'sessions'})}
+  </div>;
+
   if (def.id === 'trend_price_vs_ma') return <div className="filter-parameters">
     <span className="rule-word">Close</span>{byId('operator', {label:''})}{byId('maType', {label:''})}{byId('maPeriod', {label:''})}
     {parameters.operator === 'within_pct' && byId('thresholdPct', {label:'Distance ≤', prefix:''})}

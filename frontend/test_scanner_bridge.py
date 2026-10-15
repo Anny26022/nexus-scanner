@@ -310,6 +310,7 @@ class BridgeTests(unittest.TestCase):
             self.assertAlmostEqual(row["metrics"]["return5"], (history["Close"].iloc[-1] / history["Close"].iloc[-6] - 1) * 100)
             self.assertAlmostEqual(row["metrics"]["gapPct"], (history["Open"].iloc[-1] / history["Close"].iloc[-2] - 1) * 100)
             self.assertAlmostEqual(row["metrics"]["turnover20"], (history["Close"] * history["Volume"]).tail(20).mean() / 1e7)
+            self.assertAlmostEqual(row["metrics"]["turnover30"], (history["Close"] * history["Volume"]).tail(30).mean() / 1e7)
             self.assertIsNone(row["metrics"]["return252"])
             current = bridge.run({**request, "asOfDate": "2026-09-30"}, root)["rows"][0]
             for field in bridge.PUBLIC_FINANCIAL_FIELDS.values():

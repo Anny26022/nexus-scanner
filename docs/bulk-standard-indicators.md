@@ -31,6 +31,8 @@ extremes, calendar-period performance, ADR14/ATR14 percentages, market cap, floa
 TTM and current financial fields keep their period in the mapped name. INR
 amounts are converted to crore once; non-INR sections remain unavailable.
 The two field registries in the fetcher enumerate the exact wire/output mappings.
+TradingView `relative_volume_10d_calc` is retained as `market.rvol10` without unit
+conversion. It is distinct from Nexus's existing preceding-20-session RVOL.
 
 Expanded market/financial data is retained as `tradingview_snapshot` in the
 canonical backend stock artifact, with its own source and candle/fetch dates.
@@ -41,7 +43,7 @@ There is no new historical ledger or frontend payload duplication. Unsupported
 20/50/100-day average traded-value keys are not requested.
 
 The request is an explicit selection, not the entire TradingView catalogue.
-A further live audit confirmed average volume 10/60/90, relative volume 10,
+A further live audit confirmed average volume 10/60/90,
 SMA/EMA30, RSI7, Stochastic and Stochastic RSI K/D, CCI20, Williams %R, Momentum,
 ROC, Awesome Oscillator, ADX +/-DI, Bollinger basis/upper/lower, quarterly
 revenue/net income, annual operating/investing/financing cash flow and equity.

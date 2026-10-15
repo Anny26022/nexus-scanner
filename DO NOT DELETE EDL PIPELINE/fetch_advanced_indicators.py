@@ -25,6 +25,7 @@ MARKET_FIELDS = {
     "AvgValue.Traded_60d": ("turnover60_crore", 1e7),
     "AvgValue.Traded_90d": ("turnover90_crore", 1e7),
     "average_volume_30d_calc": ("average_volume30", 1), "VWAP": ("vwap", 1),
+    "relative_volume_10d_calc": ("rvol10", 1),
     "price_52_week_high": ("high52w", 1), "price_52_week_low": ("low52w", 1),
     "High.All": ("all_time_high", 1), "Low.All": ("all_time_low", 1),
     "Perf.5D": ("performance_5d_pct", 1), "Perf.1M": ("performance_1m_pct", 1),

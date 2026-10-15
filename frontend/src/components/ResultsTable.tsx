@@ -201,7 +201,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
         <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
           <caption className="sr-only">Equities matching the current screen</caption>
           <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: layout.columnWidth(column)}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
-          <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} data-column={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
+          <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} title={column.label} data-column={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
             aria-sort={column.sortField ? currentSort?.field === column.sortField ? currentSort.direction === 'asc' ? 'ascending' : 'descending' : 'none' : undefined}>
             {column.sortField ? <button type="button" disabled={busy} onClick={() => {resetScroll(); onSortChange(column.sortField!, currentSort?.field === column.sortField && currentSort?.direction === 'asc' ? 'desc' : 'asc');}}>
               {column.label}{currentSort?.field === column.sortField ? currentSort?.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} /> : <ArrowUpDown size={13} />}

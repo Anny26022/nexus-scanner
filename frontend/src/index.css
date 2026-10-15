@@ -231,8 +231,8 @@
 .table-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
 .data-table { table-layout: fixed; border-collapse: separate; border-spacing: 0; width: 100%; min-width: 1120px; text-align: left; font-size: 12px; color: var(--secondary); }
 .data-table thead { position: sticky; top: 0; z-index: 1; background: var(--surface-subtle); }
-.data-table th { height: 38px; border-block: 1px solid var(--line); padding: 0 12px; font-size: 10px; font-weight: 600; white-space: nowrap; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-.data-table th button { display: flex; align-items: center; gap: 5px; min-height: 34px; }
+.data-table th { height: 38px; overflow: hidden; border-block: 1px solid var(--line); padding: 0 12px; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .04em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.data-table th button { display: flex; max-width: 100%; min-width: 0; align-items: center; gap: 5px; overflow: hidden; min-height: 34px; text-overflow: ellipsis; white-space: nowrap; }
 .data-table th button:hover, .data-table th[aria-sort="ascending"], .data-table th[aria-sort="descending"] { color: var(--accent); }
 .data-table td { height: 46px; padding: 5px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; overflow: hidden; }
 .windowed-table tbody tr:not(.table-spacer), .windowed-table tbody tr:not(.table-spacer) > td { height: 50px; }

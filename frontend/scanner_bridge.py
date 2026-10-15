@@ -437,7 +437,7 @@ def run(request, root=ROOT, cache=None):
                     row["metrics"][f"return{period}"] = finite_number((last["Close"] / history["Close"].iloc[-1-period] - 1) * 100) if len(history) > period else None
                 row["metrics"]["gapPct"] = finite_number((last["Open"] / history["Close"].iloc[-2] - 1) * 100) if len(history) > 1 else None
                 turnover = history["Close"] * history["Volume"]
-                for period in (20, 50, 100):
+                for period in (20, 30, 50, 100):
                     row["metrics"][f"turnover{period}"] = finite_number(turnover.tail(period).mean() / 1e7) if len(history) >= period else None
             # stock_row starts from the current snapshot. Recalculate after
             # history substitution and current-only field sanitization so the

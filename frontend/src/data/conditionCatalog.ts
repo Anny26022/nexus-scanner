@@ -100,6 +100,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
       const periods = def.id === 'PRICE_CHANGE_PCT' && parameter.id === 'overDays' ? [1,5,21,63,126,252]
         : def.id === 'ATR_PCT' && parameter.id === 'period' ? [14]
           : def.id === 'ADR_PCT' && parameter.id === 'lookbackDays' ? [20]
+            : def.id === 'AVG_TURNOVER' && parameter.id === 'lookbackDays' ? [20,30,50,100]
             : ['GAP_UP','GAP_DOWN'].includes(def.id) && parameter.id === 'withinDays' ? [1] : null;
       return periods ? {...parameter, type:'select' as const, defaultValue:periods.includes(Number(parameter.defaultValue))
         ? parameter.defaultValue : periods[0], options:periods.map(value => ({value, label:String(value)}))} : parameter;

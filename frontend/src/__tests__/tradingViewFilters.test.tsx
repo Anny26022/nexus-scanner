@@ -44,12 +44,12 @@ it('rejects unknown fields and old releases instead of dropping the condition', 
   expect(supportsSnapshotCondition(condition('TV_PERFORMANCE','unknown'))).toBe(false);
   expect(() => screenSnapshot({...data,tradingViewMetricsVersion:undefined},{...request,
     expressionTree:{type:'condition',condition:condition('TV_PERFORMANCE','market.rvol10')}}))
-    .toThrow('TradingView filters need a newer dataset');
+    .toThrow('These filters need a newer dataset');
 });
 
 it('only offers metrics actually populated for the loaded release session', async () => {
   const snapshot = {...data,stocks:[{...stock,tradingview:{...data.stocks[0].tradingview!,
-    values:{'market.rvol10':0,'market.performance_1m_pct':null}}}]};
+    values:{'market.rvol10':0,'market.performance_1w_pct':null}}}]};
   const result = await createSnapshotEngine(async () => snapshot)({type:'filterChoices',source:{revision:data.revision,url:'/unused'}});
   expect(result.type).toBe('filterChoices');
   if (result.type === 'filterChoices') expect(result.result.TRADINGVIEW_METRIC).toEqual(['market.rvol10']);
@@ -59,17 +59,17 @@ it('edits multiple TradingView rules in the shared filter modal and saves their 
   const apply=vi.fn();
   render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={apply}
     choices={{SECTOR:[],INDUSTRY:[],SERIES:[],PRICE_BAND:[],INDEX_MEMBERSHIP:[],
-      TRADINGVIEW_METRIC:['market.rvol10','market.performance_1m_pct']}} />);
-  fireEvent.click(screen.getByRole('checkbox',{name:'TradingView momentum & performance:'}));
-  const family = screen.getByRole('button',{name:'Add TradingView momentum & performance rule'}).closest('.filter-family')!;
+      TRADINGVIEW_METRIC:['market.rvol10','market.performance_1w_pct']}} />);
+  fireEvent.click(screen.getByRole('checkbox',{name:'Period Returns & Momentum:'}));
+  const family = screen.getByRole('button',{name:'Add Period Returns & Momentum rule'}).closest('.filter-family')!;
   fireEvent.change(within(family as HTMLElement).getByRole('spinbutton',{name:'Value'}),{target:{value:'2'}});
-  fireEvent.click(screen.getByRole('button',{name:'Add TradingView momentum & performance rule'}));
+  fireEvent.click(screen.getByRole('button',{name:'Add Period Returns & Momentum rule'}));
   const metrics=within(family as HTMLElement).getAllByRole('combobox',{name:'Metric'});
-  fireEvent.change(metrics[1],{target:{value:'market.performance_1m_pct'}});
+  fireEvent.change(metrics[1],{target:{value:'market.performance_1w_pct'}});
   fireEvent.click(screen.getByRole('button',{name:'Apply'}));
   const saved = Object.values(apply.mock.calls[0][0]) as Array<{conditionId:string; parameters:{metric:string; value:number}}>;
   expect(saved).toHaveLength(2);
-  expect(saved.map(rule => rule.parameters.metric)).toEqual(['market.rvol10','market.performance_1m_pct']);
+  expect(saved.map(rule => rule.parameters.metric)).toEqual(['market.rvol10','market.performance_1w_pct']);
   expect(saved[0].parameters.value).toBe(2);
 });
 
@@ -78,8 +78,8 @@ it('lets the same published metric be added as a result column', () => {
   const result=screenSnapshot(data,request)!;
   render(<ResultsTable data={result} isLoading={false} isError={false} onPageChange={vi.fn()} onSortChange={vi.fn()} />);
   fireEvent.click(screen.getByRole('button',{name:'Customize columns'}));
-  fireEvent.change(screen.getByRole('searchbox',{name:'Search columns'}),{target:{value:'TV Relative volume'}});
-  fireEvent.click(screen.getByRole('checkbox',{name:'TV Relative volume (10d, ×)'}));
-  expect(screen.getByRole('columnheader',{name:'TV Relative volume (10d, ×)'})).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('searchbox',{name:'Search columns'}),{target:{value:'Relative volume'}});
+  fireEvent.click(screen.getByRole('checkbox',{name:'Relative volume (10d, ×)'}));
+  expect(screen.getByRole('columnheader',{name:'Relative volume (10d, ×)'})).toBeInTheDocument();
   localStorage.removeItem('nexus-scanner.screener.columns.v1');
 });

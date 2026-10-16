@@ -20,7 +20,7 @@ FIELD_DEFINITIONS = load_json(resource_path("tradingview_fields.json"))
 MARKET_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "market"}
 FINANCIAL_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "financials"}
 TECHNICAL_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "technicals"}
-COLUMNS = ["isin", "time", "update_mode", "currency", "fundamental_currency_code", "exchange", "is_primary",
+COLUMNS = ["isin", "time", "close", "update_mode", "currency", "fundamental_currency_code", "exchange", "is_primary",
            *[f["wire"] for f in FIELD_DEFINITIONS]]
 LIMIT = 10000
 
@@ -71,9 +71,9 @@ def normalize_rows(response, master, fetched_at):
             "market": mapped_values(values, MARKET_FIELDS, values["currency"]),
             "financials": mapped_values(values, FINANCIAL_FIELDS, values["fundamental_currency_code"]),
             "technicals": mapped_values(values, TECHNICAL_FIELDS, values["currency"]),
-            **{kind: [{"Indicator": f"{period}-{kind}", "Value": number(values[f"{kind}{period}"])}
+            **{kind: [{"Indicator": f"{period}-{kind}", "Value": number(values.get(f"{kind}{period}"))}
                       for period in PERIODS] for kind in ("SMA", "EMA")},
-            "TechnicalIndicators": [{"Indicator": label, "Value": number(values[field])}
+            "TechnicalIndicators": [{"Indicator": label, "Value": number(values.get(field))}
                                     for field, label in INDICATORS.items()],
             # Monthly TradingView pivots are not the old provider's daily pivots.
             "Pivots": [],

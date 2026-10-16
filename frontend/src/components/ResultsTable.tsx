@@ -114,7 +114,7 @@ const columns: ResultColumn[] = [
   valueColumn('isAsm', 'ASM', 'Other', 'boolean'), valueColumn('asmStage', 'ASM stage', 'Other'),
   valueColumn('isGsm', 'GSM', 'Other', 'boolean'), valueColumn('gsmStage', 'GSM stage', 'Other'),
   valueColumn('surveillanceAvailable', 'Surveillance data available', 'Other', 'boolean'),
-  ...tradingViewMetrics.map((metric):ResultColumn => ({id:`tv.${metric.id}`, label:`TV ${metric.label}`,
+  ...tradingViewMetrics.map((metric):ResultColumn => ({id:`tv.${metric.id}`, label:metric.label,
     group:metric.category === 'fundamentals' ? 'Fundamental' : 'Technical',
     getValue:row => row.tradingview?.values[metric.id]})),
 ];

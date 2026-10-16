@@ -22,7 +22,7 @@ class AdvancedIndicatorTests(unittest.TestCase):
         return indicators.normalize_rows({"totalCount": len(rows), "data": rows, **extra}, MASTER, "observed")
 
     def test_joins_by_isin_and_preserves_nulls_units_and_provenance(self):
-        result = self.normalize([row(SMA200=None, EMA200=float("nan"), ATR=5.5)])[0]
+        result = self.normalize([row(SMA100=None, EMA100=float("nan"), **{"MACD.macd": 5.5})])[0]
         self.assertEqual(result["Symbol"], "CANONICAL-A")
         self.assertEqual(result["exchange"], "NSE")
         self.assertIs(result["isPrimary"], True)
@@ -33,7 +33,7 @@ class AdvancedIndicatorTests(unittest.TestCase):
         self.assertEqual(result["updateMode"], "delayed_streaming_900")
         self.assertIsNone(result["SMA"][-1]["Value"])
         self.assertIsNone(result["EMA"][-1]["Value"])
-        self.assertEqual(result["TechnicalIndicators"][1]["Value"], 5.5)
+        self.assertEqual(result["TechnicalIndicators"][3]["Value"], 5.5)
         self.assertNotIn("Action", result["TechnicalIndicators"][0])
         self.assertEqual(result["Pivots"], [])
 
@@ -47,28 +47,24 @@ class AdvancedIndicatorTests(unittest.TestCase):
         self.assertEqual(result[0]["asOfDate"], "2026-10-09")
 
     def test_expanded_fields_preserve_reporting_periods_and_convert_rupees_once(self):
-        result = self.normalize([row(**{"market_cap_basic": 1230000000,
+        result = self.normalize([row(**{
             "AvgValue.Traded_10d": 20000000, "AvgValue.Traded_30d": 50000000,
-            "AvgValue.Traded_60d": 70000000, "AvgValue.Traded_90d": None,
             "relative_volume_10d_calc": 2.5,
             "Perf.W": -3.5, "Perf.YTD": 0, "Perf.3Y": 42,
             "Perf.10Y": None, "Perf.All": 1250,
-            "total_revenue_ttm": 970000000,
-            "return_on_equity_fy": 15.2, "total_assets_fy": None})])[0]
-        self.assertEqual(result["market"]["market_cap_crore"], 123)
+            "total_debt_fy": 970000000,
+            "total_current_assets_fy": 150000000, "total_liabilities_fy": None})])[0]
         self.assertEqual(result["market"]["turnover30_crore"], 5)
         self.assertEqual(result["market"]["turnover10_crore"], 2)
-        self.assertEqual(result["market"]["turnover60_crore"], 7)
-        self.assertIsNone(result["market"]["turnover90_crore"])
         self.assertEqual(result["market"]["rvol10"], 2.5)
         self.assertEqual(result["market"]["performance_1w_pct"], -3.5)
         self.assertEqual(result["market"]["performance_ytd_pct"], 0)
         self.assertEqual(result["market"]["performance_3y_pct"], 42)
         self.assertIsNone(result["market"]["performance_10y_pct"])
         self.assertEqual(result["market"]["performance_all_time_pct"], 1250)
-        self.assertEqual(result["financials"]["revenue_ttm_crore"], 97)
-        self.assertEqual(result["financials"]["roe_fy_pct"], 15.2)
-        self.assertIsNone(result["financials"]["total_assets_fy_crore"])
+        self.assertEqual(result["financials"]["total_debt_fy_crore"], 97)
+        self.assertEqual(result["financials"]["current_assets_fy_crore"], 15)
+        self.assertIsNone(result["financials"]["total_liabilities_fy_crore"])
 
     def test_currency_mismatch_does_not_create_inr_values(self):
         result = self.normalize([row(currency="USD", fundamental_currency_code="USD")])[0]
@@ -78,10 +74,10 @@ class AdvancedIndicatorTests(unittest.TestCase):
     def test_pipeline_retains_expanded_data_without_overwriting_canonical_values(self):
         from edl_pipeline.transforms.fundamentals import analyze_stock
         from standardize_stock_artifact import canonicalize_stock
-        enrichment = self.normalize([row(market_cap_basic=1230000000)])[0]
+        enrichment = self.normalize([row(total_debt_fy=1230000000)])[0]
         canonical = canonicalize_stock(analyze_stock({"Symbol": "CANONICAL-A"}, {}, enrichment, {}))
         self.assertIsNone(canonical["market_cap_crore"])
-        self.assertEqual(canonical["tradingview_snapshot"]["market"]["market_cap_crore"], 123)
+        self.assertEqual(canonical["tradingview_snapshot"]["financials"]["total_debt_fy_crore"], 123)
         self.assertEqual(canonical["tradingview_snapshot"]["as_of_date"], "2026-10-15")
         self.assertEqual(canonical["tradingview_snapshot"]["primary_exchange"], "NSE")
         self.assertIs(canonical["tradingview_snapshot"]["is_primary"], True)

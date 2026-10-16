@@ -320,7 +320,7 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
   const usesTradingView = (node:ExpressionNode):boolean => node.type === 'group'
     ? node.children.some(usesTradingView) : isTradingViewCondition(node.condition.conditionId);
   if (data.tradingViewMetricsVersion !== 1 && usesTradingView(request.expressionTree)) {
-    throw new Error('TradingView filters need a newer dataset. Try after the next daily data refresh.');
+    throw new Error('These filters need a newer dataset. Try after the next daily data refresh.');
   }
   const customPreset = (node: ExpressionNode): boolean => node.type === 'group'
     ? node.children.some(customPreset) : presetIds.has(node.condition.conditionId) && hasCustomPresetEligibility(node.condition.parameters);

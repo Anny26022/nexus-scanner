@@ -30,18 +30,15 @@ per-security enrichment fan-out, not the historical fetch or snapshot calculatio
 stage. Formula parity has not been established, so TradingView values are not
 silently substituted into those calculations.
 
-The same request also collects OHLC/volume, change/gap, VWAP, 52-week/all-time
-extremes, calendar-period performance, ADR14/ATR14 percentages, market cap, float,
-30-day average volume and 10/30/60/90-day average traded value, plus financial ratios/statements. Annual,
-TTM and current financial fields keep their period in the mapped name. INR
-amounts are converted to crore once; non-INR sections remain unavailable.
-`tradingview_fields.json` is the shared registry for all 81 numeric fields and
-their wire keys, labels, units, categories and divisors. The seven remaining
-requested fields carry identity, listing, timing and currency metadata. The registry is
+The bulk request focuses on curated indicators and periods that Nexus snapshot lacks,
+avoiding duplication of canonical OHLCV, moving averages, and standard valuation ratios.
+`tradingview_fields.json` is the shared registry for the 22 curated numeric fields and
+their wire keys, labels, units, categories and divisors. The eight remaining
+requested fields carry identity, listing, timing, candle validation (`close`) and currency metadata. The registry is
 included in pipeline wheels and immutable snapshot revision hashing.
 TradingView `relative_volume_10d_calc` is retained as `market.rvol10` without unit
 conversion. It is distinct from Nexus's existing preceding-20-session RVOL.
-Performance fields cover 5D, 1W, 1M, 3M, 6M, 1Y, YTD, 3Y, 5Y, 10Y and all time.
+Performance fields cover 1W, YTD, 3Y, 10Y and all time.
 Percentage values are retained as returned, including negatives and nulls.
 
 Expanded technical/market/financial data is retained as `tradingview_snapshot` in the

@@ -262,41 +262,25 @@ class R2Store:
         self.run('copyto', str(source / 'index.json'), self.remote(key + '/index.json'), '--immutable', '--checksum')
 
     def upload_objects(self, source):
-        """Transfer and read back only new content-addressed files."""
+        """Verify content-addressed files without listing the growing R2 bucket."""
         remote = self.remote('objects')
-        started = time.perf_counter()
-        listing = subprocess.run(['rclone', 'lsf', remote, '--files-only', '--format', 'ps',
-                                  '--separator', '\t', '--s3-no-check-bucket',
-                                  '--contimeout', '15s', '--timeout', '1m', '--low-level-retries', '5'],
-                                 env=self.env, check=True, capture_output=True, text=True, timeout=300)
-        print(f'R2 object listing elapsed: {time.perf_counter() - started:.2f}s', flush=True)
-        existing = {}
-        for line in listing.stdout.splitlines():
-            name, size = line.rsplit('\t', 1)
-            existing[name] = int(size)
-        new = []
-        for file in source.glob('*.json.gz'):
-            if file.name in existing:
-                if existing[file.name] != file.stat().st_size:
-                    raise RuntimeError('Immutable remote object has a different size: ' + file.name)
-            else:
-                new.append(file.name)
-        total_bytes = sum((source / name).stat().st_size for name in new)
-        print(f'R2 objects: {len(new)} new ({total_bytes:,} bytes); {len(existing)} already stored', flush=True)
-        if not new:
+        files = sorted(path.name for path in source.glob('*.json.gz'))
+        if not files:
             return
-        # Avoid two more full-prefix listings on sparse daily updates. Keep
-        # listings for cold/bulk uploads where per-object lookups cost more.
-        discovery = ('--no-traverse',) if len(new) * 10 <= len(existing) else ()
-        print(f'R2 object discovery: {"targeted" if discovery else "listing"}; workers: 32', flush=True)
+        # R2 already holds years of immutable objects. A full lsf of that prefix
+        # exceeded the five-minute timeout before the daily upload even began.
+        # --files-from with --no-traverse addresses only these exact paths for
+        # both commands. Immutable copy rejects conflicting remote bytes; the
+        # download check verifies every object before release references change.
+        print(f'R2 verifying {len(files)} current objects without a bucket listing', flush=True)
         with tempfile.TemporaryDirectory() as folder:
-            names = Path(folder) / 'new.txt'
-            names.write_text('\n'.join(sorted(new)) + '\n')
-            self.run('copy', str(source), remote, '--files-from', str(names), *discovery,
+            names = Path(folder) / 'objects.txt'
+            names.write_text('\n'.join(files) + '\n')
+            self.run('copy', str(source), remote, '--files-from', str(names), '--no-traverse',
                      '--transfers', '32', '--checkers', '32',
                      '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
                      '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
-            self.run('check', str(source), remote, '--files-from', str(names), *discovery,
+            self.run('check', str(source), remote, '--files-from', str(names), '--no-traverse',
                      '--one-way', '--download', '--checkers', '32')
 
     def archive(self, previous, month):

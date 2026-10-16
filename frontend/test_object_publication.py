@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent / 'DO NOT DELETE EDL PIPELINE'
 sys.path.insert(0, str(ROOT))
@@ -194,14 +194,16 @@ class ObjectPublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'content does not match'):
                 prepare_archives(charts)
 
-    def test_r2_transfers_and_verifies_only_missing_objects(self):
+    def test_r2_targets_source_objects_without_listing_the_bucket(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             old = put_object(root, {'old': 1}); new = put_object(root, {'new': 1})
             store = R2Store.__new__(R2Store); store.env = {}; store.bucket = 'test'
             calls = []
             def run(*args):
+                self.assertIn('--no-traverse', args)
                 names = Path(args[args.index('--files-from') + 1]).read_text().splitlines()
+                self.assertEqual(names, sorted([old + '.json.gz', new + '.json.gz']))
                 if args[0] == 'check':
                     self.assertIn('--download', args)
                     self.assertIn('--one-way', args)
@@ -212,27 +214,14 @@ class ObjectPublicationTests(unittest.TestCase):
                     self.assertIn('cache-control=public,max-age=31536000,immutable', args)
                     self.assertEqual(args[args.index('--transfers') + 1], '32')
                 self.assertEqual(args[args.index('--checkers') + 1], '32')
-                self.assertEqual('--no-traverse' in args, targeted)
-                calls.append((args[0], names))
+                calls.append(args[0])
             store.run = run
-            listing = f'{old}.json.gz\t{(root / (old + ".json.gz")).stat().st_size}\n'
-            for count in (0, 1, 9, 10, 100):
-                with self.subTest(existing=count):
-                    targeted = count >= 10
-                    calls.clear()
-                    existing = listing + ''.join(f'unrelated-{i}.json.gz\t1\n' for i in range(count - 1)) if count else ''
-                    with patch('chart_publication.subprocess.run', return_value=Mock(stdout=existing)):
-                        store.upload_objects(root)
-                    expected = sorted([new + '.json.gz'] + ([old + '.json.gz'] if not count else []))
-                    self.assertEqual(calls, [('copy', expected), ('check', expected)])
-            existing = listing + f'{new}.json.gz\t{(root / (new + ".json.gz")).stat().st_size}\n'
-            with patch('chart_publication.subprocess.run', return_value=Mock(stdout=existing)):
-                calls.clear()
+            with patch('chart_publication.subprocess.run', side_effect=AssertionError('full listing')):
                 store.upload_objects(root)
-                self.assertEqual(calls, [])
-            with patch('chart_publication.subprocess.run', return_value=Mock(stdout=f'{old}.json.gz\t1\n')):
-                with self.assertRaisesRegex(RuntimeError, 'different size'):
-                    store.upload_objects(root)
+            self.assertEqual(calls, ['copy', 'check'])
+            with tempfile.TemporaryDirectory() as empty:
+                store.upload_objects(Path(empty))
+            self.assertEqual(calls, ['copy', 'check'])
 
     def test_r2_object_command_failures_preserve_pointer_until_successful_retry(self):
         for failure in ('copy', 'check', 'copyto'):
@@ -249,12 +238,12 @@ class ObjectPublicationTests(unittest.TestCase):
                     calls.append(args[0])
                     if args[0] == failure:
                         raise subprocess.CalledProcessError(1, args)
-                with patch('chart_publication.subprocess.run', return_value=Mock(stdout='')), patch.object(store, 'run', side_effect=run):
+                with patch.object(store, 'run', side_effect=run):
                     with self.assertRaises(subprocess.CalledProcessError):
                         complete_release(charts, output, manifest, store)
                 self.assertEqual((output / 'current.json').read_bytes(), before)
                 self.assertEqual(calls, ['copy', 'check', 'copyto'][:('copy', 'check', 'copyto').index(failure) + 1])
-                with patch('chart_publication.subprocess.run', return_value=Mock(stdout='')), patch.object(store, 'run') as retry:
+                with patch.object(store, 'run') as retry:
                     complete_release(charts, output, manifest, store)
                 self.assertEqual([call.args[0] for call in retry.call_args_list], ['copy', 'check', 'copyto', 'copyto'])
                 self.assertEqual(json.loads((output / 'current.json').read_text())['revision'], manifest['revision'])

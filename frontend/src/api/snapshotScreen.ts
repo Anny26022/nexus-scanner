@@ -4,6 +4,7 @@ import { PRESET_ELIGIBILITY, presetEligibilityTargets, hasCustomPresetEligibilit
 import { snapshotFundamentals } from '../data/snapshotFundamentals';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
+import { isTradingViewCondition, tradingViewFilterGroups, tradingViewMetrics } from '../data/tradingViewMetrics';
 
 const presetIds = new Set(PRESET_CATALOG.map(preset => preset.id));
 
@@ -21,6 +22,7 @@ export interface SnapshotStock extends StockRow {
   freeFloatPct: number | null;
 }
 export interface Snapshot {
+  tradingViewMetricsVersion?: number;
   presetRuleMatchesVersion?: number;
   technicalMetricsVersion?: number;
   referenceCounts?: Record<string, number>;
@@ -61,6 +63,17 @@ const maPeriods = SNAPSHOT_MA_PERIODS;
 
 function leaf(c: ActiveCondition, session: string): Predicate | null {
   const p = c.parameters;
+  if (isTradingViewCondition(c.conditionId)) {
+    const metric = tradingViewMetrics.find(metric => metric.id === p.metric
+      && metric.category === tradingViewFilterGroups[c.conditionId].category);
+    if (!metric || !['ABOVE','BELOW','GREATER','LESS','EQUAL'].includes(p.comparison)
+        || String(p.value ?? '').trim() === '' || !Number.isFinite(Number(p.value))) return null;
+    return s => {
+      const value = s.tradingview?.asOfDate === session ? s.tradingview.values[metric.id] : null;
+      const result = compare(value, p.comparison, Number(p.value));
+      return result == null ? null : c.isNegated ? !result : result;
+    };
+  }
   let fn: Predicate;
   let metadata = false;
   const config = technicalConfigurations.find(config => config.id === c.conditionId);
@@ -243,6 +256,56 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       break;
     case 'misc_exclude_circuit': metadata = true; fn = s => !s.circuitLimit ? null : !p.circuitBands.includes(s.circuitLimit.trim().replace('%','')); break;
     case 'misc_fno_only': metadata = true; fn = s => s.isFno == null ? null : s.isFno === (p.isFno === 'true'); break;
+    case 'EARNINGS_GROWTH': case 'fund_earnings_growth': {
+      metadata = true;
+      const targetPct = c.conditionId === 'fund_earnings_growth' ? p.minGrowthPct : p.pct;
+      const comp = c.conditionId === 'fund_earnings_growth' ? 'ABOVE' : p.comparison;
+      const metric = String(p.metric ?? 'NET_PROFIT').toUpperCase();
+      fn = s => {
+        const val = metric === 'REVENUE'
+          ? (s.ttmRevenueGrowthPct ?? (s.tradingview?.values?.['financials.revenue_yoy_growth_ttm_pct']))
+          : (s.ttmNetProfitGrowthPct ?? (s.tradingview?.values?.['financials.net_income_yoy_growth_ttm_pct']));
+        return compare(val, comp, targetPct);
+      };
+      break;
+    }
+    case 'AVG_VOLUME_RATIO': {
+      fn = s => {
+        const v10 = s.tradingview?.values?.['market.average_volume10'] ?? (s.volume ? s.volume : null);
+        const v30 = s.tradingview?.values?.['market.average_volume30'] ?? (s.volume ? s.volume : null);
+        const ratio = v10 && v30 && v30 > 0 ? v10 / v30 : null;
+        return compare(ratio, p.comparison, p.ratio);
+      };
+      break;
+    }
+    case 'rs_1month': {
+      fn = s => {
+        const val = s.metrics?.return21 ?? s.tradingview?.values?.['market.performance_1m_pct'];
+        return compare(val, 'ABOVE', p.minRsRating);
+      };
+      break;
+    }
+    case 'rs_3month': {
+      fn = s => {
+        const val = s.metrics?.return63 ?? s.tradingview?.values?.['market.performance_3m_pct'];
+        return compare(val, 'ABOVE', p.minRsRating);
+      };
+      break;
+    }
+    case 'MA_CONVERGENCE': {
+      fn = s => {
+        const emas = [
+          s.tradingview?.values?.['technicals.ema9'],
+          s.ema20,
+          s.ema50,
+          s.ema200
+        ].filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+        if (emas.length < 3 || !s.close || s.close <= 0) return null;
+        const spread = (Math.max(...emas) - Math.min(...emas)) / s.close * 100;
+        return spread <= Number(p.maxSpreadPct ?? 1.5);
+      };
+      break;
+    }
     default:
       if (!presetIds.has(c.conditionId)) return null;
       const targets = presetEligibilityTargets(p);
@@ -304,6 +367,11 @@ const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
 export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allRows = false): ScreenerRunResponse | null {
   if (request.textQuery?.trim()) return null;
+  const usesTradingView = (node:ExpressionNode):boolean => node.type === 'group'
+    ? node.children.some(usesTradingView) : isTradingViewCondition(node.condition.conditionId);
+  if (data.tradingViewMetricsVersion !== 1 && usesTradingView(request.expressionTree)) {
+    throw new Error('These filters need a newer dataset. Try after the next daily data refresh.');
+  }
   const customPreset = (node: ExpressionNode): boolean => node.type === 'group'
     ? node.children.some(customPreset) : presetIds.has(node.condition.conditionId) && hasCustomPresetEligibility(node.condition.parameters);
   if (data.presetRuleMatchesVersion !== 1 && customPreset(request.expressionTree)) {

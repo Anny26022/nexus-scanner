@@ -1,0 +1,282 @@
+[
+  {
+    "wire": "SMA5",
+    "key": "sma5",
+    "section": "technicals",
+    "category": "trend",
+    "label": "SMA 5 (\u20b9)",
+    "divisor": 1
+  },
+  {
+    "wire": "EMA5",
+    "key": "ema5",
+    "section": "technicals",
+    "category": "trend",
+    "label": "EMA 5 (\u20b9)",
+    "divisor": 1
+  },
+  {
+    "wire": "SMA100",
+    "key": "sma100",
+    "section": "technicals",
+    "category": "trend",
+    "label": "SMA 100 (\u20b9)",
+    "divisor": 1
+  },
+  {
+    "wire": "EMA100",
+    "key": "ema100",
+    "section": "technicals",
+    "category": "trend",
+    "label": "EMA 100 (\u20b9)",
+    "divisor": 1
+  },
+  {
+    "wire": "MACD.macd",
+    "key": "macd_macd",
+    "section": "technicals",
+    "category": "trend",
+    "label": "MACD(12,26)",
+    "divisor": 1
+  },
+  {
+    "wire": "MACD.signal",
+    "key": "macd_signal",
+    "section": "technicals",
+    "category": "trend",
+    "label": "MACD Signal(9)",
+    "divisor": 1
+  },
+  {
+    "wire": "AvgValue.Traded_10d",
+    "key": "turnover10_crore",
+    "section": "market",
+    "category": "liquidity",
+    "label": "Average turnover (10d, \u20b9 Cr)",
+    "divisor": 10000000
+  },
+  {
+    "wire": "AvgValue.Traded_30d",
+    "key": "turnover30_crore",
+    "section": "market",
+    "category": "liquidity",
+    "label": "Average turnover (30d, \u20b9 Cr)",
+    "divisor": 10000000
+  },
+  {
+    "wire": "average_volume_30d_calc",
+    "key": "average_volume30",
+    "section": "market",
+    "category": "liquidity",
+    "label": "Average volume (30d, shares)",
+    "divisor": 1
+  },
+  {
+    "wire": "relative_volume_10d_calc",
+    "key": "rvol10",
+    "section": "market",
+    "category": "momentum",
+    "label": "Relative volume (10d, \u00d7)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.W",
+    "key": "performance_1w_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (1w, %)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.YTD",
+    "key": "performance_ytd_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (ytd, %)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.3Y",
+    "key": "performance_3y_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (3y, %)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.10Y",
+    "key": "performance_10y_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (10y, %)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.All",
+    "key": "performance_all_time_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (all time, %)",
+    "divisor": 1
+  },
+  {
+    "wire": "ADRP",
+    "key": "adr14_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "ADR (14, %)",
+    "divisor": 1
+  },
+  {
+    "wire": "enterprise_value_ebitda_ttm",
+    "key": "ev_ebitda_ttm",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "EV/EBITDA (TTM)",
+    "divisor": 1
+  },
+  {
+    "wire": "earnings_per_share_diluted_yoy_growth_ttm",
+    "key": "eps_diluted_growth_ttm_pct",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "Eps diluted growth (ttm) (%)",
+    "divisor": 1
+  },
+  {
+    "wire": "total_current_assets_fy",
+    "key": "current_assets_fy_crore",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "Current assets (fy) (\u20b9 cr)",
+    "divisor": 10000000
+  },
+  {
+    "wire": "total_current_liabilities_fy",
+    "key": "current_liabilities_fy_crore",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "Current liabilities (fy) (\u20b9 cr)",
+    "divisor": 10000000
+  },
+  {
+    "wire": "total_liabilities_fy",
+    "key": "total_liabilities_fy_crore",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "Total liabilities (fy) (\u20b9 cr)",
+    "divisor": 10000000
+  },
+  {
+    "wire": "total_debt_fy",
+    "key": "total_debt_fy_crore",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "Total debt (fy) (\u20b9 cr)",
+    "divisor": 10000000
+  },
+  {
+    "wire": "High.All",
+    "key": "all_time_high",
+    "section": "market",
+    "category": "momentum",
+    "label": "All-time high (\u20b9)",
+    "divisor": 1
+  },
+  {
+    "wire": "Low.All",
+    "key": "all_time_low",
+    "section": "market",
+    "category": "momentum",
+    "label": "All-time low (\u20b9)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.5Y",
+    "key": "performance_5y_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (5y, %)",
+    "divisor": 1
+  },
+  {
+    "wire": "price_earnings_ttm",
+    "key": "pe_ttm",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "P/E (TTM)",
+    "divisor": 1
+  },
+  {
+    "wire": "price_earnings_growth_ttm",
+    "key": "peg_ttm",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "PEG (TTM)",
+    "divisor": 1
+  },
+  {
+    "wire": "total_revenue_yoy_growth_ttm",
+    "key": "revenue_yoy_growth_ttm_pct",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "Revenue YoY growth (ttm) (%)",
+    "divisor": 1
+  },
+  {
+    "wire": "net_income_yoy_growth_ttm",
+    "key": "net_income_yoy_growth_ttm_pct",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "Net income YoY growth (ttm) (%)",
+    "divisor": 1
+  },
+  {
+    "wire": "average_volume_10d_calc",
+    "key": "average_volume10",
+    "section": "market",
+    "category": "liquidity",
+    "label": "Average volume (10d, shares)",
+    "divisor": 1
+  },
+  {
+    "wire": "average_volume_60d_calc",
+    "key": "average_volume60",
+    "section": "market",
+    "category": "liquidity",
+    "label": "Average volume (60d, shares)",
+    "divisor": 1
+  },
+  {
+    "wire": "average_volume_90d_calc",
+    "key": "average_volume90",
+    "section": "market",
+    "category": "liquidity",
+    "label": "Average volume (90d, shares)",
+    "divisor": 1
+  },
+  {
+    "wire": "EMA9",
+    "key": "ema9",
+    "section": "technicals",
+    "category": "trend",
+    "label": "EMA 9 (\u20b9)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.1M",
+    "key": "performance_1m_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (1m, %)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.3M",
+    "key": "performance_3m_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (3m, %)",
+    "divisor": 1
+  }
+]

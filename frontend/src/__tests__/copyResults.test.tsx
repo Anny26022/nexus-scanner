@@ -49,3 +49,29 @@ it('dismisses the format menu with Escape and returns focus to the icon',()=>{
   expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   expect(trigger).toHaveFocus();
 });
+
+it('formats CSV results with properly escaped headers and values', async () => {
+  const { escapeCsvField, formatCsvResults } = await import('../utils/copyResults');
+  expect(escapeCsvField('Simple')).toBe('Simple');
+  expect(escapeCsvField('Quotes "Inside"')).toBe('"Quotes ""Inside"""');
+  expect(escapeCsvField('Has, comma')).toBe('"Has, comma"');
+  expect(escapeCsvField(null)).toBe('');
+  expect(escapeCsvField(123.45)).toBe('123.45');
+
+  const rows = [
+    { symbol: 'RELIANCE', close: 2950.5, name: 'Reliance Industries, Ltd.' },
+    { symbol: 'TCS', close: 3800, name: 'Tata "Consultancy" Services' },
+  ];
+  const columns = [
+    { id: 'symbol', label: 'Symbol' },
+    { id: 'name', label: 'Company Name' },
+    { id: 'close', label: 'Close Price', getValue: (r: any) => `₹${r.close}` },
+  ];
+
+  const csv = formatCsvResults(rows, columns);
+  const lines = csv.split('\r\n');
+  expect(lines[0]).toBe('Symbol,Company Name,Close Price');
+  expect(lines[1]).toBe('RELIANCE,"Reliance Industries, Ltd.",₹2950.5');
+  expect(lines[2]).toBe('TCS,"Tata ""Consultancy"" Services",₹3800');
+});
+

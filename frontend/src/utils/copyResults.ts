@@ -26,3 +26,26 @@ export function formatCopyResults(rows:CopyRow[], group:CopyGroup, taxonomy?:The
   return [...groups].sort(([a],[b]) => a.localeCompare(b)).map(([label,symbols]) =>
     `###${label.replaceAll(',', ' / ').replace(/[\r\n]/g,' ')}(${symbols.length}),${symbols.join(',')}`).join(',');
 }
+
+export function escapeCsvField(value: unknown): string {
+  if (value == null) return '';
+  const str = String(value);
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+export function formatCsvResults(
+  rows: Record<string, unknown>[],
+  columns: { id: string; label: string; getValue?: (row: any) => unknown }[]
+): string {
+  const header = columns.map(c => escapeCsvField(c.label)).join(',');
+  const lines = rows.map(row =>
+    columns.map(c => {
+      const val = c.getValue ? c.getValue(row) : row[c.id];
+      return escapeCsvField(val);
+    }).join(',')
+  );
+  return [header, ...lines].join('\r\n');
+}

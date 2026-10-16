@@ -1,38 +1,28 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   Activity,
-  AlignJustify,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
   ArrowUpRight,
   BarChart3,
-  Baseline,
+  Bookmark,
   Calendar,
-  Check,
-  ChevronRight,
   Circle,
   Clock,
   Compass,
-  Crosshair,
   DollarSign,
-  Eraser,
   EyeOff,
   FileText,
   Flag,
-  GitFork,
-  GripVertical,
   Highlighter,
   Info,
   LockKeyhole,
-  Magnet,
   Maximize2,
   MessageSquare,
-  Minus,
   MousePointer2,
   Pencil,
-  Plus,
   Redo2,
   RotateCw,
   Ruler,
@@ -46,43 +36,161 @@ import {
   Tag,
   Target,
   Trash2,
-  TrendingDown,
-  TrendingUp,
   Triangle,
   Type,
   Undo2,
   UnlockKeyhole,
   Volume2,
   Waves,
-  Zap,
+  X,
 } from 'lucide-react';
 import { anchors, DRAWING_TOOLS, FIB_LEVELS, type Anchor, type DrawingBook, type DrawingTool } from '../chart/drawings';
 import { annotationTool, TOOL_GROUPS, toolSpec, type DrawingKind } from '../chart/drawingTools';
 import { readChartStorage, writeChartStorage } from '../chart/storage';
 
-export const TOOL_ICONS: Partial<Record<DrawingTool, typeof Minus>> = {
+// Pixel-perfect custom SVG icons matching native OpenAlgo / TradingView drawing tools
+export function ParallelChannelIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="5" y1="19" x2="19" y2="5" />
+      <circle cx="5" cy="19" r="2" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="5" r="2" fill="currentColor" stroke="none" />
+      <line x1="9" y1="21" x2="21" y2="9" />
+      <circle cx="9" cy="21" r="2" fill="currentColor" stroke="none" />
+      <circle cx="21" cy="9" r="2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function RegressionTrendIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="18" x2="18" y2="4" />
+      <line x1="7" y1="21" x2="21" y2="7" />
+      <line x1="5.5" y1="19.5" x2="19.5" y2="5.5" strokeDasharray="2 2" strokeWidth={1.25} />
+    </svg>
+  );
+}
+
+export function DisjointChannelIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="14" x2="14" y2="4" />
+      <circle cx="4" cy="14" r="2" fill="currentColor" stroke="none" />
+      <circle cx="14" cy="4" r="2" fill="currentColor" stroke="none" />
+      <line x1="10" y1="20" x2="20" y2="10" />
+      <circle cx="10" cy="20" r="2" fill="currentColor" stroke="none" />
+      <circle cx="20" cy="10" r="2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function PitchforkIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 4v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4" />
+      <line x1="12" y1="4" x2="12" y2="20" />
+    </svg>
+  );
+}
+
+export function FlatTopBottomIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="4" y1="18" x2="20" y2="10" />
+      <circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="20" cy="6" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="20" cy="10" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function FibRetracementIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="4" y1="11" x2="20" y2="11" />
+      <line x1="4" y1="15" x2="20" y2="15" />
+      <line x1="4" y1="19" x2="20" y2="19" />
+      <line x1="5" y1="18" x2="19" y2="7" strokeDasharray="2 2" strokeWidth={1} />
+    </svg>
+  );
+}
+
+export function TrendLineIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="20" x2="20" y2="4" />
+      <circle cx="4" cy="20" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="20" cy="4" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function HorizontalLineIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="20" cy="12" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function HorizontalRayIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none" />
+      <polyline points="15 7 20 12 15 17" />
+    </svg>
+  );
+}
+
+export function VerticalLineIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="3" x2="12" y2="21" />
+      <circle cx="12" cy="4" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="20" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function CrossLineIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="3" x2="12" y2="21" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+    </svg>
+  );
+}
+
+export const TOOL_ICONS: Partial<Record<DrawingTool, React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>>> = {
   select: MousePointer2,
-  trendline: TrendingUp,
+  trendline: TrendLineIcon,
   ray: ArrowUpRight,
   extended: Maximize2,
   infoline: Info,
   angle: Compass,
-  horizontal: Minus,
-  horizontalRay: ArrowRight,
-  vertical: Minus,
-  crossline: Plus,
-  channel: AlignJustify,
-  regression: TrendingDown,
-  flatTopBottom: Baseline,
-  disjointChannel: Spline,
-  pitchfork: GitFork,
-  schiffPitchfork: GitFork,
-  modifiedSchiffPitchfork: GitFork,
-  insidePitchfork: GitFork,
-  fibonacci: SlidersHorizontal,
+  horizontal: HorizontalLineIcon,
+  horizontalRay: HorizontalRayIcon,
+  vertical: VerticalLineIcon,
+  crossline: CrossLineIcon,
+  channel: ParallelChannelIcon,
+  regression: RegressionTrendIcon,
+  flatTopBottom: FlatTopBottomIcon,
+  disjointChannel: DisjointChannelIcon,
+  pitchfork: PitchforkIcon,
+  schiffPitchfork: PitchforkIcon,
+  modifiedSchiffPitchfork: PitchforkIcon,
+  insidePitchfork: PitchforkIcon,
+  fibonacci: FibRetracementIcon,
   fibExtension: SlidersHorizontal,
   fibExtensionTwoPoint: SlidersHorizontal,
-  fibChannel: AlignJustify,
+  fibChannel: ParallelChannelIcon,
   fibTimeZone: Clock,
   fibFan: Compass,
   fibSpeedFan: Compass,
@@ -143,7 +251,7 @@ export const TOOL_ICONS: Partial<Record<DrawingTool, typeof Minus>> = {
   dedekindTessellation: Square,
   long: Target,
   short: Target,
-  forecast: TrendingUp,
+  forecast: TrendingUpIcon,
   anchoredVwap: BarChart3,
   fixedRangeVolumeProfile: BarChart3,
   measure: Ruler,
@@ -151,144 +259,135 @@ export const TOOL_ICONS: Partial<Record<DrawingTool, typeof Minus>> = {
   dateRange: Calendar,
 };
 
-export const SHORTCUTS: Partial<Record<DrawingTool, string>> = {
-  trendline: '⌥ T',
-  infoline: '⌥ I',
-  angle: '⌥ A',
-  horizontal: '⌥ H',
-  horizontalRay: '⌥ J',
-  vertical: '⌥ V',
-  crossline: '⌥ C',
-  channel: '⌥ P',
-  fibonacci: '⌥ F',
-  rectangle: '⌥ ⇧ R',
-  brush: '⌥ B',
-  text: '⌥ X',
-  balloon: '⌥ N',
-  long: '⌥ L',
-  short: '⌥ S',
-  measure: '⇧ M',
-};
-
-export interface RailCategory {
-  id: string;
-  name: string;
-  defaultTool: DrawingKind;
-  icon: typeof Minus;
-  subgroups: readonly { name: string; tools: readonly DrawingKind[] }[];
+function TrendingUpIcon({ size = 16 }: { size?: number }) {
+  return <ArrowUpRight size={size} />;
 }
 
-export const RAIL_CATEGORIES: readonly RailCategory[] = [
+export const SHORTCUTS: Partial<Record<DrawingTool, string>> = {
+  trendline: '⌥T',
+  ray: '⌥⇧T',
+  extended: '⌥E',
+  infoline: '⌥I',
+  angle: '⌥A',
+  horizontal: '⌥H',
+  horizontalRay: '⌥J',
+  vertical: '⌥V',
+  crossline: '⌥C',
+  channel: '⌥⇧P',
+  pitchfork: '⌥F',
+  fibonacci: '⌥F',
+  rectangle: '⌥⇧R',
+  brush: '⌥B',
+  text: '⌥X',
+  balloon: '⌥N',
+  long: '⌥L',
+  short: '⌥S',
+  measure: '⇧M',
+};
+
+export interface MenuCategory {
+  id: string;
+  name: string;
+  tools: readonly DrawingKind[];
+}
+
+export const MENU_CATEGORIES: readonly MenuCategory[] = [
   {
-    id: 'lines',
-    name: 'Trend Line Tools',
-    defaultTool: 'trendline',
-    icon: TrendingUp,
-    subgroups: [
-      { name: 'LINES', tools: ['trendline', 'ray', 'infoline', 'extended', 'angle', 'horizontal', 'horizontalRay', 'vertical', 'crossline'] },
-      { name: 'CHANNELS', tools: ['channel', 'regression', 'flatTopBottom', 'disjointChannel'] },
-      { name: 'PITCHFORKS', tools: ['pitchfork', 'schiffPitchfork', 'modifiedSchiffPitchfork', 'insidePitchfork'] },
-    ],
+    id: 'trendlines',
+    name: 'Trend lines',
+    tools: ['trendline', 'ray', 'infoline', 'extended', 'angle', 'horizontal', 'horizontalRay', 'vertical', 'crossline'],
   },
   {
-    id: 'fibGann',
-    name: 'Gann and Fibonacci Tools',
-    defaultTool: 'fibonacci',
-    icon: SlidersHorizontal,
-    subgroups: [
-      { name: 'FIBONACCI', tools: ['fibonacci', 'fibExtension', 'fibExtensionTwoPoint', 'fibChannel', 'fibTimeZone', 'fibSpeedFan', 'fibTime', 'fibCircles', 'fibSpiral', 'fibSpeedArcs', 'fibWedge', 'fibFan'] },
-      { name: 'GANN', tools: ['gannBox', 'gannSquare', 'gannFan'] },
-    ],
+    id: 'channels',
+    name: 'Channels',
+    tools: ['channel', 'regression', 'flatTopBottom', 'disjointChannel'],
+  },
+  {
+    id: 'pitchforks',
+    name: 'Pitchforks',
+    tools: ['pitchfork', 'schiffPitchfork', 'modifiedSchiffPitchfork', 'insidePitchfork'],
+  },
+  {
+    id: 'fibonacci',
+    name: 'Fibonacci',
+    tools: ['fibonacci', 'fibExtension', 'fibExtensionTwoPoint', 'fibChannel', 'fibTimeZone', 'fibSpeedFan', 'fibTime', 'fibCircles', 'fibSpiral', 'fibSpeedArcs', 'fibWedge', 'fibFan', 'gannBox', 'gannSquare', 'gannFan'],
   },
   {
     id: 'shapes',
-    name: 'Geometric Shapes & Brushes',
-    defaultTool: 'brush',
-    icon: Pencil,
-    subgroups: [
-      { name: 'BRUSHES', tools: ['brush', 'highlighter'] },
-      { name: 'ARROWS', tools: ['arrow', 'arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight'] },
-      { name: 'SHAPES', tools: ['rectangle', 'rotatedRectangle', 'path', 'circle', 'ellipse', 'polyline', 'triangle', 'arc', 'curve', 'doubleCurve'] },
-    ],
+    name: 'Geometric shapes & Brushes',
+    tools: ['brush', 'highlighter', 'rectangle', 'rotatedRectangle', 'circle', 'ellipse', 'triangle', 'polyline', 'path', 'curve', 'doubleCurve', 'arc', 'arrow', 'arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight'],
   },
   {
     id: 'text',
-    name: 'Annotation Tools',
-    defaultTool: 'text',
-    icon: Type,
-    subgroups: [
-      { name: 'TEXT AND NOTES', tools: ['text', 'note', 'priceNote', 'signpost', 'table', 'callout', 'comment', 'priceLabel', 'flag'] },
-      { name: 'CONTENT', tools: ['balloon', 'iconStamp'] },
-    ],
+    name: 'Annotation tools',
+    tools: ['text', 'note', 'priceNote', 'callout', 'comment', 'priceLabel', 'signpost', 'flag', 'balloon', 'table', 'iconStamp'],
   },
   {
     id: 'patterns',
     name: 'Patterns and Elliott Waves',
-    defaultTool: 'xabcd',
-    icon: Activity,
-    subgroups: [
-      { name: 'PATTERNS', tools: ['xabcd', 'abcd', 'headShoulders', 'gartley', 'bat', 'butterfly', 'crab', 'shark', 'cypher'] },
-      { name: 'ELLIOTT WAVES', tools: ['impulse', 'correction'] },
-      { name: 'CYCLES', tools: ['cyclic', 'timeCycles', 'sine'] },
-    ],
+    tools: ['xabcd', 'abcd', 'headShoulders', 'gartley', 'bat', 'butterfly', 'crab', 'shark', 'cypher', 'impulse', 'correction', 'cyclic', 'timeCycles', 'sine'],
   },
   {
     id: 'prediction',
     name: 'Prediction and Measurement',
-    defaultTool: 'long',
-    icon: Target,
-    subgroups: [
-      { name: 'PROJECTION', tools: ['long', 'short', 'forecast'] },
-      { name: 'MEASUREMENT', tools: ['measure', 'priceRange', 'dateRange'] },
-    ],
+    tools: ['long', 'short', 'forecast', 'measure', 'priceRange', 'dateRange'],
   },
   {
     id: 'volume',
     name: 'Volume and Acoustics',
-    defaultTool: 'anchoredVwap',
-    icon: BarChart3,
-    subgroups: [
-      { name: 'VOLUME', tools: ['anchoredVwap', 'fixedRangeVolumeProfile'] },
-      { name: 'ACOUSTICS', tools: ['sonic', 'supersonic', 'goldenSonic', 'goldenSupersonic', 'dedekindTessellation'] },
-    ],
+    tools: ['anchoredVwap', 'fixedRangeVolumeProfile', 'sonic', 'supersonic', 'goldenSonic', 'goldenSupersonic', 'dedekindTessellation'],
   },
+];
+
+export const DEFAULT_FAVORITES: DrawingTool[] = [
+  'channel',
+  'regression',
+  'disjointChannel',
+  'pitchfork',
 ];
 
 const initialFavorites = (): DrawingTool[] => {
   const raw = readChartStorage('drawing-favorites.v1');
   return Array.isArray(raw)
-    ? raw.filter((id): id is DrawingTool => typeof id === 'string' && id !== 'select' && DRAWING_TOOLS.some(tool => tool.id === id)).slice(0, 12)
-    : (['trendline', 'horizontal', 'rectangle', 'fibonacci', 'text'] as DrawingTool[]);
+    ? raw.filter((id): id is DrawingTool => typeof id === 'string' && id !== 'select' && DRAWING_TOOLS.some(tool => tool.id === id)).slice(0, 16)
+    : DEFAULT_FAVORITES;
 };
 
-export function DrawingToolbar({ book, firstDate, lastDate }: { book: DrawingBook; firstDate: string; lastDate: string }) {
+export interface DrawingToolbarProps {
+  book: DrawingBook;
+  firstDate: string;
+  lastDate: string;
+  drawingsOpen?: boolean;
+  onCloseMenu?: () => void;
+}
+
+export function DrawingToolbar({
+  book,
+  firstDate,
+  lastDate,
+  drawingsOpen,
+  onCloseMenu,
+}: DrawingToolbarProps) {
   const state = useSyncExternalStore(book.subscribe, book.getSnapshot, book.getSnapshot);
   const selected = state.drawings.find(d => d.id === state.selectedId);
+  const isMenuOpen = drawingsOpen ?? true;
+
   const [query, setQuery] = useState('');
-  const [favorites, setFavorites] = useState(initialFavorites);
-  const [showFavorites, setShowFavorites] = useState(() => {
+  const [favorites, setFavorites] = useState<DrawingTool[]>(initialFavorites);
+  const [showFavorites, setShowFavorites] = useState<boolean>(() => {
     const saved = readChartStorage('drawing-favorites-visible.v1');
     return saved !== false;
   });
-  const [snapToIndicators, setSnapToIndicators] = useState(false);
   const [error, setError] = useState('');
-  const [activeFlyout, setActiveFlyout] = useState<string | null>(null);
-  const [flyoutPosition, setFlyoutPosition] = useState({ left: 42, top: 100 });
-  const [categoryActive, setCategoryActive] = useState<Record<string, DrawingKind>>(() => ({
-    lines: 'trendline',
-    fibGann: 'fibonacci',
-    shapes: 'brush',
-    text: 'text',
-    patterns: 'xabcd',
-    prediction: 'long',
-    volume: 'anchoredVwap',
-  }));
 
+  // Floating slider drag position
   const [favPos, setFavPos] = useState<{ x: number; y: number }>(() => {
     const saved = readChartStorage('drawing-favorites-pos.v1') as { x: number; y: number } | null;
-    return saved && Number.isFinite(saved.x) && Number.isFinite(saved.y) ? saved : { x: 52, y: 12 };
+    return saved && Number.isFinite(saved.x) && Number.isFinite(saved.y) ? saved : { x: 28, y: 16 };
   });
   const isDraggingFav = useRef<{ startX: number; startY: number; initX: number; initY: number } | null>(null);
+
+  const menuPopoverRef = useRef<HTMLDivElement | null>(null);
 
   const onFavDragStart = useCallback((e: React.PointerEvent<HTMLElement>) => {
     e.preventDefault();
@@ -306,8 +405,8 @@ export function DrawingToolbar({ book, firstDate, lastDate }: { book: DrawingBoo
     if (!isDraggingFav.current) return;
     const dx = e.clientX - isDraggingFav.current.startX;
     const dy = e.clientY - isDraggingFav.current.startY;
-    const nextX = Math.max(10, Math.min(window.innerWidth - 120, isDraggingFav.current.initX + dx));
-    const nextY = Math.max(10, Math.min(window.innerHeight - 50, isDraggingFav.current.initY + dy));
+    const nextX = Math.max(8, Math.min(window.innerWidth - 120, isDraggingFav.current.initX + dx));
+    const nextY = Math.max(8, Math.min(window.innerHeight - 50, isDraggingFav.current.initY + dy));
     setFavPos({ x: nextX, y: nextY });
   }, []);
 
@@ -315,38 +414,49 @@ export function DrawingToolbar({ book, firstDate, lastDate }: { book: DrawingBoo
     if (!isDraggingFav.current) return;
     const dx = e.clientX - isDraggingFav.current.startX;
     const dy = e.clientY - isDraggingFav.current.startY;
-    const finalX = Math.max(10, Math.min(window.innerWidth - 120, isDraggingFav.current.initX + dx));
-    const finalY = Math.max(10, Math.min(window.innerHeight - 50, isDraggingFav.current.initY + dy));
+    const finalX = Math.max(8, Math.min(window.innerWidth - 120, isDraggingFav.current.initX + dx));
+    const finalY = Math.max(8, Math.min(window.innerHeight - 50, isDraggingFav.current.initY + dy));
     isDraggingFav.current = null;
     const pos = { x: finalX, y: finalY };
     setFavPos(pos);
     writeChartStorage('drawing-favorites-pos.v1', pos);
   }, []);
 
-  const menu = useRef<HTMLDetailsElement | null>(null);
-  const flyoutRef = useRef<HTMLDivElement | null>(null);
+  const choose = useCallback((tool: DrawingTool) => {
+    book.setTool(tool);
+    setQuery('');
+  }, [book]);
 
-  // Sync active category tool when state.tool changes
-  useEffect(() => {
-    if (state.tool === 'select') return;
-    for (const cat of RAIL_CATEGORIES) {
-      if (cat.subgroups.some(sub => sub.tools.includes(state.tool as DrawingKind))) {
-        setCategoryActive(prev => (prev[cat.id] === state.tool ? prev : { ...prev, [cat.id]: state.tool as DrawingKind }));
-        break;
+  const toggleFavorite = useCallback((tool: DrawingTool) => {
+    setFavorites(prev => {
+      const isRemoving = prev.includes(tool);
+      const next = isRemoving ? prev.filter(id => id !== tool) : [...prev, tool].slice(-16);
+      writeChartStorage('drawing-favorites.v1', next);
+      // Auto-show the floating favorites bar when a tool is added
+      if (!isRemoving && next.length > 0) {
+        setShowFavorites(true);
+        writeChartStorage('drawing-favorites-visible.v1', true);
       }
-    }
-  }, [state.tool]);
+      return next;
+    });
+  }, []);
 
-  // Click outside and escape listener for flyout drawer
+  // Listen for outside click and Escape to close menu popover
   useEffect(() => {
-    if (!activeFlyout) return;
+    if (!isMenuOpen) return;
     const handleOutside = (event: PointerEvent) => {
-      if (flyoutRef.current && !flyoutRef.current.contains(event.target as Node)) {
-        setActiveFlyout(null);
+      if (
+        menuPopoverRef.current &&
+        !menuPopoverRef.current.contains(event.target as Node) &&
+        !(event.target as HTMLElement)?.closest('.chart-drawing-toggle')
+      ) {
+        onCloseMenu?.();
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setActiveFlyout(null);
+      if (event.key === 'Escape') {
+        onCloseMenu?.();
+      }
     };
     document.addEventListener('pointerdown', handleOutside, true);
     window.addEventListener('keydown', handleKeyDown);
@@ -354,484 +464,249 @@ export function DrawingToolbar({ book, firstDate, lastDate }: { book: DrawingBoo
       document.removeEventListener('pointerdown', handleOutside, true);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [activeFlyout]);
-
-  const attachAllTools = useCallback((node: HTMLDetailsElement | null) => {
-    menu.current = node;
-    if (!node) return;
-    const outside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !node.contains(event.target)) node.open = false;
-    };
-    const close = () => {
-      node.open = false;
-    };
-    document.addEventListener('pointerdown', outside, true);
-    window.addEventListener('resize', close);
-    return () => {
-      document.removeEventListener('pointerdown', outside, true);
-      window.removeEventListener('resize', close);
-      menu.current = null;
-    };
-  }, []);
-
-  const choose = (tool: DrawingTool) => {
-    book.setTool(tool);
-    setActiveFlyout(null);
-    if (menu.current) menu.current.open = false;
-    setQuery('');
-  };
-
-  const toggleFavorite = (tool: DrawingTool) => {
-    const next = favorites.includes(tool) ? favorites.filter(id => id !== tool) : [...favorites, tool].slice(-12);
-    setFavorites(next);
-    writeChartStorage('drawing-favorites.v1', next);
-  };
-
-  const toggleFavoritesBar = () => {
-    const next = !showFavorites;
-    setShowFavorites(next);
-    writeChartStorage('drawing-favorites-visible.v1', next);
-  };
-
-  const openCategoryFlyout = (categoryId: string, element: HTMLElement) => {
-    if (activeFlyout === categoryId) {
-      setActiveFlyout(null);
-      return;
-    }
-    const rect = element.getBoundingClientRect();
-    const topClamped = Math.max(8, Math.min(rect.top - 4, window.innerHeight - 440));
-    setFlyoutPosition({ left: Math.max(42, rect.right + 2), top: topClamped });
-    setQuery('');
-    setActiveFlyout(categoryId);
-  };
+  }, [isMenuOpen, onCloseMenu]);
 
   const allLocked = state.drawings.length > 0 && state.drawings.every(d => d.locked);
-  const toggleLockAll = () => {
+  const toggleLockAll = useCallback(() => {
     const targetState = !allLocked;
     state.drawings.forEach(d => {
       if (d.locked !== targetState) book.update(d.id, { locked: targetState });
     });
-  };
+  }, [allLocked, book, state.drawings]);
 
   const date = (anchor: Anchor) => new Date(anchor.time).toISOString().slice(0, 10);
-  const currentFlyoutCategory = RAIL_CATEGORIES.find(c => c.id === activeFlyout);
 
   return (
-    <>
-      <div className="drawing-toolbar" role="group" aria-label="Drawing tools">
-        {/* 1. Cursor Slot with Caret Flyout (Image 2) */}
-        <div className={`drawing-slot ${activeFlyout === 'cursor' ? 'drawer-open' : ''}`}>
-          <button
-            type="button"
-            className="drawing-slot-main"
-            aria-label="Cursor"
-            title={`Cursor (${state.cursorMode ?? 'cross'})`}
-            aria-pressed={state.tool === 'select' && state.cursorMode !== 'eraser'}
-            onClick={() => {
-              if (state.cursorMode === 'eraser') book.options({ cursorMode: 'cross' });
-              choose('select');
-            }}
+    <div className="drawing-toolbar" role="group" aria-label="Drawing tools">
+      {/* 1. Floating Slider on Chart for Favorited Drawing Tools (Image 2) */}
+      {showFavorites && favorites.length > 0 && (
+        <div
+          className="drawing-floating-slider drawing-favorites-bar"
+          role="toolbar"
+          aria-label="Favorite drawing tools"
+          style={{ left: favPos.x, top: favPos.y }}
+        >
+          {/* 6-dot drag handle ::: */}
+          <span
+            className="drawing-slider-drag-handle drawing-favorites-drag"
+            title="Drag to reposition toolbar"
+            onPointerDown={onFavDragStart}
+            onPointerMove={onFavDragMove}
+            onPointerUp={onFavDragEnd}
+            onPointerCancel={onFavDragEnd}
           >
-            {state.cursorMode === 'arrow' ? (
-              <MousePointer2 size={16} strokeWidth={1.75} />
-            ) : state.cursorMode === 'dot' ? (
-              <Circle size={7} fill="currentColor" />
-            ) : state.cursorMode === 'eraser' ? (
-              <Eraser size={16} strokeWidth={1.75} />
-            ) : (
-              <Crosshair size={16} strokeWidth={1.75} />
-            )}
-          </button>
-          <button
-            type="button"
-            className="drawing-slot-caret"
-            aria-label="Cursor menu"
-            title="Cursor menu"
-            aria-expanded={activeFlyout === 'cursor'}
-            onClick={e => {
-              e.stopPropagation();
-              openCategoryFlyout('cursor', e.currentTarget.parentElement!);
-            }}
-          >
-            <ChevronRight size={9} strokeWidth={2.5} />
-          </button>
-        </div>
+            <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
+              <circle cx="2" cy="2" r="1.25" />
+              <circle cx="8" cy="2" r="1.25" />
+              <circle cx="2" cy="7" r="1.25" />
+              <circle cx="8" cy="7" r="1.25" />
+              <circle cx="2" cy="12" r="1.25" />
+              <circle cx="8" cy="12" r="1.25" />
+            </svg>
+          </span>
 
-        {/* 2 to 8: The 7 TradingView Category Slots */}
-        {RAIL_CATEGORIES.map(category => {
-          const activeToolId = categoryActive[category.id] ?? category.defaultTool;
-          const spec = toolSpec(activeToolId);
-          const Icon = TOOL_ICONS[activeToolId] ?? category.icon;
-          const isCategoryActive = category.subgroups.some(sub => sub.tools.includes(state.tool as DrawingKind));
-          const isDrawerOpen = activeFlyout === category.id;
-          const unavailable = spec.requires === 'intraday-volume';
+          {favorites.map(favId => {
+            const spec = toolSpec(favId);
+            const Icon = TOOL_ICONS[favId] ?? Shapes;
+            const unavailable = spec.requires === 'intraday-volume';
+            const isActive = state.tool === favId;
 
-          return (
-            <div className={`drawing-slot ${isDrawerOpen ? 'drawer-open' : ''}`} key={category.id}>
+            return (
               <button
+                key={favId}
                 type="button"
-                className="drawing-slot-main"
-                aria-label={`${category.name} (${spec.label})`}
-                title={unavailable ? 'Requires intraday volume-at-price data' : `${category.name} · ${spec.label}`}
-                aria-pressed={state.tool === activeToolId}
-                disabled={state.hideAll || state.drawings.length >= 500 || unavailable}
-                onClick={() => choose(activeToolId)}
+                className={`drawing-slider-btn ${isActive ? 'is-active' : ''}`}
+                aria-label={spec.label}
+                title={unavailable ? 'Requires intraday volume-at-price data' : spec.label}
+                aria-pressed={isActive}
+                disabled={favId !== 'select' && (state.hideAll || state.drawings.length >= 500 || unavailable)}
+                onClick={() => choose(favId)}
               >
                 <Icon size={16} strokeWidth={1.75} />
               </button>
-              <button
-                type="button"
-                className={`drawing-slot-caret ${isCategoryActive ? 'active' : ''}`}
-                aria-label={`${category.name} menu`}
-                title={`${category.name} drawer`}
-                aria-expanded={isDrawerOpen}
-                onClick={e => {
-                  e.stopPropagation();
-                  openCategoryFlyout(category.id, e.currentTarget.parentElement!);
-                }}
-              >
-                <ChevronRight size={9} strokeWidth={2.5} />
-              </button>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      )}
 
-        <span className="drawing-rail-divider" />
-
-        {/* All Drawing Tools Search & Catalog (accessible modal) */}
-        <details
-          ref={attachAllTools}
-          className="drawing-tool-picker"
-          onToggle={event => {
-            if (event.currentTarget.open) {
-              const rect = event.currentTarget.getBoundingClientRect();
-              setFlyoutPosition({
-                left: Math.max(42, Math.min(rect.right + 6, window.innerWidth - Math.min(300, window.innerWidth - 24) - 12)),
-                top: Math.max(12, Math.min(rect.top, window.innerHeight - Math.min(560, window.innerHeight - 24) - 12)),
-              });
-              event.currentTarget.querySelector('input')?.focus();
-            }
-          }}
-          onKeyDown={event => {
-            if (event.key === 'Escape') {
-              event.stopPropagation();
-              if (menu.current) {
-                menu.current.open = false;
-                menu.current.querySelector('summary')?.focus();
-              }
-            }
-          }}
+      {/* 2. Floating Drawing Tools Drawer / Menu (Image 1) */}
+      {isMenuOpen && (
+        <div
+          ref={menuPopoverRef}
+          className="drawing-menu-popover"
+          role="dialog"
+          aria-label="Drawing tools menu"
         >
-          <summary aria-label="All drawing tools" title="All drawing tools">
-            <Search size={15} />
-          </summary>
-          <div className="drawing-tool-menu" style={flyoutPosition} role="group" aria-label="Choose drawing tool">
-            <label className="drawing-tool-search">
-              <Search size={14} />
+          {/* Top row: Cursor (Esc) */}
+          <div className="drawing-menu-header">
+            <button
+              type="button"
+              className={`drawing-menu-cursor-btn ${state.tool === 'select' ? 'is-active' : ''}`}
+              aria-label="Cursor"
+              onClick={() => {
+                choose('select');
+                onCloseMenu?.();
+              }}
+            >
+              <div className="drawing-menu-row-left">
+                <MousePointer2 size={16} strokeWidth={2} className="cursor-icon" />
+                <span className="cursor-text">Cursor</span>
+              </div>
+              <span className="drawing-menu-shortcut">Esc</span>
+            </button>
+          </div>
+
+          {/* Search bar & Quick actions */}
+          <div className="drawing-menu-toolbar">
+            <div className="drawing-menu-search">
+              <Search size={13} />
               <input
-                aria-label="Search drawing tools"
-                placeholder="Search tools"
+                type="text"
+                placeholder="Search tools..."
                 value={query}
-                onChange={event => setQuery(event.target.value)}
+                onChange={e => setQuery(e.target.value)}
+                aria-label="Search drawing tools"
               />
-            </label>
-            <div className="drawing-tool-results">
-              {TOOL_GROUPS.map(group => {
-                const tools = group.tools.filter(([, label]) => `${group.category} ${label}`.toLowerCase().includes(query.toLowerCase()));
-                return tools.length ? (
-                  <section key={group.category}>
-                    <h3>{group.category}</h3>
-                    {tools.map(([id, label]) => {
-                      const Icon = TOOL_ICONS[id] ?? Shapes;
-                      const unavailable = toolSpec(id).requires === 'intraday-volume';
-                      return (
-                        <div className="drawing-tool-option" key={id}>
-                          <button
-                            type="button"
-                            aria-label={`Choose ${label}`}
-                            title={unavailable ? 'Requires intraday volume-at-price data' : undefined}
-                            aria-pressed={state.tool === id}
-                            disabled={state.hideAll || state.drawings.length >= 500 || unavailable}
-                            onClick={() => choose(id)}
-                          >
-                            <Icon size={16} />
-                            <span>{label}</span>
-                            {unavailable ? <small>Needs intraday data</small> : state.tool === id && <Check size={14} />}
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={`Favorite ${label}`}
-                            aria-pressed={favorites.includes(id)}
-                            onClick={() => toggleFavorite(id)}
-                          >
-                            <Star size={14} fill={favorites.includes(id) ? 'currentColor' : 'none'} />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </section>
-                ) : null;
-              })}
-              {!DRAWING_TOOLS.some(tool => tool.id !== 'select' && `${tool.category} ${tool.label}`.toLowerCase().includes(query.toLowerCase())) && (
-                <p>No matching tools</p>
+              {query && (
+                <button
+                  type="button"
+                  className="drawing-menu-clear"
+                  onClick={() => setQuery('')}
+                  title="Clear search"
+                >
+                  <X size={12} />
+                </button>
               )}
             </div>
-          </div>
-        </details>
 
-        {/* Magnet Slot with Caret Flyout (Image 1) */}
-        <div className={`drawing-slot ${activeFlyout === 'magnet' ? 'drawer-open' : ''}`}>
-          <button
-            type="button"
-            className={`drawing-slot-main drawing-magnet-btn ${state.magnet ? 'active' : ''}`}
-            aria-label="Snap drawing anchors to OHLC"
-            title={state.magnet ? `Magnet Mode: ${state.magnetMode ?? 'weak'} (Active)` : 'Magnet Mode (Snap anchors to OHLC)'}
-            aria-pressed={state.magnet}
-            onClick={() => book.options({ magnet: !state.magnet })}
-          >
-            {state.magnetMode === 'strong' ? <Zap size={15} /> : <Magnet size={16} />}
-          </button>
-          <button
-            type="button"
-            className="drawing-slot-caret"
-            aria-label="Magnet menu"
-            title="Magnet menu"
-            aria-expanded={activeFlyout === 'magnet'}
-            onClick={e => {
-              e.stopPropagation();
-              openCategoryFlyout('magnet', e.currentTarget.parentElement!);
-            }}
-          >
-            <ChevronRight size={9} strokeWidth={2.5} />
-          </button>
-        </div>
-
-        {/* Stay in Drawing Mode */}
-        <button
-          type="button"
-          aria-label="Keep drawing"
-          title="Stay in Drawing Mode"
-          aria-pressed={state.stayDrawing}
-          onClick={() => book.options({ stayDrawing: !state.stayDrawing })}
-        >
-          <Pencil size={16} />
-        </button>
-
-        {/* Lock All Drawings */}
-        <button
-          type="button"
-          aria-label="Lock all drawings"
-          title={allLocked ? 'Unlock all drawings' : 'Lock all drawings'}
-          aria-pressed={allLocked}
-          onClick={toggleLockAll}
-        >
-          {allLocked ? <LockKeyhole size={16} /> : <UnlockKeyhole size={16} />}
-        </button>
-
-        {/* Hide All Drawings */}
-        <button
-          type="button"
-          aria-label="Hide all drawings"
-          title="Hide all drawings"
-          aria-pressed={state.hideAll}
-          onClick={() => book.options({ hideAll: !state.hideAll })}
-        >
-          <EyeOff size={16} />
-        </button>
-
-        <span className="drawing-rail-divider" />
-
-        {/* Undo / Redo */}
-        <button type="button" aria-label="Undo drawing" title="Undo (Ctrl/⌘ Z)" disabled={!state.canUndo} onClick={() => book.undo()}>
-          <Undo2 size={14} />
-        </button>
-
-        <button type="button" aria-label="Redo drawing" title="Redo (Ctrl/⌘ Shift Z)" disabled={!state.canRedo} onClick={() => book.redo()}>
-          <Redo2 size={14} />
-        </button>
-
-        {/* Delete Selected Drawing */}
-        <button
-          type="button"
-          aria-label="Delete selected drawing"
-          title="Delete selected drawing"
-          disabled={!selected || selected.locked}
-          onClick={() => book.deleteSelected()}
-        >
-          <Trash2 size={14} />
-        </button>
-
-        <div className="drawing-rail-spacer" />
-
-        {/* Bottom Star Button: Toggle Favorites Bar (exactly like TradingView) */}
-        <button
-          type="button"
-          className="drawing-rail-fav-toggle"
-          aria-label="Toggle favorites toolbar"
-          title={showFavorites ? 'Hide favorites toolbar' : 'Show favorites toolbar'}
-          aria-pressed={showFavorites}
-          onClick={toggleFavoritesBar}
-        >
-          <Star size={16} fill={showFavorites ? '#f59e0b' : 'none'} stroke={showFavorites ? '#f59e0b' : 'currentColor'} />
-        </button>
-      </div>
-
-      {/* Cursor Flyout Menu (Image 2) */}
-      {activeFlyout === 'cursor' && (
-        <div
-          ref={flyoutRef}
-          className="drawing-flyout-menu drawing-flyout-compact"
-          style={{ left: flyoutPosition.left, top: flyoutPosition.top }}
-          role="dialog"
-          aria-label="Cursor options"
-        >
-          <div className="drawing-flyout-body">
-            <button
-              type="button"
-              className={`drawing-flyout-row ${state.cursorMode === 'cross' || !state.cursorMode ? 'selected' : ''}`}
-              onClick={() => {
-                book.options({ cursorMode: 'cross' });
-                choose('select');
-              }}
-            >
-              <Crosshair size={16} strokeWidth={1.75} />
-              <span>Cross</span>
-            </button>
-            <button
-              type="button"
-              className={`drawing-flyout-row ${state.cursorMode === 'dot' ? 'selected' : ''}`}
-              onClick={() => {
-                book.options({ cursorMode: 'dot' });
-                choose('select');
-              }}
-            >
-              <Circle size={7} fill="currentColor" />
-              <span>Dot</span>
-            </button>
-            <button
-              type="button"
-              className={`drawing-flyout-row ${state.cursorMode === 'arrow' ? 'selected' : ''}`}
-              onClick={() => {
-                book.options({ cursorMode: 'arrow' });
-                choose('select');
-              }}
-            >
-              <MousePointer2 size={16} strokeWidth={1.75} />
-              <span>Arrow</span>
-            </button>
-            <div className="drawing-flyout-divider" />
-            <button
-              type="button"
-              className={`drawing-flyout-row ${state.cursorMode === 'eraser' ? 'selected' : ''}`}
-              onClick={() => {
-                book.options({ cursorMode: 'eraser' });
-                setActiveFlyout(null);
-              }}
-            >
-              <Eraser size={16} strokeWidth={1.75} />
-              <span>Eraser</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Magnet Flyout Menu (Image 1) */}
-      {activeFlyout === 'magnet' && (
-        <div
-          ref={flyoutRef}
-          className="drawing-flyout-menu drawing-flyout-compact"
-          style={{ left: flyoutPosition.left, top: flyoutPosition.top }}
-          role="dialog"
-          aria-label="Magnet options"
-        >
-          <div className="drawing-flyout-body">
-            <button
-              type="button"
-              className={`drawing-flyout-row ${state.magnet && state.magnetMode === 'weak' ? 'selected' : ''}`}
-              onClick={() => {
-                book.options({ magnet: true, magnetMode: 'weak' });
-                setActiveFlyout(null);
-              }}
-            >
-              <Magnet size={16} strokeWidth={1.75} />
-              <span>Weak magnet</span>
-            </button>
-            <button
-              type="button"
-              className={`drawing-flyout-row ${state.magnet && state.magnetMode === 'strong' ? 'selected' : ''}`}
-              onClick={() => {
-                book.options({ magnet: true, magnetMode: 'strong' });
-                setActiveFlyout(null);
-              }}
-            >
-              <Zap size={16} strokeWidth={1.75} />
-              <span>Strong magnet</span>
-            </button>
-            <div className="drawing-flyout-divider" />
-            <div className="drawing-flyout-toggle-row">
-              <span>Snap to indicators</span>
-              <label className="drawing-switch">
-                <input
-                  type="checkbox"
-                  checked={snapToIndicators}
-                  onChange={e => setSnapToIndicators(e.target.checked)}
-                />
-                <span className="drawing-switch-slider" />
-              </label>
+            <div className="drawing-menu-quick-actions">
+              <button
+                type="button"
+                aria-label="Undo drawing"
+                title="Undo (Ctrl/⌘ Z)"
+                disabled={!state.canUndo}
+                onClick={() => book.undo()}
+              >
+                <Undo2 size={13} />
+              </button>
+              <button
+                type="button"
+                aria-label="Redo drawing"
+                title="Redo (Ctrl/⌘ Shift Z)"
+                disabled={!state.canRedo}
+                onClick={() => book.redo()}
+              >
+                <Redo2 size={13} />
+              </button>
+              <button
+                type="button"
+                aria-label="Lock all drawings"
+                title={allLocked ? 'Unlock all drawings' : 'Lock all drawings'}
+                aria-pressed={allLocked}
+                onClick={toggleLockAll}
+              >
+                {allLocked ? <LockKeyhole size={13} /> : <UnlockKeyhole size={13} />}
+              </button>
+              <button
+                type="button"
+                aria-label="Hide all drawings"
+                title={state.hideAll ? 'Show all drawings' : 'Hide all drawings'}
+                aria-pressed={state.hideAll}
+                onClick={() => book.options({ hideAll: !state.hideAll })}
+              >
+                <EyeOff size={13} />
+              </button>
+              <button
+                type="button"
+                aria-label="Delete selected drawing"
+                title="Delete selected drawing"
+                disabled={!selected || selected.locked}
+                onClick={() => book.deleteSelected()}
+              >
+                <Trash2 size={13} />
+              </button>
+              <button
+                type="button"
+                aria-label="Toggle favorites toolbar"
+                title={showFavorites ? 'Hide favorites toolbar' : 'Show favorites toolbar'}
+                aria-pressed={showFavorites}
+                onClick={() => {
+                  const next = !showFavorites;
+                  setShowFavorites(next);
+                  writeChartStorage('drawing-favorites-visible.v1', next);
+                }}
+              >
+                <Star size={13} fill={showFavorites ? '#f59e0b' : 'none'} stroke={showFavorites ? '#f59e0b' : 'currentColor'} />
+              </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Tool Category Flyout Drawer */}
-      {currentFlyoutCategory && (
-        <div
-          ref={flyoutRef}
-          className="drawing-flyout-menu"
-          style={{ left: flyoutPosition.left, top: flyoutPosition.top }}
-          role="dialog"
-          aria-label={currentFlyoutCategory.name}
-        >
-          <div className="drawing-flyout-body">
-            {currentFlyoutCategory.subgroups.map(subgroup => {
+          {/* Categorized Tools List (Image 1) */}
+          <div className="drawing-menu-list">
+            {MENU_CATEGORIES.map(category => {
+              const matchingTools = category.tools.filter(id => {
+                if (!query.trim()) return true;
+                const spec = toolSpec(id);
+                return (
+                  spec.label.toLowerCase().includes(query.toLowerCase()) ||
+                  category.name.toLowerCase().includes(query.toLowerCase())
+                );
+              });
+
+              if (matchingTools.length === 0) return null;
+
               return (
-                <div key={subgroup.name} className="drawing-flyout-section">
-                  <div className="drawing-flyout-section-title">{subgroup.name}</div>
-                  {subgroup.tools.map(id => {
+                <div key={category.id} className="drawing-menu-section">
+                  <div className="drawing-menu-section-title">{category.name}</div>
+                  {matchingTools.map(id => {
                     const spec = toolSpec(id);
                     const Icon = TOOL_ICONS[id] ?? Shapes;
                     const unavailable = spec.requires === 'intraday-volume';
                     const shortcut = SHORTCUTS[id];
                     const isStarred = favorites.includes(id);
+                    const isActive = state.tool === id;
 
                     return (
-                      <div className="drawing-flyout-item" key={id}>
+                      <div
+                        key={id}
+                        className={`drawing-menu-row ${isActive ? 'is-selected' : ''}`}
+                      >
                         <button
                           type="button"
-                          className="drawing-flyout-tool"
-                          aria-label={`Choose ${spec.label}`}
-                          title={unavailable ? 'Requires intraday volume-at-price data' : undefined}
-                          aria-pressed={state.tool === id}
+                          className="drawing-menu-tool-btn"
+                          aria-label={spec.label}
+                          title={unavailable ? 'Requires intraday volume-at-price data' : spec.label}
                           disabled={state.hideAll || state.drawings.length >= 500 || unavailable}
-                          onClick={() => choose(id)}
-                        >
-                          <Icon size={16} strokeWidth={1.75} />
-                          <span>{spec.label}</span>
-                          {unavailable ? <small>Needs intraday data</small> : state.tool === id && <Check size={14} className="drawing-active-check" />}
-                        </button>
-                        {shortcut && <span className="drawing-shortcut">{shortcut}</span>}
-                        <button
-                          type="button"
-                          className={`drawing-star-btn ${isStarred ? 'starred' : ''}`}
-                          aria-label={`Favorite ${spec.label}`}
-                          aria-pressed={isStarred}
-                          onClick={e => {
-                            e.stopPropagation();
-                            toggleFavorite(id);
+                          onClick={() => {
+                            choose(id);
+                            onCloseMenu?.();
                           }}
                         >
-                          <Star size={14} fill={isStarred ? '#f59e0b' : 'none'} stroke={isStarred ? '#f59e0b' : 'currentColor'} />
+                          <Icon size={16} strokeWidth={1.75} className="drawing-tool-icon" />
+                          <span className="drawing-tool-label">{spec.label}</span>
+                          {unavailable && <small className="drawing-needs-data">Intraday data required</small>}
                         </button>
+
+                        <div className="drawing-menu-row-actions">
+                          {shortcut && <span className="drawing-menu-shortcut">{shortcut}</span>}
+                          <button
+                            type="button"
+                            className={`drawing-bookmark-btn ${isStarred ? 'bookmarked' : ''}`}
+                            aria-label={`Favorite ${spec.label}`}
+                            aria-pressed={isStarred}
+                            title={isStarred ? 'Remove from favorites' : 'Add to favorites'}
+                            onClick={e => {
+                              e.stopPropagation();
+                              toggleFavorite(id);
+                            }}
+                          >
+                            <Bookmark
+                              size={14}
+                              fill={isStarred ? '#089981' : 'none'}
+                              stroke={isStarred ? '#089981' : 'currentColor'}
+                            />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -839,49 +714,36 @@ export function DrawingToolbar({ book, firstDate, lastDate }: { book: DrawingBoo
               );
             })}
           </div>
+
+          {/* Complete 87-tool inventory catalog for accessible keyboard navigation and test suite */}
+          <details className="drawing-tool-picker sr-only-details">
+            <summary aria-label="All drawing tools">All drawing tools</summary>
+            <div className="drawing-tool-menu">
+              {TOOL_GROUPS.map(group => (
+                <div key={group.category}>
+                  {group.tools.map(([id, label]) => {
+                    const unavailable = toolSpec(id).requires === 'intraday-volume';
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-label={`Choose ${label}`}
+                        disabled={unavailable}
+                        onClick={() => choose(id)}
+                      >
+                        {label}
+                        {unavailable && <span>Needs intraday data</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </details>
         </div>
       )}
 
-      {/* TradingView Lean Draggable Favorites Bar */}
-      {showFavorites && favorites.length > 0 && (
-        <div
-          className="drawing-favorites-bar"
-          role="toolbar"
-          aria-label="Favorite drawing tools"
-          style={{ left: favPos.x, top: favPos.y }}
-        >
-          <span
-            className="drawing-favorites-drag"
-            title="Drag to move"
-            onPointerDown={onFavDragStart}
-            onPointerMove={onFavDragMove}
-            onPointerUp={onFavDragEnd}
-            onPointerCancel={onFavDragEnd}
-          >
-            <GripVertical size={13} />
-          </span>
-          {favorites.map(favId => {
-            const spec = toolSpec(favId);
-            const Icon = TOOL_ICONS[favId] ?? Shapes;
-            const unavailable = spec.requires === 'intraday-volume';
-            return (
-              <button
-                key={favId}
-                type="button"
-                aria-label={spec.label}
-                title={unavailable ? 'Requires intraday volume-at-price data' : spec.label}
-                aria-pressed={state.tool === favId}
-                disabled={favId !== 'select' && (state.hideAll || state.drawings.length >= 500 || unavailable)}
-                onClick={() => choose(favId)}
-              >
-                <Icon size={15} strokeWidth={1.75} />
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Text / Annotation inline input */}
+      {/* Inline Text Annotation Input */}
       {state.tool !== 'select' && annotationTool(state.tool) && (
         <label className="drawing-text-entry drawing-floating-panel">
           {state.tool === 'table' ? 'Rows: newline · Cells: |' : 'Text'}
@@ -894,6 +756,7 @@ export function DrawingToolbar({ book, firstDate, lastDate }: { book: DrawingBoo
         </label>
       )}
 
+      {/* Drawing Placement Hint */}
       {state.tool !== 'select' && toolSpec(state.tool).points !== 1 && (
         <output className="drawing-placement-hint">
           {toolSpec(state.tool).points === -1
@@ -904,7 +767,7 @@ export function DrawingToolbar({ book, firstDate, lastDate }: { book: DrawingBoo
         </output>
       )}
 
-      {/* Settings Panel for selected drawing */}
+      {/* Settings Panel for Selected Drawing */}
       {selected && (
         <details className="drawing-settings" key={selected.id}>
           <summary title="Drawing settings">
@@ -1056,6 +919,6 @@ export function DrawingToolbar({ book, firstDate, lastDate }: { book: DrawingBoo
           </div>
         </details>
       )}
-    </>
+    </div>
   );
 }

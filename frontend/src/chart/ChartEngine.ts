@@ -7,8 +7,10 @@ import {
 import { ema, validEmaLine, type Candle, type EmaLine } from './model';
 import { DrawingBook, hitDrawing, indexTime, timeIndex, type DrawingProjection, type Pixel } from './drawings';
 import { DrawingLayer } from './DrawingLayer';
-import { rsi, macd, sma, bollinger, atr, stochastic, monthlyVwap, supertrend, defaultStudies, type ChartStudies } from './studies';
+import { rsi, macd, sma, bollinger, atr, stochastic, monthlyVwap, supertrend, defaultStudies, getPriceSource, type ChartStudies } from './studies';
 export type { ChartStudies } from './studies';
+import { type StudyConfigs } from './studyConfigs';
+export type { StudyConfigs } from './studyConfigs';
 import type { ChartEvent } from './events';
 
 // Match the reference screener's native candle and bar palette.
@@ -45,6 +47,7 @@ export type ChartAppearance = {
   horzGridStyle?:'solid'|'dashed'|'dotted';
   crosshairColor?:string;
   crosshairStyle?:'solid'|'dashed'|'dotted';
+  crosshairTransparency?:number;
   watermarkVisible?:boolean;
   watermarkText?:string;
   watermarkColor?:string;
@@ -73,6 +76,10 @@ export type ChartAppearance = {
 };
 const scaleModes = {normal:PriceScaleMode.Normal,logarithmic:PriceScaleMode.Logarithmic,percentage:PriceScaleMode.Percentage,indexed:PriceScaleMode.IndexedTo100};
 const withAlpha = (hex:string,opacity:number) => `${hex}${Math.round(opacity*255).toString(16).padStart(2,'0')}`;
+const RIGHT_EDGE_BARS = 6;
+const RIGHT_EDGE_PIXELS = 32;
+const SCROLL_WITHOUT_WHEEL = {mouseWheel:false,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true} as const;
+const SCALE_WITH_WHEEL = {mouseWheel:true,pinch:true,axisPressedMouseMove:true,axisDoubleClickReset:true} as const;
 
 /** Native TradingView rendering and navigation; Nexus owns data, tools and replay. */
 export class ChartEngine {
@@ -104,7 +111,13 @@ export class ChartEngine {
   private showEvents=false;
   private markerEvents=new Map<string,ChartEvent[]>();
   private studies:ChartStudies=defaultStudies();
+  private studyConfigs:StudyConfigs={};
   private studySeries:ISeriesApi<'Line'|'Histogram'>[]=[];
+  private studySeriesByPane=new Map<string,ISeriesApi<'Line'|'Histogram'>[]>();
+  private onPanesChange?:()=>void;
+  private maximizedPane:number|null=null;
+  private hostObserver?:ResizeObserver;
+  private paneObserver?:ResizeObserver;
   private comparison:ISeriesApi<'Line'>|null=null;
   private comparisonData:readonly Candle[]=[];
   private comparisonSeparate=false;
@@ -119,10 +132,12 @@ export class ChartEngine {
       autoSize:true,
       layout:{fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',fontSize:11,attributionLogo:false,panes:{enableResize:true}},
       rightPriceScale:{borderVisible:false,scaleMargins:{top:.13,bottom:.22}},
-      timeScale:{borderVisible:false,rightOffset:6,barSpacing:8,fixLeftEdge:false,lockVisibleTimeRangeOnResize:true,shiftVisibleRangeOnNewBar:true},
+      timeScale:{borderVisible:false,rightOffset:RIGHT_EDGE_BARS,rightOffsetPixels:RIGHT_EDGE_PIXELS,barSpacing:8,fixLeftEdge:false,lockVisibleTimeRangeOnResize:true,shiftVisibleRangeOnNewBar:true},
       crosshair:{mode:CrosshairMode.Normal},
-      localization:{locale:'en-IN',priceFormatter:(value:number)=>value.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})},
+      localization:{locale:'en-IN'},
       kineticScroll:{mouse:true,touch:true},
+      handleScroll:SCROLL_WITHOUT_WHEEL,
+      handleScale:SCALE_WITH_WHEEL,
     });
     this.price=this.createPriceSeries();
     this.volumeSeries=this.chart.addSeries(HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:'volume',lastValueVisible:false,priceLineVisible:false});
@@ -153,7 +168,7 @@ export class ChartEngine {
     this.theme=new MutationObserver(()=>this.readTheme());
     this.theme.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
     this.readTheme();
-    this.unsubscribe=book.subscribe(()=>{this.chart.applyOptions({handleScroll:book.getSnapshot().tool==='select' && !this.replayPicker});});
+    this.unsubscribe=book.subscribe(()=>{this.chart.applyOptions({handleScroll:this.scrollOptions()});});
     const options={signal:this.events.signal,capture:true};
     host.addEventListener('pointerdown',this.down,options);
     host.addEventListener('pointermove',this.move,options);
@@ -165,6 +180,8 @@ export class ChartEngine {
     host.addEventListener('touchstart',event=>{if(this.blockMouse){event.preventDefault();event.stopPropagation();}},{...options,passive:false});
     host.addEventListener('keydown',this.key,options);
     host.addEventListener('dblclick',event=>{if(this.layer.finish()) {event.preventDefault();event.stopPropagation();}},options);
+    this.hostObserver=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{this.notifyPanesChange();}):undefined;
+    this.hostObserver?.observe(host);
     this.reset();
   }
 
@@ -310,18 +327,22 @@ export class ChartEngine {
         vertLine:{
           visible:appearance.crosshair,
           labelVisible:appearance.crosshair,
-          ...(appearance.crosshairColor?{color:appearance.crosshairColor}:{}),
+          ...(appearance.crosshairTransparency !== undefined
+            ? { color: withAlpha(appearance.crosshairColor || '#aab8c5', Math.max(0, Math.min(1, 1 - appearance.crosshairTransparency / 100))) }
+            : appearance.crosshairColor ? { color: appearance.crosshairColor } : {}),
           style:toLwcLineStyle(appearance.crosshairStyle),
         },
         horzLine:{
           visible:appearance.crosshair,
           labelVisible:appearance.crosshair,
-          ...(appearance.crosshairColor?{color:appearance.crosshairColor}:{}),
+          ...(appearance.crosshairTransparency !== undefined
+            ? { color: withAlpha(appearance.crosshairColor || '#aab8c5', Math.max(0, Math.min(1, 1 - appearance.crosshairTransparency / 100))) }
+            : appearance.crosshairColor ? { color: appearance.crosshairColor } : {}),
           style:toLwcLineStyle(appearance.crosshairStyle),
         },
       },
-      handleScroll:appearance.panEnabled!==false,
-      handleScale:appearance.zoomEnabled!==false,
+      handleScroll:this.scrollOptions(),
+      handleScale:appearance.zoomEnabled!==false?SCALE_WITH_WHEEL:false,
     });
 
     if(this.watermarkPlugin) {
@@ -372,6 +393,11 @@ export class ChartEngine {
       this.volumeSeries.moveToPane(separate?this.chart.panes().length:0);
       if(separate) this.volumeSeries.getPane().setStretchFactor(.25);
     }
+    this.volumeSeries.applyOptions({
+      priceScaleId:separate?'right':'volume',
+      lastValueVisible:separate,
+      visible:appearance.volume,
+    });
     this.volumeSeries.priceScale().applyOptions({scaleMargins:{top:separate?.1:.8,bottom:0},visible:separate});
     const topMargin=typeof appearance.topMargin==='number'?appearance.topMargin/100:.13;
     const bottomMargin=typeof appearance.bottomMargin==='number'?appearance.bottomMargin/100:(appearance.volume&&!separate?.22:.06);
@@ -380,14 +406,15 @@ export class ChartEngine {
       invertScale:appearance.invertScale??false,
       scaleMargins:{top:topMargin,bottom:bottomMargin},
     });
-    this.volumeSeries.applyOptions({visible:appearance.volume});
     this.showEvents=appearance.events??false;this.refreshMarkers();
+    this.updatePaneObservers();
+    this.notifyPanesChange();
     this.invalidate();
   }
   resetPriceScale=()=>this.chart.priceScale('right').setAutoScale(true);
   reset=()=>{
     this.layer.cancel();this.resetPriceScale();
-    this.chart.timeScale().setVisibleLogicalRange({from:Math.max(0,this.candles.length-120),to:this.candles.length-1+6});
+    this.setLatestRange(Math.max(0,this.candles.length-120));
   };
   zoom(factor:number,anchor=.5) {
     const scale=this.chart.timeScale(),range=scale.getVisibleLogicalRange();if(!range) return;
@@ -396,11 +423,16 @@ export class ChartEngine {
   }
   setRange(months:number|null) {
     if(!this.candles.length) return;
-    if(months===null) {this.chart.timeScale().fitContent();return;}
+    if(months===null) {this.setLatestRange(0);return;}
     const last=this.candles.at(-1)!,boundary=new Date(`${last.date}T00:00:00Z`);
     boundary.setUTCMonth(boundary.getUTCMonth()-months);
-    const from=this.candles.find(bar=>bar.date>=boundary.toISOString().slice(0,10))?.date??this.candles[0].date;
-    this.chart.timeScale().setVisibleRange({from,to:last.date});
+    const from=this.candles.findIndex(bar=>bar.date>=boundary.toISOString().slice(0,10));
+    this.setLatestRange(Math.max(0,from));
+  }
+  private setLatestRange(from:number) {
+    const scale=this.chart.timeScale(),width=scale.width(),last=this.candles.length-1;
+    const pixelBars=width>RIGHT_EDGE_PIXELS?Math.ceil(RIGHT_EDGE_PIXELS*(last-from)/(width-RIGHT_EDGE_PIXELS)):0;
+    scale.setVisibleLogicalRange({from,to:last+Math.max(RIGHT_EDGE_BARS,pixelBars)});
   }
   setCandles(candles:readonly Candle[]) {
     const previous=this.candles;
@@ -433,10 +465,20 @@ export class ChartEngine {
     const range=this.chart.timeScale().getVisibleRange();
     return range?{from:this.dateString(range.from),to:this.dateString(range.to)}:undefined;
   }
-  restoreView(view:{from:string;to:string}) {this.chart.timeScale().setVisibleRange(view);}
+  restoreView(view:{from:string;to:string}) {
+    const last=this.candles.at(-1);
+    if(last&&view.to>=last.date) {
+      const from=this.candles.findIndex(bar=>bar.date>=view.from);
+      this.setLatestRange(from<0?Math.max(0,this.candles.length-120):from);
+    } else this.chart.timeScale().setVisibleRange(view);
+  }
   paneWeights() {return this.chart.panes().map(pane=>pane.getStretchFactor());}
   restorePaneWeights(weights:readonly number[]) {const panes=this.chart.panes();if(weights.length===panes.length) panes.forEach((pane,index)=>pane.setStretchFactor(weights[index]));}
-  latest() {this.chart.timeScale().scrollToPosition(6,true);}
+  latest() {
+    const scale=this.chart.timeScale(),range=scale.getVisibleLogicalRange(),width=scale.width();
+    const pixelBars=range&&width>0?Math.ceil(RIGHT_EDGE_PIXELS*(range.to-range.from)/width):0;
+    scale.scrollToPosition(Math.max(RIGHT_EDGE_BARS,pixelBars),true);
+  }
   goToDate(date:string):boolean {
     const scale=this.chart.timeScale(),index=scale.timeToIndex(date,true),range=scale.getVisibleLogicalRange();
     if(index===null||!range||date<this.candles[0].date||date>this.candles.at(-1)!.date) return false;
@@ -456,41 +498,290 @@ export class ChartEngine {
     }
     this.markers.setMarkers([...this.markerEvents].sort(([a],[b])=>a.localeCompare(b)).map(([id,events]):SeriesMarker<Time>=>({id,time:id.slice(7),position:'belowBar',shape:'circle',color:events.some(event=>event.kind==='earnings')?'#049981':events.some(event=>event.kind==='action')?'#f59e0b':'#187669',size:.6})));
   }
+  setStudyConfigs(configs:StudyConfigs) {
+    this.studyConfigs=configs;
+    this.setStudies(this.studies);
+  }
   setStudies(studies:Partial<ChartStudies>) {
     for(const series of this.studySeries) this.chart.removeSeries(series);
-    this.studySeries=[];this.studies={...defaultStudies(),...studies};
+    this.studySeries=[];this.studySeriesByPane.clear();this.studies={...defaultStudies(),...studies};
     const panes=new Map<string,number>();
     for(const plot of this.studyPlots()) {
       if(plot.pane!=='price'&&!panes.has(plot.pane)) panes.set(plot.pane,this.chart.panes().length);
       const pane=plot.pane==='price'?0:panes.get(plot.pane)!;
-      const series=this.chart.addSeries(plot.histogram?HistogramSeries:LineSeries,{color:plot.color,lineWidth:1,title:plot.title,priceLineVisible:false,lastValueVisible:!plot.histogram},pane);
+      const series=this.chart.addSeries(plot.histogram?HistogramSeries:LineSeries,{
+        color:plot.color,
+        lineWidth:(plot.lineWidth??1) as LineWidth,
+        lineStyle:plot.lineStyle??LineStyle.Solid,
+        title:plot.title,
+        priceLineVisible:false,
+        lastValueVisible:!plot.histogram
+      },pane);
       if(plot.pane!=='price') series.getPane().setStretchFactor(.3);
-      for(const price of plot.levels??[]) series.createPriceLine({price,color:'#aab8c5',lineWidth:1,lineStyle:LineStyle.Dashed,axisLabelVisible:true});
+      for(const level of plot.levels??[]) {
+        series.createPriceLine({
+          price:level.price,
+          color:level.color??'#aab8c5',
+          lineWidth:1 as LineWidth,
+          lineStyle:level.lineStyle??LineStyle.Dashed,
+          axisLabelVisible:true
+        });
+      }
       this.studySeries.push(series);
+      if(!this.studySeriesByPane.has(plot.pane)) this.studySeriesByPane.set(plot.pane,[]);
+      this.studySeriesByPane.get(plot.pane)!.push(series);
     }
     this.updateStudies();
+    this.updatePaneObservers();
+    this.notifyPanesChange();
   }
   private studyPlots() {
-    const plots:Array<{title:string;color:string;values:(number|null)[];pane:string;histogram?:boolean;levels?:number[]}>=[];
-    const add=(title:string,color:string,values:(number|null)[],pane='price',levels?:number[])=>plots.push({title,color,values,pane,levels});
-    if(this.studies.rsi) add('RSI 14','#8b5cf6',rsi(this.candles),'rsi',[30,70]);
-    if(this.studies.macd) {
-      const values=macd(this.candles);
-      add('MACD 12/26',this.accent,values.line,'macd');add('Signal 9','#f59e0b',values.signal,'macd');
-      plots.push({title:'MACD histogram',color:CHART_PALETTE.volumeUp,values:values.histogram,pane:'macd',histogram:true});
+    const toLineStyle=(s?:string)=>s==='dashed'?LineStyle.Dashed:s==='dotted'?LineStyle.Dotted:LineStyle.Solid;
+    const plots:Array<{
+      title:string;
+      color:string;
+      values:(number|null)[];
+      pane:string;
+      histogram?:boolean;
+      lineWidth?:number;
+      lineStyle?:LineStyle;
+      levels?:Array<{price:number;color?:string;lineStyle?:LineStyle}>;
+    }>=[];
+    const add=(title:string,color:string,values:(number|null)[],pane='price',lineWidth=1,lineStyle=LineStyle.Solid,levels?:Array<{price:number;color?:string;lineStyle?:LineStyle}>)=>plots.push({title,color,values,pane,lineWidth,lineStyle,levels});
+
+    if(this.studies.rsi) {
+      const cfg=this.studyConfigs.rsi;
+      const period=cfg?.period??14;
+      const source=cfg?.source??'close';
+      const levels=cfg?.bandsVisible!==false?[
+        {price:cfg?.oversold??30,color:cfg?.bandColor??'#aab8c5',lineStyle:LineStyle.Dashed},
+        {price:cfg?.overbought??70,color:cfg?.bandColor??'#aab8c5',lineStyle:LineStyle.Dashed},
+      ]:undefined;
+      if(cfg?.lineVisible!==false) {
+        add(`RSI ${period}`,cfg?.color??'#8b5cf6',rsi(this.candles,period,source),'rsi',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle),levels);
+      }
     }
-    if(this.studies.sma) add('SMA 50','#3b82f6',sma(this.candles.map(bar=>bar.close),50));
-    if(this.studies.bollinger) {const values=bollinger(this.candles);add('BB 20 · upper','#78909c',values.upper);add('BB 20 · middle','#78909c',values.middle);add('BB 20 · lower','#78909c',values.lower);}
-    if(this.studies.vwap) add('Monthly VWAP','#e09b26',monthlyVwap(this.candles));
-    if(this.studies.atr) add('ATR 14','#e09b26',atr(this.candles),'atr');
-    if(this.studies.stochastic) {const values=stochastic(this.candles);add('Stoch %K 14',this.accent,values.k,'stochastic',[20,80]);add('Stoch %D 3','#ef5350',values.d,'stochastic');}
-    if(this.studies.supertrend) {const st=supertrend(this.candles,10,3);add('Supertrend 10 3',st.directions.at(-1)===-1?'#ef5350':'#089981',st.values,'price');}
+    if(this.studies.macd) {
+      const cfg=this.studyConfigs.macd;
+      const fast=cfg?.fast??12,slow=cfg?.slow??26,signal=cfg?.signal??9;
+      const source=cfg?.source??'close';
+      const values=macd(this.candles,fast,slow,signal,source);
+      if(cfg?.macdVisible!==false) {
+        add(`MACD ${fast}/${slow}`,cfg?.macdColor??this.accent,values.line,'macd',cfg?.macdWidth??1,toLineStyle(cfg?.macdStyle));
+      }
+      if(cfg?.signalVisible!==false) {
+        add(`Signal ${signal}`,cfg?.signalColor??'#f59e0b',values.signal,'macd',cfg?.signalWidth??1,toLineStyle(cfg?.signalStyle));
+      }
+      if(cfg?.histVisible!==false) {
+        plots.push({title:'MACD histogram',color:cfg?.histColor??CHART_PALETTE.volumeUp,values:values.histogram,pane:'macd',histogram:true});
+      }
+    }
+    if(this.studies.sma) {
+      const cfg=this.studyConfigs.sma;
+      const period=cfg?.period??50;
+      const source=cfg?.source??'close';
+      if(cfg?.visible!==false) {
+        add(`SMA ${period}`,cfg?.color??'#3b82f6',sma(this.candles.map(bar=>getPriceSource(bar,source)),period),'price',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle));
+      }
+    }
+    if(this.studies.bollinger) {
+      const cfg=this.studyConfigs.bollinger;
+      const period=cfg?.period??20,multiplier=cfg?.multiplier??2;
+      const source=cfg?.source??'close';
+      const values=bollinger(this.candles,period,multiplier,source);
+      if(cfg?.upperVisible!==false) {
+        add(`BB ${period} · upper`,cfg?.upperColor??'#78909c',values.upper,'price',cfg?.upperWidth??1,toLineStyle(cfg?.upperStyle));
+      }
+      if(cfg?.middleVisible!==false) {
+        add(`BB ${period} · middle`,cfg?.middleColor??'#78909c',values.middle,'price',cfg?.middleWidth??1,toLineStyle(cfg?.middleStyle??'dashed'));
+      }
+      if(cfg?.lowerVisible!==false) {
+        add(`BB ${period} · lower`,cfg?.lowerColor??'#78909c',values.lower,'price',cfg?.lowerWidth??1,toLineStyle(cfg?.lowerStyle));
+      }
+    }
+    if(this.studies.vwap) {
+      const cfg=this.studyConfigs.vwap;
+      if(cfg?.visible!==false) {
+        add('Monthly VWAP',cfg?.color??'#e09b26',monthlyVwap(this.candles),'price',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle));
+      }
+    }
+    if(this.studies.atr) {
+      const cfg=this.studyConfigs.atr;
+      const period=cfg?.period??14;
+      if(cfg?.visible!==false) {
+        add(`ATR ${period}`,cfg?.color??'#e09b26',atr(this.candles,period),'atr',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle));
+      }
+    }
+    if(this.studies.stochastic) {
+      const cfg=this.studyConfigs.stochastic;
+      const period=cfg?.period??14,dPeriod=cfg?.dPeriod??3;
+      const values=stochastic(this.candles,period,dPeriod);
+      const levels=cfg?.bandsVisible!==false?[
+        {price:cfg?.lower??20,color:cfg?.bandColor??'#aab8c5',lineStyle:LineStyle.Dashed},
+        {price:cfg?.upper??80,color:cfg?.bandColor??'#aab8c5',lineStyle:LineStyle.Dashed},
+      ]:undefined;
+      if(cfg?.kVisible!==false) {
+        add(`Stoch %K ${period}`,cfg?.kColor??this.accent,values.k,'stochastic',cfg?.kWidth??1,toLineStyle(cfg?.kStyle),levels);
+      }
+      if(cfg?.dVisible!==false) {
+        add(`Stoch %D ${dPeriod}`,cfg?.dColor??'#ef5350',values.d,'stochastic',cfg?.dWidth??1,toLineStyle(cfg?.dStyle));
+      }
+    }
+    if(this.studies.supertrend) {
+      const cfg=this.studyConfigs.supertrend;
+      const period=cfg?.period??10,multiplier=cfg?.multiplier??3;
+      const st=supertrend(this.candles,period,multiplier);
+      add(`Supertrend ${period} ${multiplier}`,st.directions.at(-1)===-1?(cfg?.downColor??'#ef5350'):(cfg?.upColor??'#089981'),st.values,'price',cfg?.lineWidth??2,toLineStyle(cfg?.lineStyle));
+    }
     return plots;
   }
   private updateStudies(appended=false) {
     for(const [index,plot] of this.studyPlots().entries()) {
       const data=this.candles.map((bar,i)=>plot.values[i]===null?{time:bar.date}:{time:bar.date,value:plot.values[i]!,...(plot.histogram?{color:plot.values[i]!>=0?CHART_PALETTE.volumeUp:CHART_PALETTE.volumeDown}:{})});
       if(appended) this.studySeries[index].update(data.at(-1)!);else this.studySeries[index].setData(data);
+    }
+  }
+  setOnPanesChange(cb:()=>void) { this.onPanesChange=cb; }
+  private updatePaneObservers() {
+    if(typeof ResizeObserver==='undefined') return;
+    if(!this.paneObserver) {
+      this.paneObserver=new ResizeObserver(()=>{this.notifyPanesChange();});
+    } else {
+      this.paneObserver.disconnect();
+    }
+    const panes=this.chart.panes();
+    for(const p of panes) {
+      const el=typeof p.getHTMLElement==='function'?p.getHTMLElement():null;
+      if(el) this.paneObserver.observe(el);
+    }
+  }
+  notifyPanesChange() {
+    this.onPanesChange?.();
+    if(typeof requestAnimationFrame!=='undefined') {
+      requestAnimationFrame(()=>{
+        this.onPanesChange?.();
+        requestAnimationFrame(()=>{
+          this.onPanesChange?.();
+        });
+      });
+    }
+    if(typeof setTimeout!=='undefined') {
+      setTimeout(()=>this.onPanesChange?.(),40);
+    }
+  }
+  getPaneOffsets():Array<{paneIndex:number;top:number;height:number}> {
+    const panes=this.chart.panes();
+    if(!panes||panes.length===0) return [];
+    const hostRect=this.host?.getBoundingClientRect?.();
+    const totalHeight=hostRect?.height&&hostRect.height>0?hostRect.height:(this.chart.paneSize?this.chart.paneSize().height:500);
+
+    // 1. Try real DOM element bounding boxes first (pixel-perfect)
+    if(hostRect&&hostRect.height>0) {
+      let domValid=true;
+      const domOffsets:Array<{paneIndex:number;top:number;height:number}>=[];
+      for(let i=0;i<panes.length;i++) {
+        const el=typeof panes[i].getHTMLElement==='function'?panes[i].getHTMLElement():null;
+        if(!el) {domValid=false;break;}
+        const r=el.getBoundingClientRect();
+        if(r.height<=0) {domValid=false;break;}
+        domOffsets.push({
+          paneIndex:i,
+          top:Math.max(0,Math.round(r.top-hostRect.top)),
+          height:Math.round(r.height),
+        });
+      }
+      if(domValid&&domOffsets.length===panes.length) {
+        return domOffsets;
+      }
+    }
+
+    // 2. Check if pane heights from getHeight() are already allocated
+    const heights=panes.map(p=>(typeof p.getHeight==='function'?p.getHeight():0));
+    const hasUnallocated=panes.length>1&&(heights.some(h=>h===0)||heights[0]>=totalHeight-10);
+
+    if(hasUnallocated) {
+      // Immediate calculation from stretch factors so new panes NEVER jump to the bottom!
+      const weights=panes.map((p,idx)=>{
+        const sf=typeof p.getStretchFactor==='function'?p.getStretchFactor():(idx===0?1:0.3);
+        return sf>0?sf:(idx===0?1:0.3);
+      });
+      const totalWeight=weights.reduce((a,b)=>a+b,0);
+      let top=0;
+      const estOffsets:Array<{paneIndex:number;top:number;height:number}>=[];
+      for(let i=0;i<panes.length;i++) {
+        const h=Math.round((weights[i]/totalWeight)*totalHeight);
+        estOffsets.push({paneIndex:i,top,height:h});
+        top+=h;
+      }
+      return estOffsets;
+    }
+
+    // 3. Fallback: accumulate getHeight()
+    let top=0;
+    const offsets:Array<{paneIndex:number;top:number;height:number}>=[];
+    for(let i=0;i<panes.length;i++) {
+      const height=heights[i];
+      offsets.push({paneIndex:i,top,height});
+      top+=height;
+    }
+    return offsets;
+  }
+  getPanesCount(): number {
+    return this.chart.panes()?.length ?? 0;
+  }
+  getPaneElement(paneIndex: number): HTMLElement | null {
+    const panes = this.chart.panes();
+    if (!panes || paneIndex < 0 || paneIndex >= panes.length) return null;
+    const p = panes[paneIndex];
+    const row = typeof p.getHTMLElement === 'function' ? p.getHTMLElement() : null;
+    if (!row) return null;
+    return (row.querySelector('td > div') as HTMLElement) || (row.querySelector('div') as HTMLElement) || row;
+  }
+  getStudyPaneIndex(studyId:string):number {
+    if(studyId==='price') return 0;
+    if(studyId==='volume') {
+      return this.currentAppearance?.volumePane&&this.currentAppearance?.volume
+        ? this.volumeSeries.getPane().paneIndex()
+        : 0;
+    }
+    const seriesList=this.studySeriesByPane.get(studyId);
+    if(seriesList&&seriesList.length>0) {
+      return seriesList[0].getPane().paneIndex();
+    }
+    return -1;
+  }
+  movePane(paneIndex:number,direction:'up'|'down') {
+    const panes=this.chart.panes();
+    const target=direction==='up'?paneIndex-1:paneIndex+1;
+    if(target>=0&&target<panes.length) {
+      panes[paneIndex].moveTo(target);
+      this.updatePaneObservers();
+      this.notifyPanesChange();
+    }
+  }
+  maximizePane(paneIndex:number) {
+    const panes=this.chart.panes();
+    if(this.maximizedPane===paneIndex) {
+      this.maximizedPane=null;
+      panes[0].setStretchFactor(1);
+      for(let i=1;i<panes.length;i++) panes[i].setStretchFactor(.3);
+    } else {
+      this.maximizedPane=paneIndex;
+      for(let i=0;i<panes.length;i++) {
+        panes[i].setStretchFactor(i===paneIndex?6:.05);
+      }
+    }
+    this.updatePaneObservers();
+    this.notifyPanesChange();
+  }
+  setStudyVisibility(studyId:string,visible:boolean) {
+    if(studyId==='volume') {
+      this.volumeSeries.applyOptions({visible,lastValueVisible:visible&&this.volumeSeries.getPane().paneIndex()!==0});
+      return;
+    }
+    const seriesList=this.studySeriesByPane.get(studyId);
+    if(seriesList) {
+      for(const s of seriesList) s.applyOptions({visible});
     }
   }
   syncCrosshair(time:Time|undefined) {
@@ -556,7 +847,11 @@ export class ChartEngine {
   setReplayPicker(pick:((index:number)=>void)|null,cancel:()=>void=()=>{}) {
     this.layer.cancel();this.replayPicker=pick?{pick,cancel}:null;
     const range=this.chart.timeScale().getVisibleLogicalRange();this.replayIndex=Math.max(0,Math.min(this.candles.length-1,Math.round(range?(range.from+range.to)/2:0)));
-    this.chart.applyOptions({handleScroll:!pick && this.book.getSnapshot().tool==='select'});this.invalidate();
+    this.chart.applyOptions({handleScroll:this.scrollOptions()});this.invalidate();
+  }
+  private scrollOptions() {
+    return !this.replayPicker && this.book.getSnapshot().tool==='select' && this.currentAppearance?.panEnabled!==false
+      ? SCROLL_WITHOUT_WHEEL : false;
   }
   private pickReplay(index:number) {const picker=this.replayPicker;this.setReplayPicker(null);picker?.pick(index);}
   private key=(event:KeyboardEvent)=>{
@@ -582,6 +877,8 @@ export class ChartEngine {
   };
   destroy() {
     if(this.disposed) return;this.disposed=true;
+    this.hostObserver?.disconnect();
+    this.paneObserver?.disconnect();
     this.events.abort();this.theme.disconnect();this.unsubscribe();this.layer.destroy();
     this.chart.unsubscribeCrosshairMove(this.crosshair);this.chart.unsubscribeClick(this.click);this.markers.detach();this.chart.remove();
   }

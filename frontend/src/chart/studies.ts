@@ -1,4 +1,19 @@
 import { ema, type Candle } from './model';
+import type { PriceSource } from './studyConfigs';
+
+export function getPriceSource(bar: Candle, source: PriceSource = 'close'): number {
+  switch (source) {
+    case 'open': return bar.open;
+    case 'high': return bar.high;
+    case 'low': return bar.low;
+    case 'hl2': return (bar.high + bar.low) / 2;
+    case 'hlc3': return (bar.high + bar.low + bar.close) / 3;
+    case 'ohlc4': return (bar.open + bar.high + bar.low + bar.close) / 4;
+    case 'close':
+    default:
+      return bar.close;
+  }
+}
 
 export const defaultStudies=()=>({rsi:false,macd:false,sma:false,bollinger:false,vwap:false,atr:false,stochastic:false,supertrend:false});
 export type ChartStudies=ReturnType<typeof defaultStudies>;
@@ -10,10 +25,10 @@ export function sma(values:readonly (number|null)[],period:number):(number|null)
     return index>=period-1&&count===period?sum/period:null;
   });
 }
-export function bollinger(candles:readonly Candle[],period=20) {
-  const middle=sma(candles.map(bar=>bar.close),period);
-  const deviation=middle.map((mean,index)=>mean===null?null:Math.sqrt(candles.slice(index-period+1,index+1).reduce((sum,bar)=>sum+(bar.close-mean)**2,0)/period));
-  return {middle,upper:middle.map((mean,index)=>mean===null?null:mean+2*deviation[index]!),lower:middle.map((mean,index)=>mean===null?null:mean-2*deviation[index]!)};
+export function bollinger(candles:readonly Candle[],period=20,multiplier=2,source:PriceSource='close') {
+  const middle=sma(candles.map(bar=>getPriceSource(bar,source)),period);
+  const deviation=middle.map((mean,index)=>mean===null?null:Math.sqrt(candles.slice(index-period+1,index+1).reduce((sum,bar)=>sum+(getPriceSource(bar,source)-mean)**2,0)/period));
+  return {middle,upper:middle.map((mean,index)=>mean===null?null:mean+multiplier*deviation[index]!),lower:middle.map((mean,index)=>mean===null?null:mean-multiplier*deviation[index]!)};
 }
 export function atr(candles:readonly Candle[],period=14):(number|null)[] {
   let value=0;
@@ -25,13 +40,13 @@ export function atr(candles:readonly Candle[],period=14):(number|null)[] {
     return value;
   });
 }
-export function stochastic(candles:readonly Candle[],period=14) {
+export function stochastic(candles:readonly Candle[],period=14,dPeriod=3) {
   const k=candles.map((bar,index)=>{
     if(index<period-1) return null;
     const window=candles.slice(index-period+1,index+1),high=Math.max(...window.map(bar=>bar.high)),low=Math.min(...window.map(bar=>bar.low));
     return high===low?50:100*(bar.close-low)/(high-low);
   });
-  return {k,d:sma(k,3)};
+  return {k,d:sma(k,dPeriod)};
 }
 /** Daily/aggregate candles cannot provide true intraday session VWAP. Reset on calendar month. */
 export function monthlyVwap(candles:readonly Candle[]):(number|null)[] {
@@ -45,11 +60,12 @@ export function monthlyVwap(candles:readonly Candle[]):(number|null)[] {
 }
 
 // Calculations remain Nexus-owned; Lightweight Charts renders the resulting series.
-export function rsi(candles:readonly Candle[],period=14):(number|null)[] {
+export function rsi(candles:readonly Candle[],period=14,source:PriceSource='close'):(number|null)[] {
   let gain=0,loss=0;
   return candles.map((bar,index)=>{
     if(!index) return null;
-    const change=bar.close-candles[index-1].close,up=Math.max(0,change),down=Math.max(0,-change);
+    const price=getPriceSource(bar,source),prevPrice=getPriceSource(candles[index-1],source);
+    const change=price-prevPrice,up=Math.max(0,change),down=Math.max(0,-change);
     if(index<=period) {gain+=up;loss+=down;}
     else {gain=gain*(period-1)/period+up/period;loss=loss*(period-1)/period+down/period;}
     if(index<period) return null;
@@ -57,11 +73,13 @@ export function rsi(candles:readonly Candle[],period=14):(number|null)[] {
     return loss===0?(gain===0?50:100):100-100/(1+gain/loss);
   });
 }
-export function macd(candles:readonly Candle[]) {
-  const fast=ema(candles,12),slow=ema(candles,26);
+export function macd(candles:readonly Candle[],fastPeriod=12,slowPeriod=26,signalPeriod=9,source:PriceSource='close') {
+  const sourceCandles=source==='close'?candles:candles.map(b=>({...b,close:getPriceSource(b,source)}));
+  const fast=ema(sourceCandles,fastPeriod),slow=ema(sourceCandles,slowPeriod);
   const line=slow.map((value,index)=>value===null?null:fast[index]!-value);
-  const populated=candles.slice(25).map((bar,index)=>({...bar,close:line[index+25]!}));
-  const signal=[...Array<null>(Math.min(25,candles.length)).fill(null),...ema(populated,9)];
+  const offset=slowPeriod-1;
+  const populated=candles.slice(offset).map((bar,index)=>({...bar,close:line[index+offset]!}));
+  const signal=[...Array<null>(Math.min(offset,candles.length)).fill(null),...ema(populated,signalPeriod)];
   return {line,signal,histogram:line.map((value,index)=>value===null||signal[index]===null?null:value-signal[index]!)};
 }
 

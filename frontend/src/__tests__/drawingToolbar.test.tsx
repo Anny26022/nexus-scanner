@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { DrawingBook } from '../chart/drawings';
 import { DrawingToolbar } from '../components/DrawingToolbar';
 import { DRAWING_TOOLS } from '../chart/drawings';
@@ -35,4 +35,70 @@ it('keeps tools labeled and reveals exact edits only for the selected drawing',(
   expect(book.getSnapshot().drawings).toHaveLength(0);
   fireEvent.click(screen.getByRole('button',{name:'Undo drawing'}));
   expect(book.getSnapshot().drawings[0].a.price).toBe(60);
+});
+it('renders floating slider on chart and immediately updates when tools are bookmarked in the drawer', () => {
+  const book = new DrawingBook();
+  const onCloseMenu = vi.fn();
+  render(
+    <DrawingToolbar
+      book={book}
+      firstDate="2026-01-01"
+      lastDate="2026-10-14"
+      drawingsOpen={true}
+      onCloseMenu={onCloseMenu}
+    />
+  );
+
+  // Floating slider is present with role toolbar
+  const slider = screen.getByRole('toolbar', { name: 'Favorite drawing tools' });
+  expect(slider).toBeInTheDocument();
+  expect(slider.querySelector('.drawing-slider-drag-handle')).toBeInTheDocument();
+
+  // Clicking Parallel Channel in the floating slider activates it
+  const channelBtn = screen.getAllByRole('button', { name: 'Parallel Channel' })[0];
+  fireEvent.click(channelBtn);
+  expect(book.getSnapshot().tool).toBe('channel');
+
+  // Drawer menu has Cursor (Esc)
+  const cursorBtn = screen.getByRole('button', { name: 'Cursor' });
+  fireEvent.click(cursorBtn);
+  expect(book.getSnapshot().tool).toBe('select');
+  expect(onCloseMenu).toHaveBeenCalled();
+
+  // Bookmark Fib Retracement in the drawer
+  const fibBookmark = screen.getByLabelText('Favorite Fib Retracement');
+  fireEvent.click(fibBookmark);
+
+  // Now Fib Retracement appears in the floating slider
+  const sliderFibBtn = screen.getAllByRole('button', { name: 'Fib Retracement' }).find(
+    b => b.closest('.drawing-floating-slider')
+  );
+  expect(sliderFibBtn).toBeInTheDocument();
+});
+
+it('auto-shows the floating favorites bar when a tool is bookmarked even if the bar was hidden', () => {
+  localStorage.setItem('nexus.chart.drawing-favorites-visible.v1', JSON.stringify(false));
+  const book = new DrawingBook();
+  render(
+    <DrawingToolbar
+      book={book}
+      firstDate="2026-01-01"
+      lastDate="2026-10-14"
+      drawingsOpen={true}
+    />
+  );
+
+  // Floating favorites toolbar is initially hidden because drawing-favorites-visible.v1 is false
+  expect(screen.queryByRole('toolbar', { name: 'Favorite drawing tools' })).not.toBeInTheDocument();
+
+  // Bookmark a tool (e.g. Trend Line)
+  const trendLineBookmark = screen.getByLabelText('Favorite Trend Line');
+  fireEvent.click(trendLineBookmark);
+
+  // The floating toolbar automatically appears!
+  const slider = screen.getByRole('toolbar', { name: 'Favorite drawing tools' });
+  expect(slider).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: 'Trend Line' }).some(
+    b => b.closest('.drawing-floating-slider')
+  )).toBe(true);
 });

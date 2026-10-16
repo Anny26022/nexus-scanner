@@ -70,10 +70,13 @@ export function loadGrid(input: unknown = readChartStorage('grid.v1')): GridSett
   return { layout, count: chartLayout(layout).count, links, tiles: [...raw.tiles, ...defaults.tiles.slice(raw.tiles.length)] };
 }
 
+import type { StudyConfigs } from './studyConfigs';
+
 export type SceneSettings = {
   style: ChartStyle;
   appearance: ChartAppearance;
   studies: ChartStudies;
+  studyConfigs?: StudyConfigs;
   emaLines: EmaLine[];
   range?: number | null;
   comparison?: { symbol: string; separate: boolean } | null;
@@ -88,6 +91,7 @@ export function loadScene(id: string, input: unknown = readChartStorage(`scene.$
   if (['candles', 'hollowCandles', 'volumeCandles', 'bars', 'highLow', 'line', 'lineWithMarkers', 'stepLine', 'area', 'hlcArea', 'baseline'].includes(raw.style!)) result.style = raw.style;
   if (Array.isArray(raw.emaLines) && raw.emaLines.length <= 5 && raw.emaLines.every(validEmaLine) && new Set(raw.emaLines.map(line => line.id)).size === raw.emaLines.length) result.emaLines = raw.emaLines;
   if (raw.studies && typeof raw.studies === 'object') result.studies = Object.fromEntries(Object.keys(defaultStudies()).map(key => [key, raw.studies![key as keyof ChartStudies] === true])) as ChartStudies;
+  if (raw.studyConfigs && typeof raw.studyConfigs === 'object') result.studyConfigs = raw.studyConfigs;
   const a = raw.appearance;
   if (a && ['normal', 'logarithmic', 'percentage', 'indexed'].includes(a.scaleMode) && ['horizontalGrid', 'verticalGrid', 'crosshair', 'volume'].every(key => typeof a[key as keyof ChartAppearance] === 'boolean')
     && (a.crosshairMode === undefined || ['normal', 'magnet', 'ohlc'].includes(a.crosshairMode)) && ['volumePane', 'events', 'conflation'].every(key => a[key as keyof ChartAppearance] === undefined || typeof a[key as keyof ChartAppearance] === 'boolean')) result.appearance = a;

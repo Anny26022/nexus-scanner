@@ -7,9 +7,12 @@ import { ChartEngine } from '../chart/ChartEngine';
 
 vi.mock('../api/screenerApi', () => ({screenerApi:{getChart:vi.fn(),runScreen:vi.fn(async()=>({rows:[{symbol:'RELIANCE',marketCapCrore:5,freeFloatPct:50,circuitLimit:'5'}],immutableRevision:'a'.repeat(64)}))}}));
 vi.mock('../chart/ChartEngine', () => ({ChartEngine:vi.fn(class {
-  chart={timeScale:()=>({subscribeVisibleTimeRangeChange:vi.fn(),unsubscribeVisibleTimeRangeChange:vi.fn()}),subscribeCrosshairMove:vi.fn(),unsubscribeCrosshairMove:vi.fn()};
+  timeScale={subscribeVisibleTimeRangeChange:vi.fn(),unsubscribeVisibleTimeRangeChange:vi.fn()};
+  chart={timeScale:()=>this.timeScale,subscribeCrosshairMove:vi.fn(),unsubscribeCrosshairMove:vi.fn()};
   savedView=vi.fn(()=>undefined);paneWeights=vi.fn(()=>[1]);restoreView=vi.fn();restorePaneWeights=vi.fn();
   zoom=vi.fn(); reset=vi.fn(); resetPriceScale=vi.fn(); setEmaLines=vi.fn(); setStyle=vi.fn(); setAppearance=vi.fn(); setRange=vi.fn(); setCandles=vi.fn(); setReplayPicker=vi.fn(); setStudies=vi.fn(); setComparison=vi.fn(); setEvents=vi.fn(); latest=vi.fn(); goToDate=vi.fn(()=>true); destroy=vi.fn();
+  setOnPanesChange=vi.fn(); getPaneOffsets=vi.fn(()=>[]); getStudyPaneIndex=vi.fn(()=>1); movePane=vi.fn(); maximizePane=vi.fn(); setStudyVisibility=vi.fn();
+  setStudyConfigs=vi.fn();
 })}));
 const candles = [
   {date:'2026-10-01',open:10,high:12,low:9,close:11,volume:100},
@@ -24,6 +27,77 @@ function chooseGrid(count:1|2) {
   fireEvent.click(screen.getByRole('button',{name:count===1?'1 chart · Single chart':'2 charts · Side by side'}));
 }
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
+it('selects one year for a fresh chart without overriding saved ranges', async () => {
+  vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
+  setup();
+  await screen.findByLabelText('RELIANCE candlestick and volume chart');
+  expect(screen.getByRole('button',{name:'1y'})).toHaveAttribute('aria-pressed','true');
+  expect(vi.mocked(ChartEngine).mock.results[0].value.setRange).toHaveBeenCalledWith(12);
+});
+it('preserves a saved All range', async () => {
+  localStorage.setItem('nexus.chart.scene.0.v1',JSON.stringify({range:null}));
+  vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
+  setup();
+  await screen.findByLabelText('RELIANCE candlestick and volume chart');
+  expect(screen.getByRole('button',{name:'All'})).toHaveAttribute('aria-pressed','true');
+  expect(vi.mocked(ChartEngine).mock.results[0].value.setRange).toHaveBeenCalledWith(null);
+});
+it('uses the selected duration instead of a stale viewport when the symbol changes', async () => {
+  localStorage.setItem('nexus.chart.scene.0.v1',JSON.stringify({range:12,view:{from:'2026-09-01',to:'2026-10-02'}}));
+  vi.mocked(screenerApi.getChart).mockImplementation(async symbol=>({schemaVersion:2,symbol,asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]}));
+  setup();
+  await screen.findByLabelText('RELIANCE candlestick and volume chart');
+  expect(screen.getByRole('button',{name:'1y'})).toHaveAttribute('aria-pressed','true');
+  expect(vi.mocked(ChartEngine).mock.results[0].value.setRange).toHaveBeenCalledWith(12);
+  expect(vi.mocked(ChartEngine).mock.results[0].value.restoreView).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole('button',{name:'6mo'}));
+  fireEvent.change(screen.getByLabelText('Chart symbol'),{target:{value:'TCS'}});
+  fireEvent.click(screen.getByRole('button',{name:'Load'}));
+  await screen.findByLabelText('TCS candlestick and volume chart');
+  const next=vi.mocked(ChartEngine).mock.results.at(-1)!.value;
+  expect(screen.getByRole('button',{name:'6mo'})).toHaveAttribute('aria-pressed','true');
+  expect(next.setRange).toHaveBeenCalledWith(6);
+  expect(next.restoreView).not.toHaveBeenCalled();
+});
+it('carries a manually adjusted date window to the next symbol', async () => {
+  vi.mocked(screenerApi.getChart).mockImplementation(async symbol=>({schemaVersion:2,symbol,asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]}));
+  setup();
+  const canvas=await screen.findByLabelText('RELIANCE candlestick and volume chart');
+  const first=vi.mocked(ChartEngine).mock.results.at(-1)!.value;
+  first.savedView.mockReturnValue({from:'2025-12-01',to:'2026-10-02'});
+  fireEvent.wheel(canvas);
+  expect(vi.mocked(ChartEngine).mock.results.at(-1)!.value).toBe(first);
+  first.timeScale.subscribeVisibleTimeRangeChange.mock.calls[1][0]();
+  expect(first.savedView).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole('button',{name:'1y'})).toHaveAttribute('aria-pressed','false');
+  fireEvent.change(screen.getByLabelText('Chart symbol'),{target:{value:'TCS'}});
+  fireEvent.click(screen.getByRole('button',{name:'Load'}));
+  await screen.findByLabelText('TCS candlestick and volume chart');
+  expect(JSON.parse(localStorage.getItem('nexus.chart.scene.0.v1')!)).toMatchObject({view:{from:'2025-12-01',to:'2026-10-02'}});
+  const next=vi.mocked(ChartEngine).mock.results.at(-1)!.value;
+  expect(next.setRange).not.toHaveBeenCalled();
+  expect(next.restoreView).toHaveBeenCalledWith({from:'2025-12-01',to:'2026-10-02'});
+});
+it('preserves a saved custom date view without selecting one year', async () => {
+  const view={from:'2026-10-01',to:'2026-10-02'};
+  localStorage.setItem('nexus.chart.scene.0.v1',JSON.stringify({view}));
+  vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
+  setup();
+  await screen.findByLabelText('RELIANCE candlestick and volume chart');
+  expect(screen.getByRole('button',{name:'1y'})).toHaveAttribute('aria-pressed','false');
+  const engine=vi.mocked(ChartEngine).mock.results[0].value;
+  expect(engine.setRange).not.toHaveBeenCalled();
+  expect(engine.restoreView).toHaveBeenCalledWith(view);
+});
+it('mounts layout previews only while the grid picker is open', () => {
+  setup();
+  expect(document.querySelectorAll('.chart-layout-preview')).toHaveLength(0);
+  fireEvent.click(screen.getByLabelText('Chart grid'));
+  expect(document.querySelectorAll('.chart-layout-preview').length).toBeGreaterThan(0);
+  fireEvent.click(screen.getByLabelText('Chart grid'));
+  expect(document.querySelectorAll('.chart-layout-preview')).toHaveLength(0);
+});
 it('loads release-pinned history, aggregates intervals and disposes replaced engines', async () => {
   vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
   const ui = setup();
@@ -33,16 +107,21 @@ it('loads release-pinned history, aggregates intervals and disposes replaced eng
   fireEvent.click(screen.getByRole('button',{name:'Zoom in'}));
   expect(first.zoom).toHaveBeenCalledWith(.8);
   fireEvent.click(screen.getByLabelText('Indicators'));
-  fireEvent.click(screen.getByLabelText('Enable EMA 3'));
-  fireEvent.click(screen.getByRole('button',{name:'Apply'}));
+  fireEvent.click(screen.getByTitle('Customize Exponential Moving Average'));
+  fireEvent.click(screen.getByRole('tab', { name: 'Style' }));
+  fireEvent.click(screen.getByLabelText('EMA 50'));
+  fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
   expect(first.setEmaLines.mock.lastCall[0][2]).toMatchObject({period:50,enabled:true,color:'#22d3ee'});
   fireEvent.click(screen.getByRole('button',{name:'Auto'}));
   expect(first.resetPriceScale).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole('button',{name:'Maximize chart'}));
   expect(screen.getByRole('dialog',{name:'Nexus charts'})).toHaveClass('chart-workspace-expanded');
+  expect(document.querySelector('.chart-desk-body')).toHaveClass('chart-desk-body-expanded');
+  expect(document.querySelector('.chart-desk-body-expanded .chart-watchlist-dock')).toBeInTheDocument();
   expect(first.destroy).not.toHaveBeenCalled();
   fireEvent.keyDown(screen.getByRole('button',{name:'Restore chart'}),{key:'Escape'});
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(document.querySelector('.chart-desk-body')).not.toHaveClass('chart-desk-body-expanded');
   fireEvent.keyDown(screen.getByLabelText('RELIANCE candlestick and volume chart'),{key:'Enter',altKey:true});
   fireEvent.click(screen.getByRole('button',{name:'Restore chart'}));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -183,5 +262,99 @@ it('keeps tiles independent, saves named layouts and restores all chart settings
   ui.unmount();ui=setup();
   await screen.findByLabelText('TCS line and volume chart');expect(screen.getByLabelText('Chart grid')).toHaveTextContent('2H');
   expect(screen.getByRole('region',{name:'Chart 2 · TCS'})).toHaveTextContent('1W');
+  ui.unmount();
+});
+
+it('persists fullscreen state across remounts and keeps layout grid option accessible in fullscreen', async () => {
+  vi.mocked(screenerApi.getChart).mockImplementation(async symbol => ({
+    schemaVersion: 2,
+    symbol,
+    asOfDate: '2026-10-02',
+    historyStartDate: '2026-10-01',
+    candles,
+    volumeEvents: {},
+    corporateActions: [],
+    earnings: [],
+    marketNews: [],
+  }));
+  let ui = setup();
+  await screen.findByLabelText('RELIANCE candlestick and volume chart');
+
+  // Verify grid picker is visible in normal mode
+  expect(screen.getByLabelText('Chart grid')).toBeInTheDocument();
+  expect(screen.getAllByLabelText('Chart grid')).toHaveLength(1);
+
+  // Maximize chart (enter fullscreen)
+  fireEvent.click(screen.getByRole('button', { name: 'Maximize chart' }));
+  expect(screen.getByRole('dialog', { name: 'Nexus charts' })).toHaveClass('chart-workspace-expanded');
+
+  // Grid picker must remain accessible in fullscreen topbar, with exactly one in DOM
+  expect(screen.getByLabelText('Chart grid')).toBeInTheDocument();
+  expect(screen.getAllByLabelText('Chart grid')).toHaveLength(1);
+  expect(localStorage.getItem('nexus.chart.chart-fullscreen.v1')).toBe('"0"');
+
+  // Simulate page refresh by unmounting and remounting
+  ui.unmount();
+  ui = setup();
+
+  // Must remain in fullscreen on page refresh
+  expect(await screen.findByRole('dialog', { name: 'Nexus charts' })).toHaveClass('chart-workspace-expanded');
+  expect(screen.getByLabelText('Chart grid')).toBeInTheDocument();
+  expect(screen.getAllByLabelText('Chart grid')).toHaveLength(1);
+
+  // Exiting fullscreen updates persistence
+  fireEvent.click(screen.getByRole('button', { name: 'Restore chart' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Chart grid')).toBeInTheDocument();
+  expect(localStorage.getItem('nexus.chart.chart-fullscreen.v1')).toBe('null');
+  ui.unmount();
+});
+
+it('configures crosshair transparency and inverted scale in chart settings', async () => {
+  vi.mocked(screenerApi.getChart).mockImplementation(async symbol => ({
+    schemaVersion: 2,
+    symbol,
+    asOfDate: '2026-10-02',
+    historyStartDate: '2026-10-01',
+    candles,
+    volumeEvents: {},
+    corporateActions: [],
+    earnings: [],
+    marketNews: [],
+  }));
+  const ui = setup();
+  await screen.findByLabelText('RELIANCE candlestick and volume chart');
+  const engine = vi.mocked(ChartEngine).mock.results[0].value;
+
+  fireEvent.click(screen.getByRole('button', { name: 'Chart settings' }));
+  const dialog = screen.getByRole('dialog', { name: 'Chart settings' });
+  expect(dialog).toBeInTheDocument();
+
+  // Test Transparency slider in Crosshair section
+  const transparencySlider = screen.getByLabelText('Transparency');
+  expect(transparencySlider).toBeInTheDocument();
+  expect(transparencySlider).toHaveValue('0');
+  expect(screen.getByText('0%')).toBeInTheDocument();
+
+  fireEvent.change(transparencySlider, { target: { value: '45' } });
+  expect(screen.getByText('45%')).toBeInTheDocument();
+  expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({ crosshairTransparency: 45 }));
+
+  // Test Invert scale toggle
+  const invertToggle = screen.getByLabelText('Invert scale');
+  expect(invertToggle).not.toBeChecked();
+  fireEvent.click(invertToggle);
+  expect(invertToggle).toBeChecked();
+  expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({ invertScale: true }));
+
+  // Test Vertical grid toggle
+  const vertToggle = screen.getByLabelText('Vertical grid');
+  expect(vertToggle).toBeChecked();
+  fireEvent.click(vertToggle);
+  expect(vertToggle).not.toBeChecked();
+  expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({ verticalGrid: false }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+  expect(screen.queryByRole('dialog', { name: 'Chart settings' })).not.toBeInTheDocument();
   ui.unmount();
 });

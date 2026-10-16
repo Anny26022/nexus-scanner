@@ -11,7 +11,7 @@ const native=vi.hoisted(()=>{
   function makeSeries(type:string) {
     return {type,setData:vi.fn(),update:vi.fn(),pop:vi.fn(),applyOptions:vi.fn(),attachPrimitive:vi.fn((primitive:{attached?:(input:unknown)=>void})=>primitive.attached?.({requestUpdate:vi.fn()})),detachPrimitive:vi.fn(),priceToCoordinate:vi.fn((price:number)=>price),coordinateToPrice:vi.fn((y:number)=>y),priceScale:vi.fn(()=>scale),getPane:vi.fn(()=>pane),moveToPane:vi.fn(),seriesOrder:vi.fn(()=>0),setSeriesOrder:vi.fn(),createPriceLine:vi.fn(()=>({applyOptions:vi.fn()})),removePriceLine:vi.fn()};
   }
-  const time={getVisibleLogicalRange:vi.fn(()=>({from:0,to:5})),setVisibleLogicalRange:vi.fn(),setVisibleRange:vi.fn(),fitContent:vi.fn(),logicalToCoordinate:vi.fn((index:number)=>index*10),coordinateToLogical:vi.fn((x:number)=>x/10),timeToCoordinate:vi.fn(()=>null),coordinateToTime:vi.fn(()=>null),timeToIndex:vi.fn(()=>1),scrollToPosition:vi.fn()};
+  const time={getVisibleLogicalRange:vi.fn(()=>({from:0,to:5})),setVisibleLogicalRange:vi.fn(),setVisibleRange:vi.fn(),fitContent:vi.fn(),width:vi.fn(()=>800),logicalToCoordinate:vi.fn((index:number)=>index*10),coordinateToLogical:vi.fn((x:number)=>x/10),timeToCoordinate:vi.fn(()=>null),coordinateToTime:vi.fn(()=>null),timeToIndex:vi.fn(()=>1),scrollToPosition:vi.fn()};
   const chart={
     addSeries:vi.fn((type:string)=>{
       const result=makeSeries(type);
@@ -39,7 +39,7 @@ function setup(input:readonly Candle[]=candles) {
 }
 it('uses matching reference bodies, borders and wicks with thicker HLC bars and preserves missing volume',()=>{
   const {engine}=setup();
-  expect(native.createChart).toHaveBeenCalledWith(expect.any(HTMLElement),expect.objectContaining({autoSize:true,layout:expect.objectContaining({attributionLogo:false})}));
+  expect(native.createChart).toHaveBeenCalledWith(expect.any(HTMLElement),expect.objectContaining({autoSize:true,layout:expect.objectContaining({attributionLogo:false}),handleScroll:expect.objectContaining({mouseWheel:false,pressedMouseMove:true}),handleScale:expect.objectContaining({mouseWheel:true,pinch:true})}));
   expect(native.chart.addSeries).toHaveBeenCalledWith('Candlestick',expect.objectContaining({upColor:'#089981',downColor:'#ef5350',wickUpColor:'#089981',wickDownColor:'#ef5350',borderVisible:true,borderUpColor:'#089981',borderDownColor:'#ef5350'}));
   expect(CHART_PALETTE.volumeUp).toBe('rgba(8,153,129,0.5)');
   const volume=native.series.find(series=>series.type==='Histogram')!;
@@ -75,6 +75,7 @@ it('keeps unrevealed prices and indicator values out of replay and appends the n
 it('wires native scale modes, crosshair readouts, image export and teardown',()=>{
   const {engine,inspect}=setup();
   engine.setAppearance({horizontalGrid:false,verticalGrid:true,crosshair:false,volume:false,scaleMode:'logarithmic'});
+  expect(native.chart.applyOptions).toHaveBeenLastCalledWith(expect.objectContaining({handleScroll:expect.objectContaining({mouseWheel:false,pressedMouseMove:true}),handleScale:expect.objectContaining({mouseWheel:true,pinch:true})}));
   expect(native.scale.applyOptions).toHaveBeenLastCalledWith(expect.objectContaining({mode:1,scaleMargins:{top:.13,bottom:.06}}));
   const crosshair=native.chart.subscribeCrosshairMove.mock.calls[0][0];
   crosshair({seriesData:new Map([[native.series[0],{time:{year:2026,month:10,day:2}}]])});
@@ -98,6 +99,36 @@ it('uses native clicks for replay, date navigation and native append following',
   engine.latest();expect(native.time.scrollToPosition).toHaveBeenCalledWith(6,true);
   engine.destroy();expect(native.chart.unsubscribeClick).toHaveBeenCalledWith(click);
 });
+it('keeps a small right-edge gap after presets and saved views that include the latest bar',()=>{
+  const {engine}=setup();
+  native.time.setVisibleLogicalRange.mockClear();
+  engine.setRange(12);
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:0,to:8});
+  native.time.setVisibleLogicalRange.mockClear();
+  engine.setRange(null);
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:0,to:8});
+  native.time.setVisibleLogicalRange.mockClear();
+  engine.restoreView({from:'2026-10-01',to:'2026-10-05'});
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:0,to:8});
+  native.time.setVisibleLogicalRange.mockClear();
+  engine.restoreView({from:'2026-10-01',to:'2026-10-02'});
+  expect(native.time.setVisibleLogicalRange).not.toHaveBeenCalled();
+  expect(native.time.setVisibleRange).toHaveBeenLastCalledWith({from:'2026-10-01',to:'2026-10-02'});
+  engine.destroy();
+});
+it('keeps a visible pixel gap even when All compresses a long history',()=>{
+  const history=Array.from({length:1000},(_,index)=>({...candles[0],date:new Date(Date.UTC(2020,0,1+index)).toISOString().slice(0,10)}));
+  const {engine}=setup(history);
+  native.time.setVisibleLogicalRange.mockClear();
+  engine.setRange(null);
+  const range=native.time.setVisibleLogicalRange.mock.lastCall?.[0];
+  expect(range.from).toBe(0);
+  expect(range.to).toBeGreaterThan(history.length-1+6);
+  native.time.getVisibleLogicalRange.mockReturnValueOnce({from:0,to:1000});
+  engine.latest();
+  expect(native.time.scrollToPosition).toHaveBeenLastCalledWith(40,true);
+  engine.destroy();
+});
 it('renders horizontal drawings with native price lines through edits, undo and style replacement',()=>{
   const book=new DrawingBook(),host=document.createElement('div');document.body.append(host);
   const engine=new ChartEngine(host,candles,vi.fn(),book);
@@ -119,6 +150,10 @@ it('groups optional event markers and excludes future events and comparison sess
   expect(native.markers.setMarkers).toHaveBeenLastCalledWith([]);
   engine.setAppearance({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',events:true,volumePane:true,crosshairMode:'ohlc'});
   expect(native.series[1].moveToPane).toHaveBeenCalledWith(1);
+  expect(native.series[1].applyOptions).toHaveBeenCalledWith(expect.objectContaining({priceScaleId:'right',lastValueVisible:true,visible:true}));
+  engine.setAppearance({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',events:true,volumePane:false,crosshairMode:'ohlc'});
+  expect(native.series[1].applyOptions).toHaveBeenCalledWith(expect.objectContaining({priceScaleId:'volume',lastValueVisible:false,visible:true}));
+  engine.setAppearance({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',events:true,volumePane:true,crosshairMode:'ohlc'});
   expect(native.markers.setMarkers.mock.lastCall?.[0]).toEqual([expect.objectContaining({time:'2026-10-01',id:'events:2026-10-01'})]);
   engine.setComparison('TCS',[...candles,{...candles[1],date:'2026-10-03'}]);
   const comparison=native.series.at(-1)!;
@@ -144,5 +179,21 @@ it('updates and rewinds every additional study from the same revealed candle pre
   for(const series of studies) {expect(series.update).toHaveBeenCalledWith(expect.objectContaining({time:history[55].date}));expect(series.setData).not.toHaveBeenCalled();}
   engine.setCandles(history.slice(0,54));
   for(const series of studies) expect(series.pop).toHaveBeenCalledWith(2);
+  engine.destroy();
+});
+it('provides pane count and safe pane elements for DOM portaling',()=>{
+  const {engine}=setup();
+  expect(engine.getPanesCount()).toBe(1);
+  expect(engine.getPaneElement(0)).toBeNull();
+  expect(engine.getPaneElement(99)).toBeNull();
+
+  const mockDiv = document.createElement('div');
+  const mockTd = document.createElement('td');
+  mockTd.appendChild(mockDiv);
+  const mockTr = document.createElement('tr');
+  mockTr.appendChild(mockTd);
+  (native.pane as any).getHTMLElement = vi.fn(() => mockTr);
+  expect(engine.getPaneElement(0)).toBe(mockDiv);
+  delete (native.pane as any).getHTMLElement;
   engine.destroy();
 });

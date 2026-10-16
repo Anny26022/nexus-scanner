@@ -32,8 +32,8 @@ export type Props = {
 const sections: readonly { id: Section; label: string; Icon: typeof CandlestickChart }[] = [
   { id: 'price', label: 'Symbol', Icon: CandlestickChart },
   { id: 'readout', label: 'Status line', Icon: Eye },
-  { id: 'axes', label: 'Scales', Icon: MoveUpRight },
   { id: 'appearance', label: 'Canvas', Icon: Palette },
+  { id: 'axes', label: 'Scales', Icon: MoveUpRight },
   { id: 'trading', label: 'Trading & Events', Icon: CalendarDays },
   { id: 'navigation', label: 'Navigation', Icon: SlidersHorizontal },
 ];
@@ -82,6 +82,38 @@ function ColorPicker({
         onChange={(e) => onChange(e.target.value)}
       />
       <span className="chart-color-swatch-fill" style={{ backgroundColor: value }} />
+    </label>
+  );
+}
+
+function SettingToggle({
+  label,
+  checked,
+  onChange,
+  disabled = false,
+  className = '',
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <label className={`chart-setting-switch-row ${className}${disabled ? ' disabled' : ''}`}>
+      <span>{label}</span>
+      <div className="chart-switch-wrap">
+        <input
+          type="checkbox"
+          aria-label={label}
+          checked={checked}
+          disabled={disabled}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <span className="chart-switch-track">
+          <span className="chart-switch-thumb" />
+        </span>
+      </div>
     </label>
   );
 }
@@ -328,14 +360,11 @@ export function ChartSettingsDialog({
                   </>
                 )}
 
-                <label className="chart-setting-toggle">
-                  <input
-                    type="checkbox"
-                    checked={draft.colorByPreviousClose ?? false}
-                    onChange={(e) => update({ colorByPreviousClose: e.target.checked })}
-                  />
-                  <span>Color from previous close</span>
-                </label>
+                <SettingToggle
+                  label="Color from previous close"
+                  checked={draft.colorByPreviousClose ?? false}
+                  onChange={(checked) => update({ colorByPreviousClose: checked })}
+                />
               </div>
             )}
 
@@ -392,15 +421,11 @@ export function ChartSettingsDialog({
                   </button>
                 </div>
               </div>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  aria-label="Comparison in synced pane"
-                  checked={compareSeparate}
-                  onChange={(event) => handleCompareSeparateChange(event.target.checked)}
-                />
-                <span>Comparison in synced pane</span>
-              </label>
+              <SettingToggle
+                label="Comparison in synced pane"
+                checked={compareSeparate}
+                onChange={(checked) => handleCompareSeparateChange(checked)}
+              />
             </div>
           </section>
 
@@ -411,22 +436,16 @@ export function ChartSettingsDialog({
             </div>
             <div className="chart-settings-group">
               <div className="chart-settings-group-title">Readout Elements</div>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.statusLogo !== false}
-                  onChange={(e) => update({ statusLogo: e.target.checked })}
-                />
-                <span>Logo</span>
-              </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.statusTitle !== false}
-                  onChange={(e) => update({ statusTitle: e.target.checked })}
-                />
-                <span>Title</span>
-              </label>
+              <SettingToggle
+                label="Logo"
+                checked={draft.statusLogo !== false}
+                onChange={(checked) => update({ statusLogo: checked })}
+              />
+              <SettingToggle
+                label="Title"
+                checked={draft.statusTitle !== false}
+                onChange={(checked) => update({ statusTitle: checked })}
+              />
               <label className="chart-setting-row chart-setting-indent">
                 <span>Title shows</span>
                 <select
@@ -439,68 +458,47 @@ export function ChartSettingsDialog({
                   <option value="ticker">Ticker</option>
                 </select>
               </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.statusMarketStatus !== false}
-                  onChange={(e) => update({ statusMarketStatus: e.target.checked })}
-                />
-                <span>Market status</span>
-              </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.statusOhlc !== false}
-                  onChange={(e) => update({ statusOhlc: e.target.checked })}
-                />
-                <span>Open, high, low, close</span>
-              </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.statusBarChange !== false}
-                  onChange={(e) => update({ statusBarChange: e.target.checked })}
-                />
-                <span>Bar change values</span>
-              </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.volume}
-                  onChange={(event) => update({ volume: event.target.checked })}
-                />
-                <span>Volume</span>
-              </label>
-              <label className="chart-setting-toggle chart-setting-indent">
-                <input
-                  type="checkbox"
-                  aria-label="Volume in separate pane"
-                  disabled={!draft.volume}
-                  checked={draft.volumePane ?? false}
-                  onChange={(event) => update({ volumePane: event.target.checked })}
-                />
-                <span>Volume in separate pane</span>
-              </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.statusIndicators !== false}
-                  onChange={(e) => update({ statusIndicators: e.target.checked })}
-                />
-                <span>Indicator values</span>
-              </label>
+              <SettingToggle
+                label="Market status"
+                checked={draft.statusMarketStatus !== false}
+                onChange={(checked) => update({ statusMarketStatus: checked })}
+              />
+              <SettingToggle
+                label="Open, high, low, close"
+                checked={draft.statusOhlc !== false}
+                onChange={(checked) => update({ statusOhlc: checked })}
+              />
+              <SettingToggle
+                label="Bar change values"
+                checked={draft.statusBarChange !== false}
+                onChange={(checked) => update({ statusBarChange: checked })}
+              />
+              <SettingToggle
+                label="Volume"
+                checked={draft.volume}
+                onChange={(checked) => update({ volume: checked })}
+              />
+              <SettingToggle
+                label="Volume in separate pane"
+                disabled={!draft.volume}
+                checked={draft.volumePane ?? false}
+                onChange={(checked) => update({ volumePane: checked })}
+                className="chart-setting-indent"
+              />
+              <SettingToggle
+                label="Indicator values"
+                checked={draft.statusIndicators !== false}
+                onChange={(checked) => update({ statusIndicators: checked })}
+              />
             </div>
 
             <div className="chart-settings-group">
               <div className="chart-settings-group-title">Background</div>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.statusBackground ?? false}
-                  onChange={(e) => update({ statusBackground: e.target.checked })}
-                />
-                <span>Background plate</span>
-              </label>
+              <SettingToggle
+                label="Background plate"
+                checked={draft.statusBackground ?? false}
+                onChange={(checked) => update({ statusBackground: checked })}
+              />
               {draft.statusBackground && (
                 <>
                   <div className="chart-setting-row">
@@ -527,123 +525,6 @@ export function ChartSettingsDialog({
             </div>
           </section>
 
-          {/* Section: Axes & Scales */}
-          <section id="settings-axes" aria-labelledby="heading-axes" className="chart-settings-section">
-            <div className="chart-settings-section-header">
-              <h3 id="heading-axes">Scales</h3>
-            </div>
-            <div className="chart-settings-group">
-              <div className="chart-settings-group-title">Navigation & Drag</div>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.panEnabled !== false}
-                  onChange={(e) => update({ panEnabled: e.target.checked })}
-                />
-                <span>Enable panning</span>
-              </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.zoomEnabled !== false}
-                  onChange={(e) => update({ zoomEnabled: e.target.checked })}
-                />
-                <span>Enable zooming</span>
-              </label>
-              <label className="chart-setting-row">
-                <span>Mouse drag</span>
-                <select
-                  className="chart-settings-select"
-                  value={draft.mousePan ?? 'both'}
-                  onChange={(e) => update({ mousePan: e.target.value as 'both' | 'horizontal' })}
-                >
-                  <option value="both">Time and price</option>
-                  <option value="horizontal">Horizontal only</option>
-                </select>
-              </label>
-              <label className="chart-setting-row">
-                <span>Default visible bars (0 = all)</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="100000"
-                  step="1"
-                  value={draft.defaultVisibleBars ?? 0}
-                  onChange={(e) => update({ defaultVisibleBars: Number(e.target.value) })}
-                />
-              </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.conflation ?? false}
-                  onChange={(event) => update({ conflation: event.target.checked })}
-                />
-                <span>Combine densely packed bars</span>
-              </label>
-            </div>
-
-            <div className="chart-settings-group">
-              <div className="chart-settings-group-title">Price Scale</div>
-              <label className="chart-setting-row">
-                <span>Price scale mode</span>
-                <select
-                  aria-label="Price scale"
-                  className="chart-settings-select"
-                  value={draft.scaleMode}
-                  onChange={(event) => update({ scaleMode: event.target.value as ScaleMode })}
-                >
-                  <option value="normal">Regular</option>
-                  <option value="logarithmic">Logarithmic</option>
-                  <option value="percentage">Percentage</option>
-                  <option value="indexed">Indexed to 100</option>
-                </select>
-              </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.invertScale ?? false}
-                  onChange={(e) => update({ invertScale: e.target.checked })}
-                />
-                <span>Invert price scale</span>
-              </label>
-            </div>
-
-            <div className="chart-settings-group">
-              <div className="chart-settings-group-title">Time Axis</div>
-              <label className="chart-setting-row">
-                <span>Timezone</span>
-                <select
-                  aria-label="Timezone"
-                  className="chart-settings-select"
-                  value={draft.timezone ?? 'Asia/Kolkata'}
-                  onChange={(e) => update({ timezone: e.target.value })}
-                >
-                  {TIMEZONES.map((tz) => (
-                    <option key={tz.value} value={tz.value}>
-                      {tz.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.sessionClock ?? false}
-                  onChange={(e) => update({ sessionClock: e.target.checked })}
-                />
-                <span>Corner clock</span>
-              </label>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.barCountdown ?? false}
-                  onChange={(e) => update({ barCountdown: e.target.checked })}
-                />
-                <span>Countdown to bar close</span>
-              </label>
-            </div>
-          </section>
-
           {/* Section: Canvas / Appearance */}
           <section id="settings-appearance" aria-labelledby="heading-appearance" className="chart-settings-section">
             <div className="chart-settings-section-header">
@@ -651,14 +532,11 @@ export function ChartSettingsDialog({
             </div>
             <div className="chart-settings-group">
               <div className="chart-settings-group-title">Watermark</div>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.watermarkVisible ?? false}
-                  onChange={(e) => update({ watermarkVisible: e.target.checked })}
-                />
-                <span>Show watermark</span>
-              </label>
+              <SettingToggle
+                label="Show watermark"
+                checked={draft.watermarkVisible ?? false}
+                onChange={(checked) => update({ watermarkVisible: checked })}
+              />
               {draft.watermarkVisible && (
                 <>
                   <label className="chart-setting-row">
@@ -684,14 +562,12 @@ export function ChartSettingsDialog({
             <div className="chart-settings-group">
               <div className="chart-settings-group-title">Grid Lines</div>
               <div className="chart-setting-row">
-                <label className="chart-setting-toggle" style={{ margin: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={draft.verticalGrid}
-                    onChange={(event) => update({ verticalGrid: event.target.checked })}
-                  />
-                  <span>Vertical grid</span>
-                </label>
+                <SettingToggle
+                  label="Vertical grid"
+                  checked={draft.verticalGrid}
+                  onChange={(checked) => update({ verticalGrid: checked })}
+                  className="chart-setting-inline-toggle"
+                />
                 <ColorPicker
                   ariaLabel="Vertical grid color"
                   value={draft.vertGridColor ?? '#2a2e39'}
@@ -699,14 +575,12 @@ export function ChartSettingsDialog({
                 />
               </div>
               <div className="chart-setting-row">
-                <label className="chart-setting-toggle" style={{ margin: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={draft.horizontalGrid}
-                    onChange={(event) => update({ horizontalGrid: event.target.checked })}
-                  />
-                  <span>Horizontal grid</span>
-                </label>
+                <SettingToggle
+                  label="Horizontal grid"
+                  checked={draft.horizontalGrid}
+                  onChange={(checked) => update({ horizontalGrid: checked })}
+                  className="chart-setting-inline-toggle"
+                />
                 <ColorPicker
                   ariaLabel="Horizontal grid color"
                   value={draft.horzGridColor ?? '#2a2e39'}
@@ -717,14 +591,29 @@ export function ChartSettingsDialog({
 
             <div className="chart-settings-group">
               <div className="chart-settings-group-title">Crosshair</div>
-              <label className="chart-setting-toggle">
-                <input
-                  type="checkbox"
-                  checked={draft.crosshair}
-                  onChange={(event) => update({ crosshair: event.target.checked })}
-                />
-                <span>Crosshair lines and labels</span>
-              </label>
+              <div className="chart-transparency-container">
+                <div className="chart-transparency-header">
+                  <span>Transparency</span>
+                  <span className="chart-badge-pill">{draft.crosshairTransparency ?? 0}%</span>
+                </div>
+                <div className="chart-slider-row">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    aria-label="Transparency"
+                    className="chart-settings-slider"
+                    value={draft.crosshairTransparency ?? 0}
+                    onChange={(e) => update({ crosshairTransparency: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+              <SettingToggle
+                label="Crosshair lines and labels"
+                checked={draft.crosshair}
+                onChange={(checked) => update({ crosshair: checked })}
+              />
               <label className="chart-setting-row">
                 <span>Crosshair snapping</span>
                 <select
@@ -765,19 +654,118 @@ export function ChartSettingsDialog({
             </div>
           </section>
 
+          {/* Section: Axes & Scales */}
+          <section id="settings-axes" aria-labelledby="heading-axes" className="chart-settings-section">
+            <div className="chart-settings-section-header">
+              <h3 id="heading-axes">Scales</h3>
+            </div>
+            <div className="chart-settings-group">
+              <div className="chart-settings-group-title">Scales</div>
+              <SettingToggle
+                label="Invert scale"
+                checked={draft.invertScale ?? false}
+                onChange={(checked) => update({ invertScale: checked })}
+              />
+              <label className="chart-setting-row">
+                <span>Price scale mode</span>
+                <select
+                  aria-label="Price scale"
+                  className="chart-settings-select"
+                  value={draft.scaleMode}
+                  onChange={(event) => update({ scaleMode: event.target.value as ScaleMode })}
+                >
+                  <option value="normal">Regular</option>
+                  <option value="logarithmic">Logarithmic</option>
+                  <option value="percentage">Percentage</option>
+                  <option value="indexed">Indexed to 100</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="chart-settings-group">
+              <div className="chart-settings-group-title">Navigation & Drag</div>
+              <SettingToggle
+                label="Enable panning"
+                checked={draft.panEnabled !== false}
+                onChange={(checked) => update({ panEnabled: checked })}
+              />
+              <SettingToggle
+                label="Enable zooming"
+                checked={draft.zoomEnabled !== false}
+                onChange={(checked) => update({ zoomEnabled: checked })}
+              />
+              <label className="chart-setting-row">
+                <span>Mouse drag</span>
+                <select
+                  className="chart-settings-select"
+                  value={draft.mousePan ?? 'both'}
+                  onChange={(e) => update({ mousePan: e.target.value as 'both' | 'horizontal' })}
+                >
+                  <option value="both">Time and price</option>
+                  <option value="horizontal">Horizontal only</option>
+                </select>
+              </label>
+              <label className="chart-setting-row">
+                <span>Default visible bars (0 = all)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100000"
+                  step="1"
+                  value={draft.defaultVisibleBars ?? 0}
+                  onChange={(e) => update({ defaultVisibleBars: Number(e.target.value) })}
+                />
+              </label>
+              <SettingToggle
+                label="Combine densely packed bars"
+                checked={draft.conflation ?? false}
+                onChange={(checked) => update({ conflation: checked })}
+              />
+            </div>
+
+            <div className="chart-settings-group">
+              <div className="chart-settings-group-title">Time Axis</div>
+              <label className="chart-setting-row">
+                <span>Timezone</span>
+                <select
+                  aria-label="Timezone"
+                  className="chart-settings-select"
+                  value={draft.timezone ?? 'Asia/Kolkata'}
+                  onChange={(e) => update({ timezone: e.target.value })}
+                >
+                  {TIMEZONES.map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <SettingToggle
+                label="Corner clock"
+                checked={draft.sessionClock ?? false}
+                onChange={(checked) => update({ sessionClock: checked })}
+              />
+              <SettingToggle
+                label="Countdown to bar close"
+                checked={draft.barCountdown ?? false}
+                onChange={(checked) => update({ barCountdown: checked })}
+              />
+            </div>
+          </section>
+
           {/* Section: Trading & Events */}
           <section id="settings-trading" aria-labelledby="heading-trading" className="chart-settings-section">
             <div className="chart-settings-section-header">
-              <h3 id="heading-trading">Trading & Events</h3>
+              <h3 id="heading-trading">Events</h3>
             </div>
-            <label className="chart-setting-toggle">
-              <input
-                type="checkbox"
+            <div className="chart-settings-group">
+              <div className="chart-settings-group-title">Events</div>
+              <SettingToggle
+                label="Show published event markers"
                 checked={draft.events ?? false}
-                onChange={(event) => update({ events: event.target.checked })}
+                onChange={(checked) => update({ events: checked })}
               />
-              <span>Show published event markers</span>
-            </label>
+            </div>
             <p className="chart-settings-note">
               Earnings, corporate actions and market news appear on the dates they occurred in history.
             </p>

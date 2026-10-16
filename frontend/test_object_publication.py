@@ -126,7 +126,10 @@ class ObjectPublicationTests(unittest.TestCase):
             self.assertEqual(lookup['publishedAt'], catalog['publishedAt'])
             self.assertEqual(lookup['symbols']['TEST']['recent'], catalog['symbols']['TEST']['recent'])
             history = json.loads(gzip.decompress(store.objects[lookup['symbols']['TEST']['history'] + '.json.gz']))
-            self.assertEqual(history, {'symbol': 'TEST', **catalog['symbols']['TEST']})
+            self.assertEqual(history, {'symbol': 'TEST', 'recent': catalog['symbols']['TEST']['recent'],
+                                       'years': catalog['symbols']['TEST']['years']})
+            self.assertEqual(lookup['symbols']['TEST']['fetchStatus'],
+                             catalog['symbols']['TEST']['fetchStatus'])
             for field, digest in [('recent', '0' * 64), ('history', index['announcements'])]:
                 with self.subTest(invalid_reference=field):
                     invalid = json.loads(json.dumps(lookup))

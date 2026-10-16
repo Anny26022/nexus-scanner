@@ -265,12 +265,20 @@ class ObjectPublicationTests(unittest.TestCase):
         store = R2Store.__new__(R2Store); store.env = {}; store.bucket = 'test'
         names = ['b'*64 + '.json.gz', 'a'*64 + '.json.gz']
         data = inventory_bytes(names)
-        with patch.object(store, 'cache_command') as upload:
+        record = hashlib.sha256(data).hexdigest().encode() + b'\n' + data
+        writes = []
+        def cache(*args, **kwargs):
+            if args[0] == 'copyto':
+                self.assertEqual(args[2:], (store.remote('verified-objects/current.txt'), '--ignore-times'))
+                writes.append(Path(args[1]).read_bytes())
+            return record
+        with patch.object(store, 'cache_command', side_effect=cache):
             store.write_inventory(names)
-            self.assertEqual(upload.call_args.args, ('rcat', store.remote('verified-objects/current.txt')))
-            record = upload.call_args.kwargs['data']
-        self.assertEqual(record, hashlib.sha256(data).hexdigest().encode() + b'\n' + data)
+        self.assertEqual(writes, [record])
         self.assertEqual(inventory_names(record), set(names))
+        with patch.object(store, 'cache_command', side_effect=[b'', b'corrupt']):
+            with self.assertRaisesRegex(RuntimeError, 'read-back mismatch'):
+                store.write_inventory(names)
         digest = hashlib.sha256(data).hexdigest()
         with patch.object(store, 'cache_command', return_value=record) as download:
             self.assertEqual(store.load_inventory(None), set(names))
@@ -283,6 +291,36 @@ class ObjectPublicationTests(unittest.TestCase):
         with patch.object(store, 'cache_command', side_effect=[missing, data]) as download:
             self.assertEqual(store.load_inventory({'verifiedObjectsSha256': digest}), set(names))
             self.assertEqual(download.call_args.args, ('cat', store.remote(f'verified-objects/{digest}.txt')))
+
+    def test_r2_cold_start_checkpoints_verified_batches_for_retry(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for index in range(5):
+                put_object(root, {'index': index})
+            store = R2Store.__new__(R2Store); store.env = {}; store.bucket = 'test'
+            checkpoints = []
+            checked = []
+            def run(*args):
+                batch = Path(args[args.index('--files-from') + 1]).read_text().splitlines()
+                self.assertLessEqual(len(batch), 2)
+                if args[0] == 'copy' and len(checked) == 1:
+                    raise subprocess.CalledProcessError(1, args)
+                if args[0] == 'check':
+                    checked.append(batch)
+            store.run = run
+            with patch('chart_publication.R2_VERIFY_BATCH_SIZE', 2), \
+                    patch.object(store, 'write_inventory', side_effect=lambda names: checkpoints.append(set(names))):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    store.upload_objects(root)
+                self.assertEqual(checkpoints, [set(checked[0])])
+                def resume(*args):
+                    if args[0] == 'check':
+                        checked.append(Path(args[args.index('--files-from') + 1]).read_text().splitlines())
+                store.run = resume
+                store.upload_objects(root, checkpoints[0])
+            self.assertEqual(len(checked), 3)
+            self.assertTrue(set(checked[0]).isdisjoint(set(checked[1] + checked[2])))
+            self.assertEqual(set().union(*map(set, checked)), {path.name for path in root.glob('*.json.gz')})
 
     def test_r2_object_command_failures_preserve_pointer_until_successful_retry(self):
         for failure in ('copy', 'check', 'copyto'):

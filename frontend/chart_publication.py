@@ -30,6 +30,7 @@ def write_json(path, payload):
 
 R2_SETTINGS = ('R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_PUBLIC_BASE_URL')
 OBJECT_NAME = re.compile(r'[a-f0-9]{64}\.json\.gz\Z')
+R2_VERIFY_BATCH_SIZE = 2048
 
 
 def inventory_bytes(names):
@@ -308,13 +309,19 @@ class R2Store:
     def write_inventory(self, names):
         data = inventory_bytes(names)
         record = hashlib.sha256(data).hexdigest().encode('ascii') + b'\n' + data
-        self.cache_command('rcat', self.remote('verified-objects/current.txt'), data=record)
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'current.txt'
+            path.write_bytes(record)
+            self.cache_command('copyto', str(path), self.remote('verified-objects/current.txt'), '--ignore-times')
+        if self.cache_command('cat', self.remote('verified-objects/current.txt')) != record:
+            raise RuntimeError('R2 verification inventory read-back mismatch')
 
     def upload_objects(self, source, known_verified=()):
         """Upload and read back objects absent from the prior verified release."""
         remote = self.remote('objects')
         files = sorted(path.name for path in source.glob('*.json.gz'))
-        pending = [name for name in files if name not in known_verified]
+        verified = set(files).intersection(known_verified)
+        pending = [name for name in files if name not in verified]
         print(f'R2 objects: {len(pending)} unverified of {len(files)} current', flush=True)
         if not pending:
             return files
@@ -322,15 +329,26 @@ class R2Store:
         # exceeded the five-minute timeout before the daily upload even began.
         # --files-from with --no-traverse addresses only unverified paths.
         # Immutable copy rejects conflicts; download check verifies their bytes.
-        with tempfile.TemporaryDirectory() as folder:
-            names = Path(folder) / 'objects.txt'
-            names.write_text('\n'.join(pending) + '\n')
-            self.run('copy', str(source), remote, '--files-from', str(names), '--no-traverse',
-                     '--transfers', '32', '--checkers', '32',
-                     '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
-                     '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
-            self.run('check', str(source), remote, '--files-from', str(names), '--no-traverse',
-                     '--one-way', '--download', '--checkers', '32')
+        checkpointing = len(pending) > R2_VERIFY_BATCH_SIZE
+        for start in range(0, len(pending), R2_VERIFY_BATCH_SIZE):
+            batch = pending[start:start + R2_VERIFY_BATCH_SIZE]
+            print(f'R2 verifying objects {start + 1}-{start + len(batch)} of {len(pending)}', flush=True)
+            with tempfile.TemporaryDirectory() as folder:
+                names = Path(folder) / 'objects.txt'
+                names.write_text('\n'.join(batch) + '\n')
+                self.run('copy', str(source), remote, '--files-from', str(names), '--no-traverse',
+                         '--transfers', '32', '--checkers', '32',
+                         '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
+                         '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
+                self.run('check', str(source), remote, '--files-from', str(names), '--no-traverse',
+                         '--one-way', '--download', '--checkers', '32')
+            verified.update(batch)
+            if checkpointing:
+                try:
+                    self.write_inventory(verified)
+                except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
+                    print(f'WARNING: R2 verification checkpoint not saved: {error}', flush=True)
+                    checkpointing = False
         return files
 
     def archive(self, previous, month):

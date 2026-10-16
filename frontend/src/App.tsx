@@ -16,8 +16,10 @@ const queryClient = new QueryClient({
   },
 });
 
+const ChartsTab = React.lazy(() => import('./components/ChartsTab'));
+
 const ScreenerAppContent: React.FC = () => {
-  const [activeTab, setActiveTab] = useLocalStorageState<'screener' | 'ipo'>('nexus-scanner.ui.active-tab.v1', 'screener');
+  const [activeTab, setActiveTab] = useLocalStorageState<'screener' | 'ipo' | 'charts'>('nexus-scanner.ui.active-tab.v1', 'screener');
 
   const { data: revisionData, isError: revisionFailed, refetch: refreshRevision } = useQuery({
     queryKey: ['revisionCurrent'],
@@ -45,6 +47,10 @@ const ScreenerAppContent: React.FC = () => {
             datasetRevision={revisionData?.immutableRevision}
             onRefreshRevision={async () => (await refreshRevision()).data?.immutableRevision}
           />
+        ) : activeTab === 'charts' ? (
+          <React.Suspense fallback={<p role="status">Loading chart workspace…</p>}>
+            <ChartsTab datasetRevision={revisionData?.immutableRevision}/>
+          </React.Suspense>
         ) : (
           <NewListingsTab key={revisionData?.immutableRevision} datasetRevision={revisionData?.immutableRevision} selectedAsOfDate={selectedAsOfDate} />
         )}

@@ -174,5 +174,61 @@
     "category": "fundamentals",
     "label": "Total debt (fy) (\u20b9 cr)",
     "divisor": 10000000
+  },
+  {
+    "wire": "High.All",
+    "key": "all_time_high",
+    "section": "market",
+    "category": "price",
+    "label": "All-time high (\u20b9)",
+    "divisor": 1
+  },
+  {
+    "wire": "Low.All",
+    "key": "all_time_low",
+    "section": "market",
+    "category": "price",
+    "label": "All-time low (\u20b9)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.5Y",
+    "key": "performance_5y_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (5y, %)",
+    "divisor": 1
+  },
+  {
+    "wire": "price_earnings_ttm",
+    "key": "pe_ttm",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "P/E (TTM)",
+    "divisor": 1
+  },
+  {
+    "wire": "price_earnings_growth_ttm",
+    "key": "peg_ttm",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "PEG (TTM)",
+    "divisor": 1
+  },
+  {
+    "wire": "total_revenue_yoy_growth_ttm",
+    "key": "revenue_yoy_growth_ttm_pct",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "Revenue YoY growth (ttm) (%)",
+    "divisor": 1
+  },
+  {
+    "wire": "net_income_yoy_growth_ttm",
+    "key": "net_income_yoy_growth_ttm_pct",
+    "section": "financials",
+    "category": "fundamentals",
+    "label": "Net income YoY growth (ttm) (%)",
+    "divisor": 1
   }
 ]

@@ -126,11 +126,32 @@ def _stock_row(task, context, session, presets, default, memo_keys):
     tradingview = tradingview_row(stock, session)
     if tradingview is not None:
         row['tradingview'] = tradingview
+        # Intelligent fallback: If primary Nexus exchange data is missing/clipped, backfill from verified TV snapshot.
+        tv_vals = tradingview.get('values') or {}
+        if row.get('peRatio') is None and tv_vals.get('financials.pe_ttm') is not None:
+            row['peRatio'] = tv_vals['financials.pe_ttm']
+        if row.get('pegRatio') is None and tv_vals.get('financials.peg_ttm') is not None:
+            row['pegRatio'] = tv_vals['financials.peg_ttm']
+        if row.get('allTimeHigh') is None and tv_vals.get('market.all_time_high') is not None:
+            row['allTimeHigh'] = tv_vals['market.all_time_high']
+            if row.get('close') and row['allTimeHigh'] > 0:
+                row['distAthPct'] = float((row['close'] / row['allTimeHigh'] - 1) * 100)
+        if row.get('allTimeLow') is None and tv_vals.get('market.all_time_low') is not None:
+            row['allTimeLow'] = tv_vals['market.all_time_low']
+        if row.get('return5yPct') is None and tv_vals.get('market.performance_5y_pct') is not None:
+            row['return5yPct'] = tv_vals['market.performance_5y_pct']
+        if row.get('evEbitda') is None and tv_vals.get('financials.ev_ebitda_ttm') is not None:
+            row['evEbitda'] = tv_vals['financials.ev_ebitda_ttm']
+        if row.get('ttmRevenueGrowthPct') is None and tv_vals.get('financials.revenue_yoy_growth_ttm_pct') is not None:
+            row['ttmRevenueGrowthPct'] = tv_vals['financials.revenue_yoy_growth_ttm_pct']
+        if row.get('ttmNetProfitGrowthPct') is None and tv_vals.get('financials.net_income_yoy_growth_ttm_pct') is not None:
+            row['ttmNetProfitGrowthPct'] = tv_vals['financials.net_income_yoy_growth_ttm_pct']
     row['historyMetadata']=stock.get('history_metadata')
     row['financialMetadata']=stock.get('financial_metadata')
     row['dividendExDate']=stock.get('dividend_ex_date')
     row['vwapAsOfDate']=stock.get('vwap_as_of_date')
-    row['peRatio']=financial_value(context,stock,{'condition':'pe_ratio'},bridge.date.fromisoformat(session),finite_number(stock.get('market_cap_crore')))[0]
+    if row.get('peRatio') is None:
+        row['peRatio']=financial_value(context,stock,{'condition':'pe_ratio'},bridge.date.fromisoformat(session),finite_number(stock.get('market_cap_crore')))[0]
     row['fnoBan']=bool(context['fno_ban_symbols'].get(symbol)) if context.get('fno_ban_available') and context.get('fno_ban_trade_date')==session else None
     row['fnoBanAsOfDate']=context.get('fno_ban_trade_date') if context.get('fno_ban_available') else None
     row['roePct']=finite_number(stock.get('roe_percent'))

@@ -180,7 +180,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
         <DownloadResults
           loadRows={loadExportRows ?? (async () => rows)}
           columns={visibleColumns}
-          filename={`nexus-results-${data?.asOfDate ?? 'export'}.csv`}
+          filename={`nexus-results-${data?.resolvedSession?.date ?? 'export'}.csv`}
           disabled={!rows.length || busy || isError}
         />
         <button type="button" className="button button-secondary" aria-label="Customize columns" title="Customize columns" onClick={() => setColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>

@@ -6,13 +6,14 @@ import time
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import sys
+import requests
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 from apply_nse_daily_ohlcv import repair_official_history
-from fetch_all_ohlcv import expected_sessions_by_symbol, fetch_single_stock, has_official_history
+from fetch_all_ohlcv import expected_sessions_by_symbol, fetch_history_chunk, fetch_single_stock, has_official_history
 from ohlcv_utils import NSE_TIMEZONE, missing_history_sessions, parse_history_date, plan_history_ranges, read_ohlcv_csv, write_ohlcv_csv
 from edl_pipeline.quality import inspect_breadth_history
 from edl_pipeline.artifacts import OHLCV_FETCH_LANE, PHASE2_SCRIPTS
@@ -27,6 +28,55 @@ def history():
 
 
 class HistoryGapTests(unittest.TestCase):
+    def test_forbidden_provider_response_is_not_retried(self):
+        response = requests.Response()
+        response.status_code = 403
+        response.url = 'https://openweb-ticks.dhan.co/getDataH'
+        session = Mock()
+        session.post.return_value = response
+        with patch('fetch_all_ohlcv.http_session', return_value=session), \
+                patch('fetch_all_ohlcv.time.sleep') as sleep:
+            with self.assertRaises(requests.HTTPError):
+                fetch_history_chunk({})
+        session.post.assert_called_once()
+        sleep.assert_not_called()
+
+    def test_transient_provider_error_still_retries(self):
+        response = requests.Response()
+        response.status_code = 503
+        response.url = 'https://openweb-ticks.dhan.co/getDataH'
+        session = Mock()
+        session.post.return_value = response
+        with patch('fetch_all_ohlcv.http_session', return_value=session), \
+                patch('fetch_all_ohlcv.time.sleep') as sleep:
+            with self.assertRaisesRegex(RuntimeError, 'after retries'):
+                fetch_history_chunk({})
+        self.assertEqual(session.post.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_forbidden_backfill_uses_valid_cache_but_not_missing_required_sessions(self):
+        response = requests.Response()
+        response.status_code = 403
+        forbidden = requests.HTTPError('history forbidden', response=response)
+        details = dict(Exch='NSE', Seg='E', Inst='EQUITY', Sid=1)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            destination = root / 'TEST.csv'
+            with patch('fetch_all_ohlcv.resolve_path', return_value=root), \
+                    patch('fetch_all_ohlcv.is_nse_cash_session', return_value=False), \
+                    patch('fetch_all_ohlcv.time.time', return_value=datetime(2026, 10, 8, 18, tzinfo=NSE_TIMEZONE).timestamp()), \
+                    patch('fetch_all_ohlcv.fetch_history_chunk', side_effect=forbidden) as fetch:
+                write_ohlcv_csv(destination, [candle('2026-10-06'), candle('2026-10-07')])
+                self.assertEqual(fetch_single_stock('TEST', details, official_nse_session='2026-10-07',
+                                                   expected_sessions={'2026-10-06', '2026-10-07'}), 'uptodate')
+                self.assertEqual(fetch.call_count, 1)
+
+                write_ohlcv_csv(destination, [candle('2026-10-06')])
+                with self.assertRaisesRegex(ValueError, 'required history sessions missing: 2026-10-07'):
+                    fetch_single_stock('TEST', details, official_nse_session='2026-10-07',
+                                       expected_sessions={'2026-10-06', '2026-10-07'})
+                self.assertEqual([row['Date'] for row in read_ohlcv_csv(destination)], ['2026-10-06'])
+
     def test_fast_date_parser_preserves_legacy_dates_and_invalid_inputs(self):
         for value in ['2026-10-07', '2026-1-7', '2024-02-29', '2023-02-29', '20261007', '', None, 42]:
             with self.subTest(value=value):

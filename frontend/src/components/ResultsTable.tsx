@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import type { ScreenerRunResponse } from '../types/screener';
-import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, X, Download } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, X } from 'lucide-react';
 import {CopyResults} from './CopyResults';
-import {formatCsvResults} from '../utils/copyResults';
+import {DownloadResults} from './DownloadResults';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { AnnouncementsPanel } from './AnnouncementsPanel';
 import { Pagination } from './Pagination';
@@ -160,28 +160,6 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const rows = data?.rows ?? [];
   const rowWindow = useTableWindow(rows, data, visibleColumns.length);
   const busy = isLoading || isFetching;
-  const [downloading, setDownloading] = useState(false);
-  const handleDownloadCsv = async () => {
-    if (downloading || busy || !rows.length) return;
-    setDownloading(true);
-    try {
-      const rowsToExport = loadExportRows ? await loadExportRows() : rows;
-      const csvContent = formatCsvResults(rowsToExport as unknown as Record<string, unknown>[], visibleColumns);
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `nexus-results-${data?.asOfDate ?? 'export'}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Failed to export CSV:', err);
-    } finally {
-      setDownloading(false);
-    }
-  };
   return <section className="results-surface" aria-label="Screener results">
     <div className="results-toolbar">
       <div className="result-count"><strong>{data?.matchCount.toLocaleString('en-IN') ?? '-'}</strong><span>matched equities <span className="result-universe">/ {data?.totalUniverseCount.toLocaleString('en-IN') ?? '-'} universe</span></span></div>
@@ -193,16 +171,12 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
             if (rows.length !== data?.matchCount) throw new Error('All matching symbols are unavailable. Run the scan again.');
             return rows;
           })} revision={data?.immutableRevision} disabled={!rows.length || busy || isError}/>
-        <button
-          type="button"
-          className="button button-secondary results-copy-button"
-          aria-label={downloading ? 'Downloading CSV' : 'Download CSV'}
-          title="Download CSV"
-          disabled={!rows.length || busy || isError || downloading}
-          onClick={() => void handleDownloadCsv()}
-        >
-          <Download size={14} />
-        </button>
+        <DownloadResults
+          loadRows={loadExportRows ?? (async () => rows)}
+          columns={visibleColumns}
+          filename={`nexus-results-${data?.asOfDate ?? 'export'}.csv`}
+          disabled={!rows.length || busy || isError}
+        />
         <button type="button" className="button button-secondary" aria-label="Customize columns" title="Customize columns" onClick={() => setColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
       </div>
     </div>

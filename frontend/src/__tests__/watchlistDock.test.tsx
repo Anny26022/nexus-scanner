@@ -1,4 +1,5 @@
 import { expect, it, vi, afterEach } from 'vitest';
+import { StrictMode } from 'react';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WatchlistDock, extractSymbolsFromInput, extractWatchlistItemsFromInput } from '../components/WatchlistDock';
@@ -274,6 +275,21 @@ it('supports static dock without close button, pasting scanner outputs, and remo
   const removeBtn = screen.getByTitle('Remove BEL');
   fireEvent.click(removeBtn);
   expect(screen.queryByText('BEL')).not.toBeInTheDocument();
+});
+
+it('writes the watchlist once per add or remove action under Strict Mode', () => {
+  const writes = vi.spyOn(Storage.prototype, 'setItem');
+  render(<StrictMode><WatchlistDock onSelectSymbol={vi.fn()} /></StrictMode>, { wrapper: createWrapper() });
+  fireEvent.click(screen.getByTitle('Add symbol to watchlist'));
+  const textarea = screen.getByPlaceholderText(/Add ticker or paste scanner output/i);
+  fireEvent.change(textarea, { target: { value: 'NSE:BEL' } });
+  writes.mockClear();
+  fireEvent.submit(textarea.closest('form')!);
+  expect(writes.mock.calls.filter(([key]) => key === 'nexus.chart.watchlist.v2')).toHaveLength(1);
+  writes.mockClear();
+  fireEvent.click(screen.getByTitle('Remove BEL'));
+  expect(writes.mock.calls.filter(([key]) => key === 'nexus.chart.watchlist.v2')).toHaveLength(1);
+  expect(readChartStorage('watchlist.v2')).toEqual([]);
 });
 
 it('sorts within pasted sections and excludes headings from quote requests', async () => {

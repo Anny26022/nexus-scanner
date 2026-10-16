@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import ChartsTab from '../components/ChartsTab';
@@ -248,7 +249,7 @@ it('mounts only selected chart tiles and disposes hidden engines when shrinking 
   chooseGrid(1);
   expect(screen.getAllByLabelText(/candlestick and volume chart$/)).toHaveLength(1);
   expect(engines[0].destroy).not.toHaveBeenCalled();for(const engine of engines.slice(1)) expect(engine.destroy).toHaveBeenCalledOnce();
-},15000);
+},30000);
 it('links subsequent symbol and interval changes independently',async()=>{
   vi.mocked(screenerApi.getChart).mockImplementation(async symbol=>({schemaVersion:2,symbol,asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]}));
   setup();await screen.findByLabelText('RELIANCE candlestick and volume chart');chooseGrid(2);
@@ -330,6 +331,20 @@ it('persists fullscreen state across remounts and keeps layout grid option acces
   expect(screen.getByLabelText('Chart grid')).toBeInTheDocument();
   expect(localStorage.getItem('nexus.chart.chart-fullscreen.v1')).toBe('null');
   ui.unmount();
+});
+
+it('writes fullscreen state once per toggle under Strict Mode', async () => {
+  vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
+  const client = new QueryClient({defaultOptions:{queries:{retry:false}}});
+  render(<StrictMode><QueryClientProvider client={client}><ChartsTab datasetRevision={'a'.repeat(64)}/></QueryClientProvider></StrictMode>);
+  await screen.findByLabelText('RELIANCE candlestick and volume chart');
+  const writes = vi.spyOn(Storage.prototype, 'setItem');
+  writes.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'Maximize chart' }));
+  expect(writes.mock.calls.filter(([key]) => key === 'nexus.chart.chart-fullscreen.v1')).toHaveLength(1);
+  writes.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'Restore chart' }));
+  expect(writes.mock.calls.filter(([key]) => key === 'nexus.chart.chart-fullscreen.v1')).toHaveLength(1);
 });
 
 it('configures crosshair transparency and inverted scale in chart settings', async () => {

@@ -155,6 +155,12 @@ export const WatchlistDock = memo(function WatchlistDock({
     const saved = readChartStorage('watchlist.v2');
     return Array.isArray(saved) ? saved.filter((item): item is string => typeof item === 'string') : [];
   });
+  const itemsChoice = useRef(items);
+  const saveItems = (next: string[]) => {
+    itemsChoice.current = next;
+    setItems(next);
+    writeChartStorage('watchlist.v2', next);
+  };
   const symbols = useMemo(() => items.filter(item => !isSection(item)), [items]);
 
   // Search filter
@@ -222,7 +228,7 @@ export const WatchlistDock = memo(function WatchlistDock({
   }, [sortColumn, sortDir]);
 
   // Add symbol(s) to watchlist (supports single ticker or batch scanner output)
-  const handleAddSymbols = (e: React.FormEvent) => {
+  const handleAddSymbols = (e: React.SyntheticEvent) => {
     e.preventDefault();
     const extracted = extractWatchlistItemsFromInput(addSymbolInput);
     const pastedSymbols = extracted.filter(item => !isSection(item));
@@ -232,20 +238,18 @@ export const WatchlistDock = memo(function WatchlistDock({
       return;
     }
     setAddError('');
-    setItems(prev => {
-      const existing = new Set(prev.filter(item => !isSection(item)));
-      const hasSections = extracted.some(isSection);
-      const toAdd = pastedSymbols.filter(symbol => !existing.has(symbol));
-      const pastedSet = new Set(pastedSymbols);
-      const next = hasSections
-        ? [...extracted, ...prev.filter(item => isSection(item) || !pastedSet.has(item))]
-        : [...toAdd, ...prev];
-      writeChartStorage('watchlist.v2', next);
-      setAddSuccess(
-        `Added ${toAdd.length} symbol${toAdd.length === 1 ? '' : 's'}${hasSections ? ` and ${extracted.length - pastedSymbols.length} heading${extracted.length - pastedSymbols.length === 1 ? '' : 's'}` : ''}${pastedSymbols.length > toAdd.length ? ` (${pastedSymbols.length - toAdd.length} already existed)` : ''}`
-      );
-      return next;
-    });
+    const previous = itemsChoice.current;
+    const existing = new Set(previous.filter(item => !isSection(item)));
+    const hasSections = extracted.some(isSection);
+    const toAdd = pastedSymbols.filter(symbol => !existing.has(symbol));
+    const pastedSet = new Set(pastedSymbols);
+    const next = hasSections
+      ? [...extracted, ...previous.filter(item => isSection(item) || !pastedSet.has(item))]
+      : [...toAdd, ...previous];
+    saveItems(next);
+    setAddSuccess(
+      `Added ${toAdd.length} symbol${toAdd.length === 1 ? '' : 's'}${hasSections ? ` and ${extracted.length - pastedSymbols.length} heading${extracted.length - pastedSymbols.length === 1 ? '' : 's'}` : ''}${pastedSymbols.length > toAdd.length ? ` (${pastedSymbols.length - toAdd.length} already existed)` : ''}`
+    );
     setAddSymbolInput('');
     setTimeout(() => {
       setAddSuccess('');
@@ -254,19 +258,14 @@ export const WatchlistDock = memo(function WatchlistDock({
   };
 
   // Remove symbol from watchlist
-  const handleRemoveSymbol = (sym: string, e: React.MouseEvent) => {
+  const handleRemoveSymbol = (sym: string, e: React.SyntheticEvent) => {
     e.stopPropagation();
-    setItems(prev => {
-      const next = prev.filter(s => s !== sym);
-      writeChartStorage('watchlist.v2', next);
-      return next;
-    });
+    saveItems(itemsChoice.current.filter(item => item !== sym));
   };
 
   // Clear entire list
   const handleClearEntireList = () => {
-    setItems([]);
-    writeChartStorage('watchlist.v2', []);
+    saveItems([]);
   };
 
   // Sort within each section, so headings stay attached to their symbols.
@@ -501,7 +500,7 @@ export const WatchlistDock = memo(function WatchlistDock({
               setAddSuccess('');
             } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
               e.preventDefault();
-              handleAddSymbols(e as any);
+              handleAddSymbols(e);
             }
           }}
         >
@@ -755,7 +754,7 @@ export const WatchlistDock = memo(function WatchlistDock({
                   } else if (e.key === 'Delete' || e.key === 'Backspace') {
                     e.preventDefault();
                     e.stopPropagation();
-                    handleRemoveSymbol(sym, e as any);
+                    handleRemoveSymbol(sym, e);
                   }
                 }}
               >

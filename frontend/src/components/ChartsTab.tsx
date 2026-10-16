@@ -400,16 +400,17 @@ export default function ChartsTab({datasetRevision}:{datasetRevision?:string}) {
     const saved = readChartStorage('chart-fullscreen.v1');
     return typeof saved === 'string' ? saved : null;
   });
+  const expandedChoice = useRef(expandedTile);
 
   const handleToggleExpand = useCallback((tileId: string) => {
-    setExpandedTile(current => {
-      const next = current === tileId ? null : tileId;
-      writeChartStorage('chart-fullscreen.v1', next);
-      return next;
-    });
+    const next = expandedChoice.current === tileId ? null : tileId;
+    expandedChoice.current = next;
+    setExpandedTile(next);
+    writeChartStorage('chart-fullscreen.v1', next);
   }, []);
 
   const handleCloseExpand = useCallback(() => {
+    expandedChoice.current = null;
     setExpandedTile(null);
     writeChartStorage('chart-fullscreen.v1', null);
   }, []);

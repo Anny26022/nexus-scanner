@@ -74,13 +74,14 @@ class FilingHistoryTests(unittest.TestCase):
 
     def test_live_quote_changes_reuse_history_but_disclosure_revisions_rebuild(self):
         filings = [{'news_date': '2026-10-07', 'caption': 'Dividend approved',
-                    'news_body': 'Dividend of Rs. 10 per share.', 'ltp': 100}]
+                    'news_body': 'Dividend of Rs. 10 per share.', 'ltp': 100, 'ch': 2, 'pch': 1}]
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'cache.json'
             first = build_filing_history_artifact.classify_cached(filings, path, ['rules'])
-            self.assertNotIn('ltp', first[0])
+            for field in ('ltp', 'ch', 'pch'):
+                self.assertNotIn(field, first[0])
             self.assertEqual(filings[0]['ltp'], 100)  # Raw provider cache remains intact.
-            filings[0]['ltp'] = 120
+            filings[0].update(ltp=120, ch=-6.01, pch=-3.02)
             stats = Counter()
             with mock.patch.object(build_filing_history_artifact, 'classify_filings', side_effect=AssertionError('normalized again')):
                 self.assertEqual(build_filing_history_artifact.classify_cached(filings, path, ['rules'], stats), first)

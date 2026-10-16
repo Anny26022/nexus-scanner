@@ -27,7 +27,7 @@ export interface AnnouncementCatalog {
   symbols: Record<string, {
     recent: string;
     years: Record<string, Array<{ summary: string; details: string; count: number }>>;
-    fetchStatus: Record<string, unknown>;
+    fetchStatus?: Record<string, unknown>;
   }>;
 }
 

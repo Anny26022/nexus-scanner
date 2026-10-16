@@ -129,7 +129,9 @@ def validate_announcement_objects(objects, catalog_hash, session, symbols, looku
             reference = lookup['symbols'][symbol]
             if (reference.get('recent') != entry['recent']
                     or reference.get('years') != sorted(map(int, entry['years']), reverse=True)
-                    or read(reference.get('history')) != {'symbol': symbol, **entry}):
+                    or reference.get('fetchStatus') != entry.get('fetchStatus', {})
+                    or read(reference.get('history')) != {'symbol': symbol,
+                                                          'recent': entry['recent'], 'years': entry['years']}):
                 raise RuntimeError('Filing lookup history mismatch')
     read(catalog['taxonomy'])
     index = read(catalog['index'])

@@ -155,7 +155,9 @@ def announcement_lookup(directory, catalog_hash):
         catalog = json.load(handle)
     return {'publishedAt': catalog['publishedAt'], 'taxonomy': catalog['taxonomy'], 'index': catalog['index'],
             'symbols': {symbol: {'recent': entry['recent'], 'years': sorted(map(int, entry['years']), reverse=True),
-                                 'history': put_object(directory, {'symbol': symbol, **entry})}
+                                 'fetchStatus': entry.get('fetchStatus', {}),
+                                 'history': put_object(directory, {'symbol': symbol,
+                                                                  'recent': entry['recent'], 'years': entry['years']})}
                         for symbol, entry in catalog['symbols'].items()}}
 
 

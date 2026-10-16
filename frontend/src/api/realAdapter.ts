@@ -87,7 +87,7 @@ function cached<T>(cache: Map<string, Promise<unknown>>, key: string, load: () =
 }
 interface FilingLookup {
   publishedAt: string; taxonomy: string; index: string;
-  symbols: Record<string, {recent: string; years: number[]; history: string}>;
+  symbols: Record<string, {recent: string; years: number[]; history: string; fetchStatus?: Record<string, unknown>}>;
 }
 interface DataIndex { revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string; filingLookup?: FilingLookup }
 async function releaseFor(revision?: string): Promise<Manifest> {

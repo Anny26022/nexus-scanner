@@ -9,7 +9,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import build_chart_artifacts as builder
-from announcement_artifacts import build_announcements
+from announcement_artifacts import announcement_lookup, build_announcements
 from filing_classification import classify_filings
 
 
@@ -31,20 +31,34 @@ class AnnouncementArtifactsTests(unittest.TestCase):
                 rows = [filing('2025-01-01', 'old')]
                 if preclassified:
                     rows = classify_filings(rows)
-                rows[0]['ltp'] = 100
+                rows[0].update(ltp=100, ch=2, pch=1)
                 payload = {'updated_at': '2026-10-07', 'records': [{'symbol': 'TEST', 'filings': rows}]}
                 first = build_announcements(payload, root, {'TEST'}, '2026-10-06')
                 catalog = read(root, first)
                 page, = catalog['symbols']['TEST']['years']['2025']
                 detail, = read(root, page['details'])['records'].values()
-                self.assertNotIn('ltp', detail)
+                for field in ('ltp', 'ch', 'pch'):
+                    self.assertNotIn(field, detail)
                 self.assertEqual(rows[0]['ltp'], 100)
-                rows[0]['ltp'] = 120
+                rows[0].update(ltp=120, ch=-6.01, pch=-3.02)
                 self.assertEqual(build_announcements(payload, root, {'TEST'}, '2026-10-06'), first)
                 rows[0]['news_body'] += ' Corrected amount: Rs. 12 crore.'
                 revised = read(root, build_announcements(payload, root, {'TEST'}, '2026-10-06'))
                 self.assertNotEqual(revised['symbols']['TEST']['years']['2025'][0]['details'], page['details'])
                 self.assertNotEqual(revised['symbols']['TEST']['years']['2025'][0]['summary'], page['summary'])
+
+    def test_fetch_status_changes_release_metadata_without_rewriting_company_history(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            company = {'symbol': 'TEST', 'filings': [filing('2025-01-01', 'old')],
+                       'fetch_status': {'lodr': {'last_attempt_at': '2026-10-06T12:00:00Z'}}}
+            payload = {'updated_at': '2026-10-07', 'records': [company]}
+            first = announcement_lookup(root, build_announcements(payload, root, {'TEST'}, '2026-10-06'))
+            company['fetch_status']['lodr']['last_attempt_at'] = '2026-10-07T12:00:00Z'
+            second = announcement_lookup(root, build_announcements(payload, root, {'TEST'}, '2026-10-06'))
+            self.assertEqual(first['symbols']['TEST']['history'], second['symbols']['TEST']['history'])
+            self.assertNotEqual(first['symbols']['TEST']['fetchStatus'], second['symbols']['TEST']['fetchStatus'])
+            self.assertNotIn('fetchStatus', read(root, second['symbols']['TEST']['history']))
 
     def test_recent_index_includes_next_day_filings_without_changing_price_cutoff(self):
         with tempfile.TemporaryDirectory() as folder:

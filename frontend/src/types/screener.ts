@@ -72,6 +72,17 @@ export interface ScreenerRunRequest {
 }
 
 export interface StockRow {
+  tradingview?: {
+    exchange?:string | null;
+    isPrimary?:boolean | null;
+    primaryExchange?:string | null;
+    listingSymbol?:string | null;
+    source:string;
+    asOfDate:string;
+    fetchedAt:string;
+    updateMode:string;
+    values:Record<string, number | null>;
+  };
   symbol: string;
   name: string;
   listingDate: string;

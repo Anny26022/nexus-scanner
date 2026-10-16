@@ -1,73 +1,117 @@
+"""Fetch standard daily indicators in one TradingView scanner request."""
+import math
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
-from pipeline_utils import load_json, post_json, save_json
+import requests
 
-# --- Configuration ---
+from pipeline_utils import load_json, post_json, resource_path, save_json
+
 INPUT_FILE = "master_isin_map.json"
 OUTPUT_FILE = "advanced_indicator_data.json"
-API_URL = "https://ow-static-scanx.dhan.co/staticscanx/indicator"
-MAX_THREADS = 50  # Fast parallel execution
+API_URL = "https://scanner.tradingview.com/india/scan"
+PERIODS = (5, 9, 10, 20, 21, 50, 100, 150, 200)
+INDICATORS = {"RSI": "RSI(14)", "ATR": "ATR(14)", "ADX": "ADX(14)",
+              "MACD.macd": "MACD(12,26)", "MACD.signal": "MACD Signal(9)"}
+# Shared with the filter catalogue and daily publisher; no parallel field lists.
+FIELD_DEFINITIONS = load_json(resource_path("tradingview_fields.json"))
+MARKET_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "market"}
+FINANCIAL_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "financials"}
+TECHNICAL_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "technicals"}
+COLUMNS = ["isin", "time", "close", "update_mode", "currency", "fundamental_currency_code", "exchange", "is_primary",
+           *[f["wire"] for f in FIELD_DEFINITIONS]]
+LIMIT = 10000
 
-def fetch_indicators(item):
-    """Fetch advanced indicators (Pivot, Moving Averages, RSI Sentiment) for a stock."""
-    symbol = item.get("Symbol")
-    isin = item.get("ISIN")
-    sid = item.get("Sid")
-    
-    # We require Sid for this API
-    if not sid:
-        return None
 
-    payload = {
-        "exchange": "NSE",
-        "segment": "E",
-        "security_id": str(sid),
-        "isin": isin,
-        "symbol": symbol,
-        "minute": "D"  # Daily timeframe
-    }
+def number(value):
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
 
-    try:
-        data = post_json(API_URL, payload, timeout=10).get("data", [])
-        if data and isinstance(data, list):
-            result = data[0]
-            return {
-                "Symbol": symbol,
-                "EMA": result.get("EMA", []),
-                "SMA": result.get("SMA", []),
-                "TechnicalIndicators": result.get("Indicator", []),
-                "Pivots": result.get("Pivot", []),
-            }
-        return None
-    except Exception:
-        return None
+
+def mapped_values(values, fields, currency):
+    # Crore/price outputs are only valid for INR. Do not label other currencies INR.
+    return {name: number(values[field]) / divisor if currency == "INR" and number(values[field]) is not None else None
+            for field, (name, divisor) in fields.items()}
+
+
+def normalize_rows(response, master, fetched_at):
+    rows = response.get("data")
+    if not isinstance(rows, list) or not rows or response.get("totalCount") != len(rows):
+        raise ValueError("Incomplete TradingView scanner response")
+    by_isin = {}
+    for row in rows:
+        if not isinstance(row, dict) or not str(row.get("s", "")).startswith("NSE:") or not isinstance(row.get("d"), list) or len(row["d"]) != len(COLUMNS):
+            raise ValueError("Unexpected TradingView scanner row/column alignment")
+        values = dict(zip(COLUMNS, row["d"]))
+        if values["exchange"] != "NSE" or values["is_primary"] is not True:
+            raise ValueError("TradingView response contains a non-NSE or non-primary listing")
+        values["listingSymbol"] = row["s"]
+        isin = values["isin"]
+        if not isin:
+            continue
+        if isin in by_isin:
+            raise ValueError(f"Ambiguous TradingView ISIN: {isin}")
+        by_isin[isin] = values
+    result = []
+    for item in master:
+        values = by_isin.get(item.get("ISIN"))
+        if values is None:
+            continue
+        timestamp = number(values["time"])
+        if timestamp is None or number(values["close"]) is None:
+            continue
+        result.append({
+            "Symbol": item["Symbol"], "ISIN": item["ISIN"], "source": API_URL,
+            "exchange": values["exchange"], "isPrimary": values["is_primary"],
+            "primaryExchange": values["exchange"], "listingSymbol": values["listingSymbol"],
+            "asOfDate": datetime.fromtimestamp(timestamp, ZoneInfo("Asia/Kolkata")).date().isoformat(),
+            "fetchedAt": fetched_at, "updateMode": values["update_mode"], "close": values["close"],
+            "currency": values["currency"], "financialCurrency": values["fundamental_currency_code"],
+            "market": mapped_values(values, MARKET_FIELDS, values["currency"]),
+            "financials": mapped_values(values, FINANCIAL_FIELDS, values["fundamental_currency_code"]),
+            "technicals": mapped_values(values, TECHNICAL_FIELDS, values["currency"]),
+            **{kind: [{"Indicator": f"{period}-{kind}", "Value": number(values.get(f"{kind}{period}"))}
+                      for period in PERIODS] for kind in ("SMA", "EMA")},
+            "TechnicalIndicators": [{"Indicator": label, "Value": number(values.get(field))}
+                                    for field, label in INDICATORS.items()],
+            # Monthly TradingView pivots are not the old provider's daily pivots.
+            "Pivots": [],
+        })
+    if not result:
+        raise ValueError("TradingView returned no indicators for the canonical ISIN universe")
+    # Use the observed stock session, never today's calendar date. Suspended
+    # stocks may still have older candles in an otherwise current response.
+    session = max(row["asOfDate"] for row in result)
+    return [row for row in result if row["asOfDate"] == session]
+
 
 def main():
+    started = time.perf_counter()
     try:
-        master_list = load_json(INPUT_FILE)
-    except FileNotFoundError:
-        print(f"Error: {INPUT_FILE} not found. Please run fetch_dhan_data.py first.")
+        master = load_json(INPUT_FILE)
+        if not master:
+            raise ValueError("Master ISIN universe is empty")
+        payload = {"columns": COLUMNS, "markets": ["india"], "options": {"lang": "en"},
+                   "filter": [{"left": "exchange", "operation": "equal", "right": "NSE"},
+                              {"left": "type", "operation": "equal", "right": "stock"},
+                              {"left": "is_primary", "operation": "equal", "right": True}],
+                   "range": [0, LIMIT]}
+        response = post_json(API_URL, payload, timeout=20, retries=1)
+        result = normalize_rows(response, master, datetime.now(timezone.utc).isoformat())
+        save_json(OUTPUT_FILE, result)
+        matched = {row["ISIN"] for row in result}
+        missing = [item["Symbol"] for item in master if item.get("ISIN") not in matched]
+        print(f"TradingView daily indicators: {len(result)}/{len(master)} matched by ISIN; "
+              f"{len(missing)} unavailable; session {result[0]['asOfDate']}; "
+              f"elapsed {time.perf_counter() - started:.2f}s", flush=True)
+        if missing:
+            print(f"Unavailable indicator symbols: {', '.join(missing)}", flush=True)
+        return True
+    except (OSError, ValueError, OverflowError, requests.RequestException) as error:
+        print(f"Advanced indicator fetch failed: {error}", flush=True)
         return False
 
-    print(f"Starting advanced indicator fetch for {len(master_list)} stocks...")
-    all_results = []
-    
-    with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
-        future_to_stock = {executor.submit(fetch_indicators, stock): stock for stock in master_list}
-        
-        completed = 0
-        for future in as_completed(future_to_stock):
-            res = future.result()
-            if res:
-                all_results.append(res)
-            completed += 1
-            if completed % 100 == 0:
-                print(f"Progress: {completed}/{len(master_list)} done.")
-
-    save_json(OUTPUT_FILE, all_results)
-    print(f"Successfully saved indicators for {len(all_results)} stocks to {OUTPUT_FILE}")
-    return True
 
 if __name__ == "__main__":
     sys.exit(0 if main() else 1)

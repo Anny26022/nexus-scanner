@@ -102,6 +102,7 @@ export interface StockRow {
   rupeeVolumeCrore: number;
   rvol: number | null;
   marketCapCrore: number;
+  freeFloatPct?: number | null;
   peRatio: number | null;
   epsTtm?: number | null;
   dividendYieldPct?: number | null;

@@ -13,7 +13,9 @@
   "dependencies": {
     "@tanstack/react-query": "^5.67.2",
     "clsx": "^2.1.1",
+    "lightweight-charts": "^5.2.1",
     "lucide-react": "^0.475.0",
+    "openalgo-charts": "^2.6.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.2"

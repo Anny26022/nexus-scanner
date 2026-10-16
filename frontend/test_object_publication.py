@@ -1,6 +1,9 @@
 import gzip
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -123,7 +126,10 @@ class ObjectPublicationTests(unittest.TestCase):
             self.assertEqual(lookup['publishedAt'], catalog['publishedAt'])
             self.assertEqual(lookup['symbols']['TEST']['recent'], catalog['symbols']['TEST']['recent'])
             history = json.loads(gzip.decompress(store.objects[lookup['symbols']['TEST']['history'] + '.json.gz']))
-            self.assertEqual(history, {'symbol': 'TEST', **catalog['symbols']['TEST']})
+            self.assertEqual(history, {'symbol': 'TEST', 'recent': catalog['symbols']['TEST']['recent'],
+                                       'years': catalog['symbols']['TEST']['years']})
+            self.assertEqual(lookup['symbols']['TEST']['fetchStatus'],
+                             catalog['symbols']['TEST']['fetchStatus'])
             for field, digest in [('recent', '0' * 64), ('history', index['announcements'])]:
                 with self.subTest(invalid_reference=field):
                     invalid = json.loads(json.dumps(lookup))
@@ -199,19 +205,88 @@ class ObjectPublicationTests(unittest.TestCase):
                 if args[0] == 'check':
                     self.assertIn('--download', args)
                     self.assertIn('--one-way', args)
-                    self.assertEqual(args[args.index('--checkers') + 1], '16')
                 else:
                     self.assertIn('--immutable', args)
                     self.assertIn('--checksum', args)
+                    self.assertIn('content-type=application/gzip', args)
+                    self.assertIn('cache-control=public,max-age=31536000,immutable', args)
+                    self.assertEqual(args[args.index('--transfers') + 1], '32')
+                self.assertEqual(args[args.index('--checkers') + 1], '32')
+                self.assertEqual('--no-traverse' in args, targeted)
                 calls.append((args[0], names))
             store.run = run
             listing = f'{old}.json.gz\t{(root / (old + ".json.gz")).stat().st_size}\n'
-            with patch('chart_publication.subprocess.run', return_value=Mock(stdout=listing)):
+            for count in (0, 1, 9, 10, 100):
+                with self.subTest(existing=count):
+                    targeted = count >= 10
+                    calls.clear()
+                    existing = listing + ''.join(f'unrelated-{i}.json.gz\t1\n' for i in range(count - 1)) if count else ''
+                    with patch('chart_publication.subprocess.run', return_value=Mock(stdout=existing)):
+                        store.upload_objects(root)
+                    expected = sorted([new + '.json.gz'] + ([old + '.json.gz'] if not count else []))
+                    self.assertEqual(calls, [('copy', expected), ('check', expected)])
+            existing = listing + f'{new}.json.gz\t{(root / (new + ".json.gz")).stat().st_size}\n'
+            with patch('chart_publication.subprocess.run', return_value=Mock(stdout=existing)):
+                calls.clear()
                 store.upload_objects(root)
-            self.assertEqual(calls, [('copy', [new + '.json.gz']), ('check', [new + '.json.gz'])])
+                self.assertEqual(calls, [])
             with patch('chart_publication.subprocess.run', return_value=Mock(stdout=f'{old}.json.gz\t1\n')):
                 with self.assertRaisesRegex(RuntimeError, 'different size'):
                     store.upload_objects(root)
+
+    def test_r2_object_command_failures_preserve_pointer_until_successful_retry(self):
+        for failure in ('copy', 'check', 'copyto'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder); output = root / 'public'; output.mkdir()
+                charts = self.build(root, '2026-10-06')
+                complete_release(charts, output, {'revision': 'a'*64, 'sessionDate': '2026-10-06'}, ObjectStore())
+                before = (output / 'current.json').read_bytes()
+                manifest = {'revision': 'b'*64, 'sessionDate': '2026-10-06'}
+                store = R2Store.__new__(R2Store)
+                store.env = {}; store.bucket = 'test'; store.base_url = 'https://charts.example.com'
+                calls = []
+                def run(*args):
+                    calls.append(args[0])
+                    if args[0] == failure:
+                        raise subprocess.CalledProcessError(1, args)
+                with patch('chart_publication.subprocess.run', return_value=Mock(stdout='')), patch.object(store, 'run', side_effect=run):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        complete_release(charts, output, manifest, store)
+                self.assertEqual((output / 'current.json').read_bytes(), before)
+                self.assertEqual(calls, ['copy', 'check', 'copyto'][:('copy', 'check', 'copyto').index(failure) + 1])
+                with patch('chart_publication.subprocess.run', return_value=Mock(stdout='')), patch.object(store, 'run') as retry:
+                    complete_release(charts, output, manifest, store)
+                self.assertEqual([call.args[0] for call in retry.call_args_list], ['copy', 'check', 'copyto', 'copyto'])
+                self.assertEqual(json.loads((output / 'current.json').read_text())['revision'], manifest['revision'])
+
+    @unittest.skipUnless(os.environ.get('RCLONE_TEST_BINARY') or shutil.which('rclone'), 'rclone is not installed')
+    def test_real_rclone_targeted_copy_and_download_check_preserve_integrity(self):
+        binary = os.environ.get('RCLONE_TEST_BINARY') or shutil.which('rclone')
+        for targeted in (False, True):
+            with self.subTest(targeted=targeted), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder); source = root / 'source'; source.mkdir()
+                target = root / 'target'; target.mkdir()
+                digest = put_object(source, {'price': 123.456789})
+                file = source / (digest + '.json.gz')
+                names = root / 'names.txt'; names.write_text(file.name + '\n')
+                (target / 'unrelated').write_bytes(b'keep')
+                flags = ['--files-from', str(names), '--checkers', '32', '--retries', '1']
+                if targeted: flags.append('--no-traverse')
+                def run(command, *extra):
+                    return subprocess.run([binary, command, str(source), str(target), *flags, *extra],
+                                          capture_output=True, timeout=30)
+                # Initial copy and an interrupted publication's retry keep identical bytes.
+                for _ in range(2):
+                    self.assertEqual(run('copy', '--immutable', '--checksum', '--transfers', '32').returncode, 0)
+                    self.assertEqual(run('check', '--one-way', '--download').returncode, 0)
+                    self.assertEqual((target / file.name).read_bytes(), file.read_bytes())
+                (target / file.name).write_bytes(b'x' * file.stat().st_size)
+                self.assertNotEqual(run('check', '--one-way', '--download').returncode, 0)
+                self.assertNotEqual(run('copy', '--immutable', '--checksum').returncode, 0)
+                self.assertEqual((target / file.name).read_bytes(), b'x' * file.stat().st_size)
+                (target / file.name).unlink()
+                self.assertNotEqual(run('check', '--one-way', '--download').returncode, 0)
+                self.assertEqual((target / 'unrelated').read_bytes(), b'keep')
 
     def test_r2_upload_avoids_post_put_head(self):
         store = R2Store.__new__(R2Store); store.env = {}

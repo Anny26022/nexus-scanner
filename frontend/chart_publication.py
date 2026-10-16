@@ -129,7 +129,9 @@ def validate_announcement_objects(objects, catalog_hash, session, symbols, looku
             reference = lookup['symbols'][symbol]
             if (reference.get('recent') != entry['recent']
                     or reference.get('years') != sorted(map(int, entry['years']), reverse=True)
-                    or read(reference.get('history')) != {'symbol': symbol, **entry}):
+                    or reference.get('fetchStatus') != entry.get('fetchStatus', {})
+                    or read(reference.get('history')) != {'symbol': symbol,
+                                                          'recent': entry['recent'], 'years': entry['years']}):
                 raise RuntimeError('Filing lookup history mismatch')
     read(catalog['taxonomy'])
     index = read(catalog['index'])
@@ -260,7 +262,7 @@ class R2Store:
         self.run('copyto', str(source / 'index.json'), self.remote(key + '/index.json'), '--immutable', '--checksum')
 
     def upload_objects(self, source):
-        """List once; transfer and read back only new content-addressed files."""
+        """Transfer and read back only new content-addressed files."""
         remote = self.remote('objects')
         started = time.perf_counter()
         listing = subprocess.run(['rclone', 'lsf', remote, '--files-only', '--format', 'ps',
@@ -283,13 +285,19 @@ class R2Store:
         print(f'R2 objects: {len(new)} new ({total_bytes:,} bytes); {len(existing)} already stored', flush=True)
         if not new:
             return
+        # Avoid two more full-prefix listings on sparse daily updates. Keep
+        # listings for cold/bulk uploads where per-object lookups cost more.
+        discovery = ('--no-traverse',) if len(new) * 10 <= len(existing) else ()
+        print(f'R2 object discovery: {"targeted" if discovery else "listing"}; workers: 32', flush=True)
         with tempfile.TemporaryDirectory() as folder:
             names = Path(folder) / 'new.txt'
             names.write_text('\n'.join(sorted(new)) + '\n')
-            self.run('copy', str(source), remote, '--files-from', str(names), '--transfers', '16',
+            self.run('copy', str(source), remote, '--files-from', str(names), *discovery,
+                     '--transfers', '32', '--checkers', '32',
                      '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
                      '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
-            self.run('check', str(source), remote, '--files-from', str(names), '--one-way', '--download', '--checkers', '16')
+            self.run('check', str(source), remote, '--files-from', str(names), *discovery,
+                     '--one-way', '--download', '--checkers', '32')
 
     def archive(self, previous, month):
         source = previous['chartObjectPrefix']

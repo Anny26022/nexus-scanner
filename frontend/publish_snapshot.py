@@ -120,7 +120,7 @@ def _stock_row(task, context, session, presets, default, memo_keys):
             metrics[f'return{period}']=float((last['Close']/frame['Close'].iloc[-1-period]-1)*100) if len(frame)>period else None
         metrics['gapPct']=float((last['Open']/frame['Close'].iloc[-2]-1)*100) if len(frame)>1 else None
         turnover = frame['Close'] * frame['Volume'] if len(frame) >= 20 else None
-        for period in (20,50,100):
+        for period in (20,30,50,100):
             metrics[f'turnover{period}']=float(turnover.tail(period).mean()/1e7) if len(frame)>=period else None
     row['metrics']=metrics
     tradingview = tradingview_row(stock, session)

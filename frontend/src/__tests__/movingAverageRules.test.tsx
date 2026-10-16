@@ -13,6 +13,15 @@ const run = (metrics: Record<string, number | null>, isNegated = false, selected
 }, {universe:'mainboard',asOfDate:snapshot.asOfDate,page:1,pageSize:15,
   expressionTree:{type:'condition',condition:{instanceId:'ma',conditionId:'PRICE_VS_MAS',parameters:{rules:selected},isNegated}}})!;
 
+it('supports a 30-session average daily turnover comparison', () => {
+  const stock = {...snapshot.stocks[0],close:100,asOfDate:snapshot.asOfDate,historyAligned:true,
+    metrics:{...snapshot.stocks[0].metrics,turnover30:5}};
+  const request = {universe:'mainboard' as const,asOfDate:snapshot.asOfDate,page:1,pageSize:15,
+    expressionTree:{type:'condition' as const,condition:{instanceId:'turnover',conditionId:'AVG_TURNOVER',
+      parameters:{comparison:'ABOVE',windowMinutes:'',lookbackDays:30,valueCr:5}}}};
+  expect(screenSnapshot({...snapshot,stocks:[stock]},request)!.matchCount).toBe(1);
+});
+
 it('requires every selected average, without imposing a stack or persistence', () => {
   expect(run({ema10:80,ema50:90,ema200:70}).matchCount).toBe(1);
   expect(run({ema10:80,ema50:110,ema200:70}).matchCount).toBe(0);

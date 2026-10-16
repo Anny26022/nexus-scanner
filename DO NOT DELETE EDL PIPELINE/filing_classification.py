@@ -396,8 +396,8 @@ def classify_corporate_action(action):
             'source': 'NSE corporate actions', 'method': 'official_subject_rules'}
 
 def filing_evidence(row):
-    """ScanX's live ltp is not historical disclosure evidence."""
-    return {key: value for key, value in row.items() if key != 'ltp'}
+    """Live quote fields are not historical disclosure evidence."""
+    return {key: value for key, value in row.items() if key not in {'ltp', 'ch', 'pch'}}
 
 
 def classify_filings(filings, classify=classify_filing):

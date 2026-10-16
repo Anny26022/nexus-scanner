@@ -215,7 +215,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'mom_gap': fn = s => p.gapType === 'Gap Up' ? compare(s.metrics.gapPct,'ABOVE',p.minGapPct) : compare(s.metrics.gapPct,'BELOW',-p.minGapPct); break;
     case 'liq_turnover': fn = s => compare(s.metrics.turnover50,'ABOVE',p.minTurnoverCr); break;
     case 'AVG_TURNOVER':
-      if (![20,50,100].includes(Number(p.lookbackDays)) || !['DAILY','daily',''].includes(String(p.windowMinutes ?? ''))) return null;
+      if (![20,30,50,100].includes(Number(p.lookbackDays)) || !['DAILY','daily',''].includes(String(p.windowMinutes ?? ''))) return null;
       fn = s => compare(s.metrics[`turnover${p.lookbackDays}`],p.comparison,p.valueCr); break;
     case 'liq_market_cap': metadata = true; fn = s => between(s.marketCapCrore,p.minMarketCap,p.maxMarketCap); break;
     case 'MARKETCAP': metadata = true; fn = s => compare(s.marketCapCrore,p.comparison,p.valueCr); break;

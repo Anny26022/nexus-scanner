@@ -29,6 +29,14 @@ def write_json(path, payload):
 
 
 R2_SETTINGS = ('R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_PUBLIC_BASE_URL')
+OBJECT_NAME = re.compile(r'[a-f0-9]{64}\.json\.gz\Z')
+
+
+def inventory_bytes(names):
+    names = sorted(set(names))
+    if any(not OBJECT_NAME.fullmatch(name) for name in names):
+        raise RuntimeError('Invalid object name in R2 verification inventory')
+    return ''.join(name + '\n' for name in names).encode('ascii')
 
 
 def missing_r2_settings():
@@ -261,27 +269,58 @@ class R2Store:
         self.run('check', str(source), self.remote(key), '--include', '*.json.gz', '--one-way', '--download', '--checkers', '16')
         self.run('copyto', str(source / 'index.json'), self.remote(key + '/index.json'), '--immutable', '--checksum')
 
-    def upload_objects(self, source):
-        """Verify content-addressed files without listing the growing R2 bucket."""
+    def load_inventory(self, previous):
+        digest = previous.get('verifiedObjectsSha256') if previous else None
+        if not digest:
+            return set()  # One-time bootstrap from a release predating inventories.
+        if not re.fullmatch(r'[a-f0-9]{64}', digest):
+            raise RuntimeError('Invalid prior R2 verification inventory digest')
+        key = self.remote(f'verified-objects/{digest}.txt')
+        result = subprocess.run(['rclone', 'cat', key, '--s3-no-check-bucket',
+                                 '--contimeout', '15s', '--timeout', '1m', '--low-level-retries', '5'],
+                                env=self.env, check=True, capture_output=True, timeout=180)
+        if hashlib.sha256(result.stdout).hexdigest() != digest:
+            raise RuntimeError('Prior R2 verification inventory checksum mismatch')
+        try:
+            names = result.stdout.decode('ascii').splitlines()
+        except UnicodeDecodeError as error:
+            raise RuntimeError('Invalid prior R2 verification inventory') from error
+        if inventory_bytes(names) != result.stdout:
+            raise RuntimeError('Invalid prior R2 verification inventory')
+        return set(names)
+
+    def write_inventory(self, names):
+        data = inventory_bytes(names)
+        digest = hashlib.sha256(data).hexdigest()
+        with tempfile.TemporaryDirectory() as folder:
+            file = Path(folder) / 'verified-objects.txt'
+            file.write_bytes(data)
+            self.run('copyto', str(file), self.remote(f'verified-objects/{digest}.txt'),
+                     '--immutable', '--checksum')
+        return digest
+
+    def upload_objects(self, source, known_verified=()):
+        """Upload and read back objects absent from the prior verified release."""
         remote = self.remote('objects')
         files = sorted(path.name for path in source.glob('*.json.gz'))
-        if not files:
-            return
+        pending = [name for name in files if name not in known_verified]
+        print(f'R2 objects: {len(pending)} unverified of {len(files)} current', flush=True)
+        if not pending:
+            return files
         # R2 already holds years of immutable objects. A full lsf of that prefix
         # exceeded the five-minute timeout before the daily upload even began.
-        # --files-from with --no-traverse addresses only these exact paths for
-        # both commands. Immutable copy rejects conflicting remote bytes; the
-        # download check verifies every object before release references change.
-        print(f'R2 verifying {len(files)} current objects without a bucket listing', flush=True)
+        # --files-from with --no-traverse addresses only unverified paths.
+        # Immutable copy rejects conflicts; download check verifies their bytes.
         with tempfile.TemporaryDirectory() as folder:
             names = Path(folder) / 'objects.txt'
-            names.write_text('\n'.join(files) + '\n')
+            names.write_text('\n'.join(pending) + '\n')
             self.run('copy', str(source), remote, '--files-from', str(names), '--no-traverse',
                      '--transfers', '32', '--checkers', '32',
                      '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
                      '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
             self.run('check', str(source), remote, '--files-from', str(names), '--no-traverse',
                      '--one-way', '--download', '--checkers', '32')
+        return files
 
     def archive(self, previous, month):
         source = previous['chartObjectPrefix']
@@ -384,8 +423,13 @@ def complete_object_release(chart_root, output, manifest, store=None):
     if store:
         base = store.base_url
         started = time.perf_counter()
-        store.upload_objects(chart_root / 'objects')
+        verified = store.load_inventory(previous)
+        files = store.upload_objects(chart_root / 'objects', verified)
         print(f'Object upload and verification elapsed: {time.perf_counter() - started:.2f}s', flush=True)
+        # An existing legacy release cannot gain a new field at an immutable R2
+        # key. New revisions carry a digest of the separately stored inventory.
+        if not existing_path.exists() or 'verifiedObjectsSha256' in existing:
+            manifest['verifiedObjectsSha256'] = store.write_inventory(files)
         manifest['publishedAt'] = manifest['sessionDate'] + 'T00:00:00Z'
         manifest['dataIndexUrl'] = f"{base}/releases/{manifest['revision']}/index.json"
         manifest['objectUrlTemplate'] = f'{base}/objects/{{hash}}.json.gz'

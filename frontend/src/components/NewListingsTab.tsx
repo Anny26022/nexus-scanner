@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
 import { ArrowUpDown, Play, SlidersHorizontal, X, ChevronDown, Search, SearchX } from 'lucide-react';
 import {CopyResults} from './CopyResults';
+import {DownloadResults} from './DownloadResults';
 import { ActiveCondition, ExpressionNode, MatchMode, ScreenerRunRequest } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { isAvailableCondition } from '../utils/filterAvailability';
@@ -247,6 +248,16 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
           <label className="results-symbol-search"><Search size={13} aria-hidden="true" /><input type="search" aria-label="Search IPO listings" placeholder="Search symbol" value={search} onChange={event => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setSearch(event.target.value); setPage(1); setScreenPage(1);}} /></label>
           <div className="results-actions">
             <CopyResults loadRows={()=>Promise.resolve(filteredIpos)} revision={datasetRevision} disabled={!filteredIpos.length || isLoading}/>
+            <DownloadResults
+              loadRows={async () => filteredIpos}
+              columns={visibleIpoColumns.map(col => ({
+                id: col.id,
+                label: col.label,
+                getValue: (row: IPORow) => col.value(row),
+              }))}
+              filename={`nexus-ipo-listings-${selectedAsOfDate || 'export'}.csv`}
+              disabled={!filteredIpos.length || isLoading}
+            />
             <button type="button" className="button button-secondary" aria-label="Customize IPO columns" onClick={() => setIsColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
           </div>
         </div>

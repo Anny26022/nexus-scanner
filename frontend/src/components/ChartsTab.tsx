@@ -32,6 +32,14 @@ import { Download, Upload } from 'lucide-react';
 
 const ranges=[[1,'1mo'],[3,'3mo'],[6,'6mo'],[12,'1y'],[24,'2y'],[null,'All']] as const;
 
+function filterStudiesForInterval(rawStudies: ChartStudies, configs: StudyConfigs, interval: Interval): ChartStudies {
+  const visible = { ...rawStudies };
+  for (const key of Object.keys(rawStudies) as (keyof ChartStudies)[]) {
+    if (rawStudies[key] && !isIndicatorVisibleForInterval(configs[key]?.visibility, interval)) visible[key] = false;
+  }
+  return visible;
+}
+
 function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionDate,symbolControls,viewControls,layoutControls,events,revision,interval,tileId,sync}: {candles: readonly Candle[]; symbol: string;book:DrawingBook;firstDate:string;lastDate:string;metrics?:ChartMetrics;sessionDate:string;symbolControls:ReactNode;viewControls:ReactNode;layoutControls?:ReactNode;events:readonly ChartEvent[];revision:string;interval:Interval;tileId:string;sync:ChartSync}) {
   const [saved]=useState(()=>loadScene(tileId));
   const paneChoice=useRef(saved.paneWeights);
@@ -54,6 +62,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const studyChoice=useRef(studies);
   const [studyConfigs, setStudyConfigs] = useState<StudyConfigs>(() => saved.studyConfigs ?? defaultStudyConfigs());
   const studyConfigsChoice = useRef(studyConfigs);
+  const visibleStudies = useMemo(() => filterStudiesForInterval(studies, studyConfigs, interval), [studies, studyConfigs, interval]);
   const [activeIndicatorSetting, setActiveIndicatorSetting] = useState<string | null>(null);
   const [comparison,setComparison]=useState<{symbol:string;separate:boolean}|null>(saved.comparison??null);
   const persist=(change:Partial<SceneSettings>)=>writeChartStorage(`scene.${tileId}.v1`,{...loadScene(tileId),...change});
@@ -62,10 +71,23 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const overlayRef = useRef<HTMLDivElement>(null);
   const candleIndexByDate = useMemo(() => new Map(candles.map((b, i) => [b.date, i])), [candles]);
   const indicatorSeries = useMemo(() => {
-    return computeIndicatorSeries(candles, emaLines, studies, studyConfigs);
-  }, [candles, emaLines, studies, studyConfigs]);
+    return computeIndicatorSeries(candles, emaLines, visibleStudies, studyConfigs);
+  }, [candles, emaLines, visibleStudies, studyConfigs]);
   const indicatorSeriesRef = useRef(indicatorSeries);
   indicatorSeriesRef.current = indicatorSeries;
+  const [hiddenStudies, setHiddenStudies] = useState<Record<string, boolean>>({});
+  const hiddenStudiesChoice = useRef(hiddenStudies);
+  const restoreHiddenStudies = (chart: ChartEngine) => {
+    for (const [id, hidden] of Object.entries(hiddenStudiesChoice.current)) {
+      if (hidden) chart.setStudyVisibility(id, false);
+    }
+  };
+  const toggleStudyVisibility = (id: string) => {
+    const hidden = !hiddenStudiesChoice.current[id];
+    hiddenStudiesChoice.current = { ...hiddenStudiesChoice.current, [id]: hidden };
+    setHiddenStudies(hiddenStudiesChoice.current);
+    engine.current?.setStudyVisibility(id, !hidden);
+  };
   const updateEmaLines = (next: EmaLine[]) => {
     setEmaLines(next);
     emaChoice.current = next;
@@ -76,26 +98,10 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     comparisonChoice.current={symbol,candles,separate};engine.current?.setComparison(symbol,candles,separate);
     if(paneChoice.current) engine.current?.restorePaneWeights(paneChoice.current);
   },[]);
-const filterStudiesForInterval = (
-  rawStudies: ChartStudies,
-  cfgs: StudyConfigs,
-  intv: string
-): ChartStudies => {
-  const result = { ...rawStudies };
-  for (const [key, enabled] of Object.entries(rawStudies)) {
-    if (enabled) {
-      const cfg = cfgs[key as keyof StudyConfigs];
-      if (!isIndicatorVisibleForInterval(cfg?.visibility, intv)) {
-        (result as any)[key] = false;
-      }
-    }
-  }
-  return result;
-};
-
   const applyStudies=(next:ChartStudies)=>{
     studyChoice.current=next;setStudies(next);
     engine.current?.setStudies(filterStudiesForInterval(next, studyConfigsChoice.current, interval));
+    if (engine.current) restoreHiddenStudies(engine.current);
     persist({studies:next});
     if (engine.current) setPaneOffsets(engine.current.getPaneOffsets?.() ?? []);
   };
@@ -104,6 +110,7 @@ const filterStudiesForInterval = (
     setStudyConfigs(next);
     engine.current?.setStudyConfigs?.(next);
     engine.current?.setStudies(filterStudiesForInterval(studyChoice.current, next, interval));
+    if (engine.current) restoreHiddenStudies(engine.current);
     persist({ studyConfigs: next });
     if (engine.current) setPaneOffsets(engine.current.getPaneOffsets?.() ?? []);
   };
@@ -147,7 +154,7 @@ const filterStudiesForInterval = (
         if (overlayRef.current) {
           const idx = candleIndexByDate.get(bar.date) ?? candles.length - 1;
           const snap = indicatorSeriesRef.current.getSnapshot(idx);
-          updateLiveIndicatorDom(overlayRef.current, snap);
+          updateLiveIndicatorDom(overlayRef.current, snap, studyConfigsChoice.current);
         }
       },activeBook,setEventDetails);
       chart.setOnPanesChange?.(() => {
@@ -159,6 +166,7 @@ const filterStudiesForInterval = (
       chart.setAppearance(appearanceChoice.current);
       chart.setStudyConfigs?.(studyConfigsChoice.current);
       chart.setStudies(filterStudiesForInterval(studyChoice.current, studyConfigsChoice.current, interval));
+      restoreHiddenStudies(chart);
       chart.setEvents(events,revealedThrough(candles,clock.getSnapshot().index,lastDate));
       const comparison=comparisonChoice.current;chart.setComparison(comparison.symbol,comparison.candles,comparison.separate);
       if (selectedRange!==undefined) chart.setRange(selectedRange);
@@ -270,8 +278,9 @@ const filterStudiesForInterval = (
           metrics={replay.index===null&&!selecting?metrics:undefined} sessionDate={replay.index===null&&!selecting?sessionDate:undefined}/>
         <PricePaneLegend
           engine={engine.current}
-          candles={candles}
-          studies={filterStudiesForInterval(studies, studyConfigs, interval)}
+          indicatorSeries={indicatorSeries}
+          snapshotIndex={replay.index ?? candles.length - 1}
+          studies={visibleStudies}
           studyConfigs={studyConfigs}
           emaLines={emaLines}
           appearance={appearance}
@@ -280,12 +289,15 @@ const filterStudiesForInterval = (
           onUpdateEmaLines={updateEmaLines}
           onUpdateStudies={applyStudies}
           onUpdateAppearance={applyAppearance}
+          hiddenStudies={hiddenStudies}
+          onToggleStudyVisibility={toggleStudyVisibility}
         />
       </div>
       <SubPaneLegends
         engine={engine.current}
-        candles={candles}
-        studies={filterStudiesForInterval(studies, studyConfigs, interval)}
+        indicatorSeries={indicatorSeries}
+        snapshotIndex={replay.index ?? candles.length - 1}
+        studies={visibleStudies}
         studyConfigs={studyConfigs}
         emaLines={emaLines}
         appearance={appearance}
@@ -295,6 +307,8 @@ const filterStudiesForInterval = (
         onUpdateEmaLines={updateEmaLines}
         onUpdateStudies={applyStudies}
         onUpdateAppearance={applyAppearance}
+        hiddenStudies={hiddenStudies}
+        onToggleStudyVisibility={toggleStudyVisibility}
       />
       <div className="chart-actions-zone" role="group" aria-label="Chart controls">
         <div className="chart-actions">
@@ -306,7 +320,7 @@ const filterStudiesForInterval = (
       </div>
       {error ? <p role="alert" className="notice">{error}</p> : <div ref={attach} className="nexus-chart-canvas" role="group" tabIndex={0} onContextMenu={event=>{event.preventDefault();setContext({x:event.clientX,y:event.clientY});}} onKeyDownCapture={event=>{
         if ((event.key==='ContextMenu') || (event.key==='F10' && event.shiftKey)) {event.preventDefault();const rect=event.currentTarget.getBoundingClientRect();setContext({x:rect.left+24,y:rect.top+24});}
-        if (replay.index===null && ['ArrowLeft','ArrowRight','Home'].includes(event.key)) markCustomRange();
+        if (replay.index===null && ['ArrowLeft','ArrowRight','Home','+','=','-'].includes(event.key)) markCustomRange();
         if (replay.index!==null && [' ','ArrowRight','ArrowLeft'].includes(event.key)) {event.preventDefault();event.stopPropagation(); if(event.key===' ') clock.toggle();else clock.step(event.key==='ArrowLeft'?-1:1);}
       }}
         aria-label={`${symbol} ${style==='candles'?'candlestick':style==='bars'?'HLC':style}${appearance.volume?' and volume':''} chart`} aria-describedby={`chart-keyboard-help-${tileId}`}

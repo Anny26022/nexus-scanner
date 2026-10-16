@@ -130,4 +130,3 @@ it('renders Volume as an indicator in catalog, supports category tab, toggling, 
     expect.objectContaining({ volume: false })
   );
 });
-

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChartEngine, CHART_PALETTE } from '../chart/ChartEngine';
 import { defaultEmaLines, type Candle } from '../chart/model';
 import { DrawingBook } from '../chart/drawings';
+import { defaultStudyConfigs } from '../chart/studyConfigs';
 
 const native=vi.hoisted(()=>{
   const series:Array<ReturnType<typeof makeSeries>>=[];
@@ -18,7 +19,7 @@ const native=vi.hoisted(()=>{
       series.push(result);return result;
     }),
     removeSeries:vi.fn(),applyOptions:vi.fn(),priceScale:vi.fn(()=>scale),timeScale:vi.fn(()=>time),paneSize:vi.fn(()=>({width:800,height:500})),
-    panes:vi.fn(()=>[pane]),subscribeClick:vi.fn(),unsubscribeClick:vi.fn(),subscribeCrosshairMove:vi.fn(),unsubscribeCrosshairMove:vi.fn(),takeScreenshot:vi.fn(),remove:vi.fn(),
+    panes:vi.fn(()=>[pane]),subscribeClick:vi.fn(),unsubscribeClick:vi.fn(),subscribeCrosshairMove:vi.fn(),unsubscribeCrosshairMove:vi.fn(),setCrosshairPosition:vi.fn(),clearCrosshairPosition:vi.fn(),takeScreenshot:vi.fn(),remove:vi.fn(),
   };
   return {chart,series,time,scale,pane,markers,createSeriesMarkers:vi.fn(()=>markers),createChart:vi.fn(()=>chart)};
 });
@@ -127,6 +128,53 @@ it('keeps a visible pixel gap even when All compresses a long history',()=>{
   native.time.getVisibleLogicalRange.mockReturnValueOnce({from:0,to:1000});
   engine.latest();
   expect(native.time.scrollToPosition).toHaveBeenLastCalledWith(40,true);
+  engine.destroy();
+});
+it('applies study configs with one native series rebuild',()=>{
+  const {engine}=setup();
+  engine.setStudies({rsi:true});
+  native.chart.removeSeries.mockClear();
+  native.chart.addSeries.mockClear();
+  const configs=defaultStudyConfigs();
+  configs.rsi={...configs.rsi!,period:7};
+  engine.setStudyConfigs(configs);
+  expect(native.chart.removeSeries).not.toHaveBeenCalled();
+  expect(native.chart.addSeries).not.toHaveBeenCalled();
+  engine.setStudies({rsi:true});
+  expect(native.chart.removeSeries).toHaveBeenCalledTimes(1);
+  expect(native.chart.addSeries).toHaveBeenCalledTimes(1);
+  expect(native.chart.addSeries).toHaveBeenCalledWith('Line',expect.objectContaining({title:'RSI 7'}),1);
+  engine.destroy();
+});
+it('applies configured volume colors to both price and separate panes',()=>{
+  const {engine}=setup(candles.map((bar,index)=>index===1?{...bar,volume:150}:bar));
+  const volume=native.series.find(series=>series.type==='Histogram')!;
+  const configs=defaultStudyConfigs();
+  configs.volume={...configs.volume!,upColor:'#123456',downColor:'#abcdef'};
+  engine.setStudyConfigs(configs);
+  expect(volume.setData).toHaveBeenLastCalledWith([
+    {time:'2026-10-01',value:100,color:'#12345680'},
+    {time:'2026-10-02',value:150,color:'#abcdef80'},
+    {time:'2026-10-05',value:200,color:'#12345680'},
+  ]);
+  engine.setAppearance({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',volumePane:true});
+  expect(volume.setData).toHaveBeenLastCalledWith(expect.arrayContaining([{time:'2026-10-01',value:100,color:'#12345680'}]));
+  engine.destroy();
+});
+it('snaps synced daily dates to the preceding weekly or monthly bar without showing a future bar',()=>{
+  const history=[
+    {...candles[0],date:'2026-10-01'},
+    {...candles[1],date:'2026-10-08'},
+    {...candles[2],date:'2026-11-02'},
+  ];
+  const {engine,inspect}=setup(history);
+  engine.syncCrosshair('2026-10-06');
+  expect(native.chart.setCrosshairPosition).toHaveBeenLastCalledWith(history[0].close,'2026-10-01',expect.anything());
+  expect(inspect).toHaveBeenLastCalledWith(history[0]);
+  engine.syncCrosshair('2026-10-20');
+  expect(native.chart.setCrosshairPosition).toHaveBeenLastCalledWith(history[1].close,'2026-10-08',expect.anything());
+  engine.syncCrosshair('2026-09-30');
+  expect(native.chart.clearCrosshairPosition).toHaveBeenCalledOnce();
   engine.destroy();
 });
 it('renders horizontal drawings with native price lines through edits, undo and style replacement',()=>{

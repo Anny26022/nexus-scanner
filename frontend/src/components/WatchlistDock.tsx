@@ -78,7 +78,14 @@ export function extractWatchlistItemsFromInput(raw: string): string[] {
   }
 
   // Preserve ### headings from scanner/TradingView-style lists in their original order.
-  const chunks = text.split(/\r?\n/).flatMap(line => line.includes('\t') ? [line] : line.split(/[;,]/));
+  const chunks = text.split(/\r?\n/).flatMap(line => {
+    if (line.includes('\t')) return [line];
+    if (!line.trimStart().startsWith('###')) return line.split(/[;,]/);
+    // A heading may contain commas; split only where its symbol list begins.
+    const split = line.match(/^(\s*###.*?\(\d+\))\s*[,;]\s*(.*)$/)
+      ?? line.match(/^(\s*###.*?)[,;]\s*((?:(?:NSE|BSE|MCX|INDEX):|###).*)$/i);
+    return split ? [split[1], ...split[2].split(/[;,]/)] : [line];
+  });
   const items: string[] = [];
   const seen = new Set<string>();
 
@@ -159,6 +166,7 @@ export const WatchlistDock = memo(function WatchlistDock({
 
   // New symbol input state
   const [showAddForm, setShowAddForm] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [addSymbolInput, setAddSymbolInput] = useState('');
   const [addError, setAddError] = useState('');
   const [addSuccess, setAddSuccess] = useState('');
@@ -408,10 +416,18 @@ export const WatchlistDock = memo(function WatchlistDock({
 
   return (
     <aside
-      className="chart-watchlist-dock"
+      className={`chart-watchlist-dock${mobileOpen ? ' is-mobile-open' : ''}`}
       aria-label="Watchlist panel"
-      onKeyDown={handleContainerKeyDown}
     >
+      <button
+        type="button"
+        className="watchlist-mobile-toggle"
+        aria-label={mobileOpen ? 'Close watchlist panel' : 'Open watchlist panel'}
+        aria-expanded={mobileOpen}
+        onClick={() => setMobileOpen(open => !open)}
+      >
+        {mobileOpen ? <X size={16} /> : <Bookmark size={16} />}
+      </button>
       {/* 1. Header with title, count badge, and actions */}
       <div className="watchlist-header">
         <div className="watchlist-title-group">

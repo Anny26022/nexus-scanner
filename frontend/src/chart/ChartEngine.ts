@@ -255,7 +255,11 @@ export class ChartEngine {
     this.invalidate();
   }
   private volumeData(bar:Candle) {
-    return bar.volume===null?{time:bar.date}:{time:bar.date,value:bar.volume,color:bar.close>=bar.open?CHART_PALETTE.volumeUp:CHART_PALETTE.volumeDown};
+    if(bar.volume===null) return {time:bar.date};
+    const color=bar.close>=bar.open
+      ? (this.studyConfigs.volume?.upColor ? withAlpha(this.studyConfigs.volume.upColor,.5) : CHART_PALETTE.volumeUp)
+      : (this.studyConfigs.volume?.downColor ? withAlpha(this.studyConfigs.volume.downColor,.5) : CHART_PALETTE.volumeDown);
+    return {time:bar.date,value:bar.volume,color};
   }
   private setData() {
     this.setPriceData();
@@ -499,14 +503,20 @@ export class ChartEngine {
     this.markers.setMarkers([...this.markerEvents].sort(([a],[b])=>a.localeCompare(b)).map(([id,events]):SeriesMarker<Time>=>({id,time:id.slice(7),position:'belowBar',shape:'circle',color:events.some(event=>event.kind==='earnings')?'#049981':events.some(event=>event.kind==='action')?'#f59e0b':'#187669',size:.6})));
   }
   setStudyConfigs(configs:StudyConfigs) {
+    // The caller applies the new visibility with setStudies immediately after.
+    // Rebuilding here would create and remove every native series twice.
+    const previous=this.studyConfigs.volume;
     this.studyConfigs=configs;
-    this.setStudies(this.studies);
+    if(previous?.upColor!==configs.volume?.upColor || previous?.downColor!==configs.volume?.downColor) {
+      this.volumeSeries.setData(this.candles.map(bar=>this.volumeData(bar)));
+    }
   }
   setStudies(studies:Partial<ChartStudies>) {
     for(const series of this.studySeries) this.chart.removeSeries(series);
     this.studySeries=[];this.studySeriesByPane.clear();this.studies={...defaultStudies(),...studies};
     const panes=new Map<string,number>();
-    for(const plot of this.studyPlots()) {
+    const plots=this.studyPlots();
+    for(const plot of plots) {
       if(plot.pane!=='price'&&!panes.has(plot.pane)) panes.set(plot.pane,this.chart.panes().length);
       const pane=plot.pane==='price'?0:panes.get(plot.pane)!;
       const series=this.chart.addSeries(plot.histogram?HistogramSeries:LineSeries,{
@@ -531,7 +541,7 @@ export class ChartEngine {
       if(!this.studySeriesByPane.has(plot.pane)) this.studySeriesByPane.set(plot.pane,[]);
       this.studySeriesByPane.get(plot.pane)!.push(series);
     }
-    this.updateStudies();
+    this.updateStudies(false,plots);
     this.updatePaneObservers();
     this.notifyPanesChange();
   }
@@ -635,8 +645,8 @@ export class ChartEngine {
     }
     return plots;
   }
-  private updateStudies(appended=false) {
-    for(const [index,plot] of this.studyPlots().entries()) {
+  private updateStudies(appended=false,plots=this.studyPlots()) {
+    for(const [index,plot] of plots.entries()) {
       const data=this.candles.map((bar,i)=>plot.values[i]===null?{time:bar.date}:{time:bar.date,value:plot.values[i]!,...(plot.histogram?{color:plot.values[i]!>=0?CHART_PALETTE.volumeUp:CHART_PALETTE.volumeDown}:{})});
       if(appended) this.studySeries[index].update(data.at(-1)!);else this.studySeries[index].setData(data);
     }
@@ -785,7 +795,15 @@ export class ChartEngine {
     }
   }
   syncCrosshair(time:Time|undefined) {
-    const bar=time===undefined?undefined:this.byDate.get(this.dateString(time));
+    // Aggregated W/M bars use their first session as the timestamp. Snap to
+    // the latest available bar at or before the source date, never a future bar.
+    let bar:Candle|undefined;
+    if(time!==undefined) {
+      const date=this.dateString(time);
+      let low=0,high=this.candles.length;
+      while(low<high) {const mid=(low+high)>>>1;if(this.candles[mid].date<=date) low=mid+1;else high=mid;}
+      bar=this.candles[low-1];
+    }
     if(bar) {this.chart.setCrosshairPosition(bar.close,bar.date,this.price);this.inspect(bar);}
     else {this.chart.clearCrosshairPosition();this.inspect(this.candles.at(-1)!);}
   }

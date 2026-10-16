@@ -402,6 +402,7 @@
   user-select: none;
   overflow: hidden;
 }
+.watchlist-mobile-toggle { display: none; }
 
 .watchlist-header {
   height: 42px;
@@ -1422,8 +1423,46 @@
 .chart-workspace.chart-workspace-expanded { position: fixed; inset: 0 320px 0 0; z-index: 100; width: auto; height: 100dvh; border: 0; border-radius: 0; }
 .chart-desk-body-expanded .chart-watchlist-dock { position: fixed; inset: 0 0 0 auto; z-index: 101; height: 100dvh; }
 @media (max-width: 700px) {
-  .chart-workspace.chart-workspace-expanded { right: 220px; }
-  .chart-desk-body-expanded .chart-watchlist-dock { width: 220px; min-width: 220px; }
+  .chart-workspace.chart-workspace-expanded { right: 38px; }
+  .chart-watchlist-dock,
+  .chart-desk-body-expanded .chart-watchlist-dock:not(.is-mobile-open) {
+    width: 38px;
+    min-width: 38px;
+    max-width: 38px;
+  }
+  .chart-desk-body-expanded .chart-watchlist-dock:not(.is-mobile-open) {
+    position: fixed;
+    inset: 0 0 0 auto;
+    height: 100dvh;
+  }
+  .watchlist-mobile-toggle {
+    display: grid;
+    place-items: center;
+    flex: 0 0 38px;
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--secondary);
+  }
+  .chart-watchlist-dock:not(.is-mobile-open) > :not(.watchlist-mobile-toggle) { display: none; }
+  .chart-watchlist-dock.is-mobile-open,
+  .chart-desk-body-expanded .chart-watchlist-dock.is-mobile-open {
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: min(320px, calc(100% - 38px));
+    min-width: 0;
+    max-width: none;
+    height: 100%;
+    z-index: 101;
+    box-shadow: -10px 0 30px rgb(0 0 0 / .14);
+  }
+  .chart-desk-body-expanded .chart-watchlist-dock.is-mobile-open {
+    position: fixed;
+    width: min(320px, calc(100vw - 38px));
+    height: 100dvh;
+  }
 }
 .chart-topbar { display: flex; align-items: center; gap: 5px; flex-shrink: 0; height: 38px; min-width: 0; padding: 0 8px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .chart-topbar-spacer { flex: 1; }

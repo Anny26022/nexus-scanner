@@ -40,7 +40,11 @@ it('saves and loads OpenAlgo workspace documents with export and import',()=>{
     id: 'test-ws-1',
     name: 'Two charts',
     grid: { ...loadGrid(), layout: '2H', count: 2 },
-    scenes: [{ style: 'area' as const }, { style: 'line' as const }, ...Array.from({ length: 14 }, () => ({}))],
+    scenes: [
+      { style: 'area' as const, view: { from: '2025-12-01', to: '2026-10-01' }, studyConfigs: { rsi: { period: 9 } }, paneWeights: [3, 1] },
+      { style: 'line' as const, range: null },
+      ...Array.from({ length: 14 }, () => ({})),
+    ],
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
   };
@@ -48,12 +52,22 @@ it('saves and loads OpenAlgo workspace documents with export and import',()=>{
   const loaded = loadNamedLayouts();
   expect(loaded[0]).toMatchObject({ name: 'Two charts', grid: { count: 2, layout: '2H' } });
   expect(loaded[0].scenes[0]).toMatchObject({ style: 'area' });
-  expect(loaded[0].scenes[1]).toMatchObject({ style: 'line' });
+  expect(loaded[0].scenes[0]).toMatchObject({ view: { from: '2025-12-01', to: '2026-10-01' }, studyConfigs: { rsi: { period: 9 } }, paneWeights: [3, 1] });
+  expect(loaded[0].scenes[0].range).toBeUndefined();
+  expect(loaded[0].scenes[1]).toMatchObject({ style: 'line', range: null });
 
   const json = exportWorkspaceDocumentJson(loaded[0]);
   const imported = importWorkspaceDocumentJson(json);
   expect(imported?.name).toBe('Two charts');
   expect(imported?.grid.layout).toBe('2H');
+  expect(imported?.scenes[0].range).toBeUndefined();
+  expect(imported?.scenes[1].range).toBeNull();
+  expect(imported?.scenes[0]).toMatchObject({ studyConfigs: { rsi: { period: 9 } }, paneWeights: [3, 1] });
+  const malformed = JSON.parse(json) as { panes: Array<{ settings: { studies: string } }> };
+  malformed.panes[0].settings.studies = '{bad json';
+  expect(importWorkspaceDocumentJson(JSON.stringify(malformed))?.scenes[0]).toMatchObject({
+    studyConfigs: { rsi: { period: 9 } }, paneWeights: [3, 1],
+  });
 
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
   expect(writeChartStorage('grid.v1', loadGrid())).toBe(false);

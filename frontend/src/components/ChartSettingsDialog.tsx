@@ -241,7 +241,7 @@ export function ChartSettingsDialog({
   const wickDownColor = draft.wickDownColor ?? downColor;
 
   return (
-    <ChartDialog title="Chart settings" onClose={onClose} className="chart-settings-dialog">
+    <ChartDialog title="Chart settings" onClose={cancel} className="chart-settings-dialog">
       <div className="chart-settings-layout">
         <nav className="chart-settings-nav" aria-label="Chart settings sections">
           {sections.map(({ id, label, Icon }) => (

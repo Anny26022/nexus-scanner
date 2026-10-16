@@ -215,6 +215,28 @@ it('keeps an explicitly saved volume overlay preference',async()=>{
   fireEvent.click(screen.getByRole('button',{name:'Chart settings'}));
   expect(screen.getByLabelText('Volume in separate pane')).not.toBeChecked();
 });
+it.each(['Cancel', 'Escape', 'Close', 'Backdrop'] as const)(
+  'rolls back live chart-settings previews on %s dismissal',
+  async dismissal => {
+    vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
+    setup();
+    await screen.findByLabelText('RELIANCE candlestick and volume chart');
+    const engine=vi.mocked(ChartEngine).mock.results[0].value;
+    fireEvent.click(screen.getByRole('button',{name:'Chart settings'}));
+    const dialog=screen.getByRole('dialog',{name:'Chart settings'});
+    fireEvent.click(within(dialog).getByLabelText('Volume in separate pane'));
+    expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({volumePane:false}));
+
+    if(dismissal==='Cancel') fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));
+    else if(dismissal==='Escape') fireEvent.keyDown(dialog,{key:'Escape'});
+    else if(dismissal==='Close') fireEvent.click(within(dialog).getByRole('button',{name:'Close chart settings'}));
+    else fireEvent.pointerDown(dialog.parentElement!);
+
+    expect(screen.queryByRole('dialog',{name:'Chart settings'})).not.toBeInTheDocument();
+    expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({volumePane:true}));
+    expect(JSON.parse(localStorage.getItem('nexus.chart.scene.0.v1') ?? '{}').appearance.volumePane).toBe(true);
+  },
+);
 it('mounts only selected chart tiles and disposes hidden engines when shrinking a sixteen-chart grid',async()=>{
   vi.mocked(screenerApi.getChart).mockImplementation(async symbol=>({schemaVersion:2,symbol,asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]}));
   setup();await screen.findByLabelText('RELIANCE candlestick and volume chart');

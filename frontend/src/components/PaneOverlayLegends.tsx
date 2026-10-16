@@ -1,4 +1,3 @@
-import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Eye,
@@ -10,17 +9,19 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { ChartEngine, ChartAppearance } from '../chart/ChartEngine';
-import type { Candle, EmaLine } from '../chart/model';
+import type { EmaLine } from '../chart/model';
 import type { ChartStudies } from '../chart/studies';
 import type { StudyConfigs } from '../chart/studyConfigs';
 import {
   computeIndicatorSeries,
+  formatIndicatorValue,
   formatVolumeValue,
 } from '../chart/indicatorValues';
 
 export interface LegendProps {
   engine: ChartEngine | null;
-  candles: readonly Candle[];
+  indicatorSeries: ReturnType<typeof computeIndicatorSeries>;
+  snapshotIndex: number;
   studies: ChartStudies;
   studyConfigs?: StudyConfigs;
   emaLines: readonly EmaLine[];
@@ -31,14 +32,16 @@ export interface LegendProps {
   onUpdateEmaLines: (lines: EmaLine[]) => void;
   onUpdateStudies: (studies: ChartStudies) => void;
   onUpdateAppearance: (app: Partial<ChartAppearance>) => void;
+  hiddenStudies: Readonly<Record<string, boolean>>;
+  onToggleStudyVisibility: (id: string) => void;
 }
 
 /**
  * Overlay rows rendered on Pane 0 (Price pane) underneath the OHLC quote
  */
 export function PricePaneLegend({
-  engine,
-  candles,
+  indicatorSeries,
+  snapshotIndex,
   studies,
   studyConfigs,
   emaLines,
@@ -48,23 +51,11 @@ export function PricePaneLegend({
   onUpdateEmaLines,
   onUpdateStudies,
   onUpdateAppearance,
+  hiddenStudies,
+  onToggleStudyVisibility,
 }: LegendProps) {
-  const [hiddenStudies, setHiddenStudies] = useState<Record<string, boolean>>({});
   const openSettings = (id: string) => (onOpenSettings ? onOpenSettings(id) : onOpenIndicators());
-
-  const toggleStudyVisibility = (id: string) => {
-    const nextHidden = !hiddenStudies[id];
-    setHiddenStudies(prev => ({ ...prev, [id]: nextHidden }));
-    engine?.setStudyVisibility(id, !nextHidden);
-  };
-
-  const indicatorSeries = useMemo(() => {
-    return computeIndicatorSeries(candles, emaLines, studies, studyConfigs);
-  }, [candles, emaLines, studies, studyConfigs]);
-
-  const latest = useMemo(() => {
-    return indicatorSeries.getSnapshot(candles.length - 1);
-  }, [indicatorSeries, candles.length]);
+  const latest = indicatorSeries.getSnapshot(snapshotIndex);
 
   const stCfg = studyConfigs?.supertrend;
   const bbCfg = studyConfigs?.bollinger;
@@ -87,7 +78,7 @@ export function PricePaneLegend({
               type="button"
               className="chart-indicator-action-btn"
               title={hiddenStudies.volume ? 'Show Volume' : 'Hide Volume'}
-              onClick={() => toggleStudyVisibility('volume')}
+              onClick={() => onToggleStudyVisibility('volume')}
             >
               {hiddenStudies.volume ? <EyeOff size={12} /> : <Eye size={12} />}
             </button>
@@ -121,7 +112,7 @@ export function PricePaneLegend({
               <span className="chart-indicator-params">(close)</span>
               {line.enabled && (
                 <span className="chart-indicator-val" data-ind-val={`ema-${line.id}`}>
-                  {val !== null && val !== undefined ? val.toFixed(2) : '-'}
+                  {formatIndicatorValue(val)}
                 </span>
               )}
             </span>
@@ -168,9 +159,7 @@ export function PricePaneLegend({
             <span>Supertrend</span>
             <span className="chart-indicator-params">({stCfg?.period ?? 10}, {stCfg?.multiplier ?? 3})</span>
             <span className="chart-indicator-val" data-ind-val="supertrend">
-              {latest.supertrend?.value !== null && latest.supertrend?.value !== undefined
-                ? latest.supertrend.value.toFixed(stCfg?.precision ?? 2)
-                : '-'}
+              {formatIndicatorValue(latest.supertrend?.value, stCfg?.precision)}
             </span>
           </span>
           <span className="chart-indicator-actions">
@@ -178,7 +167,7 @@ export function PricePaneLegend({
               type="button"
               className="chart-indicator-action-btn"
               title={hiddenStudies.supertrend ? 'Show' : 'Hide'}
-              onClick={() => toggleStudyVisibility('supertrend')}
+              onClick={() => onToggleStudyVisibility('supertrend')}
             >
               {hiddenStudies.supertrend ? <EyeOff size={12} /> : <Eye size={12} />}
             </button>
@@ -206,13 +195,13 @@ export function PricePaneLegend({
             <span className="chart-indicator-params">({bbCfg?.period ?? 20}, {bbCfg?.multiplier ?? 2})</span>
             <span className="chart-indicator-val">
               {bbCfg?.upperVisible !== false && (
-                <span data-ind-val="bb-upper" style={{ color: bbCfg?.upperColor ?? '#78909c' }}>{latest.bollinger?.upper?.toFixed(bbCfg?.precision ?? 2) ?? '-'} </span>
+                <span data-ind-val="bb-upper" style={{ color: bbCfg?.upperColor ?? '#78909c' }}>{formatIndicatorValue(latest.bollinger?.upper, bbCfg?.precision)} </span>
               )}
               {bbCfg?.middleVisible !== false && (
-                <span data-ind-val="bb-mid" style={{ color: bbCfg?.middleColor ?? '#78909c' }}>{latest.bollinger?.middle?.toFixed(bbCfg?.precision ?? 2) ?? '-'} </span>
+                <span data-ind-val="bb-mid" style={{ color: bbCfg?.middleColor ?? '#78909c' }}>{formatIndicatorValue(latest.bollinger?.middle, bbCfg?.precision)} </span>
               )}
               {bbCfg?.lowerVisible !== false && (
-                <span data-ind-val="bb-lower" style={{ color: bbCfg?.lowerColor ?? '#78909c' }}>{latest.bollinger?.lower?.toFixed(bbCfg?.precision ?? 2) ?? '-'}</span>
+                <span data-ind-val="bb-lower" style={{ color: bbCfg?.lowerColor ?? '#78909c' }}>{formatIndicatorValue(latest.bollinger?.lower, bbCfg?.precision)}</span>
               )}
             </span>
           </span>
@@ -221,7 +210,7 @@ export function PricePaneLegend({
               type="button"
               className="chart-indicator-action-btn"
               title={hiddenStudies.bollinger ? 'Show' : 'Hide'}
-              onClick={() => toggleStudyVisibility('bollinger')}
+              onClick={() => onToggleStudyVisibility('bollinger')}
             >
               {hiddenStudies.bollinger ? <EyeOff size={12} /> : <Eye size={12} />}
             </button>
@@ -248,7 +237,7 @@ export function PricePaneLegend({
             <span>SMA {smaCfg?.period ?? 50}</span>
             <span className="chart-indicator-params">({smaCfg?.source ?? 'close'})</span>
             <span className="chart-indicator-val" data-ind-val="sma-50">
-              {latest.sma !== null && latest.sma !== undefined ? latest.sma.toFixed(smaCfg?.precision ?? 2) : '-'}
+              {formatIndicatorValue(latest.sma, smaCfg?.precision)}
             </span>
           </span>
           <span className="chart-indicator-actions">
@@ -256,7 +245,7 @@ export function PricePaneLegend({
               type="button"
               className="chart-indicator-action-btn"
               title={hiddenStudies.sma ? 'Show' : 'Hide'}
-              onClick={() => toggleStudyVisibility('sma')}
+              onClick={() => onToggleStudyVisibility('sma')}
             >
               {hiddenStudies.sma ? <EyeOff size={12} /> : <Eye size={12} />}
             </button>
@@ -283,7 +272,7 @@ export function PricePaneLegend({
             <span>VWAP</span>
             <span className="chart-indicator-params">(Monthly)</span>
             <span className="chart-indicator-val" data-ind-val="vwap">
-              {latest.vwap !== null && latest.vwap !== undefined ? latest.vwap.toFixed(studyConfigs?.vwap?.precision ?? 2) : '-'}
+              {formatIndicatorValue(latest.vwap, studyConfigs?.vwap?.precision)}
             </span>
           </span>
           <span className="chart-indicator-actions">
@@ -291,7 +280,7 @@ export function PricePaneLegend({
               type="button"
               className="chart-indicator-action-btn"
               title={hiddenStudies.vwap ? 'Show' : 'Hide'}
-              onClick={() => toggleStudyVisibility('vwap')}
+              onClick={() => onToggleStudyVisibility('vwap')}
             >
               {hiddenStudies.vwap ? <EyeOff size={12} /> : <Eye size={12} />}
             </button>
@@ -318,33 +307,21 @@ export function PricePaneLegend({
  */
 export function SubPaneLegends({
   engine,
-  candles,
+  indicatorSeries,
+  snapshotIndex,
   studies,
   studyConfigs,
-  emaLines,
   appearance,
   paneOffsets = [],
   onOpenIndicators,
   onOpenSettings,
   onUpdateStudies,
   onUpdateAppearance,
+  hiddenStudies,
+  onToggleStudyVisibility,
 }: LegendProps) {
-  const [hiddenStudies, setHiddenStudies] = useState<Record<string, boolean>>({});
   const openSettings = (id: string) => (onOpenSettings ? onOpenSettings(id) : onOpenIndicators());
-
-  const toggleStudyVisibility = (id: string) => {
-    const nextHidden = !hiddenStudies[id];
-    setHiddenStudies(prev => ({ ...prev, [id]: nextHidden }));
-    engine?.setStudyVisibility(id, !nextHidden);
-  };
-
-  const indicatorSeries = useMemo(() => {
-    return computeIndicatorSeries(candles, emaLines, studies, studyConfigs);
-  }, [candles, emaLines, studies, studyConfigs]);
-
-  const latest = useMemo(() => {
-    return indicatorSeries.getSnapshot(candles.length - 1);
-  }, [indicatorSeries, candles.length]);
+  const latest = indicatorSeries.getSnapshot(snapshotIndex);
 
   const effectiveOffsets = paneOffsets.length > 0 ? paneOffsets : (engine?.getPaneOffsets?.() ?? []);
   const panesCount = engine?.getPanesCount?.() ?? (effectiveOffsets.length > 0 ? Math.max(...effectiveOffsets.map(p => p.paneIndex)) + 1 : 1);
@@ -381,7 +358,7 @@ export function SubPaneLegends({
           label: 'MACD',
           valKey: 'macd-line',
           color: studyConfigs?.macd?.macdColor ?? '#187669',
-          defaultVal: latest.macd?.line !== null && latest.macd?.line !== undefined ? latest.macd.line.toFixed(prec) : '-',
+          defaultVal: formatIndicatorValue(latest.macd?.line, prec),
         });
       }
       if (studyConfigs?.macd?.signalVisible !== false) {
@@ -389,7 +366,7 @@ export function SubPaneLegends({
           label: 'Signal',
           valKey: 'macd-signal',
           color: studyConfigs?.macd?.signalColor ?? '#f59e0b',
-          defaultVal: latest.macd?.signal !== null && latest.macd?.signal !== undefined ? latest.macd.signal.toFixed(prec) : '-',
+          defaultVal: formatIndicatorValue(latest.macd?.signal, prec),
         });
       }
       if (studyConfigs?.macd?.histVisible !== false) {
@@ -397,7 +374,7 @@ export function SubPaneLegends({
           label: 'Hist',
           valKey: 'macd-hist',
           color: (latest.macd?.histogram ?? 0) >= 0 ? (studyConfigs?.macd?.histColor ?? '#089981') : '#ef5350',
-          defaultVal: latest.macd?.histogram !== null && latest.macd?.histogram !== undefined ? latest.macd.histogram.toFixed(prec) : '-',
+          defaultVal: formatIndicatorValue(latest.macd?.histogram, prec),
         });
       }
       subPanes.push({
@@ -424,7 +401,7 @@ export function SubPaneLegends({
         plots.push({
           valKey: 'rsi',
           color: studyConfigs?.rsi?.color ?? '#8b5cf6',
-          defaultVal: latest.rsi !== null && latest.rsi !== undefined ? latest.rsi.toFixed(prec) : '-',
+          defaultVal: formatIndicatorValue(latest.rsi, prec),
         });
       }
       subPanes.push({
@@ -451,7 +428,7 @@ export function SubPaneLegends({
         plots.push({
           valKey: 'atr',
           color: studyConfigs?.atr?.color ?? '#e09b26',
-          defaultVal: latest.atr !== null && latest.atr !== undefined ? latest.atr.toFixed(prec) : '-',
+          defaultVal: formatIndicatorValue(latest.atr, prec),
         });
       }
       subPanes.push({
@@ -480,7 +457,7 @@ export function SubPaneLegends({
           label: '%K',
           valKey: 'stoch-k',
           color: studyConfigs?.stochastic?.kColor ?? '#187669',
-          defaultVal: latest.stochastic?.k !== null && latest.stochastic?.k !== undefined ? latest.stochastic.k.toFixed(prec) : '-',
+          defaultVal: formatIndicatorValue(latest.stochastic?.k, prec),
         });
       }
       if (studyConfigs?.stochastic?.dVisible !== false) {
@@ -488,7 +465,7 @@ export function SubPaneLegends({
           label: '%D',
           valKey: 'stoch-d',
           color: studyConfigs?.stochastic?.dColor ?? '#ef5350',
-          defaultVal: latest.stochastic?.d !== null && latest.stochastic?.d !== undefined ? latest.stochastic.d.toFixed(prec) : '-',
+          defaultVal: formatIndicatorValue(latest.stochastic?.d, prec),
         });
       }
       subPanes.push({
@@ -574,7 +551,7 @@ export function SubPaneLegends({
                 type="button"
                 className="chart-pane-tool-btn"
                 title={isHidden ? 'Show indicator' : 'Hide indicator'}
-                onClick={() => toggleStudyVisibility(pane.id)}
+                onClick={() => onToggleStudyVisibility(pane.id)}
               >
                 {isHidden ? <EyeOff size={13} /> : <Eye size={13} />}
               </button>

@@ -45,7 +45,6 @@ it('renders inputs and style tabs and applies customized RSI settings', () => {
   );
   expect(onClose).toHaveBeenCalledOnce();
 });
-
 it('renders Supertrend inputs and allows resetting to defaults', () => {
   const onApplyConfigs = vi.fn();
   const onApplyEmaLines = vi.fn();

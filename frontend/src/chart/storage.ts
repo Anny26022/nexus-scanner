@@ -149,11 +149,13 @@ export function gridToWorkspaceDocument(name: string, grid: GridSettings, scenes
       chart: { version: 1 },
       settings: {
         studies: JSON.stringify(scene.studies ?? {}),
+        studyConfigs: JSON.stringify(scene.studyConfigs ?? {}),
         appearance: JSON.stringify(scene.appearance ?? {}),
         emaLines: JSON.stringify(scene.emaLines ?? []),
-        range: scene.range ?? -1,
+        range: scene.range === undefined ? 'custom' : scene.range === null ? 'all' : scene.range,
         comparison: JSON.stringify(scene.comparison ?? null),
         view: JSON.stringify(scene.view ?? null),
+        paneWeights: JSON.stringify(scene.paneWeights ?? []),
       },
       volume: scene.appearance?.volume ?? true,
       magnet: scene.appearance?.crosshairMode === 'magnet' ? 'strong' : 'off',
@@ -196,6 +198,11 @@ export function gridToWorkspaceDocument(name: string, grid: GridSettings, scenes
   };
 }
 
+function parseSetting(value: unknown): unknown {
+  if (typeof value !== 'string') return undefined;
+  try { return JSON.parse(value); } catch { return undefined; }
+}
+
 /** Parses an OpenAlgo Workspace Document back into a Nexus SavedLayout. */
 export function workspaceDocumentToLayout(doc: unknown): SavedLayout | null {
   try {
@@ -221,16 +228,15 @@ export function workspaceDocumentToLayout(doc: unknown): SavedLayout | null {
       if (['candles', 'hollowCandles', 'volumeCandles', 'bars', 'highLow', 'line', 'lineWithMarkers', 'stepLine', 'area', 'hlcArea', 'baseline'].includes(pane.chartType)) {
         scene.style = pane.chartType as ChartStyle;
       }
-      try {
-        if (typeof s.studies === 'string') scene.studies = JSON.parse(s.studies);
-        if (typeof s.appearance === 'string') scene.appearance = JSON.parse(s.appearance);
-        if (typeof s.emaLines === 'string') scene.emaLines = JSON.parse(s.emaLines);
-        if (s.range !== undefined) scene.range = s.range === -1 ? null : (s.range as number);
-        if (typeof s.comparison === 'string') scene.comparison = JSON.parse(s.comparison);
-        if (typeof s.view === 'string') scene.view = JSON.parse(s.view);
-      } catch {
-        // ignore malformed settings
-      }
+      scene.studies = parseSetting(s.studies) as ChartStudies;
+      scene.studyConfigs = parseSetting(s.studyConfigs) as StudyConfigs;
+      scene.appearance = parseSetting(s.appearance) as ChartAppearance;
+      scene.emaLines = parseSetting(s.emaLines) as EmaLine[];
+      if (s.range === 'all' || s.range === -1) scene.range = null;
+      else if (typeof s.range === 'number') scene.range = s.range;
+      scene.comparison = parseSetting(s.comparison) as SceneSettings['comparison'];
+      scene.view = parseSetting(s.view) as SceneSettings['view'];
+      scene.paneWeights = parseSetting(s.paneWeights) as number[];
       return loadScene('', scene);
     });
 

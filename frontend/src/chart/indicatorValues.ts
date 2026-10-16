@@ -35,6 +35,12 @@ export function formatVolumeValue(volume: number | null): string {
   return metricFormatter.format(volume);
 }
 
+export function formatIndicatorValue(value: number | null | undefined, precision = 2): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return '-';
+  const digits = Number.isInteger(precision) ? Math.max(0, Math.min(10, precision)) : 2;
+  return value.toFixed(digits);
+}
+
 import type { StudyConfigs } from './studyConfigs';
 
 export function computeIndicatorSeries(
@@ -116,66 +122,55 @@ export function computeIndicatorSeries(
 /**
  * 60/120fps direct DOM updater for live crosshair inspection
  */
-export function updateLiveIndicatorDom(container: HTMLElement, snapshot: IndicatorSnapshot) {
+export function updateLiveIndicatorDom(container: HTMLElement, snapshot: IndicatorSnapshot, configs?: StudyConfigs) {
+  const formatted = formatIndicatorValue;
   for (const el of container.querySelectorAll<HTMLElement>('[data-ind-val]')) {
     const key = el.dataset.indVal;
     if (!key) continue;
 
     if (key.startsWith('ema-')) {
       const id = key.slice(4);
-      const val = snapshot.ema[id];
-      el.textContent = val !== null && val !== undefined ? val.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.ema[id]);
     } else if (key === 'vol' || key === 'volume-pane') {
       el.textContent = formatVolumeValue(snapshot.volume);
     } else if (key === 'macd-line') {
-      const v = snapshot.macd?.line;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.macd?.line, configs?.macd?.precision);
     } else if (key === 'macd-signal') {
-      const v = snapshot.macd?.signal;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.macd?.signal, configs?.macd?.precision);
     } else if (key === 'macd-hist') {
       const v = snapshot.macd?.histogram;
       if (v !== null && v !== undefined) {
-        el.textContent = v.toFixed(2);
+        el.textContent = formatted(v, configs?.macd?.precision);
         el.style.color = v >= 0 ? '#089981' : '#ef5350';
       } else {
         el.textContent = '-';
       }
     } else if (key === 'rsi') {
-      const v = snapshot.rsi;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.rsi, configs?.rsi?.precision);
     } else if (key === 'atr') {
-      const v = snapshot.atr;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.atr, configs?.atr?.precision);
     } else if (key === 'stoch-k') {
-      const v = snapshot.stochastic?.k;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.stochastic?.k, configs?.stochastic?.precision);
     } else if (key === 'stoch-d') {
-      const v = snapshot.stochastic?.d;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.stochastic?.d, configs?.stochastic?.precision);
     } else if (key === 'supertrend') {
       const v = snapshot.supertrend?.value;
       if (v !== null && v !== undefined) {
-        el.textContent = v.toFixed(2);
-        el.style.color = snapshot.supertrend?.direction === 1 ? '#089981' : '#ef5350';
+        el.textContent = formatted(v, configs?.supertrend?.precision);
+        el.style.color = snapshot.supertrend?.direction === 1 ? (configs?.supertrend?.upColor ?? '#089981') : (configs?.supertrend?.downColor ?? '#ef5350');
       } else {
         el.textContent = '-';
       }
     } else if (key === 'bb-upper') {
-      const v = snapshot.bollinger?.upper;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.bollinger?.upper, configs?.bollinger?.precision);
     } else if (key === 'bb-mid') {
-      const v = snapshot.bollinger?.middle;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.bollinger?.middle, configs?.bollinger?.precision);
     } else if (key === 'bb-lower') {
-      const v = snapshot.bollinger?.lower;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.bollinger?.lower, configs?.bollinger?.precision);
     } else if (key === 'sma-50') {
-      const v = snapshot.sma;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.sma, configs?.sma?.precision);
     } else if (key === 'vwap') {
-      const v = snapshot.vwap;
-      el.textContent = v !== null && v !== undefined ? v.toFixed(2) : '-';
+      el.textContent = formatted(snapshot.vwap, configs?.vwap?.precision);
     }
   }
 }

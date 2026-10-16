@@ -57,6 +57,10 @@ it('extractSymbolsFromInput parses various scanner outputs, table pastes, prefix
 it('keeps pasted headings and symbols in their original order', () => {
   expect(extractWatchlistItemsFromInput('###Capital Goods(2),NSE:BEL,NSE:HAL,###Banks(1),NSE:HDFCBANK'))
     .toEqual(['###Capital Goods', 'BEL', 'HAL', '###Banks', 'HDFCBANK']);
+  expect(extractWatchlistItemsFromInput('###Diamond, Gems & Jewellery\nNSE:XYZ'))
+    .toEqual(['###Diamond, Gems & Jewellery', 'XYZ']);
+  expect(extractWatchlistItemsFromInput('###Capital Goods(2),BEL,HAL'))
+    .toEqual(['###Capital Goods', 'BEL', 'HAL']);
 });
 
 it('defaults to an empty watchlist without any hardcoded symbols', () => {
@@ -339,6 +343,40 @@ it('navigates symbols via keyboard arrow keys and updates the active symbol', ()
   const dixonRow = screen.getByText('DIXON').closest('.watchlist-row')!;
   fireEvent.keyDown(dixonRow, { key: 'ArrowDown' });
   expect(onSelectSymbol).toHaveBeenCalledWith('RELIANCE');
+});
+
+it('does not hijack typing or caret navigation in watchlist inputs', () => {
+  writeChartStorage('watchlist.v2', ['DIXON', 'RELIANCE']);
+  const onSelectSymbol = vi.fn();
+  render(<WatchlistDock activeSymbol="DIXON" onSelectSymbol={onSelectSymbol} />, { wrapper: createWrapper() });
+
+  const search = screen.getByLabelText('Filter symbols');
+  expect(fireEvent.keyDown(search, { key: 'j' })).toBe(true);
+  expect(fireEvent.keyDown(search, { key: 'k' })).toBe(true);
+  expect(fireEvent.keyDown(search, { key: 'Home' })).toBe(true);
+  expect(onSelectSymbol).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByTitle('Add symbol to watchlist'));
+  const textarea = screen.getByPlaceholderText(/Add ticker or paste scanner output/i);
+  expect(fireEvent.keyDown(textarea, { key: 'j' })).toBe(true);
+  expect(fireEvent.keyDown(textarea, { key: 'ArrowDown' })).toBe(true);
+  expect(onSelectSymbol).not.toHaveBeenCalled();
+
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  expect(onSelectSymbol).toHaveBeenCalledExactlyOnceWith('DIXON');
+});
+
+it('exposes a mobile watchlist drawer toggle', () => {
+  render(<WatchlistDock onSelectSymbol={vi.fn()} />, { wrapper: createWrapper() });
+  const dock = screen.getByRole('complementary', { name: 'Watchlist panel' });
+  const open = screen.getByRole('button', { name: 'Open watchlist panel' });
+  expect(open).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(open);
+  expect(dock).toHaveClass('is-mobile-open');
+  const close = screen.getByRole('button', { name: 'Close watchlist panel' });
+  expect(close).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.click(close);
+  expect(dock).not.toHaveClass('is-mobile-open');
 });
 
 it('opens dropdown menu beside watchlist and clears entire list', () => {

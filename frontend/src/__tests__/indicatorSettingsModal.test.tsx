@@ -179,4 +179,3 @@ it('renders EMA settings modal with Inputs, Style, and Visibility tabs and appli
   );
   expect(onClose).toHaveBeenCalledOnce();
 });
-

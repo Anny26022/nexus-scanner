@@ -7,7 +7,6 @@ import { tradingViewConditionCatalog } from './tradingViewMetrics';
 
 export const RETIRED_TECHNICAL_LABELS: Record<string, string> = {
   INDICATOR_COMPARE: 'Indicator Compare / Crossover',
-  MA_CONVERGENCE: 'MA Convergence',
   DIVERGENCE: 'Price / Oscillator Divergence',
   SUPERTREND: 'Supertrend Direction',
 };

@@ -179,7 +179,7 @@
     "wire": "High.All",
     "key": "all_time_high",
     "section": "market",
-    "category": "price",
+    "category": "momentum",
     "label": "All-time high (\u20b9)",
     "divisor": 1
   },
@@ -187,7 +187,7 @@
     "wire": "Low.All",
     "key": "all_time_low",
     "section": "market",
-    "category": "price",
+    "category": "momentum",
     "label": "All-time low (\u20b9)",
     "divisor": 1
   },
@@ -229,6 +229,54 @@
     "section": "financials",
     "category": "fundamentals",
     "label": "Net income YoY growth (ttm) (%)",
+    "divisor": 1
+  },
+  {
+    "wire": "average_volume_10d_calc",
+    "key": "average_volume10",
+    "section": "market",
+    "category": "liquidity",
+    "label": "Average volume (10d, shares)",
+    "divisor": 1
+  },
+  {
+    "wire": "average_volume_60d_calc",
+    "key": "average_volume60",
+    "section": "market",
+    "category": "liquidity",
+    "label": "Average volume (60d, shares)",
+    "divisor": 1
+  },
+  {
+    "wire": "average_volume_90d_calc",
+    "key": "average_volume90",
+    "section": "market",
+    "category": "liquidity",
+    "label": "Average volume (90d, shares)",
+    "divisor": 1
+  },
+  {
+    "wire": "EMA9",
+    "key": "ema9",
+    "section": "technicals",
+    "category": "trend",
+    "label": "EMA 9 (\u20b9)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.1M",
+    "key": "performance_1m_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (1m, %)",
+    "divisor": 1
+  },
+  {
+    "wire": "Perf.3M",
+    "key": "performance_3m_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (3m, %)",
     "divisor": 1
   }
 ]

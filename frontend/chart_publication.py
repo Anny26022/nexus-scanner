@@ -39,6 +39,21 @@ def inventory_bytes(names):
     return ''.join(name + '\n' for name in names).encode('ascii')
 
 
+def inventory_names(data, digest=None):
+    if digest is None:
+        header, separator, data = data.partition(b'\n')
+        digest = header.decode('ascii') if separator else ''
+    if not re.fullmatch(r'[a-f0-9]{64}', digest) or hashlib.sha256(data).hexdigest() != digest:
+        raise RuntimeError('R2 verification inventory checksum mismatch')
+    try:
+        names = data.decode('ascii').splitlines()
+    except UnicodeDecodeError as error:
+        raise RuntimeError('Invalid R2 verification inventory') from error
+    if inventory_bytes(names) != data:
+        raise RuntimeError('Invalid R2 verification inventory')
+    return set(names)
+
+
 def missing_r2_settings():
     return [key for key in R2_SETTINGS if not os.environ.get(key, '').strip()]
 
@@ -269,35 +284,31 @@ class R2Store:
         self.run('check', str(source), self.remote(key), '--include', '*.json.gz', '--one-way', '--download', '--checkers', '16')
         self.run('copyto', str(source / 'index.json'), self.remote(key + '/index.json'), '--immutable', '--checksum')
 
+    def cache_command(self, *args, data=None):
+        return subprocess.run(['rclone', *args, '--s3-no-check-bucket', '--s3-no-head',
+                               '--contimeout', '10s', '--timeout', '30s', '--retries', '2',
+                               '--low-level-retries', '2'], env=self.env, check=True,
+                              capture_output=True, input=data, timeout=120).stdout
+
     def load_inventory(self, previous):
-        digest = previous.get('verifiedObjectsSha256') if previous else None
-        if not digest:
-            return set()  # One-time bootstrap from a release predating inventories.
-        if not re.fullmatch(r'[a-f0-9]{64}', digest):
-            raise RuntimeError('Invalid prior R2 verification inventory digest')
-        key = self.remote(f'verified-objects/{digest}.txt')
-        result = subprocess.run(['rclone', 'cat', key, '--s3-no-check-bucket',
-                                 '--contimeout', '15s', '--timeout', '1m', '--low-level-retries', '5'],
-                                env=self.env, check=True, capture_output=True, timeout=180)
-        if hashlib.sha256(result.stdout).hexdigest() != digest:
-            raise RuntimeError('Prior R2 verification inventory checksum mismatch')
+        # This is an acceleration cache, not a prerequisite for publication.
         try:
-            names = result.stdout.decode('ascii').splitlines()
-        except UnicodeDecodeError as error:
-            raise RuntimeError('Invalid prior R2 verification inventory') from error
-        if inventory_bytes(names) != result.stdout:
-            raise RuntimeError('Invalid prior R2 verification inventory')
-        return set(names)
+            return inventory_names(self.cache_command('cat', self.remote('verified-objects/current.txt')))
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError, UnicodeError) as error:
+            print(f'R2 verification cache unavailable; checking current objects: {error}', flush=True)
+        # A release published by the previous implementation may carry a receipt.
+        digest = previous.get('verifiedObjectsSha256') if previous else None
+        if digest and re.fullmatch(r'[a-f0-9]{64}', digest):
+            try:
+                return inventory_names(self.cache_command('cat', self.remote(f'verified-objects/{digest}.txt')), digest)
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError, UnicodeError):
+                pass
+        return set()
 
     def write_inventory(self, names):
         data = inventory_bytes(names)
-        digest = hashlib.sha256(data).hexdigest()
-        with tempfile.TemporaryDirectory() as folder:
-            file = Path(folder) / 'verified-objects.txt'
-            file.write_bytes(data)
-            self.run('copyto', str(file), self.remote(f'verified-objects/{digest}.txt'),
-                     '--immutable', '--checksum')
-        return digest
+        record = hashlib.sha256(data).hexdigest().encode('ascii') + b'\n' + data
+        self.cache_command('rcat', self.remote('verified-objects/current.txt'), data=record)
 
     def upload_objects(self, source, known_verified=()):
         """Upload and read back objects absent from the prior verified release."""
@@ -405,6 +416,7 @@ def complete_object_release(chart_root, output, manifest, store=None):
     if previous and previous['sessionDate'] > manifest['sessionDate']:
         raise RuntimeError('Refusing to publish an older session over the current release')
     manifest = dict(manifest, schemaVersion=7, chartRevision=revision)
+    manifest.pop('verifiedObjectsSha256', None)
     existing_path = output / 'revisions' / manifest['revision'] / 'release.json'
     if existing_path.exists():
         existing = json.loads(existing_path.read_text())
@@ -412,6 +424,8 @@ def complete_object_release(chart_root, output, manifest, store=None):
             raise RuntimeError('Scanner revision already binds different chart data')
         if existing.get('publishedAt'):
             manifest['publishedAt'] = existing['publishedAt']
+        if existing.get('verifiedObjectsSha256'):
+            manifest['verifiedObjectsSha256'] = existing['verifiedObjectsSha256']
     if store is None and os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':
         store = R2Store()
     started = time.perf_counter()
@@ -426,16 +440,16 @@ def complete_object_release(chart_root, output, manifest, store=None):
         verified = store.load_inventory(previous)
         files = store.upload_objects(chart_root / 'objects', verified)
         print(f'Object upload and verification elapsed: {time.perf_counter() - started:.2f}s', flush=True)
-        # An existing legacy release cannot gain a new field at an immutable R2
-        # key. New revisions carry a digest of the separately stored inventory.
-        if not existing_path.exists() or 'verifiedObjectsSha256' in existing:
-            manifest['verifiedObjectsSha256'] = store.write_inventory(files)
         manifest['publishedAt'] = manifest['sessionDate'] + 'T00:00:00Z'
         manifest['dataIndexUrl'] = f"{base}/releases/{manifest['revision']}/index.json"
         manifest['objectUrlTemplate'] = f'{base}/objects/{{hash}}.json.gz'
         # Write references only after every object was uploaded and verified.
         store.write_release(index, f"releases/{manifest['revision']}/index.json")
         store.write_release(manifest, f"releases/{manifest['revision']}/release.json")
+        try:
+            store.write_inventory(files)
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
+            print(f'WARNING: R2 verification cache not saved: {error}', flush=True)
     else:
         destination = output / 'objects'
         destination.mkdir(exist_ok=True, parents=True)

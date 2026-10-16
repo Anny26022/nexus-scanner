@@ -177,7 +177,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `nexus-results-${data?.asOfDate ?? 'export'}.csv`;
+      link.download = `nexus-results-${data?.resolvedSession.date ?? 'export'}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

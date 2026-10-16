@@ -123,10 +123,14 @@ def fetch_history_chunk(payload):
             )
             response.raise_for_status()
             return rows_from_tick_data(response.json().get("data", {}))
+        except requests.HTTPError as error:
+            if error.response is not None and error.response.status_code == 403:
+                raise  # Retrying a forbidden history request cannot repair it.
+            last_error = error
         except (requests.RequestException, ValueError, TypeError, IndexError) as error:
             last_error = error
-            if attempt + 1 < FETCH_ATTEMPTS:
-                time.sleep(0.25 * (2 ** attempt))
+        if attempt + 1 < FETCH_ATTEMPTS:
+            time.sleep(0.25 * (2 ** attempt))
     raise RuntimeError("Historical OHLCV chunk failed after retries") from last_error
 
 def fetch_single_stock(sym, details, live_snapshot=None, official_nse_session=None, expected_sessions=()):
@@ -151,6 +155,7 @@ def fetch_single_stock(sym, details, live_snapshot=None, official_nse_session=No
     # cache, never the routine post-close history source.
     new_rows = []
     if not has_official_history(existing_rows, official_nse_session, desired_start, expected_sessions):
+        forbidden = False
         for range_start, range_end in plan_history_ranges(existing_rows, desired_start, current_end, expected_sessions):
             for c_start, c_end in chunk_history_range(range_start, range_end, CHUNK_DAYS):
                 payload = {
@@ -158,9 +163,18 @@ def fetch_single_stock(sym, details, live_snapshot=None, official_nse_session=No
                     "INST": details["Inst"], "SEC_ID": details["Sid"],
                     "EXPCODE": 0, "INTERVAL": "D", "START": int(c_start), "END": int(c_end)
                 }
-                chunk_rows = fetch_history_chunk(payload)
+                try:
+                    chunk_rows = fetch_history_chunk(payload)
+                except requests.HTTPError as error:
+                    if error.response is None or error.response.status_code != 403:
+                        raise
+                    logger.warning("Dhan history forbidden for %s; validating cached and official candles", sym)
+                    forbidden = True
+                    break
                 if chunk_rows:
                     new_rows.extend(chunk_rows)
+            if forbidden:
+                break
 
     # Provider ranges can overlap adjusted bars; fill absent dates only.
     cached_dates = {row["Date"] for row in existing_rows}

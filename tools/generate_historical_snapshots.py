@@ -137,7 +137,9 @@ def main():
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/historical_snapshots"))
     parser.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 10, 1))
     parser.add_argument("--end-date", type=date.fromisoformat, default=date(2021, 10, 15))
+    parser.add_argument("--update-sessions-manifest", type=Path, default=None, help="Path to frontend/public/data/sessions.json to register sessions")
     parser.add_argument("--dry-run", action="store_true", help="Print execution plan without writing files")
+
     args = parser.parse_args()
 
     pipeline_dir = args.pipeline_dir.resolve()
@@ -367,6 +369,43 @@ def main():
         generated_count += 1
 
     print(f"\nAll done! Successfully generated {generated_count} historical daily snapshots in {output_dir}")
+
+    if args.update_sessions_manifest and generated_count > 0:
+        manifest_file = args.update_sessions_manifest.resolve()
+        existing = {}
+        if manifest_file.exists():
+            try:
+                with open(manifest_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for item in data.get("sessions", []):
+                        dt = item.get("date")
+                        if dt:
+                            existing[dt] = item
+            except Exception as e:
+                print(f"Warning: could not read existing sessions manifest: {e}")
+
+        # Add newly generated sessions
+        for s_date in valid_sessions:
+            s_str = s_date.strftime("%Y-%m-%d")
+            if s_str not in existing:
+                existing[s_str] = {
+                    "date": s_str,
+                    "label": s_str,
+                    "isHistorical": True,
+                }
+
+        sorted_sessions = sorted(existing.values(), key=lambda x: x["date"], reverse=True)
+        manifest_payload = {
+            "version": 1,
+            "latestSessionDate": sorted_sessions[0]["date"] if sorted_sessions else "",
+            "sessions": sorted_sessions,
+        }
+        manifest_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(manifest_file, "w", encoding="utf-8") as f:
+            json.dump(manifest_payload, f, indent=2)
+            f.write("\n")
+        print(f"Updated sessions manifest at {manifest_file} ({len(sorted_sessions)} total sessions)")
+
 
 
 if __name__ == "__main__":

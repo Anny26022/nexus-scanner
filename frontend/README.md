@@ -365,8 +365,8 @@ Build with `npm ci` and `npm run build`, then host `dist/` with its public data 
 
 ### Cloudflare production and PR previews
 
-The root `wrangler.jsonc` builds and serves the static frontend for both production
-and PR previews. It does not deploy the Python scanner bridge. Browser-evaluable
+The root `wrangler.jsonc` builds and serves the frontend and the Workers AI compiler
+for production and PR previews. It does not deploy the Python scanner bridge. Browser-evaluable
 conditions and published preset defaults work; expressions requiring historical
 Python evaluation need a separately deployed backend.
 
@@ -375,12 +375,50 @@ base before building; the frontend appends `/screens/run`. The backend must allo
 the production/preview origin through CORS and have the requested frozen dataset
 revision and history inputs. Build-time settings require a new build to take effect.
 
-Without an external API, the default `/api/screens/run` has no handler in this
-static deployment. With Wrangler 4.148.0, local checks return HTTP 405 for POST;
-an unmatched GET returns the SPA's `index.html` with HTTP 200. Neither response is
-a scanner API result. SPA fallback supports frontend deep links and does not
-supply API endpoints. Historical queries are unavailable in these previews until
-the separate backend is configured.
+Without an external API, `/api/screens/run` returns a JSON 404. Historical queries
+remain unavailable until the separate backend is configured. Frontend deep links
+continue to use static SPA fallback; `/api/*` routes always reach the Worker.
+
+### Plain-language screening with Workers AI
+
+`POST /api/screener/ai-compile` accepts `{ "text": "Close above 200 EMA and volume at least 2x the 20-day average" }`.
+The `AI` binding runs `@cf/meta/llama-3.3-70b-instruct-fp8-fast` in JSON mode.
+The server and browser validate the output against the same available filter
+catalogue, including parameter types, options and published calculation settings.
+The model never calculates stock results. Its condition map is rebuilt from
+validated clauses; model-provided condition maps and labels are not trusted.
+
+Run from the repository root:
+
+```bash
+npm ci
+npx wrangler login
+npm run dev:ai
+```
+
+In a second terminal, start the frontend on port 8080:
+
+```bash
+cd frontend
+npm run dev -- --host localhost --port 8080 --strictPort
+```
+
+Vite proxies only the AI compiler endpoint to the local Worker on port 8787.
+Inference runs on Cloudflare even during local development, consuming the
+account's Workers AI allowance. No Cloudflare token is exposed to the browser.
+The Worker limits requests to 2,000 characters and 10 requests per minute per IP.
+Model output or inference failures produce an explicit error, with no regex fallback.
+
+The modal previews all clauses and preserves AND/OR. Unsupported clauses block
+the Run button; users can revise the request or explicitly edit the supported
+subset. Mixed nested AND/OR cannot be represented by the current editor and
+must be reported as unsupported. English and Hinglish translations remain model
+interpretations and should be checked in the preview.
+
+`npm run check:worker` generates binding types and checks the Worker. To deploy
+the frontend and compiler together, run `npm run deploy` from the root. The
+existing build command prepares the static frontend and the Worker receives
+its AI and rate-limit bindings from `wrangler.jsonc`.
 
 ### Historical evaluation deployment
 

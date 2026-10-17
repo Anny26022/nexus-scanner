@@ -4,7 +4,8 @@ import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse 
 import {tradingViewMetrics} from '../data/tradingViewMetrics';
 
 export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
-export type FilterChoices = Record<'SECTOR' | 'INDUSTRY' | 'SERIES' | 'PRICE_BAND' | 'INDEX_MEMBERSHIP', string[]> & {TRADINGVIEW_METRIC?:string[]};
+import type {FilterChoices} from '../types/filterChoices';
+export type {FilterChoices} from '../types/filterChoices';
 export type SnapshotTask =
   | { type:'warm'; source:SnapshotSource }
   | { type:'filterChoices'; source:SnapshotSource }

@@ -1,0 +1,4 @@
+# Copy this file to .dev.vars for local development
+# Groq API key for blazing fast responses (<150ms) and 14,400 free requests per day.
+# Obtain a free key from https://console.groq.com/keys
+GROQ_API_KEY=

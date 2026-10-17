@@ -1,0 +1,22 @@
+[     252ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:15804
+[  637263ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:8080/src/chart/drawings.ts?t=1792107376920:0
+[  637264ms] [ERROR] [vite] Failed to reload /src/components/DrawingToolbar.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://localhost:8080/@vite/client:356
+[  637264ms] [ERROR] [vite] Failed to reload /src/components/ChartsTab.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://localhost:8080/@vite/client:356
+[  701112ms] Error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: undefined. You likely forgot to export your component from the file it's defined in, or you might have mixed up default and named imports.
+
+Check the render method of `DrawingToolbar`.
+    at createFiberFromTypeAndProps (http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:2972:21)
+    at createFiberFromElement (http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:2983:11)
+    at reconcileChildFibersImpl (http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:3993:401)
+    at http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:4047:28
+    at reconcileChildren (http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:5585:46)
+    at beginWork (http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:6451:1569)
+    at runWithFiberInDEV (http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:944:66)
+    at performUnitOfWork (http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:9148:92)
+    at workLoopSync (http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:9044:37)
+    at renderRootSync (http://localhost:8080/node_modules/.vite/deps/react-dom_client.js?v=f1f9724a:9028:6)
+[  701111ms] [WARNING] %s
+
+%s
+ An error occurred in the <button> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:8080/@vite/client:356

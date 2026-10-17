@@ -5,7 +5,21 @@ import path from 'path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import type { ServerResponse } from 'node:http';
-import type { Connect, Plugin } from 'vite';
+import type { Connect, Plugin, ProxyOptions } from 'vite';
+import {buildAiFilterChoices} from './build_ai_filter_choices.mjs';
+import {localAiWorker} from './dev/aiWorker';
+
+const aiProxy: ProxyOptions = {
+  target: 'http://127.0.0.1:8787',
+  changeOrigin: true,
+  configure(proxy) {
+    proxy.on('proxyReq', (proxyReq, req) => {
+      // Vite forwards a same-origin browser request to the local Worker port.
+      // Leave foreign origins intact so the Worker can reject them.
+      if (req.headers.origin === `http://${req.headers.host}`) proxyReq.removeHeader('Origin');
+    });
+  },
+};
 
 function scannerBridge(): Plugin {
   let worker: ChildProcessWithoutNullStreams | undefined;
@@ -101,7 +115,17 @@ function scannerBridge(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), scannerBridge()],
+  plugins: [react(), tailwindcss(), scannerBridge(), {
+    name: 'ai-filter-choices',
+    async configureServer(server) {
+      await buildAiFilterChoices();
+      server.watcher.on('change', file => {
+        if (file.endsWith('/public/data/current.json')) void buildAiFilterChoices().catch(console.error);
+      });
+    },
+  }, localAiWorker()],
+  server: {proxy: {'/api/screener/ai-compile': aiProxy}},
+  preview: {proxy: {'/api/screener/ai-compile': aiProxy}},
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),

@@ -9,7 +9,10 @@ import { isAvailableCondition, isAvailableFilter } from '../utils/filterAvailabi
 afterEach(cleanup);
 
 it('keeps published filters and presets available but disables backend-only defaults', () => {
-  expect(NEXUS_CONDITION_CATALOG.filter(isAvailableFilter)).toHaveLength(79);
+  expect(NEXUS_CONDITION_CATALOG.filter(isAvailableFilter)).toHaveLength(75);
+  for (const conditionId of ['EARNINGS_GROWTH','fund_earnings_growth','rs_1month','rs_3month']) {
+    expect(isAvailableFilter(NEXUS_CONDITION_CATALOG.find(def=>def.id===conditionId)!)).toBe(false);
+  }
   expect(PRESET_CATALOG).toHaveLength(45);
   expect(PRESET_CATALOG.every(isAvailableFilter)).toBe(true);
   expect(isAvailableCondition({instanceId:'ma', conditionId:'MA_STACK', parameters:{periods:'50,173,200',maType:'EMA',priceAbove:false}})).toBe(false);
@@ -42,7 +45,7 @@ it('blocks backend-only parameter settings and allows correction without losing 
   expect(period.closest('.filter-row')).toHaveAttribute('data-unavailable', 'true');
   expect(period).toBeEnabled();
   expect(screen.getByRole('button', {name:'Apply'})).toBeDisabled();
-  expect(screen.getByRole('alert')).toHaveTextContent('Backend-dependent filters are temporarily disabled');
+  expect(screen.getByRole('alert')).toHaveTextContent('Unavailable in snapshot:');
   fireEvent.change(period, {target:{value:'20'}});
   expect(period.closest('.filter-row')).toHaveAttribute('data-unavailable', 'false');
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();

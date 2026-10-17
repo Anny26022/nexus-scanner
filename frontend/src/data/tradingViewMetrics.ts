@@ -3,7 +3,7 @@ import type {ConditionCategory, ConditionDef} from '../types/screener';
 
 export const tradingViewMetrics = fields.map(field => ({...field, id:`${field.section}.${field.key}`}));
 export const tradingViewFilterGroups: Record<string, {category:ConditionCategory; label:string}> = {
-  TV_TECHNICALS: {category:'trend', label:'Moving Averages & MACD'},
+  TV_TECHNICALS: {category:'trend', label:'Technical Indicators (TradingView)'},
   TV_PERFORMANCE: {category:'momentum', label:'Period Returns & Momentum'},
   TV_MARKET: {category:'liquidity', label:'Average Volume & Turnover'},
   TV_FINANCIALS: {category:'fundamentals', label:'Balance Sheet & Statement Ratios'},

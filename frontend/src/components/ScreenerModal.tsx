@@ -5,7 +5,7 @@ import { Dialog } from './Dialog';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 import { X, SlidersHorizontal, Library, ChevronDown, Info } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
-import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG, REDUNDANT_CATALOG_CONDITIONS } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 import { PRESET_ELIGIBILITY, presetEligibilitySummary } from '../data/presetEligibility';
@@ -462,8 +462,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const filtered = catalogToUse.filter((c) => {
     if (isTradingViewCondition(c.id) && !c.parameters.find(p => p.id === 'metric')?.options?.length
         && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
-    // ROE is editable through Fundamental Metric; keep saved legacy rules visible.
-    if (c.id === 'fund_roe' && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
+    if ((c.id === 'fund_roe' || REDUNDANT_CATALOG_CONDITIONS.has(c.id)) && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
     return (activeTab === 'presets' || category === 'all' || c.category === category)
       && (!search.trim() || `${c.label} ${c.description} ${c.parameters.flatMap(p => p.options?.map(o => o.label) ?? []).join(' ')}`.toLowerCase().includes(search.trim().toLowerCase()));
   });

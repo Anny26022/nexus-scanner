@@ -143,10 +143,12 @@
 .theme-control button[aria-pressed="true"] { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); font-weight: 600; }
 .workspace { display: flex; flex-direction: column; position: relative; height: 100dvh; width: 100%; min-width: 0; margin: auto; padding: 18px 24px 16px; align-self: start; background: var(--page); }
 .workspace.workspace--charts { padding: 0; }
-.workspace--charts .chart-grid-1 .chart-workspace { border: 0; border-radius: 0; }
-.workspace-sidebar-reopen { position: absolute; z-index: 60; top: 10px; left: 10px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.workspace-sidebar-reopen { position: absolute; z-index: 60; top: 10px; left: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); width: 26px; height: 26px; display: grid; place-items: center; color: var(--muted); cursor: pointer; transition: all 0.15s ease; }
+.workspace-sidebar-reopen:hover { background: var(--surface-hover); color: var(--text); border-color: var(--line-strong); }
+.workspace.workspace--charts .workspace-sidebar-reopen { top: 6px; left: 8px; width: 26px; height: 26px; }
 .workspace--sidebar-hidden:not(.workspace--charts) .workspace-heading { padding-left: 36px; }
 .workspace--sidebar-hidden .chart-desk > .chart-desk-toolbar { padding-left: 48px; }
+.workspace--sidebar-hidden .chart-topbar { padding-left: 42px; }
 .workspace-heading, .screen-controls, .results-toolbar, .research-view > .notice { flex-shrink: 0; }
 .workspace-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .workspace-breadcrumb { color: var(--muted); font-size: 11px; margin: 0 0 6px; font-weight: 500; }

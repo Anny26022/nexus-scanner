@@ -66,10 +66,40 @@ export function validateAiScreenResult(raw: unknown, catalog: AiFilterDefinition
     const def = catalog.find(definition => definition.id === value.conditionId);
     if (!def || !record(value.parameters)) return unsupported('This filter is not available in the screener.');
     const parameters = {...value.parameters};
-    // A single published option is a constant, not a model-chosen default threshold.
+    for (const key of Object.keys(parameters)) {
+      if (!def.parameters.some(parameter => parameter.id === key)) {
+        delete parameters[key];
+      }
+    }
     for (const parameter of def.parameters) {
-      if (!Object.hasOwn(parameters,parameter.id) && parameter.type === 'select' && parameter.options?.length === 1) {
-        parameters[parameter.id] = parameter.options[0].value;
+      if (!Object.hasOwn(parameters, parameter.id)) {
+        if (parameter.type === 'select' && parameter.options?.length === 1) {
+          parameters[parameter.id] = parameter.options[0].value;
+        } else if (parameter.defaultValue !== undefined) {
+          parameters[parameter.id] = parameter.defaultValue;
+        }
+      }
+      if (parameter.type === 'select' && Object.hasOwn(parameters, parameter.id)) {
+        const val = parameters[parameter.id];
+        const matched = parameter.options?.find(opt =>
+          opt.value === val ||
+          String(opt.value).toLowerCase() === String(val).toLowerCase() ||
+          (opt.label && opt.label.toLowerCase() === String(val).toLowerCase())
+        );
+        if (matched) {
+          parameters[parameter.id] = matched.value;
+        }
+      }
+      if (parameter.type === 'multiselect' && Object.hasOwn(parameters, parameter.id)) {
+        if (typeof parameters[parameter.id] === 'string') {
+          parameters[parameter.id] = [parameters[parameter.id]];
+        }
+      }
+      if (parameter.type === 'number' && Object.hasOwn(parameters, parameter.id) && typeof parameters[parameter.id] === 'string') {
+        const parsed = Number((parameters[parameter.id] as string).replace(/[^0-9.-]+/g, ''));
+        if (Number.isFinite(parsed)) {
+          parameters[parameter.id] = parsed;
+        }
       }
     }
     if (Object.keys(parameters).some(key => !def.parameters.some(parameter => parameter.id === key))

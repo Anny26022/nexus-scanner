@@ -3,7 +3,7 @@ import {useMutation} from '@tanstack/react-query';
 import { Dialog } from './Dialog';
 import { ArrowRight, CornerDownLeft, SlidersHorizontal, CheckCircle2, AlertCircle, RotateCcw, X } from 'lucide-react';
 import { ActiveCondition, MatchMode } from '../types/screener';
-import { compileNaturalLanguageQuery, SAMPLE_PROMPTS } from '../api/aiScreenerCompiler';
+import { compileNaturalLanguageQuery, SAMPLE_PROMPTS, type ClauseCompilation } from '../api/aiScreenerCompiler';
 import {useFilterChoices} from '../hooks/useFilterChoices';
 
 interface AiScreenerModalProps {
@@ -35,7 +35,8 @@ export const AiScreenerModal: React.FC<AiScreenerModalProps> = ({
   const isCompiling = compilation.isPending;
   const result = compilation.data;
   const hasConditions = Boolean(result && Object.keys(result.conditionsMap).length);
-  const canRun = hasConditions && result?.unsupportedClauses.length === 0;
+  // Allow running if there is at least one supported condition; notify user clearly if any clause was skipped.
+  const canRun = hasConditions;
   const handleClose = () => { controller.current?.abort(); onClose(); };
 
   if (!isOpen) return null;
@@ -147,9 +148,11 @@ export const AiScreenerModal: React.FC<AiScreenerModalProps> = ({
             <AlertCircle size={14} className="shrink-0" />
             <div>
               <span>{compilation.error.message}</span>
-              <p className="mt-1 text-[11px] opacity-80">
-                Tip: Try specifying clear parameters like moving averages (e.g. 50 EMA, 200 SMA), volume multiples, P/E ratio, or turnover.
-              </p>
+              {!/allocation|neuron|quota|too many requests|rate limit/i.test(compilation.error.message) && (
+                <p className="mt-1 text-[11px] opacity-80">
+                  Tip: Try specifying clear parameters like moving averages (e.g. 50 EMA, 200 SMA), volume multiples, P/E ratio, or turnover.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -191,7 +194,7 @@ export const AiScreenerModal: React.FC<AiScreenerModalProps> = ({
             </div>
 
             <div className="ai-clauses-list">
-              {result.clauses.map((clause, idx) => (
+              {result.clauses.map((clause: ClauseCompilation, idx: number) => (
                 <div key={idx} className="ai-clause-card">
                   <div className="ai-clause-top">
                     <span className="ai-clause-source">"{clause.sourceText}"</span>

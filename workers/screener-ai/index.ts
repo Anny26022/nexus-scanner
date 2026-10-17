@@ -79,8 +79,12 @@ export default {
       return json(payload);
     } catch (error) {
       // Do not log user prompts or untrusted model output.
+      const message = error instanceof Error ? error.message : '';
       console.error(JSON.stringify({event:'ai_compile_failed', requestId,
-        kind:error instanceof SyntaxError ? 'invalid_json' : 'inference_or_validation'}));
+        kind:error instanceof SyntaxError ? 'invalid_json' : 'inference_or_validation', message}));
+      if (/4006|quota|allocation|neuron/i.test(message)) {
+        return json({error: message, requestId}, 429);
+      }
       return json({error:'The AI could not build a valid screen. Please rephrase your request and try again.',requestId},502);
     }
   },

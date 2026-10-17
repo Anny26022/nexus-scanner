@@ -46,16 +46,19 @@ export const SAMPLE_PROMPTS: SamplePrompt[] = [
 export async function compileNaturalLanguageQuery(input: string, signal?: AbortSignal, context?: {datasetRevision?:string; choices?:FilterChoices}) {
   const text = input.trim();
   if (!text || text.length > MAX_PROMPT_LENGTH) throw new Error(`Use 1–${MAX_PROMPT_LENGTH} characters to describe your screen.`);
+  
   const response = await fetch('/api/screener/ai-compile', {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({text,...(context?.datasetRevision ? {datasetRevision:context.datasetRevision} : {})}),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(90000)]) : AbortSignal.timeout(90000),
   });
+
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const error = typeof payload === 'object' && payload !== null && 'error' in payload ? payload.error : undefined;
     throw new Error(typeof error === 'string' ? error : 'The AI compiler is unavailable. Please try again.');
   }
-  const result = validateAiScreenResult(payload,createAiFilterCatalog(context?.choices));
+
+  const result = validateAiScreenResult(payload, createAiFilterCatalog(context?.choices));
   if (typeof payload === 'object' && payload !== null && 'catalogRevision' in payload) {
     if (context?.datasetRevision && payload.catalogRevision !== context.datasetRevision) throw new Error('The filter catalogue changed. Refresh the screener.');
     if (typeof payload.catalogRevision === 'string') result.catalogRevision = payload.catalogRevision;

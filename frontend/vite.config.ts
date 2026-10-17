@@ -7,6 +7,7 @@ import { createInterface } from 'node:readline';
 import type { ServerResponse } from 'node:http';
 import type { Connect, Plugin, ProxyOptions } from 'vite';
 import {buildAiFilterChoices} from './build_ai_filter_choices.mjs';
+import {localAiWorker} from './dev/aiWorker';
 
 const aiProxy: ProxyOptions = {
   target: 'http://127.0.0.1:8787',
@@ -122,7 +123,7 @@ export default defineConfig({
         if (file.endsWith('/public/data/current.json')) void buildAiFilterChoices().catch(console.error);
       });
     },
-  }],
+  }, localAiWorker()],
   server: {proxy: {'/api/screener/ai-compile': aiProxy}},
   preview: {proxy: {'/api/screener/ai-compile': aiProxy}},
   resolve: {

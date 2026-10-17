@@ -326,7 +326,19 @@ def main():
                     sh_by_symbol[sym].append(rec)
         print(f"Loaded {sum(len(v) for v in sh_by_symbol.values())} shareholding records")
 
-    # 5. Trading Sessions in Range
+    # 5. Load Corporate Action Ledger
+    ca_path = pipeline_dir / "corporate_action_ledger.json.gz"
+    actions_by_symbol = defaultdict(list)
+    if ca_path.exists():
+        with gzip.open(ca_path, "rt", encoding="utf-8") as f:
+            ca_data = json.load(f)
+            for rec in ca_data.get("records", []):
+                sym = str(rec.get("symbol") or "").upper()
+                if sym:
+                    actions_by_symbol[sym].append(rec)
+        print(f"Loaded {sum(len(v) for v in actions_by_symbol.values())} corporate action records")
+
+    # 6. Trading Sessions in Range
     unique_dates = sorted(set(d.date() for d in dates if args.start_date <= d.date() <= args.end_date))
     print(f"Found {len(unique_dates)} trading sessions in target window: {unique_dates}")
 
@@ -428,6 +440,26 @@ def main():
             ]
             latest_sh = sorted(valid_shs, key=lambda x: x["period_end"])[-1] if valid_shs else None
 
+            # Point-in-time Corporate Actions & Dividends
+            sym_actions = actions_by_symbol.get(sym, [])
+            valid_actions = [
+                a for a in sym_actions
+                if a.get("ex_date") and a["ex_date"] <= session_str
+            ]
+            div_actions = [
+                a for a in valid_actions
+                if "DIVIDEND" in (a.get("action_type") or "") and a.get("dividend_per_share") is not None
+            ]
+            latest_div = sorted(div_actions, key=lambda x: x["ex_date"])[-1] if div_actions else None
+            
+            trailing_1y_start = (session_date - timedelta(days=365)).isoformat()
+            trailing_1y_divs = [
+                a for a in div_actions
+                if a["ex_date"] >= trailing_1y_start
+            ]
+            trailing_div_sum = sum(a["dividend_per_share"] for a in trailing_1y_divs)
+            div_yield_pct = round((trailing_div_sum / tech["close"]) * 100, 2) if tech["close"] > 0 and trailing_div_sum > 0 else None
+
             # Delivery & VWAP stats from official NSE Bhavcopy
             deliv = delivery_map.get(sym)
             deliv_qty = int(deliv["DELIV_QTY"]) if deliv and deliv.get("DELIV_QTY", "").isdigit() else None
@@ -526,6 +558,9 @@ def main():
                 "quarterlyEps": latest_fin.get("eps") if latest_fin else None,
                 "quarterlyOpm": latest_fin.get("opm") if latest_fin else None,
                 "earningsDate": latest_fin.get("filing_date")[:10] if latest_fin and latest_fin.get("filing_date") else None,
+                "dividendYieldPct": div_yield_pct,
+                "dividendPerShare": latest_div.get("dividend_per_share") if latest_div else None,
+                "dividendExDate": latest_div.get("ex_date") if latest_div else None,
                 "metrics": {
                     "return5": round(((tech["close"] / c_vals[-6]) - 1) * 100, 2) if len(c_vals) >= 6 else None,
                     "return21": round(((tech["close"] / c_vals[-22]) - 1) * 100, 2) if len(c_vals) >= 22 else None,

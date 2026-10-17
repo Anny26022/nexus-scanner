@@ -36,9 +36,9 @@ def normalized(steps):
 
 class RefreshWorkflowTests(unittest.TestCase):
     def test_backup_policy_preserves_manual_runs_and_weekly_archives(self):
-        for name, expected in [('daily_refresh.yml', "${{ github.event_name == 'schedule' && '0' || '1' }}"),
+        for name, expected in [('daily_refresh.yml', "${{ (github.event_name == 'schedule' || inputs.scheduled_refresh) && '0' || '1' }}"),
                                ('weekly_eod2_refresh.yml', '1')]:
-            job, = document('.github/workflows/' + name)['jobs'].values()
+            job = document('.github/workflows/' + name)['jobs']['refresh-data' if name == 'daily_refresh.yml' else 'refresh-adjusted-history']
             build, = [step for step in job['steps'] if step['name'] == 'Build and publish validated data']
             self.assertEqual(build['env']['EDL_FILING_BACKUPS'], expected)
 
@@ -48,12 +48,15 @@ class RefreshWorkflowTests(unittest.TestCase):
                 workflow = document('.github/workflows/' + name)
                 cron = '30 10 * * 1-5' if name == 'daily_refresh.yml' else '30 3 * * 0'
                 # PyYAML YAML 1.1 treats the unquoted GitHub "on" key as True.
+                dispatch = {'inputs': {'scheduled_refresh': {'description': 'Automatic daily trigger (Cloudflare scheduler)',
+                            'type': 'boolean', 'default': False}}} if name == 'daily_refresh.yml' else None
                 self.assertEqual(workflow.get('on', workflow.get(True)), {
-                    'schedule': [{'cron': cron}], 'workflow_dispatch': None,
+                    'schedule': [{'cron': cron}], 'workflow_dispatch': dispatch,
                 })
                 self.assertEqual(workflow['concurrency'], {'group': 'daily-data-refresh', 'cancel-in-progress': False})
-                self.assertEqual(workflow['permissions'], {'contents': 'write'})
-                job, = workflow['jobs'].values()
+                permissions = {'contents': 'write', 'actions': 'read'} if name == 'daily_refresh.yml' else {'contents': 'write'}
+                self.assertEqual(workflow['permissions'], permissions)
+                job = workflow['jobs']['refresh-data' if name == 'daily_refresh.yml' else 'refresh-adjusted-history']
                 expanded = []
                 for caller in job['steps']:
                     action_path = caller.get('uses', '')
@@ -100,8 +103,23 @@ class RefreshWorkflowTests(unittest.TestCase):
                         else:
                             self.assertTrue(action_path.endswith('restore-refresh-history'))
                         expanded.append(step)
+                # The external automatic dispatch keeps the scheduled archive policy;
+                # manual runs still request full backups. All other pipeline steps
+                # retain the original contract.
+                if name == 'daily_refresh.yml':
+                    for step in expanded:
+                        if step['name'] == 'Build and publish validated data':
+                            step['env']['EDL_FILING_BACKUPS'] = "${{ github.event_name == 'schedule' && '0' || '1' }}"
                 actual = hashlib.sha256(json.dumps(normalized(expanded), sort_keys=True).encode()).hexdigest()
                 self.assertEqual(actual, expected, json.dumps(normalized(expanded), indent=2))
+
+    def test_daily_refresh_checks_for_duplicates_before_starting_the_pipeline(self):
+        jobs = document('.github/workflows/daily_refresh.yml')['jobs']
+        self.assertEqual(jobs['refresh-data']['needs'], 'refresh-gate')
+        self.assertEqual(jobs['refresh-data']['if'], "needs.refresh-gate.outputs.should_run == 'true'")
+        gate = jobs['refresh-gate']['steps'][1]
+        self.assertIn('existingRefresh(data.workflow_runs, cutoff, context.runId)', gate['with']['script'])
+        self.assertEqual(gate['env']['AUTOMATIC_REFRESH'], "${{ github.event_name == 'schedule' || inputs.scheduled_refresh }}")
 
     def test_eod2_cache_saves_only_successful_changed_checkouts(self):
         fake_git = '''git() {
@@ -118,7 +136,8 @@ class RefreshWorkflowTests(unittest.TestCase):
         '''
         import tempfile
         for name in BASELINES:
-            job, = document('.github/workflows/' + name)['jobs'].values()
+            workflow_jobs = document('.github/workflows/' + name)['jobs']
+            job = workflow_jobs['refresh-data' if name == 'daily_refresh.yml' else 'refresh-adjusted-history']
             steps = {step['name']: step for step in job['steps']}
             restore = steps['Restore EOD2 data checkout']
             update = steps['Update EOD2 adjusted-history data']
@@ -144,7 +163,7 @@ class RefreshWorkflowTests(unittest.TestCase):
                                             env=env, capture_output=True, text=True)
                     self.assertEqual(result.returncode, exit_code)
                     values = output.read_text() if output.exists() else ''
-                    self.assertEqual(values, '' if exit_code else f'revision={next_revision}\n' +
+        self.assertEqual(values, '' if exit_code else f'revision={next_revision}\n' +
                                      ('changed=true\n' if previous != next_revision else ''))
 
     def test_phase_guard_rejects_invalid_inputs_before_cache_writes(self):

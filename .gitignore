@@ -40,6 +40,8 @@ DO NOT DELETE EDL PIPELINE/filing_history.json.gz
 
 # Local environment
 .env
+.dev.vars
+.dev.vars.*
 .venv/
 venv/
 

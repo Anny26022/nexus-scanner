@@ -41,7 +41,8 @@ export async function readCompilation(cache:CompilationCache,key:Request,catalog
       || ![metadata.inputTokens,metadata.outputTokens].every(value=>typeof value === 'number' && Number.isFinite(value) && value >= 0)) return undefined;
     return {...result,...(typeof payload.catalogRevision === 'string' ? {catalogRevision:payload.catalogRevision} : {}),
       compilation:{model:metadata.model,attempts:metadata.attempts,cacheHit:true,
-        inputTokens:metadata.inputTokens as number,outputTokens:metadata.outputTokens as number}};
+        inputTokens:metadata.inputTokens as number,outputTokens:metadata.outputTokens as number,
+        ...(typeof metadata.cachedTokens === 'number' ? {cachedTokens:metadata.cachedTokens} : {})}};
   } catch {
     // Cache failures and stale entries must not prevent fresh inference.
     return undefined;

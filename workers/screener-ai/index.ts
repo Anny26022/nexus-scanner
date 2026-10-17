@@ -5,10 +5,10 @@ import type {FilterChoices} from '../../frontend/src/types/filterChoices';
 import {GROQ_MODEL, PRIMARY_MODEL, FALLBACK_MODEL, compileWithFallback, compilerPrompt, type CompileModel, type InferenceInput} from './compiler';
 import {compilationCacheKey, readCompilation, storeCompilation} from './compilationCache';
 
-interface WorkerEnv extends Env {
+type WorkerEnv = Omit<Env, 'GROQ_API_KEY'> & {
   GROQ_API_KEY?: string;
   GROQ_MODEL?: string;
-}
+};
 
 const isObject = (v:unknown): v is Record<string,unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const json = (body: unknown, status = 200) => Response.json(body, {status,

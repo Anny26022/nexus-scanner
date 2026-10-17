@@ -120,7 +120,7 @@ export interface StockRow {
   distAthPct: number | null;
   earningsDate: string | null;
   daysSinceEarnings: number | null;
-  fnoBan: boolean;
+  fnoBan: boolean | null;
   isFno: boolean;
   circuitLimit: string;
   deliveryPct: number | null;

@@ -3351,18 +3351,19 @@
 .column-dialog-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 34px; color: var(--muted); font-size: 12px; font-weight: 500; }
 .column-dialog-toolbar > div { display: flex; gap: 6px; flex-shrink: 0; }
 .column-dialog-toolbar .button { min-height: 28px; padding: 0 10px; font-size: 11.5px; border-radius: 6px; }
-.column-category-tabs { display: flex; flex: 0 0 auto; gap: 6px; min-height: 36px; align-items: center; overflow-x: auto; border-bottom: 1px solid var(--line); padding-bottom: 8px; scrollbar-width: none; }
+.column-category-tabs { display: flex; flex: 0 0 auto; gap: 6px; min-height: 34px; align-items: center; overflow-x: auto; border-bottom: 1px solid var(--line); padding-bottom: 8px; scrollbar-width: none; }
 .column-category-tabs::-webkit-scrollbar { display: none; }
-.column-category-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 7px; color: var(--secondary); font-size: 11.5px; font-weight: 500; border: 1px solid transparent; transition: all .15s ease; white-space: nowrap; cursor: pointer; }
+.column-category-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 7px; color: var(--secondary); font-size: 11.5px; font-weight: 500; border: 1px solid transparent; background: transparent; transition: all .15s ease; white-space: nowrap; cursor: pointer; }
 .column-category-btn:hover:not([aria-selected="true"]) { background: var(--surface-hover); color: var(--text); }
-.column-category-btn[aria-selected="true"] { background: var(--surface-hover); color: var(--text); font-weight: 600; border-color: var(--line); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
-.column-category-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; font-size: 10px; font-weight: 700; border-radius: 9999px; background: var(--accent); color: var(--on-accent); line-height: 1; }
-.column-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 4px 18px; flex: 1; overflow: auto; min-height: 0; padding: 6px 4px 6px 0; scrollbar-gutter: stable; }
-.column-picker-option { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 36px; padding: 0 10px; border-radius: 8px; color: var(--secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: background 0.12s ease; }
-.column-picker-option:hover { background: var(--surface-subtle); color: var(--text); }
+.column-category-btn[aria-selected="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; border-color: var(--accent-line); }
+.column-category-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; padding: 0 4px; font-size: 9.5px; font-weight: 700; border-radius: 9999px; background: var(--accent); color: var(--on-accent); line-height: 1; }
+.column-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 4px 18px; flex: 1; overflow: auto; min-height: 0; padding: 8px 4px 8px 0; scrollbar-gutter: stable; }
+.column-picker-option { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 34px; padding: 0 10px; border-radius: 7px; color: var(--secondary); font-size: 12px; font-weight: 500; cursor: pointer; transition: background 0.12s ease; user-select: none; }
+.column-picker-option:hover { background: var(--surface-hover); color: var(--text); }
+.column-picker-option:has(input:checked) { color: var(--text); font-weight: 550; }
 .column-picker-option span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .column-picker-option small { flex-shrink: 0; margin-left: auto; color: var(--muted); font-size: 10.5px; }
-.column-picker-option input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
+.column-picker-option input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); border-radius: 4px; }
 .column-picker-option input:disabled { opacity: .55; }
 .column-search-empty { grid-column: 1 / -1; padding: 20px 0; color: var(--muted); font-size: 12px; text-align: center; }
 .results-actions .button { min-height: 32px; padding-inline: 10px; gap: 6px; border-radius: 8px; font-size: 11.5px; }

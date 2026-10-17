@@ -67,7 +67,7 @@ export default {
         choices[key] = values.map(String);
       }
       const catalog = createAiFilterCatalog(choices);
-      const key = await compilationCacheKey(url,data.revision,compilerPrompt(catalog),text);
+      const key = await compilationCacheKey(url,data.revision,compilerPrompt(catalog, text),text);
       const cache = caches.default;
       const cached = await readCompilation(cache,key,catalog);
       if (cached) return json({...cached,catalogRevision:data.revision});

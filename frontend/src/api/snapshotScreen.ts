@@ -256,52 +256,33 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       break;
     case 'misc_exclude_circuit': metadata = true; fn = s => !s.circuitLimit ? null : !p.circuitBands.includes(s.circuitLimit.trim().replace('%','')); break;
     case 'misc_fno_only': metadata = true; fn = s => s.isFno == null ? null : s.isFno === (p.isFno === 'true'); break;
-    case 'EARNINGS_GROWTH': case 'fund_earnings_growth': {
-      metadata = true;
-      const targetPct = c.conditionId === 'fund_earnings_growth' ? p.minGrowthPct : p.pct;
-      const comp = c.conditionId === 'fund_earnings_growth' ? 'ABOVE' : p.comparison;
-      const metric = String(p.metric ?? 'NET_PROFIT').toUpperCase();
-      fn = s => {
-        const val = metric === 'REVENUE'
-          ? (s.ttmRevenueGrowthPct ?? (s.tradingview?.values?.['financials.revenue_yoy_growth_ttm_pct']))
-          : (s.ttmNetProfitGrowthPct ?? (s.tradingview?.values?.['financials.net_income_yoy_growth_ttm_pct']));
-        return compare(val, comp, targetPct);
-      };
-      break;
-    }
+    // TTM growth cannot implement arbitrary quarterly metrics, filing choices or age limits.
+    // Explicit TTM fields remain available through FUNDAMENTAL_METRIC / TV_FINANCIALS.
+    case 'EARNINGS_GROWTH': case 'fund_earnings_growth': return null;
     case 'AVG_VOLUME_RATIO': {
+      const windows = [10,30,60,90];
+      if (!windows.includes(Number(p.recentDays)) || !windows.includes(Number(p.baseDays))
+          || Number(p.recentDays) >= Number(p.baseDays)) return null;
       fn = s => {
-        const v10 = s.tradingview?.values?.['market.average_volume10'] ?? (s.volume ? s.volume : null);
-        const v30 = s.tradingview?.values?.['market.average_volume30'] ?? (s.volume ? s.volume : null);
-        const ratio = v10 && v30 && v30 > 0 ? v10 / v30 : null;
+        if (s.tradingview?.asOfDate !== session) return null;
+        const recent = number(s.tradingview.values[`market.average_volume${p.recentDays}`]);
+        const base = number(s.tradingview.values[`market.average_volume${p.baseDays}`]);
+        const ratio = recent !== null && base !== null && base > 0 ? recent / base : null;
         return compare(ratio, p.comparison, p.ratio);
       };
       break;
     }
-    case 'rs_1month': {
-      fn = s => {
-        const val = s.metrics?.return21 ?? s.tradingview?.values?.['market.performance_1m_pct'];
-        return compare(val, 'ABOVE', p.minRsRating);
-      };
-      break;
-    }
-    case 'rs_3month': {
-      fn = s => {
-        const val = s.metrics?.return63 ?? s.tradingview?.values?.['market.performance_3m_pct'];
-        return compare(val, 'ABOVE', p.minRsRating);
-      };
-      break;
-    }
+    // A stock's percentage return is not its cross-sectional RS percentile.
+    case 'rs_1month': case 'rs_3month': return null;
     case 'MA_CONVERGENCE': {
+      const periods = String(p.periods ?? '').split(',').map(value=>Number(value.trim()));
+      if (p.withinDays !== 1 || !['EMA','SMA'].includes(p.maType) || periods.length < 2
+          || new Set(periods).size !== periods.length || periods.some(period=>!maPeriods.includes(period))) return null;
       fn = s => {
-        const emas = [
-          s.tradingview?.values?.['technicals.ema9'],
-          s.ema20,
-          s.ema50,
-          s.ema200
-        ].filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
-        if (emas.length < 3 || !s.close || s.close <= 0) return null;
-        const spread = (Math.max(...emas) - Math.min(...emas)) / s.close * 100;
+        const values = periods.map(period=>number(s.metrics[`${p.maType.toLowerCase()}${period}`]));
+        if (values.some(value=>value === null) || !s.close || s.close <= 0) return null;
+        const averages = values as number[];
+        const spread = (Math.max(...averages) - Math.min(...averages)) / s.close * 100;
         return spread <= Number(p.maxSpreadPct ?? 1.5);
       };
       break;

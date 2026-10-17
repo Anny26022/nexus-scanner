@@ -1,0 +1,14 @@
+[
+  {"id":"english-ma-volume","text":"Latest close above 200 EMA and volume at least 2 times the 20 day average","mode":"all","expected":[{"id":"PRICE_VS_MAS","parameters":{"rules":["ABOVE_EMA_200"]}},{"id":"VOLUME_VS_AVG","parameters":{"multiple":2,"avgDays":20,"withinDays":1}}]},
+  {"id":"hinglish-ma-cap","text":"Close 50 EMA ke upar aur market cap kam se kam 1000 crore","mode":"all","expected":[{"id":"PRICE_VS_MAS","parameters":{"rules":["ABOVE_EMA_50"]}},{"id":"MARKETCAP","parameters":{"comparison":"ABOVE","valueCr":1000}}]},
+  {"id":"fundamental-comparisons","text":"P/E ratio at most 25 and Return on Equity at least 15%","mode":"all","expected":[{"id":"PE_RATIO","parameters":{"comparison":"BELOW","value":25}},{"id":"FUNDAMENTAL_METRIC","parameters":{"metric":"ROE","comparison":"ABOVE","value":15}}]},
+  {"id":"or-logic","text":"Latest close above 200 EMA or latest close above 50 SMA","mode":"any","expected":[{"id":"PRICE_VS_MAS","parameters":{"rules":["ABOVE_EMA_200"]}},{"id":"PRICE_VS_MAS","parameters":{"rules":["ABOVE_SMA_50"]}}]},
+  {"id":"dynamic-taxonomy","text":"BANKS sector stocks belonging to NIFTY 500","mode":"all","expected":[{"id":"SECTOR","parameters":{"values":["BANKS"]}},{"id":"INDEX_MEMBERSHIP","parameters":{"indexName":"NIFTY 500"}}]},
+  {"id":"strict-cap","text":"Market cap greater than 1000 crore","mode":"all","expected":[{"id":"MARKETCAP","isNegated":true,"parameters":{"comparison":"BELOW","valueCr":1000}}]},
+  {"id":"lakh-conversion","text":"20 day average daily turnover at least 100 lakh","mode":"all","expected":[{"id":"AVG_TURNOVER","parameters":{"comparison":"ABOVE","valueCr":1,"lookbackDays":20}}]},
+  {"id":"volume-windows","text":"10 day average volume divided by 60 day average volume is at least 1.5","mode":"all","expected":[{"id":"AVG_VOLUME_RATIO","parameters":{"recentDays":10,"baseDays":60,"comparison":"ABOVE","ratio":1.5}}]},
+  {"id":"preset-eligibility","text":"Use the Easy Money preset with minimum market cap 2000 crore, close price 20 rupees and 50 session average turnover 10 crore","mode":"all","expected":[{"id":"lib-easy-money","parameters":{"minMarketCapCr":2000,"minPrice":20,"minTurnoverCr":10}}]},
+  {"id":"unsupported-indicator","text":"Supertrend green and latest close above 200 EMA","mode":"all","unsupported":true,"expected":[{"id":"PRICE_VS_MAS","parameters":{"rules":["ABOVE_EMA_200"]}}]},
+  {"id":"unsupported-quarterly","text":"Quarter on quarter EPS growth at least 20%","mode":"all","unsupported":true,"expected":[]},
+  {"id":"nested-logic","text":"Latest close above 200 EMA and either market cap at least 1000 crore or P/E at most 20","mode":"all","unsupported":true,"expected":[]}
+]

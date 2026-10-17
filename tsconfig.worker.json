@@ -1,0 +1,9 @@
+{
+  "extends": "./frontend/tsconfig.json",
+  "compilerOptions": {
+    "types": [],
+    "lib": ["ES2022"],
+    "baseUrl": "."
+  },
+  "include": ["workers/screener-ai/**/*.ts", "worker-configuration.d.ts"]
+}

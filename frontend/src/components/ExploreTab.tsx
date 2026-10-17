@@ -15,12 +15,13 @@ import { explainCondition, explainExpressionTree } from '../utils/nqlParser';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { useFilterChoices } from '../hooks/useFilterChoices';
-import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search, Info } from 'lucide-react';
+import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search, Info, Sparkles } from 'lucide-react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import type { AnnouncementFilter } from '../api/announcements';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
 import { useNextScreenPage, screenPageStaleTime } from '../hooks/useNextScreenPage';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
+import { AiScreenerModal } from './AiScreenerModal';
 
 interface ExploreTabProps {
   selectedAsOfDate: string;
@@ -46,6 +47,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   const asOfDate = selectedAsOfDate;
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.screener.match-mode.v1', 'all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [aiDraft, setAiDraft] = useState<{conditions: Record<string, ActiveCondition>; matchMode: MatchMode} | null>(null);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const filterChoices = useFilterChoices(isModalOpen, datasetRevision);
   const [activeQuery, setActiveQuery] = useLocalStorageState('nexus-scanner.screener.query.v1', '');
   const [queryText, setQueryText] = useState(activeQuery);
@@ -108,6 +111,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   useNextScreenPage('screenRun', runRequest, data, !hasUnavailable && !isFetching && !isError);
 
   const handleApply = (newMap: Record<string, ActiveCondition>, newMatchMode: MatchMode) => {
+    setAiDraft(null);
     setActiveConditionsMap(newMap);
     setMatchMode(newMatchMode);
     setActiveQuery('');
@@ -183,6 +187,15 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
             onKeyDown={event => { if (event.key === 'Enter') void handleRun(); }} placeholder="e.g. P/E < 20 AND EPS > 10" /></span></label>
         <div className="screen-buttons">
           {(filterCount > 0 || activeQuery || symbolSearch) && <button className="button button-ghost" onClick={handleReset}><RotateCcw size={14} />Reset</button>}
+          <button
+            type="button"
+            onClick={() => setIsAiModalOpen(true)}
+            className="button button-secondary"
+            title="Describe stocks in English or Hinglish"
+          >
+            <Sparkles size={13} />
+            <span>Ask AI</span>
+          </button>
           <button onClick={() => setIsModalOpen(true)} className="button button-secondary"><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</button>
           <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable} className="button button-primary"><Play size={14} />Run</button>
         </div>
@@ -203,6 +216,19 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
       onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
-    <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} activeConditionsMap={activeConditionsMap} matchMode={matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />
+    <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => {setIsModalOpen(false); setAiDraft(null);}} activeConditionsMap={aiDraft?.conditions ?? activeConditionsMap} matchMode={aiDraft?.matchMode ?? matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />
+    {isAiModalOpen && <AiScreenerModal
+      datasetRevision={datasetRevision}
+      isOpen={isAiModalOpen}
+      onClose={() => setIsAiModalOpen(false)}
+      onApplyConditions={async (compiledConditions, _immediateRun, compiledMatchMode) => {
+        await onRefreshRevision();
+        handleApply(compiledConditions, compiledMatchMode);
+      }}
+      onOpenFilterEditor={(compiledConditions, compiledMatchMode) => {
+        setAiDraft({conditions:compiledConditions, matchMode:compiledMatchMode});
+        setIsModalOpen(true);
+      }}
+    />}
   </div>;
 };

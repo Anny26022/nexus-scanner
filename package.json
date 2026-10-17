@@ -1,0 +1,16 @@
+{
+  "name": "nexus-scanner-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "npm ci --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "dev:ai": "wrangler dev --port 8787",
+    "types": "wrangler types",
+    "check:worker": "npm run types && node frontend/node_modules/typescript/bin/tsc -p tsconfig.worker.json",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.1"
+  }
+}

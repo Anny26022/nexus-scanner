@@ -1,0 +1,136 @@
+- generic [ref=e3]:
+  - link "Skip to results workspace" [ref=e4] [cursor=pointer]:
+    - /url: "#workspace"
+  - banner [ref=e5]:
+    - generic [ref=e13]:
+      - text: Nexus
+      - generic [ref=e14]: Screener
+    - navigation "Main navigation" [ref=e15]:
+      - button "Screener" [ref=e16] [cursor=pointer]
+      - button "IPO Catalogue" [ref=e21] [cursor=pointer]
+      - button "Charts" [ref=e23] [cursor=pointer]
+    - group "Appearance" [ref=e26]:
+      - button "Light appearance" [pressed] [ref=e27] [cursor=pointer]
+      - button "Dark appearance" [ref=e34] [cursor=pointer]
+  - main [ref=e37]:
+    - generic [ref=e42]:
+      - text: Session
+      - strong [ref=e43]: 14 Oct 2026
+    - generic [ref=e521]:
+      - group "Chart layout" [ref=e522]:
+        - button "Layouts" [ref=e523] [cursor=pointer]
+        - group [ref=e524]:
+          - generic "Chart grid" [ref=e525] [cursor=pointer]:
+            - generic [ref=e528]: Grid
+            - generic [ref=e529]: "1"
+      - region "Chart 1 · RELIANCE" [ref=e533]:
+        - generic [ref=e534]:
+          - generic [ref=e535]:
+            - textbox "Chart symbol" [ref=e537]:
+              - /placeholder: Symbol...
+              - text: RELIANCE
+            - button "Load" [ref=e538] [cursor=pointer]
+          - group "Candle interval" [ref=e542]:
+            - button "Daily candles" [pressed] [ref=e543] [cursor=pointer]: 1D
+            - button "Weekly candles" [ref=e544] [cursor=pointer]: 1W
+            - button "Monthly candles" [ref=e545] [cursor=pointer]: 1M
+          - generic "Chart style" [ref=e547]:
+            - combobox "Chart style" [ref=e548] [cursor=pointer]:
+              - option "Candles" [selected]
+              - option "HLC bars"
+              - option "Line"
+              - option "Area"
+              - option "Baseline"
+          - button "Indicators" [ref=e549] [cursor=pointer]
+          - button "Hide drawing tools" [pressed] [ref=e644] [cursor=pointer]
+          - button "Replay" [ref=e556] [cursor=pointer]
+          - button "Chart settings" [ref=e560] [cursor=pointer]
+          - button "Maximize chart" [ref=e564] [cursor=pointer]
+        - generic [ref=e570]:
+          - group "Drawing tools" [ref=e645]:
+            - button "Select / pan" [pressed] [ref=e646] [cursor=pointer]
+            - button "Trendline" [ref=e649] [cursor=pointer]
+            - button "Horizontal line" [ref=e653] [cursor=pointer]
+            - button "Vertical line" [ref=e655] [cursor=pointer]
+            - button "Ray" [ref=e659] [cursor=pointer]
+            - button "Rectangle" [ref=e663] [cursor=pointer]
+            - button "Fibonacci retracement" [ref=e666] [cursor=pointer]
+            - button "Text" [ref=e668] [cursor=pointer]
+            - group [ref=e671]:
+              - generic "More drawing tools" [active] [ref=e672] [cursor=pointer]
+              - generic [ref=e696]:
+                - button "Horizontal ray" [ref=e697] [cursor=pointer]
+                - button "Extended line" [ref=e698] [cursor=pointer]
+                - button "Parallel channel" [ref=e699] [cursor=pointer]
+                - button "Price range" [ref=e700] [cursor=pointer]
+                - button "Date range" [ref=e701] [cursor=pointer]
+                - button "Date and price range" [ref=e702] [cursor=pointer]
+                - button "Arrow" [ref=e703] [cursor=pointer]
+                - button "Ellipse" [ref=e704] [cursor=pointer]
+                - button "Brush" [ref=e705] [cursor=pointer]
+                - button "Anchored VWAP" [ref=e706] [cursor=pointer]
+            - group [ref=e678]:
+              - generic "Drawing list" [ref=e679] [cursor=pointer]
+              - option "No drawings" [selected]
+            - button "Undo drawing" [disabled] [ref=e684]
+            - button "Redo drawing" [disabled] [ref=e688]
+            - button "Delete selected drawing" [disabled] [ref=e692]
+          - generic [ref=e571]:
+            - generic:
+              - generic [ref=e572]:
+                - group "RELIANCE snapshot metrics" [ref=e573]:
+                  - generic [ref=e574]:
+                    - generic [ref=e575]: MCap
+                    - generic [ref=e576]: ₹15,78,841.3 Cr
+                  - generic [ref=e577]:
+                    - generic [ref=e578]: FF MCap
+                    - generic [ref=e579]: ₹7,81,842.21 Cr
+                  - generic [ref=e580]:
+                    - generic [ref=e581]: Circuit
+                    - generic [ref=e582]: No band
+                - status "RELIANCE candle values" [ref=e583]:
+                  - generic [ref=e584]: 14 Oct 2026
+                  - generic [ref=e585]:
+                    - generic [ref=e586]: O
+                    - generic [ref=e587]: 1,167.00
+                  - generic [ref=e588]:
+                    - generic [ref=e589]: H
+                    - generic [ref=e590]: 1,188.00
+                  - generic [ref=e591]:
+                    - generic [ref=e592]: L
+                    - generic [ref=e593]: 1,162.70
+                  - generic [ref=e594]:
+                    - generic [ref=e595]: C
+                    - generic [ref=e596]: 1,174.60
+                  - generic [ref=e597]: +0.68%
+                  - generic [ref=e598]:
+                    - generic [ref=e599]: Vol
+                    - generic [ref=e600]: 1.09Cr
+              - generic [ref=e601]:
+                - button "EMA 9" [ref=e602] [cursor=pointer]
+                - button "EMA 20" [ref=e603] [cursor=pointer]
+            - group "Chart controls" [ref=e604]:
+              - button "Zoom in" [ref=e605] [cursor=pointer]
+              - button "Zoom out" [ref=e607] [cursor=pointer]
+              - button "Reset chart view" [ref=e609] [cursor=pointer]
+              - button "Auto" [ref=e613] [cursor=pointer]
+            - group "RELIANCE candlestick and volume chart" [ref=e614]:
+              - table [ref=e616]:
+                - row [ref=e617]:
+                  - cell
+                  - cell [ref=e618]
+                  - cell [ref=e622]
+                - row [ref=e626]:
+                  - cell
+                  - cell [ref=e627]
+                  - cell [ref=e631]
+        - generic [ref=e634]:
+          - group "Visible date range" [ref=e635]:
+            - button "1mo" [ref=e636] [cursor=pointer]
+            - button "3mo" [ref=e637] [cursor=pointer]
+            - button "6mo" [ref=e638] [cursor=pointer]
+            - button "1y" [ref=e639] [cursor=pointer]
+            - button "2y" [ref=e640] [cursor=pointer]
+            - button "All" [ref=e641] [cursor=pointer]
+          - button "Latest" [ref=e642] [cursor=pointer]
+        - paragraph [ref=e643]: Two clicks or drag to draw. Select to move; drag handles to reshape. Delete removes. Ctrl or Command Z undoes. Escape cancels. Scroll or pinch zooms. Drag the right price scale to stretch or compress prices; double-click it to restore automatic scaling. Drag pane separators to resize. Alt Enter maximizes or restores the chart. While selecting a replay bar, use Left and Right then Enter, or click a bar. During replay, Space plays or pauses and Left or Right steps one bar.

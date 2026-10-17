@@ -1,0 +1,1155 @@
+{
+  "date": "2026-10-17",
+  "datasetRevision": "33f1362d1044a9d684b528bfe5429a1e3a1953bcbf879a2d771162d68a039659",
+  "promptHash": "ac2b4cfc8d5e2a50bfc5baaf715b5a9d10933f2178ed4f524b8f2ac51a8a33b6",
+  "promptCharacters": 50108,
+  "catalogCount": 104,
+  "cases": [
+    {
+      "id": "english-ma-volume",
+      "text": "Latest close above 200 EMA and volume at least 2 times the 20 day average",
+      "mode": "all",
+      "expected": [
+        {
+          "id": "PRICE_VS_MAS",
+          "parameters": {
+            "rules": [
+              "ABOVE_EMA_200"
+            ]
+          }
+        },
+        {
+          "id": "VOLUME_VS_AVG",
+          "parameters": {
+            "multiple": 2,
+            "avgDays": 20,
+            "withinDays": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "hinglish-ma-cap",
+      "text": "Close 50 EMA ke upar aur market cap kam se kam 1000 crore",
+      "mode": "all",
+      "expected": [
+        {
+          "id": "PRICE_VS_MAS",
+          "parameters": {
+            "rules": [
+              "ABOVE_EMA_50"
+            ]
+          }
+        },
+        {
+          "id": "MARKETCAP",
+          "parameters": {
+            "comparison": "ABOVE",
+            "valueCr": 1000
+          }
+        }
+      ]
+    },
+    {
+      "id": "fundamental-comparisons",
+      "text": "P/E ratio at most 25 and Return on Equity at least 15%",
+      "mode": "all",
+      "expected": [
+        {
+          "id": "PE_RATIO",
+          "parameters": {
+            "comparison": "BELOW",
+            "value": 25
+          }
+        },
+        {
+          "id": "FUNDAMENTAL_METRIC",
+          "parameters": {
+            "metric": "ROE",
+            "comparison": "ABOVE",
+            "value": 15
+          }
+        }
+      ]
+    },
+    {
+      "id": "or-logic",
+      "text": "Latest close above 200 EMA or latest close above 50 SMA",
+      "mode": "any",
+      "expected": [
+        {
+          "id": "PRICE_VS_MAS",
+          "parameters": {
+            "rules": [
+              "ABOVE_EMA_200"
+            ]
+          }
+        },
+        {
+          "id": "PRICE_VS_MAS",
+          "parameters": {
+            "rules": [
+              "ABOVE_SMA_50"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "dynamic-taxonomy",
+      "text": "BANKS sector stocks belonging to NIFTY 500",
+      "mode": "all",
+      "expected": [
+        {
+          "id": "SECTOR",
+          "parameters": {
+            "values": [
+              "BANKS"
+            ]
+          }
+        },
+        {
+          "id": "INDEX_MEMBERSHIP",
+          "parameters": {
+            "indexName": "NIFTY 500"
+          }
+        }
+      ]
+    },
+    {
+      "id": "strict-cap",
+      "text": "Market cap greater than 1000 crore",
+      "mode": "all",
+      "expected": [
+        {
+          "id": "MARKETCAP",
+          "isNegated": true,
+          "parameters": {
+            "comparison": "BELOW",
+            "valueCr": 1000
+          }
+        }
+      ]
+    },
+    {
+      "id": "lakh-conversion",
+      "text": "20 day average daily turnover at least 100 lakh",
+      "mode": "all",
+      "expected": [
+        {
+          "id": "AVG_TURNOVER",
+          "parameters": {
+            "comparison": "ABOVE",
+            "valueCr": 1,
+            "lookbackDays": 20
+          }
+        }
+      ]
+    },
+    {
+      "id": "volume-windows",
+      "text": "10 day average volume divided by 60 day average volume is at least 1.5",
+      "mode": "all",
+      "expected": [
+        {
+          "id": "AVG_VOLUME_RATIO",
+          "parameters": {
+            "recentDays": 10,
+            "baseDays": 60,
+            "comparison": "ABOVE",
+            "ratio": 1.5
+          }
+        }
+      ]
+    },
+    {
+      "id": "preset-eligibility",
+      "text": "Use the Easy Money preset with minimum market cap 2000 crore, close price 20 rupees and 50 session average turnover 10 crore",
+      "mode": "all",
+      "expected": [
+        {
+          "id": "lib-easy-money",
+          "parameters": {
+            "minMarketCapCr": 2000,
+            "minPrice": 20,
+            "minTurnoverCr": 10
+          }
+        }
+      ]
+    },
+    {
+      "id": "unsupported-indicator",
+      "text": "Supertrend green and latest close above 200 EMA",
+      "mode": "all",
+      "unsupported": true,
+      "expected": [
+        {
+          "id": "PRICE_VS_MAS",
+          "parameters": {
+            "rules": [
+              "ABOVE_EMA_200"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "unsupported-quarterly",
+      "text": "Quarter on quarter EPS growth at least 20%",
+      "mode": "all",
+      "unsupported": true,
+      "expected": []
+    },
+    {
+      "id": "nested-logic",
+      "text": "Latest close above 200 EMA and either market cap at least 1000 crore or P/E at most 20",
+      "mode": "all",
+      "unsupported": true,
+      "expected": []
+    }
+  ],
+  "results": [
+    {
+      "id": "english-ma-volume",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 2801,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Latest close above 200 EMA",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_EMA",
+            "parameters": {
+              "period": 200,
+              "comparison": "ABOVE",
+              "persistDays": 1
+            },
+            "isNegated": false,
+            "assumption": "PRICE_VS_EMA uses the latest close against the 200 EMA with 1 persist day"
+          },
+          {
+            "sourceText": "volume at least 2 times the 20 day average",
+            "status": "EXACT",
+            "conditionId": "VOLUME_VS_AVG",
+            "parameters": {
+              "avgDays": 20,
+              "multiple": 2
+            },
+            "isNegated": false,
+            "assumption": "VOLUME_VS_AVG uses 20 day average with 2x multiple"
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16040,
+        "completion_tokens": 161,
+        "total_tokens": 16201,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 79.08472442626953
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "hinglish-ma-cap",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 2079,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Close 50 EMA ke upar aur market cap kam se kam 1000 crore",
+            "status": "EXACT",
+            "conditionId": "trend_price_vs_ma",
+            "parameters": {
+              "maType": "SMA",
+              "maPeriod": 50,
+              "operator": "ABOVE",
+              "thresholdPct": 0
+            },
+            "isNegated": false,
+            "assumption": "Threshold percentage is 0 as no value provided"
+          },
+          {
+            "sourceText": "Close 50 EMA ke upar aur market cap kam se kam 1000 crore",
+            "status": "EXACT",
+            "conditionId": "MARKETCAP",
+            "parameters": {
+              "comparison": "ABOVE",
+              "valueCr": 1000
+            },
+            "isNegated": false
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16039,
+        "completion_tokens": 155,
+        "total_tokens": 16194,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 78.89724731445312
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "fundamental-comparisons",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 1994,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "P/E ratio at most 25",
+            "status": "EXACT",
+            "conditionId": "fund_pe_ratio",
+            "parameters": {
+              "minPe": 0,
+              "maxPe": 25
+            },
+            "isNegated": false,
+            "assumption": "maxPe is the upper bound for P/E ratio"
+          },
+          {
+            "sourceText": "Return on Equity at least 15%",
+            "status": "EXACT",
+            "conditionId": "fund_roe",
+            "parameters": {
+              "minRoe": 15
+            },
+            "isNegated": false,
+            "assumption": "minRoe is the lower bound for Return on Equity"
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16036,
+        "completion_tokens": 126,
+        "total_tokens": 16162,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 77.9996109008789
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "or-logic",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 1582,
+      "success": true,
+      "raw": {
+        "matchMode": "any",
+        "clauses": [
+          {
+            "sourceText": "Latest close above 200 EMA",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_MAS",
+            "parameters": {
+              "period": 200,
+              "comparison": "ABOVE"
+            },
+            "isNegated": false,
+            "assumption": "PRICE_VS_MAS uses the latest close against the 200 EMA"
+          },
+          {
+            "sourceText": "or",
+            "status": "UNSUPPORTED",
+            "conditionId": "",
+            "parameters": {},
+            "isNegated": false,
+            "assumption": "Logical 'or' between clauses is not directly supported, use matchMode='any'"
+          },
+          {
+            "sourceText": "latest close above 50 SMA",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_MAS",
+            "parameters": {
+              "period": 50,
+              "comparison": "ABOVE"
+            },
+            "isNegated": false,
+            "assumption": "PRICE_VS_MAS uses the latest close against the 50 SMA"
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16035,
+        "completion_tokens": 187,
+        "total_tokens": 16222,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 79.85395050048828
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "dynamic-taxonomy",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 2853,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "BANKS sector stocks belonging to NIFTY 500",
+            "status": "EXACT",
+            "conditionId": "SECTOR",
+            "parameters": {
+              "values": [
+                "BANKS"
+              ]
+            },
+            "isNegated": false,
+            "assumption": "Sector filter matches exact name"
+          },
+          {
+            "sourceText": "BANKS sector stocks belonging to NIFTY 500",
+            "status": "EXACT",
+            "conditionId": "INDEX_MEMBERSHIP",
+            "parameters": {
+              "indexName": "NIFTY 500"
+            },
+            "isNegated": false,
+            "assumption": "Index membership filter matches exact name"
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16032,
+        "completion_tokens": 126,
+        "total_tokens": 16158,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 77.98110961914062
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "strict-cap",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 1620,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Market cap greater than 1000 crore",
+            "status": "EXACT",
+            "conditionId": "MARKETCAP",
+            "parameters": {
+              "comparison": ">",
+              "valueCr": 1000
+            },
+            "isNegated": false,
+            "assumption": "Market cap greater than 1000 crore in ₹ Cr units"
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16028,
+        "completion_tokens": 78,
+        "total_tokens": 16106,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 76.49981689453125
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "lakh-conversion",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 1340,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "20 day average daily turnover at least 100 lakh",
+            "status": "EXACT",
+            "conditionId": "AVG_TURNOVER",
+            "parameters": {
+              "comparison": 2,
+              "windowMinutes": 20,
+              "lookbackDays": 20,
+              "valueCr": 100
+            },
+            "assumption": "windowMinutes is set to 20 as per the 20 day average and valueCr is converted from 100 lakh to 10 crore (since 100 lakh = 1 crore, but the parameter expects value in crore, so 100 lakh = 10 crore)"
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16031,
+        "completion_tokens": 140,
+        "total_tokens": 16171,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 78.40313720703125
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "volume-windows",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 1612,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "10 day average volume divided by 60 day average volume is at least 1.5",
+            "status": "EXACT",
+            "conditionId": "AVG_VOLUME_RATIO",
+            "parameters": {
+              "recentDays": 10,
+              "baseDays": 60,
+              "comparison": "GREATER",
+              "ratio": 1.5
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16038,
+        "completion_tokens": 76,
+        "total_tokens": 16114,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 76.48512268066406
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "preset-eligibility",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 1737,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Use the Easy Money preset with minimum market cap 2000 crore, close price 20 rupees and 50 session average turnover 10 crore",
+            "status": "EXACT",
+            "conditionId": "lib-easy-money",
+            "parameters": {
+              "minMarketCapCr": 2000,
+              "minPrice": 20,
+              "minTurnoverCr": 10
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16052,
+        "completion_tokens": 91,
+        "total_tokens": 16143,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 77.0069808959961
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "unsupported-indicator",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 1527,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Supertrend green",
+            "status": "UNSUPPORTED",
+            "conditionId": "",
+            "parameters": {}
+          },
+          {
+            "sourceText": "latest close above 200 EMA",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_EMA",
+            "parameters": {
+              "period": 200,
+              "comparison": "ABOVE",
+              "persistDays": 1
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16032,
+        "completion_tokens": 79,
+        "total_tokens": 16111,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 76.54879760742188
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "unsupported-quarterly",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 1434,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Quarter on quarter EPS growth at least 20%",
+            "status": "EXACT",
+            "conditionId": "fundamental_metrics.fundamental_metric",
+            "parameters": {
+              "metric": "EPS_GROWTH_1Y",
+              "comparison": "GREATER",
+              "value": 20
+            },
+            "isNegated": false,
+            "assumption": ""
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16029,
+        "completion_tokens": 77,
+        "total_tokens": 16106,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 76.4739761352539
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "nested-logic",
+      "model": "@cf/qwen/qwen3-30b-a3b-fp8",
+      "elapsedMs": 1776,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Latest close above 200 EMA",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_EMA",
+            "parameters": {
+              "period": 21,
+              "comparison": 1,
+              "persistDays": 1
+            },
+            "isNegated": false,
+            "assumption": "PRICE_VS_EMA uses the latest close vs EMA(200) with 1 session persistence"
+          },
+          {
+            "sourceText": "market cap at least 1000 crore",
+            "status": "EXACT",
+            "conditionId": "MARKETCAP",
+            "parameters": {
+              "comparison": 0,
+              "valueCr": 1000
+            },
+            "isNegated": false
+          },
+          {
+            "sourceText": "P/E at most 20",
+            "status": "EXACT",
+            "conditionId": "PE_RATIO",
+            "parameters": {
+              "comparison": 1,
+              "value": 20
+            },
+            "isNegated": false
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 16047,
+        "completion_tokens": 174,
+        "total_tokens": 16221,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 79.51326751708984
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "english-ma-volume",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 8352,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Latest close above 200 EMA",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_MAS",
+            "parameters": {
+              "period": 200,
+              "comparison": "ABOVE"
+            },
+            "assumption": "Using EMA for the moving average type"
+          },
+          {
+            "sourceText": "volume at least 2 times the 20 day average",
+            "status": "EXACT",
+            "conditionId": "VOLUME_VS_AVG",
+            "parameters": {
+              "avgDays": 20,
+              "multiple": 2
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15230,
+        "completion_tokens": 126,
+        "total_tokens": 15356,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 431.9540710449219
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "hinglish-ma-cap",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 7163,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Close 50 EMA ke upar aur market cap kam se kam 1000 crore",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_SMA",
+            "parameters": {
+              "period": 50,
+              "persistDays": 1,
+              "comparison": "ABOVE"
+            },
+            "assumption": "50 EMA refers to 50-day Simple Moving Average"
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15229,
+        "completion_tokens": 95,
+        "total_tokens": 15324,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 425.5784606933594
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "fundamental-comparisons",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 11545,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "P/E ratio at most 25",
+            "status": "EXACT",
+            "conditionId": "PE_RATIO",
+            "parameters": {
+              "comparison": "BELOW",
+              "value": 25
+            },
+            "assumption": "Trailing 12m P/E ratio"
+          },
+          {
+            "sourceText": "Return on Equity at least 15%",
+            "status": "EXACT",
+            "conditionId": "FUNDAMENTAL_METRIC",
+            "parameters": {
+              "metric": "ROE",
+              "comparison": "ABOVE",
+              "value": 15
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15227,
+        "completion_tokens": 126,
+        "total_tokens": 15353,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 431.87408447265625
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "or-logic",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 8809,
+      "success": true,
+      "raw": {
+        "matchMode": "any",
+        "clauses": [
+          {
+            "sourceText": "Latest close above 200 EMA",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_MAS",
+            "parameters": {
+              "maType": "EMA",
+              "maPeriod": 200,
+              "operator": "ABOVE"
+            },
+            "assumption": "Using EMA for 200 period moving average"
+          },
+          {
+            "sourceText": "Latest close above 50 SMA",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_MAS",
+            "parameters": {
+              "maType": "SMA",
+              "maPeriod": 50,
+              "operator": "ABOVE"
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15225,
+        "completion_tokens": 138,
+        "total_tokens": 15363,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 434.27838134765625
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "strict-cap",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 6300,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Market cap greater than 1000 crore",
+            "status": "EXACT",
+            "conditionId": "MARKETCAP",
+            "parameters": {
+              "comparison": "GREATER",
+              "valueCr": 1000
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15219,
+        "completion_tokens": 61,
+        "total_tokens": 15280,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 418.348388671875
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "lakh-conversion",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 7010,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "20 day average daily turnover at least 100 lakh",
+            "status": "EXACT",
+            "conditionId": "AVG_TURNOVER",
+            "parameters": {
+              "comparison": "ABOVE",
+              "windowMinutes": 0,
+              "lookbackDays": 20,
+              "valueCr": 1
+            },
+            "assumption": "Average daily turnover is in ₹ Crore"
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15221,
+        "completion_tokens": 94,
+        "total_tokens": 15315,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 425.1603088378906
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "dynamic-taxonomy",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 10740,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "BANKS sector stocks belonging to NIFTY 500",
+            "status": "EXACT",
+            "conditionId": "SECTOR",
+            "parameters": {
+              "values": [
+                "BANKS"
+              ]
+            },
+            "assumption": "NSE sector classification"
+          },
+          {
+            "sourceText": "BANKS sector stocks belonging to NIFTY 500",
+            "status": "EXACT",
+            "conditionId": "INDEX_MEMBERSHIP",
+            "parameters": {
+              "indexName": "NIFTY 500"
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15223,
+        "completion_tokens": 115,
+        "total_tokens": 15338,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 429.5145568847656
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "volume-windows",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 6603,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "10 day average volume divided by 60 day average volume is at least 1.5",
+            "status": "EXACT",
+            "conditionId": "AVG_VOLUME_RATIO",
+            "parameters": {
+              "recentDays": 10,
+              "baseDays": 60,
+              "comparison": "GREATER",
+              "ratio": 1.5
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15229,
+        "completion_tokens": 86,
+        "total_tokens": 15315,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 423.7351989746094
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "preset-eligibility",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 3314,
+      "success": true,
+      "raw": {
+        "matchMode": "any",
+        "clauses": [
+          {
+            "sourceText": "Easy Money preset with minimum market cap 2000 crore, close price 20 rupees and 50 session average turnover 10 crore",
+            "status": "APPROXIMATE",
+            "conditionId": "lib-easy-money",
+            "parameters": {
+              "minMarketCapCr": 2000,
+              "minPrice": 20,
+              "minTurnoverCr": 10
+            },
+            "assumption": "Using the Easy Money preset with specified parameters"
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15240,
+        "completion_tokens": 108,
+        "total_tokens": 15348,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 428.5342712402344
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "unsupported-indicator",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 8356,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Supertrend green and latest close above 200 EMA",
+            "status": "APPROXIMATE",
+            "conditionId": "TV_TECHNICALS",
+            "parameters": {
+              "metric": "Supertrend",
+              "comparison": "GREEN",
+              "value": 0
+            },
+            "assumption": "Assuming Supertrend green means the trend is up"
+          },
+          {
+            "sourceText": "Supertrend green and latest close above 200 EMA",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_MAS",
+            "parameters": {
+              "rules": "ABOVE_EMA_200"
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15223,
+        "completion_tokens": 142,
+        "total_tokens": 15365,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 435.0443115234375
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "unsupported-quarterly",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 16058,
+      "success": true,
+      "raw": {
+        "matchMode": "all",
+        "clauses": [
+          {
+            "sourceText": "Quarter on quarter EPS growth at least 20%",
+            "status": "EXACT",
+            "conditionId": "FUNDAMENTAL_METRIC",
+            "parameters": {
+              "metric": "EPS_GROWTH_1Y",
+              "comparison": "GREATER",
+              "value": 20
+            },
+            "assumption": "Assuming QoQ refers to year-on-year (YoY) growth as quarterly growth is not explicitly defined in the catalogue."
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15221,
+        "completion_tokens": 107,
+        "total_tokens": 15328,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 427.82275390625
+      },
+      "finishReason": "stop",
+      "errors": []
+    },
+    {
+      "id": "nested-logic",
+      "model": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+      "elapsedMs": 10351,
+      "success": true,
+      "raw": {
+        "matchMode": "any",
+        "clauses": [
+          {
+            "sourceText": "Latest close above 200 EMA",
+            "status": "EXACT",
+            "conditionId": "PRICE_VS_MAS",
+            "parameters": {
+              "masRule": "ABOVE_EMA_200"
+            },
+            "assumption": "Using EMA for moving average"
+          },
+          {
+            "sourceText": "market cap at least 1000 crore",
+            "status": "EXACT",
+            "conditionId": "MARKETCAP",
+            "parameters": {
+              "comparison": "GREATER",
+              "valueCr": 1000
+            },
+            "assumption": "Market cap in crore"
+          },
+          {
+            "sourceText": "P/E at most 20",
+            "status": "EXACT",
+            "conditionId": "PE_RATIO",
+            "parameters": {
+              "comparison": "LESS",
+              "value": 20
+            }
+          }
+        ]
+      },
+      "usage": {
+        "prompt_tokens": 15235,
+        "completion_tokens": 171,
+        "total_tokens": 15406,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "neurons": 441.30364990234375
+      },
+      "finishReason": "stop",
+      "errors": []
+    }
+  ]
+}

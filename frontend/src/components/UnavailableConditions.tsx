@@ -13,14 +13,33 @@ export function UnavailableConditions({ conditions, onRemove }: {
 }) {
   const unavailable = Object.entries(conditions).filter(([, condition]) => !isAvailableCondition(condition));
   if (!unavailable.length) return null;
-  return <div role="alert" className="notice">
-    <p>{UNAVAILABLE_CONDITIONS_MESSAGE}</p>
-    <div className="active-filters">{unavailable.map(([key, condition]) => {
-      const label = RETIRED_TECHNICAL_LABELS[condition.conditionId]
-        ?? NEXUS_CONDITION_CATALOG.find(def => def.id === condition.conditionId)?.label ?? condition.conditionId;
-      return <span className="filter-chip" key={key}>{label} · Unavailable
-        <button type="button" aria-label={`Remove unavailable ${label}`} onClick={() => onRemove(key)}>Remove</button>
-      </span>;
-    })}</div>
-  </div>;
+
+  return (
+    <div role="alert" className="unavailable-notice-inline">
+      <span className="unavailable-text">Unavailable in snapshot:</span>
+      <div className="unavailable-chips">
+        {unavailable.map(([key, condition]) => {
+          const label = RETIRED_TECHNICAL_LABELS[condition.conditionId]
+            ?? NEXUS_CONDITION_CATALOG.find(def => def.id === condition.conditionId)?.label ?? condition.conditionId;
+          return (
+            <span className="filter-chip filter-chip--unavailable" key={key}>
+              <span>{label}</span>
+              <button type="button" aria-label={`Remove unavailable ${label}`} onClick={() => onRemove(key)}>
+                ×
+              </button>
+            </span>
+          );
+        })}
+        {unavailable.length > 1 && (
+          <button 
+            type="button" 
+            className="unavailable-clear-all"
+            onClick={() => unavailable.forEach(([key]) => onRemove(key))}
+          >
+            Clear all
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }

@@ -19,6 +19,10 @@ export function availableFilterParameters(definition: ConditionDef): ActiveCondi
     const supported = {...parameters, window:'FRONT_WEIGHTED'};
     if (isAvailableCondition({...condition, parameters: supported})) return supported;
   }
+  if (definition.id === 'AVG_VOLUME_RATIO') {
+    const supported = {...parameters, recentDays:10, baseDays:30};
+    if (isAvailableCondition({...condition, parameters:supported})) return supported;
+  }
   return null;
 }
 

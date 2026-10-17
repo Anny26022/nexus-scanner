@@ -15,6 +15,47 @@ from edl_pipeline.scanner.calculation_cache import memoized
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def test_daily_publication_carries_aligned_tradingview_fields_through_both_wire_formats(self):
+        from test_packed_snapshot import decode_packed_snapshot
+        with tempfile.TemporaryDirectory() as folder, patch('publish_snapshot.list_presets', return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl'; root.mkdir(); output=Path(folder)/'public'; self.fixture(root)
+            source=root/'all_stocks_fundamental_analysis.json.gz'
+            stocks=json.loads(gzip.decompress(source.read_bytes()))
+            stocks[0]['tradingview_snapshot'] = {'source':'https://scanner.tradingview.com/india/scan',
+                'as_of_date':'2026-09-30', 'fetched_at':'2026-09-30T12:00:00Z',
+                'update_mode':'delayed_streaming_900','currency':'INR','financial_currency':'INR',
+                'exchange':'NSE','is_primary':True,'primary_exchange':'NSE','listing_symbol':'NSE:TEST',
+                'market':{'rvol10':2.5,'turnover30_crore':5,'adr14_pct':1.5},
+                'financials':{'pe_ttm':25.4},'technicals':{'ema5':99}}
+            source.write_bytes(gzip.compress(json.dumps(stocks).encode()))
+            manifest=publish(root,output)
+            path=output/'revisions'/manifest['revision']
+            payload=json.loads((path/'stocks.json').read_text())
+            self.assertEqual(payload['tradingViewMetricsVersion'],1)
+            self.assertEqual(payload['stocks'][0]['tradingview']['exchange'],'NSE')
+            self.assertIs(payload['stocks'][0]['tradingview']['isPrimary'],True)
+            self.assertEqual(payload['stocks'][0]['tradingview']['primaryExchange'],'NSE')
+            self.assertEqual(payload['stocks'][0]['tradingview']['listingSymbol'],'NSE:TEST')
+            values=payload['stocks'][0]['tradingview']['values']
+            self.assertEqual(values['market.rvol10'],2.5)
+            self.assertEqual(values['market.turnover30_crore'],5)
+            self.assertEqual(values['market.adr14_pct'],1.5)
+            self.assertEqual(values['technicals.ema5'],99)
+            self.assertEqual(values['financials.pe_ttm'],25.4)
+            # Verify intelligent fallback populated the primary row!
+            self.assertEqual(payload['stocks'][0]['peRatio'],25.4)
+            with gzip.open(path/'stocks.packed.json.gz','rt') as handle:
+                self.assertEqual(decode_packed_snapshot(json.load(handle)),payload)
+
+    def test_tradingview_publication_never_relabels_stale_dates_or_foreign_amounts(self):
+        from publish_snapshot import tradingview_row
+        source={'source':'https://scanner.tradingview.com/india/scan','as_of_date':'2026-09-29',
+                'currency':'INR','financial_currency':'USD','financials':{'total_debt_fy_crore':100}}
+        self.assertIsNone(tradingview_row({'tradingview_snapshot':source},'2026-09-30'))
+        source['as_of_date']='2026-09-30'
+        result=tradingview_row({'tradingview_snapshot':source},'2026-09-30')
+        self.assertIsNone(result['values']['financials.total_debt_fy_crore'])
+
     def test_delivery_window_is_derived_from_nested_and_legacy_rule_inputs(self):
         expressions = [bridge.group('AND',
             bridge.leaf('DELIVERY_PCT_SPIKE', withinDays=3, minDeliverablePct=60),
@@ -99,6 +140,23 @@ class SnapshotPublicationTests(unittest.TestCase):
                 return {str(path.relative_to(output)): path.read_bytes()
                         for path in output.rglob('*') if path.is_file()}
             self.assertEqual(files(cached_output), files(baseline_output))
+
+    def test_publishes_rule_only_signal_even_when_eligibility_fails(self):
+        with tempfile.TemporaryDirectory() as folder, patch('publish_snapshot.list_presets', return_value=[{'id':'lib-easy-money'}]):
+            root=Path(folder)/'edl'; root.mkdir(); output=Path(folder)/'public'; self.fixture(root, cap=100)
+            path = root/'ohlcv_data/TEST.csv'
+            frame = pd.read_csv(path)
+            frame.loc[frame.index[-1], ['Open','High','Low','Close']] = [110,113,109,112]
+            frame.to_csv(path, index=False)
+            manifest = publish(root, output)
+            payload = json.loads((output/'revisions'/manifest['revision']/'stocks.json').read_text())
+            row = payload['stocks'][0]
+            self.assertTrue(row['presetRuleMatches']['lib-easy-money'])
+            self.assertFalse(row['presetMatches']['lib-easy-money'])
+            # The packed wire format retains the new results without changing schemas.
+            from test_packed_snapshot import decode_packed_snapshot
+            with gzip.open(output/'revisions'/manifest['revision']/'stocks.packed.json.gz', 'rt') as handle:
+                self.assertEqual(decode_packed_snapshot(json.load(handle)), payload)
 
     def test_publishes_ownership_values_and_preserves_old_revision(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
@@ -197,6 +255,21 @@ class SnapshotPublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):
             root=Path(folder)/'edl';root.mkdir(); output=Path(folder)/'public';self.fixture(root)
             first=publish(root,output)
+            payload = json.loads((output/'revisions'/first['revision']/'stocks.json').read_text())
+            self.assertEqual(payload['presetRuleMatchesVersion'], 1)
+            self.assertEqual(set(payload['stocks'][0]['presetRuleMatches']), set(payload['stocks'][0]['presetMatches']))
+            self.assertEqual(first['themeClassificationUrl'], f"/data/revisions/{first['revision']}/theme-classification.json.gz")
+            with gzip.open(output/'revisions'/first['revision']/'theme-classification.json.gz', 'rt') as handle:
+                taxonomy = json.load(handle)
+            self.assertEqual(taxonomy['version'], first['themeClassificationVersion'])
+            self.assertEqual(taxonomy['asOfDate'], first['sessionDate'])
+            self.assertIn('TEST', taxonomy['records'])
+            self.assertEqual(first['universeClassificationUrl'], f"/data/revisions/{first['revision']}/universe-classification.json")
+            combined = json.loads((output/'revisions'/first['revision']/'universe-classification.json').read_text())
+            self.assertEqual(combined['asOfDate'], first['sessionDate'])
+            self.assertEqual(combined['records']['TEST']['thematic'], taxonomy['records']['TEST'])
+            self.assertIn('basicIndustry', combined['records']['TEST'])
+            self.assertEqual(combined['records']['TEST']['nicheTags'], [])
             with gzip.open(output/'revisions'/first['revision']/'ipos.json.gz','rt') as handle:
                 self.assertEqual(json.load(handle)['provider_data']['analytics']['year_summary']['year'], '2026')
             self.assertTrue((output/'revisions'/first['revision']/'earnings-calendar.json.gz').exists())
@@ -220,6 +293,35 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(old['rows'][0]['marketCapCrore'],5000)
             self.assertEqual(new['rows'][0]['marketCapCrore'],6000)
             self.assertTrue((root/'.scanner_cache/revisions'/second['revision']/'delivery_history_data/2026-09-30.json.gz').exists())
+
+    def test_taxonomy_metadata_preserves_themes_and_resource_changes_version_the_release(self):
+        from pipeline_utils import resource_path
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'edl'; root.mkdir()
+            output = Path(folder) / 'public'; self.fixture(root)
+            source = root / 'all_stocks_fundamental_analysis.json.gz'
+            with gzip.open(source, 'rt') as handle:
+                stocks = json.load(handle)
+            stocks[0].update(sector='IT Software', industry='IT Enabled Services', niche_tags=['Enterprise Services'],
+                             provider_sector='Information Technology', provider_industry='IT Enabled Services')
+            with gzip.open(source, 'wt') as handle:
+                json.dump(stocks, handle)
+            resource = Path(folder) / 'taxonomy_overrides.json'
+            resource.write_bytes(resource_path(resource.name).read_bytes())
+            with patch('publish_snapshot.resource_path', side_effect=lambda name: resource if name == resource.name else resource_path(name)):
+                first = publish(root, output)
+                original = output / 'revisions' / first['revision'] / 'stocks.json'
+                original_bytes = original.read_bytes()
+                row = json.loads(original_bytes)['stocks'][0]
+                self.assertEqual(row['sector'], 'IT Software')
+                self.assertEqual(row['nicheTags'], ['Enterprise Services'])
+                self.assertEqual(row['providerSector'], 'Information Technology')
+                with gzip.open(output / 'revisions' / first['revision'] / 'theme-classification.json.gz', 'rt') as handle:
+                    self.assertEqual(json.load(handle)['records']['TEST']['theme'], 'IT Enabled Services')
+                resource.write_bytes(resource.read_bytes() + b'\n')
+                second = publish(root, output)
+            self.assertNotEqual(first['revision'], second['revision'])
+            self.assertEqual(original.read_bytes(), original_bytes)
 
     def test_failure_does_not_replace_current_manifest(self):
         with tempfile.TemporaryDirectory() as folder,patch('publish_snapshot.list_presets',return_value=[{'id':'lib-easy-money'}]):

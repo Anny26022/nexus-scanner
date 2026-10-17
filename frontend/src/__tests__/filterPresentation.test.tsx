@@ -2,7 +2,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { ScreenerModal } from '../components/ScreenerModal';
 import { comparisonLabel, filterLogicHint, parameterPresentation } from '../utils/filterPresentation';
-import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG } from '../data/conditionCatalog';
+import presetDefinitions from '../data/presetDefinitions.json';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
 
 afterEach(cleanup);
@@ -17,24 +18,59 @@ it('distinguishes strict price comparisons from inclusive numeric thresholds', (
   expect(comparisonLabel('trend_price_vs_ma', 'within_pct', 'Within % Range')).toBe('Within % Range');
 });
 
-it('hides fixed momentum controls and preserves their values on apply', () => {
+it('offers Persistent Momentum only as the complete preset', () => {
   const apply = vi.fn();
   render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={apply} />);
-  const row = screen.getByRole('checkbox', {name:'Persistent Momentum:'}).closest('.filter-row') as HTMLElement;
-  expect(within(row).queryByText('OR')).not.toBeInTheDocument();
-  expect(within(row).queryByText('ANY')).not.toBeInTheDocument();
-  expect(within(row).queryByRole('combobox')).not.toBeInTheDocument();
-  expect(within(row).getByRole('button', {name:'Show Persistent Momentum description'})).toBeInTheDocument();
+  expect(screen.queryByRole('checkbox', {name:'Persistent Momentum:'})).not.toBeInTheDocument();
+  expect(FILTER_CONDITION_CATALOG.some(def => ['PERSISTENT_MOMENTUM','trend_persistent_momentum'].includes(def.id))).toBe(false);
+  fireEvent.click(screen.getByRole('button', {name:'Pre-built Scans'}));
+  const row = screen.getByRole('checkbox', {name:'Persistent Momentum'}).closest('.filter-row') as HTMLElement;
   fireEvent.click(within(row).getByRole('checkbox'));
   fireEvent.click(screen.getByRole('button', {name:'OR (Any)'}));
   fireEvent.click(screen.getByRole('button', {name:'Apply'}));
   expect(apply.mock.calls[0][1]).toBe('any');
-  expect(apply.mock.calls[0][0].PERSISTENT_MOMENTUM.parameters).toEqual({ema10Days:20, ema20Days:30, ema50Days:50});
+  expect(apply.mock.calls[0][0]['lib-persistent-momentum'].parameters).toEqual({});
+  expect(presetDefinitions.find(p => p.id === 'lib-persistent-momentum')!.expression).toMatchObject({
+    op:'AND', children:[
+      {kind:'PERSISTENT_MOMENTUM',params:{ema10Days:20,ema20Days:30,ema50Days:50}},
+      {kind:'AVG_TURNOVER',params:{comparison:'ABOVE',lookbackDays:20,valueCr:5}},
+    ],
+  });
+});
+
+it('shows, edits, removes and restores preset eligibility without changing its internal rules', () => {
+  const apply = vi.fn();
+  const props = {isOpen:true,onClose:vi.fn(),activeConditionsMap:{},matchMode:'all' as const,onApply:apply};
+  const {unmount} = render(<ScreenerModal {...props} />);
+  fireEvent.click(screen.getByRole('button', {name:'Pre-built Scans'}));
+  fireEvent.click(screen.getByRole('checkbox', {name:'Easy Money'}));
+  expect(screen.getByRole('spinbutton', {name:'Market cap minimum'})).toHaveValue(1000);
+  expect(screen.getByRole('spinbutton', {name:'Close price minimum'})).toHaveValue(10);
+  expect(screen.getByRole('spinbutton', {name:'50-session avg turnover minimum'})).toHaveValue(5);
+  fireEvent.change(screen.getByRole('spinbutton', {name:'Market cap minimum'}), {target:{value:'500'}});
+  fireEvent.click(screen.getByRole('checkbox', {name:'Use Close price'}));
+  expect(screen.getByRole('spinbutton', {name:'Close price minimum'})).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', {name:'Use 50-session avg turnover'}));
+  fireEvent.click(screen.getByRole('checkbox', {name:'Use 50-session avg turnover'}));
+  expect(screen.getByRole('spinbutton', {name:'50-session avg turnover minimum'})).toHaveValue(5);
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  const saved = apply.mock.calls[0][0];
+  expect(saved['lib-easy-money'].parameters).toEqual({minMarketCapCr:500,minPrice:null,minTurnoverCr:5});
+  unmount();
+  render(<ScreenerModal {...props} activeConditionsMap={saved} />);
+  fireEvent.click(screen.getByRole('button', {name:'Pre-built Scans'}));
+  expect(screen.getByRole('spinbutton', {name:'Market cap minimum'})).toHaveValue(500);
+  expect(screen.getByRole('checkbox', {name:'Use Close price'})).not.toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox', {name:'Use Close price'}));
+  expect(screen.getByRole('spinbutton', {name:'Close price minimum'})).toHaveValue(10);
+  fireEvent.change(screen.getByRole('spinbutton', {name:'Close price minimum'}), {target:{value:''}});
+  expect(screen.getByRole('button', {name:'Apply'})).toBeDisabled();
 });
 
 it('hides fixed technical parameters across the shared editor without hiding thresholds', () => {
   render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={vi.fn()} />);
   for (const config of technicalConfigurations) {
+    if (!FILTER_CONDITION_CATALOG.some(def => def.id === config.id)) continue;
     const def = NEXUS_CONDITION_CATALOG.find(def => def.id === config.id)!;
     const row = screen.getAllByRole('checkbox', {name:`${def.label}:`}).map(checkbox => checkbox.closest('.filter-row') as HTMLElement)
       .find(row => row.dataset.conditionId === config.id)!;

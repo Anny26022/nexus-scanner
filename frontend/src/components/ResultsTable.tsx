@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import type { ScreenerRunResponse } from '../types/screener';
-import { ArrowUpDown, ArrowUp, ArrowDown, Copy, Check, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, X } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, X } from 'lucide-react';
+import {CopyResults} from './CopyResults';
+import {DownloadResults} from './DownloadResults';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { AnnouncementsPanel } from './AnnouncementsPanel';
 import { Pagination } from './Pagination';
@@ -12,8 +14,10 @@ import { useTableWindow } from '../hooks/useTableWindow';
 import { useColumnWindow } from '../hooks/useColumnWindow';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { tableLayout } from '../utils/tableLayout';
+import { tradingViewMetrics } from '../data/tradingViewMetrics';
 
 interface ResultsTableProps {
+  loadExportRows?:()=>Promise<ScreenerRunResponse['rows']>;
   symbolSearch?: string;
   onSymbolSearchChange?: (value: string) => void;
   data?: ScreenerRunResponse;
@@ -111,6 +115,9 @@ const columns: ResultColumn[] = [
   valueColumn('isAsm', 'ASM', 'Other', 'boolean'), valueColumn('asmStage', 'ASM stage', 'Other'),
   valueColumn('isGsm', 'GSM', 'Other', 'boolean'), valueColumn('gsmStage', 'GSM stage', 'Other'),
   valueColumn('surveillanceAvailable', 'Surveillance data available', 'Other', 'boolean'),
+  ...tradingViewMetrics.map((metric):ResultColumn => ({id:`tv.${metric.id}`, label:metric.label,
+    group:metric.category === 'fundamentals' ? 'Fundamental' : 'Technical',
+    getValue:row => row.tradingview?.values[metric.id]})),
 ];
 const DEFAULT_COLUMNS = ['company','sector','close','changePct','rvol','marketCapCrore','rsRsi','deliveryPct'];
 const COLUMN_GROUPS: ColumnGroup[] = ['Overview','Technical','Fundamental','Other'];
@@ -133,9 +140,7 @@ const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
 };
 
 export function ResultsTable({ data, isLoading, isError, isFetching = false, error, onRetry,
-  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange }: ResultsTableProps) {
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState('');
+  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows }: ResultsTableProps) {
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [columnSearch, setColumnSearch] = useState('');
@@ -146,7 +151,9 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const usingCustomColumns = selectedColumnIds.length !== DEFAULT_COLUMNS.length || DEFAULT_COLUMNS.some(id => !selectedColumnIds.includes(id));
   const layout = tableLayout(columns.filter(column => column.id === 'company' || selectedColumnIds.includes(column.id)), 'screener', phone, usingCustomColumns);
   const visibleColumns = layout.columns;
-  const customizableColumns = columns.filter(column => column.id !== 'company');
+  const hasTradingView = data?.rows.some(row => row.tradingview);
+  const customizableColumns = columns.filter(column => column.id !== 'company'
+    && (!column.id.startsWith('tv.') || hasTradingView || selectedColumnIds.includes(column.id)));
   const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerColumns = columnSearch.trim() ? matchingColumns : customizableColumns.filter(column => column.group === columnGroup);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -159,26 +166,23 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const rows = data?.rows ?? [];
   const rowWindow = useTableWindow(rows, data, visibleColumns.length);
   const busy = isLoading || isFetching;
-  const copy = async () => {
-    const symbols = data?.matchedSymbols ?? (rows.length === data?.matchCount ? rows.map(row => row.symbol) : undefined);
-    if (!symbols || symbols.length !== data?.matchCount) {
-      setCopyError('All matching symbols are unavailable. Run the scan again.');
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(symbols.map(symbol => `NSE:${symbol}`).join(', '));
-      setCopyError('');
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { setCopyError('Clipboard access was denied. Please allow clipboard access and try again.'); }
-  };
   return <section className="results-surface" aria-label="Screener results">
     <div className="results-toolbar">
       <div className="result-count"><strong>{data?.matchCount.toLocaleString('en-IN') ?? '-'}</strong><span>matched equities <span className="result-universe">/ {data?.totalUniverseCount.toLocaleString('en-IN') ?? '-'} universe</span></span></div>
       {onSymbolSearchChange && <label className="results-symbol-search"><Search size={13} aria-hidden="true" /><input type="search" aria-label="Search symbol or company" placeholder="Search symbol" value={symbolSearch} onChange={event => {resetScroll(); onSymbolSearchChange(event.target.value);}} /></label>}
       <div className="results-actions">
         {(isError || busy) && <span role="status" className="fetch-status">{isError ? 'Query failed' : 'Updating results'}</span>}
-        <button type="button" onClick={() => void copy()} disabled={!rows.length || busy} className="button button-secondary results-copy-button" aria-label={copied ? 'Copied TradingView symbols' : 'Copy TradingView symbols'} title={copied ? 'Copied!' : 'Copy TradingView'}>{copied ? <Check size={15} /> : <Copy size={15} />}</button>
+        <CopyResults symbols={data?.matchedSymbols?.length === data?.matchCount ? data?.matchedSymbols : undefined}
+          loadRows={loadExportRows ?? (async()=>{
+            if (rows.length !== data?.matchCount) throw new Error('All matching symbols are unavailable. Run the scan again.');
+            return rows;
+          })} revision={data?.immutableRevision} disabled={!rows.length || busy || isError}/>
+        <DownloadResults
+          loadRows={loadExportRows ?? (async () => rows)}
+          columns={visibleColumns}
+          filename={`nexus-results-${data?.resolvedSession?.date ?? 'export'}.csv`}
+          disabled={!rows.length || busy || isError}
+        />
         <button type="button" className="button button-secondary" aria-label="Customize columns" title="Customize columns" onClick={() => setColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
       </div>
     </div>
@@ -191,7 +195,23 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
           <button type="button" className="button button-ghost" onClick={() => { resetScroll(); setSavedColumnIds(DEFAULT_COLUMNS); }}>Reset</button>
         </div></div>
         {!columnSearch.trim() && <div className="column-category-tabs" role="tablist" aria-label="Column categories">
-          {COLUMN_GROUPS.map(group => <button key={group} type="button" role="tab" aria-selected={columnGroup === group} onClick={() => setColumnGroup(group)}>{group}</button>)}
+          {COLUMN_GROUPS.map(group => {
+            const count = customizableColumns.filter(column => column.group === group && selectedColumnIds.includes(column.id)).length;
+            return (
+              <button
+                key={group}
+                type="button"
+                role="tab"
+                aria-selected={columnGroup === group}
+                aria-label={group}
+                onClick={() => setColumnGroup(group)}
+                className="column-category-btn"
+              >
+                <span>{group}</span>
+                {count > 0 && <span className="column-category-badge" aria-hidden="true">{count}</span>}
+              </button>
+            );
+          })}
         </div>}
         <div className="column-options" role="group" aria-label={columnSearch.trim() ? 'Search results' : `${columnGroup} columns`}>
           {pickerColumns.length ? pickerColumns.map(column => <label key={column.id} className="column-picker-option">
@@ -204,14 +224,13 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
         </div>
       </div>
     </Dialog>}
-    {copyError && <p role="alert" className="notice">{copyError}</p>}
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
     <div className="table-viewport" aria-busy={busy}>
       <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
         <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
           <caption className="sr-only">Equities matching the current screen</caption>
           <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: layout.columnWidth(column)}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
-          <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} data-column={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
+          <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} title={column.label} data-column={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
             aria-sort={column.sortField ? currentSort?.field === column.sortField ? currentSort.direction === 'asc' ? 'ascending' : 'descending' : 'none' : undefined}>
             {column.sortField ? <button type="button" disabled={busy} onClick={() => {resetScroll(); onSortChange(column.sortField!, currentSort?.field === column.sortField && currentSort?.direction === 'asc' ? 'desc' : 'asc');}}>
               {column.label}{currentSort?.field === column.sortField ? currentSort?.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} /> : <ArrowUpDown size={13} />}

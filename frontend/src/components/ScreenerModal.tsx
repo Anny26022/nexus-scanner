@@ -5,13 +5,15 @@ import { Dialog } from './Dialog';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 import { X, SlidersHorizontal, Library, ChevronDown, Info } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
-import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG, REDUNDANT_CATALOG_CONDITIONS } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 import { PRESET_CATALOG } from '../data/presetCatalog';
+import { PRESET_ELIGIBILITY, presetEligibilitySummary } from '../data/presetEligibility';
 import { availableFilterParameters, isAvailableCondition } from '../utils/filterAvailability';
 import { comparisonLabel, filterLogicHint, parameterPresentation, RANGE_FILTERS } from '../utils/filterPresentation';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
+import {isTradingViewCondition, tradingViewMetrics} from '../data/tradingViewMetrics';
 import type { FilterChoices } from '../api/snapshotEngine';
 import { SNAPSHOT_MA_PERIODS } from '../api/snapshotScreen';
 
@@ -97,10 +99,10 @@ const MultiSelectDropdown = ({ options, value, onChange, label, single = false, 
       <button 
         ref={trigger} type="button" disabled={!options.length} title={value.join(', ')} aria-label={`${label}: ${value?.length ? `${value.length} selected` : 'Select options'}`} aria-expanded={isOpen}
         onClick={toggleMenu}
-        className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none max-w-[120px] shrink-0 truncate transition-colors cursor-pointer flex items-center gap-1"
+        className="bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2.5 py-1 text-[11.5px] font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20 max-w-[140px] shrink-0 truncate transition-all cursor-pointer flex items-center justify-between gap-1.5 shadow-sm"
       >
         <span className="truncate">{value?.length ? single ? options.find(option => option.value === value[0])?.label ?? value[0] : `${value.length} selected` : 'Select...'}</span>
-        <ChevronDown size={12} />
+        <ChevronDown size={12} className="text-gray-400 shrink-0" />
       </button>
       
       {isOpen && (
@@ -178,7 +180,7 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
         value={val}
         aria-label={p.label}
         onChange={(e) => updateParam(defId, p.id, e.target.value)}
-        className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 max-w-[110px] shrink-0 truncate transition-colors cursor-pointer"
+        className="bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2 py-1 text-[11.5px] font-medium text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 max-w-[130px] shrink-0 truncate transition-all cursor-pointer shadow-sm"
       >
         {(p.options || []).map((opt) => (
           <option key={opt.value} value={opt.value} disabled={!isAvailableCondition({
@@ -197,12 +199,12 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
       max={p.max}
       step={p.step ?? (isIntegerParameter(p) ? 1 : 0.1)}
       aria-label={p.label}
-      className="w-14 bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 text-center focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
+      className="w-16 bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2 py-1 text-[11.5px] font-semibold text-gray-800 text-center focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all shadow-sm"
     />;
   }
 
   return (
-    <div key={p.id} title={p.description ?? p.label} className="parameter-control">
+    <div key={p.id} title={p.type === 'select' ? p.options?.find(option => String(option.value) === String(val))?.label ?? p.label : p.description ?? p.label} className="parameter-control">
       {visibleLabel && <span className="parameter-label">{visibleLabel}</span>}
       <div className="parameter-value">{visiblePrefix && <span className="parameter-sign" aria-hidden="true">{visiblePrefix}</span>}{control}
         {visibleUnit && <span className="parameter-unit">{readableUnit(visibleUnit)}</span>}
@@ -216,8 +218,14 @@ const FilterRule = memo(function FilterRule({def, parameters, updateParam}: {
 }) {
   const fixed = technicalConfigurations.find(config => config.id === def.id)?.fixed ?? {};
   if (def.parameters.every(parameter => Object.hasOwn(fixed, parameter.id))) return null;
-  const field = (p: ParameterSpec, display: Pick<FilterParameterProps, 'label' | 'prefix' | 'unit'> = {}) =>
-    Object.hasOwn(fixed, p.id) ? null : <FilterParameter key={p.id} defId={def.id} parameters={parameters} p={p} val={parameters[p.id]} updateParam={updateParam} {...display} />;
+  const field = (p: ParameterSpec, display: Pick<FilterParameterProps, 'label' | 'prefix' | 'unit'> = {}) => {
+    if (Object.hasOwn(fixed, p.id)) return null;
+    const savedMetric = isTradingViewCondition(def.id) && p.id === 'metric'
+      ? tradingViewMetrics.find(metric => metric.id === parameters.metric) : undefined;
+    const parameter = savedMetric && !p.options?.some(option => option.value === savedMetric.id)
+      ? {...p, options:[...(p.options ?? []), {value:savedMetric.id,label:savedMetric.label}]} : p;
+    return <FilterParameter key={p.id} defId={def.id} parameters={parameters} p={parameter} val={parameters[p.id]} updateParam={updateParam} {...display} />;
+  };
   const byId = (id: string, display: Pick<FilterParameterProps, 'label' | 'prefix' | 'unit'> = {}) => {
     const p = def.parameters.find(p => p.id === id);
     return p ? field(p, display) : null;
@@ -248,6 +256,12 @@ const FilterRule = memo(function FilterRule({def, parameters, updateParam}: {
     <span className="rule-word">for ≥</span>{byId('persistDays', {label:'', unit:'sessions'})}
   </div>;
 
+  if (def.id === 'AVG_TURNOVER') return <div className="filter-parameters">
+    <span className="rule-word">Avg. daily turnover</span>{byId('comparison', {label:''})}
+    {byId('valueCr', {label:'', unit:'₹ Cr'})}<span className="rule-word">over</span>
+    {byId('lookbackDays', {label:'', unit:'sessions'})}
+  </div>;
+
   if (def.id === 'trend_price_vs_ma') return <div className="filter-parameters">
     <span className="rule-word">Close</span>{byId('operator', {label:''})}{byId('maType', {label:''})}{byId('maPeriod', {label:''})}
     {parameters.operator === 'within_pct' && byId('thresholdPct', {label:'Distance ≤', prefix:''})}
@@ -276,9 +290,10 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
   const supportedParameters = availableFilterParameters(def);
   const editable = supportedParameters !== null || Boolean(active && isAvailableCondition(active));
   const available = active ? isAvailableCondition(active) : editable;
-  const parameters = active?.parameters ?? supportedParameters ?? Object.fromEntries(def.parameters.map(p => [p.id, p.defaultValue]));
+  const parameters = active?.parameters ?? (def.id === 'PRICE_VS_MAS' ? {rules:[]} : supportedParameters) ?? Object.fromEntries(def.parameters.map(p => [p.id, p.defaultValue]));
   const logicHint = filterLogicHint(def.id, parameters);
-  const description = showParameters && logicHint ? `${def.description} ${logicHint}` : def.description;
+  const description = !showParameters ? `${def.description}. Eligibility: ${presetEligibilitySummary(parameters)}.`
+    : logicHint ? `${def.description} ${logicHint}` : def.description;
 
   return (
     <div className="filter-row group" data-condition-id={def.id} data-active={checked} data-unavailable={!available} data-preset={!showParameters}>
@@ -305,6 +320,48 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
         <FilterRule def={def} parameters={parameters} updateParam={updateRule} />
       )}
       {editable && showParameters && def.id === 'MA_STACK' && logicHint && <p className="filter-logic-hint">{logicHint}</p>}
+      {checked && !showParameters && <div className="preset-eligibility-card">
+        <div className="preset-eligibility-header">
+          <span className="preset-eligibility-title">Eligibility Criteria</span>
+          <span className="preset-eligibility-badge">ALL REQUIRED (AND)</span>
+        </div>
+        <div className="preset-eligibility-list">
+          {PRESET_ELIGIBILITY.map(rule => {
+            const value = parameters[rule.id] === undefined ? rule.defaultValue : parameters[rule.id];
+            const isEnabled = value !== null;
+            return (
+              <div key={rule.id} className={`preset-eligibility-row ${isEnabled ? 'is-active' : 'is-disabled'}`}>
+                <label className="preset-eligibility-toggle">
+                  <input
+                    type="checkbox"
+                    aria-label={`Use ${rule.label}`}
+                    checked={isEnabled}
+                    onChange={event => updateRule(def.id, rule.id, event.target.checked ? rule.defaultValue : null)}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
+                  />
+                  <span className="preset-eligibility-name">{rule.label}</span>
+                </label>
+                <div className="preset-eligibility-inputs">
+                  <span className="preset-eligibility-op" aria-hidden="true">&gt;</span>
+                  <div className="preset-eligibility-input-wrap">
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      aria-label={`${rule.label} minimum`}
+                      disabled={!isEnabled}
+                      value={value ?? ''}
+                      onChange={event => updateRule(def.id, rule.id, numericInputValue(event.target.value))}
+                      className="preset-eligibility-input"
+                    />
+                    <span className="preset-eligibility-unit">{rule.unit}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>}
       {descriptionOpen && <p className={showParameters ? 'filter-logic-hint' : 'preset-description'}>{description}</p>}
     </div>
   );
@@ -322,11 +379,19 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   retryChoices,
 }) => {
   const [category, setCategory] = useState<ConditionCategory | 'all'>('all');
-  const [localMap, setLocalMap] = useState<Record<string, ActiveCondition>>(activeConditionsMap);
+  const [localMap, setLocalMap] = useState<Record<string, ActiveCondition>>(() => Object.fromEntries(
+    Object.entries(activeConditionsMap).filter(([, condition]) => !(condition.conditionId === 'PRICE_VS_MAS'
+      && Array.isArray(condition.parameters.rules) && condition.parameters.rules.length === 0)),
+  ));
   const [localMode, setLocalMode] = useState<MatchMode>(matchMode);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
-  const customCatalog = useMemo(() => NEXUS_CONDITION_CATALOG.map(def => {
+  const customCatalog = useMemo(() => FILTER_CONDITION_CATALOG.map(def => {
+    if (isTradingViewCondition(def.id)) return {...def, parameters:def.parameters.map(parameter => {
+      if (parameter.id !== 'metric') return parameter;
+      const options = parameter.options?.filter(option => choices?.TRADINGVIEW_METRIC?.includes(option.value)) ?? [];
+      return {...parameter, options, defaultValue:options[0]?.value ?? parameter.defaultValue};
+    })};
     const values = def.id === 'MA_STACK' ? SNAPSHOT_MA_PERIODS.map(String) : choices?.[def.id as keyof FilterChoices];
     if (def.id !== 'MA_STACK' && !['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(def.id)) return def;
     return {...def, parameters:def.parameters.map(parameter => parameter.type === 'string'
@@ -353,6 +418,11 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     setLocalMap((prev) => {
       const existing = prev[condId];
       const definitionId = existing?.conditionId ?? condId;
+      if (definitionId === 'PRICE_VS_MAS' && paramId === 'rules' && Array.isArray(value) && value.length === 0) {
+        const next = {...prev};
+        delete next[condId];
+        return next;
+      }
       const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === definitionId);
       if (!existing && def) {
         const params = availableFilterParameters(def);
@@ -390,10 +460,11 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const catalogToUse = activeTab === 'custom' ? customCatalog : PRESET_CATALOG;
 
   const filtered = catalogToUse.filter((c) => {
-    // ROE is editable through Fundamental Metric; keep saved legacy rules visible.
-    if (c.id === 'fund_roe' && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
+    if (isTradingViewCondition(c.id) && !c.parameters.find(p => p.id === 'metric')?.options?.length
+        && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
+    if ((c.id === 'fund_roe' || REDUNDANT_CATALOG_CONDITIONS.has(c.id)) && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
     return (activeTab === 'presets' || category === 'all' || c.category === category)
-      && (!search.trim() || `${c.label} ${c.description}`.toLowerCase().includes(search.trim().toLowerCase()));
+      && (!search.trim() || `${c.label} ${c.description} ${c.parameters.flatMap(p => p.options?.map(o => o.label) ?? []).join(' ')}`.toLowerCase().includes(search.trim().toLowerCase()));
   });
 
   const handleReset = () => setLocalMap({});
@@ -413,8 +484,45 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       <div className="match-mode" role="group" aria-label="Match mode"><span>Selected filters</span><button title="Every selected filter must match" aria-pressed={localMode === 'all'} onClick={() => setLocalMode('all')}>AND (All)</button><button title="At least one selected filter must match" aria-pressed={localMode === 'any'} onClick={() => setLocalMode('any')}>OR (Any)</button></div>
     </div>
     <div className="filter-modal-options">
-      <label className="query-input"><input aria-label="Search filters" placeholder="Search filters" value={search} onChange={event => setSearch(event.target.value)} /></label>
-      {activeTab === 'custom' && <div className="filter-categories" role="group" aria-label="Filter categories">{CATEGORY_TABS.map(tab => <button key={tab.id} aria-pressed={category === tab.id} onClick={() => setCategory(tab.id)}>{tab.label}</button>)}</div>}
+      <div className="relative flex items-center min-w-0">
+        <label className="query-input w-full">
+          <input aria-label="Search filters" placeholder="Search filters" value={search} onChange={event => setSearch(event.target.value)} />
+        </label>
+        {search && (
+          <button
+            type="button"
+            className="absolute right-2 text-gray-400 hover:text-gray-600 p-0.5 rounded transition-colors"
+            onClick={() => setSearch('')}
+            aria-label="Clear filter search"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+      {activeTab === 'custom' && (
+        <div className="filter-categories" role="group" aria-label="Filter categories">
+          {CATEGORY_TABS.map(tab => {
+            const count = tab.id === 'all'
+              ? Object.keys(localMap).length
+              : Object.values(localMap).filter(cond => {
+                  const def = customCatalog.find(c => c.id === cond.conditionId);
+                  return def?.category === tab.id;
+                }).length;
+            return (
+              <button
+                key={tab.id}
+                aria-pressed={category === tab.id}
+                aria-label={tab.label}
+                onClick={() => setCategory(tab.id)}
+                className="filter-category-btn"
+              >
+                <span>{tab.label}</span>
+                {count > 0 && <span className="filter-category-badge" aria-hidden="true">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
     <div className="filter-modal-content">
       {choicesLoading && <p role="status" className="cell-muted">Loading filter choices…</p>}
@@ -425,16 +533,31 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         return next;
       })} />
       <div className={activeTab === 'presets' ? 'grid grid-cols-1 gap-x-8 xl:grid-cols-2' : 'filter-rule-list'} data-preset-list={activeTab === 'presets'}>
-        {filtered.map(def => {
+        {filtered.map((def, index) => {
           const instances = Object.entries(localMap).filter(([, condition]) => condition.conditionId === def.id);
           const repeatable = activeTab === 'custom' && (def.category === 'fundamentals' && def.parameters.length > 0
-            || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id));
-          return <div key={def.id} className="filter-family">
-            {(instances.length ? instances : [[def.id, undefined] as const]).map(([key, condition]) =>
-              <FilterRow key={key} ruleKey={key} def={def} active={condition} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}
-            {repeatable && instances.length > 0 && availableFilterParameters(def) && <button type="button" className="add-filter-rule"
-              aria-label={`Add ${def.label} rule`} onClick={() => addRule(def)}>+ Add rule</button>}
-          </div>;
+            || isTradingViewCondition(def.id) || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id));
+          
+          const prevDef = index > 0 ? filtered[index - 1] : null;
+          const showSectionDivider = activeTab === 'custom' && category === 'all' && (!prevDef || prevDef.category !== def.category);
+          const categoryTitle = showSectionDivider ? (CATEGORY_TABS.find(t => t.id === def.category)?.label ?? def.category) : null;
+
+          return (
+            <React.Fragment key={def.id}>
+              {showSectionDivider && (
+                <div className="filter-section-header" role="presentation">
+                  <span className="filter-section-title">{categoryTitle}</span>
+                  <div className="filter-section-divider" />
+                </div>
+              )}
+              <div className="filter-family">
+                {(instances.length ? instances : [[def.id, undefined] as const]).map(([key, condition]) =>
+                  <FilterRow key={key} ruleKey={key} def={def} active={condition} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}
+                {repeatable && instances.length > 0 && availableFilterParameters(def) && <button type="button" className="add-filter-rule"
+                  aria-label={`Add ${def.label} rule`} onClick={() => addRule(def)}>+ Add rule</button>}
+              </div>
+            </React.Fragment>
+          );
         })}
       </div>
       {!filtered.length && <div className="data-state"><h2>No matching {activeTab === 'custom' ? 'filters' : 'scans'}</h2><p>Try a different category or search.</p></div>}

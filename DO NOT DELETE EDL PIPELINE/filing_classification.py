@@ -395,11 +395,16 @@ def classify_corporate_action(action):
     return {'version': VERSION, 'topics': sorted(topics) or ['unclassified'], 'terms': terms,
             'source': 'NSE corporate actions', 'method': 'official_subject_rules'}
 
+def filing_evidence(row):
+    """Live quote fields are not historical disclosure evidence."""
+    return {key: value for key, value in row.items() if key not in {'ltp', 'ch', 'pch'}}
+
+
 def classify_filings(filings, classify=classify_filing):
     """Merge identical same-time documents across feeds; preserve revisions."""
     result, seen = [], {}
     for raw in filings:
-        row = dict(raw)
+        row = filing_evidence(raw)
         url = str(row.get("file_url") or "").strip()
         parts = urlsplit(url)
         url_key = urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path, parts.query, ""))

@@ -1,8 +1,10 @@
 import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 import { PRESET_CATALOG } from '../data/presetCatalog';
+import { PRESET_ELIGIBILITY, presetEligibilityTargets, hasCustomPresetEligibility } from '../data/presetEligibility';
 import { snapshotFundamentals } from '../data/snapshotFundamentals';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
+import { isTradingViewCondition, tradingViewFilterGroups, tradingViewMetrics } from '../data/tradingViewMetrics';
 
 const presetIds = new Set(PRESET_CATALOG.map(preset => preset.id));
 
@@ -15,10 +17,13 @@ export interface SnapshotStock extends StockRow {
   metrics: Record<string, number | null>;
   fnoBanAsOfDate?: string | null;
   presetMatches: Record<string, Truth>;
+  presetRuleMatches?: Record<string, Truth>;
   roePct: number | null;
   freeFloatPct: number | null;
 }
 export interface Snapshot {
+  tradingViewMetricsVersion?: number;
+  presetRuleMatchesVersion?: number;
   technicalMetricsVersion?: number;
   referenceCounts?: Record<string, number>;
   revision: string;
@@ -58,6 +63,17 @@ const maPeriods = SNAPSHOT_MA_PERIODS;
 
 function leaf(c: ActiveCondition, session: string): Predicate | null {
   const p = c.parameters;
+  if (isTradingViewCondition(c.conditionId)) {
+    const metric = tradingViewMetrics.find(metric => metric.id === p.metric
+      && metric.category === tradingViewFilterGroups[c.conditionId].category);
+    if (!metric || !['ABOVE','BELOW','GREATER','LESS','EQUAL'].includes(p.comparison)
+        || String(p.value ?? '').trim() === '' || !Number.isFinite(Number(p.value))) return null;
+    return s => {
+      const value = s.tradingview?.asOfDate === session ? s.tradingview.values[metric.id] : null;
+      const result = compare(value, p.comparison, Number(p.value));
+      return result == null ? null : c.isNegated ? !result : result;
+    };
+  }
   let fn: Predicate;
   let metadata = false;
   const config = technicalConfigurations.find(config => config.id === c.conditionId);
@@ -199,7 +215,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'mom_gap': fn = s => p.gapType === 'Gap Up' ? compare(s.metrics.gapPct,'ABOVE',p.minGapPct) : compare(s.metrics.gapPct,'BELOW',-p.minGapPct); break;
     case 'liq_turnover': fn = s => compare(s.metrics.turnover50,'ABOVE',p.minTurnoverCr); break;
     case 'AVG_TURNOVER':
-      if (![20,50,100].includes(Number(p.lookbackDays)) || !['DAILY','daily',''].includes(String(p.windowMinutes ?? ''))) return null;
+      if (![20,30,50,100].includes(Number(p.lookbackDays)) || !['DAILY','daily',''].includes(String(p.windowMinutes ?? ''))) return null;
       fn = s => compare(s.metrics[`turnover${p.lookbackDays}`],p.comparison,p.valueCr); break;
     case 'liq_market_cap': metadata = true; fn = s => between(s.marketCapCrore,p.minMarketCap,p.maxMarketCap); break;
     case 'MARKETCAP': metadata = true; fn = s => compare(s.marketCapCrore,p.comparison,p.valueCr); break;
@@ -240,9 +256,70 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       break;
     case 'misc_exclude_circuit': metadata = true; fn = s => !s.circuitLimit ? null : !p.circuitBands.includes(s.circuitLimit.trim().replace('%','')); break;
     case 'misc_fno_only': metadata = true; fn = s => s.isFno == null ? null : s.isFno === (p.isFno === 'true'); break;
+    case 'EARNINGS_GROWTH': case 'fund_earnings_growth': {
+      metadata = true;
+      const targetPct = c.conditionId === 'fund_earnings_growth' ? p.minGrowthPct : p.pct;
+      const comp = c.conditionId === 'fund_earnings_growth' ? 'ABOVE' : p.comparison;
+      const metric = String(p.metric ?? 'NET_PROFIT').toUpperCase();
+      fn = s => {
+        const val = metric === 'REVENUE'
+          ? (s.ttmRevenueGrowthPct ?? (s.tradingview?.values?.['financials.revenue_yoy_growth_ttm_pct']))
+          : (s.ttmNetProfitGrowthPct ?? (s.tradingview?.values?.['financials.net_income_yoy_growth_ttm_pct']));
+        return compare(val, comp, targetPct);
+      };
+      break;
+    }
+    case 'AVG_VOLUME_RATIO': {
+      fn = s => {
+        const v10 = s.tradingview?.values?.['market.average_volume10'] ?? (s.volume ? s.volume : null);
+        const v30 = s.tradingview?.values?.['market.average_volume30'] ?? (s.volume ? s.volume : null);
+        const ratio = v10 && v30 && v30 > 0 ? v10 / v30 : null;
+        return compare(ratio, p.comparison, p.ratio);
+      };
+      break;
+    }
+    case 'rs_1month': {
+      fn = s => {
+        const val = s.metrics?.return21 ?? s.tradingview?.values?.['market.performance_1m_pct'];
+        return compare(val, 'ABOVE', p.minRsRating);
+      };
+      break;
+    }
+    case 'rs_3month': {
+      fn = s => {
+        const val = s.metrics?.return63 ?? s.tradingview?.values?.['market.performance_3m_pct'];
+        return compare(val, 'ABOVE', p.minRsRating);
+      };
+      break;
+    }
+    case 'MA_CONVERGENCE': {
+      fn = s => {
+        const emas = [
+          s.tradingview?.values?.['technicals.ema9'],
+          s.ema20,
+          s.ema50,
+          s.ema200
+        ].filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+        if (emas.length < 3 || !s.close || s.close <= 0) return null;
+        const spread = (Math.max(...emas) - Math.min(...emas)) / s.close * 100;
+        return spread <= Number(p.maxSpreadPct ?? 1.5);
+      };
+      break;
+    }
     default:
       if (!presetIds.has(c.conditionId)) return null;
-      fn = s => s.presetMatches[c.conditionId] ?? null;
+      const targets = presetEligibilityTargets(p);
+      if (!targets) return null;
+      fn = s => {
+        if (!hasCustomPresetEligibility(p)) return s.presetMatches[c.conditionId] ?? null;
+        const eligibility = PRESET_ELIGIBILITY.map((rule, i): Truth => {
+          if (targets[i] === null) return true;
+          const value = rule.field === 'turnover50' ? s.metrics.turnover50 : s[rule.field as keyof SnapshotStock];
+          return s.asOfDate !== session || s.metadataAsOfDate !== session ? null : compare(value, 'GREATER', targets[i]!);
+        });
+        const ruleMatch = s.historyAligned && s.asOfDate === session ? s.presetRuleMatches?.[c.conditionId] ?? null : null;
+        return combine([...eligibility, ruleMatch], true);
+      };
       return c.isNegated ? s => { const v = fn(s); return v == null ? null : !v; } : fn;
   }
   const checked: Predicate = s => metadata
@@ -288,8 +365,18 @@ export function supportsSnapshotCondition(condition: ActiveCondition): boolean {
 interface Matches { rows: SnapshotStock[]; universeCount: number; coverage:Coverage; diagnostics:ScreenerRunResponse['unavailableDiagnostics']; warnings:string[] }
 const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
-export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): ScreenerRunResponse | null {
+export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allRows = false): ScreenerRunResponse | null {
   if (request.textQuery?.trim()) return null;
+  const usesTradingView = (node:ExpressionNode):boolean => node.type === 'group'
+    ? node.children.some(usesTradingView) : isTradingViewCondition(node.condition.conditionId);
+  if (data.tradingViewMetricsVersion !== 1 && usesTradingView(request.expressionTree)) {
+    throw new Error('These filters need a newer dataset. Try after the next daily data refresh.');
+  }
+  const customPreset = (node: ExpressionNode): boolean => node.type === 'group'
+    ? node.children.some(customPreset) : presetIds.has(node.condition.conditionId) && hasCustomPresetEligibility(node.condition.parameters);
+  if (data.presetRuleMatchesVersion !== 1 && customPreset(request.expressionTree)) {
+    throw new Error('Preset eligibility edits need a newer dataset. Restore the default thresholds or try after the next data refresh.');
+  }
   const key = JSON.stringify([request.expressionTree,request.universe,request.customSymbols,request.sort,request.announcementSymbols]);
   let cache = matchCache.get(data);
   if (!cache) { cache = new Map(); matchCache.set(data,cache); }
@@ -331,6 +418,6 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest): Scr
   const rows = search ? matches.rows.filter(row => row.symbol.toLowerCase().includes(search) || row.name.toLowerCase().includes(search)) : matches.rows;
   const page = Math.max(1,request.page), size = Math.max(1,Math.min(100,request.pageSize));
   return { resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
-    immutableRevision:data.revision,rows:rows.slice((page-1)*size,page*size),matchedSymbols:rows.map(row=>row.symbol),matchCount:rows.length,totalUniverseCount:matches.universeCount,
+    immutableRevision:data.revision,rows:allRows ? rows : rows.slice((page-1)*size,page*size),matchedSymbols:rows.map(row=>row.symbol),matchCount:rows.length,totalUniverseCount:matches.universeCount,
     page,pageSize:size,perConditionCoverage:matches.coverage,unavailableDiagnostics:matches.diagnostics,warnings:matches.warnings };
 }

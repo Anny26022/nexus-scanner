@@ -45,6 +45,14 @@ class BridgeTests(unittest.TestCase):
         row = bridge.stock_row(stock, {})
         self.assertEqual(row["dataCompleteness"], 29)
         self.assertEqual((row["epsTtm"], row["dividendYieldPct"], row["debtToEquity"]), (25, 2, 0.44))
+        stock.update(niche_tags=['Enterprise Services'], provider_sector='Information Technology',
+                     provider_industry='IT Enabled Services')
+        stock['niche_evidence'] = {'tags': ['Enterprise Services'], 'source_urls': ['https://example.com/annual-report'],
+                                  'reviewed_on': '2026-10-15', 'exposure': 'direct'}
+        self.assertEqual(bridge.stock_row(stock, {})['nicheEvidence'], {
+            'tags': ['Enterprise Services'], 'sourceUrls': ['https://example.com/annual-report'],
+            'reviewedOn': '2026-10-15', 'exposure': 'direct'})
+        self.assertEqual(bridge.stock_row(stock, {})['dataCompleteness'], row['dataCompleteness'])
 
     def test_ownership_fields_keep_missing_and_non_finite_values_unavailable(self):
         row = bridge.stock_row({"symbol": "TEST", "promoter_holding_percent": float('nan'),
@@ -118,6 +126,26 @@ class BridgeTests(unittest.TestCase):
         self.assertTrue(bridge.preset_baseline({**self.stock(),"market_cap_crore":2_000_000,"close":100_000}))
         self.assertTrue(bridge.preset_baseline({**self.stock(),"circuit_limit":"5%"}))
         self.assertIsNone(bridge.preset_baseline({**self.stock(),"daily_rupee_turnover_50_cr":None}))
+
+    def test_preset_eligibility_is_editable_removable_and_strict(self):
+        removed = {'minMarketCapCr': None, 'minPrice': None, 'minTurnoverCr': None}
+        self.assertTrue(bridge.preset_baseline({}, removed))
+        for rule in bridge.PRESET_ELIGIBILITY:
+            with self.subTest(rule=rule['id']):
+                parameters = {**removed, rule['id']: 5}
+                self.assertFalse(bridge.preset_baseline({rule['backendField']: 5}, parameters))
+                self.assertTrue(bridge.preset_baseline({rule['backendField']: 5.01}, parameters))
+                self.assertIsNone(bridge.preset_baseline({}, parameters))
+                for invalid in ('', -1, True, float('inf')):
+                    with self.assertRaises(ValueError):
+                        bridge.preset_baseline({}, {rule['id']: invalid})
+        node = bridge.translate('lib-easy-money', removed)
+        self.assertEqual(node['eligibility'], removed)
+        node['expression'] = {'type':'snapshot','field':'close','strict_min':0}
+        stock = {**self.stock(), 'close': 1, 'market_cap_crore': 1, 'daily_rupee_turnover_50_cr':None}
+        self.assertTrue(bridge.evaluate(node, stock, None, {}, '2026-09-30', set(), []))
+        node['eligibility'] = {}
+        self.assertFalse(bridge.evaluate(node, stock, None, {}, '2026-09-30', set(), []))
 
     def test_financial_leaf_uses_ledger_instead_of_snapshot(self):
         rows=[{"quarter_end":q,"filing_date":"2026-08-01","report_type":"CONSOLIDATED","net_profit":100}
@@ -282,6 +310,7 @@ class BridgeTests(unittest.TestCase):
             self.assertAlmostEqual(row["metrics"]["return5"], (history["Close"].iloc[-1] / history["Close"].iloc[-6] - 1) * 100)
             self.assertAlmostEqual(row["metrics"]["gapPct"], (history["Open"].iloc[-1] / history["Close"].iloc[-2] - 1) * 100)
             self.assertAlmostEqual(row["metrics"]["turnover20"], (history["Close"] * history["Volume"]).tail(20).mean() / 1e7)
+            self.assertAlmostEqual(row["metrics"]["turnover30"], (history["Close"] * history["Volume"]).tail(30).mean() / 1e7)
             self.assertIsNone(row["metrics"]["return252"])
             current = bridge.run({**request, "asOfDate": "2026-09-30"}, root)["rows"][0]
             for field in bridge.PUBLIC_FINANCIAL_FIELDS.values():

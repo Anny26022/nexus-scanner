@@ -72,11 +72,26 @@ export interface ScreenerRunRequest {
 }
 
 export interface StockRow {
+  tradingview?: {
+    exchange?:string | null;
+    isPrimary?:boolean | null;
+    primaryExchange?:string | null;
+    listingSymbol?:string | null;
+    source:string;
+    asOfDate:string;
+    fetchedAt:string;
+    updateMode:string;
+    values:Record<string, number | null>;
+  };
   symbol: string;
   name: string;
   listingDate: string;
   sector: string; // "Unclassified" if missing
   industry: string; // "Unclassified" if missing
+  nicheTags?: string[];
+  nicheEvidence?: {tags:string[]; sourceUrls:string[]; reviewedOn:string; exposure:'direct'|'joint_venture'|'mixed'};
+  providerSector?: string | null;
+  providerIndustry?: string | null;
   series: string;
   close: number;
   changePct: number;
@@ -87,6 +102,7 @@ export interface StockRow {
   rupeeVolumeCrore: number;
   rvol: number | null;
   marketCapCrore: number;
+  freeFloatPct?: number | null;
   peRatio: number | null;
   epsTtm?: number | null;
   dividendYieldPct?: number | null;

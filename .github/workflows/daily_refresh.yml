@@ -63,28 +63,40 @@ jobs:
       - name: Restore refresh history
         uses: ./.github/actions/restore-refresh-history
 
-      - name: Select weekly EOD2 cache key
-        id: eod2-cache-key
-        run: echo "week=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-
       - name: Restore EOD2 data checkout
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/eod2_data
-          key: eod2-data-v1-${{ runner.os }}-${{ steps.eod2-cache-key.outputs.week }}
+          key: eod2-data-v2-${{ runner.os }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
+            eod2-data-v2-${{ runner.os }}-
             eod2-data-v1-${{ runner.os }}-
 
       - name: Update EOD2 adjusted-history data
+        id: eod2-update
         continue-on-error: true
         env:
           EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
         run: |
+          previous=$(git -C "$EOD2_DATA_DIR" rev-parse HEAD 2>/dev/null || true)
           if [ -d "$EOD2_DATA_DIR/.git" ]; then
             git -C "$EOD2_DATA_DIR" pull --ff-only origin main
           else
             git clone --depth 1 https://github.com/BennyThadikaran/eod2_data.git "$EOD2_DATA_DIR"
           fi
+          revision=$(git -C "$EOD2_DATA_DIR" rev-parse HEAD)
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          if [ "$previous" != "$revision" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save updated EOD2 data checkout
+        if: steps.eod2-update.outcome == 'success' && steps.eod2-update.outputs.changed == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/eod2_data
+          key: eod2-data-v2-${{ runner.os }}-${{ steps.eod2-update.outputs.revision }}
 
       - name: Install Dependencies
         run: |

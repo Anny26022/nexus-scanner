@@ -4,14 +4,14 @@
     "name": "Persistent Momentum",
     "category": "Momentum & Leadership",
     "horizon": "Positional",
-    "description": "Held above the 10, 20 and 50 EMA for weeks on end.",
+    "description": "Above EMA10 for 20 sessions, EMA20 for 30, or EMA50 for 50; AND 20-session average turnover at least ₹5 Cr.",
     "aka": [
       "Momentum Scanner",
       "momentum"
     ],
     "rules": [
       "Above the 10 EMA for 20 days, or the 20 EMA for 30, or the 50 EMA for 50",
-      "Average turnover above \u20b95 Cr"
+      "20-session average turnover ≥ ₹5 Cr"
     ],
     "expression": {
       "type": "group",

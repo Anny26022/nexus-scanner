@@ -7,10 +7,13 @@ afterEach(() => {cleanup(); vi.unstubAllGlobals(); localStorage.clear(); delete 
 it('preserves the primary navigation and supports persistent appearance choices', () => {
   vi.stubGlobal('matchMedia', vi.fn(() => ({matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn()})));
   const change = vi.fn();
-  render(<Navbar activeTab="screener" onTabChange={change} />);
+  const hideSidebar = vi.fn();
+  render(<Navbar activeTab="screener" onTabChange={change} onHideSidebar={hideSidebar} />);
   expect(screen.getByRole('button', {name: 'Screener'})).toHaveAttribute('aria-current', 'page');
   fireEvent.click(screen.getByRole('button', {name: 'IPO Catalogue'}));
   expect(change).toHaveBeenCalledWith('ipo');
+  fireEvent.click(screen.getByRole('button', {name: 'Hide sidebar'}));
+  expect(hideSidebar).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByRole('button', {name: 'Dark appearance'}));
   expect(document.documentElement.dataset.theme).toBe('dark');
   expect(localStorage.getItem('nexus-scanner.ui.theme.v1')).toBe('"dark"');

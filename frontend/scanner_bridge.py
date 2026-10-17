@@ -29,6 +29,8 @@ LEGACY_PRESETS = {
     "preset_vcp_contraction": "lib-vcp", "preset_earnings_growth_momentum": "lib-earnings-momentum",
 }
 
+PRESET_ELIGIBILITY = json.loads((Path(__file__).parent / 'src/data/presetEligibility.json').read_text())
+
 
 def leaf(kind, **params):
     return {"type": "condition", "kind": kind, "params": params}
@@ -46,7 +48,7 @@ def band(kind, field, low, high, **params):
 def translate(identifier, p):
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
-        return {"type": "preset", "expression": preset["expression"]}
+        return {"type": "preset", "expression": preset["expression"], "eligibility": p}
     if identifier.isupper():
         p = dict(p)
         for field in ("values", "periods"):
@@ -167,15 +169,17 @@ def snapshot_rule(s, spec, as_of):
     return None
 
 
-def preset_baseline(s):
-    cap, price, turnover = [finite_number(s.get(k)) for k in ("market_cap_crore", "close", "daily_rupee_turnover_50_cr")]
-    if cap is not None and cap <= 1000:
-        return False
-    if price is not None and price <= 10:
-        return False
-    if turnover is not None and turnover <= 5:
-        return False
-    return None if any(v is None for v in (cap,price,turnover)) else True
+def preset_baseline(s, parameters=None):
+    outcomes = []
+    for rule in PRESET_ELIGIBILITY:
+        target = (parameters or {}).get(rule['id'], rule['defaultValue'])
+        if target is None:
+            continue
+        if isinstance(target, bool) or not isinstance(target, (int, float)) or finite_number(target) is None or target < 0:
+            raise ValueError('Preset eligibility thresholds must be non-negative numbers or null.')
+        value = finite_number(s.get(rule['backendField']))
+        outcomes.append(None if value is None else value > target)
+    return combine(outcomes, 'AND')
 
 
 def combine(values, op):
@@ -193,7 +197,7 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
         value = evaluate(node["child"],s,frame,context,as_of,diagnostics,delivery)
         return None if value is None else not value
     if node["type"] == "preset":
-        baseline = preset_baseline(s) if s.get("as_of_date") == as_of else None
+        baseline = preset_baseline(s, node.get('eligibility')) if s.get("as_of_date") == as_of else None
         if baseline is False:
             return False
         if baseline is None:
@@ -283,7 +287,8 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
 def data_completeness(row):
     # Preserve the denominator used before the optional ScanX fields were added.
     added = set(PUBLIC_FINANCIAL_FIELDS.values()) - {"epsTtm", "dividendYieldPct", "debtToEquity"}
-    added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness", "metrics"})
+    added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness", "metrics",
+                  "nicheTags", "nicheEvidence", "providerSector", "providerIndustry"})
     values = [value for key, value in row.items() if key not in added]
     return round(100 * sum(value is not None for value in values) / len(values)) if values else 0
 
@@ -311,7 +316,13 @@ def stock_row(s, ratings):
     row["debtToEquitySource"] = s.get("debt_to_equity_source")
     row["financialHistoryObservedOn"] = (s.get("financial_statement_history") or {}).get("observed_on")
     row.update({k:s.get(k) for k in ("symbol","name","open","high","low","close","volume")})
-    row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7, rsRating=ratings.get(s["symbol"],{}).get("front_weighted"), daysSinceEarnings=None, fnoBan=False)
+    row.update(sector=s.get("sector") or "Unclassified", industry=s.get("industry") or "Unclassified", nicheTags=s.get("niche_tags") or [], rupeeVolumeCrore=(s.get("rupee_volume") or 0)/1e7, rsRating=ratings.get(s["symbol"],{}).get("front_weighted"), daysSinceEarnings=None, fnoBan=False)
+    row.update({target: s[source] for source, target in
+                (("provider_sector", "providerSector"), ("provider_industry", "providerIndustry")) if source in s})
+    if s.get("niche_evidence"):
+        evidence = s["niche_evidence"]
+        row["nicheEvidence"] = {"tags": evidence["tags"], "sourceUrls": evidence["source_urls"],
+                                "reviewedOn": evidence["reviewed_on"], "exposure": evidence["exposure"]}
     for ma in ("sma20","sma50","sma200","ema20","ema50","ema200"):
         row[ma]=s.get(ma)
     row["dataCompleteness"] = data_completeness(row)
@@ -426,7 +437,7 @@ def run(request, root=ROOT, cache=None):
                     row["metrics"][f"return{period}"] = finite_number((last["Close"] / history["Close"].iloc[-1-period] - 1) * 100) if len(history) > period else None
                 row["metrics"]["gapPct"] = finite_number((last["Open"] / history["Close"].iloc[-2] - 1) * 100) if len(history) > 1 else None
                 turnover = history["Close"] * history["Volume"]
-                for period in (20, 50, 100):
+                for period in (20, 30, 50, 100):
                     row["metrics"][f"turnover{period}"] = finite_number(turnover.tail(period).mean() / 1e7) if len(history) >= period else None
             # stock_row starts from the current snapshot. Recalculate after
             # history substitution and current-only field sanitization so the

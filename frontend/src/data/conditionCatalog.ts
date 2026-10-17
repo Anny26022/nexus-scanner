@@ -3,10 +3,10 @@ import nativeConditions from './nativeConditions.json';
 import { snapshotFundamentals } from './snapshotFundamentals';
 import technicalConfigurations from './snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from './movingAverageRules';
+import { tradingViewConditionCatalog } from './tradingViewMetrics';
 
 export const RETIRED_TECHNICAL_LABELS: Record<string, string> = {
   INDICATOR_COMPARE: 'Indicator Compare / Crossover',
-  MA_CONVERGENCE: 'MA Convergence',
   DIVERGENCE: 'Price / Oscillator Divergence',
   SUPERTREND: 'Supertrend Direction',
 };
@@ -100,11 +100,13 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
       const periods = def.id === 'PRICE_CHANGE_PCT' && parameter.id === 'overDays' ? [1,5,21,63,126,252]
         : def.id === 'ATR_PCT' && parameter.id === 'period' ? [14]
           : def.id === 'ADR_PCT' && parameter.id === 'lookbackDays' ? [20]
+            : def.id === 'AVG_TURNOVER' && parameter.id === 'lookbackDays' ? [20,30,50,100]
             : ['GAP_UP','GAP_DOWN'].includes(def.id) && parameter.id === 'withinDays' ? [1] : null;
       return periods ? {...parameter, type:'select' as const, defaultValue:periods.includes(Number(parameter.defaultValue))
         ? parameter.defaultValue : periods[0], options:periods.map(value => ({value, label:String(value)}))} : parameter;
     }),
   })),
+  ...tradingViewConditionCatalog,
   // --- TREND ---
   {
     id: 'trend_price_vs_ma',
@@ -734,3 +736,30 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
       label:parameter.options?.find(option => option.value === fixed[parameter.id])?.label ?? String(fixed[parameter.id])}]}
     : parameter)};
 });
+
+export const REDUNDANT_CATALOG_CONDITIONS = new Set([
+  'PERSISTENT_MOMENTUM',
+  'trend_persistent_momentum',
+  'trend_ma_stack',
+  'trend_ma_slope',
+  'trend_ema_reclaim',
+  'trend_pct_days_above_ma',
+  'mom_consecutive_up',
+  'mom_gap',
+  'mom_delivery_vol',
+  'range_52w_proximity',
+  'range_contraction',
+  'range_inside_bar',
+  'rs_rating',
+  'fund_free_float',
+  'fund_stock_price',
+  'fund_earnings_growth',
+  'liq_turnover',
+  'liq_market_cap',
+]);
+
+// Keep internal/saved condition definitions evaluable in NEXUS_CONDITION_CATALOG,
+// but present a clean, non-duplicated catalog to the user.
+export const FILTER_CONDITION_CATALOG = NEXUS_CONDITION_CATALOG.filter(
+  def => !REDUNDANT_CATALOG_CONDITIONS.has(def.id),
+);

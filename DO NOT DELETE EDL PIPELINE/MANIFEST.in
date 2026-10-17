@@ -1,1 +1,4 @@
 include breadth_methodology.json filing_source_labels.json
+include taxonomy_overrides.json
+include stockscans_classification.json
+include tradingview_fields.json

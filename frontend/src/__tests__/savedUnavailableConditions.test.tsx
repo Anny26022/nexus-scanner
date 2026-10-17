@@ -10,13 +10,13 @@ vi.mock('../api/screenerApi', () => ({screenerApi: {runScreen: vi.fn(), getIpoCa
 afterEach(() => {cleanup(); localStorage.clear(); vi.clearAllMocks();});
 
 const saved: Record<string, ActiveCondition> = {
-  old: {instanceId: 'old', conditionId: 'MA_CONVERGENCE', parameters: {periods: '9,20,50'}},
+  old: {instanceId: 'old', conditionId: 'SUPERTREND', parameters: {}},
   mom_rvol: {instanceId: 'rvol', conditionId: 'mom_rvol', parameters: {minRvol: 2, maxRvol: 20}},
 };
 
 it.each([
-  ['screener', saved.old, 'MA Convergence'],
-  ['ipo', saved.old, 'MA Convergence'],
+  ['screener', saved.old, 'Supertrend Direction'],
+  ['ipo', saved.old, 'Supertrend Direction'],
   ['screener', {instanceId:'old', conditionId:'MA_STACK', parameters:{periods:'50,173,200', maType:'EMA', priceAbove:false}}, 'MA Stack'],
   ['ipo', {instanceId:'old', conditionId:'MA_STACK', parameters:{periods:'50,173,200', maType:'EMA', priceAbove:false}}, 'MA Stack'],
   ['screener', {instanceId:'old', conditionId:'trend_price_vs_ma', parameters:{maType:'EMA', maPeriod:173, operator:'above', thresholdPct:0}}, 'Price vs Moving Average'],

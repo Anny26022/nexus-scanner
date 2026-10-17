@@ -20,8 +20,28 @@ from edl_pipeline.scanner.financials import financial_value, finite_number
 from edl_pipeline.scanner.calculation_cache import calculation_cache
 from screen_trend_conditions import _delivery_records
 from snapshot_technicals import technical_metrics, CONFIG_PATH
+from theme_classification import (classify, consolidated_classification, SOURCE_PATH as THEME_SOURCE_PATH,
+                                  WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
+from pipeline_utils import resource_path
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
+TRADINGVIEW_FIELDS_PATH = resource_path('tradingview_fields.json')
+TRADINGVIEW_FIELDS = json.loads(TRADINGVIEW_FIELDS_PATH.read_text())
+
+
+def tradingview_row(stock, session):
+    source = stock.get('tradingview_snapshot')
+    if not isinstance(source, dict) or source.get('as_of_date') != session or source.get('source') != 'https://scanner.tradingview.com/india/scan':
+        return None
+    values = {}
+    for field in TRADINGVIEW_FIELDS:
+        currency = source.get('financial_currency' if field['section'] == 'financials' else 'currency')
+        section = source.get(field['section']) or {}
+        values[f"{field['section']}.{field['key']}"] = finite_number(section.get(field['key'])) if currency == 'INR' else None
+    return {'source':source['source'], 'asOfDate':source['as_of_date'],
+            'fetchedAt':source.get('fetched_at'), 'updateMode':source.get('update_mode'),
+            'exchange':source.get('exchange'), 'isPrimary':source.get('is_primary'),
+            'primaryExchange':source.get('primary_exchange'), 'listingSymbol':source.get('listing_symbol'), 'values':values}
 
 
 def write_json(path, payload):
@@ -100,14 +120,38 @@ def _stock_row(task, context, session, presets, default, memo_keys):
             metrics[f'return{period}']=float((last['Close']/frame['Close'].iloc[-1-period]-1)*100) if len(frame)>period else None
         metrics['gapPct']=float((last['Open']/frame['Close'].iloc[-2]-1)*100) if len(frame)>1 else None
         turnover = frame['Close'] * frame['Volume'] if len(frame) >= 20 else None
-        for period in (20,50,100):
+        for period in (20,30,50,100):
             metrics[f'turnover{period}']=float(turnover.tail(period).mean()/1e7) if len(frame)>=period else None
     row['metrics']=metrics
+    tradingview = tradingview_row(stock, session)
+    if tradingview is not None:
+        row['tradingview'] = tradingview
+        # Intelligent fallback: If primary Nexus exchange data is missing/clipped, backfill from verified TV snapshot.
+        tv_vals = tradingview.get('values') or {}
+        if row.get('peRatio') is None and tv_vals.get('financials.pe_ttm') is not None:
+            row['peRatio'] = tv_vals['financials.pe_ttm']
+        if row.get('pegRatio') is None and tv_vals.get('financials.peg_ttm') is not None:
+            row['pegRatio'] = tv_vals['financials.peg_ttm']
+        if row.get('allTimeHigh') is None and tv_vals.get('market.all_time_high') is not None:
+            row['allTimeHigh'] = tv_vals['market.all_time_high']
+            if row.get('close') and row['allTimeHigh'] > 0:
+                row['distAthPct'] = float((row['close'] / row['allTimeHigh'] - 1) * 100)
+        if row.get('allTimeLow') is None and tv_vals.get('market.all_time_low') is not None:
+            row['allTimeLow'] = tv_vals['market.all_time_low']
+        if row.get('return5yPct') is None and tv_vals.get('market.performance_5y_pct') is not None:
+            row['return5yPct'] = tv_vals['market.performance_5y_pct']
+        if row.get('evEbitda') is None and tv_vals.get('financials.ev_ebitda_ttm') is not None:
+            row['evEbitda'] = tv_vals['financials.ev_ebitda_ttm']
+        if row.get('ttmRevenueGrowthPct') is None and tv_vals.get('financials.revenue_yoy_growth_ttm_pct') is not None:
+            row['ttmRevenueGrowthPct'] = tv_vals['financials.revenue_yoy_growth_ttm_pct']
+        if row.get('ttmNetProfitGrowthPct') is None and tv_vals.get('financials.net_income_yoy_growth_ttm_pct') is not None:
+            row['ttmNetProfitGrowthPct'] = tv_vals['financials.net_income_yoy_growth_ttm_pct']
     row['historyMetadata']=stock.get('history_metadata')
     row['financialMetadata']=stock.get('financial_metadata')
     row['dividendExDate']=stock.get('dividend_ex_date')
     row['vwapAsOfDate']=stock.get('vwap_as_of_date')
-    row['peRatio']=financial_value(context,stock,{'condition':'pe_ratio'},bridge.date.fromisoformat(session),finite_number(stock.get('market_cap_crore')))[0]
+    if row.get('peRatio') is None:
+        row['peRatio']=financial_value(context,stock,{'condition':'pe_ratio'},bridge.date.fromisoformat(session),finite_number(stock.get('market_cap_crore')))[0]
     row['fnoBan']=bool(context['fno_ban_symbols'].get(symbol)) if context.get('fno_ban_available') and context.get('fno_ban_trade_date')==session else None
     row['fnoBanAsOfDate']=context.get('fno_ban_trade_date') if context.get('fno_ban_available') else None
     row['roePct']=finite_number(stock.get('roe_percent'))
@@ -118,7 +162,7 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         if node['type']=='group':
             return bridge.combine([evaluate(n) for n in node['children']],node['op'])
         if node['type']=='preset':
-            baseline=bridge.preset_baseline(stock) if stock.get('as_of_date')==session else None
+            baseline=bridge.preset_baseline(stock, node.get('eligibility')) if stock.get('as_of_date')==session else None
             return False if baseline is False else bridge.combine([baseline,evaluate(node['expression'])],'AND')
         key=memo_keys[id(node)]
         if key not in memo:
@@ -131,6 +175,7 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         for field in ('sma20', 'sma50', 'sma200', 'ema20', 'ema50', 'ema200'):
             row[field] = metrics.get(field, row.get(field))
         row['daysSinceEarnings'] = metrics.get('DAYS_SINCE_EARNINGS')
+        row['presetRuleMatches']={key:evaluate(node['expression']) for key,node in presets.items()}
         row['presetMatches']={key:evaluate(node) for key,node in presets.items()}
         default_match = evaluate(default) is True
     return row, default_match
@@ -248,7 +293,10 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = elapsed('stock metrics and presets', started)
     cache.save_frames(root)
     started = elapsed('history packing', started)
-    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH]
+    code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH,Path(__file__).with_name('theme_classification.py'),THEME_SOURCE_PATH,THEME_WEB_OVERRIDES_PATH,Path(__file__).parent/'src/data/presetEligibility.json']
+    code_files.append(resource_path('taxonomy_overrides.json'))
+    code_files.append(resource_path('stockscans_classification.json'))
+    code_files.append(TRADINGVIEW_FIELDS_PATH)
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
@@ -288,6 +336,12 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
     started = elapsed('revision hashing and backend freezing', started)
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'technicalMetricsVersion':1,'referenceCounts':{'rvol15Sma50':default_count}}
+    payload['tradingViewMetricsVersion'] = 1
+    payload['presetRuleMatchesVersion'] = 1
+    taxonomy = classify(rows, session)
+    taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
+    (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
+    write_json(generation/'universe-classification.json', consolidated_classification(rows, taxonomy))
     stock_bytes=write_json(generation/'stocks.json',payload)
     # Keep the full financial series out of every lightweight scanner row.
     histories = {symbol: stock["financial_statement_history"] for symbol, stock in context['stocks'].items()
@@ -320,6 +374,9 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         manifest['earningsCalendarUrl']=f'/data/revisions/{revision}/earnings-calendar.json.gz'
     manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'
     manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'
+    manifest['themeClassificationUrl'] = f'/data/revisions/{revision}/theme-classification.json.gz'
+    manifest['themeClassificationVersion'] = taxonomy['version']
+    manifest['universeClassificationUrl'] = f'/data/revisions/{revision}/universe-classification.json'
     started = elapsed('serialization and compression', started)
     manifest = complete_release(chart_root, output, manifest)
     elapsed('release completion', started)

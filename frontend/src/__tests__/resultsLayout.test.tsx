@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ResultsTable } from '../components/ResultsTable';
 import { Pagination } from '../components/Pagination';
@@ -22,22 +22,24 @@ it('copies every matching symbol from a later page without rendering additional 
     render(<ResultsTable {...props} data={{...data, page:2, matchCount:16, matchedSymbols}} />);
     expect(screen.getByRole('button', {name:'Next'})).toBeDisabled();
     expect(screen.getByRole('button', {name:'Previous'})).toBeEnabled();
-    fireEvent.click(screen.getByRole('button', {name:'Copy TradingView symbols'}));
-    expect(writeText).toHaveBeenCalledWith(matchedSymbols.map(symbol => `NSE:${symbol}`).join(', '));
+    fireEvent.click(screen.getByRole('button', {name:'Copy results'}));
+    fireEvent.click(screen.getByRole('menuitem', {name:'Symbols'}));
+    await waitFor(()=>expect(writeText).toHaveBeenCalledWith(matchedSymbols.map(symbol => `NSE:${symbol}`).join(', ')));
     expect(screen.getAllByRole('row')).toHaveLength(2);
     expect(screen.getByText('AVTNPL')).toBeInTheDocument();
     expect(screen.queryByText('MATCH1')).not.toBeInTheDocument();
-    await screen.findByRole('button', {name:'Copied TradingView symbols'});
+    await screen.findByRole('button', {name:'Results copied'});
   } finally {
     if (original) Object.defineProperty(navigator, 'clipboard', original);
     else Reflect.deleteProperty(navigator, 'clipboard');
   }
 });
 
-it('reports incomplete legacy results rather than silently copying just the current page', () => {
+it('reports incomplete legacy results rather than silently copying just the current page', async () => {
   render(<ResultsTable {...props} data={data} />);
-  fireEvent.click(screen.getByRole('button', {name:'Copy TradingView symbols'}));
-  expect(screen.getByRole('alert')).toHaveTextContent('All matching symbols are unavailable');
+  fireEvent.click(screen.getByRole('button', {name:'Copy results'}));
+  fireEvent.click(screen.getByRole('menuitem', {name:'Symbols'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('All matching symbols are unavailable');
 });
 
 it('leads with quotes only on phones and restores desktop order without changing saved columns', () => {
@@ -90,7 +92,7 @@ it('disables exports and page changes while previous-page data is updating', () 
   expect(screen.getByText('AVTNPL')).toBeInTheDocument();
   expect(screen.getByRole('status')).toHaveTextContent('Updating results');
   expect(screen.queryByRole('button', {name: 'Watchlist'})).not.toBeInTheDocument();
-  for (const name of ['Copy TradingView symbols', 'Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
+  for (const name of ['Copy results', 'Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
   view.rerender(<ResultsTable {...props} data={{...data, page: 2, matchCount: 45}} isFetching />);
   for (const name of ['Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
 });
@@ -124,6 +126,14 @@ it('persists an added fundamental result column across fresh mounts', () => {
   fireEvent.click(screen.getByRole('button', {name: 'Customize columns'}));
   fireEvent.click(screen.getByRole('tab', {name: 'Fundamental'}));
   expect(screen.getByRole('checkbox', {name: 'P/E'})).toBeChecked();
+  window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
+});
+
+it('clips long custom column headers within their cells while retaining the full label', () => {
+  window.localStorage.setItem('nexus-scanner.screener.columns.v1', JSON.stringify(['company', 'currentLiabilitiesLakh', 'nonCurrentLiabilitiesLakh']));
+  render(<ResultsTable {...props} data={data} />);
+  expect(screen.getByRole('columnheader', {name: 'Current liabilities (Lakh)'})).toHaveAttribute('title', 'Current liabilities (Lakh)');
+  expect(screen.getByRole('columnheader', {name: 'Non-current liabilities (Lakh)'})).toHaveAttribute('title', 'Non-current liabilities (Lakh)');
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
 });
 

@@ -1,16 +1,20 @@
 import gzip
+import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent / 'DO NOT DELETE EDL PIPELINE'
 sys.path.insert(0, str(ROOT))
 from announcement_artifacts import put_object
 import build_chart_artifacts as builder
-from chart_publication import complete_release, R2Store, prepare_archives, validate_announcement_objects
+from chart_publication import complete_release, inventory_bytes, inventory_names, R2Store, prepare_archives, validate_announcement_objects
 from filing_archives import prepare_filing_archives
 
 
@@ -19,18 +23,27 @@ class ObjectStore:
     def __init__(self):
         self.objects = {}
         self.references = {}
+        self.inventory = set()
         self.uploaded = []
         self.fail = False
-    def upload_objects(self, source):
+    def load_inventory(self, previous):
+        return set(self.inventory)
+    def write_inventory(self, names):
+        self.inventory = set(names)
+    def upload_objects(self, source, known_verified=()):
         if self.fail:
             raise RuntimeError('object upload failed')
-        for path in source.glob('*.json.gz'):
+        paths = list(source.glob('*.json.gz'))
+        for path in paths:
+            if path.name in known_verified:
+                continue
             data = path.read_bytes()
             if path.name not in self.objects:
                 self.uploaded.append(path.name)
                 self.objects[path.name] = data
             else:
                 assert self.objects[path.name] == data
+        return [path.name for path in paths]
     def write_release(self, value, key):
         if key in self.references:
             assert self.references[key] == value
@@ -123,7 +136,10 @@ class ObjectPublicationTests(unittest.TestCase):
             self.assertEqual(lookup['publishedAt'], catalog['publishedAt'])
             self.assertEqual(lookup['symbols']['TEST']['recent'], catalog['symbols']['TEST']['recent'])
             history = json.loads(gzip.decompress(store.objects[lookup['symbols']['TEST']['history'] + '.json.gz']))
-            self.assertEqual(history, {'symbol': 'TEST', **catalog['symbols']['TEST']})
+            self.assertEqual(history, {'symbol': 'TEST', 'recent': catalog['symbols']['TEST']['recent'],
+                                       'years': catalog['symbols']['TEST']['years']})
+            self.assertEqual(lookup['symbols']['TEST']['fetchStatus'],
+                             catalog['symbols']['TEST']['fetchStatus'])
             for field, digest in [('recent', '0' * 64), ('history', index['announcements'])]:
                 with self.subTest(invalid_reference=field):
                     invalid = json.loads(json.dumps(lookup))
@@ -143,6 +159,29 @@ class ObjectPublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'object upload'):
                 complete_release(self.build(root, '2026-10-07'), output, {'revision': 'c'*64, 'sessionDate': '2026-10-07'}, store)
             self.assertEqual((output / 'current.json').read_bytes(), previous)
+
+    def test_optional_inventory_skips_unchanged_objects_without_changing_release(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); output = root / 'public'; output.mkdir()
+            charts = self.build(root, '2026-10-06'); store = ObjectStore()
+            first = complete_release(charts, output, {'revision': 'a'*64, 'sessionDate': '2026-10-06'}, store)
+            original_files = set(path.name for path in (charts / 'objects').glob('*.json.gz'))
+            self.assertEqual(store.inventory, original_files)
+            self.assertNotIn('verifiedObjectsSha256', first)
+            with patch.object(store, 'upload_objects', wraps=store.upload_objects) as upload:
+                complete_release(charts, output, {'revision': 'b'*64, 'sessionDate': '2026-10-06'}, store)
+                self.assertEqual(upload.call_args.args[1], original_files)
+            self.assertEqual(set(store.uploaded), original_files)
+            with patch.object(store, 'write_inventory', side_effect=RuntimeError('receipt upload failed')):
+                third = complete_release(charts, output, {'revision': 'c'*64, 'sessionDate': '2026-10-06'}, store)
+            self.assertEqual(json.loads((output / 'current.json').read_text())['revision'], third['revision'])
+            self.assertNotIn('verifiedObjectsSha256', third)
+            legacy = dict(third, verifiedObjectsSha256='f'*64)
+            (output / 'revisions' / third['revision'] / 'release.json').write_text(json.dumps(legacy))
+            (output / 'current.json').write_text(json.dumps(legacy))
+            store.references[f"releases/{third['revision']}/release.json"] = legacy
+            retried = complete_release(charts, output, {'revision': 'c'*64, 'sessionDate': '2026-10-06'}, store)
+            self.assertEqual(retried, legacy)
 
     def test_local_consumer_can_resolve_every_reference_after_staging_is_removed(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -188,30 +227,170 @@ class ObjectPublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'content does not match'):
                 prepare_archives(charts)
 
-    def test_r2_transfers_and_verifies_only_missing_objects(self):
+    def test_r2_targets_source_objects_without_listing_the_bucket(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             old = put_object(root, {'old': 1}); new = put_object(root, {'new': 1})
             store = R2Store.__new__(R2Store); store.env = {}; store.bucket = 'test'
             calls = []
+            expected = sorted([old + '.json.gz', new + '.json.gz'])
             def run(*args):
+                self.assertIn('--no-traverse', args)
                 names = Path(args[args.index('--files-from') + 1]).read_text().splitlines()
+                self.assertEqual(names, expected)
                 if args[0] == 'check':
                     self.assertIn('--download', args)
                     self.assertIn('--one-way', args)
-                    self.assertEqual(args[args.index('--checkers') + 1], '16')
                 else:
                     self.assertIn('--immutable', args)
                     self.assertIn('--checksum', args)
-                calls.append((args[0], names))
+                    self.assertIn('content-type=application/gzip', args)
+                    self.assertIn('cache-control=public,max-age=31536000,immutable', args)
+                    self.assertEqual(args[args.index('--transfers') + 1], '32')
+                self.assertEqual(args[args.index('--checkers') + 1], '32')
+                calls.append(args[0])
             store.run = run
-            listing = f'{old}.json.gz\t{(root / (old + ".json.gz")).stat().st_size}\n'
-            with patch('chart_publication.subprocess.run', return_value=Mock(stdout=listing)):
-                store.upload_objects(root)
-            self.assertEqual(calls, [('copy', [new + '.json.gz']), ('check', [new + '.json.gz'])])
-            with patch('chart_publication.subprocess.run', return_value=Mock(stdout=f'{old}.json.gz\t1\n')):
-                with self.assertRaisesRegex(RuntimeError, 'different size'):
+            with patch('chart_publication.subprocess.run', side_effect=AssertionError('full listing')):
+                self.assertEqual(store.upload_objects(root), expected)
+            self.assertEqual(calls, ['copy', 'check'])
+            expected = [new + '.json.gz']
+            with patch('chart_publication.subprocess.run', side_effect=AssertionError('full listing')):
+                self.assertEqual(store.upload_objects(root, {old + '.json.gz'}), sorted([old + '.json.gz', new + '.json.gz']))
+            self.assertEqual(calls, ['copy', 'check', 'copy', 'check'])
+            with tempfile.TemporaryDirectory() as empty:
+                self.assertEqual(store.upload_objects(Path(empty)), [])
+            self.assertEqual(calls, ['copy', 'check', 'copy', 'check'])
+
+    def test_r2_inventory_cache_is_checksummed_and_missing_or_corrupt_cache_rechecks(self):
+        store = R2Store.__new__(R2Store); store.env = {}; store.bucket = 'test'
+        names = ['b'*64 + '.json.gz', 'a'*64 + '.json.gz']
+        data = inventory_bytes(names)
+        record = hashlib.sha256(data).hexdigest().encode() + b'\n' + data
+        writes = []
+        def cache(*args, **kwargs):
+            if args[0] == 'copyto':
+                self.assertEqual(args[2:], (store.remote('verified-objects/current.txt'), '--ignore-times'))
+                writes.append(Path(args[1]).read_bytes())
+            return record
+        with patch.object(store, 'cache_command', side_effect=cache):
+            store.write_inventory(names)
+        self.assertEqual(writes, [record])
+        self.assertEqual(inventory_names(record), set(names))
+        with patch.object(store, 'cache_command', side_effect=[b'', b'corrupt']):
+            with self.assertRaisesRegex(RuntimeError, 'read-back mismatch'):
+                store.write_inventory(names)
+        digest = hashlib.sha256(data).hexdigest()
+        with patch.object(store, 'cache_command', return_value=record) as download:
+            self.assertEqual(store.load_inventory(None), set(names))
+            self.assertEqual(download.call_args.args, ('cat', store.remote('verified-objects/current.txt')))
+        with patch.object(store, 'cache_command', return_value=record + b'corrupt'):
+            self.assertEqual(store.load_inventory(None), set())
+        missing = subprocess.CalledProcessError(1, ['rclone', 'cat'])
+        with patch.object(store, 'cache_command', side_effect=missing):
+            self.assertEqual(store.load_inventory(None), set())
+        with patch.object(store, 'cache_command', side_effect=[missing, data]) as download:
+            self.assertEqual(store.load_inventory({'verifiedObjectsSha256': digest}), set(names))
+            self.assertEqual(download.call_args.args, ('cat', store.remote(f'verified-objects/{digest}.txt')))
+
+    def test_r2_cold_start_checkpoints_verified_batches_for_retry(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for index in range(5):
+                put_object(root, {'index': index})
+            store = R2Store.__new__(R2Store); store.env = {}; store.bucket = 'test'
+            checkpoints = []
+            checked = []
+            def run(*args):
+                batch = Path(args[args.index('--files-from') + 1]).read_text().splitlines()
+                self.assertLessEqual(len(batch), 2)
+                if args[0] == 'copy' and len(checked) == 1:
+                    raise subprocess.CalledProcessError(1, args)
+                if args[0] == 'check':
+                    checked.append(batch)
+            store.run = run
+            with patch('chart_publication.R2_VERIFY_BATCH_SIZE', 2), \
+                    patch.object(store, 'write_inventory', side_effect=lambda names: checkpoints.append(set(names))):
+                with self.assertRaises(subprocess.CalledProcessError):
                     store.upload_objects(root)
+                self.assertEqual(checkpoints, [set(checked[0])])
+                def resume(*args):
+                    if args[0] == 'check':
+                        checked.append(Path(args[args.index('--files-from') + 1]).read_text().splitlines())
+                store.run = resume
+                store.upload_objects(root, checkpoints[0])
+            self.assertEqual(len(checked), 3)
+            self.assertTrue(set(checked[0]).isdisjoint(set(checked[1] + checked[2])))
+            self.assertEqual(set().union(*map(set, checked)), {path.name for path in root.glob('*.json.gz')})
+
+    def test_r2_object_command_failures_preserve_pointer_until_successful_retry(self):
+        for failure in ('copy', 'check', 'copyto'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder); output = root / 'public'; output.mkdir()
+                charts = self.build(root, '2026-10-06')
+                complete_release(charts, output, {'revision': 'a'*64, 'sessionDate': '2026-10-06'}, ObjectStore())
+                before = (output / 'current.json').read_bytes()
+                manifest = {'revision': 'b'*64, 'sessionDate': '2026-10-06'}
+                store = R2Store.__new__(R2Store)
+                store.env = {}; store.bucket = 'test'; store.base_url = 'https://charts.example.com'
+                calls = []
+                def run(*args):
+                    calls.append(args[0])
+                    if args[0] == failure:
+                        raise subprocess.CalledProcessError(1, args)
+                with patch.object(store, 'load_inventory', return_value=set()), patch.object(store, 'run', side_effect=run):
+                    with self.assertRaises(subprocess.CalledProcessError):
+                        complete_release(charts, output, manifest, store)
+                self.assertEqual((output / 'current.json').read_bytes(), before)
+                self.assertEqual(calls, ['copy', 'check', 'copyto'][:('copy', 'check', 'copyto').index(failure) + 1])
+                with patch.object(store, 'load_inventory', return_value=set()), patch.object(store, 'run') as retry, \
+                        patch.object(store, 'cache_command'):
+                    complete_release(charts, output, manifest, store)
+                self.assertEqual([call.args[0] for call in retry.call_args_list], ['copy', 'check', 'copyto', 'copyto'])
+                self.assertEqual(json.loads((output / 'current.json').read_text())['revision'], manifest['revision'])
+
+    @unittest.skipUnless(shutil.which('rclone'), 'rclone is not installed')
+    def test_real_rclone_inventory_cache_roundtrip_and_overwrite(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = R2Store.__new__(R2Store)
+            store.env = dict(os.environ)
+            store.remote = lambda key: str(Path(folder) / key)
+            first = ['a'*64 + '.json.gz']
+            second = ['b'*64 + '.json.gz']
+            store.write_inventory(first)
+            self.assertEqual(store.load_inventory(None), set(first))
+            store.write_inventory(second)
+            self.assertEqual(store.load_inventory(None), set(second))
+            (Path(folder) / 'verified-objects/current.txt').write_bytes(b'corrupt')
+            self.assertEqual(store.load_inventory(None), set())
+
+    @unittest.skipUnless(os.environ.get('RCLONE_TEST_BINARY') or shutil.which('rclone'), 'rclone is not installed')
+    def test_real_rclone_targeted_copy_and_download_check_preserve_integrity(self):
+        binary = os.environ.get('RCLONE_TEST_BINARY') or shutil.which('rclone')
+        for targeted in (False, True):
+            with self.subTest(targeted=targeted), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder); source = root / 'source'; source.mkdir()
+                target = root / 'target'; target.mkdir()
+                digest = put_object(source, {'price': 123.456789})
+                file = source / (digest + '.json.gz')
+                names = root / 'names.txt'; names.write_text(file.name + '\n')
+                (target / 'unrelated').write_bytes(b'keep')
+                flags = ['--files-from', str(names), '--checkers', '32', '--retries', '1']
+                if targeted: flags.append('--no-traverse')
+                def run(command, *extra):
+                    return subprocess.run([binary, command, str(source), str(target), *flags, *extra],
+                                          capture_output=True, timeout=30)
+                # Initial copy and an interrupted publication's retry keep identical bytes.
+                for _ in range(2):
+                    self.assertEqual(run('copy', '--immutable', '--checksum', '--transfers', '32').returncode, 0)
+                    self.assertEqual(run('check', '--one-way', '--download').returncode, 0)
+                    self.assertEqual((target / file.name).read_bytes(), file.read_bytes())
+                (target / file.name).write_bytes(b'x' * file.stat().st_size)
+                self.assertNotEqual(run('check', '--one-way', '--download').returncode, 0)
+                self.assertNotEqual(run('copy', '--immutable', '--checksum').returncode, 0)
+                self.assertEqual((target / file.name).read_bytes(), b'x' * file.stat().st_size)
+                (target / file.name).unlink()
+                self.assertNotEqual(run('check', '--one-way', '--download').returncode, 0)
+                self.assertEqual((target / 'unrelated').read_bytes(), b'keep')
 
     def test_r2_upload_avoids_post_put_head(self):
         store = R2Store.__new__(R2Store); store.env = {}

@@ -15,7 +15,7 @@ import { explainCondition, explainExpressionTree } from '../utils/nqlParser';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { useFilterChoices } from '../hooks/useFilterChoices';
-import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search } from 'lucide-react';
+import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search, Info } from 'lucide-react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import type { AnnouncementFilter } from '../api/announcements';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
@@ -152,10 +152,32 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
   return <div className="research-view">
     <section className="screen-controls" aria-label="Screen criteria">
       <div className="screen-toolbar">
-        <label className="universe-control"><span className="field-label">Universe</span><span className="select-wrap">
-          <select aria-label="Stock universe" value={universe} onChange={e => {setUniverse(e.target.value as UniverseType); setPage(1);}}>
-            <option value="mainboard">Mainboard</option><option value="nifty50">Nifty 50</option><option value="nifty500">Nifty 500</option><option value="midsmall400">MidSmall 400</option>
-          </select><ChevronDown size={14} /></span></label>
+        <div className="universe-control">
+          <div className="universe-label-row">
+            <span className="field-label">Universe</span>
+            <button
+              type="button"
+              className="universe-info-button"
+              data-tooltip={
+                universe === 'mainboard'
+                  ? 'Mainboard: All active NSE mainboard listed equities (excludes SME, debt, and suspended listings).'
+                  : universe === 'nifty50'
+                  ? 'Nifty 50: The 50 largest, most liquid blue-chip equities representing the benchmark Indian index.'
+                  : universe === 'nifty500'
+                  ? 'Nifty 500: Top 500 companies by market capitalization and liquidity across NSE sectors.'
+                  : 'MidSmall 400: Nifty Midcap 150 and Smallcap 250 universe combined (excludes Nifty 100 large caps).'
+              }
+              aria-label="Universe filter details"
+            >
+              <Info size={11} strokeWidth={2.2} />
+            </button>
+          </div>
+          <span className="select-wrap">
+            <select aria-label="Stock universe" value={universe} onChange={e => {setUniverse(e.target.value as UniverseType); setPage(1);}}>
+              <option value="mainboard">Mainboard</option><option value="nifty50">Nifty 50</option><option value="nifty500">Nifty 500</option><option value="midsmall400">MidSmall 400</option>
+            </select><ChevronDown size={14} />
+          </span>
+        </div>
         <label className="query-control"><span className="field-label">Scanner query</span><span className="query-input"><Search size={16} />
           <input aria-label="Scanner query" value={queryText} onChange={event => setQueryText(event.target.value)}
             onKeyDown={event => { if (event.key === 'Enter') void handleRun(); }} placeholder="e.g. P/E < 20 AND EPS > 10" /></span></label>
@@ -178,6 +200,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       {!hasUnavailable && !activeQuery && explanationResult.compiledExplanations.length > 0 && <p className="criteria-summary">{explanationResult.compiledExplanations.map(e => e.humanReadableText).join(matchMode === 'all' ? '; ' : ' OR ')}</p>}
     </section>
     {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
+      loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
       onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
     <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} activeConditionsMap={activeConditionsMap} matchMode={matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />

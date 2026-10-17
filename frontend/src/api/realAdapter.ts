@@ -87,7 +87,7 @@ function cached<T>(cache: Map<string, Promise<unknown>>, key: string, load: () =
 }
 interface FilingLookup {
   publishedAt: string; taxonomy: string; index: string;
-  symbols: Record<string, {recent: string; years: number[]; history: string}>;
+  symbols: Record<string, {recent: string; years: number[]; history: string; fetchStatus?: Record<string, unknown>}>;
 }
 interface DataIndex { revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string; filingLookup?: FilingLookup }
 async function releaseFor(revision?: string): Promise<Manifest> {
@@ -134,7 +134,7 @@ async function companyAnnouncements(release: Manifest, symbol: string) {
   return history;
 }
 
-async function getIpoJson<T>(url: string): Promise<T> {
+async function getIpoJson<T>(url: string, resource = 'IPO catalogue'): Promise<T> {
   if (!url.endsWith('.gz')) return getJson<T>(url);
   try {
     const response = await fetch(url);
@@ -152,7 +152,7 @@ async function getIpoJson<T>(url: string): Promise<T> {
     }
     throw new Error('Expected gzip');
   } catch {
-    throw new Error('IPO catalogue unavailable');
+    throw new Error(`${resource} unavailable`);
   }
 }
 
@@ -161,6 +161,16 @@ async function snapshotSource(revision?: string): Promise<SnapshotSource> {
 }
 
 class RealDataAdapter {
+  async getThemeClassification(revision?: string) {
+    const release = await releaseFor(revision);
+    if (!release.themeClassificationUrl || !release.themeClassificationVersion) throw new Error('Theme classifications are unavailable in this release.');
+    const data = await cached(releaseCache, release.themeClassificationUrl,
+      () => getIpoJson<import('../utils/copyResults').ThemeClassification>(release.themeClassificationUrl!, 'Theme classification'), 6);
+    if (data.schemaVersion !== 1 || data.version !== release.themeClassificationVersion || data.asOfDate !== release.sessionDate || !data.records) {
+      throw new Error('Theme classification release mismatch');
+    }
+    return data;
+  }
   async getFilterChoices(revision?: string) {
     const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision)});
     if (response.type !== 'filterChoices') throw new Error('Unexpected filter choices response');
@@ -172,7 +182,7 @@ class RealDataAdapter {
     return { isValid:true, errors:[], compiledExplanations:[], warnings:[] };
   }
 
-  async runScreen(req: ScreenerRunRequest): Promise<ScreenerRunResponse> {
+  async runScreen(req: ScreenerRunRequest, allRows = false): Promise<ScreenerRunResponse> {
     const announcementFilter = req.announcementFilter;
     if (announcementFilter) {
       const release = await releaseFor(req.datasetRevision);
@@ -184,7 +194,7 @@ class RealDataAdapter {
     const source = await snapshotSource(req.datasetRevision);
     const snapshot = req.textQuery?.trim()
       ? {type:'screen' as const, source, revision:source.revision, sessionDate:source.sessionDate ?? req.asOfDate, result:null}
-      : await runSnapshotTask({type:'screen',source,request:req});
+      : await runSnapshotTask({type:'screen',source,request:req,allRows});
     if (snapshot.type !== 'screen') throw new Error('Unexpected scanner response');
     if (snapshot.result) return snapshot.result;
     const base = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');

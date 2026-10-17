@@ -3,10 +3,10 @@ import type {AiFilterDefinition} from '../../frontend/src/api/aiFilterCatalog';
 import {compactCatalog} from './compactCatalog';
 import {materializeCompilerResult} from './compilerResult';
 
-export const GROQ_MODEL = 'llama-3.1-8b-instant';
-export const PRIMARY_MODEL = '@cf/meta/llama-3.1-8b-instruct';
-export const FALLBACK_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
-export type CompileModel = typeof GROQ_MODEL | typeof PRIMARY_MODEL | typeof FALLBACK_MODEL;
+export const GROQ_MODEL = 'openai/gpt-oss-20b';
+export const PRIMARY_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
+export const FALLBACK_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+export type CompileModel = typeof GROQ_MODEL | typeof PRIMARY_MODEL | typeof FALLBACK_MODEL | string;
 export interface InferenceInput {messages:{role:'system'|'user';content:string}[];response_format:{type:'json_object'};temperature:number;max_tokens:number}
 export type ModelRunner = (model:CompileModel, input:InferenceInput, signal:AbortSignal)=>Promise<unknown>;
 const object = (value: unknown): value is Record<string,unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -94,10 +94,11 @@ export async function compileWithFallback(query:string,catalog:AiFilterDefinitio
       return {...result,compilation:{model,attempts:index+1,cacheHit:false,inputTokens,outputTokens}};
     } catch (error) {
       if (options.signal?.aborted) throw error;
-      const message = error instanceof Error ? error.message : '';
+      const message = error instanceof Error ? error.message : String(error);
       lastErrorMessage = message;
+      console.warn(JSON.stringify({event:'ai_model_error', model, message}));
       const reasons = ['invalid_response','truncated_response','invalid_result','invalid_parameters','source_not_quoted','incomplete_translation','persistence_for_current_price'];
-      options.onAttempt?.({model,success:false,inputTokens:0,outputTokens:0,reason:reasons.includes(message) ? message : 'inference_error'});
+      options.onAttempt?.({model,success:false,inputTokens:0,outputTokens:0,reason:reasons.includes(message) ? message : message || 'inference_error'});
     }
   }
 

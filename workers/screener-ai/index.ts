@@ -7,6 +7,7 @@ import {compilationCacheKey, readCompilation, storeCompilation} from './compilat
 
 interface WorkerEnv extends Env {
   GROQ_API_KEY?: string;
+  GROQ_MODEL?: string;
 }
 
 const isObject = (v:unknown): v is Record<string,unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -71,12 +72,13 @@ export default {
       const cached = await readCompilation(cache,key,catalog);
       if (cached) return json({...cached,catalogRevision:data.revision});
       const groqApiKey = env.GROQ_API_KEY?.trim();
+      const groqModel = env.GROQ_MODEL?.trim() || GROQ_MODEL;
       const models: CompileModel[] = groqApiKey
-        ? [GROQ_MODEL, PRIMARY_MODEL, FALLBACK_MODEL]
+        ? [groqModel, PRIMARY_MODEL, FALLBACK_MODEL]
         : [PRIMARY_MODEL, FALLBACK_MODEL];
 
       const runModel = async (model: CompileModel, input: InferenceInput, signal: AbortSignal): Promise<unknown> => {
-        if (model === GROQ_MODEL && groqApiKey) {
+        if (model === groqModel && groqApiKey) {
           const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -84,7 +86,7 @@ export default {
               'Authorization': `Bearer ${groqApiKey}`,
             },
             body: JSON.stringify({
-              model: GROQ_MODEL,
+              model: groqModel,
               messages: input.messages,
               response_format: input.response_format,
               temperature: input.temperature,

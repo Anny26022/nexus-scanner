@@ -60,6 +60,31 @@ def fetch_nse_delivery_csv(session_date: date) -> Optional[List[Dict[str, Any]]]
         return None
 
 
+def fetch_nse_price_bands(session_date: date) -> Dict[str, str]:
+    """Fetch official daily price bands from nsearchives sec_list_{date}.csv."""
+    date_str = session_date.strftime("%d%m%Y")
+    url = f"https://nsearchives.nseindia.com/content/equities/sec_list_{date_str}.csv"
+    req = urllib.request.Request(url, headers=NSE_HEADERS)
+    band_map = {}
+    try:
+        with urllib.request.urlopen(req, context=SSL_CTX, timeout=8) as resp:
+            if resp.status == 200:
+                content = resp.read().decode("utf-8", errors="ignore")
+                reader = csv.reader(io.StringIO(content))
+                header = next(reader, None)
+                if header:
+                    for row in reader:
+                        if len(row) >= 4:
+                            sym = row[0].strip().upper()
+                            band = row[3].strip()
+                            if sym:
+                                band_map[sym] = band if band and band != "-" else "No Band"
+    except Exception:
+        pass
+    return band_map
+
+
+
 def fetch_nse_surveillance_for_date(session_date: date) -> Dict[str, Dict[str, Any]]:
     """Fetch and parse official ASM/GSM circular lists for a given trading date."""
     import zipfile
@@ -325,6 +350,9 @@ def main():
                 if sym and r.get("SERIES") == "EQ":
                     delivery_map[sym] = r
 
+        # Fetch official NSE daily price bands from sec_list_{date}.csv
+        price_bands_map = fetch_nse_price_bands(session_date)
+
         # Fetch official NSE ASM/GSM circular surveillance lists for this session
         surveillance_map = fetch_nse_surveillance_for_date(session_date)
 
@@ -424,6 +452,9 @@ def main():
             is_gsm = surv_info["isGsm"] if surv_info else (False if surv_avail else None)
             gsm_stage = surv_info["gsmStage"] if surv_info else None
 
+            # Official price band for this session
+            circuit_limit = price_bands_map.get(sym) or stock.get("circuit_limit") or "20"
+
             item = {
                 "symbol": sym,
                 "name": stock.get("name") or sym,
@@ -435,9 +466,10 @@ def main():
                 "isSme": stock.get("is_sme", False),
                 "isFno": stock.get("is_fno", False),
                 "fnoBan": False,
-                "circuitLimit": stock.get("circuit_limit") or "20",
+                "circuitLimit": circuit_limit,
                 "surveillanceAvailable": surv_avail,
                 "surveillanceAsOfDate": session_str if surv_avail else None,
+
                 "isAsm": is_asm,
                 "asmStage": asm_stage,
                 "isGsm": is_gsm,

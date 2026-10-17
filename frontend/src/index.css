@@ -3654,6 +3654,7 @@
     align-items: center;
     background: var(--surface);
   }
+  .sidebar-toggle, .workspace-sidebar-reopen { display: none !important; }
   .sidebar-brand-row { grid-column: 1; grid-row: 1; }
   .brand { font-size: 15px; gap: 7px; letter-spacing: -.3px; font-weight: 700; }
   .brand-mark { width: 20px; height: 20px; }

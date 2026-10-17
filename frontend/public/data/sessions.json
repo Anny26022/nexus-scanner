@@ -1,4 +1,65 @@
 {
   "version": 1,
-  "sessions": []
+  "sessions": [
+    {
+      "date": "2021-10-14",
+      "revision": "96d18e588f93a76125051dead1e73024ab641b65bc5e75db4779a73867755d61",
+      "label": "2021-10-14",
+      "isHistorical": true
+    },
+    {
+      "date": "2021-10-13",
+      "revision": "08b6ce37bfb74f0bc84ee958ef5605d6fbfc8c0be4845650c64ae9363b3e9985",
+      "label": "2021-10-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2021-10-12",
+      "revision": "9f98107ccdf4ee00640c186053af23121c11090d0394696c3e41b8e794877e4e",
+      "label": "2021-10-12",
+      "isHistorical": true
+    },
+    {
+      "date": "2021-10-11",
+      "revision": "6cbd10b9ce8d8dfc1e6d74ea28ae5ce71853dd2a5f373f72cf4c7873d54550c8",
+      "label": "2021-10-11",
+      "isHistorical": true
+    },
+    {
+      "date": "2021-10-08",
+      "revision": "49529b739e64845717c3cef192b799493163e7c3544b5064634df298aa207144",
+      "label": "2021-10-08",
+      "isHistorical": true
+    },
+    {
+      "date": "2021-10-07",
+      "revision": "e78535c174651a00b9573467298329a2315f09b626a516550f81abe5a540343e",
+      "label": "2021-10-07",
+      "isHistorical": true
+    },
+    {
+      "date": "2021-10-06",
+      "revision": "1aa557b21bd19127f609870891d788225b98db040d9f7842028e855ffc1582ac",
+      "label": "2021-10-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2021-10-05",
+      "revision": "8731cc90efc3286f493e86d5c188c7ec977982cf2bfdb5d46cee2f87ada792a2",
+      "label": "2021-10-05",
+      "isHistorical": true
+    },
+    {
+      "date": "2021-10-04",
+      "revision": "2602aa02f81262a1ec7ab43fdf5e433d81bb10a7b9e6a45266610e5fbd28c030",
+      "label": "2021-10-04",
+      "isHistorical": true
+    },
+    {
+      "date": "2021-10-01",
+      "revision": "fe0252ba7590da70f1de8155d9a1cbb48aec7a21ab60b560cfec6538d0e70e07",
+      "label": "2021-10-01",
+      "isHistorical": true
+    }
+  ]
 }

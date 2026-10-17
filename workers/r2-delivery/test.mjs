@@ -22,6 +22,13 @@ test('serves published objects with browser-readable metadata', async () => {
   assert.deepEqual(calls.pop(), ['get', 'objects/abc.json.gz']);
 });
 
+test('serves published historical snapshots', async () => {
+  const response = await worker.fetch(new Request('https://data.example.com/snapshots/2021-10-14.json.gz'), env);
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), 'published bytes');
+  assert.deepEqual(calls.pop(), ['get', 'snapshots/2021-10-14.json.gz']);
+});
+
 test('HEAD returns metadata without a body', async () => {
   const response = await worker.fetch(new Request('https://data.example.com/releases/abc/index.json', { method: 'HEAD' }), env);
   assert.equal(response.status, 200);

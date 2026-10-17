@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "revision": "554005974264d9bee0685f0a1e6b924ebad9960799ae323e6699f707b5c59fe4",
-  "updatedAt": "2026-10-11T10:41:16.605371+00:00",
-  "reportCount": 2422,
-  "universeSessionDate": "2026-10-09",
-  "universeRevision": "c4c718cd60ae318bcfe632aa8b423db68d30fffbc83762a2a74f630a199f0f5a",
+  "revision": "21196cec559d081bbdb0895743fc1a176c2ea6a5293ec68ed003061a6d8c85ee",
+  "updatedAt": "2026-10-17T13:01:00.571818+00:00",
+  "reportCount": 2423,
+  "universeSessionDate": "2026-10-16",
+  "universeRevision": "9d94c4f98e94be4127872b2f3141ff748d901c3c66726645eff44cba0d9da2de",
   "encoding": "gzip",
-  "datasetUrl": "/data/tijori/revisions/554005974264d9bee0685f0a1e6b924ebad9960799ae323e6699f707b5c59fe4/overviews.json.gz"
+  "datasetUrl": "/data/tijori/revisions/21196cec559d081bbdb0895743fc1a176c2ea6a5293ec68ed003061a6d8c85ee/overviews.json.gz"
 }

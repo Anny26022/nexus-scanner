@@ -311,6 +311,19 @@ def calculate_technicals(opens: np.ndarray, closes: np.ndarray, highs: np.ndarra
 
 
 
+def compute_ohlcv_fingerprint(pipeline_dir: Path) -> str:
+    ohlcv_dir = pipeline_dir / "ohlcv_data"
+    if not ohlcv_dir.exists():
+        return ""
+    paths = sorted(ohlcv_dir.glob("*.csv"))
+    entries = []
+    for p in paths:
+        if p.is_file():
+            stat = p.stat()
+            entries.append((f"ohlcv_data/{p.name}", stat.st_size, stat.st_mtime_ns))
+    return hashlib.sha256(json.dumps(entries).encode()).hexdigest()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate 5-year historical snapshots.")
     parser.add_argument("--pipeline-dir", type=Path, default=Path("DO NOT DELETE EDL PIPELINE"))
@@ -355,11 +368,18 @@ def main():
                 chk_dates = pd.to_datetime(chk["dates"])
                 marker = pipeline_dir / "scanner_revision.json"
                 if marker.exists():
-                    manifest = json.loads(marker.read_text())
-                    expected_rev = manifest.get("historyRevision")
-                    if expected_rev and npz_rev != expected_rev:
-                        print(f"history.npz revision ({npz_rev[:12]}) differs from expected ({expected_rev[:12]}), rebuilding...")
-                        rebuild_history = True
+                    try:
+                        manifest = json.loads(marker.read_text())
+                        expected_rev = manifest.get("historyRevision")
+                    except Exception:
+                        expected_rev = compute_ohlcv_fingerprint(pipeline_dir)
+                else:
+                    expected_rev = compute_ohlcv_fingerprint(pipeline_dir)
+
+                if expected_rev and npz_rev != expected_rev:
+                    print(f"history.npz revision ({npz_rev[:12]}) differs from source CSV fingerprint ({expected_rev[:12]}), rebuilding...")
+                    rebuild_history = True
+
                 if not rebuild_history and len(chk_dates) > 0 and args.end_date > chk_dates.max().date():
                     if ohlcv_dir.exists() and any(ohlcv_dir.glob("*.csv")):
                         print(f"Target end date {args.end_date} exceeds history.npz max date {chk_dates.max().date()}, checking for newer ohlcv_data...")
@@ -382,10 +402,8 @@ def main():
                 sc.save_frames(pipeline_dir)
                 print("Successfully compiled .scanner_cache/history.npz from ohlcv_data!")
             except Exception as e:
-                if not history_npz_path.exists():
-                    sys.exit(f"Failed to compile history.npz from ohlcv_data: {e}")
-                print(f"Warning: Rebuild failed ({e}), continuing with existing history.npz")
-        elif not history_npz_path.exists():
+                sys.exit(f"Failed to compile history.npz from ohlcv_data: {e}")
+        else:
             sys.exit(f"Error: Neither {history_npz_path} nor {ohlcv_dir} exists.")
 
     print("Loading vectorized OHLCV history.npz...")

@@ -101,10 +101,11 @@ jobs:
           if not snapshots:
               sys.exit("Error: No snapshots found in outputs/historical_snapshots/*.json.gz; nothing to upload.")
 
-          print(f"Uploading {len(snapshots)} snapshots to R2 bucket '{bucket_name}'...")
+          print(f"Uploading and verifying {len(snapshots)} snapshots to R2 bucket '{bucket_name}'...")
           for filepath in snapshots:
               filename = os.path.basename(filepath)
               key = f"snapshots/{filename}"
+              file_size = os.path.getsize(filepath)
               with open(filepath, 'rb') as f:
                   s3.upload_fileobj(
                       f,
@@ -112,12 +113,16 @@ jobs:
                       key,
                       ExtraArgs={'ContentType': 'application/json', 'ContentEncoding': 'gzip'}
                   )
-              print(f"Uploaded {key}")
+              # Verify R2 persistence with head_object readback
+              head = s3.head_object(Bucket=bucket_name, Key=key)
+              if head.get('ContentLength') != file_size:
+                  sys.exit(f"R2 readback verification failed for {key}: expected {file_size} bytes, got {head.get('ContentLength')}")
+              print(f"Uploaded and verified {key} ({file_size} bytes)")
 
-          # Write sentinel file verifying successful upload
+          # Write sentinel file verifying successful upload and readback
           with open(".upload_verified", "w") as f:
-              f.write(f"Verified upload of {len(snapshots)} snapshots\n")
-          print("R2 snapshot upload complete and verified.")
+              f.write(f"Verified upload and readback of {len(snapshots)} snapshots\n")
+          print("R2 snapshot upload and readback complete and verified.")
           EOF
 
       - name: Commit Updated Sessions Manifest

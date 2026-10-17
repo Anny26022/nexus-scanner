@@ -26,7 +26,7 @@ test('dispatches only when the run lookup is complete and empty',async()=>{
   };
   assert.equal((await triggerRefresh(time,'test-token',request)).action,'dispatched');
   assert.equal(calls.length,2);
-  assert.deepEqual(JSON.parse(calls[1].options.body),{ref:'main',inputs:{scheduled_refresh:true}});
+  assert.deepEqual(JSON.parse(calls[1].options.body),{ref:'main',inputs:{scheduled_refresh:'true'}});
   assert.ok(calls[0].url.includes('created=%3E%3D2026-10-14T10%3A30%3A00Z'));
 });
 test('the second check skips an existing daily refresh',async()=>{

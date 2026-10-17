@@ -23,7 +23,7 @@ export async function triggerRefresh(time, token, request = fetch) {
   const existing = existingRefresh(data.workflow_runs, cutoff);
   if (existing) return {action:'skipped', runId:existing.id, cutoff};
   const dispatch = await request(`${workflow}/dispatches`, {method:'POST', headers:{...headers,'Content-Type':'application/json'},
-    body:JSON.stringify({ref:'main',inputs:{scheduled_refresh:true}}), signal:AbortSignal.timeout(15000)});
+    body:JSON.stringify({ref:'main',inputs:{scheduled_refresh:'true'}}), signal:AbortSignal.timeout(15000)});
   if (!dispatch.ok) throw new Error(`GitHub dispatch failed (HTTP ${dispatch.status})`);
   return {action:'dispatched', cutoff};
 }

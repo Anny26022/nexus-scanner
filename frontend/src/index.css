@@ -3332,9 +3332,11 @@
 .results-symbol-search { display: flex; align-items: center; gap: 6px; flex: 0 1 180px; min-width: 130px; height: 28px; margin-inline: auto; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: var(--surface-subtle); transition: all 0.15s ease; }
 .results-symbol-search:focus-within { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 2px var(--accent-soft); }
 .results-symbol-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 11.5px; font-weight: 500; }
-.results-actions .button { min-height: 28px; height: 28px; padding-inline: 8px; gap: 5px; border-radius: 6px; font-size: 11px; }
-.results-actions .button svg { width: 13px; height: 13px; }
-.results-actions .button.results-copy-button { width: 28px; height: 28px; min-height: 28px; padding: 0; flex: 0 0 28px; }
+.results-actions .button { min-height: 28px; height: 28px; padding-inline: 8px; gap: 5px; border-radius: 6px; font-size: 11px; border: 1px solid transparent; background: transparent; color: var(--secondary); box-shadow: none; }
+.results-actions .button:hover { background: var(--surface-hover); color: var(--text); border-color: transparent; }
+.results-actions .button svg { width: 14px; height: 14px; color: var(--secondary); }
+.results-actions .button.results-copy-button { width: 28px; height: 28px; min-height: 28px; padding: 0; flex: 0 0 28px; border: 1px solid transparent; background: transparent; }
+.results-actions .button.results-copy-button:hover { background: var(--surface-hover); color: var(--text); }
 .fetch-status { font-size: 10px; color: var(--muted); min-width: 85px; font-weight: 500; }
 .dialog.column-dialog { width: min(680px, calc(100vw - 40px)); max-height: min(720px, calc(100dvh - 48px)); }
 .column-dialog::backdrop { background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(8px); }

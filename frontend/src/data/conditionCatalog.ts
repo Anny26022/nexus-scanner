@@ -82,7 +82,6 @@ export const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
 ];
 
 export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
-  ...tradingViewConditionCatalog,
   {
     id:'PRICE_VS_MAS', label:'Price vs moving averages', category:'trend',
     description:'Latest close must satisfy every selected comparison (AND). These are current-price comparisons, not persistence or moving-average stack rules. Equality does not count as above or below.',
@@ -107,6 +106,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
         ? parameter.defaultValue : periods[0], options:periods.map(value => ({value, label:String(value)}))} : parameter;
     }),
   })),
+  ...tradingViewConditionCatalog,
   // --- TREND ---
   {
     id: 'trend_price_vs_ma',

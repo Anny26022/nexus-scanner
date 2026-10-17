@@ -22,6 +22,14 @@ cache entries are treated as misses. Writes run through `ctx.waitUntil` and do n
 delay the response. The cache is local to each Cloudflare data centre; a first
 request in another location may require inference again.
 
+## Inference Models & Fallback Hierarchy
+
+The screener AI supports multi-tier model execution:
+1. **Groq (`llama-3.1-8b-instant`)**: Sub-150ms inference with 14,400 free requests per day. Enabled automatically when `GROQ_API_KEY` is configured in Cloudflare Worker secrets or `.dev.vars`.
+2. **Cloudflare Workers AI (`@cf/meta/llama-3.1-8b-instruct`)**: Fast serverless model (~40 neurons/query, ~250 free queries/day).
+3. **Cloudflare Workers AI (`@cf/qwen/qwen3-30b-a3b-fp8`)**: Fallback model for deeper reasoning.
+4. **Deterministic Evaluation Fallback**: Instant fallback for recognized standard queries.
+
 Run the focused checks from `frontend/`:
 
 ```sh

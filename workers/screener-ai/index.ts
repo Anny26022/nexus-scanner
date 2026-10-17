@@ -2,8 +2,12 @@ import {MAX_PROMPT_LENGTH} from '../../frontend/src/api/aiScreenerContract';
 
 import {createAiFilterCatalog} from '../../frontend/src/api/aiFilterCatalog';
 import type {FilterChoices} from '../../frontend/src/types/filterChoices';
-import {compileWithFallback, compilerPrompt} from './compiler';
+import {GROQ_MODEL, PRIMARY_MODEL, FALLBACK_MODEL, compileWithFallback, compilerPrompt, type CompileModel, type InferenceInput} from './compiler';
 import {compilationCacheKey, readCompilation, storeCompilation} from './compilationCache';
+
+interface WorkerEnv extends Env {
+  GROQ_API_KEY?: string;
+}
 
 const isObject = (v:unknown): v is Record<string,unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const json = (body: unknown, status = 200) => Response.json(body, {status,
@@ -66,11 +70,42 @@ export default {
       const cache = caches.default;
       const cached = await readCompilation(cache,key,catalog);
       if (cached) return json({...cached,catalogRevision:data.revision});
-      const result = await compileWithFallback(text.trim(),catalog,
-        (model,input,signal)=>env.AI.run(model as any,input as any,{signal}), {
-          signal:AbortSignal.any([request.signal,AbortSignal.timeout(78000)]),
-          onAttempt:attempt=>console.log(JSON.stringify({event:'ai_compile_attempt',requestId,...attempt})),
-        });
+      const groqApiKey = env.GROQ_API_KEY?.trim();
+      const models: CompileModel[] = groqApiKey
+        ? [GROQ_MODEL, PRIMARY_MODEL, FALLBACK_MODEL]
+        : [PRIMARY_MODEL, FALLBACK_MODEL];
+
+      const runModel = async (model: CompileModel, input: InferenceInput, signal: AbortSignal): Promise<unknown> => {
+        if (model === GROQ_MODEL && groqApiKey) {
+          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${groqApiKey}`,
+            },
+            body: JSON.stringify({
+              model: GROQ_MODEL,
+              messages: input.messages,
+              response_format: input.response_format,
+              temperature: input.temperature,
+              max_tokens: input.max_tokens,
+            }),
+            signal,
+          });
+          if (!res.ok) {
+            const errText = await res.text().catch(() => '');
+            throw new Error(`groq_error_${res.status}: ${errText}`);
+          }
+          return await res.json();
+        }
+        return env.AI.run(model as any, input as any, {signal});
+      };
+
+      const result = await compileWithFallback(text.trim(), catalog, runModel, {
+        models,
+        signal: AbortSignal.any([request.signal, AbortSignal.timeout(78000)]),
+        onAttempt: attempt => console.log(JSON.stringify({event: 'ai_compile_attempt', requestId, ...attempt})),
+      });
       const payload = {...result,catalogRevision:data.revision};
       if (!result.unsupportedClauses.length) {
         ctx.waitUntil(storeCompilation(cache,key,payload,catalog)
@@ -88,4 +123,4 @@ export default {
       return json({error:'The AI could not build a valid screen. Please rephrase your request and try again.',requestId},502);
     }
   },
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<WorkerEnv>;

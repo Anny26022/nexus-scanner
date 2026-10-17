@@ -68,6 +68,7 @@ node_modules/
 worker-configuration.d.ts
 frontend/public/data/ai-filter-choices.json
 .dev.vars*
+!.dev.vars.example
 
 # Chart payloads are published through R2, never through Git.
 DO NOT DELETE EDL PIPELINE/chart_artifacts/

@@ -28,7 +28,7 @@ export function localAiWorker(): Plugin {
       path.join(root, 'node_modules/wrangler/bin/wrangler.js'), 'dev',
       '--config', path.join(root, 'wrangler.dev.jsonc'),
       '--ip', '127.0.0.1', '--port', '8787', '--show-interactive-dev-session=false',
-    ], {cwd:root, stdio:'pipe'});
+    ], {cwd:root, stdio:'pipe', env: process.env});
     if (!child) {
       child = current;
       current.stdin.end();

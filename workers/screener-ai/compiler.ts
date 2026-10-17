@@ -3,9 +3,10 @@ import type {AiFilterDefinition} from '../../frontend/src/api/aiFilterCatalog';
 import {compactCatalog} from './compactCatalog';
 import {materializeCompilerResult} from './compilerResult';
 
+export const GROQ_MODEL = 'llama-3.1-8b-instant';
 export const PRIMARY_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 export const FALLBACK_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
-export type CompileModel = typeof PRIMARY_MODEL | typeof FALLBACK_MODEL;
+export type CompileModel = typeof GROQ_MODEL | typeof PRIMARY_MODEL | typeof FALLBACK_MODEL;
 export interface InferenceInput {messages:{role:'system'|'user';content:string}[];response_format:{type:'json_object'};temperature:number;max_tokens:number}
 export type ModelRunner = (model:CompileModel, input:InferenceInput, signal:AbortSignal)=>Promise<unknown>;
 const object = (value: unknown): value is Record<string,unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -38,7 +39,16 @@ function parseOutput(output:unknown): {raw:unknown;inputTokens:number;outputToke
     if (!object(first) || first.finish_reason === 'length' || !object(first.message)) throw new Error('truncated_response');
     content = first.message.content;
   }
-  const raw:unknown = typeof content === 'string' ? JSON.parse(content) : content;
+  let raw: unknown;
+  if (typeof content === 'string') {
+    const trimmed = content.trim();
+    const unwrapped = trimmed.startsWith('```')
+      ? trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+      : trimmed;
+    raw = JSON.parse(unwrapped);
+  } else {
+    raw = content;
+  }
   const usage = object(output.usage) ? output.usage : {};
   const numeric = (v:unknown)=>typeof v === 'number' && Number.isFinite(v) ? v : 0;
   return {raw,inputTokens:numeric(usage.prompt_tokens),outputTokens:numeric(usage.completion_tokens)};
@@ -55,9 +65,8 @@ function checkCoverage(_query:string,result:AiScreenResult) {
 import evaluationCases from './evaluation-cases.json';
 
 export async function compileWithFallback(query:string,catalog:AiFilterDefinition[],run:ModelRunner,
-  options:{signal?:AbortSignal; primary?:CompileModel; onAttempt?:(data:{model:string;success:boolean;inputTokens:number;outputTokens:number;reason?:string})=>void}={}) {
-  const primary = options.primary ?? PRIMARY_MODEL;
-  const models:CompileModel[] = primary === FALLBACK_MODEL ? [FALLBACK_MODEL] : [primary,FALLBACK_MODEL];
+  options:{signal?:AbortSignal; primary?:CompileModel; models?:CompileModel[]; onAttempt?:(data:{model:string;success:boolean;inputTokens:number;outputTokens:number;reason?:string})=>void}={}) {
+  const models:CompileModel[] = options.models ?? (options.primary === FALLBACK_MODEL ? [FALLBACK_MODEL] : [options.primary ?? PRIMARY_MODEL, FALLBACK_MODEL]);
   const messages:InferenceInput['messages'] = [{role:'system',content:compilerPrompt(catalog)},{role:'user',content:query}];
   let inputTokens=0,outputTokens=0;
   let partialCandidate: {result:AiScreenResult; model:string; index:number} | null = null;

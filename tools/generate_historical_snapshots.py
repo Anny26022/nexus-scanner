@@ -60,16 +60,19 @@ def fetch_nse_delivery_csv(session_date: date) -> Optional[List[Dict[str, Any]]]
         return None
 
 
-def calculate_technicals(closes: np.ndarray, highs: np.ndarray, lows: np.ndarray, volumes: np.ndarray) -> Dict[str, Any]:
+def calculate_technicals(opens: np.ndarray, closes: np.ndarray, highs: np.ndarray, lows: np.ndarray, volumes: np.ndarray) -> Dict[str, Any]:
     """Calculate core screener indicators given price arrays."""
     n = len(closes)
     if n == 0:
         return {}
 
+    current_open = float(opens[-1]) if len(opens) else float(closes[-1])
     current_close = float(closes[-1])
     current_high = float(highs[-1])
     current_low = float(lows[-1])
     current_volume = float(volumes[-1])
+
+    change_pct = float(((current_close / closes[-2]) - 1.0) * 100.0) if n >= 2 and closes[-2] > 0 else 0.0
 
     # SMAs
     sma10 = float(np.mean(closes[-10:])) if n >= 10 else current_close
@@ -77,9 +80,25 @@ def calculate_technicals(closes: np.ndarray, highs: np.ndarray, lows: np.ndarray
     sma50 = float(np.mean(closes[-50:])) if n >= 50 else current_close
     sma200 = float(np.mean(closes[-200:])) if n >= 200 else current_close
 
+    # EMAs (approximate via exponential weighting)
+    def calc_ema(arr: np.ndarray, period: int) -> float:
+        if len(arr) < period:
+            return float(arr[-1])
+        k = 2.0 / (period + 1.0)
+        ema = float(arr[0])
+        for val in arr[1:]:
+            ema = (val * k) + (ema * (1.0 - k))
+        return ema
+
+    ema20 = calc_ema(closes, 20)
+    ema50 = calc_ema(closes, 50)
+    ema200 = calc_ema(closes, 200)
+
     # Volume SMAs & Turnover
-    avg_volume_20 = float(np.mean(volumes[-20:])) if n >= 20 else current_volume
+    avg_vol_20 = float(np.mean(volumes[-21:-1])) if n >= 21 else (float(np.mean(volumes)) if n > 0 else 1.0)
+    rvol = float(current_volume / avg_vol_20) if avg_vol_20 > 0 else 1.0
     avg_turnover_20_cr = float(np.mean(closes[-20:] * volumes[-20:]) / 1e7) if n >= 20 else (current_close * current_volume / 1e7)
+    rupee_volume_crore = float(current_close * current_volume / 1e7)
 
     # 52-Week High / Low (252 trading sessions)
     lookback_52w = min(n, 252)
@@ -108,18 +127,25 @@ def calculate_technicals(closes: np.ndarray, highs: np.ndarray, lows: np.ndarray
     is_inside_day = bool(n >= 2 and highs[-1] <= highs[-2] and lows[-1] >= lows[-2])
 
     return {
+        "open": current_open,
         "close": current_close,
         "high": current_high,
         "low": current_low,
         "volume": current_volume,
+        "changePct": change_pct,
+        "rvol": rvol,
+        "rupeeVolumeCrore": rupee_volume_crore,
         "sma10": sma10,
         "sma20": sma20,
         "sma50": sma50,
         "sma200": sma200,
-        "avg_volume_20": avg_volume_20,
+        "ema20": ema20,
+        "ema50": ema50,
+        "ema200": ema200,
+        "avg_volume_20": avg_vol_20,
         "daily_rupee_turnover_20_cr": avg_turnover_20_cr,
-        "percent_from_52w_high": dist_52w_high_pct,
-        "percent_from_52w_low": dist_52w_low_pct,
+        "dist52wHighPct": dist_52w_high_pct,
+        "dist52wLowPct": dist_52w_low_pct,
         "close_above_sma20": bool(current_close >= sma20),
         "close_above_sma50": bool(current_close >= sma50),
         "close_above_sma200": bool(current_close >= sma200),
@@ -129,6 +155,7 @@ def calculate_technicals(closes: np.ndarray, highs: np.ndarray, lows: np.ndarray
         "bullish_candle": bullish_candle,
         "is_inside_day": is_inside_day,
     }
+
 
 
 def main():
@@ -260,7 +287,8 @@ def main():
             l_vals = s_values[:, 2]
             v_vals = s_values[:, 4]
 
-            tech = calculate_technicals(c_vals, h_vals, l_vals, v_vals)
+            o_vals = s_values[:, 0]
+            tech = calculate_technicals(o_vals, c_vals, h_vals, l_vals, v_vals)
             if not tech:
                 continue
 
@@ -298,48 +326,83 @@ def main():
             deliv_qty = int(deliv["DELIV_QTY"]) if deliv and deliv.get("DELIV_QTY", "").isdigit() else None
             deliv_pct = float(deliv["DELIV_PER"]) if deliv and deliv.get("DELIV_PER") else None
 
+            # Market cap estimation (close * total equity shares from fundamental / shareholding records)
+            mcap_crore = stock.get("market_cap_crore")
+            if not mcap_crore and latest_fin and latest_fin.get("eps") and latest_fin.get("net_profit") and latest_fin["eps"] > 0:
+                shares = (latest_fin["net_profit"] * 1e7) / latest_fin["eps"]
+                mcap_crore = round((shares * tech["close"]) / 1e7, 2)
+
             item = {
                 "symbol": sym,
-                "name": stock.get("name"),
-                "isin": stock.get("isin"),
-                "sector": stock.get("sector"),
-                "industry": stock.get("industry"),
-                "listing_board": stock.get("listing_board"),
-                "is_sme": stock.get("is_sme", False),
-                "as_of_date": session_str,
-                "close": tech["close"],
+                "name": stock.get("name") or sym,
+                "isin": stock.get("isin") or "",
+                "sector": stock.get("sector") or "Unclassified",
+                "industry": stock.get("industry") or "Unclassified",
+                "series": stock.get("series") or "EQ",
+                "listingDate": stock.get("listing_date") or "",
+                "isSme": stock.get("is_sme", False),
+                "isFno": stock.get("is_fno", False),
+                "fnoBan": False,
+                "circuitLimit": stock.get("circuit_limit") or "20",
+                "asOfDate": session_str,
+                "metadataAsOfDate": session_str,
+                "historyAligned": True,
+                "indexMemberships": stock.get("index_memberships") or [],
+                "open": tech["open"],
                 "high": tech["high"],
                 "low": tech["low"],
+                "close": tech["close"],
                 "volume": tech["volume"],
+                "changePct": tech["changePct"],
+                "rvol": tech["rvol"],
+                "rupeeVolumeCrore": tech["rupeeVolumeCrore"],
+                "marketCapCrore": mcap_crore or 0.0,
+                "peRatio": round(tech["close"] / latest_fin["eps"], 2) if latest_fin and latest_fin.get("eps") and latest_fin["eps"] > 0 else None,
+                "epsTtm": latest_fin.get("eps") if latest_fin else None,
+                "rsi14": tech["rsi14"],
                 "sma10": tech["sma10"],
                 "sma20": tech["sma20"],
                 "sma50": tech["sma50"],
                 "sma200": tech["sma200"],
-                "rsi14": tech["rsi14"],
-                "percent_from_52w_high": tech["percent_from_52w_high"],
-                "percent_from_52w_low": tech["percent_from_52w_low"],
-                "close_above_sma20": tech["close_above_sma20"],
-                "close_above_sma50": tech["close_above_sma50"],
-                "close_above_sma200": tech["close_above_sma200"],
-                "sma20_above_sma50": tech["sma20_above_sma50"],
-                "sma50_above_sma200": tech["sma50_above_sma200"],
-                "avg_volume_20": tech["avg_volume_20"],
-                "daily_rupee_turnover_20_cr": tech["daily_rupee_turnover_20_cr"],
-                "bullish_candle": tech["bullish_candle"],
-                "is_inside_day": tech["is_inside_day"],
-                "deliverable_quantity": deliv_qty,
-                "delivery_percent": deliv_pct,
-                "promoter_holding_percent": latest_sh.get("promoter_holding_percent") if latest_sh else None,
-                "fii_holding_percent": latest_sh.get("fii_holding_percent") if latest_sh else None,
-                "dii_holding_percent": latest_sh.get("dii_holding_percent") if latest_sh else None,
-                "public_holding_percent": latest_sh.get("public_holding_percent") if latest_sh else None,
-                "quarterly_sales": latest_fin.get("sales") if latest_fin else None,
-                "quarterly_net_profit": latest_fin.get("net_profit") if latest_fin else None,
-                "quarterly_eps": latest_fin.get("eps") if latest_fin else None,
-                "quarterly_opm": latest_fin.get("opm") if latest_fin else None,
-                "latest_earnings_date": latest_fin.get("filing_date")[:10] if latest_fin and latest_fin.get("filing_date") else None,
+                "ema20": tech["ema20"],
+                "ema50": tech["ema50"],
+                "ema200": tech["ema200"],
+                "dist52wHighPct": tech["dist52wHighPct"],
+                "dist52wLowPct": tech["dist52wLowPct"],
+                "deliveryPct": deliv_pct,
+                "deliverableQuantity": deliv_qty,
+                "promoterHoldingPct": latest_sh.get("promoter_holding_percent") if latest_sh else None,
+                "fiiHoldingPct": latest_sh.get("fii_holding_percent") if latest_sh else None,
+                "diiHoldingPct": latest_sh.get("dii_holding_percent") if latest_sh else None,
+                "publicHoldingPct": latest_sh.get("public_holding_percent") if latest_sh else None,
+                "quarterlySales": latest_fin.get("sales") if latest_fin else None,
+                "quarterlyNetProfit": latest_fin.get("net_profit") if latest_fin else None,
+                "quarterlyEps": latest_fin.get("eps") if latest_fin else None,
+                "quarterlyOpm": latest_fin.get("opm") if latest_fin else None,
+                "earningsDate": latest_fin.get("filing_date")[:10] if latest_fin and latest_fin.get("filing_date") else None,
+                "metrics": {
+                    "return5": round(((tech["close"] / c_vals[-6]) - 1) * 100, 2) if len(c_vals) >= 6 else None,
+                    "return21": round(((tech["close"] / c_vals[-22]) - 1) * 100, 2) if len(c_vals) >= 22 else None,
+                    "return63": round(((tech["close"] / c_vals[-64]) - 1) * 100, 2) if len(c_vals) >= 64 else None,
+                    "return126": round(((tech["close"] / c_vals[-127]) - 1) * 100, 2) if len(c_vals) >= 127 else None,
+                    "return252": round(((tech["close"] / c_vals[-253]) - 1) * 100, 2) if len(c_vals) >= 253 else None,
+                    "turnover20": tech["daily_rupee_turnover_20_cr"],
+                    "historySessions": len(c_vals),
+                    "sma20": tech["sma20"],
+                    "sma50": tech["sma50"],
+                    "sma200": tech["sma200"],
+                    "ema20": tech["ema20"],
+                    "ema50": tech["ema50"],
+                    "ema200": tech["ema200"],
+                    "rsi14": tech["rsi14"],
+                },
+                "presetMatches": {
+                    "trend_template": bool(tech["close_above_sma50"] and tech["close_above_sma200"] and tech["sma50_above_sma200"]),
+                    "mom_rvol": bool(tech["rvol"] >= 1.5),
+                },
             }
             snapshot_stocks.append(item)
+
 
         total_active = len(snapshot_stocks)
         breadth_record = {

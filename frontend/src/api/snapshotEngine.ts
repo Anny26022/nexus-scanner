@@ -31,10 +31,16 @@ async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
     } else throw new Error('Invalid compressed scanner snapshot');
   } else data = await response.json();
   data = unpackSnapshot(data) as Snapshot;
-  if (!data || data.revision !== source.revision || !Array.isArray(data.stocks)
-      || data.totalStocks !== data.stocks.length || !/^\d{4}-\d{2}-\d{2}$/.test(data.asOfDate)
-      || (source.sessionDate && data.asOfDate !== source.sessionDate)) {
+  if (!data || !Array.isArray(data.stocks)
+      || !/^\d{4}-\d{2}-\d{2}$/.test(data.asOfDate)
+      || (source.sessionDate ? data.asOfDate !== source.sessionDate : data.revision !== source.revision)) {
     throw new Error('Scanner snapshot revision/session mismatch');
+  }
+  if (!data.revision) {
+    data.revision = source.revision || data.asOfDate;
+  }
+  if (data.totalStocks == null) {
+    data.totalStocks = data.stocks.length;
   }
   return data;
 }
@@ -42,18 +48,20 @@ async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
 export function createSnapshotEngine(loader = readSnapshot) {
   const snapshots = new Map<string, Promise<Snapshot>>();
   async function load(source: SnapshotSource) {
-    if (!/^[a-f0-9]{64}$/.test(source.revision)) throw new Error('Invalid dataset revision');
-    let promise = snapshots.get(source.revision);
+    const cacheKey = source.sessionDate || source.revision;
+    if (!cacheKey) throw new Error('Invalid dataset revision or session date');
+    let promise = snapshots.get(cacheKey);
     if (!promise) {
       promise = loader(source).catch(error => {
-        if (snapshots.get(source.revision) === promise) snapshots.delete(source.revision);
+        if (snapshots.get(cacheKey) === promise) snapshots.delete(cacheKey);
         throw error;
       });
-      snapshots.set(source.revision,promise);
+      snapshots.set(cacheKey, promise);
       if (snapshots.size > 2) snapshots.delete(snapshots.keys().next().value!);
     }
     return promise;
   }
+
   return async (task: SnapshotTask): Promise<SnapshotResult> => {
     const data = await load(task.source);
     if (task.type === 'warm') return {type:'warm'};

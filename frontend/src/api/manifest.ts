@@ -71,11 +71,19 @@ export function preloadManifest(): Promise<Manifest> {
 
 export const getManifest = () => current ? Promise.resolve(current) : refreshManifest();
 
-export function manifestSnapshotSource(manifest: Manifest, revision = manifest.revision): SnapshotSource {
+export function manifestSnapshotSource(manifest: Manifest, revision = manifest.revision, sessionDate?: string): SnapshotSource {
   if (!/^[a-f0-9]{64}$/.test(revision)) throw new Error('Invalid dataset revision');
+  if (sessionDate && sessionDate !== manifest.sessionDate) {
+    return {
+      revision,
+      sessionDate,
+      url: `/data/snapshots/${sessionDate}.json.gz`,
+    };
+  }
   // Historical revisions keep their original URL; current releases advertise gzip.
   return {revision, url:revision === manifest.revision
     ? (typeof DecompressionStream !== 'undefined' ? manifest.datasetPackedGzipUrl ?? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
     : `/data/revisions/${revision}/stocks.json`,
   sessionDate:revision === manifest.revision ? manifest.sessionDate : undefined};
 }
+

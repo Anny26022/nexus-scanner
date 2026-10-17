@@ -156,8 +156,8 @@ async function getIpoJson<T>(url: string, resource = 'IPO catalogue'): Promise<T
   }
 }
 
-async function snapshotSource(revision?: string): Promise<SnapshotSource> {
-  return manifestSnapshotSource(await getManifest(), revision);
+async function snapshotSource(revision?: string, sessionDate?: string): Promise<SnapshotSource> {
+  return manifestSnapshotSource(await getManifest(), revision, sessionDate);
 }
 
 class RealDataAdapter {
@@ -171,8 +171,8 @@ class RealDataAdapter {
     }
     return data;
   }
-  async getFilterChoices(revision?: string) {
-    const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision)});
+  async getFilterChoices(revision?: string, sessionDate?: string) {
+    const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision, sessionDate)});
     if (response.type !== 'filterChoices') throw new Error('Unexpected filter choices response');
     return response.result;
   }
@@ -191,7 +191,8 @@ class RealDataAdapter {
       const matches = filterAnnouncements(index, announcementFilter);
       req = {...req, announcementSymbols: [...new Set(matches.map(row => row.symbol!))]};
     }
-    const source = await snapshotSource(req.datasetRevision);
+    const source = await snapshotSource(req.datasetRevision, req.asOfDate);
+
     const snapshot = req.textQuery?.trim()
       ? {type:'screen' as const, source, revision:source.revision, sessionDate:source.sessionDate ?? req.asOfDate, result:null}
       : await runSnapshotTask({type:'screen',source,request:req,allRows});

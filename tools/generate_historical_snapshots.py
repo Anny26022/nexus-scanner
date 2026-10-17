@@ -60,12 +60,13 @@ def fetch_nse_delivery_csv(session_date: date) -> Optional[List[Dict[str, Any]]]
         return None
 
 
-def fetch_nse_price_bands(session_date: date) -> Dict[str, str]:
-    """Fetch official daily price bands from nsearchives sec_list_{date}.csv."""
+def fetch_nse_price_bands(session_date: date) -> Tuple[Dict[str, str], Dict[str, str]]:
+    """Fetch official daily price bands and GSM remarks from nsearchives sec_list_{date}.csv."""
     date_str = session_date.strftime("%d%m%Y")
     url = f"https://nsearchives.nseindia.com/content/equities/sec_list_{date_str}.csv"
     req = urllib.request.Request(url, headers=NSE_HEADERS)
     band_map = {}
+    gsm_remarks = {}
     try:
         with urllib.request.urlopen(req, context=SSL_CTX, timeout=8) as resp:
             if resp.status == 200:
@@ -79,9 +80,16 @@ def fetch_nse_price_bands(session_date: date) -> Dict[str, str]:
                             band = row[3].strip()
                             if sym:
                                 band_map[sym] = band if band and band != "-" else "No Band"
+                        if len(row) >= 5:
+                            sym = row[0].strip().upper()
+                            remark = row[4].strip().upper()
+                            if sym and "GSM" in remark:
+                                stage = remark.split("STAGE")[-1].replace("-", "").strip() or "I"
+                                gsm_remarks[sym] = stage
     except Exception:
         pass
-    return band_map
+    return band_map, gsm_remarks
+
 
 
 
@@ -350,8 +358,8 @@ def main():
                 if sym and r.get("SERIES") == "EQ":
                     delivery_map[sym] = r
 
-        # Fetch official NSE daily price bands from sec_list_{date}.csv
-        price_bands_map = fetch_nse_price_bands(session_date)
+        # Fetch official NSE daily price bands & GSM remarks from sec_list_{date}.csv
+        price_bands_map, gsm_remarks_map = fetch_nse_price_bands(session_date)
 
         # Fetch official NSE ASM/GSM circular surveillance lists for this session
         surveillance_map = fetch_nse_surveillance_for_date(session_date)
@@ -446,14 +454,19 @@ def main():
 
 
             surv_info = surveillance_map.get(sym)
-            surv_avail = bool(surveillance_map)
-            is_asm = surv_info["isAsm"] if surv_info else (False if surv_avail else None)
+            surv_avail = bool(surveillance_map) or bool(gsm_remarks_map)
+            is_asm = surv_info["isAsm"] if surv_info else (False if bool(surveillance_map) else None)
             asm_stage = surv_info["asmStage"] if surv_info else None
-            is_gsm = surv_info["isGsm"] if surv_info else (False if surv_avail else None)
-            gsm_stage = surv_info["gsmStage"] if surv_info else None
+            
+            # Combine GSM circular state with sec_list Remarks
+            is_gsm = (surv_info and surv_info["isGsm"]) or (sym in gsm_remarks_map)
+            gsm_stage = (surv_info and surv_info["gsmStage"]) or gsm_remarks_map.get(sym)
+            if not surv_avail:
+                is_gsm = None
 
             # Official price band for this session
             circuit_limit = price_bands_map.get(sym) or stock.get("circuit_limit") or "20"
+
 
             item = {
                 "symbol": sym,

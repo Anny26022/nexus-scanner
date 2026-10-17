@@ -4338,8 +4338,108 @@
   .data-state h2 { font-size: 14px; }
   .data-state p { font-size: 11px; }
   .notice { flex-shrink: 0; max-height: 25dvh; overflow: auto; margin: 0; border-radius: 0; font-size: 11px; padding: 8px 12px; }
-  .dialog, .dialog.column-dialog { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; }
-  .dialog .dialog-surface, .filter-dialog .dialog-surface, .dialog.column-dialog .dialog-surface { height: 100%; max-height: 100%; border: 0; border-radius: 0; }
+  .dialog:not(.ai-screener-dialog), .dialog.column-dialog { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; }
+  .dialog:not(.ai-screener-dialog) .dialog-surface, .filter-dialog .dialog-surface, .dialog.column-dialog .dialog-surface { height: 100%; max-height: 100%; border: 0; border-radius: 0; }
+
+  /* Mobile AI Screener: sleek floating rectangular chatbox */
+  .dialog.ai-screener-dialog {
+    width: min(480px, calc(100vw - 24px));
+    max-width: min(480px, calc(100vw - 24px));
+    height: auto;
+    max-height: min(84dvh, 620px);
+    margin: auto;
+    border-radius: 16px;
+    border: 1px solid var(--line-strong);
+    box-shadow: 0 20px 48px -8px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--line);
+    overflow: hidden;
+  }
+  .dialog.ai-screener-dialog .dialog-surface {
+    height: auto;
+    max-height: min(84dvh, 620px);
+    border-radius: 16px;
+    border: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .dialog.ai-screener-dialog .dialog-header {
+    padding: 12px 16px 10px;
+    min-height: auto;
+    border-bottom: 1px solid var(--line);
+    align-items: flex-start;
+  }
+  .dialog.ai-screener-dialog .dialog-header h2 {
+    font-size: 15px;
+    font-weight: 650;
+  }
+  .dialog.ai-screener-dialog .dialog-header p {
+    font-size: 11px;
+    line-height: 1.35;
+    margin-top: 2px;
+  }
+  .dialog.ai-screener-dialog .dialog-header .icon-button {
+    width: 32px;
+    height: 32px;
+  }
+  .dialog.ai-screener-dialog .ai-dialog-content {
+    padding: 12px 14px 14px;
+    gap: 12px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .dialog.ai-screener-dialog .ai-composer-card {
+    border-radius: 10px;
+  }
+  .dialog.ai-screener-dialog .ai-textarea {
+    font-size: 13px;
+    padding: 10px 12px 6px;
+    min-height: 60px;
+  }
+  .dialog.ai-screener-dialog .ai-composer-toolbar {
+    padding: 6px 10px;
+  }
+  .dialog.ai-screener-dialog .ai-kbd-hint {
+    display: none;
+  }
+  .dialog.ai-screener-dialog .ai-composer-toolbar .button {
+    margin-left: auto;
+    min-height: 32px;
+    font-size: 12px;
+    padding: 0 12px;
+    gap: 6px;
+  }
+  .dialog.ai-screener-dialog .ai-examples-section {
+    gap: 6px;
+  }
+  .dialog.ai-screener-dialog .ai-examples-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .dialog.ai-screener-dialog .ai-example-btn {
+    width: 100%;
+    justify-content: space-between;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    border-radius: 7px;
+  }
+  .dialog.ai-screener-dialog .dialog-footer {
+    padding: 10px 14px;
+    min-height: auto;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .dialog.ai-screener-dialog .ai-dialog-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+  .dialog.ai-screener-dialog .ai-dialog-actions .button {
+    flex: 1;
+    min-height: 36px;
+    font-size: 12px;
+    justify-content: center;
+  }
   .dialog-header { padding: max(10px, env(safe-area-inset-top)) 14px 10px; min-height: 48px; }
   .dialog-header h2, .column-dialog .dialog-header h2 { font-size: 16px; font-weight: 650; }
   .dialog-header p { font-size: 11px; }

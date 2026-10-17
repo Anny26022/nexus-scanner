@@ -321,16 +321,30 @@ def main():
             ]
             latest_sh = sorted(valid_shs, key=lambda x: x["period_end"])[-1] if valid_shs else None
 
-            # Delivery stats
+            # Delivery & VWAP stats from official NSE Bhavcopy
             deliv = delivery_map.get(sym)
             deliv_qty = int(deliv["DELIV_QTY"]) if deliv and deliv.get("DELIV_QTY", "").isdigit() else None
             deliv_pct = float(deliv["DELIV_PER"]) if deliv and deliv.get("DELIV_PER") else None
+            vwap = None
+            if deliv:
+                try:
+                    raw_avg = deliv.get("AVG_PRICE", "").strip()
+                    if raw_avg and raw_avg.replace(".", "", 1).isdigit() and float(raw_avg) > 0:
+                        vwap = float(raw_avg)
+                    elif deliv.get("TURNOVER_LACS") and deliv.get("TTL_TRD_QNTY"):
+                        turnover_lacs = float(deliv["TURNOVER_LACS"])
+                        ttl_qty = float(deliv["TTL_TRD_QNTY"])
+                        if ttl_qty > 0:
+                            vwap = round((turnover_lacs * 100_000.0) / ttl_qty, 2)
+                except Exception:
+                    pass
 
             # Market cap estimation (close * total equity shares from fundamental / shareholding records)
             mcap_crore = stock.get("market_cap_crore")
             if not mcap_crore and latest_fin and latest_fin.get("eps") and latest_fin.get("net_profit") and latest_fin["eps"] > 0:
                 shares = (latest_fin["net_profit"] * 1e7) / latest_fin["eps"]
                 mcap_crore = round((shares * tech["close"]) / 1e7, 2)
+
 
             item = {
                 "symbol": sym,
@@ -356,6 +370,8 @@ def main():
                 "changePct": tech["changePct"],
                 "rvol": tech["rvol"],
                 "rupeeVolumeCrore": tech["rupeeVolumeCrore"],
+                "vwap": vwap,
+                "vwapAsOfDate": session_str if vwap is not None else None,
                 "marketCapCrore": mcap_crore or 0.0,
                 "peRatio": round(tech["close"] / latest_fin["eps"], 2) if latest_fin and latest_fin.get("eps") and latest_fin["eps"] > 0 else None,
                 "epsTtm": latest_fin.get("eps") if latest_fin else None,

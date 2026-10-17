@@ -346,8 +346,9 @@ export interface SymbolComparisonResponse {
 
 export interface RevisionCurrentResponse {
   latestSessionDate: string;
-  availableSessions: Array<{ date: string; label: string; isHistorical: boolean }>;
+  availableSessions: Array<{ date: string; label: string; isHistorical: boolean; revision?: string }>;
   immutableRevision: string;
   mainboardUniverseCount: number;
   catalogVersion: string;
 }
+

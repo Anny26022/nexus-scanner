@@ -436,9 +436,22 @@ class RealDataAdapter {
 
   async getCurrentRevision(): Promise<RevisionCurrentResponse> {
     const manifest = await refreshManifest();
-    return {latestSessionDate:manifest.sessionDate,availableSessions:[{date:manifest.sessionDate,label:'Latest',isHistorical:false}],
+    let availableSessions = [{date:manifest.sessionDate,label:'Latest',isHistorical:false,revision:manifest.revision}];
+    try {
+      const resp = await fetch('/data/sessions.json');
+      if (resp.ok) {
+        const data = await resp.json();
+        if (Array.isArray(data.sessions) && data.sessions.length > 0) {
+          availableSessions = data.sessions;
+        }
+      }
+    } catch {
+      // Fallback to single latest session
+    }
+    return {latestSessionDate:manifest.sessionDate,availableSessions,
       immutableRevision:manifest.revision,mainboardUniverseCount:manifest.totalStocks,catalogVersion:'v4-snapshot'};
   }
 }
+
 
 export const realAdapter = new RealDataAdapter();

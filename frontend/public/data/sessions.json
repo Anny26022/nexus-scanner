@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "latestSessionDate": "2026-10-16",
+  "sessions": [
+    {
+      "date": "2026-10-16",
+      "revision": "9d94c4f98e94be4127872b2f3141ff748d901c3c66726645eff44cba0d9da2de",
+      "label": "2026-10-16 (Latest)",
+      "isHistorical": false
+    },
+    {
+      "date": "2026-10-15",
+      "revision": "0e21ef6d3d7af9154ca822b70ba44ef35dad06a4e04d2a3076eba9d3faef80bf",
+      "label": "2026-10-15",
+      "isHistorical": true
+    },
+    {
+      "date": "2026-10-14",
+      "revision": "fe7bcaddc2d0f83573c1a4979b3170f72e311bdab22b4a0becf2f681027052d5",
+      "label": "2026-10-14",
+      "isHistorical": true
+    },
+    {
+      "date": "2026-10-13",
+      "revision": "4a6febfa7af142655571052507cd4dab0db0cbc7c4fdaba4dbf53be628412e54",
+      "label": "2026-10-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2026-10-09",
+      "revision": "37fef81167df84cb7a9964669607313a0029014fd5d0f28c5ceec8f89fcac24f",
+      "label": "2026-10-09",
+      "isHistorical": true
+    },
+    {
+      "date": "2026-10-08",
+      "revision": "484a70de07837f83cf322a02a20bc09f4f91c981e59b44bb98e3b67d5b683c83",
+      "label": "2026-10-08",
+      "isHistorical": true
+    },
+    {
+      "date": "2026-10-06",
+      "revision": "607232c0519cc32fc36001959c85af7c23b0146b9df7342780516bf1be743478",
+      "label": "2026-10-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2026-10-01",
+      "revision": "f1679d6077f4e3cc8ba1dd35dbb4bc6ed12cef5f4e1ae715453e7ea5c806ed08",
+      "label": "2026-10-01",
+      "isHistorical": true
+    }
+  ]
+}

@@ -30,7 +30,16 @@ const ScreenerAppContent: React.FC = () => {
     refetchOnWindowFocus: true,
   });
 
-  const selectedAsOfDate = revisionData?.latestSessionDate || '';
+  const [customSessionDate, setCustomSessionDate] = React.useState<string | null>(null);
+
+  const availableSessions = revisionData?.availableSessions || [];
+  const latestDate = revisionData?.latestSessionDate || '';
+  const selectedAsOfDate = customSessionDate || latestDate;
+
+  // Resolve matching revision for selected session
+  const selectedSessionMeta = availableSessions.find((s) => s.date === selectedAsOfDate);
+  const activeRevision = selectedSessionMeta?.revision || revisionData?.immutableRevision;
+  const isHistoricalSelected = Boolean(selectedAsOfDate && latestDate && selectedAsOfDate !== latestDate);
 
   return (
     <div className={`app-frame${sidebarHidden ? ' app-frame--sidebar-hidden' : ''}`}>
@@ -39,27 +48,77 @@ const ScreenerAppContent: React.FC = () => {
 
       <main id="workspace" className={`workspace${activeTab === 'charts' ? ' workspace--charts' : ''}${sidebarHidden ? ' workspace--sidebar-hidden' : ''}`} tabIndex={-1}>
         {sidebarHidden && <button type="button" className="workspace-sidebar-reopen" aria-label="Show sidebar" title="Show sidebar" onClick={() => setSidebarHidden(false)}><PanelLeftOpen size={17}/></button>}
-        {activeTab !== 'charts' && <div className="workspace-heading">
-          <div className="session-label"><CalendarDays size={16} /><span>{selectedAsOfDate ? <>Session <strong>{new Date(`${selectedAsOfDate}T00:00:00`).toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}</strong></> : 'Checking latest session'}</span></div>
-        </div>}
+        {activeTab !== 'charts' && (
+          <div className="workspace-heading">
+            <div className="session-picker-wrapper">
+              <div className="session-label">
+                <CalendarDays size={16} />
+                <span>Session:</span>
+              </div>
+              <select
+                className={`session-select${isHistoricalSelected ? ' session-select--historical' : ''}`}
+                value={selectedAsOfDate}
+                aria-label="Select trading session"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setCustomSessionDate(val === latestDate ? null : val);
+                }}
+              >
+                {availableSessions.length > 0 ? (
+                  availableSessions.map((s) => (
+                    <option key={s.date} value={s.date}>
+                      {new Date(`${s.date}T00:00:00`).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
+                      {s.date === latestDate ? ' (Latest)' : ' (Historical)'}
+                    </option>
+                  ))
+                ) : (
+                  <option value={selectedAsOfDate}>
+                    {selectedAsOfDate
+                      ? new Date(`${selectedAsOfDate}T00:00:00`).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })
+                      : 'Checking latest session'}
+                  </option>
+                )}
+              </select>
+              {isHistoricalSelected && (
+                <button
+                  type="button"
+                  className="button button-ghost button-sm session-reset-btn"
+                  onClick={() => setCustomSessionDate(null)}
+                  title="Reset to latest trading session"
+                >
+                  Reset to Latest
+                </button>
+              )}
+            </div>
+          </div>
+        )}
         {revisionFailed && <p role="alert" className="notice">The latest data release could not be loaded. <button className="button button-ghost" onClick={() => void refreshRevision()}>Retry</button></p>}
         {activeTab === 'screener' ? (
           <ExploreTab
             selectedAsOfDate={selectedAsOfDate}
-            datasetRevision={revisionData?.immutableRevision}
+            datasetRevision={activeRevision}
             onRefreshRevision={async () => (await refreshRevision()).data?.immutableRevision}
           />
         ) : activeTab === 'charts' ? (
           <React.Suspense fallback={<p role="status">Loading chart workspace…</p>}>
-            <ChartsTab datasetRevision={revisionData?.immutableRevision}/>
+            <ChartsTab datasetRevision={activeRevision}/>
           </React.Suspense>
         ) : (
-          <NewListingsTab key={revisionData?.immutableRevision} datasetRevision={revisionData?.immutableRevision} selectedAsOfDate={selectedAsOfDate} />
+          <NewListingsTab key={activeRevision} datasetRevision={activeRevision} selectedAsOfDate={selectedAsOfDate} />
         )}
       </main>
     </div>
   );
 };
+
 
 export const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>

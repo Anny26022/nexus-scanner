@@ -49,11 +49,12 @@ export function createSnapshotEngine(loader = readSnapshot) {
         if (snapshots.get(source.revision) === promise) snapshots.delete(source.revision);
         throw error;
       });
-      snapshots.set(source.revision,promise);
+      snapshots.set(source.revision, promise);
       if (snapshots.size > 2) snapshots.delete(snapshots.keys().next().value!);
     }
     return promise;
   }
+
   return async (task: SnapshotTask): Promise<SnapshotResult> => {
     const data = await load(task.source);
     if (task.type === 'warm') return {type:'warm'};

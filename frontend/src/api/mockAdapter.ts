@@ -623,7 +623,7 @@ export class MockScreenerAdapter {
           return (stock.rsRating ?? 0) >= (p.minRsRating ?? 0);
         case 'fund_fno_status':
           if (p.fnoFilter === 'fno_only') return stock.isFno;
-          if (p.fnoFilter === 'in_fno_ban') return stock.fnoBan;
+          if (p.fnoFilter === 'in_fno_ban') return Boolean(stock.fnoBan);
           if (p.fnoFilter === 'non_fno_only') return !stock.isFno;
           return true;
         default:

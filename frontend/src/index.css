@@ -3269,8 +3269,16 @@
 }
 @media (hover: none) { .chart-actions { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); } }
 @media (prefers-reduced-motion: reduce) { .chart-actions { transition: none; } }
-.session-label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; flex-shrink: 0; }
+.session-picker-wrapper { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.session-label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11.5px; flex-shrink: 0; }
 .session-label strong { color: var(--text); font-weight: 600; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.session-select { height: 26px; padding: 0 8px; font-size: 11.5px; font-weight: 500; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; transition: all 0.15s ease; outline: none; }
+.session-select:hover { border-color: var(--line-strong); background: var(--surface-hover); }
+.session-select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.session-select--historical { border-color: #f59e0b; background: rgba(245, 158, 11, 0.08); color: #d97706; font-weight: 600; }
+.session-reset-btn { height: 26px; padding: 0 8px; font-size: 11px; font-weight: 500; color: var(--muted); border-radius: 6px; }
+.session-reset-btn:hover { color: var(--text); background: var(--surface-hover); }
+
 .research-view { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 8px; min-width: 0; }
 .screen-controls { padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); transition: border-color 0.15s ease, box-shadow 0.15s ease; }
 .screen-toolbar { display: flex; align-items: flex-end; gap: 10px; }
@@ -4338,8 +4346,108 @@
   .data-state h2 { font-size: 14px; }
   .data-state p { font-size: 11px; }
   .notice { flex-shrink: 0; max-height: 25dvh; overflow: auto; margin: 0; border-radius: 0; font-size: 11px; padding: 8px 12px; }
-  .dialog, .dialog.column-dialog { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; }
-  .dialog .dialog-surface, .filter-dialog .dialog-surface, .dialog.column-dialog .dialog-surface { height: 100%; max-height: 100%; border: 0; border-radius: 0; }
+  .dialog:not(.ai-screener-dialog), .dialog.column-dialog { width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; margin: 0; }
+  .dialog:not(.ai-screener-dialog) .dialog-surface, .filter-dialog .dialog-surface, .dialog.column-dialog .dialog-surface { height: 100%; max-height: 100%; border: 0; border-radius: 0; }
+
+  /* Mobile AI Screener: sleek floating rectangular chatbox */
+  .dialog.ai-screener-dialog {
+    width: min(480px, calc(100vw - 24px));
+    max-width: min(480px, calc(100vw - 24px));
+    height: auto;
+    max-height: min(84dvh, 620px);
+    margin: auto;
+    border-radius: 16px;
+    border: 1px solid var(--line-strong);
+    box-shadow: 0 20px 48px -8px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--line);
+    overflow: hidden;
+  }
+  .dialog.ai-screener-dialog .dialog-surface {
+    height: auto;
+    max-height: min(84dvh, 620px);
+    border-radius: 16px;
+    border: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .dialog.ai-screener-dialog .dialog-header {
+    padding: 12px 16px 10px;
+    min-height: auto;
+    border-bottom: 1px solid var(--line);
+    align-items: flex-start;
+  }
+  .dialog.ai-screener-dialog .dialog-header h2 {
+    font-size: 15px;
+    font-weight: 650;
+  }
+  .dialog.ai-screener-dialog .dialog-header p {
+    font-size: 11px;
+    line-height: 1.35;
+    margin-top: 2px;
+  }
+  .dialog.ai-screener-dialog .dialog-header .icon-button {
+    width: 32px;
+    height: 32px;
+  }
+  .dialog.ai-screener-dialog .ai-dialog-content {
+    padding: 12px 14px 14px;
+    gap: 12px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .dialog.ai-screener-dialog .ai-composer-card {
+    border-radius: 10px;
+  }
+  .dialog.ai-screener-dialog .ai-textarea {
+    font-size: 13px;
+    padding: 10px 12px 6px;
+    min-height: 60px;
+  }
+  .dialog.ai-screener-dialog .ai-composer-toolbar {
+    padding: 6px 10px;
+  }
+  .dialog.ai-screener-dialog .ai-kbd-hint {
+    display: none;
+  }
+  .dialog.ai-screener-dialog .ai-composer-toolbar .button {
+    margin-left: auto;
+    min-height: 32px;
+    font-size: 12px;
+    padding: 0 12px;
+    gap: 6px;
+  }
+  .dialog.ai-screener-dialog .ai-examples-section {
+    gap: 6px;
+  }
+  .dialog.ai-screener-dialog .ai-examples-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .dialog.ai-screener-dialog .ai-example-btn {
+    width: 100%;
+    justify-content: space-between;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    border-radius: 7px;
+  }
+  .dialog.ai-screener-dialog .dialog-footer {
+    padding: 10px 14px;
+    min-height: auto;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .dialog.ai-screener-dialog .ai-dialog-actions {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+  .dialog.ai-screener-dialog .ai-dialog-actions .button {
+    flex: 1;
+    min-height: 36px;
+    font-size: 12px;
+    justify-content: center;
+  }
   .dialog-header { padding: max(10px, env(safe-area-inset-top)) 14px 10px; min-height: 48px; }
   .dialog-header h2, .column-dialog .dialog-header h2 { font-size: 16px; font-weight: 650; }
   .dialog-header p { font-size: 11px; }

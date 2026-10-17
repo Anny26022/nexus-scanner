@@ -94,10 +94,16 @@ async function releaseFor(revision?: string): Promise<Manifest> {
   const latest = await getManifest();
   const selected = revision ?? latest.revision;
   if (!/^[a-f0-9]{64}$/.test(selected)) throw new Error('Invalid dataset revision');
-  const release = selected === latest.revision ? latest : validateManifest(await cached(
-    releaseCache, selected, () => getJson<unknown>(`/data/revisions/${selected}/release.json`), 3));
-  if (release.revision !== selected) throw new Error('Release revision mismatch');
-  return release;
+  if (selected === latest.revision) return latest;
+  try {
+    const release = validateManifest(await cached(
+      releaseCache, selected, () => getJson<unknown>(`/data/revisions/${selected}/release.json`), 3));
+    if (release.revision !== selected) throw new Error('Release revision mismatch');
+    return release;
+  } catch (err) {
+    console.warn(`Release manifest for revision ${selected} not found, falling back to latest release:`, err);
+    return latest;
+  }
 }
 async function dataIndex(release: Manifest): Promise<DataIndex> {
   if (!release.dataIndexUrl) throw new DataUnavailableError('Announcements were not published with this data release. The publisher must configure announcement storage and publish a complete release.', 'not_published');
@@ -156,8 +162,8 @@ async function getIpoJson<T>(url: string, resource = 'IPO catalogue'): Promise<T
   }
 }
 
-async function snapshotSource(revision?: string): Promise<SnapshotSource> {
-  return manifestSnapshotSource(await getManifest(), revision);
+async function snapshotSource(revision?: string, sessionDate?: string): Promise<SnapshotSource> {
+  return manifestSnapshotSource(await getManifest(), revision, sessionDate);
 }
 
 class RealDataAdapter {
@@ -171,8 +177,8 @@ class RealDataAdapter {
     }
     return data;
   }
-  async getFilterChoices(revision?: string) {
-    const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision)});
+  async getFilterChoices(revision?: string, sessionDate?: string) {
+    const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision, sessionDate)});
     if (response.type !== 'filterChoices') throw new Error('Unexpected filter choices response');
     return response.result;
   }
@@ -191,7 +197,8 @@ class RealDataAdapter {
       const matches = filterAnnouncements(index, announcementFilter);
       req = {...req, announcementSymbols: [...new Set(matches.map(row => row.symbol!))]};
     }
-    const source = await snapshotSource(req.datasetRevision);
+    const source = await snapshotSource(req.datasetRevision, req.asOfDate);
+
     const snapshot = req.textQuery?.trim()
       ? {type:'screen' as const, source, revision:source.revision, sessionDate:source.sessionDate ?? req.asOfDate, result:null}
       : await runSnapshotTask({type:'screen',source,request:req,allRows});
@@ -436,9 +443,30 @@ class RealDataAdapter {
 
   async getCurrentRevision(): Promise<RevisionCurrentResponse> {
     const manifest = await refreshManifest();
-    return {latestSessionDate:manifest.sessionDate,availableSessions:[{date:manifest.sessionDate,label:'Latest',isHistorical:false}],
-      immutableRevision:manifest.revision,mainboardUniverseCount:manifest.totalStocks,catalogVersion:'v4-snapshot'};
+    return {
+      latestSessionDate: manifest.sessionDate,
+      availableSessions: [{date:manifest.sessionDate, label:'Latest', isHistorical:false, revision:manifest.revision}],
+      immutableRevision: manifest.revision,
+      mainboardUniverseCount: manifest.totalStocks,
+      catalogVersion: 'v4-snapshot',
+    };
+  }
+
+  async getAvailableSessions(): Promise<Array<{ date: string; label: string; isHistorical: boolean; revision: string }>> {
+    try {
+      const resp = await fetch('/data/sessions.json');
+      if (resp.ok) {
+        const data = await resp.json();
+        if (Array.isArray(data.sessions) && data.sessions.length > 0) {
+          return data.sessions;
+        }
+      }
+    } catch {
+      // Fallback to empty list
+    }
+    return [];
   }
 }
+
 
 export const realAdapter = new RealDataAdapter();

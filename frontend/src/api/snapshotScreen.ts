@@ -350,6 +350,11 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
   if (request.textQuery?.trim()) return null;
   const usesTradingView = (node:ExpressionNode):boolean => node.type === 'group'
     ? node.children.some(usesTradingView) : isTradingViewCondition(node.condition.conditionId);
+  const usesFnoBan = (node:ExpressionNode):boolean => node.type === 'group'
+    ? node.children.some(usesFnoBan) : node.condition.conditionId === 'FNO_BAN';
+  if (usesFnoBan(request.expressionTree) && !data.stocks.some(s => s.fnoBan != null)) {
+    throw new Error('Historical F&O ban status is not archived by the exchange and is only available for live sessions.');
+  }
   if (data.tradingViewMetricsVersion !== 1 && usesTradingView(request.expressionTree)) {
     throw new Error('These filters need a newer dataset. Try after the next daily data refresh.');
   }

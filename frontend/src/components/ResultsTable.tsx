@@ -148,12 +148,20 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>('nexus-scanner.screener.columns.v1', DEFAULT_COLUMNS);
   const selectedColumnIds = Array.isArray(savedColumnIds) ? savedColumnIds : DEFAULT_COLUMNS;
   const phone = usePhoneLayout();
+  const hasTradingView = Boolean(data?.rows.some(row => row.tradingview));
+  const hasFnoBan = Boolean(data?.rows.some(row => row.fnoBan != null));
+  const activeColumns = columns.filter(column => {
+    if (column.id === 'company') return true;
+    if (column.id.startsWith('tv.') && !hasTradingView) return false;
+    if (column.id === 'fnoBan' && !hasFnoBan) return false;
+    return selectedColumnIds.includes(column.id);
+  });
   const usingCustomColumns = selectedColumnIds.length !== DEFAULT_COLUMNS.length || DEFAULT_COLUMNS.some(id => !selectedColumnIds.includes(id));
-  const layout = tableLayout(columns.filter(column => column.id === 'company' || selectedColumnIds.includes(column.id)), 'screener', phone, usingCustomColumns);
+  const layout = tableLayout(activeColumns, 'screener', phone, usingCustomColumns);
   const visibleColumns = layout.columns;
-  const hasTradingView = data?.rows.some(row => row.tradingview);
   const customizableColumns = columns.filter(column => column.id !== 'company'
-    && (!column.id.startsWith('tv.') || hasTradingView || selectedColumnIds.includes(column.id)));
+    && (!column.id.startsWith('tv.') || hasTradingView)
+    && (column.id !== 'fnoBan' || hasFnoBan));
   const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerColumns = columnSearch.trim() ? matchingColumns : customizableColumns.filter(column => column.group === columnGroup);
   const scrollRef = useRef<HTMLDivElement>(null);

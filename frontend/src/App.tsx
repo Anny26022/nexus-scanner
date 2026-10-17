@@ -30,15 +30,33 @@ const ScreenerAppContent: React.FC = () => {
     refetchOnWindowFocus: true,
   });
 
+  const { data: sessionsList = [] } = useQuery({
+    queryKey: ['availableSessions'],
+    queryFn: () => screenerApi.getAvailableSessions(),
+    staleTime: 60_000,
+  });
+
   const [customSessionDate, setCustomSessionDate] = React.useState<string | null>(null);
 
-  const availableSessions = revisionData?.availableSessions || [];
   const latestDate = revisionData?.latestSessionDate || '';
-  const selectedAsOfDate = customSessionDate || latestDate;
+  const latestRevision = revisionData?.immutableRevision || '';
 
-  // Resolve matching revision for selected session
+  const availableSessions = React.useMemo(() => {
+    const list = sessionsList.filter((s) => s.date !== latestDate);
+    if (latestDate && latestRevision) {
+      list.unshift({
+        date: latestDate,
+        label: 'Latest',
+        isHistorical: false,
+        revision: latestRevision,
+      });
+    }
+    return list;
+  }, [sessionsList, latestDate, latestRevision]);
+
+  const selectedAsOfDate = customSessionDate || latestDate;
   const selectedSessionMeta = availableSessions.find((s) => s.date === selectedAsOfDate);
-  const activeRevision = selectedSessionMeta?.revision || revisionData?.immutableRevision;
+  const activeRevision = selectedSessionMeta?.revision || latestRevision;
   const isHistoricalSelected = Boolean(selectedAsOfDate && latestDate && selectedAsOfDate !== latestDate);
 
   return (

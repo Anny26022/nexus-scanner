@@ -79,4 +79,8 @@ export const screenerApi = {
   async getCurrentRevision(): Promise<RevisionCurrentResponse> {
     return (await getAdapter()).getCurrentRevision();
   },
+
+  async getAvailableSessions(): Promise<Array<{ date: string; label: string; isHistorical: boolean; revision: string }>> {
+    return USE_MOCK_API ? [] : realAdapter.getAvailableSessions();
+  },
 };

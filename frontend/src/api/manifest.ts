@@ -74,10 +74,14 @@ export const getManifest = () => current ? Promise.resolve(current) : refreshMan
 export function manifestSnapshotSource(manifest: Manifest, revision = manifest.revision, sessionDate?: string): SnapshotSource {
   if (!/^[a-f0-9]{64}$/.test(revision)) throw new Error('Invalid dataset revision');
   if (sessionDate && sessionDate !== manifest.sessionDate) {
+    const baseUrl = manifest.objectUrlTemplate
+      ? manifest.objectUrlTemplate.replace(/\/objects\/\{hash\}\.json\.gz$/, '')
+      : '';
+    const url = baseUrl ? `${baseUrl}/snapshots/${sessionDate}.json.gz` : `/data/snapshots/${sessionDate}.json.gz`;
     return {
       revision,
       sessionDate,
-      url: `/data/snapshots/${sessionDate}.json.gz`,
+      url,
     };
   }
   // Historical revisions keep their original URL; current releases advertise gzip.

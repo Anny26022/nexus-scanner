@@ -13,6 +13,7 @@ from validated historical sources:
 import argparse
 import csv
 import gzip
+import hashlib
 import io
 import json
 import os
@@ -40,9 +41,18 @@ SSL_CTX.check_hostname = False
 SSL_CTX.verify_mode = ssl.CERT_NONE
 
 
-def fetch_nse_delivery_csv(session_date: date) -> Optional[List[Dict[str, Any]]]:
-    """Fetch official delivery bhavcopy from nsearchives for a given date."""
+def fetch_nse_delivery_csv(session_date: date, cache_dir: Optional[Path] = None) -> Optional[List[Dict[str, Any]]]:
+    """Fetch official delivery bhavcopy from nsearchives for a given date, with disk caching."""
     date_str = session_date.strftime("%d%m%Y")
+    cached_file = cache_dir / f"sec_bhavdata_full_{date_str}.csv" if cache_dir else None
+    if cached_file and cached_file.exists():
+        try:
+            with open(cached_file, "r", encoding="utf-8", errors="ignore") as f:
+                reader = csv.DictReader(f)
+                return [{k.strip(): (v.strip() if v else "") for k, v in item.items() if k} for item in reader]
+        except Exception:
+            pass
+
     url = f"https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{date_str}.csv"
     req = urllib.request.Request(url, headers=NSE_HEADERS)
     try:
@@ -50,6 +60,12 @@ def fetch_nse_delivery_csv(session_date: date) -> Optional[List[Dict[str, Any]]]
             if resp.status != 200:
                 return None
             content = resp.read().decode("utf-8", errors="ignore")
+            if cached_file:
+                try:
+                    cached_file.parent.mkdir(parents=True, exist_ok=True)
+                    cached_file.write_text(content, encoding="utf-8")
+                except Exception:
+                    pass
             reader = csv.DictReader(io.StringIO(content))
             rows = []
             for item in reader:
@@ -60,45 +76,71 @@ def fetch_nse_delivery_csv(session_date: date) -> Optional[List[Dict[str, Any]]]
         return None
 
 
-def fetch_nse_price_bands(session_date: date) -> Tuple[Dict[str, str], Dict[str, str]]:
-    """Fetch official daily price bands and GSM remarks from nsearchives sec_list_{date}.csv."""
+def fetch_nse_price_bands(session_date: date, cache_dir: Optional[Path] = None) -> Tuple[Dict[str, str], Dict[str, str]]:
+    """Fetch official daily price bands and GSM remarks from nsearchives sec_list_{date}.csv, with disk caching."""
     date_str = session_date.strftime("%d%m%Y")
-    url = f"https://nsearchives.nseindia.com/content/equities/sec_list_{date_str}.csv"
-    req = urllib.request.Request(url, headers=NSE_HEADERS)
+    cached_file = cache_dir / f"sec_list_{date_str}.csv" if cache_dir else None
+    content = None
+    if cached_file and cached_file.exists():
+        try:
+            content = cached_file.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            pass
+
+    if content is None:
+        url = f"https://nsearchives.nseindia.com/content/equities/sec_list_{date_str}.csv"
+        req = urllib.request.Request(url, headers=NSE_HEADERS)
+        try:
+            with urllib.request.urlopen(req, context=SSL_CTX, timeout=8) as resp:
+                if resp.status == 200:
+                    content = resp.read().decode("utf-8", errors="ignore")
+                    if cached_file:
+                        try:
+                            cached_file.parent.mkdir(parents=True, exist_ok=True)
+                            cached_file.write_text(content, encoding="utf-8")
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
     band_map = {}
     gsm_remarks = {}
-    try:
-        with urllib.request.urlopen(req, context=SSL_CTX, timeout=8) as resp:
-            if resp.status == 200:
-                content = resp.read().decode("utf-8", errors="ignore")
-                reader = csv.reader(io.StringIO(content))
-                header = next(reader, None)
-                if header:
-                    for row in reader:
-                        if len(row) >= 4:
-                            sym = row[0].strip().upper()
-                            band = row[3].strip()
-                            if sym:
-                                band_map[sym] = band if band and band != "-" else "No Band"
-                        if len(row) >= 5:
-                            sym = row[0].strip().upper()
-                            remark = row[4].strip().upper()
-                            if sym and "GSM" in remark:
-                                stage = remark.split("STAGE")[-1].replace("-", "").strip() or "I"
-                                gsm_remarks[sym] = stage
-    except Exception:
-        pass
+    if content:
+        reader = csv.reader(io.StringIO(content))
+        header = next(reader, None)
+        if header:
+            for row in reader:
+                if len(row) >= 4:
+                    sym = row[0].strip().upper()
+                    band = row[3].strip()
+                    if sym:
+                        band_map[sym] = band if band and band != "-" else "No Band"
+                if len(row) >= 5:
+                    sym = row[0].strip().upper()
+                    remark = row[4].strip().upper()
+                    if sym and "GSM" in remark:
+                        stage = remark.split("STAGE")[-1].replace("-", "").strip() or "I"
+                        gsm_remarks[sym] = stage
     return band_map, gsm_remarks
 
 
-
-
-def fetch_nse_surveillance_for_date(session_date: date) -> Dict[str, Dict[str, Any]]:
-    """Fetch and parse official ASM/GSM circular lists for a given trading date."""
-    import zipfile
-    import openpyxl
-
+def fetch_nse_surveillance_for_date(session_date: date, cache_dir: Optional[Path] = None) -> Dict[str, Dict[str, Any]]:
+    """Fetch and parse official ASM/GSM circular lists for a given trading date, with disk caching."""
     date_str = session_date.strftime("%d-%m-%Y")
+    cached_file = cache_dir / f"surveillance_{date_str}.json" if cache_dir else None
+    if cached_file and cached_file.exists():
+        try:
+            with open(cached_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+
+    try:
+        import zipfile
+        import openpyxl
+    except ImportError:
+        return {}
+
     url = f"https://www.nseindia.com/api/circulars?fromDate={date_str}&toDate={date_str}"
     req = urllib.request.Request(url, headers=NSE_HEADERS)
     surveillance_map = {}
@@ -156,6 +198,15 @@ def fetch_nse_surveillance_for_date(session_date: date) -> Dict[str, Dict[str, A
                     pass
     except Exception:
         pass
+
+    if cached_file and surveillance_map:
+        try:
+            cached_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(cached_file, "w", encoding="utf-8") as f:
+                json.dump(surveillance_map, f)
+        except Exception:
+            pass
+
     return surveillance_map
 
 
@@ -180,13 +231,15 @@ def calculate_technicals(opens: np.ndarray, closes: np.ndarray, highs: np.ndarra
     sma50 = float(np.mean(closes[-50:])) if n >= 50 else current_close
     sma200 = float(np.mean(closes[-200:])) if n >= 200 else current_close
 
-    # EMAs (approximate via exponential weighting)
+    # EMAs (approximate via exponential weighting over last 4*period bars for performance)
     def calc_ema(arr: np.ndarray, period: int) -> float:
         if len(arr) < period:
             return float(arr[-1])
+        lookback = min(len(arr), period * 4)
+        sub = arr[-lookback:]
         k = 2.0 / (period + 1.0)
-        ema = float(arr[0])
-        for val in arr[1:]:
+        ema = float(sub[0])
+        for val in sub[1:]:
             ema = (val * k) + (ema * (1.0 - k))
         return ema
 
@@ -286,10 +339,31 @@ def main():
         master_stocks = json.load(f)
     print(f"Loaded master stock universe: {len(master_stocks)} symbols")
 
+    # Cache directory for historical downloads
+    cache_dir = pipeline_dir / ".scanner_cache" / "historical_downloads"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
     # 2. Load Historical OHLCV Cache
     history_npz_path = pipeline_dir / ".scanner_cache" / "history.npz"
     if not history_npz_path.exists():
-        sys.exit(f"Error: {history_npz_path} does not exist.")
+        print(f"{history_npz_path} does not exist. Checking for ohlcv_data to build it...")
+        ohlcv_dir = pipeline_dir / "ohlcv_data"
+        if ohlcv_dir.exists() and any(ohlcv_dir.glob("*.csv")):
+            sys.path.insert(0, str(pipeline_dir / "src"))
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "frontend"))
+            try:
+                from scanner_cache import ScannerCache
+                sc = ScannerCache()
+                sc.refresh(pipeline_dir)
+                for csv_file in ohlcv_dir.glob("*.csv"):
+                    sc.frame(pipeline_dir, csv_file.stem, as_of="2099-12-31")
+                sc.save_frames(pipeline_dir)
+                print("Successfully compiled .scanner_cache/history.npz from ohlcv_data!")
+            except Exception as e:
+                sys.exit(f"Failed to compile history.npz from ohlcv_data: {e}")
+        else:
+            sys.exit(f"Error: Neither {history_npz_path} nor {ohlcv_dir} exists.")
+
     print("Loading vectorized OHLCV history.npz...")
     t0 = time.time()
     npz_data = np.load(history_npz_path)
@@ -347,7 +421,7 @@ def main():
         return
 
     # 6. Build Daily Snapshots
-    generated_count = 0
+    generated_sessions = []
     for session_date in unique_dates:
         session_str = session_date.isoformat()
         session_ts = pd.Timestamp(session_date)
@@ -361,8 +435,8 @@ def main():
         above_50dma = 0
         above_200dma = 0
 
-        # Optional: Fetch delivery bhavdata for this session
-        delivery_rows = fetch_nse_delivery_csv(session_date)
+        # Optional: Fetch delivery bhavdata for this session (with disk caching)
+        delivery_rows = fetch_nse_delivery_csv(session_date, cache_dir)
         delivery_map = {}
         if delivery_rows:
             for r in delivery_rows:
@@ -370,11 +444,11 @@ def main():
                 if sym and r.get("SERIES") == "EQ":
                     delivery_map[sym] = r
 
-        # Fetch official NSE daily price bands & GSM remarks from sec_list_{date}.csv
-        price_bands_map, gsm_remarks_map = fetch_nse_price_bands(session_date)
+        # Fetch official NSE daily price bands & GSM remarks from sec_list_{date}.csv (with disk caching)
+        price_bands_map, gsm_remarks_map = fetch_nse_price_bands(session_date, cache_dir)
 
-        # Fetch official NSE ASM/GSM circular surveillance lists for this session
-        surveillance_map = fetch_nse_surveillance_for_date(session_date)
+        # Fetch official NSE ASM/GSM circular surveillance lists for this session (with disk caching)
+        surveillance_map = fetch_nse_surveillance_for_date(session_date, cache_dir)
 
         for stock in master_stocks:
             sym = str(stock.get("symbol") or "").upper()
@@ -432,11 +506,11 @@ def main():
             ]
             latest_fin = sorted(valid_fins, key=lambda x: x["filing_date"])[-1] if valid_fins else None
 
-            # Point-in-time shareholding attachment
+            # Point-in-time shareholding attachment (strictly observed on or before session_date)
             sym_shs = sh_by_symbol.get(sym, [])
             valid_shs = [
                 s for s in sym_shs
-                if s.get("period_end") and s["period_end"] <= session_str
+                if s.get("observed_on") and s["observed_on"] <= session_str
             ]
             latest_sh = sorted(valid_shs, key=lambda x: x["period_end"])[-1] if valid_shs else None
 
@@ -478,12 +552,11 @@ def main():
                 except Exception:
                     pass
 
-            # Market cap estimation (close * total equity shares from fundamental / shareholding records)
-            mcap_crore = stock.get("market_cap_crore")
-            if not mcap_crore and latest_fin and latest_fin.get("eps") and latest_fin.get("net_profit") and latest_fin["eps"] > 0:
+            # Point-in-time market cap derivation (never copy current market cap into historical dates)
+            mcap_crore = 0.0
+            if latest_fin and latest_fin.get("eps") and latest_fin.get("net_profit") and latest_fin["eps"] > 0:
                 shares = (latest_fin["net_profit"] * 1e7) / latest_fin["eps"]
                 mcap_crore = round((shares * tech["close"]) / 1e7, 2)
-
 
             surv_info = surveillance_map.get(sym)
             surv_avail = bool(surveillance_map) or bool(gsm_remarks_map)
@@ -499,7 +572,6 @@ def main():
             # Official price band for this session
             circuit_limit = price_bands_map.get(sym) or stock.get("circuit_limit") or "20"
 
-
             item = {
                 "symbol": sym,
                 "name": stock.get("name") or sym,
@@ -509,7 +581,7 @@ def main():
                 "series": stock.get("series") or "EQ",
                 "listingDate": stock.get("listing_date") or "",
                 "isSme": stock.get("is_sme", False),
-                "isFno": stock.get("is_fno", False),
+                "isFno": bool(stock.get("fno_eligible") or stock.get("is_fno")),
                 "fnoBan": None,
                 "fnoBanAsOfDate": None,
                 "tradingview": None,
@@ -525,7 +597,7 @@ def main():
                 "metadataAsOfDate": session_str,
                 "historyAligned": True,
 
-                "indexMemberships": stock.get("index_memberships") or [],
+                "indexMemberships": [],
                 "open": tech["open"],
                 "high": tech["high"],
                 "low": tech["low"],
@@ -536,7 +608,7 @@ def main():
                 "rupeeVolumeCrore": tech["rupeeVolumeCrore"],
                 "vwap": vwap,
                 "vwapAsOfDate": session_str if vwap is not None else None,
-                "marketCapCrore": mcap_crore or 0.0,
+                "marketCapCrore": mcap_crore,
                 "peRatio": round(tech["close"] / latest_fin["eps"], 2) if latest_fin and latest_fin.get("eps") and latest_fin["eps"] > 0 else None,
                 "epsTtm": latest_fin.get("eps") if latest_fin else None,
                 "rsi14": tech["rsi14"],
@@ -581,6 +653,9 @@ def main():
                 },
                 "presetMatches": {
                     "trend_template": bool(tech["close_above_sma50"] and tech["close_above_sma200"] and tech["sma50_above_sma200"]),
+                    "lib-stage-two": bool(tech["close_above_sma50"] and tech["close_above_sma200"] and tech["sma50_above_sma200"]),
+                    "lib-52w-high-breakout": bool(tech["dist52wHighPct"] >= -0.5),
+                    "lib-20d-high-thrust": bool(tech["changePct"] >= 4.0 and tech["rvol"] >= 2.0),
                     "mom_rvol": bool(tech["rvol"] >= 1.5),
                 },
             }
@@ -598,25 +673,29 @@ def main():
             "pct_above_200dma": round((above_200dma / total_active) * 100, 2) if total_active else 0,
         }
 
-        payload = {
-            "schema_version": 4,
-            "as_of_date": session_str,
+        raw_payload = {
+            "schemaVersion": 4,
+            "asOfDate": session_str,
+            "totalStocks": len(snapshot_stocks),
             "stocks": snapshot_stocks,
             "breadth": breadth_record,
-            "data_completeness": "historical_point_in_time_reconstructed",
+            "dataCompleteness": "historical_point_in_time_reconstructed",
         }
+        json_bytes = json.dumps(raw_payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        session_hash = hashlib.sha256(json_bytes).hexdigest()
+        raw_payload["revision"] = session_hash
 
         out_file = output_dir / f"{session_str}.json.gz"
         with gzip.open(out_file, "wt", encoding="utf-8") as f:
-            json.dump(payload, f, separators=(",", ":"), ensure_ascii=False)
+            json.dump(raw_payload, f, separators=(",", ":"), ensure_ascii=False)
 
         file_size_kb = out_file.stat().st_size / 1024
-        print(f"Generated {out_file.name} ({len(snapshot_stocks)} stocks, {file_size_kb:.1f} KB) in {time.time()-t_session:.2f}s")
-        generated_count += 1
+        print(f"Generated {out_file.name} ({len(snapshot_stocks)} stocks, {file_size_kb:.1f} KB, rev {session_hash[:12]}) in {time.time()-t_session:.2f}s")
+        generated_sessions.append((session_date, session_hash))
 
-    print(f"\nAll done! Successfully generated {generated_count} historical daily snapshots in {output_dir}")
+    print(f"\nAll done! Successfully generated {len(generated_sessions)} historical daily snapshots in {output_dir}")
 
-    if args.update_sessions_manifest and generated_count > 0:
+    if args.update_sessions_manifest and generated_sessions:
         manifest_file = args.update_sessions_manifest.resolve()
         existing = {}
         if manifest_file.exists():
@@ -630,20 +709,19 @@ def main():
             except Exception as e:
                 print(f"Warning: could not read existing sessions manifest: {e}")
 
-        # Add newly generated sessions
-        for s_date in valid_sessions:
+        # Add newly generated sessions with their exact revision hashes
+        for s_date, s_hash in generated_sessions:
             s_str = s_date.strftime("%Y-%m-%d")
-            if s_str not in existing:
-                existing[s_str] = {
-                    "date": s_str,
-                    "label": s_str,
-                    "isHistorical": True,
-                }
+            existing[s_str] = {
+                "date": s_str,
+                "revision": s_hash,
+                "label": s_str,
+                "isHistorical": True,
+            }
 
         sorted_sessions = sorted(existing.values(), key=lambda x: x["date"], reverse=True)
         manifest_payload = {
             "version": 1,
-            "latestSessionDate": sorted_sessions[0]["date"] if sorted_sessions else "",
             "sessions": sorted_sessions,
         }
         manifest_file.parent.mkdir(parents=True, exist_ok=True)

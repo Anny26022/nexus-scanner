@@ -3,8 +3,8 @@ import type {AiFilterDefinition} from '../../frontend/src/api/aiFilterCatalog';
 import {compactCatalog} from './compactCatalog';
 import {materializeCompilerResult} from './compilerResult';
 
-export const PRIMARY_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
-export const FALLBACK_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+export const PRIMARY_MODEL = '@cf/meta/llama-3.1-8b-instruct';
+export const FALLBACK_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 export type CompileModel = typeof PRIMARY_MODEL | typeof FALLBACK_MODEL;
 export interface InferenceInput {messages:{role:'system'|'user';content:string}[];response_format:{type:'json_object'};temperature:number;max_tokens:number}
 export type ModelRunner = (model:CompileModel, input:InferenceInput, signal:AbortSignal)=>Promise<unknown>;
@@ -67,7 +67,7 @@ export async function compileWithFallback(query:string,catalog:AiFilterDefinitio
     options.signal?.throwIfAborted();
     try {
       const signal = options.signal ? AbortSignal.any([options.signal,AbortSignal.timeout(index===0?30000:45000)]) : AbortSignal.timeout(index===0?30000:45000);
-      const requestMessages = model === PRIMARY_MODEL ? [{...messages[0],content:messages[0].content+'\n/no_think'},messages[1]] : messages;
+      const requestMessages = model === FALLBACK_MODEL ? [{...messages[0],content:messages[0].content+'\n/no_think'},messages[1]] : messages;
       const parsed = parseOutput(await run(model,{messages:requestMessages,response_format:{type:'json_object'},temperature:0,max_tokens:2200},signal));
       inputTokens+=parsed.inputTokens;outputTokens+=parsed.outputTokens;
       if (!object(parsed.raw) || !Array.isArray(parsed.raw.clauses)) throw new Error('invalid_result');

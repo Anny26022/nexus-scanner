@@ -67,7 +67,7 @@ export default {
       const cached = await readCompilation(cache,key,catalog);
       if (cached) return json({...cached,catalogRevision:data.revision});
       const result = await compileWithFallback(text.trim(),catalog,
-        (model,input,signal)=>env.AI.run(model,input,{signal}), {
+        (model,input,signal)=>env.AI.run(model as any,input as any,{signal}), {
           signal:AbortSignal.any([request.signal,AbortSignal.timeout(78000)]),
           onAttempt:attempt=>console.log(JSON.stringify({event:'ai_compile_attempt',requestId,...attempt})),
         });

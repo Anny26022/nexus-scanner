@@ -301,12 +301,44 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     {isColumnPickerOpen && <Dialog label="Customize IPO columns" className="column-dialog" onClose={() => setIsColumnPickerOpen(false)}>
       <div className="dialog-header"><div><h2>Customize IPO columns</h2><p>{visibleIpoColumns.length} selected · choose IPO fields for the table</p></div><button type="button" className="icon-button" aria-label="Close IPO column customization" onClick={() => setIsColumnPickerOpen(false)}><X size={18} /></button></div>
       <div className="column-dialog-content">
-        <label className="column-search"><Search size={14} /><input type="search" aria-label="Search IPO columns" placeholder="Search IPO fields" value={columnSearch} onChange={event => setColumnSearch(event.target.value)} /></label>
+        <div className="relative flex items-center min-w-0">
+          <label className="column-search w-full"><Search size={14} /><input type="search" aria-label="Search IPO columns" placeholder="Search IPO fields" value={columnSearch} onChange={event => setColumnSearch(event.target.value)} /></label>
+          {columnSearch && (
+            <button
+              type="button"
+              className="absolute right-3 text-gray-400 hover:text-gray-600 p-0.5 rounded transition-colors"
+              onClick={() => setColumnSearch('')}
+              aria-label="Clear column search"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
         <div className="column-dialog-toolbar"><span>{columnSearch.trim() ? `${pickerIpoColumns.length} results` : `${pickerIpoColumns.filter(column => column.id === 'company' || selectedIpoColumnIds.includes(column.id)).length} selected in ${columnGroup.toLowerCase()}`}</span><div>
           <button type="button" className="button button-ghost" onClick={() => setSavedIpoColumnIds(ipoColumns.map(column => column.id))}>Select all</button>
           <button type="button" className="button button-ghost" onClick={() => setSavedIpoColumnIds(IPO_DEFAULT_COLUMNS)}>Reset</button>
         </div></div>
-        {!columnSearch.trim() && <div className="column-category-tabs" role="tablist" aria-label="IPO column categories">{IPO_COLUMN_GROUPS.map(group => <button key={group} type="button" role="tab" aria-selected={columnGroup===group} onClick={() => setColumnGroup(group)}>{group}</button>)}</div>}
+        {!columnSearch.trim() && (
+          <div className="column-category-tabs" role="tablist" aria-label="IPO column categories">
+            {IPO_COLUMN_GROUPS.map(group => {
+              const count = ipoColumns.filter(c => c.group === group && (c.id === 'company' || selectedIpoColumnIds.includes(c.id))).length;
+              return (
+                <button
+                  key={group}
+                  type="button"
+                  role="tab"
+                  aria-selected={columnGroup === group}
+                  aria-label={group}
+                  onClick={() => setColumnGroup(group)}
+                  className="column-category-btn"
+                >
+                  <span>{group}</span>
+                  {count > 0 && <span className="column-category-badge" aria-hidden="true">{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="column-options" role="group" aria-label={columnSearch.trim()?'IPO column search results':`${columnGroup} IPO columns`}>
           {pickerIpoColumns.length ? pickerIpoColumns.map(column => <label key={column.id} className="column-picker-option">
             <input type="checkbox" aria-label={column.label} checked={column.id==='company'||selectedIpoColumnIds.includes(column.id)} disabled={column.id==='company'}

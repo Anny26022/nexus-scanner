@@ -82,7 +82,6 @@ export const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
 ];
 
 export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
-  ...tradingViewConditionCatalog,
   {
     id:'PRICE_VS_MAS', label:'Price vs moving averages', category:'trend',
     description:'Latest close must satisfy every selected comparison (AND). These are current-price comparisons, not persistence or moving-average stack rules. Equality does not count as above or below.',
@@ -107,6 +106,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
         ? parameter.defaultValue : periods[0], options:periods.map(value => ({value, label:String(value)}))} : parameter;
     }),
   })),
+  ...tradingViewConditionCatalog,
   // --- TREND ---
   {
     id: 'trend_price_vs_ma',
@@ -737,8 +737,29 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
     : parameter)};
 });
 
-// Keep internal/saved condition definitions evaluable, but offer momentum only
-// as the complete preset (EMA persistence AND average turnover).
+export const REDUNDANT_CATALOG_CONDITIONS = new Set([
+  'PERSISTENT_MOMENTUM',
+  'trend_persistent_momentum',
+  'trend_ma_stack',
+  'trend_ma_slope',
+  'trend_ema_reclaim',
+  'trend_pct_days_above_ma',
+  'mom_consecutive_up',
+  'mom_gap',
+  'mom_delivery_vol',
+  'range_52w_proximity',
+  'range_contraction',
+  'range_inside_bar',
+  'rs_rating',
+  'fund_free_float',
+  'fund_stock_price',
+  'fund_earnings_growth',
+  'liq_turnover',
+  'liq_market_cap',
+]);
+
+// Keep internal/saved condition definitions evaluable in NEXUS_CONDITION_CATALOG,
+// but present a clean, non-duplicated catalog to the user.
 export const FILTER_CONDITION_CATALOG = NEXUS_CONDITION_CATALOG.filter(
-  def => !['PERSISTENT_MOMENTUM', 'trend_persistent_momentum'].includes(def.id),
+  def => !REDUNDANT_CATALOG_CONDITIONS.has(def.id),
 );

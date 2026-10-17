@@ -5,7 +5,7 @@ import { Dialog } from './Dialog';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 import { X, SlidersHorizontal, Library, ChevronDown, Info } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
-import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG } from '../data/conditionCatalog';
+import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG, REDUNDANT_CATALOG_CONDITIONS } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 import { PRESET_ELIGIBILITY, presetEligibilitySummary } from '../data/presetEligibility';
@@ -99,10 +99,10 @@ const MultiSelectDropdown = ({ options, value, onChange, label, single = false, 
       <button 
         ref={trigger} type="button" disabled={!options.length} title={value.join(', ')} aria-label={`${label}: ${value?.length ? `${value.length} selected` : 'Select options'}`} aria-expanded={isOpen}
         onClick={toggleMenu}
-        className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none max-w-[120px] shrink-0 truncate transition-colors cursor-pointer flex items-center gap-1"
+        className="bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2.5 py-1 text-[11.5px] font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20 max-w-[140px] shrink-0 truncate transition-all cursor-pointer flex items-center justify-between gap-1.5 shadow-sm"
       >
         <span className="truncate">{value?.length ? single ? options.find(option => option.value === value[0])?.label ?? value[0] : `${value.length} selected` : 'Select...'}</span>
-        <ChevronDown size={12} />
+        <ChevronDown size={12} className="text-gray-400 shrink-0" />
       </button>
       
       {isOpen && (
@@ -180,7 +180,7 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
         value={val}
         aria-label={p.label}
         onChange={(e) => updateParam(defId, p.id, e.target.value)}
-        className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 max-w-[110px] shrink-0 truncate transition-colors cursor-pointer"
+        className="bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2 py-1 text-[11.5px] font-medium text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 max-w-[130px] shrink-0 truncate transition-all cursor-pointer shadow-sm"
       >
         {(p.options || []).map((opt) => (
           <option key={opt.value} value={opt.value} disabled={!isAvailableCondition({
@@ -199,7 +199,7 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
       max={p.max}
       step={p.step ?? (isIntegerParameter(p) ? 1 : 0.1)}
       aria-label={p.label}
-      className="w-14 bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 text-center focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
+      className="w-16 bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2 py-1 text-[11.5px] font-semibold text-gray-800 text-center focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all shadow-sm"
     />;
   }
 
@@ -462,8 +462,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const filtered = catalogToUse.filter((c) => {
     if (isTradingViewCondition(c.id) && !c.parameters.find(p => p.id === 'metric')?.options?.length
         && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
-    // ROE is editable through Fundamental Metric; keep saved legacy rules visible.
-    if (c.id === 'fund_roe' && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
+    if ((c.id === 'fund_roe' || REDUNDANT_CATALOG_CONDITIONS.has(c.id)) && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
     return (activeTab === 'presets' || category === 'all' || c.category === category)
       && (!search.trim() || `${c.label} ${c.description} ${c.parameters.flatMap(p => p.options?.map(o => o.label) ?? []).join(' ')}`.toLowerCase().includes(search.trim().toLowerCase()));
   });
@@ -485,8 +484,45 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       <div className="match-mode" role="group" aria-label="Match mode"><span>Selected filters</span><button title="Every selected filter must match" aria-pressed={localMode === 'all'} onClick={() => setLocalMode('all')}>AND (All)</button><button title="At least one selected filter must match" aria-pressed={localMode === 'any'} onClick={() => setLocalMode('any')}>OR (Any)</button></div>
     </div>
     <div className="filter-modal-options">
-      <label className="query-input"><input aria-label="Search filters" placeholder="Search filters" value={search} onChange={event => setSearch(event.target.value)} /></label>
-      {activeTab === 'custom' && <div className="filter-categories" role="group" aria-label="Filter categories">{CATEGORY_TABS.map(tab => <button key={tab.id} aria-pressed={category === tab.id} onClick={() => setCategory(tab.id)}>{tab.label}</button>)}</div>}
+      <div className="relative flex items-center min-w-0">
+        <label className="query-input w-full">
+          <input aria-label="Search filters" placeholder="Search filters" value={search} onChange={event => setSearch(event.target.value)} />
+        </label>
+        {search && (
+          <button
+            type="button"
+            className="absolute right-2 text-gray-400 hover:text-gray-600 p-0.5 rounded transition-colors"
+            onClick={() => setSearch('')}
+            aria-label="Clear filter search"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+      {activeTab === 'custom' && (
+        <div className="filter-categories" role="group" aria-label="Filter categories">
+          {CATEGORY_TABS.map(tab => {
+            const count = tab.id === 'all'
+              ? Object.keys(localMap).length
+              : Object.values(localMap).filter(cond => {
+                  const def = customCatalog.find(c => c.id === cond.conditionId);
+                  return def?.category === tab.id;
+                }).length;
+            return (
+              <button
+                key={tab.id}
+                aria-pressed={category === tab.id}
+                aria-label={tab.label}
+                onClick={() => setCategory(tab.id)}
+                className="filter-category-btn"
+              >
+                <span>{tab.label}</span>
+                {count > 0 && <span className="filter-category-badge" aria-hidden="true">{count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
     <div className="filter-modal-content">
       {choicesLoading && <p role="status" className="cell-muted">Loading filter choices…</p>}
@@ -497,16 +533,31 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         return next;
       })} />
       <div className={activeTab === 'presets' ? 'grid grid-cols-1 gap-x-8 xl:grid-cols-2' : 'filter-rule-list'} data-preset-list={activeTab === 'presets'}>
-        {filtered.map(def => {
+        {filtered.map((def, index) => {
           const instances = Object.entries(localMap).filter(([, condition]) => condition.conditionId === def.id);
           const repeatable = activeTab === 'custom' && (def.category === 'fundamentals' && def.parameters.length > 0
             || isTradingViewCondition(def.id) || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id));
-          return <div key={def.id} className="filter-family">
-            {(instances.length ? instances : [[def.id, undefined] as const]).map(([key, condition]) =>
-              <FilterRow key={key} ruleKey={key} def={def} active={condition} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}
-            {repeatable && instances.length > 0 && availableFilterParameters(def) && <button type="button" className="add-filter-rule"
-              aria-label={`Add ${def.label} rule`} onClick={() => addRule(def)}>+ Add rule</button>}
-          </div>;
+          
+          const prevDef = index > 0 ? filtered[index - 1] : null;
+          const showSectionDivider = activeTab === 'custom' && category === 'all' && (!prevDef || prevDef.category !== def.category);
+          const categoryTitle = showSectionDivider ? (CATEGORY_TABS.find(t => t.id === def.category)?.label ?? def.category) : null;
+
+          return (
+            <React.Fragment key={def.id}>
+              {showSectionDivider && (
+                <div className="filter-section-header" role="presentation">
+                  <span className="filter-section-title">{categoryTitle}</span>
+                  <div className="filter-section-divider" />
+                </div>
+              )}
+              <div className="filter-family">
+                {(instances.length ? instances : [[def.id, undefined] as const]).map(([key, condition]) =>
+                  <FilterRow key={key} ruleKey={key} def={def} active={condition} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}
+                {repeatable && instances.length > 0 && availableFilterParameters(def) && <button type="button" className="add-filter-rule"
+                  aria-label={`Add ${def.label} rule`} onClick={() => addRule(def)}>+ Add rule</button>}
+              </div>
+            </React.Fragment>
+          );
         })}
       </div>
       {!filtered.length && <div className="data-state"><h2>No matching {activeTab === 'custom' ? 'filters' : 'scans'}</h2><p>Try a different category or search.</p></div>}

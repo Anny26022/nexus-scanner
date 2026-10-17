@@ -195,7 +195,23 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
           <button type="button" className="button button-ghost" onClick={() => { resetScroll(); setSavedColumnIds(DEFAULT_COLUMNS); }}>Reset</button>
         </div></div>
         {!columnSearch.trim() && <div className="column-category-tabs" role="tablist" aria-label="Column categories">
-          {COLUMN_GROUPS.map(group => <button key={group} type="button" role="tab" aria-selected={columnGroup === group} onClick={() => setColumnGroup(group)}>{group}</button>)}
+          {COLUMN_GROUPS.map(group => {
+            const count = customizableColumns.filter(column => column.group === group && selectedColumnIds.includes(column.id)).length;
+            return (
+              <button
+                key={group}
+                type="button"
+                role="tab"
+                aria-selected={columnGroup === group}
+                aria-label={group}
+                onClick={() => setColumnGroup(group)}
+                className="column-category-btn"
+              >
+                <span>{group}</span>
+                {count > 0 && <span className="column-category-badge" aria-hidden="true">{count}</span>}
+              </button>
+            );
+          })}
         </div>}
         <div className="column-options" role="group" aria-label={columnSearch.trim() ? 'Search results' : `${columnGroup} columns`}>
           {pickerColumns.length ? pickerColumns.map(column => <label key={column.id} className="column-picker-option">

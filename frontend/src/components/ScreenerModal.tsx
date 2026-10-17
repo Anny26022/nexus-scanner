@@ -99,10 +99,10 @@ const MultiSelectDropdown = ({ options, value, onChange, label, single = false, 
       <button 
         ref={trigger} type="button" disabled={!options.length} title={value.join(', ')} aria-label={`${label}: ${value?.length ? `${value.length} selected` : 'Select options'}`} aria-expanded={isOpen}
         onClick={toggleMenu}
-        className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none max-w-[120px] shrink-0 truncate transition-colors cursor-pointer flex items-center gap-1"
+        className="bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2.5 py-1 text-[11.5px] font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20 max-w-[140px] shrink-0 truncate transition-all cursor-pointer flex items-center justify-between gap-1.5 shadow-sm"
       >
         <span className="truncate">{value?.length ? single ? options.find(option => option.value === value[0])?.label ?? value[0] : `${value.length} selected` : 'Select...'}</span>
-        <ChevronDown size={12} />
+        <ChevronDown size={12} className="text-gray-400 shrink-0" />
       </button>
       
       {isOpen && (
@@ -180,7 +180,7 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
         value={val}
         aria-label={p.label}
         onChange={(e) => updateParam(defId, p.id, e.target.value)}
-        className="bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 max-w-[110px] shrink-0 truncate transition-colors cursor-pointer"
+        className="bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2 py-1 text-[11.5px] font-medium text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 max-w-[130px] shrink-0 truncate transition-all cursor-pointer shadow-sm"
       >
         {(p.options || []).map((opt) => (
           <option key={opt.value} value={opt.value} disabled={!isAvailableCondition({
@@ -199,7 +199,7 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
       max={p.max}
       step={p.step ?? (isIntegerParameter(p) ? 1 : 0.1)}
       aria-label={p.label}
-      className="w-14 bg-white border border-gray-200 hover:border-teal-400 rounded-md px-1.5 py-0.5 text-[11px] text-gray-700 text-center focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-colors"
+      className="w-16 bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2 py-1 text-[11.5px] font-semibold text-gray-800 text-center focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all shadow-sm"
     />;
   }
 

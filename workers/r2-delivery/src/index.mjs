@@ -1,4 +1,4 @@
-const prefixes = /^(?:objects|releases|daily|monthly)\//;
+const prefixes = /^(?:objects|releases|daily|monthly|snapshots)\//;
 
 export default {
   async fetch(request, env) {

@@ -345,10 +345,32 @@ def main():
 
     # 2. Load Historical OHLCV Cache
     history_npz_path = pipeline_dir / ".scanner_cache" / "history.npz"
-    if not history_npz_path.exists():
-        print(f"{history_npz_path} does not exist. Checking for ohlcv_data to build it...")
-        ohlcv_dir = pipeline_dir / "ohlcv_data"
+    ohlcv_dir = pipeline_dir / "ohlcv_data"
+
+    rebuild_history = not history_npz_path.exists()
+    if not rebuild_history:
+        try:
+            with np.load(history_npz_path, allow_pickle=False) as chk:
+                npz_rev = str(chk.get("revision", ""))
+                chk_dates = pd.to_datetime(chk["dates"])
+                marker = pipeline_dir / "scanner_revision.json"
+                if marker.exists():
+                    manifest = json.loads(marker.read_text())
+                    expected_rev = manifest.get("historyRevision")
+                    if expected_rev and npz_rev != expected_rev:
+                        print(f"history.npz revision ({npz_rev[:12]}) differs from expected ({expected_rev[:12]}), rebuilding...")
+                        rebuild_history = True
+                if not rebuild_history and len(chk_dates) > 0 and args.end_date > chk_dates.max().date():
+                    if ohlcv_dir.exists() and any(ohlcv_dir.glob("*.csv")):
+                        print(f"Target end date {args.end_date} exceeds history.npz max date {chk_dates.max().date()}, checking for newer ohlcv_data...")
+                        rebuild_history = True
+        except Exception as e:
+            print(f"history.npz check warning: {e}; will rebuild if ohlcv_data exists.")
+            rebuild_history = True
+
+    if rebuild_history:
         if ohlcv_dir.exists() and any(ohlcv_dir.glob("*.csv")):
+            print("Compiling .scanner_cache/history.npz from ohlcv_data...")
             sys.path.insert(0, str(pipeline_dir / "src"))
             sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "frontend"))
             try:
@@ -360,8 +382,10 @@ def main():
                 sc.save_frames(pipeline_dir)
                 print("Successfully compiled .scanner_cache/history.npz from ohlcv_data!")
             except Exception as e:
-                sys.exit(f"Failed to compile history.npz from ohlcv_data: {e}")
-        else:
+                if not history_npz_path.exists():
+                    sys.exit(f"Failed to compile history.npz from ohlcv_data: {e}")
+                print(f"Warning: Rebuild failed ({e}), continuing with existing history.npz")
+        elif not history_npz_path.exists():
             sys.exit(f"Error: Neither {history_npz_path} nor {ohlcv_dir} exists.")
 
     print("Loading vectorized OHLCV history.npz...")
@@ -553,7 +577,7 @@ def main():
                     pass
 
             # Point-in-time market cap derivation (never copy current market cap into historical dates)
-            mcap_crore = 0.0
+            mcap_crore = None
             if latest_fin and latest_fin.get("eps") and latest_fin.get("net_profit") and latest_fin["eps"] > 0:
                 shares = (latest_fin["net_profit"] * 1e7) / latest_fin["eps"]
                 mcap_crore = round((shares * tech["close"]) / 1e7, 2)
@@ -581,7 +605,7 @@ def main():
                 "series": stock.get("series") or "EQ",
                 "listingDate": stock.get("listing_date") or "",
                 "isSme": stock.get("is_sme", False),
-                "isFno": bool(stock.get("fno_eligible") or stock.get("is_fno")),
+                "isFno": None,
                 "fnoBan": None,
                 "fnoBanAsOfDate": None,
                 "tradingview": None,
@@ -679,7 +703,15 @@ def main():
             "totalStocks": len(snapshot_stocks),
             "stocks": snapshot_stocks,
             "breadth": breadth_record,
-            "dataCompleteness": "historical_point_in_time_reconstructed",
+            "pointInTimeCoverage": {
+                "survivorshipBias": "Stock universe restricted to current surviving master list; historical delisted/merged securities omitted",
+                "shareholding": "Strictly observed_on <= asOfDate (null for historical dates prior to ledger observation recording)",
+                "fnoEligibility": "unavailable",
+                "fnoBan": "unavailable",
+                "tradingview": "unavailable",
+                "surveillance": "Reconstructed from official NSE circulars where complete" if surv_avail else "incomplete_circular_chain",
+            },
+            "dataCompleteness": "historical_reconstructed_with_survivorship_qualification",
         }
         json_bytes = json.dumps(raw_payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         session_hash = hashlib.sha256(json_bytes).hexdigest()

@@ -94,10 +94,16 @@ async function releaseFor(revision?: string): Promise<Manifest> {
   const latest = await getManifest();
   const selected = revision ?? latest.revision;
   if (!/^[a-f0-9]{64}$/.test(selected)) throw new Error('Invalid dataset revision');
-  const release = selected === latest.revision ? latest : validateManifest(await cached(
-    releaseCache, selected, () => getJson<unknown>(`/data/revisions/${selected}/release.json`), 3));
-  if (release.revision !== selected) throw new Error('Release revision mismatch');
-  return release;
+  if (selected === latest.revision) return latest;
+  try {
+    const release = validateManifest(await cached(
+      releaseCache, selected, () => getJson<unknown>(`/data/revisions/${selected}/release.json`), 3));
+    if (release.revision !== selected) throw new Error('Release revision mismatch');
+    return release;
+  } catch (err) {
+    console.warn(`Release manifest for revision ${selected} not found, falling back to latest release:`, err);
+    return latest;
+  }
 }
 async function dataIndex(release: Manifest): Promise<DataIndex> {
   if (!release.dataIndexUrl) throw new DataUnavailableError('Announcements were not published with this data release. The publisher must configure announcement storage and publish a complete release.', 'not_published');

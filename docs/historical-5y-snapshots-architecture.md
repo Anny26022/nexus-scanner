@@ -7,17 +7,18 @@ Nexus Scanner supports point-in-time historical screening up to 5 years into the
 
 ## 2. Point-in-Time Data Feasibility Matrix
 
-| Data Dimension | Coverage Back to 5 Years | Official Data Source | Implementation Method |
+| Data Dimension | Coverage Back to 5 Years | Official Data Source | Implementation Method & Caveats |
 | :--- | :---: | :--- | :--- |
 | **OHLCV Price Data** | **100% Available** | NSE Bhavcopy Archives (`cm{date}bhav.csv.zip`) & EOD2 | Vectorized slice from `.scanner_cache/history.npz` |
 | **Technical Indicators (SMA, EMA, RSI)** | **100% Available** | Derived from historical OHLCV | Mathematical calculation on price history |
 | **Volume & Turnover** | **100% Available** | NSE Historical Bhavcopies | Extracted directly from exchange traded quantities |
-| **Delivery Percentage & Deliverable Qty** | **100% Available** | `https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{date}.csv` | Fetched daily from NSE static archive |
+| **Delivery Percentage & Deliverable Qty** | **100% Available** | `https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{date}.csv` | Fetched daily from NSE static archive with local disk caching |
 | **Market Breadth (% > 20/50/200 DMA)** | **100% Available** | Computed across active universe | Calculated cross-sectionally for every session |
-| **Shareholding Patterns (Promoter/FII/DII)** | **100% Available** | `shareholding_history.json.gz` (NSE/ScanX 2006–2026) | Point-in-time join matching `period_end <= session_date` |
-| **Quarterly Financial Statements** | **Available from 2020+** | `quarterly_financial_history.json.gz` (55,945 filings) | Point-in-time join matching `filing_date <= session_date` |
-| **F&O Ban List** | **Reconstructable** | `fo{date}bhav.csv.zip` Open Interest archives | Recomputed via MWPL (Open Interest > 95% threshold) |
-| **Surveillance Lists (ASM / GSM)** | **Ephemeral (Null)** | Circular PDFs (Not archived statically by NSE) | Defaulted to `null` with completeness badge |
+| **Shareholding Patterns (Promoter/FII/DII)** | **Qualified (Null for 2021–2025)** | `shareholding_history.json.gz` | Strictly enforced `observed_on <= session_date`. As current ledger entries were first observed in Oct 2026, historical holdings prior to observation remain null |
+| **Quarterly Financial Statements** | **Available from 2021-10+** | `quarterly_financial_history.json.gz` (55,945 filings) | Point-in-time join matching `filing_date <= session_date` |
+| **F&O Eligibility & Ban List** | **Unavailable (Null)** | NSE replaces lists daily | Marked `null` / unavailable to avoid lookahead and false assumptions |
+| **Surveillance Lists (ASM / GSM)** | **Reconstructed where circulars exist** | Official NSE circulars & price bands | Extracted from daily circulars and price band archives; null if incomplete |
+| **Stock Universe Survivorship** | **Survivorship-Biased** | Current master stock universe | Snapshots include today's surviving companies; historically delisted or merged securities are omitted |
 
 ---
 
@@ -27,22 +28,22 @@ The production script [`tools/generate_historical_snapshots.py`](../tools/genera
 
 ### Command Line Usage:
 ```bash
-# Generate snapshots for a specific date range (e.g., October 2021)
+# Generate snapshots for a specific date range (e.g., Q4 2021)
 python3 tools/generate_historical_snapshots.py \
   --pipeline-dir "DO NOT DELETE EDL PIPELINE" \
   --output-dir "outputs/historical_snapshots" \
   --start-date 2021-10-01 \
-  --end-date 2021-10-15
+  --end-date 2021-12-31
 
 # Dry run to verify date range without generating files
 python3 tools/generate_historical_snapshots.py --dry-run
 ```
 
-### Performance Benchmark:
-- **Loading Universe & 7.2M Candles**: ~1.4 seconds.
-- **Per-Session Snapshot Generation**: **~0.5 to 0.6 seconds** per trading day.
-- **5-Year Full Backfill (~1,250 trading days)**: **~10 to 12 minutes** total run time.
-- **Compressed Storage Footprint**: ~265 KB per daily snapshot $\times$ 1,250 days $\approx$ **~330 MB to 600 MB** total storage.
+### Performance & Chunking Guidance:
+- **Cached Execution**: **~0.6 seconds** per trading session once Bhavcopy and Price Band files are cached in `.scanner_cache/historical_downloads/`.
+- **Uncached Network Execution**: **~2.5 seconds** per trading session (due to sequential NSE archive downloads).
+- **Execution Strategy**: Rather than attempting all 1,250 days (~5 years) in a single GitHub Actions run, backfill jobs should be executed in quarterly or yearly chunks (e.g. 60–250 sessions per workflow run). This prevents network rate limiting from NSE archives and keeps individual runs within 3–10 minutes.
+- **Compressed Storage Footprint**: ~400–460 KB per daily snapshot $\times$ 1,250 days $\approx$ **~500 MB** total storage on Cloudflare R2.
 
 ---
 

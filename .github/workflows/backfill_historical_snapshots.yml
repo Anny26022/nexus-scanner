@@ -47,8 +47,8 @@ jobs:
       - name: Cache Historical Downloads & Cache
         uses: actions/cache@v4
         with:
-          path: .scanner_cache
-          key: historical-cache-${{ runner.os }}-${{ hashFiles('ohlcv_data/*.csv') }}
+          path: DO NOT DELETE EDL PIPELINE/.scanner_cache
+          key: historical-cache-${{ runner.os }}-${{ hashFiles('DO NOT DELETE EDL PIPELINE/ohlcv_data/*.csv') }}
           restore-keys: |
             historical-cache-${{ runner.os }}-
 
@@ -79,15 +79,14 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: |
           python - << 'EOF'
-          import os, glob, boto3
+          import os, glob, sys, boto3
           account_id = os.environ.get('R2_ACCOUNT_ID')
           access_key = os.environ.get('R2_ACCESS_KEY_ID')
           secret_key = os.environ.get('R2_SECRET_ACCESS_KEY')
           bucket_name = os.environ.get('R2_BUCKET', 'nexus-screener-chart-data')
 
           if not (account_id and access_key and secret_key):
-              print("R2 credentials not fully provided; skipping R2 upload.")
-              exit(0)
+              sys.exit("Error: R2 credentials (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) are required when upload_r2 is true.")
 
           endpoint = f"https://{account_id}.r2.cloudflarestorage.com"
           s3 = boto3.client(
@@ -99,6 +98,9 @@ jobs:
           )
 
           snapshots = glob.glob("outputs/historical_snapshots/*.json.gz")
+          if not snapshots:
+              sys.exit("Error: No snapshots found in outputs/historical_snapshots/*.json.gz; nothing to upload.")
+
           print(f"Uploading {len(snapshots)} snapshots to R2 bucket '{bucket_name}'...")
           for filepath in snapshots:
               filename = os.path.basename(filepath)
@@ -111,17 +113,20 @@ jobs:
                       ExtraArgs={'ContentType': 'application/json', 'ContentEncoding': 'gzip'}
                   )
               print(f"Uploaded {key}")
-          print("R2 snapshot upload complete.")
+
+          # Write sentinel file verifying successful upload
+          with open(".upload_verified", "w") as f:
+              f.write(f"Verified upload of {len(snapshots)} snapshots\n")
+          print("R2 snapshot upload complete and verified.")
           EOF
 
       - name: Commit Updated Sessions Manifest
-        if: ${{ github.event.inputs.upload_r2 == 'true' }}
+        if: ${{ hashFiles('.upload_verified') != '' }}
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add frontend/public/data/sessions.json
-          git commit -m "chore(data): register backfilled sessions [${{ github.event.inputs.start_date }} to ${{ github.event.inputs.end_date }}]" || echo "No manifest changes to commit"
-          git push origin HEAD || echo "Push skipped or branch protected"
+          git diff --staged --quiet || (git commit -m "chore(data): register backfilled sessions [${{ github.event.inputs.start_date }} to ${{ github.event.inputs.end_date }}]" && git push origin HEAD)
 
       - name: Upload Artifacts Archive
         uses: actions/upload-artifact@v4

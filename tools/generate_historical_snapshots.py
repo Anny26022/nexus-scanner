@@ -60,6 +60,73 @@ def fetch_nse_delivery_csv(session_date: date) -> Optional[List[Dict[str, Any]]]
         return None
 
 
+def fetch_nse_surveillance_for_date(session_date: date) -> Dict[str, Dict[str, Any]]:
+    """Fetch and parse official ASM/GSM circular lists for a given trading date."""
+    import zipfile
+    import openpyxl
+
+    date_str = session_date.strftime("%d-%m-%Y")
+    url = f"https://www.nseindia.com/api/circulars?fromDate={date_str}&toDate={date_str}"
+    req = urllib.request.Request(url, headers=NSE_HEADERS)
+    surveillance_map = {}
+    try:
+        with urllib.request.urlopen(req, context=SSL_CTX, timeout=8) as resp:
+            if resp.status != 200:
+                return {}
+            payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
+            items = payload.get("data", [])
+            for c in items:
+                link = c.get("circFilelink") or ""
+                sub = (c.get("sub") or "").upper()
+                if not (link.endswith(".zip") and ("ASM" in sub or "GSM" in sub or "SURVEILLANCE" in sub)):
+                    continue
+                try:
+                    c_req = urllib.request.Request(link, headers=NSE_HEADERS)
+                    with urllib.request.urlopen(c_req, context=SSL_CTX, timeout=8) as c_resp:
+                        zf = zipfile.ZipFile(io.BytesIO(c_resp.read()))
+                        for name in zf.namelist():
+                            if not (name.endswith(".xlsx") or name.endswith(".xls")):
+                                continue
+                            wb = openpyxl.load_workbook(io.BytesIO(zf.read(name)), data_only=True)
+                            for sheetname in wb.sheetnames:
+                                s = wb[sheetname]
+                                is_asm_sheet = "ASM" in sheetname.upper() or "ASM" in str(s.cell(1, 1).value or "").upper()
+                                is_gsm_sheet = "GSM" in sheetname.upper() or "GSM" in str(s.cell(1, 1).value or "").upper()
+                                for r in range(2, s.max_row + 1):
+                                    row_vals = [s.cell(r, col).value for col in range(1, min(s.max_column + 1, 10))]
+                                    isin = None
+                                    symbol = None
+                                    stage = "I"
+                                    for v in row_vals:
+                                        if isinstance(v, str):
+                                            v_clean = v.strip().upper()
+                                            if len(v_clean) == 12 and v_clean.startswith("INE"):
+                                                isin = v_clean
+                                            elif v_clean in {"I", "II", "III", "IV"}:
+                                                stage = v_clean
+                                            elif 2 <= len(v_clean) <= 15 and v_clean.isalnum() and not v_clean.startswith("INE"):
+                                                if not symbol:
+                                                    symbol = v_clean
+                                    if symbol:
+                                        entry = surveillance_map.setdefault(symbol, {
+                                            "isAsm": False, "asmStage": None,
+                                            "isGsm": False, "gsmStage": None,
+                                            "surveillanceAvailable": True
+                                        })
+                                        if is_asm_sheet:
+                                            entry["isAsm"] = True
+                                            entry["asmStage"] = stage
+                                        if is_gsm_sheet:
+                                            entry["isGsm"] = True
+                                            entry["gsmStage"] = stage
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return surveillance_map
+
+
+
 def calculate_technicals(opens: np.ndarray, closes: np.ndarray, highs: np.ndarray, lows: np.ndarray, volumes: np.ndarray) -> Dict[str, Any]:
     """Calculate core screener indicators given price arrays."""
     n = len(closes)
@@ -258,9 +325,13 @@ def main():
                 if sym and r.get("SERIES") == "EQ":
                     delivery_map[sym] = r
 
+        # Fetch official NSE ASM/GSM circular surveillance lists for this session
+        surveillance_map = fetch_nse_surveillance_for_date(session_date)
+
         for stock in master_stocks:
             sym = str(stock.get("symbol") or "").upper()
             idx = symbol_to_idx.get(sym)
+
             if idx is None:
                 continue
 
@@ -346,6 +417,13 @@ def main():
                 mcap_crore = round((shares * tech["close"]) / 1e7, 2)
 
 
+            surv_info = surveillance_map.get(sym)
+            surv_avail = bool(surveillance_map)
+            is_asm = surv_info["isAsm"] if surv_info else (False if surv_avail else None)
+            asm_stage = surv_info["asmStage"] if surv_info else None
+            is_gsm = surv_info["isGsm"] if surv_info else (False if surv_avail else None)
+            gsm_stage = surv_info["gsmStage"] if surv_info else None
+
             item = {
                 "symbol": sym,
                 "name": stock.get("name") or sym,
@@ -358,9 +436,16 @@ def main():
                 "isFno": stock.get("is_fno", False),
                 "fnoBan": False,
                 "circuitLimit": stock.get("circuit_limit") or "20",
+                "surveillanceAvailable": surv_avail,
+                "surveillanceAsOfDate": session_str if surv_avail else None,
+                "isAsm": is_asm,
+                "asmStage": asm_stage,
+                "isGsm": is_gsm,
+                "gsmStage": gsm_stage,
                 "asOfDate": session_str,
                 "metadataAsOfDate": session_str,
                 "historyAligned": True,
+
                 "indexMemberships": stock.get("index_memberships") or [],
                 "open": tech["open"],
                 "high": tech["high"],

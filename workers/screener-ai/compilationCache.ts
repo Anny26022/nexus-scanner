@@ -37,7 +37,7 @@ export async function readCompilation(cache:CompilationCache,key:Request,catalog
     const result = validateAiScreenResult(payload,catalog);
     if (result.unsupportedClauses.length || !object(payload) || !object(payload.compilation)) return undefined;
     const metadata = payload.compilation;
-    if (typeof metadata.model !== 'string' || typeof metadata.attempts !== 'number' || ![1,2].includes(metadata.attempts)
+    if (typeof metadata.model !== 'string' || typeof metadata.attempts !== 'number' || metadata.attempts < 1 || metadata.attempts > 4
       || ![metadata.inputTokens,metadata.outputTokens].every(value=>typeof value === 'number' && Number.isFinite(value) && value >= 0)) return undefined;
     return {...result,...(typeof payload.catalogRevision === 'string' ? {catalogRevision:payload.catalogRevision} : {}),
       compilation:{model:metadata.model,attempts:metadata.attempts,cacheHit:true,

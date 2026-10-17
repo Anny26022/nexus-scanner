@@ -35,7 +35,7 @@ UNSUPPORTED for unavailable indicators/periods, nested logic, guesses, intraday 
 ${JSON.stringify(encoded)}`;
 }
 
-function parseOutput(output:unknown): {raw:unknown;inputTokens:number;outputTokens:number} {
+function parseOutput(output:unknown): {raw:unknown;inputTokens:number;outputTokens:number;cachedTokens:number} {
   if (!object(output)) throw new Error('invalid_response');
   let content = output.response;
   if (Array.isArray(output.choices)) {
@@ -54,8 +54,14 @@ function parseOutput(output:unknown): {raw:unknown;inputTokens:number;outputToke
     raw = content;
   }
   const usage = object(output.usage) ? output.usage : {};
+  const promptDetails = object(usage.prompt_tokens_details) ? usage.prompt_tokens_details : {};
   const numeric = (v:unknown)=>typeof v === 'number' && Number.isFinite(v) ? v : 0;
-  return {raw,inputTokens:numeric(usage.prompt_tokens),outputTokens:numeric(usage.completion_tokens)};
+  return {
+    raw,
+    inputTokens: numeric(usage.prompt_tokens),
+    outputTokens: numeric(usage.completion_tokens),
+    cachedTokens: numeric(promptDetails.cached_tokens),
+  };
 }
 
 function checkCoverage(_query:string,result:AiScreenResult) {
@@ -69,10 +75,10 @@ function checkCoverage(_query:string,result:AiScreenResult) {
 import evaluationCases from './evaluation-cases.json';
 
 export async function compileWithFallback(query:string,catalog:AiFilterDefinition[],run:ModelRunner,
-  options:{signal?:AbortSignal; primary?:CompileModel; models?:CompileModel[]; onAttempt?:(data:{model:string;success:boolean;inputTokens:number;outputTokens:number;reason?:string})=>void}={}) {
+  options:{signal?:AbortSignal; primary?:CompileModel; models?:CompileModel[]; onAttempt?:(data:{model:string;success:boolean;inputTokens:number;outputTokens:number;cachedTokens?:number;reason?:string})=>void}={}) {
   const models:CompileModel[] = options.models ?? (options.primary === FALLBACK_MODEL ? [FALLBACK_MODEL] : [options.primary ?? PRIMARY_MODEL, FALLBACK_MODEL]);
   const messages:InferenceInput['messages'] = [{role:'system',content:compilerPrompt(catalog, query)},{role:'user',content:query}];
-  let inputTokens=0,outputTokens=0;
+  let inputTokens=0,outputTokens=0,cachedTokens=0;
   let partialCandidate: {result:AiScreenResult; model:string; index:number} | null = null;
   let lastErrorMessage = '';
 
@@ -82,7 +88,7 @@ export async function compileWithFallback(query:string,catalog:AiFilterDefinitio
       const signal = options.signal ? AbortSignal.any([options.signal,AbortSignal.timeout(index===0?30000:45000)]) : AbortSignal.timeout(index===0?30000:45000);
       const requestMessages = model === FALLBACK_MODEL ? [{...messages[0],content:messages[0].content+'\n/no_think'},messages[1]] : messages;
       const parsed = parseOutput(await run(model,{messages:requestMessages,response_format:{type:'json_object'},temperature:0,max_tokens:450},signal));
-      inputTokens+=parsed.inputTokens;outputTokens+=parsed.outputTokens;
+      inputTokens+=parsed.inputTokens;outputTokens+=parsed.outputTokens;cachedTokens+=parsed.cachedTokens;
       if (!object(parsed.raw) || !Array.isArray(parsed.raw.clauses)) throw new Error('invalid_result');
       const result = materializeCompilerResult(parsed.raw,catalog,query);
       const rawClauses = parsed.raw.clauses;
@@ -94,8 +100,8 @@ export async function compileWithFallback(query:string,catalog:AiFilterDefinitio
         throw new Error('invalid_parameters');
       }
       checkCoverage(query,result);
-      options.onAttempt?.({model,success:true,inputTokens:parsed.inputTokens,outputTokens:parsed.outputTokens});
-      return {...result,compilation:{model,attempts:index+1,cacheHit:false,inputTokens,outputTokens}};
+      options.onAttempt?.({model,success:true,inputTokens:parsed.inputTokens,outputTokens:parsed.outputTokens,cachedTokens:parsed.cachedTokens});
+      return {...result,compilation:{model,attempts:index+1,cacheHit:false,inputTokens,outputTokens,cachedTokens}};
     } catch (error) {
       if (options.signal?.aborted) throw error;
       const message = error instanceof Error ? error.message : String(error);
@@ -114,7 +120,8 @@ export async function compileWithFallback(query:string,catalog:AiFilterDefinitio
         attempts: partialCandidate.index + 1,
         cacheHit: false,
         inputTokens,
-        outputTokens
+        outputTokens,
+        cachedTokens
       }
     };
   }

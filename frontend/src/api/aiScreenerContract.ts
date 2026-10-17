@@ -22,7 +22,7 @@ export interface AiScreenResult {
   conditionsMap: Record<string, ActiveCondition>;
   unsupportedClauses: string[];
   catalogRevision?: string;
-  compilation?: {model:string; attempts:number; cacheHit:boolean; inputTokens:number; outputTokens:number};
+  compilation?: {model:string; attempts:number; cacheHit:boolean; inputTokens:number; outputTokens:number; cachedTokens?:number};
 }
 
 // Shared by the Worker and browser. The request cannot supply its own catalogue.

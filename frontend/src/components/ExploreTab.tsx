@@ -15,18 +15,21 @@ import { explainCondition, explainExpressionTree } from '../utils/nqlParser';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { useFilterChoices } from '../hooks/useFilterChoices';
-import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search, Info, Sparkles } from 'lucide-react';
+import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search, Info, Sparkles, BarChart3 } from 'lucide-react';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import type { AnnouncementFilter } from '../api/announcements';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
 import { useNextScreenPage, screenPageStaleTime } from '../hooks/useNextScreenPage';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 import { AiScreenerModal } from './AiScreenerModal';
+import { ScanHistoryPanel } from './ScanHistoryPanel';
 
 interface ExploreTabProps {
   selectedAsOfDate: string;
   datasetRevision?: string;
   onRefreshRevision: () => Promise<string | undefined>;
+  availableSessions?: Array<{ date: string; label: string; isHistorical: boolean; revision: string }>;
+  onSelectSession?: (date: string) => void;
 }
 
 const DEFAULT_CONDITIONS: Record<string, ActiveCondition> = {
@@ -42,11 +45,18 @@ const DEFAULT_CONDITIONS: Record<string, ActiveCondition> = {
   },
 };
 
-export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datasetRevision, onRefreshRevision }) => {
+export const ExploreTab: React.FC<ExploreTabProps> = ({
+  selectedAsOfDate,
+  datasetRevision,
+  onRefreshRevision,
+  availableSessions = [],
+  onSelectSession,
+}) => {
   const [universe, setUniverse] = useLocalStorageState<UniverseType>('nexus-scanner.screener.universe.v1', 'mainboard');
   const asOfDate = selectedAsOfDate;
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.screener.match-mode.v1', 'all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isScanHistoryOpen, setIsScanHistoryOpen] = useState(false);
   const [aiDraft, setAiDraft] = useState<{conditions: Record<string, ActiveCondition>; matchMode: MatchMode} | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const filterChoices = useFilterChoices(isModalOpen, datasetRevision, asOfDate);
@@ -197,6 +207,17 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
             <span>Ask AI</span>
           </button>
           <button onClick={() => setIsModalOpen(true)} className="button button-secondary"><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</button>
+          {availableSessions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsScanHistoryOpen(!isScanHistoryOpen)}
+              className={`button ${isScanHistoryOpen ? 'button-primary' : 'button-secondary'}`}
+              title="Chartink-style Historical Scan Backtesting"
+            >
+              <BarChart3 size={14} />
+              <span>Backtest</span>
+            </button>
+          )}
           <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable} className="button button-primary"><Play size={14} />Run</button>
         </div>
       </div>
@@ -212,6 +233,19 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({ selectedAsOfDate, datase
       <UnavailableConditions conditions={activeConditionsMap} onRemove={handleRemove} />
       {!hasUnavailable && !activeQuery && explanationResult.compiledExplanations.length > 0 && <p className="criteria-summary">{explanationResult.compiledExplanations.map(e => e.humanReadableText).join(matchMode === 'all' ? '; ' : ' OR ')}</p>}
     </section>
+    {isScanHistoryOpen && availableSessions.length > 0 && (
+      <ScanHistoryPanel
+        expressionTree={expressionTree}
+        universe={universe}
+        customSymbols={runRequest.customSymbols}
+        availableSessions={availableSessions}
+        currentSessionDate={asOfDate}
+        onSelectSession={(date) => {
+          onSelectSession?.(date);
+        }}
+        onClose={() => setIsScanHistoryOpen(false)}
+      />
+    )}
     {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
       loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}

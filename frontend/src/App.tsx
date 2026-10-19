@@ -87,6 +87,8 @@ const ScreenerAppContent: React.FC = () => {
             selectedAsOfDate={selectedAsOfDate}
             datasetRevision={activeRevision}
             onRefreshRevision={async () => (await refreshRevision()).data?.immutableRevision}
+            availableSessions={availableSessions}
+            onSelectSession={setCustomSessionDate}
           />
         ) : activeTab === 'charts' ? (
           <React.Suspense fallback={<p role="status">Loading chart workspace…</p>}>

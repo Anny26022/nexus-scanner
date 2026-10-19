@@ -13,9 +13,10 @@ export interface ScanSession {
 export interface ScanHistoryPoint {
   date: string;
   count: number;
-  symbols: string[];
   status: 'success' | 'error' | 'unsupported';
   error?: string;
+  // symbols are loaded on demand during drilldown inspection to minimize memory
+  symbols?: string[];
 }
 
 export interface ScanHistorySummary {
@@ -42,7 +43,9 @@ export interface ScanCompatibilityResult {
   reason?: string;
 }
 
+const SCAN_HISTORY_CACHE_MAX = 200;
 const scanHistoryCache = new Map<string, ScanHistoryPoint>();
+const sessionSymbolsCache = new Map<string, string[]>();
 
 export function getScanHistoryCacheKey(
   date: string,
@@ -53,6 +56,13 @@ export function getScanHistoryCacheKey(
 ): string {
   const custom = customSymbols && customSymbols.length > 0 ? customSymbols.slice().sort().join(',') : '';
   return `${date}:${revision}:${universe}:${custom}:${JSON.stringify(expressionTree)}`;
+}
+
+function setScanHistoryCache(key: string, point: ScanHistoryPoint) {
+  scanHistoryCache.set(key, point);
+  if (scanHistoryCache.size > SCAN_HISTORY_CACHE_MAX) {
+    scanHistoryCache.delete(scanHistoryCache.keys().next().value!);
+  }
 }
 
 export function checkScanCompatibility(tree: ExpressionNode): ScanCompatibilityResult {
@@ -82,14 +92,17 @@ export async function runScanHistorySession(
   session: ScanSession,
   expressionTree: ExpressionNode,
   universe: UniverseType,
-  customSymbols?: string[]
+  customSymbols?: string[],
+  signal?: AbortSignal
 ): Promise<ScanHistoryPoint> {
   const cacheKey = getScanHistoryCacheKey(session.date, session.revision, universe, expressionTree, customSymbols);
   const cached = scanHistoryCache.get(cacheKey);
   if (cached) return cached;
 
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
   const manifest = await getManifest();
-  const source = manifestSnapshotSource(manifest, session.revision, session.date);
+  const source = manifestSnapshotSource(manifest, session.revision, session.date, signal);
 
   const request: ScreenerRunRequest = {
     expressionTree,
@@ -98,29 +111,82 @@ export async function runScanHistorySession(
     asOfDate: session.date,
     datasetRevision: session.revision,
     page: 1,
-    pageSize: 1, // Only need 1 row; matchedSymbols contains all passing symbol names
+    pageSize: 1,
   };
 
   const snapshot = await runSnapshotTask({
     type: 'screen',
     source,
     request,
-    allRows: false, // Avoid expensive structured clone transfer of full row objects
+    allRows: false,
   });
 
   if (snapshot.type !== 'screen' || !snapshot.result) {
     throw new Error(`Failed to screen session ${session.date}`);
   }
 
+  // Count only returned for histogram; symbols loaded on demand when user clicks that date
   const point: ScanHistoryPoint = {
     date: session.date,
     count: snapshot.result.matchCount,
-    symbols: snapshot.result.matchedSymbols || snapshot.result.rows.map(r => r.symbol),
     status: 'success',
   };
 
-  scanHistoryCache.set(cacheKey, point);
+  // Cache symbols separately if needed for instant access
+  if (snapshot.result.matchedSymbols) {
+    sessionSymbolsCache.set(cacheKey, snapshot.result.matchedSymbols);
+    if (sessionSymbolsCache.size > SCAN_HISTORY_CACHE_MAX) {
+      sessionSymbolsCache.delete(sessionSymbolsCache.keys().next().value!);
+    }
+  }
+
+  setScanHistoryCache(cacheKey, point);
   return point;
+}
+
+export async function loadSessionSymbols(
+  session: ScanSession,
+  expressionTree: ExpressionNode,
+  universe: UniverseType,
+  customSymbols?: string[],
+  signal?: AbortSignal
+): Promise<string[]> {
+  const cacheKey = getScanHistoryCacheKey(session.date, session.revision, universe, expressionTree, customSymbols);
+  const cached = sessionSymbolsCache.get(cacheKey);
+  if (cached) return cached;
+
+  if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+  const manifest = await getManifest();
+  const source = manifestSnapshotSource(manifest, session.revision, session.date, signal);
+
+  const request: ScreenerRunRequest = {
+    expressionTree,
+    universe,
+    customSymbols,
+    asOfDate: session.date,
+    datasetRevision: session.revision,
+    page: 1,
+    pageSize: 1,
+  };
+
+  const snapshot = await runSnapshotTask({
+    type: 'screen',
+    source,
+    request,
+    allRows: false,
+  });
+
+  if (snapshot.type !== 'screen' || !snapshot.result) {
+    throw new Error(`Failed to load symbols for session ${session.date}`);
+  }
+
+  const symbols = snapshot.result.matchedSymbols || snapshot.result.rows.map(r => r.symbol);
+  sessionSymbolsCache.set(cacheKey, symbols);
+  if (sessionSymbolsCache.size > SCAN_HISTORY_CACHE_MAX) {
+    sessionSymbolsCache.delete(sessionSymbolsCache.keys().next().value!);
+  }
+  return symbols;
 }
 
 export function computeScanHistorySummary(points: ScanHistoryPoint[], totalSessions: number): ScanHistorySummary {
@@ -177,7 +243,8 @@ export async function executeScanHistory(
     onProgress?: (progress: ScanHistoryProgress, point: ScanHistoryPoint) => void;
   } = {}
 ): Promise<{ points: ScanHistoryPoint[]; summary: ScanHistorySummary }> {
-  const { concurrency = 4, signal, onProgress } = options;
+  // Adaptive concurrency default: 2 concurrent fetches to bound peak memory and prevent tab pressure
+  const { concurrency = 2, signal, onProgress } = options;
   const total = sessions.length;
   const resultsMap = new Map<string, ScanHistoryPoint>();
   let completed = 0;
@@ -189,7 +256,7 @@ export async function executeScanHistory(
       const currentIndex = index++;
       const session = sessions[currentIndex];
       try {
-        const point = await runScanHistorySession(session, expressionTree, universe, customSymbols);
+        const point = await runScanHistorySession(session, expressionTree, universe, customSymbols, signal);
         if (signal?.aborted) break;
         resultsMap.set(session.date, point);
         completed++;
@@ -209,7 +276,6 @@ export async function executeScanHistory(
         const errorPoint: ScanHistoryPoint = {
           date: session.date,
           count: 0,
-          symbols: [],
           status: isUnsupported ? 'unsupported' : 'error',
           error: message,
         };

@@ -21,6 +21,7 @@ import {
   executeScanHistory,
   computeScanHistorySummary,
   checkScanCompatibility,
+  loadSessionSymbols,
   type ScanSession,
   type ScanHistoryPoint,
   type ScanHistorySummary,
@@ -55,6 +56,8 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   const [progress, setProgress] = useState<ScanHistoryProgress | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<ScanHistoryPoint | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<ScanHistoryPoint | null>(null);
+  const [sessionSymbols, setSessionSymbols] = useState<Record<string, string[]>>({});
+  const [loadingSymbols, setLoadingSymbols] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState('');
   const [copied, setCopied] = useState(false);
 
@@ -94,6 +97,25 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     return computeScanHistorySummary(points, targetSessions.length);
   }, [points, targetSessions.length]);
 
+  const handleSelectPoint = async (point: ScanHistoryPoint) => {
+    setSelectedPoint(point);
+    setSymbolFilter('');
+    if (sessionSymbols[point.date] || point.status !== 'success' || point.count === 0) return;
+
+    const session = targetSessions.find(s => s.date === point.date);
+    if (!session) return;
+
+    setLoadingSymbols(true);
+    try {
+      const syms = await loadSessionSymbols(session, expressionTree, universe, customSymbols);
+      setSessionSymbols(prev => ({ ...prev, [point.date]: syms }));
+    } catch (e) {
+      console.warn('Failed to load symbols on demand for session:', e);
+    } finally {
+      setLoadingSymbols(false);
+    }
+  };
+
   const handleStartScan = async () => {
     if (!compatibility.compatible) return;
 
@@ -116,7 +138,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
         universe,
         customSymbols,
         {
-          concurrency: 4,
+          concurrency: 2,
           signal: ac.signal,
           onProgress: (prog, point) => {
             localPointsMap.set(point.date, point);
@@ -129,8 +151,9 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
       if (!ac.signal.aborted) {
         setPoints(result.points);
         setStatus('completed');
-        if (result.points.length > 0 && !selectedPoint) {
-          setSelectedPoint(result.points[result.points.length - 1]);
+        if (result.points.length > 0) {
+          const lastPoint = result.points[result.points.length - 1];
+          void handleSelectPoint(lastPoint);
         }
       }
     } catch (err) {
@@ -162,12 +185,14 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     return max > 0 ? max : 10;
   }, [points]);
 
+  const currentSymbols = selectedPoint ? (sessionSymbols[selectedPoint.date] || []) : [];
+
   const filteredDrilldownSymbols = useMemo(() => {
     if (!selectedPoint) return [];
-    if (!symbolFilter.trim()) return selectedPoint.symbols;
+    if (!symbolFilter.trim()) return currentSymbols;
     const q = symbolFilter.trim().toUpperCase();
-    return selectedPoint.symbols.filter(s => s.toUpperCase().includes(q));
-  }, [selectedPoint, symbolFilter]);
+    return currentSymbols.filter(s => s.toUpperCase().includes(q));
+  }, [selectedPoint, symbolFilter, currentSymbols]);
 
   return (
     <div className="mb-4 rounded-xl border border-line bg-surface p-4 shadow-sm text-text transition-all">
@@ -359,10 +384,10 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                     <span className="text-amber-500">{hoveredPoint.error || 'Evaluation error'}</span>
                   )}
                 </div>
-                {hoveredPoint.symbols.length > 0 && (
+                {sessionSymbols[hoveredPoint.date] && sessionSymbols[hoveredPoint.date].length > 0 && (
                   <div className="mt-0.5 text-[11px] text-muted-text">
-                    Top: {hoveredPoint.symbols.slice(0, 5).join(', ')}
-                    {hoveredPoint.symbols.length > 5 ? ` (+${hoveredPoint.symbols.length - 5} more)` : ''}
+                    Top: {sessionSymbols[hoveredPoint.date].slice(0, 5).join(', ')}
+                    {sessionSymbols[hoveredPoint.date].length > 5 ? ` (+${sessionSymbols[hoveredPoint.date].length - 5} more)` : ''}
                   </div>
                 )}
               </div>
@@ -415,7 +440,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                       className="cursor-pointer transition-opacity"
                       onMouseEnter={() => setHoveredPoint(p)}
                       onMouseLeave={() => setHoveredPoint(null)}
-                      onClick={() => setSelectedPoint(p)}
+                      onClick={() => void handleSelectPoint(p)}
                     >
                       <rect
                         x={x}
@@ -486,10 +511,10 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {selectedPoint.symbols.length > 0 && (
+                  {currentSymbols.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => handleCopySymbols(selectedPoint.symbols)}
+                      onClick={() => handleCopySymbols(currentSymbols)}
                       className="flex items-center gap-1 rounded-md border border-line bg-surface px-2 py-1 text-[11px] font-medium text-text hover:bg-subtle"
                     >
                       {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
@@ -509,7 +534,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
               </div>
 
               {/* Symbol search within drilldown */}
-              {selectedPoint.symbols.length > 8 && (
+              {selectedPoint.count > 8 && (
                 <div className="mt-2.5 mb-2">
                   <div className="relative flex items-center">
                     <Search size={13} className="absolute left-2.5 text-muted-text" />
@@ -526,7 +551,12 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
 
               {/* Stock Pills */}
               <div className="mt-2 flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
-                {filteredDrilldownSymbols.length > 0 ? (
+                {loadingSymbols ? (
+                  <span className="text-xs text-muted-text py-2 flex items-center gap-1.5">
+                    <span className="h-3 w-3 animate-spin rounded-full border border-accent border-t-transparent inline-block" />
+                    Loading passing stocks for this session...
+                  </span>
+                ) : filteredDrilldownSymbols.length > 0 ? (
                   filteredDrilldownSymbols.map(sym => (
                     <button
                       key={sym}

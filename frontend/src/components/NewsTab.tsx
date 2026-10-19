@@ -7,9 +7,7 @@ import {
   Check, 
   X,
   ExternalLink,
-  ChevronRight,
-  TrendingUp,
-  TrendingDown
+  ChevronRight
 } from 'lucide-react';
 import { fetchLiveNews, type DhanNewsArticle } from '../api/dhanNewsApi';
 import { SymbolWithLogo } from './SymbolWithLogo';
@@ -202,72 +200,74 @@ export function NewsTab() {
         </div>
       </header>
 
-      {/* Filter Bar: Pure Clean Inline Controls */}
+      {/* Filter Bar: Light, Inline, Airy */}
       <nav className="ap-filter-bar" aria-label="News filters">
-        <div className="ap-search-wrap">
-          <Search size={13} className="ap-search-icon" />
-          <input
-            type="text"
-            className="ap-search-input"
-            placeholder="Search company, ticker, headline..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
+        <div className="ap-filter-top-row">
+          <div className="ap-search-wrap">
+            <Search size={13} className="ap-search-icon" />
+            <input
+              type="text"
+              className="ap-search-input"
+              placeholder="Search ticker, company or filing text..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="ap-search-clear"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+              >
+                <X size={11} />
+              </button>
+            )}
+          </div>
+
+          {/* Lightweight Sentiment Filter */}
+          <div className="ap-sentiment-filter-row" role="tablist" aria-label="Sentiment filter">
             <button
               type="button"
-              className="ap-search-clear"
-              onClick={() => setSearchQuery('')}
-              aria-label="Clear search"
+              role="tab"
+              aria-selected={selectedSentiment === 'ALL'}
+              className={`ap-filter-pill ${selectedSentiment === 'ALL' ? 'is-active' : ''}`}
+              onClick={() => setSelectedSentiment('ALL')}
             >
-              <X size={12} />
+              All <span className="ap-pill-count">{counts.total}</span>
             </button>
-          )}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={selectedSentiment === 'positive'}
+              className={`ap-filter-pill is-pos-pill ${selectedSentiment === 'positive' ? 'is-active' : ''}`}
+              onClick={() => setSelectedSentiment('positive')}
+            >
+              <span className="ap-micro-dot is-pos" />
+              Positive <span className="ap-pill-count">{counts.pos}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={selectedSentiment === 'negative'}
+              className={`ap-filter-pill is-neg-pill ${selectedSentiment === 'negative' ? 'is-active' : ''}`}
+              onClick={() => setSelectedSentiment('negative')}
+            >
+              <span className="ap-micro-dot is-neg" />
+              Negative <span className="ap-pill-count">{counts.neg}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={selectedSentiment === 'neutral'}
+              className={`ap-filter-pill ${selectedSentiment === 'neutral' ? 'is-active' : ''}`}
+              onClick={() => setSelectedSentiment('neutral')}
+            >
+              Neutral <span className="ap-pill-count">{counts.neu}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Sentiment Segment Control */}
-        <div className="ap-segmented-control" role="tablist" aria-label="Sentiment filter">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedSentiment === 'ALL'}
-            className={`ap-segment-btn ${selectedSentiment === 'ALL' ? 'is-active' : ''}`}
-            onClick={() => setSelectedSentiment('ALL')}
-          >
-            All <span className="ap-counter">{counts.total}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedSentiment === 'positive'}
-            className={`ap-segment-btn ${selectedSentiment === 'positive' ? 'is-active is-positive' : ''}`}
-            onClick={() => setSelectedSentiment('positive')}
-          >
-            <TrendingUp size={11} />
-            Positive <span className="ap-counter">{counts.pos}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedSentiment === 'negative'}
-            className={`ap-segment-btn ${selectedSentiment === 'negative' ? 'is-active is-negative' : ''}`}
-            onClick={() => setSelectedSentiment('negative')}
-          >
-            <TrendingDown size={11} />
-            Negative <span className="ap-counter">{counts.neg}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={selectedSentiment === 'neutral'}
-            className={`ap-segment-btn ${selectedSentiment === 'neutral' ? 'is-active' : ''}`}
-            onClick={() => setSelectedSentiment('neutral')}
-          >
-            Neutral <span className="ap-counter">{counts.neu}</span>
-          </button>
-        </div>
-
-        {/* Topic Pills */}
+        {/* Topic Pills: Whisper-quiet, ultra-minimal */}
         <div className="ap-topic-scroller">
           {TOPIC_FILTERS.map(topic => (
             <button

@@ -4,7 +4,8 @@ import { screenerApi } from './api/screenerApi';
 import { Navbar } from './components/Navbar';
 import { ExploreTab } from './components/ExploreTab';
 import { NewListingsTab } from './components/NewListingsTab';
-import { CalendarDays, PanelLeftOpen } from 'lucide-react';
+import { SessionDatePicker } from './components/SessionDatePicker';
+import { PanelLeftOpen } from 'lucide-react';
 import { useLocalStorageState } from './hooks/useLocalStorageState';
 
 const queryClient = new QueryClient({
@@ -57,8 +58,6 @@ const ScreenerAppContent: React.FC = () => {
   const selectedAsOfDate = customSessionDate || latestDate;
   const selectedSessionMeta = availableSessions.find((s) => s.date === selectedAsOfDate);
   const activeRevision = selectedSessionMeta?.revision || latestRevision;
-  const isHistorical = Boolean(selectedAsOfDate && latestDate && selectedAsOfDate !== latestDate);
-  const minDate = availableSessions[availableSessions.length - 1]?.date;
 
   return (
     <div className={`app-frame${sidebarHidden ? ' app-frame--sidebar-hidden' : ''}`}>
@@ -71,34 +70,14 @@ const ScreenerAppContent: React.FC = () => {
           <div className="workspace-heading">
             <div className="session-picker-wrapper">
               <div className="session-label">
-                <CalendarDays size={16} />
                 <span>Session:</span>
               </div>
-              <input
-                type="date"
-                className={`session-date-input${isHistorical ? ' session-date-input--historical' : ''}`}
-                value={selectedAsOfDate}
-                min={minDate}
-                max={latestDate}
-                title="Select trading session date"
-                aria-label="Select trading session date"
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (!val || val >= latestDate) return setCustomSessionDate(null);
-                  const snap = availableSessions.find((s) => s.date <= val);
-                  setCustomSessionDate(snap ? snap.date : null);
-                }}
+              <SessionDatePicker
+                selectedDate={selectedAsOfDate}
+                latestDate={latestDate}
+                availableSessions={availableSessions}
+                onChange={setCustomSessionDate}
               />
-              {isHistorical && (
-                <button
-                  type="button"
-                  className="button button-ghost button-sm session-reset-btn"
-                  onClick={() => setCustomSessionDate(null)}
-                  title="Reset to latest trading session"
-                >
-                  Reset to Latest
-                </button>
-              )}
             </div>
           </div>
         )}

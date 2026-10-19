@@ -200,15 +200,16 @@ export function NewsTab() {
         </div>
       </header>
 
-      {/* Filter Bar: Light, Inline, Airy */}
+      {/* Revamped Unified Control Bar */}
       <nav className="ap-filter-bar" aria-label="News filters">
-        <div className="ap-filter-top-row">
+        <div className="ap-control-strip">
+          {/* Minimal Search Input */}
           <div className="ap-search-wrap">
             <Search size={13} className="ap-search-icon" />
             <input
               type="text"
               className="ap-search-input"
-              placeholder="Search ticker, company or filing text..."
+              placeholder="Search ticker, company or filing..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -224,61 +225,71 @@ export function NewsTab() {
             )}
           </div>
 
-          {/* Lightweight Sentiment Filter */}
-          <div className="ap-sentiment-filter-row" role="tablist" aria-label="Sentiment filter">
+          <div className="ap-control-divider" />
+
+          {/* Clean Segmented Tab Control */}
+          <div className="ap-segment-track" role="tablist" aria-label="Sentiment filter">
             <button
               type="button"
               role="tab"
               aria-selected={selectedSentiment === 'ALL'}
-              className={`ap-filter-pill ${selectedSentiment === 'ALL' ? 'is-active' : ''}`}
+              className={`ap-seg-tab ${selectedSentiment === 'ALL' ? 'is-active' : ''}`}
               onClick={() => setSelectedSentiment('ALL')}
             >
-              All <span className="ap-pill-count">{counts.total}</span>
+              <span>All</span>
+              <span className="ap-tab-num">{counts.total}</span>
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={selectedSentiment === 'positive'}
-              className={`ap-filter-pill is-pos-pill ${selectedSentiment === 'positive' ? 'is-active' : ''}`}
+              className={`ap-seg-tab is-pos ${selectedSentiment === 'positive' ? 'is-active' : ''}`}
               onClick={() => setSelectedSentiment('positive')}
             >
-              <span className="ap-micro-dot is-pos" />
-              Positive <span className="ap-pill-count">{counts.pos}</span>
+              <span className="ap-tab-pip is-pos" />
+              <span>Positive</span>
+              <span className="ap-tab-num">{counts.pos}</span>
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={selectedSentiment === 'negative'}
-              className={`ap-filter-pill is-neg-pill ${selectedSentiment === 'negative' ? 'is-active' : ''}`}
+              className={`ap-seg-tab is-neg ${selectedSentiment === 'negative' ? 'is-active' : ''}`}
               onClick={() => setSelectedSentiment('negative')}
             >
-              <span className="ap-micro-dot is-neg" />
-              Negative <span className="ap-pill-count">{counts.neg}</span>
+              <span className="ap-tab-pip is-neg" />
+              <span>Negative</span>
+              <span className="ap-tab-num">{counts.neg}</span>
             </button>
             <button
               type="button"
               role="tab"
               aria-selected={selectedSentiment === 'neutral'}
-              className={`ap-filter-pill ${selectedSentiment === 'neutral' ? 'is-active' : ''}`}
+              className={`ap-seg-tab ${selectedSentiment === 'neutral' ? 'is-active' : ''}`}
               onClick={() => setSelectedSentiment('neutral')}
             >
-              Neutral <span className="ap-pill-count">{counts.neu}</span>
+              <span className="ap-tab-pip is-neu" />
+              <span>Neutral</span>
+              <span className="ap-tab-num">{counts.neu}</span>
             </button>
           </div>
         </div>
 
-        {/* Topic Pills: Whisper-quiet, ultra-minimal */}
-        <div className="ap-topic-scroller">
-          {TOPIC_FILTERS.map(topic => (
-            <button
-              key={topic.id}
-              type="button"
-              className={`ap-topic-pill ${selectedTopic === topic.id ? 'is-active' : ''}`}
-              onClick={() => setSelectedTopic(topic.id)}
-            >
-              {topic.label}
-            </button>
-          ))}
+        {/* Clean Topic Navigation Row */}
+        <div className="ap-topic-strip">
+          <span className="ap-topic-label">Filter:</span>
+          <div className="ap-topic-scroller">
+            {TOPIC_FILTERS.map(topic => (
+              <button
+                key={topic.id}
+                type="button"
+                className={`ap-topic-btn ${selectedTopic === topic.id ? 'is-active' : ''}`}
+                onClick={() => setSelectedTopic(topic.id)}
+              >
+                {topic.label}
+              </button>
+            ))}
+          </div>
         </div>
       </nav>
 

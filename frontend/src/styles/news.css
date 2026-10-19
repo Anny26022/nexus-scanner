@@ -167,18 +167,17 @@
   cursor: not-allowed;
 }
 
-/* 2. Light, Airy Filter Bar */
+/* 2. Revamped Unified Control Bar & Topics */
 .ap-filter-bar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
-.ap-filter-top-row {
+.ap-control-strip {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -186,8 +185,8 @@
 .ap-search-wrap {
   position: relative;
   flex: 1;
-  min-width: 200px;
-  max-width: 380px;
+  min-width: 220px;
+  max-width: 360px;
 }
 
 .ap-search-icon {
@@ -242,97 +241,136 @@
   color: var(--text, #111827);
 }
 
-/* Lightweight Pill Tabs for Sentiment */
-.ap-sentiment-filter-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
+.ap-control-divider {
+  width: 1px;
+  height: 18px;
+  background-color: var(--line, rgba(0, 0, 0, 0.08));
 }
 
-.ap-filter-pill {
+/* Elegant Segmented Track */
+.ap-segment-track {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 9px;
-  border-radius: 6px;
-  border: 1px solid transparent;
+  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+  padding: 2px;
+  border-radius: 7px;
+  gap: 1px;
+}
+
+.ap-seg-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: none;
   background: transparent;
   font-size: 11.5px;
   font-weight: 500;
   color: var(--text-muted, #6b7280);
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
   font-family: inherit;
 }
 
-.ap-filter-pill:hover {
+.ap-seg-tab:hover {
   color: var(--text, #111827);
 }
 
-.ap-filter-pill.is-active {
+.ap-seg-tab.is-active {
+  background: var(--surface, #ffffff);
   color: var(--text, #111827);
   font-weight: 600;
-  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-.ap-pill-count {
-  font-size: 10.5px;
-  font-weight: 400;
-  color: var(--text-muted, #9ca3af);
+.ap-seg-tab.is-active.is-pos {
+  color: #059669;
+}
+
+.ap-seg-tab.is-active.is-neg {
+  color: #e11d48;
+}
+
+.ap-tab-num {
+  font-size: 10px;
+  opacity: 0.7;
   font-variant-numeric: tabular-nums;
+  margin-left: 1px;
 }
 
-.ap-micro-dot {
+.ap-tab-pip {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   display: inline-block;
 }
 
-.ap-micro-dot.is-pos {
+.ap-tab-pip.is-pos {
   background-color: #10b981;
 }
 
-.ap-micro-dot.is-neg {
+.ap-tab-pip.is-neg {
   background-color: #f43f5e;
 }
 
-/* Ultra-light Topic Filter Bar */
+.ap-tab-pip.is-neu {
+  background-color: #94a3b8;
+}
+
+/* Topic Strip - Clean horizontal navigation */
+.ap-topic-strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.ap-topic-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #9ca3af);
+  flex-shrink: 0;
+}
+
 .ap-topic-scroller {
   display: flex;
   align-items: center;
   gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
-  padding: 2px 0;
 }
 
 .ap-topic-scroller::-webkit-scrollbar {
   display: none;
 }
 
-.ap-topic-pill {
+.ap-topic-btn {
   font-size: 11.5px;
   font-weight: 450;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 3px 9px;
+  border-radius: 5px;
   background: transparent;
-  border: none;
-  color: var(--text-muted, #9ca3af);
+  border: 1px solid transparent;
+  color: var(--text-muted, #6b7280);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.12s ease;
   font-family: inherit;
 }
 
-.ap-topic-pill:hover {
+.ap-topic-btn:hover {
   color: var(--text, #111827);
+  background: var(--surface-hover, rgba(0, 0, 0, 0.03));
 }
 
-.ap-topic-pill.is-active {
+.ap-topic-btn.is-active {
   color: var(--text, #111827);
   font-weight: 600;
-  background: var(--surface-hover, rgba(0, 0, 0, 0.04));
+  background: var(--surface-hover, rgba(0, 0, 0, 0.06));
+  border-color: var(--line, rgba(0, 0, 0, 0.08));
 }
 
 /* 3. Pure Line-Item Stream - No Heavy Cards */

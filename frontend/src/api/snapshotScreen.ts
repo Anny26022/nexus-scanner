@@ -403,10 +403,16 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
   const search = request.symbolSearch?.trim().toLowerCase();
   const rows = search ? matches.rows.filter(row => row.symbol.toLowerCase().includes(search) || row.name.toLowerCase().includes(search)) : matches.rows;
   const page = Math.max(1,request.page), size = Math.max(1,Math.min(100,request.pageSize));
+  const sectorCounts: Record<string, number> = {};
+  for (const row of rows) {
+    const s = row.sector?.trim() || 'Others';
+    sectorCounts[s] = (sectorCounts[s] || 0) + 1;
+  }
   return { resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
     immutableRevision:data.revision,
     rows:request.countsOnly ? [] : (allRows ? rows : rows.slice((page-1)*size,page*size)),
     matchedSymbols:request.countsOnly ? [] : rows.map(row=>row.symbol),
     matchCount:rows.length,totalUniverseCount:matches.universeCount,
+    sectorCounts,
     page,pageSize:size,perConditionCoverage:matches.coverage,unavailableDiagnostics:matches.diagnostics,warnings:matches.warnings };
 }

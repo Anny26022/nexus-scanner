@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   UniverseType,
@@ -56,7 +56,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   const asOfDate = selectedAsOfDate;
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.screener.match-mode.v1', 'all');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isScanHistoryOpen, setIsScanHistoryOpen] = useState(false);
+  const [isScanHistoryOpen, setIsScanHistoryOpen] = useState(true);
+  const backtestRef = useRef<HTMLDivElement>(null);
   const [aiDraft, setAiDraft] = useState<{conditions: Record<string, ActiveCondition>; matchMode: MatchMode} | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const filterChoices = useFilterChoices(isModalOpen, datasetRevision, asOfDate);
@@ -210,12 +211,15 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
           {availableSessions.length > 0 && (
             <button
               type="button"
-              onClick={() => setIsScanHistoryOpen(true)}
+              onClick={() => {
+                if (!isScanHistoryOpen) setIsScanHistoryOpen(true);
+                backtestRef.current?.scrollIntoView({ behavior: 'smooth' });
+              }}
               className="button button-secondary"
-              title="Chartink-style Historical Scan Frequency Analysis"
+              title="Chartink-style Historical Backtest Analysis"
             >
               <BarChart3 size={14} />
-              <span>Scan History</span>
+              <span>Backtest</span>
             </button>
           )}
           <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable} className="button button-primary"><Play size={14} />Run</button>
@@ -238,17 +242,19 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
       onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
     {isScanHistoryOpen && availableSessions.length > 0 && (
-      <ScanHistoryPanel
-        expressionTree={expressionTree}
-        universe={universe}
-        customSymbols={runRequest.customSymbols}
-        availableSessions={availableSessions}
-        currentSessionDate={asOfDate}
-        onSelectSession={(date) => {
-          onSelectSession?.(date);
-        }}
-        onClose={() => setIsScanHistoryOpen(false)}
-      />
+      <div ref={backtestRef} id="backtest-history" className="w-full">
+        <ScanHistoryPanel
+          expressionTree={expressionTree}
+          universe={universe}
+          customSymbols={runRequest.customSymbols}
+          availableSessions={availableSessions}
+          currentSessionDate={asOfDate}
+          onSelectSession={(date) => {
+            onSelectSession?.(date);
+          }}
+          onClose={() => setIsScanHistoryOpen(false)}
+        />
+      </div>
     )}
     <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => {setIsModalOpen(false); setAiDraft(null);}} activeConditionsMap={aiDraft?.conditions ?? activeConditionsMap} matchMode={aiDraft?.matchMode ?? matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />
     {isAiModalOpen && <AiScreenerModal

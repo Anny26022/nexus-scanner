@@ -12,6 +12,7 @@ import {
   TrendingDown
 } from 'lucide-react';
 import { fetchLiveNews, type DhanNewsArticle } from '../api/dhanNewsApi';
+import { SymbolWithLogo } from './SymbolWithLogo';
 
 const TOPIC_FILTERS = [
   { id: 'ALL', label: 'All' },
@@ -339,15 +340,16 @@ export function NewsTab() {
 
                 {/* Main Content Area */}
                 <div className="ap-entry-main">
-                  {/* Metadata Row: Symbol, Company, Time */}
+                  {/* Metadata Row: Symbol with Logo, Company, Time */}
                   <div className="ap-entry-meta">
                     <button
                       type="button"
-                      className="ap-symbol-text"
+                      className="ap-symbol-btn"
                       onClick={e => handleFilterStock(article, e)}
                       title={`Filter all announcements for ${symbol}`}
                     >
-                      {symbol}
+                      <SymbolWithLogo symbol={symbol} showText={false} size="sm" className="ap-symbol-logo" />
+                      <span className="ap-symbol-text">{symbol}</span>
                     </button>
                     <span className="ap-company-name">{article.stock_name}</span>
 

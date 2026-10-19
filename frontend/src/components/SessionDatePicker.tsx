@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import * as Popover from '@radix-ui/react-popover';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 
 export interface SessionMeta {
@@ -27,7 +28,6 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
   onChange,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   // Set of dates that have actual snapshots
   const availableSet = useMemo(() => new Set(availableSessions.map((s) => s.date)), [availableSessions]);
@@ -46,18 +46,6 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
       if (!isNaN(m)) setViewMonth(m);
     }
   }, [selectedDate]);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [isOpen]);
 
   // Year range from availableSessions (or 2021 to 2026)
   const availableYears = useMemo(() => {
@@ -132,160 +120,160 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
   }, [selectedDate, latestDate]);
 
   return (
-    <div className="relative inline-flex items-center gap-2" ref={containerRef}>
-      {/* Sleek Trigger Button */}
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className={`h-[26px] px-2.5 rounded-md border text-xs font-medium inline-flex items-center gap-2 transition-all cursor-pointer ${
-          isHistorical
-            ? 'border-amber-500/50 bg-amber-500/10 text-amber-500 font-semibold hover:border-amber-500'
-            : 'border-line bg-surface hover:bg-surface-hover hover:border-line-strong text-text'
-        }`}
-        title="Click to select trading session"
-        aria-label="Select trading session"
-        aria-expanded={isOpen}
-      >
-        <CalendarDays size={13} className={isHistorical ? 'text-amber-500' : 'text-muted'} />
-        <span>{formattedSelected}</span>
-        {!isHistorical && <span className="text-[10px] text-muted font-normal">(Latest)</span>}
-        <ChevronDown size={12} className={`text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
+    <div className="relative inline-flex items-center gap-2">
+      <Popover.Root open={isOpen} onOpenChange={setIsOpen}>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            className={`h-[26px] px-2.5 rounded-md border text-xs font-medium inline-flex items-center gap-2 transition-all cursor-pointer ${
+              isHistorical
+                ? 'border-amber-500/50 bg-amber-500/10 text-amber-500 font-semibold hover:border-amber-500'
+                : 'border-line bg-surface hover:bg-surface-hover hover:border-line-strong text-text'
+            }`}
+            title="Click to select trading session"
+            aria-label="Select trading session"
+          >
+            <CalendarDays size={13} className={isHistorical ? 'text-amber-500' : 'text-muted'} />
+            <span>{formattedSelected}</span>
+            {!isHistorical && <span className="text-[10px] text-muted font-normal">(Latest)</span>}
+            <ChevronDown size={12} className={`text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          </button>
+        </Popover.Trigger>
 
-      {/* Reset to Latest button */}
-      {isHistorical && (
-        <button
-          type="button"
-          onClick={() => onChange(null)}
-          className="h-[26px] px-2 rounded-md text-[11px] font-medium text-muted hover:text-text hover:bg-surface-hover transition-colors inline-flex items-center gap-1 cursor-pointer"
-          title="Reset to latest trading session"
-        >
-          <RotateCcw size={11} />
-          <span>Reset</span>
-        </button>
-      )}
+        {isHistorical && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="h-[26px] px-2 rounded-md text-[11px] font-medium text-muted hover:text-text hover:bg-surface-hover transition-colors inline-flex items-center gap-1 cursor-pointer"
+            title="Reset to latest trading session"
+          >
+            <RotateCcw size={11} />
+            <span>Reset</span>
+          </button>
+        )}
 
-      {/* Sleek Minimal Popover */}
-      {isOpen && (
-        <div
-          role="dialog"
-          aria-label="Session calendar"
-          className="absolute top-full left-0 mt-1 z-50 w-[260px] p-2.5 rounded-lg border border-line bg-surface shadow-2xl animate-in fade-in zoom-in-95 duration-100"
-        >
-          {/* Month & Year Controls */}
-          <div className="flex items-center justify-between gap-1 mb-2">
-            <button
-              type="button"
-              onClick={handlePrevMonth}
-              className="p-1 rounded text-muted hover:text-text hover:bg-surface-hover transition-colors"
-              aria-label="Previous month"
-            >
-              <ChevronLeft size={14} />
-            </button>
-
-            <div className="flex items-center gap-1">
-              <select
-                value={viewMonth}
-                onChange={(e) => setViewMonth(Number(e.target.value))}
-                className="h-6 px-1 text-xs font-medium border border-line rounded bg-surface text-text cursor-pointer outline-none hover:border-line-strong"
-                aria-label="Select month"
+        <Popover.Portal>
+          <Popover.Content
+            align="start"
+            sideOffset={4}
+            collisionPadding={8}
+            className="z-50 w-[260px] p-2.5 rounded-lg border border-line bg-surface shadow-2xl animate-in fade-in zoom-in-95 duration-100 outline-none"
+          >
+            {/* Month & Year Controls */}
+            <div className="flex items-center justify-between gap-1 mb-2">
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                className="p-1 rounded text-muted hover:text-text hover:bg-surface-hover transition-colors"
+                aria-label="Previous month"
               >
-                {MONTH_NAMES.map((name, idx) => (
-                  <option key={name} value={idx}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                <ChevronLeft size={14} />
+              </button>
 
-              <select
-                value={viewYear}
-                onChange={(e) => setViewYear(Number(e.target.value))}
-                className="h-6 px-1 text-xs font-medium border border-line rounded bg-surface text-text cursor-pointer outline-none hover:border-line-strong"
-                aria-label="Select year"
+              <div className="flex items-center gap-1">
+                <select
+                  value={viewMonth}
+                  onChange={(e) => setViewMonth(Number(e.target.value))}
+                  className="h-6 px-1 text-xs font-medium border border-line rounded bg-surface text-text cursor-pointer outline-none hover:border-line-strong"
+                  aria-label="Select month"
+                >
+                  {MONTH_NAMES.map((name, idx) => (
+                    <option key={name} value={idx}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={viewYear}
+                  onChange={(e) => setViewYear(Number(e.target.value))}
+                  className="h-6 px-1 text-xs font-medium border border-line rounded bg-surface text-text cursor-pointer outline-none hover:border-line-strong"
+                  aria-label="Select year"
+                >
+                  {availableYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                className="p-1 rounded text-muted hover:text-text hover:bg-surface-hover transition-colors"
+                aria-label="Next month"
               >
-                {availableYears.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
+                <ChevronRight size={14} />
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={handleNextMonth}
-              className="p-1 rounded text-muted hover:text-text hover:bg-surface-hover transition-colors"
-              aria-label="Next month"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
+            {/* Days of Week Header */}
+            <div className="grid grid-cols-7 gap-1 text-center mb-1">
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+                <span key={d} className="text-[10px] font-semibold text-muted">
+                  {d}
+                </span>
+              ))}
+            </div>
 
-          {/* Days of Week Header */}
-          <div className="grid grid-cols-7 gap-1 text-center mb-1">
-            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
-              <span key={d} className="text-[10px] font-semibold text-muted">
-                {d}
+            {/* Day Cells Grid */}
+            <div className="grid grid-cols-7 gap-1">
+              {calendarDays.map((cell, idx) => {
+                if (!cell) {
+                  return <div key={`empty-${idx}`} className="h-6 w-6" />;
+                }
+
+                const isSelected = cell.dateStr === (selectedDate || latestDate);
+                const isToday = cell.dateStr === latestDate;
+
+                return (
+                  <button
+                    key={cell.dateStr}
+                    type="button"
+                    disabled={!cell.isAvailable}
+                    onClick={() => {
+                      onChange(cell.dateStr === latestDate ? null : cell.dateStr);
+                      setIsOpen(false);
+                    }}
+                    className={`h-6 w-6 mx-auto rounded text-xs flex items-center justify-center transition-all ${
+                      isSelected
+                        ? 'bg-accent text-white font-bold shadow-xs'
+                        : cell.isAvailable
+                        ? 'text-text hover:bg-surface-hover hover:text-accent font-medium cursor-pointer'
+                        : 'text-muted/30 cursor-not-allowed'
+                    } ${isToday && !isSelected ? 'ring-1 ring-accent/60 font-semibold' : ''}`}
+                    title={
+                      cell.isAvailable
+                        ? `Session: ${cell.dateStr}${isToday ? ' (Latest)' : ''}`
+                        : `${cell.dateStr} (No session data / Market holiday)`
+                    }
+                  >
+                    {cell.day}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Popover Footer: Quick Jump to Latest */}
+            <div className="mt-2 pt-2 border-t border-line flex items-center justify-between text-[11px]">
+              <span className="text-[10px] text-muted">
+                {availableSet.size} sessions available
               </span>
-            ))}
-          </div>
-
-          {/* Day Cells Grid */}
-          <div className="grid grid-cols-7 gap-1">
-            {calendarDays.map((cell, idx) => {
-              if (!cell) {
-                return <div key={`empty-${idx}`} className="h-6 w-6" />;
-              }
-
-              const isSelected = cell.dateStr === (selectedDate || latestDate);
-              const isToday = cell.dateStr === latestDate;
-
-              return (
-                <button
-                  key={cell.dateStr}
-                  type="button"
-                  disabled={!cell.isAvailable}
-                  onClick={() => {
-                    onChange(cell.dateStr === latestDate ? null : cell.dateStr);
-                    setIsOpen(false);
-                  }}
-                  className={`h-6 w-6 mx-auto rounded text-xs flex items-center justify-center transition-all ${
-                    isSelected
-                      ? 'bg-accent text-white font-bold shadow-xs'
-                      : cell.isAvailable
-                      ? 'text-text hover:bg-surface-hover hover:text-accent font-medium cursor-pointer'
-                      : 'text-muted/30 cursor-not-allowed'
-                  } ${isToday && !isSelected ? 'ring-1 ring-accent/60 font-semibold' : ''}`}
-                  title={
-                    cell.isAvailable
-                      ? `Session: ${cell.dateStr}${isToday ? ' (Latest)' : ''}`
-                      : `${cell.dateStr} (No session data / Market holiday)`
-                  }
-                >
-                  {cell.day}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Popover Footer: Quick Jump to Latest */}
-          <div className="mt-2 pt-2 border-t border-line flex items-center justify-between text-[11px]">
-            <span className="text-[10px] text-muted">
-              {availableSet.size} sessions available
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                onChange(null);
-                setIsOpen(false);
-              }}
-              className="text-accent hover:underline font-medium cursor-pointer"
-            >
-              Latest Session
-            </button>
-          </div>
-        </div>
-      )}
+              <button
+                type="button"
+                onClick={() => {
+                  onChange(null);
+                  setIsOpen(false);
+                }}
+                className="text-accent hover:underline font-medium cursor-pointer"
+              >
+                Latest Session
+              </button>
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
     </div>
   );
 };

@@ -12,18 +12,20 @@ import {
   Filter, 
   Radio, 
   Building2, 
-  X
+  X,
+  LayoutList,
+  LayoutGrid
 } from 'lucide-react';
 import { fetchLiveNews, type DhanNewsArticle } from '../api/dhanNewsApi';
 
 const SUB_CATEGORIES = [
-  { id: 'ALL', label: 'All Topics' },
+  { id: 'ALL', label: 'All Categories' },
   { id: 'earnings-financial-results', label: 'Earnings & Results' },
   { id: 'corporate-actions', label: 'Corporate Actions' },
-  { id: 'management-leadership', label: 'Management & Board' },
-  { id: 'legal-compliance', label: 'Legal & Regulatory' },
-  { id: 'strategic-partnerships', label: 'M&A & Partnerships' },
-  { id: 'operational-updates', label: 'Operations & Orders' },
+  { id: 'management-leadership', label: 'Board & Leadership' },
+  { id: 'legal-compliance', label: 'Regulatory & Compliance' },
+  { id: 'strategic-partnerships', label: 'M&A & Joint Ventures' },
+  { id: 'operational-updates', label: 'Orders & Operations' },
 ];
 
 const MARKET_CAPS = [
@@ -57,6 +59,7 @@ function formatFullDate(epochMs: number): string {
 
 export function NewsTab() {
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [viewMode, setViewMode] = useState<'stream' | 'grid'>('stream');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSentiment, setSelectedSentiment] = useState<'ALL' | 'positive' | 'negative' | 'neutral'>('ALL');
   const [selectedSubCat, setSelectedSubCat] = useState('ALL');
@@ -72,7 +75,6 @@ export function NewsTab() {
     lastTs: 0,
   });
 
-  // Main feed query
   const queryIsin = activeStockIsin || 'ALL';
   const { data: pageResult, isPending, isFetching, error, refetch } = useQuery({
     queryKey: ['dhanLiveNews', queryIsin, pageCursor.page, pageCursor.firstTs, pageCursor.lastTs],
@@ -89,19 +91,16 @@ export function NewsTab() {
     staleTime: 15_000,
   });
 
-  // Merge articles without useEffect: compute articles derived from initial query + appended pages
   const allArticles = useMemo(() => {
     const fresh = pageResult?.articles ?? [];
     if (pageCursor.page === 0) {
       return fresh;
     }
-    // De-duplicate on article_id
     const existingIds = new Set(accumulatedArticles.map(a => a.article_id));
     const newItems = fresh.filter(a => !existingIds.has(a.article_id));
     return [...accumulatedArticles, ...newItems];
   }, [pageResult, pageCursor.page, accumulatedArticles]);
 
-  // Handle Load More
   const handleLoadMore = () => {
     if (!pageResult || pageResult.articles.length === 0) return;
     setAccumulatedArticles(allArticles);
@@ -112,7 +111,6 @@ export function NewsTab() {
     }));
   };
 
-  // Filter by Stock
   const handleFilterStock = (article: DhanNewsArticle) => {
     if (!article.isin_code) return;
     setActiveStockIsin(article.isin_code);
@@ -122,7 +120,6 @@ export function NewsTab() {
     setPageCursor({ page: 0, firstTs: 0, lastTs: 0 });
   };
 
-  // Clear Stock Filter
   const handleClearStockFilter = () => {
     setActiveStockIsin(null);
     setActiveStockSymbol(null);
@@ -131,7 +128,6 @@ export function NewsTab() {
     setPageCursor({ page: 0, firstTs: 0, lastTs: 0 });
   };
 
-  // Copy Summary
   const handleCopy = (article: DhanNewsArticle) => {
     const text = `${article.sm_symbol} - ${article.news_object.title}\n${article.news_object.text}\nSentiment: ${article.news_object.overall_sentiment.toUpperCase()} | Date: ${formatFullDate(article.publish_date)}`;
     navigator.clipboard.writeText(text);
@@ -139,23 +135,18 @@ export function NewsTab() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Derived in-memory filtering for instant response
   const filteredArticles = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return allArticles.filter(a => {
-      // Sentiment filter
       if (selectedSentiment !== 'ALL' && a.news_object?.overall_sentiment !== selectedSentiment) {
         return false;
       }
-      // Sub-category filter
       if (selectedSubCat !== 'ALL' && a.sub_category !== selectedSubCat) {
         return false;
       }
-      // Market cap filter
       if (selectedMarketCap !== 'ALL' && a.metadata?.marketcap !== selectedMarketCap) {
         return false;
       }
-      // Search query
       if (query) {
         const sym = (a.sm_symbol || '').toLowerCase();
         const name = (a.stock_name || '').toLowerCase();
@@ -170,7 +161,6 @@ export function NewsTab() {
     });
   }, [allArticles, selectedSentiment, selectedSubCat, selectedMarketCap, searchQuery]);
 
-  // KPI Calculations across loaded universe
   const { positiveCount, negativeCount, neutralCount, totalCount } = useMemo(() => {
     let pos = 0, neg = 0, neu = 0;
     for (const a of allArticles) {
@@ -189,107 +179,103 @@ export function NewsTab() {
 
   return (
     <div className="news-view">
-      {/* Top Header */}
-      <div className="news-header">
+      {/* Sleek Top Bar */}
+      <header className="news-header">
         <div className="news-title-group">
           <div className="news-title-row">
-            <h1 className="news-title">News & Catalyst Intelligence</h1>
+            <h1 className="news-title">News & Catalyst Stream</h1>
             <span className="news-live-badge">
               <span className="pulse-dot" />
-              Live Stream
+              Live
             </span>
           </div>
           <p className="news-subtitle">
-            Real-time exchange regulatory announcements, financial results, and NLP sentiment analysis
+            Real-time corporate disclosures, earnings releases, and AI sentiment analysis
           </p>
         </div>
 
         <div className="news-controls-right">
           <button
             type="button"
-            className={`news-toggle-btn ${autoRefresh ? 'news-toggle-btn--active' : ''}`}
+            className={`news-control-pill ${autoRefresh ? 'news-control-pill--active' : ''}`}
             onClick={() => setAutoRefresh(prev => !prev)}
             title="Toggle 30-second live auto-refresh"
           >
-            <Radio size={14} className={autoRefresh ? 'pulse-dot' : ''} />
-            Auto-Refresh {autoRefresh ? 'ON' : 'OFF'}
+            <Radio size={13} className={autoRefresh ? 'pulse-dot' : ''} />
+            <span>Live Sync</span>
           </button>
           <button
             type="button"
-            className="button button-secondary"
+            className="news-control-pill"
             onClick={() => void refetch()}
             disabled={isFetching}
-            title="Fetch latest announcements"
+            title="Refresh announcements now"
           >
-            <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
-            Refresh
+            <RefreshCw size={12} className={isFetching ? 'animate-spin' : ''} />
+            <span>Refresh</span>
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* KPI Stats Ribbon */}
-      <div className="news-stats-ribbon">
-        <div className="news-stat-card">
-          <div className="news-stat-icon-wrap news-stat-icon-wrap--total">
-            <Radio size={16} />
-          </div>
-          <div className="news-stat-info">
-            <span className="news-stat-value">{totalCount}</span>
-            <span className="news-stat-label">Announcements Loaded</span>
-          </div>
+      {/* Modern Filter Ribbon */}
+      <section className="news-stats-ribbon" aria-label="Sentiment overview">
+        <div
+          role="button"
+          tabIndex={0}
+          className={`news-stat-item ${selectedSentiment === 'ALL' ? 'news-stat-item--selected' : ''}`}
+          onClick={() => setSelectedSentiment('ALL')}
+          onKeyDown={e => e.key === 'Enter' && setSelectedSentiment('ALL')}
+        >
+          <span className="news-stat-indicator news-stat-indicator--all" />
+          <span className="news-stat-count">{totalCount}</span>
+          <span className="news-stat-label">All Updates</span>
         </div>
 
-        <div className="news-stat-card">
-          <div className="news-stat-icon-wrap news-stat-icon-wrap--bullish">
-            <TrendingUp size={16} />
-          </div>
-          <div className="news-stat-info">
-            <span className="news-stat-value">
-              {positiveCount} <span style={{ fontSize: '12px', fontWeight: 500, color: '#10b981' }}>
-                ({totalCount ? Math.round((positiveCount / totalCount) * 100) : 0}%)
-              </span>
-            </span>
-            <span className="news-stat-label">Positive Catalysts</span>
-          </div>
+        <div
+          role="button"
+          tabIndex={0}
+          className={`news-stat-item ${selectedSentiment === 'positive' ? 'news-stat-item--selected' : ''}`}
+          onClick={() => setSelectedSentiment('positive')}
+          onKeyDown={e => e.key === 'Enter' && setSelectedSentiment('positive')}
+        >
+          <span className="news-stat-indicator news-stat-indicator--positive" />
+          <span className="news-stat-count" style={{ color: '#10b981' }}>{positiveCount}</span>
+          <span className="news-stat-label">Bullish / Positive</span>
         </div>
 
-        <div className="news-stat-card">
-          <div className="news-stat-icon-wrap news-stat-icon-wrap--neutral">
-            <Minus size={16} />
-          </div>
-          <div className="news-stat-info">
-            <span className="news-stat-value">
-              {neutralCount} <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--muted)' }}>
-                ({totalCount ? Math.round((neutralCount / totalCount) * 100) : 0}%)
-              </span>
-            </span>
-            <span className="news-stat-label">Neutral / Routine Filings</span>
-          </div>
+        <div
+          role="button"
+          tabIndex={0}
+          className={`news-stat-item ${selectedSentiment === 'neutral' ? 'news-stat-item--selected' : ''}`}
+          onClick={() => setSelectedSentiment('neutral')}
+          onKeyDown={e => e.key === 'Enter' && setSelectedSentiment('neutral')}
+        >
+          <span className="news-stat-indicator news-stat-indicator--neutral" />
+          <span className="news-stat-count">{neutralCount}</span>
+          <span className="news-stat-label">Neutral / Filing</span>
         </div>
 
-        <div className="news-stat-card">
-          <div className="news-stat-icon-wrap news-stat-icon-wrap--bearish">
-            <TrendingDown size={16} />
-          </div>
-          <div className="news-stat-info">
-            <span className="news-stat-value">
-              {negativeCount} <span style={{ fontSize: '12px', fontWeight: 500, color: '#f43f5e' }}>
-                ({totalCount ? Math.round((negativeCount / totalCount) * 100) : 0}%)
-              </span>
-            </span>
-            <span className="news-stat-label">Negative / Risk Events</span>
-          </div>
+        <div
+          role="button"
+          tabIndex={0}
+          className={`news-stat-item ${selectedSentiment === 'negative' ? 'news-stat-item--selected' : ''}`}
+          onClick={() => setSelectedSentiment('negative')}
+          onKeyDown={e => e.key === 'Enter' && setSelectedSentiment('negative')}
+        >
+          <span className="news-stat-indicator news-stat-indicator--negative" />
+          <span className="news-stat-count" style={{ color: '#f43f5e' }}>{negativeCount}</span>
+          <span className="news-stat-label">Bearish / Risk</span>
         </div>
-      </div>
+      </section>
 
-      {/* Filter and Search Bar */}
-      <div className="news-filter-strip">
-        <div className="news-filter-row">
-          <div className="news-search-box">
-            <Search size={14} className="text-muted" />
+      {/* Minimal Unified Toolbar */}
+      <div className="news-toolbar">
+        <div className="news-toolbar-left">
+          <div className="news-search-input-wrap">
+            <Search size={13} className="text-muted" />
             <input
               type="text"
-              placeholder="Search by company, ticker, headline, or keywords..."
+              placeholder="Filter by company, ticker, headline, sector..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
             />
@@ -297,48 +283,17 @@ export function NewsTab() {
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--muted)' }}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--muted)', padding: 0 }}
               >
-                <X size={13} />
+                <X size={12} />
               </button>
             )}
           </div>
-
-          <div className="sentiment-pills" role="radiogroup" aria-label="Filter by Sentiment">
-            <button
-              type="button"
-              className={`sentiment-pill ${selectedSentiment === 'ALL' ? 'sentiment-pill--active' : ''}`}
-              onClick={() => setSelectedSentiment('ALL')}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              className={`sentiment-pill sentiment-pill--bullish ${selectedSentiment === 'positive' ? 'sentiment-pill--active' : ''}`}
-              onClick={() => setSelectedSentiment('positive')}
-            >
-              <TrendingUp size={11} /> Positive ({positiveCount})
-            </button>
-            <button
-              type="button"
-              className={`sentiment-pill ${selectedSentiment === 'neutral' ? 'sentiment-pill--active' : ''}`}
-              onClick={() => setSelectedSentiment('neutral')}
-            >
-              <Minus size={11} /> Neutral ({neutralCount})
-            </button>
-            <button
-              type="button"
-              className={`sentiment-pill sentiment-pill--bearish ${selectedSentiment === 'negative' ? 'sentiment-pill--active' : ''}`}
-              onClick={() => setSelectedSentiment('negative')}
-            >
-              <TrendingDown size={11} /> Negative ({negativeCount})
-            </button>
-          </div>
         </div>
 
-        <div className="news-secondary-filters">
+        <div className="news-toolbar-right">
           <select
-            className="news-select"
+            className="news-clean-select"
             value={selectedSubCat}
             onChange={e => setSelectedSubCat(e.target.value)}
             aria-label="Filter by category"
@@ -351,7 +306,7 @@ export function NewsTab() {
           </select>
 
           <select
-            className="news-select"
+            className="news-clean-select"
             value={selectedMarketCap}
             onChange={e => setSelectedMarketCap(e.target.value)}
             aria-label="Filter by market capitalization"
@@ -363,37 +318,59 @@ export function NewsTab() {
             ))}
           </select>
 
-          {activeStockIsin && (
-            <div className="news-stock-tag">
-              <Building2 size={12} />
-              <span>Filtering: {activeStockSymbol}{activeStockName && activeStockName !== activeStockSymbol ? ` (${activeStockName})` : ''}</span>
-              <button
-                type="button"
-                onClick={handleClearStockFilter}
-                title="Clear stock filter & return to market-wide stream"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          )}
-
-          <span style={{ fontSize: '11px', color: 'var(--muted)', marginLeft: 'auto' }}>
-            Showing <strong>{filteredArticles.length}</strong> of {allArticles.length} articles
-          </span>
+          <div className="news-view-mode-group">
+            <button
+              type="button"
+              className={`news-view-mode-btn ${viewMode === 'stream' ? 'news-view-mode-btn--active' : ''}`}
+              onClick={() => setViewMode('stream')}
+              title="Stream view"
+            >
+              <LayoutList size={13} />
+            </button>
+            <button
+              type="button"
+              className={`news-view-mode-btn ${viewMode === 'grid' ? 'news-view-mode-btn--active' : ''}`}
+              onClick={() => setViewMode('grid')}
+              title="Grid view"
+            >
+              <LayoutGrid size={13} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* News Feed Stream */}
-      <div className="news-feed-container">
+      {/* Stock Focus Filter Banner */}
+      {activeStockIsin && (
+        <div className="news-stock-focus-banner">
+          <div className="news-stock-focus-info">
+            <Building2 size={15} color="var(--accent)" />
+            <span className="news-stock-badge-large">{activeStockSymbol}</span>
+            <span className="news-stock-focus-desc">
+              {activeStockName && activeStockName !== activeStockSymbol ? activeStockName : 'Company timeline'} · 2-year filings
+            </span>
+          </div>
+          <button
+            type="button"
+            className="news-stock-clear-btn"
+            onClick={handleClearStockFilter}
+          >
+            <X size={12} />
+            <span>Clear Filter</span>
+          </button>
+        </div>
+      )}
+
+      {/* News Stream / Grid */}
+      <main className={viewMode === 'stream' ? 'news-feed-stream' : 'news-feed-grid'}>
         {isPending && allArticles.length === 0 ? (
-          <div className="news-state-box">
-            <RefreshCw size={24} className="animate-spin text-muted" />
-            <h3>Connecting to Live Exchange Feed</h3>
-            <p>Retrieving latest corporate announcements and earnings results...</p>
+          <div className="news-empty-state" style={{ gridColumn: '1 / -1' }}>
+            <RefreshCw size={20} className="animate-spin text-muted" />
+            <h3>Connecting to Exchange Feed</h3>
+            <p>Gathering real-time corporate announcements...</p>
           </div>
         ) : error && allArticles.length === 0 ? (
-          <div className="news-state-box">
-            <h3>Unable to Load Live News</h3>
+          <div className="news-empty-state" style={{ gridColumn: '1 / -1' }}>
+            <h3>Feed Temporarily Unavailable</h3>
             <p>{(error as Error).message}</p>
             <button
               type="button"
@@ -401,14 +378,14 @@ export function NewsTab() {
               style={{ marginTop: '12px' }}
               onClick={() => void refetch()}
             >
-              Retry
+              Try Again
             </button>
           </div>
         ) : filteredArticles.length === 0 ? (
-          <div className="news-state-box">
-            <Filter size={24} className="text-muted" />
-            <h3>No Announcements Match Your Filters</h3>
-            <p>Try broadening your search query, sentiment, or category selection.</p>
+          <div className="news-empty-state" style={{ gridColumn: '1 / -1' }}>
+            <Filter size={20} className="text-muted" />
+            <h3>No Announcements Found</h3>
+            <p>Try modifying your search or clearing active filters.</p>
           </div>
         ) : (
           filteredArticles.map(article => {
@@ -418,96 +395,99 @@ export function NewsTab() {
             return (
               <article
                 key={article.article_id}
-                className={`news-card news-card--${sentiment}`}
+                className={`news-item-card news-item-card--${sentiment}`}
               >
-                <div className="news-card-header">
-                  <div className="news-card-stock-info">
+                <div className="news-item-header">
+                  <div className="news-item-stock">
                     <button
                       type="button"
-                      className="news-symbol-btn"
+                      className="news-ticker-pill"
                       onClick={() => handleFilterStock(article)}
                       title={`Filter by ${article.sm_symbol || article.stock_name} (2-Year History)`}
                     >
                       {article.sm_symbol || 'CORP'}
                     </button>
-                    <span className="news-company-name">{article.stock_name}</span>
-                    {article.metadata?.sector_name && (
-                      <span className="news-sector-pill">{article.metadata.sector_name}</span>
-                    )}
+                    <span className="news-company-text" title={article.stock_name}>
+                      {article.stock_name}
+                    </span>
                     {article.metadata?.marketcap && (
-                      <span className="news-sector-pill" style={{ opacity: 0.8 }}>
-                        {article.metadata.marketcap}
-                      </span>
+                      <span className="news-tag-micro">{article.metadata.marketcap}</span>
+                    )}
+                    {article.metadata?.sector_name && (
+                      <span className="news-tag-micro">{article.metadata.sector_name}</span>
                     )}
                   </div>
 
-                  <div className="news-card-right-meta">
-                    <span className={`sentiment-tag sentiment-tag--${sentiment}`}>
+                  <div className="news-item-meta">
+                    <span className={`news-sentiment-badge news-sentiment-badge--${sentiment}`}>
                       {sentiment === 'positive' ? (
-                        <TrendingUp size={12} />
+                        <TrendingUp size={11} />
                       ) : sentiment === 'negative' ? (
-                        <TrendingDown size={12} />
+                        <TrendingDown size={11} />
                       ) : (
-                        <Minus size={12} />
+                        <Minus size={11} />
                       )}
-                      {sentiment}
+                      <span>{sentiment}</span>
                     </span>
-                    <span className="news-time-ago" title={formatFullDate(article.publish_date)}>
-                      <Clock size={11} style={{ display: 'inline', marginRight: '3px' }} />
+                    <span className="news-time-label" title={formatFullDate(article.publish_date)}>
+                      <Clock size={10} style={{ display: 'inline', marginRight: '3px' }} />
                       {formatTimeAgo(article.publish_date)}
                     </span>
                   </div>
                 </div>
 
-                <h2 className="news-headline">{article.news_object?.title}</h2>
+                <h2 className="news-item-headline">{article.news_object?.title}</h2>
 
                 {article.news_object?.text && (
-                  <p className="news-summary">{article.news_object.text}</p>
+                  <p className="news-item-summary">{article.news_object.text}</p>
                 )}
 
-                <div className="news-card-footer">
-                  <span className="news-subcat-badge">
+                <footer className="news-item-footer">
+                  <span className="news-category-label">
                     {article.sub_category ? article.sub_category.replaceAll('-', ' ') : 'General'}
                   </span>
 
-                  <div className="news-card-actions">
+                  <div className="news-action-toolbar">
                     <button
                       type="button"
-                      className="news-action-btn"
+                      className="news-action-btn-clean"
                       onClick={() => handleFilterStock(article)}
-                      title="Load 2-year filing history for this stock"
+                      title="View all historical filings for this stock"
                     >
-                      <Building2 size={11} /> Stock History
+                      <Building2 size={11} />
+                      <span>Timeline</span>
                     </button>
                     <button
                       type="button"
-                      className="news-action-btn"
+                      className="news-action-btn-clean"
                       onClick={() => handleCopy(article)}
-                      title="Copy summary to clipboard"
+                      title="Copy synopsis to clipboard"
                     >
                       {isCopied ? <Check size={11} color="#10b981" /> : <Copy size={11} />}
-                      {isCopied ? 'Copied' : 'Copy'}
+                      <span>{isCopied ? 'Copied' : 'Copy'}</span>
                     </button>
                   </div>
-                </div>
+                </footer>
               </article>
             );
           })
         )}
+      </main>
 
-        {/* Load More Button */}
-        {allArticles.length > 0 && (
+      {/* Clean Load Earlier Bar */}
+      {allArticles.length > 0 && (
+        <div className="news-load-more-bar">
           <button
             type="button"
-            className="news-load-more-btn"
+            className="news-clean-load-btn"
             onClick={handleLoadMore}
             disabled={isFetching}
           >
-            <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
-            {isFetching ? 'Loading Earlier Filings...' : 'Load Earlier Announcements'}
+            <RefreshCw size={12} className={isFetching ? 'animate-spin' : ''} />
+            <span>{isFetching ? 'Loading earlier records...' : 'Load Earlier Announcements'}</span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

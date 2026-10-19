@@ -12,6 +12,9 @@ import {
 import { fetchLiveNews, type DhanNewsArticle } from '../api/dhanNewsApi';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { DhanSentimentBadge } from './DhanSentimentBadge';
+import symbolIsinMapData from '../data/symbolIsinMap.json';
+
+const SYMBOL_ISIN_MAP: Record<string, string> = symbolIsinMapData;
 
 const TOPIC_FILTERS = [
   { id: 'ALL', label: 'All' },
@@ -78,14 +81,25 @@ export function NewsTab() {
   });
 
   const allArticles = useMemo(() => {
+    // If we're filtering for a specific stock, ensure we only consider fresh articles that match that stock
     const fresh = pageResult?.articles ?? [];
+    if (activeStockIsin) {
+      const isinMatch = fresh.filter(a => !a.isin_code || a.isin_code === activeStockIsin);
+      if (pageCursor.page === 0) {
+        return isinMatch;
+      }
+      const existingIds = new Set(accumulatedArticles.map(a => a.article_id));
+      const newItems = isinMatch.filter(a => !existingIds.has(a.article_id));
+      return [...accumulatedArticles, ...newItems];
+    }
+
     if (pageCursor.page === 0) {
       return fresh;
     }
     const existingIds = new Set(accumulatedArticles.map(a => a.article_id));
     const newItems = fresh.filter(a => !existingIds.has(a.article_id));
     return [...accumulatedArticles, ...newItems];
-  }, [pageResult, pageCursor.page, accumulatedArticles]);
+  }, [pageResult, pageCursor.page, accumulatedArticles, activeStockIsin]);
 
   const handleLoadMore = () => {
     if (!pageResult || pageResult.articles.length === 0) return;
@@ -124,12 +138,25 @@ export function NewsTab() {
   const filteredArticles = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return allArticles.filter(a => {
+      // 1. Strict Active Stock Scoping (Never display foreign stock articles when a stock filter is active)
+      if (activeStockIsin && a.isin_code && a.isin_code !== activeStockIsin) {
+        return false;
+      }
+      if (activeStockSymbol && a.sm_symbol && a.sm_symbol.toUpperCase() !== activeStockSymbol.toUpperCase()) {
+        return false;
+      }
+
+      // 2. Sentiment filter
       if (selectedSentiment !== 'ALL' && a.news_object?.overall_sentiment !== selectedSentiment) {
         return false;
       }
+
+      // 3. Topic filter
       if (selectedTopic !== 'ALL' && a.sub_category !== selectedTopic) {
         return false;
       }
+
+      // 4. Client Search Query
       if (query) {
         const sym = (a.sm_symbol || '').toLowerCase();
         const name = (a.stock_name || '').toLowerCase();
@@ -141,7 +168,7 @@ export function NewsTab() {
       }
       return true;
     });
-  }, [allArticles, selectedSentiment, selectedTopic, searchQuery]);
+  }, [allArticles, activeStockIsin, activeStockSymbol, selectedSentiment, selectedTopic, searchQuery]);
 
   const counts = useMemo(() => {
     let pos = 0, neg = 0, neu = 0;
@@ -210,9 +237,21 @@ export function NewsTab() {
             <input
               type="text"
               className="ap-search-input"
-              placeholder="Search ticker, company or filing..."
+              placeholder="Search ticker, company or filing (press Enter)..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const term = searchQuery.trim().toUpperCase();
+                  if (term && SYMBOL_ISIN_MAP[term]) {
+                    setActiveStockIsin(SYMBOL_ISIN_MAP[term]);
+                    setActiveStockSymbol(term);
+                    setAccumulatedArticles([]);
+                    setPageCursor({ page: 0, firstTs: 0, lastTs: 0 });
+                    setSearchQuery('');
+                  }
+                }
+              }}
             />
             {searchQuery && (
               <button

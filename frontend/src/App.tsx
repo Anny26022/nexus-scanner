@@ -65,7 +65,7 @@ const ScreenerAppContent: React.FC = () => {
       <a href="#workspace" className="skip-link">Skip to results workspace</a>
       {!sidebarHidden && <Navbar activeTab={activeTab} onTabChange={setActiveTab} onHideSidebar={() => setSidebarHidden(true)} sessionDate={activeTab === 'screener' ? selectedAsOfDate : undefined} />}
 
-      <main id="workspace" className={`workspace${activeTab === 'charts' ? ' workspace--charts' : ''}${sidebarHidden ? ' workspace--sidebar-hidden' : ''}`} tabIndex={-1}>
+      <main id="workspace" className={`workspace${activeTab === 'charts' ? ' workspace--charts' : ''}${activeTab === 'news' ? ' workspace--news' : ''}${sidebarHidden ? ' workspace--sidebar-hidden' : ''}`} tabIndex={-1}>
         {sidebarHidden && <button type="button" className="workspace-sidebar-reopen" aria-label="Show sidebar" title="Show sidebar" onClick={() => setSidebarHidden(false)}><PanelLeftOpen size={17}/></button>}
         {activeTab === 'screener' && (
           <div className="workspace-heading">

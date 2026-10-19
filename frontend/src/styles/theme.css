@@ -157,6 +157,7 @@
 .theme-control button[aria-pressed="true"] { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); font-weight: 600; }
 .workspace { display: flex; flex-direction: column; position: relative; height: 100dvh; width: 100%; min-width: 0; margin: auto; padding: 18px 24px 16px; align-self: start; background: var(--page); }
 .workspace.workspace--charts { padding: 0; }
+.workspace.workspace--news { overflow-y: auto; overflow-x: hidden; height: 100dvh; }
 .workspace-sidebar-reopen { position: absolute; z-index: 60; top: 10px; left: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); width: 26px; height: 26px; display: grid; place-items: center; color: var(--muted); cursor: pointer; transition: all 0.15s ease; }
 .workspace-sidebar-reopen:hover { background: var(--surface-hover); color: var(--text); border-color: var(--line-strong); }
 .workspace.workspace--charts .workspace-sidebar-reopen { top: 6px; left: 8px; width: 26px; height: 26px; }

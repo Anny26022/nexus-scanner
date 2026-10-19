@@ -67,6 +67,7 @@ export interface ScreenerRunRequest {
   asOfDate: string;
   quickFilters?: Record<string, any>;
   sort?: { field: string; direction: 'asc' | 'desc' };
+  countsOnly?: boolean;
   page: number;
   pageSize: number;
 }

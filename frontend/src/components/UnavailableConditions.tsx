@@ -16,6 +16,7 @@ export function UnavailableConditions({ conditions, onRemove }: {
 
   return (
     <div role="alert" className="unavailable-notice-inline">
+      <span className="sr-only">{UNAVAILABLE_CONDITIONS_MESSAGE}</span>
       <span className="unavailable-text">Unavailable in snapshot:</span>
       <div className="unavailable-chips">
         {unavailable.map(([key, condition]) => {

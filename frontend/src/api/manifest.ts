@@ -71,23 +71,25 @@ export function preloadManifest(): Promise<Manifest> {
 
 export const getManifest = () => current ? Promise.resolve(current) : refreshManifest();
 
-export function manifestSnapshotSource(manifest: Manifest, revision = manifest.revision, sessionDate?: string): SnapshotSource {
+export function manifestSnapshotSource(manifest: Manifest, revision = manifest.revision, sessionDate?: string, signal?: AbortSignal): SnapshotSource {
   if (!/^[a-f0-9]{64}$/.test(revision)) throw new Error('Invalid dataset revision');
   if (sessionDate && sessionDate !== manifest.sessionDate) {
     const baseUrl = manifest.objectUrlTemplate
       ? manifest.objectUrlTemplate.replace(/\/objects\/\{hash\}\.json\.gz$/, '')
       : '';
-    const url = baseUrl ? `${baseUrl}/snapshots/${sessionDate}.json.gz` : `/data/snapshots/${sessionDate}.json.gz`;
+    const url = baseUrl ? `${baseUrl}/snapshots/${sessionDate}.json.gz?v=${revision.slice(0, 16)}` : `/data/snapshots/${sessionDate}.json.gz?v=${revision.slice(0, 16)}`;
     return {
       revision,
       sessionDate,
       url,
+      signal,
     };
   }
   // Historical revisions keep their original URL; current releases advertise gzip.
   return {revision, url:revision === manifest.revision
     ? (typeof DecompressionStream !== 'undefined' ? manifest.datasetPackedGzipUrl ?? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
     : `/data/revisions/${revision}/stocks.json`,
-  sessionDate:revision === manifest.revision ? manifest.sessionDate : undefined};
+  sessionDate:revision === manifest.revision ? manifest.sessionDate : undefined,
+  signal};
 }
 

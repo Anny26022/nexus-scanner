@@ -54,13 +54,14 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
       const y = parseInt(s.date.slice(0, 4), 10);
       if (!isNaN(y)) years.add(y);
     }
-    if (years.size === 0) {
-      return [2021, 2022, 2023, 2024, 2025, 2026];
-    }
-    return Array.from(years).sort((a, b) => a - b);
+    return years.size === 0 ? [2021, 2022, 2023, 2024, 2025, 2026] : Array.from(years).sort((a, b) => a - b);
   }, [availableSessions]);
 
+  // Earliest session archive begins Oct 2021 (month index 9)
+  const isAtMin = viewYear <= 2021 && viewMonth <= 9;
+
   const handlePrevMonth = () => {
+    if (isAtMin) return;
     if (viewMonth === 0) {
       setViewYear((y) => y - 1);
       setViewMonth(11);
@@ -84,10 +85,7 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
     const totalDays = new Date(viewYear, viewMonth + 1, 0).getDate();
     const days: Array<{ day: number; dateStr: string; isAvailable: boolean } | null> = [];
 
-    // Empty slots before 1st of month
-    for (let i = 0; i < firstDayIndex; i++) {
-      days.push(null);
-    }
+    for (let i = 0; i < firstDayIndex; i++) days.push(null);
 
     for (let d = 1; d <= totalDays; d++) {
       const mm = String(viewMonth + 1).padStart(2, '0');
@@ -164,7 +162,12 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
               <button
                 type="button"
                 onClick={handlePrevMonth}
-                className="p-1 rounded text-muted hover:text-text hover:bg-surface-hover transition-colors"
+                disabled={isAtMin}
+                className={`p-1 rounded transition-colors ${
+                  isAtMin
+                    ? 'text-muted/30 cursor-not-allowed'
+                    : 'text-muted hover:text-text hover:bg-surface-hover cursor-pointer'
+                }`}
                 aria-label="Previous month"
               >
                 <ChevronLeft size={14} />
@@ -178,7 +181,7 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
                   aria-label="Select month"
                 >
                   {MONTH_NAMES.map((name, idx) => (
-                    <option key={name} value={idx}>
+                    <option key={name} value={idx} disabled={viewYear === 2021 && idx < 9}>
                       {name}
                     </option>
                   ))}
@@ -186,7 +189,11 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
 
                 <select
                   value={viewYear}
-                  onChange={(e) => setViewYear(Number(e.target.value))}
+                  onChange={(e) => {
+                    const y = Number(e.target.value);
+                    setViewYear(y);
+                    if (y === 2021 && viewMonth < 9) setViewMonth(9);
+                  }}
                   className="h-6 px-1 text-xs font-medium border border-line rounded bg-surface text-text cursor-pointer outline-none hover:border-line-strong"
                   aria-label="Select year"
                 >
@@ -201,7 +208,7 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
               <button
                 type="button"
                 onClick={handleNextMonth}
-                className="p-1 rounded text-muted hover:text-text hover:bg-surface-hover transition-colors"
+                className="p-1 rounded text-muted hover:text-text hover:bg-surface-hover cursor-pointer"
                 aria-label="Next month"
               >
                 <ChevronRight size={14} />

@@ -48,9 +48,9 @@ export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMou
 
   const tabs = [
     ...(report?.the_read?.length ? [{id: 'snapshot' as const, label: 'Snapshot'}] : []),
-    ...(stockIsin ? [{id: 'news' as const, label: `News${newsArticles.length ? ` (${newsArticles.length})` : ''}`}] : []),
     ...(report?.what_to_watch?.length ? [{id: 'watch' as const, label: 'What to Watch'}] : []),
     ...(report?.key_events?.length ? [{id: 'events' as const, label: 'Key events'}] : []),
+    ...(stockIsin ? [{id: 'news' as const, label: `News${newsArticles.length ? ` (${newsArticles.length})` : ''}`}] : []),
   ];
   const [requestedTab, setRequestedTab] = useState<Tab>('snapshot');
   const activeTab = tabs.some(tab => tab.id === requestedTab) ? requestedTab : tabs[0]?.id;

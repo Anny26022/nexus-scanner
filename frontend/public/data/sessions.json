@@ -2,6 +2,1482 @@
   "version": 1,
   "sessions": [
     {
+      "date": "2023-12-29",
+      "revision": "91e3e393c1543e16bc4a061dd9e1fd4f087d950152e272267841b0b61a3b08aa",
+      "label": "2023-12-29",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-28",
+      "revision": "2ff3584a2fd57e411f001353ffc4c1ccfd7692b23fc1b07108afc58dad4c7d24",
+      "label": "2023-12-28",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-27",
+      "revision": "6fa955a2aa5bbc269e67c55f4be07a6f3d778b3bd363d3fe365d9db9d647f939",
+      "label": "2023-12-27",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-26",
+      "revision": "ecb7aa6c2695791a9fe8661fa82d1ce8d5dd8bf5765f136cca8f6a985600bc97",
+      "label": "2023-12-26",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-22",
+      "revision": "4d47350b0f0865d3052e29dde496728f466dc7e85884afaadbab079a9c4366bb",
+      "label": "2023-12-22",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-21",
+      "revision": "4ca0aa2f46f81aeb082b3e7812eca207d0385da57a277f49aaaa5303039e3cd7",
+      "label": "2023-12-21",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-20",
+      "revision": "2cf4bf761bb4a56a4afce12eb464eba1455b51324c17a2c49a7d0f49c2239c88",
+      "label": "2023-12-20",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-19",
+      "revision": "c22b33647db4cac644d75cbed57d8f85495361dfddc2f5838aa1b4fe89fabb1a",
+      "label": "2023-12-19",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-18",
+      "revision": "36712218a717bf451592fa9f93a8762d8b27fa4946bbb2609195178cb077afbc",
+      "label": "2023-12-18",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-15",
+      "revision": "113a3196add49311d53e4e7a5fde7a9252cb9d35e3f24af1413cdabe0f6c2219",
+      "label": "2023-12-15",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-14",
+      "revision": "c6c6946137ab10cf5ae530f98c4478fa6aed29a94df9c6f2cd70e11daab2e69a",
+      "label": "2023-12-14",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-13",
+      "revision": "9e0b21b5db04241f06332b74b088e8d449410ed30193522d6c04c037e98fb060",
+      "label": "2023-12-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-12",
+      "revision": "0a0a07a0f49307401b659df1531968adc128de3965a99290a6e1c87f8aa77d46",
+      "label": "2023-12-12",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-11",
+      "revision": "74352a11fab9d22cf118141f7c0d079cb6e6ddfe16e12a11b767f8b3ed04ed78",
+      "label": "2023-12-11",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-08",
+      "revision": "6dca31d7cbd12d9cc97562c8a1773052e60f0afd307c0365993bf496eb8f2415",
+      "label": "2023-12-08",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-07",
+      "revision": "cc99bb5e13ffd59d7455d4b0edd2a3965b5dcbd3a91737cbabbde5853bcb72c2",
+      "label": "2023-12-07",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-06",
+      "revision": "d3e53fb02a3bf9d0c8dc81d70b2d3209a384db888c9356810f88c0e454f47b7e",
+      "label": "2023-12-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-05",
+      "revision": "35333da63e3ce9639a92533ba5b5728d68ab2a1b81ef4c09d4b085de84f2d055",
+      "label": "2023-12-05",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-04",
+      "revision": "24a30344fb04de39478deed1aa7cad3aeb475065c06063dd5f12c86ceb6f56e5",
+      "label": "2023-12-04",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-12-01",
+      "revision": "e2fec94c9726c2a6540406f5c59cdafff1e9a4320f1621b2e54a2c517de5be60",
+      "label": "2023-12-01",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-30",
+      "revision": "a9c476e869ac3a0567d3b361c79a1979868fe87583e5efeab417ccd9f5f690d2",
+      "label": "2023-11-30",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-29",
+      "revision": "7b0403e8b93beefa0b869ed97bca8811a2f87a58c16701e7aee534e91398a934",
+      "label": "2023-11-29",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-28",
+      "revision": "eb7ff9bd25b1ec5805a1ad18b6ec192118a5225c62f426f16f24de3350542023",
+      "label": "2023-11-28",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-24",
+      "revision": "b6c812df5c2a11d5d666a6be54852d8ed74b4844f100e5f42a5f509ba3f34358",
+      "label": "2023-11-24",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-23",
+      "revision": "1b6d5b4fb82645d8d9e29bb448854225f47c25af9931a2b109bed0b66bb76fc0",
+      "label": "2023-11-23",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-22",
+      "revision": "b848ba0b42eff81258ef7ece2653c1b2e76765e9fc606fb9ea75ef81d52f052f",
+      "label": "2023-11-22",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-21",
+      "revision": "2bece0905d3fc6982e02e082dceb3e00d1bc25634fe6e05304bc849190f04fc6",
+      "label": "2023-11-21",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-20",
+      "revision": "e5d3ed5f6f6657b67a2788d9852cee30727f457d60bc341663a6496f05a64778",
+      "label": "2023-11-20",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-17",
+      "revision": "42e2a3f778b60cef4abb2f18aa5288663ae310fc7a5d5ae36ffd0b9d79aedb63",
+      "label": "2023-11-17",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-16",
+      "revision": "3798eb8257513e5f2f39a3c72420300b2b451b78f8ec908ecd754493d6af68e8",
+      "label": "2023-11-16",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-15",
+      "revision": "f1dd3776fc290e20ec0a33990a34e09a11d44a2edc0e536e31fe461afde26a97",
+      "label": "2023-11-15",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-13",
+      "revision": "f8740da34802cb7f9c779bf5c15f873a7162cbaaab2d67c472af919027d537da",
+      "label": "2023-11-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-12",
+      "revision": "c8e829f31d3ef1c45de3e063e14547159c2293c8670534c30e2f132938c12d97",
+      "label": "2023-11-12",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-10",
+      "revision": "ce3d1c71d5f1d1e8273c8165fc33325390363be2faec2f5f2f1a2b920a8d7caf",
+      "label": "2023-11-10",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-09",
+      "revision": "e9f776055fade382dda6d5e93625edb37359a9a1b0b74e870a621fb6380f64d6",
+      "label": "2023-11-09",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-08",
+      "revision": "6283a27a676fdaf8df635316bea13c4ee4319d134efdb60301b44c6c8f0ed484",
+      "label": "2023-11-08",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-07",
+      "revision": "a36e355571ebac0f7f51f95d1e4931f5be592b3d9f2d5018fd59d2d88866942e",
+      "label": "2023-11-07",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-06",
+      "revision": "7c26efa3f214559b4fcb0f784b301a7bb9a8909886817d54d7ec9d232cc43a37",
+      "label": "2023-11-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-03",
+      "revision": "58825872732f8836d1d6aeb9811d30f60dca454dddad101229aeea0670b7ed68",
+      "label": "2023-11-03",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-02",
+      "revision": "5c6ce59d1e315fa418fc6f7a037564d05c156987243b79675e8aae2cf5a862e5",
+      "label": "2023-11-02",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-11-01",
+      "revision": "b5a7578fd0abe149fe6b0abed2b3d5b297e98056a2ac87108bdc08f074660a23",
+      "label": "2023-11-01",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-31",
+      "revision": "1236a99919d904b793e72db4a4a2141d5273e5d84832d1c00f2d6cc35a37c7d5",
+      "label": "2023-10-31",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-30",
+      "revision": "ba864901e4e3f18fb53c0d1a92c6708b5e4ab6cbeb0887088d8be21501b8c5fc",
+      "label": "2023-10-30",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-27",
+      "revision": "eb2a7d99ba6ef9269f3e18a345ce3d9b1bfb978954b85f3b23236c6bcc9743f7",
+      "label": "2023-10-27",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-26",
+      "revision": "c649bc2686c6b56c16c1033c9f00161efc4dc42f6e9be5a2b497450540fa7e06",
+      "label": "2023-10-26",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-25",
+      "revision": "282bb58a34d90761ead4ff3734f90c2646b1f5898fab2e59aca8c10730fed7e0",
+      "label": "2023-10-25",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-23",
+      "revision": "72922f77aca870a7de4a0b3a5828c1393cb28d55fb13d64921cbd2342c761da9",
+      "label": "2023-10-23",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-20",
+      "revision": "1870d1f6a16a2be519519c76838f768b81cb864170f75fed80fa40a1457f604c",
+      "label": "2023-10-20",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-19",
+      "revision": "efc122c17d516439ca900877016117abc824539d77bcdcbd9b7df61dc954a820",
+      "label": "2023-10-19",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-18",
+      "revision": "2dd948d81dbe5ee00756360cff870dc1a12df68947824cd8472d6defad36c7b8",
+      "label": "2023-10-18",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-17",
+      "revision": "4fa3a181413850cfb32dcac3115b28ad2103e828dde44a652f72dcf35a169431",
+      "label": "2023-10-17",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-16",
+      "revision": "8ed4dbb14cdb38b004ea87032f31001d1099e1f60e9917016a3e14d38c961f74",
+      "label": "2023-10-16",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-13",
+      "revision": "b53f9e56cbb8f9c844503622efd818aabdd0bb8d06cb3fe2c7387b3416facb58",
+      "label": "2023-10-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-12",
+      "revision": "b696cf43e1a79ceb460c6e811442810971063869ebf927838fd4ee387ef0a2f6",
+      "label": "2023-10-12",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-11",
+      "revision": "268918e274ce371d11c086f0ba3b69855b7c62fe4fd77be38260592f0ec89bf9",
+      "label": "2023-10-11",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-10",
+      "revision": "7a86f7525fa2d086b00d9f4090da25b80b327ec528a4ae895641e8c7500d0a7c",
+      "label": "2023-10-10",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-09",
+      "revision": "7a1175893c88521255a03e3cc02588b8a7350b71a61cfa57f1c9a4cade4f42ca",
+      "label": "2023-10-09",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-06",
+      "revision": "718ea51ceed66dc4e7808898e6ff8764a25515e6bc4e332c9b71a6a83b3f8c7d",
+      "label": "2023-10-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-05",
+      "revision": "d2abd5cc7bb139c7ad80d23f4e7e42c579603b9c496f0433f26e48ae55cf0e69",
+      "label": "2023-10-05",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-04",
+      "revision": "b0e797ccf97f34baf4ea5d6e0c45bbe60da8e6dd1d400e230fe93724263a7d3e",
+      "label": "2023-10-04",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-10-03",
+      "revision": "b41b8036962dc24c9440f8e85e94aa832b10f21b2acadddb343710a62d18f2d1",
+      "label": "2023-10-03",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-29",
+      "revision": "e56fd4a0cd4980479763928560d493f1952e74e8d33ac7cbccbf2d0170383e50",
+      "label": "2023-09-29",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-28",
+      "revision": "4d5b123becc5ce712daa5e69a5d6f67aabfd1dd5c64689c47fc68a42f0130d0d",
+      "label": "2023-09-28",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-27",
+      "revision": "dd7c3808cebd0c4798c8e6dd536c2f989876d6c85bf1182a512e19e0057ac1e1",
+      "label": "2023-09-27",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-26",
+      "revision": "048a554e4694198f51c10718f4f798998f2b3c8431b1138a755a038f56139dca",
+      "label": "2023-09-26",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-25",
+      "revision": "e44090b77305e416534cff5abdba866a0a9a1596295588426b40a79b9968ba15",
+      "label": "2023-09-25",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-22",
+      "revision": "52f69fb80dc84abc57da0ef9a7753c0d95e7f0def5316868746078ef9d5817f7",
+      "label": "2023-09-22",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-21",
+      "revision": "ed84a39442d7c9cfdea955ea490f4395d98ad31a03da8e97f5b75dc2bebdca62",
+      "label": "2023-09-21",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-20",
+      "revision": "4564d15327382550a80758385efa689584fb6ac6d9aaadb36f6251cb513b48e0",
+      "label": "2023-09-20",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-18",
+      "revision": "a0f6d0112f1777065d6b2f5a9ce92cb0da1431fd664cb2cd2f33dfd621a031b3",
+      "label": "2023-09-18",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-15",
+      "revision": "cbbd01c091691510f986ef231c7f17a03f97ef0917ddc43784d9a66234bf3737",
+      "label": "2023-09-15",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-14",
+      "revision": "f64fde82347c95375a9da8a6fe5a098e47ea149c022e08f6d4ab1030dfbc5dd2",
+      "label": "2023-09-14",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-13",
+      "revision": "f4b72af77eca290266846160ddba4a08eb3fe5acea4fdd95f5d419cd7a209e1f",
+      "label": "2023-09-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-12",
+      "revision": "ace903bdc93590eec1c2740b0ba6938dc3395f55af3de622f795189fd1dee96b",
+      "label": "2023-09-12",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-11",
+      "revision": "596339a9f8f93abbf66a6722c90a37a50ec2c295b53f6f20effb0f5998a7167c",
+      "label": "2023-09-11",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-08",
+      "revision": "96563d37feaaeb5af262a43f2849e8d802f3982a6aa583c66fa3163cb3b85759",
+      "label": "2023-09-08",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-07",
+      "revision": "b3d90cc8bae736d22be3cc2da2e25fa35d5a72e82d41d0cd2b619adbeab410e6",
+      "label": "2023-09-07",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-06",
+      "revision": "f1b99014c320ad7ee55a130d62380dbc9e5d0fa339b26836695b47e5c016ac03",
+      "label": "2023-09-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-05",
+      "revision": "3d9e99dc63eceefd3c272ad6680e57ebf0f4a4136753582fa82c96a551ab4b61",
+      "label": "2023-09-05",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-04",
+      "revision": "c8579d56bbf2ff84101d2939f11b73cb21863d22f169b6b36e196234d56add50",
+      "label": "2023-09-04",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-09-01",
+      "revision": "d076fbef777db06447d67b12ccf45af1ac8199ffaba83edf66d0d565887a7cef",
+      "label": "2023-09-01",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-31",
+      "revision": "dd0f41df4741202cd17c9f38f0e92e08dd4e94a989eb896fd1d2ffdbba14abb8",
+      "label": "2023-08-31",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-30",
+      "revision": "3eaa136adbdc00299e0eeb09421fc5b86f701516ea64cb85c6c5c59c8bb2e62a",
+      "label": "2023-08-30",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-29",
+      "revision": "fbcf6a24e1ca3840278f330676f45dfd674a13c4e90d91d20c20aaddbfd61264",
+      "label": "2023-08-29",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-28",
+      "revision": "1983afbb215de13898f7f9dc28ee446b9e6d33c75401e4ec517d62e6d1292f73",
+      "label": "2023-08-28",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-25",
+      "revision": "690daace56d070398ea3935d64e167084b3b6f329b2dc2617526d1a830523bff",
+      "label": "2023-08-25",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-24",
+      "revision": "22721a205fdf9012de3a826bdafb9780dbd8925d55d528d33ed12ad95845c65f",
+      "label": "2023-08-24",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-23",
+      "revision": "b4bfcabeae3987ae40f2d838ff68c5ebe510f9f9236eee32357ab2d950bb3038",
+      "label": "2023-08-23",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-22",
+      "revision": "88a7d95ce79ba1860fe85c6757d6403b74eb531023f4438aeb4e4c88e6014734",
+      "label": "2023-08-22",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-21",
+      "revision": "9e923a1d95d4684027a04381858948219049bec86e740a0ac4948cca0588c8ec",
+      "label": "2023-08-21",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-18",
+      "revision": "c2781a289ee005cb336268afa312567b8bc829c915ed8b2c8ac46226a1312a9a",
+      "label": "2023-08-18",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-17",
+      "revision": "0500bb1e72abc3bb9188f1daa43953c564390614e371bfa438df13808f38b273",
+      "label": "2023-08-17",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-16",
+      "revision": "0577fe7add6a8169671997dc9b61e039e4df1800483fab38f649fb1ddc37208c",
+      "label": "2023-08-16",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-14",
+      "revision": "7315d7bcb1c088a7f8064703a9a9dd81330858fd7733d0d645d128edde0f283d",
+      "label": "2023-08-14",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-11",
+      "revision": "95b53f51581d72f0cb7c908e07732e1cc5ce05a29780f3d8b203f2742a5baaba",
+      "label": "2023-08-11",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-10",
+      "revision": "d863e77cbf37303421be43564c631b54fadce58fd7480efb2d5d35a5cd814c20",
+      "label": "2023-08-10",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-09",
+      "revision": "c99d90c5e550f719e781fa268ebcc254d4a2771b6369a841b923da91c34443f6",
+      "label": "2023-08-09",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-08",
+      "revision": "ec77a35422ce1772ed4c4a3867a1d7914a3f3a45dd1a4ed8f234d83207c9cc87",
+      "label": "2023-08-08",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-07",
+      "revision": "1fc512d4cdedd232fb0350b25bc18f055605e0e4836b39967cf6abc2599e0544",
+      "label": "2023-08-07",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-04",
+      "revision": "808a99a5f3071d70c017f28ff0faaa45e8b34eba7574cc53798e31779f16df96",
+      "label": "2023-08-04",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-03",
+      "revision": "579b440e0b0e13f1a7e1e102ad3acf69085484ac02aeb4638000f4592642b555",
+      "label": "2023-08-03",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-02",
+      "revision": "d88d3417dd3688117e9b443a56d97b3bcc00fbe50775faf79adfb94505c20f8e",
+      "label": "2023-08-02",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-08-01",
+      "revision": "8180835505936ca41c2bcf61a74c8ffdb28c0d9825c2baf25ecf47e9db9ef7e2",
+      "label": "2023-08-01",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-31",
+      "revision": "9c76017239f2caee6b1e134f2b8141f222a988152947f1f530e70a47ca79eb1e",
+      "label": "2023-07-31",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-28",
+      "revision": "67197d3e84220f458ec132a14d933d4b401510eebe9472628122dc70faae2b27",
+      "label": "2023-07-28",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-27",
+      "revision": "348a6cfa151ebe77a04bfb8ca76e7d168fda83184fbdeb042623bb53fc46b8b7",
+      "label": "2023-07-27",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-26",
+      "revision": "060b22aa20b9e354f89f8c1a9841f1d7d3e95596101fdfcba4278875e135180d",
+      "label": "2023-07-26",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-25",
+      "revision": "3fabf81b0db865ed528a3de09475ac99469ebb4686ec719474e96ac6411e0dd8",
+      "label": "2023-07-25",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-24",
+      "revision": "9116498059a0172483bca3576a90e51c953edc331ad1c6db072a76d24ce26362",
+      "label": "2023-07-24",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-21",
+      "revision": "83d0fcc6e898b0c7f1d0078e6ea724551b2c405747247b9112f6d0f05584fd3a",
+      "label": "2023-07-21",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-20",
+      "revision": "14d2ffc43d30be26744dd2c867eb5489c9f4d95ef7e1b91ffd396829824c9adb",
+      "label": "2023-07-20",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-19",
+      "revision": "fb2edcd9404fe0ccef38bdb052d1f24a4242e8481fcae204149897105d30e5ea",
+      "label": "2023-07-19",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-18",
+      "revision": "b703022574a1688e5fc82c049515fbb66da75d28421ed787b8d1ad20500e049d",
+      "label": "2023-07-18",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-17",
+      "revision": "313184ddbc651a979f2dfdbd6a4527b323cf2a9a0c720a9910da4fe75748b681",
+      "label": "2023-07-17",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-14",
+      "revision": "434c99c919d5eefbac5efe17c21f2513981520900135d5101ebdff6d24442f60",
+      "label": "2023-07-14",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-13",
+      "revision": "90ce277c98bfebbd6bb4c008b1fca808fc4c7f7af59eeffdde40309f4af77f5f",
+      "label": "2023-07-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-12",
+      "revision": "86a170666f5ba4dc609fe5193422ce1efb26fedaf7b420e43c0d86271a3084eb",
+      "label": "2023-07-12",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-11",
+      "revision": "9de19617f279564f64000500b1f31825f2825959f711215af9beb165c35f7323",
+      "label": "2023-07-11",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-10",
+      "revision": "3ca93c976055f2f08b81504dd177dbd16e302c8b95ebb6cf857228548ea11510",
+      "label": "2023-07-10",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-07",
+      "revision": "24db14f38924ee8610ef128ad468b650df7919808cdc56186fa7cdffc8f1ad10",
+      "label": "2023-07-07",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-06",
+      "revision": "39b291930ed8cefccb5958beab6f5889787531f0383e0d33fe1d7ddbf09840e6",
+      "label": "2023-07-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-05",
+      "revision": "dd23c89f7a04cd12299623bad7ec2ec7765a7615d397c3fbb8fbb2fa70cb7d2a",
+      "label": "2023-07-05",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-04",
+      "revision": "a4a6745383ec83b976704127c6e2c4ccb96d394f450fbdc8259569a59973b954",
+      "label": "2023-07-04",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-07-03",
+      "revision": "0ef8154dce5a1a006ece9e765f602a55eda5c9f53c17851d1d0b94e11f991ee2",
+      "label": "2023-07-03",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-30",
+      "revision": "4572f9f1206d0ab67f752e720cabb56b00371792b3b4ec481ba1039aa43ea8c9",
+      "label": "2023-06-30",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-28",
+      "revision": "58e4190fac8ab9f852ce04eb16bb4d6b4c7a60ce0bfca04d21f1793b7663ba45",
+      "label": "2023-06-28",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-27",
+      "revision": "ff9e95883e4bb7fbf72e0a8ccaed4d700c62ef0c36af735d0bdb787fa50d4c7c",
+      "label": "2023-06-27",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-26",
+      "revision": "09745ce945e3be22d980b74389e287b4bb870452673e94c97856ae23af65d593",
+      "label": "2023-06-26",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-23",
+      "revision": "1f02cc829f9ce60d5401b17a5c050bf111e2b02a5642c7d1cee35b756bdeeabf",
+      "label": "2023-06-23",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-22",
+      "revision": "caeff0e158a586394b2bae37129bb147b9555e8a66b6e6b96a8a18ce58086256",
+      "label": "2023-06-22",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-21",
+      "revision": "f9171e4f01666f7358ec069c59bf3b7ffa4cfcacebe214475dcca625663850c3",
+      "label": "2023-06-21",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-20",
+      "revision": "1860484d40442ccb6cb88f8d867397b5bd890500adab64eb45ca602ea22a38cd",
+      "label": "2023-06-20",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-19",
+      "revision": "44779290e6b94b779b9bb8e8471d5ffec6692666785cd5b536e8495442e60a4f",
+      "label": "2023-06-19",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-16",
+      "revision": "43d39aeef0a58e57d0fc90d53d600132f9a07304b7f250cedb55e3c19495af37",
+      "label": "2023-06-16",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-15",
+      "revision": "120d843ef2499af50dfc3c2fcf5a478c4b1dfb27a0e9e5dbbef49b7a3bc13208",
+      "label": "2023-06-15",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-14",
+      "revision": "9390e0024c991bb72e011f27e641c2800462abc55065fe767b8e9ca07e02025f",
+      "label": "2023-06-14",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-13",
+      "revision": "f6f6f29d7afc181c8d4be0542fc6dc7be2965bed7e7d8fc405f845d58b2cdd38",
+      "label": "2023-06-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-12",
+      "revision": "bd178b4c87e39e3b4083438a97dbbaa8deeac1f085efa2bf3c32e507fded82a2",
+      "label": "2023-06-12",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-09",
+      "revision": "a1df985a929ec124c04719470463236dff99a116c938c0cd5d4c751182205fe3",
+      "label": "2023-06-09",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-08",
+      "revision": "2d73ed3bd9d4152ea36b79801d591e3bd7b90a33d9ec43788500edbe664df1de",
+      "label": "2023-06-08",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-07",
+      "revision": "ab618b218c245210bdd34a5d1842954bf332bbbc3b9d5aabc746310666b1bdc1",
+      "label": "2023-06-07",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-06",
+      "revision": "414e0ffda1e23db8e6b976ba69fb10a665a9a914f06226dc95f9b10909d5cedb",
+      "label": "2023-06-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-05",
+      "revision": "a56a0b71cda9c733dbd6f7210a301d9b3bdac05ad4c4bb51ea50b85b06b0e4e0",
+      "label": "2023-06-05",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-02",
+      "revision": "b1900d992a55fe9e26c232314b22d44a6b1ae0b2035b8dfd84e2c209e4c876ae",
+      "label": "2023-06-02",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-06-01",
+      "revision": "1cea91248b8112bb81b6d89407803da6b8594d23febef93df5841153c7afdd33",
+      "label": "2023-06-01",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-31",
+      "revision": "0a2ef3e39d06e0e91897052b2904f9aae359f8d309ac1f35584679e29c2b6251",
+      "label": "2023-05-31",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-30",
+      "revision": "2540bc06d8a80b88526c9cee02765639de8e0e29af1d3474af66660bb5684fdf",
+      "label": "2023-05-30",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-29",
+      "revision": "09e7ec5aae7d46093dbd7c5fa5acefd35be1545e44da9681e51b7e510589295b",
+      "label": "2023-05-29",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-26",
+      "revision": "30db5c7355e2426a5b35d051840e7e9cb966989f298990c30a5cb5264fb8ef9e",
+      "label": "2023-05-26",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-25",
+      "revision": "e48badec93c412b6c3e1acdb45ccba39144f7da03fa77de6d1601e23dbe1d37c",
+      "label": "2023-05-25",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-24",
+      "revision": "f7e6b2078d3a98e0cd1e8c4442930582a7fe4f2cb96fca39e3ec14df354b402e",
+      "label": "2023-05-24",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-23",
+      "revision": "c988f9680ceb99aa8c21b3a59949a99d8735db99ad7a1f864b2bfdce721cf50b",
+      "label": "2023-05-23",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-22",
+      "revision": "e6cd465681945a8505053564cbd50c137b8346a5e250106268d1f668d176b35b",
+      "label": "2023-05-22",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-19",
+      "revision": "410c992db83b3c5c729456045c96cf0fa4d7e29821276cf7e58b2cebc541424c",
+      "label": "2023-05-19",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-18",
+      "revision": "3b4a1f418efb6ac71abc0c882f5328a3a1e168b4d2a7b97714b514a99ff6fc1b",
+      "label": "2023-05-18",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-17",
+      "revision": "43223726705822b8e9719e7547d005e73878f98d60bbb63909e75432a8b90b07",
+      "label": "2023-05-17",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-16",
+      "revision": "411d7d13f38d00479f6561c327eee61fa92bc4dc7d8ccdfc1ff14a7cdc344227",
+      "label": "2023-05-16",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-15",
+      "revision": "a2968dda872fede6de0d6d42a5296a2002821fc5b9fe1d4414641a66e1d7ec67",
+      "label": "2023-05-15",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-12",
+      "revision": "69fd6b2bf25007d54d2fdb9760ca8ecb2d1efc86c0f48d6614c33b439a9eddbd",
+      "label": "2023-05-12",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-11",
+      "revision": "2d6282bc9ab1feb062979203833ede6d8897717db35be285b48a59701562d36b",
+      "label": "2023-05-11",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-10",
+      "revision": "1ac172009ea28f0f66873962550c9e7faf136c3bb54524740b71b30880409847",
+      "label": "2023-05-10",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-09",
+      "revision": "13f9d7b091743e1956d1f6045707ee14780b9b772b01b15ad79bbf2e09abae8b",
+      "label": "2023-05-09",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-08",
+      "revision": "e8b2040504f7f296aec59a480cf7491b946fbf74c93081edfc1e61259c038f97",
+      "label": "2023-05-08",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-05",
+      "revision": "d68ae364e368c60b61f0636c96149c4b08168c0b8f522c6c8c6ab656eedc5c0c",
+      "label": "2023-05-05",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-04",
+      "revision": "0bbdb1e13cb3ac3e2d054f925063a0477e9488901626e5ec8921fab3aa26c956",
+      "label": "2023-05-04",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-03",
+      "revision": "49eac358d551179dcb4720cf2aa753849acadec61f244c5cede2b7841ae2be4a",
+      "label": "2023-05-03",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-05-02",
+      "revision": "13161f520689a6f474128ad9ea2044566357c8a3fc1e0049483f345584b2f077",
+      "label": "2023-05-02",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-28",
+      "revision": "393fcbb3134fbc710e99a65877673df93b41ff033e00cda53f4d1de3feff5e51",
+      "label": "2023-04-28",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-27",
+      "revision": "2062c0bb8439b11aafeb59bd4105d5a153c8f327652a8c24a2739493768807d2",
+      "label": "2023-04-27",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-26",
+      "revision": "fa5b3cd9cf23cbc4d6869c27dab42fdc4c63a7d3740c8d448f0f5a9a8ab57f05",
+      "label": "2023-04-26",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-25",
+      "revision": "ef25a08eb99844d2348df832d65536eb68471505a5a92421fd2f1abbfefed5ed",
+      "label": "2023-04-25",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-24",
+      "revision": "6f20025594c11d1fe3528c11d386b5799ac4240647901f0faaa94bf4bafe6444",
+      "label": "2023-04-24",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-21",
+      "revision": "cca7fefd89e85f9e3b9ffd5a11d39702f51166a6a7a4cf8210b5a8f78c893ddd",
+      "label": "2023-04-21",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-20",
+      "revision": "a2893c7089c452ebd93397d3494cf19faa4b322100b07ec125cbe67be78e7e2e",
+      "label": "2023-04-20",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-19",
+      "revision": "c9024c8d9a702a7eb03f2132fb58312632ff8a9b2383fd656d374c0bda38507a",
+      "label": "2023-04-19",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-18",
+      "revision": "f754ac79dec828dcc3d1a44bb320be6f8dccd1a527302944eefc85099ca52f74",
+      "label": "2023-04-18",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-17",
+      "revision": "2bde383ea0c57e9c76a4f7632b4c486cf0bddd7e524365fe03e74ebc10c59cd4",
+      "label": "2023-04-17",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-13",
+      "revision": "34bb4726ce3bc1b4bd2d52a08eb00d8a0106070841222cba88fc6ff5281b1198",
+      "label": "2023-04-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-12",
+      "revision": "a6727cfda8dd3721fd21fff01759a446e2e380860ffa931d170d4a5144662fc0",
+      "label": "2023-04-12",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-11",
+      "revision": "8f3f1561462d0f030224fc5f95791d11da6dee57965310b5a4280d6513d9afef",
+      "label": "2023-04-11",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-10",
+      "revision": "fa38a5c8c9559219df7df1b40a4e0e775bf74f7699480efedd3a2687c46ea817",
+      "label": "2023-04-10",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-06",
+      "revision": "21c697b2f82633de39341d208fcc282e37955ce498b6c4dafb34e750a6c1d6fe",
+      "label": "2023-04-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-05",
+      "revision": "6f752ba32273c1d8a1920d8af5f9e33a60c81ddf9ae0a7be2bf9b99d50c510f7",
+      "label": "2023-04-05",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-04-03",
+      "revision": "e9dd324768791fb329c18e582767eba1cfde198626a897991fd6ef973adb7116",
+      "label": "2023-04-03",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-31",
+      "revision": "2ad8f2e0f09f82a2413c233a0fce17614622fd69316a6c7ddadef91f6ba01037",
+      "label": "2023-03-31",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-29",
+      "revision": "0a69d78fb5756dd97a100737670d301df91d22782027b8b96c7e7f286d3b5c84",
+      "label": "2023-03-29",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-28",
+      "revision": "6d67346c4322b38d8945a6cbd0050f378164e1d00305a3dc905d683282995fbf",
+      "label": "2023-03-28",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-27",
+      "revision": "a179e49d60c353f3422f7de496836997a7cff8202feb953b35743e169d111385",
+      "label": "2023-03-27",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-24",
+      "revision": "a977ef29e0400719901a3fc9e745a105177f7ae1be30afa1121e966925d8c7eb",
+      "label": "2023-03-24",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-23",
+      "revision": "52faacfdf8b43b1dfff184328f64f058a3200137c5252d3aefdcd87d7cd38664",
+      "label": "2023-03-23",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-22",
+      "revision": "04287c0dac4d8f11bef8d8ea4f4586007bbaeadfaa1c021bc533312f61a9cf4e",
+      "label": "2023-03-22",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-21",
+      "revision": "eb870dc068843dacc6ff8f1ce595ee55ae4c5becdfcc637dc23dfcdeb4aa3a25",
+      "label": "2023-03-21",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-20",
+      "revision": "78dee01d33f8655eb9a068676437b41cdb2440d9a6d3e707ee29894aeae90726",
+      "label": "2023-03-20",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-17",
+      "revision": "d6a80a9eede49d7a00f5d735f10fe1e7ffc09f7de176a020fd67e7651676b5a2",
+      "label": "2023-03-17",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-16",
+      "revision": "551a15b859c0c29b555a99a4d2d41876aa03c052d6f42297308eb3ef25c921a1",
+      "label": "2023-03-16",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-15",
+      "revision": "36a52ace33e9522b67ec7c2e24ac24158ffcc4c924cd1269cd308778d9fe7f59",
+      "label": "2023-03-15",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-14",
+      "revision": "f39d9f585d3dc80cc0a7cc49ec3ed44a2434708a6510c77921a6a36dcbcafbdf",
+      "label": "2023-03-14",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-13",
+      "revision": "0954596a00d9cf947887878113e651ce1acb784b887125402d2dc877cfcec3cb",
+      "label": "2023-03-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-10",
+      "revision": "48eef07ec7c1ed72345032d18b0d1e278db6223774ea5fe889bfa35cd0dbaf3a",
+      "label": "2023-03-10",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-09",
+      "revision": "13eb6911bf4a7c0932faf376c344227bf28162c8c604b174b3cf5d39411e212a",
+      "label": "2023-03-09",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-08",
+      "revision": "c65effcc03a691604f7dca5550072115bbfbb4738644b54e8d00b241c4314d76",
+      "label": "2023-03-08",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-06",
+      "revision": "7f2cbdbdfa04d9b4354820874a4667641ff82ac78662de489f8c2c6cd2ce2386",
+      "label": "2023-03-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-03",
+      "revision": "e3e96172afd1759afd6524a29a15b406cbfdf185e954b0d4bc68706bf26c2dff",
+      "label": "2023-03-03",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-02",
+      "revision": "3cbffb81e3ea4f0a218feb949055963acc38992f0cc6adefe1e116c67a79a8c8",
+      "label": "2023-03-02",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-03-01",
+      "revision": "d0e80bc4d57a014925e3cef0a52326e45940f242764c2caa8f9bf3d6ff7dae91",
+      "label": "2023-03-01",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-28",
+      "revision": "dbb9e0824a8c63d0a2effdc5f01b4efabe01b4b68a407027496635a25d6b188e",
+      "label": "2023-02-28",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-27",
+      "revision": "3ba6a37e2a4106c9cb500e9cf063eb6e9c9a9f896115623ca1edaafc5a1fdb34",
+      "label": "2023-02-27",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-24",
+      "revision": "97dc1c4c5578422330b4f4816d0eaba76e265b1ed9e157adf6cd8dac74a775a5",
+      "label": "2023-02-24",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-23",
+      "revision": "f74f62269ef8f261cb29b75d784d7d3245c691c21e65520448347c21a606bb6c",
+      "label": "2023-02-23",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-22",
+      "revision": "4f1444baac2991a5fb3b3cc186ef73c9309d6a6b451282311e02f7345b12eaac",
+      "label": "2023-02-22",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-21",
+      "revision": "342524ee7994aae2ef306c8fdede35c08ed39f4016b1a08b43d32c9eb0d73aac",
+      "label": "2023-02-21",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-20",
+      "revision": "c7fd706695f9352ccab52d568209f67d03bb684d2a5d8a735bf050952a3bb709",
+      "label": "2023-02-20",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-17",
+      "revision": "8f333caca6f2e450329210c65dde434ff514a8fd5b06462d64db7bf4c39acb21",
+      "label": "2023-02-17",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-16",
+      "revision": "c49d0c5959dd89da2a85dd2fde79e8f79c0957ff4bf44a481ee8791d65299b89",
+      "label": "2023-02-16",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-15",
+      "revision": "90e06c1b1e3b26dff5930ecf938977d040386ce0c9394c752b63ba2a6b392da7",
+      "label": "2023-02-15",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-14",
+      "revision": "68367e7be1f2b4fcae919e7da4e8a0b11c2aa16f78e52ede24ff723dd45fa4b5",
+      "label": "2023-02-14",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-13",
+      "revision": "e4f1afce6b5d57422a88ba61b3f532411eba28a947b4dff0a1da019ff2b02b5c",
+      "label": "2023-02-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-10",
+      "revision": "8b7206b4b54c07d3ea8abb3be64408f6c6c089894719245785f9e4b190c57090",
+      "label": "2023-02-10",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-09",
+      "revision": "d9f67a35af9dd61176d43e4693c55cf9f6e3ea90eeace5b187168dac859ce9b1",
+      "label": "2023-02-09",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-08",
+      "revision": "8a6209fc9496634b18d0538e3ed6e6fc6c1957aaea8a6519cf5f655a80bd0c64",
+      "label": "2023-02-08",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-07",
+      "revision": "41997d013d0b96dc596e40bbc3defad8bdeb8c22172f61939b2b04ea29031da7",
+      "label": "2023-02-07",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-06",
+      "revision": "df8c197fb001e65d63fd4e7d43fc5571fd18e1388f7f76b656cea4b3864a9f3c",
+      "label": "2023-02-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-03",
+      "revision": "b09cd850483e2d5a49762254dd820d16b766aa708d685d80773dac760076b079",
+      "label": "2023-02-03",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-02",
+      "revision": "cc2978d8ed7eaa5e8ddc57a4198ae3ad6b95a56b4f7b81a59ddb820941bc0a3c",
+      "label": "2023-02-02",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-02-01",
+      "revision": "3a1a3c70f3f17a3e16f7d9487619356a69b5a21a3e4510dd1ca2e6fca3022886",
+      "label": "2023-02-01",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-31",
+      "revision": "f5c45921ba8c52614fd0373a760f0e9f039e8cde16da689612c16d7bb9f3a27a",
+      "label": "2023-01-31",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-30",
+      "revision": "4b7e49101ac6d00571693558b32ac06343bf8dc403166d6df1781b81c4bc91a4",
+      "label": "2023-01-30",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-27",
+      "revision": "facd9b9c312571d32de7666174803e1178aa6c284ab908fc6c5495959ae7823b",
+      "label": "2023-01-27",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-25",
+      "revision": "f335060cb43d3349157842b349ea0460a8654872909e4fc8fab4d13e34306e18",
+      "label": "2023-01-25",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-24",
+      "revision": "ba134258222172204870220f3e5fe49d77d65933222d32820d485833e40d8c05",
+      "label": "2023-01-24",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-23",
+      "revision": "24b8bbd8765a0b612fabfcbdf9ccf1d5dc610007da336636c73f68bc7f04f8c5",
+      "label": "2023-01-23",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-20",
+      "revision": "a9aa9034e068f7719794de1c8c56ddc3801539a6d96e0b82929dc4915f2e9b9a",
+      "label": "2023-01-20",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-19",
+      "revision": "c684a2b0a063dd6bf75d64970c931a6feffebf5d91dc8d3b954449d2ac404539",
+      "label": "2023-01-19",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-18",
+      "revision": "cd4ed7554e33b0c8c445c50a0f8c91559971fbea9e02699971f5ec1d8d2c0003",
+      "label": "2023-01-18",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-17",
+      "revision": "d19ee7da95821c6e519ce38825fc4a021e68dda60ca554a3b6b5fbfdf01ab215",
+      "label": "2023-01-17",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-16",
+      "revision": "e289f6e22e5728173e5adf206fbbb99810a9f30eee5d68adc06721846692178f",
+      "label": "2023-01-16",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-13",
+      "revision": "784b28148be6bfba0597bf2e783a22fa5f6de7c9942f9db8120789fc34352e13",
+      "label": "2023-01-13",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-12",
+      "revision": "434165fda5fd641b77d2b946334dbe035acf19f5af2e79b13cb4ddac2151c6b0",
+      "label": "2023-01-12",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-11",
+      "revision": "3dfdb887c6cd583e065c8be0c5d7f8363ff27d83e9aea855abd7afd7a03d2021",
+      "label": "2023-01-11",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-10",
+      "revision": "e92b87e9b738d379280afe8dcd1d501ff4de09fcfc26200f301ec07498999d7e",
+      "label": "2023-01-10",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-09",
+      "revision": "7783ac1cc89e548aa7e750baf789ad39df6a6146e8038074890635318aaba29d",
+      "label": "2023-01-09",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-06",
+      "revision": "8b499b705ff9a2192716d071fe8f492708c7263b6fdb06f0567ff770494e50a6",
+      "label": "2023-01-06",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-05",
+      "revision": "5cc4b4a4b0e9cbda6b57a91657de42d3172e51d021b81d8208fa79e2102834b7",
+      "label": "2023-01-05",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-04",
+      "revision": "38daee93b4a50b985a0c72c7cb34ffbc9c889500f2afa3648d444542acdcdb7c",
+      "label": "2023-01-04",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-03",
+      "revision": "20709cb3078182f2f2fb4211bc87cf765e02a231d3c947fb5dd26f587ddcc767",
+      "label": "2023-01-03",
+      "isHistorical": true
+    },
+    {
+      "date": "2023-01-02",
+      "revision": "ef101f0faab49d8766a4cc25b0932cb150f4519623062b939f88f2c1f3848882",
+      "label": "2023-01-02",
+      "isHistorical": true
+    },
+    {
       "date": "2022-12-30",
       "revision": "e8d9cc9616c714cc119db9bbc2bb85b6958df94c252ac22f2016710b311d1142",
       "label": "2022-12-30",

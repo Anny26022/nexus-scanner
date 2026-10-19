@@ -13,11 +13,14 @@ import {
   Check,
   X,
   ChevronRight,
+  AlertTriangle,
+  Info,
 } from 'lucide-react';
 import type { ExpressionNode, UniverseType } from '../types/screener';
 import {
   executeScanHistory,
   computeScanHistorySummary,
+  checkScanCompatibility,
   type ScanSession,
   type ScanHistoryPoint,
   type ScanHistorySummary,
@@ -48,6 +51,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   const [range, setRange] = useState<RangeOption>(60);
   const [status, setStatus] = useState<'idle' | 'running' | 'completed' | 'stopped'>('idle');
   const [points, setPoints] = useState<ScanHistoryPoint[]>([]);
+  const [lastRunFingerprint, setLastRunFingerprint] = useState<string | null>(null);
   const [progress, setProgress] = useState<ScanHistoryProgress | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<ScanHistoryPoint | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<ScanHistoryPoint | null>(null);
@@ -56,20 +60,43 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Target sessions in chronological order (oldest to newest)
+  // Criteria fingerprint to detect if filters/universe have changed since last run
+  const currentFingerprint = useMemo(() => {
+    const custom = customSymbols ? customSymbols.slice().sort().join(',') : '';
+    return `${universe}:${custom}:${JSON.stringify(expressionTree)}`;
+  }, [universe, customSymbols, expressionTree]);
+
+  const isStale = lastRunFingerprint !== null && lastRunFingerprint !== currentFingerprint;
+
+  // Pre-flight compatibility check
+  const compatibility = useMemo(() => {
+    return checkScanCompatibility(expressionTree);
+  }, [expressionTree]);
+
+  // Target sessions: anchored around currentSessionDate in contiguous chronological order
   const targetSessions = useMemo(() => {
     if (!availableSessions.length) return [];
-    // Sort descending first to take most recent N, then reverse for chronological left-to-right timeline
+    // Sort descending (newest to oldest)
     const sortedDesc = [...availableSessions].sort((a, b) => b.date.localeCompare(a.date));
-    const sliced = range === 'all' ? sortedDesc : sortedDesc.slice(0, range);
+
+    // Find anchor index if currentSessionDate exists in available sessions
+    const anchorIdx = sortedDesc.findIndex(s => s.date === currentSessionDate);
+    const startIdx = anchorIdx >= 0 ? anchorIdx : 0;
+
+    const window = sortedDesc.slice(startIdx);
+    const sliced = range === 'all' ? window : window.slice(0, range);
+
+    // Return in chronological order (oldest to newest, left-to-right on timeline)
     return sliced.sort((a, b) => a.date.localeCompare(b.date));
-  }, [availableSessions, range]);
+  }, [availableSessions, currentSessionDate, range]);
 
   const summary: ScanHistorySummary = useMemo(() => {
     return computeScanHistorySummary(points, targetSessions.length);
   }, [points, targetSessions.length]);
 
   const handleStartScan = async () => {
+    if (!compatibility.compatible) return;
+
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -78,6 +105,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
 
     setStatus('running');
     setProgress({ current: 0, total: targetSessions.length, pct: 0 });
+    setLastRunFingerprint(currentFingerprint);
 
     const localPointsMap = new Map<string, ScanHistoryPoint>();
 
@@ -93,7 +121,6 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
           onProgress: (prog, point) => {
             localPointsMap.set(point.date, point);
             setProgress(prog);
-            // Real-time chart rendering as points stream in
             setPoints(targetSessions.map(s => localPointsMap.get(s.date)).filter((p): p is ScanHistoryPoint => p !== undefined));
           },
         }
@@ -102,7 +129,6 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
       if (!ac.signal.aborted) {
         setPoints(result.points);
         setStatus('completed');
-        // If no session is selected yet, select the last session
         if (result.points.length > 0 && !selectedPoint) {
           setSelectedPoint(result.points[result.points.length - 1]);
         }
@@ -129,7 +155,6 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // SVG Chart Geometry
   const chartHeight = 120;
   const maxCount = useMemo(() => {
     if (!points.length) return 10;
@@ -154,13 +179,13 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold tracking-tight">Historical Scan Backtest</h3>
+              <h3 className="text-sm font-semibold tracking-tight">Historical Scan Frequency</h3>
               <span className="rounded-full bg-subtle px-2 py-0.5 text-[11px] font-medium text-muted-text">
-                Chartink-style
+                Point-in-Time Breadth
               </span>
             </div>
             <p className="text-xs text-muted-text">
-              Evaluate this filter combination across historical trading sessions to analyze hit frequency & breadth.
+              Track how many mainboard stocks passed this filter criteria across archived trading sessions.
             </p>
           </div>
         </div>
@@ -183,7 +208,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                     : 'text-muted-text hover:text-text'
                 }`}
               >
-                {option === 'all' ? `All (${availableSessions.length})` : `${option} Sessions`}
+                {option === 'all' ? `All (${targetSessions.length})` : `${option} Sessions`}
               </button>
             ))}
           </div>
@@ -201,23 +226,52 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
             <button
               type="button"
               onClick={handleStartScan}
-              className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-xs font-medium text-white hover:opacity-95 shadow-xs"
+              disabled={!compatibility.compatible}
+              className="flex items-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-xs font-medium text-white hover:opacity-95 disabled:opacity-50 shadow-xs"
             >
               {points.length > 0 ? <RotateCcw size={13} /> : <Play size={13} />}
-              {points.length > 0 ? 'Re-run Backtest' : 'Run Backtest'}
+              {points.length > 0 ? 'Re-run Scan' : 'Run Scan'}
             </button>
           )}
 
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close scan backtest"
+            aria-label="Close scan history"
             className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-text hover:bg-subtle hover:text-text"
           >
             <X size={15} />
           </button>
         </div>
       </div>
+
+      {/* Compatibility Notice if unsupported filter is present */}
+      {!compatibility.compatible && (
+        <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-500">
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+          <div>
+            <span className="font-semibold">Filter combination unsupported for historical scanning:</span>{' '}
+            {compatibility.reason}
+          </div>
+        </div>
+      )}
+
+      {/* Stale Warning Banner */}
+      {isStale && status !== 'running' && (
+        <div className="mt-3 flex items-center justify-between rounded-lg border border-line bg-subtle p-2.5 text-xs text-muted-text">
+          <div className="flex items-center gap-2">
+            <Info size={14} className="text-accent" />
+            <span>Filters or universe have changed since this frequency scan was generated.</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleStartScan}
+            className="font-medium text-accent hover:underline"
+          >
+            Re-run to update
+          </button>
+        </div>
+      )}
 
       {/* Progress Bar (Visible while running) */}
       {status === 'running' && progress && (
@@ -235,7 +289,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
         </div>
       )}
 
-      {/* Summary KPI Cards (Rendered once scan has points or completed) */}
+      {/* Summary KPI Cards */}
       {points.length > 0 && (
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
           <div className="rounded-lg border border-line bg-subtle/50 p-2.5">
@@ -282,7 +336,9 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
             </div>
             <div className="mt-1 text-base font-bold text-accent">
               {summary.frequencyPct}%{' '}
-              <span className="text-[11px] font-normal text-muted-text">of days</span>
+              <span className="text-[11px] font-normal text-muted-text">
+                ({summary.evaluatedSessions} evaluated{summary.failedSessions > 0 ? `, ${summary.failedSessions} failed` : ''})
+              </span>
             </div>
           </div>
         </div>
@@ -297,7 +353,11 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
               <div className="absolute top-2 right-3 z-10 rounded-md border border-line bg-surface/95 px-2.5 py-1.5 text-xs shadow-md backdrop-blur-xs">
                 <div className="font-semibold text-text">
                   {hoveredPoint.date} •{' '}
-                  <span className="text-accent">{hoveredPoint.count} stocks</span>
+                  {hoveredPoint.status === 'success' ? (
+                    <span className="text-accent">{hoveredPoint.count} stocks</span>
+                  ) : (
+                    <span className="text-amber-500">{hoveredPoint.error || 'Evaluation error'}</span>
+                  )}
                 </div>
                 {hoveredPoint.symbols.length > 0 && (
                   <div className="mt-0.5 text-[11px] text-muted-text">
@@ -315,7 +375,6 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                 viewBox={`0 0 ${Math.max(500, points.length * 14)} ${chartHeight}`}
                 preserveAspectRatio="none"
               >
-                {/* Y-axis gridline */}
                 <line
                   x1="0"
                   y1={chartHeight / 2}
@@ -340,7 +399,12 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                   const barSlot = totalWidth / points.length;
                   const barWidth = Math.max(3, barSlot - 2);
                   const x = idx * barSlot + 1;
-                  const barHeight = p.count > 0 ? Math.max(4, (p.count / maxCount) * (chartHeight - 10)) : 1;
+                  const isError = p.status !== 'success';
+                  const barHeight = isError
+                    ? 8
+                    : p.count > 0
+                    ? Math.max(4, (p.count / maxCount) * (chartHeight - 10))
+                    : 1;
                   const y = chartHeight - barHeight;
                   const isSelected = selectedPoint?.date === p.date;
                   const isCurrentSession = currentSessionDate === p.date;
@@ -353,7 +417,6 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                       onMouseLeave={() => setHoveredPoint(null)}
                       onClick={() => setSelectedPoint(p)}
                     >
-                      {/* Bar rectangle */}
                       <rect
                         x={x}
                         y={y}
@@ -361,7 +424,9 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                         height={barHeight}
                         rx={barWidth > 4 ? 2 : 0}
                         className={`transition-colors ${
-                          isSelected
+                          isError
+                            ? 'fill-amber-500/70 hover:fill-amber-500'
+                            : isSelected
                             ? 'fill-accent'
                             : isCurrentSession
                             ? 'fill-emerald-500'
@@ -370,7 +435,6 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                             : 'fill-muted-text/20 hover:fill-muted-text/40'
                         }`}
                       />
-                      {/* Current session indicator tick */}
                       {isCurrentSession && (
                         <circle
                           cx={x + barWidth / 2}
@@ -398,15 +462,25 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
             <div className="mt-3 rounded-lg border border-line bg-subtle/40 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent text-xs font-bold">
-                    {selectedPoint.count}
+                  <div
+                    className={`flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold ${
+                      selectedPoint.status !== 'success'
+                        ? 'bg-amber-500/15 text-amber-500'
+                        : 'bg-accent/15 text-accent'
+                    }`}
+                  >
+                    {selectedPoint.status === 'success' ? selectedPoint.count : '!'}
                   </div>
                   <div>
                     <span className="text-xs font-semibold text-text">
                       {selectedPoint.date} Session
                     </span>
                     <span className="ml-2 text-[11px] text-muted-text">
-                      {selectedPoint.count === 1 ? '1 stock passed' : `${selectedPoint.count} stocks passed`}
+                      {selectedPoint.status !== 'success'
+                        ? `Evaluation error: ${selectedPoint.error || 'Unavailable'}`
+                        : selectedPoint.count === 1
+                        ? '1 stock passed'
+                        : `${selectedPoint.count} stocks passed`}
                     </span>
                   </div>
                 </div>
@@ -466,9 +540,11 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                   ))
                 ) : (
                   <span className="text-xs text-muted-text py-2">
-                    {selectedPoint.count === 0
+                    {selectedPoint.status !== 'success'
+                      ? `Unable to evaluate stocks on this session: ${selectedPoint.error}`
+                      : selectedPoint.count === 0
                       ? 'No stocks passed this filter on this trading day.'
-                      : 'No symbols match your filter.'}
+                      : 'No symbols match your search.'}
                   </span>
                 )}
               </div>
@@ -480,14 +556,15 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle text-muted-text mb-2">
             <BarChart3 size={24} />
           </div>
-          <h4 className="text-sm font-medium text-text">Ready to Backtest</h4>
+          <h4 className="text-sm font-medium text-text">Ready to Analyze Frequency</h4>
           <p className="mt-1 max-w-sm text-xs text-muted-text">
-            Test how frequently this filter triggered across {targetSessions.length} past sessions.
+            Test how frequently this filter triggered across {targetSessions.length} past trading sessions.
           </p>
           <button
             type="button"
             onClick={handleStartScan}
-            className="mt-3 flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white shadow-xs hover:opacity-95"
+            disabled={!compatibility.compatible}
+            className="mt-3 flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-white shadow-xs hover:opacity-95 disabled:opacity-50"
           >
             <Play size={14} />
             Start Scan ({targetSessions.length} Sessions)

@@ -212,10 +212,10 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
               type="button"
               onClick={() => setIsScanHistoryOpen(!isScanHistoryOpen)}
               className={`button ${isScanHistoryOpen ? 'button-primary' : 'button-secondary'}`}
-              title="Chartink-style Historical Scan Backtesting"
+              title="Chartink-style Historical Scan Frequency Analysis"
             >
               <BarChart3 size={14} />
-              <span>Backtest</span>
+              <span>Scan History</span>
             </button>
           )}
           <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable} className="button button-primary"><Play size={14} />Run</button>

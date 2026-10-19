@@ -1,6 +1,7 @@
 import { getManifest, manifestSnapshotSource } from './manifest';
 import { runSnapshotTask } from './snapshotClient';
 import type { ScreenerRunRequest, ExpressionNode, UniverseType } from '../types/screener';
+import { isTradingViewCondition } from '../data/tradingViewMetrics';
 
 export interface ScanSession {
   date: string;
@@ -13,11 +14,14 @@ export interface ScanHistoryPoint {
   date: string;
   count: number;
   symbols: string[];
+  status: 'success' | 'error' | 'unsupported';
+  error?: string;
 }
 
 export interface ScanHistorySummary {
   totalSessions: number;
   evaluatedSessions: number;
+  failedSessions: number;
   averageMatches: number;
   peakDate: string;
   peakCount: number;
@@ -33,10 +37,45 @@ export interface ScanHistoryProgress {
   pct: number;
 }
 
+export interface ScanCompatibilityResult {
+  compatible: boolean;
+  reason?: string;
+}
+
 const scanHistoryCache = new Map<string, ScanHistoryPoint>();
 
-export function getScanHistoryCacheKey(date: string, universe: UniverseType, expressionTree: ExpressionNode): string {
-  return `${date}:${universe}:${JSON.stringify(expressionTree)}`;
+export function getScanHistoryCacheKey(
+  date: string,
+  revision: string,
+  universe: UniverseType,
+  expressionTree: ExpressionNode,
+  customSymbols?: string[]
+): string {
+  const custom = customSymbols && customSymbols.length > 0 ? customSymbols.slice().sort().join(',') : '';
+  return `${date}:${revision}:${universe}:${custom}:${JSON.stringify(expressionTree)}`;
+}
+
+export function checkScanCompatibility(tree: ExpressionNode): ScanCompatibilityResult {
+  function inspect(node: ExpressionNode): string | null {
+    if (node.type === 'group') {
+      for (const child of node.children) {
+        const res = inspect(child);
+        if (res) return res;
+      }
+      return null;
+    }
+    const id = node.condition.conditionId;
+    if (id === 'FNO_BAN') {
+      return 'F&O Ban status is an exchange live-session metric and is not archived in historical snapshots.';
+    }
+    if (isTradingViewCondition(id)) {
+      return 'TradingView technical metrics are available on live sessions only and are not archived historically.';
+    }
+    return null;
+  }
+
+  const reason = inspect(tree);
+  return reason ? { compatible: false, reason } : { compatible: true };
 }
 
 export async function runScanHistorySession(
@@ -45,7 +84,7 @@ export async function runScanHistorySession(
   universe: UniverseType,
   customSymbols?: string[]
 ): Promise<ScanHistoryPoint> {
-  const cacheKey = getScanHistoryCacheKey(session.date, universe, expressionTree);
+  const cacheKey = getScanHistoryCacheKey(session.date, session.revision, universe, expressionTree, customSymbols);
   const cached = scanHistoryCache.get(cacheKey);
   if (cached) return cached;
 
@@ -59,14 +98,14 @@ export async function runScanHistorySession(
     asOfDate: session.date,
     datasetRevision: session.revision,
     page: 1,
-    pageSize: 100,
+    pageSize: 1, // Only need 1 row; matchedSymbols contains all passing symbol names
   };
 
   const snapshot = await runSnapshotTask({
     type: 'screen',
     source,
     request,
-    allRows: true,
+    allRows: false, // Avoid expensive structured clone transfer of full row objects
   });
 
   if (snapshot.type !== 'screen' || !snapshot.result) {
@@ -77,6 +116,7 @@ export async function runScanHistorySession(
     date: session.date,
     count: snapshot.result.matchCount,
     symbols: snapshot.result.matchedSymbols || snapshot.result.rows.map(r => r.symbol),
+    status: 'success',
   };
 
   scanHistoryCache.set(cacheKey, point);
@@ -84,10 +124,14 @@ export async function runScanHistorySession(
 }
 
 export function computeScanHistorySummary(points: ScanHistoryPoint[], totalSessions: number): ScanHistorySummary {
-  if (!points.length) {
+  const successPoints = points.filter(p => p.status === 'success');
+  const failedSessions = points.length - successPoints.length;
+
+  if (!successPoints.length) {
     return {
       totalSessions,
       evaluatedSessions: 0,
+      failedSessions,
       averageMatches: 0,
       peakDate: '-',
       peakCount: 0,
@@ -98,11 +142,11 @@ export function computeScanHistorySummary(points: ScanHistoryPoint[], totalSessi
   }
 
   let totalMatches = 0;
-  let peakPoint = points[0];
-  let lowestPoint = points[0];
+  let peakPoint = successPoints[0];
+  let lowestPoint = successPoints[0];
   let nonZeroCount = 0;
 
-  for (const p of points) {
+  for (const p of successPoints) {
     totalMatches += p.count;
     if (p.count > peakPoint.count) peakPoint = p;
     if (p.count < lowestPoint.count) lowestPoint = p;
@@ -111,13 +155,14 @@ export function computeScanHistorySummary(points: ScanHistoryPoint[], totalSessi
 
   return {
     totalSessions,
-    evaluatedSessions: points.length,
-    averageMatches: Math.round((totalMatches / points.length) * 10) / 10,
+    evaluatedSessions: successPoints.length,
+    failedSessions,
+    averageMatches: Math.round((totalMatches / successPoints.length) * 10) / 10,
     peakDate: peakPoint.date,
     peakCount: peakPoint.count,
     lowestDate: lowestPoint.date,
     lowestCount: lowestPoint.count,
-    frequencyPct: Math.round((nonZeroCount / points.length) * 100),
+    frequencyPct: Math.round((nonZeroCount / successPoints.length) * 100),
   };
 }
 
@@ -158,19 +203,26 @@ export async function executeScanHistory(
           point
         );
       } catch (err) {
-        // If single session fails, record 0 or log without breaking the rest
-        console.warn(`Historical scan error for ${session.date}:`, err);
-        const fallbackPoint: ScanHistoryPoint = { date: session.date, count: 0, symbols: [] };
-        resultsMap.set(session.date, fallbackPoint);
+        if (signal?.aborted) break;
+        const message = err instanceof Error ? err.message : 'Evaluation failed';
+        const isUnsupported = message.includes('not archived') || message.includes('newer dataset');
+        const errorPoint: ScanHistoryPoint = {
+          date: session.date,
+          count: 0,
+          symbols: [],
+          status: isUnsupported ? 'unsupported' : 'error',
+          error: message,
+        };
+        resultsMap.set(session.date, errorPoint);
         completed++;
         onProgress?.(
           {
             current: completed,
             total,
-            latestPoint: fallbackPoint,
+            latestPoint: errorPoint,
             pct: Math.round((completed / total) * 100),
           },
-          fallbackPoint
+          errorPoint
         );
       }
     }
@@ -179,7 +231,6 @@ export async function executeScanHistory(
   const workers = Array.from({ length: Math.min(concurrency, sessions.length) }, () => worker());
   await Promise.all(workers);
 
-  // Return points in original order of input sessions
   const points = sessions
     .map(s => resultsMap.get(s.date))
     .filter((p): p is ScanHistoryPoint => p !== undefined);

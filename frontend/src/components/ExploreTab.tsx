@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   UniverseType,
@@ -56,8 +56,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   const asOfDate = selectedAsOfDate;
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.screener.match-mode.v1', 'all');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isScanHistoryOpen, setIsScanHistoryOpen] = useState(true);
-  const backtestRef = useRef<HTMLDivElement>(null);
+  const [isScanHistoryOpen, setIsScanHistoryOpen] = useState(false);
   const [aiDraft, setAiDraft] = useState<{conditions: Record<string, ActiveCondition>; matchMode: MatchMode} | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const filterChoices = useFilterChoices(isModalOpen, datasetRevision, asOfDate);
@@ -208,20 +207,6 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
             <span>Ask AI</span>
           </button>
           <button onClick={() => setIsModalOpen(true)} className="button button-secondary"><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</button>
-          {availableSessions.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                if (!isScanHistoryOpen) setIsScanHistoryOpen(true);
-                backtestRef.current?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              className="button button-secondary"
-              title="Chartink-style Historical Backtest Analysis"
-            >
-              <BarChart3 size={14} />
-              <span>Backtest</span>
-            </button>
-          )}
           <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable} className="button button-primary"><Play size={14} />Run</button>
         </div>
       </div>
@@ -241,19 +226,43 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
       onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
-    {isScanHistoryOpen && availableSessions.length > 0 && (
-      <div ref={backtestRef} id="backtest-history" className="w-full">
-        <ScanHistoryPanel
-          expressionTree={expressionTree}
-          universe={universe}
-          customSymbols={runRequest.customSymbols}
-          availableSessions={availableSessions}
-          currentSessionDate={asOfDate}
-          onSelectSession={(date) => {
-            onSelectSession?.(date);
-          }}
-          onClose={() => setIsScanHistoryOpen(false)}
-        />
+    {availableSessions.length > 0 && (
+      <div id="backtest-history" className="w-full mt-6">
+        {!isScanHistoryOpen ? (
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-surface p-4 sm:p-5 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent border border-accent-line">
+                <BarChart3 size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-text">Historical Backtest</h3>
+                <p className="text-xs text-muted">
+                  Evaluate filter consistency and stacked sector breakdown across {availableSessions.length} archived sessions.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsScanHistoryOpen(true)}
+              className="button button-primary text-xs h-8 px-4"
+            >
+              <BarChart3 size={14} />
+              <span>Backtest</span>
+            </button>
+          </div>
+        ) : (
+          <ScanHistoryPanel
+            expressionTree={expressionTree}
+            universe={universe}
+            customSymbols={runRequest.customSymbols}
+            availableSessions={availableSessions}
+            currentSessionDate={asOfDate}
+            onSelectSession={(date) => {
+              onSelectSession?.(date);
+            }}
+            onClose={() => setIsScanHistoryOpen(false)}
+          />
+        )}
       </div>
     )}
     <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => {setIsModalOpen(false); setAiDraft(null);}} activeConditionsMap={aiDraft?.conditions ?? activeConditionsMap} matchMode={aiDraft?.matchMode ?? matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />

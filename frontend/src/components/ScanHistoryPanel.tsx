@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   Info,
 } from 'lucide-react';
+import { useMountEffect } from '../hooks/useMountEffect';
 import type { ExpressionNode, UniverseType } from '../types/screener';
 import {
   executeScanHistory,
@@ -62,6 +63,16 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   const [copied, setCopied] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const symbolsControllerRef = useRef<AbortController | null>(null);
+
+  const cancelRequests = () => {
+    abortControllerRef.current?.abort();
+    symbolsControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    symbolsControllerRef.current = null;
+  };
+  useMountEffect(() => cancelRequests);
+  const handleClose = () => { cancelRequests(); onClose(); };
 
   // Criteria fingerprint to detect if filters/universe have changed since last run
   const currentFingerprint = useMemo(() => {
@@ -98,6 +109,9 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   }, [points, targetSessions.length]);
 
   const handleSelectPoint = async (point: ScanHistoryPoint) => {
+    symbolsControllerRef.current?.abort();
+    symbolsControllerRef.current = null;
+    setLoadingSymbols(false);
     setSelectedPoint(point);
     setSymbolFilter('');
     if (sessionSymbols[point.date] || point.status !== 'success' || point.count === 0) return;
@@ -105,27 +119,33 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     const session = targetSessions.find(s => s.date === point.date);
     if (!session) return;
 
+    const controller = new AbortController();
+    symbolsControllerRef.current = controller;
     setLoadingSymbols(true);
     try {
-      const syms = await loadSessionSymbols(session, expressionTree, universe, customSymbols);
-      setSessionSymbols(prev => ({ ...prev, [point.date]: syms }));
+      const syms = await loadSessionSymbols(session, expressionTree, universe, customSymbols, controller.signal);
+      if (!controller.signal.aborted) setSessionSymbols(prev => ({ ...prev, [point.date]: syms }));
     } catch (e) {
-      console.warn('Failed to load symbols on demand for session:', e);
+      if (!controller.signal.aborted) console.warn('Failed to load symbols on demand for session:', e);
     } finally {
-      setLoadingSymbols(false);
+      if (symbolsControllerRef.current === controller) {
+        symbolsControllerRef.current = null;
+        setLoadingSymbols(false);
+      }
     }
   };
 
   const handleStartScan = async () => {
     if (!compatibility.compatible) return;
 
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    cancelRequests();
+    setLoadingSymbols(false);
     const ac = new AbortController();
     abortControllerRef.current = ac;
 
     setStatus('running');
+    setPoints([]);
+    setSelectedPoint(null);
     setProgress({ current: 0, total: targetSessions.length, pct: 0 });
     setLastRunFingerprint(currentFingerprint);
 
@@ -165,10 +185,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   };
 
   const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
+    cancelRequests();
     setStatus('stopped');
   };
 
@@ -225,6 +242,9 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                 onClick={() => {
                   setRange(option);
                   setStatus('idle');
+                  setPoints([]);
+                  setSelectedPoint(null);
+                  setProgress(null);
                 }}
                 disabled={status === 'running'}
                 className={`rounded-md px-2.5 py-1 transition-colors ${
@@ -261,7 +281,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close scan history"
             className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-text hover:bg-subtle hover:text-text"
           >

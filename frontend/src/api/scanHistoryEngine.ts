@@ -43,9 +43,49 @@ export interface ScanCompatibilityResult {
   reason?: string;
 }
 
-const SCAN_HISTORY_CACHE_MAX = 200;
-const scanHistoryCache = new Map<string, ScanHistoryPoint>();
-const sessionSymbolsCache = new Map<string, string[]>();
+class LruMap<K, V> {
+  private map = new Map<K, V>();
+  constructor(private max: number) {}
+
+  get(key: K): V | undefined {
+    const val = this.map.get(key);
+    if (val !== undefined) {
+      this.map.delete(key);
+      this.map.set(key, val);
+    }
+    return val;
+  }
+
+  set(key: K, value: V): void {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= this.max) {
+      const oldest = this.map.keys().next().value;
+      if (oldest !== undefined) this.map.delete(oldest);
+    }
+    this.map.set(key, value);
+  }
+
+  has(key: K): boolean {
+    return this.map.has(key);
+  }
+
+  delete(key: K): boolean {
+    return this.map.delete(key);
+  }
+
+  get size(): number {
+    return this.map.size;
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+}
+
+export const SCAN_HISTORY_CACHE_MAX = 200;
+export const scanHistoryCache = new LruMap<string, ScanHistoryPoint>(SCAN_HISTORY_CACHE_MAX);
+export const sessionSymbolsCache = new LruMap<string, string[]>(SCAN_HISTORY_CACHE_MAX);
 
 export function getScanHistoryCacheKey(
   date: string,
@@ -56,13 +96,6 @@ export function getScanHistoryCacheKey(
 ): string {
   const custom = customSymbols && customSymbols.length > 0 ? customSymbols.slice().sort().join(',') : '';
   return `${date}:${revision}:${universe}:${custom}:${JSON.stringify(expressionTree)}`;
-}
-
-function setScanHistoryCache(key: string, point: ScanHistoryPoint) {
-  scanHistoryCache.set(key, point);
-  if (scanHistoryCache.size > SCAN_HISTORY_CACHE_MAX) {
-    scanHistoryCache.delete(scanHistoryCache.keys().next().value!);
-  }
 }
 
 export function checkScanCompatibility(tree: ExpressionNode): ScanCompatibilityResult {
@@ -102,7 +135,7 @@ export async function runScanHistorySession(
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
   const manifest = await getManifest();
-  const source = manifestSnapshotSource(manifest, session.revision, session.date, signal);
+  const source = manifestSnapshotSource(manifest, session.revision, session.date);
 
   const request: ScreenerRunRequest = {
     expressionTree,
@@ -120,7 +153,7 @@ export async function runScanHistorySession(
     source,
     request,
     allRows: false,
-  });
+  }, signal);
 
   if (snapshot.type !== 'screen' || !snapshot.result) {
     throw new Error(`Failed to screen session ${session.date}`);
@@ -136,12 +169,9 @@ export async function runScanHistorySession(
   // Cache symbols separately if provided (e.g. if loaded on-demand)
   if (snapshot.result.matchedSymbols && snapshot.result.matchedSymbols.length > 0) {
     sessionSymbolsCache.set(cacheKey, snapshot.result.matchedSymbols);
-    if (sessionSymbolsCache.size > SCAN_HISTORY_CACHE_MAX) {
-      sessionSymbolsCache.delete(sessionSymbolsCache.keys().next().value!);
-    }
   }
 
-  setScanHistoryCache(cacheKey, point);
+  scanHistoryCache.set(cacheKey, point);
   return point;
 }
 
@@ -159,7 +189,7 @@ export async function loadSessionSymbols(
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
   const manifest = await getManifest();
-  const source = manifestSnapshotSource(manifest, session.revision, session.date, signal);
+  const source = manifestSnapshotSource(manifest, session.revision, session.date);
 
   const request: ScreenerRunRequest = {
     expressionTree,
@@ -176,7 +206,7 @@ export async function loadSessionSymbols(
     source,
     request,
     allRows: false,
-  });
+  }, signal);
 
   if (snapshot.type !== 'screen' || !snapshot.result) {
     throw new Error(`Failed to load symbols for session ${session.date}`);
@@ -184,9 +214,6 @@ export async function loadSessionSymbols(
 
   const symbols = snapshot.result.matchedSymbols || snapshot.result.rows.map(r => r.symbol);
   sessionSymbolsCache.set(cacheKey, symbols);
-  if (sessionSymbolsCache.size > SCAN_HISTORY_CACHE_MAX) {
-    sessionSymbolsCache.delete(sessionSymbolsCache.keys().next().value!);
-  }
   return symbols;
 }
 

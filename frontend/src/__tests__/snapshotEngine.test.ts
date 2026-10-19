@@ -180,6 +180,24 @@ it('times out stalled fallback and loads a fresh engine on retry',async()=>{
  await expect(runSnapshotTask({type:'screen',source,request})).resolves.toMatchObject({type:'screen'});
  expect(fetcher).toHaveBeenCalledTimes(2);
 });
+it('aborts the fallback fetch when its task times out', async () => {
+ vi.useFakeTimers();
+ vi.stubGlobal('Worker', undefined);
+ let fetchSignal: AbortSignal | undefined;
+ vi.stubGlobal('fetch', vi.fn((_url, options?: RequestInit) => {
+  fetchSignal = options?.signal ?? undefined;
+  return new Promise<Response>((_resolve, reject) => {
+   fetchSignal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+  });
+ }));
+ const { runSnapshotTask } = await import('../api/snapshotClient');
+ const task = runSnapshotTask({ type: 'screen', source, request });
+ const failure = expect(task).rejects.toThrow('timed out');
+ await vi.waitFor(() => expect(fetchSignal).toBeDefined());
+ await vi.advanceTimersByTimeAsync(60000);
+ await failure;
+ expect(fetchSignal?.aborted).toBe(true);
+});
 it('keeps newer pending tasks alive when one worker task times out',async()=>{
  vi.useFakeTimers();
  class TestWorker {
@@ -198,10 +216,107 @@ it('keeps newer pending tasks alive when one worker task times out',async()=>{
  await vi.advanceTimersByTimeAsync(30000);await failure;
  const worker=TestWorker.last;
  expect(worker.terminate).not.toHaveBeenCalled();
+ expect(worker.tasks).toContainEqual({ type: 'cancel', id: worker.tasks[0].id });
  const result={type:'compare',result:{validSymbols:[],invalidSymbols:[]}};
  worker.onmessage!({data:{id:worker.tasks[1].id,result}});
  await expect(second).resolves.toEqual(result);
  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('isolates cancellation between tasks sharing a concurrent snapshot load', async () => {
+ let resolveLoader!: (data: Snapshot) => void;
+ let loaderSignal: AbortSignal | undefined;
+ const loader = vi.fn((_source, signal?: AbortSignal) => {
+  loaderSignal = signal;
+  return new Promise<Snapshot>((resolve, reject) => {
+   resolveLoader = resolve;
+   signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+  });
+ });
+
+ const run = createSnapshotEngine(loader);
+ const ac1 = new AbortController();
+ const ac2 = new AbortController();
+
+ const task1 = run({ type: 'screen', source, request }, ac1.signal);
+ const task2 = run({ type: 'screen', source, request: { ...request, page: 2 } }, ac2.signal);
+
+ expect(loader).toHaveBeenCalledTimes(1);
+
+ // Cancel task1
+ ac1.abort();
+ await expect(task1).rejects.toThrow('Aborted');
+
+ // The shared fetch must NOT be aborted because task2 is still awaiting it
+ expect(loaderSignal?.aborted).toBe(false);
+
+ // Resolve the underlying fetch
+ resolveLoader(snapshot);
+
+ // Verify task2 succeeds
+ const res2 = await task2;
+ expect(res2.type).toBe('screen');
+});
+
+it('aborts the underlying shared fetch only when all subscribers cancel', async () => {
+ let loaderSignal: AbortSignal | undefined;
+ const loader = vi.fn((_source, signal?: AbortSignal) => {
+  loaderSignal = signal;
+  return new Promise<Snapshot>((_resolve, reject) => {
+   signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+  });
+ });
+
+ const run = createSnapshotEngine(loader);
+ const ac1 = new AbortController();
+ const ac2 = new AbortController();
+
+ const task1 = run({ type: 'screen', source, request }, ac1.signal);
+ const task2 = run({ type: 'screen', source, request: { ...request, page: 2 } }, ac2.signal);
+
+ expect(loader).toHaveBeenCalledTimes(1);
+
+ // Cancel task1
+ ac1.abort();
+ await expect(task1).rejects.toThrow('Aborted');
+ expect(loaderSignal?.aborted).toBe(false);
+
+ // Cancel task2
+ ac2.abort();
+ await expect(task2).rejects.toThrow('Aborted');
+
+ // Now that all subscribers cancelled, loaderSignal MUST be aborted
+ expect(loaderSignal?.aborted).toBe(true);
+});
+
+it('sends cancel message and cleans up abort listeners when a worker task times out', async () => {
+ vi.useFakeTimers();
+ class TestWorker {
+  static last: TestWorker;
+  onmessage?: (event: any) => void;
+  tasks: any[] = [];
+  terminate = vi.fn();
+  constructor() { TestWorker.last = this; }
+  postMessage(message: any) { this.tasks.push(message); }
+ }
+ vi.stubGlobal('Worker', TestWorker);
+ const { runSnapshotTask } = await import('../api/snapshotClient');
+
+ const ac = new AbortController();
+ const taskPromise = runSnapshotTask({ type: 'screen', source, request }, ac.signal);
+ const failure = expect(taskPromise).rejects.toThrow('timed out');
+
+ await vi.advanceTimersByTimeAsync(60000);
+ await failure;
+
+ const worker = TestWorker.last;
+ expect(worker.tasks).toContainEqual({ type: 'cancel', id: 1 });
+
+ // Verify aborting ac.signal after timeout does not cause duplicate cancel messages
+ const cancelMessagesBefore = worker.tasks.filter(t => t.type === 'cancel').length;
+ ac.abort();
+ const cancelMessagesAfter = worker.tasks.filter(t => t.type === 'cancel').length;
+ expect(cancelMessagesAfter).toBe(cancelMessagesBefore);
 });
 
 it.each(['compressed', 'decompressed'])('screens packed gzip with %s HTTP delivery identically', async delivery => {

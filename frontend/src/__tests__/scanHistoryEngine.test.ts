@@ -3,6 +3,7 @@ import {
   getScanHistoryCacheKey,
   computeScanHistorySummary,
   checkScanCompatibility,
+  scanHistoryCache,
   type ScanHistoryPoint,
 } from '../api/scanHistoryEngine';
 import type { ExpressionNode } from '../types/screener';
@@ -66,5 +67,39 @@ describe('scanHistoryEngine', () => {
     expect(summary.lowestDate).toBe('2022-12-30');
     // Non-zero success sessions: 2 out of 3 = 67%
     expect(summary.frequencyPct).toBe(67);
+  });
+
+  it('maintains true LRU cache eviction semantics on read and write', () => {
+    const cache = scanHistoryCache;
+    cache.clear();
+
+    const p1: ScanHistoryPoint = { date: '2022-01-01', count: 1, status: 'success' };
+    const p2: ScanHistoryPoint = { date: '2022-01-02', count: 2, status: 'success' };
+
+    cache.set('key1', p1);
+    cache.set('key2', p2);
+
+    // Accessing key1 should refresh its recency
+    expect(cache.get('key1')).toBe(p1);
+
+    // Fill cache up to capacity to verify LRU order
+    for (let i = 3; i <= 201; i++) {
+      cache.set(`key${i}`, { date: `2022-01-${i}`, count: i, status: 'success' });
+    }
+
+    // key2 (never read) should be evicted first, while key1 (read recently) should still be in cache
+    expect(cache.has('key2')).toBe(false);
+    expect(cache.has('key1')).toBe(true);
+  });
+
+  it('ensures snapshot sources are structured-cloneable without DataCloneError', () => {
+    const source = {
+      revision: 'a'.repeat(64),
+      url: 'https://example.com/snapshot.json.gz',
+      sessionDate: '2024-01-01',
+    };
+
+    // structuredClone simulates worker.postMessage() serialization
+    expect(() => structuredClone({ id: 1, task: { type: 'screen', source } })).not.toThrow();
   });
 });

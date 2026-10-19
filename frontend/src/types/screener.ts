@@ -217,6 +217,7 @@ export interface ScreenerRunResponse {
   immutableRevision: string;
   rows: StockRow[];
   matchedSymbols?: string[];
+  sectorCounts?: Record<string, number>;
   matchCount: number;
   totalUniverseCount: number;
   page: number;

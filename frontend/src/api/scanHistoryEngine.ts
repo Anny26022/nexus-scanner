@@ -17,6 +17,7 @@ export interface ScanHistoryPoint {
   error?: string;
   // symbols are loaded on demand during drilldown inspection to minimize memory
   symbols?: string[];
+  sectorCounts?: Record<string, number>;
 }
 
 export interface ScanHistorySummary {
@@ -164,6 +165,7 @@ export async function runScanHistorySession(
     date: session.date,
     count: snapshot.result.matchCount,
     status: 'success',
+    sectorCounts: snapshot.result.sectorCounts,
   };
 
   // Cache symbols separately if provided (e.g. if loaded on-demand)

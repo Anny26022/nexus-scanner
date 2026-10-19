@@ -41,10 +41,26 @@
   --color-rose-50: var(--negative-soft);
   --color-rose-200: var(--negative-line);
   --color-rose-600: var(--negative);
-  --color-rose-700: var(--negative);
-  --color-rose-900: var(--negative);
   --color-amber-700: var(--warning);
   --color-red-600: var(--negative);
+
+  /* Semantic UI Tokens for Tailwind utilities */
+  --color-page: var(--page);
+  --color-sidebar: var(--sidebar);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-hover: var(--surface-hover);
+  --color-text: var(--text);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
 }
 :root {
   color-scheme: light;

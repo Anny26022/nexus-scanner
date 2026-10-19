@@ -11,6 +11,7 @@ it('announces selected bands and consumes Escape without closing the filter dial
   fireEvent.click(trigger);
   const menu = screen.getByRole('group', {name:'Band limit to exclude'});
   expect(menu).toHaveClass('fixed');
+  expect(screen.getByRole('dialog')).toContainElement(menu);
   const option = screen.getByRole('checkbox', {name: '20% Circuit Limit'});
   fireEvent.click(option);
   expect(trigger).toHaveAccessibleName('Band limit to exclude: 3 selected');

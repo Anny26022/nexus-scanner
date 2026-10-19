@@ -108,7 +108,7 @@ const MultiSelectDropdown = ({ options, value, onChange, label, single = false, 
       {isOpen && (
         createPortal(<>
           <div className="fixed inset-0 z-[120]" onClick={() => setIsOpen(false)} />
-          <div className="filter-choice-menu fixed z-[121] overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 text-[12px] shadow-lg"
+          <div data-escape-layer className="filter-choice-menu fixed z-[121] overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 text-[12px] shadow-lg"
             role="group" aria-label={label} style={{top:menuPosition?.top,left:menuPosition?.left,maxHeight:menuPosition?.maxHeight,width:200}}>
              {searchable && <div className="filter-choice-search"><input autoFocus aria-label={`Search ${label}`} placeholder="Search…" value={search} onChange={event => setSearch(event.target.value)} /></div>}
              {options.filter(option => option.label.toLowerCase().includes(search.trim().toLowerCase())).map(o => {
@@ -125,7 +125,7 @@ const MultiSelectDropdown = ({ options, value, onChange, label, single = false, 
              })}
              {search && !options.some(option => option.label.toLowerCase().includes(search.trim().toLowerCase())) && <p className="px-2 py-1">No matches</p>}
           </div>
-        </>, trigger.current?.closest('dialog') ?? document.body)
+        </>, trigger.current?.closest('[role="dialog"]') ?? document.body)
       )}
     </div>
   );

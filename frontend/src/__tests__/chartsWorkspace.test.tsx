@@ -231,7 +231,7 @@ it.each(['Cancel', 'Escape', 'Close', 'Backdrop'] as const)(
     if(dismissal==='Cancel') fireEvent.click(within(dialog).getByRole('button',{name:'Cancel'}));
     else if(dismissal==='Escape') fireEvent.keyDown(dialog,{key:'Escape'});
     else if(dismissal==='Close') fireEvent.click(within(dialog).getByRole('button',{name:'Close chart settings'}));
-    else fireEvent.pointerDown(dialog.parentElement!);
+    else fireEvent.pointerDown(document.querySelector('.chart-modal-backdrop')!);
 
     expect(screen.queryByRole('dialog',{name:'Chart settings'})).not.toBeInTheDocument();
     expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({volumePane:true}));

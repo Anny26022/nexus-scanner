@@ -210,8 +210,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
           {availableSessions.length > 0 && (
             <button
               type="button"
-              onClick={() => setIsScanHistoryOpen(!isScanHistoryOpen)}
-              className={`button ${isScanHistoryOpen ? 'button-primary' : 'button-secondary'}`}
+              onClick={() => setIsScanHistoryOpen(true)}
+              className="button button-secondary"
               title="Chartink-style Historical Scan Frequency Analysis"
             >
               <BarChart3 size={14} />
@@ -233,8 +233,13 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       <UnavailableConditions conditions={activeConditionsMap} onRemove={handleRemove} />
       {!hasUnavailable && !activeQuery && explanationResult.compiledExplanations.length > 0 && <p className="criteria-summary">{explanationResult.compiledExplanations.map(e => e.humanReadableText).join(matchMode === 'all' ? '; ' : ' OR ')}</p>}
     </section>
+    {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
+      loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
+      symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
+      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
     {isScanHistoryOpen && availableSessions.length > 0 && (
       <ScanHistoryPanel
+        isOpen={isScanHistoryOpen}
         expressionTree={expressionTree}
         universe={universe}
         customSymbols={runRequest.customSymbols}
@@ -242,14 +247,11 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
         currentSessionDate={asOfDate}
         onSelectSession={(date) => {
           onSelectSession?.(date);
+          setIsScanHistoryOpen(false);
         }}
         onClose={() => setIsScanHistoryOpen(false)}
       />
     )}
-    {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
-      loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
-      symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
-      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
     <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => {setIsModalOpen(false); setAiDraft(null);}} activeConditionsMap={aiDraft?.conditions ?? activeConditionsMap} matchMode={aiDraft?.matchMode ?? matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />
     {isAiModalOpen && <AiScreenerModal
       datasetRevision={datasetRevision}

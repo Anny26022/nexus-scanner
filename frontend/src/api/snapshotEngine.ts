@@ -3,7 +3,7 @@ import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
 import {tradingViewMetrics} from '../data/tradingViewMetrics';
 
-export interface SnapshotSource { revision: string; url: string; sessionDate?: string; signal?: AbortSignal }
+export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
 import type {FilterChoices} from '../types/filterChoices';
 export type {FilterChoices} from '../types/filterChoices';
 export type SnapshotTask =
@@ -17,8 +17,8 @@ export type SnapshotResult =
   | { type:'screen'; result:ScreenerRunResponse | null; revision:string; sessionDate:string }
   | { type:'compare'; result:SymbolComparisonResponse };
 
-async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
-  const response = await fetch(source.url, {cache:'force-cache', signal:source.signal});
+async function readSnapshot(source: SnapshotSource, signal?: AbortSignal): Promise<Snapshot> {
+  const response = await fetch(source.url, {cache:'force-cache', signal});
   if (!response.ok) throw new Error(`Snapshot request failed (HTTP ${response.status})`);
   let data: Snapshot;
   if (source.url.split('?')[0].endsWith('.gz')) {
@@ -41,12 +41,12 @@ async function readSnapshot(source: SnapshotSource): Promise<Snapshot> {
 
 export function createSnapshotEngine(loader = readSnapshot) {
   const snapshots = new Map<string, Promise<Snapshot>>();
-  async function load(source: SnapshotSource) {
+  async function load(source: SnapshotSource, signal?: AbortSignal) {
     if (!/^[a-f0-9]{64}$/.test(source.revision)) throw new Error('Invalid dataset revision');
     const key = source.sessionDate ? `${source.revision}:${source.sessionDate}` : source.revision;
     let promise = snapshots.get(key);
     if (!promise) {
-      promise = loader(source).catch(error => {
+      promise = loader(source, signal).catch(error => {
         if (snapshots.get(key) === promise) snapshots.delete(key);
         throw error;
       });
@@ -56,8 +56,8 @@ export function createSnapshotEngine(loader = readSnapshot) {
     return promise;
   }
 
-  return async (task: SnapshotTask): Promise<SnapshotResult> => {
-    const data = await load(task.source);
+  return async (task: SnapshotTask, signal?: AbortSignal): Promise<SnapshotResult> => {
+    const data = await load(task.source, signal);
     if (task.type === 'warm') return {type:'warm'};
     if (task.type === 'filterChoices') {
       const fields = {SECTOR:'sector', INDUSTRY:'industry', SERIES:'series', PRICE_BAND:'circuitLimit', INDEX_MEMBERSHIP:'indexMemberships'} as const;

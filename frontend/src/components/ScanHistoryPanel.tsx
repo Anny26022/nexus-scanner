@@ -1,28 +1,15 @@
-import React, { useState, useMemo, useRef } from 'react';
-import {
-  BarChart3,
-  Play,
-  Square,
-  RotateCcw,
-  Search,
-  Copy,
-  Check,
-  ChevronRight,
-  AlertTriangle,
-  Info,
-  X,
-} from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { AlertTriangle, Check, ChevronRight, Copy, Play, Search, Square, X } from 'lucide-react';
 import { useMountEffect } from '../hooks/useMountEffect';
 import type { ExpressionNode, UniverseType } from '../types/screener';
 import {
-  executeScanHistory,
-  computeScanHistorySummary,
   checkScanCompatibility,
+  computeScanHistorySummary,
+  executeScanHistory,
   loadSessionSymbols,
-  type ScanSession,
   type ScanHistoryPoint,
-  type ScanHistorySummary,
   type ScanHistoryProgress,
+  type ScanSession,
 } from '../api/scanHistoryEngine';
 
 interface ScanHistoryPanelProps {
@@ -36,761 +23,314 @@ interface ScanHistoryPanelProps {
 }
 
 type RangeOption = 30 | 60 | 120 | 'all';
-type ViewMode = 'bars' | 'stocks';
+type ScanStatus = 'idle' | 'running' | 'completed' | 'stopped';
+const INITIAL_SYMBOLS = 80;
 
-// Comprehensive sector color palette matching Indian equity classification (Chartink style)
-const SECTOR_COLORS: Record<string, string> = {
-  'Financial Services': '#3b82f6',
-  'Financials': '#3b82f6',
-  'Bank': '#0284c7',
-  'Information Technology': '#f59e0b',
-  'IT': '#f59e0b',
-  'i.t': '#f59e0b',
-  'Healthcare': '#8b5cf6',
-  'Pharma': '#8b5cf6',
-  'Consumer Discretionary': '#06b6d4',
-  'Consumer Goods': '#06b6d4',
-  'Fast Moving Consumer Goods': '#84cc16',
-  'FMCG': '#84cc16',
-  'Automobile and Auto Components': '#f43f5e',
-  'Automobile': '#f43f5e',
-  'Auto': '#f43f5e',
-  'Metals & Mining': '#10b981',
-  'Metals': '#10b981',
-  'Energy': '#0ea5e9',
-  'Oil & Gas': '#0ea5e9',
-  'Power': '#14b8a6',
-  'Power & Utilities': '#14b8a6',
-  'Utilities': '#14b8a6',
-  'Chemicals': '#a3e635',
-  'Capital Goods': '#d946ef',
-  'Industrials': '#d946ef',
-  'Construction': '#22c55e',
-  'Construction Materials': '#2dd4bf',
-  'Building Materials': '#2dd4bf',
-  'Telecommunication': '#fb923c',
-  'Telecom': '#fb923c',
-  'Services': '#6366f1',
-  'Media': '#10b981',
-  'Realty': '#a855f7',
-  'Real Estate': '#a855f7',
-  'Textiles': '#059669',
-  'Transportation': '#e11d48',
-  'Others': '#94a3b8',
-  'Unclassified': '#94a3b8',
-};
-
-function getSectorColor(sector: string): string {
-  if (SECTOR_COLORS[sector]) return SECTOR_COLORS[sector];
-  const colors = [
-    '#3b82f6', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6',
-    '#06b6d4', '#84cc16', '#f43f5e', '#d946ef', '#14b8a6',
-    '#eab308', '#0ea5e9', '#a855f7', '#fb923c', '#2dd4bf',
-  ];
-  let hash = 0;
-  for (let i = 0; i < sector.length; i++) {
-    hash = (hash << 5) - hash + sector.charCodeAt(i);
-  }
-  return colors[Math.abs(hash) % colors.length];
-}
-
-function formatDisplayDate(dateStr: string): string {
-  if (!dateStr) return '';
-  try {
-    const d = new Date(`${dateStr}T00:00:00`);
-    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
-  } catch {
-    return dateStr;
-  }
+function formatDate(date: string): string {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-IN', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
 }
 
 export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
-  expressionTree,
-  universe,
-  customSymbols,
-  availableSessions,
-  currentSessionDate,
-  onSelectSession,
-  onClose,
+  expressionTree, universe, customSymbols, availableSessions, currentSessionDate, onSelectSession, onClose,
 }) => {
   const [range, setRange] = useState<RangeOption>(60);
-  const [viewMode, setViewMode] = useState<ViewMode>('bars');
-  const [status, setStatus] = useState<'idle' | 'running' | 'completed' | 'stopped'>('idle');
+  const [status, setStatus] = useState<ScanStatus>('idle');
   const [points, setPoints] = useState<ScanHistoryPoint[]>([]);
-  const [lastRunFingerprint, setLastRunFingerprint] = useState<string | null>(null);
   const [progress, setProgress] = useState<ScanHistoryProgress | null>(null);
-  const [hoveredPoint, setHoveredPoint] = useState<ScanHistoryPoint | null>(null);
-  const [selectedPointState, setSelectedPointState] = useState<ScanHistoryPoint | null>(null);
+  const [lastRunFingerprint, setLastRunFingerprint] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [sessionSymbols, setSessionSymbols] = useState<Record<string, string[]>>({});
   const [loadingSymbols, setLoadingSymbols] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState('');
+  const [visibleSymbolCount, setVisibleSymbolCount] = useState(INITIAL_SYMBOLS);
   const [copied, setCopied] = useState(false);
-
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const symbolsControllerRef = useRef<AbortController | null>(null);
+  const scanController = useRef<AbortController | null>(null);
+  const symbolsController = useRef<AbortController | null>(null);
 
   const cancelRequests = () => {
-    abortControllerRef.current?.abort();
-    symbolsControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    symbolsControllerRef.current = null;
+    scanController.current?.abort();
+    symbolsController.current?.abort();
+    scanController.current = null;
+    symbolsController.current = null;
   };
-
   useMountEffect(() => cancelRequests);
 
-  const handleClose = () => {
-    cancelRequests();
-    onClose?.();
-  };
-
-  // Criteria fingerprint to detect if filters/universe have changed since last run
-  const currentFingerprint = useMemo(() => {
-    const custom = customSymbols ? customSymbols.slice().sort().join(',') : '';
-    return `${universe}:${custom}:${JSON.stringify(expressionTree)}`;
-  }, [universe, customSymbols, expressionTree]);
-
-  const isStale = lastRunFingerprint !== null && lastRunFingerprint !== currentFingerprint;
-
-  // Pre-flight compatibility check
-  const compatibility = useMemo(() => {
-    return checkScanCompatibility(expressionTree);
-  }, [expressionTree]);
-
-  // Target sessions: anchored around currentSessionDate in contiguous chronological order
   const targetSessions = useMemo(() => {
-    if (!availableSessions.length) return [];
-    const sortedDesc = [...availableSessions].sort((a, b) => b.date.localeCompare(a.date));
-    const anchorIdx = sortedDesc.findIndex(s => s.date === currentSessionDate);
-    const startIdx = anchorIdx >= 0 ? anchorIdx : 0;
-    const window = sortedDesc.slice(startIdx);
-    const sliced = range === 'all' ? window : window.slice(0, range);
-    return sliced.sort((a, b) => a.date.localeCompare(b.date));
+    const sessions = [...availableSessions].sort((a, b) => b.date.localeCompare(a.date));
+    const anchor = sessions.findIndex(session => session.date === currentSessionDate);
+    const window = sessions.slice(anchor < 0 ? 0 : anchor);
+    return (range === 'all' ? window : window.slice(0, range)).reverse();
   }, [availableSessions, currentSessionDate, range]);
+  const fingerprint = useMemo(() => `${universe}:${(customSymbols ?? []).slice().sort().join(',')}:${JSON.stringify(expressionTree)}`,
+    [universe, customSymbols, expressionTree]);
+  const compatibility = useMemo(() => checkScanCompatibility(expressionTree), [expressionTree]);
+  const summary = useMemo(() => computeScanHistorySummary(points, targetSessions.length), [points, targetSessions.length]);
+  const selectedPoint = points.find(point => point.date === selectedDate) ?? points.at(-1) ?? null;
+  const displayPoint = points.find(point => point.date === hoveredDate) ?? selectedPoint;
+  const currentSymbols = selectedPoint ? (sessionSymbols[selectedPoint.date] ?? []) : [];
+  const filteredSymbols = symbolFilter.trim()
+    ? currentSymbols.filter(symbol => symbol.toUpperCase().includes(symbolFilter.trim().toUpperCase()))
+    : currentSymbols;
+  const visibleSymbols = filteredSymbols.slice(0, visibleSymbolCount);
+  const sectorCounts = selectedPoint?.sectorCounts
+    ? Object.entries(selectedPoint.sectorCounts).sort((a, b) => b[1] - a[1])
+    : [];
 
-  const summary: ScanHistorySummary = useMemo(() => {
-    return computeScanHistorySummary(points, targetSessions.length);
-  }, [points, targetSessions.length]);
-
-  // Derived selected point (defaults to latest evaluated point if none explicitly selected)
-  const selectedPoint = useMemo(() => {
-    if (selectedPointState) return selectedPointState;
-    return points.length > 0 ? points[points.length - 1] : null;
-  }, [selectedPointState, points]);
-
-  const handleSelectPoint = async (point: ScanHistoryPoint) => {
-    setSelectedPointState(point);
+  const selectPoint = async (point: ScanHistoryPoint) => {
+    symbolsController.current?.abort();
+    symbolsController.current = null;
+    setLoadingSymbols(false);
+    setSelectedDate(point.date);
     setSymbolFilter('');
+    setVisibleSymbolCount(INITIAL_SYMBOLS);
     if (sessionSymbols[point.date] || point.status !== 'success' || point.count === 0) return;
-
-    const session = targetSessions.find(s => s.date === point.date);
+    const session = targetSessions.find(item => item.date === point.date);
     if (!session) return;
-
-    symbolsControllerRef.current?.abort();
-    const sc = new AbortController();
-    symbolsControllerRef.current = sc;
-
+    const controller = new AbortController();
+    symbolsController.current = controller;
     setLoadingSymbols(true);
     try {
-      const syms = await loadSessionSymbols(session, expressionTree, universe, customSymbols);
-      if (!sc.signal.aborted) {
-        setSessionSymbols(prev => ({ ...prev, [point.date]: syms }));
-      }
-    } catch (e) {
-      if (!sc.signal.aborted) {
-        console.warn('Failed to load symbols on demand for session:', e);
-      }
+      const symbols = await loadSessionSymbols(session, expressionTree, universe, customSymbols, controller.signal);
+      if (!controller.signal.aborted) setSessionSymbols(previous => ({ ...previous, [point.date]: symbols }));
+    } catch (error) {
+      if (!controller.signal.aborted) console.warn('Could not load historical symbols', error);
     } finally {
-      if (!sc.signal.aborted) {
+      if (symbolsController.current === controller) {
+        symbolsController.current = null;
         setLoadingSymbols(false);
       }
     }
   };
 
-  const handleStartScan = async () => {
+  const startScan = async () => {
     if (!compatibility.compatible) return;
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    const ac = new AbortController();
-    abortControllerRef.current = ac;
-
+    cancelRequests();
+    setLoadingSymbols(false);
+    setPoints([]);
+    setSelectedDate(null);
+    setHoveredDate(null);
     setStatus('running');
     setProgress({ current: 0, total: targetSessions.length, pct: 0 });
-    setLastRunFingerprint(currentFingerprint);
-
-    const localPointsMap = new Map<string, ScanHistoryPoint>();
-
+    setLastRunFingerprint(fingerprint);
+    const controller = new AbortController();
+    scanController.current = controller;
+    const streamed = new Map<string, ScanHistoryPoint>();
     try {
-      const result = await executeScanHistory(
-        targetSessions,
-        expressionTree,
-        universe,
-        customSymbols,
-        {
-          concurrency: 2,
-          signal: ac.signal,
-          onProgress: (prog, point) => {
-            localPointsMap.set(point.date, point);
-            setProgress(prog);
-            setPoints(targetSessions.map(s => localPointsMap.get(s.date)).filter((p): p is ScanHistoryPoint => p !== undefined));
-          },
-        }
-      );
-
-      if (!ac.signal.aborted) {
-        setPoints(result.points);
-        setStatus('completed');
-        if (result.points.length > 0) {
-          const lastPoint = result.points[result.points.length - 1];
-          void handleSelectPoint(lastPoint);
-        }
-      }
-    } catch (err) {
-      if (!ac.signal.aborted) {
-        console.error('Scan history run error:', err);
+      const result = await executeScanHistory(targetSessions, expressionTree, universe, customSymbols, {
+        concurrency: 2,
+        signal: controller.signal,
+        onProgress: (nextProgress, point) => {
+          if (controller.signal.aborted) return;
+          streamed.set(point.date, point);
+          setProgress(nextProgress);
+          setPoints(targetSessions.flatMap(session => streamed.get(session.date) ?? []));
+        },
+      });
+      if (controller.signal.aborted) return;
+      setPoints(result.points);
+      setStatus('completed');
+      const latest = result.points.at(-1);
+      if (latest) void selectPoint(latest);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        console.error('Scan history failed', error);
         setStatus('stopped');
       }
+    } finally {
+      if (scanController.current === controller) scanController.current = null;
     }
   };
 
-  const handleStop = () => {
-    cancelRequests();
-    setStatus('stopped');
+  const changeRange = (next: RangeOption) => {
+    setRange(next);
+    setStatus('idle');
+    setPoints([]);
+    setProgress(null);
+    setSelectedDate(null);
+    setHoveredDate(null);
+    setLastRunFingerprint(null);
   };
-
-  const handleCopySymbols = (symbols: string[]) => {
-    navigator.clipboard.writeText(symbols.join(', '));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Aggregate active sectors across evaluated sessions
-  const activeSectors = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const p of points) {
-      if (p.sectorCounts) {
-        for (const [sec, count] of Object.entries(p.sectorCounts)) {
-          counts[sec] = (counts[sec] || 0) + count;
-        }
-      }
+  const close = () => { cancelRequests(); onClose?.(); };
+  const stop = () => { cancelRequests(); setStatus('stopped'); };
+  const copySymbols = async () => {
+    try {
+      await navigator.clipboard.writeText(currentSymbols.join(', '));
+      setCopied(true);
+    } catch {
+      setCopied(false);
     }
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([sec]) => sec);
-  }, [points]);
-
-  const chartHeight = 160;
-  const maxCount = useMemo(() => {
-    if (!points.length) return 10;
-    const max = Math.max(...points.map(p => p.count));
-    return max > 0 ? max : 10;
-  }, [points]);
-
-  const currentSymbols = selectedPoint ? (sessionSymbols[selectedPoint.date] || []) : [];
-
-  const filteredDrilldownSymbols = useMemo(() => {
-    if (!selectedPoint) return [];
-    if (!symbolFilter.trim()) return currentSymbols;
-    const q = symbolFilter.trim().toUpperCase();
-    return currentSymbols.filter(s => s.toUpperCase().includes(q));
-  }, [selectedPoint, symbolFilter, currentSymbols]);
+  };
+  const chartWidth = Math.max(640, points.length * 11);
+  const chartHeight = 144;
+  const maxCount = Math.max(1, ...points.map(point => point.count));
+  const isStale = lastRunFingerprint !== null && lastRunFingerprint !== fingerprint;
 
   return (
-    <section
-      aria-label="Backtest History"
-      className="mt-6 rounded-2xl border border-line bg-surface p-4 sm:p-5 shadow-xs text-text transition-all"
-    >
-      {/* Section Top Header (Chartink-Style) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-text">
-              BACKTEST HISTORY
-            </h2>
-            <span className="rounded-full bg-subtle px-2.5 py-0.5 text-xs font-medium text-muted">
-              {range === 'all' ? `All (${targetSessions.length} sessions)` : `${range} sessions`}
-            </span>
-          </div>
-          {status === 'completed' && points.length > 0 && (
-            <div className="hidden sm:flex items-center gap-3 pl-3 border-l border-line text-xs text-muted">
-              <span>Avg: <strong className="text-text tabular-nums">{summary.averageMatches}</strong> stocks/day</span>
-              <span>Peak: <strong className="text-positive tabular-nums">{summary.peakCount}</strong></span>
-              <span>Hit Rate: <strong className="text-accent tabular-nums">{summary.frequencyPct}%</strong></span>
-            </div>
-          )}
+    <section aria-label="Backtest history" className="scan-history">
+      <header className="scan-history-header">
+        <div className="scan-history-title">
+          <h2>Scan history</h2>
+          <span>{targetSessions.length} sessions</span>
         </div>
-
-        {/* Top Controls: View Switch, Range, Action */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Chartink [Bars / Stocks] Switch */}
-          <div className="flex rounded-lg border border-line bg-subtle p-0.5 text-xs font-medium">
-            <button
-              type="button"
-              onClick={() => setViewMode('bars')}
-              className={`rounded-md px-3 py-1 transition-all ${
-                viewMode === 'bars'
-                  ? 'bg-surface font-semibold text-text shadow-xs'
-                  : 'text-muted hover:text-text'
-              }`}
-            >
-              Bars
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('stocks')}
-              className={`rounded-md px-3 py-1 transition-all ${
-                viewMode === 'stocks'
-                  ? 'bg-surface font-semibold text-text shadow-xs'
-                  : 'text-muted hover:text-text'
-              }`}
-            >
-              Stocks
-            </button>
-          </div>
-
-          {/* Time Range Selector */}
-          <div className="flex rounded-lg border border-line bg-subtle p-0.5 text-xs font-medium">
+        <div className="scan-history-controls">
+          <div className="scan-history-segment" aria-label="History range">
             {([30, 60, 120, 'all'] as const).map(option => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => {
-                  setRange(option);
-                  setStatus('idle');
-                }}
-                disabled={status === 'running'}
-                className={`rounded-md px-2.5 py-1 transition-all ${
-                  range === option
-                    ? 'bg-surface font-semibold text-text shadow-xs'
-                    : 'text-muted hover:text-text'
-                }`}
-              >
+              <button key={option} type="button" disabled={status === 'running'}
+                aria-pressed={range === option} onClick={() => changeRange(option)}>
                 {option === 'all' ? 'All' : `${option}d`}
               </button>
             ))}
           </div>
-
-          {/* Run / Stop Button */}
           {status === 'running' ? (
-            <button
-              type="button"
-              onClick={handleStop}
-              className="button button-secondary text-negative hover:bg-negative/10 hover:border-negative-line text-xs h-7 px-3"
-            >
-              <Square size={12} />
-              <span>Stop</span>
+            <button type="button" className="button button-secondary" onClick={stop}>
+              <Square size={14} /> Stop
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleStartScan}
-              disabled={!compatibility.compatible}
-              className="button button-primary text-xs h-7 px-3"
-            >
-              {points.length > 0 ? <RotateCcw size={12} /> : <Play size={12} />}
-              <span>{points.length > 0 ? 'Re-run Scan' : 'Run Scan'}</span>
+          ) : status !== 'idle' ? (
+            <button type="button" className="button button-primary" disabled={!compatibility.compatible} onClick={() => void startScan()}>
+              <Play size={14} /> {points.length ? 'Run again' : 'Run scan'}
             </button>
-          )}
-
+          ) : null}
           {onClose && (
-            <button
-              type="button"
-              onClick={handleClose}
-              aria-label="Close dialog"
-              className="rounded-lg p-1 text-muted hover:bg-subtle hover:text-text transition-colors"
-              title="Close Backtest"
-            >
-              <X size={16} />
+            <button type="button" className="scan-history-icon-button" aria-label="Close scan history" onClick={close}>
+              <X size={17} />
             </button>
           )}
         </div>
-      </div>
+      </header>
 
-      {/* Info / Notice Strip (Chartink style) */}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
-        <div className="flex items-center gap-1.5">
-          <Info size={13} className="text-muted shrink-0" />
-          <span>Click on bars to view stock details filtered at the given time</span>
-        </div>
-        {selectedPoint && (
-          <span className="font-medium text-text">
-            Selected: <strong className="text-accent">{selectedPoint.date}</strong> ({selectedPoint.count} stocks)
-          </span>
-        )}
-      </div>
-
-      {/* Compatibility Warning if filter is unsupported */}
       {!compatibility.compatible && (
-        <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-          <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-          <div>
-            <span className="font-semibold">Filter combination unsupported for historical scanning:</span>{' '}
-            {compatibility.reason}
-          </div>
-        </div>
+        <p className="scan-history-notice" role="alert"><AlertTriangle size={16} />{compatibility.reason}</p>
       )}
-
-      {/* Stale Warning Banner */}
       {isStale && status !== 'running' && (
-        <div className="mt-3 flex items-center justify-between rounded-xl border border-line bg-subtle/50 px-3 py-2 text-xs text-muted">
-          <div className="flex items-center gap-2">
-            <Info size={14} className="text-accent" />
-            <span>Criteria have changed since this backtest was generated.</span>
-          </div>
-          <button
-            type="button"
-            onClick={handleStartScan}
-            className="font-medium text-accent hover:underline"
-          >
-            Re-run to update
-          </button>
-        </div>
+        <p className="scan-history-notice">Filters have changed. Run the scan again to refresh these results.</p>
       )}
-
-      {/* In-flight Progress Bar */}
       {status === 'running' && progress && (
-        <div className="mt-3 rounded-xl border border-line bg-subtle/30 p-3">
-          <div className="flex justify-between text-xs text-muted mb-1.5 font-medium">
-            <span>Evaluating session {progress.current} of {progress.total}...</span>
-            <span className="font-mono text-accent font-semibold">{progress.pct}%</span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-subtle">
-            <div
-              className="h-full bg-accent transition-all duration-150 rounded-full"
-              style={{ width: `${progress.pct}%` }}
-            />
-          </div>
+        <div className="scan-history-progress" role="status" aria-live="polite">
+          <span>Scanning {progress.current} of {progress.total} sessions</span>
+          <span>{progress.pct}%</span>
+          <div className="scan-history-progress-track"><div style={{ width: `${progress.pct}%` }} /></div>
         </div>
       )}
 
-      {/* Chartink Stacked Sector Legend (Visible in Bars View) */}
-      {viewMode === 'bars' && activeSectors.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-1.5 max-h-24 overflow-y-auto pr-1">
-          {activeSectors.map(sector => (
-            <span
-              key={sector}
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-subtle/80 border border-line/60 text-secondary"
-            >
-              <span
-                className="w-2.5 h-2.5 rounded-xs shrink-0"
-                style={{ backgroundColor: getSectorColor(sector) }}
-              />
-              <span className="truncate max-w-[140px]">{sector}</span>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Main Backtest Visualizations */}
       {points.length > 0 ? (
-        <div className="mt-4">
-          {viewMode === 'bars' ? (
-            /* BARS VIEW: Chartink-Style Stacked Histogram */
-            <div className="relative rounded-xl border border-line bg-surface p-4 shadow-xs">
-              {/* Floating Tooltip */}
-              {hoveredPoint && (
-                <div className="absolute top-3 right-4 z-10 rounded-lg border border-line bg-surface/95 px-3 py-2 text-xs shadow-md backdrop-blur-xs max-w-xs">
-                  <div className="font-semibold text-text flex items-center justify-between gap-2">
-                    <span>{formatDisplayDate(hoveredPoint.date)}</span>
-                    <span className="text-accent font-bold tabular-nums">{hoveredPoint.count} stocks</span>
-                  </div>
-                  {hoveredPoint.sectorCounts && Object.keys(hoveredPoint.sectorCounts).length > 0 && (
-                    <div className="mt-1.5 space-y-0.5 border-t border-line/60 pt-1 text-[11px] text-muted max-h-28 overflow-y-auto pr-1">
-                      {Object.entries(hoveredPoint.sectorCounts)
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 5)
-                        .map(([sec, count]) => (
-                          <div key={sec} className="flex items-center justify-between gap-2">
-                            <span className="flex items-center gap-1.5 truncate">
-                              <span
-                                className="w-2 h-2 rounded-full shrink-0"
-                                style={{ backgroundColor: getSectorColor(sec) }}
-                              />
-                              <span className="truncate">{sec}</span>
-                            </span>
-                            <span className="tabular-nums font-mono text-text">{count}</span>
-                          </div>
-                        ))}
-                    </div>
-                  )}
+        <>
+          <div className="scan-history-summary">
+            <div><span>Average matches</span><strong>{summary.averageMatches.toLocaleString('en-IN')}</strong></div>
+            <div><span>Peak</span><strong>{summary.peakCount.toLocaleString('en-IN')}</strong></div>
+            <div><span>Sessions with matches</span><strong>{summary.frequencyPct}%</strong></div>
+          </div>
+
+          <div className="scan-history-chart-heading">
+            <div>
+              <h3>Matches over time</h3>
+              <p>Select a bar to inspect that session.</p>
+            </div>
+            {displayPoint && <p><strong>{formatDate(displayPoint.date)}</strong><span>{displayPoint.count.toLocaleString('en-IN')} matches</span></p>}
+          </div>
+          <div className="scan-history-chart-scroll">
+            <div style={{ minWidth: chartWidth }}>
+              <svg className="scan-history-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none"
+                role="img" aria-label="Historical matches by trading session">
+                {[0.25, 0.5, 0.75].map(step => (
+                  <line key={step} x1="0" x2={chartWidth} y1={chartHeight * step} y2={chartHeight * step} className="scan-history-gridline" />
+                ))}
+                {points.map((point, index) => {
+                  const slot = chartWidth / points.length;
+                  const height = point.status === 'success' ? Math.max(2, point.count / maxCount * (chartHeight - 16)) : 5;
+                  const selected = selectedPoint?.date === point.date;
+                  return (
+                    <g key={point.date} role="button" tabIndex={0}
+                      aria-label={`${formatDate(point.date)}: ${point.count} matches`}
+                      onClick={() => void selectPoint(point)}
+                      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void selectPoint(point); } }}
+                      onMouseEnter={() => setHoveredDate(point.date)}
+                      onMouseLeave={() => setHoveredDate(null)}>
+                      <rect x={index * slot} y={0} width={slot} height={chartHeight} fill="transparent" />
+                      <rect x={index * slot + Math.max(1, slot * .15)} y={chartHeight - height}
+                        width={Math.max(3, slot * .7)} height={height} rx={2}
+                        className={point.status !== 'success' ? 'scan-history-bar scan-history-bar-error' : selected ? 'scan-history-bar scan-history-bar-selected' : 'scan-history-bar'} />
+                    </g>
+                  );
+                })}
+              </svg>
+              <div className="scan-history-dates">
+                {[0, .25, .5, .75, 1].map(position => (
+                  <span key={position}>{formatDate(points[Math.round((points.length - 1) * position)].date)}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {selectedPoint && (
+            <div className="scan-history-results">
+              <div className="scan-history-results-header">
+                <div>
+                  <h3>{formatDate(selectedPoint.date)} <span>{selectedPoint.count.toLocaleString('en-IN')} matches</span></h3>
+                  <p>{selectedPoint.status === 'success' ? 'Stocks matching your filters on this date' : selectedPoint.error ?? 'Session unavailable'}</p>
                 </div>
+                <div className="scan-history-result-actions">
+                  <label className="scan-history-search">
+                    <Search size={15} aria-hidden="true" />
+                    <span className="sr-only">Filter symbols</span>
+                    <input value={symbolFilter} onChange={event => { setSymbolFilter(event.target.value); setVisibleSymbolCount(INITIAL_SYMBOLS); }}
+                      placeholder="Filter symbols" disabled={!currentSymbols.length} />
+                  </label>
+                  <button type="button" className="button button-secondary" onClick={() => void copySymbols()} disabled={!currentSymbols.length}>
+                    {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy all'}
+                  </button>
+                  <button type="button" className="button button-primary" onClick={() => onSelectSession(selectedPoint.date)}
+                    disabled={selectedPoint.status !== 'success'}>
+                    Open session <ChevronRight size={15} />
+                  </button>
+                </div>
+              </div>
+
+              {sectorCounts.length > 0 && (
+                <details className="scan-history-sectors">
+                  <summary>Sector breakdown <span>{sectorCounts.length} sectors</span></summary>
+                  <div>{sectorCounts.map(([sector, count]) => (
+                    <span key={sector}>{sector}<strong>{count.toLocaleString('en-IN')}</strong></span>
+                  ))}</div>
+                </details>
               )}
 
-              {/* Stacked SVG Chart */}
-              <div className="w-full overflow-x-auto overflow-y-hidden pt-2 pb-1">
-                <svg
-                  className="h-[160px] w-full min-w-[560px]"
-                  viewBox={`0 0 ${Math.max(560, points.length * 16)} ${chartHeight}`}
-                  preserveAspectRatio="none"
-                >
-                  {/* Gridlines */}
-                  {[0.25, 0.5, 0.75].map(ratio => (
-                    <line
-                      key={ratio}
-                      x1="0"
-                      y1={chartHeight * ratio}
-                      x2="100%"
-                      y2={chartHeight * ratio}
-                      stroke="currentColor"
-                      strokeDasharray="2 4"
-                      className="text-line/40"
-                    />
-                  ))}
-                  {/* Baseline */}
-                  <line
-                    x1="0"
-                    y1={chartHeight - 1}
-                    x2="100%"
-                    y2={chartHeight - 1}
-                    stroke="currentColor"
-                    className="text-line"
-                  />
-
-                  {/* Stacked Bars per Session */}
-                  {points.map((p, idx) => {
-                    const totalWidth = Math.max(560, points.length * 16);
-                    const barSlot = totalWidth / points.length;
-                    const barWidth = Math.max(3, barSlot - 2);
-                    const x = idx * barSlot + 1;
-                    const isSelected = selectedPoint?.date === p.date;
-                    const isCurrentSession = currentSessionDate === p.date;
-                    const isError = p.status !== 'success';
-
-                    if (isError) {
-                      return (
-                        <g key={p.date} className="cursor-pointer" onClick={() => void handleSelectPoint(p)}>
-                          <rect
-                            x={x}
-                            y={chartHeight - 8}
-                            width={barWidth}
-                            height={8}
-                            rx={1}
-                            className="fill-warning/70 hover:fill-warning"
-                          />
-                        </g>
-                      );
-                    }
-
-                    if (p.count === 0) {
-                      return (
-                        <g key={p.date} className="cursor-pointer" onClick={() => void handleSelectPoint(p)}>
-                          <rect
-                            x={x}
-                            y={chartHeight - 2}
-                            width={barWidth}
-                            height={2}
-                            className="fill-muted/20 hover:fill-muted/40"
-                          />
-                        </g>
-                      );
-                    }
-
-                    // Stack segments by sector
-                    const sectorEntries: [string, number][] =
-                      p.sectorCounts && Object.keys(p.sectorCounts).length > 0
-                        ? Object.entries(p.sectorCounts)
-                        : [['Others', p.count]];
-
-                    const totalBarHeight = Math.max(4, (p.count / maxCount) * (chartHeight - 20));
-                    let currentY = chartHeight;
-
-                    return (
-                      <g
-                        key={p.date}
-                        className="cursor-pointer transition-opacity"
-                        onMouseEnter={() => setHoveredPoint(p)}
-                        onMouseLeave={() => setHoveredPoint(null)}
-                        onClick={() => void handleSelectPoint(p)}
-                      >
-                        {/* Background hit highlight if selected */}
-                        {isSelected && (
-                          <rect
-                            x={x - 1}
-                            y={chartHeight - totalBarHeight - 4}
-                            width={barWidth + 2}
-                            height={totalBarHeight + 4}
-                            rx={3}
-                            className="fill-accent/15 stroke-accent stroke-[1.5]"
-                          />
-                        )}
-
-                        {sectorEntries.map(([sec, count], segIdx) => {
-                          const segHeight = Math.max(1, (count / p.count) * totalBarHeight);
-                          currentY -= segHeight;
-                          const isTop = segIdx === sectorEntries.length - 1;
-                          return (
-                            <rect
-                              key={sec}
-                              x={x}
-                              y={currentY}
-                              width={barWidth}
-                              height={segHeight}
-                              rx={isTop && barWidth > 3 ? 2 : 0}
-                              fill={getSectorColor(sec)}
-                              className="opacity-90 hover:opacity-100 transition-opacity"
-                            />
-                          );
-                        })}
-
-                        {/* Anchor dot for current live session */}
-                        {isCurrentSession && (
-                          <circle
-                            cx={x + barWidth / 2}
-                            cy={Math.max(4, chartHeight - totalBarHeight - 5)}
-                            r={2.5}
-                            className="fill-positive"
-                          />
-                        )}
-                      </g>
-                    );
-                  })}
-                </svg>
-
-                {/* Timeline Date Milestones */}
-                <div className="flex justify-between px-1 pt-2 text-[10px] text-muted font-mono">
-                  <span>{formatDisplayDate(points[0]?.date)}</span>
-                  <span>{formatDisplayDate(points[Math.floor(points.length * 0.25)]?.date)}</span>
-                  <span>{formatDisplayDate(points[Math.floor(points.length * 0.5)]?.date)}</span>
-                  <span>{formatDisplayDate(points[Math.floor(points.length * 0.75)]?.date)}</span>
-                  <span>{formatDisplayDate(points[points.length - 1]?.date)}</span>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {/* STOCKS VIEW OR DRILLDOWN INSPECTOR */}
-          {(viewMode === 'stocks' || selectedPoint) && (
-            <div className="mt-4 rounded-xl border border-line bg-surface p-4 shadow-xs">
-              {/* Session Drilldown Header */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent-soft text-accent border border-accent-line text-xs font-bold tabular-nums">
-                    {selectedPoint?.count ?? 0}
+              {loadingSymbols ? (
+                <p className="scan-history-empty">Loading symbols for this session...</p>
+              ) : visibleSymbols.length ? (
+                <>
+                  <div className="scan-history-symbols" aria-label="Matching symbols">
+                    {visibleSymbols.map(symbol => <span key={symbol}>{symbol}</span>)}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-text">
-                        Session {selectedPoint?.date}
-                      </span>
-                      <span className="text-[11px] text-muted">
-                        ({formatDisplayDate(selectedPoint?.date || '')})
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-muted">
-                      {selectedPoint?.status !== 'success'
-                        ? `Evaluation error: ${selectedPoint?.error || 'Unavailable'}`
-                        : selectedPoint?.count === 1
-                        ? '1 stock matched criteria'
-                        : `${selectedPoint?.count ?? 0} stocks matched criteria on this date`}
-                    </p>
+                  <div className="scan-history-results-footer">
+                    <span>Showing {visibleSymbols.length.toLocaleString('en-IN')} of {filteredSymbols.length.toLocaleString('en-IN')} symbols</span>
+                    {visibleSymbols.length < filteredSymbols.length && (
+                      <button type="button" onClick={() => setVisibleSymbolCount(count => count + INITIAL_SYMBOLS)}>Show more</button>
+                    )}
                   </div>
-                </div>
-
-                {/* Search & Actions */}
-                <div className="flex items-center gap-2">
-                  {(selectedPoint?.count ?? 0) > 6 && (
-                    <div className="relative flex items-center">
-                      <Search size={12} className="absolute left-2.5 text-muted pointer-events-none" />
-                      <input
-                        type="text"
-                        placeholder="Filter symbols..."
-                        value={symbolFilter}
-                        onChange={e => setSymbolFilter(e.target.value)}
-                        className="h-7 w-36 rounded-md border border-line bg-surface-subtle py-0.5 pr-2 pl-7 text-xs text-text placeholder:text-muted focus:border-accent focus:bg-surface focus:outline-hidden transition-all"
-                      />
-                    </div>
-                  )}
-
-                  {currentSymbols.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopySymbols(currentSymbols)}
-                      className="button button-secondary text-xs h-7 px-2.5"
-                    >
-                      {copied ? <Check size={12} className="text-positive" /> : <Copy size={12} />}
-                      <span>{copied ? 'Copied' : 'Copy All'}</span>
-                    </button>
-                  )}
-
-                  {selectedPoint && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onSelectSession(selectedPoint.date);
-                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                      className="button button-primary text-xs h-7 px-2.5"
-                    >
-                      <span>Load This Session</span>
-                      <ChevronRight size={12} />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Passing Symbols Grid */}
-              <div className="mt-3">
-                {loadingSymbols ? (
-                  <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted">
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-                    <span>Loading passing stocks for this session...</span>
-                  </div>
-                ) : filteredDrilldownSymbols.length > 0 ? (
-                  <div>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-1.5 max-h-56 overflow-y-auto pr-1">
-                      {filteredDrilldownSymbols.map(sym => (
-                        <button
-                          key={sym}
-                          type="button"
-                          onClick={() => {
-                            onSelectSession(selectedPoint!.date);
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                          title={`Load session ${selectedPoint?.date} with ${sym}`}
-                          className="rounded-md border border-line bg-surface-subtle hover:bg-surface hover:border-accent hover:text-accent px-2 py-1 text-xs font-mono font-medium text-text transition-all text-center truncate"
-                        >
-                          {sym}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-2 text-[11px] text-muted text-right">
-                      Showing {filteredDrilldownSymbols.length} of {currentSymbols.length} stocks
-                    </div>
-                  </div>
-                ) : (
-                  <div className="py-6 text-center text-xs text-muted">
-                    {selectedPoint?.status !== 'success'
-                      ? `Unable to evaluate stocks on this session: ${selectedPoint?.error}`
-                      : selectedPoint?.count === 0
-                      ? 'No stocks passed this filter criteria on this trading day.'
-                      : `No symbols match "${symbolFilter}".`}
-                  </div>
-                )}
-              </div>
+                </>
+              ) : (
+                <p className="scan-history-empty">
+                  {selectedPoint.status !== 'success' ? 'This session could not be evaluated.'
+                    : selectedPoint.count === 0 ? 'No stocks matched on this date.'
+                    : symbolFilter ? 'No symbols match your search.' : 'No symbols available.'}
+                </p>
+              )}
             </div>
           )}
-        </div>
+        </>
       ) : status === 'idle' ? (
-        /* Empty / Idle State */
-        <div className="my-8 flex flex-col items-center justify-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft text-accent border border-accent-line mb-3">
-            <BarChart3 size={24} />
-          </div>
-          <h3 className="text-sm font-semibold text-text">Ready to Backtest Frequency & Sector Breadth</h3>
-          <p className="mt-1 max-w-md text-xs text-muted">
-            Analyze historical match frequency and stacked sector breakdown across {targetSessions.length} archived sessions exact like Chartink.
-          </p>
-          <button
-            type="button"
-            onClick={handleStartScan}
-            disabled={!compatibility.compatible}
-            className="mt-4 button button-primary px-4 py-2 text-xs"
-          >
-            <Play size={13} />
-            <span>Start Frequency Scan ({targetSessions.length} Sessions)</span>
+        <div className="scan-history-intro">
+          <h3>See how this screen performed over time</h3>
+          <p>Run your current filters across {targetSessions.length} archived trading sessions.</p>
+          <button type="button" className="button button-primary" disabled={!compatibility.compatible} onClick={() => void startScan()}>
+            <Play size={14} /> Start frequency scan
           </button>
         </div>
+      ) : status === 'stopped' ? (
+        <p className="scan-history-empty">Scan stopped. Run it again to refresh the timeline.</p>
       ) : null}
     </section>
   );

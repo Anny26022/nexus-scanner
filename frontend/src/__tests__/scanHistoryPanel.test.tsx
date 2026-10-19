@@ -28,7 +28,7 @@ it('aborts a running scan when the dialog closes', () => {
   fireEvent.click(screen.getByRole('button', { name: /start frequency scan/i }));
   const signal = vi.mocked(executeScanHistory).mock.calls[0][4]?.signal;
   expect(signal?.aborted).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close scan history' }));
   expect(signal?.aborted).toBe(true);
   expect(onClose).toHaveBeenCalledOnce();
 });

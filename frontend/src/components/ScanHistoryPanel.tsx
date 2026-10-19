@@ -67,6 +67,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   const fingerprint = useMemo(() => `${universe}:${(customSymbols ?? []).slice().sort().join(',')}:${JSON.stringify(expressionTree)}`,
     [universe, customSymbols, expressionTree]);
   const compatibility = useMemo(() => checkScanCompatibility(expressionTree), [expressionTree]);
+  const canRun = compatibility.compatible && targetSessions.length > 0;
   const summary = useMemo(() => computeScanHistorySummary(points, targetSessions.length), [points, targetSessions.length]);
   const selectedPoint = points.find(point => point.date === selectedDate) ?? points.at(-1) ?? null;
   const displayPoint = points.find(point => point.date === hoveredDate) ?? selectedPoint;
@@ -85,6 +86,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     setLoadingSymbols(false);
     setSelectedDate(point.date);
     setSymbolFilter('');
+    setCopied(false);
     setVisibleSymbolCount(INITIAL_SYMBOLS);
     if (sessionSymbols[point.date] || point.status !== 'success' || point.count === 0) return;
     const session = targetSessions.find(item => item.date === point.date);
@@ -112,6 +114,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     setPoints([]);
     setSelectedDate(null);
     setHoveredDate(null);
+    setCopied(false);
     setStatus('running');
     setProgress({ current: 0, total: targetSessions.length, pct: 0 });
     setLastRunFingerprint(fingerprint);
@@ -189,7 +192,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
               <Square size={14} /> Stop
             </button>
           ) : status !== 'idle' ? (
-            <button type="button" className="button button-primary" disabled={!compatibility.compatible} onClick={() => void startScan()}>
+            <button type="button" className="button button-primary" disabled={!canRun} onClick={() => void startScan()}>
               <Play size={14} /> {points.length ? 'Run again' : 'Run scan'}
             </button>
           ) : null}
@@ -217,10 +220,15 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
 
       {points.length > 0 ? (
         <>
+          {summary.failedSessions > 0 && (
+            <p className="scan-history-notice" role="status">
+              {summary.failedSessions} {summary.failedSessions === 1 ? 'session' : 'sessions'} unavailable. Results use {summary.evaluatedSessions} evaluated {summary.evaluatedSessions === 1 ? 'session' : 'sessions'}.
+            </p>
+          )}
           <div className="scan-history-summary">
             <div><span>Average matches</span><strong>{summary.averageMatches.toLocaleString('en-IN')}</strong></div>
             <div><span>Peak</span><strong>{summary.peakCount.toLocaleString('en-IN')}</strong></div>
-            <div><span>Sessions with matches</span><strong>{summary.frequencyPct}%</strong></div>
+            <div><span>Evaluated with matches</span><strong>{summary.frequencyPct}%</strong></div>
           </div>
 
           <div className="scan-history-chart-heading">
@@ -233,7 +241,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
           <div className="scan-history-chart-scroll">
             <div style={{ minWidth: chartWidth }}>
               <svg className="scan-history-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none"
-                role="img" aria-label="Historical matches by trading session">
+                role="group" aria-label="Historical matches by trading session">
                 {[0.25, 0.5, 0.75].map(step => (
                   <line key={step} x1="0" x2={chartWidth} y1={chartHeight * step} y2={chartHeight * step} className="scan-history-gridline" />
                 ))}
@@ -325,7 +333,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
         <div className="scan-history-intro">
           <h3>See how this screen performed over time</h3>
           <p>Run your current filters across {targetSessions.length} archived trading sessions.</p>
-          <button type="button" className="button button-primary" disabled={!compatibility.compatible} onClick={() => void startScan()}>
+          <button type="button" className="button button-primary" disabled={!canRun} onClick={() => void startScan()}>
             <Play size={14} /> Start frequency scan
           </button>
         </div>

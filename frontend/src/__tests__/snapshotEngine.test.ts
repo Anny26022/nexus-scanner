@@ -180,6 +180,24 @@ it('times out stalled fallback and loads a fresh engine on retry',async()=>{
  await expect(runSnapshotTask({type:'screen',source,request})).resolves.toMatchObject({type:'screen'});
  expect(fetcher).toHaveBeenCalledTimes(2);
 });
+it('aborts the fallback fetch when its task times out', async () => {
+ vi.useFakeTimers();
+ vi.stubGlobal('Worker', undefined);
+ let fetchSignal: AbortSignal | undefined;
+ vi.stubGlobal('fetch', vi.fn((_url, options?: RequestInit) => {
+  fetchSignal = options?.signal ?? undefined;
+  return new Promise<Response>((_resolve, reject) => {
+   fetchSignal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+  });
+ }));
+ const { runSnapshotTask } = await import('../api/snapshotClient');
+ const task = runSnapshotTask({ type: 'screen', source, request });
+ const failure = expect(task).rejects.toThrow('timed out');
+ await vi.waitFor(() => expect(fetchSignal).toBeDefined());
+ await vi.advanceTimersByTimeAsync(60000);
+ await failure;
+ expect(fetchSignal?.aborted).toBe(true);
+});
 it('keeps newer pending tasks alive when one worker task times out',async()=>{
  vi.useFakeTimers();
  class TestWorker {

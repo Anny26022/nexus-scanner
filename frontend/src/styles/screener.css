@@ -181,6 +181,12 @@
 .filter-dialog, .filter-dialog .dialog-surface { max-height: min(780px, calc(100dvh - 96px)); }
 .scan-history-dialog { width: min(1040px, calc(100vw - 32px)); }
 .scan-history-dialog .dialog-surface { max-height: min(840px, calc(100dvh - 48px)); }
+@media (max-width: 640px) {
+  .scan-history-dialog .dialog-header, .scan-history-actions { flex-wrap: wrap; }
+  .scan-history-actions, .scan-history-range { width: 100%; }
+  .scan-history-range { order: 1; }
+  .scan-history-range button { flex: 1; min-width: 0; white-space: nowrap; }
+}
 .dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; gap: 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .dialog-header h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin: 0; color: var(--text); }
 .dialog-header p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }

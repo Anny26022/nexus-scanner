@@ -30,6 +30,7 @@ function stop(message: string) {
 function runFallback(task: SnapshotTask, signal?: AbortSignal): Promise<SnapshotResult> {
   const engine = fallback ??= import('./snapshotEngine').then(module => module.createSnapshotEngine());
   return new Promise((resolve, reject) => {
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let onAbort: (() => void) | undefined;
 
@@ -41,6 +42,7 @@ function runFallback(task: SnapshotTask, signal?: AbortSignal): Promise<Snapshot
     if (signal) {
       onAbort = () => {
         cleanup();
+        controller.abort();
         reject(new DOMException('Aborted', 'AbortError'));
       };
       signal.addEventListener('abort', onAbort, { once: true });
@@ -48,12 +50,13 @@ function runFallback(task: SnapshotTask, signal?: AbortSignal): Promise<Snapshot
 
     timer = setTimeout(() => {
       cleanup();
+      controller.abort();
       if (fallback === engine) fallback = undefined;
       reject(new Error(timeoutMessage));
     }, 60000);
 
     engine
-      .then(run => run(task, signal))
+      .then(run => run(task, controller.signal))
       .then(
         result => {
           cleanup();

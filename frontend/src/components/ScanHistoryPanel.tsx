@@ -17,6 +17,7 @@ import {
   Info,
 } from 'lucide-react';
 import { Dialog } from './Dialog';
+import { useMountEffect } from '../hooks/useMountEffect';
 import type { ExpressionNode, UniverseType } from '../types/screener';
 import {
   executeScanHistory,
@@ -75,6 +76,22 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   const [copied, setCopied] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const symbolsControllerRef = useRef<AbortController | null>(null);
+
+  useMountEffect(() => () => {
+    abortControllerRef.current?.abort();
+    symbolsControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    symbolsControllerRef.current = null;
+  });
+
+  const handleClose = () => {
+    abortControllerRef.current?.abort();
+    symbolsControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    symbolsControllerRef.current = null;
+    onClose();
+  };
 
   // Criteria fingerprint to detect if filters/universe have changed since last run
   const currentFingerprint = useMemo(() => {
@@ -105,6 +122,9 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   }, [points, targetSessions.length]);
 
   const handleSelectPoint = async (point: ScanHistoryPoint) => {
+    symbolsControllerRef.current?.abort();
+    symbolsControllerRef.current = null;
+    setLoadingSymbols(false);
     setSelectedPoint(point);
     setSymbolFilter('');
     if (sessionSymbols[point.date] || point.status !== 'success' || point.count === 0) return;
@@ -112,20 +132,28 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     const session = targetSessions.find(s => s.date === point.date);
     if (!session) return;
 
+    const controller = new AbortController();
+    symbolsControllerRef.current = controller;
     setLoadingSymbols(true);
     try {
-      const syms = await loadSessionSymbols(session, expressionTree, universe, customSymbols);
-      setSessionSymbols(prev => ({ ...prev, [point.date]: syms }));
+      const syms = await loadSessionSymbols(session, expressionTree, universe, customSymbols, controller.signal);
+      if (!controller.signal.aborted) setSessionSymbols(prev => ({ ...prev, [point.date]: syms }));
     } catch (e) {
-      console.warn('Failed to load symbols on demand for session:', e);
+      if (!controller.signal.aborted) console.warn('Failed to load symbols on demand for session:', e);
     } finally {
-      setLoadingSymbols(false);
+      if (symbolsControllerRef.current === controller) {
+        symbolsControllerRef.current = null;
+        setLoadingSymbols(false);
+      }
     }
   };
 
   const handleStartScan = async () => {
     if (!compatibility.compatible) return;
 
+    symbolsControllerRef.current?.abort();
+    symbolsControllerRef.current = null;
+    setLoadingSymbols(false);
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -133,6 +161,8 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     abortControllerRef.current = ac;
 
     setStatus('running');
+    setPoints([]);
+    setSelectedPoint(null);
     setProgress({ current: 0, total: targetSessions.length, pct: 0 });
     setLastRunFingerprint(currentFingerprint);
 
@@ -204,7 +234,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   if (!isOpen) return null;
 
   return (
-    <Dialog label="Historical Scan Frequency" onClose={onClose} className="scan-history-dialog">
+    <Dialog label="Historical Scan Frequency" onClose={handleClose} className="scan-history-dialog">
       {/* Dialog Header */}
       <div className="dialog-header">
         <div className="flex items-center gap-3 min-w-0">
@@ -227,16 +257,20 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
         </div>
 
         {/* Action Controls & Close */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="scan-history-actions flex items-center gap-2 shrink-0">
           {/* Range Selector */}
-          <div className="flex rounded-lg border border-line bg-subtle p-0.5 text-xs font-medium">
+          <div className="scan-history-range flex rounded-lg border border-line bg-subtle p-0.5 text-xs font-medium">
             {([30, 60, 120, 'all'] as const).map(option => (
               <button
                 key={option}
                 type="button"
+                aria-label={option === 'all' ? `All ${targetSessions.length} trading sessions` : `${option} trading sessions`}
                 onClick={() => {
                   setRange(option);
                   setStatus('idle');
+                  setPoints([]);
+                  setSelectedPoint(null);
+                  setProgress(null);
                 }}
                 disabled={status === 'running'}
                 className={`rounded-md px-2.5 py-1 transition-all ${
@@ -245,7 +279,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                     : 'text-muted hover:text-text'
                 }`}
               >
-                {option === 'all' ? `All (${targetSessions.length})` : `${option}d`}
+                {option === 'all' ? `All (${targetSessions.length})` : <>{option}<span className="hidden sm:inline"> sessions</span></>}
               </button>
             ))}
           </div>
@@ -274,7 +308,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close dialog"
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-hover hover:text-text transition-colors"
           >
@@ -556,7 +590,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                       type="button"
                       onClick={() => {
                         onSelectSession(selectedPoint.date);
-                        onClose();
+                        handleClose();
                       }}
                       className="button button-primary text-xs h-7 px-2.5"
                     >
@@ -582,7 +616,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                             type="button"
                             onClick={() => {
                               onSelectSession(selectedPoint.date);
-                              onClose();
+                              handleClose();
                             }}
                             title={`Load session ${selectedPoint.date} to inspect ${sym}`}
                             className="rounded-md border border-line bg-surface-subtle hover:bg-surface hover:border-accent hover:text-accent px-2 py-1 text-xs font-mono font-medium text-text transition-all text-center truncate"

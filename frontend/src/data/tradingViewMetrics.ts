@@ -8,7 +8,7 @@ export const tradingViewFilterGroups: Record<string, {category:ConditionCategory
   TV_MARKET: {category:'liquidity', label:'Average Volume & Turnover'},
   TV_FINANCIALS: {category:'fundamentals', label:'Balance Sheet & Statement Ratios'},
 };
-export const isTradingViewCondition = (id:string) => Object.hasOwn(tradingViewFilterGroups, id);
+export const isTradingViewCondition = (id:string) => Object.hasOwn(tradingViewFilterGroups, id) || id.startsWith('TV_') || id.startsWith('TRADINGVIEW');
 export const tradingViewConditionCatalog: ConditionDef[] = Object.entries(tradingViewFilterGroups).map(([id, group]) => {
   const options = tradingViewMetrics.filter(metric => metric.category === group.category)
     .map(metric => ({value:metric.id, label:metric.label}));

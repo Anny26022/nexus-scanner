@@ -17,25 +17,27 @@ export function ChartDialog({
   return (
     <RadixDialog.Root open onOpenChange={(open) => !open && onClose()}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="chart-modal-backdrop fixed inset-0 z-50 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150" />
-        <RadixDialog.Content
-          aria-label={title}
-          className={`chart-modal fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 outline-none animate-in fade-in zoom-in-95 duration-150 ${className}`}
-        >
-          <header className="chart-modal-heading">
-            <h2>{title}</h2>
-            <RadixDialog.Close asChild>
-              <button
-                type="button"
-                className="chart-icon-button"
-                aria-label={`Close ${title.toLowerCase()}`}
-              >
-                <X size={18} />
-              </button>
-            </RadixDialog.Close>
-          </header>
-          {children}
-        </RadixDialog.Content>
+        <RadixDialog.Overlay onPointerDown={event => { event.stopPropagation(); onClose(); }} className="chart-modal-backdrop animate-in fade-in duration-150" />
+        <div className="fixed inset-0 z-[251] grid place-items-center p-[10px] sm:p-[18px] pointer-events-none">
+          <RadixDialog.Content
+            aria-label={title}
+            className={`chart-modal pointer-events-auto outline-none animate-in fade-in zoom-in-95 duration-150 ${className}`}
+          >
+            <header className="chart-modal-heading">
+              <h2>{title}</h2>
+              <RadixDialog.Close asChild>
+                <button
+                  type="button"
+                  className="chart-icon-button"
+                  aria-label={`Close ${title.toLowerCase()}`}
+                >
+                  <X size={18} />
+                </button>
+              </RadixDialog.Close>
+            </header>
+            {children}
+          </RadixDialog.Content>
+        </div>
       </RadixDialog.Portal>
     </RadixDialog.Root>
   );

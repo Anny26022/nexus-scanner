@@ -119,7 +119,7 @@ it('persists an added fundamental result column across fresh mounts', () => {
   const pe = screen.getByRole('checkbox', {name: 'P/E'});
   expect(pe).not.toBeChecked();
   fireEvent.click(pe);
-  expect(screen.getByRole('columnheader', {name: 'P/E'})).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', {name: 'P/E', hidden: true})).toBeInTheDocument();
   expect(view.container.querySelector('colgroup col:nth-child(3)')).toHaveStyle({width: '150px'});
   view.unmount();
   render(<ResultsTable {...props} data={data} />);
@@ -149,7 +149,7 @@ it('selects all available columns from the compact column chooser', () => {
   const tableScroll = screen.getByLabelText('Equity results table, scroll for more columns');
   Object.defineProperty(tableScroll, 'clientWidth', {value: 1024, configurable: true});
   fireEvent.scroll(tableScroll, {target: {scrollLeft: 16400}});
-  expect(screen.getByRole('columnheader', {name: 'Data completeness'})).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', {name: 'Data completeness', hidden: true})).toBeInTheDocument();
   view.unmount();
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');
 });

@@ -983,7 +983,7 @@
 .chart-replay button:hover { background: var(--surface-hover); }
 .chart-replay button[aria-pressed="true"] { color: var(--accent); }
 .chart-replay output { color: var(--muted); font-size: 10px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.chart-modal-backdrop { position: fixed; inset: 0; z-index: 250; display: grid; place-items: center; padding: 18px; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px); }
+.chart-modal-backdrop { position: fixed; inset: 0; z-index: 250; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px); }
 .chart-modal { width: min(440px, 100%); max-height: min(640px, calc(100dvh - 36px)); overflow: auto; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--text); box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28); }
 .chart-modal-heading { display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--surface-subtle); }
 .chart-modal-heading h2 { margin: 0; color: var(--text); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
@@ -2302,7 +2302,6 @@
   .chart-range-select { display: block; width: 66px; min-height: 28px; border: 0; background: transparent; color: var(--secondary); font-size: 10px; }
   .chart-replay { flex-wrap: wrap; justify-content: center; width: calc(100% - 14px); }
   .chart-replay output { width: 100%; text-align: center; }
-  .chart-modal-backdrop { padding: 10px; }
   .chart-settings-dialog { width: 100%; min-height: min(570px, calc(100dvh - 20px)); max-height: calc(100dvh - 20px); }
   .chart-settings-dialog .chart-modal-heading { min-height: 56px; padding-inline: 16px; }
   .chart-settings-dialog .chart-modal-heading h2 { font-size: 18px; }

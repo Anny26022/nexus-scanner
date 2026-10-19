@@ -1,5 +1,5 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 
 /** Accessible modal powered by Radix UI: focus trapping, background inertness, Escape, and portal rendering. */
 export function Dialog({
@@ -13,16 +13,23 @@ export function Dialog({
   children: ReactNode;
   className?: string;
 }) {
+  const contentRef = useRef<HTMLDivElement>(null);
   return (
     <RadixDialog.Root open onOpenChange={(open) => !open && onClose()}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay className="dialog-backdrop fixed inset-0 z-50 bg-[rgb(15_23_31_/_48%)] backdrop-blur-xs animate-in fade-in duration-150" />
-        <RadixDialog.Content
-          aria-label={label}
-          className={`dialog fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 outline-none animate-in fade-in zoom-in-95 duration-150 ${className}`}
-        >
-          <div className="dialog-surface">{children}</div>
-        </RadixDialog.Content>
+        <RadixDialog.Overlay onPointerDown={event => { event.stopPropagation(); onClose(); }} className="dialog-backdrop fixed inset-0 z-[250] bg-[rgb(15_23_31_/_48%)] backdrop-blur-xs animate-in fade-in duration-150" />
+        <div className="fixed inset-0 z-[251] grid place-items-center pointer-events-none">
+          <RadixDialog.Content
+            ref={contentRef}
+            aria-label={label}
+            className={`dialog pointer-events-auto outline-none animate-in fade-in zoom-in-95 duration-150 ${className}`}
+            onEscapeKeyDown={event => {
+              if (contentRef.current?.querySelector('[data-escape-layer]')) event.preventDefault();
+            }}
+          >
+            <div className="dialog-surface">{children}</div>
+          </RadixDialog.Content>
+        </div>
       </RadixDialog.Portal>
     </RadixDialog.Root>
   );

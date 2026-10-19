@@ -80,6 +80,6 @@ it('lets the same published metric be added as a result column', () => {
   fireEvent.click(screen.getByRole('button',{name:'Customize columns'}));
   fireEvent.change(screen.getByRole('searchbox',{name:'Search columns'}),{target:{value:'Relative volume'}});
   fireEvent.click(screen.getByRole('checkbox',{name:'Relative volume (10d, ×)'}));
-  expect(screen.getByRole('columnheader',{name:'Relative volume (10d, ×)'})).toBeInTheDocument();
+  expect(screen.getByRole('columnheader',{name:'Relative volume (10d, ×)', hidden:true})).toBeInTheDocument();
   localStorage.removeItem('nexus-scanner.screener.columns.v1');
 });

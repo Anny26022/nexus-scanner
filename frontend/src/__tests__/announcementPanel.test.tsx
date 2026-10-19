@@ -23,7 +23,7 @@ it('distinguishes unpublished data from an empty filing period and does not retr
   expect(screen.queryByRole('button', {name: 'Retry'})).not.toBeInTheDocument();
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 40)); });
   expect(screenerApi.getAnnouncements).toHaveBeenCalledTimes(1);
-  fireEvent(screen.getByRole('dialog'), new Event('cancel', {bubbles: true}));
+  fireEvent.keyDown(screen.getByRole('dialog'), {key: 'Escape'});
   expect(close).toHaveBeenCalledTimes(1);
 });
 

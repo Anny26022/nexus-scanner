@@ -40,24 +40,114 @@ async function readSnapshot(source: SnapshotSource, signal?: AbortSignal): Promi
 }
 
 export function createSnapshotEngine(loader = readSnapshot) {
-  const snapshots = new Map<string, Promise<Snapshot>>();
-  async function load(source: SnapshotSource, signal?: AbortSignal) {
+  const snapshots = new Map<string, Snapshot>();
+
+  interface Subscriber {
+    signal?: AbortSignal;
+    onAbort?: () => void;
+    resolve: (data: Snapshot) => void;
+    reject: (err: any) => void;
+  }
+
+  interface InFlightEntry {
+    controller: AbortController;
+    subscribers: Set<Subscriber>;
+    promise: Promise<Snapshot>;
+  }
+
+  const inFlight = new Map<string, InFlightEntry>();
+
+  async function load(source: SnapshotSource, signal?: AbortSignal): Promise<Snapshot> {
     if (!/^[a-f0-9]{64}$/.test(source.revision)) throw new Error('Invalid dataset revision');
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
     const key = source.sessionDate ? `${source.revision}:${source.sessionDate}` : source.revision;
-    let promise = snapshots.get(key);
-    if (!promise) {
-      promise = loader(source, signal).catch(error => {
-        if (snapshots.get(key) === promise) snapshots.delete(key);
-        throw error;
-      });
-      snapshots.set(key, promise);
-      if (snapshots.size > 2) snapshots.delete(snapshots.keys().next().value!);
+
+    const cached = snapshots.get(key);
+    if (cached) {
+      snapshots.delete(key);
+      snapshots.set(key, cached);
+      return cached;
     }
-    return promise;
+
+    let entry = inFlight.get(key);
+    if (!entry) {
+      const fetchController = new AbortController();
+      let loadPromise: Promise<Snapshot>;
+      try {
+        loadPromise = Promise.resolve(loader(source, fetchController.signal));
+      } catch (err) {
+        loadPromise = Promise.reject(err);
+      }
+      const newEntry: InFlightEntry = {
+        controller: fetchController,
+        subscribers: new Set(),
+        promise: loadPromise
+          .then(data => {
+            snapshots.set(key, data);
+            if (snapshots.size > 2) snapshots.delete(snapshots.keys().next().value!);
+            return data;
+          })
+          .finally(() => {
+            if (inFlight.get(key) === newEntry) inFlight.delete(key);
+          }),
+      };
+      entry = newEntry;
+      inFlight.set(key, entry);
+    }
+
+    const activeEntry = entry;
+    return new Promise<Snapshot>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DOMException('Aborted', 'AbortError'));
+        return;
+      }
+
+      const subscriber: Subscriber = {
+        signal,
+        resolve,
+        reject,
+      };
+
+      if (signal) {
+        subscriber.onAbort = () => {
+          activeEntry.subscribers.delete(subscriber);
+          // Only abort the underlying fetch if no subscribers remain waiting for this load
+          if (activeEntry.subscribers.size === 0) {
+            activeEntry.controller.abort();
+            if (inFlight.get(key) === activeEntry) inFlight.delete(key);
+          }
+          reject(new DOMException('Aborted', 'AbortError'));
+        };
+        signal.addEventListener('abort', subscriber.onAbort, { once: true });
+      }
+
+      activeEntry.subscribers.add(subscriber);
+
+      activeEntry.promise
+        .then(data => {
+          activeEntry.subscribers.delete(subscriber);
+          if (subscriber.signal && subscriber.onAbort) {
+            subscriber.signal.removeEventListener('abort', subscriber.onAbort);
+          }
+          resolve(data);
+        })
+        .catch(err => {
+          activeEntry.subscribers.delete(subscriber);
+          if (subscriber.signal && subscriber.onAbort) {
+            subscriber.signal.removeEventListener('abort', subscriber.onAbort);
+          }
+          if (!signal?.aborted) {
+            reject(err);
+          }
+        });
+    });
   }
 
   return async (task: SnapshotTask, signal?: AbortSignal): Promise<SnapshotResult> => {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     const data = await load(task.source, signal);
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (task.type === 'warm') return {type:'warm'};
     if (task.type === 'filterChoices') {
       const fields = {SECTOR:'sector', INDUSTRY:'industry', SERIES:'series', PRICE_BAND:'circuitLimit', INDEX_MEMBERSHIP:'indexMemberships'} as const;

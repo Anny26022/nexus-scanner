@@ -30,14 +30,41 @@ function stop(message: string) {
 function runFallback(task: SnapshotTask, signal?: AbortSignal): Promise<SnapshotResult> {
   const engine = fallback ??= import('./snapshotEngine').then(module => module.createSnapshotEngine());
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onAbort: (() => void) | undefined;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+    };
+
+    if (signal) {
+      onAbort = () => {
+        cleanup();
+        reject(new DOMException('Aborted', 'AbortError'));
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    timer = setTimeout(() => {
+      cleanup();
       if (fallback === engine) fallback = undefined;
       reject(new Error(timeoutMessage));
     }, 60000);
-    engine.then(run => run(task, signal)).then(resolve, error => {
-      if (fallback === engine) fallback = undefined;
-      reject(error);
-    }).finally(() => clearTimeout(timer));
+
+    engine
+      .then(run => run(task, signal))
+      .then(
+        result => {
+          cleanup();
+          resolve(result);
+        },
+        error => {
+          cleanup();
+          if (fallback === engine) fallback = undefined;
+          reject(error);
+        }
+      );
   });
 }
 
@@ -76,14 +103,16 @@ export function runSnapshotTask(task: SnapshotTask, signal?: AbortSignal): Promi
 
   return new Promise((resolve, reject) => {
     const id = ++sequence;
-    const timer = setTimeout(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
       pending.delete(id);
-      reject(new Error(timeoutMessage));
-    }, 60000);
+      if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+    };
 
     const onAbort = () => {
-      clearTimeout(timer);
-      pending.delete(id);
+      cleanup();
       try {
         worker?.postMessage({ type: 'cancel', id });
       } catch {
@@ -91,6 +120,16 @@ export function runSnapshotTask(task: SnapshotTask, signal?: AbortSignal): Promi
       }
       reject(new DOMException('Aborted', 'AbortError'));
     };
+
+    timer = setTimeout(() => {
+      cleanup();
+      try {
+        worker?.postMessage({ type: 'cancel', id });
+      } catch {
+        // Ignore postMessage error when cancelling
+      }
+      reject(new Error(timeoutMessage));
+    }, 60000);
 
     if (signal) {
       signal.addEventListener('abort', onAbort, { once: true });
@@ -101,9 +140,7 @@ export function runSnapshotTask(task: SnapshotTask, signal?: AbortSignal): Promi
       // NOTE: task MUST be structured-cloneable. Never embed non-cloneable objects (like AbortSignal).
       worker!.postMessage({ id, task });
     } catch (e) {
-      clearTimeout(timer);
-      pending.delete(id);
-      if (signal && onAbort) signal.removeEventListener('abort', onAbort);
+      cleanup();
       stop('Unable to start scanner processing.');
       reject(e instanceof Error ? e : new Error('Unable to start scanner processing.'));
     }

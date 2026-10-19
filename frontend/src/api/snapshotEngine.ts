@@ -50,7 +50,7 @@ export function createSnapshotEngine(loader = readSnapshot) {
         throw error;
       });
       snapshots.set(key, promise);
-      if (snapshots.size > 30) snapshots.delete(snapshots.keys().next().value!);
+      if (snapshots.size > 2) snapshots.delete(snapshots.keys().next().value!);
     }
     return promise;
   }

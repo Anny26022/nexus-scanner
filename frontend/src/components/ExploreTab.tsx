@@ -227,26 +227,19 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
       onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
     {availableSessions.length > 0 && (
-      <div id="backtest-history" className="w-full mt-6">
+      <div id="backtest-history" className="mt-3 w-full">
         {!isScanHistoryOpen ? (
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-surface p-4 sm:p-5 shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent border border-accent-line">
-                <BarChart3 size={20} />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-text">Historical Backtest</h3>
-                <p className="text-xs text-muted">
-                  Evaluate filter consistency and stacked sector breakdown across {availableSessions.length} archived sessions.
-                </p>
-              </div>
+          <div className="flex items-center justify-between gap-3 border-t border-line px-1 py-2.5 sm:px-2">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <BarChart3 size={16} className="shrink-0 text-accent" aria-hidden="true" />
+              <h3 className="whitespace-nowrap text-sm font-semibold text-text">Historical Backtest</h3>
+              <span className="hidden text-xs text-muted sm:inline">{availableSessions.length} sessions</span>
             </div>
             <button
               type="button"
               onClick={() => setIsScanHistoryOpen(true)}
-              className="button button-primary text-xs h-8 px-4"
+              className="button button-primary h-8 shrink-0 px-3 text-xs"
             >
-              <BarChart3 size={14} />
               <span>Backtest</span>
             </button>
           </div>

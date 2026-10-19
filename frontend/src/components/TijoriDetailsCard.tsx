@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, X, RefreshCw, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ExternalLink, X, RefreshCw } from 'lucide-react';
 import { getTijoriOverviews } from '../api/tijori';
 import { fetchLiveNews } from '../api/dhanNewsApi';
 import symbolIsinMap from '../data/symbolIsinMap.json';
 import { SymbolWithLogo } from './SymbolWithLogo';
+import { DhanSentimentBadge } from './DhanSentimentBadge';
 import type { companyPopoverPosition } from '../utils/companyPopoverPosition';
 
 type Tab = 'snapshot' | 'news' | 'watch' | 'events';
@@ -108,15 +109,7 @@ export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMou
                       return (
                         <article key={article.article_id} className="hover-news-item">
                           <div className="hover-news-row">
-                            <span className={`hover-sentiment-badge is-${sentiment}`} title={`${sentiment} announcement`}>
-                              {sentiment === 'positive' ? (
-                                <TrendingUp size={11} />
-                              ) : sentiment === 'negative' ? (
-                                <TrendingDown size={11} />
-                              ) : (
-                                <Minus size={11} />
-                              )}
-                            </span>
+                            <DhanSentimentBadge sentiment={sentiment} size="sm" className="hover-dhan-badge" />
                             <div className="hover-news-content">
                               <h4 className="hover-news-title">{article.news_object?.title}</h4>
                               <div className="hover-news-meta">

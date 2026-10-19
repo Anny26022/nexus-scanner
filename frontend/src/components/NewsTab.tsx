@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { fetchLiveNews, type DhanNewsArticle } from '../api/dhanNewsApi';
 import { SymbolWithLogo } from './SymbolWithLogo';
+import { DhanSentimentBadge } from './DhanSentimentBadge';
 
 const TOPIC_FILTERS = [
   { id: 'ALL', label: 'All' },
@@ -344,9 +345,9 @@ export function NewsTab() {
                   }
                 }}
               >
-                {/* Micro Sentiment Dot Column */}
+                {/* Dhan-style Sentiment Indicator Column */}
                 <div className="ap-entry-dot-col">
-                  <span className={`ap-sentiment-dot is-${sentiment}`} />
+                  <DhanSentimentBadge sentiment={sentiment} size="sm" />
                 </div>
 
                 {/* Main Content Area */}

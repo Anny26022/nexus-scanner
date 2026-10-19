@@ -404,7 +404,7 @@
 /* The Line Item Row */
 .ap-entry-row {
   display: grid;
-  grid-template-columns: 10px 1fr auto;
+  grid-template-columns: 20px 1fr auto;
   column-gap: 12px;
   padding: 12px 6px;
   border-bottom: 1px solid var(--line, rgba(0, 0, 0, 0.04));
@@ -422,9 +422,9 @@
   background-color: var(--surface-hover, rgba(0, 0, 0, 0.02));
 }
 
-/* Left Indicator Dot */
+/* Left Indicator Column */
 .ap-entry-dot-col {
-  padding-top: 5px;
+  padding-top: 2px;
   display: flex;
   justify-content: center;
 }

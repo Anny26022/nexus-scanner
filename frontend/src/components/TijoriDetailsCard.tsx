@@ -107,21 +107,23 @@ export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMou
                       const sentiment = article.news_object?.overall_sentiment || 'neutral';
                       return (
                         <article key={article.article_id} className="hover-news-item">
-                          <div className="hover-news-top">
+                          <div className="hover-news-row">
                             <span className={`hover-sentiment-pip is-${sentiment}`} />
-                            {article.sub_category && (
-                              <span className="hover-news-topic">
-                                {article.sub_category.replaceAll('-', ' ')}
-                              </span>
-                            )}
-                            <time className="hover-news-time" dateTime={new Date(article.publish_date).toISOString()}>
-                              {formatRelative(article.publish_date)}
-                            </time>
+                            <div className="hover-news-content">
+                              <h4 className="hover-news-title">{article.news_object?.title}</h4>
+                              <div className="hover-news-meta">
+                                {article.sub_category && (
+                                  <span className="hover-news-topic">
+                                    {article.sub_category.replaceAll('-', ' ')}
+                                  </span>
+                                )}
+                                <span className="hover-news-dot">·</span>
+                                <time className="hover-news-time" dateTime={new Date(article.publish_date).toISOString()}>
+                                  {formatRelative(article.publish_date)}
+                                </time>
+                              </div>
+                            </div>
                           </div>
-                          <h4 className="hover-news-title">{article.news_object?.title}</h4>
-                          {article.news_object?.text && (
-                            <p className="hover-news-text">{article.news_object.text}</p>
-                          )}
                         </article>
                       );
                     })}

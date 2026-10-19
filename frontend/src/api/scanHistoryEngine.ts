@@ -112,6 +112,7 @@ export async function runScanHistorySession(
     datasetRevision: session.revision,
     page: 1,
     pageSize: 1,
+    countsOnly: true,
   };
 
   const snapshot = await runSnapshotTask({
@@ -132,8 +133,8 @@ export async function runScanHistorySession(
     status: 'success',
   };
 
-  // Cache symbols separately if needed for instant access
-  if (snapshot.result.matchedSymbols) {
+  // Cache symbols separately if provided (e.g. if loaded on-demand)
+  if (snapshot.result.matchedSymbols && snapshot.result.matchedSymbols.length > 0) {
     sessionSymbolsCache.set(cacheKey, snapshot.result.matchedSymbols);
     if (sessionSymbolsCache.size > SCAN_HISTORY_CACHE_MAX) {
       sessionSymbolsCache.delete(sessionSymbolsCache.keys().next().value!);

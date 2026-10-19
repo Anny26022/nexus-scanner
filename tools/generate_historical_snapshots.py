@@ -29,6 +29,12 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import numpy as np
 import pandas as pd
 
+# Add frontend to sys.path for scanner_bridge
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+if str(FRONTEND_DIR) not in sys.path:
+    sys.path.insert(0, str(FRONTEND_DIR))
+import scanner_bridge as bridge
+
 # Fallback headers for NSE downloads
 NSE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -210,6 +216,17 @@ def fetch_nse_surveillance_for_date(session_date: date, cache_dir: Optional[Path
     return surveillance_map
 
 
+def check_consecutive_quarters(quarter_dates: List[date]) -> bool:
+    """Verify that a sequence of 4 quarter ends represents 4 consecutive, unbroken reporting quarters."""
+    if len(quarter_dates) != 4:
+        return False
+    for i in range(3):
+        diff = (quarter_dates[i + 1] - quarter_dates[i]).days
+        # Normal quarter spacing is between 80 and 100 days
+        if not (80 <= diff <= 100):
+            return False
+    return True
+
 
 def calculate_technicals(opens: np.ndarray, closes: np.ndarray, highs: np.ndarray, lows: np.ndarray, volumes: np.ndarray) -> Dict[str, Any]:
     """Calculate core screener indicators given price arrays."""
@@ -251,6 +268,8 @@ def calculate_technicals(opens: np.ndarray, closes: np.ndarray, highs: np.ndarra
     avg_vol_20 = float(np.mean(volumes[-21:-1])) if n >= 21 else (float(np.mean(volumes)) if n > 0 else 1.0)
     rvol = float(current_volume / avg_vol_20) if avg_vol_20 > 0 else 1.0
     avg_turnover_20_cr = float(np.mean(closes[-20:] * volumes[-20:]) / 1e7) if n >= 20 else (current_close * current_volume / 1e7)
+    avg_turnover_50_cr = float(np.mean(closes[-50:] * volumes[-50:]) / 1e7) if n >= 50 else None
+    avg_turnover_100_cr = float(np.mean(closes[-100:] * volumes[-100:]) / 1e7) if n >= 100 else None
     rupee_volume_crore = float(current_close * current_volume / 1e7)
 
     # 52-Week High / Low (252 trading sessions)
@@ -259,6 +278,34 @@ def calculate_technicals(opens: np.ndarray, closes: np.ndarray, highs: np.ndarra
     low_52w = float(np.min(lows[-lookback_52w:]))
     dist_52w_high_pct = float(((current_close - high_52w) / high_52w) * 100) if high_52w > 0 else 0.0
     dist_52w_low_pct = float(((current_close - low_52w) / low_52w) * 100) if low_52w > 0 else 0.0
+
+    # All-Time High / Low
+    all_time_high = float(np.max(highs))
+    all_time_low = float(np.min(lows))
+    dist_ath_pct = float(((current_close - all_time_high) / all_time_high) * 100.0) if all_time_high > 0 else 0.0
+
+    # ADR (20D): Mean of (High - Low) / Close * 100 over last 20 days
+    adr20_pct = float(np.mean((highs[-20:] - lows[-20:]) / closes[-20:] * 100.0)) if n >= 20 else float(np.mean((highs - lows) / closes * 100.0))
+
+    # ATR (14): Wilder's 14-period True Range
+    if n >= 15:
+        sub_c = closes[-56:]
+        sub_h = highs[-56:]
+        sub_l = lows[-56:]
+        prev_c = sub_c[:-1]
+        tr = np.maximum(sub_h[1:] - sub_l[1:], np.maximum(np.abs(sub_h[1:] - prev_c), np.abs(sub_l[1:] - prev_c)))
+        atr = float(np.mean(tr[:14]))
+        for val in tr[14:]:
+            atr = (atr * 13.0 + float(val)) / 14.0
+        atr14 = float(atr)
+    else:
+        atr14 = float(np.mean(highs - lows))
+
+    # Gap percentage (today's open vs yesterday's close)
+    gap_pct = float(((current_open / closes[-2]) - 1.0) * 100.0) if n >= 2 and closes[-2] > 0 else 0.0
+
+    # 5-Year Return (1,260 sessions)
+    return_5y_pct = float(((current_close / closes[-1261]) - 1.0) * 100.0) if n >= 1261 and closes[-1261] > 0 else None
 
     # RSI (14)
     if n >= 15:
@@ -296,9 +343,18 @@ def calculate_technicals(opens: np.ndarray, closes: np.ndarray, highs: np.ndarra
         "ema50": ema50,
         "ema200": ema200,
         "avg_volume_20": avg_vol_20,
-        "daily_rupee_turnover_20_cr": avg_turnover_20_cr,
+        "daily_rupee_turnover_20_cr": round(avg_turnover_20_cr, 2),
+        "daily_rupee_turnover_50_cr": round(avg_turnover_50_cr, 2) if avg_turnover_50_cr is not None else None,
+        "daily_rupee_turnover_100_cr": round(avg_turnover_100_cr, 2) if avg_turnover_100_cr is not None else None,
         "dist52wHighPct": dist_52w_high_pct,
         "dist52wLowPct": dist_52w_low_pct,
+        "allTimeHigh": round(all_time_high, 2),
+        "allTimeLow": round(all_time_low, 2),
+        "distAthPct": round(dist_ath_pct, 2),
+        "adr20Pct": round(adr20_pct, 2),
+        "atr14": round(atr14, 2),
+        "gapPct": round(gap_pct, 2),
+        "return5yPct": round(return_5y_pct, 2) if return_5y_pct is not None else None,
         "close_above_sma20": bool(current_close >= sma20),
         "close_above_sma50": bool(current_close >= sma50),
         "close_above_sma200": bool(current_close >= sma200),
@@ -540,21 +596,109 @@ def main():
             if tech["close_above_sma200"]:
                 above_200dma += 1
 
-            # Point-in-time financial attachment (latest filed before session_date)
+            # Point-in-time financial attachment (strictly filed on or before session_date)
             sym_fins = financials_by_symbol.get(sym, [])
             valid_fins = [
                 f for f in sym_fins
                 if f.get("filing_date") and f["filing_date"][:10] <= session_str
             ]
-            latest_fin = sorted(valid_fins, key=lambda x: x["filing_date"])[-1] if valid_fins else None
+            quarter_map = {}
+            for f in valid_fins:
+                qe = f.get("quarter_end")
+                if not qe:
+                    continue
+                existing = quarter_map.get(qe)
+                if existing is None:
+                    quarter_map[qe] = f
+                elif f.get("report_type") == "CONSOLIDATED" and existing.get("report_type") != "CONSOLIDATED":
+                    quarter_map[qe] = f
+                elif f.get("report_type") == existing.get("report_type") and f.get("filing_date", "") > existing.get("filing_date", ""):
+                    quarter_map[qe] = f
+            sorted_fins = sorted(quarter_map.values(), key=lambda x: x["quarter_end"])
+            latest_fin = sorted_fins[-1] if sorted_fins else None
 
-            # Point-in-time shareholding attachment (strictly observed on or before session_date)
+            days_since_earnings = None
+            if latest_fin and latest_fin.get("filing_date"):
+                try:
+                    filing_d = date.fromisoformat(latest_fin["filing_date"][:10])
+                    days_since_earnings = max(0, (session_date - filing_d).days)
+                except Exception:
+                    pass
+
+            # Strict 4-consecutive-quarter TTM calculation
+            ttm_sales = None
+            ttm_rev = None
+            ttm_profit = None
+            ttm_eps = None
+            ttm_opm = None
+            ttm_sales_growth = None
+            ttm_profit_growth = None
+            ttm_rev_growth = None
+
+            if len(sorted_fins) >= 4:
+                trailing_4q = sorted_fins[-4:]
+                try:
+                    trailing_dates = [date.fromisoformat(f["quarter_end"][:10]) for f in trailing_4q]
+                    if check_consecutive_quarters(trailing_dates):
+                        ttm_sales = round(sum(f.get("sales", 0.0) or 0.0 for f in trailing_4q if f.get("sales") is not None), 2)
+                        ttm_rev = round(sum(f.get("revenue", 0.0) or 0.0 for f in trailing_4q if f.get("revenue") is not None), 2)
+                        ttm_profit = round(sum(f.get("net_profit", 0.0) or 0.0 for f in trailing_4q if f.get("net_profit") is not None), 2)
+                        ttm_eps = round(sum(f.get("eps", 0.0) or 0.0 for f in trailing_4q if f.get("eps") is not None), 2)
+
+                        # Weighted operating profit / sales * 100
+                        tot_op = sum((f.get("sales", 0.0) or 0.0) * (f.get("opm", 0.0) or 0.0) / 100.0 for f in trailing_4q if f.get("sales") is not None and f.get("opm") is not None)
+                        if ttm_sales > 0:
+                            ttm_opm = round((tot_op / ttm_sales) * 100.0, 2)
+
+                        # YoY 4-quarter growth comparison (must be spaced ~365 days prior)
+                        if len(sorted_fins) >= 8:
+                            prev_4q = sorted_fins[-8:-4]
+                            prev_dates = [date.fromisoformat(f["quarter_end"][:10]) for f in prev_4q]
+                            if check_consecutive_quarters(prev_dates) and (trailing_dates[0] - prev_dates[0]).days in range(350, 380):
+                                prev_sales = sum(f.get("sales", 0.0) or 0.0 for f in prev_4q if f.get("sales") is not None)
+                                prev_profit = sum(f.get("net_profit", 0.0) or 0.0 for f in prev_4q if f.get("net_profit") is not None)
+                                prev_rev = sum(f.get("revenue", 0.0) or 0.0 for f in prev_4q if f.get("revenue") is not None)
+                                if prev_sales > 0 and ttm_sales > 0:
+                                    ttm_sales_growth = round(((ttm_sales / prev_sales) - 1.0) * 100.0, 2)
+                                if prev_profit > 0 and ttm_profit > 0:
+                                    ttm_profit_growth = round(((ttm_profit / prev_profit) - 1.0) * 100.0, 2)
+                                if prev_rev > 0 and ttm_rev > 0:
+                                    ttm_rev_growth = round(((ttm_rev / prev_rev) - 1.0) * 100.0, 2)
+                except Exception:
+                    pass
+
+            # Point-in-time Market cap and P/E derivation
+            mcap_crore = None
+            pe_ratio = None
+            if ttm_eps and ttm_eps > 0:
+                pe_ratio = round(tech["close"] / ttm_eps, 2)
+            if latest_fin and latest_fin.get("net_profit") and latest_fin.get("eps") and latest_fin["eps"] > 0:
+                shares = (latest_fin["net_profit"] * 1e7) / latest_fin["eps"]
+                mcap_crore = round((shares * tech["close"]) / 1e7, 2)
+
+            # Point-in-time shareholding with SEBI LODR Regulation 31 statutory lag (21 days post quarter-end)
             sym_shs = sh_by_symbol.get(sym, [])
-            valid_shs = [
-                s for s in sym_shs
-                if s.get("observed_on") and s["observed_on"] <= session_str
-            ]
-            latest_sh = sorted(valid_shs, key=lambda x: x["period_end"])[-1] if valid_shs else None
+            valid_shs = []
+            for s in sym_shs:
+                pe_str = s.get("period_end")
+                if not pe_str:
+                    continue
+                try:
+                    pe_d = date.fromisoformat(pe_str[:10])
+                    if pe_d + timedelta(days=21) <= session_date:
+                        valid_shs.append(s)
+                except Exception:
+                    continue
+            valid_shs.sort(key=lambda x: x["period_end"])
+            latest_sh = valid_shs[-1] if valid_shs else None
+            prev_sh = valid_shs[-2] if len(valid_shs) >= 2 else None
+            fii_qoq = None
+            dii_qoq = None
+            if latest_sh and prev_sh:
+                if latest_sh.get("fii_holding_percent") is not None and prev_sh.get("fii_holding_percent") is not None:
+                    fii_qoq = round(latest_sh["fii_holding_percent"] - prev_sh["fii_holding_percent"], 2)
+                if latest_sh.get("dii_holding_percent") is not None and prev_sh.get("dii_holding_percent") is not None:
+                    dii_qoq = round(latest_sh["dii_holding_percent"] - prev_sh["dii_holding_percent"], 2)
 
             # Point-in-time Corporate Actions & Dividends
             sym_actions = actions_by_symbol.get(sym, [])
@@ -576,7 +720,7 @@ def main():
             trailing_div_sum = sum(a["dividend_per_share"] for a in trailing_1y_divs)
             div_yield_pct = round((trailing_div_sum / tech["close"]) * 100, 2) if tech["close"] > 0 and trailing_div_sum > 0 else None
 
-            # Delivery & VWAP stats from official NSE Bhavcopy
+            # Delivery & VWAP stats from official NSE Bhavcopy for this session
             deliv = delivery_map.get(sym)
             deliv_qty = int(deliv["DELIV_QTY"]) if deliv and deliv.get("DELIV_QTY", "").isdigit() else None
             deliv_pct = float(deliv["DELIV_PER"]) if deliv and deliv.get("DELIV_PER") else None
@@ -594,12 +738,6 @@ def main():
                 except Exception:
                     pass
 
-            # Point-in-time market cap derivation (never copy current market cap into historical dates)
-            mcap_crore = None
-            if latest_fin and latest_fin.get("eps") and latest_fin.get("net_profit") and latest_fin["eps"] > 0:
-                shares = (latest_fin["net_profit"] * 1e7) / latest_fin["eps"]
-                mcap_crore = round((shares * tech["close"]) / 1e7, 2)
-
             surv_info = surveillance_map.get(sym)
             surv_avail = bool(surveillance_map) or bool(gsm_remarks_map)
             is_asm = surv_info["isAsm"] if surv_info else (False if bool(surveillance_map) else None)
@@ -614,6 +752,7 @@ def main():
             # Official price band for this session
             circuit_limit = price_bands_map.get(sym) or stock.get("circuit_limit") or "20"
 
+            # Reconstruct item explicitly without leaking 2026 current-master stock values
             item = {
                 "symbol": sym,
                 "name": stock.get("name") or sym,
@@ -627,10 +766,10 @@ def main():
                 "fnoBan": None,
                 "fnoBanAsOfDate": None,
                 "tradingview": None,
+                "indexMemberships": [],
                 "circuitLimit": circuit_limit,
                 "surveillanceAvailable": surv_avail,
                 "surveillanceAsOfDate": session_str if surv_avail else None,
-
                 "isAsm": is_asm,
                 "asmStage": asm_stage,
                 "isGsm": is_gsm,
@@ -638,8 +777,6 @@ def main():
                 "asOfDate": session_str,
                 "metadataAsOfDate": session_str,
                 "historyAligned": True,
-
-                "indexMemberships": [],
                 "open": tech["open"],
                 "high": tech["high"],
                 "low": tech["low"],
@@ -650,9 +787,8 @@ def main():
                 "rupeeVolumeCrore": tech["rupeeVolumeCrore"],
                 "vwap": vwap,
                 "vwapAsOfDate": session_str if vwap is not None else None,
-                "marketCapCrore": mcap_crore,
-                "peRatio": round(tech["close"] / latest_fin["eps"], 2) if latest_fin and latest_fin.get("eps") and latest_fin["eps"] > 0 else None,
-                "epsTtm": latest_fin.get("eps") if latest_fin else None,
+                "deliveryPct": deliv_pct,
+                "deliverableQuantity": deliv_qty,
                 "rsi14": tech["rsi14"],
                 "sma10": tech["sma10"],
                 "sma20": tech["sma20"],
@@ -663,20 +799,81 @@ def main():
                 "ema200": tech["ema200"],
                 "dist52wHighPct": tech["dist52wHighPct"],
                 "dist52wLowPct": tech["dist52wLowPct"],
-                "deliveryPct": deliv_pct,
-                "deliverableQuantity": deliv_qty,
+                "allTimeHigh": tech["allTimeHigh"],
+                "allTimeLow": tech["allTimeLow"],
+                "distAthPct": tech["distAthPct"],
+                "adr20Pct": tech["adr20Pct"],
+                "atr14": tech["atr14"],
+                "return5yPct": tech["return5yPct"],
+                "dividendPerShare": latest_div.get("dividend_per_share") if latest_div else None,
+                "dividendExDate": latest_div.get("ex_date") if latest_div else None,
+                "dividendYieldPct": div_yield_pct,
                 "promoterHoldingPct": latest_sh.get("promoter_holding_percent") if latest_sh else None,
                 "fiiHoldingPct": latest_sh.get("fii_holding_percent") if latest_sh else None,
                 "diiHoldingPct": latest_sh.get("dii_holding_percent") if latest_sh else None,
                 "publicHoldingPct": latest_sh.get("public_holding_percent") if latest_sh else None,
+                "numberOfShareholders": latest_sh.get("number_of_shareholders") if latest_sh else None,
+                "fiiChangePctQoq": fii_qoq,
+                "diiChangePctQoq": dii_qoq,
                 "quarterlySales": latest_fin.get("sales") if latest_fin else None,
                 "quarterlyNetProfit": latest_fin.get("net_profit") if latest_fin else None,
                 "quarterlyEps": latest_fin.get("eps") if latest_fin else None,
                 "quarterlyOpm": latest_fin.get("opm") if latest_fin else None,
                 "earningsDate": latest_fin.get("filing_date")[:10] if latest_fin and latest_fin.get("filing_date") else None,
-                "dividendYieldPct": div_yield_pct,
-                "dividendPerShare": latest_div.get("dividend_per_share") if latest_div else None,
-                "dividendExDate": latest_div.get("ex_date") if latest_div else None,
+                "daysSinceEarnings": days_since_earnings,
+                "ttmSalesCrore": ttm_sales,
+                "ttmRevenueCrore": ttm_rev,
+                "ttmNetProfitCrore": ttm_profit,
+                "epsTtm": ttm_eps,
+                "opmTtmPct": ttm_opm,
+                "ttmSalesGrowthPct": ttm_sales_growth,
+                "ttmNetProfitGrowthPct": ttm_profit_growth,
+                "ttmRevenueGrowthPct": ttm_rev_growth,
+                "marketCapCrore": mcap_crore,
+                "peRatio": pe_ratio,
+                "pbRatio": None,
+                "pegRatio": None,
+                "evEbitda": None,
+                "roePct": None,
+                "rocePct": None,
+                "roaPct": None,
+                "debtToEquity": None,
+                "currentRatio": None,
+                "interestCoverage": None,
+                "salesGrowth5yPct": None,
+                "epsGrowth1yPct": None,
+                "epsCagr3yPct": None,
+                "revenueCagr3yPct": None,
+                "opm5YearsAgoPct": None,
+                "averageRoe3yPct": None,
+                "averageRoa3yPct": None,
+                "averageOpm5yPct": None,
+                "medianSalesGrowth5yPct": None,
+                "freeCashFlowCrore": None,
+                "borrowingsCrore": None,
+                "cwipCrore": None,
+                "fixedAssetsCrore": None,
+                "financingCashFlowCrore": None,
+                "totalRevenueLakh": None,
+                "totalIncomeLakh": None,
+                "totalExpenseLakh": None,
+                "profitBeforeTaxLakh": None,
+                "totalTaxExpensesLakh": None,
+                "netProfitLakh": None,
+                "totalEquityLakh": None,
+                "totalAssetsLakh": None,
+                "currentAssetsLakh": None,
+                "currentLiabilitiesLakh": None,
+                "nonCurrentAssetsLakh": None,
+                "nonCurrentLiabilitiesLakh": None,
+                "totalLiabilitiesLakh": None,
+                "operatingCashFlowLakh": None,
+                "investingCashFlowLakh": None,
+                "netCashFlowLakh": None,
+                "industryPeRatio": None,
+                "faceValue": None,
+                "epsLastYear": None,
+                "epsTwoYearsBack": None,
                 "metrics": {
                     "return5": round(((tech["close"] / c_vals[-6]) - 1) * 100, 2) if len(c_vals) >= 6 else None,
                     "return21": round(((tech["close"] / c_vals[-22]) - 1) * 100, 2) if len(c_vals) >= 22 else None,
@@ -684,7 +881,11 @@ def main():
                     "return126": round(((tech["close"] / c_vals[-127]) - 1) * 100, 2) if len(c_vals) >= 127 else None,
                     "return252": round(((tech["close"] / c_vals[-253]) - 1) * 100, 2) if len(c_vals) >= 253 else None,
                     "turnover20": tech["daily_rupee_turnover_20_cr"],
+                    "turnover50": tech["daily_rupee_turnover_50_cr"],
+                    "turnover100": tech["daily_rupee_turnover_100_cr"],
+                    "gapPct": tech["gapPct"],
                     "historySessions": len(c_vals),
+                    "sma10": tech["sma10"],
                     "sma20": tech["sma20"],
                     "sma50": tech["sma50"],
                     "sma200": tech["sma200"],
@@ -703,6 +904,25 @@ def main():
             }
             snapshot_stocks.append(item)
 
+
+        # Compute cross-sectional RS rating (1-99) for all stocks with at least 253 sessions
+        eligible_rs = []
+        for it in snapshot_stocks:
+            m = it.get("metrics") or {}
+            r21, r63, r126, r252 = m.get("return21"), m.get("return63"), m.get("return126"), m.get("return252")
+            if r21 is not None and r63 is not None and r126 is not None and r252 is not None:
+                comp = 0.40 * r21 + 0.20 * r63 + 0.20 * r126 + 0.20 * r252
+                eligible_rs.append((it, comp))
+
+        if eligible_rs:
+            eligible_rs.sort(key=lambda x: x[1])
+            n_rs = len(eligible_rs)
+            for pos, (it, _) in enumerate(eligible_rs):
+                it["rsRating"] = int(round(1.0 + 98.0 * pos / max(1, n_rs - 1)))
+
+        # Finally, calculate dataCompleteness for each item
+        for it in snapshot_stocks:
+            it["dataCompleteness"] = bridge.data_completeness(it)
 
         total_active = len(snapshot_stocks)
         breadth_record = {
@@ -723,9 +943,12 @@ def main():
             "breadth": breadth_record,
             "pointInTimeCoverage": {
                 "survivorshipBias": "Stock universe restricted to current surviving master list; historical delisted/merged securities omitted",
-                "shareholding": "Strictly observed_on <= asOfDate (null for historical dates prior to ledger observation recording)",
+                "shareholding": "Point-in-time quarter end filings with 21-day SEBI LODR statutory reporting lag",
+                "financials": "Point-in-time disclosure filing dates; TTM requires 4 consecutive quarters without temporal gaps",
+                "balanceSheetRatios": "unavailable (annual balance sheet time-series not maintained)",
                 "fnoEligibility": "unavailable",
                 "fnoBan": "unavailable",
+                "indexMemberships": "unavailable (constituent change history not backfilled)",
                 "tradingview": "unavailable",
                 "surveillance": "Reconstructed from official NSE circulars where complete" if surv_avail else "incomplete_circular_chain",
             },

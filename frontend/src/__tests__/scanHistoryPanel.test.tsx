@@ -25,17 +25,17 @@ const props = {
 it('aborts a running scan when the dialog closes', () => {
   const onClose = vi.fn();
   render(<ScanHistoryPanel {...props} onClose={onClose} />);
-  fireEvent.click(screen.getByRole('button', { name: /start scan/i }));
+  fireEvent.click(screen.getByRole('button', { name: /start frequency scan/i }));
   const signal = vi.mocked(executeScanHistory).mock.calls[0][4]?.signal;
   expect(signal?.aborted).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: 'Close scan history' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
   expect(signal?.aborted).toBe(true);
   expect(onClose).toHaveBeenCalledOnce();
 });
 
 it('aborts a running scan if the panel unmounts', () => {
   const view = render(<ScanHistoryPanel {...props} />);
-  fireEvent.click(screen.getByRole('button', { name: /start scan/i }));
+  fireEvent.click(screen.getByRole('button', { name: /start frequency scan/i }));
   const signal = vi.mocked(executeScanHistory).mock.calls[0][4]?.signal;
   view.unmount();
   expect(signal?.aborted).toBe(true);

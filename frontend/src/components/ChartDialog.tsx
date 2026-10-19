@@ -1,27 +1,42 @@
-import { useCallback, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import * as RadixDialog from '@radix-ui/react-dialog';
+import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
 
-/** A chart-local modal: contained focus, Escape, backdrop dismissal and focus return. */
-export function ChartDialog({title,onClose,children,className}:{title:string;onClose:()=>void;children:ReactNode;className?:string}) {
-  const attach=useCallback((node:HTMLDivElement|null)=>{
-    if (!node) return;
-    const previous=document.activeElement;
-    node.querySelector<HTMLElement>('button,input,select')?.focus();
-    return ()=>{if(previous instanceof HTMLElement && previous.isConnected) previous.focus();};
-  },[]);
-  return createPortal(<div className="chart-modal-backdrop" onPointerDown={event=>{if(event.target===event.currentTarget) onClose();}}>
-    <div ref={attach} className={`chart-modal${className?` ${className}`:''}`} role="dialog" aria-modal="true" aria-label={title} onKeyDown={event=>{
-      if(event.key==='Escape') {event.preventDefault();event.stopPropagation();onClose();}
-      if(event.key==='Tab') {
-        const controls=Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,[tabindex="0"]')).filter(node=>node.getClientRects().length>0);
-        const first=controls[0],last=controls.at(-1);
-        if(event.shiftKey && document.activeElement===first) {event.preventDefault();last?.focus();}
-        else if(!event.shiftKey && document.activeElement===last) {event.preventDefault();first?.focus();}
-      }
-    }}>
-      <header className="chart-modal-heading"><h2>{title}</h2><button type="button" className="chart-icon-button" aria-label={`Close ${title.toLowerCase()}`} onClick={onClose}><X size={18}/></button></header>
-      {children}
-    </div>
-  </div>, document.body);
+/** A chart modal powered by Radix UI: accessible focus containment, Escape, backdrop dismissal, and focus return. */
+export function ChartDialog({
+  title,
+  onClose,
+  children,
+  className = '',
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <RadixDialog.Root open onOpenChange={(open) => !open && onClose()}>
+      <RadixDialog.Portal>
+        <RadixDialog.Overlay className="chart-modal-backdrop fixed inset-0 z-50 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150" />
+        <RadixDialog.Content
+          aria-label={title}
+          className={`chart-modal fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 outline-none animate-in fade-in zoom-in-95 duration-150 ${className}`}
+        >
+          <header className="chart-modal-heading">
+            <h2>{title}</h2>
+            <RadixDialog.Close asChild>
+              <button
+                type="button"
+                className="chart-icon-button"
+                aria-label={`Close ${title.toLowerCase()}`}
+              >
+                <X size={18} />
+              </button>
+            </RadixDialog.Close>
+          </header>
+          {children}
+        </RadixDialog.Content>
+      </RadixDialog.Portal>
+    </RadixDialog.Root>
+  );
 }

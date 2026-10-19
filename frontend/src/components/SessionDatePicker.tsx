@@ -32,10 +32,30 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
   // Set of dates that have actual snapshots
   const availableSet = useMemo(() => new Set(availableSessions.map((s) => s.date)), [availableSessions]);
 
+  // Minimum and maximum bounds from available sessions
+  const { minDate, maxDate } = useMemo(() => {
+    let min = '2021-10-01';
+    let max = latestDate || '2026-10-16';
+    if (availableSessions.length > 0) {
+      min = availableSessions[0].date;
+      max = availableSessions[0].date;
+      for (const s of availableSessions) {
+        if (s.date < min) min = s.date;
+        if (s.date > max) max = s.date;
+      }
+    }
+    return { minDate: min, maxDate: max };
+  }, [availableSessions, latestDate]);
+
+  const minYear = useMemo(() => parseInt(minDate.slice(0, 4), 10) || 2021, [minDate]);
+  const minMonth = useMemo(() => (parseInt(minDate.slice(5, 7), 10) || 10) - 1, [minDate]);
+  const maxYear = useMemo(() => parseInt(maxDate.slice(0, 4), 10) || 2026, [maxDate]);
+  const maxMonth = useMemo(() => (parseInt(maxDate.slice(5, 7), 10) || 10) - 1, [maxDate]);
+
   // Determine active view year/month (default to selected date, or latest)
-  const initialDate = selectedDate || latestDate || '2026-10-16';
-  const [viewYear, setViewYear] = useState(() => parseInt(initialDate.slice(0, 4), 10) || 2026);
-  const [viewMonth, setViewMonth] = useState(() => (parseInt(initialDate.slice(5, 7), 10) || 10) - 1);
+  const initialDate = selectedDate || latestDate || maxDate;
+  const [viewYear, setViewYear] = useState(() => parseInt(initialDate.slice(0, 4), 10) || maxYear);
+  const [viewMonth, setViewMonth] = useState(() => (parseInt(initialDate.slice(5, 7), 10) || maxMonth + 1) - 1);
 
   // Sync view when selectedDate changes externally
   useEffect(() => {
@@ -60,7 +80,11 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
     return Array.from(years).sort((a, b) => a - b);
   }, [availableSessions]);
 
+  const isPrevDisabled = viewYear < minYear || (viewYear === minYear && viewMonth <= minMonth);
+  const isNextDisabled = viewYear > maxYear || (viewYear === maxYear && viewMonth >= maxMonth);
+
   const handlePrevMonth = () => {
+    if (isPrevDisabled) return;
     if (viewMonth === 0) {
       setViewYear((y) => y - 1);
       setViewMonth(11);
@@ -70,6 +94,7 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
   };
 
   const handleNextMonth = () => {
+    if (isNextDisabled) return;
     if (viewMonth === 11) {
       setViewYear((y) => y + 1);
       setViewMonth(0);
@@ -77,6 +102,27 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
       setViewMonth((m) => m + 1);
     }
   };
+
+  const handleYearChange = (newYear: number) => {
+    setViewYear(newYear);
+    if (newYear === minYear && viewMonth < minMonth) {
+      setViewMonth(minMonth);
+    } else if (newYear === maxYear && viewMonth > maxMonth) {
+      setViewMonth(maxMonth);
+    }
+  };
+
+  const availableMonths = useMemo(() => {
+    return MONTH_NAMES.map((name, idx) => {
+      const isBeforeMin = viewYear === minYear && idx < minMonth;
+      const isAfterMax = viewYear === maxYear && idx > maxMonth;
+      return {
+        name,
+        value: idx,
+        disabled: isBeforeMin || isAfterMax,
+      };
+    });
+  }, [viewYear, minYear, minMonth, maxYear, maxMonth]);
 
   // Calendar days calculation
   const calendarDays = useMemo(() => {
@@ -93,15 +139,16 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
       const mm = String(viewMonth + 1).padStart(2, '0');
       const dd = String(d).padStart(2, '0');
       const dateStr = `${viewYear}-${mm}-${dd}`;
+      const isOutOfRange = dateStr < minDate || dateStr > maxDate;
       days.push({
         day: d,
         dateStr,
-        isAvailable: availableSet.has(dateStr),
+        isAvailable: !isOutOfRange && availableSet.has(dateStr),
       });
     }
 
     return days;
-  }, [viewYear, viewMonth, availableSet]);
+  }, [viewYear, viewMonth, availableSet, minDate, maxDate]);
 
   const isHistorical = Boolean(selectedDate && latestDate && selectedDate !== latestDate);
 
@@ -164,7 +211,12 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
               <button
                 type="button"
                 onClick={handlePrevMonth}
-                className="p-1 rounded text-muted hover:text-text hover:bg-surface-hover transition-colors"
+                disabled={isPrevDisabled}
+                className={`p-1 rounded transition-colors ${
+                  isPrevDisabled
+                    ? 'text-muted/30 cursor-not-allowed'
+                    : 'text-muted hover:text-text hover:bg-surface-hover cursor-pointer'
+                }`}
                 aria-label="Previous month"
               >
                 <ChevronLeft size={14} />
@@ -177,16 +229,16 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
                   className="h-6 px-1 text-xs font-medium border border-line rounded bg-surface text-text cursor-pointer outline-none hover:border-line-strong"
                   aria-label="Select month"
                 >
-                  {MONTH_NAMES.map((name, idx) => (
-                    <option key={name} value={idx}>
-                      {name}
+                  {availableMonths.map((m) => (
+                    <option key={m.name} value={m.value} disabled={m.disabled}>
+                      {m.name}
                     </option>
                   ))}
                 </select>
 
                 <select
                   value={viewYear}
-                  onChange={(e) => setViewYear(Number(e.target.value))}
+                  onChange={(e) => handleYearChange(Number(e.target.value))}
                   className="h-6 px-1 text-xs font-medium border border-line rounded bg-surface text-text cursor-pointer outline-none hover:border-line-strong"
                   aria-label="Select year"
                 >
@@ -201,7 +253,12 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
               <button
                 type="button"
                 onClick={handleNextMonth}
-                className="p-1 rounded text-muted hover:text-text hover:bg-surface-hover transition-colors"
+                disabled={isNextDisabled}
+                className={`p-1 rounded transition-colors ${
+                  isNextDisabled
+                    ? 'text-muted/30 cursor-not-allowed'
+                    : 'text-muted hover:text-text hover:bg-surface-hover cursor-pointer'
+                }`}
                 aria-label="Next month"
               >
                 <ChevronRight size={14} />

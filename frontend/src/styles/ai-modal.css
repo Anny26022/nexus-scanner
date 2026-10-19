@@ -354,9 +354,116 @@
 .tijori-watch-list p { margin: 0; color: var(--secondary); overflow-wrap: anywhere; }
 .tijori-details-footer { display: flex; flex: 0 0 auto; justify-content: space-between; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
 .tijori-details-footer > a { display: inline-flex; align-items: center; gap: 5px; color: var(--secondary); }
-.tijori-details-footer > a:hover { color: var(--accent); }
 .tijori-loading { display: grid; gap: 16px; padding: 20px 0; }
 .tijori-loading .skeleton { height: 42px; }
+
+/* Sleek Minimal Stock News Stream inside Hover Card */
+.hover-news-stream {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0 2px;
+}
+
+.hover-news-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.hover-news-item {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line, rgba(0, 0, 0, 0.05));
+  transition: background-color 0.12s ease;
+  border-radius: 6px;
+}
+
+.hover-news-item:hover {
+  background-color: var(--surface-hover, rgba(0, 0, 0, 0.02));
+}
+
+.hover-news-item:last-child {
+  border-bottom: none;
+}
+
+.hover-news-row {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  column-gap: 8px;
+  align-items: baseline;
+}
+
+/* Authentic Dhan-style Sentiment Badge */
+.dhan-sentiment-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  transition: all 0.12s ease;
+  transform: translateY(2px);
+}
+
+.dhan-sentiment-badge.is-positive {
+  color: #10b981;
+  background-color: rgba(16, 185, 129, 0.1);
+}
+
+.dhan-sentiment-badge.is-negative {
+  color: #f43f5e;
+  background-color: rgba(244, 63, 94, 0.1);
+}
+
+.dhan-sentiment-badge.is-neutral {
+  color: #64748b;
+  background-color: rgba(100, 116, 139, 0.08);
+}
+
+.dhan-sentiment-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hover-news-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.hover-news-title {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text, #111827);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.hover-news-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--muted, #9ca3af);
+  line-height: 1;
+}
+
+.hover-news-topic {
+  text-transform: capitalize;
+  font-weight: 450;
+}
+
+.hover-news-dot {
+  opacity: 0.5;
+}
+
+.hover-news-time {
+  font-variant-numeric: tabular-nums;
+}
 @keyframes ipo-panel-enter { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: scale(1); } }
 .skip-link { position: fixed; top: -100px; left: 16px; z-index: 30; background: var(--surface); color: var(--text); padding: 12px; border: 2px solid var(--accent); border-radius: 8px; }
 .skip-link:focus { top: 12px; }

@@ -4,6 +4,7 @@ import { screenerApi } from './api/screenerApi';
 import { Navbar } from './components/Navbar';
 import { ExploreTab } from './components/ExploreTab';
 import { NewListingsTab } from './components/NewListingsTab';
+import { NewsTab } from './components/NewsTab';
 import { SessionDatePicker } from './components/SessionDatePicker';
 import { PanelLeftOpen } from 'lucide-react';
 import { useLocalStorageState } from './hooks/useLocalStorageState';
@@ -20,7 +21,7 @@ const queryClient = new QueryClient({
 const ChartsTab = React.lazy(() => import('./components/ChartsTab'));
 
 const ScreenerAppContent: React.FC = () => {
-  const [activeTab, setActiveTab] = useLocalStorageState<'screener' | 'ipo' | 'charts'>('nexus-scanner.ui.active-tab.v1', 'screener');
+  const [activeTab, setActiveTab] = useLocalStorageState<'screener' | 'ipo' | 'charts' | 'news'>('nexus-scanner.ui.active-tab.v1', 'screener');
   const [sidebarHidden, setSidebarHidden] = useLocalStorageState('nexus-scanner.ui.sidebar-hidden.v1', false);
 
   const { data: revisionData, isError: revisionFailed, refetch: refreshRevision } = useQuery({
@@ -64,7 +65,7 @@ const ScreenerAppContent: React.FC = () => {
       <a href="#workspace" className="skip-link">Skip to results workspace</a>
       {!sidebarHidden && <Navbar activeTab={activeTab} onTabChange={setActiveTab} onHideSidebar={() => setSidebarHidden(true)} sessionDate={activeTab === 'screener' ? selectedAsOfDate : undefined} />}
 
-      <main id="workspace" className={`workspace${activeTab === 'charts' ? ' workspace--charts' : ''}${sidebarHidden ? ' workspace--sidebar-hidden' : ''}`} tabIndex={-1}>
+      <main id="workspace" className={`workspace${activeTab === 'charts' ? ' workspace--charts' : ''}${activeTab === 'news' ? ' workspace--news' : ''}${sidebarHidden ? ' workspace--sidebar-hidden' : ''}`} tabIndex={-1}>
         {sidebarHidden && <button type="button" className="workspace-sidebar-reopen" aria-label="Show sidebar" title="Show sidebar" onClick={() => setSidebarHidden(false)}><PanelLeftOpen size={17}/></button>}
         {activeTab === 'screener' && (
           <div className="workspace-heading">
@@ -94,6 +95,8 @@ const ScreenerAppContent: React.FC = () => {
           <React.Suspense fallback={<p role="status">Loading chart workspace…</p>}>
             <ChartsTab datasetRevision={latestRevision}/>
           </React.Suspense>
+        ) : activeTab === 'news' ? (
+          <NewsTab />
         ) : (
           <NewListingsTab key={latestRevision} datasetRevision={latestRevision} selectedAsOfDate={latestDate} />
         )}

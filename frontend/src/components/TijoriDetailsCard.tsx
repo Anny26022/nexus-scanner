@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, X } from 'lucide-react';
+import { ExternalLink, X, RefreshCw } from 'lucide-react';
 import { getTijoriOverviews } from '../api/tijori';
+import { fetchLiveNews } from '../api/dhanNewsApi';
+import symbolIsinMap from '../data/symbolIsinMap.json';
 import { SymbolWithLogo } from './SymbolWithLogo';
+import { DhanSentimentBadge } from './DhanSentimentBadge';
 import type { companyPopoverPosition } from '../utils/companyPopoverPosition';
 
-type Tab = 'snapshot' | 'watch' | 'events';
+type Tab = 'snapshot' | 'news' | 'watch' | 'events';
 interface Props extends ReturnType<typeof companyPopoverPosition> {
   row: {symbol: string; name: string};
   id: string;
@@ -18,14 +21,37 @@ const date = (value: string) => new Date(`${value}T00:00:00+05:30`).toLocaleDate
   day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata',
 });
 
+function formatRelative(epochMs: number): string {
+  const diffSec = Math.floor((Date.now() - epochMs) / 1000);
+  if (diffSec < 60) return 'just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const diffDay = Math.floor(diffHour / 24);
+  return `${diffDay}d ago`;
+}
+
 export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMouseEnter, onMouseLeave}: Props) {
   const query = useQuery({queryKey: ['tijori-overviews'], queryFn: getTijoriOverviews,
     staleTime: 30 * 60 * 1000, gcTime: 60 * 60 * 1000, retry: 1});
   const report = query.data?.[row.symbol];
+
+  const stockIsin = (symbolIsinMap as Record<string, string>)[row.symbol];
+  const newsQuery = useQuery({
+    queryKey: ['stockHoverNews', row.symbol, stockIsin],
+    queryFn: ({ signal }) => fetchLiveNews({ stockIsin: stockIsin || 'ALL', limit: 100, signal }),
+    enabled: Boolean(stockIsin),
+    staleTime: 60 * 1000,
+  });
+
+  const newsArticles = newsQuery.data?.articles ?? [];
+
   const tabs = [
     ...(report?.the_read?.length ? [{id: 'snapshot' as const, label: 'Snapshot'}] : []),
     ...(report?.what_to_watch?.length ? [{id: 'watch' as const, label: 'What to Watch'}] : []),
     ...(report?.key_events?.length ? [{id: 'events' as const, label: 'Key events'}] : []),
+    ...(stockIsin ? [{id: 'news' as const, label: `News${newsArticles.length ? ` (${newsArticles.length})` : ''}`}] : []),
   ];
   const [requestedTab, setRequestedTab] = useState<Tab>('snapshot');
   const activeTab = tabs.some(tab => tab.id === requestedTab) ? requestedTab : tabs[0]?.id;
@@ -53,18 +79,66 @@ export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMou
         }}>{tab.label}</button>)}
     </div>}
     <div key={activeTab ?? 'status'} className="ipo-details-content">
-      {query.isPending ? <div className="tijori-loading" role="status" aria-label="Loading company snapshot">
+      {query.isPending && activeTab !== 'news' ? <div className="tijori-loading" role="status" aria-label="Loading company snapshot">
         <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
-      </div> : query.isError ? <div className="ipo-details-empty" role="alert"><p>Company snapshot could not be loaded.</p>
+      </div> : query.isError && activeTab !== 'news' ? <div className="ipo-details-empty" role="alert"><p>Company snapshot could not be loaded.</p>
         <button className="button button-ghost" onClick={() => void query.refetch()}>Retry</button></div>
         : !tabs.length ? <p className="ipo-details-empty">No Tijori snapshot is available for this company.</p>
           : <div role="tabpanel" id={`${id}-${activeTab}-panel`} aria-labelledby={`${id}-${activeTab}-tab`} tabIndex={0}>
-            {activeTab === 'snapshot' && <ul className="tijori-snapshot-list">{report!.the_read.map((text, index) => <li key={index}>{text}</li>)}</ul>}
-            {activeTab === 'watch' && <div className="tijori-watch-list">{report!.what_to_watch.map((item, index) => <article key={index}>
+            {activeTab === 'snapshot' && report && <ul className="tijori-snapshot-list">{report.the_read.map((text, index) => <li key={index}>{text}</li>)}</ul>}
+            
+            {activeTab === 'news' && (
+              <div className="hover-news-stream">
+                {newsQuery.isPending ? (
+                  <div className="tijori-loading" role="status" aria-label="Loading stock news">
+                    <span className="skeleton" /><span className="skeleton" />
+                  </div>
+                ) : newsQuery.isError ? (
+                  <div className="ipo-details-empty">
+                    <p>Unable to load live news for {row.symbol}.</p>
+                    <button type="button" className="button button-ghost" onClick={() => void newsQuery.refetch()}>
+                      <RefreshCw size={12} /> Retry
+                    </button>
+                  </div>
+                ) : newsArticles.length === 0 ? (
+                  <p className="ipo-details-empty">No exchange filings or live news found for {row.symbol}.</p>
+                ) : (
+                  <div className="hover-news-list">
+                    {newsArticles.map(article => {
+                      const sentiment = article.news_object?.overall_sentiment || 'neutral';
+                      return (
+                        <article key={article.article_id} className="hover-news-item">
+                          <div className="hover-news-row">
+                            <DhanSentimentBadge sentiment={sentiment} size="sm" className="hover-dhan-badge" />
+                            <div className="hover-news-content">
+                              <h4 className="hover-news-title">{article.news_object?.title}</h4>
+                              <div className="hover-news-meta">
+                                {article.sub_category && (
+                                  <span className="hover-news-topic">
+                                    {article.sub_category.replaceAll('-', ' ')}
+                                  </span>
+                                )}
+                                <span className="hover-news-dot">·</span>
+                                <time className="hover-news-time" dateTime={new Date(article.publish_date).toISOString()}>
+                                  {formatRelative(article.publish_date)}
+                                </time>
+                              </div>
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'watch' && report && <div className="tijori-watch-list">{report.what_to_watch.map((item, index) => <article key={index}>
               <h3>{item.title}</h3>{item.window && <span className="tijori-watch-window">{item.window}</span>}
               {item.body && <p>{item.body}</p>}
             </article>)}</div>}
-            {activeTab === 'events' && <div className="tijori-watch-list">{report!.key_events.map((event, index) => <article key={index}>
+
+            {activeTab === 'events' && report && <div className="tijori-watch-list">{report.key_events.map((event, index) => <article key={index}>
               {event.chart_date && <time className="tijori-watch-window" dateTime={event.chart_date}>{date(event.chart_date)}</time>}
               <p>{event.label}</p>
             </article>)}</div>}

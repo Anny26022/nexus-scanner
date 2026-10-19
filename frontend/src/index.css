@@ -3276,6 +3276,39 @@
 .session-select:hover { border-color: var(--line-strong); background: var(--surface-hover); }
 .session-select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .session-select--historical { border-color: #f59e0b; background: rgba(245, 158, 11, 0.08); color: #d97706; font-weight: 600; }
+.session-date-input {
+  height: 26px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  color-scheme: dark;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+}
+.session-date-input:hover { border-color: var(--line-strong); background: var(--surface-hover); }
+.session-date-input:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.session-date-input--historical { border-color: #f59e0b; background: rgba(245, 158, 11, 0.08); color: #d97706; font-weight: 600; }
+.session-date-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.7;
+  filter: invert(0.8);
+  transition: opacity 0.15s ease;
+}
+.session-date-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+[data-theme="light"] .session-date-input {
+  color-scheme: light;
+}
+[data-theme="light"] .session-date-input::-webkit-calendar-picker-indicator {
+  filter: none;
+}
 .session-reset-btn { height: 26px; padding: 0 8px; font-size: 11px; font-weight: 500; color: var(--muted); border-radius: 6px; }
 .session-reset-btn:hover { color: var(--text); background: var(--surface-hover); }
 

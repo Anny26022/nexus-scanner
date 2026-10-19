@@ -64,10 +64,39 @@ const ScreenerAppContent: React.FC = () => {
     return groups;
   }, [availableSessions]);
 
+  const { minDate, maxDate } = React.useMemo(() => {
+    if (availableSessions.length === 0) return { minDate: '', maxDate: '' };
+    const dates = availableSessions.map((s) => s.date).filter(Boolean).sort();
+    return { minDate: dates[0] || '', maxDate: dates[dates.length - 1] || '' };
+  }, [availableSessions]);
+
   const selectedAsOfDate = customSessionDate || latestDate;
   const selectedSessionMeta = availableSessions.find((s) => s.date === selectedAsOfDate);
   const activeRevision = selectedSessionMeta?.revision || latestRevision;
   const isHistoricalSelected = Boolean(selectedAsOfDate && latestDate && selectedAsOfDate !== latestDate);
+
+  const handleDateSelect = React.useCallback(
+    (inputDate: string) => {
+      if (!inputDate) return;
+      if (latestDate && inputDate >= latestDate) {
+        setCustomSessionDate(null);
+        return;
+      }
+      const exact = availableSessions.find((s) => s.date === inputDate);
+      if (exact) {
+        setCustomSessionDate(exact.date === latestDate ? null : exact.date);
+        return;
+      }
+      const preceding = availableSessions.find((s) => s.date <= inputDate);
+      if (preceding) {
+        setCustomSessionDate(preceding.date === latestDate ? null : preceding.date);
+      } else if (availableSessions.length > 0) {
+        const earliest = availableSessions[availableSessions.length - 1];
+        setCustomSessionDate(earliest.date === latestDate ? null : earliest.date);
+      }
+    },
+    [availableSessions, latestDate]
+  );
 
   return (
     <div className={`app-frame${sidebarHidden ? ' app-frame--sidebar-hidden' : ''}`}>
@@ -119,6 +148,16 @@ const ScreenerAppContent: React.FC = () => {
                   </option>
                 )}
               </select>
+              <input
+                type="date"
+                className={`session-date-input${isHistoricalSelected ? ' session-date-input--historical' : ''}`}
+                value={selectedAsOfDate}
+                min={minDate}
+                max={maxDate}
+                title="Jump directly to a date"
+                aria-label="Jump directly to date"
+                onChange={(e) => handleDateSelect(e.target.value)}
+              />
               {isHistoricalSelected && (
                 <button
                   type="button"

@@ -54,49 +54,11 @@ const ScreenerAppContent: React.FC = () => {
     return list;
   }, [sessionsList, latestDate, latestRevision]);
 
-  const groupedSessions = React.useMemo(() => {
-    const groups: Record<string, typeof availableSessions> = {};
-    for (const s of availableSessions) {
-      const year = s.date.slice(0, 4);
-      if (!groups[year]) groups[year] = [];
-      groups[year].push(s);
-    }
-    return groups;
-  }, [availableSessions]);
-
-  const { minDate, maxDate } = React.useMemo(() => {
-    if (availableSessions.length === 0) return { minDate: '', maxDate: '' };
-    const dates = availableSessions.map((s) => s.date).filter(Boolean).sort();
-    return { minDate: dates[0] || '', maxDate: dates[dates.length - 1] || '' };
-  }, [availableSessions]);
-
   const selectedAsOfDate = customSessionDate || latestDate;
   const selectedSessionMeta = availableSessions.find((s) => s.date === selectedAsOfDate);
   const activeRevision = selectedSessionMeta?.revision || latestRevision;
-  const isHistoricalSelected = Boolean(selectedAsOfDate && latestDate && selectedAsOfDate !== latestDate);
-
-  const handleDateSelect = React.useCallback(
-    (inputDate: string) => {
-      if (!inputDate) return;
-      if (latestDate && inputDate >= latestDate) {
-        setCustomSessionDate(null);
-        return;
-      }
-      const exact = availableSessions.find((s) => s.date === inputDate);
-      if (exact) {
-        setCustomSessionDate(exact.date === latestDate ? null : exact.date);
-        return;
-      }
-      const preceding = availableSessions.find((s) => s.date <= inputDate);
-      if (preceding) {
-        setCustomSessionDate(preceding.date === latestDate ? null : preceding.date);
-      } else if (availableSessions.length > 0) {
-        const earliest = availableSessions[availableSessions.length - 1];
-        setCustomSessionDate(earliest.date === latestDate ? null : earliest.date);
-      }
-    },
-    [availableSessions, latestDate]
-  );
+  const isHistorical = Boolean(selectedAsOfDate && latestDate && selectedAsOfDate !== latestDate);
+  const minDate = availableSessions[availableSessions.length - 1]?.date;
 
   return (
     <div className={`app-frame${sidebarHidden ? ' app-frame--sidebar-hidden' : ''}`}>
@@ -112,53 +74,22 @@ const ScreenerAppContent: React.FC = () => {
                 <CalendarDays size={16} />
                 <span>Session:</span>
               </div>
-              <select
-                className={`session-select${isHistoricalSelected ? ' session-select--historical' : ''}`}
-                value={selectedAsOfDate}
-                aria-label="Select trading session"
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setCustomSessionDate(val === latestDate ? null : val);
-                }}
-              >
-                {availableSessions.length > 0 ? (
-                  Object.entries(groupedSessions).map(([year, list]) => (
-                    <optgroup key={year} label={year}>
-                      {list.map((s) => (
-                        <option key={s.date} value={s.date}>
-                          {new Date(`${s.date}T00:00:00`).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                          {s.date === latestDate ? ' (Latest)' : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))
-                ) : (
-                  <option value={selectedAsOfDate}>
-                    {selectedAsOfDate
-                      ? new Date(`${selectedAsOfDate}T00:00:00`).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })
-                      : 'Checking latest session'}
-                  </option>
-                )}
-              </select>
               <input
                 type="date"
-                className={`session-date-input${isHistoricalSelected ? ' session-date-input--historical' : ''}`}
+                className={`session-date-input${isHistorical ? ' session-date-input--historical' : ''}`}
                 value={selectedAsOfDate}
                 min={minDate}
-                max={maxDate}
-                title="Jump directly to a date"
-                aria-label="Jump directly to date"
-                onChange={(e) => handleDateSelect(e.target.value)}
+                max={latestDate}
+                title="Select trading session date"
+                aria-label="Select trading session date"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val || val >= latestDate) return setCustomSessionDate(null);
+                  const snap = availableSessions.find((s) => s.date <= val);
+                  setCustomSessionDate(snap ? snap.date : null);
+                }}
               />
-              {isHistoricalSelected && (
+              {isHistorical && (
                 <button
                   type="button"
                   className="button button-ghost button-sm session-reset-btn"

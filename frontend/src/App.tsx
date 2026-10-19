@@ -54,6 +54,16 @@ const ScreenerAppContent: React.FC = () => {
     return list;
   }, [sessionsList, latestDate, latestRevision]);
 
+  const groupedSessions = React.useMemo(() => {
+    const groups: Record<string, typeof availableSessions> = {};
+    for (const s of availableSessions) {
+      const year = s.date.slice(0, 4);
+      if (!groups[year]) groups[year] = [];
+      groups[year].push(s);
+    }
+    return groups;
+  }, [availableSessions]);
+
   const selectedAsOfDate = customSessionDate || latestDate;
   const selectedSessionMeta = availableSessions.find((s) => s.date === selectedAsOfDate);
   const activeRevision = selectedSessionMeta?.revision || latestRevision;
@@ -83,15 +93,19 @@ const ScreenerAppContent: React.FC = () => {
                 }}
               >
                 {availableSessions.length > 0 ? (
-                  availableSessions.map((s) => (
-                    <option key={s.date} value={s.date}>
-                      {new Date(`${s.date}T00:00:00`).toLocaleDateString('en-IN', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })}
-                      {s.date === latestDate ? ' (Latest)' : ' (Historical)'}
-                    </option>
+                  Object.entries(groupedSessions).map(([year, list]) => (
+                    <optgroup key={year} label={year}>
+                      {list.map((s) => (
+                        <option key={s.date} value={s.date}>
+                          {new Date(`${s.date}T00:00:00`).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                          {s.date === latestDate ? ' (Latest)' : ''}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))
                 ) : (
                   <option value={selectedAsOfDate}>

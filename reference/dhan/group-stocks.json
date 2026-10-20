@@ -1,0 +1,1103 @@
+{
+  "source": "Dhan (ow-scanx-analytics.dhan.co)",
+  "groups": {
+    "tata-group-stocks": {
+      "groupName": "Tata Group",
+      "sourceUrl": "https://dhan.co/stocks/market/tata-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE010J01012",
+          "symbol": "TEJASNET",
+          "name": "Tejas Networks",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE045B01015",
+          "symbol": "NELCO",
+          "name": "NELCO",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE053A01029",
+          "symbol": "INDHOTEL",
+          "name": "Indian Hotels Company",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE081A01020",
+          "symbol": "TATASTEEL",
+          "name": "Tata Steel",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE092A01019",
+          "symbol": "TATACHEM",
+          "name": "Tata Chemicals",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE133D01023",
+          "symbol": "ARTSON",
+          "name": "Artson",
+          "exchange": "BSE"
+        },
+        {
+          "isin": "INE142M01025",
+          "symbol": "TATATECH",
+          "name": "Tata Technologies",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE151A01013",
+          "symbol": "TATACOMM",
+          "name": "Tata Communications",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE155A01022",
+          "symbol": "TMPV",
+          "name": "Tata Motors Passenger Vehicles",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE192A01025",
+          "symbol": "TATACONSUM",
+          "name": "Tata Consumer Products",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE1TAE01010",
+          "symbol": "TMCV",
+          "name": "Tata Motors",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE226A01021",
+          "symbol": "VOLTAS",
+          "name": "Voltas",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE245A01021",
+          "symbol": "TATAPOWER",
+          "name": "Tata Power",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE280A01028",
+          "symbol": "TITAN",
+          "name": "Titan",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE391D01019",
+          "symbol": "TRF",
+          "name": "TRF",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE451C01013",
+          "symbol": "ACGL",
+          "name": "Automobile Corporation of Goa",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE467B01029",
+          "symbol": "TCS",
+          "name": "Tata Consultancy Services",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE517B01013",
+          "symbol": "TTML",
+          "name": "Tata Teleservices Maharashtra",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE613A01020",
+          "symbol": "RALLIS",
+          "name": "Rallis",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE664D01019",
+          "symbol": "BENARAS",
+          "name": "Benares Hotels",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE670A01012",
+          "symbol": "TATAELXSI",
+          "name": "Tata Elxsi",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE672A01026",
+          "symbol": "TATAINVEST",
+          "name": "Tata Investment Corporation",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE750A01020",
+          "symbol": "ORIENTHOT",
+          "name": "Oriental Hotels",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE849A01020",
+          "symbol": "TRENT",
+          "name": "Trent",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE900C01027",
+          "symbol": "ASAL",
+          "name": "Automotive Stampings & Assemblies",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE976I01016",
+          "symbol": "TATACAP",
+          "name": "Tata Capital",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "adani-group-stocks": {
+      "groupName": "Adani Group",
+      "sourceUrl": "https://dhan.co/stocks/market/adani-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE012A01025",
+          "symbol": "ACC",
+          "name": "ACC",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE079A01024",
+          "symbol": "AMBUJACEM",
+          "name": "Ambuja Cements",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE155G01029",
+          "symbol": "NDTV",
+          "name": "New Delhi Television (NDTV)",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE364U01010",
+          "symbol": "ADANIGREEN",
+          "name": "Adani Green Energy",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE399L01023",
+          "symbol": "ATGL",
+          "name": "Adani Total Gas",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE423A01024",
+          "symbol": "ADANIENT",
+          "name": "Adani Enterprises",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE686A01026",
+          "symbol": "CEMPRO",
+          "name": "Cemindia Projects",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE742F01042",
+          "symbol": "ADANIPORTS",
+          "name": "Adani Ports & SEZ",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE814H01029",
+          "symbol": "ADANIPOWER",
+          "name": "Adani Power",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE876N01018",
+          "symbol": "ORIENTCEM",
+          "name": "Orient Cement",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE931S01010",
+          "symbol": "ADANIENSOL",
+          "name": "Adani Energy Solutions",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "mukesh-ambani-group-stocks": {
+      "groupName": "Mukesh Ambani Group",
+      "sourceUrl": "https://dhan.co/stocks/market/mukesh-ambani-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE002A01018",
+          "symbol": "RELIANCE",
+          "name": "Reliance Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE00M201021",
+          "symbol": "SWSOLAR",
+          "name": "Sterling & Wilson Renewable Energy",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE046A01015",
+          "symbol": "RIIL",
+          "name": "Reliance Industrial Infrastructure",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE525B01016",
+          "symbol": "HATHWAYB",
+          "name": "Hathway Bhawani Cabletel & Datacom",
+          "exchange": "BSE"
+        },
+        {
+          "isin": "INE599M01018",
+          "symbol": "JUSTDIAL",
+          "name": "Just Dial",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE669A01022",
+          "symbol": "INFOMEDIA",
+          "name": "Infomedia Press",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE758E01017",
+          "symbol": "JIOFIN",
+          "name": "Jio Financial Services",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE869I01013",
+          "symbol": "GTPL",
+          "name": "GTPL Hathway",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE870H01013",
+          "symbol": "NETWORK18",
+          "name": "Network18 Media & Investments",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE947J01015",
+          "symbol": "DEN",
+          "name": "Den Networks",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE982F01036",
+          "symbol": "HATHWAY",
+          "name": "Hathway Cable & Datacom",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "anil-ambani-group-stocks": {
+      "groupName": "Anil Ambani Group",
+      "sourceUrl": "https://dhan.co/stocks/market/anil-ambani-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE036A01016",
+          "symbol": "RELINFRA",
+          "name": "Reliance Infrastructure",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE330H01018",
+          "symbol": "RCOM",
+          "name": "Reliance Communications",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE442U01014",
+          "symbol": "VARUNME",
+          "name": "Varun Mercantile",
+          "exchange": "BSE"
+        },
+        {
+          "isin": "INE542F01020",
+          "symbol": "SWANDEF",
+          "name": "Swan Defence & Heavy Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE614G01033",
+          "symbol": "RPOWER",
+          "name": "Reliance Power",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "jindal-group-stocks": {
+      "groupName": "Jindal Group",
+      "sourceUrl": "https://dhan.co/stocks/market/jindal-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE019A01038",
+          "symbol": "JSWSTEEL",
+          "name": "JSW Steel",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE023A01030",
+          "symbol": "NSIL",
+          "name": "Nalwa Sons Investments",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE025A01027",
+          "symbol": "CONSOFINVT",
+          "name": "Consolidated Finvest & Holdings",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE121E01018",
+          "symbol": "JSWENERGY",
+          "name": "JSW Energy",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE133A01011",
+          "symbol": "JSWDULUX",
+          "name": "JSW Dulux",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE197D01010",
+          "symbol": "JINDALPOLY",
+          "name": "Jindal Poly Films",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE220G01021",
+          "symbol": "JSL",
+          "name": "Jindal Stainless",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE271B01025",
+          "symbol": "MAHSEAMLES",
+          "name": "Maharashtra Seamless",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE324A01032",
+          "symbol": "JINDALSAW",
+          "name": "Jindal SAW",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE555C01029",
+          "symbol": "SHIVACEM",
+          "name": "Shiva Cement",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE718I01012",
+          "symbol": "JSWCEMENT",
+          "name": "JSW Cement",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE742C01031",
+          "symbol": "JINDRILL",
+          "name": "Jindal Drilling & Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE749A01030",
+          "symbol": "JINDALSTEL",
+          "name": "Jindal Steel",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE750M01017",
+          "symbol": "HEXATRADEX",
+          "name": "Hexa Tradex",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE796G01012",
+          "symbol": "JINDALPHOT",
+          "name": "Jindal Photo",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE824G01012",
+          "symbol": "JSWHL",
+          "name": "JSW Holdings",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE863T01013",
+          "symbol": "JITFINFRA",
+          "name": "JITF Infralogistics",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE880J01026",
+          "symbol": "JSWINFRA",
+          "name": "JSW Infrastructure",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE928H01019",
+          "symbol": "HARYNACAP",
+          "name": "Haryana Capfin",
+          "exchange": "BSE"
+        }
+      ]
+    },
+    "birla-group-stocks": {
+      "groupName": "Birla Group",
+      "sourceUrl": "https://dhan.co/stocks/market/birla-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE038A01020",
+          "symbol": "HINDALCO",
+          "name": "Hindalco Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE03JI01017",
+          "symbol": "DGCONTENT",
+          "name": "Digicontent",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE047A01021",
+          "symbol": "GRASIM",
+          "name": "Grasim Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE055A01016",
+          "symbol": "ABREL",
+          "name": "Aditya Birla Real Estate",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE085A01013",
+          "symbol": "CHAMBLFERT",
+          "name": "Chambal Fertilisers & Chemicals",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE087A01019",
+          "symbol": "KESORAMIND",
+          "name": "Kesoram Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE088F01024",
+          "symbol": "PARADEEP",
+          "name": "Paradeep Phosphates",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE142Z01019",
+          "symbol": "ORIENTELEC",
+          "name": "Orient Electric",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE14LE01019",
+          "symbol": "ABLBL",
+          "name": "Aditya Birla Lifestyle Brands",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE217A01012",
+          "symbol": "ZUARIIND",
+          "name": "Zuari Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE253A01025",
+          "symbol": "HINDMOTORS",
+          "name": "Hindustan Motors",
+          "exchange": "BSE"
+        },
+        {
+          "isin": "INE279A01012",
+          "symbol": "UNIVCABLES",
+          "name": "Universal Cables",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE318D01020",
+          "symbol": "ZENITHSTL",
+          "name": "Zenith Steel Pipes & Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE335W01016",
+          "symbol": "GANGESSECU",
+          "name": "Ganges Securities",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE340A01012",
+          "symbol": "BIRLACORPN",
+          "name": "Birla Corporation",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE347A01017",
+          "symbol": "MANGLMCEM",
+          "name": "Mangalam Cement",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE347W01011",
+          "symbol": "MAGADSUGAR",
+          "name": "Magadh Sugar & Energy",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE349W01017",
+          "symbol": "AVADHSUGAR",
+          "name": "Avadh Sugar & Energy",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE364A01020",
+          "symbol": "JAYSREETEA",
+          "name": "Jay Shree Tea & Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE372E01025",
+          "symbol": "BIRLAPREC",
+          "name": "Birla Precision Technologies",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE383A01012",
+          "symbol": "INDIACEM",
+          "name": "India Cements",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE404A01024",
+          "symbol": "ABSLAMC",
+          "name": "Aditya Birla Sun Life AMC",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE435C01024",
+          "symbol": "TEXINFRA",
+          "name": "Texmaco Infrastructure & Holdings",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE471W01019",
+          "symbol": "PALASHSECU",
+          "name": "Palash Securities",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE481G01011",
+          "symbol": "ULTRACEMCO",
+          "name": "UltraTech Cement",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE485A01015",
+          "symbol": "CENTENKA",
+          "name": "Century Enka",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE492A01029",
+          "symbol": "SUDARCOLOR",
+          "name": "Sudarshan Colorants",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE501G01024",
+          "symbol": "HTMEDIA",
+          "name": "HT Media",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE557A01011",
+          "symbol": "BIRLANU",
+          "name": "Birlanu",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE592A01026",
+          "symbol": "ORIENTPPR",
+          "name": "Orient Paper & Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE647O01011",
+          "symbol": "ABFRL",
+          "name": "Aditya Birla Fashion & Retail",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE674K01013",
+          "symbol": "ABCAPITAL",
+          "name": "Aditya Birla Capital",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE707A01012",
+          "symbol": "VINDHYATEL",
+          "name": "Vindhya Telelinks",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE747B01016",
+          "symbol": "NEXTMEDIA",
+          "name": "Next Mediaworks",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE800A01015",
+          "symbol": "BIRLACABLE",
+          "name": "Birla Cable",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE836A01035",
+          "symbol": "BSOFT",
+          "name": "Birlasoft",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE840M01016",
+          "symbol": "ZUARI",
+          "name": "Zuari Agro Chemicals",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE865C01022",
+          "symbol": "BIRLAMONEY",
+          "name": "Aditya Birla Money",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE871K01015",
+          "symbol": "HMVL",
+          "name": "Hindustan Media Ventures",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE923A01015",
+          "symbol": "SILINV",
+          "name": "SIL Investments",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "bajaj-group-stocks": {
+      "groupName": "Bajaj Group",
+      "sourceUrl": "https://dhan.co/stocks/market/bajaj-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE083O01019",
+          "symbol": "ZHINDHSG",
+          "name": "Hindustan Housing",
+          "exchange": "BSE"
+        },
+        {
+          "isin": "INE0KQN01018",
+          "symbol": "BAJEL",
+          "name": "Bajel Projects",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE0O9T01021",
+          "symbol": "BAJAJINDEF",
+          "name": "Indef Manufacturing",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE118A01012",
+          "symbol": "BAJAJHLDNG",
+          "name": "Bajaj Holdings & Investments",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE193E01025",
+          "symbol": "BAJAJELEC",
+          "name": "Bajaj Electricals",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE288A01013",
+          "symbol": "MAHSCOOTER",
+          "name": "Maharashtra Scooters",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE296A01032",
+          "symbol": "BAJFINANCE",
+          "name": "Bajaj Finance",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE304A01026",
+          "symbol": "MUKANDLTD",
+          "name": "Mukand",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE306A01021",
+          "symbol": "BAJAJHIND",
+          "name": "Bajaj Hindusthan Sugar",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE377Y01014",
+          "symbol": "BAJAJHFL",
+          "name": "Bajaj Housing Finance",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE688E01024",
+          "symbol": "HERCULES",
+          "name": "Hercules Investments",
+          "exchange": "BSE"
+        },
+        {
+          "isin": "INE704G01024",
+          "symbol": "BAJAJST",
+          "name": "Bajaj Steel Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE917I01010",
+          "symbol": "BAJAJ-AUTO",
+          "name": "Bajaj Auto",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE918I01026",
+          "symbol": "BAJAJFINSV",
+          "name": "Bajaj Finserv",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE933K01021",
+          "symbol": "BAJAJCON",
+          "name": "Bajaj Consumer Care",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "hinduja-group-stocks": {
+      "groupName": "Hinduja Group",
+      "sourceUrl": "https://dhan.co/stocks/market/hinduja-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE077F01035",
+          "symbol": "GOCLCORP",
+          "name": "GOCL Corporation",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE095A01012",
+          "symbol": "INDUSINDBK",
+          "name": "Indusind Bank",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE170I01016",
+          "symbol": "HGS",
+          "name": "Hinduja Global Solutions",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE208A01029",
+          "symbol": "ASHOKLEY",
+          "name": "Ashok Leyland",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE217K01011",
+          "symbol": "RHFL",
+          "name": "Reliance Home Finance",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE353A01023",
+          "symbol": "NDLVENTURE",
+          "name": "NDL Ventures",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE635Q01029",
+          "symbol": "GULFOILLUB",
+          "name": "Gulf Oil Lubricants",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "godrej-group-stocks": {
+      "groupName": "Godrej Group",
+      "sourceUrl": "https://dhan.co/stocks/market/godrej-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE102D01028",
+          "symbol": "GODREJCP",
+          "name": "Godrej Consumer Products",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE233A01035",
+          "symbol": "GODREJIND",
+          "name": "Godrej Industries",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE484J01027",
+          "symbol": "GODREJPROP",
+          "name": "Godrej Properties",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE563J01010",
+          "symbol": "ASTEC",
+          "name": "Astec Lifesciences",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE850D01014",
+          "symbol": "GODREJAGRO",
+          "name": "Godrej Agrovet",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "hdfc-group-stocks": {
+      "groupName": "HDFC Group",
+      "sourceUrl": "https://dhan.co/stocks/market/hdfc-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE040A01034",
+          "symbol": "HDFCBANK",
+          "name": "HDFC Bank",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE127D01025",
+          "symbol": "HDFCAMC",
+          "name": "HDFC AMC",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE756I01012",
+          "symbol": "HDBFS",
+          "name": "HDB Financial Services",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE795G01014",
+          "symbol": "HDFCLIFE",
+          "name": "HDFC Life Insurance",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "icici-group-stocks": {
+      "groupName": "ICICI Group",
+      "sourceUrl": "https://dhan.co/stocks/market/icici-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE090A01021",
+          "symbol": "ICICIBANK",
+          "name": "ICICI Bank",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE346A01027",
+          "symbol": "ICICIAMC",
+          "name": "ICICI Prudential Asset Management",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE726G01019",
+          "symbol": "ICICIPRULI",
+          "name": "ICICI Prudential Life Insurance",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE765G01017",
+          "symbol": "ICICIGI",
+          "name": "ICICI Lombard General Insurance",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "lt-group-stocks": {
+      "groupName": "L&T Group",
+      "sourceUrl": "https://dhan.co/stocks/market/lt-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE010V01017",
+          "symbol": "LTTS",
+          "name": "L&T Technology Services",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE018A01030",
+          "symbol": "LT",
+          "name": "Larsen & Toubro",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE214T01019",
+          "symbol": "LTM",
+          "name": "LTM",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE498L01015",
+          "symbol": "LTF",
+          "name": "L&T Finance",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "murugappa-group-stocks": {
+      "groupName": "Murugappa Group",
+      "sourceUrl": "https://dhan.co/stocks/market/murugappa-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE067A01029",
+          "symbol": "CGPOWER",
+          "name": "CG Power & Industrial Solutions",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE120A01034",
+          "symbol": "CARBORUNIV",
+          "name": "Carborundum Universal",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE121A01024",
+          "symbol": "CHOLAFIN",
+          "name": "Cholamandalam Investment",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE126A01031",
+          "symbol": "EIDPARRY",
+          "name": "EID Parry",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE149A01033",
+          "symbol": "CHOLAHLDNG",
+          "name": "Cholamandalam Financial Holdings",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE169A01031",
+          "symbol": "COROMANDEL",
+          "name": "Coromandel International",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE312J01012",
+          "symbol": "COROENGG",
+          "name": "Coromandel Engineering Company",
+          "exchange": "BSE"
+        },
+        {
+          "isin": "INE631A01022",
+          "symbol": "SHANTIGEAR",
+          "name": "Shanthi Gears",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE974X01010",
+          "symbol": "TIINDIA",
+          "name": "Tube Investment",
+          "exchange": "NSE"
+        }
+      ]
+    },
+    "mahindra-group-stocks": {
+      "groupName": "Mahindra Group",
+      "sourceUrl": "https://dhan.co/stocks/market/mahindra-group-stocks/",
+      "stocks": [
+        {
+          "isin": "INE101A01026",
+          "symbol": "M&M",
+          "name": "Mahindra & Mahindra",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE215D01010",
+          "symbol": "MAHEPC",
+          "name": "Mahindra EPC Irrigation",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE237A01036",
+          "symbol": "KOTAKBANK",
+          "name": "Kotak Bank",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE277A01016",
+          "symbol": "SWARAJENG",
+          "name": "Swaraj Engines",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE669C01036",
+          "symbol": "TECHM",
+          "name": "Tech Mahindra",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE766P01016",
+          "symbol": "MAHLOG",
+          "name": "Mahindra Logistic",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE774D01024",
+          "symbol": "M&MFIN",
+          "name": "M&M Financial Services",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE813A01018",
+          "symbol": "MAHLIFE",
+          "name": "Mahindra Lifespaces Developers",
+          "exchange": "NSE"
+        },
+        {
+          "isin": "INE998I01010",
+          "symbol": "MHRIL",
+          "name": "Mahindra Holidays",
+          "exchange": "NSE"
+        }
+      ]
+    }
+  }
+}

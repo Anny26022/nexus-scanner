@@ -2,8 +2,8 @@ import { Sun, Moon, ArrowUpRight, PanelLeftClose } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 
 interface NavbarProps {
-  activeTab: 'screener' | 'ipo' | 'charts' | 'news';
-  onTabChange: (tab: 'screener' | 'ipo' | 'charts' | 'news') => void;
+  activeTab: 'screener' | 'ipo' | 'charts';
+  onTabChange: (tab: 'screener' | 'ipo' | 'charts') => void;
   onHideSidebar: () => void;
   sessionDate?: string;
 }
@@ -23,7 +23,6 @@ export function Navbar({ activeTab, onTabChange, onHideSidebar, sessionDate }: N
       <button type="button" aria-current={activeTab === 'screener' ? 'page' : undefined} onClick={() => onTabChange('screener')}><span>Screener</span><ArrowUpRight className="nav-arrow" size={14} /></button>
       <button type="button" aria-current={activeTab === 'ipo' ? 'page' : undefined} onClick={() => onTabChange('ipo')}><span>IPO Catalogue</span><ArrowUpRight className="nav-arrow" size={14} /></button>
       <button type="button" aria-current={activeTab === 'charts' ? 'page' : undefined} onClick={() => onTabChange('charts')}><span>Charts</span><ArrowUpRight className="nav-arrow" size={14} /></button>
-      <button type="button" aria-current={activeTab === 'news' ? 'page' : undefined} onClick={() => onTabChange('news')}><span>Live News</span><ArrowUpRight className="nav-arrow" size={14} /></button>
     </nav>
     <div className="sidebar-footer">
       {sessionDate && <div className="mobile-session-badge"><span>{new Date(`${sessionDate}T00:00:00`).toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}</span></div>}

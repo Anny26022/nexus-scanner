@@ -288,7 +288,9 @@ def data_completeness(row):
     # Preserve the denominator used before the optional ScanX fields were added.
     added = set(PUBLIC_FINANCIAL_FIELDS.values()) - {"epsTtm", "dividendYieldPct", "debtToEquity"}
     added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness", "metrics",
-                  "nicheTags", "nicheEvidence", "providerSector", "providerIndustry"})
+                  "nicheTags", "nicheEvidence", "providerSector", "providerIndustry",
+                  "setupGeometry", "trendTemplate", "stageStatus", "upcomingEarnings",
+                  "tradedValueMean20dCr", "tradedValueMedian20dCr", "isLiquidScreen"})
     values = [value for key, value in row.items() if key not in added]
     return round(100 * sum(value is not None for value in values) / len(values)) if values else 0
 
@@ -325,6 +327,13 @@ def stock_row(s, ratings):
                                 "reviewedOn": evidence["reviewed_on"], "exposure": evidence["exposure"]}
     for ma in ("sma20","sma50","sma200","ema20","ema50","ema200"):
         row[ma]=s.get(ma)
+    row["setupGeometry"] = s.get("setup_geometry")
+    row["trendTemplate"] = s.get("trend_template")
+    row["stageStatus"] = s.get("stage_status")
+    row["upcomingEarnings"] = s.get("upcoming_earnings")
+    row["tradedValueMean20dCr"] = s.get("traded_value_mean_20d_cr")
+    row["tradedValueMedian20dCr"] = s.get("traded_value_median_20d_cr")
+    row["isLiquidScreen"] = s.get("is_liquid_screen")
     row["dataCompleteness"] = data_completeness(row)
     return row
 

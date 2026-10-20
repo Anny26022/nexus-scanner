@@ -163,6 +163,14 @@ export interface StockRow {
   roaPct?: number | null;
   cwipCrore?: number | null;
   fixedAssetsCrore?: number | null;
+  setupGeometry?: Record<string, any> | null;
+  trendTemplate?: { score: number; isLeader: boolean; checks: Record<string, boolean>; fails: string[] } | null;
+  stageStatus?: { stage: number; slope20d: number; justEnteredStage2: boolean } | null;
+  upcomingEarnings?: { scheduledDate?: string; daysUntilResults?: number; purpose?: string } | null;
+  tradedValueMean20dCr?: number | null;
+  tradedValueMedian20dCr?: number | null;
+  isLiquidScreen?: boolean | null;
+  isRsLine52wHigh?: boolean | null;
   borrowingsCrore?: number | null;
   freeCashFlowCrore?: number | null;
   financingCashFlowCrore?: number | null;

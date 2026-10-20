@@ -4,14 +4,14 @@
     "name": "Persistent Momentum",
     "category": "Momentum & Leadership",
     "horizon": "Positional",
-    "description": "Above EMA10 for 20 sessions, EMA20 for 30, or EMA50 for 50; AND 20-session average turnover at least ₹5 Cr.",
+    "description": "Above EMA10 for 20 sessions, EMA20 for 30, or EMA50 for 50; AND 20-session average turnover at least \u20b95 Cr.",
     "aka": [
       "Momentum Scanner",
       "momentum"
     ],
     "rules": [
       "Above the 10 EMA for 20 days, or the 20 EMA for 30, or the 50 EMA for 50",
-      "20-session average turnover ≥ ₹5 Cr"
+      "20-session average turnover \u2265 \u20b95 Cr"
     ],
     "expression": {
       "type": "group",
@@ -2219,6 +2219,526 @@
             "avgDays": 20,
             "multiple": 1.5
           }
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-vcp",
+    "name": "VCP (Volatility Contraction)",
+    "category": "Setups & Patterns",
+    "horizon": "Swing",
+    "description": "Successively shallower contractions with volume dry-up near highs.",
+    "rules": [
+      "Three successively shallower pullbacks, latest <= 8.5%",
+      "Within 15% of 52-week high and above 50 DMA",
+      "Drying volume on final contraction",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_VCP",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-darvas",
+    "name": "Darvas Box (Confirmed / Breakout)",
+    "category": "Setups & Patterns",
+    "horizon": "Positional",
+    "description": "Box ceiling within 5% of 52W high, height <= 20%, 3-day hold for top and bottom.",
+    "rules": [
+      "Ceiling within 5% of 52-week high",
+      "Box height relative to top <= 20%",
+      "3-day high/low confirmation",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_DARVAS",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-cup-handle",
+    "name": "Cup with Handle",
+    "category": "Setups & Patterns",
+    "horizon": "Positional",
+    "description": "Base depth 12-40% over >= 7 weeks, handle pullback in upper half <= 12%.",
+    "rules": [
+      "Base duration >= 7 weeks with depth 12-40%",
+      "Right rim within 12% of left rim",
+      "Handle depth in upper half <= 12%",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_CUP_HANDLE",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-bull-flag",
+    "name": "Bull Flag / Pennant",
+    "category": "Setups & Patterns",
+    "horizon": "Swing",
+    "description": "Sharp run-up >= 25% into a high 4-20 sessions ago, shallow pullback <= 12%.",
+    "rules": [
+      "Flag pole run-up >= 25% reached 4-20 sessions ago",
+      "Consolidation pullback <= 12%",
+      "Pause volume drying up",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_BULL_FLAG",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-pocket-pivot",
+    "name": "Pocket Pivot",
+    "category": "Setups & Patterns",
+    "horizon": "Swing",
+    "description": "Up day above 50 DMA whose volume exceeds every down-day volume in the preceding 10 sessions.",
+    "rules": [
+      "Close > prior close and above 50 DMA",
+      "Volume exceeds maximum down-day volume in last 10 days",
+      "RS Rating >= 60",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_POCKET_PIVOT",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-volume-breakout",
+    "name": "Volume Breakout (50-Day)",
+    "category": "Setups & Patterns",
+    "horizon": "Breakout",
+    "description": "Close above prior 50-day high (excluding today) with relative volume >= 2x.",
+    "rules": [
+      "Latest close clears the prior 50-day high (excluding today)",
+      "Relative volume >= 2.0x (vs 50-day average)",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_VOLUME_BREAKOUT",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-multi-year-breakout",
+    "name": "Multi-Year Breakout",
+    "category": "Setups & Patterns",
+    "horizon": "Positional",
+    "description": "Clearing ~3-year resistance ceiling that held for at least 1 year, within 15% of breakout level.",
+    "rules": [
+      "Clears multi-year resistance ceiling held for >= 1 year",
+      "Close within 15% above breakout level",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_MYB",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-coiled",
+    "name": "Coiled Spring",
+    "category": "Setups & Patterns",
+    "horizon": "Swing",
+    "description": "10-day range <= 10%, ATR(10)/ATR(50) <= 0.85, volume-dry ratio < 0.90, RS >= 60.",
+    "rules": [
+      "10-day price range <= 10%",
+      "ATR(10)/ATR(50) volatility compression <= 85%",
+      "Volume drying ratio < 0.90",
+      "Above 50 DMA and RS >= 60",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_COILED",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-tight-weeks",
+    "name": "Tight Weeks",
+    "category": "Setups & Patterns",
+    "horizon": "Positional",
+    "description": "At least 3 consecutive weekly closes within 1.5% of one another, above 50 DMA, RS >= 60.",
+    "rules": [
+      ">= 3 consecutive weekly closes within 1.5% of each other",
+      "Above 50 DMA",
+      "RS Rating >= 60",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_TIGHT_WEEKS",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-trend-leaders",
+    "name": "Minervini Trend Template (8/8 Leaders)",
+    "category": "Trend & Leadership",
+    "horizon": "Positional",
+    "description": "Passes all 8 strict trend rules: Price > 150/200, 150 > 200, 200 rising, 50 > 150/200, +30% off low, within 25% of high, RS >= 70.",
+    "rules": [
+      "Price > SMA150 and SMA200",
+      "SMA150 > SMA200 and SMA200 rising",
+      "SMA50 > SMA150 and SMA200",
+      "Price > SMA50",
+      "+30% above 52W low & within 25% of 52W high",
+      "RS Rating >= 70",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_TREND_LEADERS",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-stage-2",
+    "name": "Stage 2 Uptrend (Weinstein)",
+    "category": "Trend & Leadership",
+    "horizon": "Positional",
+    "description": "SMA150 slope rose more than 1.0% over 20 sessions with price above it.",
+    "rules": [
+      "SMA150 20-session slope > +1.0%",
+      "Price > SMA150",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_STAGE_2",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-just-entered-stage-2",
+    "name": "Just Entered Stage 2",
+    "category": "Trend & Leadership",
+    "horizon": "Positional",
+    "description": "Currently in Stage 2, but was NOT in Stage 2 15 sessions ago (fresh transition).",
+    "rules": [
+      "Currently in Weinstein Stage 2",
+      "Was not in Stage 2 15 sessions ago",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_JUST_ENTERED_STAGE_2",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-rs-line-high",
+    "name": "RS Line at 52-Week High",
+    "category": "Trend & Leadership",
+    "horizon": "Swing",
+    "description": "Stock / Nifty 500 relative strength ratio at a new 52-week high.",
+    "rules": [
+      "Stock to Nifty 500 ratio at highest level in 52 weeks",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_RS_LINE_HIGH",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-rs-leaders-80",
+    "name": "RS Leaders (>= 80)",
+    "category": "Trend & Leadership",
+    "horizon": "Positional",
+    "description": "Composite RS Rating in top 20% of universe (RS >= 80).",
+    "rules": [
+      "Audited composite RS Rating >= 80",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_RS_LEADERS_80",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-earnings-7d",
+    "name": "Upcoming Results (Next 7 Days)",
+    "category": "Upcoming Earnings",
+    "horizon": "Event",
+    "description": "Scheduled corporate earnings result within the next 7 calendar days.",
+    "rules": [
+      "Earnings results date within next 7 days",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_EARNINGS_7D",
+          "params": {}
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 10
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "lib-ms-earnings-14d",
+    "name": "Upcoming Results (Next 14 Days)",
+    "category": "Upcoming Earnings",
+    "horizon": "Event",
+    "description": "Scheduled corporate earnings result within the next 14 calendar days.",
+    "rules": [
+      "Earnings results date within next 14 days",
+      "Average traded value >= 10 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "MS_EARNINGS_14D",
+          "params": {}
         },
         {
           "type": "condition",

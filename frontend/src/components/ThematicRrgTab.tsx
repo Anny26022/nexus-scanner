@@ -448,7 +448,7 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             </span>
           </h1>
           <div className="rrg-subtitle">
-            Benchmark: <strong>{data.benchmark}</strong> · As of {data.asOfDate} · {data.totalBlocks} Blocks · {data.totalNiches} Niches · {data.ipoTactical?.length ?? 0} Tactical IPOs Tracked
+            Benchmark: <strong>{data.benchmark}</strong> · As of {data.asOfDate} · {data.totalBlocks} Blocks · {data.totalNiches} Niches · {data.ipoTactical?.length ?? 0} Pre-Graduation IPOs (5–64 Sessions)
           </div>
         </div>
 
@@ -483,6 +483,7 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
               className="rrg-segmented-btn"
               aria-pressed={viewMode === 'ipos'}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+              title="Young IPO debutants (< 65 trading sessions) not yet eligible for main 3M RRG"
               onClick={() => {
                 setViewMode('ipos');
                 setActiveDrillBlock(null);

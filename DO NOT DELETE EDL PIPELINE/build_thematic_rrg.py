@@ -519,7 +519,8 @@ def build_thematic_rrg_payload(
             if 0 <= diff_days <= 300 and sym_u in histories:
                 d_arr, c_arr = histories[sym_u]
                 n_bars = len(c_arr)
-                if n_bars >= 5:
+                # Pre-graduation debutants: only young IPOs that have not yet completed the 65 sessions for main RRG
+                if 5 <= n_bars < 65:
                     lookback = min(10, n_bars - 1)
                     s_now = c_arr[-1]
                     s_past = c_arr[-1 - lookback]

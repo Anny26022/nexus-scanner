@@ -106,6 +106,7 @@ class TestThematicRrg(unittest.TestCase):
             self.assertIn("listingAgeDays", item)
             self.assertIn("sessions", item)
             self.assertGreaterEqual(item["sessions"], 5)
+            self.assertLess(item["sessions"], 65, f"Stock {item['symbol']} with {item['sessions']} sessions should have graduated to main RRG")
             self.assertLessEqual(item["listingAgeDays"], 300)
             self.assertGreaterEqual(len(item["trail"]), 1)
             x = item["x"]

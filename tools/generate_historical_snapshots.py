@@ -955,6 +955,13 @@ def main():
                     "lib-20d-high-thrust": bool(tech["changePct"] >= 4.0 and tech["rvol"] >= 2.0),
                     "mom_rvol": bool(tech["rvol"] >= 1.5),
                 },
+                "presetRuleMatches": {
+                    "trend_template": bool(tech["close_above_sma50"] and tech["close_above_sma200"] and tech["sma50_above_sma200"]),
+                    "lib-stage-two": bool(tech["close_above_sma50"] and tech["close_above_sma200"] and tech["sma50_above_sma200"]),
+                    "lib-52w-high-breakout": bool(tech["dist52wHighPct"] >= -0.5),
+                    "lib-20d-high-thrust": bool(tech["changePct"] >= 4.0 and tech["rvol"] >= 2.0),
+                    "mom_rvol": bool(tech["rvol"] >= 1.5),
+                },
             }
             snapshot_stocks.append(item)
             stock_series_data[sym] = (c_vals, h_vals, l_vals, v_vals, s_dates[window_slice])
@@ -1139,25 +1146,48 @@ def main():
             it["tradedValueMean20dCr"] = round(mean_val_cr, 2)
             it["tradedValueMedian20dCr"] = round(median_val_cr, 2)
 
-            # Sync preset matches
-            it["presetMatches"].update({
-                "lib-ms-vcp": bool(vcp) and is_liquid,
-                "lib-ms-darvas": bool(darvas and (darvas.get("state") in ("confirmed", "breakout") or darvas.get("status") in ("confirmed", "breakout"))) and is_liquid,
-                "lib-ms-coiled": coiled and is_liquid,
-                "lib-ms-tight-weeks": bool(tight_wks) and is_liquid,
-                "lib-ms-stage-2": (stage_res.get("stage") == 2) and is_liquid,
-                "lib-ms-just-entered-stage-2": stage_res.get("just_entered_stage_2", False) and is_liquid,
-                "lib-ms-trend-leaders": trend_res.get("is_leader", False) and is_liquid,
-                "lib-ms-pocket-pivot": pocket_pivot and is_liquid,
-                "lib-ms-volume-breakout": vol_breakout and is_liquid,
-                "lib-ms-multi-year-breakout": myb and is_liquid,
-                "lib-ms-rs-leaders-80": bool((comp_rs or 0) >= 80) and is_liquid,
-                "lib-ms-rs-line-high": bool(is_rs_high) and is_liquid,
+            # Calculate default eligibility (market cap >= 1000 Cr, close >= 10, 50d turnover >= 5 Cr, and 20d mean turnover >= 10 Cr)
+            mcap_cr = it.get("marketCapCrore")
+            p_close = it.get("close")
+            t50_val = (it.get("metrics") or {}).get("turnover50")
+            default_eligible = bool(
+                (mcap_cr is not None and mcap_cr >= 1000.0) and
+                (p_close is not None and p_close >= 10.0) and
+                (t50_val is None or t50_val >= 5.0) and
+                is_liquid
+            )
+
+            # Rule-only matches without default eligibility constraints
+            ms_rule_matches = {
+                "lib-ms-vcp": bool(vcp),
+                "lib-ms-darvas": bool(darvas and (darvas.get("state") in ("confirmed", "breakout") or darvas.get("status") in ("confirmed", "breakout"))),
+                "lib-ms-coiled": bool(coiled),
+                "lib-ms-tight-weeks": bool(tight_wks),
+                "lib-ms-stage-2": (stage_res.get("stage") == 2),
+                "lib-ms-just-entered-stage-2": bool(stage_res.get("just_entered_stage_2", False)),
+                "lib-ms-trend-leaders": bool(trend_res.get("is_leader", False)),
+                "lib-ms-pocket-pivot": bool(pocket_pivot),
+                "lib-ms-volume-breakout": bool(vol_breakout),
+                "lib-ms-multi-year-breakout": bool(myb),
+                "lib-ms-rs-leaders-80": bool((comp_rs or 0) >= 80),
+                "lib-ms-rs-line-high": bool(is_rs_high),
                 "lib-ms-liquid-screen": is_liquid,
-                "lib-ms-cup-handle": bool(cup) and is_liquid,
-                "lib-ms-cup-with-handle": bool(cup) and is_liquid,
-                "lib-ms-bull-flag": bool(flag) and is_liquid,
+                "lib-ms-cup-handle": bool(cup),
+                "lib-ms-cup-with-handle": bool(cup),
+                "lib-ms-bull-flag": bool(flag),
+            }
+
+            if "presetRuleMatches" not in it:
+                it["presetRuleMatches"] = {}
+            it["presetRuleMatches"].update(ms_rule_matches)
+
+            # Preset matches require BOTH rule-match and default eligibility
+            it["presetMatches"].update({
+                k: bool(v and default_eligible) for k, v in ms_rule_matches.items()
             })
+            for k in ("trend_template", "lib-stage-two", "lib-52w-high-breakout", "lib-20d-high-thrust", "mom_rvol"):
+                if k in it["presetMatches"]:
+                    it["presetMatches"][k] = bool(it["presetRuleMatches"].get(k) and default_eligible)
 
             # Calculate dataCompleteness
             it["dataCompleteness"] = bridge.data_completeness(it)
@@ -1175,6 +1205,7 @@ def main():
 
         raw_payload = {
             "schemaVersion": 4,
+            "presetRuleMatchesVersion": 1,
             "asOfDate": session_str,
             "totalStocks": len(snapshot_stocks),
             "stocks": snapshot_stocks,

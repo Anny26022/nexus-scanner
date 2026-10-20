@@ -139,6 +139,14 @@ describe('published snapshots', () => {
     expect(screenSnapshot({...snapshot,stocks:[staleMetadata]},{...request,
       expressionTree:{...staleFundamental,condition:{...staleFundamental.condition,isNegated:true}}})?.matchCount).toBe(0);
   });
+  it('rejects stocks with historyAligned: false in preset fallback and evaluation', () => {
+    const unalignedStock = { ...snapshot.stocks[0], historyAligned: false };
+    const unalignedSnapshot = { ...snapshot, stocks: [unalignedStock] };
+    const vcpCond = condition('lib-ms-vcp', {});
+    expect(screenSnapshot(unalignedSnapshot, { ...request, expressionTree: vcpCond })?.matchCount).toBe(0);
+    // Under negation, unknown/null remains unknown (0 matches)
+    expect(screenSnapshot(unalignedSnapshot, { ...request, expressionTree: { ...vcpCond, condition: { ...vcpCond.condition, isNegated: true } } })?.matchCount).toBe(0);
+  });
   it('refreshes a same-session correction and pins Python fallback to that revision', async () => {
     vi.resetModules();
     const revision = 'a'.repeat(64), next = 'b'.repeat(64);

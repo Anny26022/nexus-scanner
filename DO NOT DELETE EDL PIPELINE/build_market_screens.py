@@ -216,27 +216,32 @@ def detect_darvas(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray) -> di
     if height_pct > 20.0:
         return None
 
-    # Proximity to 52-week high: Nicolas Darvas required box top within 15% of 52W high
+    # Proximity to 52-week high: preset promises box top within 5% of 52W high
     h52 = float(np.max(highs[-min(len(highs), 252):]))
-    if h52 > 0 and ((h52 - box_top) / h52) * 100.0 > 15.0:
+    if h52 > 0 and ((h52 - box_top) / h52) * 100.0 > 5.0:
         return None
 
     current_close = float(recent_c[-1])
     # Chronological cancellation: breach below box floor invalidates the box
-    if current_close < box_bot:
+    if any(recent_c[k] < box_bot for k in range(box_bot_idx, n)):
         return None
 
     is_confirmed = (box_bot <= current_close <= box_top)
     is_breakout = (box_top < current_close <= box_top * 1.08)
 
-    # Breakout age check: breakout must have occurred within the last 5 trading days
+    # Breakout age check: initial breakout must have occurred within the last 5 trading days
+    breakout_age = 0
     if is_breakout:
-        recent_breakout_bars = [k for k in range(1, min(6, n)) if recent_c[-k] > box_top]
-        if not recent_breakout_bars:
+        first_breakout_idx = next((k for k in range(box_bot_idx, n) if recent_c[k] > box_top), None)
+        if first_breakout_idx is None:
+            return None
+        breakout_age = (n - 1) - first_breakout_idx
+        if breakout_age > 5:
             return None
 
     if is_confirmed or is_breakout:
         dist_top = ((box_top - current_close) / box_top) * 100.0
+        days_in_state = breakout_age if is_breakout else sum(1 for k in range(box_bot_idx, n) if box_bot <= recent_c[k] <= box_top)
         return {
             "matched": True,
             "state": "confirmed" if is_confirmed else "breakout",
@@ -248,8 +253,8 @@ def detect_darvas(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray) -> di
             "height_pct": round(height_pct, 2),
             "distFromTopPct": round(dist_top, 2),
             "dist_from_top_pct": round(dist_top, 2),
-            "daysInState": int(n - (box_bot_idx or box_top_idx)),
-            "days_in_state": int(n - (box_bot_idx or box_top_idx)),
+            "daysInState": days_in_state,
+            "days_in_state": days_in_state,
         }
     return None
 
@@ -518,6 +523,97 @@ def evaluate_weinstein_stage(closes: np.ndarray) -> dict:
     }
 
 
+def precompute_gallery_rs(
+    stocks: list[dict],
+    ohlcv_dir: Path,
+    today_date: str,
+    scan_len: int = 126,
+) -> dict[str, dict[str, int]]:
+    """Precompute point-in-time cross-sectional RS percentile ranks (1-99) for all gallery scan dates."""
+    if not ohlcv_dir.exists():
+        return {}
+
+    target_dates = []
+    probe_files = [ohlcv_dir / "TCS.csv", ohlcv_dir / "RELIANCE.csv", ohlcv_dir / "INFY.csv"]
+    for pf in probe_files:
+        if pf.exists():
+            rows = read_ohlcv_csv(pf)
+            all_d = [str(r.get("Date", "")).split()[0] for r in rows if str(r.get("Date", "")).split()[0] <= today_date]
+            if len(all_d) >= 40:
+                target_dates = all_d[-scan_len:]
+                break
+
+    if not target_dates:
+        sample = next(ohlcv_dir.glob("*.csv"), None)
+        if sample:
+            rows = read_ohlcv_csv(sample)
+            all_d = [str(r.get("Date", "")).split()[0] for r in rows if str(r.get("Date", "")).split()[0] <= today_date]
+            target_dates = all_d[-scan_len:]
+
+    if not target_dates:
+        return {}
+
+    scores_by_date: dict[str, dict[str, float]] = {d: {} for d in target_dates}
+
+    for stock in stocks:
+        sym = stock.get("symbol") or stock.get("Symbol")
+        if not sym:
+            continue
+        sym_upper = sym.upper()
+        csv_file = ohlcv_dir / f"{sym_upper}.csv"
+        if not csv_file.exists():
+            continue
+
+        rows = read_ohlcv_csv(csv_file)
+        if len(rows) < 65:
+            continue
+
+        c_dates = []
+        closes = []
+        for r in rows:
+            v = valid_ohlcv_values(r)
+            if v:
+                d_str = str(r.get("Date", "")).split()[0]
+                if d_str <= today_date:
+                    c_dates.append(d_str)
+                    closes.append(v[3])
+
+        if len(closes) < 65:
+            continue
+
+        d_to_i = {d: i for i, d in enumerate(c_dates)}
+        for d in target_dates:
+            idx = d_to_i.get(d)
+            if idx is not None and idx >= 63 and closes[idx] > 0:
+                c = closes[idx]
+                p63 = closes[idx - 63]
+                if p63 <= 0:
+                    continue
+                r63 = (c - p63) / p63
+                p126 = closes[idx - 126] if idx >= 126 else None
+                r126 = ((c - p126) / p126) if (p126 is not None and p126 > 0) else r63
+                p189 = closes[idx - 189] if idx >= 189 else None
+                r189 = ((c - p189) / p189) if (p189 is not None and p189 > 0) else r126
+                p252 = closes[idx - 252] if idx >= 252 else None
+                r252 = ((c - p252) / p252) if (p252 is not None and p252 > 0) else r189
+                scores_by_date[d][sym_upper] = float(0.40 * r63 + 0.20 * r126 + 0.20 * r189 + 0.20 * r252)
+
+    rs_by_date: dict[str, dict[str, int]] = {}
+    for d, score_map in scores_by_date.items():
+        if not score_map:
+            continue
+        series = pd.Series(score_map, dtype=float).dropna()
+        n = len(series)
+        if n <= 1:
+            rs_by_date[d] = {k: 50 for k in series.index}
+        else:
+            ranks = series.rank(method="min") - 1.0
+            percentiles = (1.0 + 98.0 * (ranks / (n - 1.0))).round().astype(int).clip(1, 99)
+            rs_by_date[d] = percentiles.to_dict()
+
+    return rs_by_date
+
+
 def enrich_snapshot_directory(
     root: Path,
     ohlcv_dir: Path | None = None,
@@ -555,10 +651,32 @@ def enrich_snapshot_directory(
 
     rs_as_of = rs_data.get("as_of_date")
     if rs_as_of and today_date and rs_as_of != today_date:
-        print(f"Notice: RS artifact date ({rs_as_of}) differs from stock snapshot date ({today_date}). Enforcing snapshot date {today_date} for all setup geometry.")
+        raise ValueError(
+            f"Stale inputs rejected: RS artifact date ({rs_as_of}) does not match stock snapshot date ({today_date}). "
+            "Pipeline inputs must be date-aligned before generating market screens."
+        )
+
+    # Check OHLCV freshness against today_date if ohlcv_dir exists
+    if ohlcv_dir.exists():
+        sample_csvs = list(ohlcv_dir.glob("*.csv"))[:10]
+        if sample_csvs:
+            max_csv_date = None
+            for p in sample_csvs:
+                rows = read_ohlcv_csv(p)
+                if rows:
+                    d = str(rows[-1].get("Date", "")).split()[0]
+                    if max_csv_date is None or d > max_csv_date:
+                        max_csv_date = d
+            if max_csv_date and max_csv_date < today_date:
+                raise ValueError(
+                    f"Stale inputs rejected: OHLCV history ends at {max_csv_date}, which is older than stock snapshot date ({today_date}). "
+                    "Cannot generate market screens with stale price history."
+                )
 
     today_dt = pd.to_datetime(today_date).date()
     print(f"Enriching snapshot directory {root.name} as of {today_date} across {len(stocks)} stocks...")
+
+    gallery_rs_map = precompute_gallery_rs(stocks, ohlcv_dir, today_date, scan_len=126) if generate_gallery else {}
 
     for stock in stocks:
         sym = stock.get("symbol") or stock.get("Symbol")
@@ -589,6 +707,16 @@ def enrich_snapshot_directory(
                     volumes.append(v[4])
 
         if len(closes) < 30:
+            continue
+
+        if dates[-1] != today_date:
+            # Stale OHLCV relative to snapshot date: expose and reject stale setup data
+            stock["setup_geometry"] = None
+            stock["setupGeometry"] = None
+            stock["trend_template"] = None
+            stock["trendTemplate"] = None
+            stock["stage_status"] = None
+            stock["stageStatus"] = None
             continue
 
         h_arr = np.array(highs, dtype=float)
@@ -746,8 +874,22 @@ def enrich_snapshot_directory(
         if generate_gallery:
             scan_len = min(len(c_arr), 126)
             if scan_len >= 40:
+                t_start = len(c_arr) - scan_len
                 active_episodes: dict[str, bool] = {"VCP": False, "Bull Flag": False, "Cup with Handle": False}
-                for t_idx in range(len(c_arr) - scan_len, len(c_arr)):
+                if t_start > 0:
+                    pre_c = c_arr[:t_start]
+                    pre_h = h_arr[:t_start]
+                    pre_l = l_arr[:t_start]
+                    pre_v = v_arr[:t_start]
+                    pre_dates = dates[:t_start]
+                    vcp_pre = detect_vcp(pre_h, pre_l, pre_c, pre_v, pre_dates)
+                    flag_pre = detect_flags(pre_h, pre_l, pre_c, pre_v)
+                    cup_pre = detect_cup_with_handle(pre_h, pre_l, pre_c)
+                    active_episodes["VCP"] = bool(vcp_pre and vcp_pre.get("matched"))
+                    active_episodes["Bull Flag"] = bool(flag_pre and flag_pre.get("matched"))
+                    active_episodes["Cup with Handle"] = bool(cup_pre and cup_pre.get("matched"))
+
+                for t_idx in range(t_start, len(c_arr)):
                     sig_date = dates[t_idx]
                     sub_c = c_arr[:t_idx + 1]
                     sub_h = h_arr[:t_idx + 1]
@@ -759,15 +901,19 @@ def enrich_snapshot_directory(
                     pat_flag = detect_flags(sub_h, sub_l, sub_c, sub_v)
                     pat_cup = detect_cup_with_handle(sub_h, sub_l, sub_c)
 
-                    # Point-in-time composite RS at t_idx without future lookahead
-                    cur_t = sub_c[-1]
-                    n_sub = len(sub_c)
-                    r63 = ((cur_t - sub_c[-64]) / sub_c[-64]) if (n_sub > 63 and sub_c[-64] > 0) else 0.0
-                    r126 = ((cur_t - sub_c[-127]) / sub_c[-127]) if (n_sub > 126 and sub_c[-127] > 0) else r63
-                    r189 = ((cur_t - sub_c[-190]) / sub_c[-190]) if (n_sub > 189 and sub_c[-190] > 0) else r126
-                    r252 = ((cur_t - sub_c[-253]) / sub_c[-253]) if (n_sub > 252 and sub_c[-253] > 0) else r189
-                    pit_score = round(float(0.40 * r63 + 0.20 * r126 + 0.20 * r189 + 0.20 * r252), 4)
-                    pit_rs = round(float(pit_score * 100.0), 1)
+                    # Point-in-time composite RS at t_idx: cross-sectional percentile rank (1-99)
+                    pit_rs = gallery_rs_map.get(sig_date, {}).get(sym_upper)
+                    if pit_rs is None:
+                        cur_t = sub_c[-1]
+                        n_sub = len(sub_c)
+                        r63 = ((cur_t - sub_c[-64]) / sub_c[-64]) if (n_sub > 63 and sub_c[-64] > 0) else 0.0
+                        r126 = ((cur_t - sub_c[-127]) / sub_c[-127]) if (n_sub > 126 and sub_c[-127] > 0) else r63
+                        r189 = ((cur_t - sub_c[-190]) / sub_c[-190]) if (n_sub > 189 and sub_c[-190] > 0) else r126
+                        r252 = ((cur_t - sub_c[-253]) / sub_c[-253]) if (n_sub > 252 and sub_c[-253] > 0) else r189
+                        pit_score = float(0.40 * r63 + 0.20 * r126 + 0.20 * r189 + 0.20 * r252)
+                        pit_rs = int(np.clip(round(50.0 + pit_score * 50.0), 1, 99))
+                    else:
+                        pit_rs = int(np.clip(pit_rs, 1, 99))
 
                     # Point-in-time trend score evaluated strictly at sig_date with point-in-time strength
                     sig_trend = evaluate_minervini_trend(sub_c, sub_h, sub_l, pit_rs)

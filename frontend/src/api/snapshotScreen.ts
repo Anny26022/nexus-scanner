@@ -315,6 +315,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       if (!targets) return null;
       fn = s => {
         if (s.presetMatches && s.presetMatches[c.conditionId] !== undefined) {
+          if (s.asOfDate !== session || s.historyAligned === false) return null;
           if (!hasCustomPresetEligibility(p)) return s.presetMatches[c.conditionId] ?? null;
           const eligibility = PRESET_ELIGIBILITY.map((rule, i): Truth => {
             if (targets[i] === null) return true;
@@ -324,7 +325,7 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
           const ruleMatch = s.historyAligned && s.asOfDate === session ? s.presetRuleMatches?.[c.conditionId] ?? null : null;
           return combine([...eligibility, ruleMatch], true);
         }
-        if (s.asOfDate !== session) {
+        if (s.asOfDate !== session || s.historyAligned === false) {
           return null;
         }
         const isLiquid = Boolean(

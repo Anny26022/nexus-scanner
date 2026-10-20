@@ -240,12 +240,16 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
                     abs(value) <= node["abs_max"] if node.get("abs_max") is not None else True))
     if node.get("type") == "condition" and str(node.get("kind", "")).startswith("MS_"):
         kind = str(node.get("kind"))
+        if s.get("as_of_date") != as_of and s.get("asOfDate") != as_of:
+            diagnostics.add(("stock_date", "stock_history_not_aligned_to_screen_date"))
+            return None
+
         setups = s.get("setup_geometry") or s.get("setupGeometry") or {}
         trend = s.get("trend_template") or s.get("trendTemplate") or {}
         stage = s.get("stage_status") or s.get("stageStatus") or {}
         earnings = s.get("upcoming_earnings") or s.get("upcomingEarnings") or {}
         rs_rating = s.get("rsRating")
-        if rs_rating is None:
+        if rs_rating is None and context.get("rs_ratings_as_of") == as_of:
             rs_rating = (context.get("rs_ratings") or context.get("ratings") or {}).get(s.get("symbol", ""), {}).get("front_weighted")
 
         if kind == "MS_VCP": return bool((setups.get("vcp") or {}).get("matched"))
@@ -260,8 +264,16 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
         if kind == "MS_TREND_LEADERS": return bool(trend.get("is_leader") or trend.get("isLeader"))
         if kind == "MS_STAGE_2": return stage.get("stage") == 2
         if kind == "MS_JUST_ENTERED_STAGE_2": return bool(stage.get("just_entered_stage_2") or stage.get("justEnteredStage2"))
-        if kind == "MS_RS_LINE_HIGH": return bool(s.get("is_rs_line_52w_high") or s.get("isRsLine52wHigh") or (context.get("ratings") or {}).get(s.get("symbol", ""), {}).get("is_rs_line_52w_high"))
-        if kind == "MS_RS_LEADERS_80": return (rs_rating or 0) >= 80
+        if kind == "MS_RS_LINE_HIGH":
+            is_high = s.get("is_rs_line_52w_high") or s.get("isRsLine52wHigh")
+            if is_high is None and context.get("rs_ratings_as_of") == as_of:
+                is_high = (context.get("ratings") or context.get("rs_ratings") or {}).get(s.get("symbol", ""), {}).get("is_rs_line_52w_high")
+            return None if is_high is None else bool(is_high)
+        if kind == "MS_RS_LEADERS_80":
+            if rs_rating is None:
+                diagnostics.add(("rs_rating", "dated_rs_ratings_unavailable"))
+                return None
+            return rs_rating >= 80
         if kind == "MS_EARNINGS_7D":
             days = earnings.get("days_until_results") if earnings.get("days_until_results") is not None else earnings.get("daysUntilResults")
             return days is not None and 0 <= days <= 7

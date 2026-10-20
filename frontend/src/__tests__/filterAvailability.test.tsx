@@ -13,7 +13,7 @@ it('keeps published filters and presets available but disables backend-only defa
   for (const conditionId of ['EARNINGS_GROWTH','fund_earnings_growth','rs_1month','rs_3month']) {
     expect(isAvailableFilter(NEXUS_CONDITION_CATALOG.find(def=>def.id===conditionId)!)).toBe(false);
   }
-  expect(PRESET_CATALOG).toHaveLength(45);
+  expect(PRESET_CATALOG).toHaveLength(61);
   expect(PRESET_CATALOG.every(isAvailableFilter)).toBe(true);
   expect(isAvailableCondition({instanceId:'ma', conditionId:'MA_STACK', parameters:{periods:'50,173,200',maType:'EMA',priceAbove:false}})).toBe(false);
   expect(hasUnavailableConditions({unknown:{instanceId:'unknown',conditionId:'UNKNOWN',parameters:{}}})).toBe(true);
@@ -82,7 +82,7 @@ it('keeps pre-built scans enabled in the same dialog', () => {
   render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={apply} />);
   fireEvent.click(screen.getByRole('button', {name:'Pre-built Scans'}));
   const presets = screen.getAllByRole('checkbox');
-  expect(presets).toHaveLength(45);
+  expect(presets).toHaveLength(61);
   for (const preset of presets) expect(preset).toBeEnabled();
   fireEvent.click(presets[0]);
   fireEvent.click(screen.getByRole('button', {name:'Apply'}));

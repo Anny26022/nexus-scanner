@@ -59,15 +59,15 @@ class MarketStrengthRsTests(unittest.TestCase):
         score = rs.calculate_composite_score(ret)
         self.assertAlmostEqual(score, 0.22)
 
-    def test_normalizes_weights_for_missing_longer_windows(self):
-        # Only 3m and 6m available (total active weight = 0.40 + 0.20 = 0.60)
+    def test_six_month_return_fills_missing_longer_windows(self):
+        # Only 3m and 6m available: 6m return substitutes missing 9m and 12m
         ret = {
             "three_month": 0.15,
             "six_month": 0.30,
         }
-        # Normalized: 0.15*(0.40/0.60) + 0.30*(0.20/0.60) = 0.10 + 0.10 = 0.20
+        # 0.40 * 0.15 + 0.20 * 0.30 + 0.20 * 0.30 + 0.20 * 0.30 = 0.06 + 0.18 = 0.24
         score = rs.calculate_composite_score(ret)
-        self.assertAlmostEqual(score, 0.20)
+        self.assertAlmostEqual(score, 0.24)
 
     def test_percentile_rank_bounds_and_ordering(self):
         scores = {"A": 0.50, "B": 0.10, "C": 0.30}

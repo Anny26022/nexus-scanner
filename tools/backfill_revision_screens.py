@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """Batch backfill past revisions in .scanner_cache/revisions with setup_geometry and trend_template.
 
-Enables historical session selector dates (e.g. browsing the screener as of Oct 1st)
-to carry full setup geometry, Minervini trend template scores, and Weinstein stages.
+Creates derived backend revisions without changing published revision inputs.
+Frontend historical datasets must be republished separately using the existing publisher.
 """
 
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
-import gzip
+import hashlib
 import json
-import os
 from pathlib import Path
+import shutil
 import sys
+import tempfile
 import time
 
 # Ensure pipeline root is importable
@@ -22,11 +22,10 @@ PIPELINE_DIR = ROOT_DIR / "DO NOT DELETE EDL PIPELINE"
 if str(PIPELINE_DIR) not in sys.path:
     sys.path.insert(0, str(PIPELINE_DIR))
 
-from build_market_screens import enrich_snapshot_directory
+from build_market_screens import enrich_snapshot_directory, load_json_or_gz
 
 
 REVISIONS_DIR = PIPELINE_DIR / ".scanner_cache" / "revisions"
-OHLCV_DIR = PIPELINE_DIR / "ohlcv_data"
 
 
 def is_revision_enriched(rev_dir: Path) -> bool:
@@ -34,20 +33,16 @@ def is_revision_enriched(rev_dir: Path) -> bool:
     stocks_gz = rev_dir / "all_stocks_fundamental_analysis.json.gz"
     stocks_json = rev_dir / "all_stocks_fundamental_analysis.json"
 
-    p = stocks_gz if stocks_gz.exists() else stocks_json
-    if not p.exists():
+    if not stocks_gz.exists() and not stocks_json.exists():
         return False
 
-    opener = gzip.open if p.suffix == ".gz" else open
     try:
-        with opener(p, "rt", encoding="utf-8") as f:
-            stocks = json.load(f)
-        if isinstance(stocks, list) and len(stocks) > 0:
-            first = stocks[0]
-            return "setup_geometry" in first and "trend_template" in first
-        elif isinstance(stocks, dict):
-            first = (stocks.get("stocks") or [{}])[0]
-            return "setup_geometry" in first and "trend_template" in first
+        stocks = load_json_or_gz(stocks_json)
+        stock_list = stocks if isinstance(stocks, list) else stocks.get("stocks", [])
+        return bool(stock_list) and all(
+            all(key in stock for key in ("setup_geometry", "trend_template", "stage_status", "upcoming_earnings", "is_liquid_screen"))
+            for stock in stock_list
+        ) and (rev_dir / "market_screens_snapshot.json.gz").exists()
     except Exception:
         return False
     return False
@@ -55,33 +50,18 @@ def is_revision_enriched(rev_dir: Path) -> bool:
 
 def get_revision_as_of_date(rev_dir: Path) -> str:
     """Extract as-of date from a revision's stock snapshot or RS file."""
-    stocks_gz = rev_dir / "all_stocks_fundamental_analysis.json.gz"
-    stocks_json = rev_dir / "all_stocks_fundamental_analysis.json"
-    p = stocks_gz if stocks_gz.exists() else stocks_json
-
-    if p.exists():
-        opener = gzip.open if p.suffix == ".gz" else open
-        try:
-            with opener(p, "rt", encoding="utf-8") as f:
-                stocks = json.load(f)
-            stock_list = stocks if isinstance(stocks, list) else stocks.get("stocks", [])
-            if stock_list:
-                return stock_list[0].get("as_of_date") or stock_list[0].get("date") or "unknown"
-        except Exception:
-            pass
-
-    rs_gz = rev_dir / "rs_rating_daily.json.gz"
-    rs_json = rev_dir / "rs_rating_daily.json"
-    p_rs = rs_gz if rs_gz.exists() else rs_json
-    if p_rs.exists():
-        opener = gzip.open if p_rs.suffix == ".gz" else open
-        try:
-            with opener(p_rs, "rt", encoding="utf-8") as f:
-                rs_data = json.load(f)
-            return rs_data.get("as_of_date") or "unknown"
-        except Exception:
-            pass
-
+    try:
+        stocks = load_json_or_gz(rev_dir / "all_stocks_fundamental_analysis.json") or []
+        stock_list = stocks if isinstance(stocks, list) else stocks.get("stocks", [])
+        if stock_list:
+            first = stock_list[0]
+            as_of = first.get("as_of_date") or first.get("date") or first.get("session_date")
+            if as_of:
+                return as_of
+        rs = load_json_or_gz(rev_dir / "rs_rating_daily.json") or {}
+        return rs.get("as_of_date") or "unknown"
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
     return "unknown"
 
 
@@ -91,8 +71,9 @@ def list_available_revisions(rev_root: Path = REVISIONS_DIR) -> list[Path]:
         return []
     revisions = []
     for item in sorted(rev_root.iterdir()):
-        if item.is_dir() and (item / "all_stocks_fundamental_analysis.json.gz").exists() or (item / "all_stocks_fundamental_analysis.json").exists():
-            revisions.append(item)
+        if item.is_dir() and any((item / name).exists() for name in ("all_stocks_fundamental_analysis.json.gz", "all_stocks_fundamental_analysis.json")):
+            if not (item / "screen_backfill.json").exists():
+                revisions.append(item)
     return revisions
 
 
@@ -100,8 +81,8 @@ def process_revision(
     rev_dir: Path,
     force: bool = False,
     dry_run: bool = False,
-    ohlcv_dir: Path = OHLCV_DIR,
-    earnings_root: Path = PIPELINE_DIR,
+    ohlcv_dir: Path | None = None,
+    earnings_root: Path | None = None,
 ) -> dict:
     """Enrich a single revision folder."""
     as_of = get_revision_as_of_date(rev_dir)
@@ -113,7 +94,7 @@ def process_revision(
             "revision": rev_id,
             "as_of_date": as_of,
             "status": "SKIPPED",
-            "message": "Already enriched (use --force to overwrite)",
+            "message": "Already enriched (use --force to derive a revised result)",
             "duration": 0.0,
         }
 
@@ -128,19 +109,82 @@ def process_revision(
 
     t0 = time.time()
     try:
-        success = enrich_snapshot_directory(
-            root=rev_dir,
-            ohlcv_dir=ohlcv_dir,
-            earnings_root=earnings_root,
-            generate_gallery=False,
-        )
+        # Work on a private copy: frozen revision IDs are also scanner cache keys.
+        # Updating their inputs in place would leave cached/backend/browser results inconsistent.
+        with tempfile.TemporaryDirectory(prefix=".screen-backfill-", dir=rev_dir.parent) as temp:
+            staged = Path(temp) / "revision"
+            shutil.copytree(rev_dir, staged)
+            marker = staged / "scanner_revision.json"
+            metadata = json.loads(marker.read_text()) if marker.exists() else {}
+            prices = Path(ohlcv_dir) if ohlcv_dir is not None else staged / "ohlcv_data"
+            exported_history = False
+            if ohlcv_dir is None and not any(prices.glob("*.csv")):
+                packed = staged / ".scanner_cache" / "history.npz"
+                if not packed.exists():
+                    raise ValueError("Revision has no frozen OHLCV history; pass --ohlcv-dir explicitly to use another history source")
+                import numpy as np
+                import pandas as pd
+                prices.mkdir(exist_ok=True)
+                exported_history = True
+                with np.load(packed, allow_pickle=False) as history:
+                    history_revision = str(history["revision"])
+                    if metadata.get("historyRevision") not in (None, history_revision):
+                        raise ValueError("Frozen history does not match the revision's historyRevision")
+                    metadata["historyRevision"] = history_revision
+                    for index, symbol in enumerate(history["symbols"]):
+                        symbol = str(symbol)
+                        if Path(symbol).name != symbol or any(c in symbol for c in ("/", "\\")):
+                            raise ValueError("Invalid symbol in frozen history")
+                        start, end = history["offsets"][index:index + 2]
+                        frame = pd.DataFrame(history["values"][start:end], columns=["Open", "High", "Low", "Close", "Volume"])
+                        frame.insert(0, "Date", pd.to_datetime(history["dates"][start:end]))
+                        frame.to_csv(prices / f"{symbol}.csv", index=False)
+            success = enrich_snapshot_directory(
+                root=staged,
+                ohlcv_dir=prices,
+                # A current calendar contains future knowledge about an old revision.
+                earnings_root=Path(earnings_root) if earnings_root is not None else staged,
+                generate_gallery=False,
+            )
+            if success:
+                if ohlcv_dir is not None:
+                    # The derived backend must retain the same history used for its signals.
+                    retained_prices = staged / "ohlcv_data"
+                    if retained_prices.exists():
+                        shutil.rmtree(retained_prices)
+                    retained_prices.mkdir()
+                    stocks = load_json_or_gz(staged / "all_stocks_fundamental_analysis.json")
+                    for stock in stocks:
+                        symbol = stock.get("symbol") or stock.get("Symbol")
+                        if not symbol or Path(symbol).name != symbol:
+                            continue
+                        filename = f"{symbol.upper()}.csv"
+                        if (prices / filename).exists():
+                            shutil.copy2(prices / filename, retained_prices / filename)
+                    (staged / ".scanner_cache/history.npz").unlink(missing_ok=True)
+                    metadata.pop("historyRevision", None)
+                if exported_history:
+                    # Keep the existing packed history; CSVs were only an adapter for enrichment.
+                    shutil.rmtree(prices)
+                    prices.mkdir()
+                digest = hashlib.sha256(rev_id.encode())
+                for filename in ("all_stocks_fundamental_analysis.json", "market_screens_snapshot.json"):
+                    digest.update((staged / filename).read_bytes())
+                new_revision = digest.hexdigest()
+                metadata["revision"] = new_revision
+                marker.write_text(json.dumps(metadata))
+                (staged / "screen_backfill.json").write_text(json.dumps({"source_revision": rev_id, "as_of_date": as_of}))
+                destination = rev_dir.parent / new_revision
+                if not destination.exists():
+                    staged.rename(destination)
         t_dur = round(time.time() - t0, 2)
         if success:
             return {
                 "revision": rev_id,
                 "as_of_date": as_of,
                 "status": "SUCCESS",
-                "message": f"Enriched successfully in {t_dur}s",
+                "message": f"Derived backend revision {new_revision} available after {t_dur}s; frontend publication is separate",
+                "output_revision": new_revision,
                 "duration": t_dur,
             }
         else:
@@ -170,12 +214,17 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Inspect and display status without modifying files.")
     parser.add_argument("--limit", "-n", type=int, default=None, help="Limit number of revisions to process.")
     parser.add_argument("--revisions-dir", type=str, default=str(REVISIONS_DIR), help="Path to revisions directory.")
+    parser.add_argument("--ohlcv-dir", type=str, help="Explicit alternate history source; defaults to each revision's frozen history.")
     args = parser.parse_args()
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be positive")
 
     rev_root = Path(args.revisions_dir)
     all_revs = list_available_revisions(rev_root)
 
     if not all_revs:
+        if args.revision:
+            parser.error("no matching revisions found")
         print(f"No revisions found in {rev_root}")
         return 0
 
@@ -183,14 +232,12 @@ def main():
     if args.revision:
         for r_name in args.revision:
             matching = [p for p in all_revs if p.name.startswith(r_name)]
-            if matching:
+            if len(matching) == 1:
                 targets.extend(matching)
+            elif len(matching) > 1:
+                parser.error(f"revision prefix '{r_name}' is ambiguous")
             else:
-                p = rev_root / r_name
-                if p.exists():
-                    targets.append(p)
-                else:
-                    print(f"Warning: revision '{r_name}' not found.")
+                parser.error(f"revision '{r_name}' not found")
     elif args.all:
         targets = all_revs
     else:
@@ -203,14 +250,16 @@ def main():
         print("\nSpecify --all to backfill all pending revisions, or --revision <id> for specific ones.")
         return 0
 
-    if args.limit:
+    targets = list(dict.fromkeys(targets))
+    if args.limit is not None:
         targets = targets[: args.limit]
 
     print(f"\nProcessing {len(targets)} revision(s) [dry_run={args.dry_run}, force={args.force}]...\n")
     results = []
     for idx, target in enumerate(targets, 1):
         print(f"[{idx}/{len(targets)}] Checking {target.name[:12]}...")
-        res = process_revision(target, force=args.force, dry_run=args.dry_run)
+        res = process_revision(target, force=args.force, dry_run=args.dry_run,
+                               ohlcv_dir=Path(args.ohlcv_dir) if args.ohlcv_dir else None)
         results.append(res)
         print(f"       -> {res['status']}: {res['message']}")
 

@@ -239,82 +239,88 @@ def detect_darvas(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray) -> di
 
 
 def detect_flags(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, volumes: np.ndarray) -> dict | None:
-    """Detect Bull Flag setup."""
+    """Detect a >=25% pole, 4-20-session pause, <=12% pullback and drying volume."""
     if len(closes) < 30:
         return None
 
     recent_highs = highs[-25:]
-    high_idx_relative = int(np.argmax(recent_highs))
-    sessions_since_high = len(recent_highs) - 1 - high_idx_relative
+    peak_idx = len(highs) - 25 + int(np.argmax(recent_highs))
+    sessions_since_high = len(closes) - 1 - peak_idx
+    if not 4 <= sessions_since_high <= 20:
+        return None
 
-    if 3 <= sessions_since_high <= 20:
-        pole_start_idx = max(0, len(closes) - 25 + high_idx_relative - 20)
-        pole_low = float(np.min(lows[pole_start_idx : len(closes) - 25 + high_idx_relative]))
-        peak_high = float(recent_highs[high_idx_relative])
+    pole_start = max(0, peak_idx - 20)
+    pole_low_idx = pole_start + int(np.argmin(lows[pole_start:peak_idx]))
+    pole_low, peak_high = float(lows[pole_low_idx]), float(highs[peak_idx])
+    if pole_low <= 0 or peak_high <= 0:
+        return None
+    pole_return = (peak_high - pole_low) / pole_low * 100.0
+    flag_low = float(np.min(lows[peak_idx:]))
+    flag_depth = (peak_high - flag_low) / peak_high * 100.0
+    if pole_return < 25.0 or not 0 <= flag_depth <= 12.0:
+        return None
 
-        if pole_low > 0:
-            pole_return = ((peak_high - pole_low) / pole_low) * 100.0
-            if pole_return >= 25.0:
-                flag_low = float(np.min(lows[-(sessions_since_high + 1):]))
-                flag_depth = ((peak_high - flag_low) / peak_high) * 100.0
-
-                if flag_depth <= 12.0 and closes[-1] >= flag_low:
-                    vol_pause = (float(np.mean(volumes[-sessions_since_high:])) / max(1e-9, float(np.mean(volumes[-50:])))) if len(volumes) >= 50 else 1.0
-                    return {
-                        "matched": True,
-                        "textbook": bool(pole_return >= 35.0 and flag_depth <= 8.0),
-                        "poleReturnPct": round(pole_return, 2),
-                        "pole_return_pct": round(pole_return, 2),
-                        "poleSessions": int(high_idx_relative),
-                        "pole_sessions": int(high_idx_relative),
-                        "flagDepthPct": round(flag_depth, 2),
-                        "flag_depth_pct": round(flag_depth, 2),
-                        "sessionsSinceHigh": int(sessions_since_high),
-                        "sessions_since_high": int(sessions_since_high),
-                        "volumePauseRatio": round(vol_pause, 2),
-                        "volume_pause_ratio": round(vol_pause, 2),
-                    }
-    return None
+    # An unavailable 50-day volume baseline cannot establish drying volume.
+    if len(volumes) < 50 or float(np.mean(volumes[-50:])) <= 0:
+        return None
+    vol_pause = float(np.mean(volumes[peak_idx + 1:])) / float(np.mean(volumes[-50:]))
+    if vol_pause >= 1.0:
+        return None
+    pole_sessions = peak_idx - pole_low_idx
+    return {
+        "matched": True,
+        "textbook": bool(pole_return >= 35.0 and flag_depth <= 8.0),
+        "poleReturnPct": round(pole_return, 2), "pole_return_pct": round(pole_return, 2),
+        "poleSessions": pole_sessions, "pole_sessions": pole_sessions,
+        "flagDepthPct": round(flag_depth, 2), "flag_depth_pct": round(flag_depth, 2),
+        "sessionsSinceHigh": sessions_since_high, "sessions_since_high": sessions_since_high,
+        "volumePauseRatio": round(vol_pause, 2), "volume_pause_ratio": round(vol_pause, 2),
+    }
 
 
 def detect_cup_with_handle(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray) -> dict | None:
-    """Detect Cup with Handle setup."""
+    """Measure a >=35-session cup and 3-25-session upper-half handle.
+
+    Rim/bottom selection is a deterministic heuristic, not a claim of exact
+    reference-scanner parity. Duration and handle depth use the selected points.
+    """
     if len(closes) < 50:
         return None
-
     w = min(120, len(closes))
-    sub_h = highs[-w:]
-    sub_l = lows[-w:]
-    sub_c = closes[-w:]
-
-    left_rim_idx = int(np.argmax(sub_h[:w//2]))
-    left_rim = float(sub_h[left_rim_idx])
-    bottom_idx = left_rim_idx + int(np.argmin(sub_l[left_rim_idx : w - 10]))
+    sub_h, sub_l = highs[-w:], lows[-w:]
+    left_idx = int(np.argmax(sub_h[:w // 2]))
+    left = float(sub_h[left_idx])
+    bottom_idx = left_idx + 1 + int(np.argmin(sub_l[left_idx + 1:w - 3]))
     bottom = float(sub_l[bottom_idx])
-
-    if left_rim <= bottom or left_rim <= 0:
+    right_start = bottom_idx + 1
+    if right_start >= w - 3 or left <= 0 or bottom >= left:
         return None
-
-    cup_depth = ((left_rim - bottom) / left_rim) * 100.0
-    if 12.0 <= cup_depth <= 40.0:
-        right_rim_sub = sub_h[bottom_idx : w - 3]
-        if len(right_rim_sub) > 0:
-            right_rim = float(np.max(right_rim_sub))
-            if abs(right_rim - left_rim) / left_rim <= 0.12:
-                handle_low = float(np.min(sub_l[-10:]))
-                handle_depth = ((right_rim - handle_low) / right_rim) * 100.0
-                if handle_depth <= 12.0 and sub_c[-1] >= handle_low:
-                    return {
-                        "matched": True,
-                        "textbook": bool(15.0 <= cup_depth <= 33.0 and handle_depth <= 8.0),
-                        "cupDepthPct": round(cup_depth, 2),
-                        "cup_depth_pct": round(cup_depth, 2),
-                        "handleDepthPct": round(handle_depth, 2),
-                        "handle_depth_pct": round(handle_depth, 2),
-                        "durationWeeks": round(w / 5.0, 1),
-                        "duration_weeks": round(w / 5.0, 1),
-                    }
-    return None
+    right_idx = right_start + int(np.argmax(sub_h[right_start:w - 3]))
+    right = float(sub_h[right_idx])
+    cup_sessions = right_idx - left_idx
+    handle_sessions = w - 1 - right_idx
+    cup_depth = (left - bottom) / left * 100.0
+    if (cup_sessions < 35 or not 3 <= handle_sessions <= 25
+            or not 12.0 <= cup_depth <= 40.0 or right <= 0
+            or abs(right - left) / left > 0.12):
+        return None
+    # The handle begins AFTER its rim, so the rim's own low cannot mask a breakout.
+    handle_low = float(np.min(sub_l[right_idx + 1:]))
+    handle_depth = (right - handle_low) / right * 100.0
+    if not 0 <= handle_depth <= 12.0 or handle_low < bottom + (left - bottom) / 2:
+        return None
+    duration_weeks = round(cup_sessions / 5.0, 1)
+    offset = len(closes) - w
+    return {
+        "matched": True,
+        "textbook": bool(15.0 <= cup_depth <= 33.0 and handle_depth <= 8.0),
+        "cupDepthPct": round(cup_depth, 2), "cup_depth_pct": round(cup_depth, 2),
+        "handleDepthPct": round(handle_depth, 2), "handle_depth_pct": round(handle_depth, 2),
+        "durationWeeks": duration_weeks, "duration_weeks": duration_weeks,
+        "handleLengthSessions": handle_sessions, "handle_length_sessions": handle_sessions,
+        "leftRimIndex": offset + left_idx, "bottomIndex": offset + bottom_idx,
+        "rightRimIndex": offset + right_idx,
+    }
 
 
 def detect_tight_weeks(closes: np.ndarray, dates: list[str], s50: float | None, rs_val: float | None) -> dict | None:

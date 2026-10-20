@@ -248,6 +248,65 @@ class PipelineReviewRegressionTests(unittest.TestCase):
         self.assertEqual(result["daysInState"], 4)
         self.assertEqual(result["state"], "breakout")
 
+    @staticmethod
+    def cup_history(left=45, bottom=60, right=80, bottom_price=75):
+        highs = np.full(100, 95.0)
+        lows, closes = highs - 2, highs - 1
+        highs[left], lows[left], closes[left] = 100, 99, 99.5
+        highs[bottom], lows[bottom], closes[bottom] = bottom_price + 3, bottom_price, bottom_price + 1
+        highs[right], lows[right], closes[right] = 100, 98, 99
+        highs[right + 1:], lows[right + 1:], closes[right + 1:] = 98, 94, 96
+        return highs, lows, closes
+
+    def test_cup_duration_measures_rim_span_not_window_size(self):
+        result = bms.detect_cup_with_handle(*self.cup_history())
+        self.assertEqual(result["durationWeeks"], 7.0)
+        self.assertEqual(result["rightRimIndex"] - result["leftRimIndex"], 35)
+        self.assertEqual(result["handleLengthSessions"], 19)
+        self.assertEqual(result["handleDepthPct"], 6)
+        # Both fixtures contain 100 sessions. A 34-session cup still fails.
+        self.assertIsNone(bms.detect_cup_with_handle(*self.cup_history(left=46)))
+
+    def test_cup_handle_requires_upper_half_and_nonnegative_depth(self):
+        highs, lows, closes = self.cup_history(bottom_price=88)
+        lows[81:] = 90  # 10% handle depth, but below cup midpoint of 94.
+        self.assertIsNone(bms.detect_cup_with_handle(highs, lows, closes))
+        highs, lows, closes = self.cup_history(right=96)
+        # The three handle bars are entirely above the rim: negative depth is invalid.
+        highs[97:], lows[97:], closes[97:] = 103, 101, 102
+        self.assertIsNone(bms.detect_cup_with_handle(highs, lows, closes))
+        highs[97:], lows[97:], closes[97:] = 99, 95, 97
+        result = bms.detect_cup_with_handle(highs, lows, closes)
+        self.assertEqual(result["handleLengthSessions"], 3)
+
+    def test_cup_handle_maximum_25_sessions(self):
+        valid = self.cup_history(left=20, bottom=45, right=74)
+        self.assertEqual(bms.detect_cup_with_handle(*valid)["handleLengthSessions"], 25)
+        self.assertIsNone(bms.detect_cup_with_handle(*self.cup_history(left=20, bottom=45, right=73)))
+
+    @staticmethod
+    def flag_history(age=4):
+        highs = np.linspace(80, 95, 80)
+        lows, closes = highs - 1, highs - 0.5
+        peak = 79 - age
+        highs[peak], lows[peak], closes[peak] = 110, 108, 109
+        lows[60] = 75
+        highs[peak + 1:], lows[peak + 1:], closes[peak + 1:] = 106, 102, 104
+        volumes = np.full(80, 1000.0)
+        volumes[peak + 1:] = 200
+        return highs, lows, closes, volumes
+
+    def test_flag_pause_age_volume_and_actual_pole_length(self):
+        valid = self.flag_history()
+        result = bms.detect_flags(*valid)
+        self.assertEqual(result["sessionsSinceHigh"], 4)
+        self.assertEqual(result["poleSessions"], 15)  # Low at60, peak at75.
+        self.assertLess(result["volumePauseRatio"], 1)
+        self.assertIsNone(bms.detect_flags(*self.flag_history(age=3)))
+        highs, lows, closes, volumes = valid
+        volumes[-4:] = 2000  # Increasing pause volume is not drying.
+        self.assertIsNone(bms.detect_flags(highs, lows, closes, volumes))
+
     def test_backend_scanner_bridge_rejects_rs_when_dates_differ(self):
         """scanner_bridge must return None for RS condition when context rs_ratings_as_of != as_of."""
         from frontend import scanner_bridge

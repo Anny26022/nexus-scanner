@@ -2239,7 +2239,7 @@
     "horizon": "Swing",
     "description": "Successively shallower contractions with volume dry-up near highs.",
     "rules": [
-      "Three successively shallower pullbacks, latest <= 8.5%",
+      "Three successively shallower pullbacks, latest <= 8%",
       "Within 15% of 52-week high and above 50 DMA",
       "Drying volume on final contraction",
       "Average traded value >= 10 Cr"

@@ -16,6 +16,7 @@ import pandas as pd
 
 from pipeline_utils import BASE_DIR, load_json, save_json, compress_file
 from ohlcv_utils import read_ohlcv_csv, valid_ohlcv_values
+from build_rs_ratings import close_history, compute_stock_returns, calculate_composite_score, percentile_rank, liquid_universe
 
 
 def load_json_or_gz(path: Path) -> Any:
@@ -171,90 +172,68 @@ def detect_vcp(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, volumes:
 
 
 def detect_darvas(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray) -> dict | None:
-    """Detect Darvas Box state and boundaries.
+    """Return a confirmed box or its breakout in the latest five sessions.
 
-    Strict boundary classification:
-    - Box height <= 20%
-    - Confirmed: box_bot <= current_close <= box_top
-    - Breakout: box_top < current_close <= box_top * 1.08
-    - Breach below bottom or far above top is NOT confirmed.
+    Confirm top and floor with three following sessions. A completed box ends
+    permanently on its first closing breakout or floor breach. Continue looking
+    for subsequent boxes after that event rather than resurrecting the old one.
     """
     if len(closes) < 60:
         return None
 
-    recent_h = highs[-30:]
-    recent_l = lows[-30:]
-    recent_c = closes[-30:]
+    recent_h, recent_l, recent_c = highs[-30:], lows[-30:], closes[-30:]
     n = len(recent_c)
-
-    box_top = None
-    box_top_idx = None
-    box_bot = None
-    box_bot_idx = None
-
-    for i in range(5, n - 3):
-        h_candidate = recent_h[i]
-        if all(recent_h[i - k] <= h_candidate for k in range(1, 4)) and all(recent_h[i + k] <= h_candidate for k in range(1, 4)):
-            box_top = h_candidate
-            box_top_idx = i
-            break
-
-    if box_top is None or box_top_idx is None:
-        return None
-
-    for j in range(box_top_idx + 1, n - 3):
-        l_candidate = recent_l[j]
-        if all(recent_l[j - k] >= l_candidate for k in range(1, 4)) and all(recent_l[j + k] >= l_candidate for k in range(1, 4)):
-            box_bot = l_candidate
-            box_bot_idx = j
-            break
-
-    if box_bot is None or box_top <= box_bot:
-        return None
-
-    height_pct = ((box_top - box_bot) / box_top) * 100.0
-    if height_pct > 20.0:
-        return None
-
-    # Proximity to 52-week high: preset promises box top within 5% of 52W high
     h52 = float(np.max(highs[-min(len(highs), 252):]))
-    if h52 > 0 and ((h52 - box_top) / h52) * 100.0 > 5.0:
-        return None
-
     current_close = float(recent_c[-1])
-    # Chronological cancellation: breach below box floor invalidates the box
-    if any(recent_c[k] < box_bot for k in range(box_bot_idx, n)):
-        return None
+    next_candidate = 5
 
-    is_confirmed = (box_bot <= current_close <= box_top)
-    is_breakout = (box_top < current_close <= box_top * 1.08)
+    for top_idx in range(5, n - 3):
+        if top_idx < next_candidate:
+            continue
+        top = float(recent_h[top_idx])
+        if not (all(recent_h[top_idx - k] <= top for k in range(1, 4))
+                and all(recent_h[top_idx + k] <= top for k in range(1, 4))):
+            continue
+        if top <= 0 or (h52 > 0 and (h52 - top) / h52 > 0.05):
+            continue
 
-    # Breakout age check: initial breakout must have occurred within the last 5 trading days
-    breakout_age = 0
-    if is_breakout:
-        first_breakout_idx = next((k for k in range(box_bot_idx, n) if recent_c[k] > box_top), None)
-        if first_breakout_idx is None:
-            return None
-        breakout_age = (n - 1) - first_breakout_idx
-        if breakout_age > 5:
-            return None
+        bottom_idx = next((j for j in range(top_idx + 1, n - 3)
+                           if all(recent_l[j - k] >= recent_l[j] for k in range(1, 4))
+                           and all(recent_l[j + k] >= recent_l[j] for k in range(1, 4))), None)
+        if bottom_idx is None:
+            continue
+        bottom = float(recent_l[bottom_idx])
+        confirmed_idx = max(top_idx + 3, bottom_idx + 3)
+        # A higher high before floor confirmation supersedes this forming top.
+        if any(recent_h[k] > top for k in range(top_idx + 1, confirmed_idx + 1)):
+            continue
+        height_pct = (top - bottom) / top * 100.0
+        if bottom >= top or height_pct > 20.0:
+            continue
 
-    if is_confirmed or is_breakout:
-        dist_top = ((box_top - current_close) / box_top) * 100.0
-        days_in_state = breakout_age if is_breakout else sum(1 for k in range(box_bot_idx, n) if box_bot <= recent_c[k] <= box_top)
+        event_idx = next((k for k in range(confirmed_idx, n)
+                          if recent_c[k] < bottom or recent_c[k] > top), None)
+        state = "confirmed"
+        days_in_state = n - 1 - confirmed_idx
+        if event_idx is not None:
+            next_candidate = event_idx
+            if recent_c[event_idx] < bottom:
+                continue
+            # A breakout ends the box even when price subsequently re-enters it.
+            days_in_state = n - 1 - event_idx
+            if (days_in_state >= 5 or current_close > top * 1.08
+                    or any(recent_c[k] < bottom for k in range(event_idx, n))):
+                continue
+            state = "breakout"
+
+        distance = (top - current_close) / top * 100.0
         return {
-            "matched": True,
-            "state": "confirmed" if is_confirmed else "breakout",
-            "topPrice": float(box_top),
-            "top_price": float(box_top),
-            "bottomPrice": float(box_bot),
-            "bottom_price": float(box_bot),
-            "heightPct": round(height_pct, 2),
-            "height_pct": round(height_pct, 2),
-            "distFromTopPct": round(dist_top, 2),
-            "dist_from_top_pct": round(dist_top, 2),
-            "daysInState": days_in_state,
-            "days_in_state": days_in_state,
+            "matched": True, "state": state,
+            "topPrice": top, "top_price": top,
+            "bottomPrice": bottom, "bottom_price": bottom,
+            "heightPct": round(height_pct, 2), "height_pct": round(height_pct, 2),
+            "distFromTopPct": round(distance, 2), "dist_from_top_pct": round(distance, 2),
+            "daysInState": days_in_state, "days_in_state": days_in_state,
         }
     return None
 
@@ -528,90 +507,40 @@ def precompute_gallery_rs(
     ohlcv_dir: Path,
     today_date: str,
     scan_len: int = 126,
+    eligible_by_date: dict[str, set[str]] | None = None,
 ) -> dict[str, dict[str, int]]:
-    """Precompute point-in-time cross-sectional RS percentile ranks (1-99) for all gallery scan dates."""
-    if not ohlcv_dir.exists():
-        return {}
+    """Rank historical returns only when the eligible universe is known for that session.
 
-    target_dates = []
-    probe_files = [ohlcv_dir / "TCS.csv", ohlcv_dir / "RELIANCE.csv", ohlcv_dir / "INFY.csv"]
-    for pf in probe_files:
-        if pf.exists():
-            rows = read_ohlcv_csv(pf)
-            all_d = [str(r.get("Date", "")).split()[0] for r in rows if str(r.get("Date", "")).split()[0] <= today_date]
-            if len(all_d) >= 40:
-                target_dates = all_d[-scan_len:]
-                break
-
-    if not target_dates:
-        sample = next(ohlcv_dir.glob("*.csv"), None)
-        if sample:
-            rows = read_ohlcv_csv(sample)
-            all_d = [str(r.get("Date", "")).split()[0] for r in rows if str(r.get("Date", "")).split()[0] <= today_date]
-            target_dates = all_d[-scan_len:]
-
-    if not target_dates:
+    Current membership cannot establish historical percentiles. Missing dated
+    membership therefore leaves the rating unavailable rather than estimating it.
+    """
+    eligible_by_date = eligible_by_date or {}
+    target_dates = sorted(d for d in eligible_by_date if d <= today_date)[-scan_len:]
+    if not ohlcv_dir.exists() or not target_dates:
         return {}
 
     scores_by_date: dict[str, dict[str, float]] = {d: {} for d in target_dates}
-
-    for stock in stocks:
-        sym = stock.get("symbol") or stock.get("Symbol")
-        if not sym:
-            continue
-        sym_upper = sym.upper()
-        csv_file = ohlcv_dir / f"{sym_upper}.csv"
+    eligible_symbols = set().union(*(eligible_by_date[d] for d in target_dates))
+    for sym in sorted(eligible_symbols):
+        csv_file = ohlcv_dir / f"{sym}.csv"
         if not csv_file.exists():
             continue
-
-        rows = read_ohlcv_csv(csv_file)
-        if len(rows) < 65:
-            continue
-
-        c_dates = []
-        closes = []
-        for r in rows:
-            v = valid_ohlcv_values(r)
-            if v:
-                d_str = str(r.get("Date", "")).split()[0]
-                if d_str <= today_date:
-                    c_dates.append(d_str)
-                    closes.append(v[3])
-
-        if len(closes) < 65:
-            continue
-
-        d_to_i = {d: i for i, d in enumerate(c_dates)}
+        # Use the same dated-close validation as the canonical RS builder.
+        history = close_history(csv_file)
+        closes = history["Close"].tolist()
+        indices = {d.strftime("%Y-%m-%d"): i for i, d in enumerate(history["Date"])}
         for d in target_dates:
-            idx = d_to_i.get(d)
-            if idx is not None and idx >= 63 and closes[idx] > 0:
-                c = closes[idx]
-                p63 = closes[idx - 63]
-                if p63 <= 0:
-                    continue
-                r63 = (c - p63) / p63
-                p126 = closes[idx - 126] if idx >= 126 else None
-                r126 = ((c - p126) / p126) if (p126 is not None and p126 > 0) else r63
-                p189 = closes[idx - 189] if idx >= 189 else None
-                r189 = ((c - p189) / p189) if (p189 is not None and p189 > 0) else r126
-                p252 = closes[idx - 252] if idx >= 252 else None
-                r252 = ((c - p252) / p252) if (p252 is not None and p252 > 0) else r189
-                scores_by_date[d][sym_upper] = float(0.40 * r63 + 0.20 * r126 + 0.20 * r189 + 0.20 * r252)
+            if sym not in eligible_by_date[d]:
+                continue
+            idx = indices.get(d)
+            if idx is None:
+                continue
+            returns = compute_stock_returns(closes, offset=len(closes) - idx - 1)
+            score = calculate_composite_score(returns) if returns is not None else None
+            if score is not None:
+                scores_by_date[d][sym] = score
 
-    rs_by_date: dict[str, dict[str, int]] = {}
-    for d, score_map in scores_by_date.items():
-        if not score_map:
-            continue
-        series = pd.Series(score_map, dtype=float).dropna()
-        n = len(series)
-        if n <= 1:
-            rs_by_date[d] = {k: 50 for k in series.index}
-        else:
-            ranks = series.rank(method="min") - 1.0
-            percentiles = (1.0 + 98.0 * (ranks / (n - 1.0))).round().astype(int).clip(1, 99)
-            rs_by_date[d] = percentiles.to_dict()
-
-    return rs_by_date
+    return {d: percentile_rank(scores) for d, scores in scores_by_date.items() if scores}
 
 
 def enrich_snapshot_directory(
@@ -619,6 +548,7 @@ def enrich_snapshot_directory(
     ohlcv_dir: Path | None = None,
     earnings_root: Path | None = None,
     generate_gallery: bool = True,
+    gallery_eligible_by_date: dict[str, set[str]] | None = None,
 ) -> bool:
     """Enrich a snapshot directory with explainable setups, trend template, and pattern gallery."""
     root = Path(root)
@@ -656,29 +586,33 @@ def enrich_snapshot_directory(
             "Pipeline inputs must be date-aligned before generating market screens."
         )
 
-    # Check OHLCV freshness against today_date if ohlcv_dir exists
-    if ohlcv_dir.exists():
-        sample_csvs = list(ohlcv_dir.glob("*.csv"))[:10]
-        if sample_csvs:
-            max_csv_date = None
-            for p in sample_csvs:
-                rows = read_ohlcv_csv(p)
-                if rows:
-                    d = str(rows[-1].get("Date", "")).split()[0]
-                    if max_csv_date is None or d > max_csv_date:
-                        max_csv_date = d
-            if max_csv_date and max_csv_date < today_date:
-                raise ValueError(
-                    f"Stale inputs rejected: OHLCV history ends at {max_csv_date}, which is older than stock snapshot date ({today_date}). "
-                    "Cannot generate market screens with stale price history."
-                )
-
     today_dt = pd.to_datetime(today_date).date()
     print(f"Enriching snapshot directory {root.name} as of {today_date} across {len(stocks)} stocks...")
 
-    gallery_rs_map = precompute_gallery_rs(stocks, ohlcv_dir, today_date, scan_len=126) if generate_gallery else {}
+    gallery_rs_map = {}
+    if generate_gallery:
+        dated_eligibility = dict(gallery_eligible_by_date or {})
+        if today_date not in dated_eligibility:
+            try:
+                eligible, _ = liquid_universe(root)
+            except (FileNotFoundError, ValueError):
+                pass  # No dated universe: historical RS stays unavailable.
+            else:
+                dated_eligibility[today_date] = eligible
+        gallery_rs_map = precompute_gallery_rs(
+            stocks, ohlcv_dir, today_date, eligible_by_date=dated_eligibility,
+        )
 
     for stock in stocks:
+        # Clear prior enrichment even when this run has missing/short/stale history.
+        for field in (
+            "setup_geometry", "setupGeometry", "trend_template", "trendTemplate",
+            "stage_status", "stageStatus", "upcoming_earnings", "upcomingEarnings",
+            "isRsLine52wHigh", "is_rs_line_52w_high", "traded_value_mean_20d_cr",
+            "tradedValueMean20dCr", "traded_value_median_20d_cr",
+            "tradedValueMedian20dCr", "is_liquid_screen", "isLiquidScreen",
+        ):
+            stock[field] = None
         sym = stock.get("symbol") or stock.get("Symbol")
         if not sym:
             continue
@@ -710,13 +644,6 @@ def enrich_snapshot_directory(
             continue
 
         if dates[-1] != today_date:
-            # Stale OHLCV relative to snapshot date: expose and reject stale setup data
-            stock["setup_geometry"] = None
-            stock["setupGeometry"] = None
-            stock["trend_template"] = None
-            stock["trendTemplate"] = None
-            stock["stage_status"] = None
-            stock["stageStatus"] = None
             continue
 
         h_arr = np.array(highs, dtype=float)
@@ -903,18 +830,6 @@ def enrich_snapshot_directory(
 
                     # Point-in-time composite RS at t_idx: cross-sectional percentile rank (1-99)
                     pit_rs = gallery_rs_map.get(sig_date, {}).get(sym_upper)
-                    if pit_rs is None:
-                        cur_t = sub_c[-1]
-                        n_sub = len(sub_c)
-                        r63 = ((cur_t - sub_c[-64]) / sub_c[-64]) if (n_sub > 63 and sub_c[-64] > 0) else 0.0
-                        r126 = ((cur_t - sub_c[-127]) / sub_c[-127]) if (n_sub > 126 and sub_c[-127] > 0) else r63
-                        r189 = ((cur_t - sub_c[-190]) / sub_c[-190]) if (n_sub > 189 and sub_c[-190] > 0) else r126
-                        r252 = ((cur_t - sub_c[-253]) / sub_c[-253]) if (n_sub > 252 and sub_c[-253] > 0) else r189
-                        pit_score = float(0.40 * r63 + 0.20 * r126 + 0.20 * r189 + 0.20 * r252)
-                        pit_rs = int(np.clip(round(50.0 + pit_score * 50.0), 1, 99))
-                    else:
-                        pit_rs = int(np.clip(pit_rs, 1, 99))
-
                     # Point-in-time trend score evaluated strictly at sig_date with point-in-time strength
                     sig_trend = evaluate_minervini_trend(sub_c, sub_h, sub_l, pit_rs)
 
@@ -946,7 +861,7 @@ def enrich_snapshot_directory(
                             "symbol": sym_upper,
                             "signal_date": sig_date,
                             "pattern": p_type,
-                            "textbook": bool(p_match.get("textbook") and pit_rs >= 80 and sig_trend["score"] == 8),
+                            "textbook": bool(p_match.get("textbook") and pit_rs is not None and pit_rs >= 80 and sig_trend["score"] == 8),
                             "signal_close": sig_close,
                             "signal_rs": pit_rs,
                             "signal_trend_score": sig_trend["score"],

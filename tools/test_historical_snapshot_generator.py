@@ -26,6 +26,26 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
         self.opens = self.closes + np.random.uniform(-1.0, 1.0, n)
         self.volumes = np.random.uniform(10_000, 500_000, n)
 
+    def test_preset_eligibility_keeps_ms_liquidity_in_editable_rule_matches(self):
+        item = {"marketCapCrore": 2000, "close": 100, "metrics": {"turnover50": 20},
+                "presetRuleMatches": {"lib-stage-two": True, "mom_rvol": True},
+                "presetMatches": {"mom_rvol": True}}
+        gen.apply_preset_eligibility(item, {"lib-ms-vcp": True}, False)
+        self.assertFalse(item["presetRuleMatches"]["lib-ms-vcp"])
+        self.assertFalse(item["presetMatches"]["lib-ms-vcp"])
+        self.assertTrue(item["presetMatches"]["lib-stage-two"])
+        self.assertTrue(item["presetMatches"]["mom_rvol"])
+
+    def test_preset_eligibility_uses_shared_strict_thresholds_and_missing_values(self):
+        for field, value, expected in (("marketCapCrore", 1000, False), ("close", 10, False),
+                                       ("turnover50", 5, False), ("turnover50", None, None)):
+            with self.subTest(field=field, value=value):
+                item = {"marketCapCrore": 2000, "close": 100, "metrics": {"turnover50": 20}}
+                (item["metrics"] if field == "turnover50" else item)[field] = value
+                gen.apply_preset_eligibility(item, {"lib-ms-vcp": True}, True)
+                self.assertIs(item["presetMatches"]["lib-ms-vcp"], expected)
+                self.assertTrue(item["presetRuleMatches"]["lib-ms-vcp"])
+
     def test_calculate_technicals_extended_indicators(self):
         tech = gen.calculate_technicals(self.opens, self.closes, self.highs, self.lows, self.volumes)
 

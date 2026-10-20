@@ -32,6 +32,21 @@ from pipeline_utils import BASE_DIR, save_json, compress_file
 from ohlcv_utils import read_ohlcv_csv, valid_ohlcv_values
 
 
+def _parse_iso_or_nse_date(value):
+    if not value or not isinstance(value, str):
+        return None
+    s = value.strip()
+    if len(s) == 10 and s[4] == '-' and s[7] == '-':
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception:
+            return None
+    try:
+        return datetime.strptime(s, '%d-%b-%Y').date()
+    except Exception:
+        return None
+
+
 def determine_quadrant(x: float, y: float) -> str:
     if x >= 0.0:
         return "Leading" if y >= 0.0 else "Weakening"
@@ -218,6 +233,27 @@ def build_thematic_rrg_payload(
                             block_macros[mem_blk] = source_macros_map.get(mem_blk, "EMERGING & CROSS-CUTTING")
                 if mem_name not in niche_macros and mem_name in niche_blocks:
                     niche_macros[mem_name] = source_macros_map.get(niche_blocks[mem_name], "EMERGING & CROSS-CUTTING")
+
+    # Dynamic themes with recentNseListingDays (e.g. IPO / Young Bases)
+    as_of_date_obj = _parse_iso_or_nse_date(as_of_date)
+    for b in src.get("blocks", []):
+        for t in b.get("themes", []):
+            max_days = t.get("recentNseListingDays")
+            t_name = t.get("name")
+            if max_days and t_name:
+                p_blk = b.get("title")
+                for sym_u, s_info in stock_map.items():
+                    ld_str = s_info.get("listing_date") or s_info.get("listingDate")
+                    ld = _parse_iso_or_nse_date(ld_str)
+                    if ld and as_of_date_obj:
+                        diff = (as_of_date_obj - ld).days
+                        if 0 <= diff <= max_days:
+                            niche_stocks.setdefault(t_name, set()).add(sym_u)
+                            niche_blocks[t_name] = p_blk
+                            block_stocks.setdefault(p_blk, set()).add(sym_u)
+                            if p_blk not in block_macros:
+                                block_macros[p_blk] = source_macros_map.get(p_blk, "EMERGING & CROSS-CUTTING")
+                            niche_macros[t_name] = block_macros[p_blk]
 
     # Final pass to ensure all niches have parent block and macro
     for n_name in niche_stocks.keys():

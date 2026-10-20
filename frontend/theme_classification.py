@@ -1,10 +1,26 @@
 """Resolve the pinned Theme Tracker taxonomy without network calls or AI inference."""
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
 
 SOURCE_PATH = Path(__file__).with_name('theme_tracker_source.json')
 WEB_OVERRIDES_PATH = Path(__file__).with_name('theme_tracker_web_overrides.json')
+
+
+def _parse_iso_or_nse_date(value):
+    if not value or not isinstance(value, str):
+        return None
+    s = value.strip()
+    if len(s) == 10 and s[4] == '-' and s[7] == '-':
+        try:
+            return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception:
+            return None
+    try:
+        return datetime.strptime(s, '%d-%b-%Y').date()
+    except Exception:
+        return None
 
 # Exact scanner labels provide a transparent, medium-confidence bridge only for
 # symbols absent from the pinned Theme Tracker source and issuer overrides.
@@ -127,6 +143,7 @@ def classify(stocks, as_of, source_path=SOURCE_PATH):
     if len(stock_symbols) != len(set(stock_symbols)):
         raise ValueError('Scanner snapshot contains duplicate symbols')
     macros = {block: macro['title'] for macro in source['macros'] for block in macro['blocks']}
+    as_of_date = _parse_iso_or_nse_date(as_of)
     records, unmapped = {}, []
     for stock in sorted(stocks, key=lambda row: row['symbol']):
         symbol = stock['symbol']
@@ -160,6 +177,16 @@ def classify(stocks, as_of, source_path=SOURCE_PATH):
                                                       stock.get('providerIndustry', stock.get('industry'))))
             if bridge_theme:
                 assign(bridge_theme, 'scanner-industry-bridge')
+        # Dynamic recent listing rule (e.g. IPO / Young Bases)
+        stock_ld_str = stock.get('listing_date') or stock.get('listingDate') or row.get('listing_date') or row.get('listingDate')
+        if as_of_date and stock_ld_str:
+            stock_ld = _parse_iso_or_nse_date(stock_ld_str)
+            if stock_ld:
+                diff_days = (as_of_date - stock_ld).days
+                for name, theme in themes.items():
+                    max_days = theme.get('recentNseListingDays')
+                    if max_days and 0 <= diff_days <= max_days:
+                        assign(name, 'dynamic-recent-listing')
         # Mirror groups are aliases/aggregations, not extra business exposures.
         def matches(name, visiting):
             if name in memberships:

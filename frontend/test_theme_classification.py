@@ -59,3 +59,25 @@ class ThemeClassificationTests(unittest.TestCase):
         self.assertEqual(record['theme'], 'Public Sector Bank')
         self.assertIn('Banks - PSU', record['aliases'])
         self.assertNotIn('Banks - PSU', record['memberships'])
+
+    def test_dynamic_recent_listing_auto_admission_and_expiry(self):
+        # A recent listing (e.g. 50 days ago) should dynamically acquire 'IPO / Young Bases'
+        recent_stock = {
+            'symbol': 'AASTHA',
+            'listing_date': '24-AUG-2026',  # 50 days prior to 2026-10-13
+        }
+        res_recent = classify([recent_stock], '2026-10-13')
+        rec_recent = res_recent['records']['AASTHA']
+        self.assertEqual(rec_recent['theme'], 'Spinning & Yarn Processing')  # Primary preserved
+        self.assertIn('IPO / Young Bases', rec_recent['memberships'])
+        self.assertEqual(rec_recent['memberships']['IPO / Young Bases'], 'dynamic-recent-listing')
+
+        # When the listing age exceeds 300 days (e.g. listed in 2024), it should automatically drop off
+        aged_stock = {
+            'symbol': 'AASTHA',
+            'listing_date': '01-OCT-2024',  # >300 days prior to 2026-10-13
+        }
+        res_aged = classify([aged_stock], '2026-10-13')
+        rec_aged = res_aged['records']['AASTHA']
+        self.assertEqual(rec_aged['theme'], 'Spinning & Yarn Processing')
+        self.assertNotIn('IPO / Young Bases', rec_aged['memberships'])

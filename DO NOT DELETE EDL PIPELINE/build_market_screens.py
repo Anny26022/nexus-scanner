@@ -353,26 +353,68 @@ def evaluate_weinstein_stage(closes: np.ndarray) -> dict:
     }
 
 
-def main():
-    root = Path(BASE_DIR)
-    ohlcv_dir = root / "ohlcv_data"
-    stocks_path = root / "all_stocks_fundamental_analysis.json"
-    if not stocks_path.exists():
-        print("Error: all_stocks_fundamental_analysis.json missing.")
+def load_json_or_gz(path: Path) -> Any:
+    """Safely load JSON from either uncompressed or .gz file path."""
+    p = Path(path)
+    if p.exists():
+        if p.name.endswith(".gz"):
+            with gzip.open(p, "rt", encoding="utf-8") as f:
+                return json.load(f)
+        else:
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+    # Try .gz sibling
+    gz = p.with_name(p.name + ".gz")
+    if gz.exists():
+        with gzip.open(gz, "rt", encoding="utf-8") as f:
+            return json.load(f)
+
+    # If path had .gz, try without .gz
+    if p.name.endswith(".gz"):
+        plain = p.with_name(p.name[:-3])
+        if plain.exists():
+            with open(plain, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+    return None
+
+
+def enrich_snapshot_directory(
+    root: Path,
+    ohlcv_dir: Path | None = None,
+    earnings_root: Path | None = None,
+    generate_gallery: bool = True,
+) -> bool:
+    """Enrich a snapshot directory (current pipeline root or historical revision) with screens and setups."""
+    root = Path(root)
+    ohlcv_dir = Path(ohlcv_dir) if ohlcv_dir else (root / "ohlcv_data")
+    earnings_root = Path(earnings_root) if earnings_root else root
+
+    stocks_json = root / "all_stocks_fundamental_analysis.json"
+    stocks_gz = root / "all_stocks_fundamental_analysis.json.gz"
+
+    stocks = load_json_or_gz(stocks_json)
+    if not stocks:
+        print(f"Error: all_stocks_fundamental_analysis missing in {root}")
         return False
 
-    stocks = load_json(stocks_path)
-    rs_data = load_json(root / "rs_rating_daily.json") or load_json(root / "rs_rating_daily.json.gz") or {}
+    rs_data = load_json_or_gz(root / "rs_rating_daily.json") or {}
     ratings = rs_data.get("ratings", {})
-    calendar = load_earnings_calendar(root)
+    calendar = load_earnings_calendar(earnings_root)
 
     screen_records = []
     gallery_items = []
 
-    today_date = rs_data.get("as_of_date") or date.today().isoformat()
-    today_dt = pd.to_datetime(today_date).date()
+    # Determine as_of_date from rs_data or the first stock's as_of_date
+    today_date = rs_data.get("as_of_date")
+    if not today_date and stocks and isinstance(stocks, list):
+        today_date = stocks[0].get("as_of_date") or stocks[0].get("date")
+    if not today_date:
+        today_date = date.today().isoformat()
 
-    print(f"Enriching stock snapshot & generating MarketStrength screens as of {today_date}...")
+    today_dt = pd.to_datetime(today_date).date()
+    print(f"Enriching snapshot directory {root.name} as of {today_date}...")
 
     for stock in stocks:
         sym = stock.get("symbol") or stock.get("Symbol")
@@ -388,7 +430,7 @@ def main():
         if len(rows) < 30:
             continue
 
-        # Extract dates and float series
+        # Extract dates and float series aligned <= today_date
         dates = []
         opens, highs, lows, closes, volumes = [], [], [], [], []
         for r in rows:
@@ -518,54 +560,54 @@ def main():
         })
 
         # 4. Pattern Gallery occurrences (Rolling historical scan for VCP, Cup, Flag)
-        # Scan last 126 sessions for first pattern appearances
-        scan_len = min(len(c_arr), 126)
-        if scan_len >= 40:
-            for t_idx in range(len(c_arr) - scan_len, len(c_arr) - 5, 5):
-                sig_date = dates[t_idx]
-                sub_c_sig = c_arr[:t_idx + 1]
-                sub_h_sig = h_arr[:t_idx + 1]
-                sub_l_sig = l_arr[:t_idx + 1]
-                sub_v_sig = v_arr[:t_idx + 1]
+        if generate_gallery:
+            scan_len = min(len(c_arr), 126)
+            if scan_len >= 40:
+                for t_idx in range(len(c_arr) - scan_len, len(c_arr) - 5, 5):
+                    sig_date = dates[t_idx]
+                    sub_c_sig = c_arr[:t_idx + 1]
+                    sub_h_sig = h_arr[:t_idx + 1]
+                    sub_l_sig = l_arr[:t_idx + 1]
+                    sub_v_sig = v_arr[:t_idx + 1]
 
-                pat_vcp = detect_vcp(sub_h_sig, sub_l_sig, sub_c_sig, sub_v_sig, dates[:t_idx + 1])
-                pat_flag = detect_flags(sub_h_sig, sub_l_sig, sub_c_sig, sub_v_sig)
-                pat_cup = detect_cup_with_handle(sub_h_sig, sub_l_sig, sub_c_sig)
+                    pat_vcp = detect_vcp(sub_h_sig, sub_l_sig, sub_c_sig, sub_v_sig, dates[:t_idx + 1])
+                    pat_flag = detect_flags(sub_h_sig, sub_l_sig, sub_c_sig, sub_v_sig)
+                    pat_cup = detect_cup_with_handle(sub_h_sig, sub_l_sig, sub_c_sig)
 
-                for p_type, p_match in (("VCP", pat_vcp), ("Bull Flag", pat_flag), ("Cup with Handle", pat_cup)):
-                    if p_match and p_match.get("matched"):
-                        # Forward outcomes (+5d, +20d, +60d)
-                        fwd_closes = c_arr[t_idx + 1 :]
-                        sig_close = float(sub_c_sig[-1])
-                        ret5 = round(((fwd_closes[min(4, len(fwd_closes)-1)] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 1 else None
-                        ret20 = round(((fwd_closes[min(19, len(fwd_closes)-1)] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 1 else None
-                        ret60 = round(((fwd_closes[min(59, len(fwd_closes)-1)] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 1 else None
+                    for p_type, p_match in (("VCP", pat_vcp), ("Bull Flag", pat_flag), ("Cup with Handle", pat_cup)):
+                        if p_match and p_match.get("matched"):
+                            # Forward outcomes (+5d, +20d, +60d)
+                            fwd_closes = c_arr[t_idx + 1 :]
+                            sig_close = float(sub_c_sig[-1])
+                            ret5 = round(((fwd_closes[min(4, len(fwd_closes)-1)] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 1 else None
+                            ret20 = round(((fwd_closes[min(19, len(fwd_closes)-1)] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 1 else None
+                            ret60 = round(((fwd_closes[min(59, len(fwd_closes)-1)] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 1 else None
 
-                        fwd_60 = fwd_closes[:60]
-                        max_gain = round(((float(np.max(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_60) > 0 else None
-                        max_dd = round(((float(np.min(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_60) > 0 else None
+                            fwd_60 = fwd_closes[:60]
+                            max_gain = round(((float(np.max(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_60) > 0 else None
+                            max_dd = round(((float(np.min(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_60) > 0 else None
 
-                        gallery_items.append({
-                            "symbol": sym_upper,
-                            "signal_date": sig_date,
-                            "pattern": p_type,
-                            "textbook": bool(p_match.get("textbook") and (comp_rs or 0) >= 80 and trend_res["score"] == 8),
-                            "signal_close": sig_close,
-                            "signal_rs": comp_rs,
-                            "signal_trend_score": trend_res["score"],
-                            "return_5d": ret5,
-                            "return_20d": ret20,
-                            "return_60d": ret60,
-                            "max_gain_60d": max_gain,
-                            "max_drawdown_60d": max_dd,
-                            "measurements": p_match,
-                        })
-                        break  # capture one pattern per time index
+                            gallery_items.append({
+                                "symbol": sym_upper,
+                                "signal_date": sig_date,
+                                "pattern": p_type,
+                                "textbook": bool(p_match.get("textbook") and (comp_rs or 0) >= 80 and trend_res["score"] == 8),
+                                "signal_close": sig_close,
+                                "signal_rs": comp_rs,
+                                "signal_trend_score": trend_res["score"],
+                                "return_5d": ret5,
+                                "return_20d": ret20,
+                                "return_60d": ret60,
+                                "max_gain_60d": max_gain,
+                                "max_drawdown_60d": max_dd,
+                                "measurements": p_match,
+                            })
+                            break  # capture one pattern per time index
 
     # Save enriched main stock snapshot
-    save_json(stocks_path, stocks, ensure_ascii=False)
-    compress_file(stocks_path, stocks_path.with_suffix(".json.gz"))
-    print(f"Enriched {len(stocks)} stocks in all_stocks_fundamental_analysis.json(.gz)")
+    save_json(stocks_json, stocks, ensure_ascii=False)
+    compress_file(stocks_json, stocks_gz)
+    print(f"Enriched {len(stocks)} stocks in {stocks_gz.name}")
 
     # Save Market Screens Snapshot
     screens_output = root / "market_screens_snapshot.json"
@@ -575,19 +617,33 @@ def main():
         "records": screen_records,
     }, ensure_ascii=False)
     compress_file(screens_output, screens_output.with_suffix(".json.gz"))
-    print(f"Saved market_screens_snapshot.json(.gz) with {len(screen_records)} records.")
+    print(f"Saved market_screens_snapshot.json(.gz) with {len(screen_records)} records in {root.name}.")
 
-    # Save Pattern Gallery
-    gallery_output = root / "pattern_gallery.json"
-    save_json(gallery_output, {
-        "as_of_date": today_date,
-        "total_items": len(gallery_items),
-        "items": gallery_items,
-    }, ensure_ascii=False)
-    compress_file(gallery_output, gallery_output.with_suffix(".json.gz"))
-    print(f"Saved pattern_gallery.json(.gz) with {len(gallery_items)} historical outcomes.")
+    # Save Pattern Gallery if requested
+    if generate_gallery:
+        gallery_output = root / "pattern_gallery.json"
+        save_json(gallery_output, {
+            "as_of_date": today_date,
+            "total_items": len(gallery_items),
+            "items": gallery_items,
+        }, ensure_ascii=False)
+        compress_file(gallery_output, gallery_output.with_suffix(".json.gz"))
+        print(f"Saved pattern_gallery.json(.gz) with {len(gallery_items)} historical outcomes.")
 
     return True
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Build market screens, setup geometry, and pattern gallery.")
+    parser.add_argument("--root", type=str, default=str(BASE_DIR), help="Root directory containing pipeline outputs.")
+    parser.add_argument("--ohlcv-dir", type=str, default=None, help="Directory containing OHLCV CSVs.")
+    parser.add_argument("--no-gallery", action="store_true", help="Skip pattern gallery generation.")
+    args = parser.parse_args()
+
+    root = Path(args.root)
+    ohlcv = Path(args.ohlcv_dir) if args.ohlcv_dir else None
+    return enrich_snapshot_directory(root, ohlcv_dir=ohlcv, generate_gallery=not args.no_gallery)
 
 
 if __name__ == "__main__":

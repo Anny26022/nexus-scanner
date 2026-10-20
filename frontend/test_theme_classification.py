@@ -71,3 +71,11 @@ class ThemeClassificationTests(unittest.TestCase):
         self.assertIn('Eigen Engineering', records['KDDL']['issuerOverlay']['niche'])
         self.assertEqual(records['KDDL']['issuerOverlay']['sourceUrl'], 'https://www.kddl.com/businesses/precision-engineering')
 
+    def test_pharma_cdmo_curated_memberships(self):
+        symbols = ['LAURUSLABS', 'ACUTAAS', 'DIVISLAB', 'SYNGENE', 'NEULANDLAB', 'CONCORDBIO', 'PPLPHARMA', 'BLUEJET', 'ANTHEM', 'GLAND']
+        result = classify([{'symbol': s} for s in symbols], '2026-10-19')
+        records = result['records']
+        for s in symbols:
+            self.assertIn('Pharma CDMO & Complex Manufacturing', records[s]['memberships'])
+
+

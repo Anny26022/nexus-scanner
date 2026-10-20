@@ -104,6 +104,31 @@ const mockRrgData = {
       constituents: [],
     },
   ],
+  ipoTactical: [
+    {
+      symbol: 'DEEPA',
+      name: 'Deepa Jewellers',
+      listingDate: '2026-09-08',
+      listingAgeDays: 41,
+      sessions: 22,
+      marketCapCr: 450.0,
+      close: 245.5,
+      changePct: 3.2,
+      excessReturn10d: 26.13,
+      turnoverIntensity: 12.9,
+      turnoverCr: 36.9,
+      deliveryPct: 30.56,
+      gainSinceListingPct: 26.3,
+      quadrant: 'Leading',
+      x: 26.13,
+      y: 12.9,
+      trail: [
+        { week: 0, date: '2026-10-19', x: 26.13, y: 12.9, quadrant: 'Leading' },
+      ],
+      theme: 'Jewellery',
+      block: 'Lifestyle & Retail',
+    },
+  ],
 };
 
 afterEach(() => {
@@ -128,6 +153,9 @@ it('loads and caches Thematic RRG dataset', async () => {
   expect(first.blocks[0].quadrant).toBe('Leading');
   expect(first.blocks[0].trail).toHaveLength(13);
   expect(first.niches[0].parentBlock).toBe('EMERGING THEMES');
+  expect(first.ipoTactical).toHaveLength(1);
+  expect(first.ipoTactical[0].symbol).toBe('DEEPA');
+  expect(first.ipoTactical[0].quadrant).toBe('Leading');
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 

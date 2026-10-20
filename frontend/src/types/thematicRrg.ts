@@ -76,6 +76,28 @@ export interface RrgNicheItem {
   constituents: RrgConstituentStock[];
 }
 
+export interface RrgIpoItem {
+  symbol: string;
+  name: string;
+  listingDate: string;
+  listingAgeDays: number;
+  sessions: number;
+  marketCapCr: number;
+  close: number;
+  changePct: number;
+  excessReturn10d: number;
+  turnoverIntensity: number;
+  turnoverCr: number;
+  deliveryPct: number | null;
+  gainSinceListingPct: number;
+  quadrant: RrgQuadrant;
+  x: number;
+  y: number;
+  trail: RrgTrailPoint[];
+  theme: string | null;
+  block: string | null;
+}
+
 export interface ThematicRrgResponse {
   schemaVersion: number;
   asOfDate: string;
@@ -88,4 +110,5 @@ export interface ThematicRrgResponse {
   totalEquities: number;
   blocks: RrgBlockItem[];
   niches: RrgNicheItem[];
+  ipoTactical: RrgIpoItem[];
 }

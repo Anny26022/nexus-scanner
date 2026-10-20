@@ -165,7 +165,7 @@ def build_thematic_rrg_payload(
         p = ohlcv_dir / f"{sym_u}.csv"
         if p.exists():
             rows = read_ohlcv_csv(p)
-            if len(rows) >= 65:
+            if len(rows) >= 5:
                 d_list, c_list = [], []
                 for r in rows:
                     v = valid_ohlcv_values(r)
@@ -174,7 +174,7 @@ def build_thematic_rrg_payload(
                         if d_str <= as_of_date:
                             d_list.append(d_str)
                             c_list.append(v[3])
-                if len(c_list) >= 65:
+                if len(c_list) >= 5:
                     histories[sym_u] = (d_list, np.array(c_list, dtype=float))
 
     print(f"Loaded {len(histories)} stock histories for RRG calculation.")
@@ -292,7 +292,7 @@ def build_thematic_rrg_payload(
 
     # Helper function to compute block/niche RRG metrics & rotation trail
     def compute_cluster_rrg(symbols: set[str], name: str, parent_block: str | None, macro: str | None) -> dict[str, Any] | None:
-        valid_syms = [s for s in symbols if s in histories]
+        valid_syms = [s for s in symbols if s in histories and len(histories[s][1]) >= 65]
         if not valid_syms:
             return None
 
@@ -508,6 +508,107 @@ def build_thematic_rrg_payload(
     blocks_result.sort(key=lambda b: b["x"], reverse=True)
     niches_result.sort(key=lambda n: n["x"], reverse=True)
 
+    print("Computing Tactical IPO RRGs...")
+    ipo_tactical_result = []
+    as_of_date_obj = _parse_iso_or_nse_date(as_of_date)
+    for sym_u, s_info in stock_map.items():
+        ld_str = s_info.get("listing_date") or s_info.get("listingDate")
+        ld = _parse_iso_or_nse_date(ld_str)
+        if ld and as_of_date_obj:
+            diff_days = (as_of_date_obj - ld).days
+            if 0 <= diff_days <= 300 and sym_u in histories:
+                d_arr, c_arr = histories[sym_u]
+                n_bars = len(c_arr)
+                if n_bars >= 5:
+                    lookback = min(10, n_bars - 1)
+                    s_now = c_arr[-1]
+                    s_past = c_arr[-1 - lookback]
+                    s_ret = ((s_now - s_past) / s_past) * 100.0 if s_past > 0 else 0.0
+
+                    b_now = bench_c[-1]
+                    b_past = bench_c[-1 - lookback]
+                    b_ret = ((b_now - b_past) / b_past) * 100.0 if b_past > 0 else 0.0
+                    x_val = round(float(s_ret - b_ret), 2)
+
+                    # Get volume history if csv exists
+                    csv_p = ohlcv_dir / f"{sym_u}.csv"
+                    rel_vol = 1.0
+                    turnover_cr = 0.0
+                    if csv_p.exists():
+                        try:
+                            df_v = pd.read_csv(csv_p, usecols=["Volume", "Close"])
+                            v_arr = df_v["Volume"].values
+                            c_arr_df = df_v["Close"].values
+                            if len(v_arr) >= 5:
+                                avg_5 = np.mean(v_arr[-5:])
+                                avg_all = np.mean(v_arr)
+                                rel_vol = (avg_5 / avg_all) if avg_all > 0 else 1.0
+                                turnover_cr = (v_arr[-1] * c_arr_df[-1]) / 1e7
+                        except Exception:
+                            pass
+
+                    y_val = round(float(min(300.0, max(-100.0, (rel_vol - 1.0) * 100.0))), 1)
+                    quad = determine_quadrant(x_val, y_val)
+
+                    ipo_trail = []
+                    for step in range(5, -1, -1):
+                        bar_idx = -1 - step
+                        if abs(bar_idx) <= n_bars and abs(bar_idx) <= len(bench_c):
+                            step_lb = min(10, n_bars - 1 - step)
+                            if step_lb > 0 and (abs(bar_idx - step_lb) <= n_bars):
+                                s_c_now = c_arr[bar_idx]
+                                s_c_past = c_arr[bar_idx - step_lb]
+                                s_st_ret = ((s_c_now - s_c_past) / s_c_past) * 100.0 if s_c_past > 0 else 0.0
+
+                                b_c_now = bench_c[bar_idx]
+                                b_c_past = bench_c[bar_idx - step_lb]
+                                b_st_ret = ((b_c_now - b_c_past) / b_c_past) * 100.0 if b_c_past > 0 else 0.0
+                                st_x = round(float(s_st_ret - b_st_ret), 2)
+                                st_y = round(float(y_val * (1.0 - (step * 0.12))), 1)
+                                ipo_trail.append({
+                                    "week": step,
+                                    "date": d_arr[bar_idx],
+                                    "x": st_x,
+                                    "y": st_y,
+                                    "quadrant": determine_quadrant(st_x, st_y),
+                                })
+
+                    rec = tax_records.get(sym_u, {})
+                    thm_name = rec.get("theme") or source_blocks_map.get(sym_u)
+                    blk_name = rec.get("block") or (source_blocks_map.get(thm_name) if thm_name else None)
+
+                    listing_close = c_arr[0]
+                    gain_since_listing = round(float(((s_now - listing_close) / listing_close) * 100.0), 1) if listing_close > 0 else 0.0
+                    c_prev = c_arr[-2] if n_bars >= 2 else s_now
+                    chg_1d = round(float(((s_now - c_prev) / c_prev) * 100.0), 2) if c_prev > 0 else 0.0
+
+                    ipo_tactical_result.append({
+                        "symbol": sym_u,
+                        "name": s_info.get("company_name") or sym_u,
+                        "listingDate": str(ld),
+                        "listingAgeDays": diff_days,
+                        "sessions": n_bars,
+                        "marketCapCr": round(float(s_info.get("market_cap_cr") or 0.0), 1),
+                        "close": round(float(s_now), 2),
+                        "changePct": chg_1d,
+                        "excessReturn10d": x_val,
+                        "turnoverIntensity": y_val,
+                        "turnoverCr": round(float(turnover_cr), 1),
+                        "deliveryPct": round(float(s_info.get("delivery_percent") or 0.0), 1) if s_info.get("delivery_percent") else None,
+                        "gainSinceListingPct": gain_since_listing,
+                        "quadrant": quad,
+                        "x": x_val,
+                        "y": y_val,
+                        "trail": ipo_trail if len(ipo_trail) >= 2 else [{
+                            "week": 0, "date": as_of_date, "x": x_val, "y": y_val, "quadrant": quad
+                        }],
+                        "theme": thm_name,
+                        "block": blk_name,
+                    })
+
+    ipo_tactical_result.sort(key=lambda item: item["x"], reverse=True)
+    print(f"Computed {len(ipo_tactical_result)} Tactical IPO RRGs.")
+
     # Build final payload
     payload = {
         "schemaVersion": 1,
@@ -521,6 +622,7 @@ def build_thematic_rrg_payload(
         "totalEquities": len(tax_records),
         "blocks": blocks_result,
         "niches": niches_result,
+        "ipoTactical": ipo_tactical_result,
     }
 
     return payload

@@ -90,5 +90,35 @@ class TestThematicRrg(unittest.TestCase):
             self.assertIn(niche["parentBlock"], block_names, f"Niche {niche['name']} points to unknown block {niche['parentBlock']}")
             self.assertEqual(len(niche["trail"]), 13)
 
+    def test_tactical_ipo_rrg(self):
+        self.assertIn("ipoTactical", self.data)
+        ipos = self.data["ipoTactical"]
+        self.assertGreaterEqual(len(ipos), 100)
+        symbols = {item["symbol"] for item in ipos}
+        for expected in ["DEEPA", "PRIORITY", "LALITHAA", "HEROMOTORS", "VARMORA"]:
+            self.assertIn(expected, symbols, f"Recent IPO {expected} missing from tactical IPO RRG")
+
+        for item in ipos:
+            self.assertIn("excessReturn10d", item)
+            self.assertIn("turnoverIntensity", item)
+            self.assertIn("quadrant", item)
+            self.assertIn("listingDate", item)
+            self.assertIn("listingAgeDays", item)
+            self.assertIn("sessions", item)
+            self.assertGreaterEqual(item["sessions"], 5)
+            self.assertLessEqual(item["listingAgeDays"], 300)
+            self.assertGreaterEqual(len(item["trail"]), 1)
+            x = item["x"]
+            y = item["y"]
+            q = item["quadrant"]
+            if x >= 0 and y >= 0:
+                self.assertEqual(q, "Leading")
+            elif x >= 0 and y < 0:
+                self.assertEqual(q, "Weakening")
+            elif x < 0 and y < 0:
+                self.assertEqual(q, "Lagging")
+            else:
+                self.assertEqual(q, "Improving")
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,7 @@ import {
   RrgQuadrant,
   RrgBlockItem,
   RrgNicheItem,
+  RrgIpoItem,
 } from '../types/thematicRrg';
 import {
   Search,
@@ -12,14 +13,17 @@ import {
   X,
   ArrowUpDown,
   Compass,
+  Sparkles,
 } from 'lucide-react';
 
 interface ThematicRrgTabProps {
   datasetRevision?: string;
 }
 
-type ViewMode = 'blocks' | 'niches';
-type SortField =
+type ViewMode = 'blocks' | 'niches' | 'ipos';
+type SortDirection = 'asc' | 'desc';
+
+type ClusterSortField =
   | 'name'
   | 'quadrant'
   | 'excessReturn3m'
@@ -31,7 +35,17 @@ type SortField =
   | 'totalTurnover20Cr'
   | 'constituentCount';
 
-type SortDirection = 'asc' | 'desc';
+type IpoSortField =
+  | 'symbol'
+  | 'quadrant'
+  | 'excessReturn10d'
+  | 'turnoverIntensity'
+  | 'close'
+  | 'listingDate'
+  | 'gainSinceListingPct'
+  | 'turnoverCr'
+  | 'deliveryPct'
+  | 'marketCapCr';
 
 export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision }) => {
   // Query data using TanStack Query (no useEffect)
@@ -47,23 +61,30 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [trailWeeks, setTrailWeeks] = useState<number>(12);
   const [activeDrillBlock, setActiveDrillBlock] = useState<string | null>(null);
+
   const [hoveredNode, setHoveredNode] = useState<{
-    item: RrgBlockItem | RrgNicheItem;
+    item: RrgBlockItem | RrgNicheItem | RrgIpoItem;
     screenX: number;
     screenY: number;
   } | null>(null);
-  const [selectedDrawerItem, setSelectedDrawerItem] = useState<RrgBlockItem | RrgNicheItem | null>(null);
 
-  // Table sorting
-  const [sortField, setSortField] = useState<SortField>('excessReturn3m');
-  const [sortDir, setSortDir] = useState<SortDirection>('desc');
+  const [selectedDrawerItem, setSelectedDrawerItem] = useState<RrgBlockItem | RrgNicheItem | null>(null);
+  const [selectedIpoDrawerItem, setSelectedIpoDrawerItem] = useState<RrgIpoItem | null>(null);
+
+  // Sorting state for clusters
+  const [clusterSortField, setClusterSortField] = useState<ClusterSortField>('excessReturn3m');
+  const [clusterSortDir, setClusterSortDir] = useState<SortDirection>('desc');
+
+  // Sorting state for IPOs
+  const [ipoSortField, setIpoSortField] = useState<IpoSortField>('excessReturn10d');
+  const [ipoSortDir, setIpoSortDir] = useState<SortDirection>('desc');
 
   // Constituent drawer sorting
   const [stockSortField, setStockSortField] = useState<'symbol' | 'rsRating' | 'excessReturn3m' | 'return1m' | 'marketCapCr' | 'turnover20Cr'>('excessReturn3m');
   const [stockSortDir, setStockSortDir] = useState<SortDirection>('desc');
 
   // Active items depending on viewMode and drilldown
-  const activeItems = useMemo<(RrgBlockItem | RrgNicheItem)[]>(() => {
+  const activeClusterItems = useMemo<(RrgBlockItem | RrgNicheItem)[]>(() => {
     if (!data) return [];
     if (activeDrillBlock) {
       return data.niches.filter((n) => n.parentBlock === activeDrillBlock);
@@ -71,17 +92,23 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
     if (viewMode === 'blocks') {
       return data.blocks;
     }
-    return data.niches;
+    if (viewMode === 'niches') {
+      return data.niches;
+    }
+    return [];
   }, [data, viewMode, activeDrillBlock]);
 
-  // Filtered items
-  const filteredItems = useMemo(() => {
-    let result = activeItems;
+  const activeIpoItems = useMemo<RrgIpoItem[]>(() => {
+    if (!data || viewMode !== 'ipos') return [];
+    return data.ipoTactical ?? [];
+  }, [data, viewMode]);
 
+  // Filtered items
+  const filteredClusterItems = useMemo(() => {
+    let result = activeClusterItems;
     if (selectedQuadrant !== 'ALL') {
       result = result.filter((item) => item.quadrant === selectedQuadrant);
     }
-
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(
@@ -91,37 +118,51 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
           item.constituents.some((s) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
       );
     }
-
     return result;
-  }, [activeItems, selectedQuadrant, searchQuery]);
+  }, [activeClusterItems, selectedQuadrant, searchQuery]);
+
+  const filteredIpoItems = useMemo(() => {
+    let result = activeIpoItems;
+    if (selectedQuadrant !== 'ALL') {
+      result = result.filter((item) => item.quadrant === selectedQuadrant);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (item) =>
+          item.symbol.toLowerCase().includes(q) ||
+          item.name.toLowerCase().includes(q) ||
+          (item.theme && item.theme.toLowerCase().includes(q)) ||
+          (item.block && item.block.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [activeIpoItems, selectedQuadrant, searchQuery]);
 
   // Quadrant counts across current view scope
   const quadrantCounts = useMemo(() => {
-    const counts = { ALL: activeItems.length, Leading: 0, Weakening: 0, Lagging: 0, Improving: 0 };
-    for (const item of activeItems) {
+    const list = viewMode === 'ipos' ? activeIpoItems : activeClusterItems;
+    const counts = { ALL: list.length, Leading: 0, Weakening: 0, Lagging: 0, Improving: 0 };
+    for (const item of list) {
       if (counts[item.quadrant] !== undefined) {
         counts[item.quadrant]++;
       }
     }
     return counts;
-  }, [activeItems]);
+  }, [viewMode, activeIpoItems, activeClusterItems]);
 
-  // Sorted items for the table
-  const sortedItems = useMemo(() => {
-    const items = [...filteredItems];
+  // Sorted items for cluster table
+  const sortedClusterItems = useMemo(() => {
+    const items = [...filteredClusterItems];
     items.sort((a, b) => {
       let aVal: number | string = 0;
       let bVal: number | string = 0;
 
-      switch (sortField) {
+      switch (clusterSortField) {
         case 'name':
-          aVal = a.name;
-          bVal = b.name;
-          return sortDir === 'asc' ? (aVal as string).localeCompare(bVal as string) : (bVal as string).localeCompare(aVal as string);
+          return clusterSortDir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
         case 'quadrant':
-          aVal = a.quadrant;
-          bVal = b.quadrant;
-          return sortDir === 'asc' ? (aVal as string).localeCompare(bVal as string) : (bVal as string).localeCompare(aVal as string);
+          return clusterSortDir === 'asc' ? a.quadrant.localeCompare(b.quadrant) : b.quadrant.localeCompare(a.quadrant);
         case 'excessReturn3m':
           aVal = a.metrics.excessReturn3m;
           bVal = b.metrics.excessReturn3m;
@@ -157,12 +198,64 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
       }
 
       if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+        return clusterSortDir === 'asc' ? aVal - bVal : bVal - aVal;
       }
       return 0;
     });
     return items;
-  }, [filteredItems, sortField, sortDir]);
+  }, [filteredClusterItems, clusterSortField, clusterSortDir]);
+
+  // Sorted items for IPO table
+  const sortedIpoItems = useMemo(() => {
+    const items = [...filteredIpoItems];
+    items.sort((a, b) => {
+      let aVal: number | string = 0;
+      let bVal: number | string = 0;
+
+      switch (ipoSortField) {
+        case 'symbol':
+          return ipoSortDir === 'asc' ? a.symbol.localeCompare(b.symbol) : b.symbol.localeCompare(a.symbol);
+        case 'quadrant':
+          return ipoSortDir === 'asc' ? a.quadrant.localeCompare(b.quadrant) : b.quadrant.localeCompare(a.quadrant);
+        case 'excessReturn10d':
+          aVal = a.excessReturn10d;
+          bVal = b.excessReturn10d;
+          break;
+        case 'turnoverIntensity':
+          aVal = a.turnoverIntensity;
+          bVal = b.turnoverIntensity;
+          break;
+        case 'close':
+          aVal = a.close;
+          bVal = b.close;
+          break;
+        case 'listingDate':
+          return ipoSortDir === 'asc' ? a.listingDate.localeCompare(b.listingDate) : b.listingDate.localeCompare(a.listingDate);
+        case 'gainSinceListingPct':
+          aVal = a.gainSinceListingPct;
+          bVal = b.gainSinceListingPct;
+          break;
+        case 'turnoverCr':
+          aVal = a.turnoverCr;
+          bVal = b.turnoverCr;
+          break;
+        case 'deliveryPct':
+          aVal = a.deliveryPct ?? -1;
+          bVal = b.deliveryPct ?? -1;
+          break;
+        case 'marketCapCr':
+          aVal = a.marketCapCr;
+          bVal = b.marketCapCr;
+          break;
+      }
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return ipoSortDir === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      return 0;
+    });
+    return items;
+  }, [filteredIpoItems, ipoSortField, ipoSortDir]);
 
   // Sorted drawer constituents
   const sortedDrawerConstituents = useMemo(() => {
@@ -214,14 +307,16 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
     let minY = -15;
     let maxY = 15;
 
-    for (const item of activeItems) {
+    const currentList = viewMode === 'ipos' ? activeIpoItems : activeClusterItems;
+
+    for (const item of currentList) {
       if (item.x < minX) minX = item.x;
       if (item.x > maxX) maxX = item.x;
       if (item.y < minY) minY = item.y;
       if (item.y > maxY) maxY = item.y;
 
       for (const pt of item.trail) {
-        if (pt.week <= trailWeeks) {
+        if (viewMode === 'ipos' || pt.week <= trailWeeks) {
           if (pt.x < minX) minX = pt.x;
           if (pt.x > maxX) maxX = pt.x;
           if (pt.y < minY) minY = pt.y;
@@ -230,7 +325,6 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
       }
     }
 
-    // Add 12% padding for neat visual breathing room
     const spanX = Math.max(Math.abs(minX), Math.abs(maxX)) * 1.15;
     const spanY = Math.max(Math.abs(minY), Math.abs(maxY)) * 1.15;
 
@@ -239,7 +333,6 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
     const finalYMin = -spanY;
     const finalYMax = spanY;
 
-    // Zero crosshair pixel positions
     const zX = padding.left + ((0 - finalXMin) / (finalXMax - finalXMin)) * plotWidth;
     const zY = padding.top + ((finalYMax - 0) / (finalYMax - finalYMin)) * plotHeight;
 
@@ -251,7 +344,7 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
       zeroX: zX,
       zeroY: zY,
     };
-  }, [activeItems, trailWeeks, plotWidth, plotHeight, padding.left, padding.top]);
+  }, [viewMode, activeIpoItems, activeClusterItems, trailWeeks, plotWidth, plotHeight, padding.left, padding.top]);
 
   // Coordinate conversion helpers
   const getPx = (x: number) => padding.left + ((x - xMin) / (xMax - xMin)) * plotWidth;
@@ -273,7 +366,6 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
     return { ticksX, ticksY };
   }, [xMax, yMax]);
 
-  // Quadrant color mapping
   const getQuadrantColor = (quadrant: RrgQuadrant) => {
     switch (quadrant) {
       case 'Leading':
@@ -287,12 +379,21 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
     }
   };
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+  const handleClusterSort = (field: ClusterSortField) => {
+    if (clusterSortField === field) {
+      setClusterSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
-      setSortField(field);
-      setSortDir('desc');
+      setClusterSortField(field);
+      setClusterSortDir('desc');
+    }
+  };
+
+  const handleIpoSort = (field: IpoSortField) => {
+    if (ipoSortField === field) {
+      setIpoSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setIpoSortField(field);
+      setIpoSortDir('desc');
     }
   };
 
@@ -305,17 +406,12 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
     }
   };
 
-  // Node radius based on constituent count
-  const getNodeRadius = (count: number) => {
-    return Math.min(13, Math.max(6, 5 + Math.sqrt(count) * 1.2));
-  };
-
   if (isLoading) {
     return (
       <div className="rrg-container" role="status">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px', color: 'var(--muted)', gap: '0.75rem' }}>
           <Compass className="animate-spin" size={24} />
-          <span>Generating Relative Rotation Graph across thematic universe…</span>
+          <span>Generating Relative Rotation Graph across thematic &amp; IPO universe…</span>
         </div>
       </div>
     );
@@ -346,37 +442,56 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
         <div className="rrg-title-group">
           <h1>
             <Compass size={22} style={{ color: '#6366f1' }} />
-            Thematic Relative Rotation Graph
-            <span className="rrg-title-badge">RRG · Nexus Hierarchy</span>
+            {viewMode === 'ipos' ? 'Fast-Cadence Tactical IPO RRG' : 'Thematic Relative Rotation Graph'}
+            <span className="rrg-title-badge">
+              {viewMode === 'ipos' ? '10D Excess · Turnover Intensity' : '3M Excess · 21D RS Momentum'}
+            </span>
           </h1>
           <div className="rrg-subtitle">
-            Benchmark: <strong>{data.benchmark}</strong> (3M: <span className={data.benchmark3mReturn >= 0 ? 'val-positive' : 'val-negative'}>{data.benchmark3mReturn > 0 ? `+${data.benchmark3mReturn.toFixed(2)}` : data.benchmark3mReturn.toFixed(2)}%</span>) · As of {data.asOfDate} · {data.totalBlocks} Blocks · {data.totalNiches} Niches · {data.totalEquities} Mapped Equities
+            Benchmark: <strong>{data.benchmark}</strong> · As of {data.asOfDate} · {data.totalBlocks} Blocks · {data.totalNiches} Niches · {data.ipoTactical?.length ?? 0} Tactical IPOs Tracked
           </div>
         </div>
 
         {/* Top Controls */}
         <div className="rrg-controls-row">
-          {/* Segmented Block vs Niche Toggle */}
-          {!activeDrillBlock && (
-            <div className="rrg-segmented-control" role="group" aria-label="Granularity">
-              <button
-                type="button"
-                className="rrg-segmented-btn"
-                aria-pressed={viewMode === 'blocks'}
-                onClick={() => setViewMode('blocks')}
-              >
-                Thematic Blocks ({data.blocks.length})
-              </button>
-              <button
-                type="button"
-                className="rrg-segmented-btn"
-                aria-pressed={viewMode === 'niches'}
-                onClick={() => setViewMode('niches')}
-              >
-                All Niches ({data.niches.length})
-              </button>
-            </div>
-          )}
+          {/* Segmented View Mode Toggle */}
+          <div className="rrg-segmented-control" role="group" aria-label="Granularity">
+            <button
+              type="button"
+              className="rrg-segmented-btn"
+              aria-pressed={viewMode === 'blocks'}
+              onClick={() => {
+                setViewMode('blocks');
+                setActiveDrillBlock(null);
+              }}
+            >
+              Thematic Blocks ({data.blocks.length})
+            </button>
+            <button
+              type="button"
+              className="rrg-segmented-btn"
+              aria-pressed={viewMode === 'niches'}
+              onClick={() => {
+                setViewMode('niches');
+                setActiveDrillBlock(null);
+              }}
+            >
+              All Niches ({data.niches.length})
+            </button>
+            <button
+              type="button"
+              className="rrg-segmented-btn"
+              aria-pressed={viewMode === 'ipos'}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+              onClick={() => {
+                setViewMode('ipos');
+                setActiveDrillBlock(null);
+              }}
+            >
+              <Sparkles size={12} style={{ color: '#f59e0b' }} />
+              Tactical IPO RRG ({data.ipoTactical?.length ?? 0})
+            </button>
+          </div>
 
           {/* Breadcrumbs if drilled into a block */}
           {activeDrillBlock && (
@@ -407,20 +522,22 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             </nav>
           )}
 
-          {/* Trail Length Selector */}
-          <div className="rrg-segmented-control" role="group" aria-label="Trail Length">
-            {[4, 8, 12].map((w) => (
-              <button
-                key={w}
-                type="button"
-                className="rrg-segmented-btn"
-                aria-pressed={trailWeeks === w}
-                onClick={() => setTrailWeeks(w)}
-              >
-                {w}W Trail
-              </button>
-            ))}
-          </div>
+          {/* Trail Length Selector (in block/niche mode) */}
+          {viewMode !== 'ipos' && (
+            <div className="rrg-segmented-control" role="group" aria-label="Trail Length">
+              {[4, 8, 12].map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  className="rrg-segmented-btn"
+                  aria-pressed={trailWeeks === w}
+                  onClick={() => setTrailWeeks(w)}
+                >
+                  {w}W Trail
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
@@ -474,7 +591,13 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
           <input
             type="text"
             className="rrg-search-input"
-            placeholder={activeDrillBlock ? `Filter niches in ${activeDrillBlock}…` : 'Filter blocks or niches…'}
+            placeholder={
+              viewMode === 'ipos'
+                ? 'Filter IPO debutants, themes...'
+                : activeDrillBlock
+                ? `Filter niches in ${activeDrillBlock}…`
+                : 'Filter blocks or niches…'
+            }
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -488,22 +611,7 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
           className="rrg-svg-root"
           onMouseLeave={() => setHoveredNode(null)}
         >
-          {/* Defs for gradients & markers */}
-          <defs>
-            <marker
-              id="arrow-head"
-              markerWidth="6"
-              markerHeight="6"
-              refX="4"
-              refY="3"
-              orient="auto"
-            >
-              <polygon points="0 1, 5 3, 0 5" fill="currentColor" opacity="0.75" />
-            </marker>
-          </defs>
-
-          {/* 1. Quadrant background fills */}
-          {/* Improving: Top-Left (X < 0, Y > 0) */}
+          {/* Quadrant background fills */}
           <rect
             x={padding.left}
             y={padding.top}
@@ -511,7 +619,6 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             height={Math.max(0, zeroY - padding.top)}
             className="rrg-quadrant-bg-improving"
           />
-          {/* Leading: Top-Right (X >= 0, Y >= 0) */}
           <rect
             x={zeroX}
             y={padding.top}
@@ -519,7 +626,6 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             height={Math.max(0, zeroY - padding.top)}
             className="rrg-quadrant-bg-leading"
           />
-          {/* Lagging: Bottom-Left (X < 0, Y < 0) */}
           <rect
             x={padding.left}
             y={zeroY}
@@ -527,7 +633,6 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             height={Math.max(0, svgHeight - padding.bottom - zeroY)}
             className="rrg-quadrant-bg-lagging"
           />
-          {/* Weakening: Bottom-Right (X >= 0, Y < 0) */}
           <rect
             x={zeroX}
             y={zeroY}
@@ -536,9 +641,9 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             className="rrg-quadrant-bg-weakening"
           />
 
-          {/* 2. Quadrant Watermark Labels */}
+          {/* Quadrant Watermark Labels */}
           <text x={padding.left + 14} y={padding.top + 22} className="rrg-quadrant-label" style={{ fill: '#3b82f6' }}>
-            IMPROVING · Underperforming / RS Strengthening
+            {viewMode === 'ipos' ? 'IMPROVING · Dip Buying / Surge Inflow' : 'IMPROVING · Underperforming / RS Strengthening'}
           </text>
           <text
             x={svgWidth - padding.right - 14}
@@ -547,7 +652,7 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             textAnchor="end"
             style={{ fill: '#10b981' }}
           >
-            LEADING · Outperforming / RS Strengthening
+            {viewMode === 'ipos' ? 'LEADING · Outperforming / High Volume Inflow' : 'LEADING · Outperforming / RS Strengthening'}
           </text>
           <text
             x={padding.left + 14}
@@ -555,7 +660,7 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             className="rrg-quadrant-label"
             style={{ fill: '#f43f5e' }}
           >
-            LAGGING · Underperforming / RS Weakening
+            {viewMode === 'ipos' ? 'LAGGING · Underperforming / Subsiding Volume' : 'LAGGING · Underperforming / RS Weakening'}
           </text>
           <text
             x={svgWidth - padding.right - 14}
@@ -564,10 +669,10 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             textAnchor="end"
             style={{ fill: '#f59e0b' }}
           >
-            WEAKENING · Outperforming / RS Weakening
+            {viewMode === 'ipos' ? 'WEAKENING · Outperforming / Volume Cooling' : 'WEAKENING · Outperforming / RS Weakening'}
           </text>
 
-          {/* 3. Grid Lines */}
+          {/* Grid Lines */}
           {gridTicks.ticksX.map((tick) => {
             const px = getPx(tick);
             return (
@@ -586,37 +691,24 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
               <g key={`gy-${tick}`}>
                 <line x1={padding.left} y1={py} x2={svgWidth - padding.right} y2={py} className="rrg-grid-line" />
                 <text x={padding.left - 8} y={py + 3} textAnchor="end" className="rrg-axis-text">
-                  {tick > 0 ? `+${tick}` : `${tick}`}
+                  {tick > 0 ? `+${tick}%` : `${tick}%`}
                 </text>
               </g>
             );
           })}
 
-          {/* 4. Center Crosshairs (0, 0) */}
-          <line
-            x1={zeroX}
-            y1={padding.top}
-            x2={zeroX}
-            y2={svgHeight - padding.bottom}
-            className="rrg-axis-center"
-          />
-          <line
-            x1={padding.left}
-            y1={zeroY}
-            x2={svgWidth - padding.right}
-            y2={zeroY}
-            className="rrg-axis-center"
-          />
+          {/* Center Crosshairs (0, 0) */}
+          <line x1={zeroX} y1={padding.top} x2={zeroX} y2={svgHeight - padding.bottom} className="rrg-axis-center" />
+          <line x1={padding.left} y1={zeroY} x2={svgWidth - padding.right} y2={zeroY} className="rrg-axis-center" />
 
-          {/* Zero Labels */}
           <text x={zeroX} y={svgHeight - padding.bottom + 16} textAnchor="middle" className="rrg-axis-text" style={{ fontWeight: 700 }}>
             0%
           </text>
           <text x={padding.left - 8} y={zeroY + 3} textAnchor="end" className="rrg-axis-text" style={{ fontWeight: 700 }}>
-            0
+            0%
           </text>
 
-          {/* Axis Labels */}
+          {/* Dynamic Axis Titles */}
           <text
             x={svgWidth / 2}
             y={svgHeight - 12}
@@ -624,7 +716,9 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             className="rrg-axis-text"
             style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em' }}
           >
-            ← UNDERPERFORMING BENCHMARK | 3-MONTH MEDIAN EXCESS RETURN VS NIFTY 500 (%) | OUTPERFORMING BENCHMARK →
+            {viewMode === 'ipos'
+              ? '← UNDERPERFORMING BENCHMARK | 10-DAY / LTD EXCESS RETURN VS NIFTY 500 (%) | OUTPERFORMING BENCHMARK →'
+              : '← UNDERPERFORMING BENCHMARK | 3-MONTH MEDIAN EXCESS RETURN VS NIFTY 500 (%) | OUTPERFORMING BENCHMARK →'}
           </text>
           <text
             x={-(svgHeight / 2)}
@@ -634,18 +728,21 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             className="rrg-axis-text"
             style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em' }}
           >
-            ← WEAKENING RS MOMENTUM | 1-MONTH CHANGE IN RS RATING (21-DAY Δ) | STRENGTHENING RS MOMENTUM →
+            {viewMode === 'ipos'
+              ? '← SUBSIDING VOLUME | 5-DAY TURNOVER INTENSITY VS LISTING AVERAGE (%) | SURGING VOLUME ACCUMULATION →'
+              : '← WEAKENING RS MOMENTUM | 1-MONTH CHANGE IN RS RATING (21-DAY Δ) | STRENGTHENING RS MOMENTUM →'}
           </text>
 
-          {/* 5. Historical Rotation Trails */}
-          {filteredItems.map((item) => {
-            const isHovered = hoveredNode?.item.name === item.name;
+          {/* Trails */}
+          {(viewMode === 'ipos' ? filteredIpoItems : filteredClusterItems).map((item) => {
+            const isHovered =
+              hoveredNode?.item.name === item.name ||
+              ('symbol' in item && hoveredNode?.item && 'symbol' in hoveredNode.item && hoveredNode.item.symbol === item.symbol);
             const itemColor = getQuadrantColor(item.quadrant);
 
-            // Filter trail to selected trail length
             const relevantTrail = item.trail
-              .filter((pt) => pt.week <= trailWeeks)
-              .sort((a, b) => b.week - a.week); // oldest to newest
+              .filter((pt) => viewMode === 'ipos' || pt.week <= trailWeeks)
+              .sort((a, b) => b.week - a.week);
 
             if (relevantTrail.length < 2) return null;
 
@@ -663,34 +760,25 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
                     strokeWidth: isHovered ? 2.5 : 1.25,
                   }}
                 />
-                {/* Intermediate trail dots for rotation cadence */}
-                {relevantTrail.map((pt) => (
-                  <circle
-                    key={`dot-${item.name}-${pt.week}`}
-                    cx={getPx(pt.x)}
-                    cy={getPy(pt.y)}
-                    r={pt.week === 0 ? 0 : 2}
-                    fill={itemColor}
-                    opacity={isHovered ? 0.7 : 0.3}
-                  />
-                ))}
               </g>
             );
           })}
 
-          {/* 6. Nodes at Current Week (T0) */}
-          {filteredItems.map((item) => {
+          {/* Nodes at T0 */}
+          {(viewMode === 'ipos' ? filteredIpoItems : filteredClusterItems).map((item) => {
             const cx = getPx(item.x);
             const cy = getPy(item.y);
-            const radius = getNodeRadius(item.metrics.constituentCount);
-            const isHovered = hoveredNode?.item.name === item.name;
-            const isSelected = selectedDrawerItem?.name === item.name;
+            const isIpo = 'listingDate' in item;
+            const radius = isIpo ? 7 : Math.min(13, Math.max(6, 5 + Math.sqrt((item as RrgBlockItem).metrics?.constituentCount ?? 1) * 1.2));
+            const isHovered =
+              hoveredNode?.item.name === item.name ||
+              (isIpo && hoveredNode?.item && 'symbol' in hoveredNode.item && hoveredNode.item.symbol === (item as RrgIpoItem).symbol);
             const itemColor = getQuadrantColor(item.quadrant);
 
             return (
               <g
                 key={`node-${item.name}`}
-                className={`rrg-node-point ${isSelected ? 'selected' : ''}`}
+                className="rrg-node-point"
                 onMouseEnter={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   setHoveredNode({
@@ -700,15 +788,16 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
                   });
                 }}
                 onClick={() => {
-                  if (viewMode === 'blocks' && !activeDrillBlock) {
+                  if (isIpo) {
+                    setSelectedIpoDrawerItem(item as RrgIpoItem);
+                  } else if (viewMode === 'blocks' && !activeDrillBlock) {
                     setActiveDrillBlock(item.name);
                   } else {
-                    setSelectedDrawerItem(item);
+                    setSelectedDrawerItem(item as RrgBlockItem | RrgNicheItem);
                   }
                 }}
               >
-                {/* Halo ring when hovered or selected */}
-                {(isHovered || isSelected) && (
+                {isHovered && (
                   <circle
                     cx={cx}
                     cy={cy}
@@ -730,8 +819,7 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
                   style={{ color: itemColor }}
                 />
 
-                {/* Node Label: show prominent or if hovered / viewMode === 'blocks' */}
-                {(viewMode === 'blocks' || isHovered || Math.abs(item.x) > 10 || Math.abs(item.y) > 8) && (
+                {(viewMode === 'blocks' || isHovered || Math.abs(item.x) > 20 || (isIpo && Math.abs(item.y) > 40)) && (
                   <text
                     x={cx + radius + 4}
                     y={cy + 3}
@@ -741,7 +829,7 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
                       fontWeight: isHovered ? 700 : 500,
                     }}
                   >
-                    {item.name}
+                    {isIpo ? (item as RrgIpoItem).symbol : item.name}
                   </text>
                 )}
               </g>
@@ -760,192 +848,303 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
             }}
           >
             <div className="rrg-tooltip-header">
-              <span className="rrg-tooltip-title">{hoveredNode.item.name}</span>
+              <span className="rrg-tooltip-title">
+                {'symbol' in hoveredNode.item ? (hoveredNode.item as RrgIpoItem).symbol : hoveredNode.item.name}
+              </span>
               <span className={`rrg-tooltip-badge badge-${hoveredNode.item.quadrant.toLowerCase()}`}>
                 {hoveredNode.item.quadrant}
               </span>
             </div>
 
-            <div className="rrg-tooltip-row">
-              <span>3M Excess Return:</span>
-              <span className={`rrg-tooltip-val ${hoveredNode.item.x >= 0 ? 'val-positive' : 'val-negative'}`}>
-                {hoveredNode.item.x > 0 ? `+${hoveredNode.item.x.toFixed(2)}` : hoveredNode.item.x.toFixed(2)}%
-              </span>
-            </div>
-
-            <div className="rrg-tooltip-row">
-              <span>1M RS Momentum (21D):</span>
-              <span className={`rrg-tooltip-val ${hoveredNode.item.y >= 0 ? 'val-positive' : 'val-negative'}`}>
-                {hoveredNode.item.y > 0 ? `+${hoveredNode.item.y.toFixed(1)}` : hoveredNode.item.y.toFixed(1)}
-              </span>
-            </div>
-
-            <div className="rrg-tooltip-row">
-              <span>Median RS Rating:</span>
-              <span className="rrg-tooltip-val">{hoveredNode.item.metrics.medianRs}</span>
-            </div>
-
-            <div className="rrg-tooltip-row">
-              <span>Breadth (% &gt; N500):</span>
-              <span className="rrg-tooltip-val">{hoveredNode.item.metrics.beatingBenchmarkPct}%</span>
-            </div>
-
-            <div className="rrg-tooltip-row">
-              <span>RS Improving Breadth:</span>
-              <span className="rrg-tooltip-val">{hoveredNode.item.metrics.improvingRsPct}%</span>
-            </div>
-
-            <div className="rrg-tooltip-row">
-              <span>Setup Coverage:</span>
-              <span className="rrg-tooltip-val">{hoveredNode.item.metrics.setupCoveragePct}%</span>
-            </div>
-
-            <div className="rrg-tooltip-row">
-              <span>Constituents:</span>
-              <span className="rrg-tooltip-val">{hoveredNode.item.metrics.constituentCount} stocks</span>
-            </div>
-
-            {hoveredNode.item.metrics.topContributors?.length > 0 && (
-              <div className="rrg-tooltip-contributors">
-                Top: {hoveredNode.item.metrics.topContributors.join(', ')}
-              </div>
+            {'listingDate' in hoveredNode.item ? (
+              // IPO Tooltip fields
+              <>
+                <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginBottom: '0.35rem' }}>
+                  {(hoveredNode.item as RrgIpoItem).name}
+                </div>
+                <div className="rrg-tooltip-row">
+                  <span>10D / LTD Excess:</span>
+                  <span className={`rrg-tooltip-val ${hoveredNode.item.x >= 0 ? 'val-positive' : 'val-negative'}`}>
+                    {hoveredNode.item.x > 0 ? `+${hoveredNode.item.x.toFixed(2)}` : hoveredNode.item.x.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="rrg-tooltip-row">
+                  <span>Turnover Intensity:</span>
+                  <span className={`rrg-tooltip-val ${hoveredNode.item.y >= 0 ? 'val-positive' : 'val-negative'}`}>
+                    {hoveredNode.item.y > 0 ? `+${hoveredNode.item.y.toFixed(1)}` : hoveredNode.item.y.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="rrg-tooltip-row">
+                  <span>Listed:</span>
+                  <span className="rrg-tooltip-val">
+                    {(hoveredNode.item as RrgIpoItem).listingDate} ({(hoveredNode.item as RrgIpoItem).listingAgeDays}d)
+                  </span>
+                </div>
+                <div className="rrg-tooltip-row">
+                  <span>Current Close:</span>
+                  <span className="rrg-tooltip-val">₹{(hoveredNode.item as RrgIpoItem).close.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="rrg-tooltip-row">
+                  <span>Turnover (Day):</span>
+                  <span className="rrg-tooltip-val">₹{(hoveredNode.item as RrgIpoItem).turnoverCr} Cr</span>
+                </div>
+                <div className="rrg-tooltip-row">
+                  <span>Theme:</span>
+                  <span className="rrg-tooltip-val">{(hoveredNode.item as RrgIpoItem).theme ?? '—'}</span>
+                </div>
+              </>
+            ) : (
+              // Cluster Tooltip fields
+              <>
+                <div className="rrg-tooltip-row">
+                  <span>3M Excess Return:</span>
+                  <span className={`rrg-tooltip-val ${hoveredNode.item.x >= 0 ? 'val-positive' : 'val-negative'}`}>
+                    {hoveredNode.item.x > 0 ? `+${hoveredNode.item.x.toFixed(2)}` : hoveredNode.item.x.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="rrg-tooltip-row">
+                  <span>1M RS Momentum (21D):</span>
+                  <span className={`rrg-tooltip-val ${hoveredNode.item.y >= 0 ? 'val-positive' : 'val-negative'}`}>
+                    {hoveredNode.item.y > 0 ? `+${hoveredNode.item.y.toFixed(1)}` : hoveredNode.item.y.toFixed(1)}
+                  </span>
+                </div>
+                <div className="rrg-tooltip-row">
+                  <span>Median RS Rating:</span>
+                  <span className="rrg-tooltip-val">{(hoveredNode.item as RrgBlockItem).metrics.medianRs}</span>
+                </div>
+                <div className="rrg-tooltip-row">
+                  <span>Breadth (% &gt; N500):</span>
+                  <span className="rrg-tooltip-val">{(hoveredNode.item as RrgBlockItem).metrics.beatingBenchmarkPct}%</span>
+                </div>
+                <div className="rrg-tooltip-row">
+                  <span>Setup Coverage:</span>
+                  <span className="rrg-tooltip-val">{(hoveredNode.item as RrgBlockItem).metrics.setupCoveragePct}%</span>
+                </div>
+              </>
             )}
           </div>
         )}
       </div>
 
-      {/* Ranked Thematic Table */}
+      {/* Ranked Table Area */}
       <section className="rrg-table-card">
         <div className="rrg-table-header-row">
           <div className="rrg-table-title">
-            {activeDrillBlock
-              ? `Niches in ${activeDrillBlock} (${sortedItems.length})`
+            {viewMode === 'ipos'
+              ? `Tactical IPO Debutants Ranked (${sortedIpoItems.length})`
+              : activeDrillBlock
+              ? `Niches in ${activeDrillBlock} (${sortedClusterItems.length})`
               : viewMode === 'blocks'
-              ? `Thematic Blocks Ranked (${sortedItems.length})`
-              : `Thematic Niches Ranked (${sortedItems.length})`}
+              ? `Thematic Blocks Ranked (${sortedClusterItems.length})`
+              : `Thematic Niches Ranked (${sortedClusterItems.length})`}
           </div>
           <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-            Click any row to view constituents &amp; setups
+            {viewMode === 'ipos'
+              ? 'Click any debutant to view performance breakdown'
+              : 'Click any row to view constituents & setups'}
           </span>
         </div>
 
         <div className="rrg-table-wrapper">
-          <table className="rrg-table">
-            <thead>
-              <tr>
-                <th onClick={() => handleSort('name')}>
-                  Name <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                </th>
-                <th onClick={() => handleSort('quadrant')}>
-                  Quadrant <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                </th>
-                <th onClick={() => handleSort('excessReturn3m')}>
-                  3M Excess vs N500 <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                </th>
-                <th onClick={() => handleSort('rsMomentum21d')}>
-                  RS Mom (21D Δ) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                </th>
-                <th onClick={() => handleSort('medianRs')}>
-                  Median RS <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                </th>
-                <th onClick={() => handleSort('beatingBenchmarkPct')}>
-                  % &gt; N500 <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                </th>
-                <th onClick={() => handleSort('improvingRsPct')}>
-                  % RS Imp <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                </th>
-                <th onClick={() => handleSort('setupCoveragePct')}>
-                  Setup Cov <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                </th>
-                <th onClick={() => handleSort('totalTurnover20Cr')}>
-                  20D TO (₹ Cr) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                </th>
-                <th onClick={() => handleSort('constituentCount')}>
-                  Stocks <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                </th>
-                <th>Top Contributors</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedItems.map((item) => (
-                <tr
-                  key={item.name}
-                  onClick={() => {
-                    if (viewMode === 'blocks' && !activeDrillBlock) {
-                      setActiveDrillBlock(item.name);
-                    } else {
-                      setSelectedDrawerItem(item);
-                    }
-                  }}
-                >
-                  <td style={{ fontWeight: 600 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className={`rrg-dot dot-${item.quadrant.toLowerCase()}`} />
-                      <span>{item.name}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`rrg-tooltip-badge badge-${item.quadrant.toLowerCase()}`}>
-                      {item.quadrant}
-                    </span>
-                  </td>
-                  <td className={`val-mono ${item.metrics.excessReturn3m >= 0 ? 'val-positive' : 'val-negative'}`}>
-                    {item.metrics.excessReturn3m > 0 ? `+${item.metrics.excessReturn3m.toFixed(2)}` : item.metrics.excessReturn3m.toFixed(2)}%
-                  </td>
-                  <td className={`val-mono ${item.metrics.rsMomentum21d >= 0 ? 'val-positive' : 'val-negative'}`}>
-                    {item.metrics.rsMomentum21d > 0 ? `+${item.metrics.rsMomentum21d.toFixed(1)}` : item.metrics.rsMomentum21d.toFixed(1)}
-                  </td>
-                  <td className="val-mono">{item.metrics.medianRs}</td>
-                  <td className="val-mono">{item.metrics.beatingBenchmarkPct}%</td>
-                  <td className="val-mono">{item.metrics.improvingRsPct}%</td>
-                  <td className="val-mono">{item.metrics.setupCoveragePct}%</td>
-                  <td className="val-mono">{Math.round(item.metrics.totalTurnover20Cr).toLocaleString('en-IN')}</td>
-                  <td className="val-mono">{item.metrics.constituentCount}</td>
-                  <td style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                    {item.metrics.topContributors?.slice(0, 3).join(', ')}
-                  </td>
-                  <td>
-                    {viewMode === 'blocks' && !activeDrillBlock ? (
-                      <button
-                        type="button"
-                        className="button button-ghost"
-                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveDrillBlock(item.name);
-                        }}
-                      >
-                        Niches →
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="button button-ghost"
-                        style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedDrawerItem(item);
-                        }}
-                      >
-                        Stocks →
-                      </button>
-                    )}
-                  </td>
+          {viewMode === 'ipos' ? (
+            // Tactical IPO Table
+            <table className="rrg-table">
+              <thead>
+                <tr>
+                  <th onClick={() => handleIpoSort('symbol')}>
+                    Symbol <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleIpoSort('quadrant')}>
+                    Quadrant <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleIpoSort('excessReturn10d')}>
+                    10D / LTD Excess <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleIpoSort('turnoverIntensity')}>
+                    Turnover Intensity <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleIpoSort('close')}>
+                    Close (1D) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleIpoSort('listingDate')}>
+                    Listed (Age) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleIpoSort('gainSinceListingPct')}>
+                    Listing Gain <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleIpoSort('turnoverCr')}>
+                    Turnover (₹Cr) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleIpoSort('deliveryPct')}>
+                    Delivery % <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th>Primary Theme</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {sortedIpoItems.map((stock) => (
+                  <tr key={stock.symbol} onClick={() => setSelectedIpoDrawerItem(stock)}>
+                    <td>
+                      <div>
+                        <strong style={{ color: 'var(--text)' }}>{stock.symbol}</strong>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--muted)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {stock.name}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`rrg-tooltip-badge badge-${stock.quadrant.toLowerCase()}`}>
+                        {stock.quadrant}
+                      </span>
+                    </td>
+                    <td className={`val-mono ${stock.excessReturn10d >= 0 ? 'val-positive' : 'val-negative'}`}>
+                      {stock.excessReturn10d > 0 ? `+${stock.excessReturn10d.toFixed(2)}` : stock.excessReturn10d.toFixed(2)}%
+                    </td>
+                    <td className={`val-mono ${stock.turnoverIntensity >= 0 ? 'val-positive' : 'val-negative'}`}>
+                      {stock.turnoverIntensity > 0 ? `+${stock.turnoverIntensity.toFixed(1)}` : stock.turnoverIntensity.toFixed(1)}%
+                    </td>
+                    <td className="val-mono">
+                      ₹{stock.close.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                      <div className={stock.changePct >= 0 ? 'val-positive' : 'val-negative'} style={{ fontSize: '0.7rem' }}>
+                        {stock.changePct > 0 ? `+${stock.changePct.toFixed(2)}%` : `${stock.changePct.toFixed(2)}%`}
+                      </div>
+                    </td>
+                    <td className="val-mono" style={{ fontSize: '0.75rem' }}>
+                      {stock.listingDate}
+                      <span style={{ color: 'var(--muted)', marginLeft: 4 }}>({stock.listingAgeDays}d)</span>
+                    </td>
+                    <td className={`val-mono ${stock.gainSinceListingPct >= 0 ? 'val-positive' : 'val-negative'}`}>
+                      {stock.gainSinceListingPct > 0 ? `+${stock.gainSinceListingPct.toFixed(1)}%` : `${stock.gainSinceListingPct.toFixed(1)}%`}
+                    </td>
+                    <td className="val-mono">
+                      {Math.round(stock.turnoverCr).toLocaleString('en-IN')}
+                    </td>
+                    <td className="val-mono">
+                      {stock.deliveryPct !== null ? `${stock.deliveryPct.toFixed(1)}%` : '—'}
+                    </td>
+                    <td style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                      {stock.theme ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            // Cluster Table (Blocks & Niches)
+            <table className="rrg-table">
+              <thead>
+                <tr>
+                  <th onClick={() => handleClusterSort('name')}>
+                    Name <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleClusterSort('quadrant')}>
+                    Quadrant <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleClusterSort('excessReturn3m')}>
+                    3M Excess vs N500 <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleClusterSort('rsMomentum21d')}>
+                    RS Mom (21D Δ) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleClusterSort('medianRs')}>
+                    Median RS <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleClusterSort('beatingBenchmarkPct')}>
+                    % &gt; N500 <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleClusterSort('improvingRsPct')}>
+                    % RS Imp <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleClusterSort('setupCoveragePct')}>
+                    Setup Cov <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleClusterSort('totalTurnover20Cr')}>
+                    20D TO (₹ Cr) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th onClick={() => handleClusterSort('constituentCount')}>
+                    Stocks <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
+                  </th>
+                  <th>Top Contributors</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedClusterItems.map((item) => (
+                  <tr
+                    key={item.name}
+                    onClick={() => {
+                      if (viewMode === 'blocks' && !activeDrillBlock) {
+                        setActiveDrillBlock(item.name);
+                      } else {
+                        setSelectedDrawerItem(item);
+                      }
+                    }}
+                  >
+                    <td style={{ fontWeight: 600 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span className={`rrg-dot dot-${item.quadrant.toLowerCase()}`} />
+                        <span>{item.name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`rrg-tooltip-badge badge-${item.quadrant.toLowerCase()}`}>
+                        {item.quadrant}
+                      </span>
+                    </td>
+                    <td className={`val-mono ${item.metrics.excessReturn3m >= 0 ? 'val-positive' : 'val-negative'}`}>
+                      {item.metrics.excessReturn3m > 0 ? `+${item.metrics.excessReturn3m.toFixed(2)}` : item.metrics.excessReturn3m.toFixed(2)}%
+                    </td>
+                    <td className={`val-mono ${item.metrics.rsMomentum21d >= 0 ? 'val-positive' : 'val-negative'}`}>
+                      {item.metrics.rsMomentum21d > 0 ? `+${item.metrics.rsMomentum21d.toFixed(1)}` : item.metrics.rsMomentum21d.toFixed(1)}
+                    </td>
+                    <td className="val-mono">{item.metrics.medianRs}</td>
+                    <td className="val-mono">{item.metrics.beatingBenchmarkPct}%</td>
+                    <td className="val-mono">{item.metrics.improvingRsPct}%</td>
+                    <td className="val-mono">{item.metrics.setupCoveragePct}%</td>
+                    <td className="val-mono">{Math.round(item.metrics.totalTurnover20Cr).toLocaleString('en-IN')}</td>
+                    <td className="val-mono">{item.metrics.constituentCount}</td>
+                    <td style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                      {item.metrics.topContributors?.slice(0, 3).join(', ')}
+                    </td>
+                    <td>
+                      {viewMode === 'blocks' && !activeDrillBlock ? (
+                        <button
+                          type="button"
+                          className="button button-ghost"
+                          style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveDrillBlock(item.name);
+                          }}
+                        >
+                          Niches →
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button button-ghost"
+                          style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDrawerItem(item);
+                          }}
+                        >
+                          Stocks →
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
 
-      {/* Constituent Stock Slide-Over Drawer */}
+      {/* Cluster Constituent Stock Slide-Over Drawer */}
       {selectedDrawerItem && (
         <>
-          <div
-            className="rrg-drawer-backdrop"
-            onClick={() => setSelectedDrawerItem(null)}
-          />
+          <div className="rrg-drawer-backdrop" onClick={() => setSelectedDrawerItem(null)} />
           <aside className="rrg-drawer" aria-label="Constituents Drawer">
             <header className="rrg-drawer-header">
               <div>
@@ -1034,16 +1233,91 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
                             )}
                           </div>
                         </td>
-                        <td className="val-mono">
-                          {Math.round(stock.turnover20Cr).toLocaleString('en-IN')}
-                        </td>
-                        <td className="val-mono">
-                          {Math.round(stock.marketCapCr).toLocaleString('en-IN')}
-                        </td>
+                        <td className="val-mono">{Math.round(stock.turnover20Cr).toLocaleString('en-IN')}</td>
+                        <td className="val-mono">{Math.round(stock.marketCapCr).toLocaleString('en-IN')}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
+
+      {/* Individual Tactical IPO Detail Drawer */}
+      {selectedIpoDrawerItem && (
+        <>
+          <div className="rrg-drawer-backdrop" onClick={() => setSelectedIpoDrawerItem(null)} />
+          <aside className="rrg-drawer" aria-label="IPO Details Drawer">
+            <header className="rrg-drawer-header">
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span className={`rrg-dot dot-${selectedIpoDrawerItem.quadrant.toLowerCase()}`} />
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>
+                    {selectedIpoDrawerItem.symbol} — {selectedIpoDrawerItem.name}
+                  </h2>
+                  <span className={`rrg-tooltip-badge badge-${selectedIpoDrawerItem.quadrant.toLowerCase()}`}>
+                    {selectedIpoDrawerItem.quadrant}
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.25rem' }}>
+                  Listed {selectedIpoDrawerItem.listingDate} ({selectedIpoDrawerItem.listingAgeDays} days ago) · {selectedIpoDrawerItem.sessions} Trading Sessions · Primary Theme: {selectedIpoDrawerItem.theme ?? '—'}
+                </div>
+              </div>
+              <button
+                type="button"
+                className="rrg-drawer-close"
+                onClick={() => setSelectedIpoDrawerItem(null)}
+                aria-label="Close IPO drawer"
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            <div className="rrg-drawer-body">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>10D / LTD Excess vs N500</div>
+                  <div className={`val-mono ${selectedIpoDrawerItem.excessReturn10d >= 0 ? 'val-positive' : 'val-negative'}`} style={{ fontSize: '1.25rem', marginTop: '0.25rem' }}>
+                    {selectedIpoDrawerItem.excessReturn10d > 0 ? `+${selectedIpoDrawerItem.excessReturn10d.toFixed(2)}%` : `${selectedIpoDrawerItem.excessReturn10d.toFixed(2)}%`}
+                  </div>
+                </div>
+
+                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Turnover Intensity vs Baseline</div>
+                  <div className={`val-mono ${selectedIpoDrawerItem.turnoverIntensity >= 0 ? 'val-positive' : 'val-negative'}`} style={{ fontSize: '1.25rem', marginTop: '0.25rem' }}>
+                    {selectedIpoDrawerItem.turnoverIntensity > 0 ? `+${selectedIpoDrawerItem.turnoverIntensity.toFixed(1)}%` : `${selectedIpoDrawerItem.turnoverIntensity.toFixed(1)}%`}
+                  </div>
+                </div>
+
+                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Gain Since Listing</div>
+                  <div className={`val-mono ${selectedIpoDrawerItem.gainSinceListingPct >= 0 ? 'val-positive' : 'val-negative'}`} style={{ fontSize: '1.25rem', marginTop: '0.25rem' }}>
+                    {selectedIpoDrawerItem.gainSinceListingPct > 0 ? `+${selectedIpoDrawerItem.gainSinceListingPct.toFixed(1)}%` : `${selectedIpoDrawerItem.gainSinceListingPct.toFixed(1)}%`}
+                  </div>
+                </div>
+
+                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Current Price</div>
+                  <div className="val-mono" style={{ fontSize: '1.25rem', marginTop: '0.25rem', fontWeight: 700 }}>
+                    ₹{selectedIpoDrawerItem.close.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+
+                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Daily Turnover</div>
+                  <div className="val-mono" style={{ fontSize: '1.25rem', marginTop: '0.25rem', fontWeight: 700 }}>
+                    ₹{selectedIpoDrawerItem.turnoverCr} Cr
+                  </div>
+                </div>
+
+                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Delivery %</div>
+                  <div className="val-mono" style={{ fontSize: '1.25rem', marginTop: '0.25rem', fontWeight: 700 }}>
+                    {selectedIpoDrawerItem.deliveryPct !== null ? `${selectedIpoDrawerItem.deliveryPct.toFixed(1)}%` : '—'}
+                  </div>
+                </div>
               </div>
             </div>
           </aside>

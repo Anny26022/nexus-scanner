@@ -39,10 +39,15 @@ def is_revision_enriched(rev_dir: Path) -> bool:
     try:
         stocks = load_json_or_gz(stocks_json)
         stock_list = stocks if isinstance(stocks, list) else stocks.get("stocks", [])
+        screens = load_json_or_gz(rev_dir / "market_screens_snapshot.json") or {}
+        first = stock_list[0] if stock_list else {}
+        as_of = first.get("as_of_date") or first.get("date") or first.get("session_date")
+        if not as_of:
+            as_of = (load_json_or_gz(rev_dir / "rs_rating_daily.json") or {}).get("as_of_date")
         return bool(stock_list) and all(
             all(key in stock for key in ("setup_geometry", "trend_template", "stage_status", "upcoming_earnings", "is_liquid_screen"))
             for stock in stock_list
-        ) and (rev_dir / "market_screens_snapshot.json.gz").exists()
+        ) and as_of is not None and screens.get("as_of_date") == as_of
     except Exception:
         return False
     return False

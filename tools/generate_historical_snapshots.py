@@ -1142,7 +1142,7 @@ def main():
             # Sync preset matches
             it["presetMatches"].update({
                 "lib-ms-vcp": bool(vcp) and is_liquid,
-                "lib-ms-darvas": bool(darvas and darvas.get("status") in ("confirmed", "breakout")) and is_liquid,
+                "lib-ms-darvas": bool(darvas and (darvas.get("state") in ("confirmed", "breakout") or darvas.get("status") in ("confirmed", "breakout"))) and is_liquid,
                 "lib-ms-coiled": coiled and is_liquid,
                 "lib-ms-tight-weeks": bool(tight_wks) and is_liquid,
                 "lib-ms-stage-2": (stage_res.get("stage") == 2) and is_liquid,
@@ -1154,6 +1154,7 @@ def main():
                 "lib-ms-rs-leaders-80": bool((comp_rs or 0) >= 80) and is_liquid,
                 "lib-ms-rs-line-high": bool(is_rs_high) and is_liquid,
                 "lib-ms-liquid-screen": is_liquid,
+                "lib-ms-cup-handle": bool(cup) and is_liquid,
                 "lib-ms-cup-with-handle": bool(cup) and is_liquid,
                 "lib-ms-bull-flag": bool(flag) and is_liquid,
             })

@@ -19,14 +19,24 @@ from ohlcv_utils import read_ohlcv_csv, valid_ohlcv_values
 
 
 def load_json_or_gz(path: Path) -> Any:
-    """Safely load JSON from either uncompressed or .gz file path, prioritizing .gz if present."""
+    """Safely load JSON from either uncompressed or .gz file path, prioritizing newest file if both exist."""
     p = Path(path)
     gz_candidate = p if p.name.endswith(".gz") else p.with_name(p.name + ".gz")
+    plain_candidate = p.with_name(p.name[:-3]) if p.name.endswith(".gz") else p
+
+    # If both plain and .gz exist, choose the newer file based on modification time
+    if gz_candidate.exists() and plain_candidate.exists():
+        if plain_candidate.stat().st_mtime >= gz_candidate.stat().st_mtime:
+            with open(plain_candidate, "r", encoding="utf-8") as f:
+                return json.load(f)
+        else:
+            with gzip.open(gz_candidate, "rt", encoding="utf-8") as f:
+                return json.load(f)
+
     if gz_candidate.exists():
         with gzip.open(gz_candidate, "rt", encoding="utf-8") as f:
             return json.load(f)
 
-    plain_candidate = p.with_name(p.name[:-3]) if p.name.endswith(".gz") else p
     if plain_candidate.exists():
         with open(plain_candidate, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -112,6 +122,7 @@ def detect_vcp(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, volumes:
         elif p[2] == "L" and last_h is not None and last_h > 0:
             depth = ((last_h - p[1]) / last_h) * 100.0
             pullbacks.append(round(-depth, 2))
+            last_h = None  # Ensure distinct H -> L contraction leg per cycle
 
     if len(pullbacks) < 3:
         return None
@@ -205,9 +216,24 @@ def detect_darvas(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray) -> di
     if height_pct > 20.0:
         return None
 
+    # Proximity to 52-week high: Nicolas Darvas required box top within 15% of 52W high
+    h52 = float(np.max(highs[-min(len(highs), 252):]))
+    if h52 > 0 and ((h52 - box_top) / h52) * 100.0 > 15.0:
+        return None
+
     current_close = float(recent_c[-1])
+    # Chronological cancellation: breach below box floor invalidates the box
+    if current_close < box_bot:
+        return None
+
     is_confirmed = (box_bot <= current_close <= box_top)
     is_breakout = (box_top < current_close <= box_top * 1.08)
+
+    # Breakout age check: breakout must have occurred within the last 5 trading days
+    if is_breakout:
+        recent_breakout_bars = [k for k in range(1, min(6, n)) if recent_c[-k] > box_top]
+        if not recent_breakout_bars:
+            return None
 
     if is_confirmed or is_breakout:
         dist_top = ((box_top - current_close) / box_top) * 100.0
@@ -327,30 +353,29 @@ def detect_tight_weeks(closes: np.ndarray, dates: list[str], s50: float | None, 
         ts_dates = pd.to_datetime(dates)
         s = pd.Series(closes, index=ts_dates)
         weekly = s.resample("W-FRI").last().dropna()
+
+        # Exclude unfinished current exchange week if last date is mid-week (Monday-Thursday)
+        if len(dates) > 0:
+            last_dt = pd.to_datetime(dates[-1])
+            if last_dt.weekday() < 4 and len(weekly) >= 4:
+                weekly = weekly.iloc[:-1]
+
         if len(weekly) < 3:
             return None
 
-        tight_count = 0
-        recent_closes = []
-        for i in range(len(weekly) - 1, 0, -1):
-            curr = float(weekly.iloc[i])
-            prev = float(weekly.iloc[i - 1])
-            if prev > 0 and abs(curr - prev) / prev <= 0.015:
-                tight_count += 1
-                recent_closes.append(round(curr, 2))
-            else:
-                break
-
-        if tight_count >= 2:  # 2 consecutive step changes <= 1.5% means 3 consecutive tight closes
-            spread = round((max(recent_closes) - min(recent_closes)) / min(recent_closes) * 100.0, 2) if len(recent_closes) >= 2 else 0.0
+        # Check last 3 consecutive completed weeks for strict <= 1.5% total range
+        recent_3 = [float(weekly.iloc[-i]) for i in (1, 2, 3)]
+        min_c, max_c = min(recent_3), max(recent_3)
+        if min_c > 0 and ((max_c - min_c) / min_c) <= 0.015:
+            spread = round(((max_c - min_c) / min_c) * 100.0, 2)
             return {
                 "matched": True,
-                "tightWeeksCount": tight_count + 1,
-                "tight_weeks_count": tight_count + 1,
+                "tightWeeksCount": 3,
+                "tight_weeks_count": 3,
                 "spreadPct": spread,
                 "spread_pct": spread,
-                "weeklyCloses": recent_closes,
-                "weekly_closes": recent_closes,
+                "weeklyCloses": [round(c, 2) for c in recent_3],
+                "weekly_closes": [round(c, 2) for c in recent_3],
             }
     except Exception:
         pass
@@ -519,11 +544,18 @@ def enrich_snapshot_directory(
     screen_records = []
     gallery_items = []
 
-    today_date = rs_data.get("as_of_date")
-    if not today_date and stocks and isinstance(stocks, list):
-        today_date = stocks[0].get("as_of_date") or stocks[0].get("date")
+    # Prioritize stock snapshot date for canonical date alignment
+    today_date = None
+    if stocks and isinstance(stocks, list) and len(stocks) > 0:
+        today_date = stocks[0].get("as_of_date") or stocks[0].get("date") or stocks[0].get("session_date")
+    if not today_date:
+        today_date = rs_data.get("as_of_date")
     if not today_date:
         today_date = date.today().isoformat()
+
+    rs_as_of = rs_data.get("as_of_date")
+    if rs_as_of and today_date and rs_as_of != today_date:
+        print(f"Notice: RS artifact date ({rs_as_of}) differs from stock snapshot date ({today_date}). Enforcing snapshot date {today_date} for all setup geometry.")
 
     today_dt = pd.to_datetime(today_date).date()
     print(f"Enriching snapshot directory {root.name} as of {today_date} across {len(stocks)} stocks...")
@@ -599,7 +631,7 @@ def enrich_snapshot_directory(
             prior_win = h_arr[-lookback_myb:-1]
             ceil_val = float(np.max(prior_win))
             ceil_idx = int(np.argmax(prior_win))
-            ceil_age = len(prior_win) - 1 - ceil_idx
+            ceil_age = len(prior_win) - ceil_idx
             if ceil_age >= 250 and c > ceil_val:
                 above_pct = ((c - ceil_val) / ceil_val) * 100.0
                 if above_pct <= 15.0:
@@ -710,11 +742,11 @@ def enrich_snapshot_directory(
             "upcoming_earnings": stock["upcoming_earnings"],
         })
 
-        # 4. Pattern Gallery occurrences (Strict Anti-Lookahead & Matured Horizons Guarantee)
+        # 4. Pattern Gallery occurrences (Strict Anti-Lookahead & Stateful Episode Tracking)
         if generate_gallery:
             scan_len = min(len(c_arr), 126)
             if scan_len >= 40:
-                active_patterns: dict[str, int] = {}
+                active_episodes: dict[str, bool] = {"VCP": False, "Bull Flag": False, "Cup with Handle": False}
                 for t_idx in range(len(c_arr) - scan_len, len(c_arr)):
                     sig_date = dates[t_idx]
                     sub_c = c_arr[:t_idx + 1]
@@ -727,37 +759,51 @@ def enrich_snapshot_directory(
                     pat_flag = detect_flags(sub_h, sub_l, sub_c, sub_v)
                     pat_cup = detect_cup_with_handle(sub_h, sub_l, sub_c)
 
-                    # Point-in-time trend score evaluated strictly at sig_date
-                    sig_trend = evaluate_minervini_trend(sub_c, sub_h, sub_l, comp_rs)
+                    # Point-in-time composite RS at t_idx without future lookahead
+                    cur_t = sub_c[-1]
+                    n_sub = len(sub_c)
+                    r63 = ((cur_t - sub_c[-64]) / sub_c[-64]) if (n_sub > 63 and sub_c[-64] > 0) else 0.0
+                    r126 = ((cur_t - sub_c[-127]) / sub_c[-127]) if (n_sub > 126 and sub_c[-127] > 0) else r63
+                    r189 = ((cur_t - sub_c[-190]) / sub_c[-190]) if (n_sub > 189 and sub_c[-190] > 0) else r126
+                    r252 = ((cur_t - sub_c[-253]) / sub_c[-253]) if (n_sub > 252 and sub_c[-253] > 0) else r189
+                    pit_score = round(float(0.40 * r63 + 0.20 * r126 + 0.20 * r189 + 0.20 * r252), 4)
+                    pit_rs = round(float(pit_score * 100.0), 1)
+
+                    # Point-in-time trend score evaluated strictly at sig_date with point-in-time strength
+                    sig_trend = evaluate_minervini_trend(sub_c, sub_h, sub_l, pit_rs)
 
                     for p_type, p_match in (("VCP", pat_vcp), ("Bull Flag", pat_flag), ("Cup with Handle", pat_cup)):
-                        if p_match and p_match.get("matched"):
-                            # Deduplicate consecutive sessions: only record first appearance of setup
-                            last_idx = active_patterns.get(p_type)
-                            if last_idx is not None and (t_idx - last_idx) < 10:
-                                continue  # Same ongoing base setup
-                            active_patterns[p_type] = t_idx
+                        is_match = bool(p_match and p_match.get("matched"))
+                        if is_match:
+                            if active_episodes.get(p_type, False):
+                                # Ongoing setup within same active episode: do not emit duplicate occurrences
+                                continue
+                            active_episodes[p_type] = True
+                        else:
+                            # Setup episode ended
+                            active_episodes[p_type] = False
+                            continue
 
-                            fwd_closes = c_arr[t_idx + 1 :]
-                            sig_close = float(sub_c[-1])
+                        fwd_closes = c_arr[t_idx + 1 :]
+                        sig_close = float(sub_c[-1])
 
-                            # Matured horizon return gates: None if horizon has not elapsed!
-                            ret5 = round(((fwd_closes[4] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 5 else None
-                            ret20 = round(((fwd_closes[19] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 20 else None
-                            ret60 = round(((fwd_closes[59] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 60 else None
+                        # Matured horizon return gates: None if horizon has not elapsed!
+                        ret5 = round(((fwd_closes[4] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 5 else None
+                        ret20 = round(((fwd_closes[19] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 20 else None
+                        ret60 = round(((fwd_closes[59] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 60 else None
 
-                            fwd_60 = fwd_closes[:60]
-                            max_gain = round(((float(np.max(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 60 else None
-                            max_dd = round(((float(np.min(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 60 else None
+                        fwd_60 = fwd_closes[:60]
+                        max_gain = round(((float(np.max(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 60 else None
+                        max_dd = round(((float(np.min(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 60 else None
 
-                            gallery_items.append({
-                                "symbol": sym_upper,
-                                "signal_date": sig_date,
-                                "pattern": p_type,
-                                "textbook": bool(p_match.get("textbook") and (comp_rs or 0) >= 80 and sig_trend["score"] == 8),
-                                "signal_close": sig_close,
-                                "signal_rs": comp_rs,
-                                "signal_trend_score": sig_trend["score"],
+                        gallery_items.append({
+                            "symbol": sym_upper,
+                            "signal_date": sig_date,
+                            "pattern": p_type,
+                            "textbook": bool(p_match.get("textbook") and pit_rs >= 80 and sig_trend["score"] == 8),
+                            "signal_close": sig_close,
+                            "signal_rs": pit_rs,
+                            "signal_trend_score": sig_trend["score"],
                                 "return_5d": ret5,
                                 "return_20d": ret20,
                                 "return_60d": ret60,

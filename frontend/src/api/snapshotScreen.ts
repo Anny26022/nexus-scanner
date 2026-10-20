@@ -324,34 +324,42 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
           const ruleMatch = s.historyAligned && s.asOfDate === session ? s.presetRuleMatches?.[c.conditionId] ?? null : null;
           return combine([...eligibility, ruleMatch], true);
         }
+        if (s.asOfDate !== session) {
+          return null;
+        }
         const isLiquid = Boolean(
           s.isLiquidScreen ??
           (s.tradedValueMean20dCr != null ? s.tradedValueMean20dCr >= 10.0 :
            (s.metrics?.turnover20 != null ? s.metrics.turnover20 >= 10.0 : false))
         );
-        const ruleMatch = (() => {
+        const geom = s.setupGeometry;
+        const trend = s.trendTemplate;
+        const stage = s.stageStatus;
+        const earnings = s.upcomingEarnings;
+
+        const ruleMatch: Truth = (() => {
           switch (c.conditionId) {
-            case 'lib-ms-vcp': return Boolean(s.setupGeometry?.vcp?.matched) && isLiquid;
-            case 'lib-ms-darvas': return Boolean(s.setupGeometry?.darvasBox?.matched ?? s.setupGeometry?.darvas_box?.matched) && isLiquid;
-            case 'lib-ms-cup-handle': return Boolean(s.setupGeometry?.cupWithHandle?.matched ?? s.setupGeometry?.cup_with_handle?.matched) && isLiquid;
-            case 'lib-ms-bull-flag': return Boolean(s.setupGeometry?.bullFlag?.matched ?? s.setupGeometry?.flag?.matched) && isLiquid;
-            case 'lib-ms-pocket-pivot': return Boolean(s.setupGeometry?.pocketPivot ?? s.setupGeometry?.pocket_pivot) && isLiquid;
-            case 'lib-ms-volume-breakout': return Boolean(s.setupGeometry?.volumeBreakout ?? s.setupGeometry?.volume_breakout) && isLiquid;
-            case 'lib-ms-multi-year-breakout': return Boolean(s.setupGeometry?.multiYearBreakout ?? s.setupGeometry?.multi_year_breakout) && isLiquid;
-            case 'lib-ms-coiled': return Boolean(s.setupGeometry?.coiled) && isLiquid;
-            case 'lib-ms-tight-weeks': return Boolean(s.setupGeometry?.tightWeeks ?? s.setupGeometry?.tight_weeks) && isLiquid;
-            case 'lib-ms-trend-leaders': return Boolean(s.trendTemplate?.isLeader ?? s.trendTemplate?.is_leader) && isLiquid;
-            case 'lib-ms-stage-2': return s.stageStatus?.stage === 2 && isLiquid;
-            case 'lib-ms-just-entered-stage-2': return Boolean(s.stageStatus?.justEnteredStage2 ?? s.stageStatus?.just_entered_stage_2) && isLiquid;
-            case 'lib-ms-rs-line-high': return Boolean(s.isRsLine52wHigh) && isLiquid;
-            case 'lib-ms-rs-leaders-80': return (s.rsRating ?? 0) >= 80 && isLiquid;
+            case 'lib-ms-vcp': return geom ? (Boolean(geom.vcp?.matched) && isLiquid) : null;
+            case 'lib-ms-darvas': return geom ? (Boolean(geom.darvasBox?.matched ?? geom.darvas_box?.matched) && isLiquid) : null;
+            case 'lib-ms-cup-handle': return geom ? (Boolean(geom.cupWithHandle?.matched ?? geom.cup_with_handle?.matched) && isLiquid) : null;
+            case 'lib-ms-bull-flag': return geom ? (Boolean(geom.bullFlag?.matched ?? geom.flag?.matched) && isLiquid) : null;
+            case 'lib-ms-pocket-pivot': return geom ? (Boolean(geom.pocketPivot ?? geom.pocket_pivot) && isLiquid) : null;
+            case 'lib-ms-volume-breakout': return geom ? (Boolean(geom.volumeBreakout ?? geom.volume_breakout) && isLiquid) : null;
+            case 'lib-ms-multi-year-breakout': return geom ? (Boolean(geom.multiYearBreakout ?? geom.multi_year_breakout) && isLiquid) : null;
+            case 'lib-ms-coiled': return geom ? (Boolean(geom.coiled) && isLiquid) : null;
+            case 'lib-ms-tight-weeks': return geom ? (Boolean(geom.tightWeeks ?? geom.tight_weeks) && isLiquid) : null;
+            case 'lib-ms-trend-leaders': return trend ? (Boolean(trend.isLeader ?? trend.is_leader) && isLiquid) : null;
+            case 'lib-ms-stage-2': return stage ? (stage.stage === 2 && isLiquid) : null;
+            case 'lib-ms-just-entered-stage-2': return stage ? (Boolean(stage.justEnteredStage2 ?? stage.just_entered_stage_2) && isLiquid) : null;
+            case 'lib-ms-rs-line-high': return s.isRsLine52wHigh != null ? (Boolean(s.isRsLine52wHigh) && isLiquid) : null;
+            case 'lib-ms-rs-leaders-80': return s.rsRating != null ? (s.rsRating >= 80 && isLiquid) : null;
             case 'lib-ms-earnings-7d': {
-              const d = s.upcomingEarnings?.daysUntilResults ?? s.upcomingEarnings?.days_until_results;
-              return d != null && d >= 0 && d <= 7 && isLiquid;
+              const d = earnings?.daysUntilResults ?? earnings?.days_until_results;
+              return d != null ? (d >= 0 && d <= 7 && isLiquid) : null;
             }
             case 'lib-ms-earnings-14d': {
-              const d = s.upcomingEarnings?.daysUntilResults ?? s.upcomingEarnings?.days_until_results;
-              return d != null && d >= 0 && d <= 14 && isLiquid;
+              const d = earnings?.daysUntilResults ?? earnings?.days_until_results;
+              return d != null ? (d >= 0 && d <= 14 && isLiquid) : null;
             }
             default: return null;
           }

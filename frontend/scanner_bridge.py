@@ -246,7 +246,7 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
         earnings = s.get("upcoming_earnings") or s.get("upcomingEarnings") or {}
         rs_rating = s.get("rsRating")
         if rs_rating is None:
-            rs_rating = (context.get("ratings") or {}).get(s.get("symbol", ""), {}).get("front_weighted")
+            rs_rating = (context.get("rs_ratings") or context.get("ratings") or {}).get(s.get("symbol", ""), {}).get("front_weighted")
 
         if kind == "MS_VCP": return bool((setups.get("vcp") or {}).get("matched"))
         if kind == "MS_DARVAS": return bool((setups.get("darvas_box") or setups.get("darvasBox") or {}).get("matched"))

@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
     "daily_refresh.yml": "1e9496b1a871260bcf771b6d0c931319d3b7dd33ffacccee08b9941424bb9e71",
-    "weekly_eod2_refresh.yml": "2f05129bb7add64b66e0e79e12fa40748a4b0561db341ac4f1bfe405d06386e9",
+    "weekly_eod2_refresh.yml": "9e482455e27c8d68f21c6f91de83c8932638140c6af4568f8b3f3ef6971fe740",
 }
 
 
@@ -103,6 +103,13 @@ class RefreshWorkflowTests(unittest.TestCase):
                 actual = hashlib.sha256(json.dumps(normalized(expanded), sort_keys=True).encode()).hexdigest()
                 self.assertEqual(actual, expected, json.dumps(normalized(expanded), indent=2))
 
+    def test_dhan_refresh_is_bounded_and_preserves_the_main_refresh_on_failure(self):
+        job, = document('.github/workflows/weekly_eod2_refresh.yml')['jobs'].values()
+        step, = [s for s in job['steps'] if s.get('id') == 'dhan_group_sync']
+        self.assertTrue(step['continue-on-error'])
+        self.assertEqual(step['timeout-minutes'], 10)
+        self.assertEqual(step['run'].strip(), 'python3 "DO NOT DELETE EDL PIPELINE/sync_dhan_group_stocks.py"')
+
     def test_eod2_cache_saves_only_successful_changed_checkouts(self):
         fake_git = '''git() {
           if [ "$1" = "clone" ] || [ "$3" = "pull" ]; then
@@ -165,7 +172,7 @@ class RefreshWorkflowTests(unittest.TestCase):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
         fake_git = "git() { printf '%s\\0' \"$@\"; printf '\\n'; };\n"
-        for weekly, additions in [('false', 30), ('true', 32)]:
+        for weekly, additions in [('false', 30), ('true', 33)]:
             with self.subTest(weekly=weekly):
                 message = 'literal $(false) commit message'
                 env = dict(os.environ, WEEKLY_REFRESH=weekly, REFRESH_COMMIT_MESSAGE=message)
@@ -173,6 +180,7 @@ class RefreshWorkflowTests(unittest.TestCase):
                                         env=env, capture_output=True, text=True, check=True)
                 calls = [line.rstrip('\0').split('\0') for line in result.stdout.splitlines()]
                 self.assertEqual(sum(call[0] == 'add' for call in calls), additions)
+                self.assertEqual(['add', 'reference/dhan/group-stocks.json'] in calls, weekly == 'true')
                 self.assertIn(['reset', '--mixed', 'origin/main'], calls)
                 self.assertIn(['commit', '-m', message], calls)
                 self.assertEqual(calls[-1], ['push'])

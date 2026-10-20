@@ -136,11 +136,12 @@ jobs:
             --sitemap reference/tijori/sitemap.xml \
             --refresh --retry-unmapped
 
-      - name: Sync Dhan Group Stocks incrementally
+      - name: Refresh Dhan group membership
         id: dhan_group_sync
         continue-on-error: true
+        timeout-minutes: 10
         run: |
-          node tools/sync_dhan_group_stocks.mjs
+          python3 "DO NOT DELETE EDL PIPELINE/sync_dhan_group_stocks.py"
 
       - name: Record Tijori refresh failure
         continue-on-error: true

@@ -2,7 +2,7 @@ name: Commit refresh outputs
 description: Stage only the existing published artifact allowlist and preserve the caller commit message.
 inputs:
   weekly:
-    description: Include the weekly Tijori publication artifacts.
+    description: Include weekly Tijori and Dhan group artifacts.
     default: 'false'
   commit-message:
     description: Generated data commit message.

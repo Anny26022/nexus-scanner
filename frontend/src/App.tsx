@@ -18,9 +18,10 @@ const queryClient = new QueryClient({
 });
 
 const ChartsTab = React.lazy(() => import('./components/ChartsTab'));
+const ThematicRrgTab = React.lazy(() => import('./components/ThematicRrgTab'));
 
 const ScreenerAppContent: React.FC = () => {
-  const [storedTab, setActiveTab] = useLocalStorageState<'screener' | 'ipo' | 'charts' | 'news'>('nexus-scanner.ui.active-tab.v1', 'screener');
+  const [storedTab, setActiveTab] = useLocalStorageState<'screener' | 'ipo' | 'charts' | 'news' | 'rrg'>('nexus-scanner.ui.active-tab.v1', 'screener');
   // Live News is temporarily hidden; restore saved News sessions to the screener.
   const activeTab = storedTab === 'news' ? 'screener' : storedTab;
   const [sidebarHidden, setSidebarHidden] = useLocalStorageState('nexus-scanner.ui.sidebar-hidden.v1', false);
@@ -92,6 +93,10 @@ const ScreenerAppContent: React.FC = () => {
             availableSessions={availableSessions}
             onSelectSession={setCustomSessionDate}
           />
+        ) : activeTab === 'rrg' ? (
+          <React.Suspense fallback={<p role="status">Loading Thematic RRG…</p>}>
+            <ThematicRrgTab datasetRevision={latestRevision} />
+          </React.Suspense>
         ) : activeTab === 'charts' ? (
           <React.Suspense fallback={<p role="status">Loading chart workspace…</p>}>
             <ChartsTab datasetRevision={latestRevision}/>

@@ -21,6 +21,7 @@ const getAdapter = () => USE_MOCK_API
 
 export const screenerApi = {
   getThemeClassification: realAdapter.getThemeClassification.bind(realAdapter),
+  getThematicRrg: realAdapter.getThematicRrg.bind(realAdapter),
   async getExportRows(request: ScreenerRunRequest) {
     const req = {...request, page:1, pageSize:100};
     const adapter = await getAdapter();

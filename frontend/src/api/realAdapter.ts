@@ -9,6 +9,7 @@ import { DataUnavailableError } from './dataErrors';
 import { getManifest, refreshManifest, validateManifest, validDate, manifestSnapshotSource, type Manifest } from './manifest';
 export { refreshManifest } from './manifest';
 const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
+const rrgSnapshots = new Map<string, Promise<import('../types/thematicRrg').ThematicRrgResponse>>();
 const finiteAmount = (value: unknown): number | null => {
   if (value == null || value === '') return null;
   const parsed = Number(value);
@@ -176,6 +177,34 @@ class RealDataAdapter {
       throw new Error('Theme classification release mismatch');
     }
     return data;
+  }
+  async getThematicRrg(revision?: string): Promise<import('../types/thematicRrg').ThematicRrgResponse> {
+    const cacheKey = revision || 'default';
+    const cached = rrgSnapshots.get(cacheKey);
+    if (cached) return cached;
+
+    const promise = (async () => {
+      const urls = [
+        revision ? `/data/revisions/${revision}/thematic_rrg.json` : undefined,
+        '/data/thematic_rrg.json',
+      ].filter(Boolean) as string[];
+
+      for (const url of urls) {
+        try {
+          const resp = await fetch(url);
+          if (resp.ok) {
+            return (await resp.json()) as import('../types/thematicRrg').ThematicRrgResponse;
+          }
+        } catch {
+          continue;
+        }
+      }
+      throw new Error('Thematic RRG data is unavailable in this release.');
+    })();
+
+    rrgSnapshots.set(cacheKey, promise);
+    promise.catch(() => rrgSnapshots.delete(cacheKey));
+    return promise;
   }
   async getFilterChoices(revision?: string, sessionDate?: string) {
     const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision, sessionDate)});

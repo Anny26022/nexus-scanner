@@ -2,8 +2,8 @@ import { Sun, Moon, ArrowUpRight, PanelLeftClose } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 
 interface NavbarProps {
-  activeTab: 'screener' | 'ipo' | 'charts';
-  onTabChange: (tab: 'screener' | 'ipo' | 'charts') => void;
+  activeTab: 'screener' | 'ipo' | 'charts' | 'rrg';
+  onTabChange: (tab: 'screener' | 'ipo' | 'charts' | 'rrg') => void;
   onHideSidebar: () => void;
   sessionDate?: string;
 }
@@ -21,6 +21,7 @@ export function Navbar({ activeTab, onTabChange, onHideSidebar, sessionDate }: N
     </svg><span>Nexus <span className="brand-subtitle">Screener</span></span></div><button type="button" className="sidebar-toggle" aria-label="Hide sidebar" title="Hide sidebar" onClick={onHideSidebar}><PanelLeftClose size={16}/></button></div>
     <nav className="primary-nav" aria-label="Main navigation">
       <button type="button" aria-current={activeTab === 'screener' ? 'page' : undefined} onClick={() => onTabChange('screener')}><span>Screener</span><ArrowUpRight className="nav-arrow" size={14} /></button>
+      <button type="button" aria-current={activeTab === 'rrg' ? 'page' : undefined} onClick={() => onTabChange('rrg')}><span>Thematic RRG</span><ArrowUpRight className="nav-arrow" size={14} /></button>
       <button type="button" aria-current={activeTab === 'ipo' ? 'page' : undefined} onClick={() => onTabChange('ipo')}><span>IPO Catalogue</span><ArrowUpRight className="nav-arrow" size={14} /></button>
       <button type="button" aria-current={activeTab === 'charts' ? 'page' : undefined} onClick={() => onTabChange('charts')}><span>Charts</span><ArrowUpRight className="nav-arrow" size={14} /></button>
     </nav>

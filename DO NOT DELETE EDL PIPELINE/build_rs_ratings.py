@@ -113,18 +113,28 @@ def compute_stock_returns(closes: list[float], offset: int = 0) -> dict[str, flo
 def calculate_composite_score(returns: dict[str, float]) -> float | None:
     """Blend returns according to MarketStrength weights (0.40/0.20/0.20/0.20).
 
-    Normalizes weights if longer windows (9m or 12m) are missing for younger listings.
+    Official methodology:
+    Weighted 12-month return: 0.40*3m + 0.20*6m + 0.20*9m + 0.20*12m
+    over windows 63, 126, 189, 252 trading days.
+    If lacking 9m/12m, 6m fills gap; < 6m gets None.
     """
-    active_weights: dict[str, float] = {}
-    for key, weight in WEIGHTS.items():
-        if key in returns and math.isfinite(returns[key]):
-            active_weights[key] = weight
-
-    total_weight = sum(active_weights.values())
-    if total_weight < 0.50:  # must have at least 3m + 6m (0.60)
+    if "three_month" not in returns or "six_month" not in returns:
         return None
 
-    score = sum(returns[k] * (w / total_weight) for k, w in active_weights.items())
+    r_3m = returns.get("three_month")
+    r_6m = returns.get("six_month")
+    if r_3m is None or r_6m is None or not (math.isfinite(r_3m) and math.isfinite(r_6m)):
+        return None
+
+    r_9m = returns.get("nine_month")
+    if r_9m is None or not math.isfinite(r_9m):
+        r_9m = r_6m
+
+    r_12m = returns.get("twelve_month")
+    if r_12m is None or not math.isfinite(r_12m):
+        r_12m = r_6m
+
+    score = 0.40 * r_3m + 0.20 * r_6m + 0.20 * r_9m + 0.20 * r_12m
     return score if math.isfinite(score) else None
 
 

@@ -216,23 +216,29 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'liq_turnover': fn = s => compare(s.metrics.turnover50,'ABOVE',p.minTurnoverCr); break;
     case 'AVG_TURNOVER':
       if (![20,30,50,100].includes(Number(p.lookbackDays)) || !['DAILY','daily',''].includes(String(p.windowMinutes ?? ''))) return null;
-      fn = s => compare(s.metrics[`turnover${p.lookbackDays}`] ?? s.tradedValueMean20dCr ?? s.rupeeVolumeCrore,p.comparison,p.valueCr); break;
+      fn = s => compare(s.metrics[`turnover${p.lookbackDays}`],p.comparison,p.valueCr); break;
     case 'MS_VCP': fn = s => Boolean(s.setupGeometry?.vcp?.matched); break;
-    case 'MS_DARVAS': fn = s => Boolean(s.setupGeometry?.darvasBox?.matched); break;
-    case 'MS_CUP_HANDLE': fn = s => Boolean(s.setupGeometry?.cupWithHandle?.matched); break;
-    case 'MS_BULL_FLAG': fn = s => Boolean(s.setupGeometry?.flag?.matched); break;
-    case 'MS_POCKET_PIVOT': fn = s => Boolean(s.setupGeometry?.pocketPivot); break;
-    case 'MS_VOLUME_BREAKOUT': fn = s => Boolean(s.setupGeometry?.volumeBreakout); break;
-    case 'MS_MYB': fn = s => Boolean(s.setupGeometry?.multiYearBreakout); break;
+    case 'MS_DARVAS': fn = s => Boolean(s.setupGeometry?.darvasBox?.matched ?? s.setupGeometry?.darvas_box?.matched); break;
+    case 'MS_CUP_HANDLE': fn = s => Boolean(s.setupGeometry?.cupWithHandle?.matched ?? s.setupGeometry?.cup_with_handle?.matched); break;
+    case 'MS_BULL_FLAG': fn = s => Boolean(s.setupGeometry?.bullFlag?.matched ?? s.setupGeometry?.flag?.matched); break;
+    case 'MS_POCKET_PIVOT': fn = s => Boolean(s.setupGeometry?.pocketPivot ?? s.setupGeometry?.pocket_pivot); break;
+    case 'MS_VOLUME_BREAKOUT': fn = s => Boolean(s.setupGeometry?.volumeBreakout ?? s.setupGeometry?.volume_breakout); break;
+    case 'MS_MYB': fn = s => Boolean(s.setupGeometry?.multiYearBreakout ?? s.setupGeometry?.multi_year_breakout); break;
     case 'MS_COILED': fn = s => Boolean(s.setupGeometry?.coiled); break;
-    case 'MS_TIGHT_WEEKS': fn = s => Boolean(s.setupGeometry?.tightWeeks); break;
-    case 'MS_TREND_LEADERS': fn = s => Boolean(s.trendTemplate?.isLeader); break;
+    case 'MS_TIGHT_WEEKS': fn = s => Boolean(s.setupGeometry?.tightWeeks ?? s.setupGeometry?.tight_weeks); break;
+    case 'MS_TREND_LEADERS': fn = s => Boolean(s.trendTemplate?.isLeader ?? s.trendTemplate?.is_leader); break;
     case 'MS_STAGE_2': fn = s => s.stageStatus?.stage === 2; break;
-    case 'MS_JUST_ENTERED_STAGE_2': fn = s => Boolean(s.stageStatus?.justEnteredStage2); break;
+    case 'MS_JUST_ENTERED_STAGE_2': fn = s => Boolean(s.stageStatus?.justEnteredStage2 ?? s.stageStatus?.just_entered_stage_2); break;
     case 'MS_RS_LINE_HIGH': fn = s => Boolean(s.isRsLine52wHigh); break;
     case 'MS_RS_LEADERS_80': fn = s => (s.rsRating ?? 0) >= 80; break;
-    case 'MS_EARNINGS_7D': fn = s => (s.upcomingEarnings?.daysUntilResults != null && s.upcomingEarnings.daysUntilResults >= 0 && s.upcomingEarnings.daysUntilResults <= 7); break;
-    case 'MS_EARNINGS_14D': fn = s => (s.upcomingEarnings?.daysUntilResults != null && s.upcomingEarnings.daysUntilResults >= 0 && s.upcomingEarnings.daysUntilResults <= 14); break;
+    case 'MS_EARNINGS_7D': fn = s => {
+      const d = s.upcomingEarnings?.daysUntilResults ?? s.upcomingEarnings?.days_until_results;
+      return d != null && d >= 0 && d <= 7;
+    }; break;
+    case 'MS_EARNINGS_14D': fn = s => {
+      const d = s.upcomingEarnings?.daysUntilResults ?? s.upcomingEarnings?.days_until_results;
+      return d != null && d >= 0 && d <= 14;
+    }; break;
     case 'liq_market_cap': metadata = true; fn = s => between(s.marketCapCrore,p.minMarketCap,p.maxMarketCap); break;
     case 'MARKETCAP': metadata = true; fn = s => compare(s.marketCapCrore,p.comparison,p.valueCr); break;
     case 'fund_pe_ratio': metadata = true; fn = s => between(s.peRatio,p.minPe,p.maxPe); break;
@@ -318,26 +324,42 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
           const ruleMatch = s.historyAligned && s.asOfDate === session ? s.presetRuleMatches?.[c.conditionId] ?? null : null;
           return combine([...eligibility, ruleMatch], true);
         }
-        const liq = (s.tradedValueMean20dCr ?? s.rupeeVolumeCrore ?? 0) >= 10;
-        switch (c.conditionId) {
-          case 'lib-ms-vcp': return Boolean(s.setupGeometry?.vcp?.matched) && liq;
-          case 'lib-ms-darvas': return Boolean(s.setupGeometry?.darvasBox?.matched) && liq;
-          case 'lib-ms-cup-handle': return Boolean(s.setupGeometry?.cupWithHandle?.matched) && liq;
-          case 'lib-ms-bull-flag': return Boolean(s.setupGeometry?.flag?.matched) && liq;
-          case 'lib-ms-pocket-pivot': return Boolean(s.setupGeometry?.pocketPivot) && liq;
-          case 'lib-ms-volume-breakout': return Boolean(s.setupGeometry?.volumeBreakout) && liq;
-          case 'lib-ms-multi-year-breakout': return Boolean(s.setupGeometry?.multiYearBreakout) && liq;
-          case 'lib-ms-coiled': return Boolean(s.setupGeometry?.coiled) && liq;
-          case 'lib-ms-tight-weeks': return Boolean(s.setupGeometry?.tightWeeks) && liq;
-          case 'lib-ms-trend-leaders': return Boolean(s.trendTemplate?.isLeader) && liq;
-          case 'lib-ms-stage-2': return (s.stageStatus?.stage === 2) && liq;
-          case 'lib-ms-just-entered-stage-2': return Boolean(s.stageStatus?.justEnteredStage2) && liq;
-          case 'lib-ms-rs-line-high': return Boolean(s.isRsLine52wHigh) && liq;
-          case 'lib-ms-rs-leaders-80': return ((s.rsRating ?? 0) >= 80) && liq;
-          case 'lib-ms-earnings-7d': return (s.upcomingEarnings?.daysUntilResults != null && s.upcomingEarnings.daysUntilResults >= 0 && s.upcomingEarnings.daysUntilResults <= 7) && liq;
-          case 'lib-ms-earnings-14d': return (s.upcomingEarnings?.daysUntilResults != null && s.upcomingEarnings.daysUntilResults >= 0 && s.upcomingEarnings.daysUntilResults <= 14) && liq;
-          default: return null;
+        const ruleMatch = (() => {
+          switch (c.conditionId) {
+            case 'lib-ms-vcp': return Boolean(s.setupGeometry?.vcp?.matched);
+            case 'lib-ms-darvas': return Boolean(s.setupGeometry?.darvasBox?.matched ?? s.setupGeometry?.darvas_box?.matched);
+            case 'lib-ms-cup-handle': return Boolean(s.setupGeometry?.cupWithHandle?.matched ?? s.setupGeometry?.cup_with_handle?.matched);
+            case 'lib-ms-bull-flag': return Boolean(s.setupGeometry?.bullFlag?.matched ?? s.setupGeometry?.flag?.matched);
+            case 'lib-ms-pocket-pivot': return Boolean(s.setupGeometry?.pocketPivot ?? s.setupGeometry?.pocket_pivot);
+            case 'lib-ms-volume-breakout': return Boolean(s.setupGeometry?.volumeBreakout ?? s.setupGeometry?.volume_breakout);
+            case 'lib-ms-multi-year-breakout': return Boolean(s.setupGeometry?.multiYearBreakout ?? s.setupGeometry?.multi_year_breakout);
+            case 'lib-ms-coiled': return Boolean(s.setupGeometry?.coiled);
+            case 'lib-ms-tight-weeks': return Boolean(s.setupGeometry?.tightWeeks ?? s.setupGeometry?.tight_weeks);
+            case 'lib-ms-trend-leaders': return Boolean(s.trendTemplate?.isLeader ?? s.trendTemplate?.is_leader);
+            case 'lib-ms-stage-2': return s.stageStatus?.stage === 2;
+            case 'lib-ms-just-entered-stage-2': return Boolean(s.stageStatus?.justEnteredStage2 ?? s.stageStatus?.just_entered_stage_2);
+            case 'lib-ms-rs-line-high': return Boolean(s.isRsLine52wHigh);
+            case 'lib-ms-rs-leaders-80': return (s.rsRating ?? 0) >= 80;
+            case 'lib-ms-earnings-7d': {
+              const d = s.upcomingEarnings?.daysUntilResults ?? s.upcomingEarnings?.days_until_results;
+              return d != null && d >= 0 && d <= 7;
+            }
+            case 'lib-ms-earnings-14d': {
+              const d = s.upcomingEarnings?.daysUntilResults ?? s.upcomingEarnings?.days_until_results;
+              return d != null && d >= 0 && d <= 14;
+            }
+            default: return null;
+          }
+        })();
+        if (ruleMatch !== null) {
+          const eligibility = PRESET_ELIGIBILITY.map((rule, i): Truth => {
+            if (targets[i] === null) return true;
+            const value = rule.field === 'turnover50' ? s.metrics.turnover50 : s[rule.field as keyof SnapshotStock];
+            return s.asOfDate !== session || s.metadataAsOfDate !== session ? null : compare(value, 'GREATER', targets[i]!);
+          });
+          return combine([...eligibility, ruleMatch], true);
         }
+        return null;
       };
       return c.isNegated ? s => { const v = fn(s); return v == null ? null : !v; } : fn;
   }

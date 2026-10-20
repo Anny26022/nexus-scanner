@@ -18,35 +18,71 @@ from pipeline_utils import BASE_DIR, load_json, save_json, compress_file
 from ohlcv_utils import read_ohlcv_csv, valid_ohlcv_values
 
 
+def load_json_or_gz(path: Path) -> Any:
+    """Safely load JSON from either uncompressed or .gz file path, prioritizing .gz if present."""
+    p = Path(path)
+    gz_candidate = p if p.name.endswith(".gz") else p.with_name(p.name + ".gz")
+    if gz_candidate.exists():
+        with gzip.open(gz_candidate, "rt", encoding="utf-8") as f:
+            return json.load(f)
+
+    plain_candidate = p.with_name(p.name[:-3]) if p.name.endswith(".gz") else p
+    if plain_candidate.exists():
+        with open(plain_candidate, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    return None
+
+
+def calculate_atr_series(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, period: int = 14) -> np.ndarray:
+    """Calculate Average True Range (ATR) array."""
+    n = len(closes)
+    if n < 2:
+        return np.zeros(n)
+    tr = np.zeros(n)
+    tr[0] = highs[0] - lows[0]
+    for i in range(1, n):
+        hl = highs[i] - lows[i]
+        hc = abs(highs[i] - closes[i - 1])
+        lc = abs(lows[i] - closes[i - 1])
+        tr[i] = max(hl, hc, lc)
+
+    atr = np.zeros(n)
+    if n >= period:
+        atr[period - 1] = np.mean(tr[:period])
+        for i in range(period, n):
+            atr[i] = (atr[i - 1] * (period - 1) + tr[i]) / period
+    return atr
+
+
 def load_earnings_calendar(root: Path) -> dict[str, dict]:
     """Map forward-looking scheduled earnings from earnings_calendar.json.gz."""
-    cal_path = root / "earnings_calendar.json.gz"
-    if not cal_path.exists():
-        cal_path = root / "earnings_calendar.json"
-    if not cal_path.exists():
-        return {}
-
-    opener = gzip.open if cal_path.suffix == ".gz" else open
-    try:
-        with opener(cal_path, "rt", encoding="utf-8") as f:
-            data = json.load(f)
-        events = data.get("events", [])
-        upcoming = {}
-        for ev in events:
-            sym = str(ev.get("symbol", "")).upper()
-            dt_str = ev.get("result_date") or ev.get("meeting_date")
-            if sym and dt_str:
-                upcoming[sym] = {
-                    "scheduled_date": dt_str,
-                    "purpose": ev.get("purpose", "Financial Results"),
-                }
-        return upcoming
-    except Exception:
-        return {}
+    cal_data = load_json_or_gz(root / "earnings_calendar.json.gz") or {}
+    events = cal_data.get("events", [])
+    upcoming = {}
+    for ev in events:
+        sym = str(ev.get("symbol", "")).upper()
+        # Support scheduled_date, result_date, and meeting_date
+        dt_str = ev.get("scheduled_date") or ev.get("result_date") or ev.get("meeting_date")
+        if sym and dt_str:
+            upcoming[sym] = {
+                "scheduled_date": dt_str,
+                "scheduledDate": dt_str,
+                "purpose": ev.get("purpose", "Financial Results"),
+            }
+    return upcoming
 
 
 def detect_vcp(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, volumes: np.ndarray, dates: list[str]) -> dict | None:
-    """Detect Volatility Contraction Pattern (VCP) with swing points."""
+    """Detect Volatility Contraction Pattern (VCP).
+
+    Audited criteria:
+    - 3 successively shallower pullbacks: abs(depth1) > abs(depth2) > abs(depth3)
+    - Latest depth <= 8.0% (Textbook <= 6.5%)
+    - Close > SMA50
+    - Within 15% of 52W high
+    - Volume dry ratio (10d vol / 50d avg vol) < 0.90
+    """
     if len(closes) < 60:
         return None
 
@@ -58,50 +94,80 @@ def detect_vcp(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, volumes:
 
     pivots = []
     for i in range(2, w - 2):
-        if sub_highs[i] >= max(sub_highs[i-2:i]) and sub_highs[i] >= max(sub_highs[i+1:i+3]):
-            pivots.append((i, "high", sub_highs[i], sub_dates[i]))
-        elif sub_lows[i] <= min(sub_lows[i-2:i]) and sub_lows[i] <= min(sub_lows[i+1:i+3]):
-            pivots.append((i, "low", sub_lows[i], sub_dates[i]))
+        if sub_highs[i] == max(sub_highs[i - 2 : i + 3]):
+            pivots.append((i, float(sub_highs[i]), "H", sub_dates[i]))
+        elif sub_lows[i] == min(sub_lows[i - 2 : i + 3]):
+            pivots.append((i, float(sub_lows[i]), "L", sub_dates[i]))
 
     if len(pivots) < 4:
         return None
 
-    contractions = []
-    last_high = None
+    pullbacks = []
+    swing_points = []
+    last_h = None
     for p in pivots:
-        if p[1] == "high":
-            last_high = p[2]
-        elif p[1] == "low" and last_high is not None and last_high > 0:
-            depth = ((p[2] - last_high) / last_high) * 100.0
-            contractions.append(round(depth, 2))
+        swing_points.append({"date": p[3], "price": p[1], "type": "high" if p[2] == "H" else "low"})
+        if p[2] == "H":
+            last_h = p[1]
+        elif p[2] == "L" and last_h is not None and last_h > 0:
+            depth = ((last_h - p[1]) / last_h) * 100.0
+            pullbacks.append(round(-depth, 2))
 
-    if len(contractions) < 2:
+    if len(pullbacks) < 3:
         return None
 
-    last_2_or_3 = contractions[-3:] if len(contractions) >= 3 else contractions[-2:]
-    # Must be successively shallower pullbacks (e.g. -15% -> -8% -> -4%)
-    is_contracting = all(abs(last_2_or_3[i]) < abs(last_2_or_3[i-1]) for i in range(1, len(last_2_or_3)))
-    latest_depth = abs(last_2_or_3[-1])
+    # Three successively shallower pullbacks
+    r1, r2, r3 = abs(pullbacks[-3]), abs(pullbacks[-2]), abs(pullbacks[-1])
+    if not (r1 > r2 and r2 > r3):
+        return None
 
-    if is_contracting and latest_depth <= 8.5:
-        vol_dry = (float(np.mean(sub_vols[-10:])) / max(1e-9, float(np.mean(sub_vols[-50:])))) if len(sub_vols) >= 50 else 1.0
-        return {
-            "matched": True,
-            "textbook": bool(latest_depth <= 6.5 and vol_dry < 0.75),
-            "pullback_depths": last_2_or_3,
-            "pivot_price": float(closes[-1]),
-            "pivot_date": dates[-1],
-            "volume_dry_ratio": round(vol_dry, 2),
-            "swing_points": [
-                {"date": p[3], "price": float(p[2]), "type": p[1]}
-                for p in pivots[-6:]
-            ],
-        }
-    return None
+    latest_depth = r3
+    if latest_depth > 8.0:
+        return None
+
+    cur_c = float(closes[-1])
+    s50 = float(np.mean(closes[-50:])) if len(closes) >= 50 else None
+    if s50 is None or cur_c <= s50:
+        return None
+
+    h52 = float(np.max(highs[-min(len(highs), 252):]))
+    if h52 <= 0 or ((h52 - cur_c) / h52) * 100.0 > 15.0:
+        return None
+
+    v10 = float(np.mean(volumes[-10:])) if len(volumes) >= 10 else float(volumes[-1])
+    v50 = float(np.mean(volumes[-50:])) if len(volumes) >= 50 else v10
+    vol_dry = round(v10 / max(1.0, v50), 2)
+    if vol_dry >= 0.90:
+        return None
+
+    h_pivots = [p[1] for p in pivots if p[2] == "H"]
+    pivot_h = max(h_pivots[-3:]) if h_pivots else float(highs[-1])
+    recent_pullbacks = pullbacks[-3:]
+    return {
+        "matched": True,
+        "textbook": bool(latest_depth <= 6.5),
+        "pullbackDepths": recent_pullbacks,
+        "pullback_depths": recent_pullbacks,
+        "pivotPrice": round(pivot_h, 2),
+        "pivot_price": round(pivot_h, 2),
+        "pivotDate": dates[-1],
+        "pivot_date": dates[-1],
+        "volumeDryRatio": vol_dry,
+        "volume_dry_ratio": vol_dry,
+        "swingPoints": swing_points[-6:],
+        "swing_points": swing_points[-6:],
+    }
 
 
 def detect_darvas(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray) -> dict | None:
-    """Detect Darvas Box state and boundaries."""
+    """Detect Darvas Box state and boundaries.
+
+    Strict boundary classification:
+    - Box height <= 20%
+    - Confirmed: box_bot <= current_close <= box_top
+    - Breakout: box_top < current_close <= box_top * 1.08
+    - Breach below bottom or far above top is NOT confirmed.
+    """
     if len(closes) < 60:
         return None
 
@@ -136,22 +202,27 @@ def detect_darvas(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray) -> di
         return None
 
     height_pct = ((box_top - box_bot) / box_top) * 100.0
-    if height_pct > 22.0:
+    if height_pct > 20.0:
         return None
 
-    current_close = recent_c[-1]
-    is_confirmed = (current_close <= box_top * 1.01) and (current_close >= box_bot * 0.99)
-    is_breakout = (current_close > box_top) and (current_close <= box_top * 1.08)
+    current_close = float(recent_c[-1])
+    is_confirmed = (box_bot <= current_close <= box_top)
+    is_breakout = (box_top < current_close <= box_top * 1.08)
 
     if is_confirmed or is_breakout:
         dist_top = ((box_top - current_close) / box_top) * 100.0
         return {
             "matched": True,
             "state": "confirmed" if is_confirmed else "breakout",
+            "topPrice": float(box_top),
             "top_price": float(box_top),
+            "bottomPrice": float(box_bot),
             "bottom_price": float(box_bot),
+            "heightPct": round(height_pct, 2),
             "height_pct": round(height_pct, 2),
+            "distFromTopPct": round(dist_top, 2),
             "dist_from_top_pct": round(dist_top, 2),
+            "daysInState": int(n - (box_bot_idx or box_top_idx)),
             "days_in_state": int(n - (box_bot_idx or box_top_idx)),
         }
     return None
@@ -173,7 +244,7 @@ def detect_flags(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, volume
 
         if pole_low > 0:
             pole_return = ((peak_high - pole_low) / pole_low) * 100.0
-            if pole_return >= 22.0:
+            if pole_return >= 25.0:
                 flag_low = float(np.min(lows[-(sessions_since_high + 1):]))
                 flag_depth = ((peak_high - flag_low) / peak_high) * 100.0
 
@@ -182,10 +253,15 @@ def detect_flags(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, volume
                     return {
                         "matched": True,
                         "textbook": bool(pole_return >= 35.0 and flag_depth <= 8.0),
+                        "poleReturnPct": round(pole_return, 2),
                         "pole_return_pct": round(pole_return, 2),
+                        "poleSessions": int(high_idx_relative),
                         "pole_sessions": int(high_idx_relative),
+                        "flagDepthPct": round(flag_depth, 2),
                         "flag_depth_pct": round(flag_depth, 2),
+                        "sessionsSinceHigh": int(sessions_since_high),
                         "sessions_since_high": int(sessions_since_high),
+                        "volumePauseRatio": round(vol_pause, 2),
                         "volume_pause_ratio": round(vol_pause, 2),
                     }
     return None
@@ -221,10 +297,63 @@ def detect_cup_with_handle(highs: np.ndarray, lows: np.ndarray, closes: np.ndarr
                     return {
                         "matched": True,
                         "textbook": bool(15.0 <= cup_depth <= 33.0 and handle_depth <= 8.0),
+                        "cupDepthPct": round(cup_depth, 2),
                         "cup_depth_pct": round(cup_depth, 2),
+                        "handleDepthPct": round(handle_depth, 2),
                         "handle_depth_pct": round(handle_depth, 2),
+                        "durationWeeks": round(w / 5.0, 1),
                         "duration_weeks": round(w / 5.0, 1),
                     }
+    return None
+
+
+def detect_tight_weeks(closes: np.ndarray, dates: list[str], s50: float | None, rs_val: float | None) -> dict | None:
+    """Detect Tight Weeks setup.
+
+    Audited criteria:
+    - >= 3 consecutive weekly closes within 1.5% of one another
+    - Weekly closes aggregated by exchange week (resample W-FRI)
+    - Close > SMA50
+    - RS >= 60
+    """
+    if len(closes) < 30 or len(dates) < 30:
+        return None
+
+    cur_c = float(closes[-1])
+    if s50 is None or cur_c <= s50 or (rs_val is None or rs_val < 60):
+        return None
+
+    try:
+        ts_dates = pd.to_datetime(dates)
+        s = pd.Series(closes, index=ts_dates)
+        weekly = s.resample("W-FRI").last().dropna()
+        if len(weekly) < 3:
+            return None
+
+        tight_count = 0
+        recent_closes = []
+        for i in range(len(weekly) - 1, 0, -1):
+            curr = float(weekly.iloc[i])
+            prev = float(weekly.iloc[i - 1])
+            if prev > 0 and abs(curr - prev) / prev <= 0.015:
+                tight_count += 1
+                recent_closes.append(round(curr, 2))
+            else:
+                break
+
+        if tight_count >= 2:  # 2 consecutive step changes <= 1.5% means 3 consecutive tight closes
+            spread = round((max(recent_closes) - min(recent_closes)) / min(recent_closes) * 100.0, 2) if len(recent_closes) >= 2 else 0.0
+            return {
+                "matched": True,
+                "tightWeeksCount": tight_count + 1,
+                "tight_weeks_count": tight_count + 1,
+                "spreadPct": spread,
+                "spread_pct": spread,
+                "weeklyCloses": recent_closes,
+                "weekly_closes": recent_closes,
+            }
+    except Exception:
+        pass
     return None
 
 
@@ -305,41 +434,50 @@ def evaluate_minervini_trend(closes: np.ndarray, highs: np.ndarray, lows: np.nda
         fails.append("RS Rating below 70")
 
     score = sum(1 for v in checks.values() if v)
+    is_leader = (score == 8)
     return {
         "score": score,
-        "is_leader": score == 8,
+        "isLeader": is_leader,
+        "is_leader": is_leader,
         "checks": checks,
         "fails": fails,
     }
 
 
 def evaluate_weinstein_stage(closes: np.ndarray) -> dict:
-    """Evaluate Weinstein Stage (Stage 2 Uptrend, Stage 4 Downtrend)."""
+    """Evaluate Weinstein Stage (1 Basing, 2 Advancing, 3 Topping, 4 Declining).
+
+    Rigorous methodology:
+    - Stage 2: SMA150 rose > 1.0% over 20 sessions and Price > SMA150
+    - Stage 4: SMA150 fell > 1.0% over 20 sessions and Price < SMA150
+    - Stage 3: SMA150 rising but Price < SMA150, OR flat slope and SMA150 > SMA150 120d ago
+    - Stage 1: SMA150 falling but Price > SMA150, OR flat slope and SMA150 <= SMA150 120d ago
+    """
     n = len(closes)
     if n < 170:
-        return {"stage": 1, "slope_20d": 0.0, "just_entered_stage_2": False}
+        return {"stage": 1, "slope_20d": 0.0, "slope20d": 0.0, "justEnteredStage2": False, "just_entered_stage_2": False}
 
-    c = closes[-1]
+    c = float(closes[-1])
     s150_now = float(np.mean(closes[-150:]))
     s150_20d = float(np.mean(closes[-170:-20]))
     slope_20d = ((s150_now - s150_20d) / s150_20d) * 100.0
 
-    if slope_20d > 1.0 and c > s150_now:
-        stage = 2
-    elif slope_20d < -1.0 and c < s150_now:
-        stage = 4
+    if slope_20d > 1.0:
+        stage = 2 if c > s150_now else 3
+    elif slope_20d < -1.0:
+        stage = 4 if c < s150_now else 1
     else:
-        # Flat slope checks 120 days ago
+        # Flat slope checks 120 sessions ago
         if n >= 270:
             s150_120d = float(np.mean(closes[-270:-120]))
             stage = 3 if s150_now > s150_120d else 1
         else:
             stage = 1
 
-    # Check if just entered Stage 2 (not stage 2 15 sessions ago)
+    # Check if just entered Stage 2 (was not stage 2 15 sessions ago)
     just_entered = False
     if stage == 2 and n >= 185:
-        c_15d = closes[-16]
+        c_15d = float(closes[-16])
         s150_15d = float(np.mean(closes[-165:-15]))
         s150_35d = float(np.mean(closes[-185:-35]))
         slope_15d = ((s150_15d - s150_35d) / s150_35d) * 100.0
@@ -349,30 +487,46 @@ def evaluate_weinstein_stage(closes: np.ndarray) -> dict:
     return {
         "stage": stage,
         "slope_20d": round(slope_20d, 2),
+        "slope20d": round(slope_20d, 2),
+        "justEnteredStage2": just_entered,
         "just_entered_stage_2": just_entered,
     }
 
 
-def main():
-    root = Path(BASE_DIR)
-    ohlcv_dir = root / "ohlcv_data"
-    stocks_path = root / "all_stocks_fundamental_analysis.json"
-    if not stocks_path.exists():
-        print("Error: all_stocks_fundamental_analysis.json missing.")
+def enrich_snapshot_directory(
+    root: Path,
+    ohlcv_dir: Path | None = None,
+    earnings_root: Path | None = None,
+    generate_gallery: bool = True,
+) -> bool:
+    """Enrich a snapshot directory with explainable setups, trend template, and pattern gallery."""
+    root = Path(root)
+    ohlcv_dir = Path(ohlcv_dir) if ohlcv_dir else (root / "ohlcv_data")
+    earnings_root = Path(earnings_root) if earnings_root else root
+
+    stocks_gz = root / "all_stocks_fundamental_analysis.json.gz"
+    stocks_json = root / "all_stocks_fundamental_analysis.json"
+
+    stocks = load_json_or_gz(stocks_gz if stocks_gz.exists() else stocks_json)
+    if not stocks:
+        print(f"Error: all_stocks_fundamental_analysis missing in {root}")
         return False
 
-    stocks = load_json(stocks_path)
-    rs_data = load_json(root / "rs_rating_daily.json") or load_json(root / "rs_rating_daily.json.gz") or {}
+    rs_data = load_json_or_gz(root / "rs_rating_daily.json") or {}
     ratings = rs_data.get("ratings", {})
-    calendar = load_earnings_calendar(root)
+    calendar = load_earnings_calendar(earnings_root)
 
     screen_records = []
     gallery_items = []
 
-    today_date = rs_data.get("as_of_date") or date.today().isoformat()
-    today_dt = pd.to_datetime(today_date).date()
+    today_date = rs_data.get("as_of_date")
+    if not today_date and stocks and isinstance(stocks, list):
+        today_date = stocks[0].get("as_of_date") or stocks[0].get("date")
+    if not today_date:
+        today_date = date.today().isoformat()
 
-    print(f"Enriching stock snapshot & generating MarketStrength screens as of {today_date}...")
+    today_dt = pd.to_datetime(today_date).date()
+    print(f"Enriching snapshot directory {root.name} as of {today_date} across {len(stocks)} stocks...")
 
     for stock in stocks:
         sym = stock.get("symbol") or stock.get("Symbol")
@@ -388,7 +542,6 @@ def main():
         if len(rows) < 30:
             continue
 
-        # Extract dates and float series
         dates = []
         opens, highs, lows, closes, volumes = [], [], [], [], []
         for r in rows:
@@ -416,42 +569,62 @@ def main():
         rs_entry = ratings.get(sym_upper, {})
         comp_rs = rs_entry.get("composite_rs") or rs_entry.get("front_weighted")
 
+        s50 = float(np.mean(c_arr[-50:])) if len(c_arr) >= 50 else None
+        h52 = float(np.max(h_arr[-min(len(h_arr), 252):]))
+
         # 1. Evaluate Setups
         vcp = detect_vcp(h_arr, l_arr, c_arr, v_arr, dates)
         darvas = detect_darvas(h_arr, l_arr, c_arr)
         flag = detect_flags(h_arr, l_arr, c_arr, v_arr)
         cup = detect_cup_with_handle(h_arr, l_arr, c_arr)
+        tight_wks = detect_tight_weeks(c_arr, dates, s50, comp_rs)
 
-        # Volume Breakout
+        # Volume Breakout: Close > 50d high (excluding today) + 50d RVOL >= 2.0x
         prior_50_high = float(np.max(h_arr[-51:-1])) if len(h_arr) >= 51 else float(np.max(h_arr[:-1]))
         rvol_50d = (vol / max(1.0, float(np.mean(v_arr[-50:])))) if len(v_arr) >= 50 else 1.0
         vol_breakout = bool(c > prior_50_high and rvol_50d >= 2.0)
 
-        # Pocket Pivot
+        # Pocket Pivot: up day, close > 50 DMA, volume > max down-day volume of prior 10 sessions, RS >= 60
         pocket_pivot = False
-        s50 = float(np.mean(c_arr[-50:])) if len(c_arr) >= 50 else None
-        if len(c_arr) >= 11 and c > c_arr[-2] and s50 and c > s50:
+        if len(c_arr) >= 11 and c > c_arr[-2] and s50 and c > s50 and (comp_rs or 0) >= 60:
             down_day_vols = [v_arr[-i] for i in range(2, 12) if c_arr[-i] < c_arr[-i-1]]
             max_down_vol = max(down_day_vols) if down_day_vols else 0.0
             pocket_pivot = bool(vol > max_down_vol)
 
-        # Compression & Tight Weeks
-        rng10 = ((float(np.max(h_arr[-10:])) - float(np.min(l_arr[-10:]))) / float(np.max(h_arr[-10:]))) * 100.0 if len(h_arr) >= 10 else 100.0
-        tight_weeks = False
-        if len(c_arr) >= 15:
-            weekly_closes = c_arr[-15::5]
-            if len(weekly_closes) >= 3:
-                tight_weeks = bool(abs(weekly_closes[-1] - weekly_closes[-2]) / weekly_closes[-2] <= 0.015 and abs(weekly_closes[-2] - weekly_closes[-3]) / weekly_closes[-3] <= 0.015)
-
-        # Multi-Year Breakout (~3 year ceiling)
-        lookback_myb = min(len(c_arr), 750)
+        # Multi-Year Breakout: ceiling established >= 250 sessions ago, current close clears ceiling within 15%
         myb = False
-        if lookback_myb >= 250:
-            hist_ceil = float(np.max(h_arr[-lookback_myb:-20]))
-            myb = bool(c > hist_ceil and ((c - hist_ceil) / hist_ceil) <= 0.15)
+        myb_details = None
+        lookback_myb = min(len(c_arr), 750)
+        if lookback_myb >= 300:
+            prior_win = h_arr[-lookback_myb:-1]
+            ceil_val = float(np.max(prior_win))
+            ceil_idx = int(np.argmax(prior_win))
+            ceil_age = len(prior_win) - 1 - ceil_idx
+            if ceil_age >= 250 and c > ceil_val:
+                above_pct = ((c - ceil_val) / ceil_val) * 100.0
+                if above_pct <= 15.0:
+                    myb = True
+                    myb_details = {
+                        "matched": True,
+                        "ceilingPrice": round(ceil_val, 2),
+                        "ceiling_price": round(ceil_val, 2),
+                        "ceilingHeldDays": ceil_age,
+                        "ceiling_held_days": ceil_age,
+                        "distanceAbovePct": round(above_pct, 2),
+                        "distance_above_pct": round(above_pct, 2),
+                    }
 
-        # Coiled
-        coiled = bool(rng10 <= 10.0 and rvol_50d < 0.90 and s50 and c > s50 and (comp_rs or 0) >= 60)
+        # Coiled: 10d range <= 10%, ATR(10)/ATR(50) <= 0.85, volumeDryRatio < 0.90, close > 50 DMA, within 15% of 52W high, RS >= 60
+        rng10 = ((float(np.max(h_arr[-10:])) - float(np.min(l_arr[-10:]))) / float(np.max(h_arr[-10:]))) * 100.0 if len(h_arr) >= 10 else 100.0
+        atr10_series = calculate_atr_series(h_arr, l_arr, c_arr, 10)
+        atr50_series = calculate_atr_series(h_arr, l_arr, c_arr, 50)
+        atr_ratio = (atr10_series[-1] / atr50_series[-1]) if (len(c_arr) >= 50 and atr50_series[-1] > 0) else 1.0
+        v10 = float(np.mean(v_arr[-10:])) if len(v_arr) >= 10 else float(v_arr[-1])
+        v50 = float(np.mean(v_arr[-50:])) if len(v_arr) >= 50 else v10
+        vol_dry_10 = (v10 / max(1.0, v50)) if v50 > 0 else 1.0
+        from_52h = ((h52 - c) / h52 * 100.0) if h52 > 0 else 100.0
+
+        coiled = bool(rng10 <= 10.0 and atr_ratio <= 0.85 and vol_dry_10 < 0.90 and s50 and c > s50 and from_52h <= 15.0 and (comp_rs or 0) >= 60)
 
         # 2. Evaluate Trend Template & Stage
         trend_res = evaluate_minervini_trend(c_arr, h_arr, l_arr, comp_rs)
@@ -467,34 +640,54 @@ def main():
             except Exception:
                 pass
 
-        # Enrich main stock record with explainable setup geometry & metrics
+        # Setup Geometry dictionary supporting BOTH camelCase and snake_case for full UI/backend parity
         setup_geometry = {
             "vcp": vcp,
+            "darvasBox": darvas,
             "darvas_box": darvas,
+            "cupWithHandle": cup,
             "cup_with_handle": cup,
+            "bullFlag": flag,
             "flag": flag,
+            "pocketPivot": pocket_pivot,
             "pocket_pivot": pocket_pivot,
+            "volumeBreakout": vol_breakout,
             "volume_breakout": vol_breakout,
-            "multi_year_breakout": myb,
+            "multiYearBreakout": myb_details if myb else None,
+            "multi_year_breakout": myb_details if myb else None,
             "coiled": coiled,
-            "tight_weeks": tight_weeks,
+            "tightWeeks": tight_wks,
+            "tight_weeks": tight_wks,
         }
+
+        # Enrich stock record in-place preserving every existing column
         stock["setup_geometry"] = setup_geometry
+        stock["setupGeometry"] = setup_geometry
         stock["trend_template"] = trend_res
+        stock["trendTemplate"] = trend_res
         stock["stage_status"] = stage_res
+        stock["stageStatus"] = stage_res
         stock["upcoming_earnings"] = {
+            "scheduledDate": cal_ev.get("scheduled_date"),
             "scheduled_date": cal_ev.get("scheduled_date"),
+            "daysUntilResults": days_until_results,
             "days_until_results": days_until_results,
             "purpose": cal_ev.get("purpose"),
         }
+        stock["upcomingEarnings"] = stock["upcoming_earnings"]
+        stock["isRsLine52wHigh"] = rs_entry.get("is_rs_line_52w_high", False)
+        stock["is_rs_line_52w_high"] = stock["isRsLine52wHigh"]
 
         # Liquidity metrics
         traded_val_20d = c_arr[-20:] * v_arr[-20:]
         mean_val_cr = float(np.mean(traded_val_20d)) / 1e7
         median_val_cr = float(np.median(traded_val_20d)) / 1e7
         stock["traded_value_mean_20d_cr"] = round(mean_val_cr, 2)
+        stock["tradedValueMean20dCr"] = round(mean_val_cr, 2)
         stock["traded_value_median_20d_cr"] = round(median_val_cr, 2)
+        stock["tradedValueMedian20dCr"] = round(median_val_cr, 2)
         stock["is_liquid_screen"] = bool(mean_val_cr >= 10.0)
+        stock["isLiquidScreen"] = stock["is_liquid_screen"]
 
         # Screen record
         screen_records.append({
@@ -506,8 +699,8 @@ def main():
             "volume": vol,
             "composite_rs": comp_rs,
             "rs_change_21d": rs_entry.get("rs_change_21d"),
-            "is_rs_line_52w_high": rs_entry.get("is_rs_line_52w_high", False),
-            "is_liquid": bool(mean_val_cr >= 10.0),
+            "is_rs_line_52w_high": stock["isRsLine52wHigh"],
+            "is_liquid": stock["is_liquid_screen"],
             "traded_value_mean_20d_cr": round(mean_val_cr, 2),
             "traded_value_median_20d_cr": round(median_val_cr, 2),
             "trend_score": trend_res["score"],
@@ -517,77 +710,104 @@ def main():
             "upcoming_earnings": stock["upcoming_earnings"],
         })
 
-        # 4. Pattern Gallery occurrences (Rolling historical scan for VCP, Cup, Flag)
-        # Scan last 126 sessions for first pattern appearances
-        scan_len = min(len(c_arr), 126)
-        if scan_len >= 40:
-            for t_idx in range(len(c_arr) - scan_len, len(c_arr) - 5, 5):
-                sig_date = dates[t_idx]
-                sub_c_sig = c_arr[:t_idx + 1]
-                sub_h_sig = h_arr[:t_idx + 1]
-                sub_l_sig = l_arr[:t_idx + 1]
-                sub_v_sig = v_arr[:t_idx + 1]
+        # 4. Pattern Gallery occurrences (Strict Anti-Lookahead & Matured Horizons Guarantee)
+        if generate_gallery:
+            scan_len = min(len(c_arr), 126)
+            if scan_len >= 40:
+                active_patterns: dict[str, int] = {}
+                for t_idx in range(len(c_arr) - scan_len, len(c_arr)):
+                    sig_date = dates[t_idx]
+                    sub_c = c_arr[:t_idx + 1]
+                    sub_h = h_arr[:t_idx + 1]
+                    sub_l = l_arr[:t_idx + 1]
+                    sub_v = v_arr[:t_idx + 1]
 
-                pat_vcp = detect_vcp(sub_h_sig, sub_l_sig, sub_c_sig, sub_v_sig, dates[:t_idx + 1])
-                pat_flag = detect_flags(sub_h_sig, sub_l_sig, sub_c_sig, sub_v_sig)
-                pat_cup = detect_cup_with_handle(sub_h_sig, sub_l_sig, sub_c_sig)
+                    # Point-in-time setup detection
+                    pat_vcp = detect_vcp(sub_h, sub_l, sub_c, sub_v, dates[:t_idx + 1])
+                    pat_flag = detect_flags(sub_h, sub_l, sub_c, sub_v)
+                    pat_cup = detect_cup_with_handle(sub_h, sub_l, sub_c)
 
-                for p_type, p_match in (("VCP", pat_vcp), ("Bull Flag", pat_flag), ("Cup with Handle", pat_cup)):
-                    if p_match and p_match.get("matched"):
-                        # Forward outcomes (+5d, +20d, +60d)
-                        fwd_closes = c_arr[t_idx + 1 :]
-                        sig_close = float(sub_c_sig[-1])
-                        ret5 = round(((fwd_closes[min(4, len(fwd_closes)-1)] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 1 else None
-                        ret20 = round(((fwd_closes[min(19, len(fwd_closes)-1)] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 1 else None
-                        ret60 = round(((fwd_closes[min(59, len(fwd_closes)-1)] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 1 else None
+                    # Point-in-time trend score evaluated strictly at sig_date
+                    sig_trend = evaluate_minervini_trend(sub_c, sub_h, sub_l, comp_rs)
 
-                        fwd_60 = fwd_closes[:60]
-                        max_gain = round(((float(np.max(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_60) > 0 else None
-                        max_dd = round(((float(np.min(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_60) > 0 else None
+                    for p_type, p_match in (("VCP", pat_vcp), ("Bull Flag", pat_flag), ("Cup with Handle", pat_cup)):
+                        if p_match and p_match.get("matched"):
+                            # Deduplicate consecutive sessions: only record first appearance of setup
+                            last_idx = active_patterns.get(p_type)
+                            if last_idx is not None and (t_idx - last_idx) < 10:
+                                continue  # Same ongoing base setup
+                            active_patterns[p_type] = t_idx
 
-                        gallery_items.append({
-                            "symbol": sym_upper,
-                            "signal_date": sig_date,
-                            "pattern": p_type,
-                            "textbook": bool(p_match.get("textbook") and (comp_rs or 0) >= 80 and trend_res["score"] == 8),
-                            "signal_close": sig_close,
-                            "signal_rs": comp_rs,
-                            "signal_trend_score": trend_res["score"],
-                            "return_5d": ret5,
-                            "return_20d": ret20,
-                            "return_60d": ret60,
-                            "max_gain_60d": max_gain,
-                            "max_drawdown_60d": max_dd,
-                            "measurements": p_match,
-                        })
-                        break  # capture one pattern per time index
+                            fwd_closes = c_arr[t_idx + 1 :]
+                            sig_close = float(sub_c[-1])
 
-    # Save enriched main stock snapshot
-    save_json(stocks_path, stocks, ensure_ascii=False)
-    compress_file(stocks_path, stocks_path.with_suffix(".json.gz"))
-    print(f"Enriched {len(stocks)} stocks in all_stocks_fundamental_analysis.json(.gz)")
+                            # Matured horizon return gates: None if horizon has not elapsed!
+                            ret5 = round(((fwd_closes[4] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 5 else None
+                            ret20 = round(((fwd_closes[19] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 20 else None
+                            ret60 = round(((fwd_closes[59] - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 60 else None
+
+                            fwd_60 = fwd_closes[:60]
+                            max_gain = round(((float(np.max(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 60 else None
+                            max_dd = round(((float(np.min(fwd_60)) - sig_close) / sig_close) * 100.0, 2) if len(fwd_closes) >= 60 else None
+
+                            gallery_items.append({
+                                "symbol": sym_upper,
+                                "signal_date": sig_date,
+                                "pattern": p_type,
+                                "textbook": bool(p_match.get("textbook") and (comp_rs or 0) >= 80 and sig_trend["score"] == 8),
+                                "signal_close": sig_close,
+                                "signal_rs": comp_rs,
+                                "signal_trend_score": sig_trend["score"],
+                                "return_5d": ret5,
+                                "return_20d": ret20,
+                                "return_60d": ret60,
+                                "max_gain_60d": max_gain,
+                                "max_drawdown_60d": max_dd,
+                                "measurements": p_match,
+                            })
+
+    # Save enriched canonical stock snapshot
+    save_json(stocks_json, stocks, ensure_ascii=False)
+    compress_file(stocks_json, stocks_gz)
+    print(f"Enriched {len(stocks)} stocks in {stocks_gz.name} and {stocks_json.name} (preserved all fields)")
 
     # Save Market Screens Snapshot
     screens_output = root / "market_screens_snapshot.json"
+    screens_gz = screens_output.with_suffix(".json.gz")
     save_json(screens_output, {
         "as_of_date": today_date,
         "total_stocks": len(screen_records),
         "records": screen_records,
     }, ensure_ascii=False)
-    compress_file(screens_output, screens_output.with_suffix(".json.gz"))
-    print(f"Saved market_screens_snapshot.json(.gz) with {len(screen_records)} records.")
+    compress_file(screens_output, screens_gz)
+    print(f"Saved market_screens_snapshot.json and .gz with {len(screen_records)} records.")
 
-    # Save Pattern Gallery
-    gallery_output = root / "pattern_gallery.json"
-    save_json(gallery_output, {
-        "as_of_date": today_date,
-        "total_items": len(gallery_items),
-        "items": gallery_items,
-    }, ensure_ascii=False)
-    compress_file(gallery_output, gallery_output.with_suffix(".json.gz"))
-    print(f"Saved pattern_gallery.json(.gz) with {len(gallery_items)} historical outcomes.")
+    # Save Pattern Gallery if requested
+    if generate_gallery:
+        gallery_output = root / "pattern_gallery.json"
+        gallery_gz = gallery_output.with_suffix(".json.gz")
+        save_json(gallery_output, {
+            "as_of_date": today_date,
+            "total_items": len(gallery_items),
+            "items": gallery_items,
+        }, ensure_ascii=False)
+        compress_file(gallery_output, gallery_gz)
+        print(f"Saved pattern_gallery.json and .gz with {len(gallery_items)} historical outcomes.")
 
     return True
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="Build market screens, setup geometry, and pattern gallery.")
+    parser.add_argument("--root", type=str, default=str(BASE_DIR), help="Root directory containing pipeline outputs.")
+    parser.add_argument("--ohlcv-dir", type=str, default=None, help="Directory containing OHLCV CSVs.")
+    parser.add_argument("--no-gallery", action="store_true", help="Skip pattern gallery generation.")
+    args = parser.parse_args()
+
+    root = Path(args.root)
+    ohlcv = Path(args.ohlcv_dir) if args.ohlcv_dir else None
+    return enrich_snapshot_directory(root, ohlcv_dir=ohlcv, generate_gallery=not args.no_gallery)
 
 
 if __name__ == "__main__":

@@ -53,6 +53,7 @@ py-modules = [
     "build_filing_history_artifact",
     "build_ipo_screener_artifact",
     "build_quarterly_financial_ledger",
+    "build_market_screens",
     "build_rs_ratings",
     "build_shareholding_history",
     "dhan_next_utils",

@@ -11,6 +11,45 @@ from edl_pipeline.scanner.presets import list_presets
 
 
 class BridgeTests(unittest.TestCase):
+    def test_market_screen_missing_measurements_stay_unknown_under_negation(self):
+        stock = {"symbol": "TEST", "as_of_date": "2026-09-30"}
+        for kind in ("MS_VCP", "MS_DARVAS", "MS_CUP_HANDLE", "MS_BULL_FLAG", "MS_COILED",
+                     "MS_POCKET_PIVOT", "MS_VOLUME_BREAKOUT", "MS_MYB", "MS_TIGHT_WEEKS",
+                     "MS_TREND_LEADERS", "MS_STAGE_2", "MS_JUST_ENTERED_STAGE_2", "MS_EARNINGS_7D"):
+            with self.subTest(kind=kind):
+                node = {"type": "not", "child": bridge.leaf(kind)}
+                self.assertIsNone(bridge.evaluate(node, stock, None, {}, "2026-09-30", set(), []))
+        # A completed detector reporting no setup is a known non-match.
+        stock["setup_geometry"] = {"vcp": None}
+        self.assertTrue(bridge.evaluate({"type": "not", "child": bridge.leaf("MS_VCP")},
+                                       stock, None, {}, "2026-09-30", set(), []))
+
+    def test_market_screen_false_alias_and_dated_rs_are_preserved(self):
+        stock = {"symbol": "TEST", "as_of_date": "2026-09-30", "is_rs_line_52w_high": False}
+        context = {"rs_ratings_as_of": "2026-09-30",
+                   "rs_ratings": {"TEST": {"front_weighted": 95, "is_rs_line_52w_high": True}}}
+        self.assertFalse(bridge.evaluate(bridge.leaf("MS_RS_LINE_HIGH"), stock, None, context,
+                                         "2026-09-30", set(), []))
+        self.assertTrue(bridge.evaluate(bridge.leaf("MS_RS_LEADERS_80"), stock, None, context,
+                                        "2026-09-30", set(), []))
+        context["rs_ratings_as_of"] = "2026-09-29"
+        self.assertIsNone(bridge.evaluate(bridge.leaf("MS_RS_LEADERS_80"), stock, None, context,
+                                          "2026-09-30", set(), []))
+        row = bridge.stock_row({**stock, "is_liquid_screen": False,
+                                "traded_value_mean_20d_cr": 0}, context["rs_ratings"])
+        self.assertFalse(row["isRsLine52wHigh"])
+        self.assertFalse(row["isLiquidScreen"])
+        self.assertEqual(row["tradedValueMean20dCr"], 0)
+        self.assertIsNone(bridge.stock_row({"symbol": "MISSING"}, {})["isRsLine52wHigh"])
+
+    def test_market_screen_rejects_stale_or_unaligned_signal_history(self):
+        stock = {"symbol": "TEST", "as_of_date": "2026-09-30", "setup_geometry": {"vcp": {"matched": True}}}
+        history = pd.DataFrame({"Date": pd.to_datetime(["2026-09-29"])})
+        self.assertIsNone(bridge.evaluate(bridge.leaf("MS_VCP"), stock, history, {}, "2026-09-30", set(), []))
+        self.assertIsNone(bridge.evaluate(bridge.leaf("MS_VCP"), stock, None, {}, "2026-09-29", set(), []))
+        stock["historyAligned"] = False
+        self.assertIsNone(bridge.evaluate(bridge.leaf("MS_VCP"), stock, None, {}, "2026-09-30", set(), []))
+
     def test_ownership_fields_keep_missing_and_non_finite_values_unavailable(self):
         row = bridge.stock_row({"symbol": "TEST", "promoter_holding_percent": float('nan'),
                                 "fii_percent_change_qoq": float('inf')}, {})

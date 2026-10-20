@@ -73,6 +73,25 @@ except ImportError:
     evaluate_minervini_trend = None
     evaluate_weinstein_stage = None
 
+def apply_preset_eligibility(item, ms_matches, is_liquid):
+    """Keep mandatory MS rules separate from editable, shared eligibility."""
+    baseline_stock = {
+        rule["backendField"]: (item.get("metrics") or {}).get("turnover50")
+        if rule["field"] == "turnover50" else item.get(rule["field"])
+        for rule in bridge.PRESET_ELIGIBILITY
+    }
+    baseline = bridge.preset_baseline(baseline_stock)
+    rules = item.setdefault("presetRuleMatches", {})
+    matches = item.setdefault("presetMatches", {})
+    for identifier, pattern_match in ms_matches.items():
+        rules[identifier] = bridge.combine([pattern_match, is_liquid], "AND")
+        matches[identifier] = bridge.combine([rules[identifier], baseline], "AND")
+    # Legacy presets retain their own rules and the shared baseline only.
+    for identifier in ("lib-stage-two", "lib-52w-high-breakout", "lib-20d-high-thrust"):
+        if identifier in rules:
+            matches[identifier] = bridge.combine([rules[identifier], baseline], "AND")
+
+
 # Fallback headers for NSE downloads
 NSE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1146,17 +1165,6 @@ def main():
             it["tradedValueMean20dCr"] = round(mean_val_cr, 2)
             it["tradedValueMedian20dCr"] = round(median_val_cr, 2)
 
-            # Calculate default eligibility (market cap >= 1000 Cr, close >= 10, 50d turnover >= 5 Cr, and 20d mean turnover >= 10 Cr)
-            mcap_cr = it.get("marketCapCrore")
-            p_close = it.get("close")
-            t50_val = (it.get("metrics") or {}).get("turnover50")
-            default_eligible = bool(
-                (mcap_cr is not None and mcap_cr >= 1000.0) and
-                (p_close is not None and p_close >= 10.0) and
-                (t50_val is None or t50_val >= 5.0) and
-                is_liquid
-            )
-
             # Rule-only matches without default eligibility constraints
             ms_rule_matches = {
                 "lib-ms-vcp": bool(vcp),
@@ -1177,17 +1185,7 @@ def main():
                 "lib-ms-bull-flag": bool(flag),
             }
 
-            if "presetRuleMatches" not in it:
-                it["presetRuleMatches"] = {}
-            it["presetRuleMatches"].update(ms_rule_matches)
-
-            # Preset matches require BOTH rule-match and default eligibility
-            it["presetMatches"].update({
-                k: bool(v and default_eligible) for k, v in ms_rule_matches.items()
-            })
-            for k in ("trend_template", "lib-stage-two", "lib-52w-high-breakout", "lib-20d-high-thrust", "mom_rvol"):
-                if k in it["presetMatches"]:
-                    it["presetMatches"][k] = bool(it["presetRuleMatches"].get(k) and default_eligible)
+            apply_preset_eligibility(it, ms_rule_matches, is_liquid)
 
             # Calculate dataCompleteness
             it["dataCompleteness"] = bridge.data_completeness(it)

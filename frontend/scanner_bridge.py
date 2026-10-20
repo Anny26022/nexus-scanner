@@ -198,6 +198,15 @@ def combine(values, op):
     return True if True in values else None if None in values else False
 
 
+def first_value(mapping, *keys):
+    """Read aliases without discarding an explicit false or zero."""
+    for key in keys:
+        value = mapping.get(key)
+        if value is not None:
+            return value
+    return None
+
+
 def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
     if node["type"] == "group":
         if not node["children"]:
@@ -240,32 +249,44 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
                     abs(value) <= node["abs_max"] if node.get("abs_max") is not None else True))
     if node.get("type") == "condition" and str(node.get("kind", "")).startswith("MS_"):
         kind = str(node.get("kind"))
-        if s.get("as_of_date") != as_of and s.get("asOfDate") != as_of:
+        if (first_value(s, "as_of_date", "asOfDate") != as_of
+                or s.get("historyAligned") is False
+                or (frame is not None and (frame.empty or frame["Date"].iloc[-1].strftime("%Y-%m-%d") != as_of))):
             diagnostics.add(("stock_date", "stock_history_not_aligned_to_screen_date"))
             return None
 
-        setups = s.get("setup_geometry") or s.get("setupGeometry") or {}
-        trend = s.get("trend_template") or s.get("trendTemplate") or {}
-        stage = s.get("stage_status") or s.get("stageStatus") or {}
-        earnings = s.get("upcoming_earnings") or s.get("upcomingEarnings") or {}
+        setups = first_value(s, "setup_geometry", "setupGeometry")
+        trend = first_value(s, "trend_template", "trendTemplate")
+        stage = first_value(s, "stage_status", "stageStatus")
+        earnings = first_value(s, "upcoming_earnings", "upcomingEarnings")
+        setup_fields = {
+            "MS_VCP": ("vcp",), "MS_DARVAS": ("darvas_box", "darvasBox"),
+            "MS_CUP_HANDLE": ("cup_with_handle", "cupWithHandle"),
+            "MS_BULL_FLAG": ("flag", "bullFlag"), "MS_POCKET_PIVOT": ("pocket_pivot", "pocketPivot"),
+            "MS_VOLUME_BREAKOUT": ("volume_breakout", "volumeBreakout"),
+            "MS_MYB": ("multi_year_breakout", "multiYearBreakout"),
+            "MS_COILED": ("coiled",), "MS_TIGHT_WEEKS": ("tight_weeks", "tightWeeks"),
+        }
+        if kind in setup_fields:
+            if setups is None:
+                return None
+            value = first_value(setups, *setup_fields[kind])
+            return bool(value.get("matched")) if isinstance(value, dict) else bool(value)
+        if kind == "MS_TREND_LEADERS":
+            value = first_value(trend or {}, "is_leader", "isLeader")
+            return None if value is None else bool(value)
+        if kind == "MS_STAGE_2":
+            value = (stage or {}).get("stage")
+            return None if value is None else value == 2
+        if kind == "MS_JUST_ENTERED_STAGE_2":
+            value = first_value(stage or {}, "just_entered_stage_2", "justEnteredStage2")
+            return None if value is None else bool(value)
         rs_rating = s.get("rsRating")
         if rs_rating is None and context.get("rs_ratings_as_of") == as_of:
             rs_rating = (context.get("rs_ratings") or context.get("ratings") or {}).get(s.get("symbol", ""), {}).get("front_weighted")
 
-        if kind == "MS_VCP": return bool((setups.get("vcp") or {}).get("matched"))
-        if kind == "MS_DARVAS": return bool((setups.get("darvas_box") or setups.get("darvasBox") or {}).get("matched"))
-        if kind == "MS_CUP_HANDLE": return bool((setups.get("cup_with_handle") or setups.get("cupWithHandle") or {}).get("matched"))
-        if kind == "MS_BULL_FLAG": return bool((setups.get("bullFlag") or setups.get("flag") or {}).get("matched"))
-        if kind == "MS_POCKET_PIVOT": return bool(setups.get("pocket_pivot") or setups.get("pocketPivot"))
-        if kind == "MS_VOLUME_BREAKOUT": return bool(setups.get("volume_breakout") or setups.get("volumeBreakout"))
-        if kind == "MS_MYB": return bool(setups.get("multi_year_breakout") or setups.get("multiYearBreakout"))
-        if kind == "MS_COILED": return bool(setups.get("coiled"))
-        if kind == "MS_TIGHT_WEEKS": return bool(setups.get("tight_weeks") or setups.get("tightWeeks"))
-        if kind == "MS_TREND_LEADERS": return bool(trend.get("is_leader") or trend.get("isLeader"))
-        if kind == "MS_STAGE_2": return stage.get("stage") == 2
-        if kind == "MS_JUST_ENTERED_STAGE_2": return bool(stage.get("just_entered_stage_2") or stage.get("justEnteredStage2"))
         if kind == "MS_RS_LINE_HIGH":
-            is_high = s.get("is_rs_line_52w_high") or s.get("isRsLine52wHigh")
+            is_high = first_value(s, "is_rs_line_52w_high", "isRsLine52wHigh")
             if is_high is None and context.get("rs_ratings_as_of") == as_of:
                 is_high = (context.get("ratings") or context.get("rs_ratings") or {}).get(s.get("symbol", ""), {}).get("is_rs_line_52w_high")
             return None if is_high is None else bool(is_high)
@@ -274,12 +295,9 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
                 diagnostics.add(("rs_rating", "dated_rs_ratings_unavailable"))
                 return None
             return rs_rating >= 80
-        if kind == "MS_EARNINGS_7D":
-            days = earnings.get("days_until_results") if earnings.get("days_until_results") is not None else earnings.get("daysUntilResults")
-            return days is not None and 0 <= days <= 7
-        if kind == "MS_EARNINGS_14D":
-            days = earnings.get("days_until_results") if earnings.get("days_until_results") is not None else earnings.get("daysUntilResults")
-            return days is not None and 0 <= days <= 14
+        if kind in {"MS_EARNINGS_7D", "MS_EARNINGS_14D"}:
+            days = first_value(earnings or {}, "days_until_results", "daysUntilResults")
+            return None if days is None else 0 <= days <= (7 if kind == "MS_EARNINGS_7D" else 14)
         return None
     spec = normalize_condition_spec(node)
     diagnostic_kind = str(node.get("kind") or spec["condition"])
@@ -384,10 +402,12 @@ def stock_row(s, ratings):
     row["trendTemplate"] = s.get("trend_template") or s.get("trendTemplate")
     row["stageStatus"] = s.get("stage_status") or s.get("stageStatus")
     row["upcomingEarnings"] = s.get("upcoming_earnings") or s.get("upcomingEarnings")
-    row["tradedValueMean20dCr"] = s.get("traded_value_mean_20d_cr") or s.get("tradedValueMean20dCr")
-    row["tradedValueMedian20dCr"] = s.get("traded_value_median_20d_cr") or s.get("tradedValueMedian20dCr")
-    row["isLiquidScreen"] = s.get("is_liquid_screen") or s.get("isLiquidScreen")
-    row["isRsLine52wHigh"] = s.get("is_rs_line_52w_high") or s.get("isRsLine52wHigh") or ratings.get(s["symbol"],{}).get("is_rs_line_52w_high", False)
+    row["tradedValueMean20dCr"] = first_value(s, "traded_value_mean_20d_cr", "tradedValueMean20dCr")
+    row["tradedValueMedian20dCr"] = first_value(s, "traded_value_median_20d_cr", "tradedValueMedian20dCr")
+    row["isLiquidScreen"] = first_value(s, "is_liquid_screen", "isLiquidScreen")
+    row["isRsLine52wHigh"] = first_value(s, "is_rs_line_52w_high", "isRsLine52wHigh")
+    if row["isRsLine52wHigh"] is None:
+        row["isRsLine52wHigh"] = ratings.get(s["symbol"], {}).get("is_rs_line_52w_high")
     row["dataCompleteness"] = data_completeness(row)
     return row
 

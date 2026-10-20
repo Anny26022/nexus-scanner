@@ -136,6 +136,12 @@ jobs:
             --sitemap reference/tijori/sitemap.xml \
             --refresh --retry-unmapped
 
+      - name: Sync Dhan Group Stocks incrementally
+        id: dhan_group_sync
+        continue-on-error: true
+        run: |
+          node tools/sync_dhan_group_stocks.mjs
+
       - name: Record Tijori refresh failure
         continue-on-error: true
         if: ${{ always() && steps.tijori_refresh.outcome == 'failure' }}

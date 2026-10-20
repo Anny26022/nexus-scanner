@@ -58,6 +58,7 @@ runs:
         if [ "$WEEKLY_REFRESH" = "true" ]; then
           git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
           git add frontend/public/data/tijori/current.json frontend/public/data/tijori/revisions
+          git add reference/dhan/group-stocks.json
         fi
         # Published frontend data needs a Cloudflare build; do not suppress it with [skip ci].
         git commit -m "$REFRESH_COMMIT_MESSAGE" || echo "No changes to commit"

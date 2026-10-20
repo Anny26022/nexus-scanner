@@ -1141,21 +1141,21 @@ def main():
 
             # Sync preset matches
             it["presetMatches"].update({
-                "lib-ms-vcp": bool(vcp),
-                "lib-ms-darvas": bool(darvas and darvas.get("status") in ("confirmed", "breakout")),
-                "lib-ms-coiled": coiled,
-                "lib-ms-tight-weeks": bool(tight_wks),
-                "lib-ms-stage-2": stage_res.get("stage") == 2,
-                "lib-ms-just-entered-stage-2": stage_res.get("just_entered_stage_2", False),
-                "lib-ms-trend-leaders": trend_res.get("is_leader", False),
-                "lib-ms-pocket-pivot": pocket_pivot,
-                "lib-ms-volume-breakout": vol_breakout,
-                "lib-ms-multi-year-breakout": myb,
-                "lib-ms-rs-leaders-80": bool((comp_rs or 0) >= 80),
-                "lib-ms-rs-line-high": bool(is_rs_high),
+                "lib-ms-vcp": bool(vcp) and is_liquid,
+                "lib-ms-darvas": bool(darvas and darvas.get("status") in ("confirmed", "breakout")) and is_liquid,
+                "lib-ms-coiled": coiled and is_liquid,
+                "lib-ms-tight-weeks": bool(tight_wks) and is_liquid,
+                "lib-ms-stage-2": (stage_res.get("stage") == 2) and is_liquid,
+                "lib-ms-just-entered-stage-2": stage_res.get("just_entered_stage_2", False) and is_liquid,
+                "lib-ms-trend-leaders": trend_res.get("is_leader", False) and is_liquid,
+                "lib-ms-pocket-pivot": pocket_pivot and is_liquid,
+                "lib-ms-volume-breakout": vol_breakout and is_liquid,
+                "lib-ms-multi-year-breakout": myb and is_liquid,
+                "lib-ms-rs-leaders-80": bool((comp_rs or 0) >= 80) and is_liquid,
+                "lib-ms-rs-line-high": bool(is_rs_high) and is_liquid,
                 "lib-ms-liquid-screen": is_liquid,
-                "lib-ms-cup-with-handle": bool(cup),
-                "lib-ms-bull-flag": bool(flag),
+                "lib-ms-cup-with-handle": bool(cup) and is_liquid,
+                "lib-ms-bull-flag": bool(flag) and is_liquid,
             })
 
             # Calculate dataCompleteness

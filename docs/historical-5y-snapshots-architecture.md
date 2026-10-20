@@ -22,36 +22,42 @@ Nexus Scanner supports point-in-time historical screening up to 5 years into the
 
 ---
 
-## 3. Backfill Execution Engine
+## 3. Rebuild and publish historical sessions
 
-The production script [`tools/generate_historical_snapshots.py`](../tools/generate_historical_snapshots.py) reconstructs point-in-time snapshots for any custom date range.
+After merging the screener and backfill changes, run **Backfill Historical Snapshots**
+on `main`. Choose the date range and enable **Upload generated snapshots to Cloudflare R2**.
+The workflow regenerates existing dates using the shared RS/setup calculations, verifies
+R2 readbacks, then commits the updated session pointers for frontend deployment.
 
-### Command Line Usage:
+The command-line equivalent requires the existing R2 credentials:
+
 ```bash
-# Generate snapshots for a specific date range (e.g., Q4 2021)
-python3 tools/generate_historical_snapshots.py \
-  --pipeline-dir "DO NOT DELETE EDL PIPELINE" \
-  --output-dir "outputs/historical_snapshots" \
-  --start-date 2021-10-01 \
-  --end-date 2021-12-31
-
-# Dry run to verify date range without generating files
-python3 tools/generate_historical_snapshots.py --dry-run
+python3 tools/backfill_historical_snapshots.py \
+  --start-date 2021-10-01 --end-date 2021-12-31 --upload-r2
 ```
 
-### Performance & Chunking Guidance:
-- **Cached Execution**: **~0.6 seconds** per trading session once Bhavcopy and Price Band files are cached in `.scanner_cache/historical_downloads/`.
-- **Uncached Network Execution**: **~2.5 seconds** per trading session (due to sequential NSE archive downloads).
-- **Execution Strategy**: Rather than attempting all 1,250 days (~5 years) in a single GitHub Actions run, backfill jobs should be executed in quarterly or yearly chunks (e.g. 60–250 sessions per workflow run). This prevents network rate limiting from NSE archives and keeps individual runs within 3–10 minutes.
-- **Compressed Storage Footprint**: ~400–460 KB per daily snapshot $\times$ 1,250 days $\approx$ **~500 MB** total storage on Cloudflare R2.
+Omit `--upload-r2` to generate preview artifacts without changing R2 or session pointers.
+Add `--dry-run` to inspect the plan without writing files or contacting R2.
+The command reuses `generate_historical_snapshots.py`; it does not maintain a second
+calculation engine or modify frozen backend revisions.
 
----
+Run large date ranges in chunks to stay within the workflow timeout and exchange archive
+rate limits. The restored OHLCV cache must cover the requested sessions; the backfill does
+not invent missing prices, historical universe membership, or financial disclosures.
 
-## 4. Cloudflare R2 Distribution & Serving
+## 4. Cloudflare R2 distribution
 
-Historical snapshots follow the storage hierarchy:
+New historical objects use immutable revision paths:
+
+```text
+r2://nexus-screener-chart-data/snapshots/{YYYY-MM-DD}/{revision}.json.gz
 ```
-r2://nexus-snapshots/history/{YYYY}/{YYYY-MM-DD}.json.gz
-```
-- Snapshots are served via Cloudflare Workers with immutable HTTP `Cache-Control: public, max-age=31536000, immutable` headers.
-- Since past historical snapshots never change, CDN cache hit ratios reach **>99%**, resulting in **~4ms** response times for historical backtests.
+
+Each payload records its RS methodology and coverage limits. The selected historical date
+stays the same when its calculation changes; its revision changes. All uploads must pass
+full-byte readback verification before `sessions.json` is updated. Failed runs leave the
+published pointers unchanged, and objects from earlier revisions remain readable.
+
+The browser requests the selected revision's object. Only a 404 falls back to the legacy
+`snapshots/{date}.json.gz?v={revision}` location; revision/session mismatches remain errors.
+Session pointers revalidate, while revision objects can be cached as immutable.

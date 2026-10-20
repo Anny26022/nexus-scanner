@@ -19,6 +19,7 @@ import json
 import os
 import ssl
 import sys
+import tempfile
 import time
 import urllib.request
 from collections import defaultdict
@@ -40,38 +41,26 @@ PIPELINE_DIR = Path(__file__).resolve().parent.parent / "DO NOT DELETE EDL PIPEL
 if str(PIPELINE_DIR) not in sys.path:
     sys.path.insert(0, str(PIPELINE_DIR))
 
-try:
-    from build_rs_ratings import (
-        compute_stock_returns,
-        calculate_composite_score,
-        percentile_rank,
-        check_rs_line_52w_high,
-        FRONT_WEIGHTED_BENCHMARK_FILENAME,
-    )
-    from build_market_screens import (
-        calculate_atr_series,
-        detect_vcp,
-        detect_darvas,
-        detect_flags,
-        detect_cup_with_handle,
-        detect_tight_weeks,
-        evaluate_minervini_trend,
-        evaluate_weinstein_stage,
-    )
-except ImportError:
-    compute_stock_returns = None
-    calculate_composite_score = None
-    percentile_rank = None
-    check_rs_line_52w_high = None
-    FRONT_WEIGHTED_BENCHMARK_FILENAME = "NIFTY_500.csv"
-    calculate_atr_series = None
-    detect_vcp = None
-    detect_darvas = None
-    detect_flags = None
-    detect_cup_with_handle = None
-    detect_tight_weeks = None
-    evaluate_minervini_trend = None
-    evaluate_weinstein_stage = None
+# Required shared engines: missing dependencies must stop generation rather than
+# silently publish snapshots using a different RS formula or incomplete setups.
+from build_rs_ratings import (
+    compute_stock_returns, calculate_composite_score, percentile_rank,
+    check_rs_line_52w_high, FRONT_WEIGHTED_BENCHMARK_FILENAME,
+)
+from build_market_screens import (
+    calculate_atr_series, detect_vcp, detect_darvas, detect_flags,
+    detect_cup_with_handle, detect_tight_weeks, evaluate_minervini_trend,
+    evaluate_weinstein_stage,
+)
+
+SCREEN_METHODOLOGY_VERSION = "market-strength-v1"
+RELATIVE_STRENGTH_METHODOLOGY = {
+    "scoreFormula": "0.40*R63 + 0.20*R126 + 0.20*R189 + 0.20*R252",
+    "rankFormula": "Cross-sectional percentile rank from 1 to 99",
+    "minimumHistorySessions": 127,
+    "missingLongHorizons": "Missing R189 and R252 independently use R126",
+    "universe": "Historical session price-valid securities from the current surviving master list; dated breadth eligibility unavailable",
+}
 
 def apply_preset_eligibility(item, ms_matches, is_liquid):
     """Keep mandatory MS rules separate from editable, shared eligibility."""
@@ -437,7 +426,7 @@ def compute_ohlcv_fingerprint(pipeline_dir: Path) -> str:
     return hashlib.sha256(json.dumps(entries).encode()).hexdigest()
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description="Generate 5-year historical snapshots.")
     parser.add_argument("--pipeline-dir", type=Path, default=Path("DO NOT DELETE EDL PIPELINE"))
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/historical_snapshots"))
@@ -446,7 +435,7 @@ def main():
     parser.add_argument("--update-sessions-manifest", type=Path, default=None, help="Path to frontend/public/data/sessions.json to register sessions")
     parser.add_argument("--dry-run", action="store_true", help="Print execution plan without writing files")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     pipeline_dir = args.pipeline_dir.resolve()
     output_dir = args.output_dir.resolve()
@@ -573,7 +562,7 @@ def main():
 
     if args.dry_run:
         print("[DRY RUN] Plan verified successfully. Exiting without file generation.")
-        return
+        return []
 
     # Load benchmark for RS Line 52w High
     bench_file = pipeline_dir / "indices_ohlcv_data" / FRONT_WEIGHTED_BENCHMARK_FILENAME
@@ -638,9 +627,9 @@ def main():
                 continue
 
             last_pos = np.where(mask)[0][-1]
-            # Ensure the stock traded on or near this date (within last 5 sessions)
+            # A dated technical snapshot must use a candle from that exact session.
             last_date = s_dates[last_pos].date()
-            if (session_date - last_date).days > 7:
+            if last_date != session_date:
                 continue
 
             # Extract window
@@ -995,36 +984,22 @@ def main():
                 continue
             c_arr = series[0]
             c_list = c_arr.tolist() if isinstance(c_arr, np.ndarray) else list(c_arr)
-            ret_dict = compute_stock_returns(c_list) if compute_stock_returns else None
+            ret_dict = compute_stock_returns(c_list)
             if ret_dict:
-                score = calculate_composite_score(ret_dict) if calculate_composite_score else None
+                score = calculate_composite_score(ret_dict)
                 if score is not None:
                     comp_scores_map[sym] = score
 
-            if compute_stock_returns and len(c_list) >= 147:
+            if len(c_list) >= 148:
                 ret_dict_21 = compute_stock_returns(c_list, offset=21)
                 if ret_dict_21:
-                    score_21 = calculate_composite_score(ret_dict_21) if calculate_composite_score else None
+                    score_21 = calculate_composite_score(ret_dict_21)
                     if score_21 is not None:
                         comp_scores_21_map[sym] = score_21
 
         # Percentile rank (1-99)
-        rs_ranks = percentile_rank(comp_scores_map) if (percentile_rank and comp_scores_map) else {}
-        rs_ranks_21 = percentile_rank(comp_scores_21_map) if (percentile_rank and comp_scores_21_map) else {}
-
-        # Fallback to legacy 4-horizon RS if module was not importable
-        if not rs_ranks:
-            eligible_rs = []
-            for it in snapshot_stocks:
-                m = it.get("metrics") or {}
-                r21, r63, r126, r252 = m.get("return21"), m.get("return63"), m.get("return126"), m.get("return252")
-                if r21 is not None and r63 is not None and r126 is not None and r252 is not None:
-                    comp = 0.40 * r21 + 0.20 * r63 + 0.20 * r126 + 0.20 * r252
-                    eligible_rs.append((it["symbol"], comp))
-            if eligible_rs:
-                eligible_rs.sort(key=lambda x: x[1])
-                n_rs = len(eligible_rs)
-                rs_ranks = {sym: int(round(1.0 + 98.0 * pos / max(1, n_rs - 1))) for pos, (sym, _) in enumerate(eligible_rs)}
+        rs_ranks = percentile_rank(comp_scores_map)
+        rs_ranks_21 = percentile_rank(comp_scores_21_map)
 
         # 2. Enrich with RS ratings, Setup Geometry, Trend Template & Stage Status
         for it in snapshot_stocks:
@@ -1062,7 +1037,7 @@ def main():
 
             # RS line 52w high vs benchmark
             is_rs_high = False
-            if check_rs_line_52w_high and bench_df_session is not None and len(c_arr) >= 20:
+            if bench_df_session is not None and len(c_arr) >= 20:
                 try:
                     stock_df = pd.DataFrame({"Date": [d.date() for d in s_dt], "Close": c_arr})
                     is_rs_high = check_rs_line_52w_high(stock_df, bench_df_session)
@@ -1070,11 +1045,11 @@ def main():
                     is_rs_high = False
 
             # Setups
-            vcp = detect_vcp(h_arr, l_arr, c_arr, v_arr, date_strs) if detect_vcp else None
-            darvas = detect_darvas(h_arr, l_arr, c_arr) if detect_darvas else None
-            flag = detect_flags(h_arr, l_arr, c_arr, v_arr) if detect_flags else None
-            cup = detect_cup_with_handle(h_arr, l_arr, c_arr) if detect_cup_with_handle else None
-            tight_wks = detect_tight_weeks(c_arr, date_strs, s50, comp_rs) if detect_tight_weeks else None
+            vcp = detect_vcp(h_arr, l_arr, c_arr, v_arr, date_strs)
+            darvas = detect_darvas(h_arr, l_arr, c_arr)
+            flag = detect_flags(h_arr, l_arr, c_arr, v_arr)
+            cup = detect_cup_with_handle(h_arr, l_arr, c_arr)
+            tight_wks = detect_tight_weeks(c_arr, date_strs, s50, comp_rs)
 
             # Volume Breakout
             prior_50_high = float(np.max(h_arr[-51:-1])) if len(h_arr) >= 51 else float(np.max(h_arr[:-1]))
@@ -1096,7 +1071,7 @@ def main():
                 prior_win = h_arr[-lookback_myb:-1]
                 ceil_val = float(np.max(prior_win))
                 ceil_idx = int(np.argmax(prior_win))
-                ceil_age = len(prior_win) - 1 - ceil_idx
+                ceil_age = len(prior_win) - ceil_idx
                 if ceil_age >= 250 and cur_c > ceil_val:
                     above_pct = ((cur_c - ceil_val) / ceil_val) * 100.0
                     if above_pct <= 15.0:
@@ -1113,8 +1088,8 @@ def main():
 
             # Coiled
             rng10 = ((float(np.max(h_arr[-10:])) - float(np.min(l_arr[-10:]))) / float(np.max(h_arr[-10:]))) * 100.0 if len(h_arr) >= 10 else 100.0
-            atr10_series = calculate_atr_series(h_arr, l_arr, c_arr, 10) if calculate_atr_series else np.zeros(len(c_arr))
-            atr50_series = calculate_atr_series(h_arr, l_arr, c_arr, 50) if calculate_atr_series else np.zeros(len(c_arr))
+            atr10_series = calculate_atr_series(h_arr, l_arr, c_arr, 10)
+            atr50_series = calculate_atr_series(h_arr, l_arr, c_arr, 50)
             atr_ratio = (atr10_series[-1] / atr50_series[-1]) if (len(c_arr) >= 50 and atr50_series[-1] > 0) else 1.0
             v10 = float(np.mean(v_arr[-10:])) if len(v_arr) >= 10 else float(v_arr[-1])
             v50 = float(np.mean(v_arr[-50:])) if len(v_arr) >= 50 else v10
@@ -1124,8 +1099,8 @@ def main():
             coiled = bool(rng10 <= 10.0 and atr_ratio <= 0.85 and vol_dry_10 < 0.90 and s50 and cur_c > s50 and from_52h <= 15.0 and (comp_rs or 0) >= 60)
 
             # Trend template and stage
-            trend_res = evaluate_minervini_trend(c_arr, h_arr, l_arr, comp_rs) if evaluate_minervini_trend else {"score": 0, "is_leader": False, "checks": {}, "fails": []}
-            stage_res = evaluate_weinstein_stage(c_arr) if evaluate_weinstein_stage else {"stage": 1, "slope_20d": 0.0, "just_entered_stage_2": False}
+            trend_res = evaluate_minervini_trend(c_arr, h_arr, l_arr, comp_rs)
+            stage_res = evaluate_weinstein_stage(c_arr)
 
             # Liquidity
             traded_val_20d = c_arr[-20:] * v_arr[-20:]
@@ -1204,6 +1179,8 @@ def main():
         raw_payload = {
             "schemaVersion": 4,
             "presetRuleMatchesVersion": 1,
+            "screenMethodologyVersion": SCREEN_METHODOLOGY_VERSION,
+            "relativeStrengthMethodology": RELATIVE_STRENGTH_METHODOLOGY,
             "asOfDate": session_str,
             "totalStocks": len(snapshot_stocks),
             "stocks": snapshot_stocks,
@@ -1226,8 +1203,8 @@ def main():
         raw_payload["revision"] = session_hash
 
         out_file = output_dir / f"{session_str}.json.gz"
-        with gzip.open(out_file, "wt", encoding="utf-8") as f:
-            json.dump(raw_payload, f, separators=(",", ":"), ensure_ascii=False)
+        with out_file.open("wb") as raw, gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as compressed:
+            compressed.write(json.dumps(raw_payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
 
         file_size_kb = out_file.stat().st_size / 1024
         print(f"Generated {out_file.name} ({len(snapshot_stocks)} stocks, {file_size_kb:.1f} KB, rev {session_hash[:12]}) in {time.time()-t_session:.2f}s")
@@ -1236,40 +1213,49 @@ def main():
     print(f"\nAll done! Successfully generated {len(generated_sessions)} historical daily snapshots in {output_dir}")
 
     if args.update_sessions_manifest and generated_sessions:
-        manifest_file = args.update_sessions_manifest.resolve()
-        existing = {}
-        if manifest_file.exists():
-            try:
-                with open(manifest_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    for item in data.get("sessions", []):
-                        dt = item.get("date")
-                        if dt:
-                            existing[dt] = item
-            except Exception as e:
-                print(f"Warning: could not read existing sessions manifest: {e}")
+        update_sessions_manifest(args.update_sessions_manifest, generated_sessions)
+    return generated_sessions
 
-        # Add newly generated sessions with their exact revision hashes
-        for s_date, s_hash in generated_sessions:
-            s_str = s_date.strftime("%Y-%m-%d")
-            existing[s_str] = {
-                "date": s_str,
-                "revision": s_hash,
-                "label": s_str,
-                "isHistorical": True,
-            }
 
-        sorted_sessions = sorted(existing.values(), key=lambda x: x["date"], reverse=True)
-        manifest_payload = {
-            "version": 1,
-            "sessions": sorted_sessions,
+def update_sessions_manifest(path: Path, generated_sessions: list[tuple[date, str]]) -> None:
+    """Atomically register verified snapshot revisions while preserving other dates.
+
+    A publisher can call this only after every generated object has been uploaded
+    and verified. Invalid existing manifests fail closed instead of losing history.
+    """
+    manifest_file = Path(path).resolve()
+    payload = {"version": 1, "sessions": []}
+    if manifest_file.exists():
+        payload = json.loads(manifest_file.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or not isinstance(payload.get("sessions"), list):
+            raise ValueError("Invalid sessions manifest")
+    existing = {}
+    for item in payload["sessions"]:
+        if not isinstance(item, dict) or not isinstance(item.get("date"), str):
+            raise ValueError("Invalid session entry in sessions manifest")
+        date.fromisoformat(item["date"])
+        existing[item["date"]] = item
+    for session_date, revision in generated_sessions:
+        if len(revision) != 64 or any(c not in "0123456789abcdef" for c in revision):
+            raise ValueError("Generated session revision must be a SHA-256 digest")
+        session_str = session_date.isoformat()
+        existing[session_str] = {
+            "date": session_str, "revision": revision, "label": session_str, "isHistorical": True,
         }
-        manifest_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(manifest_file, "w", encoding="utf-8") as f:
-            json.dump(manifest_payload, f, indent=2)
-            f.write("\n")
-        print(f"Updated sessions manifest at {manifest_file} ({len(sorted_sessions)} total sessions)")
-
+    payload["sessions"] = sorted(existing.values(), key=lambda item: item["date"], reverse=True)
+    manifest_file.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=manifest_file.parent,
+                                         prefix=f".{manifest_file.name}.", suffix=".tmp", delete=False) as handle:
+            temp_path = Path(handle.name)
+            json.dump(payload, handle, indent=2)
+            handle.write("\n")
+        os.replace(temp_path, manifest_file)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+    print(f"Updated sessions manifest at {manifest_file} ({len(existing)} total sessions)")
 
 
 if __name__ == "__main__":

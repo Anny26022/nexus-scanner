@@ -58,80 +58,37 @@ jobs:
           pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
           pip install boto3 openpyxl
 
-      - name: Generate Historical Snapshots
+      - name: Rebuild and publish historical snapshots
         env:
           START_DATE: ${{ github.event.inputs.start_date }}
           END_DATE: ${{ github.event.inputs.end_date }}
-        run: |
-          python tools/generate_historical_snapshots.py \
-            --pipeline-dir "DO NOT DELETE EDL PIPELINE" \
-            --start-date "$START_DATE" \
-            --end-date "$END_DATE" \
-            --output-dir "outputs/historical_snapshots" \
-            --update-sessions-manifest "frontend/public/data/sessions.json"
-
-      - name: Upload to Cloudflare R2
-        if: ${{ github.event.inputs.upload_r2 == 'true' }}
-        env:
+          UPLOAD_R2: ${{ github.event.inputs.upload_r2 }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: nexus-screener-chart-data
         run: |
-          python - << 'EOF'
-          import os, glob, sys, boto3
-          account_id = os.environ.get('R2_ACCOUNT_ID')
-          access_key = os.environ.get('R2_ACCESS_KEY_ID')
-          secret_key = os.environ.get('R2_SECRET_ACCESS_KEY')
-          bucket_name = os.environ.get('R2_BUCKET', 'nexus-screener-chart-data')
+          args=(--start-date "$START_DATE" --end-date "$END_DATE"
+                --pipeline-dir "DO NOT DELETE EDL PIPELINE"
+                --output-dir "outputs/historical_snapshots"
+                --sessions-manifest "frontend/public/data/sessions.json")
+          if [[ "$UPLOAD_R2" == "true" ]]; then args+=(--upload-r2); fi
+          python tools/backfill_historical_snapshots.py "${args[@]}"
 
-          if not (account_id and access_key and secret_key):
-              sys.exit("Error: R2 credentials (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY) are required when upload_r2 is true.")
-
-          endpoint = f"https://{account_id}.r2.cloudflarestorage.com"
-          s3 = boto3.client(
-              's3',
-              endpoint_url=endpoint,
-              aws_access_key_id=access_key,
-              aws_secret_access_key=secret_key,
-              region_name='auto'
-          )
-
-          snapshots = glob.glob("outputs/historical_snapshots/*.json.gz")
-          if not snapshots:
-              sys.exit("Error: No snapshots found in outputs/historical_snapshots/*.json.gz; nothing to upload.")
-
-          print(f"Uploading and verifying {len(snapshots)} snapshots to R2 bucket '{bucket_name}'...")
-          for filepath in snapshots:
-              filename = os.path.basename(filepath)
-              key = f"snapshots/{filename}"
-              file_size = os.path.getsize(filepath)
-              with open(filepath, 'rb') as f:
-                  s3.upload_fileobj(
-                      f,
-                      bucket_name,
-                      key,
-                      ExtraArgs={'ContentType': 'application/json', 'ContentEncoding': 'gzip'}
-                  )
-              # Verify R2 persistence with head_object readback
-              head = s3.head_object(Bucket=bucket_name, Key=key)
-              if head.get('ContentLength') != file_size:
-                  sys.exit(f"R2 readback verification failed for {key}: expected {file_size} bytes, got {head.get('ContentLength')}")
-              print(f"Uploaded and verified {key} ({file_size} bytes)")
-
-          # Write sentinel file verifying successful upload and readback
-          with open(".upload_verified", "w") as f:
-              f.write(f"Verified upload and readback of {len(snapshots)} snapshots\n")
-          print("R2 snapshot upload and readback complete and verified.")
-          EOF
-
-      - name: Commit Updated Sessions Manifest
-        if: ${{ hashFiles('.upload_verified') != '' }}
+      - name: Commit verified session pointers
+        if: ${{ github.event.inputs.upload_r2 == 'true' }}
+        env:
+          START_DATE: ${{ github.event.inputs.start_date }}
+          END_DATE: ${{ github.event.inputs.end_date }}
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add frontend/public/data/sessions.json
-          git diff --staged --quiet || (git commit -m "chore(data): register backfilled sessions [${{ github.event.inputs.start_date }} to ${{ github.event.inputs.end_date }}]" && git pull --rebase origin main && git push origin HEAD)
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(data): rebuild historical sessions [$START_DATE to $END_DATE]"
+            git pull --rebase origin "$GITHUB_REF_NAME"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
 
       - name: Upload Artifacts Archive
         uses: actions/upload-artifact@v4

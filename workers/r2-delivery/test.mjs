@@ -23,10 +23,12 @@ test('serves published objects with browser-readable metadata', async () => {
 });
 
 test('serves published historical snapshots', async () => {
-  const response = await worker.fetch(new Request('https://data.example.com/snapshots/2021-10-14.json.gz'), env);
-  assert.equal(response.status, 200);
-  assert.equal(await response.text(), 'published bytes');
-  assert.deepEqual(calls.pop(), ['get', 'snapshots/2021-10-14.json.gz']);
+  for (const key of ['snapshots/2021-10-14.json.gz', `snapshots/2021-10-14/${'a'.repeat(64)}.json.gz`]) {
+    const response = await worker.fetch(new Request(`https://data.example.com/${key}`), env);
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), 'published bytes');
+    assert.deepEqual(calls.pop(), ['get', key]);
+  }
 });
 
 test('HEAD returns metadata without a body', async () => {

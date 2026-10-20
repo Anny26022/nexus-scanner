@@ -3,7 +3,7 @@ import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
 import {tradingViewMetrics} from '../data/tradingViewMetrics';
 
-export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
+export interface SnapshotSource { revision: string; url: string; fallbackUrl?: string; sessionDate?: string }
 import type {FilterChoices} from '../types/filterChoices';
 export type {FilterChoices} from '../types/filterChoices';
 export type SnapshotTask =
@@ -18,10 +18,17 @@ export type SnapshotResult =
   | { type:'compare'; result:SymbolComparisonResponse };
 
 async function readSnapshot(source: SnapshotSource, signal?: AbortSignal): Promise<Snapshot> {
-  const response = await fetch(source.url, {cache:'force-cache', signal});
+  let url = source.url;
+  let response = await fetch(url, {cache:'force-cache', signal});
+  // Older published sessions predate immutable snapshot keys. Only absence of
+  // that key permits the legacy lookup; all content still passes validation.
+  if (response.status === 404 && source.fallbackUrl) {
+    url = source.fallbackUrl;
+    response = await fetch(url, {cache:'force-cache', signal});
+  }
   if (!response.ok) throw new Error(`Snapshot request failed (HTTP ${response.status})`);
   let data: Snapshot;
-  if (source.url.split('?')[0].endsWith('.gz')) {
+  if (url.split('?')[0].endsWith('.gz')) {
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
       const stream = new Response(bytes).body!.pipeThrough(new DecompressionStream('gzip'));

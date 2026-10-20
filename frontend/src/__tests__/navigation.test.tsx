@@ -17,6 +17,7 @@ it('preserves the primary navigation and supports persistent appearance choices'
   fireEvent.click(screen.getByRole('button', {name: 'Dark appearance'}));
   expect(document.documentElement.dataset.theme).toBe('dark');
   expect(localStorage.getItem('nexus-scanner.ui.theme.v1')).toBe('"dark"');
+  expect(screen.queryByRole('button', {name: 'Live News'})).not.toBeInTheDocument();
   expect(screen.queryByRole('button', {name: 'System appearance'})).not.toBeInTheDocument();
   expect(screen.queryByText(/A clearer view of/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', {name: 'Light appearance'}));

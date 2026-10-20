@@ -1,1136 +1,996 @@
-import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { screenerApi } from '../api/screenerApi';
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import * as Dialog from "@radix-ui/react-dialog";
 import {
-  RrgQuadrant,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
+  Compass,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
+import { screenerApi } from "../api/screenerApi";
+import type {
   RrgBlockItem,
   RrgNicheItem,
   RrgIpoItem,
-} from '../types/thematicRrg';
-import {
-  Search,
-  ChevronRight,
-  X,
-  ArrowUpDown,
-  Compass,
-  Sparkles,
-} from 'lucide-react';
+  RrgQuadrant,
+  RrgConstituentStock,
+} from "../types/thematicRrg";
 
-interface ThematicRrgTabProps {
-  datasetRevision?: string;
+type Cluster = RrgBlockItem | RrgNicheItem;
+type Item = Cluster | RrgIpoItem;
+type Mode = "blocks" | "niches" | "ipos";
+const quadrants: RrgQuadrant[] = [
+  "Leading",
+  "Improving",
+  "Weakening",
+  "Lagging",
+];
+const colors: Record<RrgQuadrant, string> = {
+  Leading: "#21886b",
+  Improving: "#5484d6",
+  Weakening: "#bc8b2d",
+  Lagging: "#cf6175",
+};
+const isBlock = (item: Item): item is RrgBlockItem => "nicheCount" in item;
+const isIpo = (item: Item): item is RrgIpoItem => "symbol" in item;
+const keyOf = (item: Item) => (isIpo(item) ? item.symbol : item.name);
+const signed = (value: number | null, suffix = "%", digits = 1) =>
+  value == null
+    ? "—"
+    : `${value > 0 ? "+" : ""}${value.toFixed(digits)}${suffix}`;
+const number = (value: number) =>
+  value.toLocaleString("en-IN", { maximumFractionDigits: 1 });
+const tone = (value: number | null) =>
+  value == null || value === 0
+    ? ""
+    : value > 0
+      ? "rrg-positive"
+      : "rrg-negative";
+const setupNames: Record<keyof RrgConstituentStock["setups"], string> = {
+  stage2: "Stage 2",
+  vcp: "VCP",
+  darvas: "Darvas",
+  bullFlag: "Bull flag",
+  cupHandle: "Cup & handle",
+  pocketPivot: "Pocket pivot",
+  coiled: "Coiled",
+  tightWeeks: "Tight weeks",
+};
+const clusterColumns = [
+  ["name", "Theme"],
+  ["quadrant", "Rotation"],
+  ["excessReturn3m", "3M excess"],
+  ["rsMomentum21d", "RS change"],
+  ["medianRs", "Median RS"],
+  ["beatingBenchmarkPct", "Breadth"],
+  ["constituentCount", "Stocks"],
+] as const;
+const ipoColumns = [
+  ["symbol", "Company"],
+  ["quadrant", "Rotation"],
+  ["excessReturn10d", "10D / LTD excess"],
+  ["turnoverIntensity", "Turnover intensity"],
+  ["close", "Price"],
+  ["listingDate", "Listed"],
+  ["gainSinceListingPct", "Listing gain"],
+] as const;
+const extraClusterSort = [
+  ["improvingRsPct", "Improving RS"],
+  ["setupCoveragePct", "Setup coverage"],
+  ["totalTurnover20Cr", "20D turnover"],
+] as const;
+const extraIpoSort = [
+  ["turnoverCr", "Daily turnover"],
+  ["deliveryPct", "Delivery"],
+  ["marketCapCr", "Market cap"],
+] as const;
+function valueOf(item: Item, field: string): number | string | null {
+  if (isIpo(item))
+    return (
+      (item as unknown as Record<string, number | string | null>)[field] ?? null
+    );
+  if (field === "name" || field === "quadrant") return item[field];
+  return (item.metrics as unknown as Record<string, number>)[field] ?? null;
+}
+function compare(
+  a: number | string | null,
+  b: number | string | null,
+  desc: boolean,
+) {
+  if (a == null) return b == null ? 0 : 1;
+  if (b == null) return -1;
+  return (
+    (typeof a === "string" && typeof b === "string"
+      ? a.localeCompare(b)
+      : Number(a) - Number(b)) * (desc ? -1 : 1)
+  );
+}
+function Badge({ quadrant }: { quadrant: RrgQuadrant }) {
+  return (
+    <span className="rrg-badge" style={{ color: colors[quadrant] }}>
+      <i style={{ background: colors[quadrant] }} />
+      {quadrant}
+    </span>
+  );
+}
+function Metric({
+  label,
+  value,
+  positive,
+}: {
+  label: string;
+  value: string;
+  positive?: number | null;
+}) {
+  return (
+    <div className="rrg-metric">
+      <dt>{label}</dt>
+      <dd className={tone(positive ?? null)}>{value}</dd>
+    </div>
+  );
 }
 
-type ViewMode = 'blocks' | 'niches' | 'ipos';
-type SortDirection = 'asc' | 'desc';
+function RotationChart({
+  items,
+  scope,
+  selected,
+  onSelect,
+  weeks,
+  ipo,
+  labels,
+}: {
+  items: Item[];
+  scope: Item[];
+  selected: Item | null;
+  onSelect: (item: Item) => void;
+  weeks: number;
+  ipo: boolean;
+  labels: boolean;
+}) {
+  const [hovered, setHovered] = useState<string | null>(null);
+  const geometry = useMemo(() => {
+    let maxX = 5,
+      maxY = 3;
+    scope.forEach((item) => {
+      [
+        { x: item.x, y: item.y },
+        ...item.trail.filter((p) => ipo || p.week <= weeks),
+      ].forEach((p) => {
+        maxX = Math.max(maxX, Math.abs(p.x));
+        maxY = Math.max(maxY, Math.abs(p.y));
+      });
+    });
+    return { x: Math.ceil(maxX * 1.15), y: Math.ceil(maxY * 1.15) };
+  }, [scope, weeks, ipo]);
+  const px = (x: number) => 454 + (x / geometry.x) * 382;
+  const py = (y: number) => 258 - (y / geometry.y) * 208;
+  const focusKey = hovered ?? (selected ? keyOf(selected) : null);
+  return (
+    <svg
+      className="rrg-plot"
+      viewBox="0 0 900 550"
+      role="group"
+      aria-label={
+        ipo
+          ? "IPO relative return and turnover rotation chart"
+          : "Theme relative return and RS momentum rotation chart"
+      }
+      onMouseLeave={() => setHovered(null)}
+    >
+      <defs>
+        <clipPath id="rrg-plot-clip">
+          <rect x="70" y="48" width="768" height="420" />
+        </clipPath>
+      </defs>
+      {(
+        [
+          { q: "Improving", x: 70, y: 48 },
+          { q: "Leading", x: 454, y: 48 },
+          { q: "Lagging", x: 70, y: 258 },
+          { q: "Weakening", x: 454, y: 258 },
+        ] as const
+      ).map(({ q, x, y }) => (
+        <g key={q}>
+          <rect
+            x={x}
+            y={y}
+            width="384"
+            height="210"
+            fill={colors[q]}
+            opacity=".035"
+          />
+          <text
+            x={q === "Leading" || q === "Weakening" ? 820 : 88}
+            y={y === 48 ? 74 : 449}
+            textAnchor={x === 454 ? "end" : "start"}
+            fill={colors[q]}
+            className="rrg-quadrant-name"
+          >
+            {q}
+          </text>
+        </g>
+      ))}
+      {[-1, -0.5, 0, 0.5, 1].map((n) => (
+        <g key={n}>
+          <line
+            x1={px(n * geometry.x)}
+            x2={px(n * geometry.x)}
+            y1="48"
+            y2="468"
+            className={n === 0 ? "rrg-origin" : "rrg-grid"}
+          />
+          <line
+            y1={py(n * geometry.y)}
+            y2={py(n * geometry.y)}
+            x1="70"
+            x2="838"
+            className={n === 0 ? "rrg-origin" : "rrg-grid"}
+          />
+          <text
+            x={px(n * geometry.x)}
+            y="491"
+            textAnchor="middle"
+            className="rrg-tick"
+          >
+            {signed(n * geometry.x, "%", 0)}
+          </text>
+          <text
+            x="57"
+            y={py(n * geometry.y) + 4}
+            textAnchor="end"
+            className="rrg-tick"
+          >
+            {signed(n * geometry.y, ipo ? "%" : "", 0)}
+          </text>
+        </g>
+      ))}
+      <text x="454" y="528" textAnchor="middle" className="rrg-axis-title">
+        {ipo
+          ? "10-day / listing-to-date excess return"
+          : "3-month median excess return"}{" "}
+        →
+      </text>
+      <text
+        transform="translate(19 258) rotate(-90)"
+        textAnchor="middle"
+        className="rrg-axis-title"
+      >
+        {ipo
+          ? "Turnover intensity vs baseline (%)"
+          : "21-day RS rating change (points)"}{" "}
+        →
+      </text>
+      <g clipPath="url(#rrg-plot-clip)">
+        {items.map((item) => {
+          const active = keyOf(item) === focusKey;
+          const trail = [...item.trail]
+            .filter((p) => ipo || p.week <= weeks)
+            .sort((a, b) => b.week - a.week);
+          return (
+            <polyline
+              key={keyOf(item)}
+              points={trail.map((p) => `${px(p.x)},${py(p.y)}`).join(" ")}
+              fill="none"
+              stroke={colors[item.quadrant]}
+              strokeWidth={active ? 2.3 : 1.2}
+              opacity={active ? 0.85 : focusKey ? 0.08 : 0.2}
+            />
+          );
+        })}
+        {items.map((item) => {
+          const active = keyOf(item) === focusKey;
+          const radius = isIpo(item)
+            ? 5
+            : Math.min(9, 4 + Math.sqrt(item.metrics.constituentCount) * 0.35);
+          return (
+            <g
+              key={keyOf(item)}
+              role="button"
+              tabIndex={0}
+              aria-label={`Inspect ${keyOf(item)}, ${item.quadrant}`}
+              className="rrg-node"
+              onMouseEnter={() => setHovered(keyOf(item))}
+              onFocus={() => setHovered(keyOf(item))}
+              onBlur={() => setHovered(null)}
+              onClick={() => onSelect(item)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(item);
+                }
+              }}
+            >
+              <title>
+                {keyOf(item)} · {item.quadrant} · {signed(item.x)} excess ·{" "}
+                {signed(item.y, ipo ? "%" : " pts")} momentum
+              </title>
+              {active && (
+                <circle
+                  cx={px(item.x)}
+                  cy={py(item.y)}
+                  r={radius + 5}
+                  fill={colors[item.quadrant]}
+                  opacity=".15"
+                />
+              )}
+              <circle
+                cx={px(item.x)}
+                cy={py(item.y)}
+                r={radius + 5}
+                fill="transparent"
+              />
+              <circle
+                cx={px(item.x)}
+                cy={py(item.y)}
+                r={radius}
+                fill={colors[item.quadrant]}
+                className="rrg-node-core"
+                opacity={focusKey && !active ? 0.5 : 0.95}
+              />
+            </g>
+          );
+        })}
+      </g>
+      {items
+        .filter((item) => keyOf(item) === focusKey || (labels && !focusKey))
+        .map((item) => (
+          <text
+            key={keyOf(item)}
+            x={px(item.x) + (item.x > geometry.x * 0.6 ? -13 : 13)}
+            y={py(item.y) - 11}
+            textAnchor={item.x > geometry.x * 0.6 ? "end" : "start"}
+            className="rrg-node-caption"
+          >
+            {keyOf(item)}
+          </text>
+        ))}
+    </svg>
+  );
+}
 
-type ClusterSortField =
-  | 'name'
-  | 'quadrant'
-  | 'excessReturn3m'
-  | 'rsMomentum21d'
-  | 'medianRs'
-  | 'beatingBenchmarkPct'
-  | 'improvingRsPct'
-  | 'setupCoveragePct'
-  | 'totalTurnover20Cr'
-  | 'constituentCount';
-
-type IpoSortField =
-  | 'symbol'
-  | 'quadrant'
-  | 'excessReturn10d'
-  | 'turnoverIntensity'
-  | 'close'
-  | 'listingDate'
-  | 'gainSinceListingPct'
-  | 'turnoverCr'
-  | 'deliveryPct'
-  | 'marketCapCr';
-
-export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision }) => {
-  // Query data using TanStack Query (no useEffect)
+export function ThematicRrgTab({
+  datasetRevision,
+}: {
+  datasetRevision?: string;
+}) {
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['thematicRrg', datasetRevision],
+    queryKey: ["thematicRrg", datasetRevision],
     queryFn: () => screenerApi.getThematicRrg(datasetRevision),
     staleTime: 5 * 60 * 1000,
   });
-
-  // Local UI state
-  const [viewMode, setViewMode] = useState<ViewMode>('blocks');
-  const [selectedQuadrant, setSelectedQuadrant] = useState<RrgQuadrant | 'ALL'>('ALL');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [trailWeeks, setTrailWeeks] = useState<number>(12);
-  const [activeDrillBlock, setActiveDrillBlock] = useState<string | null>(null);
-
-  const [hoveredNode, setHoveredNode] = useState<{
-    item: RrgBlockItem | RrgNicheItem | RrgIpoItem;
-    screenX: number;
-    screenY: number;
-  } | null>(null);
-
-  const [selectedDrawerItem, setSelectedDrawerItem] = useState<RrgBlockItem | RrgNicheItem | null>(null);
-  const [selectedIpoDrawerItem, setSelectedIpoDrawerItem] = useState<RrgIpoItem | null>(null);
-
-  // Sorting state for clusters
-  const [clusterSortField, setClusterSortField] = useState<ClusterSortField>('excessReturn3m');
-  const [clusterSortDir, setClusterSortDir] = useState<SortDirection>('desc');
-
-  // Sorting state for IPOs
-  const [ipoSortField, setIpoSortField] = useState<IpoSortField>('excessReturn10d');
-  const [ipoSortDir, setIpoSortDir] = useState<SortDirection>('desc');
-
-  // Constituent drawer sorting
-  const [stockSortField, setStockSortField] = useState<'symbol' | 'rsRating' | 'excessReturn3m' | 'return1m' | 'marketCapCr' | 'turnover20Cr'>('excessReturn3m');
-  const [stockSortDir, setStockSortDir] = useState<SortDirection>('desc');
-
-  // Active items depending on viewMode and drilldown
-  const activeClusterItems = useMemo<(RrgBlockItem | RrgNicheItem)[]>(() => {
-    if (!data) return [];
-    if (activeDrillBlock) {
-      return data.niches.filter((n) => n.parentBlock === activeDrillBlock);
-    }
-    if (viewMode === 'blocks') {
-      return data.blocks;
-    }
-    if (viewMode === 'niches') {
-      return data.niches;
-    }
-    return [];
-  }, [data, viewMode, activeDrillBlock]);
-
-  const activeIpoItems = useMemo<RrgIpoItem[]>(() => {
-    if (!data || viewMode !== 'ipos') return [];
-    return data.ipoTactical ?? [];
-  }, [data, viewMode]);
-
-  // Filtered items
-  const filteredClusterItems = useMemo(() => {
-    let result = activeClusterItems;
-    if (selectedQuadrant !== 'ALL') {
-      result = result.filter((item) => item.quadrant === selectedQuadrant);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.filter(
+  const [mode, setMode] = useState<Mode>("blocks");
+  const [block, setBlock] = useState<string | null>(null);
+  const [quadrant, setQuadrant] = useState<RrgQuadrant | "ALL">("ALL");
+  const [search, setSearch] = useState("");
+  const [weeks, setWeeks] = useState(12);
+  const [labels, setLabels] = useState(false);
+  const [selection, setSelection] = useState<string | null>(null);
+  const [sort, setSort] = useState("excessReturn3m");
+  const [desc, setDesc] = useState(true);
+  const [dialog, setDialog] = useState(false);
+  const [stockSort, setStockSort] = useState("excessReturn3m");
+  const [stockDesc, setStockDesc] = useState(true);
+  const scope = useMemo<Item[]>(
+    () =>
+      !data
+        ? []
+        : mode === "ipos"
+          ? (data.ipoTactical ?? [])
+          : block
+            ? data.niches.filter((item) => item.parentBlock === block)
+            : data[mode],
+    [data, mode, block],
+  );
+  const items = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return scope
+      .filter(
         (item) =>
-          item.name.toLowerCase().includes(q) ||
-          (item.macro && item.macro.toLowerCase().includes(q)) ||
-          item.constituents.some((s) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
-      );
-    }
-    return result;
-  }, [activeClusterItems, selectedQuadrant, searchQuery]);
-
-  const filteredIpoItems = useMemo(() => {
-    let result = activeIpoItems;
-    if (selectedQuadrant !== 'ALL') {
-      result = result.filter((item) => item.quadrant === selectedQuadrant);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.filter(
-        (item) =>
-          item.symbol.toLowerCase().includes(q) ||
-          item.name.toLowerCase().includes(q) ||
-          (item.theme && item.theme.toLowerCase().includes(q)) ||
-          (item.block && item.block.toLowerCase().includes(q))
-      );
-    }
-    return result;
-  }, [activeIpoItems, selectedQuadrant, searchQuery]);
-
-  // Quadrant counts across current view scope
-  const quadrantCounts = useMemo(() => {
-    const list = viewMode === 'ipos' ? activeIpoItems : activeClusterItems;
-    const counts = { ALL: list.length, Leading: 0, Weakening: 0, Lagging: 0, Improving: 0 };
-    for (const item of list) {
-      if (counts[item.quadrant] !== undefined) {
-        counts[item.quadrant]++;
-      }
-    }
-    return counts;
-  }, [viewMode, activeIpoItems, activeClusterItems]);
-
-  // Sorted items for cluster table
-  const sortedClusterItems = useMemo(() => {
-    const items = [...filteredClusterItems];
-    items.sort((a, b) => {
-      let aVal: number | string = 0;
-      let bVal: number | string = 0;
-
-      switch (clusterSortField) {
-        case 'name':
-          return clusterSortDir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
-        case 'quadrant':
-          return clusterSortDir === 'asc' ? a.quadrant.localeCompare(b.quadrant) : b.quadrant.localeCompare(a.quadrant);
-        case 'excessReturn3m':
-          aVal = a.metrics.excessReturn3m;
-          bVal = b.metrics.excessReturn3m;
-          break;
-        case 'rsMomentum21d':
-          aVal = a.metrics.rsMomentum21d;
-          bVal = b.metrics.rsMomentum21d;
-          break;
-        case 'medianRs':
-          aVal = a.metrics.medianRs;
-          bVal = b.metrics.medianRs;
-          break;
-        case 'beatingBenchmarkPct':
-          aVal = a.metrics.beatingBenchmarkPct;
-          bVal = b.metrics.beatingBenchmarkPct;
-          break;
-        case 'improvingRsPct':
-          aVal = a.metrics.improvingRsPct;
-          bVal = b.metrics.improvingRsPct;
-          break;
-        case 'setupCoveragePct':
-          aVal = a.metrics.setupCoveragePct;
-          bVal = b.metrics.setupCoveragePct;
-          break;
-        case 'totalTurnover20Cr':
-          aVal = a.metrics.totalTurnover20Cr;
-          bVal = b.metrics.totalTurnover20Cr;
-          break;
-        case 'constituentCount':
-          aVal = a.metrics.constituentCount;
-          bVal = b.metrics.constituentCount;
-          break;
-      }
-
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return clusterSortDir === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-      return 0;
-    });
-    return items;
-  }, [filteredClusterItems, clusterSortField, clusterSortDir]);
-
-  // Sorted items for IPO table
-  const sortedIpoItems = useMemo(() => {
-    const items = [...filteredIpoItems];
-    items.sort((a, b) => {
-      let aVal: number | string = 0;
-      let bVal: number | string = 0;
-
-      switch (ipoSortField) {
-        case 'symbol':
-          return ipoSortDir === 'asc' ? a.symbol.localeCompare(b.symbol) : b.symbol.localeCompare(a.symbol);
-        case 'quadrant':
-          return ipoSortDir === 'asc' ? a.quadrant.localeCompare(b.quadrant) : b.quadrant.localeCompare(a.quadrant);
-        case 'excessReturn10d':
-          aVal = a.excessReturn10d;
-          bVal = b.excessReturn10d;
-          break;
-        case 'turnoverIntensity':
-          aVal = a.turnoverIntensity;
-          bVal = b.turnoverIntensity;
-          break;
-        case 'close':
-          aVal = a.close;
-          bVal = b.close;
-          break;
-        case 'listingDate':
-          return ipoSortDir === 'asc' ? a.listingDate.localeCompare(b.listingDate) : b.listingDate.localeCompare(a.listingDate);
-        case 'gainSinceListingPct':
-          aVal = a.gainSinceListingPct;
-          bVal = b.gainSinceListingPct;
-          break;
-        case 'turnoverCr':
-          aVal = a.turnoverCr;
-          bVal = b.turnoverCr;
-          break;
-        case 'deliveryPct':
-          aVal = a.deliveryPct ?? -1;
-          bVal = b.deliveryPct ?? -1;
-          break;
-        case 'marketCapCr':
-          aVal = a.marketCapCr;
-          bVal = b.marketCapCr;
-          break;
-      }
-
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return ipoSortDir === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-      return 0;
-    });
-    return items;
-  }, [filteredIpoItems, ipoSortField, ipoSortDir]);
-
-  // Sorted drawer constituents
-  const sortedDrawerConstituents = useMemo(() => {
-    if (!selectedDrawerItem) return [];
-    const list = [...selectedDrawerItem.constituents];
-    list.sort((a, b) => {
-      let aVal: number | string = 0;
-      let bVal: number | string = 0;
-      switch (stockSortField) {
-        case 'symbol':
-          return stockSortDir === 'asc' ? a.symbol.localeCompare(b.symbol) : b.symbol.localeCompare(a.symbol);
-        case 'rsRating':
-          aVal = a.rsRating ?? -1;
-          bVal = b.rsRating ?? -1;
-          break;
-        case 'excessReturn3m':
-          aVal = a.excessReturn3m ?? -999;
-          bVal = b.excessReturn3m ?? -999;
-          break;
-        case 'return1m':
-          aVal = a.return1m ?? -999;
-          bVal = b.return1m ?? -999;
-          break;
-        case 'marketCapCr':
-          aVal = a.marketCapCr;
-          bVal = b.marketCapCr;
-          break;
-        case 'turnover20Cr':
-          aVal = a.turnover20Cr;
-          bVal = b.turnover20Cr;
-          break;
-      }
-      return stockSortDir === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
-    });
-    return list;
-  }, [selectedDrawerItem, stockSortField, stockSortDir]);
-
-  // SVG Chart Dimensions & Scales
-  const svgWidth = 920;
-  const svgHeight = 560;
-  const padding = { top: 40, right: 60, bottom: 50, left: 60 };
-  const plotWidth = svgWidth - padding.left - padding.right;
-  const plotHeight = svgHeight - padding.top - padding.bottom;
-
-  // Calculate dynamic axis domains centered around (0, 0)
-  const { xMin, xMax, yMin, yMax, zeroX, zeroY } = useMemo(() => {
-    let minX = -15;
-    let maxX = 15;
-    let minY = -15;
-    let maxY = 15;
-
-    const currentList = viewMode === 'ipos' ? activeIpoItems : activeClusterItems;
-
-    for (const item of currentList) {
-      if (item.x < minX) minX = item.x;
-      if (item.x > maxX) maxX = item.x;
-      if (item.y < minY) minY = item.y;
-      if (item.y > maxY) maxY = item.y;
-
-      for (const pt of item.trail) {
-        if (viewMode === 'ipos' || pt.week <= trailWeeks) {
-          if (pt.x < minX) minX = pt.x;
-          if (pt.x > maxX) maxX = pt.x;
-          if (pt.y < minY) minY = pt.y;
-          if (pt.y > maxY) maxY = pt.y;
-        }
-      }
-    }
-
-    const spanX = Math.max(Math.abs(minX), Math.abs(maxX)) * 1.15;
-    const spanY = Math.max(Math.abs(minY), Math.abs(maxY)) * 1.15;
-
-    const finalXMin = -spanX;
-    const finalXMax = spanX;
-    const finalYMin = -spanY;
-    const finalYMax = spanY;
-
-    const zX = padding.left + ((0 - finalXMin) / (finalXMax - finalXMin)) * plotWidth;
-    const zY = padding.top + ((finalYMax - 0) / (finalYMax - finalYMin)) * plotHeight;
-
-    return {
-      xMin: finalXMin,
-      xMax: finalXMax,
-      yMin: finalYMin,
-      yMax: finalYMax,
-      zeroX: zX,
-      zeroY: zY,
-    };
-  }, [viewMode, activeIpoItems, activeClusterItems, trailWeeks, plotWidth, plotHeight, padding.left, padding.top]);
-
-  // Coordinate conversion helpers
-  const getPx = (x: number) => padding.left + ((x - xMin) / (xMax - xMin)) * plotWidth;
-  const getPy = (y: number) => padding.top + ((yMax - y) / (yMax - yMin)) * plotHeight;
-
-  // Grid tick marks
-  const gridTicks = useMemo(() => {
-    const ticksX: number[] = [];
-    const ticksY: number[] = [];
-    const stepX = Math.round((xMax / 4) / 5) * 5 || 5;
-    const stepY = Math.round((yMax / 4) / 5) * 5 || 5;
-
-    for (let x = -Math.floor(xMax / stepX) * stepX; x <= xMax; x += stepX) {
-      if (x !== 0) ticksX.push(x);
-    }
-    for (let y = -Math.floor(yMax / stepY) * stepY; y <= yMax; y += stepY) {
-      if (y !== 0) ticksY.push(y);
-    }
-    return { ticksX, ticksY };
-  }, [xMax, yMax]);
-
-  const getQuadrantColor = (quadrant: RrgQuadrant) => {
-    switch (quadrant) {
-      case 'Leading':
-        return '#10b981';
-      case 'Weakening':
-        return '#f59e0b';
-      case 'Lagging':
-        return '#f43f5e';
-      case 'Improving':
-        return '#3b82f6';
-    }
+          (quadrant === "ALL" || item.quadrant === quadrant) &&
+          (!query ||
+            (isIpo(item)
+              ? [item.symbol, item.name, item.theme, item.block]
+              : [
+                  item.name,
+                  item.macro,
+                  ...item.constituents.flatMap((s) => [s.symbol, s.name]),
+                ]
+            ).some((v) => v?.toLowerCase().includes(query))),
+      )
+      .sort((a, b) => compare(valueOf(a, sort), valueOf(b, sort), desc));
+  }, [scope, quadrant, search, sort, desc]);
+  const selected = items.find((item) => keyOf(item) === selection) ?? null;
+  const stocks = useMemo(
+    () =>
+      selected && !isIpo(selected)
+        ? [...selected.constituents].sort((a, b) =>
+            compare(
+              a[stockSort as keyof RrgConstituentStock] as
+                number | string | null,
+              b[stockSort as keyof RrgConstituentStock] as
+                number | string | null,
+              stockDesc,
+            ),
+          )
+        : [],
+    [selected, stockSort, stockDesc],
+  );
+  const counts = useMemo(
+    () =>
+      Object.fromEntries(
+        quadrants.map((q) => [
+          q,
+          scope.filter((item) => item.quadrant === q).length,
+        ]),
+      ),
+    [scope],
+  );
+  const changeMode = (next: Mode) => {
+    setMode(next);
+    setBlock(null);
+    setSelection(null);
+    setQuadrant("ALL");
+    setSearch("");
+    setSort(next === "ipos" ? "excessReturn10d" : "excessReturn3m");
+    setDesc(true);
+    setDialog(false);
   };
-
-  const handleClusterSort = (field: ClusterSortField) => {
-    if (clusterSortField === field) {
-      setClusterSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setClusterSortField(field);
-      setClusterSortDir('desc');
-    }
+  const drill = (name: string | null) => {
+    setBlock(name);
+    setSelection(null);
+    setSearch("");
+    setQuadrant("ALL");
   };
-
-  const handleIpoSort = (field: IpoSortField) => {
-    if (ipoSortField === field) {
-      setIpoSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setIpoSortField(field);
-      setIpoSortDir('desc');
-    }
+  const sortBy = (field: string) => {
+    setSort(field);
+    setDesc(sort === field ? !desc : true);
   };
-
-  const handleStockSort = (field: typeof stockSortField) => {
-    if (stockSortField === field) {
-      setStockSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setStockSortField(field);
-      setStockSortDir('desc');
-    }
-  };
-
-  if (isLoading) {
+  const columns = mode === "ipos" ? ipoColumns : clusterColumns;
+  if (isLoading)
     return (
-      <div className="rrg-container" role="status">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '300px', color: 'var(--muted)', gap: '0.75rem' }}>
-          <Compass className="animate-spin" size={24} />
-          <span>Generating Relative Rotation Graph across thematic &amp; IPO universe…</span>
-        </div>
+      <div className="rrg-workspace rrg-loading" role="status">
+        <div className="rrg-skeleton rrg-skeleton-title" />
+        <div className="rrg-skeleton rrg-skeleton-chart" />
+        <span>Loading market rotation…</span>
       </div>
     );
-  }
-
-  if (isError || !data) {
+  if (isError || !data)
     return (
-      <div className="rrg-container" role="alert">
-        <div style={{ padding: '2rem', textAlign: 'center', background: 'var(--surface-subtle)', borderRadius: '12px', border: '1px solid var(--line)' }}>
-          <p style={{ color: '#f43f5e', fontWeight: 600, marginBottom: '0.5rem' }}>
-            Failed to load Thematic RRG dataset
-          </p>
-          <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '1rem' }}>
-            {error instanceof Error ? error.message : 'Unknown network or parsing error.'}
-          </p>
-          <button className="button button-ghost" onClick={() => void refetch()}>
-            Retry
-          </button>
-        </div>
+      <div className="rrg-workspace rrg-error">
+        <Compass size={32} />
+        <h2>Rotation data is unavailable</h2>
+        <p>
+          {error instanceof Error
+            ? error.message
+            : "Please try loading the dataset again."}
+        </p>
+        <button className="rrg-primary" onClick={() => void refetch()}>
+          Try again
+        </button>
       </div>
     );
-  }
-
+  const date = new Date(`${data.asOfDate}T00:00:00`).toLocaleDateString(
+    "en-IN",
+    { day: "numeric", month: "short", year: "numeric" },
+  );
   return (
-    <div className="rrg-container">
-      {/* Header */}
-      <header className="rrg-header">
-        <div className="rrg-title-group">
+    <div className="rrg-workspace">
+      <header className="rrg-page-header">
+        <div>
+          <div className="rrg-eyebrow">
+            <Compass size={14} /> MARKET ROTATION
+          </div>
           <h1>
-            <Compass size={22} style={{ color: '#6366f1' }} />
-            {viewMode === 'ipos' ? 'Fast-Cadence Tactical IPO RRG' : 'Thematic Relative Rotation Graph'}
-            <span className="rrg-title-badge">
-              {viewMode === 'ipos' ? '10D Excess · Turnover Intensity' : '3M Excess · 21D RS Momentum'}
-            </span>
+            Thematic RRG<span className="rrg-title-dot">.</span>
           </h1>
-          <div className="rrg-subtitle">
-            Benchmark: <strong>{data.benchmark}</strong> · As of {data.asOfDate} · {data.totalBlocks} Blocks · {data.totalNiches} Niches · {data.ipoTactical?.length ?? 0} Pre-Graduation IPOs (5–64 Sessions)
-          </div>
+          <p>Follow strength. Find what’s moving next.</p>
         </div>
-
-        {/* Top Controls */}
-        <div className="rrg-controls-row">
-          {/* Segmented View Mode Toggle */}
-          <div className="rrg-segmented-control" role="group" aria-label="Granularity">
-            <button
-              type="button"
-              className="rrg-segmented-btn"
-              aria-pressed={viewMode === 'blocks'}
-              onClick={() => {
-                setViewMode('blocks');
-                setActiveDrillBlock(null);
-              }}
-            >
-              Thematic Blocks ({data.blocks.length})
-            </button>
-            <button
-              type="button"
-              className="rrg-segmented-btn"
-              aria-pressed={viewMode === 'niches'}
-              onClick={() => {
-                setViewMode('niches');
-                setActiveDrillBlock(null);
-              }}
-            >
-              All Niches ({data.niches.length})
-            </button>
-            <button
-              type="button"
-              className="rrg-segmented-btn"
-              aria-pressed={viewMode === 'ipos'}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
-              title="Young IPO debutants (< 65 trading sessions) not yet eligible for main 3M RRG"
-              onClick={() => {
-                setViewMode('ipos');
-                setActiveDrillBlock(null);
-              }}
-            >
-              <Sparkles size={12} style={{ color: '#f59e0b' }} />
-              Tactical IPO RRG ({data.ipoTactical?.length ?? 0})
-            </button>
-          </div>
-
-          {/* Breadcrumbs if drilled into a block */}
-          {activeDrillBlock && (
-            <nav className="rrg-breadcrumbs" aria-label="Drilldown Breadcrumbs">
-              <button
-                type="button"
-                className="rrg-breadcrumb-btn"
-                onClick={() => {
-                  setActiveDrillBlock(null);
-                  setViewMode('blocks');
-                }}
-              >
-                All Blocks
-              </button>
-              <ChevronRight size={14} />
-              <strong style={{ color: 'var(--text)' }}>{activeDrillBlock}</strong>
-              <button
-                type="button"
-                style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', marginLeft: '0.35rem' }}
-                onClick={() => {
-                  setActiveDrillBlock(null);
-                  setViewMode('blocks');
-                }}
-                title="Back to all blocks"
-              >
-                <X size={14} />
-              </button>
-            </nav>
-          )}
-
-          {/* Trail Length Selector (in block/niche mode) */}
-          {viewMode !== 'ipos' && (
-            <div className="rrg-segmented-control" role="group" aria-label="Trail Length">
-              {[4, 8, 12].map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  className="rrg-segmented-btn"
-                  aria-pressed={trailWeeks === w}
-                  onClick={() => setTrailWeeks(w)}
-                >
-                  {w}W Trail
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="rrg-dataset">
+          <span className="rrg-date-dot" />
+          As of {date}
+          <span>Relative to {data.benchmark}</span>
         </div>
       </header>
-
-      {/* Filter Row: Quadrant chips + Search bar */}
-      <div className="rrg-controls-row">
-        <div className="rrg-filter-chips">
-          <button
-            type="button"
-            className={`rrg-chip ${selectedQuadrant === 'ALL' ? 'active' : ''}`}
-            onClick={() => setSelectedQuadrant('ALL')}
-          >
-            All ({quadrantCounts.ALL})
-          </button>
-          <button
-            type="button"
-            className={`rrg-chip chip-leading ${selectedQuadrant === 'Leading' ? 'active' : ''}`}
-            onClick={() => setSelectedQuadrant(selectedQuadrant === 'Leading' ? 'ALL' : 'Leading')}
-          >
-            <span className="rrg-dot dot-leading" />
-            Leading ({quadrantCounts.Leading})
-          </button>
-          <button
-            type="button"
-            className={`rrg-chip chip-weakening ${selectedQuadrant === 'Weakening' ? 'active' : ''}`}
-            onClick={() => setSelectedQuadrant(selectedQuadrant === 'Weakening' ? 'ALL' : 'Weakening')}
-          >
-            <span className="rrg-dot dot-weakening" />
-            Weakening ({quadrantCounts.Weakening})
-          </button>
-          <button
-            type="button"
-            className={`rrg-chip chip-lagging ${selectedQuadrant === 'Lagging' ? 'active' : ''}`}
-            onClick={() => setSelectedQuadrant(selectedQuadrant === 'Lagging' ? 'ALL' : 'Lagging')}
-          >
-            <span className="rrg-dot dot-lagging" />
-            Lagging ({quadrantCounts.Lagging})
-          </button>
-          <button
-            type="button"
-            className={`rrg-chip chip-improving ${selectedQuadrant === 'Improving' ? 'active' : ''}`}
-            onClick={() => setSelectedQuadrant(selectedQuadrant === 'Improving' ? 'ALL' : 'Improving')}
-          >
-            <span className="rrg-dot dot-improving" />
-            Improving ({quadrantCounts.Improving})
-          </button>
+      <div className="rrg-navigation">
+        <div className="rrg-segments" aria-label="Rotation universe">
+          {(["blocks", "niches", "ipos"] as const).map((m) => (
+            <button
+              key={m}
+              aria-pressed={mode === m}
+              onClick={() => changeMode(m)}
+            >
+              {m === "blocks"
+                ? "Thematic blocks"
+                : m === "niches"
+                  ? "All niches"
+                  : "Tactical IPOs"}
+              <span>
+                {m === "blocks"
+                  ? data.totalBlocks
+                  : m === "niches"
+                    ? data.totalNiches
+                    : (data.ipoTactical ?? []).length}
+              </span>
+            </button>
+          ))}
         </div>
-
-        {/* Real-time search */}
-        <div className="rrg-search-wrapper">
-          <Search size={14} className="rrg-search-icon" />
-          <input
-            type="text"
-            className="rrg-search-input"
-            placeholder={
-              viewMode === 'ipos'
-                ? 'Filter IPO debutants, themes...'
-                : activeDrillBlock
-                ? `Filter niches in ${activeDrillBlock}…`
-                : 'Filter blocks or niches…'
-            }
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+        <span className="rrg-universe-note">
+          {mode === "ipos"
+            ? "5–64 trading sessions · daily trails"
+            : `${number(data.totalEquities)} equities · weekly trails`}
+        </span>
       </div>
-
-      {/* Relative Rotation Graph Canvas */}
-      <div className="rrg-canvas-card">
-        <svg
-          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          className="rrg-svg-root"
-          onMouseLeave={() => setHoveredNode(null)}
-        >
-          {/* Quadrant background fills */}
-          <rect
-            x={padding.left}
-            y={padding.top}
-            width={Math.max(0, zeroX - padding.left)}
-            height={Math.max(0, zeroY - padding.top)}
-            className="rrg-quadrant-bg-improving"
-          />
-          <rect
-            x={zeroX}
-            y={padding.top}
-            width={Math.max(0, svgWidth - padding.right - zeroX)}
-            height={Math.max(0, zeroY - padding.top)}
-            className="rrg-quadrant-bg-leading"
-          />
-          <rect
-            x={padding.left}
-            y={zeroY}
-            width={Math.max(0, zeroX - padding.left)}
-            height={Math.max(0, svgHeight - padding.bottom - zeroY)}
-            className="rrg-quadrant-bg-lagging"
-          />
-          <rect
-            x={zeroX}
-            y={zeroY}
-            width={Math.max(0, svgWidth - padding.right - zeroX)}
-            height={Math.max(0, svgHeight - padding.bottom - zeroY)}
-            className="rrg-quadrant-bg-weakening"
-          />
-
-          {/* Quadrant Watermark Labels */}
-          <text x={padding.left + 14} y={padding.top + 22} className="rrg-quadrant-label" style={{ fill: '#3b82f6' }}>
-            {viewMode === 'ipos' ? 'IMPROVING · Dip Buying / Surge Inflow' : 'IMPROVING · Underperforming / RS Strengthening'}
-          </text>
-          <text
-            x={svgWidth - padding.right - 14}
-            y={padding.top + 22}
-            className="rrg-quadrant-label"
-            textAnchor="end"
-            style={{ fill: '#10b981' }}
-          >
-            {viewMode === 'ipos' ? 'LEADING · Outperforming / High Volume Inflow' : 'LEADING · Outperforming / RS Strengthening'}
-          </text>
-          <text
-            x={padding.left + 14}
-            y={svgHeight - padding.bottom - 14}
-            className="rrg-quadrant-label"
-            style={{ fill: '#f43f5e' }}
-          >
-            {viewMode === 'ipos' ? 'LAGGING · Underperforming / Subsiding Volume' : 'LAGGING · Underperforming / RS Weakening'}
-          </text>
-          <text
-            x={svgWidth - padding.right - 14}
-            y={svgHeight - padding.bottom - 14}
-            className="rrg-quadrant-label"
-            textAnchor="end"
-            style={{ fill: '#f59e0b' }}
-          >
-            {viewMode === 'ipos' ? 'WEAKENING · Outperforming / Volume Cooling' : 'WEAKENING · Outperforming / RS Weakening'}
-          </text>
-
-          {/* Grid Lines */}
-          {gridTicks.ticksX.map((tick) => {
-            const px = getPx(tick);
-            return (
-              <g key={`gx-${tick}`}>
-                <line x1={px} y1={padding.top} x2={px} y2={svgHeight - padding.bottom} className="rrg-grid-line" />
-                <text x={px} y={svgHeight - padding.bottom + 16} textAnchor="middle" className="rrg-axis-text">
-                  {tick > 0 ? `+${tick}%` : `${tick}%`}
-                </text>
-              </g>
-            );
-          })}
-
-          {gridTicks.ticksY.map((tick) => {
-            const py = getPy(tick);
-            return (
-              <g key={`gy-${tick}`}>
-                <line x1={padding.left} y1={py} x2={svgWidth - padding.right} y2={py} className="rrg-grid-line" />
-                <text x={padding.left - 8} y={py + 3} textAnchor="end" className="rrg-axis-text">
-                  {tick > 0 ? `+${tick}%` : `${tick}%`}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Center Crosshairs (0, 0) */}
-          <line x1={zeroX} y1={padding.top} x2={zeroX} y2={svgHeight - padding.bottom} className="rrg-axis-center" />
-          <line x1={padding.left} y1={zeroY} x2={svgWidth - padding.right} y2={zeroY} className="rrg-axis-center" />
-
-          <text x={zeroX} y={svgHeight - padding.bottom + 16} textAnchor="middle" className="rrg-axis-text" style={{ fontWeight: 700 }}>
-            0%
-          </text>
-          <text x={padding.left - 8} y={zeroY + 3} textAnchor="end" className="rrg-axis-text" style={{ fontWeight: 700 }}>
-            0%
-          </text>
-
-          {/* Dynamic Axis Titles */}
-          <text
-            x={svgWidth / 2}
-            y={svgHeight - 12}
-            textAnchor="middle"
-            className="rrg-axis-text"
-            style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em' }}
-          >
-            {viewMode === 'ipos'
-              ? '← UNDERPERFORMING BENCHMARK | 10-DAY / LTD EXCESS RETURN VS NIFTY 500 (%) | OUTPERFORMING BENCHMARK →'
-              : '← UNDERPERFORMING BENCHMARK | 3-MONTH MEDIAN EXCESS RETURN VS NIFTY 500 (%) | OUTPERFORMING BENCHMARK →'}
-          </text>
-          <text
-            x={-(svgHeight / 2)}
-            y={16}
-            transform="rotate(-90)"
-            textAnchor="middle"
-            className="rrg-axis-text"
-            style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.04em' }}
-          >
-            {viewMode === 'ipos'
-              ? '← SUBSIDING VOLUME | 5-DAY TURNOVER INTENSITY VS LISTING AVERAGE (%) | SURGING VOLUME ACCUMULATION →'
-              : '← WEAKENING RS MOMENTUM | 1-MONTH CHANGE IN RS RATING (21-DAY Δ) | STRENGTHENING RS MOMENTUM →'}
-          </text>
-
-          {/* Trails */}
-          {(viewMode === 'ipos' ? filteredIpoItems : filteredClusterItems).map((item) => {
-            const isHovered =
-              hoveredNode?.item.name === item.name ||
-              ('symbol' in item && hoveredNode?.item && 'symbol' in hoveredNode.item && hoveredNode.item.symbol === item.symbol);
-            const itemColor = getQuadrantColor(item.quadrant);
-
-            const relevantTrail = item.trail
-              .filter((pt) => viewMode === 'ipos' || pt.week <= trailWeeks)
-              .sort((a, b) => b.week - a.week);
-
-            if (relevantTrail.length < 2) return null;
-
-            const pathPoints = relevantTrail.map((pt) => `${getPx(pt.x)},${getPy(pt.y)}`).join(' ');
-
-            return (
-              <g key={`trail-${item.name}`}>
-                <polyline
-                  points={pathPoints}
-                  fill="none"
-                  stroke={itemColor}
-                  className="rrg-trail-line"
-                  style={{
-                    opacity: isHovered ? 0.95 : 0.35,
-                    strokeWidth: isHovered ? 2.5 : 1.25,
-                  }}
-                />
-              </g>
-            );
-          })}
-
-          {/* Nodes at T0 */}
-          {(viewMode === 'ipos' ? filteredIpoItems : filteredClusterItems).map((item) => {
-            const cx = getPx(item.x);
-            const cy = getPy(item.y);
-            const isIpo = 'listingDate' in item;
-            const radius = isIpo ? 7 : Math.min(13, Math.max(6, 5 + Math.sqrt((item as RrgBlockItem).metrics?.constituentCount ?? 1) * 1.2));
-            const isHovered =
-              hoveredNode?.item.name === item.name ||
-              (isIpo && hoveredNode?.item && 'symbol' in hoveredNode.item && hoveredNode.item.symbol === (item as RrgIpoItem).symbol);
-            const itemColor = getQuadrantColor(item.quadrant);
-
-            return (
-              <g
-                key={`node-${item.name}`}
-                className="rrg-node-point"
-                onMouseEnter={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setHoveredNode({
-                    item,
-                    screenX: rect.right + 12,
-                    screenY: rect.top - 20,
-                  });
-                }}
-                onClick={() => {
-                  if (isIpo) {
-                    setSelectedIpoDrawerItem(item as RrgIpoItem);
-                  } else if (viewMode === 'blocks' && !activeDrillBlock) {
-                    setActiveDrillBlock(item.name);
-                  } else {
-                    setSelectedDrawerItem(item as RrgBlockItem | RrgNicheItem);
-                  }
-                }}
-              >
-                {isHovered && (
-                  <circle
-                    cx={cx}
-                    cy={cy}
-                    r={radius + 5}
-                    fill="none"
-                    stroke={itemColor}
-                    strokeWidth={2}
-                    opacity={0.6}
-                  />
-                )}
-
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={radius}
-                  fill={itemColor}
-                  stroke="#ffffff"
-                  strokeWidth={1.5}
-                  style={{ color: itemColor }}
-                />
-
-                {(viewMode === 'blocks' || isHovered || Math.abs(item.x) > 20 || (isIpo && Math.abs(item.y) > 40)) && (
-                  <text
-                    x={cx + radius + 4}
-                    y={cy + 3}
-                    className="rrg-node-label"
-                    style={{
-                      opacity: isHovered ? 1 : 0.8,
-                      fontWeight: isHovered ? 700 : 500,
-                    }}
-                  >
-                    {isIpo ? (item as RrgIpoItem).symbol : item.name}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </svg>
-
-        {/* Floating Tooltip */}
-        {hoveredNode && (
-          <div
-            className="rrg-tooltip"
-            style={{
-              left: Math.min(window.innerWidth - 260, Math.max(20, hoveredNode.screenX)),
-              top: Math.max(100, hoveredNode.screenY),
-              position: 'fixed',
-            }}
-          >
-            <div className="rrg-tooltip-header">
-              <span className="rrg-tooltip-title">
-                {'symbol' in hoveredNode.item ? (hoveredNode.item as RrgIpoItem).symbol : hoveredNode.item.name}
-              </span>
-              <span className={`rrg-tooltip-badge badge-${hoveredNode.item.quadrant.toLowerCase()}`}>
-                {hoveredNode.item.quadrant}
-              </span>
+      <div className="rrg-workbench">
+        <section className="rrg-chart-panel" aria-label="Rotation map">
+          <div className="rrg-panel-heading">
+            <div>
+              {block ? (
+                <button className="rrg-back" onClick={() => drill(null)}>
+                  <ChevronLeft size={14} />
+                  All blocks
+                </button>
+              ) : (
+                <span className="rrg-eyebrow">ROTATION MAP</span>
+              )}
+              <h2>
+                {block ??
+                  (mode === "blocks"
+                    ? "The bigger picture"
+                    : mode === "niches"
+                      ? "Inside the themes"
+                      : "The next generation")}
+              </h2>
             </div>
-
-            {'listingDate' in hoveredNode.item ? (
-              // IPO Tooltip fields
-              <>
-                <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginBottom: '0.35rem' }}>
-                  {(hoveredNode.item as RrgIpoItem).name}
+            <div className="rrg-chart-options">
+              <label className="rrg-label-toggle">
+                <input
+                  type="checkbox"
+                  checked={labels}
+                  onChange={(e) => setLabels(e.target.checked)}
+                />
+                Labels
+              </label>
+              {mode !== "ipos" && (
+                <div className="rrg-trail-control" aria-label="Trail length">
+                  {[4, 8, 12].map((w) => (
+                    <button
+                      key={w}
+                      aria-pressed={weeks === w}
+                      onClick={() => setWeeks(w)}
+                    >
+                      {w}W
+                    </button>
+                  ))}
                 </div>
-                <div className="rrg-tooltip-row">
-                  <span>10D / LTD Excess:</span>
-                  <span className={`rrg-tooltip-val ${hoveredNode.item.x >= 0 ? 'val-positive' : 'val-negative'}`}>
-                    {hoveredNode.item.x > 0 ? `+${hoveredNode.item.x.toFixed(2)}` : hoveredNode.item.x.toFixed(2)}%
-                  </span>
-                </div>
-                <div className="rrg-tooltip-row">
-                  <span>Turnover Intensity:</span>
-                  <span className={`rrg-tooltip-val ${hoveredNode.item.y >= 0 ? 'val-positive' : 'val-negative'}`}>
-                    {hoveredNode.item.y > 0 ? `+${hoveredNode.item.y.toFixed(1)}` : hoveredNode.item.y.toFixed(1)}%
-                  </span>
-                </div>
-                <div className="rrg-tooltip-row">
-                  <span>Listed:</span>
-                  <span className="rrg-tooltip-val">
-                    {(hoveredNode.item as RrgIpoItem).listingDate} ({(hoveredNode.item as RrgIpoItem).listingAgeDays}d)
-                  </span>
-                </div>
-                <div className="rrg-tooltip-row">
-                  <span>Current Close:</span>
-                  <span className="rrg-tooltip-val">₹{(hoveredNode.item as RrgIpoItem).close.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="rrg-tooltip-row">
-                  <span>Turnover (Day):</span>
-                  <span className="rrg-tooltip-val">₹{(hoveredNode.item as RrgIpoItem).turnoverCr} Cr</span>
-                </div>
-                <div className="rrg-tooltip-row">
-                  <span>Theme:</span>
-                  <span className="rrg-tooltip-val">{(hoveredNode.item as RrgIpoItem).theme ?? '—'}</span>
-                </div>
-              </>
-            ) : (
-              // Cluster Tooltip fields
-              <>
-                <div className="rrg-tooltip-row">
-                  <span>3M Excess Return:</span>
-                  <span className={`rrg-tooltip-val ${hoveredNode.item.x >= 0 ? 'val-positive' : 'val-negative'}`}>
-                    {hoveredNode.item.x > 0 ? `+${hoveredNode.item.x.toFixed(2)}` : hoveredNode.item.x.toFixed(2)}%
-                  </span>
-                </div>
-                <div className="rrg-tooltip-row">
-                  <span>1M RS Momentum (21D):</span>
-                  <span className={`rrg-tooltip-val ${hoveredNode.item.y >= 0 ? 'val-positive' : 'val-negative'}`}>
-                    {hoveredNode.item.y > 0 ? `+${hoveredNode.item.y.toFixed(1)}` : hoveredNode.item.y.toFixed(1)}
-                  </span>
-                </div>
-                <div className="rrg-tooltip-row">
-                  <span>Median RS Rating:</span>
-                  <span className="rrg-tooltip-val">{(hoveredNode.item as RrgBlockItem).metrics.medianRs}</span>
-                </div>
-                <div className="rrg-tooltip-row">
-                  <span>Breadth (% &gt; N500):</span>
-                  <span className="rrg-tooltip-val">{(hoveredNode.item as RrgBlockItem).metrics.beatingBenchmarkPct}%</span>
-                </div>
-                <div className="rrg-tooltip-row">
-                  <span>Setup Coverage:</span>
-                  <span className="rrg-tooltip-val">{(hoveredNode.item as RrgBlockItem).metrics.setupCoveragePct}%</span>
-                </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* Ranked Table Area */}
-      <section className="rrg-table-card">
-        <div className="rrg-table-header-row">
-          <div className="rrg-table-title">
-            {viewMode === 'ipos'
-              ? `Tactical IPO Debutants Ranked (${sortedIpoItems.length})`
-              : activeDrillBlock
-              ? `Niches in ${activeDrillBlock} (${sortedClusterItems.length})`
-              : viewMode === 'blocks'
-              ? `Thematic Blocks Ranked (${sortedClusterItems.length})`
-              : `Thematic Niches Ranked (${sortedClusterItems.length})`}
+          <div className="rrg-quadrant-filters" aria-label="Filter by rotation">
+            <button
+              aria-pressed={quadrant === "ALL"}
+              onClick={() => setQuadrant("ALL")}
+            >
+              All<span>{scope.length}</span>
+            </button>
+            {quadrants.map((q) => (
+              <button
+                key={q}
+                aria-pressed={quadrant === q}
+                onClick={() => setQuadrant(quadrant === q ? "ALL" : q)}
+              >
+                <i style={{ background: colors[q] }} />
+                {q}
+                <span>{counts[q]}</span>
+              </button>
+            ))}
           </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-            {viewMode === 'ipos'
-              ? 'Click any debutant to view performance breakdown'
-              : 'Click any row to view constituents & setups'}
-          </span>
-        </div>
-
-        <div className="rrg-table-wrapper">
-          {viewMode === 'ipos' ? (
-            // Tactical IPO Table
-            <table className="rrg-table">
-              <thead>
-                <tr>
-                  <th onClick={() => handleIpoSort('symbol')}>
-                    Symbol <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleIpoSort('quadrant')}>
-                    Quadrant <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleIpoSort('excessReturn10d')}>
-                    10D / LTD Excess <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleIpoSort('turnoverIntensity')}>
-                    Turnover Intensity <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleIpoSort('close')}>
-                    Close (1D) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleIpoSort('listingDate')}>
-                    Listed (Age) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleIpoSort('gainSinceListingPct')}>
-                    Listing Gain <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleIpoSort('turnoverCr')}>
-                    Turnover (₹Cr) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleIpoSort('deliveryPct')}>
-                    Delivery % <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th>Primary Theme</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedIpoItems.map((stock) => (
-                  <tr key={stock.symbol} onClick={() => setSelectedIpoDrawerItem(stock)}>
-                    <td>
-                      <div>
-                        <strong style={{ color: 'var(--text)' }}>{stock.symbol}</strong>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--muted)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {stock.name}
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`rrg-tooltip-badge badge-${stock.quadrant.toLowerCase()}`}>
-                        {stock.quadrant}
-                      </span>
-                    </td>
-                    <td className={`val-mono ${stock.excessReturn10d >= 0 ? 'val-positive' : 'val-negative'}`}>
-                      {stock.excessReturn10d > 0 ? `+${stock.excessReturn10d.toFixed(2)}` : stock.excessReturn10d.toFixed(2)}%
-                    </td>
-                    <td className={`val-mono ${stock.turnoverIntensity >= 0 ? 'val-positive' : 'val-negative'}`}>
-                      {stock.turnoverIntensity > 0 ? `+${stock.turnoverIntensity.toFixed(1)}` : stock.turnoverIntensity.toFixed(1)}%
-                    </td>
-                    <td className="val-mono">
-                      ₹{stock.close.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                      <div className={stock.changePct >= 0 ? 'val-positive' : 'val-negative'} style={{ fontSize: '0.7rem' }}>
-                        {stock.changePct > 0 ? `+${stock.changePct.toFixed(2)}%` : `${stock.changePct.toFixed(2)}%`}
-                      </div>
-                    </td>
-                    <td className="val-mono" style={{ fontSize: '0.75rem' }}>
-                      {stock.listingDate}
-                      <span style={{ color: 'var(--muted)', marginLeft: 4 }}>({stock.listingAgeDays}d)</span>
-                    </td>
-                    <td className={`val-mono ${stock.gainSinceListingPct >= 0 ? 'val-positive' : 'val-negative'}`}>
-                      {stock.gainSinceListingPct > 0 ? `+${stock.gainSinceListingPct.toFixed(1)}%` : `${stock.gainSinceListingPct.toFixed(1)}%`}
-                    </td>
-                    <td className="val-mono">
-                      {Math.round(stock.turnoverCr).toLocaleString('en-IN')}
-                    </td>
-                    <td className="val-mono">
-                      {stock.deliveryPct !== null ? `${stock.deliveryPct.toFixed(1)}%` : '—'}
-                    </td>
-                    <td style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                      {stock.theme ?? '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            // Cluster Table (Blocks & Niches)
-            <table className="rrg-table">
-              <thead>
-                <tr>
-                  <th onClick={() => handleClusterSort('name')}>
-                    Name <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleClusterSort('quadrant')}>
-                    Quadrant <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleClusterSort('excessReturn3m')}>
-                    3M Excess vs N500 <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleClusterSort('rsMomentum21d')}>
-                    RS Mom (21D Δ) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleClusterSort('medianRs')}>
-                    Median RS <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleClusterSort('beatingBenchmarkPct')}>
-                    % &gt; N500 <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleClusterSort('improvingRsPct')}>
-                    % RS Imp <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleClusterSort('setupCoveragePct')}>
-                    Setup Cov <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleClusterSort('totalTurnover20Cr')}>
-                    20D TO (₹ Cr) <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th onClick={() => handleClusterSort('constituentCount')}>
-                    Stocks <ArrowUpDown size={11} style={{ display: 'inline', marginLeft: 2 }} />
-                  </th>
-                  <th>Top Contributors</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedClusterItems.map((item) => (
-                  <tr
-                    key={item.name}
-                    onClick={() => {
-                      if (viewMode === 'blocks' && !activeDrillBlock) {
-                        setActiveDrillBlock(item.name);
-                      } else {
-                        setSelectedDrawerItem(item);
-                      }
-                    }}
+          <RotationChart
+            items={items}
+            scope={scope}
+            selected={selected}
+            onSelect={(item) => setSelection(keyOf(item))}
+            weeks={weeks}
+            ipo={mode === "ipos"}
+            labels={labels}
+          />
+          <div className="rrg-chart-foot">
+            <span>
+              <span className="rrg-trail-sample" />
+              {mode === "ipos" ? "Daily" : `${weeks}-week`} history
+            </span>
+            <span>
+              {items.length} of {scope.length} visible · Select a dot to explore
+            </span>
+          </div>
+        </section>
+        <aside
+          className="rrg-inspector"
+          aria-label="Rotation details"
+          
+        >
+          {selected ? (
+            <>
+              <div className="rrg-inspector-top">
+                <span className="rrg-eyebrow">
+                  {isIpo(selected) ? "IPO SPOTLIGHT" : "THEME SPOTLIGHT"}
+                </span>
+                <button
+                  className="rrg-icon-button"
+                  aria-label="Clear selection"
+                  onClick={() => setSelection(null)}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <Badge quadrant={selected.quadrant} />
+              <h2>{keyOf(selected)}</h2>
+              <p className="rrg-inspector-subtitle">
+                {isIpo(selected)
+                  ? selected.name
+                  : (selected.parentBlock ??
+                    selected.macro ??
+                    "Thematic block")}
+              </p>
+              <dl className="rrg-hero-metrics">
+                <Metric
+                  label={
+                    isIpo(selected) ? "10D / LTD excess" : "3M excess return"
+                  }
+                  value={signed(selected.x)}
+                  positive={selected.x}
+                />
+                <Metric
+                  label={
+                    isIpo(selected) ? "Turnover intensity" : "21D RS change"
+                  }
+                  value={signed(selected.y, isIpo(selected) ? "%" : " pts")}
+                  positive={selected.y}
+                />
+              </dl>
+              {isIpo(selected) ? (
+                <dl className="rrg-detail-list">
+                  <Metric label="Price" value={`₹${number(selected.close)}`} />
+                  <Metric
+                    label="Daily change"
+                    value={signed(selected.changePct)}
+                    positive={selected.changePct}
+                  />
+                  <Metric
+                    label="Since listing"
+                    value={signed(selected.gainSinceListingPct)}
+                    positive={selected.gainSinceListingPct}
+                  />
+                  <Metric label="Listed" value={selected.listingDate} />
+                  <Metric
+                    label="Trading sessions"
+                    value={number(selected.sessions)}
+                  />
+                  <Metric
+                    label="Listing age"
+                    value={`${selected.listingAgeDays} days`}
+                  />
+                  <Metric
+                    label="Daily turnover"
+                    value={`₹${number(selected.turnoverCr)} Cr`}
+                  />
+                  <Metric
+                    label="Delivery"
+                    value={
+                      selected.deliveryPct == null
+                        ? "—"
+                        : `${number(selected.deliveryPct)}%`
+                    }
+                  />
+                  <Metric
+                    label="Market cap"
+                    value={`₹${number(selected.marketCapCr)} Cr`}
+                  />
+                  <Metric label="Theme" value={selected.theme ?? "—"} />
+                  <Metric label="Block" value={selected.block ?? "—"} />
+                </dl>
+              ) : (
+                <>
+                  <div className="rrg-breadth">
+                    <div>
+                      <span>Beating benchmark</span>
+                      <strong>
+                        {number(selected.metrics.beatingBenchmarkPct)}%
+                      </strong>
+                    </div>
+                    <meter
+                      min="0"
+                      max="100"
+                      value={selected.metrics.beatingBenchmarkPct}
+                      aria-label="Stocks beating benchmark"
+                    />
+                  </div>
+                  <dl className="rrg-detail-list">
+                    <Metric
+                      label="Median RS"
+                      value={number(selected.metrics.medianRs)}
+                    />
+                    <Metric
+                      label="Improving RS"
+                      value={`${number(selected.metrics.improvingRsPct)}%`}
+                    />
+                    <Metric
+                      label="Setup coverage"
+                      value={`${number(selected.metrics.setupCoveragePct)}%`}
+                    />
+                    <Metric
+                      label="1M / 6M excess"
+                      value={`${signed(selected.metrics.excessReturn1m)} / ${signed(selected.metrics.excessReturn6m)}`}
+                    />
+                    <Metric
+                      label="20D turnover"
+                      value={`₹${number(selected.metrics.totalTurnover20Cr)} Cr`}
+                    />
+                    <Metric
+                      label="Top 3 concentration"
+                      value={`${number(selected.metrics.concentrationTop3Pct)}%`}
+                    />
+                  </dl>
+                  <div className="rrg-contributors">
+                    <span className="rrg-eyebrow">TOP CONTRIBUTORS</span>
+                    <p>
+                      {selected.metrics.topContributors.join(" · ") ||
+                        "No contributors available"}
+                    </p>
+                  </div>
+                  <button
+                    className="rrg-primary"
+                    onClick={() => setDialog(true)}
                   >
-                    <td style={{ fontWeight: 600 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span className={`rrg-dot dot-${item.quadrant.toLowerCase()}`} />
-                        <span>{item.name}</span>
-                      </div>
+                    Explore {selected.metrics.constituentCount} stocks
+                    <ArrowUpRight size={15} />
+                  </button>
+                  {isBlock(selected) && (
+                    <button
+                      className="rrg-secondary-button"
+                      onClick={() => drill(selected.name)}
+                    >
+                      View {selected.nicheCount} niches
+                      <ChevronRight size={15} />
+                    </button>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="rrg-eyebrow">MARKET PULSE</span>
+              <h2>
+                Where strength
+                <br />
+                is shifting.
+              </h2>
+              <p className="rrg-inspector-subtitle">
+                Explore the map to trace rotation across{" "}
+                {block
+                  ? "this block’s niches"
+                  : mode === "ipos"
+                    ? "recent listings"
+                    : "the market"}
+                .
+              </p>
+              <div className="rrg-pulse">
+                {quadrants.map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => setQuadrant(quadrant === q ? "ALL" : q)}
+                    aria-pressed={quadrant === q}
+                  >
+                    <Badge quadrant={q} />
+                    <strong>{counts[q]}</strong>
+                    <span className="rrg-pulse-track">
+                      <i
+                        style={{
+                          width: `${scope.length ? (counts[q] / scope.length) * 100 : 0}%`,
+                          background: colors[q],
+                        }}
+                      />
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="rrg-map-guide">
+                <SlidersHorizontal size={17} />
+                <h3>Read the rotation</h3>
+                <p>
+                  Right means outperforming {data.benchmark}. Up means{" "}
+                  {mode === "ipos"
+                    ? "rising turnover intensity"
+                    : "strengthening relative strength"}
+                  .
+                </p>
+                <p>Select a theme in the map or rankings to see its story.</p>
+              </div>
+            </>
+          )}
+        </aside>
+      </div>
+      <section className="rrg-rankings">
+        <div className="rrg-ranking-heading">
+          <div>
+            <span className="rrg-eyebrow">THE DETAILS</span>
+            <h2>
+              {block
+                ? "Niche rankings"
+                : mode === "blocks"
+                  ? "Block rankings"
+                  : mode === "niches"
+                    ? "Niche rankings"
+                    : "IPO rankings"}
+              <span>{items.length}</span>
+            </h2>
+          </div>
+          <div className="rrg-table-controls">
+            <label className="rrg-search">
+              <Search size={15} />
+              <input
+                aria-label="Search rotation universe"
+                placeholder={
+                  mode === "ipos"
+                    ? "Search company or theme…"
+                    : "Search theme or stock…"
+                }
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button aria-label="Clear search" onClick={() => setSearch("")}>
+                  <X size={14} />
+                </button>
+              )}
+            </label>
+            <label className="rrg-sort-select">
+              <SlidersHorizontal size={14} />
+              <select
+                aria-label="Sort rankings"
+                value={sort}
+                onChange={(e) => sortBy(e.target.value)}
+              >
+                {[
+                  ...columns,
+                  ...(mode === "ipos" ? extraIpoSort : extraClusterSort),
+                ].map(([field, label]) => (
+                  <option key={field} value={field}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="rrg-icon-button"
+              aria-label={desc ? "Sort ascending" : "Sort descending"}
+              onClick={() => setDesc(!desc)}
+            >
+              {desc ? <ArrowDown size={16} /> : <ArrowUp size={16} />}
+            </button>
+          </div>
+        </div>
+        {items.length === 0 ? (
+          <div className="rrg-empty">
+            <Search size={25} />
+            <h3>No matches in this view</h3>
+            <p>Try another theme, stock, or rotation filter.</p>
+            <button
+              className="rrg-secondary-button"
+              onClick={() => {
+                setSearch("");
+                setQuadrant("ALL");
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <div className="rrg-table-scroll">
+            <table className="rrg-ranking-table">
+              <thead>
+                <tr>
+                  <th className="rrg-row-number">#</th>
+                  {columns.map(([field, label]) => (
+                    <th
+                      key={field}
+                      aria-sort={
+                        sort === field
+                          ? desc
+                            ? "descending"
+                            : "ascending"
+                          : "none"
+                      }
+                    >
+                      <button onClick={() => sortBy(field)}>
+                        {label}
+                        {sort === field &&
+                          (desc ? (
+                            <ArrowDown size={12} />
+                          ) : (
+                            <ArrowUp size={12} />
+                          ))}
+                      </button>
+                    </th>
+                  ))}
+                  <th>
+                    <span className="rrg-sr-only">Explore</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => (
+                  <tr
+                    key={keyOf(item)}
+                    data-selected={selected === item}
+                    onClick={() => setSelection(keyOf(item))}
+                  >
+                    <td className="rrg-row-number">
+                      {String(index + 1).padStart(2, "0")}
                     </td>
                     <td>
-                      <span className={`rrg-tooltip-badge badge-${item.quadrant.toLowerCase()}`}>
-                        {item.quadrant}
-                      </span>
-                    </td>
-                    <td className={`val-mono ${item.metrics.excessReturn3m >= 0 ? 'val-positive' : 'val-negative'}`}>
-                      {item.metrics.excessReturn3m > 0 ? `+${item.metrics.excessReturn3m.toFixed(2)}` : item.metrics.excessReturn3m.toFixed(2)}%
-                    </td>
-                    <td className={`val-mono ${item.metrics.rsMomentum21d >= 0 ? 'val-positive' : 'val-negative'}`}>
-                      {item.metrics.rsMomentum21d > 0 ? `+${item.metrics.rsMomentum21d.toFixed(1)}` : item.metrics.rsMomentum21d.toFixed(1)}
-                    </td>
-                    <td className="val-mono">{item.metrics.medianRs}</td>
-                    <td className="val-mono">{item.metrics.beatingBenchmarkPct}%</td>
-                    <td className="val-mono">{item.metrics.improvingRsPct}%</td>
-                    <td className="val-mono">{item.metrics.setupCoveragePct}%</td>
-                    <td className="val-mono">{Math.round(item.metrics.totalTurnover20Cr).toLocaleString('en-IN')}</td>
-                    <td className="val-mono">{item.metrics.constituentCount}</td>
-                    <td style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                      {item.metrics.topContributors?.slice(0, 3).join(', ')}
+                      <button
+                        className="rrg-row-name"
+                        onClick={() => setSelection(keyOf(item))}
+                      >
+                        {keyOf(item)}
+                      </button>
+                      <small>
+                        {isIpo(item)
+                          ? item.name
+                          : `${item.metrics.constituentCount} stocks${isBlock(item) ? ` · ${item.nicheCount} niches` : item.parentBlock ? ` · ${item.parentBlock}` : ""}`}
+                      </small>
                     </td>
                     <td>
-                      {viewMode === 'blocks' && !activeDrillBlock ? (
+                      <Badge quadrant={item.quadrant} />
+                    </td>
+                    <td className={tone(item.x)}>{signed(item.x)}</td>
+                    <td className={tone(item.y)}>
+                      {signed(item.y, isIpo(item) ? "%" : " pts")}
+                    </td>
+                    {isIpo(item) ? (
+                      <>
+                        <td>₹{number(item.close)}</td>
+                        <td>{item.listingDate}</td>
+                        <td className={tone(item.gainSinceListingPct)}>
+                          {signed(item.gainSinceListingPct)}
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td>{number(item.metrics.medianRs)}</td>
+                        <td>{number(item.metrics.beatingBenchmarkPct)}%</td>
+                        <td>{item.metrics.constituentCount}</td>
+                      </>
+                    )}
+                    <td>
+                      {!isIpo(item) && isBlock(item) ? (
                         <button
-                          type="button"
-                          className="button button-ghost"
-                          style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                          className="rrg-table-action"
+                          aria-label={`View niches in ${item.name}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setActiveDrillBlock(item.name);
+                            drill(item.name);
                           }}
                         >
-                          Niches →
+                          Niches
+                          <ChevronRight size={14} />
                         </button>
                       ) : (
                         <button
-                          type="button"
-                          className="button button-ghost"
-                          style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
+                          className="rrg-table-action"
+                          aria-label={`Inspect ${keyOf(item)}`}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedDrawerItem(item);
+                            setSelection(keyOf(item));
                           }}
                         >
-                          Stocks →
+                          Inspect
+                          <ArrowUpRight size={14} />
                         </button>
                       )}
                     </td>
@@ -1138,194 +998,131 @@ export const ThematicRrgTab: React.FC<ThematicRrgTabProps> = ({ datasetRevision 
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
+          </div>
+        )}
       </section>
-
-      {/* Cluster Constituent Stock Slide-Over Drawer */}
-      {selectedDrawerItem && (
-        <>
-          <div className="rrg-drawer-backdrop" onClick={() => setSelectedDrawerItem(null)} />
-          <aside className="rrg-drawer" aria-label="Constituents Drawer">
-            <header className="rrg-drawer-header">
+      <footer className="rrg-page-foot">
+        {data.benchmark} benchmark<span>Snapshot · {date}</span>
+      </footer>
+      <Dialog.Root
+        open={dialog && !!selected && !isIpo(selected)}
+        onOpenChange={setDialog}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="rrg-dialog-overlay" />
+          <Dialog.Content className="rrg-dialog">
+            <header>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span className={`rrg-dot dot-${selectedDrawerItem.quadrant.toLowerCase()}`} />
-                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>
-                    {selectedDrawerItem.name}
-                  </h2>
-                  <span className={`rrg-tooltip-badge badge-${selectedDrawerItem.quadrant.toLowerCase()}`}>
-                    {selectedDrawerItem.quadrant}
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.25rem' }}>
-                  {selectedDrawerItem.parentBlock ? `Parent Block: ${selectedDrawerItem.parentBlock} · ` : ''}
-                  {selectedDrawerItem.metrics.constituentCount} Equities · Median RS: {selectedDrawerItem.metrics.medianRs} · 3M Excess: {selectedDrawerItem.metrics.excessReturn3m > 0 ? `+${selectedDrawerItem.metrics.excessReturn3m.toFixed(2)}` : selectedDrawerItem.metrics.excessReturn3m.toFixed(2)}%
-                </div>
+                <span className="rrg-eyebrow">CONSTITUENTS</span>
+                <Dialog.Title>{selected?.name}</Dialog.Title>
+                <Dialog.Description>
+                  {stocks.length} stocks · Price, relative strength, and active
+                  setups
+                </Dialog.Description>
               </div>
-              <button
-                type="button"
-                className="rrg-drawer-close"
-                onClick={() => setSelectedDrawerItem(null)}
-                aria-label="Close constituents drawer"
+              <Dialog.Close
+                className="rrg-icon-button"
+                aria-label="Close constituents"
               >
                 <X size={20} />
-              </button>
+              </Dialog.Close>
             </header>
-
-            <div className="rrg-drawer-body">
-              <div className="rrg-table-wrapper">
-                <table className="rrg-table">
-                  <thead>
-                    <tr>
-                      <th onClick={() => handleStockSort('symbol')}>Symbol</th>
-                      <th>Close (1D)</th>
-                      <th onClick={() => handleStockSort('rsRating')}>RS (21D Δ)</th>
-                      <th onClick={() => handleStockSort('return1m')}>1M Ret</th>
-                      <th onClick={() => handleStockSort('excessReturn3m')}>3M Excess</th>
-                      <th>Active Setups</th>
-                      <th onClick={() => handleStockSort('turnover20Cr')}>20D TO (₹Cr)</th>
-                      <th onClick={() => handleStockSort('marketCapCr')}>MCap (₹Cr)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedDrawerConstituents.map((stock) => (
-                      <tr key={stock.symbol}>
-                        <td>
-                          <div>
-                            <strong style={{ color: 'var(--text)' }}>{stock.symbol}</strong>
-                            <div style={{ fontSize: '0.7rem', color: 'var(--muted)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {stock.name}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="val-mono">
-                          ₹{stock.close.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                          <div className={stock.changePct >= 0 ? 'val-positive' : 'val-negative'} style={{ fontSize: '0.7rem' }}>
-                            {stock.changePct > 0 ? `+${stock.changePct.toFixed(2)}%` : `${stock.changePct.toFixed(2)}%`}
-                          </div>
-                        </td>
-                        <td className="val-mono">
-                          <span style={{ fontWeight: 700 }}>{stock.rsRating ?? '—'}</span>
-                          {stock.rsChange21d !== null && (
-                            <span className={stock.rsChange21d >= 0 ? 'val-positive' : 'val-negative'} style={{ fontSize: '0.7rem', marginLeft: '0.35rem' }}>
-                              {stock.rsChange21d > 0 ? `(+${stock.rsChange21d})` : `(${stock.rsChange21d})`}
-                            </span>
-                          )}
-                        </td>
-                        <td className={`val-mono ${stock.return1m !== null && stock.return1m >= 0 ? 'val-positive' : 'val-negative'}`}>
-                          {stock.return1m !== null ? (stock.return1m > 0 ? `+${stock.return1m.toFixed(1)}%` : `${stock.return1m.toFixed(1)}%`) : '—'}
-                        </td>
-                        <td className={`val-mono ${stock.excessReturn3m !== null && stock.excessReturn3m >= 0 ? 'val-positive' : 'val-negative'}`}>
-                          {stock.excessReturn3m !== null ? (stock.excessReturn3m > 0 ? `+${stock.excessReturn3m.toFixed(1)}%` : `${stock.excessReturn3m.toFixed(1)}%`) : '—'}
-                        </td>
-                        <td>
-                          <div className="rrg-setup-pills">
-                            {stock.setups.stage2 && <span className="rrg-setup-pill active">Stage 2</span>}
-                            {stock.setups.vcp && <span className="rrg-setup-pill active">VCP</span>}
-                            {stock.setups.darvas && <span className="rrg-setup-pill active">Darvas</span>}
-                            {stock.setups.bullFlag && <span className="rrg-setup-pill active">Bull Flag</span>}
-                            {stock.setups.cupHandle && <span className="rrg-setup-pill active">Cup&amp;H</span>}
-                            {stock.setups.pocketPivot && <span className="rrg-setup-pill active">Pocket</span>}
-                            {stock.setups.coiled && <span className="rrg-setup-pill active">Coiled</span>}
-                            {stock.setups.tightWeeks && <span className="rrg-setup-pill active">Tight</span>}
-                            {!Object.values(stock.setups).some(Boolean) && (
-                              <span className="rrg-setup-pill" style={{ opacity: 0.5 }}>None</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="val-mono">{Math.round(stock.turnover20Cr).toLocaleString('en-IN')}</td>
-                        <td className="val-mono">{Math.round(stock.marketCapCr).toLocaleString('en-IN')}</td>
-                      </tr>
+            <div className="rrg-table-scroll">
+              <table className="rrg-ranking-table">
+                <thead>
+                  <tr>
+                    {[
+                      ["symbol", "Stock"],
+                      ["close", "Price / 1D"],
+                      ["rsRating", "RS / 21D Δ"],
+                      ["return1m", "1M return"],
+                      ["excessReturn3m", "3M excess"],
+                      ["turnover20Cr", "20D turnover ₹Cr"],
+                      ["marketCapCr", "Market cap ₹Cr"],
+                    ].map(([field, label]) => (
+                      <th
+                        key={field}
+                        aria-sort={
+                          stockSort === field
+                            ? stockDesc
+                              ? "descending"
+                              : "ascending"
+                            : "none"
+                        }
+                      >
+                        <button
+                          onClick={() => {
+                            setStockSort(field);
+                            setStockDesc(
+                              stockSort === field ? !stockDesc : true,
+                            );
+                          }}
+                        >
+                          {label}
+                          {stockSort === field &&
+                            (stockDesc ? (
+                              <ArrowDown size={12} />
+                            ) : (
+                              <ArrowUp size={12} />
+                            ))}
+                        </button>
+                      </th>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                    <th>Active setups</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stocks.map((stock) => (
+                    <tr key={stock.symbol}>
+                      <td>
+                        <strong>{stock.symbol}</strong>
+                        <small>{stock.name}</small>
+                      </td>
+                      <td>
+                        ₹{number(stock.close)}
+                        <small className={tone(stock.changePct)}>
+                          {signed(stock.changePct)}
+                        </small>
+                      </td>
+                      <td>
+                        {stock.rsRating ?? "—"}
+                        <small className={tone(stock.rsChange21d)}>
+                          {signed(stock.rsChange21d, " pts")}
+                        </small>
+                      </td>
+                      <td className={tone(stock.return1m)}>
+                        {signed(stock.return1m)}
+                      </td>
+                      <td className={tone(stock.excessReturn3m)}>
+                        {signed(stock.excessReturn3m)}
+                      </td>
+                      <td>{number(stock.turnover20Cr)}</td>
+                      <td>{number(stock.marketCapCr)}</td>
+                      <td>
+                        <div className="rrg-setups">
+                          {(
+                            Object.keys(
+                              setupNames,
+                            ) as (keyof typeof setupNames)[]
+                          )
+                            .filter((key) => stock.setups[key])
+                            .map((key) => (
+                              <span key={key}>{setupNames[key]}</span>
+                            ))}
+                          {!Object.values(stock.setups).some(Boolean) && (
+                            <span>—</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </aside>
-        </>
-      )}
-
-      {/* Individual Tactical IPO Detail Drawer */}
-      {selectedIpoDrawerItem && (
-        <>
-          <div className="rrg-drawer-backdrop" onClick={() => setSelectedIpoDrawerItem(null)} />
-          <aside className="rrg-drawer" aria-label="IPO Details Drawer">
-            <header className="rrg-drawer-header">
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span className={`rrg-dot dot-${selectedIpoDrawerItem.quadrant.toLowerCase()}`} />
-                  <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>
-                    {selectedIpoDrawerItem.symbol} — {selectedIpoDrawerItem.name}
-                  </h2>
-                  <span className={`rrg-tooltip-badge badge-${selectedIpoDrawerItem.quadrant.toLowerCase()}`}>
-                    {selectedIpoDrawerItem.quadrant}
-                  </span>
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.25rem' }}>
-                  Listed {selectedIpoDrawerItem.listingDate} ({selectedIpoDrawerItem.listingAgeDays} days ago) · {selectedIpoDrawerItem.sessions} Trading Sessions · Primary Theme: {selectedIpoDrawerItem.theme ?? '—'}
-                </div>
-              </div>
-              <button
-                type="button"
-                className="rrg-drawer-close"
-                onClick={() => setSelectedIpoDrawerItem(null)}
-                aria-label="Close IPO drawer"
-              >
-                <X size={20} />
-              </button>
-            </header>
-
-            <div className="rrg-drawer-body">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>10D / LTD Excess vs N500</div>
-                  <div className={`val-mono ${selectedIpoDrawerItem.excessReturn10d >= 0 ? 'val-positive' : 'val-negative'}`} style={{ fontSize: '1.25rem', marginTop: '0.25rem' }}>
-                    {selectedIpoDrawerItem.excessReturn10d > 0 ? `+${selectedIpoDrawerItem.excessReturn10d.toFixed(2)}%` : `${selectedIpoDrawerItem.excessReturn10d.toFixed(2)}%`}
-                  </div>
-                </div>
-
-                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Turnover Intensity vs Baseline</div>
-                  <div className={`val-mono ${selectedIpoDrawerItem.turnoverIntensity >= 0 ? 'val-positive' : 'val-negative'}`} style={{ fontSize: '1.25rem', marginTop: '0.25rem' }}>
-                    {selectedIpoDrawerItem.turnoverIntensity > 0 ? `+${selectedIpoDrawerItem.turnoverIntensity.toFixed(1)}%` : `${selectedIpoDrawerItem.turnoverIntensity.toFixed(1)}%`}
-                  </div>
-                </div>
-
-                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Gain Since Listing</div>
-                  <div className={`val-mono ${selectedIpoDrawerItem.gainSinceListingPct >= 0 ? 'val-positive' : 'val-negative'}`} style={{ fontSize: '1.25rem', marginTop: '0.25rem' }}>
-                    {selectedIpoDrawerItem.gainSinceListingPct > 0 ? `+${selectedIpoDrawerItem.gainSinceListingPct.toFixed(1)}%` : `${selectedIpoDrawerItem.gainSinceListingPct.toFixed(1)}%`}
-                  </div>
-                </div>
-
-                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Current Price</div>
-                  <div className="val-mono" style={{ fontSize: '1.25rem', marginTop: '0.25rem', fontWeight: 700 }}>
-                    ₹{selectedIpoDrawerItem.close.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                  </div>
-                </div>
-
-                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Daily Turnover</div>
-                  <div className="val-mono" style={{ fontSize: '1.25rem', marginTop: '0.25rem', fontWeight: 700 }}>
-                    ₹{selectedIpoDrawerItem.turnoverCr} Cr
-                  </div>
-                </div>
-
-                <div style={{ padding: '0.75rem', background: 'var(--surface-subtle)', borderRadius: '8px', border: '1px solid var(--line)' }}>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Delivery %</div>
-                  <div className="val-mono" style={{ fontSize: '1.25rem', marginTop: '0.25rem', fontWeight: 700 }}>
-                    {selectedIpoDrawerItem.deliveryPct !== null ? `${selectedIpoDrawerItem.deliveryPct.toFixed(1)}%` : '—'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </aside>
-        </>
-      )}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
-};
-
+}
 export default ThematicRrgTab;

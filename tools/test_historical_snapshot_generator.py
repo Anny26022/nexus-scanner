@@ -219,6 +219,31 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
         self.assertIn("21-day SEBI LODR", coverage["shareholding"])
         self.assertIn("consecutive quarters", coverage["financials"])
 
+    def test_rs_and_setup_geometry_enrichment_parity(self):
+        # Verify that compute_stock_returns and calculate_composite_score are imported and working
+        self.assertIsNotNone(gen.compute_stock_returns)
+        self.assertIsNotNone(gen.calculate_composite_score)
+        self.assertIsNotNone(gen.percentile_rank)
+
+        # 200 closes (young stock listing >= 126 sessions)
+        c_list = [100.0 * (1.001 ** i) for i in range(200)]
+        returns = gen.compute_stock_returns(c_list)
+        self.assertIsNotNone(returns)
+        self.assertIn("three_month", returns)
+        self.assertIn("six_month", returns)
+        # Young stock fallback: nine_month and twelve_month should fill from six_month in calculate_composite_score
+        score = gen.calculate_composite_score(returns)
+        self.assertIsNotNone(score)
+
+        # Verify detect functions are bound
+        self.assertIsNotNone(gen.detect_vcp)
+        self.assertIsNotNone(gen.detect_darvas)
+        self.assertIsNotNone(gen.detect_flags)
+        self.assertIsNotNone(gen.detect_cup_with_handle)
+        self.assertIsNotNone(gen.detect_tight_weeks)
+        self.assertIsNotNone(gen.evaluate_minervini_trend)
+        self.assertIsNotNone(gen.evaluate_weinstein_stage)
+
 
 if __name__ == "__main__":
     unittest.main()

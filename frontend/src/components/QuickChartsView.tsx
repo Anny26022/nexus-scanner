@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChartNoAxesCombined, Maximize2, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
+import { ChartNoAxesCombined, Maximize2, RefreshCw } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { validateCandles, type Candle } from '../chart/model';
 import { ChartEngine } from '../chart/ChartEngine';
@@ -42,7 +42,6 @@ function MiniChart({ candles, symbol }: { candles: readonly Candle[]; symbol: st
   // selects the initial viewport; slicing here would make older sessions
   // impossible to reach by panning left.
   const displayCandles = candles;
-  const engineRef = useRef<ChartEngine | null>(null);
   const attach = useCallback((host: HTMLDivElement | null) => {
     if (!host || !displayCandles.length) return;
     const scene = loadScene('0');
@@ -62,17 +61,9 @@ function MiniChart({ candles, symbol }: { candles: readonly Candle[]; symbol: st
       zoomEnabled: true,
     });
     engine.setRange(6);
-    engineRef.current = engine;
-    return () => { engine.destroy(); if (engineRef.current === engine) engineRef.current = null; };
+    return () => engine.destroy();
   }, [displayCandles, symbol]);
-  return <div className="quick-chart-interactive">
-    <div ref={attach} className="quick-chart-canvas" aria-label="Interactive chart using the saved chart style, indicators, and drawings. Drag to pan, scroll or pinch to zoom, and select drawings to edit them." role="group" tabIndex={0} />
-    <div className="quick-chart-controls" role="group" aria-label={`${symbol} chart controls`}>
-      <button type="button" aria-label="Zoom in" title="Zoom in" onPointerDown={event => event.stopPropagation()} onClick={() => engineRef.current?.zoom(.8)}><Plus size={13}/></button>
-      <button type="button" aria-label="Zoom out" title="Zoom out" onPointerDown={event => event.stopPropagation()} onClick={() => engineRef.current?.zoom(1.25)}><Minus size={13}/></button>
-      <button type="button" aria-label="Reset chart view" title="Reset chart view" onPointerDown={event => event.stopPropagation()} onClick={() => engineRef.current?.reset()}><RotateCcw size={12}/></button>
-    </div>
-  </div>;
+  return <div ref={attach} className="quick-chart-canvas" aria-label="Interactive chart using the saved chart style, indicators, and drawings. Drag to pan, scroll or pinch to zoom, and select drawings to edit them." role="group" tabIndex={0} />;
 }
 
 function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRow; revision?: string; rank: number; onOpenFullChart?: (symbol: string, revision?: string) => void }) {

@@ -205,7 +205,7 @@ it('connects native panes, styles, settings, date navigation and release-pinned 
   fireEvent.change(screen.getByLabelText('Go to date'),{target:{value:'2026-10-01'}});
   fireEvent.click(screen.getByRole('button',{name:'Go'}));
   expect(engine.goToDate).toHaveBeenCalledWith('2026-10-01');
-  fireEvent.click(screen.getByRole('button',{name:'Recenter'}));expect(engine.latest).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button',{name:'Latest'}));expect(engine.latest).toHaveBeenCalledOnce();
   expect(ChartEngine).toHaveBeenCalledTimes(1);
 });
 it('keeps an explicitly saved volume overlay preference',async()=>{

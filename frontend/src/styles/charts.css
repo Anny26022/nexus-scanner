@@ -576,8 +576,8 @@
 .chart-ranges button { min-width: 28px; height: 22px; min-height: 22px; padding: 0 6px; border: 0; border-radius: 3px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.12s; }
 .chart-ranges button:hover { color: var(--text); background: var(--surface-hover); }
 .chart-ranges button[aria-pressed="true"] { color: var(--accent); font-weight: 650; background: transparent; }
-.chart-latest { height: 22px; padding: 0 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--secondary); font-size: 11px; font-weight: 650; cursor: pointer; transition: all 0.12s; margin-left: 4px; }
-.chart-latest:hover { border-color: var(--line-strong); color: var(--accent); background: var(--surface-hover); }
+.chart-latest { height: 22px; padding: 0 8px; border: 0; border-radius: 3px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.12s; margin-left: 4px; }
+.chart-latest:hover { color: var(--accent); background: var(--surface-hover); }
 .chart-range-select { display: none; }
 .chart-status { display: grid; place-content: center; justify-items: center; flex: 1; padding: 20px; color: var(--muted); font-size: 12px; }
 .drawing-toolbar {

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChartNoAxesCombined, Maximize2, RefreshCw } from 'lucide-react';
+import { ChartNoAxesCombined, Maximize2, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { validateCandles, type Candle } from '../chart/model';
 import { ChartEngine } from '../chart/ChartEngine';
@@ -98,17 +98,26 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
       </div>
       <div className="quick-chart-quote"><strong>₹{price.format(row.close)}</strong><span className={positive ? 'positive' : 'negative'}>{positive ? '+' : ''}{row.changePct.toFixed(2)}%</span></div>
     </header>
-    <div className="quick-chart-stage">
+    <div className="quick-chart-stage chart-stage">
       {chart.isPending || !visible ? <div className="quick-chart-skeleton" aria-label="Loading chart" />
         : chart.isError ? <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>Chart unavailable</span><button type="button" onClick={() => void chart.refetch()} aria-label={`Retry ${row.symbol} chart`}><RefreshCw size={13} /></button></div>
-          : chart.data?.candles.length ? <MiniChart candles={chart.data.candles} symbol={row.symbol} onEngineChange={onEngineChange} /> : <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>No price history</span></div>}
+          : chart.data?.candles.length ? <>
+            <MiniChart candles={chart.data.candles} symbol={row.symbol} onEngineChange={onEngineChange} />
+            <div className="chart-actions-zone" role="group" aria-label={`${row.symbol} chart controls`}>
+              <div className="chart-actions">
+                <button type="button" className="button button-icon" aria-label="Zoom in" title="Zoom in (+)" onClick={() => engineRef.current?.zoom(.8)}><Plus size={15}/></button>
+                <button type="button" className="button button-icon" aria-label="Zoom out" title="Zoom out (-)" onClick={() => engineRef.current?.zoom(1.25)}><Minus size={15}/></button>
+                <button type="button" className="button button-icon" aria-label="Reset chart view" title="Reset chart view (Home)" onClick={() => engineRef.current?.reset()}><RotateCcw size={14}/></button>
+                <button type="button" className="button button-ghost chart-auto-btn" title="Restore automatic price scaling" onClick={() => engineRef.current?.resetPriceScale()}>Auto</button>
+              </div>
+            </div>
+          </> : <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>No price history</span></div>}
     </div>
     <footer className="quick-chart-meta">
       <span>RS <strong>{row.rsRating ?? ' - '}</strong></span>
       <span>RVOL <strong>{row.rvol == null ? ' - ' : `${row.rvol.toFixed(1)}×`}</strong></span>
       <span>₹{Number.isFinite(row.rupeeVolumeCrore) ? price.format(row.rupeeVolumeCrore) : ' - '} Cr</span>
       <span>1D</span>
-      <button type="button" className="chart-latest" onClick={() => engineRef.current?.latest()}>Recenter</button>
       <button type="button" className="quick-chart-open" onClick={openFullChart} aria-label={`Open ${row.symbol} full chart`}><Maximize2 size={12} /><span>Open chart</span></button>
     </footer>
   </article>;

@@ -40,7 +40,7 @@ function useNearViewport(root: Element | null) {
     }
     const observer = new IntersectionObserver(([entry]) => {
       setNearViewport(Boolean(entry?.isIntersecting));
-    }, { root, rootMargin: '280px 0px' });
+    }, { root, rootMargin: '1000px 0px' });
     observerRef.current = observer;
     observer.observe(node);
     return () => {

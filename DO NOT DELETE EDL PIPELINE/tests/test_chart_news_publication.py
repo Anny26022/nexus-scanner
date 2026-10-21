@@ -141,6 +141,9 @@ class ChartNewsPublicationTests(unittest.TestCase):
             self.assertIn('build_chart_artifacts.py',POST_STANDARDIZATION_SCRIPTS)
             self.assertGreater(POST_STANDARDIZATION_SCRIPTS.index('build_chart_artifacts.py'),
                                POST_STANDARDIZATION_SCRIPTS.index('build_quarterly_financial_ledger.py'))
+            self.assertIn('build_thematic_rrg.py', POST_STANDARDIZATION_SCRIPTS)
+            self.assertGreater(POST_STANDARDIZATION_SCRIPTS.index('build_thematic_rrg.py'),
+                               POST_STANDARDIZATION_SCRIPTS.index('build_chart_artifacts.py'))
 
     def test_failed_pipeline_does_not_replace_previous_charts(self):
         with tempfile.TemporaryDirectory() as folder:

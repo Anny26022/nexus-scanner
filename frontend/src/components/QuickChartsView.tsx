@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChartNoAxesCombined, Maximize2, RefreshCw } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
@@ -37,7 +37,7 @@ function useNearViewport() {
   return { visible, observe };
 }
 
-function MiniChart({ candles, symbol }: { candles: readonly Candle[]; symbol: string }) {
+function MiniChart({ candles, symbol, onEngineChange }: { candles: readonly Candle[]; symbol: string; onEngineChange: (engine: ChartEngine | null) => void }) {
   // Keep the complete published history in the engine. setRange(6) below only
   // selects the initial viewport; slicing here would make older sessions
   // impossible to reach by panning left.
@@ -61,13 +61,16 @@ function MiniChart({ candles, symbol }: { candles: readonly Candle[]; symbol: st
       zoomEnabled: true,
     });
     engine.setRange(6);
-    return () => engine.destroy();
-  }, [displayCandles, symbol]);
+    onEngineChange(engine);
+    return () => { engine.destroy(); onEngineChange(null); };
+  }, [displayCandles, symbol, onEngineChange]);
   return <div ref={attach} className="quick-chart-canvas" aria-label="Interactive chart using the saved chart style, indicators, and drawings. Drag to pan, scroll or pinch to zoom, and select drawings to edit them." role="group" tabIndex={0} />;
 }
 
 function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRow; revision?: string; rank: number; onOpenFullChart?: (symbol: string, revision?: string) => void }) {
   const { visible, observe } = useNearViewport();
+  const engineRef = useRef<ChartEngine | null>(null);
+  const onEngineChange = useCallback((engine: ChartEngine | null) => { engineRef.current = engine; }, []);
   const chart = useQuery({
     queryKey: ['quick-chart', revision, row.symbol],
     queryFn: async () => {
@@ -98,13 +101,14 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
     <div className="quick-chart-stage">
       {chart.isPending || !visible ? <div className="quick-chart-skeleton" aria-label="Loading chart" />
         : chart.isError ? <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>Chart unavailable</span><button type="button" onClick={() => void chart.refetch()} aria-label={`Retry ${row.symbol} chart`}><RefreshCw size={13} /></button></div>
-          : chart.data?.candles.length ? <MiniChart candles={chart.data.candles} symbol={row.symbol} /> : <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>No price history</span></div>}
+          : chart.data?.candles.length ? <MiniChart candles={chart.data.candles} symbol={row.symbol} onEngineChange={onEngineChange} /> : <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>No price history</span></div>}
     </div>
     <footer className="quick-chart-meta">
       <span>RS <strong>{row.rsRating ?? ' - '}</strong></span>
       <span>RVOL <strong>{row.rvol == null ? ' - ' : `${row.rvol.toFixed(1)}×`}</strong></span>
       <span>₹{Number.isFinite(row.rupeeVolumeCrore) ? price.format(row.rupeeVolumeCrore) : ' - '} Cr</span>
       <span>1D</span>
+      <button type="button" className="quick-chart-recenter" onClick={() => engineRef.current?.latest()}>Recenter</button>
       <button type="button" className="quick-chart-open" onClick={openFullChart} aria-label={`Open ${row.symbol} full chart`}><Maximize2 size={12} /><span>Open chart</span></button>
     </footer>
   </article>;

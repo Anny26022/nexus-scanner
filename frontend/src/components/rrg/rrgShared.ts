@@ -68,6 +68,12 @@ export const computeBounds = (scope: RrgItem[], isIpo: boolean): RrgBounds => {
   scope.forEach((item) => {
     xs.push(Math.abs(item.x));
     ys.push(Math.abs(item.y));
+    if (!isIpo) {
+      item.trail.forEach((point) => {
+        xs.push(Math.abs(point.x));
+        ys.push(Math.abs(point.y));
+      });
+    }
   });
   const percentile = (values: number[], quantile: number) => {
     if (!values.length) return 0;
@@ -121,18 +127,21 @@ export const trailFor = (
   item: RrgItem,
   weeks: number,
   isIpo: boolean,
+  replayWeek = 0,
 ): RrgTrailPoint[] => {
   const points = isIpo
     ? item.trail
-    : item.trail.filter((point) => point.week <= weeks);
+    : item.trail.filter((point) => point.week <= weeks && point.week >= replayWeek);
   if (points.length < 2) return [];
   const trimmed = points.slice();
   const last = trimmed[trimmed.length - 1];
-  trimmed[trimmed.length - 1] = {
-    ...last,
-    x: item.x,
-    y: item.y,
-    quadrant: item.quadrant,
-  };
+  if (replayWeek === 0) {
+    trimmed[trimmed.length - 1] = {
+      ...last,
+      x: item.x,
+      y: item.y,
+      quadrant: item.quadrant,
+    };
+  }
   return trimmed;
 };

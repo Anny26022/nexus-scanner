@@ -148,11 +148,11 @@ export function RrgRankings({
                   </>
                 ) : (
                   <>
-                    <td className={`rrg-td is-numeric ${toneClass(item.metrics.excessReturn3m)}`}>
-                      {fmtSigned(item.metrics.excessReturn3m)}
+                    <td className={`rrg-td is-numeric ${toneClass(item.x)}`}>
+                      {fmtSigned(item.x)}
                     </td>
-                    <td className={`rrg-td is-numeric ${toneClass(item.metrics.rsMomentum21d)}`}>
-                      {fmtSigned(item.metrics.rsMomentum21d, " pts")}
+                    <td className={`rrg-td is-numeric ${toneClass(item.y)}`}>
+                      {fmtSigned(item.y, " pts")}
                     </td>
                     <td className="rrg-td is-numeric">{fmtNum(item.metrics.medianRs, 0)}</td>
                     <td className="rrg-td is-numeric">{fmtNum(item.metrics.beatingBenchmarkPct)}%</td>

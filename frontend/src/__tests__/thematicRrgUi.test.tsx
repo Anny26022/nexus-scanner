@@ -26,7 +26,10 @@ const block: RrgBlockItem = {
   quadrant: 'Leading',
   x: 12,
   y: 3,
-  trail: [{ week: 0, date: '2026-10-19', x: 12, y: 3, quadrant: 'Leading' }],
+  trail: [
+    { week: 12, date: '2026-07-27', x: -4, y: 2, quadrant: 'Improving' },
+    { week: 0, date: '2026-10-19', x: 12, y: 3, quadrant: 'Leading' },
+  ],
   metrics,
   niches: ['Precision'],
   nicheCount: 1,
@@ -142,6 +145,14 @@ it('does not mislabel the raw metrics as JdK ratio and momentum', () => {
   expect(screen.getByText(/3-month excess return vs NIFTY 500/i)).toBeTruthy();
   expect(screen.getAllByText(/21-day relative-strength momentum/i).length).toBeGreaterThan(0);
   expect(screen.queryByText('JdK RS-Ratio')).toBeNull();
+});
+
+it('replays the recorded weekly RRG snapshot instead of only showing the live date', () => {
+  mount();
+  expect(screen.getByText('Live')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('RRG replay date'), { target: { value: '0' } });
+  expect(screen.getAllByText('27 Jul 2026').length).toBeGreaterThan(0);
+  expect(screen.getByText(/Snapshot · 27 Jul 2026/i)).toBeTruthy();
 });
 
 it('switches to the separate new-listing rotation model', () => {

@@ -23,6 +23,7 @@ export interface RrgChartProps {
   onSelect: (item: RrgItem) => void;
   weeks: number;
   showTrails: boolean;
+  replayWeek: number;
   isIpoMode: boolean;
   showLabels: boolean;
   benchmark: string;
@@ -46,6 +47,7 @@ export function RrgChart({
   onSelect,
   weeks,
   showTrails,
+  replayWeek,
   isIpoMode,
   showLabels,
   benchmark,
@@ -102,13 +104,13 @@ export function RrgChart({
 
   const focalTrail = useMemo(() => {
     if (!activeItem) return [] as { x: number; y: number }[];
-    const points = trailFor(activeItem, weeks, isIpoMode);
+    const points = trailFor(activeItem, weeks, isIpoMode, replayWeek);
     return points.map((point) => ({ x: mapX(point.x), y: mapY(point.y) }));
-  }, [activeItem, weeks, isIpoMode, width, height]);
+  }, [activeItem, weeks, isIpoMode, replayWeek, width, height]);
 
   const focalPaths = useMemo(() => {
     if (!activeItem) return [] as string[];
-    const segments = segmentsFor(trailFor(activeItem, weeks, isIpoMode));
+    const segments = segmentsFor(trailFor(activeItem, weeks, isIpoMode, replayWeek));
     return segments.map((segment) =>
       segment
         .map(
@@ -117,7 +119,7 @@ export function RrgChart({
         )
         .join(" "),
     );
-  }, [activeItem, weeks, isIpoMode, segmentsFor, width, height]);
+  }, [activeItem, weeks, isIpoMode, replayWeek, segmentsFor, width, height]);
 
   const nonFocalTrails = useMemo(() => {
     if (!showTrails || weeks <= 0 || isIpoMode) return [] as { key: string; d: string; color: string }[];
@@ -125,7 +127,7 @@ export function RrgChart({
     items.forEach((item) => {
       const key = itemKey(item);
       if (key === activeKey) return;
-      const segments = segmentsFor(trailFor(item, weeks, false));
+      const segments = segmentsFor(trailFor(item, weeks, false, replayWeek));
       if (!segments.length) return;
       const d = segments
         .map((segment) =>
@@ -140,7 +142,7 @@ export function RrgChart({
       out.push({ key, d, color: QUADRANT_VAR[item.quadrant] });
     });
     return out;
-  }, [items, weeks, showTrails, isIpoMode, activeKey, segmentsFor, width, height]);
+  }, [items, weeks, showTrails, isIpoMode, replayWeek, activeKey, segmentsFor, width, height]);
 
   const labels = useMemo(() => {
     if (!showLabels && !activeKey) return [] as { key: string; x: number; y: number; anchor: "start" | "end"; text: string; strong: boolean }[];

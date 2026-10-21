@@ -13,6 +13,9 @@ import type { StockRow } from '../types/screener';
 type QuickChartsViewProps = {
   rows: StockRow[];
   revision?: string;
+  matchCount?: number;
+  matchedSymbols?: string[];
+  loadRows?: () => Promise<StockRow[]>;
   busy: boolean;
   firstRank?: number;
   onOpenFullChart?: (symbol: string, revision?: string) => void;
@@ -134,12 +137,22 @@ function QuickChartCard({ row, revision, rank, scrollRoot, onOpenFullChart }: { 
   </article>;
 }
 
-export function QuickChartsView({ rows, revision, busy, firstRank = 1, onOpenFullChart }: QuickChartsViewProps) {
+export function QuickChartsView({ rows, revision, matchCount = rows.length, matchedSymbols, loadRows, busy, firstRank = 1, onOpenFullChart }: QuickChartsViewProps) {
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
-  if (busy && !rows.length) return <div className="quick-charts-grid" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="quick-chart-card quick-chart-card-skeleton" key={index} />)}</div>;
-  if (!rows.length) return null;
+  const fullResultKey = matchedSymbols?.length === matchCount ? matchedSymbols.join(',') : rows.map(row => row.symbol).join(',');
+  const allRows = useQuery({
+    queryKey: ['quick-chart-rows', revision, matchCount, fullResultKey],
+    queryFn: () => loadRows!(),
+    enabled: Boolean(loadRows && revision && matchCount > rows.length),
+    staleTime: Infinity,
+    retry: 1,
+  });
+  const chartRows = allRows.data ?? rows;
+  if ((busy || allRows.isPending) && !chartRows.length) return <div className="quick-charts-grid" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="quick-chart-card quick-chart-card-skeleton" key={index} />)}</div>;
+  if (!chartRows.length) return null;
   return <div ref={setScrollRoot} className="quick-charts-scroll" aria-live="polite">
     <p className="quick-charts-hint">Interactive charts use your saved style, indicators, and drawings. Drag to pan; scroll or pinch to zoom.</p>
-    <div className="quick-charts-grid">{rows.map((row, index) => <QuickChartCard key={row.symbol} row={row} revision={revision} rank={firstRank + index} scrollRoot={scrollRoot} onOpenFullChart={onOpenFullChart} />)}</div>
+    {allRows.isPending && <p className="quick-charts-hint">Preparing all {matchCount.toLocaleString('en-IN')} matching equities…</p>}
+    <div className="quick-charts-grid">{chartRows.map((row, index) => <QuickChartCard key={row.symbol} row={row} revision={revision} rank={firstRank + index} scrollRoot={scrollRoot} onOpenFullChart={onOpenFullChart} />)}</div>
   </div>;
 }

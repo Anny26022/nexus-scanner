@@ -124,7 +124,7 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
       <span>₹{Number.isFinite(row.rupeeVolumeCrore) ? price.format(row.rupeeVolumeCrore) : ' - '} Cr</span>
       <span>1D</span>
       {Boolean(onOpenFullChart) && (
-        <button type="button" className="quick-chart-open" onClick={openFullChart} aria-label={`Open ${row.symbol} full chart`}><Maximize2 size={12} /><span>Open chart</span></button>
+        <button type="button" className="quick-chart-open" onClick={openFullChart} aria-label={`Open ${row.symbol} full chart`} title={`Open ${row.symbol} full chart`}><Maximize2 size={13} /></button>
       )}
     </footer>
   </article>;

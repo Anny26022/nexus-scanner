@@ -16,6 +16,8 @@ export interface Manifest {
   chartRevision?: string;
   dataIndexUrl?: string;
   objectUrlTemplate?: string;
+  thematicRrgUrl?: string;
+  thematicRrgVersion?: string;
 }
 let current: Manifest | undefined;
 let pending: Promise<Manifest> | undefined;
@@ -40,7 +42,9 @@ export function validateManifest(value: unknown): Manifest {
       || (manifest.schemaVersion === 7 && (!validUrl(manifest.dataIndexUrl) || !manifest.chartRevision
           || !validUrl(manifest.objectUrlTemplate) || manifest.objectUrlTemplate?.split('{hash}').length !== 2))
       || (manifest.chartUrlTemplate !== undefined && (!validUrl(manifest.chartUrlTemplate)
-          || manifest.chartUrlTemplate.split('{symbol}').length !== 2))) {
+          || manifest.chartUrlTemplate.split('{symbol}').length !== 2))
+      || (manifest.thematicRrgUrl !== undefined && (!validUrl(manifest.thematicRrgUrl)
+          || !/^[a-f0-9]{64}$/.test(manifest.thematicRrgVersion ?? '')))) {
     throw new Error('Invalid scanner dataset manifest');
   }
   return manifest;

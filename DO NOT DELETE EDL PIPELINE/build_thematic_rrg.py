@@ -19,8 +19,8 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 import gzip
+import hashlib
 import json
-import math
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -30,6 +30,17 @@ import pandas as pd
 
 from pipeline_utils import BASE_DIR, save_json, compress_file
 from ohlcv_utils import read_ohlcv_csv, valid_ohlcv_values
+from build_rs_ratings import FRONT_WEIGHTED_HORIZONS, rank_first_ratings
+
+
+# The main RRG is intended to reflect investable institutional rotation. Keep
+# these gates local to this artifact: the scanner and breadth universes have
+# their own documented eligibility contracts.
+RRG_MIN_MARKET_CAP_CR = 999.0
+RRG_MIN_CLOSE = 10.0
+RRG_MIN_MEDIAN_TURNOVER_20_CR = 5.0
+RRG_MIN_MAIN_HISTORY_SESSIONS = 65
+RRG_TURNOVER_WINDOW = 20
 
 
 def _parse_iso_or_nse_date(value):
@@ -52,6 +63,74 @@ def determine_quadrant(x: float, y: float) -> str:
         return "Leading" if y >= 0.0 else "Weakening"
     else:
         return "Improving" if y >= 0.0 else "Lagging"
+
+
+def finite_number(value: Any) -> float | None:
+    """Return a finite numeric value without accepting malformed metadata."""
+    try:
+        number = float(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+    return number if np.isfinite(number) else None
+
+
+def market_cap_crore(stock_meta: dict[str, Any]) -> float | None:
+    for key in ("marketCapCrore", "market_cap_crore", "market_cap_cr"):
+        value = finite_number(stock_meta.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def institutional_rrg_symbols(
+    histories: dict[str, tuple[list[str], np.ndarray]],
+    stock_map: dict[str, dict[str, Any]],
+    turnover20_by_symbol: dict[str, float],
+) -> set[str]:
+    """Return the main-RRG universe after the documented investability gates."""
+    eligible: set[str] = set()
+    for symbol, (_, closes) in histories.items():
+        market_cap = market_cap_crore(stock_map.get(symbol, {}))
+        turnover20 = turnover20_by_symbol.get(symbol)
+        if (
+            len(closes) >= RRG_MIN_MAIN_HISTORY_SESSIONS
+            and market_cap is not None
+            and market_cap > RRG_MIN_MARKET_CAP_CR
+            and float(closes[-1]) > RRG_MIN_CLOSE
+            and turnover20 is not None
+            and turnover20 >= RRG_MIN_MEDIAN_TURNOVER_20_CR
+        ):
+            eligible.add(symbol)
+    return eligible
+
+
+def rolling_rs_ratings(
+    histories: dict[str, tuple[list[str], np.ndarray]],
+    benchmark: np.ndarray,
+    offsets: set[int],
+) -> dict[int, dict[str, int]]:
+    """Rebuild the published cross-sectional RS rating at every trail anchor."""
+    ratings_by_offset: dict[int, dict[str, int]] = {}
+    for offset in sorted(offsets):
+        idx = -1 - offset
+        scores = {name: {} for name in FRONT_WEIGHTED_HORIZONS}
+        for symbol, (_, closes) in histories.items():
+            n = len(closes)
+            if abs(idx) > n or abs(idx - max(FRONT_WEIGHTED_HORIZONS.values())) > n:
+                continue
+            ratios: dict[str, float] = {}
+            for name, horizon in FRONT_WEIGHTED_HORIZONS.items():
+                stock_start, stock_end = closes[idx - horizon], closes[idx]
+                benchmark_start, benchmark_end = benchmark[idx - horizon], benchmark[idx]
+                if min(stock_start, stock_end, benchmark_start, benchmark_end) <= 0:
+                    ratios = {}
+                    break
+                ratios[name] = (stock_end / stock_start) / (benchmark_end / benchmark_start)
+            if len(ratios) == len(FRONT_WEIGHTED_HORIZONS):
+                for name, ratio in ratios.items():
+                    scores[name][symbol] = float(ratio)
+        ratings_by_offset[offset] = rank_first_ratings(scores).get("front_weighted", {})
+    return ratings_by_offset
 
 
 def load_theme_classification(frontend_dir: Path) -> dict[str, dict]:
@@ -160,13 +239,14 @@ def build_thematic_rrg_payload(
 
     # 5. Load stock close histories for constituent universe
     histories: dict[str, tuple[list[str], np.ndarray]] = {}
+    turnover20_by_symbol: dict[str, float] = {}
     for sym in tax_records.keys():
         sym_u = sym.upper()
         p = ohlcv_dir / f"{sym_u}.csv"
         if p.exists():
             rows = read_ohlcv_csv(p)
             if len(rows) >= 5:
-                d_list, c_list = [], []
+                d_list, c_list, turnover_list = [], [], []
                 for r in rows:
                     v = valid_ohlcv_values(r)
                     if v:
@@ -174,10 +254,19 @@ def build_thematic_rrg_payload(
                         if d_str <= as_of_date:
                             d_list.append(d_str)
                             c_list.append(v[3])
+                            turnover_list.append((v[3] * v[4]) / 1e7)
                 if len(c_list) >= 5:
                     histories[sym_u] = (d_list, np.array(c_list, dtype=float))
+                    if len(turnover_list) >= RRG_TURNOVER_WINDOW:
+                        turnover20_by_symbol[sym_u] = float(np.median(turnover_list[-RRG_TURNOVER_WINDOW:]))
 
     print(f"Loaded {len(histories)} stock histories for RRG calculation.")
+    rrg_symbols = institutional_rrg_symbols(histories, stock_map, turnover20_by_symbol)
+    print(
+        f"Institutional RRG universe: {len(rrg_symbols)} symbols "
+        f"(market cap > ₹{RRG_MIN_MARKET_CAP_CR:g}cr, close > ₹{RRG_MIN_CLOSE:g}, "
+        f"median 20-session turnover ≥ ₹{RRG_MIN_MEDIAN_TURNOVER_20_CR:g}cr)."
+    )
 
     # 6. Group stocks by Block and by Niche
     source_p = frontend_dir / "theme_tracker_source.json"
@@ -267,8 +356,17 @@ def build_thematic_rrg_payload(
             if n_name not in niche_macros:
                 niche_macros[n_name] = block_macros[p_blk]
 
-    # 7. Precompute weekly benchmark excess returns & RS scores across the universe
+    # 7. Precompute weekly benchmark excess returns and cross-sectional RS
+    # ratings. Include the 21-session predecessor for each trail anchor so a
+    # point's y-value is always rating(t) - rating(t-21), including today.
     n_bench = len(bench_c)
+    rating_offsets = {
+        offset
+        for week in range(trail_weeks + 1)
+        for offset in (week * 5, week * 5 + 21)
+    }
+    rating_histories = {symbol: history for symbol, history in histories.items() if symbol in rrg_symbols}
+    ratings_by_offset = rolling_rs_ratings(rating_histories, bench_c, rating_offsets)
     weekly_bench_excess: list[dict] = []
     for w in range(trail_weeks + 1):
         idx = -1 - w * 5
@@ -292,7 +390,7 @@ def build_thematic_rrg_payload(
 
     # Helper function to compute block/niche RRG metrics & rotation trail
     def compute_cluster_rrg(symbols: set[str], name: str, parent_block: str | None, macro: str | None) -> dict[str, Any] | None:
-        valid_syms = [s for s in symbols if s in histories and len(histories[s][1]) >= 65]
+        valid_syms = [s for s in symbols if s in rrg_symbols]
         if not valid_syms:
             return None
 
@@ -317,23 +415,10 @@ def build_thematic_rrg_payload(
                         st_ret63 = ((cur_c - p63_c) / p63_c) * 100.0
                         excess_63_list.append(st_ret63 - b_ret63)
 
-                if w == 0:
-                    # Current week: use published 21d RS change from rs_data
-                    rs_entry = rs_data.get(s, {})
-                    chg21 = rs_entry.get("rs_change_21d")
-                    if chg21 is not None and math.isfinite(chg21):
-                        rs_chg_list.append(float(chg21))
-                else:
-                    # Historical week: compute 21d momentum of multi-horizon composite
-                    if abs(idx - 21 - 63) <= n_c:
-                        c_t = c_arr[idx]
-                        c_21 = c_arr[idx - 21]
-                        c_63 = c_arr[idx - 63]
-                        c_84 = c_arr[idx - 84] if abs(idx - 84) <= n_c else c_63
-                        r_t = (c_t / c_63 - 1.0) if c_63 > 0 else 0.0
-                        r_prev = (c_21 / c_84 - 1.0) if c_84 > 0 else 0.0
-                        # Scaled to RS rating point change
-                        rs_chg_list.append(float(np.clip((r_t - r_prev) * 50.0, -30.0, 30.0)))
+                rating_now = ratings_by_offset.get(w * 5, {}).get(s)
+                rating_21d_ago = ratings_by_offset.get(w * 5 + 21, {}).get(s)
+                if rating_now is not None and rating_21d_ago is not None:
+                    rs_chg_list.append(float(rating_now - rating_21d_ago))
 
             med_excess_63 = float(np.median(excess_63_list)) if excess_63_list else 0.0
             med_rs_chg = float(np.median(rs_chg_list)) if rs_chg_list else 0.0
@@ -368,7 +453,7 @@ def build_thematic_rrg_payload(
             d_arr, c_arr = histories[s]
             cur_price = float(c_arr[-1])
             chg_1d = float(stock_meta.get("changePct") or stock_meta.get("change_pct") or 0.0)
-            mcap_cr = float(stock_meta.get("marketCapCrore") or stock_meta.get("market_cap_crore") or 0.0)
+            mcap_cr = market_cap_crore(stock_meta) or 0.0
 
             # Returns
             r1m = round(((cur_price / c_arr[-22]) - 1.0) * 100.0, 2) if len(c_arr) >= 22 else None
@@ -388,14 +473,21 @@ def build_thematic_rrg_payload(
 
             # RS Rating
             rs_entry = rs_data.get(s, {})
-            rs_val = rs_entry.get("composite_rs") or rs_entry.get("front_weighted") or stock_meta.get("rsRating")
-            rs_chg = rs_entry.get("rs_change_21d")
+            rs_val = ratings_by_offset.get(0, {}).get(s)
+            rs_chg = None
+            rs_21d_ago = ratings_by_offset.get(21, {}).get(s)
+            if rs_val is not None and rs_21d_ago is not None:
+                rs_chg = rs_val - rs_21d_ago
+            if rs_val is None:
+                rs_val = rs_entry.get("composite_rs") or rs_entry.get("front_weighted") or stock_meta.get("rsRating")
+            if rs_chg is None:
+                rs_chg = rs_entry.get("rs_change_21d")
             if rs_val is not None: rs_ratings_list.append(rs_val)
             if rs_chg is not None and rs_chg > 0:
                 improving_rs_count += 1
 
             # Turnover
-            t20 = float(stock_meta.get("tradedValueMean20dCr") or stock_meta.get("traded_value_mean_20d_cr") or 0.0)
+            t20 = turnover20_by_symbol[s]
             turnover_20_list.append(t20)
 
             # Setups
@@ -621,6 +713,12 @@ def build_thematic_rrg_payload(
         "totalBlocks": len(blocks_result),
         "totalNiches": len(niches_result),
         "totalEquities": len(tax_records),
+        "constituentEligibility": {
+            "marketCapCrStrictlyGreaterThan": RRG_MIN_MARKET_CAP_CR,
+            "closeStrictlyGreaterThan": RRG_MIN_CLOSE,
+            "medianDailyTurnover20SessionsCrAtLeast": RRG_MIN_MEDIAN_TURNOVER_20_CR,
+            "eligibleSymbols": len(rrg_symbols),
+        },
         "blocks": blocks_result,
         "niches": niches_result,
         "ipoTactical": ipo_tactical_result,
@@ -636,14 +734,30 @@ def main():
     parser.add_argument("--trail-weeks", type=int, default=12, help="Number of weekly rotation trail steps.")
     args = parser.parse_args()
 
-    root = Path(args.root)
-    frontend = Path(args.frontend)
+    root = Path(args.root).resolve()
+    frontend = Path(args.frontend).resolve()
 
     payload = build_thematic_rrg_payload(root, frontend, trail_weeks=args.trail_weeks)
 
-    # Save to frontend public data directory
+    # Publish a content-addressed RRG sidecar. Scanner revisions are immutable;
+    # an RRG refresh advances only the current-manifest pointer.
     public_data = frontend / "public" / "data"
     public_data.mkdir(parents=True, exist_ok=True)
+    payload_bytes = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    payload_hash = hashlib.sha256(payload_bytes).hexdigest()
+    sidecar_json = public_data / "thematic-rrg" / f"{payload_hash}.json"
+    if not sidecar_json.exists():
+        save_json(sidecar_json, payload, ensure_ascii=False)
+
+    cur_p = public_data / "current.json"
+    if cur_p.exists():
+        with open(cur_p, "r", encoding="utf-8") as f:
+            cur_meta = json.load(f)
+        cur_meta["thematicRrgUrl"] = f"/data/thematic-rrg/{payload_hash}.json"
+        cur_meta["thematicRrgVersion"] = payload_hash
+        save_json(cur_p, cur_meta, ensure_ascii=False)
+
+    # Retain the non-versioned file only as a compatibility fallback.
     out_json = public_data / "thematic_rrg.json"
     out_gz = public_data / "thematic_rrg.json.gz"
 
@@ -659,20 +773,7 @@ def main():
         save_json(dist_json, payload, ensure_ascii=False)
         compress_file(dist_json, dist_gz)
 
-    # Also save to current revision directory if it exists
-    cur_p = public_data / "current.json"
-    if cur_p.exists():
-        with open(cur_p, "r", encoding="utf-8") as f:
-            cur_meta = json.load(f)
-        rev = cur_meta.get("revision")
-        if rev:
-            rev_dir = public_data / "revisions" / rev
-            if rev_dir.exists():
-                rev_json = rev_dir / "thematic_rrg.json"
-                rev_gz = rev_dir / "thematic_rrg.json.gz"
-                save_json(rev_json, payload, ensure_ascii=False)
-                compress_file(rev_json, rev_gz)
-                print(f"Also saved RRG to revision directory {rev_dir.name}.")
+    print(f"Published Thematic RRG sidecar {payload_hash[:12]} and updated current.json.")
 
 
 if __name__ == "__main__":

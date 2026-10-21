@@ -184,7 +184,9 @@ class RealDataAdapter {
     if (cached) return cached;
 
     const promise = (async () => {
+      const release = await releaseFor(revision);
       const urls = [
+        release.thematicRrgUrl,
         revision ? `/data/revisions/${revision}/thematic_rrg.json` : undefined,
         '/data/thematic_rrg.json',
       ].filter(Boolean) as string[];

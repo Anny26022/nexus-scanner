@@ -108,6 +108,12 @@ export interface ThematicRrgResponse {
   totalBlocks: number;
   totalNiches: number;
   totalEquities: number;
+  constituentEligibility?: {
+    marketCapCrStrictlyGreaterThan: number;
+    closeStrictlyGreaterThan: number;
+    medianDailyTurnover20SessionsCrAtLeast: number;
+    eligibleSymbols: number;
+  };
   blocks: RrgBlockItem[];
   niches: RrgNicheItem[];
   ipoTactical: RrgIpoItem[];

@@ -137,7 +137,17 @@ afterEach(() => {
 });
 
 it('loads and caches Thematic RRG dataset', async () => {
-  const fetchMock = vi.fn(async () => new Response(JSON.stringify(mockRrgData)));
+  const manifest = {
+    revision,
+    sessionDate: '2026-10-19',
+    datasetUrl: `/data/revisions/${revision}/stocks.json`,
+    iposUrl: `/data/revisions/${revision}/ipos.json.gz`,
+    totalStocks: 2_604,
+    schemaVersion: 4,
+  };
+  const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(
+    url === '/data/current.json' ? manifest : mockRrgData,
+  )));
   vi.stubGlobal('fetch', fetchMock);
 
   const { realAdapter } = await import('../api/realAdapter');
@@ -156,7 +166,7 @@ it('loads and caches Thematic RRG dataset', async () => {
   expect(first.ipoTactical).toHaveLength(1);
   expect(first.ipoTactical[0].symbol).toBe('DEEPA');
   expect(first.ipoTactical[0].quadrant).toBe('Leading');
-  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
 it('correctly categorizes quadrants across positive and negative domains', () => {

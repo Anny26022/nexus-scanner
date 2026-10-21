@@ -24,6 +24,7 @@ const ScreenerAppContent: React.FC = () => {
   // Live News is temporarily hidden; restore saved News sessions to the screener.
   const activeTab = storedTab === 'news' ? 'screener' : storedTab;
   const [sidebarHidden, setSidebarHidden] = useLocalStorageState('nexus-scanner.ui.sidebar-hidden.v1', false);
+  const [chartRevision, setChartRevision] = React.useState<string | undefined>();
 
   const { data: revisionData, isError: revisionFailed, refetch: refreshRevision } = useQuery({
     queryKey: ['revisionCurrent'],
@@ -64,7 +65,7 @@ const ScreenerAppContent: React.FC = () => {
   return (
     <div className={`app-frame${sidebarHidden ? ' app-frame--sidebar-hidden' : ''}`}>
       <a href="#workspace" className="skip-link">Skip to results workspace</a>
-      {!sidebarHidden && <Navbar activeTab={activeTab} onTabChange={setActiveTab} onHideSidebar={() => setSidebarHidden(true)} sessionDate={activeTab === 'screener' ? selectedAsOfDate : undefined} />}
+      {!sidebarHidden && <Navbar activeTab={activeTab} onTabChange={tab => { setChartRevision(undefined); setActiveTab(tab); }} onHideSidebar={() => setSidebarHidden(true)} sessionDate={activeTab === 'screener' ? selectedAsOfDate : undefined} />}
 
       <main id="workspace" className={`workspace${activeTab === 'charts' ? ' workspace--charts' : ''}${sidebarHidden ? ' workspace--sidebar-hidden' : ''}`} tabIndex={-1}>
         {sidebarHidden && <button type="button" className="workspace-sidebar-reopen" aria-label="Show sidebar" title="Show sidebar" onClick={() => setSidebarHidden(false)}><PanelLeftOpen size={17}/></button>}
@@ -91,10 +92,11 @@ const ScreenerAppContent: React.FC = () => {
             onRefreshRevision={async () => (await refreshRevision()).data?.immutableRevision}
             availableSessions={availableSessions}
             onSelectSession={setCustomSessionDate}
+            onOpenFullChart={(_symbol, revision) => { setChartRevision(revision); setActiveTab('charts'); }}
           />
         ) : activeTab === 'charts' ? (
           <React.Suspense fallback={<p role="status">Loading chart workspace…</p>}>
-            <ChartsTab datasetRevision={latestRevision}/>
+            <ChartsTab datasetRevision={chartRevision ?? latestRevision}/>
           </React.Suspense>
         ) : (
           <NewListingsTab key={latestRevision} datasetRevision={latestRevision} selectedAsOfDate={latestDate} />

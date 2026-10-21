@@ -30,6 +30,7 @@ interface ExploreTabProps {
   onRefreshRevision: () => Promise<string | undefined>;
   availableSessions?: Array<{ date: string; label: string; isHistorical: boolean; revision: string }>;
   onSelectSession?: (date: string) => void;
+  onOpenFullChart?: (symbol: string, revision?: string) => void;
 }
 
 const DEFAULT_CONDITIONS: Record<string, ActiveCondition> = {
@@ -51,6 +52,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   onRefreshRevision,
   availableSessions = [],
   onSelectSession,
+  onOpenFullChart,
 }) => {
   const [universe, setUniverse] = useLocalStorageState<UniverseType>('nexus-scanner.screener.universe.v1', 'mainboard');
   const asOfDate = selectedAsOfDate;
@@ -225,7 +227,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
     {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
       loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
-      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
+      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onOpenFullChart={onOpenFullChart} />}
     {availableSessions.length > 0 && (
       <div id="backtest-history" className="mt-3 w-full">
         {!isScanHistoryOpen ? (

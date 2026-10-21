@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CandlestickSeries, ColorType, LineSeries, createChart } from 'lightweight-charts';
-import { ChartNoAxesCombined, RefreshCw } from 'lucide-react';
+import { ChartNoAxesCombined, Maximize2, RefreshCw } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { validateCandles, type Candle } from '../chart/model';
+import { loadGrid, writeChartStorage } from '../chart/storage';
 import { sma } from '../chart/studies';
 import type { StockRow } from '../types/screener';
 
@@ -12,6 +13,7 @@ type QuickChartsViewProps = {
   revision?: string;
   busy: boolean;
   firstRank?: number;
+  onOpenFullChart?: (symbol: string, revision?: string) => void;
 };
 
 const price = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
@@ -67,7 +69,7 @@ function MiniChart({ candles }: { candles: readonly Candle[] }) {
   return <div ref={attach} className="quick-chart-canvas" aria-label="Interactive candlestick chart. Drag to review prior sessions, pinch to zoom." role="img" />;
 }
 
-function QuickChartCard({ row, revision, rank }: { row: StockRow; revision?: string; rank: number }) {
+function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRow; revision?: string; rank: number; onOpenFullChart?: (symbol: string, revision?: string) => void }) {
   const { visible, observe } = useNearViewport();
   const chart = useQuery({
     queryKey: ['quick-chart', revision, row.symbol],
@@ -80,6 +82,14 @@ function QuickChartCard({ row, revision, rank }: { row: StockRow; revision?: str
     retry: 1,
   });
   const positive = row.changePct >= 0;
+  const openFullChart = () => {
+    const grid = loadGrid();
+    writeChartStorage('grid.v1', {
+      ...grid,
+      tiles: [{ ...grid.tiles[0], symbol: row.symbol }, ...grid.tiles.slice(1)],
+    });
+    onOpenFullChart?.(row.symbol, revision);
+  };
   return <article ref={observe} className="quick-chart-card" aria-label={`${row.symbol} quick chart`}>
     <header className="quick-chart-header">
       <div className="quick-chart-identity">
@@ -98,15 +108,16 @@ function QuickChartCard({ row, revision, rank }: { row: StockRow; revision?: str
       <span>RVOL <strong>{row.rvol == null ? ' - ' : `${row.rvol.toFixed(1)}×`}</strong></span>
       <span>₹{Number.isFinite(row.rupeeVolumeCrore) ? price.format(row.rupeeVolumeCrore) : ' - '} Cr</span>
       <span>1D</span>
+      <button type="button" className="quick-chart-open" onClick={openFullChart} aria-label={`Open ${row.symbol} full chart`}><Maximize2 size={12} /><span>Open chart</span></button>
     </footer>
   </article>;
 }
 
-export function QuickChartsView({ rows, revision, busy, firstRank = 1 }: QuickChartsViewProps) {
+export function QuickChartsView({ rows, revision, busy, firstRank = 1, onOpenFullChart }: QuickChartsViewProps) {
   if (busy && !rows.length) return <div className="quick-charts-grid" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="quick-chart-card quick-chart-card-skeleton" key={index} />)}</div>;
   if (!rows.length) return null;
   return <div className="quick-charts-scroll" aria-live="polite">
     <p className="quick-charts-hint">Drag a chart to review earlier sessions. Pinch to zoom.</p>
-    <div className="quick-charts-grid">{rows.map((row, index) => <QuickChartCard key={row.symbol} row={row} revision={revision} rank={firstRank + index} />)}</div>
+    <div className="quick-charts-grid">{rows.map((row, index) => <QuickChartCard key={row.symbol} row={row} revision={revision} rank={firstRank + index} onOpenFullChart={onOpenFullChart} />)}</div>
   </div>;
 }

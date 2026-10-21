@@ -31,6 +31,7 @@ interface ResultsTableProps {
   onPageSizeChange?: (size: number) => void;
   onSortChange: (field: string, direction: 'asc' | 'desc') => void;
   currentSort?: { field: string; direction: 'asc' | 'desc' };
+  onOpenFullChart?: (symbol: string, revision?: string) => void;
 }
 
 type ColumnGroup = 'Overview' | 'Technical' | 'Fundamental' | 'Other';
@@ -141,7 +142,7 @@ const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
 };
 
 export function ResultsTable({ data, isLoading, isError, isFetching = false, error, onRetry,
-  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows }: ResultsTableProps) {
+  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows, onOpenFullChart }: ResultsTableProps) {
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [resultView, setResultView] = useLocalStorageState<'table' | 'charts'>('nexus-scanner.screener.result-view.v1', 'table');
@@ -239,7 +240,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       </div>
     </Dialog>}
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
-    {resultView === 'charts' && !isError ? <QuickChartsView rows={rows} revision={data?.immutableRevision} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} /> : <div className="table-viewport" aria-busy={busy}>
+    {resultView === 'charts' && !isError ? <QuickChartsView rows={rows} revision={data?.immutableRevision} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} /> : <div className="table-viewport" aria-busy={busy}>
       <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
         <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
           <caption className="sr-only">Equities matching the current screen</caption>

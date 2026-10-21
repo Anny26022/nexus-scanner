@@ -3,2671 +3,2671 @@
   "sessions": [
     {
       "date": "2026-10-16",
-      "revision": "56465e3fc259a17871581752f803b007b856474d82130922d03dffb2b6f4285a",
+      "revision": "23514e9b6ead4d22bbc771c75f6ae4a4646695578e0553aaabc73d78e8058283",
       "label": "2026-10-16",
       "isHistorical": true
     },
     {
       "date": "2026-10-15",
-      "revision": "a6cbc24a7fb7cd3bcb5572c1fbaa1e4173b7f00fb8a1e5c74ae01e51793da3c3",
+      "revision": "a370a22ece9b9937356ec94498467d70b3aeb0fea0ce68391b3b2153c06b76f2",
       "label": "2026-10-15",
       "isHistorical": true
     },
     {
       "date": "2026-10-14",
-      "revision": "e8d87bd71181cc61cd4c22fcde2794c8bc150628d4c650c8c9853574cecaf2ab",
+      "revision": "8e4a52322dd3cff2e479c23d15806858eb6b115374aa87c39c560ed12a30adba",
       "label": "2026-10-14",
       "isHistorical": true
     },
     {
       "date": "2026-10-13",
-      "revision": "d2f57a4cecc12aac4596ecb91aaff4262552275aa52e53b25fa0e19da83b090e",
+      "revision": "79c26234e9f3d2b88a8c1b009901c3ca29af31a853ca0633ade042703f2bb572",
       "label": "2026-10-13",
       "isHistorical": true
     },
     {
       "date": "2026-10-12",
-      "revision": "faec51ae048ab69ecca543f40afb9b44c9ca483a2478f9dbbea75574f73e941e",
+      "revision": "c326bc55457323fcdb6a0e1f82e5d44d23fcb84807bdbdc7bb6c92d98c3bf11e",
       "label": "2026-10-12",
       "isHistorical": true
     },
     {
       "date": "2026-10-09",
-      "revision": "e62ed4045d532a58b822af8e97f3bb2e1d831f52b876acbb96a20ab48b2cc984",
+      "revision": "3a78555852a1406b6a7af78a06f57a2099be88a9d89925dae9fce79e92656533",
       "label": "2026-10-09",
       "isHistorical": true
     },
     {
       "date": "2026-10-08",
-      "revision": "5474dd5d8b06cd2fe7a6b2c81537644b55b88d6f0db07cb6fc5bf860a21ae3a0",
+      "revision": "d17ebc2dca33c1ded0d7562673e946a3b9f3d22b4bb70f568053883cfe22439c",
       "label": "2026-10-08",
       "isHistorical": true
     },
     {
       "date": "2026-10-07",
-      "revision": "00ddde199fb3ff5a46048316f3674fd9476c52df9a6c47174fb38f5cc477a7e4",
+      "revision": "46372a8b4936a63e2ef0af1e168fab23d60fbdfe103869198c07ca5c2fa083ae",
       "label": "2026-10-07",
       "isHistorical": true
     },
     {
       "date": "2026-10-06",
-      "revision": "994596f773d2ceb6f79f5459ec79e0abdf776da0965261907bbb1da6ef64b554",
+      "revision": "bbd83d56fa3219d976de88d75fbcf0451d0155aceac51160e7af759fd0e759de",
       "label": "2026-10-06",
       "isHistorical": true
     },
     {
       "date": "2026-10-05",
-      "revision": "8b503e254a76a89711a410e79fda1a32305f3d3cc6da48f8ce7f40dffde3856e",
+      "revision": "a72b251ff36bfb412393144d98c26499c8fe0f29fc7003106b491d07a580af59",
       "label": "2026-10-05",
       "isHistorical": true
     },
     {
       "date": "2026-10-01",
-      "revision": "82ef94989575cf759f1d9a51e29fcf836f3a622d6790d898da9bdb3c932da94a",
+      "revision": "23ed1830369dab592c335b4df4e0969b9c70f71fa2e4aef014cd901918c9b870",
       "label": "2026-10-01",
       "isHistorical": true
     },
     {
       "date": "2026-09-30",
-      "revision": "87df6421fccede328377dd4bc5569b8d373c957eedb1e2c362bea15758f4789c",
+      "revision": "85d7e87b196c08461dcbd8d52a61a27714df84da64d0bd40f3abecc94a3d7b68",
       "label": "2026-09-30",
       "isHistorical": true
     },
     {
       "date": "2026-09-29",
-      "revision": "b6fe4d4179791149d3c61ae04d6858ab8f780c3147386dd210ced7c22ce271bd",
+      "revision": "d07bd1d92e4a40acf18f9be056473be7e66f71517974b5a45e2833e02f114b38",
       "label": "2026-09-29",
       "isHistorical": true
     },
     {
       "date": "2026-09-28",
-      "revision": "9625c0a8682ee4a276d06254b6ce23c0e6236b484a5d3ed4313861acaf0064a4",
+      "revision": "bac98e8b32f49104b629c35d58e8a0b88d3e7ee4f90485ae9cc4352da89a4a62",
       "label": "2026-09-28",
       "isHistorical": true
     },
     {
       "date": "2026-09-25",
-      "revision": "0bd620246ac704312bcdeb5e1c2a0c9c993edc7d2c0c855c20a94222602e08c1",
+      "revision": "79d5e9b49f612650ef402e122c91afd250288978827da2406902aa5f51ae501b",
       "label": "2026-09-25",
       "isHistorical": true
     },
     {
       "date": "2026-09-24",
-      "revision": "0a2fd2841c0ab34abcc95e7fe13dfdacb95f6d054194887a775fb5680ef75682",
+      "revision": "49bc8336a379c9f7864fc0e347f21eb67d784c3ff5a36cccab143c0544412628",
       "label": "2026-09-24",
       "isHistorical": true
     },
     {
       "date": "2026-09-23",
-      "revision": "c039083e1e0f9e2784e6e19a6eff2cc27fd28def542599b07ba05bf5ae16cbe6",
+      "revision": "076f962cf55ccbde7122bed892967bebfe4c0fbdb97630e8fe8400eb02ff7cdf",
       "label": "2026-09-23",
       "isHistorical": true
     },
     {
       "date": "2026-09-22",
-      "revision": "f052f9f5a2b90e3ce5699b2502042e64ccfa66c94227e76daaf6f569838448b3",
+      "revision": "9bd3e39844cdee2b505d04522067304ddbec869e2b76e5b6960ca7505dd468ea",
       "label": "2026-09-22",
       "isHistorical": true
     },
     {
       "date": "2026-09-21",
-      "revision": "6db4e34552e8b7600f7c1c7cee0b97ebae0101b3ec329b53752c9ecd06881bf0",
+      "revision": "6af95a66498988465d22166e47e2afb5b7efabb3cd4dbd127e297ae05feffb3e",
       "label": "2026-09-21",
       "isHistorical": true
     },
     {
       "date": "2026-09-18",
-      "revision": "e876929362f2536d9ceaa8b1689ba90591572617212147c3c60834263d4d6763",
+      "revision": "7bac93d0afad5af677fb78f936c54142edac53140c3f1cb0477bc72800e5a05c",
       "label": "2026-09-18",
       "isHistorical": true
     },
     {
       "date": "2026-09-17",
-      "revision": "d5b5464686383d93a5b80c00dda77a896f427c422b85be95f9ac2bfff474e287",
+      "revision": "f99f8e1981ecb3bac562cfb42b4a3722d8f5f7fb75933a47396f5806532e0435",
       "label": "2026-09-17",
       "isHistorical": true
     },
     {
       "date": "2026-09-16",
-      "revision": "a0013f6dfeeaa014ee09de22c62753db535ed117f290347bc7846e38307231dd",
+      "revision": "4d78ffcfb96c8f4bcd8538dee1e7dd02ad03051c358b651565c3143e9fc5da17",
       "label": "2026-09-16",
       "isHistorical": true
     },
     {
       "date": "2026-09-15",
-      "revision": "6d427e0668704b928e9aa4c2b67d9dd4669b81dde81807a3d3e211420a19d269",
+      "revision": "c1a3d33650997e3853d8abeea37f2f162bc404f1c7a2bb603a0d6cfbc3905f39",
       "label": "2026-09-15",
       "isHistorical": true
     },
     {
       "date": "2026-09-11",
-      "revision": "aa60fb064935e8265a0da8edd6a9f5e5a1d7d0b8206b8de0299ae110f15088c4",
+      "revision": "5a711a7692e2b187c089fda167a17731870273bafbf943f45b4cc0186ef9b357",
       "label": "2026-09-11",
       "isHistorical": true
     },
     {
       "date": "2026-09-10",
-      "revision": "7bbcfa8e5982a5d6b0d2ed3b49c2897f04515e332e9aa3bdc77440da7cf4bbbc",
+      "revision": "7adb5219a4ed7ccf1433ebb0d0dfbf3630889e7bbb94680a435d4c0754790309",
       "label": "2026-09-10",
       "isHistorical": true
     },
     {
       "date": "2026-09-09",
-      "revision": "6cd1d789e8643e14f70ef78f61814203b4b349276b7a9587e64904d44683be6f",
+      "revision": "e77f61465e2da8859af18f4a278f6dedd51dd48385b2a6381368b0a9868a0875",
       "label": "2026-09-09",
       "isHistorical": true
     },
     {
       "date": "2026-09-08",
-      "revision": "e41deb539f1dbbc384fe2af20e845e001e05e75070b6c39eec3b894922336916",
+      "revision": "f0b4a5cc7d5313abeebf82042e108f962cb4f8c355fe8a0e5bfa4e67774e4b61",
       "label": "2026-09-08",
       "isHistorical": true
     },
     {
       "date": "2026-09-07",
-      "revision": "73944ff118f1ab95cfd94e99f7debc94b866dc1817c8e5c0ba402a335a803ebd",
+      "revision": "2f2d10ebe1b037d5ba5573222d33e20b11bb1bd6ea900129167feedd0bb00e74",
       "label": "2026-09-07",
       "isHistorical": true
     },
     {
       "date": "2026-09-04",
-      "revision": "499aa484c8b0e7768aa2bbd075cccc8f84787597d09e20cb29f72fba3cf09186",
+      "revision": "cec6a134d6266df8ff1fb093157051f459292427f2098ff68868dd2e562ddf0a",
       "label": "2026-09-04",
       "isHistorical": true
     },
     {
       "date": "2026-09-03",
-      "revision": "99d79dc1f1fbfafb99d080e5215997cc6351750b0c83a20a176f80ca3fe5b9a7",
+      "revision": "673ec14d921ebe0db8dad439dc3a411ff8a4a4d7dbbc690b66f45ecde6bf7fd1",
       "label": "2026-09-03",
       "isHistorical": true
     },
     {
       "date": "2026-09-02",
-      "revision": "58eed077eecb9ab2419191ac70a0e706d1b753b43e63f656eb667fb284b9488d",
+      "revision": "16d53dd7ed474ddf488192100a0c59e257b10717b1b689ae924ff6b2bcf90f5e",
       "label": "2026-09-02",
       "isHistorical": true
     },
     {
       "date": "2026-09-01",
-      "revision": "619453620ac4c7587cf733976a042811d301241b02c4f8c5f7d2c1c891395c75",
+      "revision": "35928c6be5079da31820b8dfa5d60c3509b192e08f4622899f0081b75af0a6ec",
       "label": "2026-09-01",
       "isHistorical": true
     },
     {
       "date": "2026-08-31",
-      "revision": "b043710da798864a13b33f9139514eb4e7b8e4b7e63f9b1cf58d2ce3b55dea48",
+      "revision": "9d1752aaed55756333b696304ae693bd921a49b62be3f6e37740f62dc6ec71f7",
       "label": "2026-08-31",
       "isHistorical": true
     },
     {
       "date": "2026-08-28",
-      "revision": "821a94eaa0d0e86dc7f2b44a131d73b1c66dc4088cecc96a860af663b0122923",
+      "revision": "eea511b9b6b625e1c7296903cd05901720746099ab87dc9650657347728ae60f",
       "label": "2026-08-28",
       "isHistorical": true
     },
     {
       "date": "2026-08-27",
-      "revision": "a88c0e0e54ce7df9f4b36579ba3e8c4c52837edf97e1c91afca357a60abee0f1",
+      "revision": "364b10f86e6dedf6f037919f190f72b468c4d0ed9c869767cdc2e092a41b12b7",
       "label": "2026-08-27",
       "isHistorical": true
     },
     {
       "date": "2026-08-26",
-      "revision": "007d59919e8bc89b356cb6138408ae5a022891425c43aed052823739dcddd718",
+      "revision": "bc82a03fc49ce84d4a232cea66b713733f46bdd749e483eedb1676ed2f1f7d77",
       "label": "2026-08-26",
       "isHistorical": true
     },
     {
       "date": "2026-08-25",
-      "revision": "5178c717abda283eec9cfda1eef4cbc57ea68726d17c818791f086bdd1729ef8",
+      "revision": "c520e85e9fb25ba69498bceda12338b3edb42aa5e3988c142f8d196220cfda0f",
       "label": "2026-08-25",
       "isHistorical": true
     },
     {
       "date": "2026-08-24",
-      "revision": "32a0f9f389c342818ae646fe025b979681d4d84de8f722d22aaa389b853e8927",
+      "revision": "007fba975937309a4ae31f851142d3cc5097cba609d3337cc6f1ca8d3ecc153e",
       "label": "2026-08-24",
       "isHistorical": true
     },
     {
       "date": "2026-08-21",
-      "revision": "1157ba1097b0271a0c20e7986b0d3a1955b8d0b8532266740bc200ed79cdc602",
+      "revision": "ec2fe44a66d526d54d27004dcfe4c4648087178010009c19a63da779a945e520",
       "label": "2026-08-21",
       "isHistorical": true
     },
     {
       "date": "2026-08-20",
-      "revision": "078a6cab93392384bc3d1e52d9e00f3ebbf3f5580e83c8299cda12f89315aeda",
+      "revision": "3bb36ebaa70b1dec80a717512d7d3682ad0154aef02e0421dc5af98735cb0296",
       "label": "2026-08-20",
       "isHistorical": true
     },
     {
       "date": "2026-08-19",
-      "revision": "7af81412c51ed269124aefdd25f0af6a2968d7f08d02a4e15daa8aa83529172c",
+      "revision": "870bfe9afc3477dc6a46fb30b139551693145dd5083d828bfd4433829a5b13e4",
       "label": "2026-08-19",
       "isHistorical": true
     },
     {
       "date": "2026-08-18",
-      "revision": "2c9abea9805cb43b7813df62ca245f4f7cf1f1372e1a5b3d8c3157308c8fe06b",
+      "revision": "c38cdc716210383fb95279fb3431591284fe305f7a07829ff60608c7b7ff7423",
       "label": "2026-08-18",
       "isHistorical": true
     },
     {
       "date": "2026-08-17",
-      "revision": "0faa17acb6ea82c0a88f4c9daecd144b8ad773325fc20758bf6137baaf868923",
+      "revision": "b83b64c42c5bb8eb357983f8bf7976975ee0c9b857c9b66c62ff44042578e4a4",
       "label": "2026-08-17",
       "isHistorical": true
     },
     {
       "date": "2026-08-14",
-      "revision": "ae866b3c33f18d83fbc8f5d4ff53bd923575e0c052a4a3e5dfbeabb77e4df508",
+      "revision": "9d8a46389f49034b9c169cb8797b69955ffe7dd47fa6614938943fb6c81f209e",
       "label": "2026-08-14",
       "isHistorical": true
     },
     {
       "date": "2026-08-13",
-      "revision": "a57f9f454b3ea44123650b4949bda4c1a90024efe4df7f2354bf65cda65a9ded",
+      "revision": "746f3d15c352b7940c1896ef963ab6366601fb5774687b516e8d44fe77c6832f",
       "label": "2026-08-13",
       "isHistorical": true
     },
     {
       "date": "2026-08-12",
-      "revision": "aba9832f5d539df3a2b77721646796a579c790077906544c5af7048d2f5f11a3",
+      "revision": "3c9f8c1bfcd79f8d2323265715cf3cfb8b6f1a895948f3b0d82187da97d95c31",
       "label": "2026-08-12",
       "isHistorical": true
     },
     {
       "date": "2026-08-11",
-      "revision": "38e35833de04767a0b920df532317fa980cb4391e0ac7dc16f0a7ccee4fe06e7",
+      "revision": "157fe09e8e5588943e0765aefbffe2ba46661863e51162272925d1c3a8827afe",
       "label": "2026-08-11",
       "isHistorical": true
     },
     {
       "date": "2026-08-10",
-      "revision": "3391117ed726e782039061dbee61b5ea62538bb507c35fc6ec997137d3b52ff3",
+      "revision": "e8044796b445832a213877dce36d17b0d6a922953d6b3f4e288d9fec1e7e3d1d",
       "label": "2026-08-10",
       "isHistorical": true
     },
     {
       "date": "2026-08-07",
-      "revision": "598b76b542d7982bbdc5f9ef03d21d2cca59ed63206edda569301b9d40474c31",
+      "revision": "799c3202a5e56f1c224366e4484a3aae4d4932d10850be92af722a5228385c24",
       "label": "2026-08-07",
       "isHistorical": true
     },
     {
       "date": "2026-08-06",
-      "revision": "4c18e2f61dfffdd10e874ffb5615cdfd406f1b9693a935827268c62243c6cdc8",
+      "revision": "4463a13d27dfea5151fe9e54b325bd6dfa79abbfd625960157077e63309e6b0f",
       "label": "2026-08-06",
       "isHistorical": true
     },
     {
       "date": "2026-08-05",
-      "revision": "c8813e02f69036eb78a53d8f25001749bcd4149d5da93202baccf3badf40b8a7",
+      "revision": "d0c9a85660918178158145695811b6b77b5d96e67fc271c7cb5f0a868f9467c7",
       "label": "2026-08-05",
       "isHistorical": true
     },
     {
       "date": "2026-08-04",
-      "revision": "059c616c995296cdc6070966d646eee076ce1bf983deab87927d145b977f14f9",
+      "revision": "b55996cb29c4f771366c0c8f11d5757a6047f7a46f40db9f6602ba8abfb9ebff",
       "label": "2026-08-04",
       "isHistorical": true
     },
     {
       "date": "2026-08-03",
-      "revision": "8055cfb297d5ca54b29f3d38ae8aa1ade310f89bbd58a905ce837202450d5849",
+      "revision": "57a06435c8512e7f0c5aaf3c739ab2e23442e8b4f9d2d7ad8aa4d2da7848d2b8",
       "label": "2026-08-03",
       "isHistorical": true
     },
     {
       "date": "2026-07-31",
-      "revision": "573abdafc678048d514c773a5d882c21e15a42bb211da1fc92a8bbaaa21a4a02",
+      "revision": "0ac2d50e80c8ea6190375ffc8d61aecc35c5c3a8c74ae666eae0a48c45ac287a",
       "label": "2026-07-31",
       "isHistorical": true
     },
     {
       "date": "2026-07-30",
-      "revision": "c4a6fb38c562130a1c4de37f2f61ddb7a2392a2477b44f4669bc74657ebe3bbe",
+      "revision": "bb92292ee1ad726ed51d1f01392e40c8c9318f6e062e4494e25114c55312bedb",
       "label": "2026-07-30",
       "isHistorical": true
     },
     {
       "date": "2026-07-29",
-      "revision": "d5fd864c3c80900273a141985633ac9abd4f9eb3ccc7790bc562826e2f8f80f7",
+      "revision": "0a2c0fa5cb47412000505c0e823ea93fbf12f22216b45adbd0df820b20b6288e",
       "label": "2026-07-29",
       "isHistorical": true
     },
     {
       "date": "2026-07-28",
-      "revision": "11838b93203d769627af11ff382e20d40876fcbc730ab4808ed587ea82662f7e",
+      "revision": "5cce69647c2e975791c82dcc1f758d8e6e0181546a812fb7b4e870a83ced0977",
       "label": "2026-07-28",
       "isHistorical": true
     },
     {
       "date": "2026-07-27",
-      "revision": "9832acda2fadd78a6cc37045e12116c4bdbaea1de94286ce26b0c3e3ba7119db",
+      "revision": "18b875ebdcda7ad2cf080ec4931dbfbc1bb4373171fbbd59b5322fb97d557f91",
       "label": "2026-07-27",
       "isHistorical": true
     },
     {
       "date": "2026-07-24",
-      "revision": "f7d0cf3b9f8ddd063568272cbcc3bf3eb36e9879681cfe869671d2a8a9d03f1f",
+      "revision": "36d561cbd35c99cc8e9703c55292e787620d4ce0eca547eb12b188a606e3e77f",
       "label": "2026-07-24",
       "isHistorical": true
     },
     {
       "date": "2026-07-23",
-      "revision": "a0954f61e6792c0f0571a88afbb4c6bf602fa07c904a16e886a780599d612943",
+      "revision": "392ae24784e03a3664684640d13fc4f580bf7db85b5bd650fe83daa83852dd3a",
       "label": "2026-07-23",
       "isHistorical": true
     },
     {
       "date": "2026-07-22",
-      "revision": "eb8da90f7de9b2b90bf267644cf449df762446b7ea9d51579ea49cdfce861733",
+      "revision": "c7f553d25c825b9a85c5a1440af619624d2fcc5ba8561bfe429359a0f24d4a51",
       "label": "2026-07-22",
       "isHistorical": true
     },
     {
       "date": "2026-07-21",
-      "revision": "484912c5ebc6f10f76e6427b8d8b9fb71b88e870a510b3bff284dce52e0259ff",
+      "revision": "aa68fbeaae320d935728f1c632c46d3802b3ba910952fa3fb0b2c6085ee44bcf",
       "label": "2026-07-21",
       "isHistorical": true
     },
     {
       "date": "2026-07-20",
-      "revision": "899f2c3950584e856d5d871935b0a68d477e3e3fd130f6bff64644b34d596f73",
+      "revision": "dcde7be08f9655e1147c9c76e70efc9c97587af3185eb5419618f900b0e33707",
       "label": "2026-07-20",
       "isHistorical": true
     },
     {
       "date": "2026-07-17",
-      "revision": "b886489304b0dd908f98391fe19a32dddb515ddc08c6322acc604d971ce5ab5d",
+      "revision": "50960b5869bfbce1e0c2faabc19e96bd909619dbecf770861c5eefb0f96c26ea",
       "label": "2026-07-17",
       "isHistorical": true
     },
     {
       "date": "2026-07-16",
-      "revision": "3d3d9263baff755f5f43f7567f2d9c9a706419884f1a927e3db612755f54926a",
+      "revision": "ce312bce7e3bb477151f196b924a60a91be5322c4527adcbed99648e8a2333af",
       "label": "2026-07-16",
       "isHistorical": true
     },
     {
       "date": "2026-07-15",
-      "revision": "c47e533f8708beaca7af0ee10a9531fb6b405abb21a03bebe78be966cfe6bd57",
+      "revision": "4ad1564b84ac0857c3e8df58d891ed637b449c56f511ae559150554899d7c1bc",
       "label": "2026-07-15",
       "isHistorical": true
     },
     {
       "date": "2026-07-14",
-      "revision": "49c339b294cfc4d82bc7ebebe6c9675c93dc56069c13731acd0e473cd72c7fee",
+      "revision": "05db76903982f1af4862a93e1122ded5eca11474946f9a076f8b2aa8c735415c",
       "label": "2026-07-14",
       "isHistorical": true
     },
     {
       "date": "2026-07-13",
-      "revision": "65b098367e298b8b48fa8087f81487c5f5b2621dbb15b65e20d312fa1facf5be",
+      "revision": "e2a42054ebb64c7da9fc498453bd3faeed6a04ea1204e6bebdb8c5c594c7486d",
       "label": "2026-07-13",
       "isHistorical": true
     },
     {
       "date": "2026-07-10",
-      "revision": "1c5267184683118064d8b8af7c5f9651720638da760548c1567fb468ed141c4b",
+      "revision": "9076d77a80fa7d035ca8c334f53666e0762169e7cfab960c7a715f8bef2b408f",
       "label": "2026-07-10",
       "isHistorical": true
     },
     {
       "date": "2026-07-09",
-      "revision": "b2aaaabd58233af65bec3baacaf6affeac696af8339e3096daf5c07be6fbb3fe",
+      "revision": "97bffac6c6497d0bf07d87f7e0a289e940a64e59375e980e016946fe279d59f8",
       "label": "2026-07-09",
       "isHistorical": true
     },
     {
       "date": "2026-07-08",
-      "revision": "bbaf72784acf6e409627832842b923988b339c93fe07776a8878a45dea5679ad",
+      "revision": "bc9951f436d5bb7496d640c572abb3a76655c794d1a80114d827a47e351e9a7d",
       "label": "2026-07-08",
       "isHistorical": true
     },
     {
       "date": "2026-07-07",
-      "revision": "a70ea1d7d52ab37728a0047d88d1e01800f8dabcadca605f2eec28a1d490d2a9",
+      "revision": "1f129bb5d03cea71c1a6aab5cd8b0536f1a04724b9e3d0e72e6007812650efce",
       "label": "2026-07-07",
       "isHistorical": true
     },
     {
       "date": "2026-07-06",
-      "revision": "f82f8f8fb144f6d6468f2a7bbad92bda6944736066c1369e25839712b479863f",
+      "revision": "6bf18e911565f028480023760fc8cd6aa045f8c3ff64067b40f2f9a313231478",
       "label": "2026-07-06",
       "isHistorical": true
     },
     {
       "date": "2026-07-03",
-      "revision": "d1f57121a624dfff75a932c8d2623a35f14768f44050a9ac95465d46720dae0e",
+      "revision": "5f8c84ffde289162e1bc0aaa62d4327bc454bd76cd3cd677b94af200c8b888cb",
       "label": "2026-07-03",
       "isHistorical": true
     },
     {
       "date": "2026-07-02",
-      "revision": "53af1b1e0d99f62d37ca1e5d21620fde88708f6b05f806ed647e0946d77979cd",
+      "revision": "37d4c33751586068592e66beb4faa8701e2ab8c894040fe68e079f4aef97c6f7",
       "label": "2026-07-02",
       "isHistorical": true
     },
     {
       "date": "2026-07-01",
-      "revision": "8d716ee139df444bd1812b949ea1692f44679fc2b0a0d2219d617e12a0a965ea",
+      "revision": "859f3e58978890d974c9b54597452770d3d626380e060a4d0fc3907a0d8ee130",
       "label": "2026-07-01",
       "isHistorical": true
     },
     {
       "date": "2026-06-30",
-      "revision": "bd6a7d8e7eed7ddc12b46ece922acf55c6140a78d2625abd97a97233ff7b884a",
+      "revision": "0b719b48f6a390a04cac0cd941200c55b1c2460e11873ad17f566b5c48b531c5",
       "label": "2026-06-30",
       "isHistorical": true
     },
     {
       "date": "2026-06-29",
-      "revision": "63adf2dd34775b77f34a4343b1fbb3304de0b32751252a57e2f78732d414de62",
+      "revision": "8976382b9432ccee778ae7ed95dfb661979713d02425624eb35ab25544088b11",
       "label": "2026-06-29",
       "isHistorical": true
     },
     {
       "date": "2026-06-25",
-      "revision": "6ea98e330b7736587f46856ae37906be8bd27f1a890e3174e487ce1353dd7af4",
+      "revision": "30b42f26a39c3cd9208081a3ae605f68f37bebc6dd3987ca8cf5653dfb9ebd5f",
       "label": "2026-06-25",
       "isHistorical": true
     },
     {
       "date": "2026-06-24",
-      "revision": "ecff322e9bb785af613e81fbe1abecfef2787a36fea07386761c536bc88d8953",
+      "revision": "36dc9e73f80864745bb6a7dc10ba83d10e088f321968a2755b2dbb5e87c8aebb",
       "label": "2026-06-24",
       "isHistorical": true
     },
     {
       "date": "2026-06-23",
-      "revision": "af188a7323644afa5c5f751b59a24ba75f6decf1638665e74e8fa455798c7dfa",
+      "revision": "324655b8ba3a99da928b3d30c26563c4063de575db6cba3fcaa1527be9a4bb68",
       "label": "2026-06-23",
       "isHistorical": true
     },
     {
       "date": "2026-06-22",
-      "revision": "40f691cec196b0d871fc5b587b17be0c88226a07c7f4d3a240ec2510cfad8abd",
+      "revision": "6144f4961834e8531e84bf73db8b5d31f7221f1521dcf2f175a1eaea6d492643",
       "label": "2026-06-22",
       "isHistorical": true
     },
     {
       "date": "2026-06-19",
-      "revision": "69804688f91dd7fefc59d75fd5e2f185cb93e59942381c4a1809e9c0a92dd701",
+      "revision": "b6543cf8aea7e25e25eb4fd47a6958efbe3ae3008f65273aec12b2a792839d80",
       "label": "2026-06-19",
       "isHistorical": true
     },
     {
       "date": "2026-06-18",
-      "revision": "6c8330121fbcdbc74593811d45ad29c5614d67ef35729190744d1ee0fcb355c9",
+      "revision": "9abe147b5a886f1e6133abbbafff72a66488ec7fd623447893ac529ab8fc3796",
       "label": "2026-06-18",
       "isHistorical": true
     },
     {
       "date": "2026-06-17",
-      "revision": "288300c7fae9dd1493d5dae52ad610eff7be275934afa70d54944adeb6efc4e4",
+      "revision": "af8b6aa5007e1ed956644a37845e74855f4dc2799d8baa39a9c11de8c8167cd6",
       "label": "2026-06-17",
       "isHistorical": true
     },
     {
       "date": "2026-06-16",
-      "revision": "7b503824ceeabe7378f1e2eba029bc9bf839dec889e9a6c5ab18fa23be0e0966",
+      "revision": "12ec8aaddb1f1191a306926efd7abaec1ffea970512e63b0eaf13523864af3a0",
       "label": "2026-06-16",
       "isHistorical": true
     },
     {
       "date": "2026-06-15",
-      "revision": "7e342d0621eb44bc204896a04a4bb72881aff236a5953f803b44b32bb1383b42",
+      "revision": "d343fc8248eecae28154e91d871cd61feccc1b6cd90e2e2e8d4d4bbd3fdf1bba",
       "label": "2026-06-15",
       "isHistorical": true
     },
     {
       "date": "2026-06-12",
-      "revision": "f70741631105ae97210a04e5b037ec0c8a1d6f0008eedea49f5e1619fa91f340",
+      "revision": "cdf52f625f563462e4144ea63d9e905c2939b4915da55a8d909e8a2e3d1a2d45",
       "label": "2026-06-12",
       "isHistorical": true
     },
     {
       "date": "2026-06-11",
-      "revision": "f8a28bc5b74542bfa71a07c68311e44f8e995186127b5fbe973ec2ec77be4b31",
+      "revision": "993bdf5b970fdbc25943f3267ea0e97ea43ce8edc61ff259844654f518c614b8",
       "label": "2026-06-11",
       "isHistorical": true
     },
     {
       "date": "2026-06-10",
-      "revision": "bf79b7155aa8466b39dfbdb24a036682a152cb925a06bcfdd6c2838a3b9ac121",
+      "revision": "19e46acf06b964395db7ca4c59b50d16f58ac23f6bc09122fc6ef132f9b1017b",
       "label": "2026-06-10",
       "isHistorical": true
     },
     {
       "date": "2026-06-09",
-      "revision": "43a3c59f392bb908ed2e1dba5d1e96c83a3ad72bc4e6d275d268feceace2b4ce",
+      "revision": "8faf69e7c2960158abbac46db2210853bca6c0919850b1a50ae035a2df2bcd3b",
       "label": "2026-06-09",
       "isHistorical": true
     },
     {
       "date": "2026-06-08",
-      "revision": "a9eaafebd2389b1cb822347d7c7695f4f0f42687633374e573c388df0d6b0614",
+      "revision": "81300d4f7a31fa2280682426c513b3710936a3010fd4aa2aa0badeeed141cd11",
       "label": "2026-06-08",
       "isHistorical": true
     },
     {
       "date": "2026-06-05",
-      "revision": "b3810905a9cc7509ed50d58ba9e51a59d86ca464314b11bb644dd5f04294b17e",
+      "revision": "0b6f7303ef1f9527604321e0b2ada6265e17c8c70372db1b4755891a1ec73299",
       "label": "2026-06-05",
       "isHistorical": true
     },
     {
       "date": "2026-06-04",
-      "revision": "2a12a80518eaaa8c54d7e338640c94969dcf5801c7751468d4d01d62fe8bee34",
+      "revision": "63f6c95f176a1bda8602ec22d6287000cb175b4c97d245da707baa0afd944552",
       "label": "2026-06-04",
       "isHistorical": true
     },
     {
       "date": "2026-06-03",
-      "revision": "ac63853a91066a407fb8a3a46f682a42f1ac7b946990c17819c294445505a983",
+      "revision": "7c3fbcc5513b3be0a99fe582b2149cfaee0b743e089dc09acf1764f3a0386b86",
       "label": "2026-06-03",
       "isHistorical": true
     },
     {
       "date": "2026-06-02",
-      "revision": "f5d2964c99158ba6e4928c067e15222eda4593193d76e02ea785be2da0511f42",
+      "revision": "c07f0e52be437cae6f3a6657c92439bd3092ec842fbb2817c0631025fc61f9e8",
       "label": "2026-06-02",
       "isHistorical": true
     },
     {
       "date": "2026-06-01",
-      "revision": "d0a75a36532f04ef06291379e81d36de51c14ecffae7d673de6bcf7ed76512b6",
+      "revision": "6b77b5ddaf22cfe6377a652f4067e656087682167c21bcaebeb0e80a9aadfb5d",
       "label": "2026-06-01",
       "isHistorical": true
     },
     {
       "date": "2026-05-29",
-      "revision": "d5f6740687b482f2349cd69e8d4574b39c8a497dbaa1b7d5a87842a5a6ac67fd",
+      "revision": "c4c247ff225e1980efa656dee286c20b15e69d882f3aa8b1e11baadfeb805e92",
       "label": "2026-05-29",
       "isHistorical": true
     },
     {
       "date": "2026-05-27",
-      "revision": "0b40cf6303800d6eeb5efa33b5806562313ea461a959cfcafa368ce378a10179",
+      "revision": "9a57bc6a78a3cccb6e1ef56abd276cec837390bc72658858b0184524ac8a3395",
       "label": "2026-05-27",
       "isHistorical": true
     },
     {
       "date": "2026-05-26",
-      "revision": "4ec8e4df362af149d2db661fbc0c9b308b92eef4b92d652b0c2bfbc95edf11e1",
+      "revision": "59982e8daafd6cbb95a1f76ba8af44d2e4a7618f4dc1a8e6387c293a4efe4360",
       "label": "2026-05-26",
       "isHistorical": true
     },
     {
       "date": "2026-05-25",
-      "revision": "9b79b782a220e6714923eb6f202e8eef6a16e73fd3b1f940b2488c211307118e",
+      "revision": "39aab58d571133648f2ef5fddf90db7a51d3812a8105730999a1443f3e154733",
       "label": "2026-05-25",
       "isHistorical": true
     },
     {
       "date": "2026-05-22",
-      "revision": "ed834a9e425b6be76a79056be94e265302d152d53b69c096c203a0f30cdf8f30",
+      "revision": "134f7a39f0b4986108e59957295b8232fe957f5aa8d1a05996601376cd3211da",
       "label": "2026-05-22",
       "isHistorical": true
     },
     {
       "date": "2026-05-21",
-      "revision": "9a9398e707ed7dcee58d406ea41e780a1143772e1e2f4dd80b64d0d3ee8e6ccf",
+      "revision": "1ebb706dd57a467dcdbb2ec9e281b37ef00d71b6368119a1a7d49a7478d0de8b",
       "label": "2026-05-21",
       "isHistorical": true
     },
     {
       "date": "2026-05-20",
-      "revision": "ba6aa53c979c7919dfc1c06133d04820d69823bdbc100dd6e2b35f52b215f0ff",
+      "revision": "8902b60a493d9c45b28f1f0f32ce94119d1b98227e1e695354e39062462c58de",
       "label": "2026-05-20",
       "isHistorical": true
     },
     {
       "date": "2026-05-19",
-      "revision": "0d3c62b44a98619af3f54bc6a45a98d71e13405f0f3fed81b93d49d852cca1f0",
+      "revision": "0d8940de0f16bfc15399b90ad3cf3396682329a891de19158794649736b3e89f",
       "label": "2026-05-19",
       "isHistorical": true
     },
     {
       "date": "2026-05-18",
-      "revision": "f3075194f2f21df9af12243e004d73f5d8ebccdc3ca321fe59a77a61daa977d8",
+      "revision": "e660443f48f9b9d4eb402f4c4e66f33e3c62803768e9578c5a54c6725afe3dcd",
       "label": "2026-05-18",
       "isHistorical": true
     },
     {
       "date": "2026-05-15",
-      "revision": "de3b3f1572e3f01e7cde3eec6f5fb35c00d6f117bd1da627e341702f7d8c54e1",
+      "revision": "a95ec504184c389e1954f9489a16f59fe52e6d277780e3e79873efee482ec7da",
       "label": "2026-05-15",
       "isHistorical": true
     },
     {
       "date": "2026-05-14",
-      "revision": "2d943180e81e3ec6e30b17c589ef551b10e19f13227019a162507c23a0310344",
+      "revision": "3eecf3665a33b72939465cd9bb5b1efca0d05f052d6f4cae0f50b79f426336fb",
       "label": "2026-05-14",
       "isHistorical": true
     },
     {
       "date": "2026-05-13",
-      "revision": "a46bf1378028e3301a684a3b03ff34200a17deffd10e7af8c4faef536325c741",
+      "revision": "6ab6d174f4c282d9c9ee9d0bf558d64f63eef32a4e57a740c3ce40b0c2902246",
       "label": "2026-05-13",
       "isHistorical": true
     },
     {
       "date": "2026-05-12",
-      "revision": "6f8953d9758d1e0c0a1fdf8f734fa47a8d656902a8cf084044093a2ca02f5f2d",
+      "revision": "4ff9b33a408c02a6bcf124e4ffa786d6c515ef961dbd78fb62f2035a22906689",
       "label": "2026-05-12",
       "isHistorical": true
     },
     {
       "date": "2026-05-11",
-      "revision": "41fcc61bce04728defd0506b61ad578a1fb3fc6ae714a19b7e8af602c0413dca",
+      "revision": "dda7799735606aa5982e235233f625f809ad2ac1d760cf9ef1e179603a0a68a9",
       "label": "2026-05-11",
       "isHistorical": true
     },
     {
       "date": "2026-05-08",
-      "revision": "f92d2ada0a24499b0c4fe52f3bbc2ce8587601d65187e7ce715c84301a099cd6",
+      "revision": "ffd9c7d191be2bae4216f82071ff8f0872538bf308a5abf0a7fe30989d2a88b7",
       "label": "2026-05-08",
       "isHistorical": true
     },
     {
       "date": "2026-05-07",
-      "revision": "6dc74dabc21d8e776bfb1fc04dec341e1a7e2d01310f57b6f5ce1b066b9a30a4",
+      "revision": "4f45e4e699c7919a3444db2ebedba8f9d29ef2df3701f0c86cb71deaf21e8510",
       "label": "2026-05-07",
       "isHistorical": true
     },
     {
       "date": "2026-05-06",
-      "revision": "bb2d1c57bbd2cf1605cd222cfa94585a0b29588c84d6debae0a503f22bbe51b6",
+      "revision": "a3ed1e62c1dc0a9c22015cafbe435897d5936ff8334828b2bcbd2817c1d9a661",
       "label": "2026-05-06",
       "isHistorical": true
     },
     {
       "date": "2026-05-05",
-      "revision": "51d22567bd938e4120c2ae9b6920265bf1ae392ac2343ad906a117ce6956d745",
+      "revision": "565848d20be6b1ad10934932ef52fc5823f3cef581291fd14091ee64b9e33644",
       "label": "2026-05-05",
       "isHistorical": true
     },
     {
       "date": "2026-05-04",
-      "revision": "f795c1e404a88effea3a519c0f76a6c567990d86a30f153799849c89053ca9af",
+      "revision": "2fdec4e69f2ca1ff49b14a57cd36d272bc10ca8377a3d29c883b1752143343a0",
       "label": "2026-05-04",
       "isHistorical": true
     },
     {
       "date": "2026-04-30",
-      "revision": "ec57dc06e3fe7bb024031f8cd63921501f0057955c470d2b9226c32d7dd72bc8",
+      "revision": "e412b408c487cb7a67d987a4cc394ca971cc86b0e85d08ef346013515a090671",
       "label": "2026-04-30",
       "isHistorical": true
     },
     {
       "date": "2026-04-29",
-      "revision": "e1ee279bbbef47896612e6cf4bc0b03dc86880fd60db4457908a85163d9922b1",
+      "revision": "0b07508acad2080d3e986d99604b52d12c1f2147cbec745f29eef7a42a2c05fc",
       "label": "2026-04-29",
       "isHistorical": true
     },
     {
       "date": "2026-04-28",
-      "revision": "b77ac39877b1e7ed242375452fd696be7bc5ca1ecd2955362be42f6a6a734e82",
+      "revision": "83c675e4e570c37c08dd8b4c164ec521b3d61c5c6be0d8875b50fb6330d1ef23",
       "label": "2026-04-28",
       "isHistorical": true
     },
     {
       "date": "2026-04-27",
-      "revision": "9e4bbc1ad7a692cb946c6c69c22b0b4daba00a07c51944e6d92960d6a67cc168",
+      "revision": "679717bcf37570dbe718ee2e164e3d97bea3b6632498aabea88ee4a4efaf96f0",
       "label": "2026-04-27",
       "isHistorical": true
     },
     {
       "date": "2026-04-24",
-      "revision": "87a59bb5c55c55bb38df8f54d91b0dd0be1cd70706ca861880a1f6bb09522f66",
+      "revision": "c0d4069b1cf508429cf05c492a3cd9c6b227c05281c3671ac1f859e9154ca588",
       "label": "2026-04-24",
       "isHistorical": true
     },
     {
       "date": "2026-04-23",
-      "revision": "02f70f52453b77a62ae244758abf14743f11b4f4ed7da5217b21cad8c3e982a1",
+      "revision": "e042cdce1c2edbeb7797ff61595295c5179ff62b8cad08068afa393ff30d5573",
       "label": "2026-04-23",
       "isHistorical": true
     },
     {
       "date": "2026-04-22",
-      "revision": "c5ce0aae1571609feac5a6dfde4efc5308649f710ff7e37149651587964b68c1",
+      "revision": "e8d1bc37eac330def82e69fd606fcb1a541fa54f6eca61b890efaf0311b30686",
       "label": "2026-04-22",
       "isHistorical": true
     },
     {
       "date": "2026-04-21",
-      "revision": "efe7418aed25918e0c73f8f64930a16eb37201aa0e69aa209c65caf44c4f5f8a",
+      "revision": "d155c8929ff54b2bf97e21c2e1476eee1dde10a11a48b4367fa317c0a10002b9",
       "label": "2026-04-21",
       "isHistorical": true
     },
     {
       "date": "2026-04-20",
-      "revision": "c6e96f43434f82d91b9a1e8fa9180dd14e2c59ac3803bb48516d42c87623323a",
+      "revision": "f40a56a0a86687490825236feddef9e3fe4d06eb63d932133d1fd1b778c52f8a",
       "label": "2026-04-20",
       "isHistorical": true
     },
     {
       "date": "2026-04-17",
-      "revision": "ce669549c7797c5f0725283ae590424255198c0b5972bbd4f4dba9b5eb59f5d7",
+      "revision": "920da9c005888c1a108e395073abff6c5be3579e7c106be7ef9c4f88188bc2a6",
       "label": "2026-04-17",
       "isHistorical": true
     },
     {
       "date": "2026-04-16",
-      "revision": "a5f226fea68ed6793a0f1535f2daa01bd9bf19a48d668c81f012cbe664b923bb",
+      "revision": "187f65066125f66917c9fea0583089694ab0ac171380abc6c0e19ef1133b8e9b",
       "label": "2026-04-16",
       "isHistorical": true
     },
     {
       "date": "2026-04-15",
-      "revision": "6b485bbaf355ccd9defdd7ad03bd390b342ff6c656dc8bb23a9c97f490966d7a",
+      "revision": "078c036882e167cc75d3e5277e249eeae00131fdec5ac3dd5e1feebcfeb92851",
       "label": "2026-04-15",
       "isHistorical": true
     },
     {
       "date": "2026-04-13",
-      "revision": "681bdaa1e73539877aca1b7e8065bdfabf041b422135fc6944978ea76c704588",
+      "revision": "256f7411815c32f35ea0b2626255899ce93433ef6a7a9817f86440b20e0375b0",
       "label": "2026-04-13",
       "isHistorical": true
     },
     {
       "date": "2026-04-10",
-      "revision": "343d4193be86f5e4757be03a68553ef8d9774315f498bc6da9dcd2a5c353f686",
+      "revision": "b0e53290123a1cc28951c1329fba7782beb24c7c89af9801f32b75fc9edd6731",
       "label": "2026-04-10",
       "isHistorical": true
     },
     {
       "date": "2026-04-09",
-      "revision": "77b43d89210fb6d07f9d3b887d8e0021f39275936b315abb2d54e348bb8854cb",
+      "revision": "091ffc5b099a0856bbf54a5537e7d0fa36c0176959c499b4e97efe39c3ccab4b",
       "label": "2026-04-09",
       "isHistorical": true
     },
     {
       "date": "2026-04-08",
-      "revision": "5f62836f851d682d197e084725eb6843e2dc52da76283ff2d1706ec2063b7490",
+      "revision": "9c9107e0e21959ccd42e6e29dff0334f617931ed910292bf84bcad4d8617aa6c",
       "label": "2026-04-08",
       "isHistorical": true
     },
     {
       "date": "2026-04-07",
-      "revision": "c31187ddfb5eb966cf760458ca2b03fec4f097af67a1b09447ff6bb522a319e4",
+      "revision": "af8c2a1a55dd07ce06c002590aef3816b15587180281dcaee51b858d3cf2e1b8",
       "label": "2026-04-07",
       "isHistorical": true
     },
     {
       "date": "2026-04-06",
-      "revision": "da1916b3d8b3924daffd79b1f190c61bafc30d35de0e7f38843434ef75d5af59",
+      "revision": "302aa2e50495738fbebc9952909e3088942b6cbb1f51f48789c5e1ab52bd53f6",
       "label": "2026-04-06",
       "isHistorical": true
     },
     {
       "date": "2026-04-02",
-      "revision": "59d6d659197ab5709d861a37083422e18190991b3a56f52ec0d369938573c99e",
+      "revision": "96cf120e25fd417e852bf4897ca90b9be0e0fafdf732197b58919a64133edb70",
       "label": "2026-04-02",
       "isHistorical": true
     },
     {
       "date": "2026-04-01",
-      "revision": "7be2643d6f3219eaa2f1458045f45d2f603cafc0e03d3667200ddc05fc89e079",
+      "revision": "0aeb7ad2c0e28297b7d2687074660e48ebad2aa8bc55752cb8946d9918d5b024",
       "label": "2026-04-01",
       "isHistorical": true
     },
     {
       "date": "2026-03-30",
-      "revision": "4881deba441f2d3a461dad87522083f906409721725e33d216c0d921c9cdb267",
+      "revision": "52a8bbddd0d121a65c3bad205db9f4361d137905217c6d6ba9268ef7b8d6c5c3",
       "label": "2026-03-30",
       "isHistorical": true
     },
     {
       "date": "2026-03-27",
-      "revision": "d09dd2bb3567db7b86bc2c1ff6256b9702d5459a0f670438639955c2153359ea",
+      "revision": "160a459fa39fba8546ee59476eadbacc0e20d891605f310b4a76918afa0852b0",
       "label": "2026-03-27",
       "isHistorical": true
     },
     {
       "date": "2026-03-25",
-      "revision": "785646f3f672d00fe32883c1c8d09f6abb239e030ace1bfcc78573efaffa3a92",
+      "revision": "4aeb78839e6ed94b82e31056082827f73dffc3a83899383262adaa8eea26c4b6",
       "label": "2026-03-25",
       "isHistorical": true
     },
     {
       "date": "2026-03-24",
-      "revision": "72f07e3c4ab31cdb272a5b1e1f17b3782842596505b353009ca23276294c7a2f",
+      "revision": "8c5acfe939df85aab488bdf08d05893a1cdc0b17cb36129af5a18ccf8aa3717e",
       "label": "2026-03-24",
       "isHistorical": true
     },
     {
       "date": "2026-03-23",
-      "revision": "26880cba69a344aa427447e3f1b5cea1116522d2d44609225b80689c1f569c7c",
+      "revision": "0c31888dfccaa63240199617fb588ee84b42a2cc33034131a6e44563bc09bacd",
       "label": "2026-03-23",
       "isHistorical": true
     },
     {
       "date": "2026-03-20",
-      "revision": "c710dbc45dc21ec523029dad72b97f74d31d45ba44935c4bc1c43bb0d8fb5883",
+      "revision": "4767a892d2181dc9df5c2ced516a8c9e60ed77fb2bb898d99a84f40c41c071c5",
       "label": "2026-03-20",
       "isHistorical": true
     },
     {
       "date": "2026-03-19",
-      "revision": "71a73e6d69c840f10cd3bac9acca27fcb8b8320455f85bb990c809d5f0b1e9b5",
+      "revision": "8cdb104a2dd70605ffc9ae5c94e88a4be8854bbb3f790795cf8440f6d9104c59",
       "label": "2026-03-19",
       "isHistorical": true
     },
     {
       "date": "2026-03-18",
-      "revision": "b6c01e37e1d7ed6b6c287fa19eee77f29147a5e3bd4f12d29b940e2a81354130",
+      "revision": "eccbda0bec8c0e365a397dd4faff297a0059dcde7175808d5d603c08ea170413",
       "label": "2026-03-18",
       "isHistorical": true
     },
     {
       "date": "2026-03-17",
-      "revision": "4f42e12c8eea04aa7cf3a66fd7667c3b76570a0d5a27c753088cf0aea3690b52",
+      "revision": "5cde14e1e228771ef6f8c189e80bf9b9ce46647d44a1e2d8f95201f7c8f83dcf",
       "label": "2026-03-17",
       "isHistorical": true
     },
     {
       "date": "2026-03-16",
-      "revision": "5de0e6c59973d417e281d2b6b1f289b4541ab2def823006dc317acb0f5cce0fc",
+      "revision": "5e35158b8007e805591602143b565430f598a2f246cd6c9f6257102b7e89887f",
       "label": "2026-03-16",
       "isHistorical": true
     },
     {
       "date": "2026-03-13",
-      "revision": "3919d3b9f8088e4981472cebfaf2f6ba4b8653f78cb862612fb5f5bd02748843",
+      "revision": "808232a59fe5566e98788c4f0124f5423fb834a1499e87b362e7233248614217",
       "label": "2026-03-13",
       "isHistorical": true
     },
     {
       "date": "2026-03-12",
-      "revision": "7d84708def0f1b3a2277a2d48c5be1049a21601799c83a61b934369e58e9a6e6",
+      "revision": "4d6b80699e76428ee1e47996da3276885d056bce89418de583c42159055ef8e7",
       "label": "2026-03-12",
       "isHistorical": true
     },
     {
       "date": "2026-03-11",
-      "revision": "b26b2edce72db1a8ebcbc4b3f9bd99d873613bd0e038de7f8b13118d3dc317e2",
+      "revision": "786db22de53981d6fe4e9184ce9c272ceebe24d8e7a4c91af73af1e115f6a2e6",
       "label": "2026-03-11",
       "isHistorical": true
     },
     {
       "date": "2026-03-10",
-      "revision": "8f8618434c5fd4e74681dee8465ce222cf7e97a3c05f439a80ed12b0de1a755d",
+      "revision": "43d0a8cb10a031e3f629277bee1b33cbd32bd19a22113c2496ec7a0ba5c62b16",
       "label": "2026-03-10",
       "isHistorical": true
     },
     {
       "date": "2026-03-09",
-      "revision": "25e33d4b3da2bb13bf1a4c7bf80668451274c510764153ac970774c6a9f0f9b1",
+      "revision": "3a008ff42aa8b1a9b5b99c8d66a594d1841719a74e880c74573294e5c714fe0d",
       "label": "2026-03-09",
       "isHistorical": true
     },
     {
       "date": "2026-03-06",
-      "revision": "7336b3df089f250227bd39ec64d6a49a166c25b8ba5ea39eb2e85ef112039f99",
+      "revision": "b317ca749e4ce224904f1cb3df2489b3c91c2cb0cc39d86fc700c29e5af2c428",
       "label": "2026-03-06",
       "isHistorical": true
     },
     {
       "date": "2026-03-05",
-      "revision": "28cb9cc8d4da7abd12c2a15f88f7928b1e050285fcc70ff860b7ba84c16384f1",
+      "revision": "0e4a2f65bbc83cb5da36dcdd0358f779ee84fa4d21b6ac80faf57bc3f695d1c3",
       "label": "2026-03-05",
       "isHistorical": true
     },
     {
       "date": "2026-03-04",
-      "revision": "6ffce316427d14a899bc36b92172990c0d76f810f89c2ba6906080a387e69dec",
+      "revision": "5cc6f384aff242dfe5cf0400186d65c4e27da6c1fa4066f6a62b4513e52a41ed",
       "label": "2026-03-04",
       "isHistorical": true
     },
     {
       "date": "2026-03-02",
-      "revision": "de87a550b85f2b974acf8cac5a758f86f64ee605ad679fdc4ccb7aaabdab12e3",
+      "revision": "57cc89bd48c95eb48615635a1b00fe913ff14963a3ddf63d3db927be413af893",
       "label": "2026-03-02",
       "isHistorical": true
     },
     {
       "date": "2026-02-27",
-      "revision": "7fda6aee19b75cf58730f7ab2dae783d509fb3f494f7245d682662a2ed1f485b",
+      "revision": "7e1c974b80192a1009c128e1a89352e02eeae1cbce0bb4754e25bcc00974cdd2",
       "label": "2026-02-27",
       "isHistorical": true
     },
     {
       "date": "2026-02-26",
-      "revision": "48cd2e6c416e1e939353327e8addb27dbc61cb08317abfba254c944aade82d0b",
+      "revision": "3748f70b736ca06b157a9ae6a01e3587d0ba307e1f808477a9dbbe232180e6a3",
       "label": "2026-02-26",
       "isHistorical": true
     },
     {
       "date": "2026-02-25",
-      "revision": "eb24fdc7dff209c18434e7a111e46cf271fac130d3118b0431485d3f23bc0112",
+      "revision": "9521389cc456ae37f043b1259a578dd2d24068a387c0d761f33c22065045042c",
       "label": "2026-02-25",
       "isHistorical": true
     },
     {
       "date": "2026-02-24",
-      "revision": "3b95ee1aac066a09a17f677d0f579c6e209ad619de796cc3cf05eafe04de55d9",
+      "revision": "c74e4cad727d8d2387b4569dfd4b6c5c842be8016dccb3097a965e06e815dfcf",
       "label": "2026-02-24",
       "isHistorical": true
     },
     {
       "date": "2026-02-23",
-      "revision": "72368c6498bc3ca6d81588397aff5f521f8e3454d3d8c3af4280356feb861a10",
+      "revision": "b225b20cd607a2be3823c9ca877cede472c5ee5e13dfccfe37a733d1d1f161ce",
       "label": "2026-02-23",
       "isHistorical": true
     },
     {
       "date": "2026-02-20",
-      "revision": "123556d8cbcae66c7167f2998c153cdb757816ada192ddbc5b5f5e8f2dfe03dd",
+      "revision": "1180367d9fd523ab03ecd6a657c96241faa1332d00078e1b08bf4fa1dfe77612",
       "label": "2026-02-20",
       "isHistorical": true
     },
     {
       "date": "2026-02-19",
-      "revision": "9389e9e05926f9d1315d8ceb629607f7ef0811503e8deabd7b63900a86eae8cc",
+      "revision": "eb1ad20cce4abcaf67c7a9f55e0b00432b4d91c464f3f3a9517aa99f39a77217",
       "label": "2026-02-19",
       "isHistorical": true
     },
     {
       "date": "2026-02-18",
-      "revision": "1af4b181d1aa61e6c144e3adc6fd086df29ff8ea7ddf14bcb248f4beff6d87b9",
+      "revision": "55f0863b86672756fa08cbefaba9547c32bafda1a84293743d1ac5de063449db",
       "label": "2026-02-18",
       "isHistorical": true
     },
     {
       "date": "2026-02-17",
-      "revision": "f25631b7cce2b438328330c550b5dc19692bde008d9b2edb4e982a47a8426b90",
+      "revision": "62b781c2b7c7a72ea8783589e7d071590aa822bf38c6c04d808b5b56a709ae80",
       "label": "2026-02-17",
       "isHistorical": true
     },
     {
       "date": "2026-02-16",
-      "revision": "2fb034c716b4596bdafa502803a3a520d506238e9fdc7d87266ce40f2b3d6a89",
+      "revision": "180192aba82e8af19dfab0b40db0c09653b053d4720a087bb055ba0231e54cdb",
       "label": "2026-02-16",
       "isHistorical": true
     },
     {
       "date": "2026-02-13",
-      "revision": "075eaa2b967ee16a516e6f81781cebe574c8112479ad959558572009af8dc557",
+      "revision": "a96e16b1cd5d96310b2bb2a453d991e0266b2293c76b2ece9b5cbde91a71b765",
       "label": "2026-02-13",
       "isHistorical": true
     },
     {
       "date": "2026-02-12",
-      "revision": "2bd8271d35fb494810a3a940d10d79159bcbe1080ebf58c6d8f42b55ce7aa83d",
+      "revision": "0e58b3a4012fa27400e89b8f4c74267b631c7e4bb6f894267ee053ad0e69e330",
       "label": "2026-02-12",
       "isHistorical": true
     },
     {
       "date": "2026-02-11",
-      "revision": "302f05d68c607d84af022e3ab7af4827e9b4ec45306ed438e55ac4881017d576",
+      "revision": "64bf1ccf08696520897a17911080848f3729e112a7d629894a18194daf3f46c4",
       "label": "2026-02-11",
       "isHistorical": true
     },
     {
       "date": "2026-02-10",
-      "revision": "9b9dd560eea8521576e2c6d1d9018762f95780fa5a78a5e6475ac7dcfebfc140",
+      "revision": "0c71d85ad5d53517b0daf78408192684c6982c25e15aca086e79c2753ac6ddaa",
       "label": "2026-02-10",
       "isHistorical": true
     },
     {
       "date": "2026-02-09",
-      "revision": "b31589eac70f9253f3df85a4ed1f61ea1a7f8e8e16219a917e6bb1c990475acc",
+      "revision": "5870b6d74ece460cf8ebfc43cb33a97b77b60f90056eec6fef49fb4967ac7736",
       "label": "2026-02-09",
       "isHistorical": true
     },
     {
       "date": "2026-02-06",
-      "revision": "43a8dc286eafd2a436f66eede307f852d69d84b35de9c7e0fde8f912d6f37d50",
+      "revision": "019a1bb45322c8ad3a7ede038ebe4da299d1b8dda7daf6eb7f87865ec0a76d59",
       "label": "2026-02-06",
       "isHistorical": true
     },
     {
       "date": "2026-02-05",
-      "revision": "f5d88880072cc4523aa383958bbc52a3ff4e6a56ca8470ca1d50022a14a79de2",
+      "revision": "8d9d90d3130a97eb7640b6de6290bea8d77ec6014f6f94b1a923eca00bdc6c6f",
       "label": "2026-02-05",
       "isHistorical": true
     },
     {
       "date": "2026-02-04",
-      "revision": "76ec10efc0ea68998e838832909c8b8652e3f58fb94de41ae7bdaba8ea54b932",
+      "revision": "ae351d5637dd41273064f05cdc78029886090fd0a3c1568dcff0e437e8d2a2d6",
       "label": "2026-02-04",
       "isHistorical": true
     },
     {
       "date": "2026-02-03",
-      "revision": "389507834fcb05cf44c546349567e12a6e6cc837d21127e7c0a9bdcf76ce4255",
+      "revision": "7fe096a589e1885ca721bdd66c45f76a1c7f3d0c61c372e34a7cdf1fc3dd5c33",
       "label": "2026-02-03",
       "isHistorical": true
     },
     {
       "date": "2026-02-02",
-      "revision": "1026b69f57da1b531410f555d22f23e20cd9a0a4be0db8ee16cb92b46383ebbd",
+      "revision": "91d08e221d257f51befb665a05ef30a6e1af8f6e94beea06d561eb5962483940",
       "label": "2026-02-02",
       "isHistorical": true
     },
     {
       "date": "2026-02-01",
-      "revision": "cbb4fe67c3c23767e72ebe21d6e2adfd59f5a8a7e04527eff5d8b9d6202bb4e7",
+      "revision": "f4b1df4d5a726f81fee10577b4368be7752331d1d7ea091304e6df65b36aedab",
       "label": "2026-02-01",
       "isHistorical": true
     },
     {
       "date": "2026-01-30",
-      "revision": "91b62c31f6e112fed653f82e434ae376ed314b7f8eabdccb518d28b23285d0c7",
+      "revision": "c9f5411669dd2f3c94278b5c134003369d1456c3e7f025ed20828384628fee27",
       "label": "2026-01-30",
       "isHistorical": true
     },
     {
       "date": "2026-01-29",
-      "revision": "7c8614140e4b759785d8b897a8edb470558d4cfbbe4aa23b62e9b95b0793939d",
+      "revision": "a50bc447c414b5531a9f5d0fe2458d26b8cbadc45c83bcbdc7591dd97e697cd3",
       "label": "2026-01-29",
       "isHistorical": true
     },
     {
       "date": "2026-01-28",
-      "revision": "76cde612bf087f4365d1fa7c5fbddb6022b02a14d432a11b1e58a8ccb3f656f8",
+      "revision": "73b4d2c02c4b3507de15a05eebb6a16805071309a505f717f14b16912408802a",
       "label": "2026-01-28",
       "isHistorical": true
     },
     {
       "date": "2026-01-27",
-      "revision": "236e148fff0150b88cee18a4954fc2c3c9bd6e1d91fa4b06ec24950b0105c0d2",
+      "revision": "c51619c48664863d35db8b638e5ed321821c3a91f9987f8695412ff7fdf1de09",
       "label": "2026-01-27",
       "isHistorical": true
     },
     {
       "date": "2026-01-23",
-      "revision": "adaee991fc2214fc4fdeae2e34a53377d5256db9fd1d6a94f09918b7f6aadafe",
+      "revision": "83b213c5620e47cfd7b8b8f8349acdc905e5d53f5496f82b4467c653b13d6929",
       "label": "2026-01-23",
       "isHistorical": true
     },
     {
       "date": "2026-01-22",
-      "revision": "d9a1e4027627dfbe1a7a63d6a9f076937d398b0837d86aaa0a94ccdb758a3ccc",
+      "revision": "1f430a428829235b2ab55482b765892bdbba628eec297baf4e31473393907fb5",
       "label": "2026-01-22",
       "isHistorical": true
     },
     {
       "date": "2026-01-21",
-      "revision": "76cdbac4a343a839a0ae34afb53632aa443e0d9e81d2ba6f92761a694a0df902",
+      "revision": "b9b48cde2a6754e30ce00fe42f487ad1127736c878ae6090450b5661cb87d525",
       "label": "2026-01-21",
       "isHistorical": true
     },
     {
       "date": "2026-01-20",
-      "revision": "adb89ebb3d1ad0f2b2a83cda7d4181dbf9dab0357c89642de2dc902523702bb5",
+      "revision": "c583032ea58b19347b7abd338335f289a20c560ef24b26553e8286d992cc0962",
       "label": "2026-01-20",
       "isHistorical": true
     },
     {
       "date": "2026-01-19",
-      "revision": "4f4de605fc5d12917b0936b0a0dda353457b79b257cd74b27ad3d04228771703",
+      "revision": "c8300b7a55facccd046e24c62c206db1f76bf5732582cc9a1f77143bca0de761",
       "label": "2026-01-19",
       "isHistorical": true
     },
     {
       "date": "2026-01-16",
-      "revision": "5b61031f350043f9999a08aa62a15526e1163825e9550ce8d028ab736bd42800",
+      "revision": "e831bd964dba7792a96902f869713cb7701c907b4aa1d6eafcac2ff5d9ff6576",
       "label": "2026-01-16",
       "isHistorical": true
     },
     {
       "date": "2026-01-14",
-      "revision": "1d74d046209a9c054e58364e8105fb511c147408a19ea3bcea2e6d8ff93d94b1",
+      "revision": "6b399cabeb3c0b8f5b6abf96ef0ab142930e083ec0a8d6d620274a3333eacfde",
       "label": "2026-01-14",
       "isHistorical": true
     },
     {
       "date": "2026-01-13",
-      "revision": "2ce4dbf5f3c31261b74a9d7f3b1bddc32da467b395b93dad9b381244c16b1fc9",
+      "revision": "fe98b562f97bdaafe89a827b5612fa7f2dbade6f18c854625160115f74ed59ac",
       "label": "2026-01-13",
       "isHistorical": true
     },
     {
       "date": "2026-01-12",
-      "revision": "f5b585177ec04479d5dc0a82caa3c2cb967b54dcdb9b740422b67860ee437a69",
+      "revision": "a17a19c26447d7e91ab509367663fdc8b07809a4555c70fd3553f3a32c88507b",
       "label": "2026-01-12",
       "isHistorical": true
     },
     {
       "date": "2026-01-09",
-      "revision": "a3934ca7422585a99c5b78e82a60468e2666f159660fd33ed2c12162e73fcea3",
+      "revision": "eae7ab8d9aada8bfbeeda9e8d60b2739819d7c01c835a2c8ccad188f44f00452",
       "label": "2026-01-09",
       "isHistorical": true
     },
     {
       "date": "2026-01-08",
-      "revision": "0021625f83c9955bdac505a177338e765f004d87ef233daf3ff950dc0ae136ce",
+      "revision": "8b9f639c2c3503ace1e23e2e6f80c1955eca2263058586a4a3cf6cdf92ad9bbe",
       "label": "2026-01-08",
       "isHistorical": true
     },
     {
       "date": "2026-01-07",
-      "revision": "57d3822f83169c38223f2412801d6e4ae13195faf8297ec5a73382944945e06a",
+      "revision": "30b3254856a3394c0d35f3bf9117618d3e900e53e63b78e6e2e95d2eda7dd8be",
       "label": "2026-01-07",
       "isHistorical": true
     },
     {
       "date": "2026-01-06",
-      "revision": "e5d3ea7a35437e9fa988f39ee83fd1f5bd7952774610506c3fadf7c5bb0b3460",
+      "revision": "5ddd29dcd6caa647819d5c97fcdbfa1fa4def71b5805b8f45f8140f522b564a7",
       "label": "2026-01-06",
       "isHistorical": true
     },
     {
       "date": "2026-01-05",
-      "revision": "ae702cb088f1cc54949ce6b18f4382e46d4c93d8e1d532efd94b4ca8cce7020e",
+      "revision": "e1411ae3fa89eca1397ada6e7a414ebc073a2191c76304c800cfa3a5c5bd1bbf",
       "label": "2026-01-05",
       "isHistorical": true
     },
     {
       "date": "2026-01-02",
-      "revision": "39ef4f3e6c9ad3bf137d05448f5fae582d8cebe4f0eacbbe12216c68ef21367f",
+      "revision": "462bc4e5f110ebbb7140297b94f1e616af260f810a1ce8513ee704500e816cbc",
       "label": "2026-01-02",
       "isHistorical": true
     },
     {
       "date": "2026-01-01",
-      "revision": "edc80348a72d755c1f782ff8d01ccf89035701ffc8e4fffe082fd91d46d7c24a",
+      "revision": "12d8d220dfbf55e00dc5e4ab3e4051aab365376b562c6137298b70931d735040",
       "label": "2026-01-01",
       "isHistorical": true
     },
     {
       "date": "2025-12-31",
-      "revision": "a726d83c2fe4083f2a4238de91962ab0e28a7ce58243133ab0554a561b9eb542",
+      "revision": "a031a8813760462814217e2d5b5223a05a24b06409f7f385db2b6208f1442c8c",
       "label": "2025-12-31",
       "isHistorical": true
     },
     {
       "date": "2025-12-30",
-      "revision": "7947de7f3316c5b4cd63549aa009075cb33e803b28f15d0b0ed380f122c5a427",
+      "revision": "05594476d4999a04dfaa703b4bdb238a03269aa8889ef2ee7f56c8ca85084952",
       "label": "2025-12-30",
       "isHistorical": true
     },
     {
       "date": "2025-12-29",
-      "revision": "10b518a6331c52318f04eed69767e8303f46c6abb069e2a7143f948c6f65871f",
+      "revision": "1bf3e54c6b0ca29342f47ffb3cd52b630fa0d08f726203dd8b0b0bcf566a0ee8",
       "label": "2025-12-29",
       "isHistorical": true
     },
     {
       "date": "2025-12-26",
-      "revision": "030ac78536750f8d261377778d7cff0d0294d4aece278bbf13ce26c2991fb076",
+      "revision": "69c687fa9698bc032530264a8a3964f74430fca701773de9d4fea5f3ea1b11f1",
       "label": "2025-12-26",
       "isHistorical": true
     },
     {
       "date": "2025-12-24",
-      "revision": "da7f3f19d8ccbd6c3d50935b467a88e0f58624c6ce576987b68a9a3fdadb46ef",
+      "revision": "ac283333c403713216dab739b60d8eabcd323090152d27c5a2f7730484355ddf",
       "label": "2025-12-24",
       "isHistorical": true
     },
     {
       "date": "2025-12-23",
-      "revision": "cbeefcb50f9dc0801ba46dac0f09ffb0b2e1307c064340970b67581604aa41cc",
+      "revision": "50554cc69dbe97cdb7d2448c34f84e58e9db61044f8ca277ecbef4c5d0d842e1",
       "label": "2025-12-23",
       "isHistorical": true
     },
     {
       "date": "2025-12-22",
-      "revision": "dd125b1365a1b4c0939e29b0eb79d86d377be694f8435a121d79dd93efcd8f3e",
+      "revision": "a1551a190290853b8e02d7ac6dcbbf1eac26a6850a6b9ea123705ff07615c902",
       "label": "2025-12-22",
       "isHistorical": true
     },
     {
       "date": "2025-12-19",
-      "revision": "7bb97c5e548f02b3779ebe0149e1652cdbb25b3cd94cd674cb2d358df5fee290",
+      "revision": "da8a9cacc7a3310c970a9095648667d1d5a1b512528ea8c8c234cc807b454af1",
       "label": "2025-12-19",
       "isHistorical": true
     },
     {
       "date": "2025-12-18",
-      "revision": "aa21dc776b33dee3a14f8d79840e48fc4484e42f096b517b2747a3b0575b8bbc",
+      "revision": "b7989f3861d9ac035e8486afc081dde7688ccb0a1e20aa284e67c33de0071aba",
       "label": "2025-12-18",
       "isHistorical": true
     },
     {
       "date": "2025-12-17",
-      "revision": "97de60f6c4be661250a3aa6541403ed5d40552f9e728b3cdd10bb22e404a192e",
+      "revision": "6b7972663042281cbb8fbb323109b806d034ec938b3725264d5cf1230a3f9bf0",
       "label": "2025-12-17",
       "isHistorical": true
     },
     {
       "date": "2025-12-16",
-      "revision": "9cfb1897793538abf6e804c7b021df3a970e87d4dd2498bd144a72928d3b20c8",
+      "revision": "0b10adea53518f86a1db791e3a08eb5bd6ce997766d685d0fb888079b5d58c4c",
       "label": "2025-12-16",
       "isHistorical": true
     },
     {
       "date": "2025-12-15",
-      "revision": "95617d47c5ae5cb36aa629fa5eac9d8ef2af9c68c12448547d98034005a505f3",
+      "revision": "3a9e35ce32d73e6421e830453804f98f3ca6073eaa9b1f9236e3d776617d7c29",
       "label": "2025-12-15",
       "isHistorical": true
     },
     {
       "date": "2025-12-12",
-      "revision": "e0d367466d0028f3ea291c9f3f6fdba8b7d4b757d4bce81352b75dab0c7668a9",
+      "revision": "45bb1d01eb5814236230f35e50a745d0dbad369a78b4a873064458bfac2303cc",
       "label": "2025-12-12",
       "isHistorical": true
     },
     {
       "date": "2025-12-11",
-      "revision": "423d1e0b8d5e46c263ac91adb1f3ca419923a02263cf5ac7105d9842ad985064",
+      "revision": "1abb52beddb6650b86af4dd4f9ed43921fb12bf4aff683bd15ca1f706b7e29ad",
       "label": "2025-12-11",
       "isHistorical": true
     },
     {
       "date": "2025-12-10",
-      "revision": "ad06d2c4887ba780b35d405df28565ea5bcf7a1901b50715cafbb75a26e81f89",
+      "revision": "d6cec84abfcd893a288931d2aa458d68942a9cca0d5081365ffd91a409575920",
       "label": "2025-12-10",
       "isHistorical": true
     },
     {
       "date": "2025-12-09",
-      "revision": "0773f58747e94dd6d973e28eb1fd929cb3b97d3a9df20f4eafb99382e432d07c",
+      "revision": "cce8c59946e24b7c9cd3435d1c35808fa20c2104f8a84f6ea74d7960c79853e4",
       "label": "2025-12-09",
       "isHistorical": true
     },
     {
       "date": "2025-12-08",
-      "revision": "ceaf0b4c2ccd3adc3a5b1fa431a3c8a094f294017e643af58c7d94f00f3f3f62",
+      "revision": "9ffaaa16409a0e66464333b8975674117f58e286e9b6ac242a64c3b506de795f",
       "label": "2025-12-08",
       "isHistorical": true
     },
     {
       "date": "2025-12-05",
-      "revision": "f414398d2852deca16309c9fc220a27659d830d5a3f315db88e9782a80d64ba6",
+      "revision": "ffeb665c0b03e816ab950c5d5e96bd78630e94bc57ec76bbd471c701d8b0ebd0",
       "label": "2025-12-05",
       "isHistorical": true
     },
     {
       "date": "2025-12-04",
-      "revision": "c84ca4df080ea79e77af807f32f8bc15f7e2ddf0ed96bfcc2700bd554365bf09",
+      "revision": "22ef1cae9f12d1334f8348ec3e34c4c0fad42c0c116e905194d3fb8b07a44ebf",
       "label": "2025-12-04",
       "isHistorical": true
     },
     {
       "date": "2025-12-03",
-      "revision": "dd1e572b858efe94769953d94382f10d464b4d6a44c816af43ec44e475bc5db4",
+      "revision": "7cc22b1450239e253e1f03df320ce80f76f6acbb370b80ba0e345c318a29937f",
       "label": "2025-12-03",
       "isHistorical": true
     },
     {
       "date": "2025-12-02",
-      "revision": "0be6c26c4e5adf57662b357d89f3557a4d7327b865f52b668de0c958d85ee8dc",
+      "revision": "dfe433000f369920cb4b7e2ef4d6cab3819695a95c81b29e9dcd77a9faeae4a9",
       "label": "2025-12-02",
       "isHistorical": true
     },
     {
       "date": "2025-12-01",
-      "revision": "4065ed16ffc65ba527306bc66bd55bca6370112367725d088c936e3789fbceef",
+      "revision": "22d01f0f7040b668f5f16927de5ad935e43bbf93a17e38165863f473c16bb5eb",
       "label": "2025-12-01",
       "isHistorical": true
     },
     {
       "date": "2025-11-28",
-      "revision": "d8851ea38561d8f9db8254728d206e5bd066b3b621348cd6af048650def22a57",
+      "revision": "af6da7fd18299b6ad63fd3a495b91bf93c77bfb28ac10b917af0127679857a7f",
       "label": "2025-11-28",
       "isHistorical": true
     },
     {
       "date": "2025-11-27",
-      "revision": "e1a2bdf3db991bbc98679df0ce53e5407daa107ccfc59d77da48a3819bdd22dd",
+      "revision": "682db8143982b0497676a1d197e34bd83dc0263478d73cc211bc7740eb620184",
       "label": "2025-11-27",
       "isHistorical": true
     },
     {
       "date": "2025-11-26",
-      "revision": "bf9e5eade333a4df8abaa839a8bb35035793862051d8982dc09299ec7c2e966d",
+      "revision": "736a48538c458fc3cf2bbbaf2761f1305606d788b64558311ec91c0e6e9c3249",
       "label": "2025-11-26",
       "isHistorical": true
     },
     {
       "date": "2025-11-25",
-      "revision": "edfd4858184275b4be69b116d7022792ea1a28dc6a0d4e778213ae969160d4ea",
+      "revision": "195b10b3cf46ccc6fc209853ff3c640779a06064032dcf23a25ceea66360348b",
       "label": "2025-11-25",
       "isHistorical": true
     },
     {
       "date": "2025-11-24",
-      "revision": "08313f3423b7601cfc1b8b122f4874934ef518d5b8f12e375d7f4e57f78ccbaa",
+      "revision": "14e0b3691e1f42fee98cf6b16334b7f9d0daedb30ccb58107d69f5c91e1118c3",
       "label": "2025-11-24",
       "isHistorical": true
     },
     {
       "date": "2025-11-21",
-      "revision": "bcc995eb73567f05abb212f2403e9f0167f40cb32a42bcc5777165a8f9a61258",
+      "revision": "340fa53c0eab25a442a5ceefa54496bd8ec129b8651eb98673885d9f7b073b90",
       "label": "2025-11-21",
       "isHistorical": true
     },
     {
       "date": "2025-11-20",
-      "revision": "855e94c055d4c9685465885dd1cafd01313c4f5fa941dae7f3479e400101daa4",
+      "revision": "780f49690e589d1c59e31b768523c2f7b8ed42b1816f50dc48b0703798cd99ab",
       "label": "2025-11-20",
       "isHistorical": true
     },
     {
       "date": "2025-11-19",
-      "revision": "e3c3ed042e7ee13d8d10de4b340a89bb314a9b2892b614c6f69704bf22fae607",
+      "revision": "ac386d193ac83d250f9002212b74d1311f25f804ec018a7cd0955bdf3063ff24",
       "label": "2025-11-19",
       "isHistorical": true
     },
     {
       "date": "2025-11-18",
-      "revision": "96e1996acb6a0f74f99b74074346e2647c6f9cffa90cf93194459063b2eefbf4",
+      "revision": "02964c417c73cd4c4d76f67d83591f7f2fde82ee653b36c6aad496360114650c",
       "label": "2025-11-18",
       "isHistorical": true
     },
     {
       "date": "2025-11-17",
-      "revision": "6186b7584017bb390b9ce199bad6433ac252829fe6da5cea519900d733ce4e14",
+      "revision": "a26df91fe94658522d4cd0bc795f6b4b8bacd5d7fe46d8d7f378a0906f21c278",
       "label": "2025-11-17",
       "isHistorical": true
     },
     {
       "date": "2025-11-14",
-      "revision": "e550b4790baa51bc88cb86189aade79e1291179eceb8bf61c7dfcb45afc6046f",
+      "revision": "12843f2972da7370166acd483664800d14bee74cf3067a0b16aefff083695073",
       "label": "2025-11-14",
       "isHistorical": true
     },
     {
       "date": "2025-11-13",
-      "revision": "8f084982903bdc35a759e54b0d08e6d5a88dc714b5e3fd64ae784dd1b8836748",
+      "revision": "1ffa1630284e951a30796599a7f0f7aca94f7e4cf8b74461846eb9f9a21db630",
       "label": "2025-11-13",
       "isHistorical": true
     },
     {
       "date": "2025-11-12",
-      "revision": "ddacd724ee1aed783d9dea85ae6060c73f28d2303fea07c9ac8c59866e6ac7a6",
+      "revision": "5cc2a83742ecd2a16ef55adc39ece6a598f01df5c43e401f7029c4f047576237",
       "label": "2025-11-12",
       "isHistorical": true
     },
     {
       "date": "2025-11-11",
-      "revision": "0b471b5051c06f8cba19c34284482ed55665568fa363814de539f7e567664102",
+      "revision": "24cd0fa93ead6bc05a67ec0ffae6a5247d33a037b1a1854b82af87218eaa750f",
       "label": "2025-11-11",
       "isHistorical": true
     },
     {
       "date": "2025-11-10",
-      "revision": "f54dc671d56d16a7a94dc88b1096fd2e04e335fee3071fad3c0bfde1b3a535a6",
+      "revision": "d0113b038141861f0f3f0b85a025662637c72934629856ff25a3d2d264626b45",
       "label": "2025-11-10",
       "isHistorical": true
     },
     {
       "date": "2025-11-07",
-      "revision": "c9f7ab5fcff088bf62bb48df662f83efe74a2d5bb15087a4a9fa708a84001d5e",
+      "revision": "4d0c9c614448a04c34a85737b2a6cc6f938ed53ff821ded8a4785f86db5985ee",
       "label": "2025-11-07",
       "isHistorical": true
     },
     {
       "date": "2025-11-06",
-      "revision": "3482e55613c985c4bad22f4eaf059fc66b6fb06b5e0700ae2e89e9e3ceac25cb",
+      "revision": "42598be83f035770ccc6d7c96d98be23e302c3e94ed2a7f8db2a4d1bb647cfea",
       "label": "2025-11-06",
       "isHistorical": true
     },
     {
       "date": "2025-11-04",
-      "revision": "e4172cce2afcbfe4fb8e5605ad20454e0eef4e8e518b6be2224bf5b9ab91c491",
+      "revision": "281ffb694b5218df2637db1bb9ac9b383065d324dfc3924228899f0ea32bb974",
       "label": "2025-11-04",
       "isHistorical": true
     },
     {
       "date": "2025-11-03",
-      "revision": "930c762ab6c2c8df7919f8146d6b4a035a9be38a539e32db233f55af82bafe55",
+      "revision": "ed0131ae44a3aabf0cc25d85cd5bb705e334a836b7c6e2132cb9cbcedba7e55c",
       "label": "2025-11-03",
       "isHistorical": true
     },
     {
       "date": "2025-10-31",
-      "revision": "5c49e152ef2c0b5eb6f39ef4c3c4ddddc1ba160992690dde88d09311ed5f67be",
+      "revision": "9b7a175f79499a9057c5475535fa57e484f4eca170fb4f4c7b238d370513a5e4",
       "label": "2025-10-31",
       "isHistorical": true
     },
     {
       "date": "2025-10-30",
-      "revision": "81686a4436c3dd8a4454094753533083fd501e1e23031da891f7cc3d11b89eae",
+      "revision": "79668360b2f188a08056663cec2ce53581e7dfdddeb96a41e70674bdb823bd52",
       "label": "2025-10-30",
       "isHistorical": true
     },
     {
       "date": "2025-10-29",
-      "revision": "3922882218ebec3d45aae96941fe89c1e1f38ad7b56faab5ae317751a2d640bd",
+      "revision": "1a5f767201fbb8c21b41ccf7b2368a351b1e58835f2cf184289f3405aaeb22d5",
       "label": "2025-10-29",
       "isHistorical": true
     },
     {
       "date": "2025-10-28",
-      "revision": "4326b5af6ebdc2386cd3b40f9743da6deeb70825d21b1956842c2e4b91eedc83",
+      "revision": "4e8c174f1b97e0392e9e3d00021f30c59555c9a09673c8fa844ff1c26754534e",
       "label": "2025-10-28",
       "isHistorical": true
     },
     {
       "date": "2025-10-27",
-      "revision": "301cdade6c9eb7e8600bfc2a8aed06f949e542247dd7b462c675539990751c68",
+      "revision": "cf2e4f8b753ed151d43253afe785e10d72dbcbd94f28315bc1f945c8a0d1039a",
       "label": "2025-10-27",
       "isHistorical": true
     },
     {
       "date": "2025-10-24",
-      "revision": "0cbec2e6bd98e715233555b156569978fad2a79fb126617a4c547bb99a6997d0",
+      "revision": "2dda91f821f4162f1981e7dba4dfea560cbe528942bde8b03a864250f66f0079",
       "label": "2025-10-24",
       "isHistorical": true
     },
     {
       "date": "2025-10-23",
-      "revision": "096ef951b37dad2e5d2c1806a76d96d0305f96198ed1fbe2b894b13916e752a9",
+      "revision": "ac8bb26924a5525c7c822d2579a6d930774b90fa3cf8b38d22fb20c6cca1560c",
       "label": "2025-10-23",
       "isHistorical": true
     },
     {
       "date": "2025-10-21",
-      "revision": "0b12a3e8ea6259441b7202876317d642a324c0fc2347f6f692cc11d084fef18a",
+      "revision": "ae5a2f3fcb5200667c0de42aa7295f16695fbe46db3c5863a908877877bd80f8",
       "label": "2025-10-21",
       "isHistorical": true
     },
     {
       "date": "2025-10-20",
-      "revision": "5f97e69fe9165c62aec121e8cdc127596efea9ea0456267f567f38b5c1d8cd54",
+      "revision": "673b530669a4a6231d43f74fed4b45e989fa453724ccf79929844619a162347e",
       "label": "2025-10-20",
       "isHistorical": true
     },
     {
       "date": "2025-10-17",
-      "revision": "dfb111b969d6e843841b141d360e28e174b552de959a56c883bfe897524e026d",
+      "revision": "48a2035f1131b9b2d09ba2ab68dd32f37223d2aebd0fbcf32f772beca358c455",
       "label": "2025-10-17",
       "isHistorical": true
     },
     {
       "date": "2025-10-16",
-      "revision": "d48228467eab78c25c37ad46078facbf7757764937a3952f7ac12633e5519c40",
+      "revision": "6ecfbea1cb334238f0343396bf4aee4426ffef3215dfba01b08b703919b487a0",
       "label": "2025-10-16",
       "isHistorical": true
     },
     {
       "date": "2025-10-15",
-      "revision": "70922bff17b7d4cc446cb47b505e56720a0a6ca50b16ee795dfd696da5ff8ea0",
+      "revision": "c041c903e91a2686464b48f3719e1ed1a452c93a1c4aeefa6b93a26a5ffe6378",
       "label": "2025-10-15",
       "isHistorical": true
     },
     {
       "date": "2025-10-14",
-      "revision": "af2e0235391a6cc7f42e33d4b86fa3603c98291672b5a3f64f7d7664d646dee2",
+      "revision": "a4b7e09f3e500e119ba951dde0ed984e4fcf1e384beaf40ef19bd05094030456",
       "label": "2025-10-14",
       "isHistorical": true
     },
     {
       "date": "2025-10-13",
-      "revision": "40f98abf7013b959aa158607ae7946cd9e3d4ed79a9f95699a1e8b6d5215f29b",
+      "revision": "fe9068dc67d2a5e93c96009d0f4863e2647b2e8f1a146c43ae30793c1b3b5e16",
       "label": "2025-10-13",
       "isHistorical": true
     },
     {
       "date": "2025-10-10",
-      "revision": "8363a10cec54bf7761e9cb694ef5ea20c24bcf6c904ddd3c1b1dfc569a0dc282",
+      "revision": "bf118741b720b486f041bba42d747c166ea06fb26d923d257885ff7a2c905d25",
       "label": "2025-10-10",
       "isHistorical": true
     },
     {
       "date": "2025-10-09",
-      "revision": "b9d5905126176c86c43319240c7fe5791486ae0923182ff77da9df2eb8c006c7",
+      "revision": "7c00f0f6e50edcedaf1b9da25ee808e9b310c8671f98c10b15a941ef67c5afac",
       "label": "2025-10-09",
       "isHistorical": true
     },
     {
       "date": "2025-10-08",
-      "revision": "d7113aacf696b89c4993de144140e758b9dd2b917894597fa90412985ba957ee",
+      "revision": "3b5dd262935f3807ed9df12d4ab1eade2d5696b4e4e20295eb5a0fa27ce0a17b",
       "label": "2025-10-08",
       "isHistorical": true
     },
     {
       "date": "2025-10-07",
-      "revision": "006b1f0bdb5c6e570b57bf375e87fb7894c923f995fd9b5f9b956e434ad4d022",
+      "revision": "ba22ab47ecdb5c6688a98a708b3287bdb14ac4f8afe2c85f0e21d787b37022b2",
       "label": "2025-10-07",
       "isHistorical": true
     },
     {
       "date": "2025-10-06",
-      "revision": "b2845c042a9d2a6eae087abe47cb2a97af4168b01f9bac70b1de75641973544c",
+      "revision": "2106639134782dd2f0abf27bdd752bf963d2d1e175461e93d6db28fd24ab008b",
       "label": "2025-10-06",
       "isHistorical": true
     },
     {
       "date": "2025-10-03",
-      "revision": "94001f095b1659d80dac9f097fa44616aab424906b88dac311fa6b91cc79c45c",
+      "revision": "8871ea954a054a5e2f1d254b67c732afacaf7ffe5665a06e4e1e9ebf670e4234",
       "label": "2025-10-03",
       "isHistorical": true
     },
     {
       "date": "2025-10-01",
-      "revision": "64d7bd740bc7fe122691936b736e63563d22297f45e4ce646574f48a399334ba",
+      "revision": "b5eea47caa46f5457b964b804985775a2d62e3865776da074edb1d0269f8f0a6",
       "label": "2025-10-01",
       "isHistorical": true
     },
     {
       "date": "2025-09-30",
-      "revision": "0b888590aeb268da179f1a69aadee94629992f2bfc216eabef4c43a8f36477be",
+      "revision": "b31f6ff40af3fd1277c7fc171cc30cedb1f00afefcc4ddb6979002275d5aedeb",
       "label": "2025-09-30",
       "isHistorical": true
     },
     {
       "date": "2025-09-29",
-      "revision": "5bc93f1930bd5ad5d5a5d469b83b8b7220dc6085bb44547eebc26a9741a3148d",
+      "revision": "1927315b32017d4dea54c27dd7c09410f4c7fc432bf6c9ab2594f62eb23fc247",
       "label": "2025-09-29",
       "isHistorical": true
     },
     {
       "date": "2025-09-26",
-      "revision": "5499e09a703e2e8430c32005a71cc9adee3a7e9c5c02d8973da74eb36622b3b7",
+      "revision": "b2823ce9b109a17fd44479f079bd1fcdc80562d2e6dacce8d16974379272f77b",
       "label": "2025-09-26",
       "isHistorical": true
     },
     {
       "date": "2025-09-25",
-      "revision": "69c60e35b433a282e71465418e3fa7d0e4e6cb763026a9f55fff5112ed1fbc1b",
+      "revision": "ce600083b7addb87629bac292c3daa29c3a97dc9c67114e135e9b893eb4eac53",
       "label": "2025-09-25",
       "isHistorical": true
     },
     {
       "date": "2025-09-24",
-      "revision": "96b9eacec2dc139150c76cdee4230bfad704863fe8618baa437b80f13eb54e71",
+      "revision": "b61367e1611de9a612cd5867d4d1f976cc4091742b1f27266eb5a3a251c6bfd9",
       "label": "2025-09-24",
       "isHistorical": true
     },
     {
       "date": "2025-09-23",
-      "revision": "edce7099bf81313298ba290f1c4ac6c42209e2e1c883b71ac740b054bd5e7c3b",
+      "revision": "b7c332146930b831fba47ba45007e7f307c0dd773591952115d51bdbb8ea1e34",
       "label": "2025-09-23",
       "isHistorical": true
     },
     {
       "date": "2025-09-22",
-      "revision": "f47b918b12d6c27f8a40ccae42adcec96b3f6cc1c02fe5485fccbdef0247ea17",
+      "revision": "2fbcd62f8f7a512d09cdbbdb694e3562d7bfd6ba615f101e794419ac12ef5c8d",
       "label": "2025-09-22",
       "isHistorical": true
     },
     {
       "date": "2025-09-19",
-      "revision": "d4653f384926d383745b07a84932db034a25f9ae428eb062c65616d9d8e9f9ea",
+      "revision": "2a49c5721166e61f8c367f86fbf0aa8c423e06abeccba9c423292eae5495c016",
       "label": "2025-09-19",
       "isHistorical": true
     },
     {
       "date": "2025-09-18",
-      "revision": "96a22117b71248d463261f306045394a7ace5245794a76fbb265a02e4fcf7780",
+      "revision": "fec53dd4e95c001abb7377a6bd5c9c2c79511e60773ebd5d6e24e137e2dc5b19",
       "label": "2025-09-18",
       "isHistorical": true
     },
     {
       "date": "2025-09-17",
-      "revision": "d52c891423e46406b7b6fce1e195430f8a5f554efee62b17b5fe76809b8460d4",
+      "revision": "c34c0ec85ba6a12a4e7b82900cc41839f5a5e06538d6d14aed8a8284703687db",
       "label": "2025-09-17",
       "isHistorical": true
     },
     {
       "date": "2025-09-16",
-      "revision": "61f96eb8520c31f9d7d547e526d1326eca776ea30cf8024e6be604333c89dadc",
+      "revision": "4e7434b3086b37896169acf5c9272cd2e9703ea7c99c85abce30c1c037757043",
       "label": "2025-09-16",
       "isHistorical": true
     },
     {
       "date": "2025-09-15",
-      "revision": "db618bb6288dabb7e36305b6bdee1063e6375ddbcc1d88f34952006e9cea7403",
+      "revision": "f8d0fe5a85cd3d7bc4820c2b97fa46f4d8f8321c3f06999c69634ab3191289cb",
       "label": "2025-09-15",
       "isHistorical": true
     },
     {
       "date": "2025-09-12",
-      "revision": "2e198ba552cab1f283849eee2cded77ba5ec6c18836ec394f161811d9d76302b",
+      "revision": "ae4c63f86f443ae550f746863f118acafe6209e6d9470e9fe77c3d541d881201",
       "label": "2025-09-12",
       "isHistorical": true
     },
     {
       "date": "2025-09-11",
-      "revision": "ba937d4e96df86b841950009e298f6c2eeaf9710f0029b3aef32053a9790fed7",
+      "revision": "82620d8d5e9c6abc59e4b8d3631da0272f77a2c08aad9ad3c2ad15fc25dbb34e",
       "label": "2025-09-11",
       "isHistorical": true
     },
     {
       "date": "2025-09-10",
-      "revision": "3edd09563e0281d463bbebd0e6e7fed8b65b81478d08f6bf498616a72121d442",
+      "revision": "6f8ff6a7e556fc9f11afd4c556f6aefacf8dcb63361eba183245fe00eff8a695",
       "label": "2025-09-10",
       "isHistorical": true
     },
     {
       "date": "2025-09-09",
-      "revision": "2d525f5de0fe4b90526228845cb1c0e0317cf6edbacdfe833dc31e7e5dee07ec",
+      "revision": "396b2a4412c9462ce495cb3016268458332d3c2024bab21df4e3d14e52ede32f",
       "label": "2025-09-09",
       "isHistorical": true
     },
     {
       "date": "2025-09-08",
-      "revision": "72617ea912210e608b8c459461b9d27c93c9785032d102a083afc8ba06b3a05a",
+      "revision": "1a3f193619f167da19a5eec94511c7c3d72aa324e78e1d041c62b280eba5ba11",
       "label": "2025-09-08",
       "isHistorical": true
     },
     {
       "date": "2025-09-05",
-      "revision": "c15022af3508ff53ec25ba2b2449079566d2479400ce44b3bad7d0f24dd1df7a",
+      "revision": "efc4b904056cd324c1f9eaa6c2bfc3aeebcb0244fe32c2138703e7b96aea6467",
       "label": "2025-09-05",
       "isHistorical": true
     },
     {
       "date": "2025-09-04",
-      "revision": "ab9226e4cc447c3742a4370bdad4194fcaa07485fac30745194d7f3b3b5508af",
+      "revision": "a2c7a839f6a5377a42da761220846cc66dc52476b24fd0dfa8df49a44a22e9c1",
       "label": "2025-09-04",
       "isHistorical": true
     },
     {
       "date": "2025-09-03",
-      "revision": "67ab956817f434ed7f98bf3d76d6b79735d9eae4b74b8ef2664ae012b2dbf4e8",
+      "revision": "79bdb8d8c7465a876f54deef76ce107cc8dd7db4ab62b8249cf64f40d874ad53",
       "label": "2025-09-03",
       "isHistorical": true
     },
     {
       "date": "2025-09-02",
-      "revision": "e2995e2af4165384de49ba51d7b3b9e131abee801ad4c59c9b5f1f5c5f6f7cc9",
+      "revision": "f93a578d97e74032361e24cdfb0a88ad0d067d799651c568271d5b3aaa75c40a",
       "label": "2025-09-02",
       "isHistorical": true
     },
     {
       "date": "2025-09-01",
-      "revision": "abb2d2e0a594cd5a441a19fa2ec889772e30f973bc0fa0bf87dd0cfefbd0045a",
+      "revision": "5b5c6f370f935efa298f19d2967798d386544edf2c6985e13544eb3bcc812578",
       "label": "2025-09-01",
       "isHistorical": true
     },
     {
       "date": "2025-08-29",
-      "revision": "ad550f03da803fd1f3be6fcb91145cc63f0f1585a2694078abb2663a506c48b5",
+      "revision": "488bbe4ce72bb9d65c29903f76be0a2e8c1f569983daa2c07ded8a3e1bffcaaa",
       "label": "2025-08-29",
       "isHistorical": true
     },
     {
       "date": "2025-08-28",
-      "revision": "2fb7001cd556226e85b9e887ee5de69ab81f00fbfc874c1716c3e2f24138e608",
+      "revision": "aa786916474db6d239b72d258b0e7aebdca53f502a717454ac5300db2aceaa62",
       "label": "2025-08-28",
       "isHistorical": true
     },
     {
       "date": "2025-08-26",
-      "revision": "9cc5e89d108b47d4c8ced1934ed29048e6df5a89026fa0415daa4cf8c9ff0d0e",
+      "revision": "8b080983ec7ea931bc52ed54f246c5c7544b3028616219d4df0a586799456d15",
       "label": "2025-08-26",
       "isHistorical": true
     },
     {
       "date": "2025-08-25",
-      "revision": "b92b9bb813dd0b42dd859733222b1e0ab1d6b9828e04b7f34d87e6f7366152d8",
+      "revision": "eae6aeae5fe523c0b2555665a7f2eb9393a80e4239a6f2f77f5aaefdf54dcc4c",
       "label": "2025-08-25",
       "isHistorical": true
     },
     {
       "date": "2025-08-22",
-      "revision": "322e72af3539b886cd4a6119bf1d9fe78ea6699bae7c801eed0bbf452a416752",
+      "revision": "eb6d4cd52422f78f8f6b748476da1869322c47db62c1df46293f29ac50e9a5e7",
       "label": "2025-08-22",
       "isHistorical": true
     },
     {
       "date": "2025-08-21",
-      "revision": "b5ee0db02a36013d2129f443361677bdabc6bd8acd50bcffcfb9236a2f1ae5dc",
+      "revision": "135e8ab8d6cb3485ed85d8c6f48803dca8dab2c8ee78ce8a6a36d1e1f4955007",
       "label": "2025-08-21",
       "isHistorical": true
     },
     {
       "date": "2025-08-20",
-      "revision": "54b282b13d153151e2ce5dbc322724c881f597769b5e8947d80b466e47c5518c",
+      "revision": "c1b1bbf435f4c934b5fefecc48acc38981e65d7d58140bfed9c08659b8bb2fb3",
       "label": "2025-08-20",
       "isHistorical": true
     },
     {
       "date": "2025-08-19",
-      "revision": "7ffa9394b77abcbd6bf589100f5568e0253d53999cc3f54fdb56a9b257c362f3",
+      "revision": "253495adbf17491e1dcb9d29f36a40f08aeeed36934bcf93eef68d84cb205afa",
       "label": "2025-08-19",
       "isHistorical": true
     },
     {
       "date": "2025-08-18",
-      "revision": "615f79a139d4de047f2ef3c102ae781fc1bb4b6d10ed2d3a96fe9b800cacc7ce",
+      "revision": "c2706a24f84df5099e38ab0dc354a94d7812441a545925687562513b3ef1e9bf",
       "label": "2025-08-18",
       "isHistorical": true
     },
     {
       "date": "2025-08-14",
-      "revision": "ea2b06067726dce68fa36950feb89fba5e143eb6806d3d7217e63b473e9af5fa",
+      "revision": "1d334effaed485043561b72af75bb28c858d7b3a939f3e1527069540e266ac19",
       "label": "2025-08-14",
       "isHistorical": true
     },
     {
       "date": "2025-08-13",
-      "revision": "28942551ee0d782b681980e53c5a80b206de765ebe83eff231dac4d12163b65a",
+      "revision": "3b17c54e310bca5402606c415ee48b0a662af5234c117e8b074386582cf819f5",
       "label": "2025-08-13",
       "isHistorical": true
     },
     {
       "date": "2025-08-12",
-      "revision": "5becb6c63c9e24aabe7b6abbeede84b97a457d5d544f9e30edca15b7564a6c1e",
+      "revision": "6c5fcb692d551fb1db43e7568935bb300197f2d4196199fbd378b95a94c379e5",
       "label": "2025-08-12",
       "isHistorical": true
     },
     {
       "date": "2025-08-11",
-      "revision": "106046ad98187eb771ed79335fda0d652dd371abf81dda0077d1dbd29d02bf5e",
+      "revision": "3ee89b17eee48a9c4fd30fe94915a2f744dd7c4f51c378b974961863173fa47a",
       "label": "2025-08-11",
       "isHistorical": true
     },
     {
       "date": "2025-08-08",
-      "revision": "cbc789b4e3f5577d314e2e3e7f2a741c14ad20f5b5ad9665e59dcbdc9f398c5d",
+      "revision": "5a259aa7a3a753e5ee36247b1ffe55769a6dd04a0d281235e30ed314acf65812",
       "label": "2025-08-08",
       "isHistorical": true
     },
     {
       "date": "2025-08-07",
-      "revision": "f2f9e8740061a85718c918bed8e994019cecf3075060de207263f61cc8c0f783",
+      "revision": "da542442d4fea192a7aa1e4bda2be663a95e9421604a09f600b456310855fd67",
       "label": "2025-08-07",
       "isHistorical": true
     },
     {
       "date": "2025-08-06",
-      "revision": "466c412fb38d64a09e7d0ddba14fc2f96f5da37506b2518d6d976d432fda844e",
+      "revision": "c783625393fe6ad807443dc20a48fbcd2b2c9ab9c6f0d185e06fb8a59b39b6c4",
       "label": "2025-08-06",
       "isHistorical": true
     },
     {
       "date": "2025-08-05",
-      "revision": "13d8fcc4be8d633b06d75000b66c8706c34556e3fc5fdeb93bb06c12b24cd803",
+      "revision": "11b89165878a8470cadf0fff9df7c0a5fc1838ce70d928b498a968f6ad98ab29",
       "label": "2025-08-05",
       "isHistorical": true
     },
     {
       "date": "2025-08-04",
-      "revision": "b6908d32fa6a167c04016a895775659c3fdbe27ab5b1876b174681e29e31ffd6",
+      "revision": "c7ffd30b5cb10102da619f42494b545d457e904f63b2d8b15545c2e6fb62c6c7",
       "label": "2025-08-04",
       "isHistorical": true
     },
     {
       "date": "2025-08-01",
-      "revision": "a2067f90d356b54536b1c9bfb6c5e00b51fe7d73c75b3a9c3d64d40cbef41626",
+      "revision": "30a79c77627051a202afd251647752299ded28e756f4ab395b51d7758263a20a",
       "label": "2025-08-01",
       "isHistorical": true
     },
     {
       "date": "2025-07-31",
-      "revision": "3c0f56ce2238383a9614d2bb3a12ae090204c617bc7f6d1262750770fedaedeb",
+      "revision": "2b2f2c20649e211cb385ba707744f91526753490f45e3c9169aaf680b8fe1a84",
       "label": "2025-07-31",
       "isHistorical": true
     },
     {
       "date": "2025-07-30",
-      "revision": "27381dc24b5fae0fe0ef830bf9c36aadaf2ef834e56427ec7cf9c38875405607",
+      "revision": "42c1b419a635db6569f80e4affda47419d180b8ba135a309a59d3930c140ff53",
       "label": "2025-07-30",
       "isHistorical": true
     },
     {
       "date": "2025-07-29",
-      "revision": "72dd23743cfb8af637b3a88c82efa79f38c337aecfd51294f14fb3a7099d36cf",
+      "revision": "ea3021aaa46b625105f94588f5d2022c90704921984a9ed1f8606189b8511fa5",
       "label": "2025-07-29",
       "isHistorical": true
     },
     {
       "date": "2025-07-28",
-      "revision": "5a8f296be98243a65f60d126dac59fcef6561d57e0e1d49d665057c5d16cb362",
+      "revision": "d70a47d0fd613a0b3d9bbfe15f7ec8c41862d4fd58955feff4d81ed21ce957c8",
       "label": "2025-07-28",
       "isHistorical": true
     },
     {
       "date": "2025-07-25",
-      "revision": "f73c0f376c4a3f3f98d3b0b00b0ddd1eba88abf0e9d841f5f51bb9febc03fb99",
+      "revision": "ae9bf15f718a3398b67da08205bdb349f60ac63bbece9df453529c8c5870c05e",
       "label": "2025-07-25",
       "isHistorical": true
     },
     {
       "date": "2025-07-24",
-      "revision": "8f8bc382a5e11a408ff3492050c4859b62c9c72335620a4f128684d68fb58e00",
+      "revision": "3a3d1f424ae4c7903eff94c5ee43e1f470fa51773a9014f4d8f84c8e512273b3",
       "label": "2025-07-24",
       "isHistorical": true
     },
     {
       "date": "2025-07-23",
-      "revision": "1f2ccd40d2a9d35cb06582121144a0b36705e62d2feac9d3c2c970ca38bc2c76",
+      "revision": "63f88557d88ad661ef7d15d00c7144f8d8d8fb7029a4692f8443272c76864a7a",
       "label": "2025-07-23",
       "isHistorical": true
     },
     {
       "date": "2025-07-22",
-      "revision": "76e3e2fbf98a1fff0264635daf17e3aaec3d729d2f14e599e56f1f9837c2ef6c",
+      "revision": "cfa069c7ea884786a179e1553d42be6f5234e69156aefedff9bdb3895d100f94",
       "label": "2025-07-22",
       "isHistorical": true
     },
     {
       "date": "2025-07-21",
-      "revision": "06675831a389f1ccf85dfa84796b59524d9656558c3c6f8d4ad4d0fadcba2990",
+      "revision": "93bc9a49cfaa194827f08d33d6b13bfd9a17a65189b9b116d2b7f20ead96f1e0",
       "label": "2025-07-21",
       "isHistorical": true
     },
     {
       "date": "2025-07-18",
-      "revision": "cabc3936650a3d794cd24fb63cb4d84a3ec7dca0f8fa5de3ad38380e969356c3",
+      "revision": "3aff3f13024f36fc75fe86c9eebdffc2db90e9491da0c902c81922d56a63bcba",
       "label": "2025-07-18",
       "isHistorical": true
     },
     {
       "date": "2025-07-17",
-      "revision": "480c5e2a74f70c4dc6ea6a98540529f005a45af604506c11c10fb92580494b89",
+      "revision": "7950bbdd8a05e4fa9bbbd9c9a156df689bd34b03e59d2eaba0baeb89d82f2b6f",
       "label": "2025-07-17",
       "isHistorical": true
     },
     {
       "date": "2025-07-16",
-      "revision": "94a284764ea55d44b8cc45405df92d54bb83eeedc8281e13c45453d49974e408",
+      "revision": "79c36fe4c3c2e8db44a4e0b51741fd094c693ebfe13cfe52a70182eb6a2e8072",
       "label": "2025-07-16",
       "isHistorical": true
     },
     {
       "date": "2025-07-15",
-      "revision": "a5684ca4686bbdddf26866240a6bd6c22780df062427cec4a59e98f6e024afc5",
+      "revision": "9a4befc006efb4bd53dcfb0b67dc9494fe5cc8376241fcc7d949267decada419",
       "label": "2025-07-15",
       "isHistorical": true
     },
     {
       "date": "2025-07-14",
-      "revision": "4044d6d38b1c05a997c47a8252415a95235f593248d1e2619e28e0f7b4609d5f",
+      "revision": "cc4495285ec07f09ce5d66791ba11768308177f6f9195189d21db0dec1dacc2c",
       "label": "2025-07-14",
       "isHistorical": true
     },
     {
       "date": "2025-07-11",
-      "revision": "4f7d626620b314f6f8f650c6441a2301b3bb611a9a9e94bafdae409e2130cdc3",
+      "revision": "024d1c9c8ea5a596b8b8a26ad3a4c2a9a181c0e3a67b3c93bb8313db6af0ba96",
       "label": "2025-07-11",
       "isHistorical": true
     },
     {
       "date": "2025-07-10",
-      "revision": "902fce2d864595d474e226a791e922d72b0673daf347dd445ffaccc04c42aad1",
+      "revision": "3a5d6004824135a099d43099f5d3fb389337832ef639bdeae853e8799ee052bc",
       "label": "2025-07-10",
       "isHistorical": true
     },
     {
       "date": "2025-07-09",
-      "revision": "309bdacee4a8f2dada6edbff24e19c48c4bd87cadd23feb9756f478831c47e72",
+      "revision": "18e2df74a5accf6dcd6ba1caec82882ec66ccf6f861045147c8a8c1cfe8372de",
       "label": "2025-07-09",
       "isHistorical": true
     },
     {
       "date": "2025-07-08",
-      "revision": "00d55bea6ad88c21db704b039c72970d5276233dfe530ba288de46d0a8b8f7c3",
+      "revision": "f9d39cfb97cc0a13d0b4fcb043583c391bf9de7e280be0ed754f0ffc4fc63cb3",
       "label": "2025-07-08",
       "isHistorical": true
     },
     {
       "date": "2025-07-07",
-      "revision": "28d87a5c9b59df252470f2059f84f226b7688ac4575fa87dddce7d6a0a8a8e27",
+      "revision": "f4432269a3a42c8308e62924e73361384c70c9dd64c5f4c6c1b67202be12d66d",
       "label": "2025-07-07",
       "isHistorical": true
     },
     {
       "date": "2025-07-04",
-      "revision": "ff234a24af81e9072414a8b3efa18e5644ce730c0bfd7f984a121bf886a65811",
+      "revision": "c0cfe62772a64a33cda0caf3fc59b7cb5728d76e3e9f9febc30b749abba22e6b",
       "label": "2025-07-04",
       "isHistorical": true
     },
     {
       "date": "2025-07-03",
-      "revision": "66616b055bc4d8f81972fe5b0ad4870f0a83f4a5f1679534506ce49275444767",
+      "revision": "aad4d5dc3b2e9efeae51c8b1629eb891a0419795c9aa85134146e948aba9659a",
       "label": "2025-07-03",
       "isHistorical": true
     },
     {
       "date": "2025-07-02",
-      "revision": "ca96a580e85015afb4585bf91300609cd181bc94f1520ee0800a4878710a9e1b",
+      "revision": "9be0bf24c556c2068224626c00db6d5e2b0f12c67b2157a0f2bc30070df2d9b9",
       "label": "2025-07-02",
       "isHistorical": true
     },
     {
       "date": "2025-07-01",
-      "revision": "051127cef61e2f2020e547dcb4ce0961286382b14734f12c80f642e72669d6aa",
+      "revision": "241c55b5309d07951282e28c4fcbcf731807b685f5daeab6a7b01ed2c086cbab",
       "label": "2025-07-01",
       "isHistorical": true
     },
     {
       "date": "2025-06-30",
-      "revision": "7f18bfe9256348f6b488f914ef259fee6dfa925b83e2a5d96b438f6c49f8f0b8",
+      "revision": "d656b93bb48031a65aeff97c0e4a3cd10554878a6670166fa886baf7d830dffe",
       "label": "2025-06-30",
       "isHistorical": true
     },
     {
       "date": "2025-06-27",
-      "revision": "6bcf403d78ee23665afc8dd5032edba5ff456852512ea055e9169281d774cdbf",
+      "revision": "ff3f9740a7c2bd54bce3e054bedfbb3b52b27c65215221560bd7f86ee94c16b4",
       "label": "2025-06-27",
       "isHistorical": true
     },
     {
       "date": "2025-06-26",
-      "revision": "43eb99d95eccbd62a676249527bd3b77c62013f2e08b43d336f2e55d2e7ae079",
+      "revision": "e6dc116197d9650fc8d1cfa8d3c0af826006df6c3580f2dbe80d9c67afb3e380",
       "label": "2025-06-26",
       "isHistorical": true
     },
     {
       "date": "2025-06-25",
-      "revision": "2b1633e77e3e8090bc59b63c5675517769b7d8b896bb5d1600e216a34675e2a5",
+      "revision": "48f0dda65268292b8dbdc8f7c5e4081ffb64b660a46e020d0e71e7cb6d6621bd",
       "label": "2025-06-25",
       "isHistorical": true
     },
     {
       "date": "2025-06-24",
-      "revision": "300dba8cc3288dd40211c3626a24c2d6508ec6b4fbfe7c7d34946e70bcfa8e0a",
+      "revision": "53b1209673a864f15b4712f86d3dfdc6555067d00fce34d44a864a353cdf442f",
       "label": "2025-06-24",
       "isHistorical": true
     },
     {
       "date": "2025-06-23",
-      "revision": "1b3d8dccf268b65135671c86651dbfb40d13fc19ed3af5c1430ac4b4cf5aa1a4",
+      "revision": "d6d2846ec8c13c0e25d1835adbc0af77b63031c8b6a29a47e38d03ddc3708aad",
       "label": "2025-06-23",
       "isHistorical": true
     },
     {
       "date": "2025-06-20",
-      "revision": "acbbdae02e1a57a3d315b63637bcbe27a2e05f1ff66690ccd5e75f0fe249b8d9",
+      "revision": "4761af359acfa155e9d508b67c0995b742827faafe42030d87d83c0283171143",
       "label": "2025-06-20",
       "isHistorical": true
     },
     {
       "date": "2025-06-19",
-      "revision": "d84ef22c28546c082839de3bfe574e28dc1b7de32f9601dfca1ee61c50ffa384",
+      "revision": "4cf2c5323fdcf67e1f5e4aeca9ab00b5308e991b4fcbfaa4a23d9df364e14dc0",
       "label": "2025-06-19",
       "isHistorical": true
     },
     {
       "date": "2025-06-18",
-      "revision": "a31ec2a74e2a74df956c9d7b738c24204c333a5c00b12e17d8f6885f9bd035b1",
+      "revision": "1559da9b268c699e71232da31fd2fb6e54bd49a13d5984502d953ad383c689d7",
       "label": "2025-06-18",
       "isHistorical": true
     },
     {
       "date": "2025-06-17",
-      "revision": "3d6b8957084d974aa71d34f5650309c35fa39fde6301db8939e3c165585e96f8",
+      "revision": "5454322f911bc556d9448a6b1496f92c59a33e8ca89850a5695d849fcb729cd5",
       "label": "2025-06-17",
       "isHistorical": true
     },
     {
       "date": "2025-06-16",
-      "revision": "1111524a154d28f0835a4786f4b916a3a2954c620bb8da78f941ec27a0527891",
+      "revision": "567c0353e2873a5e7c73284b36a084f9303f7e01989b5d45adac34a2a418668b",
       "label": "2025-06-16",
       "isHistorical": true
     },
     {
       "date": "2025-06-13",
-      "revision": "d5d685e57111c43d554a3a45867b79d6fd3b424aadea9061133cd2c099904512",
+      "revision": "c0b6d62f8f26d389f9166806c0b5ef49181a8c6133eca260d2fe8e8499014e50",
       "label": "2025-06-13",
       "isHistorical": true
     },
     {
       "date": "2025-06-12",
-      "revision": "23c5a3e4708633ba3ad6d4452677a260153a0d8cd538c27258e8b468c08daaea",
+      "revision": "eefbd86a14f773355e9c898cbd7ffaf13699b11c4b5b6fd0debb8557c4b497f0",
       "label": "2025-06-12",
       "isHistorical": true
     },
     {
       "date": "2025-06-11",
-      "revision": "94b0fcb78a75a0b068135b9b8f2a7ae6ae5fd277f37ce76c3d3ab6a283ffab67",
+      "revision": "376337cc5eb5ed855046b4e73c92b8891cd0bb8211e6d758f125897ee8d928bc",
       "label": "2025-06-11",
       "isHistorical": true
     },
     {
       "date": "2025-06-10",
-      "revision": "0a7dc843a56e874e320a59a2370d4003344c87b3e9fb8cb9f17351ddb0c43372",
+      "revision": "a894621bf83fe911717fb69a166626ab892f2dbd91419647f4bf8b0cfe9aebfe",
       "label": "2025-06-10",
       "isHistorical": true
     },
     {
       "date": "2025-06-09",
-      "revision": "ecaff2ad08504b99013e36c5aed504131273726755ca1f5fc546a1cb92a27c16",
+      "revision": "4403a57e7323bc251b251b0ac3e8c855feb9d3ce89c40fc1987c3f6affd07c3c",
       "label": "2025-06-09",
       "isHistorical": true
     },
     {
       "date": "2025-06-06",
-      "revision": "79ea9a4ae873751590718b2f307f5e56c60f3222eb722a5911606492b0c4ee0e",
+      "revision": "3dfa2ee77e7345e8ebac532388bbf38a6a64d079dea4c631bf09169d9d4ec039",
       "label": "2025-06-06",
       "isHistorical": true
     },
     {
       "date": "2025-06-05",
-      "revision": "afe6fb1a7be65050464c5ac56aece9744c307055c37e03133055cdf542d85ae8",
+      "revision": "542bd12061b6b22b015f8bfb79ceb2a9eb649b7ef7fb76cc5fadd0ddac159fad",
       "label": "2025-06-05",
       "isHistorical": true
     },
     {
       "date": "2025-06-04",
-      "revision": "2a2cd5f7cf0b749a565ccdec12698cd54e50f30ce469ec7554039608e35fee7a",
+      "revision": "fc11424c609fc942c2e998cc39be10e15acfd90cdaad8403d2257056bb54b775",
       "label": "2025-06-04",
       "isHistorical": true
     },
     {
       "date": "2025-06-03",
-      "revision": "7bd79409fb54ecb3ca13f323a02fd261c304ed97f78177807a1b11eccc5fd6aa",
+      "revision": "3b7e779e1e99c7562cd01c5deed73e2d20a706e76c04dcdba012532bf38b27cf",
       "label": "2025-06-03",
       "isHistorical": true
     },
     {
       "date": "2025-06-02",
-      "revision": "cf43a2f6773e8754e61e4e274a202a1e861e6a10c24ef3f7e1f301f1b49336e7",
+      "revision": "3aff46743a8977b03c3656edef6479b1e677d9dbb1c68767e5a99dbe1515ef38",
       "label": "2025-06-02",
       "isHistorical": true
     },
     {
       "date": "2025-05-30",
-      "revision": "cd0f34bfa9b4a816b3c034ea2b235807a366f0a0d565ca2a7b13df8e273763ee",
+      "revision": "a51fa822ca8ac472870fda969fe163af7a67ee23b39dba68500ac98c39e7b1f6",
       "label": "2025-05-30",
       "isHistorical": true
     },
     {
       "date": "2025-05-29",
-      "revision": "600d9457bc23fb75064264c6b541e82b435710329d014cfe80ec82345a27f5ba",
+      "revision": "2e0375c1bbf8668f35563d3c4cbc928b9929877aa68de1219895ebe89bfe5bc9",
       "label": "2025-05-29",
       "isHistorical": true
     },
     {
       "date": "2025-05-28",
-      "revision": "6448d467b07d96094364ba8bed5fd475917dbc4963cf912cfa7fc6681e38cdf0",
+      "revision": "f07502c454d4e7f94d6986070275295408985b48bd7f70e2fd20d0b3f44e8fcf",
       "label": "2025-05-28",
       "isHistorical": true
     },
     {
       "date": "2025-05-27",
-      "revision": "5c186a4aad628aed9d35d0d224967155a6f75b9866e4bccab0275106e0ec5cda",
+      "revision": "63da3127c2a5f3a952c26523e9387f2b1e125e68401b498afdab6e996162543f",
       "label": "2025-05-27",
       "isHistorical": true
     },
     {
       "date": "2025-05-26",
-      "revision": "be5dbd47bcb9f0bbc496ea57cac2dad70803f22f2fee70565c28abf7788708b9",
+      "revision": "9af5a81443c38519c80c00a61b4e8a53a6d47ee0bacf5be2ccbff1fe84ce5372",
       "label": "2025-05-26",
       "isHistorical": true
     },
     {
       "date": "2025-05-23",
-      "revision": "111a4570a57e3b673096c12a8f3260f17485ba93b33545944707fc0657297e6c",
+      "revision": "e1f65bc4a4d23cba31f70565d0e31a1e4c1725877d11d1003253cd67ec1a7260",
       "label": "2025-05-23",
       "isHistorical": true
     },
     {
       "date": "2025-05-22",
-      "revision": "2227b87965f497a2dfa3ac453827f612dfd871479a95ff39d554b6cba71b1d40",
+      "revision": "f5c04e94debab6b5dcbecbe6add4382b2ba2812d16049d0a9a67e4cba5cecf65",
       "label": "2025-05-22",
       "isHistorical": true
     },
     {
       "date": "2025-05-21",
-      "revision": "d644db9aa04b4c0300d790678195f04df95fe37094ee8f55fbaad715e5a0288b",
+      "revision": "26bacb24714901feba6f41985079039f90defea535f53f23388b18d2acac27c3",
       "label": "2025-05-21",
       "isHistorical": true
     },
     {
       "date": "2025-05-20",
-      "revision": "84dc9031f8809392bfc96bce81b83b1e0f4b338ae5627ac199b2101940dd54c2",
+      "revision": "953f1f277f077daf965a1488003b44e44df84b0b80c4918583eed1cb94bb0e93",
       "label": "2025-05-20",
       "isHistorical": true
     },
     {
       "date": "2025-05-19",
-      "revision": "e8567ba46970025e8644d2869a9ff011d3d67dd25da067ba9a110d37cba895f2",
+      "revision": "9e4e9c78cdb350bc7de14f12a945576fc44ceb5eee8f5e457d5c09b3a7db7828",
       "label": "2025-05-19",
       "isHistorical": true
     },
     {
       "date": "2025-05-16",
-      "revision": "e8bfd4b9fa2d7a3890e99b08bc3febebe9b6e8427a71975d7dee1d6ceef0abf8",
+      "revision": "c74cbf777ceec6c169475a299fba5b32462aaeb5b1db0ac7502572018932e114",
       "label": "2025-05-16",
       "isHistorical": true
     },
     {
       "date": "2025-05-15",
-      "revision": "f6225653bcf595fdcb8b8df31e7bfc233070d10eff9b97495e91141903cb367b",
+      "revision": "fed65c89e070aa38a27f05920b995c9488a9808029d4941fc03a17856ea7ed13",
       "label": "2025-05-15",
       "isHistorical": true
     },
     {
       "date": "2025-05-14",
-      "revision": "57660e4cba4ae675f34375e1b52d4be7e217ee715df0574e8449d9285964cda2",
+      "revision": "d8c9935bd90a00a92d19aac85a3aca57a262dd2b16ebadf14a9dc95fc4eb151f",
       "label": "2025-05-14",
       "isHistorical": true
     },
     {
       "date": "2025-05-13",
-      "revision": "cccc40acdc6c770763d0b69cf75f41becfa0c19ff6b1a2ae59e1dd8328b3be6c",
+      "revision": "15f1ccdc5bbd068d692258ae48a33ca380ef3dcd682ebc64dcc1545db145314d",
       "label": "2025-05-13",
       "isHistorical": true
     },
     {
       "date": "2025-05-12",
-      "revision": "1b872611695f162cf50790d649bfd6ad84b24180837e1e853b97974815330ca8",
+      "revision": "f03b45f5a491bbf3e9b83cc0ec3e77e17839a65fcdd1fe66d81949bde3e62fae",
       "label": "2025-05-12",
       "isHistorical": true
     },
     {
       "date": "2025-05-09",
-      "revision": "6884ad2bf5fb561753fa7ba9097b357d79005ca2bd4424f4755db0ecc1797892",
+      "revision": "dd4f810caa7f506e9a713966ba3611ca6b857cbf75cf7a7b8109d604dd72a9fe",
       "label": "2025-05-09",
       "isHistorical": true
     },
     {
       "date": "2025-05-08",
-      "revision": "5a1258132dadc6e84f89640693dd4f8c2a728b3c420698dd612bfb57efd63409",
+      "revision": "e4015ea81df90b7759d2dd57c7d1b225399afd4a30be3d9377e044809fe5db15",
       "label": "2025-05-08",
       "isHistorical": true
     },
     {
       "date": "2025-05-07",
-      "revision": "f08ea91aebe73aacf4ae4ca5df6b4d283c1be43096b793dcf369b1915c7e157f",
+      "revision": "43d3572d21d9670dfcae0ec9f153caf66bc48f1bd68b2beb68090cd67c81e251",
       "label": "2025-05-07",
       "isHistorical": true
     },
     {
       "date": "2025-05-06",
-      "revision": "d1bf44cfb7cfe249612cec0e4ba7682587bcd922622955869705dc9fdd7a2f34",
+      "revision": "d2d6f1ff22635ad8d164a0018c14e6291669f4ffb9cfb85e95346a2900c735ec",
       "label": "2025-05-06",
       "isHistorical": true
     },
     {
       "date": "2025-05-05",
-      "revision": "cb73e92c434a076b403e34f78daffe7baa647569ba4cdae78f1def3973703480",
+      "revision": "c3f3d52b3404ac535f003cb43a125effa597ca18c490e2ea32121d6d3ce47abe",
       "label": "2025-05-05",
       "isHistorical": true
     },
     {
       "date": "2025-05-02",
-      "revision": "06d115cd4e3fb3b9215d0e24fcbaad24cc212d9096ee3e38bb7a5ff05069a086",
+      "revision": "1ccf6f92b79850989a252065aa75d4f9cd31fb89a07ec472fbd021354447b07d",
       "label": "2025-05-02",
       "isHistorical": true
     },
     {
       "date": "2025-04-30",
-      "revision": "7ac5ea3463be5dc103a17702542a9f40be6bfe0f7608fd91f255c3e3ca1e4575",
+      "revision": "5bd4fba7bce4a21dc36e101ebebd5e5428a59b91123850ec3d80724b17640a6c",
       "label": "2025-04-30",
       "isHistorical": true
     },
     {
       "date": "2025-04-29",
-      "revision": "6ef72158a30a82bf697fb3080f699f9f314a242bc05d24019ef243ec31cb4e2c",
+      "revision": "b48405aa4e583bd792bdeb5e4cbeb19186ad4e772c2c18c4fd0d3bd404cb82f1",
       "label": "2025-04-29",
       "isHistorical": true
     },
     {
       "date": "2025-04-28",
-      "revision": "517f7d1b245e755c35cd8b31132c2c3dca05dc9bf5479f19c688c43e69871a09",
+      "revision": "3311e5ffd07800537cfd7a99861173d810fda7c94ff4ce83412adbb9d7915f9c",
       "label": "2025-04-28",
       "isHistorical": true
     },
     {
       "date": "2025-04-25",
-      "revision": "6e6dcc57d6c1de4fa54f0dca3176ce0e36343e62b64c3fcbfd20756826c32707",
+      "revision": "ea164d972a4c0f0ff3654f0d87b810d85c9ecb3c637bfb06eab9c172636a958c",
       "label": "2025-04-25",
       "isHistorical": true
     },
     {
       "date": "2025-04-24",
-      "revision": "3a4ea67e0b728a85ee003f14464365bea16a74ea3df6d57d408291f66aa2e04a",
+      "revision": "fd6b972764d5226cedf1aba835ab37c8c4581a354deb4703d5d8f5ea1c64f72a",
       "label": "2025-04-24",
       "isHistorical": true
     },
     {
       "date": "2025-04-23",
-      "revision": "de638661f5481b245fd4e7a0d9f0eb58e4a678a74ad56ff3f08c9d05bb023666",
+      "revision": "a6995a00ec0ee4b8ce45797db21a5dedb53d8e0460392d594a9da9a8df21e8a4",
       "label": "2025-04-23",
       "isHistorical": true
     },
     {
       "date": "2025-04-22",
-      "revision": "19ad5066980cbf4b81c9f4c945314ca1613104e4b66aacff57f03a62a5fa6b9a",
+      "revision": "381b964ca85e45eaa049ae2313cf85fbd52597cd5c6641e9f2a9fe0138898d79",
       "label": "2025-04-22",
       "isHistorical": true
     },
     {
       "date": "2025-04-21",
-      "revision": "0a25c09a179b5b8d5cbd56bc3f813575f7b122be6d24ba959155b9eb5b565f57",
+      "revision": "2d6e2cb309d0c6e3ed612c322eed8900057413b2d82862b69623c623ee9866b6",
       "label": "2025-04-21",
       "isHistorical": true
     },
     {
       "date": "2025-04-17",
-      "revision": "de030f3dbba9f108b17853be3603af418046b6df497d1a474632371009730f46",
+      "revision": "1f4065df6c40140b4103281614eb92490b071e0322996203a59fa54abe545855",
       "label": "2025-04-17",
       "isHistorical": true
     },
     {
       "date": "2025-04-16",
-      "revision": "4966e7a98e65b4ab607aba3253c4d5fc3b6c8c6a9ad12fd83c8a5474e5190a61",
+      "revision": "c1bcef48f526b51d802f24940bcb4c9ec56ec1c1c05d5beb784e6ed3ce024dc0",
       "label": "2025-04-16",
       "isHistorical": true
     },
     {
       "date": "2025-04-15",
-      "revision": "1a92dcb8b94e6934c2f3591088f036b63e47db7c473a3934e949b31864eefca4",
+      "revision": "101f306635ffcc55216ad316e76f7b2bee71c006cac050e885aeb9539622353c",
       "label": "2025-04-15",
       "isHistorical": true
     },
     {
       "date": "2025-04-11",
-      "revision": "f991c7e874ee5d218b3a63cabb473b4c954264b15e6287e4069dd4351ca1fd42",
+      "revision": "1f68cab61b02e10f23d97a61c36702c2ed376fb053f5857f01c0b21029ce8f8a",
       "label": "2025-04-11",
       "isHistorical": true
     },
     {
       "date": "2025-04-09",
-      "revision": "fdfdde49134cdd58369b9d591a5b2abd77a161b5feb1616a586c6e3d322ca38e",
+      "revision": "a58a508d3e4c52726fe5a8ccee2a73e87b3a9f339cfde9d3c5608479e64bb510",
       "label": "2025-04-09",
       "isHistorical": true
     },
     {
       "date": "2025-04-08",
-      "revision": "d5991862a3d2835342d419469ace302cbd248ace74dfe651e45ef6c66b2728e1",
+      "revision": "a6ef19021a1f2d768bfdedf5d4b38c955033a26ca52a40b3fcac4aac40c039ca",
       "label": "2025-04-08",
       "isHistorical": true
     },
     {
       "date": "2025-04-07",
-      "revision": "e9c11aadd65c9b11517b493b9274ff7468bf2881894838091c364dc88699d988",
+      "revision": "6d75df85eaaa3a72b441843fcf8d620879face730f89cca7a63ba896545d3b58",
       "label": "2025-04-07",
       "isHistorical": true
     },
     {
       "date": "2025-04-04",
-      "revision": "381ce6e65d3dd20ba4d3ee0011d475673302977f89a68092ec77b6c06d450d5f",
+      "revision": "bd7b858b0831980e210d777270b6451bea242846bb9da899510971c7a6c57857",
       "label": "2025-04-04",
       "isHistorical": true
     },
     {
       "date": "2025-04-03",
-      "revision": "4009d35b7dc3b5a7e3f600ab30cd78f55e00cd992a83490e6c4c321a86e35562",
+      "revision": "e7d4c8aed8135f9507a165098cd887f68753476861e57964560e4916cbf4c3a0",
       "label": "2025-04-03",
       "isHistorical": true
     },
     {
       "date": "2025-04-02",
-      "revision": "0cbd93a29eaae63934d189e4a881f9454ed785e395596dde1b7bb23573fa6702",
+      "revision": "dbff3c96dc1b96c8e9e5992aae66fa1315db6bb8529cd45c8c57e83e811183c3",
       "label": "2025-04-02",
       "isHistorical": true
     },
     {
       "date": "2025-04-01",
-      "revision": "b5ef86a54714d48589b4c5f81f6d7d49ba88c49c59edfe1732b4e5374bc40e2c",
+      "revision": "bca45ebbd6d95fcda0ef0186fd1772846a6710ed72e39029b6920fc0af195a73",
       "label": "2025-04-01",
       "isHistorical": true
     },
     {
       "date": "2025-03-28",
-      "revision": "d3f8f4c18a452e8230dc169f142dd48292874412c2b2dd39dae611b81b8c6feb",
+      "revision": "e673fa88941501bacebea53271faa17fdf1fec175a3943ba5a8d96e3ba7c66e6",
       "label": "2025-03-28",
       "isHistorical": true
     },
     {
       "date": "2025-03-27",
-      "revision": "abdacbc728f3f8de882305b6a020b48d49814c4c8883ce27c509f48af668cf1f",
+      "revision": "f62a42679cb96b59bd19f4c6ad7a42e933fd1f7fc48b0a08a023e6b000d942b3",
       "label": "2025-03-27",
       "isHistorical": true
     },
     {
       "date": "2025-03-26",
-      "revision": "95272c999f9a249c13487c210de01590df95816264ffcb749d90cd9b4b2ea205",
+      "revision": "817ba4e92bca7ccdd050f81402520a91877397c78f2e54e424fa851474caee41",
       "label": "2025-03-26",
       "isHistorical": true
     },
     {
       "date": "2025-03-25",
-      "revision": "1111444b3bd20eba6eb8b142f11435fc3ecc8ae628cbf7a5623d15ca82706b29",
+      "revision": "98299b01515766b95341b59d7d3b895f5492bfcf5d6a2b679c1234f505398646",
       "label": "2025-03-25",
       "isHistorical": true
     },
     {
       "date": "2025-03-24",
-      "revision": "bf120264202ab6634ed37574911f8abd4f25f48a30db43121520807b9b79eb56",
+      "revision": "c854a2d6566a437376887ef9730162d5173b25fd829cb92ea1feef0d3c869c5d",
       "label": "2025-03-24",
       "isHistorical": true
     },
     {
       "date": "2025-03-21",
-      "revision": "08b5a33c418332ce35d94654586b3af9ead60cf5c7b7acf25b940fbf5f66da30",
+      "revision": "fd2d8af8e81aa8709b3bdb11dc12fee1d73a8d6fae9d646174d98a2e6e770926",
       "label": "2025-03-21",
       "isHistorical": true
     },
     {
       "date": "2025-03-20",
-      "revision": "3a46aadf0891d30132216d77dc7af294cbef8d24d9e6a32c3d4c61c08e6ba538",
+      "revision": "310fd30e76392e31034988b3f439adb95ec5c9179ea06355846e797a390d41b2",
       "label": "2025-03-20",
       "isHistorical": true
     },
     {
       "date": "2025-03-19",
-      "revision": "3d5f0b9c48f10a297cdeb6b619207622a4d5adca8bf9e59a6228539a2422cb5f",
+      "revision": "044db65db9d4621689f84db386d45962dfaa2cb86f51346b60baafc1d84156df",
       "label": "2025-03-19",
       "isHistorical": true
     },
     {
       "date": "2025-03-18",
-      "revision": "283603c40eb82958691e51dbf45873eca5ddf9b317569a325150ea2fba5e8e25",
+      "revision": "2629472923e35c5e1953461c20ed38f3945f217e57c384f56c3582eff0d3e672",
       "label": "2025-03-18",
       "isHistorical": true
     },
     {
       "date": "2025-03-17",
-      "revision": "a867e8a199c9142079581fdfe8dc24c6e0bd0b58eb04346af24621c2d5b2e58a",
+      "revision": "7957bd9c24788c66f87cf52e6d148e1b50d6134e0e13f741a40c56f065d3e13d",
       "label": "2025-03-17",
       "isHistorical": true
     },
     {
       "date": "2025-03-13",
-      "revision": "737bf81e987ffb1b9d3a8f6023fbd06948474409e6c5dabf4af1ddc82333ff15",
+      "revision": "d0f217fa0339ea01b094ad06d35a1fa0579e0a3e8607ddb7169a0ef6d2786d1a",
       "label": "2025-03-13",
       "isHistorical": true
     },
     {
       "date": "2025-03-12",
-      "revision": "60337045a3db30c9bd20bcea43199bc269f1639f84de7757561f7ddddb92e8b7",
+      "revision": "e1764fcc35251fa937295e3df9e766bf27478e48fa4387b17d36dae7b1bbfd7d",
       "label": "2025-03-12",
       "isHistorical": true
     },
     {
       "date": "2025-03-11",
-      "revision": "d5ade0877ea105eb83f192411fb325515ae608caabb07607caab32315dd8de93",
+      "revision": "13bcb877dd04d93224fea47d185511aa55074c15a59c12ac4d7143e12661cdbd",
       "label": "2025-03-11",
       "isHistorical": true
     },
     {
       "date": "2025-03-10",
-      "revision": "774ddc46a1185d566a0df8118a6c4b6d8a94c8bb8d7462497b3e07adea887df4",
+      "revision": "fa1279cfb83bec79978467843ab384b34906908e31f6c1269dcd73238435bedc",
       "label": "2025-03-10",
       "isHistorical": true
     },
     {
       "date": "2025-03-07",
-      "revision": "be38aae339f744f5ad8474830360baeef10e48ead0d20dc82bcfe3473b0d4c0c",
+      "revision": "9b7acccb234ad325a188ff560206d6457aa1bd8e83f6fa54bde88f02c609ec85",
       "label": "2025-03-07",
       "isHistorical": true
     },
     {
       "date": "2025-03-06",
-      "revision": "59a70277bc08ebf9f345ba91722f50d8e65a0a1fd6776805a81e58bd598297ec",
+      "revision": "6ab86707c19c95465a995311d14e39ef172e77c7e5bb393b9d4aa423090321a7",
       "label": "2025-03-06",
       "isHistorical": true
     },
     {
       "date": "2025-03-05",
-      "revision": "29d8bf2c1218fdf2778a72a1a3e9b67015576a656cf645933e9c2c327eb9db61",
+      "revision": "5269e1dbb03477b071118ce64c5ad9430320d7a267196209dfaa6becc10c2110",
       "label": "2025-03-05",
       "isHistorical": true
     },
     {
       "date": "2025-03-04",
-      "revision": "a294e185d3b510ff7ef695165ebb5fe80ffcaada10248fe6f5d1211f2f63bd48",
+      "revision": "a2dfb2ebff967979004fd0c72442b737985feb53a18cb318ca81bc413e5a7369",
       "label": "2025-03-04",
       "isHistorical": true
     },
     {
       "date": "2025-03-03",
-      "revision": "6e5c688c3280dd3b4a738377090e6e8e94b1c0ed25f37ea409c814e2ff2d1191",
+      "revision": "a824a0f9c7a0be0e119be8bd0e16665c73e7c5802e7a65473194cb99f140d7ba",
       "label": "2025-03-03",
       "isHistorical": true
     },
     {
       "date": "2025-02-28",
-      "revision": "9d828352afa47155d119baa581683b80a08bd141b9473d0f9b5a3f01512df60b",
+      "revision": "14e70dc13ba71b8f58ca9fa3ff344da0991467daf5a7231698483f29567d347a",
       "label": "2025-02-28",
       "isHistorical": true
     },
     {
       "date": "2025-02-27",
-      "revision": "776ebc35b2dfc61c4de1061306310e4b71cc083137bf833957c2274d1bbc847d",
+      "revision": "742482d1fa2e39c72e1d9827c307ba88956b17847c5b76dd7a5719fc4877cf6c",
       "label": "2025-02-27",
       "isHistorical": true
     },
     {
       "date": "2025-02-25",
-      "revision": "30eb1732617a966d38051582008265e63fb91fe333462916408c99ea2704a6f9",
+      "revision": "ef403f98b30c411ed64cde157eeadabb75e511b24f857f56c3e9b1118354269f",
       "label": "2025-02-25",
       "isHistorical": true
     },
     {
       "date": "2025-02-24",
-      "revision": "c1828cbdda510c9540765b5e48ef18597f8beff07533fbba2cbb8335fe58f3da",
+      "revision": "3fc2cee48e0b0588195668453f48d9255a1aa387deea2ef8bda8a776908fdab4",
       "label": "2025-02-24",
       "isHistorical": true
     },
     {
       "date": "2025-02-21",
-      "revision": "5154b868b0d85050ae17885d94129eb728141f13956f081f2147399ff07f6e1a",
+      "revision": "2ad03bb14eb46177c00047a3aeac49598cbba46601c84c4f92577d72c816cf01",
       "label": "2025-02-21",
       "isHistorical": true
     },
     {
       "date": "2025-02-20",
-      "revision": "5a144bfa5fa252b10f7578a6db46263eae5b9660338d9e00209ed465d944e3ae",
+      "revision": "e5d3f08d65f84bbf8eb92b716c94e643094b63965a3025486c1f7c6e78fa71a9",
       "label": "2025-02-20",
       "isHistorical": true
     },
     {
       "date": "2025-02-19",
-      "revision": "3b9b050a6fa3e3e3a9c1f6b9bbb92ea1c5038126657201349606746dc05cc25d",
+      "revision": "286c9b0b2e777441448245d6a7fab5d7319536fdc79d5f60b2fadda305a546ae",
       "label": "2025-02-19",
       "isHistorical": true
     },
     {
       "date": "2025-02-18",
-      "revision": "b40e9bd4daf96ae0d657806f4fbdafa94d868c79dc22b4e04d465de0acbb684b",
+      "revision": "1f98d542e28e46e166dbd64ae72cf2d111ef6832857dbcbcd2629f695a534f1a",
       "label": "2025-02-18",
       "isHistorical": true
     },
     {
       "date": "2025-02-17",
-      "revision": "019a7d09c7a645facb4a33adc60ec9c4a4669ebbdc580481af1b510eaf5e44b9",
+      "revision": "ea6912591815fde0eca2d03b3833ce38c5732cbb04a7cad12b506d377e436a18",
       "label": "2025-02-17",
       "isHistorical": true
     },
     {
       "date": "2025-02-14",
-      "revision": "d7f1ae0422cb1804e84a7553d2c4b93d441ef19d509b0263c86e0975249cd024",
+      "revision": "fc0a001b7976e2e23a2762ef6edbfc9879a5bc2938498d84363671c5d700039a",
       "label": "2025-02-14",
       "isHistorical": true
     },
     {
       "date": "2025-02-13",
-      "revision": "cefd12f0c0707f19222ff9fa7b3d50b3b6dfe85303fc2501f87d377cdf4d3bee",
+      "revision": "4d31a0f935ce7cf5328b6e6d10bfcaa007ac9d3b2e93f99c340a1e5ff561bdab",
       "label": "2025-02-13",
       "isHistorical": true
     },
     {
       "date": "2025-02-12",
-      "revision": "ad6cb0721454eb718658f3f9ac7071613d2479d7e034313c3553cbf516d7489a",
+      "revision": "8ba870f7e4c600755548a6f1666f9b059339d5141cd3b1cddd4242e446519f80",
       "label": "2025-02-12",
       "isHistorical": true
     },
     {
       "date": "2025-02-11",
-      "revision": "1fd680bb5fdfb19e71708652415cdd1afe8329b271e9b761dce26b95fd6b114a",
+      "revision": "85f3a2afe4789a5eccaaff38b237b56ba78b051e67768e31701c9921c6a242af",
       "label": "2025-02-11",
       "isHistorical": true
     },
     {
       "date": "2025-02-10",
-      "revision": "fcff37a924fc09b1ec7ce55de4e930520a0585e8572224bd6ad3e5f7251d3b48",
+      "revision": "7cbb883d3e957b4082c8e70080d06c7fb01c058c5d74dd3662e656c686f4d5e6",
       "label": "2025-02-10",
       "isHistorical": true
     },
     {
       "date": "2025-02-07",
-      "revision": "0eb2d01bead706077e558050897e92cc80f2019e2d991e9113524f51210522b0",
+      "revision": "7332dc688d070a9c49d8b9345c985edf280a36e13cd3da7f61e121079349fb3f",
       "label": "2025-02-07",
       "isHistorical": true
     },
     {
       "date": "2025-02-06",
-      "revision": "283931f24bfa1184f7ab4af3b6fb308c46d4eabc883bb925fc26fa9889585221",
+      "revision": "66a618698d7707b2fe3fba127ebe88cc496f66abfd04de140f4a8a2797f90ae2",
       "label": "2025-02-06",
       "isHistorical": true
     },
     {
       "date": "2025-02-05",
-      "revision": "2d91c8a4a579b505847eb3ac3747e1a7d45d6cd530ac9da0124e07f01b647994",
+      "revision": "ea819f3e06b26da9626c7f64921a636c24e5dfb69407dadbc6d4f563d09d7044",
       "label": "2025-02-05",
       "isHistorical": true
     },
     {
       "date": "2025-02-04",
-      "revision": "487f93f3e9e58020641552bfce82245c4f3b0f23039f21e96463b5ff7c4d7031",
+      "revision": "6f495ac36cb86d0f61b274be760131b03c93184a24d3bf2463b5c98b9e5255de",
       "label": "2025-02-04",
       "isHistorical": true
     },
     {
       "date": "2025-02-03",
-      "revision": "e4d3934c8ef66f51533ec8f6b6cefd3015104373ee4677b5cede6ee1a152a19f",
+      "revision": "cac64a44487b916fc5891ca00dc455067af2fa52dd11a7de1213f88de6cf5d4b",
       "label": "2025-02-03",
       "isHistorical": true
     },
     {
       "date": "2025-02-01",
-      "revision": "e1f03666d7bb0a1f44921d4dbd9b06c3e74ec509f4379ae5763a7f863c03b41f",
+      "revision": "c8d315bc8ced49156fb25185c2755429722ddf42fb94380cc56187d27d9e7ec1",
       "label": "2025-02-01",
       "isHistorical": true
     },
     {
       "date": "2025-01-31",
-      "revision": "56a0a2462c51372d8fd91a43de99b5028b77b5bd8ddb4f2d84b99a8808c01bdd",
+      "revision": "39be982a625a60ccf0408ae67ec664a9a5a819fddceda4d7a20fe691c39ea68b",
       "label": "2025-01-31",
       "isHistorical": true
     },
     {
       "date": "2025-01-30",
-      "revision": "5f325bac68d911fbf446589b608f104f1ff0ce50f543bf397438944c64bed418",
+      "revision": "22de12516fb2b1d5bf06fecf5cf42ea73a05beebd497e93c1cf985ee39ccd7d5",
       "label": "2025-01-30",
       "isHistorical": true
     },
     {
       "date": "2025-01-29",
-      "revision": "5d7531491ece98e466741bfa5744122f2b532d25c841c99c480f5cbf16929c6f",
+      "revision": "72e9b84cc06d0056f51a5e2fe04df27aabde6f2eb28b03b8df1df5b76955830b",
       "label": "2025-01-29",
       "isHistorical": true
     },
     {
       "date": "2025-01-28",
-      "revision": "4f73d7097410c93edcf74dba68ff418d621ed1157e4122479ce9494dd974fad9",
+      "revision": "e595de5b01b842bea7476ca2d008cb3f84eee9f8cb437f3564f13b4f1a13c04d",
       "label": "2025-01-28",
       "isHistorical": true
     },
     {
       "date": "2025-01-27",
-      "revision": "30cb651a3a1a7806e064f379dae3851c69442f3d5ca5f92823339571c0636b5f",
+      "revision": "4154aabbe2023d19c0e5745f7bca9956320d8b860267d11872dd7a86d25165ef",
       "label": "2025-01-27",
       "isHistorical": true
     },
     {
       "date": "2025-01-24",
-      "revision": "5a897e763cb22aa86863b39a604da1f08c423beaa35388950def81673d902eb9",
+      "revision": "af2e0fb7052f45fbfae279d818a7af0da1e02050c4d94d2bfb0d6460da74997c",
       "label": "2025-01-24",
       "isHistorical": true
     },
     {
       "date": "2025-01-23",
-      "revision": "2e08c871defee78b6282544049b3e1f2947e236a4764de78ac6c4835db8f3812",
+      "revision": "462774243ae894db531c1c8d8451f2e6c50ce1d1b6510c5a83cd635c48ceb767",
       "label": "2025-01-23",
       "isHistorical": true
     },
     {
       "date": "2025-01-22",
-      "revision": "9aa2bd99c8c08002ee7b0511f1e926ef179bce76349ad0a0e4b1dc4f0b0a74a8",
+      "revision": "2ac28fe62242744ee7c0f31a5ca807ac8cb9c78dd32762236d513de90bb4d16f",
       "label": "2025-01-22",
       "isHistorical": true
     },
     {
       "date": "2025-01-21",
-      "revision": "c85094c90fe61ef7ca30df46b5c01b449e797a7eb3c85fe983df49e71f1f671c",
+      "revision": "a75da070da49e3daf666dbc8433719921b8fa8c32108d990e23a1362108579b7",
       "label": "2025-01-21",
       "isHistorical": true
     },
     {
       "date": "2025-01-20",
-      "revision": "ad8d69a12990a0b687c267fc51f46c943b5b5b17cd812b61d6ab959674971637",
+      "revision": "70a3a5da89c6adb19bcf37c30f31dbc58105ac7916c0aa046f2aa8e4ec83d0f3",
       "label": "2025-01-20",
       "isHistorical": true
     },
     {
       "date": "2025-01-17",
-      "revision": "2b435a4d3694ab98c7e010830a60fe9c21c995c806544df7289dd094e8e5f53a",
+      "revision": "965a64f093f80d0aee9fc2c7351923a2505583f8216c06c106f6c0ca53305923",
       "label": "2025-01-17",
       "isHistorical": true
     },
     {
       "date": "2025-01-16",
-      "revision": "ef9e558877d0b3cd77e67061a128ab0fc1196b65ee709dc05110fb33e29a015f",
+      "revision": "c27ddd500aafe56f91eadd554e848ad4219a85aefc95b0058150936f3ad12ea7",
       "label": "2025-01-16",
       "isHistorical": true
     },
     {
       "date": "2025-01-15",
-      "revision": "fdd03a136ea605f1ab4239ce01b80c81fcb15f3c805d7f173e0353309ca090f7",
+      "revision": "e7468e186bb8a2a2368432b21051e089dcd838fd43ce31ceac312e3e8d2250dc",
       "label": "2025-01-15",
       "isHistorical": true
     },
     {
       "date": "2025-01-14",
-      "revision": "dc3dbebbce935484e03bbc280139dfc8285d49bb99b943a1172ae860183efedd",
+      "revision": "df8d2ed64e01f53ef7797a0d98f199db6a0f176e85d18b660cfb5e3ea4e1f8d1",
       "label": "2025-01-14",
       "isHistorical": true
     },
     {
       "date": "2025-01-13",
-      "revision": "c9888103ec10c0b46ebfff0fdcd71170301a23b3dad9f19104311339b94471b3",
+      "revision": "647f81b2d495d58991a1182899e8df0c1ef06f179ad71a775fe08dea56ca4064",
       "label": "2025-01-13",
       "isHistorical": true
     },
     {
       "date": "2025-01-10",
-      "revision": "ff257296dcf15f9ee30c2192d4fad27bd567612d065fcc9f2620d5666a4da061",
+      "revision": "284d1e02c49803fb6b731a143b47aa61a1c40376bb82576c7e712f4cc5b73a83",
       "label": "2025-01-10",
       "isHistorical": true
     },
     {
       "date": "2025-01-09",
-      "revision": "7fdaeaa3a3f346e212630620c664f1c2249d70227594454747e2b59911c182bb",
+      "revision": "8bf9787ad779ab262011ca2a3351eeb4e9089749368c24195daa49bf5f0bc3b5",
       "label": "2025-01-09",
       "isHistorical": true
     },
     {
       "date": "2025-01-08",
-      "revision": "174901c60f31e88cc4d4868832e0a31eec6871209baa20392b541ca44bd3ef75",
+      "revision": "a3e53e22c64354eab4a2e4f78cade668b917a46c451eeee2dee40072e76bc75f",
       "label": "2025-01-08",
       "isHistorical": true
     },
     {
       "date": "2025-01-07",
-      "revision": "97135b04c41c9bac8d430b2c0c11b94bc4974a84d40dc2ed17b5a23dd2bc8fed",
+      "revision": "7334a688b6b2e50c05856c07c1cc16244daeffd0e4df6ece518597cce980f96f",
       "label": "2025-01-07",
       "isHistorical": true
     },
     {
       "date": "2025-01-06",
-      "revision": "d9b88e21617d43e9cf7e535581e401ab97a5234f7688d8f90cc417e7ae57c8e7",
+      "revision": "4c9eefccec6c64ba0e0cc89266db4108fc7c8804e6d96a4141b647f16d452faf",
       "label": "2025-01-06",
       "isHistorical": true
     },
     {
       "date": "2025-01-03",
-      "revision": "bcecf2ab3d08b3320ac2df49800fde0086c3c9a8330ea998a45c87156ab800e5",
+      "revision": "5f5323fcf19cb7c4fd50cc6aa8a285cfce80e3ab2453a5181e4aeabb877f6590",
       "label": "2025-01-03",
       "isHistorical": true
     },
     {
       "date": "2025-01-02",
-      "revision": "5cfce2e833a4fa466782386d4648d253b23eddc9e8150c2ee1f549a2b8386d09",
+      "revision": "d14b8e0fedb37882753c67334e5c7d471292017738382c5d481233f6ba621097",
       "label": "2025-01-02",
       "isHistorical": true
     },
     {
       "date": "2025-01-01",
-      "revision": "93f6b224b5958861207ba4e6c58dbf09418240d09b89cf4cc05668cef31742ff",
+      "revision": "99e629fab77ec6ef338d517a836693b84af7512e6610ec1b2aed5f0a329e3d0d",
       "label": "2025-01-01",
       "isHistorical": true
     },

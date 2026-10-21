@@ -105,6 +105,13 @@ const data: ThematicRrgResponse = {
     { ...block, name: 'Services', quadrant: 'Lagging', x: -2, y: -1, metrics: { ...metrics, excessReturn3m: -2 } },
   ],
   niches: [{ ...block, name: 'Precision', parentBlock: block.name }],
+  thematicIndices: [{
+    ...block,
+    name: 'Nifty India Defence',
+    indexSymbol: 'NIFTY IND DEFENCE',
+    parentBlock: 'NSE thematic index',
+    macro: 'Official NSE index',
+  }],
   ipoTactical: [ipo],
 };
 
@@ -127,6 +134,7 @@ it('renders the thematic rotation controls and real metric labels', () => {
   expect(screen.getByText('1,000 institutional equities')).toBeTruthy();
   expect(screen.getByRole('tab', { name: /Blocks/i })).toBeTruthy();
   expect(screen.getByRole('tab', { name: /Niches/i })).toBeTruthy();
+  expect(screen.getByRole('tab', { name: /NSE indices/i })).toBeTruthy();
   expect(screen.getByRole('tab', { name: /New listings/i })).toBeTruthy();
   expect(screen.queryByText('Labels')).toBeNull();
 });

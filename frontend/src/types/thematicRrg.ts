@@ -76,6 +76,10 @@ export interface RrgNicheItem {
   constituents: RrgConstituentStock[];
 }
 
+export interface RrgThematicIndexItem extends RrgNicheItem {
+  indexSymbol: string;
+}
+
 export interface RrgIpoItem {
   symbol: string;
   name: string;
@@ -107,6 +111,7 @@ export interface ThematicRrgResponse {
   trailWeeks: number;
   totalBlocks: number;
   totalNiches: number;
+  totalThematicIndices?: number;
   totalEquities: number;
   constituentEligibility?: {
     marketCapCrStrictlyGreaterThan: number;
@@ -115,5 +120,6 @@ export interface ThematicRrgResponse {
   };
   blocks: RrgBlockItem[];
   niches: RrgNicheItem[];
+  thematicIndices?: RrgThematicIndexItem[];
   ipoTactical: RrgIpoItem[];
 }

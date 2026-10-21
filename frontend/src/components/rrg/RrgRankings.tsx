@@ -4,6 +4,7 @@ import {
   fmtNum,
   fmtSigned,
   isIpoItem,
+  isThematicIndexItem,
   itemKey,
   itemSubtitle,
   toneClass,
@@ -51,6 +52,15 @@ const IPO_COLUMNS: Column[] = [
   { id: "listingDate", label: "Listed" },
 ];
 
+const INDEX_COLUMNS: Column[] = [
+  { id: "name", label: "NSE thematic index" },
+  { id: "quadrant", label: "Quadrant" },
+  { id: "excessReturn1m", label: "1M excess", numeric: true },
+  { id: "excessReturn3m", label: "3M excess", numeric: true },
+  { id: "excessReturn6m", label: "6M excess", numeric: true },
+  { id: "medianRs", label: "Index RS", numeric: true },
+];
+
 function SortHeader({
   column,
   active,
@@ -86,7 +96,7 @@ export function RrgRankings({
   onSelect,
   bounds,
 }: RrgRankingsProps) {
-  const columns = mode === "ipos" ? IPO_COLUMNS : CLUSTER_COLUMNS;
+  const columns = mode === "ipos" ? IPO_COLUMNS : mode === "indices" ? INDEX_COLUMNS : CLUSTER_COLUMNS;
 
   return (
     <div className="rrg-table-wrap">
@@ -145,6 +155,13 @@ export function RrgRankings({
                     </td>
                     <td className="rrg-td is-numeric">₹{fmtNum(item.turnoverCr)}</td>
                     <td className="rrg-td is-numeric rrg-td--dim">{item.listingDate}</td>
+                  </>
+                ) : isThematicIndexItem(item) ? (
+                  <>
+                    <td className={`rrg-td is-numeric ${toneClass(item.metrics.excessReturn1m)}`}>{fmtSigned(item.metrics.excessReturn1m)}</td>
+                    <td className={`rrg-td is-numeric ${toneClass(item.x)}`}>{fmtSigned(item.x)}</td>
+                    <td className={`rrg-td is-numeric ${toneClass(item.metrics.excessReturn6m)}`}>{fmtSigned(item.metrics.excessReturn6m)}</td>
+                    <td className="rrg-td is-numeric">{fmtNum(item.metrics.medianRs, 0)}</td>
                   </>
                 ) : (
                   <>

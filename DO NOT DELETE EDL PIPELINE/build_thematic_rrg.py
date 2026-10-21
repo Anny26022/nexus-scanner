@@ -17,6 +17,7 @@ Methodology:
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from datetime import datetime
 import gzip
 import hashlib
@@ -42,6 +43,40 @@ RRG_MIN_TURNOVER30_CR = 5.0
 RRG_MIN_MAIN_HISTORY_SESSIONS = 65
 RRG_MIN_CONSTITUENTS = 3
 RRG_TURNOVER_WINDOW = 20
+
+# The compact NSE thematic-index universe shown beside the taxonomy RRG. The
+# source names account for provider spelling while display names remain stable.
+THEMATIC_INDEXES = {
+    "Nifty India Defence": "Nifty India Defence",
+    "Nifty IPO": "Nifty IPO",
+    "Nifty Capital Markets": "Nifty Capital Markets",
+    "Nifty Sugar & Ethanol": "Nifty Sugar & Ethanol Index",
+    "Nifty AI Catalysts": "Nifty AI Catalysts",
+    "Nifty India Digital": "Nifty India Digital",
+    "Nifty India Internet": "Nifty India Internet Index",
+    "Nifty India Manufacturing": "Nifty India Manufacturing",
+    "Nifty Small Finance Banks & Microfinance Institutions": "Nifty Small Finance Banks & Microfinance Institutions Index",
+    "Nifty EV & New Age Automotive": "Nifty EV and New Age Auto",
+    "Nifty India New Age Consumption": "Nifty India New Age Consumption",
+    "Nifty Transportation & Logistics": "Nifty Transportation Logistics",
+    "Nifty Mobility": "Nifty Mobility",
+    "Nifty Energy": "Nifty Energy",
+    "Nifty Services Sector": "Nifty Services Sector",
+    "Nifty Waves": "Nifty Waves Index",
+    "Nifty India Infrastructure & Logistics": "Nifty India Infrastructure & Logistics Index",
+    "Nifty India Tourism": "Nifty India Tourism",
+    "Nifty Infrastructure": "NIFTY Infra",
+    "Nifty India Consumption": "NIFTY Consumption",
+    "Nifty Commodities": "Nifty Commodities",
+    "Nifty Housing": "Nifty Housing",
+    "Nifty Non-Cyclical Consumer": "Nifty Non Cyclical Consumer",
+    "Nifty MNC": "NIFTY MNC",
+    "Nifty Core Housing": "Nifty Core Housing",
+    "Nifty PSE": "Nifty PSE",
+    "Nifty Rural": "Nifty Rural",
+    "Nifty CPSE": "Nifty CPSE",
+    "Nifty India Railways PSU": "Nifty India Railways PSU Index",
+}
 
 
 def _parse_iso_or_nse_date(value):
@@ -220,6 +255,77 @@ def load_theme_classification(frontend_dir: Path) -> dict[str, dict]:
                 continue
 
     return {}
+
+
+def safe_index_filename(symbol: str, index_id: Any = None, disambiguate: bool = False) -> str:
+    safe_symbol = "".join(char if char.isalnum() else "_" for char in str(symbol))
+    if not disambiguate:
+        return safe_symbol
+    safe_id = "".join(char if char.isalnum() else "_" for char in str(index_id))
+    return f"{safe_symbol}__{safe_id}"
+
+
+def thematic_index_histories(root: Path, bench_dates: list[str]) -> list[dict[str, Any]]:
+    """Load official NSE thematic-index closes aligned to benchmark sessions."""
+    index_list = root / "all_indices_list.json"
+    index_dir = root / "indices_ohlcv_data"
+    if not index_list.exists() or not index_dir.exists():
+        return []
+    try:
+        all_indices = json.loads(index_list.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    counts = Counter(safe_index_filename(row.get("Symbol") or "") for row in all_indices)
+    by_name = {str(row.get("IndexName") or "").casefold(): row for row in all_indices}
+    histories = []
+    for display_name, source_name in THEMATIC_INDEXES.items():
+        row = by_name.get(source_name.casefold())
+        if not row:
+            continue
+        symbol = str(row.get("Symbol") or "")
+        filename = safe_index_filename(symbol, row.get("IndexID"), counts[safe_index_filename(symbol)] > 1)
+        path = index_dir / f"{filename}.csv"
+        if not path.exists():
+            continue
+        try:
+            frame = pd.read_csv(path, usecols=["Date", "Close"])
+            frame["Date"] = frame["Date"].astype(str).str[:10]
+            frame["Close"] = pd.to_numeric(frame["Close"], errors="coerce")
+            prices = {
+                date: float(close)
+                for date, close in zip(frame["Date"], frame["Close"])
+                if np.isfinite(close) and close > 0
+            }
+        except (OSError, ValueError, KeyError):
+            continue
+        # 63 sessions for the relative-return rank, 21 before it for the
+        # momentum delta, and 12 weekly replay anchors.
+        required_dates = [bench_dates[-1 - offset] for offset in range(63 + 21 + 12 * 5 + 1)]
+        if all(date in prices for date in required_dates):
+            histories.append({"name": display_name, "symbol": symbol, "prices": prices})
+    return histories
+
+
+def index_rs_ratings(
+    histories: list[dict[str, Any]], bench_dates: list[str], bench_closes: np.ndarray, offsets: set[int],
+) -> dict[int, dict[str, int]]:
+    """Cross-sectional 3-month index-relative ratings at each replay anchor."""
+    ratings: dict[int, dict[str, int]] = {}
+    for offset in sorted(offsets):
+        end_idx, start_idx = -1 - offset, -1 - offset - 63
+        benchmark_ratio = bench_closes[end_idx] / bench_closes[start_idx]
+        scores = []
+        for history in histories:
+            prices = history["prices"]
+            start, end = prices.get(bench_dates[start_idx]), prices.get(bench_dates[end_idx])
+            if start and end and benchmark_ratio > 0:
+                scores.append((history["name"], (end / start) / benchmark_ratio))
+        ordered = sorted(scores, key=lambda item: (-item[1], item[0]))
+        ratings[offset] = {
+            name: int(np.floor(99 - 98 * position / max(1, len(ordered) - 1) + 0.5))
+            for position, (name, _) in enumerate(ordered)
+        }
+    return ratings
 
 
 def build_thematic_rrg_payload(
@@ -630,6 +736,71 @@ def build_thematic_rrg_payload(
     blocks_result.sort(key=lambda b: b["x"], reverse=True)
     niches_result.sort(key=lambda n: n["x"], reverse=True)
 
+    print("Computing NSE thematic-index RRGs...")
+    index_histories = thematic_index_histories(root, bench_dates)
+    index_offsets = {
+        offset
+        for week in range(trail_weeks + 1)
+        for offset in (week * 5, week * 5 + 21)
+    }
+    index_ratings = index_rs_ratings(index_histories, bench_dates, bench_c, index_offsets)
+    thematic_indices_result = []
+    for history in index_histories:
+        name, prices = history["name"], history["prices"]
+        trail = []
+        for week in range(trail_weeks, -1, -1):
+            offset = week * 5
+            end_idx, start_idx = -1 - offset, -1 - offset - 63
+            index_return = (prices[bench_dates[end_idx]] / prices[bench_dates[start_idx]] - 1.0) * 100.0
+            bench_return = (bench_c[end_idx] / bench_c[start_idx] - 1.0) * 100.0
+            rating = index_ratings.get(offset, {}).get(name)
+            prior_rating = index_ratings.get(offset + 21, {}).get(name)
+            if rating is None or prior_rating is None:
+                trail = []
+                break
+            x, y = round(float(index_return - bench_return), 2), round(float(rating - prior_rating), 1)
+            trail.append({
+                "week": week,
+                "date": bench_dates[end_idx],
+                "x": x,
+                "y": y,
+                "quadrant": determine_quadrant(x, y),
+            })
+        if not trail:
+            continue
+        cur = trail[-1]
+        def excess_return(horizon: int) -> float:
+            index_return = (prices[bench_dates[-1]] / prices[bench_dates[-1 - horizon]] - 1.0) * 100.0
+            bench_return = (bench_c[-1] / bench_c[-1 - horizon] - 1.0) * 100.0
+            return round(float(index_return - bench_return), 2)
+        thematic_indices_result.append({
+            "name": name,
+            "indexSymbol": history["symbol"],
+            "parentBlock": "NSE thematic index",
+            "macro": "Official NSE index",
+            "quadrant": cur["quadrant"],
+            "x": cur["x"],
+            "y": cur["y"],
+            "trail": trail,
+            "metrics": {
+                "excessReturn1m": excess_return(21),
+                "excessReturn3m": cur["x"],
+                "excessReturn6m": excess_return(126),
+                "medianRs": index_ratings[0][name],
+                "rsMomentum21d": cur["y"],
+                "beatingBenchmarkPct": 0.0,
+                "improvingRsPct": 0.0,
+                "setupCoveragePct": 0.0,
+                "totalTurnover20Cr": 0.0,
+                "concentrationTop3Pct": 0.0,
+                "constituentCount": 0,
+                "topContributors": [],
+            },
+            "constituents": [],
+        })
+    thematic_indices_result.sort(key=lambda item: item["x"], reverse=True)
+    print(f"Computed {len(thematic_indices_result)} NSE thematic-index RRGs.")
+
     print("Computing Tactical IPO RRGs...")
     ipo_tactical_result = []
     as_of_date_obj = _parse_iso_or_nse_date(as_of_date)
@@ -742,6 +913,7 @@ def build_thematic_rrg_payload(
         "trailWeeks": trail_weeks,
         "totalBlocks": len(blocks_result),
         "totalNiches": len(niches_result),
+        "totalThematicIndices": len(thematic_indices_result),
         "totalEquities": len(tax_records),
         "constituentEligibility": {
             "marketCapCrStrictlyGreaterThan": RRG_MIN_MARKET_CAP_CR,
@@ -750,6 +922,7 @@ def build_thematic_rrg_payload(
         },
         "blocks": blocks_result,
         "niches": niches_result,
+        "thematicIndices": thematic_indices_result,
         "ipoTactical": ipo_tactical_result,
     }
 

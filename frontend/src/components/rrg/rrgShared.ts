@@ -2,12 +2,13 @@ import type {
   RrgBlockItem,
   RrgIpoItem,
   RrgNicheItem,
+  RrgThematicIndexItem,
   RrgQuadrant,
   RrgTrailPoint,
 } from "../../types/thematicRrg";
 
-export type RrgItem = RrgBlockItem | RrgNicheItem | RrgIpoItem;
-export type RrgMode = "blocks" | "niches" | "ipos";
+export type RrgItem = RrgBlockItem | RrgNicheItem | RrgThematicIndexItem | RrgIpoItem;
+export type RrgMode = "blocks" | "niches" | "indices" | "ipos";
 
 export const QUADRANT_ORDER: RrgQuadrant[] = [
   "Leading",
@@ -32,6 +33,7 @@ export const QUADRANT_BLURB: Record<RrgQuadrant, string> = {
 };
 
 export const isIpoItem = (item: RrgItem): item is RrgIpoItem => "symbol" in item;
+export const isThematicIndexItem = (item: RrgItem): item is RrgThematicIndexItem => "indexSymbol" in item;
 export const isBlockItem = (item: RrgItem): item is RrgBlockItem =>
   "nicheCount" in item;
 
@@ -40,6 +42,7 @@ export const itemKey = (item: RrgItem): string =>
 
 export const itemSubtitle = (item: RrgItem): string => {
   if (isIpoItem(item)) return item.theme ?? item.block ?? "Tactical IPO";
+  if (isThematicIndexItem(item)) return "Official NSE index";
   return item.parentBlock ?? item.macro ?? "Macro pillar";
 };
 

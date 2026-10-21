@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from datetime import date, timedelta
 
 import numpy as np
 
@@ -12,7 +13,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from build_thematic_rrg import institutional_rrg_symbols, load_theme_classification
+from build_thematic_rrg import institutional_rrg_symbols, load_theme_classification, thematic_index_histories
 
 class TestThematicRrg(unittest.TestCase):
     @classmethod
@@ -169,6 +170,25 @@ class TestThematicRrg(unittest.TestCase):
             self.assertEqual(records["ABC"]["theme"], "Primary theme")
             self.assertIn("Editable niche", records["ABC"]["memberships"])
             self.assertEqual(records["EXTRA"]["theme"], "Editable niche")
+
+    def test_thematic_indices_use_only_aligned_official_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "indices_ohlcv_data").mkdir()
+            (root / "all_indices_list.json").write_text(json.dumps([{
+                "IndexName": "Nifty India Defence", "Symbol": "NIFTY IND DEFENCE", "IndexID": 493,
+            }]), encoding="utf-8")
+            dates = [(date(2026, 1, 1) + timedelta(days=offset)).isoformat() for offset in range(150)]
+            (root / "indices_ohlcv_data" / "NIFTY_IND_DEFENCE.csv").write_text(
+                "Date,Close\n" + "\n".join(f"{session},{100 + offset}" for offset, session in enumerate(dates)),
+                encoding="utf-8",
+            )
+
+            histories = thematic_index_histories(root, dates)
+
+            self.assertEqual(len(histories), 1)
+            self.assertEqual(histories[0]["name"], "Nifty India Defence")
+            self.assertEqual(histories[0]["prices"][dates[-1]], 249.0)
 
 if __name__ == "__main__":
     unittest.main()

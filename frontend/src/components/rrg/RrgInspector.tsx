@@ -8,6 +8,7 @@ import {
   fmtSigned,
   isBlockItem,
   isIpoItem,
+  isThematicIndexItem,
   itemKey,
   itemSubtitle,
   toneClass,
@@ -207,6 +208,14 @@ export function RrgInspector({
                 <div><dt>Market cap</dt><dd>₹{fmtCompact(item.marketCapCr)}</dd></div>
                 <div><dt>Block</dt><dd>{item.block ?? "—"}</dd></div>
               </dl>
+            ) : isThematicIndexItem(item) ? (
+              <dl className="rrg-specs">
+                <div><dt>Index symbol</dt><dd>{item.indexSymbol}</dd></div>
+                <div><dt>Index RS rating</dt><dd>{fmtNum(item.metrics.medianRs, 0)}</dd></div>
+                <div><dt>1M / 3M excess</dt><dd>{fmtSigned(item.metrics.excessReturn1m)} / {fmtSigned(item.metrics.excessReturn3m)}</dd></div>
+                <div><dt>6M excess</dt><dd>{fmtSigned(item.metrics.excessReturn6m)}</dd></div>
+                <div><dt>Source</dt><dd>Official NSE index OHLCV</dd></div>
+              </dl>
             ) : (
               <>
                 <div className="rrg-breadth">
@@ -246,7 +255,7 @@ export function RrgInspector({
             )}
 
             <div className="rrg-inspector__actions">
-              {!isIpoItem(item) && (
+              {!isIpoItem(item) && !isThematicIndexItem(item) && (
                 <button className="rrg-btn rrg-btn--primary" onClick={onOpenConstituents}>
                   <span>Explore {item.metrics.constituentCount} Stocks</span>
                   <ArrowUpRight size={14} />

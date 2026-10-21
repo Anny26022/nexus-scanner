@@ -23,7 +23,14 @@ export function formatCopyResults(rows:CopyRow[], group:CopyGroup, taxonomy?:The
     symbols.push(`NSE:${row.symbol}`);
     groups.set(label,symbols);
   }
-  return [...groups].sort(([a],[b]) => a.localeCompare(b)).map(([label,symbols]) =>
+  return [...groups].sort(([labelA, symbolsA], [labelB, symbolsB]) => {
+    if (symbolsB.length !== symbolsA.length) {
+      return symbolsB.length - symbolsA.length;
+    }
+    if (labelA === 'Unclassified') return 1;
+    if (labelB === 'Unclassified') return -1;
+    return labelA.localeCompare(labelB);
+  }).map(([label,symbols]) =>
     `###${label.replaceAll(',', ' / ').replace(/[\r\n]/g,' ')}(${symbols.length}),${symbols.join(',')}`).join(',');
 }
 

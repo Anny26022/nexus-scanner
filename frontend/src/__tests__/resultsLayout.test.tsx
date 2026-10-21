@@ -50,7 +50,7 @@ it('switches the current result page into the lazy quick-chart gallery', async (
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={client}><ResultsTable {...props} data={data} /></QueryClientProvider>);
   fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
-  expect(screen.getByText('Chart previews use your saved style, indicators, and drawings. Open one to analyse it.')).toBeInTheDocument();
+  expect(screen.getByText('Interactive charts use your saved style, indicators, and drawings. Drag to pan; scroll or pinch to zoom.')).toBeInTheDocument();
   expect(screen.getByLabelText('AVTNPL quick chart')).toBeInTheDocument();
   await waitFor(() => expect(screenerApi.getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision));
 });

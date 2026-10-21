@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChartNoAxesCombined, Maximize2, RefreshCw } from 'lucide-react';
+import { ChartNoAxesCombined, Maximize2, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { validateCandles, type Candle } from '../chart/model';
 import { ChartEngine } from '../chart/ChartEngine';
@@ -39,6 +39,7 @@ function useNearViewport() {
 
 function MiniChart({ candles, symbol }: { candles: readonly Candle[]; symbol: string }) {
   const displayCandles = useMemo(() => candles.slice(-130), [candles]);
+  const engineRef = useRef<ChartEngine | null>(null);
   const attach = useCallback((host: HTMLDivElement | null) => {
     if (!host || !displayCandles.length) return;
     const scene = loadScene('0');
@@ -50,17 +51,25 @@ function MiniChart({ candles, symbol }: { candles: readonly Candle[]; symbol: st
     engine.setAppearance({
       horizontalGrid: true,
       verticalGrid: false,
-      crosshair: false,
+      crosshair: true,
       volume: true,
       scaleMode: 'normal',
       ...scene.appearance,
-      panEnabled: false,
-      zoomEnabled: false,
+      panEnabled: true,
+      zoomEnabled: true,
     });
     engine.setRange(6);
-    return () => engine.destroy();
+    engineRef.current = engine;
+    return () => { engine.destroy(); if (engineRef.current === engine) engineRef.current = null; };
   }, [displayCandles, symbol]);
-  return <div ref={attach} className="quick-chart-canvas" aria-label="Chart preview using the saved chart style, indicators, and drawings." role="img" />;
+  return <div className="quick-chart-interactive">
+    <div ref={attach} className="quick-chart-canvas" aria-label="Interactive chart using the saved chart style, indicators, and drawings. Drag to pan, scroll or pinch to zoom, and select drawings to edit them." role="group" tabIndex={0} />
+    <div className="quick-chart-controls" role="group" aria-label={`${symbol} chart controls`}>
+      <button type="button" aria-label="Zoom in" title="Zoom in" onPointerDown={event => event.stopPropagation()} onClick={() => engineRef.current?.zoom(.8)}><Plus size={13}/></button>
+      <button type="button" aria-label="Zoom out" title="Zoom out" onPointerDown={event => event.stopPropagation()} onClick={() => engineRef.current?.zoom(1.25)}><Minus size={13}/></button>
+      <button type="button" aria-label="Reset chart view" title="Reset chart view" onPointerDown={event => event.stopPropagation()} onClick={() => engineRef.current?.reset()}><RotateCcw size={12}/></button>
+    </div>
+  </div>;
 }
 
 function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRow; revision?: string; rank: number; onOpenFullChart?: (symbol: string, revision?: string) => void }) {
@@ -111,7 +120,7 @@ export function QuickChartsView({ rows, revision, busy, firstRank = 1, onOpenFul
   if (busy && !rows.length) return <div className="quick-charts-grid" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="quick-chart-card quick-chart-card-skeleton" key={index} />)}</div>;
   if (!rows.length) return null;
   return <div className="quick-charts-scroll" aria-live="polite">
-    <p className="quick-charts-hint">Chart previews use your saved style, indicators, and drawings. Open one to analyse it.</p>
+    <p className="quick-charts-hint">Interactive charts use your saved style, indicators, and drawings. Drag to pan; scroll or pinch to zoom.</p>
     <div className="quick-charts-grid">{rows.map((row, index) => <QuickChartCard key={row.symbol} row={row} revision={revision} rank={firstRank + index} onOpenFullChart={onOpenFullChart} />)}</div>
   </div>;
 }

@@ -1,11 +1,13 @@
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ResultsTable } from '../components/ResultsTable';
+import { screenerApi } from '../api/screenerApi';
 import { Pagination } from '../components/Pagination';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
 import type { ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.removeItem('nexus-scanner.screener.result-view.v1'); });
 const request: ScreenerRunRequest = {datasetRevision: 'a'.repeat(64), universe: 'mainboard', asOfDate: '2026-10-09',
   expressionTree: {type: 'group', operator: 'all', children: []}, page: 1, pageSize: 15, sort: {field: 'rvol', direction: 'desc'}};
 const row = {symbol: 'AVTNPL', name: 'Avt Natural Products', sector: 'FMCG', industry: 'Agricultural Products',
@@ -40,6 +42,16 @@ it('reports incomplete legacy results rather than silently copying just the curr
   fireEvent.click(screen.getByRole('button', {name:'Copy results'}));
   fireEvent.click(screen.getByRole('menuitem', {name:'Symbols'}));
   expect(await screen.findByRole('alert')).toHaveTextContent('All matching symbols are unavailable');
+});
+
+it('switches the current result page into the lazy quick-chart gallery', async () => {
+  vi.spyOn(screenerApi, 'getChart').mockRejectedValue(new Error('offline'));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><ResultsTable {...props} data={data} /></QueryClientProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
+  expect(screen.getByText('Drag a chart to review earlier sessions. Pinch to zoom.')).toBeInTheDocument();
+  expect(screen.getByLabelText('AVTNPL quick chart')).toBeInTheDocument();
+  await waitFor(() => expect(screenerApi.getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision));
 });
 
 it('leads with quotes only on phones and restores desktop order without changing saved columns', () => {

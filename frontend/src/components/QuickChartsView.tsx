@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CandlestickSeries, ColorType, LineSeries, createChart } from 'lightweight-charts';
 import { ChartNoAxesCombined, Maximize2, RefreshCw } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { validateCandles, type Candle } from '../chart/model';
-import { loadGrid, writeChartStorage } from '../chart/storage';
-import { sma } from '../chart/studies';
+import { ChartEngine } from '../chart/ChartEngine';
+import { loadGrid, loadScene, savedDrawingBook, writeChartStorage } from '../chart/storage';
+import { defaultStudies } from '../chart/studies';
+import { defaultStudyConfigs } from '../chart/studyConfigs';
+import { loadEmaLines } from './EmaSettings';
 import type { StockRow } from '../types/screener';
 
 type QuickChartsViewProps = {
@@ -35,38 +37,30 @@ function useNearViewport() {
   return { visible, observe };
 }
 
-function MiniChart({ candles }: { candles: readonly Candle[] }) {
+function MiniChart({ candles, symbol }: { candles: readonly Candle[]; symbol: string }) {
   const displayCandles = useMemo(() => candles.slice(-130), [candles]);
   const attach = useCallback((host: HTMLDivElement | null) => {
     if (!host || !displayCandles.length) return;
-    const chart = createChart(host, {
-      autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: 'transparent', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif', attributionLogo: false },
-      grid: { vertLines: { visible: false }, horzLines: { color: 'rgba(122, 137, 130, .13)' } },
-      rightPriceScale: { visible: false, borderVisible: false, scaleMargins: { top: .12, bottom: .10 } },
-      leftPriceScale: { visible: false },
-      timeScale: { visible: false, borderVisible: false, rightOffset: 3, barSpacing: 5.25, minBarSpacing: 2, lockVisibleTimeRangeOnResize: true },
-      crosshair: { vertLine: { visible: false }, horzLine: { visible: false } },
-      handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-      handleScale: { mouseWheel: false, pinch: true, axisPressedMouseMove: false, axisDoubleClickReset: true },
-      kineticScroll: { mouse: true, touch: true },
+    const scene = loadScene('0');
+    const engine = new ChartEngine(host, displayCandles, () => {}, savedDrawingBook(symbol));
+    engine.setStyle(scene.style ?? 'candles');
+    engine.setEmaLines(scene.emaLines ?? loadEmaLines());
+    engine.setStudyConfigs(scene.studyConfigs ?? defaultStudyConfigs());
+    engine.setStudies(scene.studies ?? defaultStudies());
+    engine.setAppearance({
+      horizontalGrid: true,
+      verticalGrid: false,
+      crosshair: false,
+      volume: true,
+      scaleMode: 'normal',
+      ...scene.appearance,
+      panEnabled: false,
+      zoomEnabled: false,
     });
-    const candlesSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#16856f', downColor: '#ca5a62', borderVisible: false,
-      wickUpColor: '#16856f', wickDownColor: '#ca5a62', lastValueVisible: false, priceLineVisible: false,
-    });
-    candlesSeries.setData(displayCandles.map(candle => ({ time: candle.date as never, open: candle.open, high: candle.high, low: candle.low, close: candle.close })));
-    const addAverage = (period: number, color: string) => {
-      const values = sma(displayCandles.map(candle => candle.close), period);
-      const series = chart.addSeries(LineSeries, { color, lineWidth: 1, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false });
-      series.setData(displayCandles.flatMap((candle, index) => values[index] == null ? [] : [{ time: candle.date as never, value: values[index]! }]));
-    };
-    addAverage(20, '#bf7a18');
-    addAverage(50, '#3d78bd');
-    chart.timeScale().fitContent();
-    return () => chart.remove();
-  }, [displayCandles]);
-  return <div ref={attach} className="quick-chart-canvas" aria-label="Interactive candlestick chart. Drag to review prior sessions, pinch to zoom." role="img" />;
+    engine.setRange(6);
+    return () => engine.destroy();
+  }, [displayCandles, symbol]);
+  return <div ref={attach} className="quick-chart-canvas" aria-label="Chart preview using the saved chart style, indicators, and drawings." role="img" />;
 }
 
 function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRow; revision?: string; rank: number; onOpenFullChart?: (symbol: string, revision?: string) => void }) {
@@ -101,7 +95,7 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
     <div className="quick-chart-stage">
       {chart.isPending || !visible ? <div className="quick-chart-skeleton" aria-label="Loading chart" />
         : chart.isError ? <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>Chart unavailable</span><button type="button" onClick={() => void chart.refetch()} aria-label={`Retry ${row.symbol} chart`}><RefreshCw size={13} /></button></div>
-          : chart.data?.candles.length ? <MiniChart candles={chart.data.candles} /> : <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>No price history</span></div>}
+          : chart.data?.candles.length ? <MiniChart candles={chart.data.candles} symbol={row.symbol} /> : <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>No price history</span></div>}
     </div>
     <footer className="quick-chart-meta">
       <span>RS <strong>{row.rsRating ?? ' - '}</strong></span>
@@ -117,7 +111,7 @@ export function QuickChartsView({ rows, revision, busy, firstRank = 1, onOpenFul
   if (busy && !rows.length) return <div className="quick-charts-grid" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="quick-chart-card quick-chart-card-skeleton" key={index} />)}</div>;
   if (!rows.length) return null;
   return <div className="quick-charts-scroll" aria-live="polite">
-    <p className="quick-charts-hint">Drag a chart to review earlier sessions. Pinch to zoom.</p>
+    <p className="quick-charts-hint">Chart previews use your saved style, indicators, and drawings. Open one to analyse it.</p>
     <div className="quick-charts-grid">{rows.map((row, index) => <QuickChartCard key={row.symbol} row={row} revision={revision} rank={firstRank + index} onOpenFullChart={onOpenFullChart} />)}</div>
   </div>;
 }

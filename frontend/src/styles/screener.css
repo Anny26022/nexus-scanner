@@ -104,30 +104,31 @@
 .results-view-toggle button:active { transform: scale(.97); }
 .quick-charts-scroll { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px 14px; background: var(--surface-subtle); }
 .quick-charts-hint { margin: 0 0 9px; color: var(--muted); font-size: 10.5px; }
-.quick-charts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; align-content: start; }
+.quick-charts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-content: start; }
 .quick-chart-card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
 .quick-chart-card:hover { border-color: var(--line-strong); box-shadow: 0 8px 24px rgb(19 34 29 / .07); transform: translateY(-1px); }
-.quick-chart-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; min-height: 43px; padding: 9px 10px 7px; border-bottom: 1px solid var(--line); }
+.quick-chart-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; min-height: 48px; padding: 11px 13px 9px; border-bottom: 1px solid var(--line); }
 .quick-chart-identity { display: flex; align-items: flex-start; min-width: 0; gap: 7px; }
 .quick-chart-rank { display: grid; flex: 0 0 auto; width: 15px; height: 18px; place-items: center; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
-.quick-chart-identity strong, .quick-chart-quote strong { display: block; color: var(--text); font-size: 12px; font-weight: 750; letter-spacing: -.015em; font-variant-numeric: tabular-nums; }
-.quick-chart-identity div > span { display: block; max-width: 205px; overflow: hidden; color: var(--muted); font-size: 10.5px; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.quick-chart-identity strong, .quick-chart-quote strong { display: block; color: var(--text); font-size: 13px; font-weight: 750; letter-spacing: -.015em; font-variant-numeric: tabular-nums; }
+.quick-chart-identity div > span { display: block; max-width: 260px; overflow: hidden; color: var(--muted); font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
 .quick-chart-quote { flex: 0 0 auto; text-align: right; }
 .quick-chart-quote > span { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.quick-chart-stage { height: 185px; padding: 4px 5px 0; }
+.quick-chart-stage { height: clamp(290px, 27vw, 390px); padding: 7px 8px 0; }
 .quick-chart-canvas { width: 100%; height: 100%; touch-action: pan-y pinch-zoom; cursor: grab; }
 .quick-chart-canvas:active { cursor: grabbing; }
 .quick-chart-skeleton { width: 100%; height: 100%; border-radius: 5px; background: linear-gradient(105deg, var(--surface-subtle) 30%, var(--surface-hover) 48%, var(--surface-subtle) 64%); background-size: 240% 100%; animation: quick-chart-shimmer 1.2s ease-in-out infinite; }
 .quick-chart-unavailable { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; height: 100%; color: var(--muted); font-size: 11px; }
 .quick-chart-unavailable button { display: inline-grid; width: 24px; height: 24px; place-items: center; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; }
 .quick-chart-unavailable button:hover { background: var(--surface-hover); color: var(--text); }
-.quick-chart-meta { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 0 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.quick-chart-meta { display: flex; align-items: center; gap: 12px; min-height: 34px; padding: 0 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .quick-chart-meta span:last-child { margin-left: auto; font-weight: 650; }
 .quick-chart-meta strong { color: var(--secondary); font-weight: 700; }
-.quick-chart-card-skeleton { height: 276px; background: linear-gradient(105deg, var(--surface) 30%, var(--surface-hover) 48%, var(--surface) 64%); background-size: 240% 100%; animation: quick-chart-shimmer 1.2s ease-in-out infinite; }
+.quick-chart-card-skeleton { height: clamp(372px, 33vw, 480px); background: linear-gradient(105deg, var(--surface) 30%, var(--surface-hover) 48%, var(--surface) 64%); background-size: 240% 100%; animation: quick-chart-shimmer 1.2s ease-in-out infinite; }
 @keyframes quick-chart-shimmer { to { background-position: -240% 0; } }
 @media (prefers-reduced-motion: reduce) { .quick-chart-card, .results-view-toggle button { transition: none; } .quick-chart-card:hover { transform: none; } .quick-chart-skeleton, .quick-chart-card-skeleton { animation: none; } }
-@media (max-width: 700px) { .results-toolbar { flex-wrap: wrap; } .results-symbol-search { order: 3; flex-basis: 100%; margin-inline: 0; } .results-actions { margin-left: auto; } .quick-charts-scroll { padding: 8px; } .quick-charts-grid { grid-template-columns: 1fr; gap: 8px; } .quick-chart-stage { height: 210px; } .quick-chart-identity div > span { max-width: min(58vw, 280px); } .results-view-toggle button span { display: none; } .results-view-toggle button { width: 28px; justify-content: center; padding: 0; } }
+@media (max-width: 900px) { .quick-charts-grid { grid-template-columns: 1fr; } .quick-chart-stage { height: clamp(250px, 48vw, 360px); } }
+@media (max-width: 700px) { .results-toolbar { flex-wrap: wrap; } .results-symbol-search { order: 3; flex-basis: 100%; margin-inline: 0; } .results-actions { margin-left: auto; } .quick-charts-scroll { padding: 8px; } .quick-charts-grid { gap: 8px; } .quick-chart-stage { height: 250px; } .quick-chart-identity div > span { max-width: min(58vw, 280px); } .results-view-toggle button span { display: none; } .results-view-toggle button { width: 28px; justify-content: center; padding: 0; } }
 .dialog.column-dialog { width: min(680px, calc(100vw - 40px)); max-height: min(720px, calc(100dvh - 48px)); }
 .column-dialog::backdrop { background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(8px); }
 .dialog.column-dialog .dialog-surface { height: min(680px, calc(100dvh - 48px)); max-height: min(680px, calc(100dvh - 48px)); border-radius: 16px; }

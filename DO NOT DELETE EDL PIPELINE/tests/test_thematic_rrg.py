@@ -136,14 +136,16 @@ class TestThematicRrg(unittest.TestCase):
             "CAP_EDGE": (["2026-01-01"] * 65, closes),
             "PRICE_EDGE": (["2026-01-01"] * 65, np.full(65, 10.0)),
             "SECOND_PASS": (["2026-01-01"] * 65, closes),
+            "TURNOVER_EDGE": (["2026-01-01"] * 65, closes),
             "SHORT": (["2026-01-01"] * 64, np.full(64, 25.0)),
         }
         stock_map = {
-            "PASS": {"market_cap_crore": 1_000},
-            "CAP_EDGE": {"market_cap_crore": 999},
-            "PRICE_EDGE": {"market_cap_crore": 1_000},
-            "SECOND_PASS": {"market_cap_crore": 1_000},
-            "SHORT": {"market_cap_crore": 1_000},
+            "PASS": {"market_cap_crore": 1_000, "metrics": {"turnover30": 6.5}},
+            "CAP_EDGE": {"market_cap_crore": 999, "metrics": {"turnover30": 10.0}},
+            "PRICE_EDGE": {"market_cap_crore": 1_000, "metrics": {"turnover30": 10.0}},
+            "SECOND_PASS": {"market_cap_crore": 1_000, "turnover30_crore": 8.0},
+            "TURNOVER_EDGE": {"market_cap_crore": 1_000, "metrics": {"turnover30": 5.0}},
+            "SHORT": {"market_cap_crore": 1_000, "metrics": {"turnover30": 10.0}},
         }
         self.assertEqual(institutional_rrg_symbols(histories, stock_map), {"PASS", "SECOND_PASS"})
 

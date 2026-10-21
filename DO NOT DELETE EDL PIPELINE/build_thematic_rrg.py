@@ -38,6 +38,7 @@ from build_rs_ratings import FRONT_WEIGHTED_HORIZONS, rank_first_ratings
 # their own documented eligibility contracts.
 RRG_MIN_MARKET_CAP_CR = 999.0
 RRG_MIN_CLOSE = 10.0
+RRG_MIN_TURNOVER30_CR = 5.0
 RRG_MIN_MAIN_HISTORY_SESSIONS = 65
 RRG_MIN_CONSTITUENTS = 3
 RRG_TURNOVER_WINDOW = 20
@@ -82,6 +83,43 @@ def market_cap_crore(stock_meta: dict[str, Any]) -> float | None:
     return None
 
 
+def turnover30_crore(stock_meta: dict[str, Any]) -> float | None:
+    """Extract 30-day average turnover in Crores across supported metadata shapes."""
+    # 1. Pipeline fundamental file key: avg_rupee_volume_30_crore
+    val = finite_number(stock_meta.get("avg_rupee_volume_30_crore"))
+    if val is not None:
+        return val
+
+    # 2. Direct metrics field (standard frontend published stock output)
+    metrics = stock_meta.get("metrics")
+    if isinstance(metrics, dict):
+        val = finite_number(metrics.get("turnover30"))
+        if val is not None:
+            return val
+
+    # 3. TradingView parsed performance/values
+    tv = stock_meta.get("tradingview")
+    if isinstance(tv, dict):
+        perf = tv.get("performance")
+        if isinstance(perf, dict):
+            val = finite_number(perf.get("turnover30_crore") or perf.get("turnover30"))
+            if val is not None:
+                return val
+        tv_vals = tv.get("values")
+        if isinstance(tv_vals, dict):
+            val = finite_number(tv_vals.get("market.turnover30_crore") or tv_vals.get("turnover30_crore"))
+            if val is not None:
+                return val
+
+    # 4. Direct top-level keys
+    for key in ("turnover30_crore", "turnover30Cr", "turnover30", "daily_rupee_turnover_30_cr"):
+        val = finite_number(stock_meta.get(key))
+        if val is not None:
+            return val
+
+    return None
+
+
 def institutional_rrg_symbols(
     histories: dict[str, tuple[list[str], np.ndarray]],
     stock_map: dict[str, dict[str, Any]],
@@ -89,12 +127,16 @@ def institutional_rrg_symbols(
     """Return the main-RRG universe after the documented investability gates."""
     eligible: set[str] = set()
     for symbol, (_, closes) in histories.items():
-        market_cap = market_cap_crore(stock_map.get(symbol, {}))
+        meta = stock_map.get(symbol, {})
+        market_cap = market_cap_crore(meta)
+        turnover30 = turnover30_crore(meta)
         if (
             len(closes) >= RRG_MIN_MAIN_HISTORY_SESSIONS
             and market_cap is not None
             and market_cap > RRG_MIN_MARKET_CAP_CR
             and float(closes[-1]) > RRG_MIN_CLOSE
+            and turnover30 is not None
+            and turnover30 > RRG_MIN_TURNOVER30_CR
         ):
             eligible.add(symbol)
     return eligible
@@ -281,7 +323,7 @@ def build_thematic_rrg_payload(
     rrg_symbols = institutional_rrg_symbols(histories, stock_map)
     print(
         f"Institutional RRG universe: {len(rrg_symbols)} symbols "
-        f"(market cap > ₹{RRG_MIN_MARKET_CAP_CR:g}cr, close > ₹{RRG_MIN_CLOSE:g})."
+        f"(market cap > ₹{RRG_MIN_MARKET_CAP_CR:g}cr, close > ₹{RRG_MIN_CLOSE:g}, 30d turnover > ₹{RRG_MIN_TURNOVER30_CR:g}cr)."
     )
 
     # 6. Group stocks by Block and by Niche

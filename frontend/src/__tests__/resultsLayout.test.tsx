@@ -275,3 +275,10 @@ it('keeps empty and single-page pagination visible without offering invalid navi
   fireEvent.click(screen.getByRole('button', {name: 'Previous'}));
   expect(change).toHaveBeenLastCalledWith(2);
 });
+
+it('propagates result view toggle via onResultViewChange callback', () => {
+  const onResultViewChange = vi.fn();
+  render(<ResultsTable {...props} data={data} resultView="table" onResultViewChange={onResultViewChange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
+  expect(onResultViewChange).toHaveBeenCalledWith('charts');
+});

@@ -569,6 +569,9 @@ def main(config=None, phase="all"):
         print("\nPHASE 4.5: Canonical consumers")
         print("-" * 40)
         for script in POST_STANDARDIZATION_SCRIPTS:
+            if script == "build_thematic_rrg.py" and not config.build_thematic_rrg:
+                print("  SKIP build_thematic_rrg.py (EDL_BUILD_THEMATIC_RRG=0)")
+                continue
             results[script] = independent[script].result() if script in independent else run_script(script, "Phase 4.5", required=True)
         if reference is not None:
             results[reference_name] = reference.result()

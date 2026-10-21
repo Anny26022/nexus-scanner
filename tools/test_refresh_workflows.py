@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
     "daily_refresh.yml": "b7bf2cde285755bd02d87c11edfd659c7a1158707eae434f62de7d156a818818",
-    "weekly_eod2_refresh.yml": "046b32400efab73fec420ab049a74402225ef0aa778e7974a49a0615bd248890",
+    "weekly_eod2_refresh.yml": "df3cbdd01fc27af609d77fc3f4f6ee929d6f21c341eba63d32fc0dd8e81c2b74",
 }
 
 
@@ -88,13 +88,17 @@ class RefreshWorkflowTests(unittest.TestCase):
                                 'WEEKLY_REFRESH': '${{ inputs.weekly }}',
                                 'REFRESH_COMMIT_MESSAGE': '${{ inputs.commit-message }}',
                             })
-                            lines, inside = [], False
+                            lines, inside = [], None
                             for line in step['run'].splitlines():
                                 if line == 'if [ "$WEEKLY_REFRESH" = "true" ]; then':
-                                    inside = True
-                                elif inside and line == 'fi':
-                                    inside = False
-                                elif not inside or caller['with']['weekly'] == 'true':
+                                    inside = 'weekly'
+                                elif line == 'if [ "$WEEKLY_REFRESH" != "true" ]; then':
+                                    inside = 'daily'
+                                elif inside is not None and line == 'fi':
+                                    inside = None
+                                elif (inside is None
+                                      or (inside == 'weekly' and caller['with']['weekly'] == 'true')
+                                      or (inside == 'daily' and caller['with']['weekly'] != 'true')):
                                     lines.append(line[2:] if inside else line)
                             step['run'] = '\n'.join(lines).replace('$REFRESH_COMMIT_MESSAGE', caller['with']['commit-message'])
                         else:
@@ -172,7 +176,7 @@ class RefreshWorkflowTests(unittest.TestCase):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
         fake_git = "git() { printf '%s\\0' \"$@\"; printf '\\n'; };\n"
-        for weekly, additions in [('false', 31), ('true', 34)]:
+        for weekly, additions in [('false', 31), ('true', 33)]:
             with self.subTest(weekly=weekly):
                 message = 'literal $(false) commit message'
                 env = dict(os.environ, WEEKLY_REFRESH=weekly, REFRESH_COMMIT_MESSAGE=message)

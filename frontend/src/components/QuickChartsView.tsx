@@ -108,7 +108,7 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
       <span>RVOL <strong>{row.rvol == null ? ' - ' : `${row.rvol.toFixed(1)}×`}</strong></span>
       <span>₹{Number.isFinite(row.rupeeVolumeCrore) ? price.format(row.rupeeVolumeCrore) : ' - '} Cr</span>
       <span>1D</span>
-      <button type="button" className="chart-latest" onClick={() => engineRef.current?.latest()}>Latest</button>
+      <button type="button" className="chart-latest" onClick={() => engineRef.current?.latest()}>Recenter</button>
       <button type="button" className="quick-chart-open" onClick={openFullChart} aria-label={`Open ${row.symbol} full chart`}><Maximize2 size={12} /><span>Open chart</span></button>
     </footer>
   </article>;

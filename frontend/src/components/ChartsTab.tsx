@@ -337,7 +337,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     <footer className="chart-statusbar">
       <div className="chart-ranges" role="group" aria-label="Visible date range">{ranges.map(([months,label])=><button type="button" key={label} aria-pressed={range===months} onClick={()=>{setRange(months);rangeChoice.current=months;engine.current?.setRange(months);persist({range:months,view:undefined});}}>{label}</button>)}</div>
       <select className="chart-range-select" aria-label="Visible date range" value={range===undefined?'custom':range===null?'all':range} onChange={event=>{const months=event.target.value==='all'?null:Number(event.target.value);setRange(months);rangeChoice.current=months;engine.current?.setRange(months);persist({range:months,view:undefined});}}><option value="custom" disabled>Range</option>{ranges.map(([months,label])=><option key={label} value={months??'all'}>{label}</option>)}</select>
-      <button type="button" className="chart-latest" onClick={()=>engine.current?.latest()}>Latest</button>
+      <button type="button" className="chart-latest" onClick={()=>engine.current?.latest()}>Recenter</button>
       {comparison && <ChartComparison {...comparison} revision={revision} interval={interval} onData={onComparison}/>}
     </footer>
     {indicatorsOpen && (

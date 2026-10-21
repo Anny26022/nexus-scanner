@@ -52,7 +52,7 @@ it('switches the current result page into the lazy quick-chart gallery', async (
   fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
   expect(screen.getByText('Interactive charts use your saved style, indicators, and drawings. Drag to pan; scroll or pinch to zoom.')).toBeInTheDocument();
   expect(screen.getByLabelText('AVTNPL quick chart')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Latest' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Recenter' })).toBeInTheDocument();
   await waitFor(() => expect(screenerApi.getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision));
 });
 

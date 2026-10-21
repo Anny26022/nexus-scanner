@@ -95,7 +95,8 @@ function QuickChartCard({ row, revision, rank, scrollRoot, onOpenFullChart }: { 
     staleTime: Infinity,
     retry: 1,
   });
-  const positive = row.changePct >= 0;
+  const changePct = typeof row.changePct === 'number' && Number.isFinite(row.changePct) ? row.changePct : null;
+  const positive = changePct != null && changePct >= 0;
   const openFullChart = () => {
     const grid = loadGrid();
     writeChartStorage('grid.v1', {
@@ -110,7 +111,12 @@ function QuickChartCard({ row, revision, rank, scrollRoot, onOpenFullChart }: { 
         <span className="quick-chart-rank" aria-label={`Result ${rank}`}>{rank}</span>
         <div><strong>{row.symbol}</strong><span title={row.name}>{row.name}</span></div>
       </div>
-      <div className="quick-chart-quote"><strong>₹{price.format(row.close)}</strong><span className={positive ? 'positive' : 'negative'}>{positive ? '+' : ''}{row.changePct.toFixed(2)}%</span></div>
+      <div className="quick-chart-quote">
+        <strong>₹{typeof row.close === 'number' && Number.isFinite(row.close) ? price.format(row.close) : ' - '}</strong>
+        <span className={changePct == null ? 'neutral' : positive ? 'positive' : 'negative'}>
+          {changePct != null ? `${positive ? '+' : ''}${changePct.toFixed(2)}%` : ' - '}
+        </span>
+      </div>
     </header>
     <div className="quick-chart-stage chart-stage">
       {chart.isPending || !nearViewport ? <div className="quick-chart-skeleton" aria-label="Loading chart" />

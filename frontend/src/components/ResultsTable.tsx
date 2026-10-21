@@ -32,6 +32,8 @@ interface ResultsTableProps {
   onSortChange: (field: string, direction: 'asc' | 'desc') => void;
   currentSort?: { field: string; direction: 'asc' | 'desc' };
   onOpenFullChart?: (symbol: string, revision?: string) => void;
+  resultView?: 'table' | 'charts';
+  onResultViewChange?: (view: 'table' | 'charts') => void;
 }
 
 type ColumnGroup = 'Overview' | 'Technical' | 'Fundamental' | 'Other';
@@ -142,10 +144,13 @@ const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
 };
 
 export function ResultsTable({ data, isLoading, isError, isFetching = false, error, onRetry,
-  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows, onOpenFullChart }: ResultsTableProps) {
+  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows, onOpenFullChart,
+  resultView: propResultView, onResultViewChange }: ResultsTableProps) {
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
-  const [resultView, setResultView] = useLocalStorageState<'table' | 'charts'>('nexus-scanner.screener.result-view.v1', 'table');
+  const [internalResultView, setInternalResultView] = useLocalStorageState<'table' | 'charts'>('nexus-scanner.screener.result-view.v1', 'table');
+  const resultView = propResultView ?? internalResultView;
+  const setResultView = onResultViewChange ?? setInternalResultView;
   const [columnSearch, setColumnSearch] = useState('');
   const [columnGroup, setColumnGroup] = useState<ColumnGroup>('Overview');
   const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>('nexus-scanner.screener.columns.v1', DEFAULT_COLUMNS);

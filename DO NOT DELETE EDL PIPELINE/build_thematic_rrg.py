@@ -130,10 +130,55 @@ def rolling_rs_ratings(
 
 def load_theme_classification(frontend_dir: Path) -> dict[str, dict]:
     """Load canonical Theme -> Block -> Macro mapping from theme-classification."""
-    # Check revs or fallback
+    # The editable taxonomy is canonical for thematic RRGs. Revision files are
+    # immutable snapshots and must not hide newer taxonomy changes.
+    source_p = frontend_dir / "theme_tracker_source.json"
+    src: dict[str, Any] = {}
+    if source_p.exists():
+        try:
+            with open(source_p, "r", encoding="utf-8") as f:
+                src = json.load(f)
+            blocks_map = {t["name"]: b["title"] for b in src["blocks"] for t in b["themes"]}
+            macros_map = {b: m["title"] for m in src["macros"] for b in m["blocks"]}
+            fields = src.get("fields", [])
+            records = {}
+            for row in src.get("rows", []):
+                item = dict(zip(fields, row))
+                symbol, theme = item.get("symbol"), item.get("theme")
+                if symbol:
+                    symbol = str(symbol).upper()
+                    block = blocks_map.get(theme) or item.get("sector")
+                    records[symbol] = {
+                        "theme": theme,
+                        "block": block,
+                        "macro": macros_map.get(block),
+                        "memberships": {theme: item.get("provenance") or "source"} if theme else {},
+                    }
+            # Theme definitions may intentionally add a stock to an extra niche
+            # without changing its primary row classification.
+            for block_def in src.get("blocks", []):
+                block = block_def.get("title")
+                for theme_def in block_def.get("themes", []):
+                    theme = theme_def.get("name")
+                    if not theme:
+                        continue
+                    for symbol in theme_def.get("symbols", []):
+                        symbol = str(symbol).upper()
+                        record = records.setdefault(symbol, {
+                            "theme": theme,
+                            "block": block,
+                            "macro": macros_map.get(block),
+                            "memberships": {},
+                        })
+                        record.setdefault("memberships", {})[theme] = "source"
+            if records:
+                return records
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+
+    # Fall back to published classifications only when the source taxonomy is unavailable.
     tax_paths = [
         frontend_dir / "public/data/universe-classification.json",
-        frontend_dir / "theme_tracker_source.json",
     ]
     # Check revision directories
     rev_dir = frontend_dir / "public/data/revisions"
@@ -158,30 +203,6 @@ def load_theme_classification(frontend_dir: Path) -> dict[str, dict]:
                     return d["records"]
             except Exception:
                 continue
-
-    # Fallback: construct from theme_tracker_source.json
-    source_p = frontend_dir / "theme_tracker_source.json"
-    if source_p.exists():
-        with open(source_p, "r", encoding="utf-8") as f:
-            src = json.load(f)
-        blocks_map = {t["name"]: b["title"] for b in src["blocks"] for t in b["themes"]}
-        macros_map = {b: m["title"] for m in src["macros"] for b in m["blocks"]}
-        fields = src.get("fields", [])
-        records = {}
-        for row in src.get("rows", []):
-            item = dict(zip(fields, row))
-            sym = item.get("symbol")
-            thm = item.get("theme")
-            blk = blocks_map.get(thm) or item.get("sector")
-            mac = macros_map.get(blk)
-            if sym:
-                records[sym] = {
-                    "theme": thm,
-                    "block": blk,
-                    "macro": mac,
-                    "memberships": {thm: item.get("provenance") or "source"} if thm else {},
-                }
-        return records
 
     return {}
 

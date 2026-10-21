@@ -84,39 +84,11 @@ def market_cap_crore(stock_meta: dict[str, Any]) -> float | None:
 
 
 def turnover30_crore(stock_meta: dict[str, Any]) -> float | None:
-    """Extract 30-day average turnover in Crores across supported metadata shapes."""
-    # 1. Pipeline fundamental file key: avg_rupee_volume_30_crore
-    val = finite_number(stock_meta.get("avg_rupee_volume_30_crore"))
-    if val is not None:
-        return val
-
-    # 2. Direct metrics field (standard frontend published stock output)
-    metrics = stock_meta.get("metrics")
-    if isinstance(metrics, dict):
-        val = finite_number(metrics.get("turnover30"))
+    metrics = stock_meta.get("metrics") or {}
+    for key in ("avg_rupee_volume_30_crore", "turnover30_crore", "turnover30"):
+        val = finite_number(stock_meta.get(key) if stock_meta.get(key) is not None else metrics.get(key))
         if val is not None:
             return val
-
-    # 3. TradingView parsed performance/values
-    tv = stock_meta.get("tradingview")
-    if isinstance(tv, dict):
-        perf = tv.get("performance")
-        if isinstance(perf, dict):
-            val = finite_number(perf.get("turnover30_crore") or perf.get("turnover30"))
-            if val is not None:
-                return val
-        tv_vals = tv.get("values")
-        if isinstance(tv_vals, dict):
-            val = finite_number(tv_vals.get("market.turnover30_crore") or tv_vals.get("turnover30_crore"))
-            if val is not None:
-                return val
-
-    # 4. Direct top-level keys
-    for key in ("turnover30_crore", "turnover30Cr", "turnover30", "daily_rupee_turnover_30_cr"):
-        val = finite_number(stock_meta.get(key))
-        if val is not None:
-            return val
-
     return None
 
 

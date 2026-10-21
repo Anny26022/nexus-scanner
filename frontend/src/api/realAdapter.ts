@@ -114,7 +114,7 @@ async function dataIndex(release: Manifest): Promise<DataIndex> {
 async function object<T>(release: Manifest, hash: string, resource = 'Announcement'): Promise<T> {
   if (!release.objectUrlTemplate || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid data object reference');
   const url = release.objectUrlTemplate.replace('{hash}', hash);
-  return cached(objectCache, url, () => getChartJson<T>(url, resource), 32);
+  return cached(objectCache, url, () => getChartJson<T>(url, resource), 128);
 }
 function validSymbol(symbol: string) {
   if (!/^[A-Z0-9&_-]+$/.test(symbol)) throw new Error('Invalid symbol');
@@ -375,7 +375,7 @@ class RealDataAdapter {
     }
     if (!release.chartUrlTemplate) throw new Error('Chart release unavailable');
     const url = release.chartUrlTemplate.replace('{symbol}', encodeURIComponent(symbol));
-    const chart = await cached(objectCache, url, () => getChartJson<ChartSnapshot>(url), 32);
+    const chart = await cached(objectCache, url, () => getChartJson<ChartSnapshot>(url), 128);
     if (chart.symbol !== symbol || chart.asOfDate !== release.sessionDate) throw new Error('Chart session mismatch');
     return chart;
   }

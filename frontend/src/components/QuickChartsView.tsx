@@ -59,8 +59,8 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
   const onEngineChange = useCallback((engine: ChartEngine | null) => { engineRef.current = engine; }, []);
   const chart = useQuery({
     queryKey: ['quick-chart', revision, row.symbol],
-    queryFn: async () => {
-      const snapshot = await screenerApi.getChart(row.symbol, revision);
+    queryFn: async ({ signal }) => {
+      const snapshot = await screenerApi.getChart(row.symbol, revision, signal);
       return { ...snapshot, candles: validateCandles(snapshot.candles) };
     },
     enabled: Boolean(revision),

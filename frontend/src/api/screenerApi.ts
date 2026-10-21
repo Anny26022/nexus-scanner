@@ -46,9 +46,9 @@ export const screenerApi = {
   getAnnouncements: realAdapter.getAnnouncements.bind(realAdapter),
   getAnnouncementHistory: realAdapter.getAnnouncementHistory.bind(realAdapter),
   getAnnouncementDetail: realAdapter.getAnnouncementDetail.bind(realAdapter),
-  async getChart(symbol: string, revision?: string): Promise<ChartSnapshot> {
+  async getChart(symbol: string, revision?: string, signal?: AbortSignal): Promise<ChartSnapshot> {
     if (USE_MOCK_API) throw new Error('Charts are unavailable in mock mode');
-    return realAdapter.getChart(symbol, revision);
+    return realAdapter.getChart(symbol, revision, signal);
   },
 
   async getCatalog(): Promise<ConditionDef[]> {

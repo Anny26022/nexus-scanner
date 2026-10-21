@@ -23,18 +23,18 @@ describe('useGridWindow', () => {
     expect(result.current.items).toHaveLength(16);
     expect(result.current.firstIndex).toBe(0);
     expect(result.current.top).toBe(0);
-    // Total rows = 50. Visible + overscan = 8 rows. Remaining = 42 rows. 42 * 440 = 18480
-    expect(result.current.bottom).toBe(42 * 440);
+    // Total rows = 50. Visible + overscan = 8 rows. Remaining = 42 rows. 42 * 418 = 17556
+    expect(result.current.bottom).toBe(42 * 418);
   });
 
   it('updates the window on scroll', () => {
     const items = Array.from({ length: 100 }, (_, i) => ({ id: i }));
     const { result } = renderHook(() => useGridWindow(items, 'key-1'));
 
-    // Scroll down to row 10 (10 * 440 = 4400px)
+    // Scroll down to row 10 (10 * 418 = 4180px)
     act(() => {
       result.current.onScroll({
-        currentTarget: { scrollTop: 4400 },
+        currentTarget: { scrollTop: 4180 },
       } as any);
     });
 
@@ -44,8 +44,8 @@ describe('useGridWindow', () => {
     expect(result.current.firstIndex).toBe(16);
     expect(result.current.items).toHaveLength(16);
     expect(result.current.items[0]).toEqual({ id: 16 });
-    expect(result.current.top).toBe(8 * 440);
-    expect(result.current.bottom).toBe((50 - 16) * 440);
+    expect(result.current.top).toBe(8 * 418);
+    expect(result.current.bottom).toBe((50 - 16) * 418);
   });
 
   it('resets window to top when key changes', () => {
@@ -55,7 +55,7 @@ describe('useGridWindow', () => {
 
     act(() => {
       result.current.onScroll({
-        currentTarget: { scrollTop: 4400 },
+        currentTarget: { scrollTop: 4180 },
       } as any);
     });
     expect(result.current.firstIndex).toBe(16);

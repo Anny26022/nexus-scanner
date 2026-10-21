@@ -38,9 +38,9 @@ async function getJson<T>(url: string, fresh = false, resource = 'Dataset'): Pro
   }
 }
 
-async function getChartJson<T>(url: string, resource = 'Chart', signal?: AbortSignal): Promise<T> {
+async function getChartJson<T>(url: string, resource = 'Chart'): Promise<T> {
   try {
-    const response = await fetch(url, { signal });
+    const response = await fetch(url);
     if (!response.ok) {
       if (resource === 'Announcement') throw new DataUnavailableError(response.status === 404
         ? 'The announcement file is missing from this published release. Please report this deployment issue.'
@@ -64,7 +64,7 @@ async function getChartJson<T>(url: string, resource = 'Chart', signal?: AbortSi
     if (!payload || typeof payload !== 'object') throw new Error('Invalid chart');
     return payload as T;
   } catch (error) {
-    if (error instanceof DataUnavailableError || (error as { name?: string })?.name === 'AbortError') throw error;
+    if (error instanceof DataUnavailableError) throw error;
     if (resource === 'Announcement') throw new DataUnavailableError('Announcement data could not be downloaded or decoded. Please retry; if this persists, check the release files and storage access.', 'download_failed');
     throw new Error('Chart data unavailable');
   }
@@ -111,10 +111,10 @@ async function dataIndex(release: Manifest): Promise<DataIndex> {
   if (index.asOfDate !== release.sessionDate || index.revision !== release.chartRevision) throw new Error('Data index release mismatch');
   return index;
 }
-async function object<T>(release: Manifest, hash: string, resource = 'Announcement', signal?: AbortSignal): Promise<T> {
+async function object<T>(release: Manifest, hash: string, resource = 'Announcement'): Promise<T> {
   if (!release.objectUrlTemplate || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid data object reference');
   const url = release.objectUrlTemplate.replace('{hash}', hash);
-  return cached(objectCache, url, () => getChartJson<T>(url, resource, signal), 512);
+  return cached(objectCache, url, () => getChartJson<T>(url, resource), 128);
 }
 function validSymbol(symbol: string) {
   if (!/^[A-Z0-9&_-]+$/.test(symbol)) throw new Error('Invalid symbol');
@@ -352,18 +352,18 @@ class RealDataAdapter {
     return ipoSnapshots.get(manifest.revision)!;
   }
 
-  async getChart(symbol: string, revision?: string, signal?: AbortSignal): Promise<ChartSnapshot> {
+  async getChart(symbol: string, revision?: string): Promise<ChartSnapshot> {
     validSymbol(symbol);
     const release = await releaseFor(revision);
     if (release.schemaVersion === 7) {
       const index = await dataIndex(release);
-      const chart = await object<ChartSnapshot & {candleChunks?: string[]}>(release, index.chartObjects[symbol], 'Chart', signal);
+      const chart = await object<ChartSnapshot & {candleChunks?: string[]}>(release, index.chartObjects[symbol], 'Chart');
       if (chart.symbol !== symbol || ![2, 3].includes(chart.schemaVersion)) throw new Error('Chart symbol/schema mismatch');
       if (chart.schemaVersion === 3) {
         const {candleChunks, ...metadata} = chart;
         if (!Array.isArray(candleChunks) || candleChunks.length > 2 || new Set(candleChunks).size !== candleChunks.length)
           throw new Error('Invalid chart chunk references');
-        const chunks = await Promise.all(candleChunks.map(hash => object<{schemaVersion:number;symbol:string;candles:ChartSnapshot['candles']}>(release, hash, 'Chart', signal)));
+        const chunks = await Promise.all(candleChunks.map(hash => object<{schemaVersion:number;symbol:string;candles:ChartSnapshot['candles']}>(release, hash, 'Chart')));
         if (chunks.some(chunk => chunk.symbol !== symbol || chunk.schemaVersion !== 1 || !Array.isArray(chunk.candles)))
           throw new Error('Chart chunk symbol/schema mismatch');
         const candles = chunks.flatMap(chunk => chunk.candles);
@@ -375,7 +375,7 @@ class RealDataAdapter {
     }
     if (!release.chartUrlTemplate) throw new Error('Chart release unavailable');
     const url = release.chartUrlTemplate.replace('{symbol}', encodeURIComponent(symbol));
-    const chart = await cached(objectCache, url, () => getChartJson<ChartSnapshot>(url, 'Chart', signal), 512);
+    const chart = await cached(objectCache, url, () => getChartJson<ChartSnapshot>(url), 128);
     if (chart.symbol !== symbol || chart.asOfDate !== release.sessionDate) throw new Error('Chart session mismatch');
     return chart;
   }

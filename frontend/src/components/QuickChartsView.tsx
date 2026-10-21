@@ -45,13 +45,13 @@ function MiniChart({ candles, symbol, onEngineChange }: { candles: readonly Cand
       scaleMode: 'normal',
       ...scene.appearance,
       panEnabled: true,
-      zoomEnabled: true,
+      zoomEnabled: false,
     });
     engine.setRange(6);
     onEngineChange(engine);
     return () => { engine.destroy(); onEngineChange(null); };
   }, [displayCandles, symbol, onEngineChange]);
-  return <div ref={attach} className="quick-chart-canvas" aria-label="Interactive chart using the saved chart style, indicators, and drawings. Drag to pan, scroll or pinch to zoom, and select drawings to edit them." role="group" tabIndex={0} />;
+  return <div ref={attach} className="quick-chart-canvas" aria-label="Interactive chart using the saved chart style, indicators, and drawings. Drag to pan; scroll or pinch to zoom, and select drawings to edit them." role="group" tabIndex={0} />;
 }
 
 function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRow; revision?: string; rank: number; onOpenFullChart?: (symbol: string, revision?: string) => void }) {
@@ -59,8 +59,8 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
   const onEngineChange = useCallback((engine: ChartEngine | null) => { engineRef.current = engine; }, []);
   const chart = useQuery({
     queryKey: ['quick-chart', revision, row.symbol],
-    queryFn: async ({ signal }) => {
-      const snapshot = await screenerApi.getChart(row.symbol, revision, signal);
+    queryFn: async () => {
+      const snapshot = await screenerApi.getChart(row.symbol, revision);
       return { ...snapshot, candles: validateCandles(snapshot.candles) };
     },
     enabled: Boolean(revision),
@@ -70,12 +70,13 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
   const changePct = typeof row.changePct === 'number' && Number.isFinite(row.changePct) ? row.changePct : null;
   const positive = changePct != null && changePct >= 0;
   const openFullChart = () => {
+    if (!onOpenFullChart) return;
     const grid = loadGrid();
     writeChartStorage('grid.v1', {
       ...grid,
       tiles: [{ ...grid.tiles[0], symbol: row.symbol }, ...grid.tiles.slice(1)],
     });
-    onOpenFullChart?.(row.symbol, revision);
+    onOpenFullChart(row.symbol, revision);
   };
   return <article className="quick-chart-card" aria-label={`${row.symbol} quick chart`}>
     <header className="quick-chart-header">
@@ -91,26 +92,40 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
       </div>
     </header>
     <div className="quick-chart-stage chart-stage">
-      {chart.isPending ? <div className="quick-chart-skeleton" aria-label="Loading chart" />
-        : chart.isError ? <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>Chart unavailable</span><button type="button" onClick={() => void chart.refetch()} aria-label={`Retry ${row.symbol} chart`}><RefreshCw size={13} /></button></div>
-          : chart.data?.candles.length ? <>
-            <MiniChart candles={chart.data.candles} symbol={row.symbol} onEngineChange={onEngineChange} />
-            <div className="chart-actions-zone" role="group" aria-label={`${row.symbol} chart controls`}>
-              <div className="chart-actions">
-                <button type="button" className="button button-icon" aria-label="Zoom in" title="Zoom in (+)" onClick={() => engineRef.current?.zoom(.8)}><Plus size={15}/></button>
-                <button type="button" className="button button-icon" aria-label="Zoom out" title="Zoom out (-)" onClick={() => engineRef.current?.zoom(1.25)}><Minus size={15}/></button>
-                <button type="button" className="button button-icon" aria-label="Reset chart view" title="Reset chart view (Home)" onClick={() => engineRef.current?.reset()}><RotateCcw size={14}/></button>
-                <button type="button" className="button button-ghost chart-auto-btn" title="Restore automatic price scaling" onClick={() => engineRef.current?.resetPriceScale()}>Auto</button>
-              </div>
+      {!revision || chart.isError ? (
+        <div className="quick-chart-unavailable">
+          <ChartNoAxesCombined size={18} />
+          <span>{revision ? 'Chart unavailable' : 'Revision unavailable'}</span>
+          {Boolean(revision) && (
+            <button type="button" onClick={() => void chart.refetch()} aria-label={`Retry ${row.symbol} chart`}><RefreshCw size={13} /></button>
+          )}
+        </div>
+      ) : chart.isPending ? (
+        <div className="quick-chart-skeleton" aria-label="Loading chart" />
+      ) : chart.data?.candles.length ? (
+        <>
+          <MiniChart candles={chart.data.candles} symbol={row.symbol} onEngineChange={onEngineChange} />
+          <div className="chart-actions-zone" role="group" aria-label={`${row.symbol} chart controls`}>
+            <div className="chart-actions">
+              <button type="button" className="button button-icon" aria-label="Zoom in" title="Zoom in (+)" onClick={() => engineRef.current?.zoom(.8)}><Plus size={15}/></button>
+              <button type="button" className="button button-icon" aria-label="Zoom out" title="Zoom out (-)" onClick={() => engineRef.current?.zoom(1.25)}><Minus size={15}/></button>
+              <button type="button" className="button button-icon" aria-label="Reset chart view" title="Reset chart view (6 months)" onClick={() => engineRef.current?.setRange(6)}><RotateCcw size={14}/></button>
+              <button type="button" className="button button-ghost chart-auto-btn" title="Restore automatic price scaling" onClick={() => engineRef.current?.resetPriceScale()}>Auto</button>
             </div>
-          </> : <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>No price history</span></div>}
+          </div>
+        </>
+      ) : (
+        <div className="quick-chart-unavailable"><ChartNoAxesCombined size={18} /><span>No price history</span></div>
+      )}
     </div>
     <footer className="quick-chart-meta">
       <span>RS <strong>{row.rsRating ?? ' - '}</strong></span>
       <span>RVOL <strong>{row.rvol == null ? ' - ' : `${row.rvol.toFixed(1)}×`}</strong></span>
       <span>₹{Number.isFinite(row.rupeeVolumeCrore) ? price.format(row.rupeeVolumeCrore) : ' - '} Cr</span>
       <span>1D</span>
-      <button type="button" className="quick-chart-open" onClick={openFullChart} aria-label={`Open ${row.symbol} full chart`}><Maximize2 size={12} /><span>Open chart</span></button>
+      {Boolean(onOpenFullChart) && (
+        <button type="button" className="quick-chart-open" onClick={openFullChart} aria-label={`Open ${row.symbol} full chart`}><Maximize2 size={12} /><span>Open chart</span></button>
+      )}
     </footer>
   </article>;
 }
@@ -126,10 +141,11 @@ export function QuickChartsView({ rows, revision, matchCount = rows.length, matc
   });
   const chartRows = allRows.data ?? rows;
   const gridWindow = useGridWindow(chartRows, `${revision}-${fullResultKey}`);
+  const baseRank = allRows.data ? 1 : firstRank;
 
   if ((busy || allRows.isPending) && !chartRows.length) return <div className="quick-charts-grid" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="quick-chart-card quick-chart-card-skeleton" key={index} />)}</div>;
   if (!chartRows.length) return null;
-  return <div className="quick-charts-scroll" onScroll={gridWindow.onScroll} aria-live="polite">
+  return <div className="quick-charts-scroll" onScroll={gridWindow.onScroll} aria-live="off">
     <p className="quick-charts-hint">Interactive charts use your saved style, indicators, and drawings. Drag to pan; scroll or pinch to zoom.</p>
     {allRows.isPending && <p className="quick-charts-hint">Preparing all {matchCount.toLocaleString('en-IN')} matching equities…</p>}
     <div className="quick-charts-grid" style={gridWindow.enabled ? { paddingTop: `${gridWindow.top}px`, paddingBottom: `${gridWindow.bottom}px` } : undefined}>
@@ -138,7 +154,7 @@ export function QuickChartsView({ rows, revision, matchCount = rows.length, matc
           key={row.symbol}
           row={row}
           revision={revision}
-          rank={firstRank + gridWindow.firstIndex + index}
+          rank={baseRank + gridWindow.firstIndex + index}
           onOpenFullChart={onOpenFullChart}
         />
       ))}

@@ -7,9 +7,10 @@ const subscribeMedia = (notify: () => void) => {
   return () => media?.removeEventListener('change', notify);
 };
 
-// Desktop: 2 columns, ~440px row height; Mobile: 1 column, ~380px row height
-const DESKTOP_ROW_HEIGHT = 440;
-const MOBILE_ROW_HEIGHT = 380;
+// Desktop: 2 columns, 404px card + 14px gap = 418px pitch
+// Mobile: 1 column, 344px card + 8px gap = 352px pitch
+const DESKTOP_ROW_HEIGHT = 418;
+const MOBILE_ROW_HEIGHT = 352;
 const OVERSCAN_ROWS = 2;
 const VISIBLE_ROWS = 4;
 const WINDOW_ROWS = VISIBLE_ROWS + 2 * OVERSCAN_ROWS; // 8 rows total (up to 16 cards on desktop)

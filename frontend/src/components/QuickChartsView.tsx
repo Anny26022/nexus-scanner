@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChartNoAxesCombined, Maximize2, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
@@ -38,7 +38,10 @@ function useNearViewport() {
 }
 
 function MiniChart({ candles, symbol }: { candles: readonly Candle[]; symbol: string }) {
-  const displayCandles = useMemo(() => candles.slice(-130), [candles]);
+  // Keep the complete published history in the engine. setRange(6) below only
+  // selects the initial viewport; slicing here would make older sessions
+  // impossible to reach by panning left.
+  const displayCandles = candles;
   const engineRef = useRef<ChartEngine | null>(null);
   const attach = useCallback((host: HTMLDivElement | null) => {
     if (!host || !displayCandles.length) return;

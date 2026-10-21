@@ -39,6 +39,7 @@ from build_rs_ratings import FRONT_WEIGHTED_HORIZONS, rank_first_ratings
 RRG_MIN_MARKET_CAP_CR = 999.0
 RRG_MIN_CLOSE = 10.0
 RRG_MIN_MAIN_HISTORY_SESSIONS = 65
+RRG_MIN_CONSTITUENTS = 3
 RRG_TURNOVER_WINDOW = 20
 
 
@@ -406,7 +407,7 @@ def build_thematic_rrg_payload(
     # Helper function to compute block/niche RRG metrics & rotation trail
     def compute_cluster_rrg(symbols: set[str], name: str, parent_block: str | None, macro: str | None) -> dict[str, Any] | None:
         valid_syms = [s for s in symbols if s in rrg_symbols]
-        if not valid_syms:
+        if len(valid_syms) < RRG_MIN_CONSTITUENTS:
             return None
 
         # Calculate historical 12-week trails

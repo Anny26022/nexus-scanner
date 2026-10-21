@@ -156,6 +156,7 @@ POST_STANDARDIZATION_SCRIPTS = [
     "build_ipo_screener_artifact.py",
     # Capture temporary news/filings before compression and cleanup.
     "build_chart_artifacts.py",
+    "build_thematic_rrg.py",
 ]
 
 # This runs after the canonical artifact is compressed, so standardisation

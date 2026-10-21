@@ -136,25 +136,17 @@ class TestThematicRrg(unittest.TestCase):
             "PASS": (["2026-01-01"] * 65, closes),
             "CAP_EDGE": (["2026-01-01"] * 65, closes),
             "PRICE_EDGE": (["2026-01-01"] * 65, np.full(65, 10.0)),
-            "TURNOVER_EDGE": (["2026-01-01"] * 65, closes),
+            "SECOND_PASS": (["2026-01-01"] * 65, closes),
             "SHORT": (["2026-01-01"] * 64, np.full(64, 25.0)),
         }
         stock_map = {
             "PASS": {"market_cap_crore": 1_000},
             "CAP_EDGE": {"market_cap_crore": 999},
             "PRICE_EDGE": {"market_cap_crore": 1_000},
-            "TURNOVER_EDGE": {"market_cap_crore": 1_000},
+            "SECOND_PASS": {"market_cap_crore": 1_000},
             "SHORT": {"market_cap_crore": 1_000},
         }
-        turnover20 = {
-            "PASS": 5.0,
-            "CAP_EDGE": 5.0,
-            "PRICE_EDGE": 5.0,
-            "TURNOVER_EDGE": 4.99,
-            "SHORT": 5.0,
-        }
-
-        self.assertEqual(institutional_rrg_symbols(histories, stock_map, turnover20), {"PASS"})
+        self.assertEqual(institutional_rrg_symbols(histories, stock_map), {"PASS", "SECOND_PASS"})
 
 if __name__ == "__main__":
     unittest.main()

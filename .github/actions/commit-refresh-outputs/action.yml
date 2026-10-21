@@ -55,6 +55,7 @@ runs:
         git add reference/index-constituent-mappings.json.gz
         git add reference/index-constituent-mappings.manifest.json
         git add frontend/public/data/current.json frontend/public/data/revisions
+        git add frontend/public/data/thematic_rrg.json frontend/public/data/thematic_rrg.json.gz frontend/public/data/thematic-rrg
         if [ "$WEEKLY_REFRESH" = "true" ]; then
           git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
           git add frontend/public/data/tijori/current.json frontend/public/data/tijori/revisions

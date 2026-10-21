@@ -95,7 +95,6 @@ const data: ThematicRrgResponse = {
   constituentEligibility: {
     marketCapCrStrictlyGreaterThan: 999,
     closeStrictlyGreaterThan: 10,
-    medianDailyTurnover20SessionsCrAtLeast: 5,
     eligibleSymbols: 1_000,
   },
   blocks: [

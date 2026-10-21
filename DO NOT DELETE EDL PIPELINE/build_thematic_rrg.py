@@ -38,7 +38,6 @@ from build_rs_ratings import FRONT_WEIGHTED_HORIZONS, rank_first_ratings
 # their own documented eligibility contracts.
 RRG_MIN_MARKET_CAP_CR = 999.0
 RRG_MIN_CLOSE = 10.0
-RRG_MIN_MEDIAN_TURNOVER_20_CR = 5.0
 RRG_MIN_MAIN_HISTORY_SESSIONS = 65
 RRG_TURNOVER_WINDOW = 20
 
@@ -85,20 +84,16 @@ def market_cap_crore(stock_meta: dict[str, Any]) -> float | None:
 def institutional_rrg_symbols(
     histories: dict[str, tuple[list[str], np.ndarray]],
     stock_map: dict[str, dict[str, Any]],
-    turnover20_by_symbol: dict[str, float],
 ) -> set[str]:
     """Return the main-RRG universe after the documented investability gates."""
     eligible: set[str] = set()
     for symbol, (_, closes) in histories.items():
         market_cap = market_cap_crore(stock_map.get(symbol, {}))
-        turnover20 = turnover20_by_symbol.get(symbol)
         if (
             len(closes) >= RRG_MIN_MAIN_HISTORY_SESSIONS
             and market_cap is not None
             and market_cap > RRG_MIN_MARKET_CAP_CR
             and float(closes[-1]) > RRG_MIN_CLOSE
-            and turnover20 is not None
-            and turnover20 >= RRG_MIN_MEDIAN_TURNOVER_20_CR
         ):
             eligible.add(symbol)
     return eligible
@@ -261,11 +256,10 @@ def build_thematic_rrg_payload(
                         turnover20_by_symbol[sym_u] = float(np.median(turnover_list[-RRG_TURNOVER_WINDOW:]))
 
     print(f"Loaded {len(histories)} stock histories for RRG calculation.")
-    rrg_symbols = institutional_rrg_symbols(histories, stock_map, turnover20_by_symbol)
+    rrg_symbols = institutional_rrg_symbols(histories, stock_map)
     print(
         f"Institutional RRG universe: {len(rrg_symbols)} symbols "
-        f"(market cap > ₹{RRG_MIN_MARKET_CAP_CR:g}cr, close > ₹{RRG_MIN_CLOSE:g}, "
-        f"median 20-session turnover ≥ ₹{RRG_MIN_MEDIAN_TURNOVER_20_CR:g}cr)."
+        f"(market cap > ₹{RRG_MIN_MARKET_CAP_CR:g}cr, close > ₹{RRG_MIN_CLOSE:g})."
     )
 
     # 6. Group stocks by Block and by Niche
@@ -716,7 +710,6 @@ def build_thematic_rrg_payload(
         "constituentEligibility": {
             "marketCapCrStrictlyGreaterThan": RRG_MIN_MARKET_CAP_CR,
             "closeStrictlyGreaterThan": RRG_MIN_CLOSE,
-            "medianDailyTurnover20SessionsCrAtLeast": RRG_MIN_MEDIAN_TURNOVER_20_CR,
             "eligibleSymbols": len(rrg_symbols),
         },
         "blocks": blocks_result,

@@ -111,7 +111,6 @@ export interface ThematicRrgResponse {
   constituentEligibility?: {
     marketCapCrStrictlyGreaterThan: number;
     closeStrictlyGreaterThan: number;
-    medianDailyTurnover20SessionsCrAtLeast: number;
     eligibleSymbols: number;
   };
   blocks: RrgBlockItem[];

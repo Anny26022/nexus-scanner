@@ -126,8 +126,6 @@
 .quick-chart-meta strong { color: var(--secondary); font-weight: 700; }
 .quick-chart-open { display: inline-flex; align-items: center; gap: 4px; height: 24px; margin-right: -5px; padding: 0 5px; border: 0; border-radius: 4px; background: transparent; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; }
 .quick-chart-open:hover { background: var(--surface-hover); color: var(--text); }
-.quick-chart-recenter { height: 24px; padding: 0 5px; border: 0; border-radius: 4px; background: transparent; color: var(--secondary); font: inherit; font-weight: 650; cursor: pointer; }
-.quick-chart-recenter:hover { background: var(--surface-hover); color: var(--text); }
 .quick-chart-card-skeleton { height: clamp(372px, 33vw, 480px); background: linear-gradient(105deg, var(--surface) 30%, var(--surface-hover) 48%, var(--surface) 64%); background-size: 240% 100%; animation: quick-chart-shimmer 1.2s ease-in-out infinite; }
 @keyframes quick-chart-shimmer { to { background-position: -240% 0; } }
 @media (prefers-reduced-motion: reduce) { .quick-chart-card, .results-view-toggle button { transition: none; } .quick-chart-card:hover { transform: none; } .quick-chart-skeleton, .quick-chart-card-skeleton { animation: none; } }

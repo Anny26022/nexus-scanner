@@ -17,8 +17,8 @@ export function Dialog({
   return (
     <RadixDialog.Root open onOpenChange={(open) => !open && onClose()}>
       <RadixDialog.Portal>
-        <RadixDialog.Overlay onPointerDown={event => { event.stopPropagation(); onClose(); }} className="dialog-backdrop fixed inset-0 z-[250] bg-[rgb(15_23_31_/_48%)] backdrop-blur-xs animate-in fade-in duration-150" />
-        <div className="fixed inset-0 z-[251] grid place-items-center pointer-events-none">
+        <RadixDialog.Overlay onPointerDown={event => { event.stopPropagation(); onClose(); }} className="dialog-backdrop fixed inset-0 z-(--z-dialog) bg-[rgb(15_23_31_/_48%)] backdrop-blur-xs animate-in fade-in duration-150" />
+        <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center pointer-events-none">
           <RadixDialog.Content
             ref={contentRef}
             aria-label={label}

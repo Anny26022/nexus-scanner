@@ -87,7 +87,18 @@
   --chart-grid: rgba(0, 0, 0, 0.05);
   --chart-crosshair: rgba(0, 0, 0, 0.22);
   --chart-scale-bg: #f8f9fd;
-  /* Layer scale: sticky table 1, navigation/popovers 10, toast 30, native dialog top layer. */
+  /* Stacking registry for UI that escapes its panel, lowest to highest.
+     Stacking inside a single panel uses small literals (1-30). */
+  --z-dock: 35;
+  --z-floating: 40;
+  --z-menu: 50;
+  --z-workspace-control: 60;
+  --z-chart-picker: 90;
+  --z-chart-overlay: 100;
+  --z-chart-menu: 110;
+  --z-chart-toolbar: 120;
+  --z-dialog: 250;
+  --z-context-menu: 260;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;

@@ -14,7 +14,7 @@ import { ScreenerModal } from './ScreenerModal';
 import { useFilterChoices } from '../hooks/useFilterChoices';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { tableLayout } from '../utils/tableLayout';
-import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import { useLocalStorageState, useSavedPagination } from '../hooks/useLocalStorageState';
 import { Pagination } from './Pagination';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
@@ -116,7 +116,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const [periodFilter, setPeriodFilter] = useLocalStorageState<'30d' | '90d' | '6m' | '1y' | 'all'>('nexus-scanner.ipo.period.v1', '1y');
   const [search, setSearch] = useLocalStorageState('nexus-scanner.ipo.search.v1', '');
   const [sort, setSort] = useLocalStorageState<{ field: 'listingDate' | 'currentPrice' | 'turnoverCrore' | 'marketCapCrore' | 'deliveryPct'; direction: 'asc' | 'desc' }>('nexus-scanner.ipo.sort.v1', { field: 'listingDate', direction: 'desc' });
-  const [page, setPage] = useState(1);
+  const {page, pageSize, setPage, setPageSize} = useSavedPagination('nexus-scanner.ipo.pagination.v1', datasetRevision, 50);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const filterChoices = useFilterChoices(isFilterModalOpen, datasetRevision);
   const [isColumnPickerOpen, setIsColumnPickerOpen] = useState(false);
@@ -127,10 +127,9 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.ipo.match-mode.v1', 'all');
   const [conditions, setConditions] = useLocalStorageState<Record<string, ActiveCondition>>('nexus-scanner.ipo.conditions.v1', {});
   const hasUnavailable = hasUnavailableConditions(conditions);
-  const [screenPage, setScreenPage] = useState(1);
+  const {page: screenPage, pageSize: screenPageSize, setPage: setScreenPage, setPageSize: setScreenPageSize} =
+    useSavedPagination('nexus-scanner.ipo.screen-pagination.v1', datasetRevision, 15);
   const [screenSort, setScreenSort] = useState<{ field: string; direction: 'asc' | 'desc' }>({ field: 'rvol', direction: 'desc' });
-  const [pageSize, setPageSize] = useState(50);
-  const [screenPageSize, setScreenPageSize] = useState(15);
   const scrollRef = useRef<HTMLDivElement>(null);
   const ipoOverview = useSymbolHoverCard<IPORow>('ipo-details');
 
@@ -241,7 +240,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     {showScreenResults && !hasUnavailable && listingSymbols.length > 0 ? <ResultsTable data={screenQuery.data} isLoading={screenQuery.isLoading} isFetching={screenQuery.isFetching}
       loadExportRows={()=>screenerApi.getExportRows({...screenRequest,datasetRevision:screenQuery.data?.immutableRevision ?? datasetRevision})}
       symbolSearch={search} onSymbolSearchChange={value => {setSearch(value); setPage(1); setScreenPage(1);}}
-      isError={screenQuery.isError} error={screenQuery.error} onRetry={() => void screenQuery.refetch()} onPageChange={setScreenPage} onPageSizeChange={size => {setScreenPageSize(size); setScreenPage(1);}}
+      isError={screenQuery.isError} error={screenQuery.error} onRetry={() => void screenQuery.refetch()} onPageChange={setScreenPage} onPageSizeChange={setScreenPageSize}
       onSortChange={(field, direction) => {setScreenSort({field, direction}); setScreenPage(1);}} currentSort={screenSort} />
       : <section className="results-surface" aria-label="IPO listings">
         <div className="results-toolbar"><div className="result-count"><strong>{!isLoading && (!ipoQuery.isError || ipoQuery.data) ? filteredIpos.length.toLocaleString('en-IN') : '-'}</strong><span>new listings</span></div>
@@ -295,7 +294,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
             </tbody>
           </table>
         </div>
-        <Pagination page={currentPage} pageSize={pageSize} total={filteredIpos.length} busy={isLoading || (ipoQuery.isError && !ipoQuery.data)} onPageChange={page => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setPage(page);}} onPageSizeChange={size => {ipoOverview.dismiss(); if (scrollRef.current) scrollRef.current.scrollTop = 0; setPageSize(size); setPage(1);}} />
+        <Pagination page={currentPage} pageSize={pageSize} total={filteredIpos.length} busy={isLoading || (ipoQuery.isError && !ipoQuery.data)} onPageChange={page => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setPage(page);}} onPageSizeChange={size => {ipoOverview.dismiss(); if (scrollRef.current) scrollRef.current.scrollTop = 0; setPageSize(size);}} />
         </div>
       </section>}
     {isColumnPickerOpen && <Dialog label="Customize IPO columns" className="column-dialog" onClose={() => setIsColumnPickerOpen(false)}>

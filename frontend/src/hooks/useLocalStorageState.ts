@@ -25,3 +25,14 @@ export const useLocalStorageState = <T,>(key: string, fallback: T): [T, Dispatch
   }, [key]);
   return [value, setStoredValue];
 };
+
+export function useSavedPagination(key: string, revision: string | undefined, defaultPageSize: 15 | 50) {
+  const [saved, setSaved] = useLocalStorageState<{revision?: string; page: number; pageSize: number}>(key, {page: 1, pageSize: defaultPageSize});
+  const pageSize = [15, 50, 100].includes(saved.pageSize) ? saved.pageSize : defaultPageSize;
+  const page = saved.revision === revision && Number.isInteger(saved.page) && saved.page > 0 ? saved.page : 1;
+  return {
+    page, pageSize,
+    setPage: (next: number) => setSaved({revision, page: next, pageSize}),
+    setPageSize: (next: number) => setSaved({revision, page: 1, pageSize: next}),
+  };
+}

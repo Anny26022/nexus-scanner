@@ -34,6 +34,7 @@ it('retains a disabled prior page during paging, then displays the correct new p
   expect(screen.getByText('AVTNPL', {selector: 'b'})).toBeInTheDocument();
   await act(async () => finish(result(next)));
   expect(await screen.findByText('WORTHPERI', {selector: 'b'})).toBeInTheDocument();
+  expect(JSON.parse(localStorage.getItem('nexus-scanner.screener.pagination.v1')!)).toMatchObject({revision, page: 2, pageSize: 15});
   expect(screen.getByRole('button', {name: 'Next'})).toBeDisabled();
   expect(screen.getByRole('button', {name: 'Previous'})).toBeEnabled();
 });
@@ -61,6 +62,14 @@ it('resets to the first page of a new release, while preserving the screen crite
   expect(vi.mocked(screenerApi.runScreen).mock.lastCall?.[0].expressionTree).toEqual(vi.mocked(screenerApi.runScreen).mock.calls[0][0].expressionTree);
 });
 
+it('restores screener page and page size from local storage for the same revision', async () => {
+  localStorage.setItem('nexus-scanner.screener.pagination.v1', JSON.stringify({revision, page: 2, pageSize: 50}));
+  vi.mocked(screenerApi.runScreen).mockImplementation(async request => ({...result(request), matchCount: 66}));
+  setup();
+  await waitFor(() => expect(vi.mocked(screenerApi.runScreen)).toHaveBeenCalledWith(expect.objectContaining({datasetRevision: revision, page: 2, pageSize: 50})));
+  expect(vi.mocked(screenerApi.runScreen).mock.lastCall?.[0]).toMatchObject({datasetRevision: revision, page: 2, pageSize: 50});
+});
+
 it('closing the filter editor does not apply drafts, reset criteria or rerun the screen', async () => {
   vi.mocked(screenerApi.runScreen).mockImplementation(async request => result(request));
   setup();
@@ -83,6 +92,7 @@ it('warms the next 100-row page and reuses visited pages without querying again'
     const request = query.queryKey[1] as ScreenerRunRequest;
     return request?.pageSize === 100 && request.page === 2 && query.state.status === 'success';
   })).toBe(true));
+  expect(JSON.parse(localStorage.getItem('nexus-scanner.screener.pagination.v1')!)).toMatchObject({revision, page: 1, pageSize: 100});
   fireEvent.click(screen.getByRole('button', {name: 'Next'}));
   expect(screen.getByText('WORTHPERI', {selector: 'b'})).toBeInTheDocument();
   expect(screen.queryByText('Updating results')).not.toBeInTheDocument();

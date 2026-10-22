@@ -62,14 +62,15 @@ class SessionHistoryTests(unittest.TestCase):
             git('init', '-q')
             git('config', 'user.name', 'Test')
             git('config', 'user.email', 'test@example.com')
-            for revision, timestamp, message in [
-                ('a' * 64, '2026-10-19T16:30:00+05:30', 'Automated Daily Data Refresh'),
-                ('b' * 64, '2026-10-19T17:30:00+05:30', 'Automated Daily Data Refresh'),
-                ('c' * 64, '2026-10-19T20:30:00+05:30', 'Automated Daily Data Refresh'),
-                ('d' * 64, '2026-10-20T20:30:00+05:30', 'Automated Daily Data Refresh'),
-                ('e' * 64, '2026-10-21T20:30:00+05:30', 'Automated weekly adjusted OHLCV refresh'),
+            for session, revision, timestamp, message in [
+                ('2026-10-19', 'a' * 64, '2026-10-19T16:30:00+05:30', 'Automated Daily Data Refresh'),
+                ('2026-10-19', 'b' * 64, '2026-10-19T17:30:00+05:30', 'Automated Daily Data Refresh'),
+                ('2026-10-19', 'c' * 64, '2026-10-19T15:00:00Z', 'Automated Daily Data Refresh'),
+                ('2026-10-19', 'd' * 64, '2026-10-20T20:30:00+05:30', 'Automated Daily Data Refresh'),
+                ('2026-10-21', 'e' * 64, '2026-10-21T20:30:00+05:30', 'Automated weekly adjusted OHLCV refresh'),
+                ('2026-10-22', 'f' * 64, '2026-10-22T16:45:00+05:30', 'Automated Daily Data Refresh'),
             ]:
-                manifest, compressed = self.snapshot(output, '2026-10-19', revision)
+                manifest, compressed = self.snapshot(output, session, revision)
                 if revision == 'c' * 64:
                     expected = compressed
                 (output / 'current.json').write_text(json.dumps(manifest))

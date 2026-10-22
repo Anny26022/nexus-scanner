@@ -25,7 +25,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: backfill-historical-snapshots
+  # Daily/weekly publication and backfills all update the same sessions manifest.
+  group: daily-data-refresh
   cancel-in-progress: false
 
 jobs:

@@ -29,6 +29,8 @@ interface ResultsTableProps {
   onRetry?: () => void;
   onPageChange: (page: number) => void;
   onPageSizeChange?: (size: number) => void;
+  page?: number;
+  pageSize?: number;
   onSortChange: (field: string, direction: 'asc' | 'desc') => void;
   currentSort?: { field: string; direction: 'asc' | 'desc' };
   onOpenFullChart?: (symbol: string, revision?: string) => void;
@@ -144,7 +146,7 @@ const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
 };
 
 export function ResultsTable({ data, isLoading, isError, isFetching = false, error, onRetry,
-  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows, onOpenFullChart,
+  onPageChange, onPageSizeChange, page, pageSize, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows, onOpenFullChart,
   resultView: propResultView, onResultViewChange }: ResultsTableProps) {
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
@@ -288,7 +290,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
           </tbody>
         </table>
       </div>
-      <Pagination page={data?.page ?? 1} pageSize={data?.pageSize ?? 15} total={data?.matchCount ?? 0} busy={busy || isError || !data} onPageChange={page => {resetScroll(); onPageChange(page);}} onPageSizeChange={onPageSizeChange && (size => {resetScroll(); onPageSizeChange(size);})} />
+      <Pagination page={data?.page ?? page ?? 1} pageSize={pageSize ?? data?.pageSize ?? 15} total={data?.matchCount} busy={busy || isError || !data} onPageChange={page => {resetScroll(); onPageChange(page);}} onPageSizeChange={onPageSizeChange && (size => {resetScroll(); onPageSizeChange(size);})} />
     </div>}
     {overview.active && overview.id && !busy && !isError && !columnPickerOpen && !filingSymbol && rows.some(row => row.symbol === overview.active!.row.symbol) &&
       <TijoriDetailsCard key={overview.active.row.symbol} {...overview.active} id={overview.id}

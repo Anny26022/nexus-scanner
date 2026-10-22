@@ -239,6 +239,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     </section>
     {showScreenResults && !hasUnavailable && listingSymbols.length > 0 ? <ResultsTable data={screenQuery.data} isLoading={screenQuery.isLoading} isFetching={screenQuery.isFetching}
       loadExportRows={()=>screenerApi.getExportRows({...screenRequest,datasetRevision:screenQuery.data?.immutableRevision ?? datasetRevision})}
+      page={screenPage} pageSize={screenPageSize}
       symbolSearch={search} onSymbolSearchChange={value => {setSearch(value); setPage(1); setScreenPage(1);}}
       isError={screenQuery.isError} error={screenQuery.error} onRetry={() => void screenQuery.refetch()} onPageChange={setScreenPage} onPageSizeChange={setScreenPageSize}
       onSortChange={(field, direction) => {setScreenSort({field, direction}); setScreenPage(1);}} currentSort={screenSort} />
@@ -294,7 +295,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
             </tbody>
           </table>
         </div>
-        <Pagination page={currentPage} pageSize={pageSize} total={filteredIpos.length} busy={isLoading || (ipoQuery.isError && !ipoQuery.data)} onPageChange={page => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setPage(page);}} onPageSizeChange={size => {ipoOverview.dismiss(); if (scrollRef.current) scrollRef.current.scrollTop = 0; setPageSize(size);}} />
+        <Pagination page={isLoading ? page : currentPage} pageSize={pageSize} total={isLoading ? undefined : filteredIpos.length} busy={isLoading || (ipoQuery.isError && !ipoQuery.data)} onPageChange={page => {if (scrollRef.current) scrollRef.current.scrollTop = 0; setPage(page);}} onPageSizeChange={size => {ipoOverview.dismiss(); if (scrollRef.current) scrollRef.current.scrollTop = 0; setPageSize(size);}} />
         </div>
       </section>}
     {isColumnPickerOpen && <Dialog label="Customize IPO columns" className="column-dialog" onClose={() => setIsColumnPickerOpen(false)}>

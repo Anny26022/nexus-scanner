@@ -250,7 +250,7 @@ SCRIPT_OUTPUT_SPECS = {
         ArtifactSpec("pattern_gallery.json", "json", min_count=0),
     ],
     "build_thematic_rrg.py": [
-        ArtifactSpec("thematic_rrg.json", "json", required_fields=("asOfDate", "rsMethodologyVersion", "blocks", "niches", "ipoTactical")),
+        ArtifactSpec("thematic_rrg.json", "json", required_fields=("schemaVersion", "asOfDate", "rsMethodologyVersion", "rsCoverage", "membershipBasis", "membershipAsOf", "blocks", "niches", "thematicIndices", "ipoTactical")),
     ],
     "fetch_all_indices.py": [
         ArtifactSpec("all_indices_list.json", "json", min_count=1),
@@ -372,6 +372,7 @@ FINAL_ARTIFACT_SPECS = [
     ArtifactSpec("nse_fno_ban.json.gz", "gzip_json", required_fields=("source", "available", "trade_date", "symbols")),
     ArtifactSpec("earnings_calendar.json.gz", "gzip_json", required_fields=("source", "fetched_at", "events", "available")),
     ArtifactSpec("rs_rating_daily.json.gz", "gzip_json", required_fields=("source", "as_of_date", "ratings")),
+    ArtifactSpec("rs_universe_history.json.gz", "gzip_json", required_fields=("methodology_version", "sessions"), nested_min_counts=(("sessions", 1),)),
     ArtifactSpec("ipo_screener.json.gz", "gzip_json", required_fields=("schema_version", "source", "as_of_date", "records", "provider_data", "pending_canonical_enrichment", "capabilities")),
     ArtifactSpec("ipo_provider_listed_archive.json.gz", "gzip_json", required_fields=("ipos",), nested_min_counts=(("ipos", 1),)),
     ArtifactSpec("ipo_provider_details_archive.json.gz", "gzip_json", required_fields=("details",)),
@@ -390,6 +391,7 @@ FINAL_ARTIFACT_SPECS = [
     ArtifactSpec("sme_market_data.json.gz", "gzip_json", min_count=1, required_fields=("Symbol", "Series")),
     ArtifactSpec("market_screens_snapshot.json.gz", "gzip_json", min_count=1, required_fields=("as_of_date", "records")),
     ArtifactSpec("pattern_gallery.json.gz", "gzip_json", min_count=0),
+    ArtifactSpec("thematic_rrg.json", "json", required_fields=("schemaVersion", "asOfDate", "rsMethodologyVersion", "rsCoverage", "membershipBasis", "membershipAsOf", "blocks", "niches", "thematicIndices", "ipoTactical")),
 ]
 
 SCRIPT_OUTPUT_SPECS[OHLCV_DERIVED_SCRIPT] = [

@@ -184,7 +184,13 @@ class RealDataAdapter {
     }
     return cached(releaseCache, `rrg:${release.thematicRrgVersion}`, async () => {
       const data = await getJson<import('../types/thematicRrg').ThematicRrgResponse>(release.thematicRrgUrl!, false, 'Thematic RRG');
+      const coverage = data.rsCoverage;
       if (data.schemaVersion !== 1 || data.rsMethodologyVersion !== 'marketstrength_parity_v2' || !validDate(data.asOfDate)
+          || data.membershipBasis !== 'current_constituents' || data.membershipAsOf !== data.asOfDate
+          || !coverage || coverage.momentumAvailable !== true || !Array.isArray(coverage.requestedDates)
+          || !Array.isArray(coverage.availableDates)
+          || coverage.requestedDates.some(date => !validDate(date))
+          || [...coverage.requestedDates].sort().join(',') !== [...coverage.availableDates].sort().join(',')
           || !Array.isArray(data.blocks) || !Array.isArray(data.niches) || !Array.isArray(data.ipoTactical)
           || data.totalBlocks !== data.blocks.length || data.totalNiches !== data.niches.length
           || (data.thematicIndices !== undefined && (!Array.isArray(data.thematicIndices)

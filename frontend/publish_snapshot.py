@@ -235,6 +235,16 @@ def attach_thematic_rrg(root, output, manifest):
         payload = json.loads(staged.read_text())
         if payload.get('asOfDate') != manifest['sessionDate']:
             raise ValueError('Thematic RRG session does not match scanner publication')
+        coverage = payload.get('rsCoverage') or {}
+        requested = coverage.get('requestedDates')
+        available = coverage.get('availableDates')
+        if (payload.get('rsMethodologyVersion') != 'marketstrength_parity_v2'
+                or coverage.get('momentumAvailable') is not True
+                or not isinstance(requested, list) or not isinstance(available, list)
+                or sorted(requested) != sorted(available)
+                or payload.get('membershipBasis') != 'current_constituents'
+                or payload.get('membershipAsOf') != payload['asOfDate']):
+            raise ValueError('Thematic RRG is missing complete dated RS or constituent-basis metadata')
         raw = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
         version = hashlib.sha256(raw).hexdigest()
         target = output / 'thematic-rrg' / f'{version}.json'

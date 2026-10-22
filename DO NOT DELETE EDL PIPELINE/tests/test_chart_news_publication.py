@@ -61,15 +61,20 @@ class ChartNewsPublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             destination = Path(folder) / 'output'; destination.mkdir()
             stage = Path(folder) / 'stage'
+            archive = destination / 'rs_universe_history.json.gz'
+            archive.write_bytes(b'previous dated universe')
             def worker(command, cwd, env):
                 current = Path(cwd)
                 if env['EDL_PIPELINE_PHASE'] == 'build':
                     self.assertTrue((current / 'fetch_checkpoint.json').exists())
+                    self.assertEqual((current / archive.name).read_bytes(), b'previous dated universe')
                     for spec in FINAL_ARTIFACT_SPECS:
                         (current / spec.path).write_bytes(b'fixture')
+                    (current / archive.name).write_bytes(b'updated dated universe')
                     (current / 'chart_artifacts').mkdir()
                     (current / 'chart_artifacts/TEST.json').write_text('{}')
                 else:
+                    self.assertEqual((current / archive.name).read_bytes(), b'previous dated universe')
                     (current / 'fetch_checkpoint.json').write_text('{"exit_code":0}')
                 (current / 'pipeline_report.json').write_text('{"exit_code":0}')
                 return mock.Mock(returncode=0)
@@ -86,6 +91,9 @@ class ChartNewsPublicationTests(unittest.TestCase):
                 self.assertEqual(publication.main(phase='build', stage_path=stage), 0)
                 self.assertFalse(stage.exists())
                 self.assertTrue((destination / 'chart_artifacts/TEST.json').exists())
+                self.assertEqual(archive.read_bytes(), b'updated dated universe')
+                self.assertIn('rs_universe_history.json.gz', {spec.path for spec in FINAL_ARTIFACT_SPECS})
+                self.assertIn('thematic_rrg.json', {spec.path for spec in FINAL_ARTIFACT_SPECS})
                 frontend.assert_called_once_with(destination)
 
     def test_promotion_does_not_load_artifacts_with_read_bytes(self):

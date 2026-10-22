@@ -4,6 +4,9 @@ const revision = 'a'.repeat(64);
 const mockRrgData = {
   schemaVersion: 1,
   rsMethodologyVersion: 'marketstrength_parity_v2',
+  rsCoverage: {requestedDates: ['2026-10-19'], availableDates: ['2026-10-19'], momentumAvailable: true},
+  membershipBasis: 'current_constituents',
+  membershipAsOf: '2026-10-19',
   asOfDate: '2026-10-19',
   generatedAt: '2026-10-20T14:00:00Z',
   benchmark: 'NIFTY 500',

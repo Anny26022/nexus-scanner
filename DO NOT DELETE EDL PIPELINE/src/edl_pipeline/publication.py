@@ -148,6 +148,9 @@ def main(phase="all", stage_path=None):
                 archive = destination / name
                 if archive.exists():
                     shutil.copy2(archive, stage / archive.name)
+            rs_universe = destination / "rs_universe_history.json.gz"
+            if rs_universe.exists():
+                shutil.copy2(rs_universe, stage / rs_universe.name)
         env = dict(os.environ, EDL_BASE_DIR=str(stage), EDL_CLEANUP_INTERMEDIATE="0", EDL_PIPELINE_PHASE=phase, PYTHONUNBUFFERED="1")
         env["PYTHONPATH"] = os.pathsep.join([str(source), str(source / "src"), env.get("PYTHONPATH", "")])
         result = subprocess.run(

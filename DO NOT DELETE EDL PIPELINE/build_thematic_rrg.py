@@ -170,6 +170,15 @@ def rolling_rs_ratings(
     return ratings_by_offset
 
 
+def required_rs_dates(benchmark_dates: list[str], trail_weeks: int) -> tuple[set[int], set[str]]:
+    """Return weekly trail anchors and their 21-session RS lookbacks."""
+    offsets = {offset for week in range(trail_weeks + 1) for offset in (week * 5, week * 5 + 21)}
+    required_sessions = max(max(offsets), trail_weeks * 5 + 63) + 1
+    if len(benchmark_dates) < required_sessions:
+        raise ValueError(f"RRG needs {required_sessions} benchmark sessions for all RS and 63-session return anchors.")
+    return offsets, {benchmark_dates[-1 - offset] for offset in offsets}
+
+
 def load_theme_classification(frontend_dir: Path, stocks: list[dict], as_of: str) -> dict[str, dict]:
     """Use the scanner's canonical taxonomy rules, including overrides and IPOs."""
     return classify(stocks, as_of, source_path=frontend_dir / "theme_tracker_source.json")["records"]
@@ -393,12 +402,15 @@ def build_thematic_rrg_payload(
     # ratings. Include the 21-session predecessor for each trail anchor so a
     # point's y-value is always rating(t) - rating(t-21), including today.
     n_bench = len(bench_c)
-    rating_offsets = {
-        offset
-        for week in range(trail_weeks + 1)
-        for offset in (week * 5, week * 5 + 21)
-    }
-    rating_dates = {bench_dates[-1-offset] for offset in rating_offsets if offset < len(bench_dates)}
+    rating_offsets, rating_dates = required_rs_dates(bench_dates, trail_weeks)
+    requires_stock_rs = any(isinstance(record, dict) and (record.get("block") or record.get("theme"))
+                            for record in tax_records.values())
+    missing_dates = sorted(rating_dates - dated_universes.keys()) if requires_stock_rs else []
+    if missing_dates:
+        raise ValueError(
+            f"Dated RS universe is missing {len(missing_dates)} RRG anchor/lookback sessions: "
+            f"{', '.join(missing_dates[:5])}. Run the historical RS backfill before publishing."
+        )
     ranking_symbols = set().union(*(dated_universes.get(d, set()) for d in rating_dates))
     rating_histories = {}
     for symbol in sorted(ranking_symbols):
@@ -408,6 +420,13 @@ def build_thematic_rrg_payload(
             frame = frame[frame['Date'].dt.strftime('%Y-%m-%d') <= as_of_date].tail(max(rating_offsets) + 253)
             rating_histories[symbol] = (frame["Date"].dt.strftime("%Y-%m-%d").tolist(), frame["Close"].to_numpy(copy=True))
     ratings_by_offset = rolling_rs_ratings(rating_histories, bench_dates, rating_offsets, dated_universes)
+    unrated_dates = ([bench_dates[-1-offset] for offset in sorted(rating_offsets) if not ratings_by_offset.get(offset)]
+                     if requires_stock_rs else [])
+    if unrated_dates:
+        raise ValueError(
+            f"Dated RS universe produced no ratings for {len(unrated_dates)} requested sessions: "
+            f"{', '.join(unrated_dates[:5])}. Refusing to publish an incomplete RRG trail."
+        )
     weekly_bench_excess: list[dict] = []
     for w in range(trail_weeks + 1):
         idx = -1 - w * 5
@@ -811,8 +830,10 @@ def build_thematic_rrg_payload(
         "benchmark": "NIFTY 500",
         "rsMethodologyVersion": METHODOLOGY_VERSION,
         "rsCoverage": {"requestedDates": sorted(rating_dates),
-                       "availableDates": sorted(d for d in rating_dates if d in dated_universes),
-                       "momentumAvailable": bool(ratings_by_offset.get(0) and ratings_by_offset.get(21))},
+                       "availableDates": sorted(rating_dates & dated_universes.keys()),
+                       "momentumAvailable": requires_stock_rs and not missing_dates and not unrated_dates},
+        "membershipBasis": "current_constituents",
+        "membershipAsOf": as_of_date,
         "benchmark3mReturn": weekly_bench_excess[0]["bench_return_63d"],
         "trailWeeks": trail_weeks,
         "totalBlocks": len(blocks_result),

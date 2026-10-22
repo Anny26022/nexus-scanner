@@ -20,12 +20,16 @@ class SnapshotPublicationTests(unittest.TestCase):
             root = Path(folder) / 'edl'; root.mkdir(); self.fixture(root)
             output = Path(folder) / 'public'
             staged = root / 'thematic_rrg.json'
-            staged.write_text(json.dumps({'asOfDate': '2026-09-30', 'blocks': []}))
+            staged.write_text(json.dumps({'asOfDate': '2026-09-30', 'rsMethodologyVersion': 'marketstrength_parity_v2',
+                'rsCoverage': {'requestedDates': ['2026-09-30'], 'availableDates': ['2026-09-30'], 'momentumAvailable': True},
+                'membershipBasis': 'current_constituents', 'membershipAsOf': '2026-09-30', 'blocks': []}))
             first = publish(root, output)
             release = output / 'revisions' / first['revision'] / 'release.json'
             frozen = release.read_bytes()
             self.assertIn('thematicRrgUrl', json.loads((output / 'current.json').read_text()))
-            staged.write_text(json.dumps({'asOfDate': '2026-09-30', 'blocks': [{'name': 'Updated'}]}))
+            staged.write_text(json.dumps({'asOfDate': '2026-09-30', 'rsMethodologyVersion': 'marketstrength_parity_v2',
+                'rsCoverage': {'requestedDates': ['2026-09-30'], 'availableDates': ['2026-09-30'], 'momentumAvailable': True},
+                'membershipBasis': 'current_constituents', 'membershipAsOf': '2026-09-30', 'blocks': [{'name': 'Updated'}]}))
             updated = publish(root, output)
             self.assertEqual(updated['revision'], first['revision'])
             self.assertNotEqual(updated['thematicRrgVersion'], first['thematicRrgVersion'])

@@ -15,10 +15,18 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from build_thematic_rrg import institutional_rrg_symbols, load_theme_classification, rolling_rs_ratings, build_thematic_rrg_payload, thematic_index_histories, index_rs_ratings
+from build_thematic_rrg import institutional_rrg_symbols, load_theme_classification, rolling_rs_ratings, build_thematic_rrg_payload, thematic_index_histories, index_rs_ratings, required_rs_dates
 from build_rs_ratings import rank_session, save_universe_history
 
 class TestThematicRrg(unittest.TestCase):
+    def test_required_rs_dates_include_every_weekly_anchor_and_21_session_predecessor(self):
+        dates = pd.bdate_range('2025-01-01', periods=400).strftime('%Y-%m-%d').tolist()
+        offsets, requested = required_rs_dates(dates, 12)
+        self.assertEqual(offsets, {offset for week in range(13) for offset in (week * 5, week * 5 + 21)})
+        self.assertEqual(len(requested), len(offsets))
+        with self.assertRaisesRegex(ValueError, 'needs 124 benchmark sessions'):
+            required_rs_dates(dates[-123:], 12)
+
     def test_index_rank_ties_singletons_and_short_benchmark_are_safe(self):
         dates = pd.bdate_range('2025-01-01', periods=160).strftime('%Y-%m-%d').tolist()
         prices = {d: 100 + i for i, d in enumerate(dates)}
@@ -137,7 +145,9 @@ class TestThematicRrg(unittest.TestCase):
             with gzip.open(root / "all_stocks_fundamental_analysis.json.gz", "wt") as handle:
                 json.dump([], handle)
             taxonomy = {s: {"block": "Block", "theme": "Niche", "macro": "Macro"} for s in ("A", "B", "C")}
-            eligible = {dates[-1]: set(histories), dates[-22]: {"A", "B", "C"}}
+            _, requested_dates = required_rs_dates(dates, 12)
+            eligible = {day: set(histories) for day in requested_dates}
+            eligible[dates[-22]] = {"A", "B", "C"}
             save_universe_history(root, eligible)
             with patch("build_thematic_rrg.load_theme_classification", return_value=taxonomy):
                 payload = build_thematic_rrg_payload(root, root)
@@ -149,13 +159,17 @@ class TestThematicRrg(unittest.TestCase):
             self.assertAlmostEqual(block["metrics"]["excessReturn6m"], round(float(np.median([
                 (histories[s][1][-1] / histories[s][1][-127] - 1) * 100 for s in taxonomy])
                 - (benchmark[-1] / benchmark[-127] - 1) * 100), 2))
-            self.assertEqual([point["week"] for point in block["trail"]], [0])
+            self.assertEqual([point["week"] for point in block["trail"]], list(range(12, -1, -1)))
+            self.assertTrue(payload["rsCoverage"]["momentumAvailable"])
+            self.assertEqual(payload["membershipBasis"], "current_constituents")
+            self.assertEqual(payload["membershipAsOf"], dates[-1])
             for constituent in block["constituents"]:
                 self.assertEqual(constituent["rsRating"], now[constituent["symbol"]]["composite_rs"])
-            # Without a prior dated universe no block may claim zero momentum.
+            # Missing anchors must stop generation rather than publish a partial trail.
             save_universe_history(root, {dates[-1]: set(histories)})
             with patch("build_thematic_rrg.load_theme_classification", return_value=taxonomy):
-                self.assertEqual(build_thematic_rrg_payload(root, root)["blocks"], [])
+                with self.assertRaisesRegex(ValueError, "Dated RS universe is missing"):
+                    build_thematic_rrg_payload(root, root)
 
     def test_trail_ranks_match_the_daily_engine_with_dated_membership(self):
         dates = pd.bdate_range("2025-01-01", periods=300).strftime("%Y-%m-%d").tolist()

@@ -104,8 +104,10 @@ export interface RrgIpoItem {
 
 export interface ThematicRrgResponse {
   schemaVersion: number;
-  rsMethodologyVersion?: string;
-  rsCoverage?: {requestedDates: string[]; availableDates: string[]; momentumAvailable?: boolean};
+  rsMethodologyVersion: string;
+  rsCoverage: {requestedDates: string[]; availableDates: string[]; momentumAvailable: boolean};
+  membershipBasis: 'current_constituents';
+  membershipAsOf: string;
   asOfDate: string;
   generatedAt: string;
   benchmark: string;

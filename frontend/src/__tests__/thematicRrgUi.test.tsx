@@ -87,6 +87,10 @@ const ipo: RrgIpoItem = {
 
 const data: ThematicRrgResponse = {
   schemaVersion: 1,
+  rsMethodologyVersion: 'marketstrength_parity_v2',
+  rsCoverage: {requestedDates: ['2026-10-19'], availableDates: ['2026-10-19'], momentumAvailable: true},
+  membershipBasis: 'current_constituents',
+  membershipAsOf: '2026-10-19',
   asOfDate: '2026-10-19',
   generatedAt: '',
   benchmark: 'NIFTY 500',
@@ -131,6 +135,7 @@ it('renders the thematic rotation controls and real metric labels', () => {
   mount();
   expect(screen.getByText('Where leadership is moving')).toBeTruthy();
   expect(screen.getByText(/Median 3-month excess return versus NIFTY 500/i)).toBeTruthy();
+  expect(screen.getByText(/Trail uses current theme constituents as of 19 Oct 2026/i)).toBeTruthy();
   expect(screen.getByText('1,000 institutional equities')).toBeTruthy();
   expect(screen.getByRole('tab', { name: /Blocks/i })).toBeTruthy();
   expect(screen.getByRole('tab', { name: /Niches/i })).toBeTruthy();

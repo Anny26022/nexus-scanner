@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChartNoAxesCombined, Maximize2, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
@@ -23,6 +23,24 @@ type QuickChartsViewProps = {
 };
 
 const price = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
+
+function useNearViewport(root: Element | null) {
+  const [nearViewport, setNearViewport] = useState(false);
+  const observe = useCallback((node: HTMLElement | null) => {
+    if (!node) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setNearViewport(true);
+      return;
+    }
+    if (!root) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      setNearViewport(Boolean(entry?.isIntersecting));
+    }, { root, rootMargin: '240px 0px' });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [root]);
+  return { nearViewport, observe };
+}
 
 function MiniChart({ candles, symbol, onEngineChange }: { candles: readonly Candle[]; symbol: string; onEngineChange: (engine: ChartEngine | null) => void }) {
   // Keep the complete published history in the engine. setRange(6) below only
@@ -54,7 +72,8 @@ function MiniChart({ candles, symbol, onEngineChange }: { candles: readonly Cand
   return <div ref={attach} className="quick-chart-canvas" aria-label="Interactive chart using the saved chart style, indicators, and drawings. Drag to pan; scroll or pinch to zoom, and select drawings to edit them." role="group" tabIndex={0} />;
 }
 
-function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRow; revision?: string; rank: number; onOpenFullChart?: (symbol: string, revision?: string) => void }) {
+function QuickChartCard({ row, revision, rank, scrollRoot, onOpenFullChart }: { row: StockRow; revision?: string; rank: number; scrollRoot: Element | null; onOpenFullChart?: (symbol: string, revision?: string) => void }) {
+  const { nearViewport, observe } = useNearViewport(scrollRoot);
   const engineRef = useRef<ChartEngine | null>(null);
   const onEngineChange = useCallback((engine: ChartEngine | null) => { engineRef.current = engine; }, []);
   const chart = useQuery({
@@ -63,7 +82,7 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
       const snapshot = await screenerApi.getChart(row.symbol, revision);
       return { ...snapshot, candles: validateCandles(snapshot.candles) };
     },
-    enabled: Boolean(revision),
+    enabled: nearViewport && Boolean(revision),
     staleTime: Infinity,
     retry: 1,
   });
@@ -78,7 +97,7 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
     });
     onOpenFullChart(row.symbol, revision);
   };
-  return <article className="quick-chart-card" aria-label={`${row.symbol} quick chart`}>
+  return <article ref={observe} className="quick-chart-card" aria-label={`${row.symbol} quick chart`}>
     <header className="quick-chart-header">
       <div className="quick-chart-identity">
         <span className="quick-chart-rank" aria-label={`Result ${rank}`}>{rank}</span>
@@ -100,7 +119,7 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
             <button type="button" onClick={() => void chart.refetch()} aria-label={`Retry ${row.symbol} chart`}><RefreshCw size={13} /></button>
           )}
         </div>
-      ) : chart.isPending ? (
+      ) : !nearViewport || chart.isPending ? (
         <div className="quick-chart-skeleton" aria-label="Loading chart" />
       ) : chart.data?.candles.length ? (
         <>
@@ -131,6 +150,7 @@ function QuickChartCard({ row, revision, rank, onOpenFullChart }: { row: StockRo
 }
 
 export function QuickChartsView({ rows, revision, matchCount = rows.length, matchedSymbols, loadRows, busy, firstRank = 1, onOpenFullChart }: QuickChartsViewProps) {
+  const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const fullResultKey = matchedSymbols?.length === matchCount ? matchedSymbols.join(',') : rows.map(row => row.symbol).join(',');
   const allRows = useQuery({
     queryKey: ['quick-chart-rows', revision, matchCount, fullResultKey],
@@ -145,7 +165,7 @@ export function QuickChartsView({ rows, revision, matchCount = rows.length, matc
 
   if ((busy || allRows.isPending) && !chartRows.length) return <div className="quick-charts-grid" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="quick-chart-card quick-chart-card-skeleton" key={index} />)}</div>;
   if (!chartRows.length) return null;
-  return <div className="quick-charts-scroll" onScroll={gridWindow.onScroll} aria-live="off">
+  return <div ref={setScrollRoot} className="quick-charts-scroll" onScroll={gridWindow.onScroll} aria-live="off">
     <p className="quick-charts-hint">Interactive charts use your saved style, indicators, and drawings. Drag to pan; scroll or pinch to zoom.</p>
     {allRows.isPending && <p className="quick-charts-hint">Preparing all {matchCount.toLocaleString('en-IN')} matching equities…</p>}
     <div className="quick-charts-grid" style={gridWindow.enabled ? { paddingTop: `${gridWindow.top}px`, paddingBottom: `${gridWindow.bottom}px` } : undefined}>
@@ -155,6 +175,7 @@ export function QuickChartsView({ rows, revision, matchCount = rows.length, matc
           row={row}
           revision={revision}
           rank={baseRank + gridWindow.firstIndex + index}
+          scrollRoot={scrollRoot}
           onOpenFullChart={onOpenFullChart}
         />
       ))}

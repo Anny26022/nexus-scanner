@@ -253,7 +253,8 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       <QuickChartsView rows={rows} revision={data?.immutableRevision} matchCount={data?.matchCount} matchedSymbols={data?.matchedSymbols} loadRows={loadExportRows} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} />
     </div>}
     <div className="table-viewport" aria-busy={busy} style={{display: resultView === 'table' || isError ? undefined : 'none'}}>
-      <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
+      {isError && <div className="data-state flex-1" role="alert"><AlertTriangle size={28} /><h2>Screener query failed</h2><p>{error?.message || 'The query could not be completed.'}</p>{onRetry && <button className="button button-secondary" onClick={onRetry}>Retry</button>}</div>}
+      <div hidden={isError} ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
         <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
           <caption className="sr-only">Equities matching the current screen</caption>
           <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: layout.columnWidth(column)}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
@@ -265,7 +266,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
           </th>)}{columnWindow.right > 0 && <th aria-hidden="true" className="column-spacer" />}</tr></thead>
           <tbody>
             {rowWindow.top > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={columnSpan} style={{height: rowWindow.top}} /></tr>}
-            {isError ? <tr><td colSpan={columnSpan}><div className="data-state" role="alert"><AlertTriangle size={28} /><h2>Screener query failed</h2><p>{error?.message || 'The query could not be completed.'}</p>{onRetry && <button className="button button-secondary" onClick={onRetry}>Retry</button>}</div></td></tr>
+            {isError ? null
               : !data ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{columnWindow.left > 0 && <td aria-hidden="true" />}{renderedColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}{columnWindow.right > 0 && <td aria-hidden="true" />}</tr>)
               : !rows.length ? <tr><td colSpan={columnSpan}><div className="data-state"><SearchX size={28} /><h2>No equities matched</h2><p>Adjust your filters or choose a broader universe.</p></div></td></tr>
               // Page slots have no company-local state; reuse their cells instead of remounting thousands.

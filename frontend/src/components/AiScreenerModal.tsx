@@ -36,8 +36,8 @@ export const AiScreenerModal: React.FC<AiScreenerModalProps> = ({
   const isCompiling = compilation.isPending;
   const result = compilation.data;
   const hasConditions = Boolean(result && Object.keys(result.conditionsMap).length);
-  // Allow running if there is at least one supported condition; notify user clearly if any clause was skipped.
-  const canRun = hasConditions;
+  // A partial screen silently drops constraints; the user must opt in via "Edit supported filters".
+  const canRun = hasConditions && result?.unsupportedClauses.length === 0;
   const handleClose = () => { controller.current?.abort(); onClose(); };
 
   if (!isOpen) return null;

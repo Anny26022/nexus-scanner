@@ -12,12 +12,12 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-# Full ordered step dictionaries, including the existing backup policy and updated EOD2 caching.
+# Full ordered steps, including backup policy, EOD2 caching and daily session registration.
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "1e9496b1a871260bcf771b6d0c931319d3b7dd33ffacccee08b9941424bb9e71",
-    "weekly_eod2_refresh.yml": "9e482455e27c8d68f21c6f91de83c8932638140c6af4568f8b3f3ef6971fe740",
+    "daily_refresh.yml": "ddb5e0a7429c128cff5f7943870a95aae948033623d629495e7a959d0a372700",
+    "weekly_eod2_refresh.yml": "1a5e8c5f93f79bf19d7745d41e3dfbad0c82077e76b11e7ac48884eb8459ae10",
 }
 
 

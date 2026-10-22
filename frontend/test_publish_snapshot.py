@@ -15,6 +15,17 @@ from edl_pipeline.scanner.calculation_cache import memoized
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def test_failed_daily_archive_preserves_current_pointer_and_sessions(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)/'edl'; root.mkdir(); output = Path(folder)/'public'; self.fixture(root)
+            publish(root, output)
+            before = {name: (output/name).read_bytes() for name in ('current.json', 'sessions.json')}
+            with patch('publish_snapshot.archive_daily_snapshot', side_effect=RuntimeError('read-back mismatch')):
+                with self.assertRaisesRegex(RuntimeError, 'read-back mismatch'):
+                    publish(root, output)
+            for name, data in before.items():
+                self.assertEqual((output/name).read_bytes(), data)
+
     def test_daily_publication_carries_aligned_tradingview_fields_through_both_wire_formats(self):
         from test_packed_snapshot import decode_packed_snapshot
         with tempfile.TemporaryDirectory() as folder, patch('publish_snapshot.list_presets', return_value=[{'id':'lib-easy-money'}]):
@@ -31,6 +42,11 @@ class SnapshotPublicationTests(unittest.TestCase):
             manifest=publish(root,output)
             path=output/'revisions'/manifest['revision']
             payload=json.loads((path/'stocks.json').read_text())
+            sessions=json.loads((output/'sessions.json').read_text())['sessions']
+            self.assertEqual(sessions[0]['date'], manifest['sessionDate'])
+            self.assertEqual(sessions[0]['revision'], manifest['revision'])
+            self.assertEqual((output/'snapshots'/f"{manifest['sessionDate']}.json.gz").read_bytes(),
+                             (path/'stocks.json.gz').read_bytes())
             self.assertEqual(payload['tradingViewMetricsVersion'],1)
             self.assertEqual(payload['stocks'][0]['tradingview']['exchange'],'NSE')
             self.assertIs(payload['stocks'][0]['tradingview']['isPrimary'],True)

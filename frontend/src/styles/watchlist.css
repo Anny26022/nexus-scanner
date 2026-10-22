@@ -10,7 +10,7 @@
   flex-direction: column;
   background: var(--surface);
   border-left: 1px solid var(--line);
-  z-index: 35;
+  z-index: var(--z-dock);
   height: 100%;
   user-select: none;
   overflow: hidden;
@@ -105,7 +105,7 @@
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   padding: 4px;
-  z-index: 50;
+  z-index: var(--z-menu);
 }
 
 .watchlist-menu-item {

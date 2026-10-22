@@ -11,6 +11,7 @@ import {
   type ScanHistoryProgress,
   type ScanSession,
 } from '../api/scanHistoryEngine';
+import { Button } from './Button';
 
 interface ScanHistoryPanelProps {
   expressionTree: ExpressionNode;
@@ -188,13 +189,13 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
             ))}
           </div>
           {status === 'running' ? (
-            <button type="button" className="button button-secondary" onClick={stop}>
+            <Button variant="secondary" onClick={stop}>
               <Square size={14} /> Stop
-            </button>
+            </Button>
           ) : status !== 'idle' ? (
-            <button type="button" className="button button-primary" disabled={!canRun} onClick={() => void startScan()}>
+            <Button variant="primary" disabled={!canRun} onClick={() => void startScan()}>
               <Play size={14} /> {points.length ? 'Run again' : 'Run scan'}
-            </button>
+            </Button>
           ) : null}
           {onClose && (
             <button type="button" className="scan-history-icon-button" aria-label="Close scan history" onClick={close}>
@@ -286,13 +287,13 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
                     <input value={symbolFilter} onChange={event => { setSymbolFilter(event.target.value); setVisibleSymbolCount(INITIAL_SYMBOLS); }}
                       placeholder="Filter symbols" disabled={!currentSymbols.length} />
                   </label>
-                  <button type="button" className="button button-secondary" onClick={() => void copySymbols()} disabled={!currentSymbols.length}>
+                  <Button variant="secondary" onClick={() => void copySymbols()} disabled={!currentSymbols.length}>
                     {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy all'}
-                  </button>
-                  <button type="button" className="button button-primary" onClick={() => onSelectSession(selectedPoint.date)}
+                  </Button>
+                  <Button variant="primary" onClick={() => onSelectSession(selectedPoint.date)}
                     disabled={selectedPoint.status !== 'success'}>
                     Open session <ChevronRight size={15} />
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -333,9 +334,9 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
         <div className="scan-history-intro">
           <h3>See how this screen performed over time</h3>
           <p>Run your current filters across {targetSessions.length} archived trading sessions.</p>
-          <button type="button" className="button button-primary" disabled={!canRun} onClick={() => void startScan()}>
+          <Button variant="primary" disabled={!canRun} onClick={() => void startScan()}>
             <Play size={14} /> Start frequency scan
-          </button>
+          </Button>
         </div>
       ) : status === 'stopped' ? (
         <p className="scan-history-empty">Scan stopped. Run it again to refresh the timeline.</p>

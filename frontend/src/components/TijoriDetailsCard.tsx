@@ -8,6 +8,7 @@ import symbolIsinMap from '../data/symbolIsinMap.json';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { DhanSentimentBadge } from './DhanSentimentBadge';
 import type { companyPopoverPosition } from '../utils/companyPopoverPosition';
+import { Button } from './Button';
 
 type Tab = 'snapshot' | 'news' | 'watch' | 'events';
 interface Props extends ReturnType<typeof companyPopoverPosition> {
@@ -82,7 +83,7 @@ export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMou
       {query.isPending && activeTab !== 'news' ? <div className="tijori-loading" role="status" aria-label="Loading company snapshot">
         <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
       </div> : query.isError && activeTab !== 'news' ? <div className="ipo-details-empty" role="alert"><p>Company snapshot could not be loaded.</p>
-        <button className="button button-ghost" onClick={() => void query.refetch()}>Retry</button></div>
+        <Button variant="ghost" onClick={() => void query.refetch()}>Retry</Button></div>
         : !tabs.length ? <p className="ipo-details-empty">No Tijori snapshot is available for this company.</p>
           : <div role="tabpanel" id={`${id}-${activeTab}-panel`} aria-labelledby={`${id}-${activeTab}-tab`} tabIndex={0}>
             {activeTab === 'snapshot' && report && <ul className="tijori-snapshot-list">{report.the_read.map((text, index) => <li key={index}>{text}</li>)}</ul>}
@@ -96,9 +97,9 @@ export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMou
                 ) : newsQuery.isError ? (
                   <div className="ipo-details-empty">
                     <p>Unable to load live news for {row.symbol}.</p>
-                    <button type="button" className="button button-ghost" onClick={() => void newsQuery.refetch()}>
+                    <Button variant="ghost" onClick={() => void newsQuery.refetch()}>
                       <RefreshCw size={12} /> Retry
-                    </button>
+                    </Button>
                   </div>
                 ) : newsArticles.length === 0 ? (
                   <p className="ipo-details-empty">No exchange filings or live news found for {row.symbol}.</p>

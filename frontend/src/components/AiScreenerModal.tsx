@@ -5,6 +5,7 @@ import { ArrowRight, CornerDownLeft, SlidersHorizontal, CheckCircle2, AlertCircl
 import { ActiveCondition, MatchMode } from '../types/screener';
 import { compileNaturalLanguageQuery, SAMPLE_PROMPTS, type ClauseCompilation } from '../api/aiScreenerCompiler';
 import {useFilterChoices} from '../hooks/useFilterChoices';
+import { Button } from './Button';
 
 interface AiScreenerModalProps {
   isOpen: boolean;
@@ -35,8 +36,8 @@ export const AiScreenerModal: React.FC<AiScreenerModalProps> = ({
   const isCompiling = compilation.isPending;
   const result = compilation.data;
   const hasConditions = Boolean(result && Object.keys(result.conditionsMap).length);
-  // Allow running if there is at least one supported condition; notify user clearly if any clause was skipped.
-  const canRun = hasConditions;
+  // A partial screen silently drops constraints; the user must opt in via "Edit supported filters".
+  const canRun = hasConditions && result?.unsupportedClauses.length === 0;
   const handleClose = () => { controller.current?.abort(); onClose(); };
 
   if (!isOpen) return null;
@@ -109,11 +110,10 @@ export const AiScreenerModal: React.FC<AiScreenerModalProps> = ({
             <span className="ai-kbd-hint">
               <kbd>⌘ / Ctrl</kbd> + <kbd>Enter</kbd> to compile
             </span>
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={() => handleCompile()}
               disabled={!inputText.trim() || isCompiling || Boolean(datasetRevision && !choices.data)}
-              className="button button-primary"
             >
               {isCompiling ? (
                 <>
@@ -126,7 +126,7 @@ export const AiScreenerModal: React.FC<AiScreenerModalProps> = ({
                   <CornerDownLeft size={13} />
                 </>
               )}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -187,10 +187,10 @@ export const AiScreenerModal: React.FC<AiScreenerModalProps> = ({
                 <h3 className="ai-readback-title">{result.name}</h3>
                 <p>{result.summary} Match {result.matchMode === 'all' ? 'all' : 'any'} conditions.</p>
               </div>
-              <button type="button" onClick={handleReset} className="button button-ghost ai-start-over-btn">
+              <Button variant="ghost" className="ai-start-over-btn" onClick={handleReset}>
                 <RotateCcw size={12} />
                 <span>Start over</span>
-              </button>
+              </Button>
             </div>
 
             <div className="ai-clauses-list">
@@ -230,29 +230,27 @@ export const AiScreenerModal: React.FC<AiScreenerModalProps> = ({
         <div className="ai-dialog-actions" style={{ marginLeft: 'auto' }}>
           {result ? (
             <>
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={handleEditFirst}
                 disabled={!hasConditions}
-                className="button button-secondary"
               >
                 <SlidersHorizontal size={13} />
                 <span>{result.unsupportedClauses.length ? 'Edit supported filters' : 'Edit conditions first'}</span>
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
                 onClick={handleRunNow}
                 disabled={!canRun}
-                className="button button-primary"
               >
                 <span>Run this screen</span>
                 <ArrowRight size={13} />
-              </button>
+              </Button>
             </>
           ) : (
-            <button type="button" onClick={handleClose} className="button button-secondary">
+            <Button variant="secondary" onClick={handleClose}>
               Cancel
-            </button>
+            </Button>
           )}
         </div>
       </div>

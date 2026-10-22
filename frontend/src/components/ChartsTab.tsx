@@ -29,6 +29,7 @@ import { IndicatorsCatalogModal } from './IndicatorsCatalogModal';
 import { IndicatorSettingsModal } from './IndicatorSettingsModal';
 import { WatchlistDock } from './WatchlistDock';
 import { Download, Upload } from 'lucide-react';
+import { Button } from './Button';
 
 const ranges=[[1,'1mo'],[3,'3mo'],[6,'6mo'],[12,'1y'],[24,'2y'],[null,'All']] as const;
 
@@ -312,10 +313,10 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       />
       <div className="chart-actions-zone" role="group" aria-label="Chart controls">
         <div className="chart-actions">
-          <button type="button" className="button button-icon" aria-label="Zoom in" title="Zoom in (+)" onClick={() => {markCustomRange();engine.current?.zoom(.8);}}><Plus size={15}/></button>
-          <button type="button" className="button button-icon" aria-label="Zoom out" title="Zoom out (-)" onClick={() => {markCustomRange();engine.current?.zoom(1.25);}}><Minus size={15}/></button>
-          <button type="button" className="button button-icon" aria-label="Reset chart view" title="Reset chart view (Home)" onClick={() => {markCustomRange();engine.current?.reset();}}><RotateCcw size={14}/></button>
-          <button type="button" className="button button-ghost chart-auto-btn" title="Restore automatic price scaling" onClick={() => engine.current?.resetPriceScale()}>Auto</button>
+          <Button aria-label="Zoom in" title="Zoom in (+)" onClick={() => {markCustomRange();engine.current?.zoom(.8);}}><Plus size={15}/></Button>
+          <Button aria-label="Zoom out" title="Zoom out (-)" onClick={() => {markCustomRange();engine.current?.zoom(1.25);}}><Minus size={15}/></Button>
+          <Button aria-label="Reset chart view" title="Reset chart view (Home)" onClick={() => {markCustomRange();engine.current?.reset();}}><RotateCcw size={14}/></Button>
+          <Button variant="ghost" className="chart-auto-btn" title="Restore automatic price scaling" onClick={() => engine.current?.resetPriceScale()}>Auto</Button>
         </div>
       </div>
       {error ? <p role="alert" className="notice">{error}</p> : <div ref={attach} className="nexus-chart-canvas" role="group" tabIndex={0} onContextMenu={event=>{event.preventDefault();setContext({x:event.clientX,y:event.clientY});}} onKeyDownCapture={event=>{
@@ -338,7 +339,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       <div className="chart-ranges" role="group" aria-label="Visible date range">{ranges.map(([months,label])=><button type="button" key={label} aria-pressed={range===months} onClick={()=>{setRange(months);rangeChoice.current=months;engine.current?.setRange(months);persist({range:months,view:undefined});}}>{label}</button>)}</div>
       <select className="chart-range-select" aria-label="Visible date range" value={range===undefined?'custom':range===null?'all':range} onChange={event=>{const months=event.target.value==='all'?null:Number(event.target.value);setRange(months);rangeChoice.current=months;engine.current?.setRange(months);persist({range:months,view:undefined});}}><option value="custom" disabled>Range</option>{ranges.map(([months,label])=><option key={label} value={months??'all'}>{label}</option>)}</select>
       <button type="button" className="chart-latest" onClick={()=>engine.current?.latest()}>Latest</button>
-      {comparison && <ChartComparison {...comparison} revision={revision} interval={interval} onData={onComparison}/>}
+      {comparison && <ChartComparison {...comparison} revision={revision} sessionDate={sessionDate} interval={interval} onData={onComparison}/>}
     </footer>
     {indicatorsOpen && (
       <IndicatorsCatalogModal
@@ -385,7 +386,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   </>;
 }
 
-export default function ChartsTab({datasetRevision}:{datasetRevision?:string}) {
+export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision?:string;sessionDate?:string}) {
   const [grid,setGrid]=useState(()=>loadGrid());
   const gridChoice=useRef(grid);
   const [sync]=useState(()=>Object.assign(new ChartSync(),{enabled:true,dates:grid.links.dates,crosshairs:grid.links.crosshair}));
@@ -460,6 +461,7 @@ export default function ChartsTab({datasetRevision}:{datasetRevision?:string}) {
             <ChartTile
               key={`${generation}:${index}:${tile.symbol}:${tile.interval}`}
               datasetRevision={datasetRevision}
+              sessionDate={sessionDate}
               tileId={tileId}
               initial={tile}
               onChange={updateTile}
@@ -475,6 +477,7 @@ export default function ChartsTab({datasetRevision}:{datasetRevision?:string}) {
       </div>
       <WatchlistDock
         datasetRevision={datasetRevision}
+        sessionDate={sessionDate}
         activeSymbol={grid.tiles[Number(activeExpandedTile ?? '0')]?.symbol}
         onSelectSymbol={selectWatchlistSymbol}
       />
@@ -569,6 +572,7 @@ export default function ChartsTab({datasetRevision}:{datasetRevision?:string}) {
 
 function ChartTile({
   datasetRevision,
+  sessionDate,
   tileId,
   initial,
   onChange,
@@ -580,6 +584,7 @@ function ChartTile({
   layoutControls,
 }: {
   datasetRevision?: string;
+  sessionDate?: string;
   tileId: string;
   initial: TileSettings;
   onChange: (tileId: string, settings: TileSettings) => void;
@@ -596,18 +601,18 @@ function ChartTile({
   const book=savedDrawingBook(symbol);
   const changeInterval=(next:Interval)=>onChange(tileId,{symbol,interval:next});
   const metadata=useQuery({
-    queryKey:['chart-metrics',datasetRevision,symbol],
+    queryKey:['chart-metrics',datasetRevision,symbol,sessionDate],
     queryFn:async()=>{
-      const result=await screenerApi.runScreen({datasetRevision,universe:'custom',customSymbols:[symbol],asOfDate:'',page:1,pageSize:1,expressionTree:{type:'group',operator:'all',children:[]}});
+      const result=await screenerApi.runScreen({datasetRevision,universe:'custom',customSymbols:[symbol],asOfDate:sessionDate ?? '',page:1,pageSize:1,expressionTree:{type:'group',operator:'all',children:[]}});
       if (result.immutableRevision!==datasetRevision) throw new Error('Chart metrics revision mismatch');
       return result.rows.find(row=>row.symbol===symbol)??null;
     },
     enabled:Boolean(datasetRevision),retry:false,staleTime:Infinity,
   });
   const chart = useQuery({
-    queryKey: ['chart', datasetRevision, symbol],
+    queryKey: ['chart', datasetRevision, symbol, sessionDate],
     queryFn: async () => {
-      const snapshot = await screenerApi.getChart(symbol, datasetRevision);
+      const snapshot = await screenerApi.getChart(symbol, datasetRevision, sessionDate);
       return {...snapshot, candles: validateCandles(snapshot.candles)};
     },
     enabled: Boolean(datasetRevision),
@@ -633,16 +638,15 @@ function ChartTile({
       </div>
       <select className="chart-interval-select" aria-label="Candle interval" value={interval} onChange={event=>changeInterval(event.target.value as Interval)}><option value="D">1D</option><option value="W">1W</option><option value="M">1M</option></select></>;
   const viewControls = (
-    <button
-      type="button"
-      className="button button-icon chart-expand"
+    <Button
+      className="chart-expand"
       aria-label={expanded ? 'Restore chart' : 'Maximize chart'}
       aria-pressed={Boolean(expanded)}
       title={`${expanded ? 'Restore' : 'Maximize'} chart (Alt/⌥ Enter)`}
       onClick={onToggleExpand}
     >
       {expanded ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
-    </button>
+    </Button>
   );
   return <section style={{gridArea:area}} className={`chart-workspace${expanded?' chart-workspace-expanded':''}`} aria-label={expanded?'Nexus charts':`Chart ${Number(tileId)+1} · ${symbol}`}
     role={expanded?'dialog':undefined} aria-modal={expanded?true:undefined} onKeyDown={event=>{
@@ -657,10 +661,10 @@ function ChartTile({
     }}>
     {(chart.isError || chart.isPending || !candles.length) && <header className="chart-topbar">{symbolControls}<span className="chart-topbar-spacer"/>{layoutControls}{viewControls}</header>}
     {inputError && <p role="alert" className="notice">{inputError}</p>}
-    {chart.isError ? <div role="alert" className="chart-status"><p>{chart.error.message}</p><button type="button" className="button button-ghost" onClick={() => void chart.refetch()}>Retry</button></div>
+    {chart.isError ? <div role="alert" className="chart-status"><p>{chart.error.message}</p><Button variant="ghost" onClick={() => void chart.refetch()}>Retry</Button></div>
       : chart.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
       : !candles.length ? <p className="chart-status" role="status">No published candles for {symbol}.</p>
-      : <ChartScene key={`${datasetRevision}:${symbol}:${interval}`} candles={candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
+      : <ChartScene key={`${datasetRevision}:${sessionDate}:${symbol}:${interval}`} candles={candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
           firstDate={chart.data.candles[0].date} lastDate={chart.data.candles.at(-1)!.date} metrics={metadata.data??undefined} sessionDate={chart.data.asOfDate} events={events} revision={datasetRevision!} interval={interval} tileId={tileId} sync={sync}/>}
   </section>;
 }

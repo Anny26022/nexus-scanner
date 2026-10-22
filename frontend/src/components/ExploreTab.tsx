@@ -23,6 +23,7 @@ import { useNextScreenPage, screenPageStaleTime } from '../hooks/useNextScreenPa
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 import { AiScreenerModal } from './AiScreenerModal';
 import { ScanHistoryPanel } from './ScanHistoryPanel';
+import { Button } from './Button';
 
 interface ExploreTabProps {
   selectedAsOfDate: string;
@@ -30,7 +31,7 @@ interface ExploreTabProps {
   onRefreshRevision: () => Promise<string | undefined>;
   availableSessions?: Array<{ date: string; label: string; isHistorical: boolean; revision: string }>;
   onSelectSession?: (date: string) => void;
-  onOpenFullChart?: (symbol: string, revision?: string) => void;
+  onOpenFullChart?: (symbol: string, revision?: string, sessionDate?: string) => void;
 }
 
 const DEFAULT_CONDITIONS: Record<string, ActiveCondition> = {
@@ -196,18 +197,17 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
           <input aria-label="Scanner query" value={queryText} onChange={event => setQueryText(event.target.value)}
             onKeyDown={event => { if (event.key === 'Enter') void handleRun(); }} placeholder="e.g. P/E < 20 AND EPS > 10" /></span></label>
         <div className="screen-buttons">
-          {(filterCount > 0 || activeQuery || symbolSearch) && <button className="button button-ghost" onClick={handleReset}><RotateCcw size={14} />Reset</button>}
-          <button
-            type="button"
+          {(filterCount > 0 || activeQuery || symbolSearch) && <Button variant="ghost" onClick={handleReset}><RotateCcw size={14} />Reset</Button>}
+          <Button
+            variant="secondary"
             onClick={() => setIsAiModalOpen(true)}
-            className="button button-secondary"
             title="Describe stocks in English or Hinglish"
           >
             <Sparkles size={13} />
             <span>Ask AI</span>
-          </button>
-          <button onClick={() => setIsModalOpen(true)} className="button button-secondary"><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</button>
-          <button onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable} className="button button-primary"><Play size={14} />Run</button>
+          </Button>
+          <Button variant="secondary" onClick={() => setIsModalOpen(true)}><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</Button>
+          <Button variant="primary" onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable}><Play size={14} />Run</Button>
         </div>
       </div>
       {(activeQuery || filterCount > 0) && <div className="active-filters">
@@ -237,13 +237,13 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
               <h3 className="whitespace-nowrap text-sm font-semibold text-text">Historical Backtest</h3>
               <span className="hidden text-xs text-muted sm:inline">{availableSessions.length} sessions</span>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              className="h-8 shrink-0"
               onClick={() => setIsScanHistoryOpen(true)}
-              className="button button-primary h-8 shrink-0 px-3 text-xs"
             >
               <span>Backtest</span>
-            </button>
+            </Button>
           </div>
         ) : (
           <ScanHistoryPanel

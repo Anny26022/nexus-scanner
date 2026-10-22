@@ -47,6 +47,7 @@ import {
 import { anchors, DRAWING_TOOLS, FIB_LEVELS, type Anchor, type DrawingBook, type DrawingTool } from '../chart/drawings';
 import { annotationTool, TOOL_GROUPS, toolSpec, type DrawingKind } from '../chart/drawingTools';
 import { readChartStorage, writeChartStorage } from '../chart/storage';
+import { Button } from './Button';
 
 // Pixel-perfect custom SVG icons matching native OpenAlgo / TradingView drawing tools
 export function ParallelChannelIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
@@ -875,9 +876,9 @@ export function DrawingToolbar({
                     <input name="levels" aria-label="Fibonacci level ratios" defaultValue={(selected.levels ?? FIB_LEVELS).join(', ')} />
                   </label>
                 )}
-                <button type="submit" className="button button-ghost">
+                <Button variant="ghost" type="submit">
                   Apply edit
-                </button>
+                </Button>
                 <label>
                   Color
                   <input

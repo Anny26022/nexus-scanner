@@ -119,6 +119,7 @@ export function extractSymbolsFromInput(raw: string): string[] {
 
 export interface WatchlistDockProps {
   datasetRevision?: string;
+  sessionDate?: string;
   activeSymbol?: string;
   onSelectSymbol: (symbol: string) => void;
   onClose?: () => void;
@@ -147,6 +148,7 @@ function useScrollToActiveItem(ref: RefObject<HTMLDivElement | null>, items: rea
 
 export const WatchlistDock = memo(function WatchlistDock({
   datasetRevision,
+  sessionDate,
   activeSymbol,
   onSelectSymbol,
   onClose,
@@ -191,14 +193,14 @@ export const WatchlistDock = memo(function WatchlistDock({
 
   // Read every matched row from the pinned scanner snapshot, not just page one.
   const { data: quoteMap, isPending: quotesPending, isError: quotesError, refetch: retryQuotes } = useQuery({
-    queryKey: ['watchlist-quotes-all', datasetRevision, quoteSymbolsKey],
+    queryKey: ['watchlist-quotes-all', datasetRevision, quoteSymbolsKey, sessionDate],
     queryFn: async () => {
       if (!symbols.length) return new Map<string, StockRow>();
       const rows = await screenerApi.getExportRows({
         datasetRevision,
         universe: 'custom',
         customSymbols: symbols,
-        asOfDate: '',
+        asOfDate: sessionDate ?? '',
         page: 1,
         pageSize: 100,
         expressionTree: { type: 'group', operator: 'all', children: [] },

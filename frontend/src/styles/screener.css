@@ -22,7 +22,7 @@
 .session-reset-btn:hover { color: var(--text); background: var(--surface-hover); }
 
 .research-view { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 8px; min-width: 0; }
-.screen-controls { padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.screen-controls { padding: 0 12px 12px; border-bottom: 1px solid var(--line); }
 .screen-toolbar { display: flex; align-items: flex-end; gap: 10px; }
 .field-label { display: block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 3px; }
 .universe-control { width: 136px; flex-shrink: 0; }
@@ -51,13 +51,6 @@
 .screen-buttons { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .screen-buttons .button { min-height: 28px; height: 28px; padding-inline: 9px; gap: 5px; font-size: 11px; border-radius: 6px; }
 .screen-buttons .button-primary { padding-inline: 13px; }
-.button { display: inline-flex; justify-content: center; align-items: center; gap: 5px; min-height: 28px; border-radius: 6px; padding: 0 10px; font-size: 11.5px; font-weight: 600; border: 1px solid transparent; transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; user-select: none; }
-.button-secondary { border-color: var(--line); background: var(--surface); color: var(--secondary); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03); }
-.button-secondary:not(:disabled):hover { background: var(--surface-hover); border-color: var(--line-strong); color: var(--text); }
-.button-primary { background: var(--accent); color: var(--on-accent); padding-inline: 13px; box-shadow: 0 1px 2px rgba(24, 118, 105, 0.2); }
-.button-primary:not(:disabled):hover { filter: brightness(1.06); box-shadow: 0 2px 5px rgba(24, 118, 105, 0.3); }
-.button-ghost { color: var(--muted); background: transparent; }
-.button-ghost:hover { background: var(--surface-hover); color: var(--text); }
 .count-badge { min-width: 16px; height: 16px; padding: 0 3px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); border-radius: 9999px; font-size: 9.5px; font-weight: 700; border: 1px solid var(--accent-line); }
 .active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
 .filter-chip { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 6px 0 7px; border: 1px solid var(--accent-line); border-radius: 4px; background: var(--accent-soft); color: var(--accent); font-size: 10.5px; font-weight: 550; max-width: 100%; transition: all 0.12s ease; }
@@ -76,7 +69,7 @@
 .add-filter { font-size: 10.5px; color: var(--muted); padding: 3px 6px; border-radius: 4px; }
 .add-filter:hover { color: var(--accent); background: var(--surface-subtle); }
 .criteria-summary { margin: 4px 0 0; font-size: 10px; color: var(--muted); line-height: 1.4; font-style: italic; }
-.results-surface { display: flex; flex-direction: column; flex: 1; min-height: var(--results-min-height, 330px); overflow: hidden; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; min-width: 0; box-shadow: var(--shadow); }
+.results-surface { display: flex; flex-direction: column; flex: 1; min-height: var(--results-min-height, 330px); overflow: hidden; background: var(--surface); min-width: 0; }
 .results-toolbar { display: flex; justify-content: space-between; align-items: center; min-height: 38px; padding: 5px 12px; gap: 10px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .result-count { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--secondary); white-space: nowrap; }
 .result-count strong { font-size: 14px; font-weight: 750; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
@@ -297,11 +290,13 @@
 .parameter-sign { font-size: 14px; font-weight: 600; color: var(--text); }
 .parameter-unit { font-size: 11.5px; color: var(--secondary); white-space: nowrap; font-weight: 500; }
 .filter-row label > span { white-space: normal; }
-.filter-row:not([data-preset="true"]) input:not([type="checkbox"]), .filter-row select { min-height: 32px; font-size: 12px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--text); transition: border-color .14s ease, box-shadow .14s ease; }
+.filter-row:not([data-preset="true"]) input:not([type="checkbox"]), .filter-row select { min-height: 32px; font-size: 12px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--text); box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); transition: border-color .14s ease, box-shadow .14s ease; }
 .filter-row:not([data-preset="true"]) input:not([type="checkbox"]):focus, .filter-row select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 2px var(--accent-soft); }
 .filter-row:not([data-preset="true"]) input[type="number"] { width: 76px; }
 .filter-row select { max-width: 175px; }
 .filter-row input[type="checkbox"] { width: 15px; height: 15px; flex-shrink: 0; }
+.filter-row > label, .filter-row > label > input:not(:disabled), .preset-eligibility-toggle > input:not(:disabled) { cursor: pointer; }
+.filter-select-trigger { font-size: 11.5px; }
 .match-mode { display: inline-flex; gap: 3px; align-items: center; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
 .match-mode > span { padding: 0 7px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
 .match-mode button { min-height: 25px; padding: 0 9px; border-radius: 6px; color: var(--secondary); font-size: 11px; font-weight: 500; transition: all .14s ease; cursor: pointer; }

@@ -219,6 +219,80 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
         self.assertIn("21-day SEBI LODR", coverage["shareholding"])
         self.assertIn("consecutive quarters", coverage["financials"])
 
+    def test_historical_index_rebalance_ledger_and_pit_reconstruction(self):
+        ledger_path = ROOT / "reference" / "historical_index_rebalance_events.json"
+        self.assertTrue(ledger_path.exists(), "Rebalance ledger file must exist")
+
+        import json
+        with open(ledger_path, "r", encoding="utf-8") as f:
+            ledger = json.load(f)
+
+        self.assertEqual(ledger.get("schema_version"), 1)
+        rebalances = ledger.get("rebalances", [])
+        self.assertGreaterEqual(len(rebalances), 500, "Ledger must contain extensive rebalance events")
+
+        indices_in_ledger = {r["index"] for r in rebalances}
+
+        # Check broad indices
+        required_broad = [
+            "NIFTY 50", "NIFTY NEXT 50", "NIFTY 100", "NIFTY 200",
+            "NIFTY 500", "NIFTY MIDCAP 150", "NIFTY SMALLCAP 250"
+        ]
+        for b in required_broad:
+            self.assertIn(b, indices_in_ledger, f"Broad index {b} must be present in ledger")
+
+        # Check sectoral indices
+        required_sectoral = [
+            "NIFTY BANK", "NIFTY IT", "NIFTY AUTO", "NIFTY PHARMA",
+            "NIFTY FMCG", "NIFTY METAL", "NIFTY REALTY", "NIFTY FINANCIAL SERVICES",
+            "NIFTY HEALTHCARE", "NIFTY CONSUMER DURABLES", "NIFTY MEDIA"
+        ]
+        for s in required_sectoral:
+            self.assertIn(s, indices_in_ledger, f"Sectoral index {s} must be present in ledger")
+
+        # Reverse temporal reconstruction simulation
+        def simulate_pit_indices(symbol: str, target_date: date, base_indices: list[str]) -> list[str]:
+            active = {idx.strip().upper() for idx in base_indices if idx}
+            for ev in sorted(rebalances, key=lambda x: x["date"], reverse=True):
+                try:
+                    ev_date = date.fromisoformat(ev["date"])
+                    if target_date < ev_date:
+                        idx_name = str(ev.get("index", "")).strip().upper()
+                        inc = [s.strip().upper() for s in ev.get("inclusions", [])]
+                        exc = [s.strip().upper() for s in ev.get("exclusions", [])]
+                        if symbol in inc:
+                            active.discard(idx_name)
+                        if symbol in exc:
+                            active.add(idx_name)
+                except Exception:
+                    continue
+            return sorted(list(active))
+
+        # Test 1: NIFTY BANK CANBK inclusion on 2024-09-30 (replaced BANDHANBNK)
+        # Prior to 2024-09-30: CANBK was NOT in Nifty Bank; BANDHANBNK WAS in Nifty Bank
+        prior_date = date(2024, 6, 1)
+        post_date = date(2024, 10, 1)
+
+        # Base is modern constituent list: CANBK in Nifty Bank, BANDHANBNK not
+        canbk_prior = simulate_pit_indices("CANBK", prior_date, ["NIFTY BANK"])
+        self.assertNotIn("NIFTY BANK", canbk_prior, "CANBK must not be in NIFTY BANK prior to rebalance date")
+
+        canbk_post = simulate_pit_indices("CANBK", post_date, ["NIFTY BANK"])
+        self.assertIn("NIFTY BANK", canbk_post, "CANBK must remain in NIFTY BANK after rebalance date")
+
+        bandhan_prior = simulate_pit_indices("BANDHANBNK", prior_date, [])
+        self.assertIn("NIFTY BANK", bandhan_prior, "BANDHANBNK must be restored to NIFTY BANK prior to its exclusion date")
+
+        bandhan_post = simulate_pit_indices("BANDHANBNK", post_date, [])
+        self.assertNotIn("NIFTY BANK", bandhan_post, "BANDHANBNK must not be in NIFTY BANK after its exclusion date")
+
+        # Test 2: NIFTY 50 APOLLOHOSP inclusion on 2022-03-31 (replaced IOC)
+        apoll_prior = simulate_pit_indices("APOLLOHOSP", date(2022, 1, 1), ["NIFTY 50"])
+        self.assertNotIn("NIFTY 50", apoll_prior)
+
+        ioc_prior = simulate_pit_indices("IOC", date(2022, 1, 1), [])
+        self.assertIn("NIFTY 50", ioc_prior)
+
 
 if __name__ == "__main__":
     unittest.main()

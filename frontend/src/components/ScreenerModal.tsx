@@ -16,6 +16,7 @@ import technicalConfigurations from '../data/snapshotTechnicals.json';
 import {isTradingViewCondition, tradingViewMetrics} from '../data/tradingViewMetrics';
 import type { FilterChoices } from '../api/snapshotEngine';
 import { SNAPSHOT_MA_PERIODS } from '../api/snapshotScreen';
+import { Button } from './Button';
 
 interface ScreenerModalProps {
   isOpen: boolean;
@@ -99,7 +100,7 @@ const MultiSelectDropdown = ({ options, value, onChange, label, single = false, 
       <button 
         ref={trigger} type="button" disabled={!options.length} title={value.join(', ')} aria-label={`${label}: ${value?.length ? `${value.length} selected` : 'Select options'}`} aria-expanded={isOpen}
         onClick={toggleMenu}
-        className="bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2.5 py-1 text-[11.5px] font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20 max-w-[140px] shrink-0 truncate transition-all cursor-pointer flex items-center justify-between gap-1.5 shadow-sm"
+        className="filter-select-trigger bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2.5 py-1 font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-teal-500/20 max-w-[140px] shrink-0 truncate transition-all cursor-pointer flex items-center justify-between gap-1.5 shadow-sm"
       >
         <span className="truncate">{value?.length ? single ? options.find(option => option.value === value[0])?.label ?? value[0] : `${value.length} selected` : 'Select...'}</span>
         <ChevronDown size={12} className="text-gray-400 shrink-0" />
@@ -180,7 +181,7 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
         value={val}
         aria-label={p.label}
         onChange={(e) => updateParam(defId, p.id, e.target.value)}
-        className="bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2 py-1 text-[11.5px] font-medium text-gray-700 focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 max-w-[130px] shrink-0 truncate transition-all cursor-pointer shadow-sm"
+        className="px-2 py-1 font-medium shrink-0 truncate cursor-pointer"
       >
         {(p.options || []).map((opt) => (
           <option key={opt.value} value={opt.value} disabled={!isAvailableCondition({
@@ -199,7 +200,7 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
       max={p.max}
       step={p.step ?? (isIntegerParameter(p) ? 1 : 0.1)}
       aria-label={p.label}
-      className="w-16 bg-white border border-gray-200 hover:border-teal-500 rounded-lg px-2 py-1 text-[11.5px] font-semibold text-gray-800 text-center focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20 transition-all shadow-sm"
+      className="px-2 py-1 font-semibold text-center"
     />;
   }
 
@@ -296,16 +297,16 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
     : logicHint ? `${def.description} ${logicHint}` : def.description;
 
   return (
-    <div className="filter-row group" data-condition-id={def.id} data-active={checked} data-unavailable={!available} data-preset={!showParameters}>
-      <label className="flex items-center gap-2.5 cursor-pointer min-w-0 pt-1">
+    <div className="filter-row" data-condition-id={def.id} data-active={checked} data-unavailable={!available} data-preset={!showParameters}>
+      <label className="flex items-center gap-2.5 min-w-0">
         <input
           type="checkbox"
           checked={checked}
           disabled={!editable && !checked}
           onChange={() => toggle(def, ruleKey)}
-          className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
+          className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all"
         />
-        <span title={def.description} className={`text-[12px] font-semibold ${checked ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-800'}`}>
+        <span title={def.description}>
           {def.label}{showParameters ? ':' : ''}
         </span>
       </label>
@@ -337,7 +338,7 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
                     aria-label={`Use ${rule.label}`}
                     checked={isEnabled}
                     onChange={event => updateRule(def.id, rule.id, event.target.checked ? rule.defaultValue : null)}
-                    className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all cursor-pointer flex-shrink-0"
+                    className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all"
                   />
                   <span className="preset-eligibility-name">{rule.label}</span>
                 </label>
@@ -564,7 +565,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     </div>
     {validationError && !hasUnavailableConditions(localMap) && <p role="alert" className="px-6 py-2 text-sm text-red-600">{validationError}</p>}
     <div className="dialog-footer"><span className="cell-muted text-xs">{Object.keys(localMap).length} selected</span>
-      <div className="flex gap-2"><button onClick={handleReset} className="button button-secondary">Reset</button><button onClick={handleApply} disabled={Boolean(validationError)} className="button button-primary">Apply</button></div>
+      <div className="flex gap-2"><Button variant="secondary" onClick={handleReset}>Reset</Button><Button variant="primary" onClick={handleApply} disabled={Boolean(validationError)}>Apply</Button></div>
     </div>
   </Dialog>;
 };

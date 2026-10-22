@@ -11,6 +11,7 @@ import { loadEmaLines } from './EmaSettings';
 import { useGridWindow } from '../hooks/useGridWindow';
 import { useMountEffect } from '../hooks/useMountEffect';
 import type { StockRow } from '../types/screener';
+import { Button } from './Button';
 
 type QuickChartsViewProps = {
   rows: StockRow[];
@@ -144,10 +145,10 @@ function QuickChartCard({ row, revision, sessionDate, rank, observe, onOpenFullC
           <MiniChart key={`${row.symbol}-${revision}-${sessionDate}`} candles={chart.data.candles} symbol={row.symbol} onEngineChange={onEngineChange} />
           <div className="chart-actions-zone" role="group" aria-label={`${row.symbol} chart controls`}>
             <div className="chart-actions">
-              <button type="button" className="button button-icon" aria-label="Zoom in" title="Zoom in (+)" onClick={() => engineRef.current?.zoom(.8)}><Plus size={15}/></button>
-              <button type="button" className="button button-icon" aria-label="Zoom out" title="Zoom out (-)" onClick={() => engineRef.current?.zoom(1.25)}><Minus size={15}/></button>
-              <button type="button" className="button button-icon" aria-label="Reset chart view" title="Reset chart view (6 months)" onClick={() => engineRef.current?.setRange(6)}><RotateCcw size={14}/></button>
-              <button type="button" className="button button-ghost chart-auto-btn" title="Restore automatic price scaling" onClick={() => engineRef.current?.resetPriceScale()}>Auto</button>
+              <Button aria-label="Zoom in" title="Zoom in (+)" onClick={() => engineRef.current?.zoom(.8)}><Plus size={15}/></Button>
+              <Button aria-label="Zoom out" title="Zoom out (-)" onClick={() => engineRef.current?.zoom(1.25)}><Minus size={15}/></Button>
+              <Button aria-label="Reset chart view" title="Reset chart view (6 months)" onClick={() => engineRef.current?.setRange(6)}><RotateCcw size={14}/></Button>
+              <Button variant="ghost" className="chart-auto-btn" title="Restore automatic price scaling" onClick={() => engineRef.current?.resetPriceScale()}>Auto</Button>
             </div>
           </div>
         </>

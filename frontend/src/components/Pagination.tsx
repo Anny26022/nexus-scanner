@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Button } from './Button';
 
 type Props = { page: number; pageSize: number; total?: number; busy?: boolean; onPageChange: (page: number) => void; onPageSizeChange?: (size: number) => void };
 
@@ -16,9 +17,9 @@ export function Pagination({ page, pageSize, total, busy = false, onPageChange, 
         onChange={event => onPageSizeChange(Number(event.target.value))}>
         {[15, 50, 100].map(size => <option key={size} value={size}>{size}</option>)}
       </select></label>}
-      <button type="button" className="button button-secondary" disabled={busy || pages === undefined || safePage <= 1} onClick={() => onPageChange(safePage - 1)}><ChevronLeft size={15} />Previous</button>
+      <Button variant="secondary" disabled={busy || pages === undefined || safePage <= 1} onClick={() => onPageChange(safePage - 1)}><ChevronLeft size={15} />Previous</Button>
       <span className="pagination-page">{safePage} <span>/</span> {pages ?? '…'}</span>
-      <button type="button" className="button button-secondary" disabled={busy || pages === undefined || safePage >= pages} onClick={() => onPageChange(safePage + 1)}>Next<ChevronRight size={15} /></button>
+      <Button variant="secondary" disabled={busy || pages === undefined || safePage >= pages} onClick={() => onPageChange(safePage + 1)}>Next<ChevronRight size={15} /></Button>
     </div>
   </nav>;
 }

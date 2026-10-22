@@ -16,6 +16,7 @@ import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { tableLayout } from '../utils/tableLayout';
 import { tradingViewMetrics } from '../data/tradingViewMetrics';
 import { QuickChartsView } from './QuickChartsView';
+import { Button } from './Button';
 
 interface ResultsTableProps {
   loadExportRows?:()=>Promise<ScreenerRunResponse['rows']>;
@@ -207,7 +208,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
           filename={`nexus-results-${data?.resolvedSession?.date ?? 'export'}.csv`}
           disabled={!rows.length || busy || isError}
         />
-        <button type="button" className="button button-secondary" aria-label="Customize columns" title="Customize columns" onClick={() => setColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
+        <Button variant="secondary" aria-label="Customize columns" title="Customize columns" onClick={() => setColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></Button>
       </div>
     </div>
     {columnPickerOpen && <Dialog label="Customize columns" className="column-dialog" onClose={() => setColumnPickerOpen(false)}>
@@ -215,8 +216,8 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       <div className="column-dialog-content">
         <label className="column-search"><Search size={14} /><input type="search" aria-label="Search columns" placeholder="Search columns" value={columnSearch} onChange={event => setColumnSearch(event.target.value)} /></label>
         <div className="column-dialog-toolbar"><span>{columnSearch.trim() ? `${pickerColumns.length} results` : `${pickerColumns.filter(column => selectedColumnIds.includes(column.id)).length} selected in ${columnGroup.toLowerCase()}`}</span><div>
-          <button type="button" className="button button-ghost" onClick={() => { resetScroll(); setSavedColumnIds(customizableColumns.map(column => column.id)); }}>Select all</button>
-          <button type="button" className="button button-ghost" onClick={() => { resetScroll(); setSavedColumnIds(DEFAULT_COLUMNS); }}>Reset</button>
+          <Button variant="ghost" onClick={() => { resetScroll(); setSavedColumnIds(customizableColumns.map(column => column.id)); }}>Select all</Button>
+          <Button variant="ghost" onClick={() => { resetScroll(); setSavedColumnIds(DEFAULT_COLUMNS); }}>Reset</Button>
         </div></div>
         {!columnSearch.trim() && <div className="column-category-tabs" role="tablist" aria-label="Column categories">
           {COLUMN_GROUPS.map(group => {
@@ -265,7 +266,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
           </th>)}{columnWindow.right > 0 && <th aria-hidden="true" className="column-spacer" />}</tr></thead>
           <tbody>
             {rowWindow.top > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={columnSpan} style={{height: rowWindow.top}} /></tr>}
-            {isError ? <tr><td colSpan={columnSpan}><div className="data-state" role="alert"><AlertTriangle size={28} /><h2>Screener query failed</h2><p>{error?.message || 'The query could not be completed.'}</p>{onRetry && <button className="button button-secondary" onClick={onRetry}>Retry</button>}</div></td></tr>
+            {isError ? <tr><td colSpan={columnSpan}><div className="data-state" role="alert"><AlertTriangle size={28} /><h2>Screener query failed</h2><p>{error?.message || 'The query could not be completed.'}</p>{onRetry && <Button variant="secondary" onClick={onRetry}>Retry</Button>}</div></td></tr>
               : !data ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{columnWindow.left > 0 && <td aria-hidden="true" />}{renderedColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}{columnWindow.right > 0 && <td aria-hidden="true" />}</tr>)
               : !rows.length ? <tr><td colSpan={columnSpan}><div className="data-state"><SearchX size={28} /><h2>No equities matched</h2><p>Adjust your filters or choose a broader universe.</p></div></td></tr>
               // Page slots have no company-local state; reuse their cells instead of remounting thousands.

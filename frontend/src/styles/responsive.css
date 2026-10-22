@@ -344,7 +344,7 @@
     font-weight: 600;
     color: var(--text);
   }
-  .company-cell .ipo-company-trigger span.block, .ipo-table .ipo-company-trigger span.block {
+  .company-cell .ipo-company-trigger .symbol-logo-name, .ipo-table .ipo-company-trigger .symbol-logo-name {
     font-size: 10px;
     color: var(--muted);
     max-width: 100px;

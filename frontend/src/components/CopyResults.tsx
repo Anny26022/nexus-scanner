@@ -2,6 +2,7 @@ import {useRef, useState} from 'react';
 import {Copy, Check} from 'lucide-react';
 import {screenerApi} from '../api/screenerApi';
 import {copyFormats, formatCopyResults, type CopyGroup, type CopyRow} from '../utils/copyResults';
+import { Button } from './Button';
 
 export function CopyResults({loadRows, symbols, revision, disabled = false}: {
   loadRows:()=>Promise<CopyRow[]>; symbols?:string[]; revision?:string; disabled?:boolean;
@@ -26,9 +27,9 @@ export function CopyResults({loadRows, symbols, revision, disabled = false}: {
   return <div className="copy-results" onBlur={event=>{
     if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
   }} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();close();}}}>
-    <button ref={trigger} type="button" className="button button-secondary results-copy-button" disabled={disabled || busy}
+    <Button variant="secondary" className="results-copy-button" ref={trigger} disabled={disabled || busy}
       aria-label={copied ? 'Results copied' : 'Copy results'} title="Copy results" aria-haspopup="menu" aria-expanded={open}
-      onClick={()=>{setError('');setOpen(!open);}}>{copied ? <Check size={15}/> : <Copy size={15}/>}</button>
+      onClick={()=>{setError('');setOpen(!open);}}>{copied ? <Check size={15}/> : <Copy size={15}/>}</Button>
     {open && <>
       <div className="copy-dismiss" onPointerDown={()=>setOpen(false)} aria-hidden="true"/>
       <div className="copy-menu" role="menu" aria-label="Copy format" onKeyDown={event=>{

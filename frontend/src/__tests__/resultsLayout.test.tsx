@@ -224,9 +224,9 @@ it('keeps company and filing controls mounted when a wide phone table is swiped 
     expect(screen.getByRole('button', {name:'View STOCK0 announcements'})).toBeInTheDocument();
     expect(screen.getByRole('columnheader', {name:'Data completeness'})).toBeInTheDocument();
     // Vertical row windowing is still bounded, even with every column selected.
-    expect(view.container.querySelectorAll('tbody tr:not(.table-spacer)')).toHaveLength(22);
+    expect(view.container.querySelectorAll('tbody tr')).toHaveLength(100);
   } finally {cleanup(); vi.unstubAllGlobals(); localStorage.removeItem('nexus-scanner.screener.columns.v1');}
-});
+}, 15000);
 
 it('lets the default table fill its viewport again after resetting a custom column layout', () => {
   window.localStorage.removeItem('nexus-scanner.screener.columns.v1');

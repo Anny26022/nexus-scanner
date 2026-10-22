@@ -171,9 +171,6 @@
 .data-table th button { display: flex; max-width: 100%; min-width: 0; align-items: center; gap: 5px; overflow: hidden; min-height: 34px; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
 .data-table th button:hover, .data-table th[aria-sort="ascending"], .data-table th[aria-sort="descending"] { color: var(--accent); }
 .data-table td { height: 46px; padding: 6px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; overflow: hidden; font-size: 12px; }
-.windowed-table tbody tr:not(.table-spacer), .windowed-table tbody tr:not(.table-spacer) > td { height: 48px; }
-.data-table .table-spacer > td { padding: 0; border: 0; }
-.data-table .column-spacer { padding-inline: 0; }
 .data-table { overflow-anchor: none; }
 .data-table tbody tr:not(.skeleton-row) { transition: background-color 0.1s ease; }
 .data-table tbody tr:not(.skeleton-row):hover { background: var(--surface-subtle); }

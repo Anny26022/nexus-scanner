@@ -10,8 +10,6 @@ import { Dialog } from './Dialog';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { useSymbolHoverCard } from '../hooks/useSymbolHoverCard';
 import { TijoriDetailsCard } from './TijoriDetailsCard';
-import { useTableWindow } from '../hooks/useTableWindow';
-import { useColumnWindow } from '../hooks/useColumnWindow';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { tableLayout } from '../utils/tableLayout';
 import { tradingViewMetrics } from '../data/tradingViewMetrics';
@@ -153,6 +151,16 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const [internalResultView, setInternalResultView] = useLocalStorageState<'table' | 'charts'>('nexus-scanner.screener.result-view.v1', 'table');
   const resultView = propResultView ?? internalResultView;
   const setResultView = onResultViewChange ?? setInternalResultView;
+  const [chartsMounted, setChartsMounted] = useState(resultView === 'charts');
+  if (resultView === 'charts' && !chartsMounted) {
+    setChartsMounted(true);
+  }
+  const handleResultViewChange = (view: 'table' | 'charts') => {
+    setResultView(view);
+    if (view === 'charts' && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('resize'));
+    }
+  };
   const [columnSearch, setColumnSearch] = useState('');
   const [columnGroup, setColumnGroup] = useState<ColumnGroup>('Overview');
   const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>('nexus-scanner.screener.columns.v1', DEFAULT_COLUMNS);
@@ -175,14 +183,9 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerColumns = columnSearch.trim() ? matchingColumns : customizableColumns.filter(column => column.group === columnGroup);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const columnWindow = useColumnWindow(visibleColumns, layout.widthOf,
-    !phone && usingCustomColumns && visibleColumns.length > 20, scrollRef);
-  const renderedColumns = columnWindow.columns;
-  const columnSpan = renderedColumns.length + Number(columnWindow.left > 0) + Number(columnWindow.right > 0);
   const overview = useSymbolHoverCard<ScreenerRunResponse['rows'][number]>();
   const resetScroll = () => { overview.dismiss(); if (scrollRef.current) scrollRef.current.scrollTop = 0; };
   const rows = data?.rows ?? [];
-  const rowWindow = useTableWindow(rows, data, visibleColumns.length);
   const busy = isLoading || isFetching;
   return <section className="results-surface" aria-label="Screener results">
     <div className="results-toolbar">
@@ -191,8 +194,8 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       <div className="results-actions">
         {(isError || busy) && <span role="status" className="fetch-status">{isError ? 'Query failed' : 'Updating results'}</span>}
         <div className="results-view-toggle" role="group" aria-label="Result view">
-          <button type="button" aria-pressed={resultView === 'table'} onClick={() => setResultView('table')}><Table2 size={14}/><span>List</span></button>
-          <button type="button" aria-pressed={resultView === 'charts'} onClick={() => setResultView('charts')}><ChartNoAxesCombined size={14}/><span>Charts</span></button>
+          <button type="button" aria-pressed={resultView === 'table'} onClick={() => handleResultViewChange('table')}><Table2 size={14}/><span>List</span></button>
+          <button type="button" aria-pressed={resultView === 'charts'} onClick={() => handleResultViewChange('charts')}><ChartNoAxesCombined size={14}/><span>Charts</span></button>
         </div>
         <CopyResults symbols={data?.matchedSymbols?.length === data?.matchCount ? data?.matchedSymbols : undefined}
           loadRows={loadExportRows ?? (async()=>{
@@ -247,51 +250,64 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       </div>
     </Dialog>}
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
-    {resultView === 'charts' && !isError ? <QuickChartsView rows={rows} revision={data?.immutableRevision} matchCount={data?.matchCount} matchedSymbols={data?.matchedSymbols} loadRows={loadExportRows} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} /> : <div className="table-viewport" aria-busy={busy}>
-      <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
-        <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
-          <caption className="sr-only">Equities matching the current screen</caption>
-          <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: layout.columnWidth(column)}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
-          <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} title={column.label} data-column={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
-            aria-sort={column.sortField ? currentSort?.field === column.sortField ? currentSort.direction === 'asc' ? 'ascending' : 'descending' : 'none' : undefined}>
-            {column.sortField ? <button type="button" disabled={busy} onClick={() => {resetScroll(); onSortChange(column.sortField!, currentSort?.field === column.sortField && currentSort?.direction === 'asc' ? 'desc' : 'asc');}}>
-              {column.label}{currentSort?.field === column.sortField ? currentSort?.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} /> : <ArrowUpDown size={13} />}
-            </button> : column.label}
-          </th>)}{columnWindow.right > 0 && <th aria-hidden="true" className="column-spacer" />}</tr></thead>
-          <tbody>
-            {rowWindow.top > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={columnSpan} style={{height: rowWindow.top}} /></tr>}
-            {isError ? <tr><td colSpan={columnSpan}><div className="data-state" role="alert"><AlertTriangle size={28} /><h2>Screener query failed</h2><p>{error?.message || 'The query could not be completed.'}</p>{onRetry && <button className="button button-secondary" onClick={onRetry}>Retry</button>}</div></td></tr>
-              : !data ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{columnWindow.left > 0 && <td aria-hidden="true" />}{renderedColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}{columnWindow.right > 0 && <td aria-hidden="true" />}</tr>)
-              : !rows.length ? <tr><td colSpan={columnSpan}><div className="data-state"><SearchX size={28} /><h2>No equities matched</h2><p>Adjust your filters or choose a broader universe.</p></div></td></tr>
-              // Page slots have no company-local state; reuse their cells instead of remounting thousands.
-              : rowWindow.rows.map((row, index) => <tr key={rowWindow.first + index} aria-rowindex={rowWindow.first + index + 2}>{columnWindow.left > 0 && <td aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, columnIndex) => <td key={column.id} aria-colindex={columnWindow.first + columnIndex + 1} className={column.id === 'company' ? '' : 'numeric'}>
-                {column.id === 'company' ? <div className="company-cell"><button type="button" className="ipo-company-trigger" aria-label={`View ${row.symbol} company snapshot`}
-                  aria-haspopup="dialog" aria-expanded={overview.active?.row.symbol === row.symbol}
-                  onMouseEnter={event => { if (!phone) overview.open(row, event.currentTarget); }}
-                  onMouseLeave={() => { if (!phone) overview.scheduleClose(); }}
-                  onFocus={event => { if (!phone) overview.open(row, event.currentTarget); }}
-                  onKeyDown={event => {
-                    if (['ArrowDown', 'Enter', ' '].includes(event.key)) {
-                      event.preventDefault(); overview.enter(row, event.currentTarget);
-                    }
-                  }}
-                  onBlur={event => {if (!phone && !document.getElementById(`company-overview-${row.symbol}`)?.contains(event.relatedTarget)) overview.scheduleClose();}}
-                  onClick={event => overview.active?.row.symbol === row.symbol && overview.active.pinned
-                    ? overview.dismiss() : overview.open(row, event.currentTarget, true)}>
-                    <SymbolWithLogo symbol={row.symbol} name={row.name} badge={row.isFno && <span className="fno-label">F&amp;O</span>} /></button>
-                  <div className="company-tools"><button type="button" className="icon-button filing-button" aria-label={`View ${row.symbol} announcements`} title="View announcements" onClick={() => setFilingSymbol(row.symbol)} disabled={busy}><FileText size={14} strokeWidth={1.8} /></button></div></div>
-                  : column.id === 'sector' ? <><div className={row.sector === 'Unclassified' ? 'cell-muted truncate' : 'cell-label truncate'} title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></>
-                  : column.id === 'deliveryPct' && row.deliveryPct == null ? <span className="cell-muted">Unavailable</span>
-                  : column.id === 'changePct' && row.changePct != null ? <span className={row.changePct >= 0 ? 'positive' : 'negative'}>{row.changePct >= 0 ? '+' : ''}{displayValue(column.getValue(row), column.format)}</span>
-                  : column.id === 'rvol' && row.rvol != null ? <span className={row.rvol >= 2 ? 'volume-badge' : ''}>{displayValue(column.getValue(row), column.format)}</span>
-                  : displayValue(column.getValue(row), column.format)}
-              </td>)}{columnWindow.right > 0 && <td aria-hidden="true" className="column-spacer" />}</tr>)}
-            {rowWindow.bottom > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={columnSpan} style={{height: rowWindow.bottom}} /></tr>}
-          </tbody>
-        </table>
+    {chartsMounted && !isError && (
+      <div style={{ display: resultView === 'charts' ? 'contents' : 'none' }}>
+        <QuickChartsView
+          rows={rows}
+          revision={data?.immutableRevision}
+          matchCount={data?.matchCount}
+          matchedSymbols={data?.matchedSymbols}
+          loadRows={loadExportRows}
+          busy={busy}
+          firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1}
+          onOpenFullChart={onOpenFullChart}
+        />
+      </div>
+    )}
+    <div style={{ display: resultView === 'table' ? 'contents' : 'none' }}>
+      <div className="table-viewport" aria-busy={busy}>
+        <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns">
+          <table className="data-table" aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
+            <caption className="sr-only">Equities matching the current screen</caption>
+            <colgroup>{visibleColumns.map(column => <col key={column.id} style={{width: layout.columnWidth(column)}} />)}</colgroup>
+            <thead><tr>{visibleColumns.map((column, index) => <th key={column.id} title={column.label} data-column={column.id} scope="col" aria-colindex={index + 1}
+              aria-sort={column.sortField ? currentSort?.field === column.sortField ? currentSort.direction === 'asc' ? 'ascending' : 'descending' : 'none' : undefined}>
+              {column.sortField ? <button type="button" disabled={busy} onClick={() => {resetScroll(); onSortChange(column.sortField!, currentSort?.field === column.sortField && currentSort?.direction === 'asc' ? 'desc' : 'asc');}}>
+                {column.label}{currentSort?.field === column.sortField ? currentSort?.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} /> : <ArrowUpDown size={13} />}
+              </button> : column.label}
+            </th>)}</tr></thead>
+            <tbody>
+              {isError ? <tr><td colSpan={visibleColumns.length}><div className="data-state" role="alert"><AlertTriangle size={28} /><h2>Screener query failed</h2><p>{error?.message || 'The query could not be completed.'}</p>{onRetry && <button className="button button-secondary" onClick={onRetry}>Retry</button>}</div></td></tr>
+                : !data ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{visibleColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}</tr>)
+                : !rows.length ? <tr><td colSpan={visibleColumns.length}><div className="data-state"><SearchX size={28} /><h2>No equities matched</h2><p>Adjust your filters or choose a broader universe.</p></div></td></tr>
+                : rows.map((row, index) => <tr key={index} aria-rowindex={index + 2}>{visibleColumns.map((column, columnIndex) => <td key={column.id} aria-colindex={columnIndex + 1} className={column.id === 'company' ? '' : 'numeric'}>
+                  {column.id === 'company' ? <div className="company-cell"><button type="button" className="ipo-company-trigger" aria-label={`View ${row.symbol} company snapshot`}
+                    aria-haspopup="dialog" aria-expanded={overview.active?.row.symbol === row.symbol}
+                    onMouseEnter={event => { if (!phone) overview.open(row, event.currentTarget); }}
+                    onMouseLeave={() => { if (!phone) overview.scheduleClose(); }}
+                    onFocus={event => { if (!phone) overview.open(row, event.currentTarget); }}
+                    onKeyDown={event => {
+                      if (['ArrowDown', 'Enter', ' '].includes(event.key)) {
+                        event.preventDefault(); overview.enter(row, event.currentTarget);
+                      }
+                    }}
+                    onBlur={event => {if (!phone && !document.getElementById(`company-overview-${row.symbol}`)?.contains(event.relatedTarget)) overview.scheduleClose();}}
+                    onClick={event => overview.active?.row.symbol === row.symbol && overview.active.pinned
+                      ? overview.dismiss() : overview.open(row, event.currentTarget, true)}>
+                      <SymbolWithLogo symbol={row.symbol} name={row.name} badge={row.isFno && <span className="fno-label">F&amp;O</span>} /></button>
+                    <div className="company-tools"><button type="button" className="icon-button filing-button" aria-label={`View ${row.symbol} announcements`} title="View announcements" onClick={() => setFilingSymbol(row.symbol)} disabled={busy}><FileText size={14} strokeWidth={1.8} /></button></div></div>
+                    : column.id === 'sector' ? <><div className={row.sector === 'Unclassified' ? 'cell-muted truncate' : 'cell-label truncate'} title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></>
+                    : column.id === 'deliveryPct' && row.deliveryPct == null ? <span className="cell-muted">Unavailable</span>
+                    : column.id === 'changePct' && row.changePct != null ? <span className={row.changePct >= 0 ? 'positive' : 'negative'}>{row.changePct >= 0 ? '+' : ''}{displayValue(column.getValue(row), column.format)}</span>
+                    : column.id === 'rvol' && row.rvol != null ? <span className={row.rvol >= 2 ? 'volume-badge' : ''}>{displayValue(column.getValue(row), column.format)}</span>
+                    : displayValue(column.getValue(row), column.format)}
+                </td>)}</tr>)}
+            </tbody>
+          </table>
+        </div>
       </div>
       <Pagination page={data?.page ?? page ?? 1} pageSize={pageSize ?? data?.pageSize ?? 15} total={data?.matchCount} busy={busy || isError || !data} onPageChange={page => {resetScroll(); onPageChange(page);}} onPageSizeChange={onPageSizeChange && (size => {resetScroll(); onPageSizeChange(size);})} />
-    </div>}
+    </div>
     {overview.active && overview.id && !busy && !isError && !columnPickerOpen && !filingSymbol && rows.some(row => row.symbol === overview.active!.row.symbol) &&
       <TijoriDetailsCard key={overview.active.row.symbol} {...overview.active} id={overview.id}
         onClose={overview.close} onMouseEnter={overview.cancelClose} onMouseLeave={overview.scheduleClose} />}

@@ -19,7 +19,6 @@ import { Pagination } from './Pagination';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
 import { useNextScreenPage, screenPageStaleTime } from '../hooks/useNextScreenPage';
-import { useTableWindow } from '../hooks/useTableWindow';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
 import { IpoDetailsCard } from './IpoDetailsCard';
 import { useSymbolHoverCard } from '../hooks/useSymbolHoverCard';
@@ -166,7 +165,6 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
     || IPO_DEFAULT_COLUMNS.some(id => !selectedIpoColumnIds.includes(id));
   const layout = tableLayout(ipoColumns.filter(column => column.id === 'company' || selectedIpoColumnIds.includes(column.id)), 'ipo', phone, customIpoColumns);
   const visibleIpoColumns = layout.columns;
-  const ipoWindow = useTableWindow(visibleIpos, visibleIpos, visibleIpoColumns.length);
   const matchingIpoColumns = ipoColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerIpoColumns = columnSearch.trim() ? matchingIpoColumns : ipoColumns.filter(column => column.group === columnGroup);
   const updatePeriod = (value: typeof periodFilter) => {
@@ -261,17 +259,17 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
             <button type="button" className="button button-secondary" aria-label="Customize IPO columns" onClick={() => setIsColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
           </div>
         </div>
-        <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns" onScroll={event => {if (!ipoOverview.active?.pinned) ipoOverview.dismiss(); ipoWindow.onScroll(event);}}>
-          <table className={`data-table ipo-table${ipoWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={visibleIpos.length + 1} style={layout.style}><caption className="sr-only">Newly listed companies</caption>
+        <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns" onScroll={() => {if (!ipoOverview.active?.pinned) ipoOverview.dismiss();}}>
+          <table className="data-table ipo-table" aria-rowcount={visibleIpos.length + 1} style={layout.style}><caption className="sr-only">Newly listed companies</caption>
             <colgroup>{visibleIpoColumns.map(column => <col key={column.id} style={{width:layout.columnWidth(column)}} />)}</colgroup>
             <thead><tr>{visibleIpoColumns.map(column => <th scope="col" key={column.id} aria-sort={column.sortField && sort.field === column.sortField ? sort.direction === 'asc' ? 'ascending' : 'descending' : column.sortField ? 'none' : undefined}>
               {column.sortField ? <button onClick={() => updateSort(column.sortField!)}>{column.label}<ArrowUpDown size={13} /></button> : column.label}
             </th>)}</tr></thead>
-            <tbody>{ipoWindow.top > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={visibleIpoColumns.length} style={{height: ipoWindow.top}} /></tr>}
+            <tbody>
               {isLoading ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{visibleIpoColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}</tr>)
               : ipoQuery.isError && !ipoQuery.data ? <tr><td colSpan={visibleIpoColumns.length}><div role="alert" className="data-state"><h2>IPO catalogue could not be loaded.</h2><button className="button button-secondary" onClick={() => void ipoQuery.refetch()}>Retry</button></div></td></tr>
               : !filteredIpos.length ? <tr><td colSpan={visibleIpoColumns.length}><div className="data-state"><SearchX size={28} /><h2>No new listings recorded for selected period window.</h2><p>Choose a longer period or clear your search.</p></div></td></tr>
-              : ipoWindow.rows.map((row, index) => <tr key={ipoWindow.first + index} aria-rowindex={ipoWindow.first + index + 2}>
+              : visibleIpos.map((row, index) => <tr key={index} aria-rowindex={index + 2}>
                 {visibleIpoColumns.map(column => <td key={column.id} className={column.id === 'company' || column.id === 'sectorIndustry' ? '' : 'numeric'}>{column.id === 'company' ? <button type="button" className="ipo-company-trigger" aria-label={`IPO details for ${row.name || row.symbol}`} title="Hover or click for IPO details"
                   aria-haspopup="dialog" aria-expanded={ipoOverview.active?.row.symbol === row.symbol} aria-controls={`ipo-details-${row.symbol}`}
                   onMouseEnter={event => { if (!phone) ipoOverview.open(row, event.currentTarget, false); }}
@@ -291,7 +289,6 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
                 </button> : column.id === 'sectorIndustry' ? <><div className="cell-label truncate" title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></>
                   : <span className={column.id==='currentPrice'?'cell-strong':''} title={column.value(row)}>{column.value(row)}</span>}</td>)}
               </tr>)}
-              {ipoWindow.bottom > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={visibleIpoColumns.length} style={{height: ipoWindow.bottom}} /></tr>}
             </tbody>
           </table>
         </div>

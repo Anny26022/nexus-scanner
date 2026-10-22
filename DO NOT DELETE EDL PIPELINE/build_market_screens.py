@@ -2,21 +2,18 @@
 
 from __future__ import annotations
 
-from collections import Counter
-from datetime import date, datetime, timedelta
+from datetime import date
 import gzip
 import json
-import math
-import os
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from pipeline_utils import BASE_DIR, load_json, save_json, compress_file
+from pipeline_utils import BASE_DIR, save_json, compress_file
 from ohlcv_utils import read_ohlcv_csv, valid_ohlcv_values
-from build_rs_ratings import close_history, compute_stock_returns, calculate_composite_score, percentile_rank, liquid_universe
+from build_rs_ratings import close_history, liquid_universe, load_universe_history, rank_session, METHODOLOGY_VERSION
 
 
 def load_json_or_gz(path: Path) -> Any:
@@ -525,28 +522,112 @@ def precompute_gallery_rs(
     if not ohlcv_dir.exists() or not target_dates:
         return {}
 
-    scores_by_date: dict[str, dict[str, float]] = {d: {} for d in target_dates}
+    histories = {}
     eligible_symbols = set().union(*(eligible_by_date[d] for d in target_dates))
     for sym in sorted(eligible_symbols):
-        csv_file = ohlcv_dir / f"{sym}.csv"
-        if not csv_file.exists():
+        path = ohlcv_dir / f"{sym}.csv"
+        if not path.exists():
             continue
-        # Use the same dated-close validation as the canonical RS builder.
-        history = close_history(csv_file)
-        closes = history["Close"].tolist()
-        indices = {d.strftime("%Y-%m-%d"): i for i, d in enumerate(history["Date"])}
-        for d in target_dates:
-            if sym not in eligible_by_date[d]:
-                continue
-            idx = indices.get(d)
-            if idx is None:
-                continue
-            returns = compute_stock_returns(closes, offset=len(closes) - idx - 1)
-            score = calculate_composite_score(returns) if returns is not None else None
-            if score is not None:
-                scores_by_date[d][sym] = score
+        history = close_history(path)
+        histories[sym] = (history["Date"].dt.strftime("%Y-%m-%d").tolist(), history["Close"].tolist())
+    return {d: {symbol: rating["composite_rs"] for symbol, rating in
+                rank_session(histories, d, eligible_by_date[d]).items()} for d in target_dates}
 
-    return {d: percentile_rank(scores) for d, scores in scores_by_date.items() if scores}
+
+def evaluate_setups(h_arr, l_arr, c_arr, v_arr, dates, comp_rs, atr_ratio_at_end=None):
+    """Canonical setup measurements for both daily and historical publication."""
+    c = float(c_arr[-1])
+    vol = float(v_arr[-1])
+
+    s50 = float(np.mean(c_arr[-50:])) if len(c_arr) >= 50 else None
+    h52 = float(np.max(h_arr[-min(len(h_arr), 252):]))
+
+    # 1. Evaluate Setups
+    vcp = detect_vcp(h_arr, l_arr, c_arr, v_arr, dates)
+    darvas = detect_darvas(h_arr, l_arr, c_arr)
+    flag = detect_flags(h_arr, l_arr, c_arr, v_arr)
+    cup = detect_cup_with_handle(h_arr, l_arr, c_arr)
+    tight_wks = detect_tight_weeks(c_arr[-80:], dates[-80:], s50, comp_rs)
+
+    # Volume Breakout: Close > 50d high (excluding today) + 50d RVOL >= 2.0x
+    prior_50_high = float(np.max(h_arr[-51:-1])) if len(h_arr) >= 51 else float(np.max(h_arr[:-1]))
+    rvol_50d = (vol / max(1.0, float(np.mean(v_arr[-50:])))) if len(v_arr) >= 50 else 1.0
+    vol_breakout = bool(c > prior_50_high and rvol_50d >= 2.0)
+
+    # Pocket Pivot: up day, close > 50 DMA, volume > max down-day volume of prior 10 sessions, RS >= 60
+    pocket_pivot = False
+    if len(c_arr) >= 11 and c > c_arr[-2] and s50 and c > s50 and (comp_rs or 0) >= 60:
+        down_day_vols = [v_arr[-i] for i in range(2, 12) if c_arr[-i] < c_arr[-i-1]]
+        max_down_vol = max(down_day_vols) if down_day_vols else 0.0
+        pocket_pivot = bool(vol > max_down_vol)
+
+    # Multi-Year Breakout: ceiling established >= 250 sessions ago, current close clears ceiling within 15%
+    myb = False
+    myb_details = None
+    lookback_myb = min(len(c_arr), 750)
+    if lookback_myb >= 300:
+        prior_win = h_arr[-lookback_myb:-1]
+        ceil_val = float(np.max(prior_win))
+        ceil_idx = int(np.argmax(prior_win))
+        ceil_age = len(prior_win) - ceil_idx
+        if ceil_age >= 250 and c > ceil_val:
+            above_pct = ((c - ceil_val) / ceil_val) * 100.0
+            if above_pct <= 15.0:
+                myb = True
+                myb_details = {
+                    "matched": True,
+                    "ceilingPrice": round(ceil_val, 2),
+                    "ceiling_price": round(ceil_val, 2),
+                    "ceilingHeldDays": ceil_age,
+                    "ceiling_held_days": ceil_age,
+                    "distanceAbovePct": round(above_pct, 2),
+                    "distance_above_pct": round(above_pct, 2),
+                }
+
+    # Coiled: 10d range <= 10%, ATR(10)/ATR(50) <= 0.85, volumeDryRatio < 0.90, close > 50 DMA, within 15% of 52W high, RS >= 60
+    rng10 = ((float(np.max(h_arr[-10:])) - float(np.min(l_arr[-10:]))) / float(np.max(h_arr[-10:]))) * 100.0 if len(h_arr) >= 10 else 100.0
+    atr_ratio = atr_ratio_at_end
+    if atr_ratio is None:
+        atr10 = calculate_atr_series(h_arr, l_arr, c_arr, 10)[-1]
+        atr50 = calculate_atr_series(h_arr, l_arr, c_arr, 50)[-1]
+        atr_ratio = atr10 / atr50 if len(c_arr) >= 50 and atr50 > 0 else 1.0
+    v10 = float(np.mean(v_arr[-10:])) if len(v_arr) >= 10 else float(v_arr[-1])
+    v50 = float(np.mean(v_arr[-50:])) if len(v_arr) >= 50 else v10
+    vol_dry_10 = (v10 / max(1.0, v50)) if v50 > 0 else 1.0
+    from_52h = ((h52 - c) / h52 * 100.0) if h52 > 0 else 100.0
+
+    coiled = bool(rng10 <= 10.0 and atr_ratio <= 0.85 and vol_dry_10 < 0.90 and s50 and c > s50 and from_52h <= 15.0 and (comp_rs or 0) >= 60)
+
+    # 2. Evaluate Trend Template & Stage
+    trend_res = evaluate_minervini_trend(c_arr, h_arr, l_arr, comp_rs)
+    stage_res = evaluate_weinstein_stage(c_arr)
+
+    setup_geometry = {
+        "vcp": vcp,
+        "darvasBox": darvas,
+        "darvas_box": darvas,
+        "cupWithHandle": cup,
+        "cup_with_handle": cup,
+        "bullFlag": flag,
+        "flag": flag,
+        "pocketPivot": pocket_pivot,
+        "pocket_pivot": pocket_pivot,
+        "volumeBreakout": vol_breakout,
+        "volume_breakout": vol_breakout,
+        "multiYearBreakout": myb_details if myb else None,
+        "multi_year_breakout": myb_details if myb else None,
+        "coiled": coiled,
+        "tightWeeks": tight_wks,
+        "tight_weeks": tight_wks,
+    }
+
+    traded_val_20d = c_arr[-20:] * v_arr[-20:]
+    mean_val_cr = float(np.mean(traded_val_20d)) / 1e7
+    median_val_cr = float(np.median(traded_val_20d)) / 1e7
+    return {"setup_geometry": setup_geometry, "trend_template": trend_res,
+            "stage_status": stage_res, "traded_value_mean_20d_cr": round(mean_val_cr, 2),
+            "traded_value_median_20d_cr": round(median_val_cr, 2),
+            "is_liquid_screen": bool(mean_val_cr >= 10.0)}
 
 
 def enrich_snapshot_directory(
@@ -597,7 +678,8 @@ def enrich_snapshot_directory(
 
     gallery_rs_map = {}
     if generate_gallery:
-        dated_eligibility = dict(gallery_eligible_by_date or {})
+        dated_eligibility = load_universe_history(root)
+        dated_eligibility.update(gallery_eligible_by_date or {})
         if today_date not in dated_eligibility:
             try:
                 eligible, _ = liquid_universe(root)
@@ -657,71 +739,14 @@ def enrich_snapshot_directory(
         c_arr = np.array(closes, dtype=float)
         v_arr = np.array(volumes, dtype=float)
 
-        c = float(c_arr[-1])
-        vol = float(v_arr[-1])
         rs_entry = ratings.get(sym_upper, {})
-        comp_rs = rs_entry.get("composite_rs") or rs_entry.get("front_weighted")
-
-        s50 = float(np.mean(c_arr[-50:])) if len(c_arr) >= 50 else None
-        h52 = float(np.max(h_arr[-min(len(h_arr), 252):]))
-
-        # 1. Evaluate Setups
-        vcp = detect_vcp(h_arr, l_arr, c_arr, v_arr, dates)
-        darvas = detect_darvas(h_arr, l_arr, c_arr)
-        flag = detect_flags(h_arr, l_arr, c_arr, v_arr)
-        cup = detect_cup_with_handle(h_arr, l_arr, c_arr)
-        tight_wks = detect_tight_weeks(c_arr, dates, s50, comp_rs)
-
-        # Volume Breakout: Close > 50d high (excluding today) + 50d RVOL >= 2.0x
-        prior_50_high = float(np.max(h_arr[-51:-1])) if len(h_arr) >= 51 else float(np.max(h_arr[:-1]))
-        rvol_50d = (vol / max(1.0, float(np.mean(v_arr[-50:])))) if len(v_arr) >= 50 else 1.0
-        vol_breakout = bool(c > prior_50_high and rvol_50d >= 2.0)
-
-        # Pocket Pivot: up day, close > 50 DMA, volume > max down-day volume of prior 10 sessions, RS >= 60
-        pocket_pivot = False
-        if len(c_arr) >= 11 and c > c_arr[-2] and s50 and c > s50 and (comp_rs or 0) >= 60:
-            down_day_vols = [v_arr[-i] for i in range(2, 12) if c_arr[-i] < c_arr[-i-1]]
-            max_down_vol = max(down_day_vols) if down_day_vols else 0.0
-            pocket_pivot = bool(vol > max_down_vol)
-
-        # Multi-Year Breakout: ceiling established >= 250 sessions ago, current close clears ceiling within 15%
-        myb = False
-        myb_details = None
-        lookback_myb = min(len(c_arr), 750)
-        if lookback_myb >= 300:
-            prior_win = h_arr[-lookback_myb:-1]
-            ceil_val = float(np.max(prior_win))
-            ceil_idx = int(np.argmax(prior_win))
-            ceil_age = len(prior_win) - ceil_idx
-            if ceil_age >= 250 and c > ceil_val:
-                above_pct = ((c - ceil_val) / ceil_val) * 100.0
-                if above_pct <= 15.0:
-                    myb = True
-                    myb_details = {
-                        "matched": True,
-                        "ceilingPrice": round(ceil_val, 2),
-                        "ceiling_price": round(ceil_val, 2),
-                        "ceilingHeldDays": ceil_age,
-                        "ceiling_held_days": ceil_age,
-                        "distanceAbovePct": round(above_pct, 2),
-                        "distance_above_pct": round(above_pct, 2),
-                    }
-
-        # Coiled: 10d range <= 10%, ATR(10)/ATR(50) <= 0.85, volumeDryRatio < 0.90, close > 50 DMA, within 15% of 52W high, RS >= 60
-        rng10 = ((float(np.max(h_arr[-10:])) - float(np.min(l_arr[-10:]))) / float(np.max(h_arr[-10:]))) * 100.0 if len(h_arr) >= 10 else 100.0
-        atr10_series = calculate_atr_series(h_arr, l_arr, c_arr, 10)
-        atr50_series = calculate_atr_series(h_arr, l_arr, c_arr, 50)
-        atr_ratio = (atr10_series[-1] / atr50_series[-1]) if (len(c_arr) >= 50 and atr50_series[-1] > 0) else 1.0
-        v10 = float(np.mean(v_arr[-10:])) if len(v_arr) >= 10 else float(v_arr[-1])
-        v50 = float(np.mean(v_arr[-50:])) if len(v_arr) >= 50 else v10
-        vol_dry_10 = (v10 / max(1.0, v50)) if v50 > 0 else 1.0
-        from_52h = ((h52 - c) / h52 * 100.0) if h52 > 0 else 100.0
-
-        coiled = bool(rng10 <= 10.0 and atr_ratio <= 0.85 and vol_dry_10 < 0.90 and s50 and c > s50 and from_52h <= 15.0 and (comp_rs or 0) >= 60)
-
-        # 2. Evaluate Trend Template & Stage
-        trend_res = evaluate_minervini_trend(c_arr, h_arr, l_arr, comp_rs)
-        stage_res = evaluate_weinstein_stage(c_arr)
+        comp_rs = rs_entry.get("composite_rs")
+        measurements = evaluate_setups(h_arr, l_arr, c_arr, v_arr, dates, comp_rs)
+        setup_geometry = measurements["setup_geometry"]
+        trend_res, stage_res = measurements["trend_template"], measurements["stage_status"]
+        mean_val_cr = measurements["traded_value_mean_20d_cr"]
+        median_val_cr = measurements["traded_value_median_20d_cr"]
+        c, vol = float(c_arr[-1]), float(v_arr[-1])
 
         # 3. Calendar
         cal_ev = calendar.get(sym_upper, {})
@@ -732,26 +757,6 @@ def enrich_snapshot_directory(
                 days_until_results = (res_d - today_dt).days
             except Exception:
                 pass
-
-        # Setup Geometry dictionary supporting BOTH camelCase and snake_case for full UI/backend parity
-        setup_geometry = {
-            "vcp": vcp,
-            "darvasBox": darvas,
-            "darvas_box": darvas,
-            "cupWithHandle": cup,
-            "cup_with_handle": cup,
-            "bullFlag": flag,
-            "flag": flag,
-            "pocketPivot": pocket_pivot,
-            "pocket_pivot": pocket_pivot,
-            "volumeBreakout": vol_breakout,
-            "volume_breakout": vol_breakout,
-            "multiYearBreakout": myb_details if myb else None,
-            "multi_year_breakout": myb_details if myb else None,
-            "coiled": coiled,
-            "tightWeeks": tight_wks,
-            "tight_weeks": tight_wks,
-        }
 
         # Enrich stock record in-place preserving every existing column
         stock["setup_geometry"] = setup_geometry
@@ -772,14 +777,11 @@ def enrich_snapshot_directory(
         stock["is_rs_line_52w_high"] = stock["isRsLine52wHigh"]
 
         # Liquidity metrics
-        traded_val_20d = c_arr[-20:] * v_arr[-20:]
-        mean_val_cr = float(np.mean(traded_val_20d)) / 1e7
-        median_val_cr = float(np.median(traded_val_20d)) / 1e7
         stock["traded_value_mean_20d_cr"] = round(mean_val_cr, 2)
         stock["tradedValueMean20dCr"] = round(mean_val_cr, 2)
         stock["traded_value_median_20d_cr"] = round(median_val_cr, 2)
         stock["tradedValueMedian20dCr"] = round(median_val_cr, 2)
-        stock["is_liquid_screen"] = bool(mean_val_cr >= 10.0)
+        stock["is_liquid_screen"] = measurements["is_liquid_screen"]
         stock["isLiquidScreen"] = stock["is_liquid_screen"]
 
         # Screen record
@@ -870,6 +872,8 @@ def enrich_snapshot_directory(
                             "textbook": bool(p_match.get("textbook") and pit_rs is not None and pit_rs >= 80 and sig_trend["score"] == 8),
                             "signal_close": sig_close,
                             "signal_rs": pit_rs,
+                            "signal_traded_value_mean_20d_cr": round(float(np.mean(sub_c[-20:] * sub_v[-20:])) / 1e7, 2),
+                            "signal_is_liquid": bool(np.mean(sub_c[-20:] * sub_v[-20:]) / 1e7 >= 10.0),
                             "signal_trend_score": sig_trend["score"],
                                 "return_5d": ret5,
                                 "return_20d": ret20,
@@ -889,6 +893,7 @@ def enrich_snapshot_directory(
     screens_gz = screens_output.with_suffix(".json.gz")
     save_json(screens_output, {
         "as_of_date": today_date,
+        "methodology_version": METHODOLOGY_VERSION,
         "total_stocks": len(screen_records),
         "records": screen_records,
     }, ensure_ascii=False)
@@ -901,6 +906,8 @@ def enrich_snapshot_directory(
         gallery_gz = gallery_output.with_suffix(".json.gz")
         save_json(gallery_output, {
             "as_of_date": today_date,
+            "methodology_version": METHODOLOGY_VERSION,
+            "historical_rs_dates": sorted(gallery_rs_map),
             "total_items": len(gallery_items),
             "items": gallery_items,
         }, ensure_ascii=False)

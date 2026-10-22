@@ -31,6 +31,17 @@ test('serves published historical snapshots', async () => {
   }
 });
 
+test('exposes gzip encoding so cross-origin clients recognize browser-decoded snapshots', async () => {
+  const gzipObject = {...object, writeHttpMetadata(headers) {
+    headers.set('Content-Type', 'application/json');
+    headers.set('Content-Encoding', 'gzip');
+  }};
+  const response = await worker.fetch(new Request(`https://data.example.com/snapshots/2026-10-01/${'a'.repeat(64)}.json.gz`,
+    {headers:{Origin:'https://scanner.example.com'}}), {DATA:{async get() {return gzipObject;}}});
+  assert.equal(response.headers.get('Content-Encoding'), 'gzip');
+  assert.ok(response.headers.get('Access-Control-Expose-Headers').split(/,\s*/).includes('Content-Encoding'));
+});
+
 test('HEAD returns metadata without a body', async () => {
   const response = await worker.fetch(new Request('https://data.example.com/releases/abc/index.json', { method: 'HEAD' }), env);
   assert.equal(response.status, 200);

@@ -15,7 +15,6 @@ sys.path[:0] = [str(ROOT), str(ROOT / "src")]
 from screen_trend_conditions import _load_context, _load_delivery_history, _resolve_universe, _requires_delivery as _needs_delivery
 from edl_pipeline.scanner.context import normalize_condition_spec
 from edl_pipeline.scanner.context import CONTEXT_CONDITION_REGISTRY
-from edl_pipeline.scanner.presets import get_preset
 from edl_pipeline.scanner.query import compile_query
 from edl_pipeline.scanner.trend import evaluate_history, normalize_history, _comparison, _evaluate_expression, _leaf_results
 from edl_pipeline.scanner.financials import finite_number, financial_value
@@ -30,10 +29,7 @@ LEGACY_PRESETS = {
 }
 
 PRESET_DEFINITIONS_FILE = Path(__file__).parent / 'src/data/presetDefinitions.json'
-try:
-    ALL_PRESET_DEFS = {p["id"]: p for p in json.loads(PRESET_DEFINITIONS_FILE.read_text())}
-except Exception:
-    ALL_PRESET_DEFS = {}
+ALL_PRESET_DEFS = {p["id"]: p for p in json.loads(PRESET_DEFINITIONS_FILE.read_text())}
 
 PRESET_ELIGIBILITY = json.loads((Path(__file__).parent / 'src/data/presetEligibility.json').read_text())
 
@@ -55,9 +51,6 @@ def translate(identifier, p):
     target_id = LEGACY_PRESETS.get(identifier, identifier)
     if target_id in ALL_PRESET_DEFS:
         preset = ALL_PRESET_DEFS[target_id]
-        return {"type": "preset", "expression": preset["expression"], "eligibility": p}
-    if target_id.startswith("lib-") or identifier in LEGACY_PRESETS:
-        preset = get_preset(target_id)
         return {"type": "preset", "expression": preset["expression"], "eligibility": p}
     if identifier.isupper():
         p = dict(p)
@@ -361,7 +354,8 @@ def data_completeness(row):
     added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness", "metrics",
                   "nicheTags", "nicheEvidence", "providerSector", "providerIndustry",
                   "setupGeometry", "trendTemplate", "stageStatus", "upcomingEarnings",
-                  "tradedValueMean20dCr", "tradedValueMedian20dCr", "isLiquidScreen", "isRsLine52wHigh"})
+                  "tradedValueMean20dCr", "tradedValueMedian20dCr", "isLiquidScreen", "isRsLine52wHigh",
+                  "rsChange21d", "rsMethodologyVersion"})
     values = [value for key, value in row.items() if key not in added]
     return round(100 * sum(value is not None for value in values) / len(values)) if values else 0
 

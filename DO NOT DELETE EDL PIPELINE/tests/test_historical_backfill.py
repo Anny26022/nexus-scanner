@@ -49,6 +49,7 @@ class HistoricalBackfillTests(unittest.TestCase):
                  "stageStatus": {}, "isLiquidScreen": True, "presetRuleMatches": {}}
         payload = {"asOfDate": session, "totalStocks": 1, "stocks": [stock],
                    "screenMethodologyVersion": backfill.generator.SCREEN_METHODOLOGY_VERSION,
+                   "rsMethodologyVersion": backfill.generator.METHODOLOGY_VERSION,
                    "presetRuleMatchesVersion": 1, **overrides}
         revision = hashlib.sha256(json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
         payload["revision"] = revision
@@ -93,6 +94,13 @@ class HistoricalBackfillTests(unittest.TestCase):
         path, _ = self.snapshot(stocks=[{"symbol": "OLD", "rsRating": 80}])
         with self.assertRaises(ValueError):
             backfill.snapshot_object(path)
+
+    def test_old_rs_methodology_is_rejected_before_upload(self):
+        path, _ = self.snapshot(rsMethodologyVersion="old-method")
+        store = FakeR2()
+        with self.assertRaises(ValueError):
+            backfill.publish_snapshots([path], store, "bucket", self.manifest)
+        self.assertEqual(store.uploaded, [])
 
     def test_cli_recomputes_selected_dates_then_publishes_only_generated_files(self):
         selected, revision = self.snapshot()

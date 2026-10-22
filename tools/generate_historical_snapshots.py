@@ -41,26 +41,15 @@ PIPELINE_DIR = Path(__file__).resolve().parent.parent / "DO NOT DELETE EDL PIPEL
 if str(PIPELINE_DIR) not in sys.path:
     sys.path.insert(0, str(PIPELINE_DIR))
 
-# Required shared engines: missing dependencies must stop generation rather than
-# silently publish snapshots using a different RS formula or incomplete setups.
 from build_rs_ratings import (
-    compute_stock_returns, calculate_composite_score, percentile_rank,
-    check_rs_line_52w_high, FRONT_WEIGHTED_BENCHMARK_FILENAME,
+    rank_session, prior_market_session, load_universe_history, save_universe_history,
+    check_rs_line_52w_high, FRONT_WEIGHTED_BENCHMARK_FILENAME, METHODOLOGY_VERSION,
 )
-from build_market_screens import (
-    calculate_atr_series, detect_vcp, detect_darvas, detect_flags,
-    detect_cup_with_handle, detect_tight_weeks, evaluate_minervini_trend,
-    evaluate_weinstein_stage,
-)
+from build_market_screens import calculate_atr_series, evaluate_setups
+from src.edl_pipeline.breadth.config import load_methodology
+from src.edl_pipeline.breadth.universe import evaluate_stock
 
 SCREEN_METHODOLOGY_VERSION = "market-strength-v1"
-RELATIVE_STRENGTH_METHODOLOGY = {
-    "scoreFormula": "0.40*R63 + 0.20*R126 + 0.20*R189 + 0.20*R252",
-    "rankFormula": "Cross-sectional percentile rank from 1 to 99",
-    "minimumHistorySessions": 127,
-    "missingLongHorizons": "Missing R189 and R252 independently use R126",
-    "universe": "Historical session price-valid securities from the current surviving master list; dated breadth eligibility unavailable",
-}
 
 def apply_preset_eligibility(item, ms_matches, is_liquid):
     """Keep mandatory MS rules separate from editable, shared eligibility."""
@@ -432,7 +421,6 @@ def main(argv=None):
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/historical_snapshots"))
     parser.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 10, 1))
     parser.add_argument("--end-date", type=date.fromisoformat, default=date(2021, 10, 15))
-    parser.add_argument("--update-sessions-manifest", type=Path, default=None, help="Path to frontend/public/data/sessions.json to register sessions")
     parser.add_argument("--dry-run", action="store_true", help="Print execution plan without writing files")
 
     args = parser.parse_args(argv)
@@ -564,16 +552,23 @@ def main(argv=None):
         print("[DRY RUN] Plan verified successfully. Exiting without file generation.")
         return []
 
-    # Load benchmark for RS Line 52w High
     bench_file = pipeline_dir / "indices_ohlcv_data" / FRONT_WEIGHTED_BENCHMARK_FILENAME
-    bench_df_all = None
-    if bench_file.exists():
-        try:
-            bench_df_all = pd.read_csv(bench_file)
-            bench_df_all["Date"] = pd.to_datetime(bench_df_all["Date"]).dt.date
-            print(f"Loaded benchmark {FRONT_WEIGHTED_BENCHMARK_FILENAME} ({len(bench_df_all)} bars)")
-        except Exception as e:
-            print(f"Warning: could not load benchmark {bench_file}: {e}")
+    bench_df_all = pd.read_csv(bench_file)
+    bench_df_all["Date"] = pd.to_datetime(bench_df_all["Date"]).dt.date
+    bench_df_all = bench_df_all.sort_values("Date").drop_duplicates("Date", keep="last")
+    market_sessions = [d.isoformat() for d in bench_df_all["Date"]]
+    dated_universes = load_universe_history(pipeline_dir)
+    histories, atr_ratios = {}, {}
+    for symbol, idx in symbol_to_idx.items():
+        start, end = offsets[idx], offsets[idx + 1]
+        bars = values[start:end]
+        history_dates = dates[start:end].strftime("%Y-%m-%d").tolist()
+        histories[symbol] = (history_dates, bars[:, 3])
+        atr10 = calculate_atr_series(bars[:, 1], bars[:, 2], bars[:, 3], 10)
+        atr50 = calculate_atr_series(bars[:, 1], bars[:, 2], bars[:, 3], 50)
+        atr_ratios[symbol] = np.divide(atr10, atr50, out=np.ones(len(bars)), where=atr50 > 0)
+    master_by_symbol = {s["symbol"].upper(): s for s in master_stocks}
+    breadth_methodology = load_methodology(pipeline_dir / "breadth_methodology.json")
 
     # 6. Build Daily Snapshots
     generated_sessions = []
@@ -838,7 +833,7 @@ def main(argv=None):
                 "gsmStage": gsm_stage,
                 "asOfDate": session_str,
                 "metadataAsOfDate": session_str,
-                "historyAligned": True,
+                "historyAligned": last_date == session_date,
                 "open": tech["open"],
                 "high": tech["high"],
                 "low": tech["low"],
@@ -974,193 +969,64 @@ def main(argv=None):
             snapshot_stocks.append(item)
             stock_series_data[sym] = (c_vals, h_vals, l_vals, v_vals, s_dates[window_slice])
 
-        # 1. Compute cross-sectional RS rating (1-99) using audited multi-horizon engine
-        comp_scores_map = {}
-        comp_scores_21_map = {}
+        # Apply the same breadth eligibility contract using only dated inputs.
+        if session_str not in dated_universes:
+            eligible = set()
+            for item in snapshot_stocks:
+                master = master_by_symbol[item["symbol"]]
+                assessment = evaluate_stock({
+                    "Sym": item["symbol"], "Isin": master.get("isin"),
+                    "Sid": master.get("security_id"), "Ltp": item["close"],
+                    "Mcap": item.get("marketCapCrore"),
+                }, breadth_methodology)
+                if item["historyAligned"] and assessment["eligible"]:
+                    eligible.add(item["symbol"])
+            dated_universes[session_str] = eligible
+        ratings = rank_session(histories, session_str, dated_universes[session_str])
+        previous_date = prior_market_session(market_sessions, session_str)
+        previous = rank_session(histories, previous_date, dated_universes.get(previous_date, set())) if previous_date else {}
         for it in snapshot_stocks:
             sym = it["symbol"]
-            series = stock_series_data.get(sym)
-            if not series:
-                continue
-            c_arr = series[0]
-            c_list = c_arr.tolist() if isinstance(c_arr, np.ndarray) else list(c_arr)
-            ret_dict = compute_stock_returns(c_list)
-            if ret_dict:
-                score = calculate_composite_score(ret_dict)
-                if score is not None:
-                    comp_scores_map[sym] = score
-
-            if len(c_list) >= 148:
-                ret_dict_21 = compute_stock_returns(c_list, offset=21)
-                if ret_dict_21:
-                    score_21 = calculate_composite_score(ret_dict_21)
-                    if score_21 is not None:
-                        comp_scores_21_map[sym] = score_21
-
-        # Percentile rank (1-99)
-        rs_ranks = percentile_rank(comp_scores_map)
-        rs_ranks_21 = percentile_rank(comp_scores_21_map)
-
-        # 2. Enrich with RS ratings, Setup Geometry, Trend Template & Stage Status
-        for it in snapshot_stocks:
-            sym = it["symbol"]
-            comp_rs = rs_ranks.get(sym)
+            rating = ratings.get(sym, {})
+            comp_rs = rating.get("composite_rs")
             it["rsRating"] = comp_rs
-            rs_21 = rs_ranks_21.get(sym)
-            rs_change = (comp_rs - rs_21) if (comp_rs is not None and rs_21 is not None) else None
-            it["rsChange21d"] = rs_change
-            it["rs_change_21d"] = rs_change
-
+            prior = previous.get(sym)
+            it["rsChange21d"] = comp_rs - prior["composite_rs"] if comp_rs is not None and prior else None
+            it["rsMethodologyVersion"] = METHODOLOGY_VERSION
+            # An archived schedule is required; today's earnings calendar is not historical evidence.
+            it["upcomingEarnings"] = None
             series = stock_series_data.get(sym)
-            if not series or len(series[0]) < 5:
-                it["setupGeometry"] = None
-                it["setup_geometry"] = None
-                it["trendTemplate"] = None
-                it["trend_template"] = None
-                it["stageStatus"] = None
-                it["stage_status"] = None
-                it["isRsLine52wHigh"] = False
-                it["is_rs_line_52w_high"] = False
-                it["isLiquidScreen"] = False
-                it["is_liquid_screen"] = False
-                it["tradedValueMean20dCr"] = None
-                it["tradedValueMedian20dCr"] = None
+            if not series or not it["historyAligned"] or len(series[0]) < 30:
+                for field in ("setupGeometry", "trendTemplate", "stageStatus", "isRsLine52wHigh",
+                              "isLiquidScreen", "tradedValueMean20dCr", "tradedValueMedian20dCr"):
+                    it[field] = None
+                it["presetMatches"] = {key: None for key in it["presetMatches"]}
+                it["presetRuleMatches"] = {key: None for key in it["presetRuleMatches"]}
                 it["dataCompleteness"] = bridge.data_completeness(it)
                 continue
             c_arr, h_arr, l_arr, v_arr, s_dt = series
-            date_strs = [d.strftime("%Y-%m-%d") for d in s_dt]
-
-            cur_c = float(c_arr[-1])
-            cur_v = float(v_arr[-1])
-            s50 = float(np.mean(c_arr[-50:])) if len(c_arr) >= 50 else None
-            h52 = float(np.max(h_arr[-min(len(h_arr), 252):]))
-
-            # RS line 52w high vs benchmark
-            is_rs_high = False
-            if bench_df_session is not None and len(c_arr) >= 20:
-                try:
-                    stock_df = pd.DataFrame({"Date": [d.date() for d in s_dt], "Close": c_arr})
-                    is_rs_high = check_rs_line_52w_high(stock_df, bench_df_session)
-                except Exception:
-                    is_rs_high = False
-
-            # Setups
-            vcp = detect_vcp(h_arr, l_arr, c_arr, v_arr, date_strs)
-            darvas = detect_darvas(h_arr, l_arr, c_arr)
-            flag = detect_flags(h_arr, l_arr, c_arr, v_arr)
-            cup = detect_cup_with_handle(h_arr, l_arr, c_arr)
-            tight_wks = detect_tight_weeks(c_arr, date_strs, s50, comp_rs)
-
-            # Volume Breakout
-            prior_50_high = float(np.max(h_arr[-51:-1])) if len(h_arr) >= 51 else float(np.max(h_arr[:-1]))
-            rvol_50d = (cur_v / max(1.0, float(np.mean(v_arr[-50:])))) if len(v_arr) >= 50 else 1.0
-            vol_breakout = bool(cur_c > prior_50_high and rvol_50d >= 2.0)
-
-            # Pocket Pivot
-            pocket_pivot = False
-            if len(c_arr) >= 11 and cur_c > c_arr[-2] and s50 and cur_c > s50 and (comp_rs or 0) >= 60:
-                down_day_vols = [v_arr[-i] for i in range(2, 12) if c_arr[-i] < c_arr[-i-1]]
-                max_down_vol = max(down_day_vols) if down_day_vols else 0.0
-                pocket_pivot = bool(cur_v > max_down_vol)
-
-            # Multi-Year Breakout
-            myb = False
-            myb_details = None
-            lookback_myb = min(len(c_arr), 750)
-            if lookback_myb >= 300:
-                prior_win = h_arr[-lookback_myb:-1]
-                ceil_val = float(np.max(prior_win))
-                ceil_idx = int(np.argmax(prior_win))
-                ceil_age = len(prior_win) - ceil_idx
-                if ceil_age >= 250 and cur_c > ceil_val:
-                    above_pct = ((cur_c - ceil_val) / ceil_val) * 100.0
-                    if above_pct <= 15.0:
-                        myb = True
-                        myb_details = {
-                            "matched": True,
-                            "ceilingPrice": round(ceil_val, 2),
-                            "ceiling_price": round(ceil_val, 2),
-                            "ceilingHeldDays": ceil_age,
-                            "ceiling_held_days": ceil_age,
-                            "distanceAbovePct": round(above_pct, 2),
-                            "distance_above_pct": round(above_pct, 2),
-                        }
-
-            # Coiled
-            rng10 = ((float(np.max(h_arr[-10:])) - float(np.min(l_arr[-10:]))) / float(np.max(h_arr[-10:]))) * 100.0 if len(h_arr) >= 10 else 100.0
-            atr10_series = calculate_atr_series(h_arr, l_arr, c_arr, 10)
-            atr50_series = calculate_atr_series(h_arr, l_arr, c_arr, 50)
-            atr_ratio = (atr10_series[-1] / atr50_series[-1]) if (len(c_arr) >= 50 and atr50_series[-1] > 0) else 1.0
-            v10 = float(np.mean(v_arr[-10:])) if len(v_arr) >= 10 else float(v_arr[-1])
-            v50 = float(np.mean(v_arr[-50:])) if len(v_arr) >= 50 else v10
-            vol_dry_10 = (v10 / max(1.0, v50)) if v50 > 0 else 1.0
-            from_52h = ((h52 - cur_c) / h52 * 100.0) if h52 > 0 else 100.0
-
-            coiled = bool(rng10 <= 10.0 and atr_ratio <= 0.85 and vol_dry_10 < 0.90 and s50 and cur_c > s50 and from_52h <= 15.0 and (comp_rs or 0) >= 60)
-
-            # Trend template and stage
-            trend_res = evaluate_minervini_trend(c_arr, h_arr, l_arr, comp_rs)
-            stage_res = evaluate_weinstein_stage(c_arr)
-
-            # Liquidity
-            traded_val_20d = c_arr[-20:] * v_arr[-20:]
-            mean_val_cr = float(np.mean(traded_val_20d)) / 1e7
-            median_val_cr = float(np.median(traded_val_20d)) / 1e7
-            is_liquid = bool(mean_val_cr >= 10.0)
-
-            setup_geometry = {
-                "vcp": vcp,
-                "darvasBox": darvas,
-                "darvas_box": darvas,
-                "cupWithHandle": cup,
-                "cup_with_handle": cup,
-                "bullFlag": flag,
-                "flag": flag,
-                "pocketPivot": pocket_pivot,
-                "pocket_pivot": pocket_pivot,
-                "volumeBreakout": vol_breakout,
-                "volume_breakout": vol_breakout,
-                "multiYearBreakout": myb_details if myb else None,
-                "multi_year_breakout": myb_details if myb else None,
-                "coiled": coiled,
-                "tightWeeks": tight_wks,
-                "tight_weeks": tight_wks,
-            }
-
-            it["setupGeometry"] = setup_geometry
-            it["setup_geometry"] = setup_geometry
-            it["trendTemplate"] = trend_res
-            it["trend_template"] = trend_res
-            it["stageStatus"] = stage_res
-            it["stage_status"] = stage_res
-            it["isRsLine52wHigh"] = is_rs_high
-            it["is_rs_line_52w_high"] = is_rs_high
-            it["isLiquidScreen"] = is_liquid
-            it["is_liquid_screen"] = is_liquid
-            it["tradedValueMean20dCr"] = round(mean_val_cr, 2)
-            it["tradedValueMedian20dCr"] = round(median_val_cr, 2)
-
-            # Rule-only matches without default eligibility constraints
-            ms_rule_matches = {
-                "lib-ms-vcp": bool(vcp),
-                "lib-ms-darvas": bool(darvas and (darvas.get("state") in ("confirmed", "breakout") or darvas.get("status") in ("confirmed", "breakout"))),
-                "lib-ms-coiled": bool(coiled),
-                "lib-ms-tight-weeks": bool(tight_wks),
-                "lib-ms-stage-2": (stage_res.get("stage") == 2),
-                "lib-ms-just-entered-stage-2": bool(stage_res.get("just_entered_stage_2", False)),
-                "lib-ms-trend-leaders": bool(trend_res.get("is_leader", False)),
-                "lib-ms-pocket-pivot": bool(pocket_pivot),
-                "lib-ms-volume-breakout": bool(vol_breakout),
-                "lib-ms-multi-year-breakout": bool(myb),
-                "lib-ms-rs-leaders-80": bool((comp_rs or 0) >= 80),
-                "lib-ms-rs-line-high": bool(is_rs_high),
-                "lib-ms-liquid-screen": is_liquid,
-                "lib-ms-cup-handle": bool(cup),
-                "lib-ms-cup-with-handle": bool(cup),
-                "lib-ms-bull-flag": bool(flag),
-            }
-
-            apply_preset_eligibility(it, ms_rule_matches, is_liquid)
+            date_strs = histories[sym][0][:len(c_arr)]
+            measured = evaluate_setups(h_arr, l_arr, c_arr, v_arr, date_strs, comp_rs,
+                                      atr_ratio_at_end=atr_ratios[sym][len(c_arr) - 1])
+            it["setupGeometry"] = measured["setup_geometry"]
+            it["trendTemplate"] = measured["trend_template"]
+            it["stageStatus"] = measured["stage_status"]
+            it["isLiquidScreen"] = measured["is_liquid_screen"]
+            it["tradedValueMean20dCr"] = measured["traded_value_mean_20d_cr"]
+            it["tradedValueMedian20dCr"] = measured["traded_value_median_20d_cr"]
+            stock_df = pd.DataFrame({"Date": [d.date() for d in s_dt[-300:]], "Close": c_arr[-300:]})
+            it["isRsLine52wHigh"] = check_rs_line_52w_high(stock_df, bench_df_session)
+            # Evaluate the catalog itself: no second handwritten list of preset predicates.
+            raw_stock = {"symbol": sym, "as_of_date": session_str,
+                         "setup_geometry": it["setupGeometry"], "trend_template": it["trendTemplate"],
+                         "stage_status": it["stageStatus"], "rsRating": comp_rs,
+                         "is_rs_line_52w_high": it["isRsLine52wHigh"]}
+            ms_matches = {}
+            for identifier, preset in bridge.ALL_PRESET_DEFS.items():
+                if identifier.startswith("lib-ms-"):
+                    signal = preset["expression"]["children"][0]
+                    ms_matches[identifier] = bridge.evaluate(signal, raw_stock, None, {}, session_str, set(), [])
+            apply_preset_eligibility(it, ms_matches, measured["is_liquid_screen"])
 
             # Calculate dataCompleteness
             it["dataCompleteness"] = bridge.data_completeness(it)
@@ -1180,7 +1046,7 @@ def main(argv=None):
             "schemaVersion": 4,
             "presetRuleMatchesVersion": 1,
             "screenMethodologyVersion": SCREEN_METHODOLOGY_VERSION,
-            "relativeStrengthMethodology": RELATIVE_STRENGTH_METHODOLOGY,
+            "rsMethodologyVersion": METHODOLOGY_VERSION,
             "asOfDate": session_str,
             "totalStocks": len(snapshot_stocks),
             "stocks": snapshot_stocks,
@@ -1194,6 +1060,8 @@ def main(argv=None):
                 "fnoBan": "unavailable",
                 "indexMemberships": "unavailable (constituent change history not backfilled)",
                 "tradingview": "unavailable",
+                "upcomingEarnings": "unavailable (dated schedule archive not maintained)",
+                "rsUniverse": "dated breadth archive; reconstructed from dated price/capitalization where absent",
                 "surveillance": "Reconstructed from official NSE circulars where complete" if surv_avail else "incomplete_circular_chain",
             },
             "dataCompleteness": "historical_reconstructed_with_survivorship_qualification",
@@ -1210,10 +1078,9 @@ def main(argv=None):
         print(f"Generated {out_file.name} ({len(snapshot_stocks)} stocks, {file_size_kb:.1f} KB, rev {session_hash[:12]}) in {time.time()-t_session:.2f}s")
         generated_sessions.append((session_date, session_hash))
 
+    save_universe_history(pipeline_dir, dated_universes)
     print(f"\nAll done! Successfully generated {len(generated_sessions)} historical daily snapshots in {output_dir}")
 
-    if args.update_sessions_manifest and generated_sessions:
-        update_sessions_manifest(args.update_sessions_manifest, generated_sessions)
     return generated_sessions
 
 

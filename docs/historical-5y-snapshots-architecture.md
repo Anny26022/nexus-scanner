@@ -40,10 +40,15 @@ Omit `--upload-r2` to generate preview artifacts without changing R2 or session 
 Add `--dry-run` to inspect the plan without writing files or contacting R2.
 The command reuses `generate_historical_snapshots.py`; it does not maintain a second
 calculation engine or modify frozen backend revisions.
+The generator cannot publish session pointers directly; only the verified publisher
+updates them. Publication requires both the current setup and RS methodology versions.
+Stocks without a candle on the selected session are excluded rather than carried forward.
 
 Run large date ranges in chunks to stay within the workflow timeout and exchange archive
 rate limits. The restored OHLCV cache must cover the requested sessions; the backfill does
 not invent missing prices, historical universe membership, or financial disclosures.
+RS change remains unavailable when the universe for the prior 21-session anchor is
+missing; backfill earlier dates first to supply that history.
 
 ## 4. Cloudflare R2 distribution
 

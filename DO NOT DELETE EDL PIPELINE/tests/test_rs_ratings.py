@@ -113,7 +113,7 @@ class MarketStrengthRsTests(unittest.TestCase):
             with open(output_file) as f:
                 payload = json.load(f)
 
-            self.assertEqual(payload["methodology"]["version"], "marketstrength_parity_v1")
+            self.assertEqual(payload["methodology"]["version"], rs.METHODOLOGY_VERSION)
             self.assertEqual(payload["as_of_date"], "2026-10-09")
             self.assertIn("TEST", payload["ratings"])
             test_rating = payload["ratings"]["TEST"]

@@ -217,28 +217,6 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
     case 'AVG_TURNOVER':
       if (![20,30,50,100].includes(Number(p.lookbackDays)) || !['DAILY','daily',''].includes(String(p.windowMinutes ?? ''))) return null;
       fn = s => compare(s.metrics[`turnover${p.lookbackDays}`],p.comparison,p.valueCr); break;
-    case 'MS_VCP': fn = s => Boolean(s.setupGeometry?.vcp?.matched); break;
-    case 'MS_DARVAS': fn = s => Boolean(s.setupGeometry?.darvasBox?.matched ?? s.setupGeometry?.darvas_box?.matched); break;
-    case 'MS_CUP_HANDLE': fn = s => Boolean(s.setupGeometry?.cupWithHandle?.matched ?? s.setupGeometry?.cup_with_handle?.matched); break;
-    case 'MS_BULL_FLAG': fn = s => Boolean(s.setupGeometry?.bullFlag?.matched ?? s.setupGeometry?.flag?.matched); break;
-    case 'MS_POCKET_PIVOT': fn = s => Boolean(s.setupGeometry?.pocketPivot ?? s.setupGeometry?.pocket_pivot); break;
-    case 'MS_VOLUME_BREAKOUT': fn = s => Boolean(s.setupGeometry?.volumeBreakout ?? s.setupGeometry?.volume_breakout); break;
-    case 'MS_MYB': fn = s => Boolean(s.setupGeometry?.multiYearBreakout ?? s.setupGeometry?.multi_year_breakout); break;
-    case 'MS_COILED': fn = s => Boolean(s.setupGeometry?.coiled); break;
-    case 'MS_TIGHT_WEEKS': fn = s => Boolean(s.setupGeometry?.tightWeeks ?? s.setupGeometry?.tight_weeks); break;
-    case 'MS_TREND_LEADERS': fn = s => Boolean(s.trendTemplate?.isLeader ?? s.trendTemplate?.is_leader); break;
-    case 'MS_STAGE_2': fn = s => s.stageStatus?.stage === 2; break;
-    case 'MS_JUST_ENTERED_STAGE_2': fn = s => Boolean(s.stageStatus?.justEnteredStage2 ?? s.stageStatus?.just_entered_stage_2); break;
-    case 'MS_RS_LINE_HIGH': fn = s => Boolean(s.isRsLine52wHigh); break;
-    case 'MS_RS_LEADERS_80': fn = s => (s.rsRating ?? 0) >= 80; break;
-    case 'MS_EARNINGS_7D': fn = s => {
-      const d = s.upcomingEarnings?.daysUntilResults ?? s.upcomingEarnings?.days_until_results;
-      return d != null && d >= 0 && d <= 7;
-    }; break;
-    case 'MS_EARNINGS_14D': fn = s => {
-      const d = s.upcomingEarnings?.daysUntilResults ?? s.upcomingEarnings?.days_until_results;
-      return d != null && d >= 0 && d <= 14;
-    }; break;
     case 'liq_market_cap': metadata = true; fn = s => between(s.marketCapCrore,p.minMarketCap,p.maxMarketCap); break;
     case 'MARKETCAP': metadata = true; fn = s => compare(s.marketCapCrore,p.comparison,p.valueCr); break;
     case 'fund_pe_ratio': metadata = true; fn = s => between(s.peRatio,p.minPe,p.maxPe); break;
@@ -328,51 +306,8 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
         if (s.asOfDate !== session || s.historyAligned === false) {
           return null;
         }
-        const isLiquid = Boolean(
-          s.isLiquidScreen ??
-          (s.tradedValueMean20dCr != null ? s.tradedValueMean20dCr >= 10.0 :
-           (s.metrics?.turnover20 != null ? s.metrics.turnover20 >= 10.0 : false))
-        );
-        const geom = s.setupGeometry;
-        const trend = s.trendTemplate;
-        const stage = s.stageStatus;
-        const earnings = s.upcomingEarnings;
-
-        const ruleMatch: Truth = (() => {
-          switch (c.conditionId) {
-            case 'lib-ms-vcp': return geom ? (Boolean(geom.vcp?.matched) && isLiquid) : null;
-            case 'lib-ms-darvas': return geom ? (Boolean(geom.darvasBox?.matched ?? geom.darvas_box?.matched) && isLiquid) : null;
-            case 'lib-ms-cup-handle': return geom ? (Boolean(geom.cupWithHandle?.matched ?? geom.cup_with_handle?.matched) && isLiquid) : null;
-            case 'lib-ms-bull-flag': return geom ? (Boolean(geom.bullFlag?.matched ?? geom.flag?.matched) && isLiquid) : null;
-            case 'lib-ms-pocket-pivot': return geom ? (Boolean(geom.pocketPivot ?? geom.pocket_pivot) && isLiquid) : null;
-            case 'lib-ms-volume-breakout': return geom ? (Boolean(geom.volumeBreakout ?? geom.volume_breakout) && isLiquid) : null;
-            case 'lib-ms-multi-year-breakout': return geom ? (Boolean(geom.multiYearBreakout ?? geom.multi_year_breakout) && isLiquid) : null;
-            case 'lib-ms-coiled': return geom ? (Boolean(geom.coiled) && isLiquid) : null;
-            case 'lib-ms-tight-weeks': return geom ? (Boolean(geom.tightWeeks ?? geom.tight_weeks) && isLiquid) : null;
-            case 'lib-ms-trend-leaders': return trend ? (Boolean(trend.isLeader ?? trend.is_leader) && isLiquid) : null;
-            case 'lib-ms-stage-2': return stage ? (stage.stage === 2 && isLiquid) : null;
-            case 'lib-ms-just-entered-stage-2': return stage ? (Boolean(stage.justEnteredStage2 ?? stage.just_entered_stage_2) && isLiquid) : null;
-            case 'lib-ms-rs-line-high': return s.isRsLine52wHigh != null ? (Boolean(s.isRsLine52wHigh) && isLiquid) : null;
-            case 'lib-ms-rs-leaders-80': return s.rsRating != null ? (s.rsRating >= 80 && isLiquid) : null;
-            case 'lib-ms-earnings-7d': {
-              const d = earnings?.daysUntilResults ?? earnings?.days_until_results;
-              return d != null ? (d >= 0 && d <= 7 && isLiquid) : null;
-            }
-            case 'lib-ms-earnings-14d': {
-              const d = earnings?.daysUntilResults ?? earnings?.days_until_results;
-              return d != null ? (d >= 0 && d <= 14 && isLiquid) : null;
-            }
-            default: return null;
-          }
-        })();
-        if (ruleMatch !== null) {
-          const eligibility = PRESET_ELIGIBILITY.map((rule, i): Truth => {
-            if (targets[i] === null) return true;
-            const value = rule.field === 'turnover50' ? s.metrics.turnover50 : s[rule.field as keyof SnapshotStock];
-            return s.asOfDate !== session || s.metadataAsOfDate !== session ? null : compare(value, 'GREATER', targets[i]!);
-          });
-          return combine([...eligibility, ruleMatch], true);
-        }
+        // Published rule results are authoritative. Missing enrichment is unknown,
+        // never reconstructed with a second detector/preset implementation here.
         return null;
       };
       return c.isNegated ? s => { const v = fn(s); return v == null ? null : !v; } : fn;

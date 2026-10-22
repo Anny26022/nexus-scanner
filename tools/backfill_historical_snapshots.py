@@ -21,6 +21,7 @@ def snapshot_object(path):
     required = {"rsRating", "setupGeometry", "trendTemplate", "stageStatus", "isLiquidScreen", "presetRuleMatches"}
     if (revision != digest or path.name != f"{session}.json.gz"
             or payload.get("screenMethodologyVersion") != generator.SCREEN_METHODOLOGY_VERSION
+            or payload.get("rsMethodologyVersion") != generator.METHODOLOGY_VERSION
             or payload.get("presetRuleMatchesVersion") != 1
             or not isinstance(stocks, list) or not stocks or payload.get("totalStocks") != len(stocks)
             or any(not required.issubset(stock) for stock in stocks)):

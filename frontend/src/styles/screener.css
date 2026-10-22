@@ -23,35 +23,36 @@
 
 .research-view { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 18px; min-width: 0; }
 .screen-controls { padding: 0; }
-.screen-toolbar { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.screen-toolbar { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .field-label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 4px; }
 .universe-control { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
-.universe-control > .select-wrap { order: 1; width: 140px; }
+.universe-control > .select-wrap { order: 1; width: 124px; }
 .universe-label-row { order: 2; display: flex; align-items: center; }
 .universe-control > .field-label:not(.sr-only) { margin: 0 8px 0 6px; white-space: nowrap; }
 .screen-toolbar > .screen-buttons:last-child { margin-left: auto; }
-.toolbar-divider { width: 1px; height: 20px; margin-inline: 4px; background: var(--line-strong); }
-.universe-info-button { position: relative; display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 50%; }
+.toolbar-divider { width: 1px; height: 16px; margin-inline: 2px; background: var(--line-strong); }
+.universe-info-button { position: relative; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 50%; }
 .universe-info-button:hover, .universe-info-button:focus-visible { color: var(--accent); background: var(--surface-hover); }
-.universe-info-button svg { width: 14px; height: 14px; }
+.universe-info-button svg { width: 13px; height: 13px; }
 .universe-info-button::after { position: absolute; z-index: 30; top: calc(100% + 8px); left: -8px; width: min(300px, calc(100vw - 48px)); padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-pop); color: var(--text); content: attr(data-tooltip); font-size: 12px; font-weight: 400; line-height: 1.5; text-align: left; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-3px); transition: opacity .18s var(--ease-out), transform .18s var(--ease-out), visibility .18s; }
 .universe-info-button:hover::after, .universe-info-button:focus-visible::after { opacity: 1; visibility: visible; transform: translateY(0); }
 .select-wrap { position: relative; display: block; }
-.select-wrap select { width: 100%; appearance: none; height: 34px; padding: 0 30px 0 12px; border: 0; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; background: var(--surface); color: var(--text); box-shadow: var(--shadow-control); cursor: pointer; transition: box-shadow .16s var(--ease-out); }
+.select-wrap select { width: 100%; appearance: none; height: 30px; padding: 0 26px 0 10px; border: 0; border-radius: var(--radius-md); font-size: 12.5px; font-weight: 500; background: var(--surface); color: var(--text); box-shadow: var(--shadow-control); cursor: pointer; transition: box-shadow .16s var(--ease-out); }
 .select-wrap select:hover { background: var(--surface); }
 .select-wrap select:focus { outline: none; background: var(--surface); box-shadow: var(--ring); }
-.select-wrap > svg { position: absolute; right: 10px; top: 10px; pointer-events: none; color: var(--muted); width: 14px; height: 14px; }
+.select-wrap > svg { position: absolute; right: 9px; top: 9px; pointer-events: none; color: var(--muted); width: 12px; height: 12px; }
 .query-control { flex: 1 1 auto; min-width: 0; }
-.query-input { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border-radius: var(--radius-md); color: var(--muted); background: var(--surface); box-shadow: var(--shadow-control); transition: box-shadow .16s var(--ease-out); }
-.query-input > svg { width: 15px; height: 15px; color: var(--muted); flex-shrink: 0; }
+.query-input { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: var(--radius-md); color: var(--muted); background: var(--surface); box-shadow: var(--shadow-control); transition: box-shadow .16s var(--ease-out); }
+.query-input > svg { width: 13px; height: 13px; color: var(--muted); flex-shrink: 0; }
 .query-input:hover:not(:focus-within) { box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.14), 0 1px 2px rgb(0 0 0 / 0.06); }
 .query-input:focus-within { background: var(--surface); box-shadow: var(--ring); }
-.query-input input { width: 100%; min-width: 0; font-size: 13px; outline: none; background: transparent; color: var(--text); }
+.query-input input { width: 100%; min-width: 0; font-size: 12.5px; outline: none; background: transparent; color: var(--text); }
 .query-input input:focus-visible { outline: none; box-shadow: none; }
-.screen-buttons { display: flex; flex-shrink: 0; align-items: center; gap: 8px; margin-left: 2px; }
-.screen-buttons .button { height: 34px; min-height: 34px; padding-inline: 12px; }
-.screen-buttons .button-primary { padding-inline: 16px; }
-.count-badge { min-width: 18px; height: 18px; padding: 0 5px; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); border-radius: 9999px; font-size: 11px; font-weight: 600; }
+.screen-buttons { display: flex; flex-shrink: 0; align-items: center; gap: 6px; margin-left: 2px; }
+.screen-buttons .button { height: 30px; min-height: 30px; padding-inline: 10px; font-size: 12.5px; gap: 5px; }
+.screen-buttons .button svg { width: 13px; height: 13px; }
+.screen-buttons .button-primary { padding-inline: 13px; }
+.count-badge { min-width: 16px; height: 16px; padding: 0 4px; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); border-radius: 9999px; font-size: 10.5px; font-weight: 600; }
 .active-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
 .filter-chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px 0 12px; border-radius: 9999px; background: var(--accent-soft); color: var(--accent); font-size: 12.5px; font-weight: 500; max-width: 100%; }
 .filter-chip button { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; color: var(--accent); border: 0; background: transparent; cursor: pointer; padding: 0; }

@@ -64,12 +64,20 @@ function parseOutput(output:unknown): {raw:unknown;inputTokens:number;outputToke
   };
 }
 
-function checkCoverage(_query:string,result:AiScreenResult) {
+function checkCoverage(query:string,result:AiScreenResult) {
+  const lower = query.toLocaleLowerCase();
+  const covered = Array.from({length:query.length},()=>false);
   for (const clause of result.clauses) {
     if (clause.conditionId === 'PRICE_VS_EMA' && /\b(latest|current)\s+(close|price)\b/i.test(clause.sourceText)) {
       throw new Error('persistence_for_current_price');
     }
+    const start = lower.indexOf(clause.sourceText.toLocaleLowerCase());
+    if (start < 0) throw new Error('source_not_quoted');
+    for (let i=start;i<start+clause.sourceText.length;i++) covered[i]=true;
   }
+  const remainder = query.split('').map((c,i)=>covered[i]?' ':c).join('');
+  const framing = new Set('show me find stocks stock shares companies where with having and or all any of the that which are is whose in for please aur ya mujhe dikhao jo wale waale aise chahiye'.split(' '));
+  if ((remainder.match(/[\p{L}\p{N}_]+/gu) ?? []).some(token=>!framing.has(token.toLowerCase()))) throw new Error('incomplete_translation');
 }
 
 import evaluationCases from './evaluation-cases.json';
@@ -90,7 +98,7 @@ export async function compileWithFallback(query:string,catalog:AiFilterDefinitio
       const parsed = parseOutput(await run(model,{messages:requestMessages,response_format:{type:'json_object'},temperature:0,max_tokens:450},signal));
       inputTokens+=parsed.inputTokens;outputTokens+=parsed.outputTokens;cachedTokens+=parsed.cachedTokens;
       if (!object(parsed.raw) || !Array.isArray(parsed.raw.clauses)) throw new Error('invalid_result');
-      const result = materializeCompilerResult(parsed.raw,catalog,query);
+      const result = materializeCompilerResult(parsed.raw,catalog);
       const rawClauses = parsed.raw.clauses;
       const hasValidCondition = Object.keys(result.conditionsMap).length > 0;
       if (hasValidCondition) {
@@ -140,7 +148,7 @@ export async function compileWithFallback(query:string,catalog:AiFilterDefinitio
       }))
     };
     return {
-      ...materializeCompilerResult(raw, catalog, query),
+      ...materializeCompilerResult(raw, catalog),
       compilation: {
         model: PRIMARY_MODEL,
         attempts: 1,

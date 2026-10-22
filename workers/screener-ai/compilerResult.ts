@@ -6,8 +6,10 @@ const object = (value:unknown): value is Record<string,unknown> =>
 
 /**
  * Deterministically normalize semantic nuances so LLM quirks don't alter user intent.
- * 1. Remap PRICE_VS_EMA to PRICE_VS_MAS if query expresses simple current price/close above/below without persistence phrasing.
- * 2. Strip unrequested minPe: 0 if user only asked for an upper bound (P/E at most X).
+ * 1. Strip unrequested minPe: 0 if user only asked for an upper bound (P/E at most X).
+ * 2. Map AVG_TURNOVER windowMinutes "Daily" to the daily enum value.
+ * PRICE_VS_EMA is never remapped here: a persistence filter for a current-close request is rejected by the
+ * compiler so the fallback model retries, instead of being silently rewritten (with an invented period).
  */
 function normalizeRawClauses(rawClauses: unknown[]): unknown[] {
   return rawClauses.map(item => {
@@ -15,14 +17,6 @@ function normalizeRawClauses(rawClauses: unknown[]): unknown[] {
     const clause = { ...item };
     const params = object(clause.parameters) ? { ...clause.parameters } : {};
     const src = typeof clause.sourceText === 'string' ? clause.sourceText.toLowerCase() : '';
-
-    // Remap PRICE_VS_EMA -> PRICE_VS_MAS if no consecutive/persistent days were requested
-    if (clause.conditionId === 'PRICE_VS_EMA' && !/\b(consecutive|days|sessions|persist|lag)\b/i.test(src)) {
-      const period = typeof params.period === 'number' ? params.period : 50;
-      const comp = params.comparison === 'BELOW' ? 'BELOW' : 'ABOVE';
-      clause.conditionId = 'PRICE_VS_MAS';
-      clause.parameters = { rules: [`${comp}_EMA_${period}`] };
-    }
 
     // Fix unrequested lower bound on P/E: if user asked for P/E <= X or at most X, don't inject minPe: 0
     if (clause.conditionId === 'fund_pe_ratio' && !/\b(positive|profitable|greater|above|min|minimum|kam se kam)\b/i.test(src)) {
@@ -46,12 +40,10 @@ function normalizeRawClauses(rawClauses: unknown[]): unknown[] {
 }
 
 /** Presentation is deterministic; fixed settings are restored by the shared validator. */
-export function materializeCompilerResult(raw:unknown, catalog:AiFilterDefinition[], query?:string) {
+export function materializeCompilerResult(raw:unknown, catalog:AiFilterDefinition[]) {
   if (!object(raw) || !Array.isArray(raw.clauses)) throw new Error('invalid_result');
-  let clauses = normalizeRawClauses(raw.clauses);
-  if (query && clauses.length === 1 && object(clauses[0]) && clauses[0].status !== 'UNSUPPORTED') {
-    clauses = [{ ...clauses[0], sourceText: query.trim() }];
-  }
+  // sourceText is kept as the model quoted it, so the compiler's coverage check can detect omitted constraints.
+  const clauses = normalizeRawClauses(raw.clauses);
   const normalizedRaw = { ...raw, clauses };
   // Titles, summaries, labels and condition maps are always generated locally.
   const result = validateAiScreenResult({...normalizedRaw, name:'Custom screen', summary:'Screen preview.'},catalog);

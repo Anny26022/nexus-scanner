@@ -67,11 +67,15 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   const [queryText, setQueryText] = useState(activeQuery);
   const [activeConditionsMap, setActiveConditionsMap] =
     useLocalStorageState<Record<string, ActiveCondition>>('nexus-scanner.screener.conditions.v1', DEFAULT_CONDITIONS);
-  const [pagination, setPagination] = useState({revision: datasetRevision, page: 1});
-  const [pageSize, setPageSize] = useState(15);
+  const [savedPagination, setSavedPagination] = useLocalStorageState<{revision?: string; page: number; pageSize: number}>(
+    'nexus-scanner.screener.pagination.v1', {page: 1, pageSize: 15}
+  );
+  const pageSize = [15, 50, 100].includes(savedPagination.pageSize) ? savedPagination.pageSize : 15;
   const [symbolSearch, setSymbolSearch] = useState('');
-  const page = pagination.revision === datasetRevision ? pagination.page : 1;
-  const setPage = (next: number) => setPagination({revision: datasetRevision, page: next});
+  const page = savedPagination.revision === datasetRevision && Number.isInteger(savedPagination.page) && savedPagination.page > 0
+    ? savedPagination.page : 1;
+  const setPage = (next: number) => setSavedPagination({revision: datasetRevision, page: next, pageSize});
+  const setPageSize = (next: number) => setSavedPagination({revision: datasetRevision, page: 1, pageSize: next});
   const [announcementFilter, setAnnouncementFilter] = useState<AnnouncementFilter>();
   const [sort, setSort] = useLocalStorageState<{ field: string; direction: 'asc' | 'desc' }>('nexus-scanner.screener.sort.v1', {
     field: 'rvol',
@@ -228,7 +232,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
     {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
       loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
-      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onOpenFullChart={onOpenFullChart}
+      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={setPageSize} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onOpenFullChart={onOpenFullChart}
       resultView={resultView} onResultViewChange={setResultView} />}
     {availableSessions.length > 0 && resultView !== 'charts' && (
       <div id="backtest-history" className="mt-3 w-full">

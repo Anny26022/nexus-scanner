@@ -15,10 +15,10 @@ const compile=(id:string,parameters:Record<string,unknown>,negated=false)=>valid
   clauses:[{sourceText:'audit',status:'EXACT',conditionId:id,parameters,isNegated:negated}]},catalog);
 const defaults=(def:typeof catalog[number])=>Object.fromEntries(def.parameters.map(p=>[p.id,p.defaultValue]));
 
-it('exposes every currently available custom definition and all 45 presets',()=>{
+it('exposes every currently available custom definition and all presets',()=>{
   const expected=[...FILTER_CONDITION_CATALOG,...PRESET_CATALOG].filter(d=>availableFilterParameters(d)!==null).map(d=>d.id).sort();
   expect(catalog.map(d=>d.id).sort()).toEqual(expected);
-  expect(catalog.filter(d=>d.id.startsWith('lib-'))).toHaveLength(45);
+  expect(catalog.filter(d=>d.id.startsWith('lib-'))).toHaveLength(PRESET_CATALOG.length);
 });
 it.each(catalog.map(d=>[d.id,d] as const))('%s: defaults survive validation with every parameter preserved',(id,def)=>{
   expect(compile(id,defaults(def)).conditionsMap.ai_0.parameters).toEqual(defaults(def));

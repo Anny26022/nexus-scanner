@@ -3,7 +3,13 @@
 from datetime import date, timedelta
 from pathlib import Path
 import unittest
+import gzip
+import json
+import tempfile
+import shutil
+from unittest.mock import patch
 import numpy as np
+import pandas as pd
 import sys
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,6 +31,26 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
         self.lows = self.closes - np.random.uniform(0.5, 3.0, n)
         self.opens = self.closes + np.random.uniform(-1.0, 1.0, n)
         self.volumes = np.random.uniform(10_000, 500_000, n)
+
+    def test_preset_eligibility_keeps_ms_liquidity_in_editable_rule_matches(self):
+        item = {"marketCapCrore": 2000, "close": 100, "metrics": {"turnover50": 20},
+                "presetRuleMatches": {"lib-stage-two": True, "mom_rvol": True},
+                "presetMatches": {"mom_rvol": True}}
+        gen.apply_preset_eligibility(item, {"lib-ms-vcp": True}, False)
+        self.assertFalse(item["presetRuleMatches"]["lib-ms-vcp"])
+        self.assertFalse(item["presetMatches"]["lib-ms-vcp"])
+        self.assertTrue(item["presetMatches"]["lib-stage-two"])
+        self.assertTrue(item["presetMatches"]["mom_rvol"])
+
+    def test_preset_eligibility_uses_shared_strict_thresholds_and_missing_values(self):
+        for field, value, expected in (("marketCapCrore", 1000, False), ("close", 10, False),
+                                       ("turnover50", 5, False), ("turnover50", None, None)):
+            with self.subTest(field=field, value=value):
+                item = {"marketCapCrore": 2000, "close": 100, "metrics": {"turnover50": 20}}
+                (item["metrics"] if field == "turnover50" else item)[field] = value
+                gen.apply_preset_eligibility(item, {"lib-ms-vcp": True}, True)
+                self.assertIs(item["presetMatches"]["lib-ms-vcp"], expected)
+                self.assertTrue(item["presetRuleMatches"]["lib-ms-vcp"])
 
     def test_calculate_technicals_extended_indicators(self):
         tech = gen.calculate_technicals(self.opens, self.closes, self.highs, self.lows, self.volumes)
@@ -218,6 +244,63 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
         self.assertEqual(coverage["indexMemberships"], "unavailable (constituent change history not backfilled)")
         self.assertIn("21-day SEBI LODR", coverage["shareholding"])
         self.assertIn("consecutive quarters", coverage["financials"])
+
+    def test_rs_and_setup_geometry_enrichment_parity(self):
+        import build_market_screens as screens
+        import build_rs_ratings as rs
+        self.assertIs(gen.rank_session, rs.rank_session)
+        self.assertIs(gen.evaluate_setups, screens.evaluate_setups)
+        dates = __import__("pandas").bdate_range("2025-01-01", periods=1300).strftime("%Y-%m-%d").tolist()
+        measured = gen.evaluate_setups(self.highs, self.lows, self.closes, self.volumes, dates, 80)
+        self.assertIn("setup_geometry", measured)
+        ranks = gen.rank_session({"TEST": (dates, self.closes)}, dates[-1], {"TEST"})
+        self.assertEqual(ranks["TEST"]["composite_rs"], 50)
+
+    def test_backfill_keeps_stale_rows_but_never_publishes_fresh_signals_for_them(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); cache = root / ".scanner_cache"; cache.mkdir()
+            (root / "indices_ohlcv_data").mkdir()
+            shutil.copy(ROOT / "DO NOT DELETE EDL PIPELINE/breadth_methodology.json", root)
+            dates = pd.bdate_range("2025-01-01", periods=300)
+            date_arrays, bar_arrays, offsets = [], [], [0]
+            master, financials = [], []
+            for i, symbol in enumerate(("A", "B", "STALE")):
+                n = 299 if symbol == "STALE" else 300
+                closes = 100 * np.exp(np.arange(n) * (.001 + i * .001))
+                date_arrays.extend(dates[:n].to_numpy())
+                bar_arrays.extend(np.column_stack((closes, closes * 1.01, closes * .99, closes, np.full(n, 1e6))))
+                offsets.append(offsets[-1] + n)
+                master.append({"symbol": symbol, "isin": f"INE{i}", "security_id": i + 1})
+                financials.append({"symbol": symbol, "quarter_end": "2024-12-31",
+                                   "filing_date": "2025-02-01", "net_profit": 10, "eps": 1})
+            np.savez(cache / "history.npz", symbols=np.array(["A", "B", "STALE"]),
+                     offsets=np.array(offsets), dates=np.array(date_arrays), values=np.array(bar_arrays), revision="fixture")
+            (root / "scanner_revision.json").write_text(json.dumps({"historyRevision": "fixture"}))
+            with gzip.open(root / "all_stocks_fundamental_analysis.json.gz", "wt") as handle:
+                json.dump(master, handle)
+            with gzip.open(root / "quarterly_financial_history.json.gz", "wt") as handle:
+                json.dump({"records": financials}, handle)
+            pd.DataFrame({"Date": dates, "Close": np.full(300, 100)}).to_csv(
+                root / "indices_ohlcv_data/NIFTY_500.csv", index=False)
+            session = dates[-1].date().isoformat()
+            output = root / "output"
+            argv = ["backfill", "--pipeline-dir", str(root), "--start-date", session,
+                    "--end-date", session, "--output-dir", str(output)]
+            with patch.object(sys, "argv", argv), \
+                 patch.object(gen, "fetch_nse_delivery_csv", return_value=[]), \
+                 patch.object(gen, "fetch_nse_price_bands", return_value=({}, {})), \
+                 patch.object(gen, "fetch_nse_surveillance_for_date", return_value={}):
+                gen.main()
+            with gzip.open(output / f"{session}.json.gz", "rt") as handle:
+                snapshot = json.load(handle)
+            rows = {row["symbol"]: row for row in snapshot["stocks"]}
+            self.assertFalse(rows["STALE"]["historyAligned"])
+            self.assertIsNone(rows["STALE"]["setupGeometry"])
+            self.assertIsNone(rows["STALE"]["rsRating"])
+            self.assertTrue(all(value is None for value in rows["STALE"]["presetMatches"].values()))
+            self.assertEqual(rows["B"]["rsRating"], 99)
+            self.assertIsNone(rows["B"]["upcomingEarnings"])
+            self.assertEqual(gen.load_universe_history(root)[session], {"A", "B"})
 
 
 if __name__ == "__main__":

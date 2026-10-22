@@ -35,6 +35,38 @@ if str(FRONTEND_DIR) not in sys.path:
     sys.path.insert(0, str(FRONTEND_DIR))
 import scanner_bridge as bridge
 
+# Add pipeline directory to sys.path for shared RS and setup engines
+PIPELINE_DIR = Path(__file__).resolve().parent.parent / "DO NOT DELETE EDL PIPELINE"
+if str(PIPELINE_DIR) not in sys.path:
+    sys.path.insert(0, str(PIPELINE_DIR))
+
+from build_rs_ratings import (
+    rank_session, prior_market_session, load_universe_history, save_universe_history,
+    check_rs_line_52w_high, FRONT_WEIGHTED_BENCHMARK_FILENAME, METHODOLOGY_VERSION,
+)
+from build_market_screens import calculate_atr_series, evaluate_setups
+from src.edl_pipeline.breadth.config import load_methodology
+from src.edl_pipeline.breadth.universe import evaluate_stock
+
+def apply_preset_eligibility(item, ms_matches, is_liquid):
+    """Keep mandatory MS rules separate from editable, shared eligibility."""
+    baseline_stock = {
+        rule["backendField"]: (item.get("metrics") or {}).get("turnover50")
+        if rule["field"] == "turnover50" else item.get(rule["field"])
+        for rule in bridge.PRESET_ELIGIBILITY
+    }
+    baseline = bridge.preset_baseline(baseline_stock)
+    rules = item.setdefault("presetRuleMatches", {})
+    matches = item.setdefault("presetMatches", {})
+    for identifier, pattern_match in ms_matches.items():
+        rules[identifier] = bridge.combine([pattern_match, is_liquid], "AND")
+        matches[identifier] = bridge.combine([rules[identifier], baseline], "AND")
+    # Legacy presets retain their own rules and the shared baseline only.
+    for identifier in ("lib-stage-two", "lib-52w-high-breakout", "lib-20d-high-thrust"):
+        if identifier in rules:
+            matches[identifier] = bridge.combine([rules[identifier], baseline], "AND")
+
+
 # Fallback headers for NSE downloads
 NSE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -547,6 +579,24 @@ def main():
         print("[DRY RUN] Plan verified successfully. Exiting without file generation.")
         return
 
+    bench_file = pipeline_dir / "indices_ohlcv_data" / FRONT_WEIGHTED_BENCHMARK_FILENAME
+    bench_df_all = pd.read_csv(bench_file)
+    bench_df_all["Date"] = pd.to_datetime(bench_df_all["Date"]).dt.date
+    bench_df_all = bench_df_all.sort_values("Date").drop_duplicates("Date", keep="last")
+    market_sessions = [d.isoformat() for d in bench_df_all["Date"]]
+    dated_universes = load_universe_history(pipeline_dir)
+    histories, atr_ratios = {}, {}
+    for symbol, idx in symbol_to_idx.items():
+        start, end = offsets[idx], offsets[idx + 1]
+        bars = values[start:end]
+        history_dates = dates[start:end].strftime("%Y-%m-%d").tolist()
+        histories[symbol] = (history_dates, bars[:, 3])
+        atr10 = calculate_atr_series(bars[:, 1], bars[:, 2], bars[:, 3], 10)
+        atr50 = calculate_atr_series(bars[:, 1], bars[:, 2], bars[:, 3], 50)
+        atr_ratios[symbol] = np.divide(atr10, atr50, out=np.ones(len(bars)), where=atr50 > 0)
+    master_by_symbol = {s["symbol"].upper(): s for s in master_stocks}
+    breadth_methodology = load_methodology(pipeline_dir / "breadth_methodology.json")
+
     # 6. Build Daily Snapshots
     generated_sessions = []
     for session_date in unique_dates:
@@ -555,7 +605,12 @@ def main():
         print(f"\nProcessing session: {session_str}...")
         t_session = time.time()
 
+        bench_df_session = None
+        if bench_df_all is not None:
+            bench_df_session = bench_df_all[bench_df_all["Date"] <= session_date].tail(300)
+
         snapshot_stocks = []
+        stock_series_data = {}
         advances = 0
         declines = 0
         above_20dma = 0
@@ -805,7 +860,7 @@ def main():
                 "gsmStage": gsm_stage,
                 "asOfDate": session_str,
                 "metadataAsOfDate": session_str,
-                "historyAligned": True,
+                "historyAligned": last_date == session_date,
                 "open": tech["open"],
                 "high": tech["high"],
                 "low": tech["low"],
@@ -930,27 +985,77 @@ def main():
                     "lib-20d-high-thrust": bool(tech["changePct"] >= 4.0 and tech["rvol"] >= 2.0),
                     "mom_rvol": bool(tech["rvol"] >= 1.5),
                 },
+                "presetRuleMatches": {
+                    "trend_template": bool(tech["close_above_sma50"] and tech["close_above_sma200"] and tech["sma50_above_sma200"]),
+                    "lib-stage-two": bool(tech["close_above_sma50"] and tech["close_above_sma200"] and tech["sma50_above_sma200"]),
+                    "lib-52w-high-breakout": bool(tech["dist52wHighPct"] >= -0.5),
+                    "lib-20d-high-thrust": bool(tech["changePct"] >= 4.0 and tech["rvol"] >= 2.0),
+                    "mom_rvol": bool(tech["rvol"] >= 1.5),
+                },
             }
             snapshot_stocks.append(item)
+            stock_series_data[sym] = (c_vals, h_vals, l_vals, v_vals, s_dates[window_slice])
 
-
-        # Compute cross-sectional RS rating (1-99) for all stocks with at least 253 sessions
-        eligible_rs = []
+        # Apply the same breadth eligibility contract using only dated inputs.
+        if session_str not in dated_universes:
+            eligible = set()
+            for item in snapshot_stocks:
+                master = master_by_symbol[item["symbol"]]
+                assessment = evaluate_stock({
+                    "Sym": item["symbol"], "Isin": master.get("isin"),
+                    "Sid": master.get("security_id"), "Ltp": item["close"],
+                    "Mcap": item.get("marketCapCrore"),
+                }, breadth_methodology)
+                if item["historyAligned"] and assessment["eligible"]:
+                    eligible.add(item["symbol"])
+            dated_universes[session_str] = eligible
+        ratings = rank_session(histories, session_str, dated_universes[session_str])
+        previous_date = prior_market_session(market_sessions, session_str)
+        previous = rank_session(histories, previous_date, dated_universes.get(previous_date, set())) if previous_date else {}
         for it in snapshot_stocks:
-            m = it.get("metrics") or {}
-            r21, r63, r126, r252 = m.get("return21"), m.get("return63"), m.get("return126"), m.get("return252")
-            if r21 is not None and r63 is not None and r126 is not None and r252 is not None:
-                comp = 0.40 * r21 + 0.20 * r63 + 0.20 * r126 + 0.20 * r252
-                eligible_rs.append((it, comp))
+            sym = it["symbol"]
+            rating = ratings.get(sym, {})
+            comp_rs = rating.get("composite_rs")
+            it["rsRating"] = comp_rs
+            prior = previous.get(sym)
+            it["rsChange21d"] = comp_rs - prior["composite_rs"] if comp_rs is not None and prior else None
+            it["rsMethodologyVersion"] = METHODOLOGY_VERSION
+            # An archived schedule is required; today's earnings calendar is not historical evidence.
+            it["upcomingEarnings"] = None
+            series = stock_series_data.get(sym)
+            if not series or not it["historyAligned"] or len(series[0]) < 30:
+                for field in ("setupGeometry", "trendTemplate", "stageStatus", "isRsLine52wHigh",
+                              "isLiquidScreen", "tradedValueMean20dCr", "tradedValueMedian20dCr"):
+                    it[field] = None
+                it["presetMatches"] = {key: None for key in it["presetMatches"]}
+                it["presetRuleMatches"] = {key: None for key in it["presetRuleMatches"]}
+                it["dataCompleteness"] = bridge.data_completeness(it)
+                continue
+            c_arr, h_arr, l_arr, v_arr, s_dt = series
+            date_strs = histories[sym][0][:len(c_arr)]
+            measured = evaluate_setups(h_arr, l_arr, c_arr, v_arr, date_strs, comp_rs,
+                                      atr_ratio_at_end=atr_ratios[sym][len(c_arr) - 1])
+            it["setupGeometry"] = measured["setup_geometry"]
+            it["trendTemplate"] = measured["trend_template"]
+            it["stageStatus"] = measured["stage_status"]
+            it["isLiquidScreen"] = measured["is_liquid_screen"]
+            it["tradedValueMean20dCr"] = measured["traded_value_mean_20d_cr"]
+            it["tradedValueMedian20dCr"] = measured["traded_value_median_20d_cr"]
+            stock_df = pd.DataFrame({"Date": [d.date() for d in s_dt[-300:]], "Close": c_arr[-300:]})
+            it["isRsLine52wHigh"] = check_rs_line_52w_high(stock_df, bench_df_session)
+            # Evaluate the catalog itself: no second handwritten list of preset predicates.
+            raw_stock = {"symbol": sym, "as_of_date": session_str,
+                         "setup_geometry": it["setupGeometry"], "trend_template": it["trendTemplate"],
+                         "stage_status": it["stageStatus"], "rsRating": comp_rs,
+                         "is_rs_line_52w_high": it["isRsLine52wHigh"]}
+            ms_matches = {}
+            for identifier, preset in bridge.ALL_PRESET_DEFS.items():
+                if identifier.startswith("lib-ms-"):
+                    signal = preset["expression"]["children"][0]
+                    ms_matches[identifier] = bridge.evaluate(signal, raw_stock, None, {}, session_str, set(), [])
+            apply_preset_eligibility(it, ms_matches, measured["is_liquid_screen"])
 
-        if eligible_rs:
-            eligible_rs.sort(key=lambda x: x[1])
-            n_rs = len(eligible_rs)
-            for pos, (it, _) in enumerate(eligible_rs):
-                it["rsRating"] = int(round(1.0 + 98.0 * pos / max(1, n_rs - 1)))
-
-        # Finally, calculate dataCompleteness for each item
-        for it in snapshot_stocks:
+            # Calculate dataCompleteness
             it["dataCompleteness"] = bridge.data_completeness(it)
 
         total_active = len(snapshot_stocks)
@@ -966,6 +1071,8 @@ def main():
 
         raw_payload = {
             "schemaVersion": 4,
+            "presetRuleMatchesVersion": 1,
+            "rsMethodologyVersion": METHODOLOGY_VERSION,
             "asOfDate": session_str,
             "totalStocks": len(snapshot_stocks),
             "stocks": snapshot_stocks,
@@ -979,6 +1086,8 @@ def main():
                 "fnoBan": "unavailable",
                 "indexMemberships": "Point-in-time constituent ledger (semi-annual rebalancing tracked)",
                 "tradingview": "unavailable",
+                "upcomingEarnings": "unavailable (dated schedule archive not maintained)",
+                "rsUniverse": "dated breadth archive; reconstructed from dated price/capitalization where absent",
                 "surveillance": "Reconstructed from official NSE circulars where complete" if surv_avail else "incomplete_circular_chain",
             },
             "dataCompleteness": "historical_reconstructed_with_survivorship_qualification",
@@ -995,6 +1104,7 @@ def main():
         print(f"Generated {out_file.name} ({len(snapshot_stocks)} stocks, {file_size_kb:.1f} KB, rev {session_hash[:12]}) in {time.time()-t_session:.2f}s")
         generated_sessions.append((session_date, session_hash))
 
+    save_universe_history(pipeline_dir, dated_universes)
     print(f"\nAll done! Successfully generated {len(generated_sessions)} historical daily snapshots in {output_dir}")
 
     if args.update_sessions_manifest and generated_sessions:

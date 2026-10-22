@@ -12,6 +12,21 @@ const request: ScreenerRunRequest = {asOfDate:snapshot.asOfDate,universe:'mainbo
 
 afterEach(() => vi.unstubAllGlobals());
 describe('published snapshots', () => {
+  it('uses published preset results and keeps absent results unknown without geometry fallbacks', () => {
+    const id = 'lib-ms-vcp';
+    const stock = {...snapshot.stocks[0], historyAligned:true, asOfDate:snapshot.asOfDate,
+      setupGeometry:{vcp:{matched:true}}, isLiquidScreen:true, presetMatches:{}, presetRuleMatches:{}};
+    const run = (input: typeof stock, negated = false) => {
+      const expression = condition(id);
+      return screenSnapshot({...snapshot, stocks:[input]}, {...request,
+        expressionTree:{...expression,condition:{...expression.condition,isNegated:negated}}})!;
+    };
+    expect(run(stock).matchCount).toBe(0);
+    expect(run(stock, true).matchCount).toBe(0);
+    expect(run(stock).perConditionCoverage[id].evaluated).toBe(0);
+    expect(run({...stock,presetMatches:{[id]:true}}).matchCount).toBe(1);
+    expect(run({...stock,presetMatches:{[id]:false}}).matchCount).toBe(0);
+  });
   it('searches symbols and company names across all matches before pagination', () => {
     const stocks = [
       {...snapshot.stocks[0], symbol:'OTHER', name:'Other Company'},
@@ -138,6 +153,14 @@ describe('published snapshots', () => {
       expressionTree:staleFundamental})?.matchCount).toBe(0);
     expect(screenSnapshot({...snapshot,stocks:[staleMetadata]},{...request,
       expressionTree:{...staleFundamental,condition:{...staleFundamental.condition,isNegated:true}}})?.matchCount).toBe(0);
+  });
+  it('rejects stocks with historyAligned: false in preset fallback and evaluation', () => {
+    const unalignedStock = { ...snapshot.stocks[0], historyAligned: false };
+    const unalignedSnapshot = { ...snapshot, stocks: [unalignedStock] };
+    const vcpCond = condition('lib-ms-vcp', {});
+    expect(screenSnapshot(unalignedSnapshot, { ...request, expressionTree: vcpCond })?.matchCount).toBe(0);
+    // Under negation, unknown/null remains unknown (0 matches)
+    expect(screenSnapshot(unalignedSnapshot, { ...request, expressionTree: { ...vcpCond, condition: { ...vcpCond.condition, isNegated: true } } })?.matchCount).toBe(0);
   });
   it('refreshes a same-session correction and pins Python fallback to that revision', async () => {
     vi.resetModules();

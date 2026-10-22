@@ -63,6 +63,8 @@ FILES_TO_COMPRESS = {
     "shareholding_history.json": "shareholding_history.json.gz",
     "filing_history.json": "filing_history.json.gz",
     "quarterly_financial_history.json": "quarterly_financial_history.json.gz",
+    "market_screens_snapshot.json": "market_screens_snapshot.json.gz",
+    "pattern_gallery.json": "pattern_gallery.json.gz",
     # Raw NSE SME coverage is retained separately; it is never part of the
     # canonical scanner universe.
     "sme_market_data.json": "sme_market_data.json.gz",
@@ -145,6 +147,7 @@ PHASE4_SCRIPTS = [
     "add_corporate_events.py",
     "build_corporate_action_ledger.py",
     "enrich_published_fields.py",
+    "build_market_screens.py",
     "standardize_stock_artifact.py",
 ]
 
@@ -240,6 +243,10 @@ SCRIPT_OUTPUT_SPECS = {
     ],
     "build_rs_ratings.py": [
         ArtifactSpec("rs_rating_daily.json", "json", required_fields=("source", "as_of_date", "ratings")),
+    ],
+    "build_market_screens.py": [
+        ArtifactSpec("market_screens_snapshot.json", "json", min_count=1, required_fields=("as_of_date", "records")),
+        ArtifactSpec("pattern_gallery.json", "json", min_count=0),
     ],
     "fetch_all_indices.py": [
         ArtifactSpec("all_indices_list.json", "json", min_count=1),
@@ -373,11 +380,12 @@ FINAL_ARTIFACT_SPECS = [
         "nse_universe_reconciliation.json", "json",
         required_fields=("available", "source", "as_of_date", "pending_scanx_enrichment", "alert_count"),
     ),
-    ArtifactSpec(
-        "mainboard_universe_report.json", "json",
+    ArtifactSpec("mainboard_universe_report.json", "json",
         required_fields=("raw_scanx_count", "excluded_sme_count", "mainboard_count", "mainboard_scanx_count"),
     ),
     ArtifactSpec("sme_market_data.json.gz", "gzip_json", min_count=1, required_fields=("Symbol", "Series")),
+    ArtifactSpec("market_screens_snapshot.json.gz", "gzip_json", min_count=1, required_fields=("as_of_date", "records")),
+    ArtifactSpec("pattern_gallery.json.gz", "gzip_json", min_count=0),
 ]
 
 SCRIPT_OUTPUT_SPECS[OHLCV_DERIVED_SCRIPT] = [

@@ -16,16 +16,11 @@ on:
         type: boolean
         required: true
         default: true
-      restore_daily:
-        description: 'Restore exact daily refresh snapshots committed after 5 PM IST instead of reconstructing'
-        type: boolean
-        default: false
 
 permissions:
   contents: write
 
 concurrency:
-  # Daily/weekly publication and backfills all update the same sessions manifest.
   group: daily-data-refresh
   cancel-in-progress: false
 
@@ -38,8 +33,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: ${{ inputs.restore_daily && '0' || '1' }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -49,11 +42,9 @@ jobs:
           cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
 
       - name: Restore refresh history (Ledgers & Vectorized History)
-        if: ${{ !inputs.restore_daily }}
         uses: ./.github/actions/restore-refresh-history
 
       - name: Cache Historical Downloads & Cache
-        if: ${{ !inputs.restore_daily }}
         uses: actions/cache@v4
         with:
           path: DO NOT DELETE EDL PIPELINE/.scanner_cache
@@ -64,23 +55,16 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ "${{ inputs.restore_daily }}" != "true" ]; then
-            pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
-          fi
+          pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
           pip install boto3 openpyxl
 
       - name: Generate Historical Snapshots
         env:
           START_DATE: ${{ github.event.inputs.start_date }}
           END_DATE: ${{ github.event.inputs.end_date }}
-          RESTORE_DAILY: ${{ inputs.restore_daily }}
         run: |
-          if [ "$RESTORE_DAILY" = "true" ]; then
-            generator=(python frontend/session_history.py)
-          else
-            generator=(python tools/generate_historical_snapshots.py --pipeline-dir "DO NOT DELETE EDL PIPELINE")
-          fi
-          "${generator[@]}" \
+          python tools/generate_historical_snapshots.py \
+            --pipeline-dir "DO NOT DELETE EDL PIPELINE" \
             --start-date "$START_DATE" \
             --end-date "$END_DATE" \
             --output-dir "outputs/historical_snapshots" \
@@ -93,7 +77,6 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: nexus-screener-chart-data
-          RESTORE_DAILY: ${{ inputs.restore_daily }}
         run: |
           python - << 'EOF'
           import os, glob, sys, boto3
@@ -134,10 +117,6 @@ jobs:
               head = s3.head_object(Bucket=bucket_name, Key=key)
               if head.get('ContentLength') != file_size:
                   sys.exit(f"R2 readback verification failed for {key}: expected {file_size} bytes, got {head.get('ContentLength')}")
-              if os.environ.get('RESTORE_DAILY') == 'true':
-                  with open(filepath, 'rb') as f:
-                      if s3.get_object(Bucket=bucket_name, Key=key)['Body'].read() != f.read():
-                          sys.exit(f"R2 snapshot bytes differ from the original daily refresh: {key}")
               print(f"Uploaded and verified {key} ({file_size} bytes)")
 
           # Write sentinel file verifying successful upload and readback

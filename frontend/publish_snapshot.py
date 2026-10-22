@@ -15,7 +15,7 @@ import scanner_bridge as bridge
 from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
-from session_history import archive_daily_snapshot, register_sessions
+from session_history import archive_daily_snapshot, register_session
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
 from edl_pipeline.scanner.calculation_cache import calculation_cache
@@ -381,7 +381,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = elapsed('serialization and compression', started)
     session_record = archive_daily_snapshot(output, manifest)
     manifest = complete_release(chart_root, output, manifest)
-    register_sessions(output / 'sessions.json', [session_record])
+    register_session(output / 'sessions.json', session_record)
     elapsed('release completion', started)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest

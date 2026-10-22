@@ -9,12 +9,45 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import scanner_bridge as bridge
 from publish_snapshot import publish, delivery_lookback
+from session_history import archive_daily_snapshot, register_session
 from scanner_cache import ScannerCache
 from edl_pipeline.scanner import context, trend
 from edl_pipeline.scanner.calculation_cache import memoized
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def test_archived_dates_survive_rollover_and_same_date_reruns(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict('os.environ', {'EDL_CHART_STORAGE': 'local'}):
+            output = Path(folder)
+            for session, revision in [('2026-10-19', 'a'*64), ('2026-10-21', 'b'*64), ('2026-10-21', 'c'*64)]:
+                source = output/'revisions'/revision/'stocks.json.gz'
+                source.parent.mkdir(parents=True)
+                source.write_bytes(gzip.compress(revision.encode(), mtime=0))
+                entry = archive_daily_snapshot(output, {'sessionDate': session, 'revision': revision})
+                register_session(output/'sessions.json', entry)
+            sessions = json.loads((output/'sessions.json').read_text())['sessions']
+            self.assertEqual([(s['date'], s['revision']) for s in sessions],
+                             [('2026-10-21', 'b'*64), ('2026-10-19', 'a'*64)])
+            for session, revision in [('2026-10-19', 'a'*64), ('2026-10-21', 'b'*64)]:
+                self.assertEqual(gzip.decompress((output/f'snapshots/{session}.json.gz').read_bytes()), revision.encode())
+
+    def test_unverified_or_conflicting_archive_is_never_registered(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder); source = output/'revisions'/('a'*64)/'stocks.json.gz'
+            source.parent.mkdir(parents=True); source.write_bytes(b'original')
+            manifest = {'sessionDate': '2026-10-21', 'revision': 'a'*64}
+            store = Mock(); store.cache_command.return_value = b'corrupted'
+            with patch.dict('os.environ', {'EDL_CHART_STORAGE': 'r2'}), \
+                    patch('session_history.R2Store', return_value=store), patch('session_history.charts_enabled', return_value=True):
+                with self.assertRaisesRegex(RuntimeError, 'read-back mismatch'):
+                    archive_daily_snapshot(output, manifest)
+            with patch.dict('os.environ', {'EDL_CHART_STORAGE': 'local'}):
+                archive_daily_snapshot(output, manifest)
+                source.write_bytes(b'different')
+                with self.assertRaisesRegex(RuntimeError, 'Conflicting daily snapshot'):
+                    archive_daily_snapshot(output, manifest)
+            self.assertFalse((output/'sessions.json').exists())
+
     def test_failed_daily_archive_preserves_current_pointer_and_sessions(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)/'edl'; root.mkdir(); output = Path(folder)/'public'; self.fixture(root)

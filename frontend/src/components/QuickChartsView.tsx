@@ -28,7 +28,7 @@ const price = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
 type ObserveCard = (node: HTMLElement | null, activate: () => void) => (() => void) | undefined;
 
 /** Activate cards once; the virtual grid bounds how many engines stay mounted. */
-function useNearViewportWatcher(scrollRef: React.RefObject<Element | null>) {
+function useNearViewportWatcher() {
   const listeners = useRef(new WeakMap<Element, () => void>());
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -48,21 +48,19 @@ function useNearViewportWatcher(scrollRef: React.RefObject<Element | null>) {
             observerRef.current?.unobserve(entry.target);
           }
         }
-      }, { root: scrollRef.current ?? node.closest('.quick-charts-scroll') ?? undefined, rootMargin: '240px 0px' });
+      }, { root: node.closest('.quick-charts-scroll'), rootMargin: '240px 0px' });
     }
     const observer = observerRef.current;
     listeners.current.set(node, activate);
     observer.observe(node);
     return () => { observer.unobserve(node); listeners.current.delete(node); };
-  }, [scrollRef]);
+  }, []);
 }
 
 function MiniChart({ candles, symbol, onEngineChange }: { candles: readonly Candle[]; symbol: string; onEngineChange: (engine: ChartEngine | null) => void }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
 
-  // The engine keeps the complete published history; setRange(6) only selects the
-  // initial viewport, so older sessions stay reachable by panning left.
-  // Keep native chart setup out of React's callback-ref commit work.
+  // Keep complete history; setRange(6) only selects the initial viewport.
   useMountEffect(() => {
     const host = hostRef.current;
     if (!host || !candles.length) return;
@@ -84,10 +82,7 @@ function MiniChart({ candles, symbol, onEngineChange }: { candles: readonly Cand
     });
     engine.setRange(6);
     onEngineChange(engine);
-    return () => {
-      engine.destroy();
-      onEngineChange(null);
-    };
+    return () => { engine.destroy(); onEngineChange(null); };
   });
 
   return <div ref={hostRef} className="quick-chart-canvas" aria-label="Interactive chart using the saved chart style, indicators, and drawings. Drag to pan; scroll or pinch to zoom, and select drawings to edit them." role="group" tabIndex={0} />;
@@ -172,8 +167,7 @@ function QuickChartCard({ row, revision, rank, observe, onOpenFullChart }: { row
 }
 
 export function QuickChartsView({ rows, revision, matchCount = rows.length, matchedSymbols, loadRows, busy, firstRank = 1, onOpenFullChart }: QuickChartsViewProps) {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const observe = useNearViewportWatcher(scrollRef);
+  const observe = useNearViewportWatcher();
   const fullResultKey = matchedSymbols?.length === matchCount ? matchedSymbols.join(',') : rows.map(row => row.symbol).join(',');
   const allRows = useQuery({
     queryKey: ['quick-chart-rows', revision, matchCount, fullResultKey],
@@ -188,7 +182,7 @@ export function QuickChartsView({ rows, revision, matchCount = rows.length, matc
 
   if ((busy || allRows.isPending) && !chartRows.length) return <div className="quick-charts-grid" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="quick-chart-card quick-chart-card-skeleton" key={index} />)}</div>;
   if (!chartRows.length) return null;
-  return <div ref={scrollRef} className="quick-charts-scroll" onScroll={gridWindow.onScroll} aria-live="off">
+  return <div className="quick-charts-scroll" onScroll={gridWindow.onScroll} aria-live="off">
     <p className="quick-charts-hint">Interactive charts use your saved style, indicators, and drawings. Drag to pan; scroll or pinch to zoom.</p>
     {allRows.isPending && <p className="quick-charts-hint">Preparing all {matchCount.toLocaleString('en-IN')} matching equities…</p>}
     <div className="quick-charts-grid" style={gridWindow.enabled ? { paddingTop: `${gridWindow.top}px`, paddingBottom: `${gridWindow.bottom}px` } : undefined}>

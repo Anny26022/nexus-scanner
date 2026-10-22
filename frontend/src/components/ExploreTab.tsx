@@ -16,7 +16,7 @@ import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
 import { useFilterChoices } from '../hooks/useFilterChoices';
 import { SlidersHorizontal, X, RotateCcw, Play, ChevronDown, Search, Info, Sparkles, BarChart3 } from 'lucide-react';
-import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import { useLocalStorageState, useSavedPagination } from '../hooks/useLocalStorageState';
 import type { AnnouncementFilter } from '../api/announcements';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
 import { useNextScreenPage, screenPageStaleTime } from '../hooks/useNextScreenPage';
@@ -67,15 +67,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   const [queryText, setQueryText] = useState(activeQuery);
   const [activeConditionsMap, setActiveConditionsMap] =
     useLocalStorageState<Record<string, ActiveCondition>>('nexus-scanner.screener.conditions.v1', DEFAULT_CONDITIONS);
-  const [savedPagination, setSavedPagination] = useLocalStorageState<{revision?: string; page: number; pageSize: number}>(
-    'nexus-scanner.screener.pagination.v1', {page: 1, pageSize: 15}
-  );
-  const pageSize = [15, 50, 100].includes(savedPagination.pageSize) ? savedPagination.pageSize : 15;
+  const {page, pageSize, setPage, setPageSize} = useSavedPagination('nexus-scanner.screener.pagination.v1', datasetRevision, 15);
   const [symbolSearch, setSymbolSearch] = useState('');
-  const page = savedPagination.revision === datasetRevision && Number.isInteger(savedPagination.page) && savedPagination.page > 0
-    ? savedPagination.page : 1;
-  const setPage = (next: number) => setSavedPagination({revision: datasetRevision, page: next, pageSize});
-  const setPageSize = (next: number) => setSavedPagination({revision: datasetRevision, page: 1, pageSize: next});
   const [announcementFilter, setAnnouncementFilter] = useState<AnnouncementFilter>();
   const [sort, setSort] = useLocalStorageState<{ field: string; direction: 'asc' | 'desc' }>('nexus-scanner.screener.sort.v1', {
     field: 'rvol',

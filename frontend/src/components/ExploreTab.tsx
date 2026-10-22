@@ -224,6 +224,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
     </section>
     {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
       loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
+      page={page} pageSize={pageSize}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
       onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={setPageSize} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onOpenFullChart={onOpenFullChart}
       resultView={resultView} onResultViewChange={setResultView} />}

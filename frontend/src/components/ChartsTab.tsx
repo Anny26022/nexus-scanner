@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Maximize2, Minimize2, Minus, Pause, Pencil, Play, Plus, RotateCcw, Settings2, SkipBack, SkipForward, SlidersHorizontal, X, Keyboard } from 'lucide-react';
+import { Maximize2, Minimize2, Minus, Pause, Pencil, Play, Plus, RotateCcw, Settings2, SkipBack, SkipForward, SlidersHorizontal, X, Keyboard, LayoutTemplate } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { ChartEngine, type ChartAppearance, type ChartStudies, type ChartStyle } from '../chart/ChartEngine';
 import { ReplayClock } from '../chart/ReplayClock';
@@ -512,7 +512,7 @@ export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision
   const layoutControls = (
     <div className="chart-desk-toolbar" role="group" aria-label="Chart layout">
       <button type="button" className="chart-shortcuts-button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" onClick={()=>setShortcutsOpen(true)}><Keyboard size={15}/></button>
-      <button type="button" onClick={()=>setLayoutsOpen(true)}>Layouts</button>
+      <button type="button" className="chart-layouts-button" aria-label="Layouts" title="Saved layouts" onClick={()=>setLayoutsOpen(true)}><LayoutTemplate size={14} aria-hidden="true"/><span>Layouts</span></button>
       <ChartLayoutPicker
         value={grid.layout}
         links={grid.links}
@@ -529,7 +529,8 @@ export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision
   );
 
   return <div className="chart-desk">
-    {!activeExpandedTile && <div className="chart-desk-header">{layoutControls}</div>}
+    {/* One chart shows the desk controls in its own toolbar; a grid shares a slim header. */}
+    {!activeExpandedTile && grid.count > 1 && <div className="chart-desk-header">{layoutControls}</div>}
     {warning&&<p role="status" className="notice">{warning}</p>}
     <div className={`chart-desk-body${activeExpandedTile ? ' chart-desk-body-expanded' : ''}`}>
       <div className={`chart-grid chart-grid-${grid.count}`} style={{gridTemplateColumns:`repeat(${chartLayout(grid.layout).columns},minmax(${chartLayout(grid.layout).minColumnWidth}px,1fr))`,gridTemplateRows:`repeat(${chartLayout(grid.layout).rows.length},minmax(260px,1fr))`,gridTemplateAreas:layoutAreas(chartLayout(grid.layout).rows)}}>
@@ -549,7 +550,7 @@ export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision
               expanded={isExpanded}
               onToggleExpand={() => handleToggleExpand(tileId)}
               onCloseExpand={handleCloseExpand}
-              layoutControls={isExpanded ? layoutControls : undefined}
+              layoutControls={isExpanded || (!activeExpandedTile && grid.count === 1) ? layoutControls : undefined}
             />
           );
         })}

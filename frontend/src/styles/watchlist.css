@@ -239,7 +239,7 @@
 .watchlist-add-textarea:focus {
   background: var(--surface);
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(8, 153, 129, 0.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .watchlist-add-textarea::placeholder {
@@ -289,9 +289,9 @@
   font-weight: 600;
   padding: 1.5px 5px;
   border-radius: 3px;
-  background: rgba(8, 153, 129, 0.08);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--accent);
-  border: 1px solid rgba(8, 153, 129, 0.2);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
   letter-spacing: 0.02em;
   line-height: 1.25;
 }
@@ -337,9 +337,9 @@
 }
 
 .watchlist-feedback-pill.is-success {
-  background: rgba(8, 153, 129, 0.08);
-  color: #089981;
-  border: 1px solid rgba(8, 153, 129, 0.18);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .watchlist-add-actions {

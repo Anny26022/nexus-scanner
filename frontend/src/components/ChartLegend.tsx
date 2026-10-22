@@ -30,18 +30,19 @@ export function ChartLegend({symbol,bar,previous,metrics,sessionDate,quoteRef}:{
   const floatCap=validCap && typeof float==='number' && Number.isFinite(float) && float>=0 && float<=100?cap*float/100:null;
   const circuit=typeof metrics?.circuitLimit==='string' && /^\s*\d+(?:\.\d+)?\s*%?\s*$/.test(metrics.circuitLimit)?Number.parseFloat(metrics.circuitLimit):null;
   const noBand=typeof metrics?.circuitLimit==='string' && metrics.circuitLimit.trim().toLowerCase()==='no band';
+  const hasMetrics=validCap || floatCap!==null || (circuit!==null && circuit>0 && circuit<=100) || noBand;
   return <div className="chart-legend">
-    {(validCap || floatCap!==null || (circuit!==null && circuit>0 && circuit<=100) || noBand) && <div className="chart-symbol-strip" role="group" tabIndex={0} aria-label={`${symbol} snapshot metrics`} title={sessionDate?`Published snapshot: ${sessionDate}. Metrics are not historical.`:undefined}>
-      {validCap && <span className="chart-pill-metric"><span className="chart-metric-label">MCap</span><b>₹{metric.format(cap)} Cr</b></span>}
-      {floatCap!==null && <span className="chart-pill-metric"><span className="chart-metric-label">FF MCap</span><b>₹{metric.format(floatCap)} Cr</b></span>}
-      {circuit!==null && circuit>0 && circuit<=100 && <span className="chart-pill-metric" title="Price circuit band (%)"><span className="chart-metric-label">Circuit</span><b data-tight={circuit<=5}>{metric.format(circuit)}</b></span>}
-      {noBand && <span className="chart-pill-metric"><span className="chart-metric-label">Circuit</span><b>No band</b></span>}
-    </div>}
     <output className="chart-readout" ref={quoteRef} aria-label={`${symbol} candle values`}>
-      <span className="chart-quote-date" data-quote="date">{values.date}</span>
       {(['open','high','low','close'] as const).map((key,index)=><span className="chart-quote-price" key={key}><span>{['O','H','L','C'][index]}</span><b data-quote={key}>{values[key]}</b></span>)}
       <b className="chart-quote-change" data-quote="change" data-tone={values.tone}>{values.change}</b>
       <span className="chart-quote-volume"><span>Vol</span><span data-quote="volume">{values.volume}</span></span>
+      <span className="chart-quote-date" data-quote="date">{values.date}</span>
     </output>
+    {hasMetrics && <div className="chart-symbol-strip" role="group" tabIndex={0} aria-label={`${symbol} snapshot metrics`} title={sessionDate?`Published snapshot: ${sessionDate}. Metrics are not historical.`:undefined}>
+      {validCap && <span className="chart-pill-metric"><span className="chart-metric-label">MCap</span><b>₹{metric.format(cap)} Cr</b></span>}
+      {floatCap!==null && <span className="chart-pill-metric"><span className="chart-metric-label">Free float</span><b>₹{metric.format(floatCap)} Cr</b></span>}
+      {circuit!==null && circuit>0 && circuit<=100 && <span className="chart-pill-metric" title="Price circuit band (%)"><span className="chart-metric-label">Circuit</span><b data-tight={circuit<=5}>{metric.format(circuit)}%</b></span>}
+      {noBand && <span className="chart-pill-metric"><span className="chart-metric-label">Circuit</span><b>No band</b></span>}
+    </div>}
   </div>;
 }

@@ -438,7 +438,7 @@
 }
 @media (max-width: 1100px) {
   .chart-grid:not(.chart-grid-1) .chart-intervals, .chart-grid:not(.chart-grid-1) .chart-bar-divider { display: none; }
-  .chart-grid:not(.chart-grid-1) .chart-interval-select { display: block; width: 38px; }
+  .chart-grid:not(.chart-grid-1) .chart-topbar .chart-interval-select { display: block; width: 38px; }
   .chart-grid:not(.chart-grid-1) .chart-symbol-search { flex-basis: 100px; min-width: 75px; }
 }
 @media (max-width: 700px) {
@@ -525,6 +525,7 @@
   background: transparent; color: var(--secondary); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;
 }
 .chart-topbar button:not(.chart-load-btn):hover { background: var(--surface-hover); color: var(--text); }
+.chart-topbar .chart-interval-select { display: none; }
 .chart-topbar button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
 .chart-topbar .chart-icon-button, .chart-topbar .chart-expand { width: 32px; min-width: 32px; padding: 0; }
 .chart-topbar .chart-intervals button { height: 28px; min-height: 28px; padding: 0 9px; border-radius: 7px; }
@@ -536,19 +537,20 @@
 .chart-overlay-legend { position: absolute; z-index: 10; top: 11px; left: 12px; display: flex; flex-direction: column; gap: 4px; max-width: calc(100% - 95px); pointer-events: none; }
 .chart-overlay-legend > * { pointer-events: auto; }
 .chart-legend { display: flex; flex-direction: column; gap: 4px; }
-.chart-symbol-strip { display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.chart-symbol-strip { display: flex; align-items: center; gap: 12px; width: fit-content; max-width: 100%; padding: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
 .chart-symbol-strip::-webkit-scrollbar { display: none; }
-.chart-pill-metric { display: flex; align-items: baseline; gap: 4px; font-size: 10px; white-space: nowrap; }
+.chart-pill-metric { display: flex; align-items: baseline; gap: 4px; font-size: 11px; white-space: nowrap; }
 .chart-metric-label { color: var(--muted); }
-.chart-pill-metric b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart-pill-metric b { color: var(--secondary); font-weight: 500; font-variant-numeric: tabular-nums; }
 .chart-pill-metric b[data-tight="true"] { color: var(--negative); }
-.chart-readout { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 7px; color: var(--secondary); font-size: 11px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.chart-readout { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--text); font-size: 12px; line-height: 1.5; font-variant-numeric: tabular-nums; }
 .chart-quote-date { color: var(--muted); }
 .chart-quote-price, .chart-quote-volume { display: inline-flex; align-items: baseline; gap: 3px; white-space: nowrap; }
-.chart-quote-price > span, .chart-quote-volume > span:first-child { color: var(--muted); font-size: 10px; }
+.chart-quote-price > span, .chart-quote-volume > span:first-child { color: var(--muted); font-size: 11px; }
 .chart-quote-price b { font-weight: 500; }
 .chart-quote-price:has([data-quote="close"]) b, .chart-quote-change { font-weight: 650; }
-.chart-quote-change { font-size: 11px; }
+.chart-quote-change { font-size: 12px; }
+.chart-quote-date { margin-left: 2px; font-size: 11px; }
 .chart-quote-change[data-tone="up"] { color: var(--positive); }
 .chart-quote-change[data-tone="down"] { color: var(--negative); }
 
@@ -574,88 +576,64 @@
   z-index: 25;
 }
 
-/* 1. Floating Slider for Favorited Drawing Tools (Image 2) */
+/* 1. Favourite drawing tools: a light vertical rail, docked left until dragged. */
 .drawing-floating-slider,
 .drawing-favorites-bar {
   position: absolute;
   z-index: 30;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 3px 6px;
-  background: #1e222d;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  gap: 2px;
+  padding: 4px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
   user-select: none;
-  color: #d1d4dc;
+  color: var(--secondary);
   pointer-events: auto;
-  backdrop-filter: blur(6px);
-  transition: box-shadow 0.15s ease;
 }
+.drawing-favorites-bar.is-docked { left: 10px; top: 50%; transform: translateY(-50%); }
 
 .drawing-slider-drag-handle,
 .drawing-favorites-drag {
   display: grid;
   place-items: center;
-  width: 14px;
-  height: 28px;
-  color: #787b86;
+  width: 28px;
+  height: 12px;
+  color: var(--muted);
   cursor: grab;
   touch-action: none;
-  padding: 0 2px;
-  transition: color 0.12s;
   flex-shrink: 0;
 }
-
-.drawing-slider-drag-handle:hover,
-.drawing-favorites-drag:hover {
-  color: #d1d4dc;
-}
-
-.drawing-slider-drag-handle:active,
-.drawing-favorites-drag:active {
-  cursor: grabbing;
-  color: #089981;
-}
+.drawing-slider-drag-handle svg, .drawing-favorites-drag svg { transform: rotate(90deg); opacity: .7; }
+.drawing-slider-drag-handle:hover, .drawing-favorites-drag:hover { color: var(--text); }
+.drawing-slider-drag-handle:active, .drawing-favorites-drag:active { cursor: grabbing; }
 
 .drawing-floating-slider button,
 .drawing-favorites-bar button,
 .drawing-slider-btn {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: transparent;
-  color: #d1d4dc;
+  color: var(--secondary);
   cursor: pointer;
-  transition: background 0.12s, color 0.12s;
   flex-shrink: 0;
 }
-
 .drawing-floating-slider button:hover,
 .drawing-favorites-bar button:hover,
-.drawing-slider-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
-}
-
+.drawing-slider-btn:hover { background: var(--surface-hover); color: var(--text); }
 .drawing-floating-slider button.is-active,
 .drawing-floating-slider button[aria-pressed="true"],
 .drawing-favorites-bar button[aria-pressed="true"],
-.drawing-slider-btn.is-active {
-  background: rgba(8, 153, 129, 0.22);
-  color: #089981;
-}
-
+.drawing-slider-btn.is-active { background: var(--accent); color: var(--on-accent); }
 .drawing-floating-slider button:disabled,
-.drawing-favorites-bar button:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
+.drawing-favorites-bar button:disabled { opacity: 0.35; cursor: default; }
 
 /* 2. Floating Drawing Tools Menu Popover (Image 1) */
 .drawing-menu-popover {
@@ -699,7 +677,7 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: #089981;
+  color: var(--accent);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -707,19 +685,19 @@
 }
 
 .drawing-menu-cursor-btn:hover {
-  background: rgba(8, 153, 129, 0.08);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .drawing-menu-cursor-btn.is-active {
-  background: rgba(8, 153, 129, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .drawing-menu-cursor-btn .cursor-icon {
-  color: #089981;
+  color: var(--accent);
 }
 
 .drawing-menu-cursor-btn .cursor-text {
-  color: #089981;
+  color: var(--accent);
   font-weight: 500;
 }
 
@@ -856,16 +834,16 @@
 
 /* Green highlight for active tool matching Image 1 */
 .drawing-menu-row.is-selected {
-  background: rgba(8, 153, 129, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .drawing-menu-row.is-selected .drawing-tool-label {
-  color: #089981;
+  color: var(--accent);
   font-weight: 500;
 }
 
 .drawing-menu-row.is-selected .drawing-tool-icon {
-  color: #089981;
+  color: var(--accent);
 }
 
 .drawing-menu-tool-btn {
@@ -926,12 +904,12 @@
 
 .drawing-bookmark-btn:hover {
   opacity: 1;
-  color: #089981;
+  color: var(--accent);
 }
 
 .drawing-bookmark-btn.bookmarked {
   opacity: 1;
-  color: #089981;
+  color: var(--accent);
 }
 
 .sr-only-details {
@@ -1570,7 +1548,7 @@
 }
 
 .chart-style-item.is-active {
-  background: rgba(24, 118, 105, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--accent);
   font-weight: 550;
 }
@@ -1696,7 +1674,7 @@
 }
 
 .catalog-tab.active {
-  background: rgba(24, 118, 105, 0.12);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
   font-weight: 600;
 }
@@ -1730,7 +1708,7 @@
 }
 
 .catalog-item-row.is-active {
-  background: rgba(24, 118, 105, 0.05);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 
 .catalog-item-left {
@@ -2284,7 +2262,7 @@
   .chart-symbol-search input { font-size: 11px; }
   .chart-load-btn { width: 19px; }
   .chart-bar-divider, .chart-intervals { display: none; }
-  .chart-interval-select { display: block; flex-shrink: 0; width: 40px; padding: 0; color: var(--secondary); }
+  .chart-topbar .chart-interval-select { display: block; flex-shrink: 0; width: 40px; padding: 0; color: var(--secondary); }
   .chart-topbar .chart-icon-button, .chart-topbar .chart-expand { width: 29px; min-width: 29px; }
   .chart-overlay-legend { left: 9px; top: 9px; max-width: calc(100% - 82px); }
   .chart-readout { gap: 2px 6px; font-size: 10px; }
@@ -2330,3 +2308,31 @@
 .chart-legend-toggle { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 500; cursor: pointer; pointer-events: auto; }
 .chart-legend-toggle:hover, .chart-legend-toggle[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); }
 .chart-desk-toolbar > .chart-shortcuts-button { width: 30px; padding: 0; justify-content: center; color: var(--muted); }
+
+/* Single-toolbar layout: desk controls sit in the chart toolbar, separated from chart tools. */
+.chart-topbar .chart-desk-toolbar { margin-left: 4px; padding-left: 8px; border-left: 1px solid var(--line); }
+.chart-topbar .chart-desk-toolbar > .chart-shortcuts-button { width: 30px; padding: 0; }
+.chart-topbar .chart-icon-button, .chart-topbar .chart-expand { color: var(--muted); }
+.chart-topbar .chart-icon-button:hover, .chart-topbar .chart-expand:hover { color: var(--text); }
+.chart-grid-1 { background: var(--surface); }
+
+/* The toolbar adapts to the chart's own width (sidebar, watchlist and grid all change it). */
+.chart-workspace { container-type: inline-size; }
+.chart-topbar .chart-symbol-search { flex: 0 0 150px; }
+@container (max-width: 1080px) {
+  .chart-style-picker-label, .chart-replay-toggle > span, .chart-layouts-button > span { display: none; }
+  .chart-style-picker-trigger { padding-inline: 8px; }
+  .chart-topbar .chart-replay-toggle, .chart-topbar .chart-desk-toolbar > .chart-layouts-button { width: 32px; padding: 0; }
+}
+@container (max-width: 760px) {
+  .chart-topbar .chart-toolbar-button > span { display: none; }
+  .chart-topbar .chart-toolbar-button { width: 32px; padding: 0; }
+  .chart-topbar .chart-symbol-search { flex-basis: 120px; }
+}
+
+/* Phone: the single toolbar scrolls sideways so every control stays reachable. */
+@media (max-width: 700px) {
+  .chart-topbar { overflow-x: auto; scrollbar-width: none; }
+  .chart-topbar::-webkit-scrollbar { display: none; }
+  .chart-topbar > * { flex-shrink: 0; }
+}

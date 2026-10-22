@@ -232,7 +232,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = time.perf_counter()
     cache=ScannerCache(); cache.refresh(root)
     starting_revision=cache.revision
-    source_files=[p for p in sorted(root.glob('*.json.gz')) if p.name!='filing_history.json.gz']
+    source_files=[p for p in sorted(root.glob('*.json.gz')) if p.name not in {'filing_history.json.gz', 'rs_universe_history.json.gz'}]
     source_bytes={p.name:p.read_bytes() for p in source_files}
     context=bridge._load_context(root)
     session=context['financial_history_as_of']
@@ -338,6 +338,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'technicalMetricsVersion':1,'referenceCounts':{'rvol15Sma50':default_count}}
     payload['tradingViewMetricsVersion'] = 1
     payload['presetRuleMatchesVersion'] = 1
+    payload['rsMethodologyVersion'] = context.get('rs_methodology_version')
     taxonomy = classify(rows, session)
     taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
     (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))

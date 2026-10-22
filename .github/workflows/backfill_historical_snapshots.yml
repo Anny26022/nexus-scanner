@@ -130,12 +130,14 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add frontend/public/data/sessions.json
+          git add frontend/public/data/sessions.json "DO NOT DELETE EDL PIPELINE/rs_universe_history.json.gz"
           git diff --staged --quiet || (git commit -m "chore(data): register backfilled sessions [${{ github.event.inputs.start_date }} to ${{ github.event.inputs.end_date }}]" && git pull --rebase origin main && git push origin HEAD)
 
       - name: Upload Artifacts Archive
         uses: actions/upload-artifact@v4
         with:
           name: historical-snapshots-${{ github.event.inputs.start_date }}-to-${{ github.event.inputs.end_date }}
-          path: outputs/historical_snapshots/*.json.gz
+          path: |
+            outputs/historical_snapshots/*.json.gz
+            DO NOT DELETE EDL PIPELINE/rs_universe_history.json.gz
           if-no-files-found: ignore

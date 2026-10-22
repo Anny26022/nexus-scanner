@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from bisect import bisect_right
 import gzip
 import json
 import math
@@ -28,8 +29,65 @@ WEIGHTS = {
     "twelve_month": 0.20,
 }
 
-MINIMUM_SESSIONS = 126
+MINIMUM_SESSIONS = 127
 FRONT_WEIGHTED_BENCHMARK_FILENAME = "NIFTY_500.csv"
+METHODOLOGY_VERSION = "marketstrength_parity_v2"
+UNIVERSE_HISTORY_FILE = "rs_universe_history.json.gz"
+
+
+def load_universe_history(root: Path) -> dict[str, set[str]]:
+    path = root / UNIVERSE_HISTORY_FILE
+    if not path.exists():
+        return {}
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if payload.get("methodology_version") != METHODOLOGY_VERSION:
+        raise ValueError("RS universe archive methodology mismatch; rebuild the dated archive")
+    return {d: set(symbols) for d, symbols in payload["sessions"].items()}
+
+
+def save_universe_history(root: Path, sessions: dict[str, set[str]]) -> None:
+    # Membership is retained per date; today's universe never substitutes for an old one.
+    path = root / UNIVERSE_HISTORY_FILE
+    temporary = path.with_suffix(".tmp")
+    with gzip.open(temporary, "wt", encoding="utf-8") as handle:
+        json.dump({"methodology_version": METHODOLOGY_VERSION,
+                   "sessions": {d: sorted(symbols) for d, symbols in sorted(sessions.items())}}, handle)
+    temporary.replace(path)
+
+
+def rank_session(histories, session: str, eligible: set[str]) -> dict[str, dict]:
+    """One dated rank engine for daily, backfill and gallery callers.
+
+    Histories contain sorted ISO trading dates and close arrays. A stale final
+    candle cannot participate in the cross-section for another market session.
+    """
+    scores = {}
+    periods = {k: {} for k in HORIZONS}
+    for symbol in sorted(eligible):
+        if symbol not in histories:
+            continue
+        dates, closes = histories[symbol]
+        end = bisect_right(dates, session)
+        if not end or dates[end - 1] != session:
+            continue
+        returns = compute_stock_returns(closes, offset=len(closes) - end)
+        score = calculate_composite_score(returns) if returns is not None else None
+        if score is None:
+            continue
+        scores[symbol] = score
+        for key, value in returns.items():
+            periods[key][symbol] = value
+    ranks = percentile_rank(scores)
+    period_ranks = {k: percentile_rank(values) for k, values in periods.items()}
+    return {symbol: {"front_weighted": value, "composite_rs": value,
+                     **{k: period_ranks[k].get(symbol) for k in HORIZONS}}
+            for symbol, value in ranks.items()}
+
+
+def prior_market_session(sessions: list[str], session: str, lookback: int = 21) -> str | None:
+    end = bisect_right(sessions, session) - 1
+    return sessions[end - lookback] if end >= lookback and sessions[end] == session else None
 
 
 def liquid_universe(root: Path):
@@ -148,6 +206,9 @@ def check_rs_line_52w_high(stock_df: pd.DataFrame, benchmark_df: pd.DataFrame) -
     )
     if len(merged) < 20:
         return False
+    if (stock_df["Date"].iloc[-1] != benchmark_df["Date"].iloc[-1]
+            or merged["Date"].iloc[-1] != stock_df["Date"].iloc[-1]):
+        return False
 
     merged["ratio"] = merged["Close_stock"] / merged["Close_bench"]
     lookback = min(len(merged), 252)
@@ -196,68 +257,27 @@ def main():
 
     eligible, universe_generated_at = liquid_universe(root)
 
-    composite_scores_today: dict[str, float] = {}
-    composite_scores_21d_ago: dict[str, float] = {}
-    period_scores: dict[str, dict[str, float]] = {k: {} for k in HORIZONS}
-    rs_line_high_flags: dict[str, bool] = {}
-
-    for path in sorted(ohlcv_dir.glob("*.csv")):
-        sym = path.stem.upper()
-        if sym not in eligible:
+    dated_universes = load_universe_history(root)
+    dated_universes[as_of_str] = eligible
+    market_sessions = benchmark["Date"].dt.strftime("%Y-%m-%d").tolist()
+    previous_date = prior_market_session(market_sessions, as_of_str)
+    previous_eligible = dated_universes.get(previous_date, set())
+    histories = {}
+    frames = {}
+    for symbol in sorted(eligible | previous_eligible):
+        path = ohlcv_dir / f"{symbol}.csv"
+        if not path.exists():
             continue
-
-        stock = close_history(path)
-        if stock.empty:
-            continue
-
-        # Trim stock up to as_of_date
-        stock = stock[stock["Date"].dt.date <= as_of_date]
-        if stock.empty or stock["Date"].iloc[-1].date() != as_of_date:
-            continue
-
-        closes = stock["Close"].tolist()
-
-        # Compute today's returns & composite
-        ret_today = compute_stock_returns(closes, offset=0)
-        if ret_today is not None:
-            comp_today = calculate_composite_score(ret_today)
-            if comp_today is not None:
-                composite_scores_today[sym] = comp_today
-                for k in HORIZONS:
-                    if k in ret_today:
-                        period_scores[k][sym] = ret_today[k]
-
-        # Compute 21-day ago returns & composite (for RS momentum delta)
-        ret_21d = compute_stock_returns(closes, offset=21)
-        if ret_21d is not None:
-            comp_21d = calculate_composite_score(ret_21d)
-            if comp_21d is not None:
-                composite_scores_21d_ago[sym] = comp_21d
-
-        # Check RS line 52W high
-        rs_line_high_flags[sym] = check_rs_line_52w_high(stock, benchmark)
-
-    # Compute percentiles across the base universe
-    ranked_today = percentile_rank(composite_scores_today)
-    ranked_21d = percentile_rank(composite_scores_21d_ago)
-    ranked_periods = {k: percentile_rank(scores) for k, scores in period_scores.items()}
-
-    ratings: dict[str, dict] = {}
-    for sym, comp_rank in ranked_today.items():
-        prev_rank = ranked_21d.get(sym)
-        delta_21d = (comp_rank - prev_rank) if prev_rank is not None else None
-
-        ratings[sym] = {
-            "front_weighted": comp_rank,  # backward compatibility alias for frontend
-            "composite_rs": comp_rank,
-            "one_month": ranked_periods["one_month"].get(sym),
-            "three_month": ranked_periods["three_month"].get(sym),
-            "six_month": ranked_periods["six_month"].get(sym),
-            "nine_month": ranked_periods["nine_month"].get(sym),
-            "twelve_month": ranked_periods["twelve_month"].get(sym),
-            "rs_change_21d": delta_21d,
-            "is_rs_line_52w_high": rs_line_high_flags.get(sym, False),
-        }
+        frame = close_history(path)
+        frames[symbol] = frame[frame["Date"].dt.date <= as_of_date]
+        histories[symbol] = (frame["Date"].dt.strftime("%Y-%m-%d").tolist(), frame["Close"].tolist())
+    ratings = rank_session(histories, as_of_str, eligible)
+    previous = rank_session(histories, previous_date, previous_eligible) if previous_date else {}
+    for symbol, rating in ratings.items():
+        prior = previous.get(symbol)
+        rating["rs_change_21d"] = rating["composite_rs"] - prior["composite_rs"] if prior else None
+        rating["is_rs_line_52w_high"] = check_rs_line_52w_high(frames[symbol], benchmark)
+    save_universe_history(root, dated_universes)
 
     if not ratings:
         print("Error: no breadth-eligible symbols met the RS minimum history threshold.")
@@ -272,16 +292,17 @@ def main():
         "universe_generated_at": universe_generated_at,
         "liquid_universe_count": len(ratings),
         "methodology": {
-            "version": "marketstrength_parity_v1",
+            "version": METHODOLOGY_VERSION,
             "benchmark": "NIFTY 500",
             "benchmark_file": FRONT_WEIGHTED_BENCHMARK_FILENAME,
             "windows": HORIZONS,
             "weights": WEIGHTS,
-            "minimum_aligned_sessions": MINIMUM_SESSIONS,
+            "minimum_aligned_sessions": 127,
             "rating_keys": ["one_month", "three_month", "six_month", "nine_month", "twelve_month", "front_weighted"],
             "score_formula": "0.40*R63 + 0.20*R126 + 0.20*R189 + 0.20*R252",
             "rank_formula": "floor(1 + 98 * strictly_lower_scores / max(1, eligible_scores - 1) + 0.5)",
-            "momentum_delta": "today_composite_rs - rs_21_sessions_ago",
+            "momentum_delta": "today_composite_rs - dated_rs_21_market_sessions_ago",
+            "short_history_policy": "missing 9M/12M returns use 6M; fewer than 127 observations are unavailable",
             "rs_line": "date-aligned Close_stock / Close_Nifty500 at 52-week high",
         },
         "ratings": ratings,

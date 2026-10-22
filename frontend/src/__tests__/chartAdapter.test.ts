@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { aggregate } from '../chart/model';
 const revision = 'a'.repeat(64);
 const manifest = { revision, schemaVersion:6, sessionDate:'2026-10-01', totalStocks:1,
   datasetUrl:'/data/stocks.json', iposUrl:'/data/ipos.json', chartRevision:'b'.repeat(64),
@@ -46,5 +47,37 @@ it.each<{schemaVersion:number; invalid?:string}>([
     arrayBuffer:async()=>new TextEncoder().encode(JSON.stringify(values[url])).buffer, headers:new Headers({'Content-Encoding':'gzip'})})));
   const {realAdapter} = await import('../api/realAdapter');
   if (invalid) await expect(realAdapter.getChart('TEST')).rejects.toThrow(invalid === 'symbol' ? 'Chart chunk symbol/schema mismatch' : undefined);
-  else await expect(realAdapter.getChart('TEST')).resolves.toEqual({schemaVersion:2, ...metadata, candles, asOfDate:'2026-10-01'});
+  else {
+    await expect(realAdapter.getChart('TEST')).resolves.toEqual({schemaVersion:2, ...metadata, candles, asOfDate:'2026-10-01'});
+    const historical = await realAdapter.getChart('TEST', revision, '2025-12-31');
+    expect(historical.candles).toEqual(candles.slice(0, 1));
+    expect(historical.asOfDate).toBe('2025-12-31');
+    expect((await realAdapter.getChart('TEST')).candles).toEqual(candles); // Shared objects stay intact.
+  }
+});
+
+it('caps fallback charts before aggregation and excludes future events', async () => {
+  const candles = ['2026-09-28', '2026-09-29', '2026-09-30'].map((date, i) =>
+    ({date, open:10, high:i === 2 ? 999 : 12, low:9, close:i === 2 ? 900 : 11, volume:100}));
+  const chart = {schemaVersion:2, symbol:'TEST', asOfDate:'2026-10-01', historyStartDate:candles[0].date,
+    candles, volumeEvents:{highestEver:{date:'2026-09-30', volume:100}},
+    corporateActions:[{ex_date:'2026-09-29'}, {ex_date:'2026-09-30'}],
+    earnings:[{filing_date:'2026-09-29'}, {filing_date:'2026-09-30'}],
+    marketNews:[{date:'2026-09-29'}, {date:'2026-09-30'}],
+    regulatoryAnnouncements:[{date:'2026-09-30'}]};
+  const fetcher = vi.fn(async (url:string) => url === '/data/current.json'
+    ? {ok:true, json:async()=>manifest}
+    : url.endsWith('/release.json') ? {ok:false, status:404}
+    : {ok:true, arrayBuffer:async()=>new TextEncoder().encode(JSON.stringify(chart)).buffer,
+      headers:new Headers({'Content-Encoding':'gzip'})});
+  vi.stubGlobal('fetch', fetcher);
+  const {screenerApi} = await import('../api/screenerApi');
+  const clipped = await screenerApi.getChart('TEST', 'f'.repeat(64), '2026-09-29');
+  expect(clipped.candles).toEqual(candles.slice(0, 2));
+  for (const interval of ['W', 'M'] as const)
+    expect(aggregate(clipped.candles, interval)).toEqual([{...candles[0], volume:200}]);
+  expect(clipped).toMatchObject({asOfDate:'2026-09-29', volumeEvents:{}, corporateActions:[{ex_date:'2026-09-29'}],
+    earnings:[{filing_date:'2026-09-29'}], marketNews:[{date:'2026-09-29'}], regulatoryAnnouncements:[]});
+  expect((await screenerApi.getChart('TEST')).candles).toEqual(candles);
+  await expect(screenerApi.getChart('TEST', revision, '2026-02-30')).rejects.toThrow('Invalid chart session date');
 });

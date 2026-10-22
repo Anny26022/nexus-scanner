@@ -19,7 +19,7 @@ const request: ScreenerRunRequest = {datasetRevision: 'a'.repeat(64), universe: 
   expressionTree: {type: 'group', operator: 'all', children: []}, page: 1, pageSize: 15, sort: {field: 'rvol', direction: 'desc'}};
 const row = {symbol: 'AVTNPL', name: 'Avt Natural Products', sector: 'FMCG', industry: 'Agricultural Products',
   close: 94.78, changePct: 10.92, rvol: 19.22, marketCapCrore: 1443, rsRating: 87, rsi14: 57.99, deliveryPct: null} as StockRow;
-const data = {rows: [row], matchCount: 16, totalUniverseCount: 2600, page: 1, pageSize: 15, immutableRevision: request.datasetRevision} as ScreenerRunResponse;
+const data = {rows: [row], matchCount: 16, totalUniverseCount: 2600, page: 1, pageSize: 15, immutableRevision: request.datasetRevision, resolvedSession: {date: request.asOfDate}} as ScreenerRunResponse;
 const props = {isLoading: false, isError: false, onPageChange: vi.fn(), onSortChange: vi.fn()};
 
 it('copies every matching symbol from a later page without rendering additional rows', async () => {
@@ -58,7 +58,7 @@ it('switches the current result page into the lazy quick-chart gallery', async (
   fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
   expect(screen.getByText('Interactive charts use your saved style, indicators, and drawings. Drag to pan; scroll or pinch to zoom.')).toBeInTheDocument();
   expect(screen.getByLabelText('AVTNPL quick chart')).toBeInTheDocument();
-  await waitFor(() => expect(screenerApi.getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision));
+  await waitFor(() => expect(screenerApi.getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision, request.asOfDate));
 });
 
 function quickChart(cached = false) {
@@ -70,14 +70,26 @@ function quickChart(cached = false) {
   const snapshot = {candles: [{date: '2026-10-01', open: 1, high: 2, low: 0.5, close: 1.5, volume: 10}]};
   const getChart = vi.spyOn(screenerApi, 'getChart').mockResolvedValue(snapshot as never);
   const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
-  if (cached) client.setQueryData(['quick-chart', request.datasetRevision, row.symbol], snapshot);
+  if (cached) client.setQueryData(['quick-chart', request.datasetRevision, row.symbol, request.asOfDate], snapshot);
   const view = render(<QueryClientProvider client={client}><ResultsTable {...props} data={data} /></QueryClientProvider>);
   fireEvent.click(screen.getByRole('button', {name: 'Charts'}));
   const card = screen.getByLabelText('AVTNPL quick chart');
   const intersect = (isIntersecting: boolean) => act(() => notify(
     [{isIntersecting, target: card} as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
-  return {...view, getChart, intersect};
+  return {...view, client, getChart, intersect};
 }
+
+it('reloads a mini chart when the date changes even with the same cached revision', async () => {
+  const {client, getChart, intersect, rerender} = quickChart();
+  intersect(true);
+  await waitFor(() => expect(ChartEngine).toHaveBeenCalledTimes(1));
+  const first = vi.mocked(ChartEngine).mock.results[0].value;
+  rerender(<QueryClientProvider client={client}><ResultsTable {...props}
+    data={{...data, resolvedSession:{...data.resolvedSession, date:'2026-10-08'}}} /></QueryClientProvider>);
+  await waitFor(() => expect(getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision, '2026-10-08'));
+  await waitFor(() => expect(ChartEngine).toHaveBeenCalledTimes(2));
+  expect(first.destroy).toHaveBeenCalledTimes(1);
+});
 
 it('defers the chart request and engine until the card approaches the viewport', async () => {
   const {getChart, intersect} = quickChart();
@@ -85,7 +97,7 @@ it('defers the chart request and engine until the card approaches the viewport',
   expect(ChartEngine).not.toHaveBeenCalled();
   intersect(true);
   await waitFor(() => expect(ChartEngine).toHaveBeenCalledTimes(1));
-  expect(getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision);
+  expect(getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision, request.asOfDate);
 });
 
 it('defers a cached chart engine until the card approaches the viewport', async () => {
@@ -119,7 +131,7 @@ it('opens a quick chart in the existing full chart workspace', () => {
   render(<QueryClientProvider client={client}><ResultsTable {...props} data={data} onOpenFullChart={openFullChart} /></QueryClientProvider>);
   fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
   fireEvent.click(screen.getByRole('button', { name: 'Open AVTNPL full chart' }));
-  expect(openFullChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision);
+  expect(openFullChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision, request.asOfDate);
   expect((readChartStorage('grid.v1') as { tiles: Array<{ symbol: string; interval: string }> }).tiles[0]).toEqual({ symbol: 'AVTNPL', interval: 'D' });
 });
 

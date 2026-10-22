@@ -21,7 +21,7 @@ const candles = [
 ];
 function setup() {
   const client = new QueryClient({defaultOptions:{queries:{retry:false}}});
-  return render(<QueryClientProvider client={client}><ChartsTab datasetRevision={'a'.repeat(64)}/></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><ChartsTab datasetRevision={'a'.repeat(64)} sessionDate="2026-10-02"/></QueryClientProvider>);
 }
 function chooseGrid(count:1|2) {
   fireEvent.click(screen.getByLabelText('Chart grid'));
@@ -103,7 +103,7 @@ it('loads release-pinned history, aggregates intervals and disposes replaced eng
   vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
   const ui = setup();
   await screen.findByLabelText('RELIANCE candlestick and volume chart');
-  expect(screenerApi.getChart).toHaveBeenCalledWith('RELIANCE','a'.repeat(64));
+  expect(screenerApi.getChart).toHaveBeenCalledWith('RELIANCE','a'.repeat(64),'2026-10-02');
   const first = vi.mocked(ChartEngine).mock.results[0].value;
   fireEvent.click(screen.getByRole('button',{name:'Zoom in'}));
   expect(first.zoom).toHaveBeenCalledWith(.8);
@@ -199,7 +199,7 @@ it('connects native panes, styles, settings, date navigation and release-pinned 
   fireEvent.change(screen.getByLabelText('Compare symbol'),{target:{value:'TCS'}});
   fireEvent.click(screen.getByRole('button',{name:'Add'}));
   await waitFor(()=>expect(engine.setComparison).toHaveBeenLastCalledWith('TCS',candles,false));
-  expect(screenerApi.getChart).toHaveBeenCalledWith('TCS','a'.repeat(64));
+  expect(screenerApi.getChart).toHaveBeenCalledWith('TCS','a'.repeat(64),'2026-10-02');
   fireEvent.click(screen.getByLabelText('Comparison in synced pane'));
   await waitFor(()=>expect(engine.setComparison).toHaveBeenLastCalledWith('TCS',candles,true));
   fireEvent.change(screen.getByLabelText('Go to date'),{target:{value:'2026-10-01'}});
@@ -336,7 +336,7 @@ it('persists fullscreen state across remounts and keeps layout grid option acces
 it('writes fullscreen state once per toggle under Strict Mode', async () => {
   vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
   const client = new QueryClient({defaultOptions:{queries:{retry:false}}});
-  render(<StrictMode><QueryClientProvider client={client}><ChartsTab datasetRevision={'a'.repeat(64)}/></QueryClientProvider></StrictMode>);
+  render(<StrictMode><QueryClientProvider client={client}><ChartsTab datasetRevision={'a'.repeat(64)} sessionDate="2026-10-02"/></QueryClientProvider></StrictMode>);
   await screen.findByLabelText('RELIANCE candlestick and volume chart');
   const writes = vi.spyOn(Storage.prototype, 'setItem');
   writes.mockClear();

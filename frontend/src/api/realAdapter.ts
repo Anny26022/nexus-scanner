@@ -352,7 +352,25 @@ class RealDataAdapter {
     return ipoSnapshots.get(manifest.revision)!;
   }
 
-  async getChart(symbol: string, revision?: string): Promise<ChartSnapshot> {
+  async getChart(symbol: string, revision?: string, sessionDate?: string): Promise<ChartSnapshot> {
+    if (sessionDate && !validDate(sessionDate)) throw new Error('Invalid chart session date');
+    const chart = await this.publishedChart(symbol, revision);
+    const cutoff = sessionDate && sessionDate < chart.asOfDate ? sessionDate : chart.asOfDate;
+    const candles = chart.candles.filter(candle => candle.date <= cutoff);
+    const clipped = {...chart, asOfDate: cutoff, candles};
+    if (cutoff < chart.asOfDate) {
+      clipped.historyStartDate = candles[0]?.date ?? null;
+      clipped.volumeEvents = {}; // Release-wide extremes can include future candles.
+      for (const [field, dateKey] of [['corporateActions', 'ex_date'], ['earnings', 'filing_date'],
+        ['marketNews', 'date'], ['regulatoryAnnouncements', 'date']] as const) {
+        clipped[field] = (chart[field] ?? []).filter(row => typeof row[dateKey] === 'string'
+          && (row[dateKey] as string).slice(0, 10) <= cutoff);
+      }
+    }
+    return clipped;
+  }
+
+  private async publishedChart(symbol: string, revision?: string): Promise<ChartSnapshot> {
     validSymbol(symbol);
     const release = await releaseFor(revision);
     if (release.schemaVersion === 7) {

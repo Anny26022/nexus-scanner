@@ -4,12 +4,15 @@ import App from '../App';
 
 vi.mock('../api/screenerApi', () => ({screenerApi: {
   getCurrentRevision: vi.fn(async () => ({latestSessionDate:'2026-10-21', immutableRevision:'a'.repeat(64)})),
-  getAvailableSessions: vi.fn(async () => []),
+  getAvailableSessions: vi.fn(async () => [{date:'2026-10-09', revision:'b'.repeat(64), isHistorical:true, label:'2026-10-09'}]),
 }}));
-vi.mock('../components/ExploreTab', () => ({ExploreTab: () => <input aria-label="Screener draft" defaultValue=""/>}));
-vi.mock('../components/ChartsTab', () => ({default: () => <p>Full chart workspace</p>}));
+vi.mock('../components/ExploreTab', () => ({ExploreTab: ({onOpenFullChart}: {onOpenFullChart: (symbol:string, revision:string, date:string)=>void}) => <>
+  <input aria-label="Screener draft" defaultValue=""/>
+  <button onClick={()=>onOpenFullChart('TEST', 'c'.repeat(64), '2026-10-08')}>Open snapshot chart</button>
+</>}));
+vi.mock('../components/ChartsTab', () => ({default: ({datasetRevision,sessionDate}:{datasetRevision:string;sessionDate:string}) => <p data-revision={datasetRevision} data-date={sessionDate}>Full chart workspace</p>}));
 vi.mock('../components/NewListingsTab', () => ({NewListingsTab: () => <p>IPO workspace</p>}));
-vi.mock('../components/SessionDatePicker', () => ({SessionDatePicker: () => null}));
+vi.mock('../components/SessionDatePicker', () => ({SessionDatePicker: ({onChange}:{onChange:(date:string)=>void}) => <button onClick={()=>onChange('2026-10-09')}>Select historical session</button>}));
 
 afterEach(() => {cleanup(); localStorage.clear();});
 
@@ -35,4 +38,17 @@ it('does not mount Screener until first visited from a saved Charts session', as
   expect(screen.queryByLabelText('Screener draft')).toBeNull();
   fireEvent.click(screen.getByRole('button', {name:'Screener'}));
   await waitFor(() => expect(screen.getByRole('textbox', {name:'Screener draft'})).toBeVisible());
+});
+
+it('keeps the snapshot date in sidebar charts and the mini-to-full handoff', async () => {
+  render(<App/>);
+  fireEvent.click(screen.getByText('Select historical session'));
+  fireEvent.click(screen.getByRole('button', {name:'Charts'}));
+  const chart = await screen.findByText('Full chart workspace');
+  await waitFor(()=>expect(chart).toHaveAttribute('data-revision', 'b'.repeat(64)));
+  expect(chart).toHaveAttribute('data-date', '2026-10-09');
+  fireEvent.click(screen.getByRole('button', {name:'Screener'}));
+  fireEvent.click(screen.getByText('Open snapshot chart'));
+  expect(await screen.findByText('Full chart workspace')).toHaveAttribute('data-date', '2026-10-08');
+  expect(screen.getByText('Full chart workspace')).toHaveAttribute('data-revision', 'c'.repeat(64));
 });

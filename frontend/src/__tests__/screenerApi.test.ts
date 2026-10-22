@@ -32,10 +32,10 @@ it('never loads mocks in real mode and preserves the real catalogue metadata', a
   const {screenerApi} = await import('../api/screenerApi');
   await screenerApi.getCatalog();
   expect(await screenerApi.getIpoCatalogue()).toEqual({records: [], details: {}});
-  await screenerApi.getChart('TEST', 'revision');
+  await screenerApi.getChart('TEST', 'revision', '2026-10-09');
   await screenerApi.getFilterChoices('revision');
   expect(fixtures.real.getFilterChoices).toHaveBeenCalledWith('revision');
-  expect(fixtures.real.getChart).toHaveBeenCalledWith('TEST', 'revision');
+  expect(fixtures.real.getChart).toHaveBeenCalledWith('TEST', 'revision', '2026-10-09');
   expect(fixtures.mockLoads).toBe(0);
 });
 

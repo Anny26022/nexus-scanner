@@ -1,14 +1,21 @@
-import { Sun, Moon, ArrowUpRight, PanelLeftClose } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Sun, Moon, ArrowUpRight, PanelLeftClose, ScanSearch, Rocket, CandlestickChart } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 
 interface NavbarProps {
   activeTab: 'screener' | 'ipo' | 'charts';
   onTabChange: (tab: 'screener' | 'ipo' | 'charts') => void;
   onHideSidebar: () => void;
-  sessionDate?: string;
+  sessionControl?: ReactNode;
 }
 
-export function Navbar({ activeTab, onTabChange, onHideSidebar, sessionDate }: NavbarProps) {
+const NAV_ITEMS = [
+  { id: 'screener', label: 'Screener', Icon: ScanSearch },
+  { id: 'ipo', label: 'IPO Catalogue', Icon: Rocket },
+  { id: 'charts', label: 'Charts', Icon: CandlestickChart },
+] as const;
+
+export function Navbar({ activeTab, onTabChange, onHideSidebar, sessionControl }: NavbarProps) {
   const { choice, setChoice } = useTheme();
   return <header className="app-sidebar">
     <div className="sidebar-brand-row"><div className="brand"><svg className="brand-mark" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -20,12 +27,19 @@ export function Navbar({ activeTab, onTabChange, onHideSidebar, sessionDate }: N
       <circle cx="12" cy="12" r="6" stroke="currentColor" strokeWidth="0.25" strokeOpacity="0.3" fill="none" />
     </svg><span>Nexus <span className="brand-subtitle">Screener</span></span></div><button type="button" className="sidebar-toggle" aria-label="Hide sidebar" title="Hide sidebar" onClick={onHideSidebar}><PanelLeftClose size={16}/></button></div>
     <nav className="primary-nav" aria-label="Main navigation">
-      <button type="button" aria-current={activeTab === 'screener' ? 'page' : undefined} onClick={() => onTabChange('screener')}><span>Screener</span><ArrowUpRight className="nav-arrow" size={14} /></button>
-      <button type="button" aria-current={activeTab === 'ipo' ? 'page' : undefined} onClick={() => onTabChange('ipo')}><span>IPO Catalogue</span><ArrowUpRight className="nav-arrow" size={14} /></button>
-      <button type="button" aria-current={activeTab === 'charts' ? 'page' : undefined} onClick={() => onTabChange('charts')}><span>Charts</span><ArrowUpRight className="nav-arrow" size={14} /></button>
+      {NAV_ITEMS.map(({id, label, Icon}) => (
+        <button key={id} type="button" aria-current={activeTab === id ? 'page' : undefined} onClick={() => onTabChange(id)}>
+          <Icon size={16} aria-hidden="true" />
+          <span>{label}</span>
+          <ArrowUpRight className="nav-arrow" size={14} aria-hidden="true" />
+        </button>
+      ))}
     </nav>
+    {sessionControl && <div className="sidebar-session">
+      <span className="sidebar-session-label">Session</span>
+      {sessionControl}
+    </div>}
     <div className="sidebar-footer">
-      {sessionDate && <div className="mobile-session-badge"><span>{new Date(`${sessionDate}T00:00:00`).toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}</span></div>}
       <div className="theme-control" role="group" aria-label="Appearance">
         {([{id: 'light', label: 'Light appearance', Icon: Sun}, {id: 'dark', label: 'Dark appearance', Icon: Moon}] as const).map(({id, label, Icon}) =>
           <button type="button" key={id} aria-label={label} title={label} aria-pressed={choice === id} onClick={() => setChoice(id)}><Icon size={16} /></button>)}

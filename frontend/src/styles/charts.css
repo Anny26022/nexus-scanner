@@ -481,7 +481,7 @@
 .chart-desk-body-expanded .chart-watchlist-dock { position: fixed; inset: 0 0 0 auto; z-index: 101; height: 100dvh; }
 @media (max-width: 700px) {
   .chart-workspace.chart-workspace-expanded { right: 38px; }
-  .chart-watchlist-dock,
+  .chart-desk-body .chart-watchlist-dock,
   .chart-desk-body-expanded .chart-watchlist-dock:not(.is-mobile-open) {
     width: 38px;
     min-width: 38px;

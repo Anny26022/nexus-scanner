@@ -149,8 +149,11 @@
 .primary-nav button[aria-current="page"] { background: var(--surface-hover); color: var(--text); font-weight: 600; border-color: transparent; box-shadow: none; }
 .nav-arrow { margin-left: auto; visibility: hidden; opacity: 0; transition: all 0.15s ease; color: var(--secondary); }
 [aria-current="page"] .nav-arrow { visibility: visible; opacity: 1; color: var(--text); }
+.sidebar-session { margin-top: 18px; padding: 12px 4px 0; border-top: 1px solid var(--line); }
+.sidebar-session-label { display: block; margin-bottom: 6px; font-size: 9.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.sidebar-session .session-picker-wrapper { display: block; }
+.sidebar-session .session-date-input { width: 100%; }
 .sidebar-footer { margin-top: auto; padding-inline: 4px; padding-top: 14px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.mobile-session-badge { display: none; }
 .theme-control { display: flex; width: fit-content; gap: 2px; padding: 2px; background: var(--surface-subtle); border: 1px solid var(--line); border-radius: 8px; }
 .theme-control button { display: grid; place-items: center; width: 30px; height: 26px; border-radius: 6px; color: var(--muted); transition: all 0.14s ease; }
 .theme-control button:hover { color: var(--text); }

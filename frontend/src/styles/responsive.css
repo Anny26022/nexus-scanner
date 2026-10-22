@@ -43,19 +43,6 @@
     align-items: center;
     gap: 8px;
   }
-  .mobile-session-badge {
-    display: inline-flex;
-    align-items: center;
-    font-size: 10.5px;
-    font-family: var(--font-mono);
-    color: var(--secondary);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-    padding: 2px 7px;
-    border-radius: 5px;
-    background: var(--surface-subtle);
-    border: 1px solid var(--line);
-  }
   .theme-control {
     padding: 2px;
     gap: 1px;
@@ -127,7 +114,7 @@
   }
   .nav-arrow { display: none; }
   .workspace { flex: 1; height: auto; min-height: 0; padding: 0; margin: 0; }
-  .workspace-heading { display: none; }
+  .workspace-heading, .sidebar-session { display: none; }
   .workspace-description { display: none; }
   .workspace-breadcrumb { display: none; }
   .session-label { display: none; }
@@ -167,13 +154,13 @@
   .screen-controls .query-input input { font-size: 13px; }
   .screen-controls .query-input > svg { width: 14px; height: 14px; color: var(--muted); }
   .universe-control {
-    grid-column: 1;
+    grid-column: 1 / -1;
     grid-row: 2;
     width: 100%;
     min-width: 0;
   }
   .field-label { font-size: 10px; }
-  .universe-control .field-label { display: none; }
+  .universe-label-row { display: none; }
   .select-wrap select {
     height: 32px;
     padding: 0 24px 0 9px;
@@ -185,9 +172,9 @@
   }
   .select-wrap > svg { top: 9px; right: 8px; }
   .screen-buttons {
-    grid-column: 2;
-    grid-row: 2;
-    width: auto;
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: 100%;
     display: flex;
     align-items: center;
     margin: 0;
@@ -284,8 +271,9 @@
   }
   .results-actions .button svg { width: 13px; height: 13px; }
   .results-symbol-search {
-    flex: 1 1 100px;
-    max-width: 150px;
+    flex: 1 1 100%;
+    max-width: none;
+    order: 3;
     min-width: 80px;
     margin: 0;
     height: 30px;

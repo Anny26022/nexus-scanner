@@ -18,6 +18,7 @@ import {
 import { RrgMicroMap } from "./RrgMicroMap";
 
 interface RrgInspectorProps {
+  replay?: boolean;
   item: RrgItem | null;
   scope: RrgItem[];
   weeks: number;
@@ -70,6 +71,7 @@ function TrailSparkline({ item, weeks }: { item: RrgItem; weeks: number }) {
 }
 
 export function RrgInspector({
+  replay = false,
   item,
   scope,
   weeks,
@@ -196,7 +198,7 @@ export function RrgInspector({
 
             <TrailSparkline item={item} weeks={weeks} />
 
-            {isIpoItem(item) ? (
+            {replay ? <p className="rrg-summary__axes">Replay shows historical positions for today’s constituents. Stock details are available in Live.</p> : isIpoItem(item) ? (
               <dl className="rrg-specs">
                 <div><dt>Price</dt><dd>₹{fmtNum(item.close)}</dd></div>
                 <div><dt>1-day change</dt><dd className={toneClass(item.changePct)}>{fmtSigned(item.changePct)}</dd></div>
@@ -246,7 +248,7 @@ export function RrgInspector({
             )}
 
             <div className="rrg-inspector__actions">
-              {!isIpoItem(item) && (
+              {!replay && !isIpoItem(item) && (
                 <button className="rrg-btn rrg-btn--primary" onClick={onOpenConstituents}>
                   <span>Explore {item.metrics.constituentCount} Stocks</span>
                   <ArrowUpRight size={14} />

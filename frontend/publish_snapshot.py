@@ -228,6 +228,32 @@ def stock_rows(tasks, context, session, presets, default, workers=0):
         executor.shutdown(wait=True, cancel_futures=True)
 
 
+def attach_thematic_rrg(root, output, manifest):
+    """Bind a generated sidecar at release publication, never mutate frozen revisions."""
+    staged = root / 'thematic_rrg.json'
+    if staged.exists():
+        payload = json.loads(staged.read_text())
+        if payload.get('asOfDate') != manifest['sessionDate']:
+            raise ValueError('Thematic RRG session does not match scanner publication')
+        raw = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
+        version = hashlib.sha256(raw).hexdigest()
+        target = output / 'thematic-rrg' / f'{version}.json'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            if target.read_bytes() != raw:
+                raise ValueError('Thematic RRG immutable object content mismatch')
+        else:
+            temporary = target.with_suffix('.tmp')
+            temporary.write_bytes(raw)
+            temporary.replace(target)
+        manifest.update(thematicRrgUrl=f'/data/thematic-rrg/{version}.json', thematicRrgVersion=version)
+    elif (output / 'current.json').exists():
+        # The weekly fundamentals-only refresh intentionally skips RRG generation.
+        previous = json.loads((output / 'current.json').read_text())
+        if previous.get('thematicRrgUrl') and previous.get('thematicRrgVersion'):
+            manifest.update({key: previous[key] for key in ('thematicRrgUrl', 'thematicRrgVersion')})
+
+
 def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = time.perf_counter()
     cache=ScannerCache(); cache.refresh(root)
@@ -379,7 +405,14 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     manifest['themeClassificationVersion'] = taxonomy['version']
     manifest['universeClassificationUrl'] = f'/data/revisions/{revision}/universe-classification.json'
     started = elapsed('serialization and compression', started)
+    rrg_pointer = {'sessionDate': session}
+    attach_thematic_rrg(root, output, rrg_pointer)
+    rrg_pointer.pop('sessionDate')
     manifest = complete_release(chart_root, output, manifest)
+    if rrg_pointer:
+        # Sidecars advance independently; do not rewrite frozen release manifests.
+        manifest = dict(manifest, **rrg_pointer)
+        write_json(output / 'current.json', manifest)
     elapsed('release completion', started)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest

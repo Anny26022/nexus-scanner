@@ -162,6 +162,18 @@ it('does not substitute the live position when a replay date has no recorded RS'
   expect(screen.getByText('0 of 2 shown')).toBeTruthy();
 });
 
+it('does not present live stock metrics as historical replay observations', () => {
+  mount();
+  fireEvent.change(screen.getByLabelText('RRG replay date'), {target: {value: '0'}});
+  expect(screen.queryByText('Median RS')).toBeNull();
+  const row = screen.getAllByText(block.name).map(node => node.closest('tr')).find(Boolean);
+  expect(row).not.toBeNull();
+  fireEvent.click(row!);
+  expect(screen.queryByText('Median RS rating')).toBeNull();
+  expect(screen.queryByText(/Explore .* Stocks/)).toBeNull();
+  expect(screen.getByText(/Replay shows historical positions for today’s constituents/)).toBeTruthy();
+});
+
 it('switches to the separate new-listing rotation model', () => {
   mount();
   fireEvent.click(screen.getByRole('tab', { name: /New listings/i }));

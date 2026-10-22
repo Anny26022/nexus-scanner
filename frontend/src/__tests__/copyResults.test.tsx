@@ -7,8 +7,22 @@ afterEach(()=>{cleanup(); vi.unstubAllGlobals();});
 it('exports unique symbols with group counts and preserves result order inside each group',()=>{
   const rows = [{symbol:'B',industry:'Sugar'}, {symbol:'A',industry:'Chemicals'},
     {symbol:'C',industry:'Sugar'}, {symbol:'B',industry:'Sugar'}, {symbol:'D'}];
-  expect(formatCopyResults(rows,'industry')).toBe('###Chemicals(1),NSE:A,###Sugar(2),NSE:B,NSE:C,###Unclassified(1),NSE:D');
+  expect(formatCopyResults(rows,'industry')).toBe('###Sugar(2),NSE:B,NSE:C,###Chemicals(1),NSE:A,###Unclassified(1),NSE:D');
   expect(formatCopyResults(rows,'symbols')).toBe('NSE:B, NSE:A, NSE:C, NSE:D');
+});
+
+it('orders groups descending by number of stocks in tradingview section format', () => {
+  const rows = [
+    { symbol: 'AUTO1', sector: 'Automobile' },
+    { symbol: 'BANK1', sector: 'Banking' },
+    { symbol: 'BANK2', sector: 'Banking' },
+    { symbol: 'BANK3', sector: 'Banking' },
+    { symbol: 'AUTO2', sector: 'Automobile' },
+    { symbol: 'IT1', sector: 'Information Technology' },
+  ];
+  expect(formatCopyResults(rows, 'sector')).toBe(
+    '###Banking(3),NSE:BANK1,NSE:BANK2,NSE:BANK3,###Automobile(2),NSE:AUTO1,NSE:AUTO2,###Information Technology(1),NSE:IT1'
+  );
 });
 
 it('joins themes by symbol without treating missing sub-industry as theme',()=>{

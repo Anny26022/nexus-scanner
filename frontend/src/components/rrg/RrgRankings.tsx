@@ -14,6 +14,7 @@ import {
 import { RrgMicroMap } from "./RrgMicroMap";
 
 interface RrgRankingsProps {
+  replay?: boolean;
   items: RrgItem[];
   mode: RrgMode;
   sortField: string;
@@ -77,6 +78,7 @@ function SortHeader({
 }
 
 export function RrgRankings({
+  replay = false,
   items,
   mode,
   sortField,
@@ -86,7 +88,7 @@ export function RrgRankings({
   onSelect,
   bounds,
 }: RrgRankingsProps) {
-  const columns = mode === "ipos" ? IPO_COLUMNS : CLUSTER_COLUMNS;
+  const columns = mode === "ipos" ? IPO_COLUMNS : CLUSTER_COLUMNS.filter(column => !replay || !["medianRs", "beatingBenchmarkPct", "constituentCount"].includes(column.id));
 
   return (
     <div className="rrg-table-wrap">
@@ -154,9 +156,9 @@ export function RrgRankings({
                     <td className={`rrg-td is-numeric ${toneClass(item.y)}`}>
                       {fmtSigned(item.y, " pts")}
                     </td>
-                    <td className="rrg-td is-numeric">{fmtNum(item.metrics.medianRs, 0)}</td>
+                    {!replay && <><td className="rrg-td is-numeric">{fmtNum(item.metrics.medianRs, 0)}</td>
                     <td className="rrg-td is-numeric">{fmtNum(item.metrics.beatingBenchmarkPct)}%</td>
-                    <td className="rrg-td is-numeric">{item.metrics.constituentCount}</td>
+                    <td className="rrg-td is-numeric">{item.metrics.constituentCount}</td></>}
                   </>
                 )}
               </tr>

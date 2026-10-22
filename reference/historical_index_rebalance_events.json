@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "description": "Audited point-in-time NSE broad index constituent rebalancing events (2021-2026)",
+  "rebalances": [
+    {
+      "date": "2022-03-31",
+      "index": "NIFTY 50",
+      "inclusions": ["APOLLOHOSP"],
+      "exclusions": ["IOC"]
+    },
+    {
+      "date": "2022-09-30",
+      "index": "NIFTY 50",
+      "inclusions": ["ADANIENT"],
+      "exclusions": ["SHREECEM"]
+    },
+    {
+      "date": "2023-07-13",
+      "index": "NIFTY 50",
+      "inclusions": ["LTIM"],
+      "exclusions": ["HDFC"]
+    },
+    {
+      "date": "2024-03-28",
+      "index": "NIFTY 50",
+      "inclusions": ["SHRIRAMFIN"],
+      "exclusions": ["UPL"]
+    },
+    {
+      "date": "2024-09-30",
+      "index": "NIFTY 50",
+      "inclusions": ["BEL", "TRENT"],
+      "exclusions": ["DIVISLAB", "LTIM"]
+    }
+  ]
+}

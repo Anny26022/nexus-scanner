@@ -249,6 +249,9 @@ SCRIPT_OUTPUT_SPECS = {
         ArtifactSpec("market_screens_snapshot.json", "json", min_count=1, required_fields=("as_of_date", "records")),
         ArtifactSpec("pattern_gallery.json", "json", min_count=0),
     ],
+    "build_thematic_rrg.py": [
+        ArtifactSpec("thematic_rrg.json", "json", required_fields=("asOfDate", "rsMethodologyVersion", "blocks", "niches", "ipoTactical")),
+    ],
     "fetch_all_indices.py": [
         ArtifactSpec("all_indices_list.json", "json", min_count=1),
     ],

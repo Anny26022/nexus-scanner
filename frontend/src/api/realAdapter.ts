@@ -9,7 +9,6 @@ import { DataUnavailableError } from './dataErrors';
 import { getManifest, refreshManifest, validateManifest, validDate, manifestSnapshotSource, type Manifest } from './manifest';
 export { refreshManifest } from './manifest';
 const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
-const rrgSnapshots = new Map<string, Promise<import('../types/thematicRrg').ThematicRrgResponse>>();
 const finiteAmount = (value: unknown): number | null => {
   if (value == null || value === '') return null;
   const parsed = Number(value);
@@ -115,7 +114,7 @@ async function dataIndex(release: Manifest): Promise<DataIndex> {
 async function object<T>(release: Manifest, hash: string, resource = 'Announcement'): Promise<T> {
   if (!release.objectUrlTemplate || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid data object reference');
   const url = release.objectUrlTemplate.replace('{hash}', hash);
-  return cached(objectCache, url, () => getChartJson<T>(url, resource), 32);
+  return cached(objectCache, url, () => getChartJson<T>(url, resource), 128);
 }
 function validSymbol(symbol: string) {
   if (!/^[A-Z0-9&_-]+$/.test(symbol)) throw new Error('Invalid symbol');
@@ -179,34 +178,23 @@ class RealDataAdapter {
     return data;
   }
   async getThematicRrg(revision?: string): Promise<import('../types/thematicRrg').ThematicRrgResponse> {
-    const cacheKey = revision || 'default';
-    const cached = rrgSnapshots.get(cacheKey);
-    if (cached) return cached;
-
-    const promise = (async () => {
-      const release = await releaseFor(revision);
-      const urls = [
-        release.thematicRrgUrl,
-        revision ? `/data/revisions/${revision}/thematic_rrg.json` : undefined,
-        '/data/thematic_rrg.json',
-      ].filter(Boolean) as string[];
-
-      for (const url of urls) {
-        try {
-          const resp = await fetch(url);
-          if (resp.ok) {
-            return (await resp.json()) as import('../types/thematicRrg').ThematicRrgResponse;
-          }
-        } catch {
-          continue;
-        }
-      }
+    const release = await releaseFor(revision);
+    if (!release.thematicRrgUrl || !release.thematicRrgVersion) {
       throw new Error('Thematic RRG data is unavailable in this release.');
-    })();
-
-    rrgSnapshots.set(cacheKey, promise);
-    promise.catch(() => rrgSnapshots.delete(cacheKey));
-    return promise;
+    }
+    return cached(releaseCache, `rrg:${release.thematicRrgVersion}`, async () => {
+      const data = await getJson<import('../types/thematicRrg').ThematicRrgResponse>(release.thematicRrgUrl!, false, 'Thematic RRG');
+      if (data.schemaVersion !== 1 || data.rsMethodologyVersion !== 'marketstrength_parity_v2' || !validDate(data.asOfDate)
+          || !Array.isArray(data.blocks) || !Array.isArray(data.niches) || !Array.isArray(data.ipoTactical)
+          || data.totalBlocks !== data.blocks.length || data.totalNiches !== data.niches.length
+          || [...data.blocks, ...data.niches].some(item => typeof item.name !== 'string'
+            || !item.metrics || !Array.isArray(item.constituents))
+          || [...data.blocks, ...data.niches, ...data.ipoTactical].some(item =>
+            !Number.isFinite(item.x) || !Number.isFinite(item.y) || !Array.isArray(item.trail))) {
+        throw new Error('Invalid thematic RRG dataset');
+      }
+      return data;
+    }, 3);
   }
   async getFilterChoices(revision?: string, sessionDate?: string) {
     const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision, sessionDate)});
@@ -406,7 +394,7 @@ class RealDataAdapter {
     }
     if (!release.chartUrlTemplate) throw new Error('Chart release unavailable');
     const url = release.chartUrlTemplate.replace('{symbol}', encodeURIComponent(symbol));
-    const chart = await cached(objectCache, url, () => getChartJson<ChartSnapshot>(url), 32);
+    const chart = await cached(objectCache, url, () => getChartJson<ChartSnapshot>(url), 128);
     if (chart.symbol !== symbol || chart.asOfDate !== release.sessionDate) throw new Error('Chart session mismatch');
     return chart;
   }

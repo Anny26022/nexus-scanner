@@ -542,6 +542,35 @@ def main():
                     actions_by_symbol[sym].append(rec)
         print(f"Loaded {sum(len(v) for v in actions_by_symbol.values())} corporate action records")
 
+    # 5b. Load Point-in-Time Index Rebalancing Ledger
+    index_rebalance_file = pipeline_dir.parent / "reference" / "historical_index_rebalance_events.json"
+    index_rebalances = []
+    if index_rebalance_file.exists():
+        try:
+            with open(index_rebalance_file, "r", encoding="utf-8") as f:
+                index_rebalances = json.load(f).get("rebalances", [])
+            print(f"Loaded {len(index_rebalances)} point-in-time index rebalance events")
+        except Exception as e:
+            print(f"Warning: could not load index rebalance events: {e}")
+
+    def point_in_time_indices(symbol: str, target_date: date, base_indices: list[str]) -> list[str]:
+        # Normalize to canonical uppercase index names
+        active = {idx.strip().upper() for idx in base_indices if idx}
+        for ev in sorted(index_rebalances, key=lambda x: x["date"], reverse=True):
+            try:
+                ev_date = date.fromisoformat(ev["date"])
+                if target_date < ev_date:
+                    idx_name = str(ev.get("index", "")).strip().upper()
+                    inc = [s.strip().upper() for s in ev.get("inclusions", [])]
+                    exc = [s.strip().upper() for s in ev.get("exclusions", [])]
+                    if symbol in inc:
+                        active.discard(idx_name)
+                    if symbol in exc:
+                        active.add(idx_name)
+            except Exception:
+                continue
+        return sorted(list(active))
+
     # 6. Trading Sessions in Range
     unique_dates = sorted(set(d.date() for d in dates if args.start_date <= d.date() <= args.end_date))
     print(f"Found {len(unique_dates)} trading sessions in target window: {unique_dates}")
@@ -821,7 +850,7 @@ def main():
                 "fnoBan": None,
                 "fnoBanAsOfDate": None,
                 "tradingview": None,
-                "indexMemberships": [],
+                "indexMemberships": point_in_time_indices(sym, session_date, stock.get("index_memberships") or []),
                 "circuitLimit": circuit_limit,
                 "surveillanceAvailable": surv_avail,
                 "surveillanceAsOfDate": session_str if surv_avail else None,
@@ -1055,7 +1084,7 @@ def main():
                 "balanceSheetRatios": "unavailable (annual balance sheet time-series not maintained)",
                 "fnoEligibility": "unavailable",
                 "fnoBan": "unavailable",
-                "indexMemberships": "unavailable (constituent change history not backfilled)",
+                "indexMemberships": "Point-in-time constituent ledger (semi-annual rebalancing tracked)",
                 "tradingview": "unavailable",
                 "upcomingEarnings": "unavailable (dated schedule archive not maintained)",
                 "rsUniverse": "dated breadth archive; reconstructed from dated price/capitalization where absent",

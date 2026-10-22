@@ -18,20 +18,57 @@ from build_thematic_rrg import institutional_rrg_symbols, load_theme_classificat
 from build_rs_ratings import rank_session, save_universe_history
 
 class TestThematicRrg(unittest.TestCase):
+    def test_ipo_trail_uses_observed_volumes_dates_and_excludes_future_and_stale_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "ohlcv_data").mkdir(); (root / "indices_ohlcv_data").mkdir()
+            (root / "theme_tracker_source.json").write_text(json.dumps({"blocks": [], "macros": []}))
+            dates = pd.bdate_range("2025-01-01", periods=250).strftime("%Y-%m-%d").tolist()
+            benchmark = np.linspace(100, 200, 250)
+            pd.DataFrame({"Date": dates, "Close": benchmark}).to_csv(root / "indices_ohlcv_data/NIFTY_500.csv", index=False)
+            ipo_dates = dates[-13:-5] + dates[-4:]  # One missing stock session.
+            closes = np.linspace(100, 120, len(ipo_dates))
+            volumes = np.array([100.] * 7 + [1000.] * 5)
+            for symbol in ("IPO", "STALE"):
+                ds, cs, vs = (ipo_dates, closes, volumes) if symbol == "IPO" else (ipo_dates[:-1], closes[:-1], volumes[:-1])
+                frame = pd.DataFrame({"Date": ds, "Open": cs, "High": cs + 1, "Low": cs - 1, "Close": cs, "Volume": vs})
+                if symbol == "IPO":
+                    frame.loc[len(frame)] = ["2030-01-01", 999, 1000, 998, 999, 1e9]
+                frame.iloc[::-1].to_csv(root / f"ohlcv_data/{symbol}.csv", index=False)
+            (root / "all_stocks_fundamental_analysis.json").write_text(json.dumps([
+                {"symbol": s, "listingDate": ipo_dates[0], "name": s, "market_cap_crore": 2000} for s in ("IPO", "STALE")]))
+            with patch("build_thematic_rrg.load_theme_classification", return_value={s: {} for s in ("IPO", "STALE")}):
+                payload = build_thematic_rrg_payload(root, root)
+            self.assertEqual([item["symbol"] for item in payload["ipoTactical"]], ["IPO"])
+            ipo = payload["ipoTactical"][0]
+            self.assertEqual(ipo["marketCapCr"], 2000)
+            self.assertEqual(ipo["close"], 120)
+            for point in ipo["trail"]:
+                end = len(volumes) - point["week"]
+                expected_y = (np.mean(volumes[max(0, end - 5):end]) / np.mean(volumes[:end]) - 1) * 100
+                self.assertEqual(point["y"], round(float(min(300, max(-100, expected_y))), 1))
+                self.assertEqual(point["date"], ipo_dates[end - 1])
+            self.assertEqual(ipo["trail"][-1]["y"], ipo["y"])
+            self.assertEqual(ipo["trail"][-1]["x"], ipo["x"])
+
     def test_payload_uses_full_rs_universe_and_omits_unknown_trail_points(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); (root / "ohlcv_data").mkdir(); (root / "indices_ohlcv_data").mkdir()
             (root / "theme_tracker_source.json").write_text(json.dumps({"blocks": [], "macros": []}))
-            dates = pd.bdate_range("2025-01-01", periods=300).strftime("%Y-%m-%d").tolist()
+            dates = pd.bdate_range("2025-01-01", periods=1000).strftime("%Y-%m-%d").tolist()
             histories = {}
             for symbol, growth in (("A", .001), ("B", .002), ("C", .003), ("OUTSIDE_THEME", .004)):
-                closes = np.exp(np.arange(300) * growth) * 100
+                closes = np.exp(np.arange(1000) * growth) * 100
                 histories[symbol] = (dates, closes)
                 pd.DataFrame({"Date": dates, "Open": closes, "High": closes * 1.01,
-                              "Low": closes * .99, "Close": closes, "Volume": np.full(300, 1e6)}).to_csv(root / f"ohlcv_data/{symbol}.csv", index=False)
-            pd.DataFrame({"Date": dates, "Close": np.full(300, 100)}).to_csv(root / "indices_ohlcv_data/NIFTY_500.csv", index=False)
+                              "Low": closes * .99, "Close": closes, "Volume": np.full(1000, 1e6)}).to_csv(root / f"ohlcv_data/{symbol}.csv", index=False)
+            benchmark = np.linspace(100, 200, 1000)
+            pd.DataFrame({"Date": dates, "Close": benchmark}).to_csv(root / "indices_ohlcv_data/NIFTY_500.csv", index=False)
             (root / "all_stocks_fundamental_analysis.json").write_text(json.dumps([
                 {"symbol": s, "market_cap_crore": 2000, "turnover30_crore": 20} for s in histories]))
+            # During Phase 4.5 yesterday's gzip can coexist with today's enriched JSON.
+            with gzip.open(root / "all_stocks_fundamental_analysis.json.gz", "wt") as handle:
+                json.dump([], handle)
             taxonomy = {s: {"block": "Block", "theme": "Niche", "macro": "Macro"} for s in ("A", "B", "C")}
             eligible = {dates[-1]: set(histories), dates[-22]: {"A", "B", "C"}}
             save_universe_history(root, eligible)
@@ -42,6 +79,9 @@ class TestThematicRrg(unittest.TestCase):
             prior = rank_session(histories, dates[-22], eligible[dates[-22]])
             expected_y = np.median([now[s]["composite_rs"] - prior[s]["composite_rs"] for s in taxonomy])
             self.assertEqual(block["y"], expected_y)
+            self.assertAlmostEqual(block["metrics"]["excessReturn6m"], round(float(np.median([
+                (histories[s][1][-1] / histories[s][1][-127] - 1) * 100 for s in taxonomy])
+                - (benchmark[-1] / benchmark[-127] - 1) * 100), 2))
             self.assertEqual([point["week"] for point in block["trail"]], [0])
             for constituent in block["constituents"]:
                 self.assertEqual(constituent["rsRating"], now[constituent["symbol"]]["composite_rs"])
@@ -212,18 +252,16 @@ class TestThematicRrg(unittest.TestCase):
             (frontend_dir / "public/data/revisions/r2").mkdir(parents=True)
             with gzip.open(frontend_dir / "public/data/revisions/r2/theme-classification.json.gz", "wt", encoding="utf-8") as f:
                 json.dump({"records": {"ABC": {"thematic": {"theme": "Frozen theme"}}}}, f)
-            (frontend_dir / "theme_tracker_source.json").write_text(json.dumps({
-                "macros": [{"title": "Macro", "blocks": ["Block"]}],
-                "blocks": [{"title": "Block", "themes": [{
-                    "name": "Editable niche", "symbols": ["ABC", "EXTRA"],
-                }]}],
-                "fields": ["symbol", "theme", "provenance"],
-                "rows": [["ABC", "Primary theme", "manual"]],
-            }), encoding="utf-8")
+            source = json.loads((Path(self.repo_root) / "frontend/theme_tracker_source.json").read_text())
+            primary = source["blocks"][0]["themes"][0]["name"]
+            source["blocks"][0]["themes"].append({"name": "Editable niche", "symbols": ["ABC", "EXTRA"],
+                                                   "allowMultipleMembership": True})
+            row = {"symbol": "ABC", "theme": primary, "provenance": "manual"}
+            source["rows"].append([row.get(field) for field in source["fields"]])
+            (frontend_dir / "theme_tracker_source.json").write_text(json.dumps(source))
+            records = load_theme_classification(frontend_dir, [{"symbol": "ABC"}, {"symbol": "EXTRA"}], "2026-10-21")
 
-            records = load_theme_classification(frontend_dir)
-
-            self.assertEqual(records["ABC"]["theme"], "Primary theme")
+            self.assertEqual(records["ABC"]["theme"], primary)
             self.assertIn("Editable niche", records["ABC"]["memberships"])
             self.assertEqual(records["EXTRA"]["theme"], "Editable niche")
 

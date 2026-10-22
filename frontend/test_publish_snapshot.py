@@ -15,6 +15,25 @@ from edl_pipeline.scanner.calculation_cache import memoized
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def test_rrg_sidecar_survives_publication_without_rewriting_frozen_release(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'edl'; root.mkdir(); self.fixture(root)
+            output = Path(folder) / 'public'
+            staged = root / 'thematic_rrg.json'
+            staged.write_text(json.dumps({'asOfDate': '2026-09-30', 'blocks': []}))
+            first = publish(root, output)
+            release = output / 'revisions' / first['revision'] / 'release.json'
+            frozen = release.read_bytes()
+            self.assertIn('thematicRrgUrl', json.loads((output / 'current.json').read_text()))
+            staged.write_text(json.dumps({'asOfDate': '2026-09-30', 'blocks': [{'name': 'Updated'}]}))
+            updated = publish(root, output)
+            self.assertEqual(updated['revision'], first['revision'])
+            self.assertNotEqual(updated['thematicRrgVersion'], first['thematicRrgVersion'])
+            self.assertEqual(release.read_bytes(), frozen)
+            self.assertTrue((output / updated['thematicRrgUrl'].removeprefix('/data/')).exists())
+            staged.unlink()  # Weekly refresh intentionally skips regeneration.
+            self.assertEqual(publish(root, output)['thematicRrgVersion'], updated['thematicRrgVersion'])
+
     def test_daily_publication_carries_aligned_tradingview_fields_through_both_wire_formats(self):
         from test_packed_snapshot import decode_packed_snapshot
         with tempfile.TemporaryDirectory() as folder, patch('publish_snapshot.list_presets', return_value=[{'id':'lib-easy-money'}]):

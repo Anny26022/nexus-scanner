@@ -153,6 +153,8 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const [internalResultView, setInternalResultView] = useLocalStorageState<'table' | 'charts'>('nexus-scanner.screener.result-view.v1', 'table');
   const resultView = propResultView ?? internalResultView;
   const setResultView = onResultViewChange ?? setInternalResultView;
+  const [chartsMounted, setChartsMounted] = useState(resultView === 'charts');
+  if (resultView === 'charts' && !chartsMounted) setChartsMounted(true);
   const [columnSearch, setColumnSearch] = useState('');
   const [columnGroup, setColumnGroup] = useState<ColumnGroup>('Overview');
   const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>('nexus-scanner.screener.columns.v1', DEFAULT_COLUMNS);
@@ -247,7 +249,10 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       </div>
     </Dialog>}
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
-    {resultView === 'charts' && !isError ? <QuickChartsView rows={rows} revision={data?.immutableRevision} matchCount={data?.matchCount} matchedSymbols={data?.matchedSymbols} loadRows={loadExportRows} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} /> : <div className="table-viewport" aria-busy={busy}>
+    {chartsMounted && !isError && <div style={{display: resultView === 'charts' ? 'contents' : 'none'}}>
+      <QuickChartsView rows={rows} revision={data?.immutableRevision} matchCount={data?.matchCount} matchedSymbols={data?.matchedSymbols} loadRows={loadExportRows} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} />
+    </div>}
+    <div className="table-viewport" aria-busy={busy} style={{display: resultView === 'table' || isError ? undefined : 'none'}}>
       <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
         <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
           <caption className="sr-only">Equities matching the current screen</caption>
@@ -291,7 +296,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
         </table>
       </div>
       <Pagination page={data?.page ?? page ?? 1} pageSize={pageSize ?? data?.pageSize ?? 15} total={data?.matchCount} busy={busy || isError || !data} onPageChange={page => {resetScroll(); onPageChange(page);}} onPageSizeChange={onPageSizeChange && (size => {resetScroll(); onPageSizeChange(size);})} />
-    </div>}
+    </div>
     {overview.active && overview.id && !busy && !isError && !columnPickerOpen && !filingSymbol && rows.some(row => row.symbol === overview.active!.row.symbol) &&
       <TijoriDetailsCard key={overview.active.row.symbol} {...overview.active} id={overview.id}
         onClose={overview.close} onMouseEnter={overview.cancelClose} onMouseLeave={overview.scheduleClose} />}

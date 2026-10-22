@@ -23,6 +23,8 @@ const ScreenerAppContent: React.FC = () => {
   const [storedTab, setActiveTab] = useLocalStorageState<'screener' | 'ipo' | 'charts' | 'news'>('nexus-scanner.ui.active-tab.v1', 'screener');
   // Live News is temporarily hidden; restore saved News sessions to the screener.
   const activeTab = storedTab === 'news' ? 'screener' : storedTab;
+  const [screenerMounted, setScreenerMounted] = React.useState(activeTab === 'screener');
+  if (activeTab === 'screener' && !screenerMounted) setScreenerMounted(true);
   const [sidebarHidden, setSidebarHidden] = useLocalStorageState('nexus-scanner.ui.sidebar-hidden.v1', false);
   const [chartRevision, setChartRevision] = React.useState<string | undefined>();
 
@@ -85,7 +87,7 @@ const ScreenerAppContent: React.FC = () => {
           </div>
         )}
         {revisionFailed && <p role="alert" className="notice">The latest data release could not be loaded. <button className="button button-ghost" onClick={() => void refreshRevision()}>Retry</button></p>}
-        {activeTab === 'screener' ? (
+        {screenerMounted && <div style={{display: activeTab === 'screener' ? 'contents' : 'none'}}>
           <ExploreTab
             selectedAsOfDate={selectedAsOfDate}
             datasetRevision={activeRevision}
@@ -94,13 +96,14 @@ const ScreenerAppContent: React.FC = () => {
             onSelectSession={setCustomSessionDate}
             onOpenFullChart={(_symbol, revision) => { setChartRevision(revision); setActiveTab('charts'); }}
           />
-        ) : activeTab === 'charts' ? (
+        </div>}
+        {activeTab === 'charts' ? (
           <React.Suspense fallback={<p role="status">Loading chart workspace…</p>}>
             <ChartsTab datasetRevision={chartRevision ?? latestRevision}/>
           </React.Suspense>
-        ) : (
+        ) : activeTab === 'ipo' ? (
           <NewListingsTab key={latestRevision} datasetRevision={latestRevision} selectedAsOfDate={latestDate} />
-        )}
+        ) : null}
       </main>
     </div>
   );

@@ -332,3 +332,69 @@ it.each(['compressed', 'decompressed'])('screens packed gzip with %s HTTP delive
  const originalResult = await createSnapshotEngine(async () => snapshot)({type:'screen',source,request});
  expect(packedResult).toStrictEqual(originalResult);
 });
+
+const historicalSource = {...source, sessionDate:snapshot.asOfDate,
+ url:`https://cdn.example.com/snapshots/${snapshot.asOfDate}/${snapshot.revision}.json.gz`,
+ fallbackUrl:`https://cdn.example.com/snapshots/${snapshot.asOfDate}.json.gz?v=${snapshot.revision.slice(0,16)}`};
+
+it('downloads and caches the immutable historical revision without requesting legacy data', async () => {
+ vi.stubGlobal('DecompressionStream',(await import('node:stream/web')).DecompressionStream);
+ const fetcher = vi.fn().mockResolvedValue(new Response(gzipSync(JSON.stringify(snapshot))));
+ vi.stubGlobal('fetch',fetcher);
+ const run = createSnapshotEngine();
+ await expect(run({type:'screen',source:historicalSource,request})).resolves.toMatchObject({type:'screen',result:{matchCount:60}});
+ await run({type:'warm',source:historicalSource});
+ expect(fetcher).toHaveBeenCalledTimes(1);
+ expect(fetcher.mock.calls[0][0]).toBe(historicalSource.url);
+});
+
+it('loads a legacy historical date only when its immutable key returns 404', async () => {
+ vi.stubGlobal('DecompressionStream',(await import('node:stream/web')).DecompressionStream);
+ const fetcher = vi.fn().mockResolvedValueOnce(new Response(null,{status:404}))
+  .mockResolvedValueOnce(new Response(gzipSync(JSON.stringify(snapshot))));
+ vi.stubGlobal('fetch',fetcher);
+ await expect(createSnapshotEngine()({type:'screen',source:historicalSource,request})).resolves.toMatchObject({type:'screen',result:{matchCount:60}});
+ expect(fetcher.mock.calls.map(call=>call[0])).toEqual([historicalSource.url,historicalSource.fallbackUrl]);
+ expect(fetcher.mock.calls[0][1]).toEqual(fetcher.mock.calls[1][1]);
+});
+
+it.each(['http500','revision','session','decode','network'])(
+ 'never masks an immutable snapshot %s failure with a legacy download', async failure => {
+  vi.stubGlobal('DecompressionStream',(await import('node:stream/web')).DecompressionStream);
+  const data = {...snapshot, ...(failure === 'revision' ? {revision:'c'.repeat(64)} : {}),
+   ...(failure === 'session' ? {asOfDate:'2026-09-30'} : {})};
+  const response = failure === 'http500' ? new Response(null,{status:500})
+   : failure === 'decode' ? new Response('invalid gzip') : new Response(gzipSync(JSON.stringify(data)));
+  const fetcher = failure === 'network' ? vi.fn().mockRejectedValue(new Error('offline')) : vi.fn().mockResolvedValue(response);
+  vi.stubGlobal('fetch',fetcher);
+  await expect(createSnapshotEngine()({type:'warm',source:historicalSource})).rejects.toThrow();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+ });
+
+it('rejects a legacy fallback with an obsolete revision', async () => {
+ vi.stubGlobal('DecompressionStream',(await import('node:stream/web')).DecompressionStream);
+ const fetcher = vi.fn().mockResolvedValueOnce(new Response(null,{status:404}))
+  .mockResolvedValueOnce(new Response(gzipSync(JSON.stringify({...snapshot,revision:'c'.repeat(64)}))));
+ vi.stubGlobal('fetch',fetcher);
+ await expect(createSnapshotEngine()({type:'warm',source:historicalSource})).rejects.toThrow('revision/session mismatch');
+ expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it('cancels the legacy fetch when its last subscriber cancels', async () => {
+ let fallbackSignal: AbortSignal | undefined;
+ const fetcher = vi.fn().mockResolvedValueOnce(new Response(null,{status:404}))
+  .mockImplementationOnce((_url, options:RequestInit) => {
+   fallbackSignal = options.signal as AbortSignal;
+   return new Promise<Response>((_resolve,reject) => {
+    fallbackSignal!.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true});
+   });
+  });
+ vi.stubGlobal('fetch',fetcher);
+ const controller = new AbortController();
+ const task = createSnapshotEngine()({type:'warm',source:historicalSource},controller.signal);
+ const rejected = expect(task).rejects.toThrow('Aborted');
+ await vi.waitFor(()=>expect(fallbackSignal).toBeDefined());
+ controller.abort();
+ await rejected;
+ expect(fallbackSignal!.aborted).toBe(true);
+});

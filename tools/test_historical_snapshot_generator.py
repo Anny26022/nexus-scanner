@@ -4,10 +4,13 @@ from datetime import date, timedelta
 from pathlib import Path
 import unittest
 import gzip
+import hashlib
+import importlib.util
+import io
 import json
 import tempfile
+from unittest.mock import Mock, patch
 import shutil
-from unittest.mock import patch
 import numpy as np
 import pandas as pd
 import sys
@@ -17,6 +20,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "frontend"))
 
 import generate_historical_snapshots as gen
+import backfill_historical_snapshots as backfill
 import scanner_bridge as bridge
 
 
@@ -31,6 +35,144 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
         self.lows = self.closes - np.random.uniform(0.5, 3.0, n)
         self.opens = self.closes + np.random.uniform(-1.0, 1.0, n)
         self.volumes = np.random.uniform(10_000, 500_000, n)
+
+    def test_full_generation_recomputes_rs_setups_hash_and_ignores_future_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pipeline, output = root / "pipeline", root / "output"
+            cache = pipeline / ".scanner_cache"
+            cache.mkdir(parents=True)
+            output.mkdir()
+            shutil.copy(ROOT / "DO NOT DELETE EDL PIPELINE/breadth_methodology.json", pipeline)
+            (pipeline / "indices_ohlcv_data").mkdir()
+            dates = pd.bdate_range("2024-01-01", periods=300)
+            pd.DataFrame({"Date": dates, "Close": np.full(300, 100)}).to_csv(
+                pipeline / "indices_ohlcv_data/NIFTY_500.csv", index=False)
+            target_idx = 280
+            session = dates[target_idx].date()
+            session_str = session.isoformat()
+            master = [
+                {"symbol": "A", "rsRating": 99, "rs_rating": 99, "peRatio": 999},
+                {"symbol": "B", "rsRating": 1, "rs_rating": 1},
+                {"symbol": "STALE", "rsRating": 99},
+                {"symbol": "YOUNG", "rsRating": 99},
+            ]
+            for i, stock in enumerate(master):
+                stock.update(isin=f"INE{i}", security_id=i + 1)
+            def write_json_gz(path, value):
+                with gzip.open(path, "wt", encoding="utf-8") as handle:
+                    json.dump(value, handle)
+            write_json_gz(pipeline / "all_stocks_fundamental_analysis.json.gz", master)
+            # A wins the obsolete one-month-weighted formula; B wins the new formula.
+            a = np.full(300, 100.0)
+            a[target_idx - 21] = 50
+            b = np.full(300, 100.0)
+            b[target_idx - 21:target_idx + 1] = 120
+            arrays = {"A": a, "B": b, "STALE": np.full(target_idx, 100.0), "YOUNG": np.full(80, 50.0)}
+            def write_history(future_multiplier=1):
+                combined_dates, combined_values, offsets = [], [], [0]
+                for symbol, prices in arrays.items():
+                    prices = prices.copy()
+                    if symbol in ("A", "B"):
+                        prices[target_idx + 1:] *= future_multiplier
+                        symbol_dates = dates
+                    elif symbol == "STALE":
+                        symbol_dates = dates[:target_idx]
+                    else:
+                        symbol_dates = dates[target_idx - 79:target_idx + 1]
+                    combined_dates.extend(symbol_dates.strftime("%Y-%m-%d"))
+                    combined_values.extend(np.column_stack((prices, prices + 1, prices - 1, prices, np.full(len(prices), 2_000_000))))
+                    offsets.append(len(combined_dates))
+                np.savez(cache / "history.npz", revision=np.array(""), symbols=np.array(list(arrays)),
+                         offsets=np.array(offsets), dates=np.array(combined_dates), values=np.array(combined_values))
+            write_history()
+            records = []
+            for symbol in ("A", "B"):
+                records.extend([
+                    {"symbol": symbol, "filing_date": (session - timedelta(days=1)).isoformat(),
+                     "quarter_end": "2024-09-30", "net_profit": 100, "eps": 1},
+                    {"symbol": symbol, "filing_date": (session + timedelta(days=1)).isoformat(),
+                     "quarter_end": "2024-12-31", "net_profit": 9999, "eps": 9999},
+                ])
+            write_json_gz(pipeline / "quarterly_financial_history.json.gz", {"records": records})
+            snapshot_path = output / f"{session_str}.json.gz"
+            write_json_gz(snapshot_path, {"revision": "legacy-revision", "stocks": master})
+            argv = ["--pipeline-dir", str(pipeline), "--output-dir", str(output),
+                    "--start-date", session_str, "--end-date", session_str]
+            with patch.object(gen, "fetch_nse_delivery_csv", return_value=[]), \
+                 patch.object(gen, "fetch_nse_price_bands", return_value=({}, {})), \
+                 patch.object(gen, "fetch_nse_surveillance_for_date", return_value={}):
+                generated = gen.main(argv)
+                first_bytes = snapshot_path.read_bytes()
+                payload = json.loads(gzip.decompress(first_bytes))
+                stocks = {stock["symbol"]: stock for stock in payload["stocks"]}
+                self.assertEqual(set(stocks), {"A", "B", "YOUNG"})
+                self.assertEqual(stocks["A"]["rsRating"], 1)
+                self.assertEqual(stocks["B"]["rsRating"], 99)
+                self.assertIsNone(stocks["YOUNG"]["rsRating"])
+                self.assertEqual(stocks["B"]["close"], 120)
+                self.assertEqual(stocks["B"]["quarterlyEps"], 1)
+                self.assertEqual(stocks["B"]["stageStatus"]["stage"], 2)
+                self.assertTrue(stocks["B"]["presetRuleMatches"]["lib-ms-stage-2"])
+                self.assertTrue(stocks["B"]["presetMatches"]["lib-ms-stage-2"])
+                self.assertIsInstance(stocks["B"]["setupGeometry"], dict)
+                self.assertEqual(payload["screenMethodologyVersion"], "market-strength-v1")
+                self.assertEqual(payload["rsMethodologyVersion"], gen.METHODOLOGY_VERSION)
+                self.assertIn("surviving master", payload["pointInTimeCoverage"]["survivorshipBias"])
+                revision = payload.pop("revision")
+                self.assertEqual(revision, hashlib.sha256(json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest())
+                self.assertNotEqual(revision, "legacy-revision")
+                self.assertEqual(generated, [(session, revision)])
+                # Exercise the public backfill command through real generation,
+                # R2 byte verification, and the historical-session pointer update.
+                objects = {}
+                client = Mock()
+                client.put_object.side_effect = lambda **kw: objects.update({kw["Key"]: kw["Body"]})
+                client.get_object.side_effect = lambda **kw: {"Body": io.BytesIO(objects[kw["Key"]])}
+                manifest = Path(tmp) / "sessions.json"
+                with patch.object(backfill, "r2_client", return_value=client):
+                    self.assertEqual(backfill.main([*argv, "--sessions-manifest", str(manifest), "--upload-r2"]), 0)
+                key = f"snapshots/{session_str}/{revision}.json.gz"
+                published = json.loads(gzip.decompress(objects[key]))
+                self.assertEqual(published["revision"], revision)
+                self.assertEqual(next(s for s in published["stocks"] if s["symbol"] == "B")["rsRating"], 99)
+                self.assertEqual(json.loads(manifest.read_text())["sessions"][0]["revision"], revision)
+                # Future candles must not alter this historical revision or compressed bytes.
+                write_history(future_multiplier=10_000)
+                self.assertEqual(gen.main(argv), generated)
+                self.assertEqual(snapshot_path.read_bytes(), first_bytes)
+                # Empty canonical ranks cannot silently switch to the old formula.
+                with patch.object(gen, "rank_session", return_value={}):
+                    gen.main(argv)
+                final = json.loads(gzip.decompress(snapshot_path.read_bytes()))
+                self.assertTrue(all(stock["rsRating"] is None for stock in final["stocks"]))
+
+    def test_missing_shared_rs_dependency_fails_import(self):
+        spec = importlib.util.spec_from_file_location("isolated_historical_generator", ROOT / "tools/generate_historical_snapshots.py")
+        module = importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules, {"build_rs_ratings": None}):
+            with self.assertRaises(ImportError):
+                spec.loader.exec_module(module)
+
+    def test_generator_cannot_publish_unverified_session_pointers(self):
+        with self.assertRaises(SystemExit) as error:
+            gen.main(["--update-sessions-manifest", "sessions.json"])
+        self.assertEqual(error.exception.code, 2)
+
+    def test_sessions_manifest_update_preserves_history_and_rejects_corruption(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "sessions.json"
+            existing = {"date": "2024-01-01", "revision": "old", "label": "Old"}
+            path.write_text(json.dumps({"version": 1, "sessions": [existing]}))
+            gen.update_sessions_manifest(path, [(date(2024, 1, 2), "a" * 64)])
+            sessions = json.loads(path.read_text())["sessions"]
+            self.assertEqual(sessions[0]["revision"], "a" * 64)
+            self.assertEqual(sessions[1], existing)
+            path.write_text("{broken")
+            with self.assertRaises(json.JSONDecodeError):
+                gen.update_sessions_manifest(path, [(date(2024, 1, 3), "b" * 64)])
+            self.assertEqual(path.read_text(), "{broken")
+            self.assertEqual(list(path.parent.glob("*.tmp")), [])
 
     def test_preset_eligibility_keeps_ms_liquidity_in_editable_rule_matches(self):
         item = {"marketCapCrore": 2000, "close": 100, "metrics": {"turnover50": 20},
@@ -256,7 +398,7 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
         ranks = gen.rank_session({"TEST": (dates, self.closes)}, dates[-1], {"TEST"})
         self.assertEqual(ranks["TEST"]["composite_rs"], 50)
 
-    def test_backfill_keeps_stale_rows_but_never_publishes_fresh_signals_for_them(self):
+    def test_backfill_excludes_stale_rows_instead_of_publishing_fresh_signals(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); cache = root / ".scanner_cache"; cache.mkdir()
             (root / "indices_ohlcv_data").mkdir()
@@ -294,10 +436,7 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
             with gzip.open(output / f"{session}.json.gz", "rt") as handle:
                 snapshot = json.load(handle)
             rows = {row["symbol"]: row for row in snapshot["stocks"]}
-            self.assertFalse(rows["STALE"]["historyAligned"])
-            self.assertIsNone(rows["STALE"]["setupGeometry"])
-            self.assertIsNone(rows["STALE"]["rsRating"])
-            self.assertTrue(all(value is None for value in rows["STALE"]["presetMatches"].values()))
+            self.assertNotIn("STALE", rows)
             self.assertEqual(rows["B"]["rsRating"], 99)
             self.assertIsNone(rows["B"]["upcomingEarnings"])
             self.assertEqual(gen.load_universe_history(root)[session], {"A", "B"})

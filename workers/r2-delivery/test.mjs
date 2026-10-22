@@ -23,10 +23,23 @@ test('serves published objects with browser-readable metadata', async () => {
 });
 
 test('serves published historical snapshots', async () => {
-  const response = await worker.fetch(new Request('https://data.example.com/snapshots/2021-10-14.json.gz'), env);
-  assert.equal(response.status, 200);
-  assert.equal(await response.text(), 'published bytes');
-  assert.deepEqual(calls.pop(), ['get', 'snapshots/2021-10-14.json.gz']);
+  for (const key of ['snapshots/2021-10-14.json.gz', `snapshots/2021-10-14/${'a'.repeat(64)}.json.gz`]) {
+    const response = await worker.fetch(new Request(`https://data.example.com/${key}`), env);
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), 'published bytes');
+    assert.deepEqual(calls.pop(), ['get', key]);
+  }
+});
+
+test('exposes gzip encoding so cross-origin clients recognize browser-decoded snapshots', async () => {
+  const gzipObject = {...object, writeHttpMetadata(headers) {
+    headers.set('Content-Type', 'application/json');
+    headers.set('Content-Encoding', 'gzip');
+  }};
+  const response = await worker.fetch(new Request(`https://data.example.com/snapshots/2026-10-01/${'a'.repeat(64)}.json.gz`,
+    {headers:{Origin:'https://scanner.example.com'}}), {DATA:{async get() {return gzipObject;}}});
+  assert.equal(response.headers.get('Content-Encoding'), 'gzip');
+  assert.ok(response.headers.get('Access-Control-Expose-Headers').split(/,\s*/).includes('Content-Encoding'));
 });
 
 test('HEAD returns metadata without a body', async () => {

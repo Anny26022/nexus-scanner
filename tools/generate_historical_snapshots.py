@@ -19,6 +19,7 @@ import json
 import os
 import ssl
 import sys
+import tempfile
 import time
 import urllib.request
 from collections import defaultdict
@@ -47,6 +48,8 @@ from build_rs_ratings import (
 from build_market_screens import calculate_atr_series, evaluate_setups
 from src.edl_pipeline.breadth.config import load_methodology
 from src.edl_pipeline.breadth.universe import evaluate_stock
+
+SCREEN_METHODOLOGY_VERSION = "market-strength-v1"
 
 def apply_preset_eligibility(item, ms_matches, is_liquid):
     """Keep mandatory MS rules separate from editable, shared eligibility."""
@@ -412,16 +415,15 @@ def compute_ohlcv_fingerprint(pipeline_dir: Path) -> str:
     return hashlib.sha256(json.dumps(entries).encode()).hexdigest()
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description="Generate 5-year historical snapshots.")
     parser.add_argument("--pipeline-dir", type=Path, default=Path("DO NOT DELETE EDL PIPELINE"))
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/historical_snapshots"))
     parser.add_argument("--start-date", type=date.fromisoformat, default=date(2021, 10, 1))
     parser.add_argument("--end-date", type=date.fromisoformat, default=date(2021, 10, 15))
-    parser.add_argument("--update-sessions-manifest", type=Path, default=None, help="Path to frontend/public/data/sessions.json to register sessions")
     parser.add_argument("--dry-run", action="store_true", help="Print execution plan without writing files")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     pipeline_dir = args.pipeline_dir.resolve()
     output_dir = args.output_dir.resolve()
@@ -548,7 +550,7 @@ def main():
 
     if args.dry_run:
         print("[DRY RUN] Plan verified successfully. Exiting without file generation.")
-        return
+        return []
 
     bench_file = pipeline_dir / "indices_ohlcv_data" / FRONT_WEIGHTED_BENCHMARK_FILENAME
     bench_df_all = pd.read_csv(bench_file)
@@ -620,9 +622,9 @@ def main():
                 continue
 
             last_pos = np.where(mask)[0][-1]
-            # Ensure the stock traded on or near this date (within last 5 sessions)
+            # A dated technical snapshot must use a candle from that exact session.
             last_date = s_dates[last_pos].date()
-            if (session_date - last_date).days > 7:
+            if last_date != session_date:
                 continue
 
             # Extract window
@@ -1043,6 +1045,7 @@ def main():
         raw_payload = {
             "schemaVersion": 4,
             "presetRuleMatchesVersion": 1,
+            "screenMethodologyVersion": SCREEN_METHODOLOGY_VERSION,
             "rsMethodologyVersion": METHODOLOGY_VERSION,
             "asOfDate": session_str,
             "totalStocks": len(snapshot_stocks),
@@ -1068,8 +1071,8 @@ def main():
         raw_payload["revision"] = session_hash
 
         out_file = output_dir / f"{session_str}.json.gz"
-        with gzip.open(out_file, "wt", encoding="utf-8") as f:
-            json.dump(raw_payload, f, separators=(",", ":"), ensure_ascii=False)
+        with out_file.open("wb") as raw, gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as compressed:
+            compressed.write(json.dumps(raw_payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
 
         file_size_kb = out_file.stat().st_size / 1024
         print(f"Generated {out_file.name} ({len(snapshot_stocks)} stocks, {file_size_kb:.1f} KB, rev {session_hash[:12]}) in {time.time()-t_session:.2f}s")
@@ -1078,41 +1081,48 @@ def main():
     save_universe_history(pipeline_dir, dated_universes)
     print(f"\nAll done! Successfully generated {len(generated_sessions)} historical daily snapshots in {output_dir}")
 
-    if args.update_sessions_manifest and generated_sessions:
-        manifest_file = args.update_sessions_manifest.resolve()
-        existing = {}
-        if manifest_file.exists():
-            try:
-                with open(manifest_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    for item in data.get("sessions", []):
-                        dt = item.get("date")
-                        if dt:
-                            existing[dt] = item
-            except Exception as e:
-                print(f"Warning: could not read existing sessions manifest: {e}")
+    return generated_sessions
 
-        # Add newly generated sessions with their exact revision hashes
-        for s_date, s_hash in generated_sessions:
-            s_str = s_date.strftime("%Y-%m-%d")
-            existing[s_str] = {
-                "date": s_str,
-                "revision": s_hash,
-                "label": s_str,
-                "isHistorical": True,
-            }
 
-        sorted_sessions = sorted(existing.values(), key=lambda x: x["date"], reverse=True)
-        manifest_payload = {
-            "version": 1,
-            "sessions": sorted_sessions,
+def update_sessions_manifest(path: Path, generated_sessions: list[tuple[date, str]]) -> None:
+    """Atomically register verified snapshot revisions while preserving other dates.
+
+    A publisher can call this only after every generated object has been uploaded
+    and verified. Invalid existing manifests fail closed instead of losing history.
+    """
+    manifest_file = Path(path).resolve()
+    payload = {"version": 1, "sessions": []}
+    if manifest_file.exists():
+        payload = json.loads(manifest_file.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict) or not isinstance(payload.get("sessions"), list):
+            raise ValueError("Invalid sessions manifest")
+    existing = {}
+    for item in payload["sessions"]:
+        if not isinstance(item, dict) or not isinstance(item.get("date"), str):
+            raise ValueError("Invalid session entry in sessions manifest")
+        date.fromisoformat(item["date"])
+        existing[item["date"]] = item
+    for session_date, revision in generated_sessions:
+        if len(revision) != 64 or any(c not in "0123456789abcdef" for c in revision):
+            raise ValueError("Generated session revision must be a SHA-256 digest")
+        session_str = session_date.isoformat()
+        existing[session_str] = {
+            "date": session_str, "revision": revision, "label": session_str, "isHistorical": True,
         }
-        manifest_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(manifest_file, "w", encoding="utf-8") as f:
-            json.dump(manifest_payload, f, indent=2)
-            f.write("\n")
-        print(f"Updated sessions manifest at {manifest_file} ({len(sorted_sessions)} total sessions)")
-
+    payload["sessions"] = sorted(existing.values(), key=lambda item: item["date"], reverse=True)
+    manifest_file.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=manifest_file.parent,
+                                         prefix=f".{manifest_file.name}.", suffix=".tmp", delete=False) as handle:
+            temp_path = Path(handle.name)
+            json.dump(payload, handle, indent=2)
+            handle.write("\n")
+        os.replace(temp_path, manifest_file)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+    print(f"Updated sessions manifest at {manifest_file} ({len(existing)} total sessions)")
 
 
 if __name__ == "__main__":

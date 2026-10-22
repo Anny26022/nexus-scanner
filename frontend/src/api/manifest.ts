@@ -77,11 +77,12 @@ export function manifestSnapshotSource(manifest: Manifest, revision = manifest.r
     const baseUrl = manifest.objectUrlTemplate
       ? manifest.objectUrlTemplate.replace(/\/objects\/\{hash\}\.json\.gz$/, '')
       : '';
-    const url = baseUrl ? `${baseUrl}/snapshots/${sessionDate}.json.gz?v=${revision.slice(0, 16)}` : `/data/snapshots/${sessionDate}.json.gz?v=${revision.slice(0, 16)}`;
+    const snapshotsUrl = `${baseUrl || '/data'}/snapshots`;
     return {
       revision,
       sessionDate,
-      url,
+      url: `${snapshotsUrl}/${sessionDate}/${revision}.json.gz`,
+      fallbackUrl: `${snapshotsUrl}/${sessionDate}.json.gz?v=${revision.slice(0, 16)}`,
     };
   }
   // Historical revisions keep their original URL; current releases advertise gzip.

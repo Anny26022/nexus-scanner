@@ -24,6 +24,7 @@ export default {
     headers.set('ETag', object.httpEtag);
     headers.set('Cache-Control', 'public, max-age=31536000, immutable');
     headers.set('Access-Control-Allow-Origin', '*');
+    headers.set('Access-Control-Expose-Headers', 'Content-Encoding');
     headers.set('X-Content-Type-Options', 'nosniff');
     return new Response(request.method === 'HEAD' ? null : object.body, { headers });
   },

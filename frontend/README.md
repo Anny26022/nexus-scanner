@@ -626,3 +626,11 @@ and saved unsupported settings are preserved for explicit correction.
 Old releases still load, but lack the new facts until the normal pipeline
 publishes a new immutable generation. Coverage and warnings distinguish missing
 data from genuine non-matches; unknown values stay unknown under negation.
+
+### Rebuild historical screens in R2
+
+Run **Backfill Historical Snapshots** on `main` after merging the screener and backfill
+changes. With R2 upload enabled, it rebuilds selected dates, verifies the new objects,
+and commits updated session pointers for frontend deployment. Preview runs do not publish.
+See [the historical backfill guide](../docs/historical-5y-snapshots-architecture.md) for
+commands, versioned paths, and historical data limits.

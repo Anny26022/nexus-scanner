@@ -11,7 +11,7 @@ export interface RrgTrailPoint {
 export interface RrgMetrics {
   excessReturn1m: number;
   excessReturn3m: number;
-  excessReturn6m: number;
+  excessReturn6m: number | null;
   medianRs: number;
   rsMomentum21d: number;
   beatingBenchmarkPct: number;
@@ -104,6 +104,8 @@ export interface RrgIpoItem {
 
 export interface ThematicRrgResponse {
   schemaVersion: number;
+  rsMethodologyVersion?: string;
+  rsCoverage?: {requestedDates: string[]; availableDates: string[]; momentumAvailable?: boolean};
   asOfDate: string;
   generatedAt: string;
   benchmark: string;
@@ -112,6 +114,8 @@ export interface ThematicRrgResponse {
   totalBlocks: number;
   totalNiches: number;
   totalThematicIndices?: number;
+  thematicIndexMethodology?: string;
+  thematicIndexCoverage?: {requested: number; available: number; missing: string[]};
   totalEquities: number;
   constituentEligibility?: {
     marketCapCrStrictlyGreaterThan: number;

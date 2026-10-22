@@ -3,13 +3,14 @@ import { it, expect, vi, afterEach } from 'vitest';
 const revision = 'a'.repeat(64);
 const mockRrgData = {
   schemaVersion: 1,
+  rsMethodologyVersion: 'marketstrength_parity_v2',
   asOfDate: '2026-10-19',
   generatedAt: '2026-10-20T14:00:00Z',
   benchmark: 'NIFTY 500',
   benchmark3mReturn: -5.56,
   trailWeeks: 12,
-  totalBlocks: 28,
-  totalNiches: 217,
+  totalBlocks: 1,
+  totalNiches: 1,
   totalEquities: 2604,
   blocks: [
     {
@@ -144,6 +145,8 @@ it('loads and caches Thematic RRG dataset', async () => {
     iposUrl: `/data/revisions/${revision}/ipos.json.gz`,
     totalStocks: 2_604,
     schemaVersion: 4,
+    thematicRrgUrl: `/data/thematic-rrg/${'b'.repeat(64)}.json`,
+    thematicRrgVersion: 'b'.repeat(64),
   };
   const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(
     url === '/data/current.json' ? manifest : mockRrgData,
@@ -167,6 +170,47 @@ it('loads and caches Thematic RRG dataset', async () => {
   expect(first.ipoTactical[0].symbol).toBe('DEEPA');
   expect(first.ipoTactical[0].quadrant).toBe('Leading');
   expect(fetchMock).toHaveBeenCalledTimes(2);
+});
+
+it('loads a changed sidecar with the same scanner revision and rejects malformed data without aliases', async () => {
+  const manifest = {revision, schemaVersion: 4, sessionDate: '2026-10-19', totalStocks: 2604,
+    datasetUrl: '/data/stocks.json', iposUrl: '/data/ipos.json',
+    thematicRrgVersion: 'b'.repeat(64), thematicRrgUrl: `/data/thematic-rrg/${'b'.repeat(64)}.json`};
+  let payload = mockRrgData;
+  const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(url === '/data/current.json' ? manifest : payload)));
+  vi.stubGlobal('fetch', fetchMock);
+  const {realAdapter} = await import('../api/realAdapter');
+  const {refreshManifest} = await import('../api/manifest');
+  await realAdapter.getThematicRrg(revision);
+  manifest.thematicRrgVersion = 'c'.repeat(64);
+  manifest.thematicRrgUrl = `/data/thematic-rrg/${'c'.repeat(64)}.json`;
+  await refreshManifest();
+  payload = {...mockRrgData, benchmark3mReturn: 10};
+  expect((await realAdapter.getThematicRrg(revision)).benchmark3mReturn).toBe(10);
+  manifest.thematicRrgVersion = 'd'.repeat(64);
+  manifest.thematicRrgUrl = `/data/thematic-rrg/${'d'.repeat(64)}.json`;
+  await refreshManifest();
+  payload = {...mockRrgData, totalBlocks: 999};
+  await expect(realAdapter.getThematicRrg(revision)).rejects.toThrow('Invalid thematic RRG');
+  expect(fetchMock.mock.calls.every(([url]) => url === '/data/current.json' || url.startsWith('/data/thematic-rrg/'))).toBe(true);
+});
+
+it('validates the official index payload before sharing the sidecar cache', async () => {
+  const manifest = {revision, schemaVersion: 4, sessionDate: '2026-10-19', totalStocks: 2604,
+    datasetUrl: '/data/stocks.json', iposUrl: '/data/ipos.json',
+    thematicRrgVersion: 'b'.repeat(64), thematicRrgUrl: `/data/thematic-rrg/${'b'.repeat(64)}.json`};
+  const index = {...mockRrgData.niches[0], name: 'Nifty India Defence', indexSymbol: 'NIFTY IND DEFENCE'};
+  let payload = {...mockRrgData, totalThematicIndices: 1, thematicIndices: [index],
+    thematicIndexMethodology: 'cross-sectional-63-session-relative-return-v1'};
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => new Response(JSON.stringify(url === '/data/current.json' ? manifest : payload))));
+  const {realAdapter} = await import('../api/realAdapter');
+  expect((await realAdapter.getThematicRrg(revision)).thematicIndices?.[0].indexSymbol).toBe('NIFTY IND DEFENCE');
+  manifest.thematicRrgVersion = 'c'.repeat(64);
+  manifest.thematicRrgUrl = `/data/thematic-rrg/${'c'.repeat(64)}.json`;
+  const {refreshManifest} = await import('../api/manifest');
+  await refreshManifest();
+  payload = {...payload, totalThematicIndices: 2};
+  await expect(realAdapter.getThematicRrg(revision)).rejects.toThrow('Invalid thematic RRG');
 });
 
 it('correctly categorizes quadrants across positive and negative domains', () => {

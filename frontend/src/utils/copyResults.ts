@@ -23,7 +23,9 @@ export function formatCopyResults(rows:CopyRow[], group:CopyGroup, taxonomy?:The
     symbols.push(`NSE:${row.symbol}`);
     groups.set(label,symbols);
   }
-  return [...groups].sort(([a],[b]) => a.localeCompare(b)).map(([label,symbols]) =>
+  return [...groups].sort(([a, sa], [b, sb]) =>
+    (sb.length - sa.length) || (a === 'Unclassified' ? 1 : b === 'Unclassified' ? -1 : a.localeCompare(b))
+  ).map(([label,symbols]) =>
     `###${label.replaceAll(',', ' / ').replace(/[\r\n]/g,' ')}(${symbols.length}),${symbols.join(',')}`).join(',');
 }
 

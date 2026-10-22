@@ -5,6 +5,7 @@ import {
   fmtNum,
   fmtSigned,
   isIpoItem,
+  isThematicIndexItem,
   itemKey,
   trailFor,
   type RrgBounds,
@@ -476,7 +477,7 @@ export function RrgChart({
             <b className={activeItem.y >= 0 ? "rrg-tone-up" : "rrg-tone-down"}>
               {fmtSigned(activeItem.y, isIpoItem(activeItem) ? "%" : " pts")}
             </b>
-            {!isIpoItem(activeItem) && (
+            {!isIpoItem(activeItem) && !isThematicIndexItem(activeItem) && replayWeek === 0 && (
               <>
                 <span>Breadth vs benchmark</span>
                 <b>{fmtNum(activeItem.metrics.beatingBenchmarkPct)}%</b>

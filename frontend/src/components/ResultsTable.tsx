@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import type { ScreenerRunResponse } from '../types/screener';
-import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, X } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, Table2, ChartNoAxesCombined, X } from 'lucide-react';
 import {CopyResults} from './CopyResults';
 import {DownloadResults} from './DownloadResults';
 import { SymbolWithLogo } from './SymbolWithLogo';
@@ -15,6 +15,7 @@ import { useColumnWindow } from '../hooks/useColumnWindow';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { tableLayout } from '../utils/tableLayout';
 import { tradingViewMetrics } from '../data/tradingViewMetrics';
+import { QuickChartsView } from './QuickChartsView';
 
 interface ResultsTableProps {
   loadExportRows?:()=>Promise<ScreenerRunResponse['rows']>;
@@ -30,6 +31,9 @@ interface ResultsTableProps {
   onPageSizeChange?: (size: number) => void;
   onSortChange: (field: string, direction: 'asc' | 'desc') => void;
   currentSort?: { field: string; direction: 'asc' | 'desc' };
+  onOpenFullChart?: (symbol: string, revision?: string) => void;
+  resultView?: 'table' | 'charts';
+  onResultViewChange?: (view: 'table' | 'charts') => void;
 }
 
 type ColumnGroup = 'Overview' | 'Technical' | 'Fundamental' | 'Other';
@@ -140,9 +144,13 @@ const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
 };
 
 export function ResultsTable({ data, isLoading, isError, isFetching = false, error, onRetry,
-  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows }: ResultsTableProps) {
+  onPageChange, onPageSizeChange, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows, onOpenFullChart,
+  resultView: propResultView, onResultViewChange }: ResultsTableProps) {
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
+  const [internalResultView, setInternalResultView] = useLocalStorageState<'table' | 'charts'>('nexus-scanner.screener.result-view.v1', 'table');
+  const resultView = propResultView ?? internalResultView;
+  const setResultView = onResultViewChange ?? setInternalResultView;
   const [columnSearch, setColumnSearch] = useState('');
   const [columnGroup, setColumnGroup] = useState<ColumnGroup>('Overview');
   const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>('nexus-scanner.screener.columns.v1', DEFAULT_COLUMNS);
@@ -180,6 +188,10 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       {onSymbolSearchChange && <label className="results-symbol-search"><Search size={13} aria-hidden="true" /><input type="search" aria-label="Search symbol or company" placeholder="Search symbol" value={symbolSearch} onChange={event => {resetScroll(); onSymbolSearchChange(event.target.value);}} /></label>}
       <div className="results-actions">
         {(isError || busy) && <span role="status" className="fetch-status">{isError ? 'Query failed' : 'Updating results'}</span>}
+        <div className="results-view-toggle" role="group" aria-label="Result view">
+          <button type="button" aria-pressed={resultView === 'table'} onClick={() => setResultView('table')}><Table2 size={14}/><span>List</span></button>
+          <button type="button" aria-pressed={resultView === 'charts'} onClick={() => setResultView('charts')}><ChartNoAxesCombined size={14}/><span>Charts</span></button>
+        </div>
         <CopyResults symbols={data?.matchedSymbols?.length === data?.matchCount ? data?.matchedSymbols : undefined}
           loadRows={loadExportRows ?? (async()=>{
             if (rows.length !== data?.matchCount) throw new Error('All matching symbols are unavailable. Run the scan again.');
@@ -233,7 +245,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       </div>
     </Dialog>}
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
-    <div className="table-viewport" aria-busy={busy}>
+    {resultView === 'charts' && !isError ? <QuickChartsView rows={rows} revision={data?.immutableRevision} matchCount={data?.matchCount} matchedSymbols={data?.matchedSymbols} loadRows={loadExportRows} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} /> : <div className="table-viewport" aria-busy={busy}>
       <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
         <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
           <caption className="sr-only">Equities matching the current screen</caption>
@@ -277,7 +289,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
         </table>
       </div>
       <Pagination page={data?.page ?? 1} pageSize={data?.pageSize ?? 15} total={data?.matchCount ?? 0} busy={busy || isError || !data} onPageChange={page => {resetScroll(); onPageChange(page);}} onPageSizeChange={onPageSizeChange && (size => {resetScroll(); onPageSizeChange(size);})} />
-    </div>
+    </div>}
     {overview.active && overview.id && !busy && !isError && !columnPickerOpen && !filingSymbol && rows.some(row => row.symbol === overview.active!.row.symbol) &&
       <TijoriDetailsCard key={overview.active.row.symbol} {...overview.active} id={overview.id}
         onClose={overview.close} onMouseEnter={overview.cancelClose} onMouseLeave={overview.scheduleClose} />}

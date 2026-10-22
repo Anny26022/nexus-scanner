@@ -27,7 +27,8 @@ const valueFor = (item: RrgItem, field: string): string | number => {
 
 export function ThematicRrgTab({ datasetRevision }: { datasetRevision?: string }) {
   const { data, isLoading, isError, refetch } = useQuery({ queryKey: ["thematicRrg", datasetRevision], queryFn: () => screenerApi.getThematicRrg(datasetRevision), staleTime: 5 * 60 * 1000 });
-  const [mode, setMode] = useState<RrgMode>("blocks");
+  const [selectedMode, setMode] = useState<RrgMode>("blocks");
+  const mode = selectedMode === "indices" && data && !data.thematicIndices?.length ? "blocks" : selectedMode;
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [quadrant, setQuadrant] = useState<RrgQuadrant | "All">("All");
   const [search, setSearch] = useState("");
@@ -51,19 +52,23 @@ export function ThematicRrgTab({ datasetRevision }: { datasetRevision?: string }
   }, [data, mode, drilledBlock]);
   const replayScope = useMemo<RrgItem[]>(() => {
     if (mode === "ipos" || replayWeek === 0) return scope;
-    return scope.map((item) => {
+    return scope.flatMap((item) => {
       const point = item.trail.find((entry) => entry.week === replayWeek);
-      return point ? { ...item, x: point.x, y: point.y, quadrant: point.quadrant } : item;
+      return point ? [{ ...item, x: point.x, y: point.y, quadrant: point.quadrant,
+        trail: item.trail.filter(entry => entry.week >= replayWeek) }] : [];
     });
   }, [scope, mode, replayWeek]);
+  const effectiveSortField = replayWeek > 0 && mode !== "ipos"
+    && ["medianRs", "beatingBenchmarkPct", "constituentCount", "excessReturn1m", "excessReturn6m"].includes(sortField)
+    ? "excessReturn3m" : sortField;
   const items = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const visible = replayScope.filter((item) => (!needle || `${itemKey(item)} ${isIpoItem(item) ? item.name : item.macro ?? ""}`.toLowerCase().includes(needle)) && (quadrant === "All" || item.quadrant === quadrant));
     return [...visible].sort((left, right) => {
-      const delta = compareValues(valueFor(left, sortField), valueFor(right, sortField));
+      const delta = compareValues(valueFor(left, effectiveSortField), valueFor(right, effectiveSortField));
       return sortDirection === "desc" ? -delta : delta;
     });
-  }, [replayScope, search, quadrant, sortField, sortDirection]);
+  }, [replayScope, search, quadrant, effectiveSortField, sortDirection]);
   const selectedItem = useMemo(() => replayScope.find((item) => itemKey(item) === selectedKey) ?? null, [replayScope, selectedKey]);
   const isIpoMode = mode === "ipos";
   const isIndexMode = mode === "indices";
@@ -84,16 +89,19 @@ export function ThematicRrgTab({ datasetRevision }: { datasetRevision?: string }
 
   const eligibleEquities = data.constituentEligibility?.eligibleSymbols;
   const earliestTrailDate = scope.flatMap((item) => item.trail).at(0)?.date ?? data.asOfDate;
-  const replayDate = replayScope.flatMap((item) => item.trail).find((point) => point.week === replayWeek)?.date ?? data.asOfDate;
+  const replayDate = replayScope.flatMap((item) => item.trail).find((point) => point.week === replayWeek)?.date;
+  const replayLabel = replayDate ? formatDate(replayDate) : "Unavailable";
   const counts = Object.fromEntries(QUADRANT_ORDER.map((entry) => [entry, replayScope.filter((item) => item.quadrant === entry).length]));
 
   return <section className="rrg-shell" aria-label="Thematic relative rotation graph">
-    <header className="rrg-header"><div><p className="rrg-kicker">THEMATIC ROTATION</p><h1>Where leadership is moving</h1><p className="rrg-subtitle">Median 3-month excess return versus {data.benchmark} and 21-day relative-strength momentum.</p></div><div className="rrg-asof"><span>AS OF</span><strong>{formatDate(data.asOfDate)}</strong><small>{eligibleEquities === undefined ? `${data.totalEquities.toLocaleString("en-IN")} equities` : `${eligibleEquities.toLocaleString("en-IN")} institutional equities`}</small></div></header>
+    <header className="rrg-header"><div><p className="rrg-kicker">THEMATIC ROTATION</p><h1>Where leadership is moving</h1><p className="rrg-subtitle">{isIndexMode ? "Official index 3-month excess return" : "Median 3-month excess return"} versus {data.benchmark} and 21-day relative-strength momentum.</p></div><div className="rrg-asof"><span>AS OF</span><strong>{formatDate(data.asOfDate)}</strong><small>{isIndexMode ? `${scope.length} NSE indices` : eligibleEquities === undefined ? `${data.totalEquities.toLocaleString("en-IN")} equities` : `${eligibleEquities.toLocaleString("en-IN")} institutional equities`}</small></div></header>
     <div className="rrg-controlbar"><div className="rrg-mode-tabs" role="tablist" aria-label="RRG universe">{([["blocks", `Blocks ${data.totalBlocks}`], ["niches", `Niches ${data.totalNiches}`], ...(data.thematicIndices?.length ? [["indices", `NSE indices ${data.thematicIndices.length}`] as const] : []), ["ipos", `New listings ${(data.ipoTactical ?? []).length}`]] as const).map(([entry, label]) => <button key={entry} type="button" role="tab" aria-selected={mode === entry} className={mode === entry ? "is-active" : ""} onClick={() => chooseMode(entry)}>{label}</button>)}</div><div className="rrg-controlbar__right"><label className="rrg-search"><Search size={14} /><span className="sr-only">Search themes</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={isIpoMode ? "Search company" : isIndexMode ? "Search NSE index" : "Search theme"} />{search && <button type="button" aria-label="Clear search" onClick={() => setSearch("")}><X size={12} /></button>}</label></div></div>
+    {!isIpoMode && !isIndexMode && data.rsCoverage?.momentumAvailable === false && <p className="notice" role="status">Rotation history is unavailable. Backfill dated RS universes to populate this map.</p>}
+    {isIndexMode && <p className="rrg-method">Index RS ranks 63-session returns across available aligned indices; it differs from stock RS. {data.thematicIndexCoverage && `${data.thematicIndexCoverage.available} of ${data.thematicIndexCoverage.requested} available.`}</p>}
     {drilledBlock && <div className="rrg-breadcrumb"><button type="button" onClick={() => setDrilledBlock(null)}>All niches</button><span>/</span><strong>{drilledBlock}</strong></div>}
-    <div className="rrg-filterbar"><div className="rrg-filterbar__label"><SlidersHorizontal size={14} /> Quadrants</div><button type="button" className={quadrant === "All" ? "is-active" : ""} onClick={() => { setQuadrant("All"); setSelectedKey(null); }}>All <span>{scope.length}</span></button>{QUADRANT_ORDER.map((entry) => <button key={entry} type="button" className={quadrant === entry ? `is-active is-${entry.toLowerCase()}` : ""} onClick={() => { setQuadrant(entry); setSelectedKey(null); }}><i className={`rrg-dot rrg-dot--${entry.toLowerCase()}`} />{entry} <span>{counts[entry]}</span></button>)}{!isIpoMode && <div className="rrg-trails"><button type="button" className={showTrails ? "is-active" : ""} onClick={() => setShowTrails((value) => !value)}>Trails</button>{showTrails && [4, 8, 12].filter((entry) => entry <= data.trailWeeks).map((entry) => <button key={entry} type="button" className={trailWeeks === entry ? "is-active" : ""} onClick={() => setWeeks(entry)}>{entry}W</button>)}<label className="rrg-replay"><span>Replay</span><input aria-label="RRG replay date" type="range" min="0" max={data.trailWeeks} value={data.trailWeeks - replayWeek} onChange={(event) => { setReplayWeek(data.trailWeeks - Number(event.target.value)); setSelectedKey(null); }} /><output>{replayWeek === 0 ? "Live" : formatDate(replayDate)}</output></label></div>}</div>
-    <div className="rrg-workspace"><div className="rrg-stage"><div className="rrg-stage__meta"><span>{replayWeek === 0 ? `${formatDate(earliestTrailDate)} → ${formatDate(data.asOfDate)}` : `Snapshot · ${formatDate(replayDate)}`}</span><span>{items.length} of {scope.length} shown</span></div><RrgChart items={items} scope={replayScope} selectedKey={selectedKey} onSelect={selectItem} weeks={trailWeeks} showTrails={showTrails} replayWeek={replayWeek} isIpoMode={isIpoMode} showLabels={showLabels} benchmark={data.benchmark} bounds={bounds} /></div><RrgInspector item={selectedItem} scope={replayScope} weeks={trailWeeks} onClose={() => setSelectedKey(null)} onDrillIntoBlock={drillIntoBlock} onOpenConstituents={() => setConstituentsOpen(true)} bounds={bounds} /></div>
-    <section className="rrg-ranking-section"><div className="rrg-ranking-section__head"><div><p className="rrg-kicker">ROTATION RANKINGS</p><h2>{isIpoMode ? "Recent listings" : isIndexMode ? "NSE thematic indices" : drilledBlock ?? (mode === "blocks" ? "Thematic blocks" : "All niches")}</h2></div><span>Click a row to inspect its rotation file</span></div><RrgRankings items={items} mode={mode} sortField={sortField} sortDesc={sortDirection === "desc"} onSort={changeSort} selectedKey={selectedKey} onSelect={selectItem} bounds={bounds} /></section>
+    <div className="rrg-filterbar"><div className="rrg-filterbar__label"><SlidersHorizontal size={14} /> Quadrants</div><button type="button" className={quadrant === "All" ? "is-active" : ""} onClick={() => { setQuadrant("All"); setSelectedKey(null); }}>All <span>{scope.length}</span></button>{QUADRANT_ORDER.map((entry) => <button key={entry} type="button" className={quadrant === entry ? `is-active is-${entry.toLowerCase()}` : ""} onClick={() => { setQuadrant(entry); setSelectedKey(null); }}><i className={`rrg-dot rrg-dot--${entry.toLowerCase()}`} />{entry} <span>{counts[entry]}</span></button>)}{!isIpoMode && <div className="rrg-trails"><button type="button" className={showTrails ? "is-active" : ""} onClick={() => setShowTrails((value) => !value)}>Trails</button>{showTrails && [4, 8, 12].filter((entry) => entry <= data.trailWeeks).map((entry) => <button key={entry} type="button" className={trailWeeks === entry ? "is-active" : ""} onClick={() => setWeeks(entry)}>{entry}W</button>)}<label className="rrg-replay"><span>Replay</span><input aria-label="RRG replay date" type="range" min="0" max={data.trailWeeks} value={data.trailWeeks - replayWeek} onChange={(event) => { setReplayWeek(data.trailWeeks - Number(event.target.value)); setSelectedKey(null); }} /><output>{replayWeek === 0 ? "Live" : replayLabel}</output></label></div>}</div>
+    <div className="rrg-workspace"><div className="rrg-stage"><div className="rrg-stage__meta"><span>{replayWeek === 0 ? `${formatDate(earliestTrailDate)} → ${formatDate(data.asOfDate)}` : `Snapshot · ${replayLabel}`}</span><span>{items.length} of {scope.length} shown</span></div><RrgChart items={items} scope={replayScope} selectedKey={selectedKey} onSelect={selectItem} weeks={trailWeeks} showTrails={showTrails} replayWeek={replayWeek} isIpoMode={isIpoMode} showLabels={showLabels} benchmark={data.benchmark} bounds={bounds} /></div><RrgInspector replay={replayWeek > 0 && !isIpoMode} item={selectedItem} scope={replayScope} weeks={trailWeeks} onClose={() => setSelectedKey(null)} onDrillIntoBlock={drillIntoBlock} onOpenConstituents={() => setConstituentsOpen(true)} bounds={bounds} /></div>
+    <section className="rrg-ranking-section"><div className="rrg-ranking-section__head"><div><p className="rrg-kicker">ROTATION RANKINGS</p><h2>{isIpoMode ? "Recent listings" : isIndexMode ? "NSE thematic indices" : drilledBlock ?? (mode === "blocks" ? "Thematic blocks" : "All niches")}</h2></div><span>Click a row to inspect its rotation file</span></div><RrgRankings replay={replayWeek > 0 && !isIpoMode} items={items} mode={mode} sortField={effectiveSortField} sortDesc={sortDirection === "desc"} onSort={changeSort} selectedKey={selectedKey} onSelect={selectItem} bounds={bounds} /></section>
     <RrgConstituentsDialog open={constituentsOpen} onOpenChange={setConstituentsOpen} item={selectedItem} stocks={constituentStocks} sortField={constituentSortField} sortDesc={constituentSortDesc} onSort={(field) => { if (field === constituentSortField) setConstituentSortDesc((value) => !value); else { setConstituentSortField(field); setConstituentSortDesc(true); } }} />
     <div className="rrg-method"><Check size={13} /><span><b>Method:</b> quadrant boundaries are 0% excess return and 0 RS-rating points. This is a thematic rotation map, not a normalized JdK RS-Ratio / RS-Momentum chart.</span></div>
   </section>;

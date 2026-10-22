@@ -292,14 +292,23 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       const targets = presetEligibilityTargets(p);
       if (!targets) return null;
       fn = s => {
-        if (!hasCustomPresetEligibility(p)) return s.presetMatches[c.conditionId] ?? null;
-        const eligibility = PRESET_ELIGIBILITY.map((rule, i): Truth => {
-          if (targets[i] === null) return true;
-          const value = rule.field === 'turnover50' ? s.metrics.turnover50 : s[rule.field as keyof SnapshotStock];
-          return s.asOfDate !== session || s.metadataAsOfDate !== session ? null : compare(value, 'GREATER', targets[i]!);
-        });
-        const ruleMatch = s.historyAligned && s.asOfDate === session ? s.presetRuleMatches?.[c.conditionId] ?? null : null;
-        return combine([...eligibility, ruleMatch], true);
+        if (s.presetMatches && s.presetMatches[c.conditionId] !== undefined) {
+          if (s.asOfDate !== session || s.historyAligned === false) return null;
+          if (!hasCustomPresetEligibility(p)) return s.presetMatches[c.conditionId] ?? null;
+          const eligibility = PRESET_ELIGIBILITY.map((rule, i): Truth => {
+            if (targets[i] === null) return true;
+            const value = rule.field === 'turnover50' ? s.metrics.turnover50 : s[rule.field as keyof SnapshotStock];
+            return s.asOfDate !== session || s.metadataAsOfDate !== session ? null : compare(value, 'GREATER', targets[i]!);
+          });
+          const ruleMatch = s.historyAligned && s.asOfDate === session ? s.presetRuleMatches?.[c.conditionId] ?? null : null;
+          return combine([...eligibility, ruleMatch], true);
+        }
+        if (s.asOfDate !== session || s.historyAligned === false) {
+          return null;
+        }
+        // Published rule results are authoritative. Missing enrichment is unknown,
+        // never reconstructed with a second detector/preset implementation here.
+        return null;
       };
       return c.isNegated ? s => { const v = fn(s); return v == null ? null : !v; } : fn;
   }

@@ -45,6 +45,9 @@ runs:
         git add "DO NOT DELETE EDL PIPELINE/nse_fno_ban.json.gz"
         git add "DO NOT DELETE EDL PIPELINE/earnings_calendar.json.gz"
         git add "DO NOT DELETE EDL PIPELINE/rs_rating_daily.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/rs_universe_history.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/market_screens_snapshot.json.gz"
+        git add "DO NOT DELETE EDL PIPELINE/pattern_gallery.json.gz"
         git add "DO NOT DELETE EDL PIPELINE/ipo_screener.json.gz"
         git add "DO NOT DELETE EDL PIPELINE/ipo_provider_listed_archive.json.gz"
         git add "DO NOT DELETE EDL PIPELINE/ipo_provider_details_archive.json.gz"
@@ -56,7 +59,7 @@ runs:
         git add reference/index-constituent-mappings.manifest.json
         git add frontend/public/data/current.json frontend/public/data/revisions
         if [ "$WEEKLY_REFRESH" != "true" ]; then
-          git add frontend/public/data/thematic_rrg.json frontend/public/data/thematic_rrg.json.gz frontend/public/data/thematic-rrg
+          git add frontend/public/data/thematic-rrg
         fi
         if [ "$WEEKLY_REFRESH" = "true" ]; then
           git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json

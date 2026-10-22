@@ -15,7 +15,6 @@ sys.path[:0] = [str(ROOT), str(ROOT / "src")]
 from screen_trend_conditions import _load_context, _load_delivery_history, _resolve_universe, _requires_delivery as _needs_delivery
 from edl_pipeline.scanner.context import normalize_condition_spec
 from edl_pipeline.scanner.context import CONTEXT_CONDITION_REGISTRY
-from edl_pipeline.scanner.presets import get_preset
 from edl_pipeline.scanner.query import compile_query
 from edl_pipeline.scanner.trend import evaluate_history, normalize_history, _comparison, _evaluate_expression, _leaf_results
 from edl_pipeline.scanner.financials import finite_number, financial_value
@@ -28,6 +27,9 @@ LEGACY_PRESETS = {
     "preset_momentum_burst": "lib-momentum-burst", "preset_52_week_high_breakout": "lib-52w-high-breakout",
     "preset_vcp_contraction": "lib-vcp", "preset_earnings_growth_momentum": "lib-earnings-momentum",
 }
+
+PRESET_DEFINITIONS_FILE = Path(__file__).parent / 'src/data/presetDefinitions.json'
+ALL_PRESET_DEFS = {p["id"]: p for p in json.loads(PRESET_DEFINITIONS_FILE.read_text())}
 
 PRESET_ELIGIBILITY = json.loads((Path(__file__).parent / 'src/data/presetEligibility.json').read_text())
 
@@ -46,8 +48,9 @@ def band(kind, field, low, high, **params):
 
 
 def translate(identifier, p):
-    if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
-        preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
+    target_id = LEGACY_PRESETS.get(identifier, identifier)
+    if target_id in ALL_PRESET_DEFS:
+        preset = ALL_PRESET_DEFS[target_id]
         return {"type": "preset", "expression": preset["expression"], "eligibility": p}
     if identifier.isupper():
         p = dict(p)
@@ -188,6 +191,15 @@ def combine(values, op):
     return True if True in values else None if None in values else False
 
 
+def first_value(mapping, *keys):
+    """Read aliases without discarding an explicit false or zero."""
+    for key in keys:
+        value = mapping.get(key)
+        if value is not None:
+            return value
+    return None
+
+
 def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
     if node["type"] == "group":
         if not node["children"]:
@@ -228,6 +240,58 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
                     value <= node["max"] if node.get("max") is not None else True,
                     value > node["strict_min"] if node.get("strict_min") is not None else True,
                     abs(value) <= node["abs_max"] if node.get("abs_max") is not None else True))
+    if node.get("type") == "condition" and str(node.get("kind", "")).startswith("MS_"):
+        kind = str(node.get("kind"))
+        if (first_value(s, "as_of_date", "asOfDate") != as_of
+                or s.get("historyAligned") is False
+                or (frame is not None and (frame.empty or frame["Date"].iloc[-1].strftime("%Y-%m-%d") != as_of))):
+            diagnostics.add(("stock_date", "stock_history_not_aligned_to_screen_date"))
+            return None
+
+        setups = first_value(s, "setup_geometry", "setupGeometry")
+        trend = first_value(s, "trend_template", "trendTemplate")
+        stage = first_value(s, "stage_status", "stageStatus")
+        earnings = first_value(s, "upcoming_earnings", "upcomingEarnings")
+        setup_fields = {
+            "MS_VCP": ("vcp",), "MS_DARVAS": ("darvas_box", "darvasBox"),
+            "MS_CUP_HANDLE": ("cup_with_handle", "cupWithHandle"),
+            "MS_BULL_FLAG": ("flag", "bullFlag"), "MS_POCKET_PIVOT": ("pocket_pivot", "pocketPivot"),
+            "MS_VOLUME_BREAKOUT": ("volume_breakout", "volumeBreakout"),
+            "MS_MYB": ("multi_year_breakout", "multiYearBreakout"),
+            "MS_COILED": ("coiled",), "MS_TIGHT_WEEKS": ("tight_weeks", "tightWeeks"),
+        }
+        if kind in setup_fields:
+            if setups is None:
+                return None
+            value = first_value(setups, *setup_fields[kind])
+            return bool(value.get("matched")) if isinstance(value, dict) else bool(value)
+        if kind == "MS_TREND_LEADERS":
+            value = first_value(trend or {}, "is_leader", "isLeader")
+            return None if value is None else bool(value)
+        if kind == "MS_STAGE_2":
+            value = (stage or {}).get("stage")
+            return None if value is None else value == 2
+        if kind == "MS_JUST_ENTERED_STAGE_2":
+            value = first_value(stage or {}, "just_entered_stage_2", "justEnteredStage2")
+            return None if value is None else bool(value)
+        rs_rating = s.get("rsRating")
+        if rs_rating is None and context.get("rs_ratings_as_of") == as_of:
+            rs_rating = (context.get("rs_ratings") or context.get("ratings") or {}).get(s.get("symbol", ""), {}).get("front_weighted")
+
+        if kind == "MS_RS_LINE_HIGH":
+            is_high = first_value(s, "is_rs_line_52w_high", "isRsLine52wHigh")
+            if is_high is None and context.get("rs_ratings_as_of") == as_of:
+                is_high = (context.get("ratings") or context.get("rs_ratings") or {}).get(s.get("symbol", ""), {}).get("is_rs_line_52w_high")
+            return None if is_high is None else bool(is_high)
+        if kind == "MS_RS_LEADERS_80":
+            if rs_rating is None:
+                diagnostics.add(("rs_rating", "dated_rs_ratings_unavailable"))
+                return None
+            return rs_rating >= 80
+        if kind in {"MS_EARNINGS_7D", "MS_EARNINGS_14D"}:
+            days = first_value(earnings or {}, "days_until_results", "daysUntilResults")
+            return None if days is None else 0 <= days <= (7 if kind == "MS_EARNINGS_7D" else 14)
+        return None
     spec = normalize_condition_spec(node)
     diagnostic_kind = str(node.get("kind") or spec["condition"])
     history_context_conditions = {"relative_strength", "rs_new_high", "average_turnover", "adr_percent",
@@ -288,7 +352,10 @@ def data_completeness(row):
     # Preserve the denominator used before the optional ScanX fields were added.
     added = set(PUBLIC_FINANCIAL_FIELDS.values()) - {"epsTtm", "dividendYieldPct", "debtToEquity"}
     added.update({"financialUnitsVersion", "debtToEquitySource", "financialHistoryObservedOn", "dataCompleteness", "metrics",
-                  "nicheTags", "nicheEvidence", "providerSector", "providerIndustry"})
+                  "nicheTags", "nicheEvidence", "providerSector", "providerIndustry",
+                  "setupGeometry", "trendTemplate", "stageStatus", "upcomingEarnings",
+                  "tradedValueMean20dCr", "tradedValueMedian20dCr", "isLiquidScreen", "isRsLine52wHigh",
+                  "rsChange21d", "rsMethodologyVersion"})
     values = [value for key, value in row.items() if key not in added]
     return round(100 * sum(value is not None for value in values) / len(values)) if values else 0
 
@@ -325,6 +392,16 @@ def stock_row(s, ratings):
                                 "reviewedOn": evidence["reviewed_on"], "exposure": evidence["exposure"]}
     for ma in ("sma20","sma50","sma200","ema20","ema50","ema200"):
         row[ma]=s.get(ma)
+    row["setupGeometry"] = s.get("setup_geometry") or s.get("setupGeometry")
+    row["trendTemplate"] = s.get("trend_template") or s.get("trendTemplate")
+    row["stageStatus"] = s.get("stage_status") or s.get("stageStatus")
+    row["upcomingEarnings"] = s.get("upcoming_earnings") or s.get("upcomingEarnings")
+    row["tradedValueMean20dCr"] = first_value(s, "traded_value_mean_20d_cr", "tradedValueMean20dCr")
+    row["tradedValueMedian20dCr"] = first_value(s, "traded_value_median_20d_cr", "tradedValueMedian20dCr")
+    row["isLiquidScreen"] = first_value(s, "is_liquid_screen", "isLiquidScreen")
+    row["isRsLine52wHigh"] = first_value(s, "is_rs_line_52w_high", "isRsLine52wHigh")
+    if row["isRsLine52wHigh"] is None:
+        row["isRsLine52wHigh"] = ratings.get(s["symbol"], {}).get("is_rs_line_52w_high")
     row["dataCompleteness"] = data_completeness(row)
     return row
 

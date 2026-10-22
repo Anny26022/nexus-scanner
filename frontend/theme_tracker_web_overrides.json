@@ -44,6 +44,7 @@
     "VARMORA": {"theme": "Tiles", "confidence": "medium", "sourceUrl": "https://varmora.com/"},
     "VEEGALAND": {"theme": "Residential Projects", "confidence": "medium", "sourceUrl": "https://www.veegaland.com/"},
     "VNL": {"theme": "Railways", "confidence": "high", "sourceUrl": "https://nsearchives.nseindia.com/corporate/Registration_29092025182450_DRHP.pdf"},
-    "VIVIANA": {"theme": "EPC - Power & Grid", "confidence": "high", "sourceUrl": "https://www.vivianagroup.in/about-us.php"}
+    "VIVIANA": {"theme": "EPC - Power & Grid", "confidence": "high", "sourceUrl": "https://www.vivianagroup.in/about-us.php"},
+    "KDDL": {"theme": "Jewellery", "niche": "Precision stamping, progressive tooling & watch components (Eigen Engineering) and luxury watch retail (Ethos)", "confidence": "high", "sourceUrl": "https://www.kddl.com/businesses/precision-engineering"}
   }
 }

@@ -228,11 +228,37 @@ def stock_rows(tasks, context, session, presets, default, workers=0):
         executor.shutdown(wait=True, cancel_futures=True)
 
 
+def attach_thematic_rrg(root, output, manifest):
+    """Bind a generated sidecar at release publication, never mutate frozen revisions."""
+    staged = root / 'thematic_rrg.json'
+    if staged.exists():
+        payload = json.loads(staged.read_text())
+        if payload.get('asOfDate') != manifest['sessionDate']:
+            raise ValueError('Thematic RRG session does not match scanner publication')
+        raw = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
+        version = hashlib.sha256(raw).hexdigest()
+        target = output / 'thematic-rrg' / f'{version}.json'
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            if target.read_bytes() != raw:
+                raise ValueError('Thematic RRG immutable object content mismatch')
+        else:
+            temporary = target.with_suffix('.tmp')
+            temporary.write_bytes(raw)
+            temporary.replace(target)
+        manifest.update(thematicRrgUrl=f'/data/thematic-rrg/{version}.json', thematicRrgVersion=version)
+    elif (output / 'current.json').exists():
+        # The weekly fundamentals-only refresh intentionally skips RRG generation.
+        previous = json.loads((output / 'current.json').read_text())
+        if previous.get('thematicRrgUrl') and previous.get('thematicRrgVersion'):
+            manifest.update({key: previous[key] for key in ('thematicRrgUrl', 'thematicRrgVersion')})
+
+
 def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = time.perf_counter()
     cache=ScannerCache(); cache.refresh(root)
     starting_revision=cache.revision
-    source_files=[p for p in sorted(root.glob('*.json.gz')) if p.name!='filing_history.json.gz']
+    source_files=[p for p in sorted(root.glob('*.json.gz')) if p.name not in {'filing_history.json.gz', 'rs_universe_history.json.gz'}]
     source_bytes={p.name:p.read_bytes() for p in source_files}
     context=bridge._load_context(root)
     session=context['financial_history_as_of']
@@ -338,6 +364,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'technicalMetricsVersion':1,'referenceCounts':{'rvol15Sma50':default_count}}
     payload['tradingViewMetricsVersion'] = 1
     payload['presetRuleMatchesVersion'] = 1
+    payload['rsMethodologyVersion'] = context.get('rs_methodology_version')
     taxonomy = classify(rows, session)
     taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
     (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
@@ -378,7 +405,14 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     manifest['themeClassificationVersion'] = taxonomy['version']
     manifest['universeClassificationUrl'] = f'/data/revisions/{revision}/universe-classification.json'
     started = elapsed('serialization and compression', started)
+    rrg_pointer = {'sessionDate': session}
+    attach_thematic_rrg(root, output, rrg_pointer)
+    rrg_pointer.pop('sessionDate')
     manifest = complete_release(chart_root, output, manifest)
+    if rrg_pointer:
+        # Sidecars advance independently; do not rewrite frozen release manifests.
+        manifest = dict(manifest, **rrg_pointer)
+        write_json(output / 'current.json', manifest)
     elapsed('release completion', started)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest

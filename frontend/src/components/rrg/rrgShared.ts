@@ -35,7 +35,7 @@ export const QUADRANT_BLURB: Record<RrgQuadrant, string> = {
 export const isIpoItem = (item: RrgItem): item is RrgIpoItem => "symbol" in item;
 export const isThematicIndexItem = (item: RrgItem): item is RrgThematicIndexItem => "indexSymbol" in item;
 export const isBlockItem = (item: RrgItem): item is RrgBlockItem =>
-  "nicheCount" in item;
+  !isThematicIndexItem(item) && "nicheCount" in item;
 
 export const itemKey = (item: RrgItem): string =>
   isIpoItem(item) ? item.symbol : item.name;

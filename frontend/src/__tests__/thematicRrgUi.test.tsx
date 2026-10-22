@@ -117,9 +117,9 @@ const data: ThematicRrgResponse = {
 
 afterEach(cleanup);
 
-function mount() {
+function mount(dataset = data) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(['thematicRrg', undefined], data);
+  client.setQueryData(['thematicRrg', undefined], dataset);
   render(
     <QueryClientProvider client={client}>
       <ThematicRrgTab />
@@ -163,9 +163,54 @@ it('replays the recorded weekly RRG snapshot instead of only showing the live da
   expect(screen.getByText(/Snapshot · 27 Jul 2026/i)).toBeTruthy();
 });
 
+it('does not substitute the live position when a replay date has no recorded RS', () => {
+  mount();
+  fireEvent.change(screen.getByLabelText('RRG replay date'), { target: { value: '6' } });
+  expect(screen.getByText(/Snapshot · Unavailable/i)).toBeTruthy();
+  expect(screen.getByText('0 of 2 shown')).toBeTruthy();
+});
+
+it('does not present live stock metrics as historical replay observations', () => {
+  mount();
+  fireEvent.change(screen.getByLabelText('RRG replay date'), {target: {value: '0'}});
+  expect(screen.queryByText('Median RS')).toBeNull();
+  const row = screen.getAllByText(block.name).map(node => node.closest('tr')).find(Boolean);
+  expect(row).not.toBeNull();
+  fireEvent.click(row!);
+  expect(screen.queryByText('Median RS rating')).toBeNull();
+  expect(screen.queryByText(/Explore .* Stocks/)).toBeNull();
+  expect(screen.getByText(/Replay shows historical positions for today’s constituents/)).toBeTruthy();
+});
+
 it('switches to the separate new-listing rotation model', () => {
   mount();
   fireEvent.click(screen.getByRole('tab', { name: /New listings/i }));
   expect(screen.getAllByText('NEW').length).toBeGreaterThan(0);
   expect(screen.getByText(/Turnover intensity vs baseline/i)).toBeTruthy();
+});
+
+it('shows official index metrics without invented stock breadth and preserves replay controls', () => {
+  mount({...data, rsCoverage: {requestedDates: [], availableDates: [], momentumAvailable: false}});
+  fireEvent.click(screen.getByRole('tab', {name: /NSE indices/i}));
+  expect(screen.getByText('1 NSE indices')).toBeTruthy();
+  expect(screen.getByText(/Official index 3-month excess return versus/)).toBeTruthy();
+  expect(screen.queryByText(/Backfill dated RS universes/)).toBeNull();
+  expect(screen.getByRole('columnheader', {name: /3M index RS/})).toBeTruthy();
+  const row = screen.getAllByText('Nifty India Defence').map(node => node.closest('tr')).find(Boolean)!;
+  fireEvent.click(row);
+  expect(screen.getByText('Official NSE index OHLCV')).toBeTruthy();
+  expect(screen.queryByText(/Explore .* Stocks/)).toBeNull();
+  expect(screen.queryByText('Breadth vs benchmark')).toBeNull();
+  fireEvent.change(screen.getByLabelText('RRG replay date'), {target: {value: '0'}});
+  expect(screen.queryByRole('columnheader', {name: /3M index RS/})).toBeNull();
+  expect(screen.queryByRole('columnheader', {name: /1M excess/})).toBeNull();
+  expect(screen.getByRole('columnheader', {name: /21D RS Δ/})).toBeTruthy();
+  const replayRow = screen.getAllByText('Nifty India Defence').map(node => node.closest('tr')).find(Boolean)!;
+  fireEvent.click(replayRow);
+  expect(screen.getByText(/Replay shows recorded index positions/)).toBeTruthy();
+});
+
+it('hides the official index tab when no eligible series is published', () => {
+  mount({...data, thematicIndices: []});
+  expect(screen.queryByRole('tab', {name: /NSE indices/i})).toBeNull();
 });

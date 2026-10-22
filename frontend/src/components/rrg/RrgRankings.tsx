@@ -15,6 +15,7 @@ import {
 import { RrgMicroMap } from "./RrgMicroMap";
 
 interface RrgRankingsProps {
+  replay?: boolean;
   items: RrgItem[];
   mode: RrgMode;
   sortField: string;
@@ -58,7 +59,8 @@ const INDEX_COLUMNS: Column[] = [
   { id: "excessReturn1m", label: "1M excess", numeric: true },
   { id: "excessReturn3m", label: "3M excess", numeric: true },
   { id: "excessReturn6m", label: "6M excess", numeric: true },
-  { id: "medianRs", label: "Index RS", numeric: true },
+  { id: "medianRs", label: "3M index RS", numeric: true },
+  { id: "rsMomentum21d", label: "21D RS Δ", numeric: true },
 ];
 
 function SortHeader({
@@ -87,6 +89,7 @@ function SortHeader({
 }
 
 export function RrgRankings({
+  replay = false,
   items,
   mode,
   sortField,
@@ -96,7 +99,7 @@ export function RrgRankings({
   onSelect,
   bounds,
 }: RrgRankingsProps) {
-  const columns = mode === "ipos" ? IPO_COLUMNS : mode === "indices" ? INDEX_COLUMNS : CLUSTER_COLUMNS;
+  const columns = (mode === "ipos" ? IPO_COLUMNS : mode === "indices" ? INDEX_COLUMNS : CLUSTER_COLUMNS).filter(column => !replay || !["medianRs", "beatingBenchmarkPct", "constituentCount", "excessReturn1m", "excessReturn6m"].includes(column.id));
 
   return (
     <div className="rrg-table-wrap">
@@ -158,10 +161,11 @@ export function RrgRankings({
                   </>
                 ) : isThematicIndexItem(item) ? (
                   <>
-                    <td className={`rrg-td is-numeric ${toneClass(item.metrics.excessReturn1m)}`}>{fmtSigned(item.metrics.excessReturn1m)}</td>
+                    {!replay && <td className={`rrg-td is-numeric ${toneClass(item.metrics.excessReturn1m)}`}>{fmtSigned(item.metrics.excessReturn1m)}</td>}
                     <td className={`rrg-td is-numeric ${toneClass(item.x)}`}>{fmtSigned(item.x)}</td>
-                    <td className={`rrg-td is-numeric ${toneClass(item.metrics.excessReturn6m)}`}>{fmtSigned(item.metrics.excessReturn6m)}</td>
-                    <td className="rrg-td is-numeric">{fmtNum(item.metrics.medianRs, 0)}</td>
+                    {!replay && <td className={`rrg-td is-numeric ${toneClass(item.metrics.excessReturn6m)}`}>{fmtSigned(item.metrics.excessReturn6m)}</td>}
+                    {!replay && <td className="rrg-td is-numeric">{fmtNum(item.metrics.medianRs, 0)}</td>}
+                    <td className={`rrg-td is-numeric ${toneClass(item.y)}`}>{fmtSigned(item.y, " pts")}</td>
                   </>
                 ) : (
                   <>
@@ -171,9 +175,9 @@ export function RrgRankings({
                     <td className={`rrg-td is-numeric ${toneClass(item.y)}`}>
                       {fmtSigned(item.y, " pts")}
                     </td>
-                    <td className="rrg-td is-numeric">{fmtNum(item.metrics.medianRs, 0)}</td>
+                    {!replay && <><td className="rrg-td is-numeric">{fmtNum(item.metrics.medianRs, 0)}</td>
                     <td className="rrg-td is-numeric">{fmtNum(item.metrics.beatingBenchmarkPct)}%</td>
-                    <td className="rrg-td is-numeric">{item.metrics.constituentCount}</td>
+                    <td className="rrg-td is-numeric">{item.metrics.constituentCount}</td></>}
                   </>
                 )}
               </tr>

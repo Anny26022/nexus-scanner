@@ -1,11 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ResultsTable } from '../components/ResultsTable';
+import { screenerApi } from '../api/screenerApi';
 import { Pagination } from '../components/Pagination';
+import { readChartStorage } from '../chart/storage';
 import { pagePlaceholder } from '../utils/pagePlaceholder';
 import type { ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); localStorage.removeItem('nexus-scanner.screener.result-view.v1'); localStorage.removeItem('nexus.chart.grid.v1'); });
 const request: ScreenerRunRequest = {datasetRevision: 'a'.repeat(64), universe: 'mainboard', asOfDate: '2026-10-09',
   expressionTree: {type: 'group', operator: 'all', children: []}, page: 1, pageSize: 15, sort: {field: 'rvol', direction: 'desc'}};
 const row = {symbol: 'AVTNPL', name: 'Avt Natural Products', sector: 'FMCG', industry: 'Agricultural Products',
@@ -40,6 +43,26 @@ it('reports incomplete legacy results rather than silently copying just the curr
   fireEvent.click(screen.getByRole('button', {name:'Copy results'}));
   fireEvent.click(screen.getByRole('menuitem', {name:'Symbols'}));
   expect(await screen.findByRole('alert')).toHaveTextContent('All matching symbols are unavailable');
+});
+
+it('switches the current result page into the lazy quick-chart gallery', async () => {
+  vi.spyOn(screenerApi, 'getChart').mockRejectedValue(new Error('offline'));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><ResultsTable {...props} data={data} /></QueryClientProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
+  expect(screen.getByText('Interactive charts use your saved style, indicators, and drawings. Drag to pan; scroll or pinch to zoom.')).toBeInTheDocument();
+  expect(screen.getByLabelText('AVTNPL quick chart')).toBeInTheDocument();
+  await waitFor(() => expect(screenerApi.getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision));
+});
+
+it('opens a quick chart in the existing full chart workspace', () => {
+  const openFullChart = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><ResultsTable {...props} data={data} onOpenFullChart={openFullChart} /></QueryClientProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open AVTNPL full chart' }));
+  expect(openFullChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision);
+  expect((readChartStorage('grid.v1') as { tiles: Array<{ symbol: string; interval: string }> }).tiles[0]).toEqual({ symbol: 'AVTNPL', interval: 'D' });
 });
 
 it('leads with quotes only on phones and restores desktop order without changing saved columns', () => {
@@ -251,4 +274,11 @@ it('keeps empty and single-page pagination visible without offering invalid navi
   expect(screen.getByText('31-40', {exact: false})).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', {name: 'Previous'}));
   expect(change).toHaveBeenLastCalledWith(2);
+});
+
+it('propagates result view toggle via onResultViewChange callback', () => {
+  const onResultViewChange = vi.fn();
+  render(<ResultsTable {...props} data={data} resultView="table" onResultViewChange={onResultViewChange} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
+  expect(onResultViewChange).toHaveBeenCalledWith('charts');
 });

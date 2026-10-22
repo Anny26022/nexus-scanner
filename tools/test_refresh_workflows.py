@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "b7bf2cde285755bd02d87c11edfd659c7a1158707eae434f62de7d156a818818",
-    "weekly_eod2_refresh.yml": "df3cbdd01fc27af609d77fc3f4f6ee929d6f21c341eba63d32fc0dd8e81c2b74",
+    "daily_refresh.yml": "87a027384eeadef2b9b7e472b437662c7d34a208d902f478312b57855e4874ee",
+    "weekly_eod2_refresh.yml": "065a331eb8c35f753d1edbd5dd4c8777f62b4c5e56762b13f07cf3848a0e2515",
 }
 
 
@@ -176,7 +176,7 @@ class RefreshWorkflowTests(unittest.TestCase):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
         fake_git = "git() { printf '%s\\0' \"$@\"; printf '\\n'; };\n"
-        for weekly, additions in [('false', 31), ('true', 33)]:
+        for weekly, additions in [('false', 34), ('true', 36)]:
             with self.subTest(weekly=weekly):
                 message = 'literal $(false) commit message'
                 env = dict(os.environ, WEEKLY_REFRESH=weekly, REFRESH_COMMIT_MESSAGE=message)
@@ -184,6 +184,7 @@ class RefreshWorkflowTests(unittest.TestCase):
                                         env=env, capture_output=True, text=True, check=True)
                 calls = [line.rstrip('\0').split('\0') for line in result.stdout.splitlines()]
                 self.assertEqual(sum(call[0] == 'add' for call in calls), additions)
+                self.assertIn(['add', 'DO NOT DELETE EDL PIPELINE/rs_universe_history.json.gz'], calls)
                 self.assertEqual(['add', 'reference/dhan/group-stocks.json'] in calls, weekly == 'true')
                 self.assertIn(['reset', '--mixed', 'origin/main'], calls)
                 self.assertIn(['commit', '-m', message], calls)

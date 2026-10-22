@@ -30,6 +30,7 @@ interface ExploreTabProps {
   onRefreshRevision: () => Promise<string | undefined>;
   availableSessions?: Array<{ date: string; label: string; isHistorical: boolean; revision: string }>;
   onSelectSession?: (date: string) => void;
+  onOpenFullChart?: (symbol: string, revision?: string) => void;
 }
 
 const DEFAULT_CONDITIONS: Record<string, ActiveCondition> = {
@@ -51,8 +52,10 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   onRefreshRevision,
   availableSessions = [],
   onSelectSession,
+  onOpenFullChart,
 }) => {
   const [universe, setUniverse] = useLocalStorageState<UniverseType>('nexus-scanner.screener.universe.v1', 'mainboard');
+  const [resultView, setResultView] = useLocalStorageState<'table' | 'charts'>('nexus-scanner.screener.result-view.v1', 'table');
   const asOfDate = selectedAsOfDate;
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.screener.match-mode.v1', 'all');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -225,8 +228,9 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
     {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
       loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
-      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} />}
-    {availableSessions.length > 0 && (
+      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={size => {setPageSize(size); setPage(1);}} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onOpenFullChart={onOpenFullChart}
+      resultView={resultView} onResultViewChange={setResultView} />}
+    {availableSessions.length > 0 && resultView !== 'charts' && (
       <div id="backtest-history" className="mt-3 w-full">
         {!isScanHistoryOpen ? (
           <div className="flex items-center justify-between gap-3 border-t border-line px-1 py-2.5 sm:px-2">

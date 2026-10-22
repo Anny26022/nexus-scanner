@@ -616,7 +616,7 @@
   body { overflow: auto; }
   .app-frame { height: auto; min-height: 100dvh; }
   .workspace, .research-view, .results-surface { flex: none; }
-  .table-viewport { flex: none; height: 65dvh; min-height: 240px; }
+  .table-viewport, .quick-charts-scroll { flex: none; height: 65dvh; min-height: 240px; }
 }
 @media (max-width: 359px) {
   .screen-buttons .button-secondary { font-size: 0; padding-inline: 8px; }

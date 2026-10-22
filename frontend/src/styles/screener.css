@@ -30,7 +30,10 @@
 .universe-label-row { order: 2; display: flex; align-items: center; }
 .universe-control > .field-label:not(.sr-only) { margin: 0 8px 0 6px; white-space: nowrap; }
 .screen-toolbar > .screen-buttons:last-child { margin-left: auto; }
-.toolbar-divider { width: 1px; height: 16px; margin-inline: 2px; background: var(--line-strong); }
+.screen-buttons .button-ghost { color: var(--secondary); }
+.screen-buttons .button-ghost:hover { color: var(--text); }
+.screen-buttons .toolbar-icon-button { width: 30px; padding: 0; color: var(--muted); }
+.screen-buttons .button-primary + .toolbar-icon-button { margin-left: 4px; }
 .universe-info-button { position: relative; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; border-radius: 50%; }
 .universe-info-button:hover, .universe-info-button:focus-visible { color: var(--accent); background: var(--surface-hover); }
 .universe-info-button svg { width: 13px; height: 13px; }

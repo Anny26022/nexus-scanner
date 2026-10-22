@@ -9,6 +9,7 @@ export interface Manifest {
   datasetPackedGzipUrl?: string;
   themeClassificationUrl?: string;
   themeClassificationVersion?: string;
+  marketOverviewUrl?: string;
   iposUrl: string;
   totalStocks: number;
   schemaVersion: number;
@@ -33,6 +34,7 @@ export function validateManifest(value: unknown): Manifest {
       || (manifest.datasetPackedGzipUrl !== undefined && (!validUrl(manifest.datasetPackedGzipUrl) || !manifest.datasetPackedGzipUrl.endsWith('.json.gz')))
       || (manifest.themeClassificationUrl !== undefined && (!validUrl(manifest.themeClassificationUrl) || !manifest.themeClassificationUrl.endsWith('.json.gz')
           || !/^[a-f0-9]{64}$/.test(manifest.themeClassificationVersion ?? '')))
+      || (manifest.marketOverviewUrl !== undefined && (!validUrl(manifest.marketOverviewUrl) || !manifest.marketOverviewUrl.endsWith('.json.gz')))
       || !validDate(manifest.sessionDate) || !validUrl(manifest.datasetUrl) || !validUrl(manifest.iposUrl)
       || !Number.isInteger(manifest.totalStocks) || manifest.totalStocks < 0
       || (manifest.chartRevision !== undefined && !/^[a-f0-9]{64}$/.test(manifest.chartRevision))

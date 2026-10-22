@@ -40,6 +40,7 @@ export const screenerApi = {
     }
     return rows;
   },
+  getMarketOverview: (revision?: string) => realAdapter.getMarketOverview(revision),
   getFilterChoices: realAdapter.getFilterChoices.bind(realAdapter),
   getAnnouncementIndex: realAdapter.getAnnouncementIndex.bind(realAdapter),
   getAnnouncementTopics: realAdapter.getAnnouncementTopics.bind(realAdapter),

@@ -7,6 +7,7 @@ import type { SnapshotSource } from './snapshotEngine';
 import { filterAnnouncements, type Announcement, type AnnouncementCatalog, type AnnouncementIndex, type FilingTopic } from './announcements';
 import { DataUnavailableError } from './dataErrors';
 import { getManifest, refreshManifest, validateManifest, validDate, manifestSnapshotSource, type Manifest } from './manifest';
+import { parseMarketOverview } from '../utils/marketOverview';
 export { refreshManifest } from './manifest';
 const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
 const finiteAmount = (value: unknown): number | null => {
@@ -176,6 +177,13 @@ class RealDataAdapter {
       throw new Error('Theme classification release mismatch');
     }
     return data;
+  }
+  async getMarketOverview(revision?: string) {
+    const release = await releaseFor(revision);
+    if (!release.marketOverviewUrl) throw new DataUnavailableError('Market overview is published with the next data refresh.', 'not_published');
+    const data = await cached(releaseCache, release.marketOverviewUrl,
+      () => getIpoJson<unknown>(release.marketOverviewUrl!, 'Market overview'), 6);
+    return parseMarketOverview(data, release.sessionDate);
   }
   async getFilterChoices(revision?: string, sessionDate?: string) {
     const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision, sessionDate)});

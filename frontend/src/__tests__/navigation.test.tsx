@@ -1,14 +1,25 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { Navbar } from '../components/Navbar';
+import { Navbar, type AppTab } from '../components/Navbar';
+import { useTheme } from '../hooks/useTheme';
 import { SymbolWithLogo } from '../components/SymbolWithLogo';
+
+function ThemedNavbar(props: {activeTab: AppTab; onTabChange: (tab: AppTab) => void; onHideSidebar: () => void; onOpenSearch?: () => void}) {
+  const {choice, setChoice} = useTheme();
+  return <Navbar {...props} onOpenSearch={props.onOpenSearch ?? (() => {})} theme={choice} onThemeChange={setChoice} />;
+}
 
 afterEach(() => {cleanup(); vi.unstubAllGlobals(); localStorage.clear(); delete document.documentElement.dataset.theme;});
 it('preserves the primary navigation and supports persistent appearance choices', () => {
   vi.stubGlobal('matchMedia', vi.fn(() => ({matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn()})));
   const change = vi.fn();
   const hideSidebar = vi.fn();
-  render(<Navbar activeTab="screener" onTabChange={change} onHideSidebar={hideSidebar} />);
+  const openSearch = vi.fn();
+  render(<ThemedNavbar activeTab="screener" onTabChange={change} onHideSidebar={hideSidebar} onOpenSearch={openSearch} />);
+  fireEvent.click(screen.getByRole('button', {name: 'Search pages, screens and symbols'}));
+  expect(openSearch).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', {name: 'Market'}));
+  expect(change).toHaveBeenCalledWith('market');
   expect(screen.getByRole('button', {name: 'Screener'})).toHaveAttribute('aria-current', 'page');
   fireEvent.click(screen.getByRole('button', {name: 'IPO Catalogue'}));
   expect(change).toHaveBeenCalledWith('ipo');

@@ -4,7 +4,7 @@ import { ChartNoAxesCombined, Maximize2, Minus, Plus, RefreshCw, RotateCcw } fro
 import { screenerApi } from '../api/screenerApi';
 import { validateCandles, type Candle } from '../chart/model';
 import { ChartEngine } from '../chart/ChartEngine';
-import { loadGrid, loadScene, savedDrawingBook, writeChartStorage } from '../chart/storage';
+import { loadScene, openSymbolInCharts, savedDrawingBook } from '../chart/storage';
 import { defaultStudies } from '../chart/studies';
 import { defaultStudyConfigs } from '../chart/studyConfigs';
 import { loadEmaLines } from './EmaSettings';
@@ -109,11 +109,7 @@ function QuickChartCard({ row, revision, sessionDate, rank, observe, onOpenFullC
   const positive = changePct != null && changePct >= 0;
   const openFullChart = () => {
     if (!onOpenFullChart) return;
-    const grid = loadGrid();
-    writeChartStorage('grid.v1', {
-      ...grid,
-      tiles: [{ ...grid.tiles[0], symbol: row.symbol }, ...grid.tiles.slice(1)],
-    });
+    openSymbolInCharts(row.symbol);
     onOpenFullChart(row.symbol, revision, sessionDate);
   };
   return <article ref={attach} className="quick-chart-card" aria-label={`${row.symbol} quick chart`}>

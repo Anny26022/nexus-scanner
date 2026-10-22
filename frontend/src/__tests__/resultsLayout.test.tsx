@@ -55,6 +55,67 @@ it('switches the current result page into the lazy quick-chart gallery', async (
   await waitFor(() => expect(screenerApi.getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision));
 });
 
+it('does not create an offscreen quick chart until it approaches the gallery viewport', async () => {
+  const callbacks: IntersectionObserverCallback[] = [];
+  class TestIntersectionObserver {
+    constructor(callback: IntersectionObserverCallback) { callbacks.push(callback); }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return []; }
+    root = null;
+    rootMargin = '0px';
+    thresholds = [];
+  }
+  vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
+  const getChart = vi.spyOn(screenerApi, 'getChart').mockResolvedValue({candles: []} as never);
+  try {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><ResultsTable {...props} data={data} /></QueryClientProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
+    await waitFor(() => expect(callbacks).toHaveLength(1));
+    expect(getChart).not.toHaveBeenCalled();
+    const card = screen.getByLabelText('AVTNPL quick chart');
+    act(() => callbacks[0]([{isIntersecting: true, target: card} as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
+    await waitFor(() => expect(getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision));
+  } finally {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  }
+});
+
+it('keeps a loaded quick chart mounted when it leaves the viewport', async () => {
+  const callbacks: IntersectionObserverCallback[] = [];
+  class TestIntersectionObserver {
+    constructor(callback: IntersectionObserverCallback) { callbacks.push(callback); }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return []; }
+    root = null;
+    rootMargin = '0px';
+    thresholds = [];
+  }
+  vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
+  const getChart = vi.spyOn(screenerApi, 'getChart').mockResolvedValue({candles: [{date: '2026-10-01', open: 1, high: 2, low: 0.5, close: 1.5, volume: 10}]} as never);
+  try {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(<QueryClientProvider client={client}><ResultsTable {...props} data={data} /></QueryClientProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'Charts' }));
+    await waitFor(() => expect(callbacks).toHaveLength(1));
+    const card = screen.getByLabelText('AVTNPL quick chart');
+    act(() => callbacks[0]([{isIntersecting: true, target: card} as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
+    await waitFor(() => expect(view.container.querySelector('.quick-chart-canvas')).not.toBeNull());
+    expect(getChart).toHaveBeenCalledWith('AVTNPL', request.datasetRevision);
+    act(() => callbacks[0]([{isIntersecting: false, target: card} as unknown as IntersectionObserverEntry], {} as IntersectionObserver));
+    expect(view.container.querySelector('.quick-chart-canvas')).not.toBeNull();
+    expect(view.container.querySelector('.quick-chart-skeleton')).toBeNull();
+  } finally {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  }
+});
+
 it('opens a quick chart in the existing full chart workspace', () => {
   const openFullChart = vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

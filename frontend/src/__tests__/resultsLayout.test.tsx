@@ -162,7 +162,7 @@ it('keeps table, column definitions and pagination mounted across loading, resul
   const widths = [...table.querySelectorAll('col')].map(col => col.style.width);
   for (const state of [{data}, {data: {...data, page: 2}}, {data: {...data, matchCount: 0, rows: []}}, {isError: true, error: new Error('Offline')}]) {
     view.rerender(<ResultsTable {...props} {...state} />);
-    expect(screen.getByRole('table')).toBe(table);
+    expect(screen.getByRole('table', {hidden: true})).toBe(table);
     expect(screen.getByRole('navigation', {name: 'Results pagination'})).toBe(pager);
     expect([...table.querySelectorAll('col')].map(col => col.style.width)).toEqual(widths);
   }
@@ -176,6 +176,22 @@ it('disables exports and page changes while previous-page data is updating', () 
   for (const name of ['Copy results', 'Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
   view.rerender(<ResultsTable {...props} data={{...data, page: 2, matchCount: 45}} isFetching />);
   for (const name of ['Next', 'Previous']) expect(screen.getByRole('button', {name})).toBeDisabled();
+});
+
+it('shows query errors outside the wide table in either result view', () => {
+  const retry = vi.fn();
+  localStorage.setItem('nexus-scanner.screener.columns.v1', JSON.stringify(['company', 'close', 'marketCapCrore', 'rsRating']));
+  try {
+    const view = render(<ResultsTable {...props} isError error={new Error('Average turnover (30d) is unavailable for this session.')} onRetry={retry}/>);
+    const alert = screen.getByRole('alert');
+    expect(alert).toBeVisible();
+    expect(alert.closest('.table-scroll')).toBeNull();
+    expect(alert).toHaveTextContent('Average turnover (30d)');
+    fireEvent.click(screen.getByRole('button', {name:'Retry'}));
+    expect(retry).toHaveBeenCalledOnce();
+    view.rerender(<ResultsTable {...props} isError error={new Error('Unavailable')} resultView="charts"/>);
+    expect(screen.getByRole('alert')).toBeVisible();
+  } finally {localStorage.removeItem('nexus-scanner.screener.columns.v1');}
 });
 
 it('uses keyboard-accessible sorting and preserves missing values rather than converting them to zero', () => {

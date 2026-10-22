@@ -348,15 +348,17 @@ const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
 export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allRows = false): ScreenerRunResponse | null {
   if (request.textQuery?.trim()) return null;
-  const usesTradingView = (node:ExpressionNode):boolean => node.type === 'group'
-    ? node.children.some(usesTradingView) : isTradingViewCondition(node.condition.conditionId);
+  const tradingViewFields = (node:ExpressionNode):string[] => node.type === 'group'
+    ? node.children.flatMap(tradingViewFields) : isTradingViewCondition(node.condition.conditionId)
+      ? [tradingViewMetrics.find(metric => metric.id === node.condition.parameters.metric)?.label ?? String(node.condition.parameters.metric)] : [];
   const usesFnoBan = (node:ExpressionNode):boolean => node.type === 'group'
     ? node.children.some(usesFnoBan) : node.condition.conditionId === 'FNO_BAN';
   if (usesFnoBan(request.expressionTree) && !data.stocks.some(s => s.fnoBan != null)) {
     throw new Error('Historical F&O ban status is not archived by the exchange and is only available for live sessions.');
   }
-  if (data.tradingViewMetricsVersion !== 1 && usesTradingView(request.expressionTree)) {
-    throw new Error('These filters need a newer dataset. Try after the next daily data refresh.');
+  const missingFields = data.tradingViewMetricsVersion !== 1 ? tradingViewFields(request.expressionTree) : [];
+  if (missingFields.length) {
+    throw new Error(`The ${data.asOfDate} snapshot has no archived TradingView values for: ${[...new Set(missingFields)].join(', ')}. Remove these filters or select a session with this data. A daily refresh does not update past snapshots.`);
   }
   const customPreset = (node: ExpressionNode): boolean => node.type === 'group'
     ? node.children.some(customPreset) : presetIds.has(node.condition.conditionId) && hasCustomPresetEligibility(node.condition.parameters);

@@ -1,21 +1,22 @@
 /* Shared primitives. Feature files style them in context with more specific selectors. */
 
 /* <Button> */
-.button { display: inline-flex; justify-content: center; align-items: center; gap: 5px; min-height: 28px; border-radius: 6px; padding: 0 10px; font-size: 11.5px; font-weight: 600; border: 1px solid transparent; transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; user-select: none; }
-.button-secondary { border-color: var(--line); background: var(--surface); color: var(--secondary); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03); }
-.button-secondary:not(:disabled):hover { background: var(--surface-hover); border-color: var(--line-strong); color: var(--text); }
-.button-primary { background: var(--accent); color: var(--on-accent); padding-inline: 13px; box-shadow: 0 1px 2px rgba(24, 118, 105, 0.2); }
-.button-primary:not(:disabled):hover { filter: brightness(1.06); box-shadow: 0 2px 5px rgba(24, 118, 105, 0.3); }
-.button-ghost { color: var(--muted); background: transparent; }
+.button { display: inline-flex; justify-content: center; align-items: center; gap: 6px; height: 32px; min-height: 32px; border-radius: var(--radius-md); padding: 0 12px; font-size: 13px; font-weight: 500; letter-spacing: -0.01em; border: 0; cursor: pointer; user-select: none; }
+.button-secondary { background: var(--surface); color: var(--text); box-shadow: var(--shadow-control); }
+.button-secondary:not(:disabled):hover { background: var(--surface-subtle); }
+.button-primary { background: var(--accent); color: var(--on-accent); font-weight: 600; padding-inline: 14px; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 1px 2px rgb(0 0 0 / 0.12); }
+.button-primary:not(:disabled):hover { background: var(--accent-hover); }
+.button-ghost { color: var(--secondary); background: transparent; }
 .button-ghost:hover { background: var(--surface-hover); color: var(--text); }
+.button svg { flex-shrink: 0; }
 
 /* <SymbolWithLogo>: zero specificity so any contextual rule (chart, watchlist, news, IPO card) wins. */
 :where(.symbol-logo) { display: inline-flex; min-width: 0; align-items: center; gap: 8px; }
-:where(.symbol-logo-mark) { width: 28px; height: 28px; flex-shrink: 0; border-radius: 6px; }
-:where(.symbol-logo-mark.symbol-logo-mark--md) { width: 32px; height: 32px; }
-:where(img.symbol-logo-mark) { padding: 2px; border: 1px solid var(--line); background: var(--surface); object-fit: contain; }
+:where(.symbol-logo-mark) { width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; }
+:where(.symbol-logo-mark.symbol-logo-mark--md) { width: 34px; height: 34px; }
+:where(img.symbol-logo-mark) { padding: 3px; border: 0; background: #fff; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.06); object-fit: contain; }
 :where(span.symbol-logo-mark) { display: grid; place-items: center; background: var(--surface-hover); color: var(--muted); font-size: 11px; font-weight: 700; }
 :where(.symbol-logo-text) { min-width: 0; }
 :where(.symbol-logo-symbol, .symbol-logo-name) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-:where(.symbol-logo-symbol) { color: var(--text); font-size: .75rem; line-height: calc(1 / .75); }
-:where(.symbol-logo-name) { color: var(--muted); font-size: 11px; }
+:where(.symbol-logo-symbol) { color: var(--text); font-size: 13px; font-weight: 600; line-height: 18px; letter-spacing: -0.01em; }
+:where(.symbol-logo-name) { color: var(--muted); font-size: 12px; line-height: 16px; }

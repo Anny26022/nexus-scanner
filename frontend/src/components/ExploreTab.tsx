@@ -25,6 +25,7 @@ import { AiScreenerModal } from './AiScreenerModal';
 import { ScanHistoryPanel } from './ScanHistoryPanel';
 import { Button } from './Button';
 
+
 interface ExploreTabProps {
   selectedAsOfDate: string;
   datasetRevision?: string;
@@ -164,12 +165,18 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
 
   const filterCount = Object.keys(activeConditionsMap).length;
 
+  const showBacktest = availableSessions.length > 0 && resultView !== 'charts';
+  const openBacktest = () => {
+    setIsScanHistoryOpen(true);
+    requestAnimationFrame(() => document.getElementById('backtest-history')?.scrollIntoView({behavior: 'smooth', block: 'start'}));
+  };
+
   return <div className="research-view">
     <section className="screen-controls" aria-label="Screen criteria">
       <div className="screen-toolbar">
         <div className="universe-control">
           <div className="universe-label-row">
-            <span className="field-label">Universe</span>
+            <span className="field-label sr-only">Universe</span>
             <button
               type="button"
               className="universe-info-button"
@@ -193,7 +200,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
             </select><ChevronDown size={14} />
           </span>
         </div>
-        <label className="query-control"><span className="field-label">Scanner query</span><span className="query-input"><Search size={16} />
+        <label className="query-control"><span className="field-label sr-only">Scanner query</span><span className="query-input"><Search size={16} />
           <input aria-label="Scanner query" value={queryText} onChange={event => setQueryText(event.target.value)}
             onKeyDown={event => { if (event.key === 'Enter') void handleRun(); }} placeholder="e.g. P/E < 20 AND EPS > 10" /></span></label>
         <div className="screen-buttons">
@@ -208,6 +215,13 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
           </Button>
           <Button variant="secondary" onClick={() => setIsModalOpen(true)}><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</Button>
           <Button variant="primary" onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable}><Play size={14} />Run</Button>
+          {showBacktest && <>
+            <span className="toolbar-divider" aria-hidden="true" />
+            <Button variant="ghost" className="backtest-trigger" onClick={openBacktest} aria-expanded={isScanHistoryOpen} aria-label="Backtest" title={`Backtest this screen across ${availableSessions.length} sessions`}>
+              <BarChart3 size={14} aria-hidden="true" />
+              <span>Backtest</span>
+            </Button>
+          </>}
         </div>
       </div>
       {(activeQuery || filterCount > 0) && <div className="active-filters">
@@ -228,36 +242,19 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
       onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={setPageSize} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onOpenFullChart={onOpenFullChart}
       resultView={resultView} onResultViewChange={setResultView} />}
-    {availableSessions.length > 0 && resultView !== 'charts' && (
-      <div id="backtest-history" className="mt-3 w-full">
-        {!isScanHistoryOpen ? (
-          <div className="flex items-center justify-between gap-3 border-t border-line px-1 py-2.5 sm:px-2">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <BarChart3 size={16} className="shrink-0 text-accent" aria-hidden="true" />
-              <h3 className="whitespace-nowrap text-sm font-semibold text-text">Historical Backtest</h3>
-              <span className="hidden text-xs text-muted sm:inline">{availableSessions.length} sessions</span>
-            </div>
-            <Button
-              variant="primary"
-              className="h-8 shrink-0"
-              onClick={() => setIsScanHistoryOpen(true)}
-            >
-              <span>Backtest</span>
-            </Button>
-          </div>
-        ) : (
-          <ScanHistoryPanel
-            expressionTree={expressionTree}
-            universe={universe}
-            customSymbols={runRequest.customSymbols}
-            availableSessions={availableSessions}
-            currentSessionDate={asOfDate}
-            onSelectSession={(date) => {
-              onSelectSession?.(date);
-            }}
-            onClose={() => setIsScanHistoryOpen(false)}
-          />
-        )}
+    {showBacktest && isScanHistoryOpen && (
+      <div id="backtest-history" className="backtest-section">
+        <ScanHistoryPanel
+          expressionTree={expressionTree}
+          universe={universe}
+          customSymbols={runRequest.customSymbols}
+          availableSessions={availableSessions}
+          currentSessionDate={asOfDate}
+          onSelectSession={(date) => {
+            onSelectSession?.(date);
+          }}
+          onClose={() => setIsScanHistoryOpen(false)}
+        />
       </div>
     )}
     <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => {setIsModalOpen(false); setAiDraft(null);}} activeConditionsMap={aiDraft?.conditions ?? activeConditionsMap} matchMode={aiDraft?.matchMode ?? matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />

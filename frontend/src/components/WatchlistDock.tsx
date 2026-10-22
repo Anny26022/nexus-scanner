@@ -645,7 +645,7 @@ export const WatchlistDock = memo(function WatchlistDock({
           onClick={() => toggleSort('symbol')}
           title="Sort by Symbol"
         >
-          <span>SYMBOL</span>
+          <span>Symbol</span>
           {renderSortIndicator('symbol')}
         </button>
         <button
@@ -654,7 +654,7 @@ export const WatchlistDock = memo(function WatchlistDock({
           onClick={() => toggleSort('last')}
           title="Sort by Last Traded Price"
         >
-          <span>LAST</span>
+          <span>Last</span>
           {renderSortIndicator('last')}
         </button>
         <button
@@ -663,7 +663,7 @@ export const WatchlistDock = memo(function WatchlistDock({
           onClick={() => toggleSort('changePct')}
           title="Sort by Percentage Change"
         >
-          <span>CHG %</span>
+          <span>Chg %</span>
           {renderSortIndicator('changePct')}
         </button>
         <div className="watchlist-col-spacer" aria-hidden="true" />

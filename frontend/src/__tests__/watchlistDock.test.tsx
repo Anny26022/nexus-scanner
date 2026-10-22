@@ -186,12 +186,12 @@ it('keeps the viewport at the top while changing sort direction, even when the a
   await waitFor(() => expect(screen.getByText('+0.00%')).toBeInTheDocument());
   const list = screen.getByRole('table', { name: 'Watchlist stocks' });
   Object.defineProperty(list, 'clientHeight', { value: 200, configurable: true });
-  fireEvent.click(screen.getByRole('button', { name: /CHG %/ }));
+  fireEvent.click(screen.getByRole('button', { name: /CHG %/i }));
   expect(list.scrollTop).toBe(0);
-  fireEvent.click(screen.getByRole('button', { name: /CHG %/ }));
+  fireEvent.click(screen.getByRole('button', { name: /CHG %/i }));
   expect(list.scrollTop).toBe(0);
   expect(screen.getByText('TEST00')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /CHG %/ }));
+  fireEvent.click(screen.getByRole('button', { name: /CHG %/i }));
   expect(list.scrollTop).toBe(0);
 });
 
@@ -216,11 +216,11 @@ it('keeps unavailable prices and changes below valid values in both sort directi
   render(<WatchlistDock datasetRevision="rev123" onSelectSymbol={vi.fn()} />, { wrapper: createWrapper() });
   await waitFor(() => expect(screen.getByText('+3.00%')).toBeInTheDocument());
   const order = () => Array.from(document.querySelectorAll('.watchlist-row .watchlist-symbol-name'), node => node.textContent);
-  fireEvent.click(screen.getByRole('button', { name: /CHG %/ }));
+  fireEvent.click(screen.getByRole('button', { name: /CHG %/i }));
   expect(order()).toEqual(['HIGH', 'LOW', 'MISSING']);
-  fireEvent.click(screen.getByRole('button', { name: /CHG %/ }));
+  fireEvent.click(screen.getByRole('button', { name: /CHG %/i }));
   expect(order()).toEqual(['LOW', 'HIGH', 'MISSING']);
-  fireEvent.click(screen.getByRole('button', { name: /LAST/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Last/i }));
   expect(order()).toEqual(['HIGH', 'LOW', 'MISSING']);
 });
 
@@ -308,7 +308,7 @@ it('sorts within pasted sections and excludes headings from quote requests', asy
   expect(screen.getByText('Banks')).toBeInTheDocument();
   const order = () => Array.from(document.querySelectorAll('.watchlist-section-title, .watchlist-row .watchlist-symbol-name'), node => node.textContent);
   expect(order()).toEqual(['Capital Goods', 'BEL', 'HAL', 'Banks', 'HDFCBANK']);
-  fireEvent.click(screen.getByRole('button', { name: /CHG %/ }));
+  fireEvent.click(screen.getByRole('button', { name: /CHG %/i }));
   expect(order()).toEqual(['Capital Goods', 'HAL', 'BEL', 'Banks', 'HDFCBANK']);
 });
 

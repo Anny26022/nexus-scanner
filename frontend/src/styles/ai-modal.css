@@ -15,10 +15,9 @@
 .ai-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 9.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
   padding: 1px 6px;
   border-radius: 4px;
   background: var(--accent-soft);
@@ -111,10 +110,9 @@
   gap: 8px;
 }
 .ai-section-eyebrow {
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--muted);
 }
 .ai-examples-grid {
@@ -313,7 +311,7 @@
 .ipo-details-copy, .ipo-details-note, .ipo-details-empty { margin: 0; color: var(--secondary); font-size: 11px; line-height: 1.55; }
 .ipo-details-note { margin-top: 8px; color: var(--muted); }
 .ipo-details-subsection { margin-top: 12px; }
-.ipo-details-subsection > h4 { margin: 0 0 7px; color: var(--muted); font-size: 10px; font-weight: 650; letter-spacing: .03em; text-transform: uppercase; }
+.ipo-details-subsection > h4 { margin: 0 0 7px; color: var(--muted); font-size: 11.5px; font-weight: 600; letter-spacing: 0; }
 .ipo-details-paragraph { margin-top: 8px; color: var(--secondary); font-size: 11px; line-height: 1.5; }
 .ipo-details-paragraph > strong { color: var(--text); font-weight: 600; }
 .ipo-details-paragraph > span { color: var(--muted); }

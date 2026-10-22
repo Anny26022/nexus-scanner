@@ -246,7 +246,7 @@ export class ChartEngine {
     const token=(name:string,fallback:string)=>style.getPropertyValue(`--${name}`).trim()||fallback;
     this.accent=token('accent','#187669');
     this.chart.applyOptions({
-      layout:{background:{type:ColorType.Solid,color:token('chart-background',token('surface','#ffffff'))},textColor:token('muted','#787b86')},
+      layout:{background:{type:ColorType.Solid,color:token('chart-background',token('surface','#ffffff'))},textColor:token('muted','#787b86'),panes:{separatorColor:token('line','#e8e8ed'),separatorHoverColor:token('line-strong','#d2d2d7')}},
       grid:{vertLines:{color:token('chart-grid','#f0f0f0')},horzLines:{color:token('chart-grid','#f0f0f0')}},
       crosshair:{vertLine:{color:token('chart-crosshair','#aab8c5'),labelBackgroundColor:token('text','#131722')},horzLine:{color:token('chart-crosshair','#aab8c5'),labelBackgroundColor:token('text','#131722')}},
     });

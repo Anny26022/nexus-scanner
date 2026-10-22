@@ -21,6 +21,12 @@ export function ChartDialog({
         <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center p-[10px] sm:p-[18px] pointer-events-none">
           <RadixDialog.Content
             aria-label={title}
+            onOpenAutoFocus={event => {
+              // Keep focus on the dialog itself so no control shows a focus ring on open; autofocused fields keep focus.
+              event.preventDefault();
+              const content = event.currentTarget as HTMLElement;
+              if (!content.contains(document.activeElement)) content.focus();
+            }}
             className={`chart-modal pointer-events-auto outline-none animate-in fade-in zoom-in-95 duration-150 ${className}`}
           >
             <header className="chart-modal-heading">

@@ -253,7 +253,7 @@ export const ConditionCatalogModal: React.FC<ConditionCatalogModalProps> = ({
                         </span>
                       </label>
 
-                      <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 border border-slate-200/70">
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-field text-muted">
                         {def.category}
                       </span>
                     </div>

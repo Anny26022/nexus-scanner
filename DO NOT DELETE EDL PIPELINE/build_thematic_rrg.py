@@ -30,7 +30,8 @@ import pandas as pd
 
 from pipeline_utils import BASE_DIR, save_json, compress_file
 from ohlcv_utils import read_ohlcv_csv, valid_ohlcv_values
-from build_rs_ratings import FRONT_WEIGHTED_HORIZONS, rank_first_ratings
+from bisect import bisect_right
+from build_rs_ratings import close_history, load_universe_history, rank_session, METHODOLOGY_VERSION
 
 
 # The main RRG is intended to reflect investable institutional rotation. Keep
@@ -116,30 +117,18 @@ def institutional_rrg_symbols(
 
 def rolling_rs_ratings(
     histories: dict[str, tuple[list[str], np.ndarray]],
-    benchmark: np.ndarray,
+    benchmark_dates: list[str],
     offsets: set[int],
+    eligible_by_date: dict[str, set[str]],
 ) -> dict[int, dict[str, int]]:
-    """Rebuild the published cross-sectional RS rating at every trail anchor."""
-    ratings_by_offset: dict[int, dict[str, int]] = {}
+    """Delegate every trail anchor to the canonical dated RS engine."""
+    ratings_by_offset = {}
     for offset in sorted(offsets):
-        idx = -1 - offset
-        scores = {name: {} for name in FRONT_WEIGHTED_HORIZONS}
-        for symbol, (_, closes) in histories.items():
-            n = len(closes)
-            if abs(idx) > n or abs(idx - max(FRONT_WEIGHTED_HORIZONS.values())) > n:
-                continue
-            ratios: dict[str, float] = {}
-            for name, horizon in FRONT_WEIGHTED_HORIZONS.items():
-                stock_start, stock_end = closes[idx - horizon], closes[idx]
-                benchmark_start, benchmark_end = benchmark[idx - horizon], benchmark[idx]
-                if min(stock_start, stock_end, benchmark_start, benchmark_end) <= 0:
-                    ratios = {}
-                    break
-                ratios[name] = (stock_end / stock_start) / (benchmark_end / benchmark_start)
-            if len(ratios) == len(FRONT_WEIGHTED_HORIZONS):
-                for name, ratio in ratios.items():
-                    scores[name][symbol] = float(ratio)
-        ratings_by_offset[offset] = rank_first_ratings(scores).get("front_weighted", {})
+        if offset < 0 or offset >= len(benchmark_dates):
+            continue
+        session = benchmark_dates[-1 - offset]
+        ratings_by_offset[offset] = {symbol: entry["composite_rs"] for symbol, entry in
+            rank_session(histories, session, eligible_by_date.get(session, set())).items()}
     return ratings_by_offset
 
 
@@ -237,9 +226,9 @@ def build_thematic_rrg_payload(
     if not bench_csv.exists():
         raise FileNotFoundError(f"Benchmark file {bench_csv} not found.")
 
-    bench_df = pd.read_csv(bench_csv)
+    bench_df = close_history(bench_csv)
     bench_c = bench_df["Close"].values
-    bench_dates = [str(d).split()[0] for d in bench_df["Date"].values]
+    bench_dates = bench_df["Date"].dt.strftime("%Y-%m-%d").tolist()
     as_of_date = bench_dates[-1]
 
     # 2. Load stock fundamentals / metadata
@@ -256,12 +245,7 @@ def build_thematic_rrg_payload(
 
     stock_map = {s.get("symbol", "").upper(): s for s in stocks_list if s.get("symbol")}
 
-    # 3. Load RS ratings artifact
-    rs_file = root / "rs_rating_daily.json"
-    rs_data = {}
-    if rs_file.exists():
-        with open(rs_file, "r", encoding="utf-8") as f:
-            rs_data = json.load(f).get("ratings", {})
+    dated_universes = load_universe_history(root)
 
     # 4. Load Theme Classification
     tax_records = load_theme_classification(frontend_dir)
@@ -395,8 +379,15 @@ def build_thematic_rrg_payload(
         for week in range(trail_weeks + 1)
         for offset in (week * 5, week * 5 + 21)
     }
-    rating_histories = {symbol: history for symbol, history in histories.items() if symbol in rrg_symbols}
-    ratings_by_offset = rolling_rs_ratings(rating_histories, bench_c, rating_offsets)
+    rating_dates = {bench_dates[-1-offset] for offset in rating_offsets if offset < len(bench_dates)}
+    ranking_symbols = set().union(*(dated_universes.get(d, set()) for d in rating_dates))
+    rating_histories = {}
+    for symbol in sorted(ranking_symbols):
+        path = ohlcv_dir / f"{symbol}.csv"
+        if path.exists():
+            frame = close_history(path)
+            rating_histories[symbol] = (frame["Date"].dt.strftime("%Y-%m-%d").tolist(), frame["Close"].to_numpy())
+    ratings_by_offset = rolling_rs_ratings(rating_histories, bench_dates, rating_offsets, dated_universes)
     weekly_bench_excess: list[dict] = []
     for w in range(trail_weeks + 1):
         idx = -1 - w * 5
@@ -420,7 +411,7 @@ def build_thematic_rrg_payload(
 
     # Helper function to compute block/niche RRG metrics & rotation trail
     def compute_cluster_rrg(symbols: set[str], name: str, parent_block: str | None, macro: str | None) -> dict[str, Any] | None:
-        valid_syms = [s for s in symbols if s in rrg_symbols]
+        valid_syms = [s for s in symbols if s in rrg_symbols and histories[s][0][-1] == as_of_date]
         if len(valid_syms) < RRG_MIN_CONSTITUENTS:
             return None
 
@@ -437,10 +428,10 @@ def build_thematic_rrg_payload(
 
             for s in valid_syms:
                 d_arr, c_arr = histories[s]
-                n_c = len(c_arr)
-                if abs(idx - 63) <= n_c:
-                    cur_c = c_arr[idx]
-                    p63_c = c_arr[idx - 63]
+                pos = bisect_right(d_arr, date_w) - 1
+                if pos >= 63 and d_arr[pos] == date_w:
+                    cur_c = c_arr[pos]
+                    p63_c = c_arr[pos - 63]
                     if p63_c > 0:
                         st_ret63 = ((cur_c - p63_c) / p63_c) * 100.0
                         excess_63_list.append(st_ret63 - b_ret63)
@@ -450,8 +441,10 @@ def build_thematic_rrg_payload(
                 if rating_now is not None and rating_21d_ago is not None:
                     rs_chg_list.append(float(rating_now - rating_21d_ago))
 
-            med_excess_63 = float(np.median(excess_63_list)) if excess_63_list else 0.0
-            med_rs_chg = float(np.median(rs_chg_list)) if rs_chg_list else 0.0
+            if not excess_63_list or not rs_chg_list:
+                continue
+            med_excess_63 = float(np.median(excess_63_list))
+            med_rs_chg = float(np.median(rs_chg_list))
             pt_quadrant = determine_quadrant(med_excess_63, med_rs_chg)
 
             trail.append({
@@ -462,6 +455,8 @@ def build_thematic_rrg_payload(
                 "quadrant": pt_quadrant,
             })
 
+        if not trail or trail[-1]["week"] != 0:
+            return None
         latest_pt = trail[-1]
         cur_x = latest_pt["x"]
         cur_y = latest_pt["y"]
@@ -502,16 +497,11 @@ def build_thematic_rrg_payload(
                 beating_count += 1
 
             # RS Rating
-            rs_entry = rs_data.get(s, {})
             rs_val = ratings_by_offset.get(0, {}).get(s)
             rs_chg = None
             rs_21d_ago = ratings_by_offset.get(21, {}).get(s)
             if rs_val is not None and rs_21d_ago is not None:
                 rs_chg = rs_val - rs_21d_ago
-            if rs_val is None:
-                rs_val = rs_entry.get("composite_rs") or rs_entry.get("front_weighted") or stock_meta.get("rsRating")
-            if rs_chg is None:
-                rs_chg = rs_entry.get("rs_change_21d")
             if rs_val is not None: rs_ratings_list.append(rs_val)
             if rs_chg is not None and rs_chg > 0:
                 improving_rs_count += 1
@@ -738,6 +728,9 @@ def build_thematic_rrg_payload(
         "asOfDate": as_of_date,
         "generatedAt": datetime.utcnow().isoformat() + "Z",
         "benchmark": "NIFTY 500",
+        "rsMethodologyVersion": METHODOLOGY_VERSION,
+        "rsCoverage": {"requestedDates": sorted(rating_dates),
+                       "availableDates": sorted(d for d in rating_dates if d in dated_universes)},
         "benchmark3mReturn": weekly_bench_excess[0]["bench_return_63d"],
         "trailWeeks": trail_weeks,
         "totalBlocks": len(blocks_result),

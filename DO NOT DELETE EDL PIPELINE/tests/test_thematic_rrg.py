@@ -5,16 +5,73 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
+import pandas as pd
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from build_thematic_rrg import institutional_rrg_symbols, load_theme_classification
+from build_thematic_rrg import institutional_rrg_symbols, load_theme_classification, rolling_rs_ratings, build_thematic_rrg_payload
+from build_rs_ratings import rank_session, save_universe_history
 
 class TestThematicRrg(unittest.TestCase):
+    def test_payload_uses_full_rs_universe_and_omits_unknown_trail_points(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); (root / "ohlcv_data").mkdir(); (root / "indices_ohlcv_data").mkdir()
+            (root / "theme_tracker_source.json").write_text(json.dumps({"blocks": [], "macros": []}))
+            dates = pd.bdate_range("2025-01-01", periods=300).strftime("%Y-%m-%d").tolist()
+            histories = {}
+            for symbol, growth in (("A", .001), ("B", .002), ("C", .003), ("OUTSIDE_THEME", .004)):
+                closes = np.exp(np.arange(300) * growth) * 100
+                histories[symbol] = (dates, closes)
+                pd.DataFrame({"Date": dates, "Open": closes, "High": closes * 1.01,
+                              "Low": closes * .99, "Close": closes, "Volume": np.full(300, 1e6)}).to_csv(root / f"ohlcv_data/{symbol}.csv", index=False)
+            pd.DataFrame({"Date": dates, "Close": np.full(300, 100)}).to_csv(root / "indices_ohlcv_data/NIFTY_500.csv", index=False)
+            (root / "all_stocks_fundamental_analysis.json").write_text(json.dumps([
+                {"symbol": s, "market_cap_crore": 2000, "turnover30_crore": 20} for s in histories]))
+            taxonomy = {s: {"block": "Block", "theme": "Niche", "macro": "Macro"} for s in ("A", "B", "C")}
+            eligible = {dates[-1]: set(histories), dates[-22]: {"A", "B", "C"}}
+            save_universe_history(root, eligible)
+            with patch("build_thematic_rrg.load_theme_classification", return_value=taxonomy):
+                payload = build_thematic_rrg_payload(root, root)
+            block = payload["blocks"][0]
+            now = rank_session(histories, dates[-1], eligible[dates[-1]])
+            prior = rank_session(histories, dates[-22], eligible[dates[-22]])
+            expected_y = np.median([now[s]["composite_rs"] - prior[s]["composite_rs"] for s in taxonomy])
+            self.assertEqual(block["y"], expected_y)
+            self.assertEqual([point["week"] for point in block["trail"]], [0])
+            for constituent in block["constituents"]:
+                self.assertEqual(constituent["rsRating"], now[constituent["symbol"]]["composite_rs"])
+            # Without a prior dated universe no block may claim zero momentum.
+            save_universe_history(root, {dates[-1]: set(histories)})
+            with patch("build_thematic_rrg.load_theme_classification", return_value=taxonomy):
+                self.assertEqual(build_thematic_rrg_payload(root, root)["blocks"], [])
+
+    def test_trail_ranks_match_the_daily_engine_with_dated_membership(self):
+        dates = pd.bdate_range("2025-01-01", periods=300).strftime("%Y-%m-%d").tolist()
+        histories = {symbol: (dates, np.exp(np.arange(300) * growth) * 100)
+                     for symbol, growth in (("A", .001), ("B", .002), ("OUTSIDE_THEME", .003))}
+        eligible = {dates[-1]: {"A", "B"}, dates[-22]: set(histories)}
+        actual = rolling_rs_ratings(histories, dates, {0, 21, 26}, eligible)
+        for offset in (0, 21):
+            session = dates[-1-offset]
+            expected = rank_session(histories, session, eligible[session])
+            self.assertEqual(actual[offset], {s: row["composite_rs"] for s, row in expected.items()})
+        self.assertEqual(actual[0]["B"] - actual[21]["B"], 49)
+        self.assertEqual(actual[26], {})  # No dated membership means unknown, never another formula.
+
+    def test_trail_ranks_align_by_date_when_a_stock_misses_a_session(self):
+        dates = pd.bdate_range("2025-01-01", periods=300).strftime("%Y-%m-%d").tolist()
+        closes = np.arange(100., 400.)
+        missing = 295
+        histories = {"A": (dates, closes), "B": (dates[:missing] + dates[missing+1:], np.delete(closes, missing))}
+        actual = rolling_rs_ratings(histories, dates, {0, 4}, {dates[-1]: {"A", "B"}, dates[missing]: {"A", "B"}})
+        self.assertNotIn("B", actual[4])
+        self.assertEqual(actual[0], {s: r["composite_rs"] for s, r in rank_session(histories, dates[-1], {"A", "B"}).items()})
+
     @classmethod
     def setUpClass(cls):
         cls.repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))

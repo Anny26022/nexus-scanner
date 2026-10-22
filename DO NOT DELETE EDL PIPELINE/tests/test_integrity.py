@@ -513,7 +513,7 @@ class IntegrityTests(unittest.TestCase):
                          'process_earnings_performance.py','process_market_breadth.py',
                          'process_historical_market_breadth.py','add_corporate_events.py',
                          'process_mbi_market_breadth.py','build_rs_ratings.py','build_shareholding_history.py',
-                         'build_corporate_action_ledger.py','standardize_stock_artifact.py',
+                         'build_corporate_action_ledger.py','build_market_screens.py','standardize_stock_artifact.py',
                          'build_filing_history_artifact.py',
                          'build_quarterly_financial_ledger.py',
                          'build_ipo_screener_artifact.py'):
@@ -523,7 +523,7 @@ class IntegrityTests(unittest.TestCase):
             self.assertIn('ABC', rs_output['ratings'])
             self.assertEqual(
                 set(rs_output['ratings']['ABC']),
-                {'one_month', 'three_month', 'six_month', 'twelve_month', 'front_weighted'},
+                {'one_month', 'three_month', 'six_month', 'nine_month', 'twelve_month', 'front_weighted', 'composite_rs', 'rs_change_21d', 'is_rs_line_52w_high'},
             )
             for raw,compressed in FILES_TO_COMPRESS.items():
                 (root/compressed).write_bytes(gzip.compress((root/raw).read_bytes()))

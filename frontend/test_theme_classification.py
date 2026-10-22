@@ -81,3 +81,20 @@ class ThemeClassificationTests(unittest.TestCase):
         rec_aged = res_aged['records']['AASTHA']
         self.assertEqual(rec_aged['theme'], 'Spinning & Yarn Processing')
         self.assertNotIn('IPO / Young Bases', rec_aged['memberships'])
+    def test_precision_engineering_and_kddl_overlay(self):
+        symbols = ['AZAD', 'JYOTICNC', 'SANSERA', 'DYNAMATECH', 'UNIMECH', 'RATNAVEER', 'MACPOWER', 'GALAPREC', 'BALUFORGE', 'KDDL']
+        result = classify([{'symbol': s} for s in symbols], '2026-10-19')
+        records = result['records']
+        for s in symbols:
+            self.assertIn('Precision Engineering & Complex Manufacturing', records[s]['memberships'])
+        self.assertEqual(records['KDDL']['theme'], 'Jewellery')
+        self.assertIsNotNone(records['KDDL']['issuerOverlay'])
+        self.assertIn('Eigen Engineering', records['KDDL']['issuerOverlay']['niche'])
+        self.assertEqual(records['KDDL']['issuerOverlay']['sourceUrl'], 'https://www.kddl.com/businesses/precision-engineering')
+
+    def test_pharma_cdmo_curated_memberships(self):
+        symbols = ['LAURUSLABS', 'ACUTAAS', 'DIVISLAB', 'SYNGENE', 'NEULANDLAB', 'CONCORDBIO', 'PPLPHARMA', 'BLUEJET', 'ANTHEM', 'GLAND']
+        result = classify([{'symbol': s} for s in symbols], '2026-10-19')
+        records = result['records']
+        for s in symbols:
+            self.assertIn('Pharma CDMO & Complex Manufacturing', records[s]['memberships'])

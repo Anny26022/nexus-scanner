@@ -6,6 +6,9 @@ const categories: Record<string, ConditionCategory> = {
   'Bases & Contraction': 'range', 'Pullbacks & Reclaims': 'trend',
   'Volume & Delivery': 'momentum', Gaps: 'momentum', Reversals: 'relative_strength',
   'Earnings & Value': 'fundamentals', 'Regime & Universe': 'liquidity',
+  'Setups & Patterns': 'range',
+  'Trend & Leadership': 'momentum',
+  'Upcoming Earnings': 'fundamentals',
 };
 
 export const PRESET_CATALOG: ConditionDef[] = definitions.map(p => ({

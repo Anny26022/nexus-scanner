@@ -155,6 +155,13 @@ it('replays the recorded weekly RRG snapshot instead of only showing the live da
   expect(screen.getByText(/Snapshot · 27 Jul 2026/i)).toBeTruthy();
 });
 
+it('does not substitute the live position when a replay date has no recorded RS', () => {
+  mount();
+  fireEvent.change(screen.getByLabelText('RRG replay date'), { target: { value: '6' } });
+  expect(screen.getByText(/Snapshot · Unavailable/i)).toBeTruthy();
+  expect(screen.getByText('0 of 2 shown')).toBeTruthy();
+});
+
 it('switches to the separate new-listing rotation model', () => {
   mount();
   fireEvent.click(screen.getByRole('tab', { name: /New listings/i }));

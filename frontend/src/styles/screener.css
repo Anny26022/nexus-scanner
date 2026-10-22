@@ -72,10 +72,10 @@
 .add-filter:hover { color: var(--accent); background: var(--surface-subtle); }
 .criteria-summary { margin: 10px 2px 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
 .results-surface { display: flex; flex-direction: column; flex: 1; min-height: var(--results-min-height, 330px); overflow: hidden; background: var(--surface); min-width: 0; border-radius: var(--radius-lg); box-shadow: var(--shadow-card); }
-.results-toolbar { display: flex; justify-content: space-between; align-items: center; min-height: 64px; padding: 14px 16px 14px 22px; gap: 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
-.result-count { display: flex; align-items: baseline; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
-.result-count strong { font-size: 17px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.result-universe { color: var(--muted); font-size: 13px; }
+.results-toolbar { display: flex; justify-content: space-between; align-items: center; min-height: 48px; padding: 8px 12px 8px 22px; gap: 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.result-count { display: flex; align-items: baseline; gap: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.result-count strong { font-size: 14px; font-weight: 650; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.result-universe { color: var(--muted); font-size: 12px; }
 .results-actions { display: flex; align-items: center; gap: 6px; }
 .copy-results { position: relative; display: flex; align-items: center; gap: 4px; }
 .copy-dismiss { position: fixed; inset: 0; z-index: 24; }
@@ -83,13 +83,13 @@
 .copy-menu > button { display: block; width: 100%; min-height: 32px; padding: 6px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; }
 .copy-menu > button:hover, .copy-menu > button:focus-visible { background: var(--accent); color: var(--on-accent); box-shadow: none; }
 .copy-error { position: absolute; top: calc(100% + 6px); right: 0; z-index: 25; width: 240px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface); color: var(--text); font-size: 12.5px; box-shadow: var(--shadow-pop); }
-.results-symbol-search { display: flex; align-items: center; gap: 8px; flex: 0 1 240px; min-width: 140px; height: 32px; margin-inline: auto; padding: 0 10px; border-radius: var(--radius-md); color: var(--muted); background: var(--field); transition: background-color .16s var(--ease-out), box-shadow .16s var(--ease-out); }
+.results-symbol-search { display: flex; align-items: center; gap: 6px; flex: 0 1 220px; min-width: 130px; height: 28px; margin-inline: auto; padding: 0 9px; border-radius: var(--radius-md); color: var(--muted); background: var(--field); transition: background-color .16s var(--ease-out), box-shadow .16s var(--ease-out); }
 .results-symbol-search:focus-within { background: var(--surface); box-shadow: var(--ring); }
-.results-symbol-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; }
+.results-symbol-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 12px; }
 .results-symbol-search input:focus-visible { box-shadow: none; }
 .fetch-status { font-size: 12px; color: var(--muted); min-width: 90px; font-weight: 500; }
 .results-view-toggle { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--field); margin-right: 4px; }
-.results-view-toggle button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
+.results-view-toggle button { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; }
 .results-view-toggle button:hover { color: var(--text); }
 .results-view-toggle button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-control); }
 @keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
@@ -150,10 +150,10 @@
 .column-picker-option input { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); border-radius: 4px; }
 .column-picker-option input:disabled { opacity: .55; }
 .column-search-empty { grid-column: 1 / -1; padding: 20px 0; color: var(--muted); font-size: 12px; text-align: center; }
-.results-actions .button { height: 32px; min-height: 32px; padding-inline: 10px; gap: 6px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; border: 0; background: transparent; color: var(--secondary); box-shadow: none; }
+.results-actions .button { height: 28px; min-height: 28px; padding-inline: 8px; gap: 5px; border-radius: var(--radius-md); font-size: 12px; font-weight: 500; border: 0; background: transparent; color: var(--secondary); box-shadow: none; }
 .results-actions .button:hover { background: var(--surface-hover); color: var(--text); }
-.results-actions .button svg { width: 15px; height: 15px; color: currentColor; }
-.results-actions .button.results-copy-button { width: 32px; padding: 0; flex: 0 0 32px; }
+.results-actions .button svg { width: 13px; height: 13px; color: currentColor; }
+.results-actions .button.results-copy-button { width: 28px; padding: 0; flex: 0 0 28px; }
 .table-viewport { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
 .table-scroll { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
 .data-table { table-layout: fixed; border-collapse: separate; border-spacing: 0; width: 100%; min-width: 1120px; text-align: left; font-size: 13px; color: var(--secondary); }

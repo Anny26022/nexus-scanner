@@ -508,6 +508,15 @@ To add a condition, define its typed inputs, implement Python evaluation and ava
 
 Derive React state where possible. Use TanStack Query for request lifecycle and event handlers for user-triggered changes. Follow the repository's convention against direct `useEffect` calls. A type or utility should not be described as an exposed product feature until it is integrated.
 
+### Styling conventions
+
+- Tailwind utilities come first. Feature stylesheets in `src/styles/` load into `@layer components`, so a utility on an element always overrides them.
+- Use semantic colour utilities (`text-muted`, `bg-surface`, `border-line`, `text-accent`), not palette names like `text-slate-500`. The palette aliases in `theme.css` exist only for older markup.
+- Use `<Button variant>` from `src/components/Button.tsx` instead of `<button className="button ...">`. Shared primitives live in `src/styles/components.css`.
+- Write feature CSS only for what utilities can't express (chart grids, canvas overlays, third-party DOM), and never select on Tailwind class names such as `span.block`.
+- Stacking for UI that escapes its panel uses the `--z-*` registry in `theme.css`; use `z-(--z-dialog)` in markup. Small literals (1-30) are only for stacking within one panel.
+- When you touch a feature, move its CSS block to utilities where practical and delete the rules it no longer needs.
+
 ## Testing and troubleshooting
 
 ### Verification commands

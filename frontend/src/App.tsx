@@ -7,6 +7,7 @@ import { NewListingsTab } from './components/NewListingsTab';
 import { SessionDatePicker } from './components/SessionDatePicker';
 import { PanelLeftOpen } from 'lucide-react';
 import { useLocalStorageState } from './hooks/useLocalStorageState';
+import { Button } from './components/Button';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -81,7 +82,7 @@ const ScreenerAppContent: React.FC = () => {
 
       <main id="workspace" className={`workspace${activeTab === 'charts' ? ' workspace--charts' : ''}${sidebarHidden ? ' workspace--sidebar-hidden' : ''}`} tabIndex={-1}>
         {sidebarHidden && <button type="button" className="workspace-sidebar-reopen" aria-label="Show sidebar" title="Show sidebar" onClick={() => setSidebarHidden(false)}><PanelLeftOpen size={17}/></button>}
-        {revisionFailed && <p role="alert" className="notice">The latest data release could not be loaded. <button className="button button-ghost" onClick={() => void refreshRevision()}>Retry</button></p>}
+        {revisionFailed && <p role="alert" className="notice">The latest data release could not be loaded. <Button variant="ghost" onClick={() => void refreshRevision()}>Retry</Button></p>}
         {screenerMounted && <div style={{display: activeTab === 'screener' ? 'contents' : 'none'}}>
           <ExploreTab
             selectedAsOfDate={selectedAsOfDate}

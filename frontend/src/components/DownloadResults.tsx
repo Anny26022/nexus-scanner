@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { formatCsvResults } from '../utils/copyResults';
+import { Button } from './Button';
 
 export interface DownloadResultsColumn<T = any> {
   id: string;
@@ -47,15 +48,15 @@ export function DownloadResults<T = any>({
   };
 
   return (
-    <button
-      type="button"
-      className="button button-secondary results-copy-button"
+    <Button
+      variant="secondary"
+      className="results-copy-button"
       aria-label={downloading ? 'Downloading CSV' : 'Download CSV'}
       title="Download CSV"
       disabled={disabled || downloading}
       onClick={() => void handleDownload()}
     >
       <Download size={14} />
-    </button>
+    </Button>
   );
 }

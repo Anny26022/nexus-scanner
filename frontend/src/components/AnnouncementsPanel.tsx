@@ -5,6 +5,7 @@ import { screenerApi } from '../api/screenerApi';
 import type { Announcement } from '../api/announcements';
 import { DataUnavailableError, retryAnnouncement } from '../api/dataErrors';
 import { Dialog } from './Dialog';
+import { Button } from './Button';
 
 type Props = { symbol: string; revision: string; onClose: () => void };
 export function AnnouncementsPanel({ symbol, revision, onClose }: Props) {
@@ -42,7 +43,7 @@ export function AnnouncementsPanel({ symbol, revision, onClose }: Props) {
       </div>
       {active.isPending && <div className="data-state" role="status"><FileText size={28} /><h2>Loading filings</h2><span className="skeleton" /></div>}
       {active.isError && <div className="data-state" role="alert"><FileText size={28} /><h2>{unavailable ? 'Announcements not published' : 'Announcements could not be loaded'}</h2><p>{active.error.message}</p>
-        {!unavailable && <button type="button" className="button button-secondary" onClick={() => void active.refetch()}>Retry</button>}</div>}
+        {!unavailable && <Button variant="secondary" onClick={() => void active.refetch()}>Retry</Button>}</div>}
       {rows && !rows.length && <div className="data-state"><FileText size={28} /><h2>{topic ? 'No filings in this classification' : 'No filings in this period'}</h2><p>{topic ? 'Choose another classification to see matching filings.' : 'Choose another year to view earlier announcements.'}</p></div>}
       {rows && rows.length > 0 && <ul className="announcement-list">
         {rows.map(row => {
@@ -62,17 +63,17 @@ export function AnnouncementsPanel({ symbol, revision, onClose }: Props) {
             {expanded && <section className="announcement-evidence-inline" aria-label={`${row.headline} evidence`} aria-live="polite">
               <p className="announcement-status">Classification status: {row.status.replaceAll('_', ' ')}</p>
               {detail.isPending && <p>Loading evidence…</p>}
-              {detail.isError && <p role="alert">{detail.error.message} <button type="button" className="button button-ghost" onClick={() => void detail.refetch()}>Retry</button></p>}
+              {detail.isError && <p role="alert">{detail.error.message} <Button variant="ghost" onClick={() => void detail.refetch()}>Retry</Button></p>}
               {events.map((event, index) => event.evidence?.excerpt && <p key={index}><span className="font-medium">{labels.get(event.topic) ?? event.topic}: </span>{event.evidence.excerpt}</p>)}
             </section>}
           </li>;
         })}
       </ul>}
-      {topics.isError && <p role="alert" className="notice">Category labels could not be loaded. Filing topic IDs are shown. <button className="button button-ghost" onClick={() => void topics.refetch()}>Retry categories</button></p>}
+      {topics.isError && <p role="alert" className="notice">Category labels could not be loaded. Filing topic IDs are shown. <Button variant="ghost" onClick={() => void topics.refetch()}>Retry categories</Button></p>}
       {year !== 'recent' && history.data && <div className="pagination">
-        <button type="button" className="button button-secondary" disabled={!page || history.isFetching} onClick={() => {setPage(page - 1); setSelected(null);}}>Newer</button>
+        <Button variant="secondary" disabled={!page || history.isFetching} onClick={() => {setPage(page - 1); setSelected(null);}}>Newer</Button>
         <span className="pagination-page">Page {page + 1} of {history.data.pages}</span>
-        <button type="button" className="button button-secondary" disabled={page + 1 >= history.data.pages || history.isFetching} onClick={() => {setPage(page + 1); setSelected(null);}}>Older</button>
+        <Button variant="secondary" disabled={page + 1 >= history.data.pages || history.isFetching} onClick={() => {setPage(page + 1); setSelected(null);}}>Older</Button>
       </div>}
     </div>
   </Dialog>;

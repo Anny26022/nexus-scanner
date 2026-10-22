@@ -1,9 +1,15 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
+/* Tokens and element defaults. */
 @import "./styles/theme.css";
-@import "./styles/charts.css";
-@import "./styles/watchlist.css";
-@import "./styles/screener.css";
-@import "./styles/news.css";
-@import "./styles/ai-modal.css";
-@import "./styles/responsive.css";
+
+/* Feature styles sit in the components layer so Tailwind utilities override them. */
+@import "./styles/components.css" layer(components);
+@import "./styles/layout.css" layer(components);
+@import "./styles/charts.css" layer(components);
+@import "./styles/watchlist.css" layer(components);
+@import "./styles/screener.css" layer(components);
+@import "./styles/news.css" layer(components);
+@import "./styles/ai-modal.css" layer(components);
+@import "./styles/responsive.css" layer(components);

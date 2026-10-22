@@ -18,7 +18,7 @@ export function ChartDialog({
     <RadixDialog.Root open onOpenChange={(open) => !open && onClose()}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay onPointerDown={event => { event.stopPropagation(); onClose(); }} className="chart-modal-backdrop animate-in fade-in duration-150" />
-        <div className="fixed inset-0 z-[251] grid place-items-center p-[10px] sm:p-[18px] pointer-events-none">
+        <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center p-[10px] sm:p-[18px] pointer-events-none">
           <RadixDialog.Content
             aria-label={title}
             className={`chart-modal pointer-events-auto outline-none animate-in fade-in zoom-in-95 duration-150 ${className}`}

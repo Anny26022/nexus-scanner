@@ -25,6 +25,7 @@ import { IpoDetailsCard } from './IpoDetailsCard';
 import { useSymbolHoverCard } from '../hooks/useSymbolHoverCard';
 import { Dialog } from './Dialog';
 import type { IPORow } from '../types/screener';
+import { Button } from './Button';
 
 type IpoColumnGroup = 'Company' | 'Listing' | 'Offer' | 'Subscription' | 'Performance' | 'Allotment' | 'Research';
 interface IpoColumn { id: string; label: string; group: IpoColumnGroup; value: (row: IPORow) => string; sortField?: typeof IPO_SORT_FIELDS[number] }
@@ -223,10 +224,10 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
           <option value="30d">30 Days</option><option value="90d">90 Days</option><option value="6m">6 Months</option><option value="1y">1 Year</option><option value="all">All Time</option>
         </select><ChevronDown size={14} /></span></label>
         <div className="screen-buttons">
-          {Object.keys(conditions).length > 0 && <button className="button button-ghost" onClick={() => {setConditions({}); setScreenPage(1);}}>Reset</button>}
-          {showScreenResults && <button className="button button-secondary" onClick={() => setShowScreenResults(false)}>Listings</button>}
-          <button className="button button-secondary" onClick={() => setIsFilterModalOpen(true)}><SlidersHorizontal size={15} />Filters{Object.keys(conditions).length > 0 && <span className="count-badge">{Object.keys(conditions).length}</span>}</button>
-          <button className="button button-primary" onClick={() => {if (hasUnavailable) return; setScreenPage(1); setShowScreenResults(true);}} disabled={hasUnavailable || !filteredIpos.length || screenQuery.isFetching}><Play size={14} />Run</button>
+          {Object.keys(conditions).length > 0 && <Button variant="ghost" onClick={() => {setConditions({}); setScreenPage(1);}}>Reset</Button>}
+          {showScreenResults && <Button variant="secondary" onClick={() => setShowScreenResults(false)}>Listings</Button>}
+          <Button variant="secondary" onClick={() => setIsFilterModalOpen(true)}><SlidersHorizontal size={15} />Filters{Object.keys(conditions).length > 0 && <span className="count-badge">{Object.keys(conditions).length}</span>}</Button>
+          <Button variant="primary" onClick={() => {if (hasUnavailable) return; setScreenPage(1); setShowScreenResults(true);}} disabled={hasUnavailable || !filteredIpos.length || screenQuery.isFetching}><Play size={14} />Run</Button>
         </div>
       </div>
       {activeConditions.length > 0 && <div className="active-filters">{Object.entries(conditions).filter(([, condition]) => isAvailableCondition(condition)).map(([key, condition]) => {
@@ -258,7 +259,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
               filename={`nexus-ipo-listings-${selectedAsOfDate || 'export'}.csv`}
               disabled={!filteredIpos.length || isLoading}
             />
-            <button type="button" className="button button-secondary" aria-label="Customize IPO columns" onClick={() => setIsColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></button>
+            <Button variant="secondary" aria-label="Customize IPO columns" onClick={() => setIsColumnPickerOpen(true)}><SlidersHorizontal size={14} /><span>Columns</span></Button>
           </div>
         </div>
         <div className="table-viewport"><div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="IPO table, scroll for more columns" onScroll={event => {if (!ipoOverview.active?.pinned) ipoOverview.dismiss(); ipoWindow.onScroll(event);}}>
@@ -269,7 +270,7 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
             </th>)}</tr></thead>
             <tbody>{ipoWindow.top > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={visibleIpoColumns.length} style={{height: ipoWindow.top}} /></tr>}
               {isLoading ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{visibleIpoColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}</tr>)
-              : ipoQuery.isError && !ipoQuery.data ? <tr><td colSpan={visibleIpoColumns.length}><div role="alert" className="data-state"><h2>IPO catalogue could not be loaded.</h2><button className="button button-secondary" onClick={() => void ipoQuery.refetch()}>Retry</button></div></td></tr>
+              : ipoQuery.isError && !ipoQuery.data ? <tr><td colSpan={visibleIpoColumns.length}><div role="alert" className="data-state"><h2>IPO catalogue could not be loaded.</h2><Button variant="secondary" onClick={() => void ipoQuery.refetch()}>Retry</Button></div></td></tr>
               : !filteredIpos.length ? <tr><td colSpan={visibleIpoColumns.length}><div className="data-state"><SearchX size={28} /><h2>No new listings recorded for selected period window.</h2><p>Choose a longer period or clear your search.</p></div></td></tr>
               : ipoWindow.rows.map((row, index) => <tr key={ipoWindow.first + index} aria-rowindex={ipoWindow.first + index + 2}>
                 {visibleIpoColumns.map(column => <td key={column.id} className={column.id === 'company' || column.id === 'sectorIndustry' ? '' : 'numeric'}>{column.id === 'company' ? <button type="button" className="ipo-company-trigger" aria-label={`IPO details for ${row.name || row.symbol}`} title="Hover or click for IPO details"
@@ -315,8 +316,8 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
           )}
         </div>
         <div className="column-dialog-toolbar"><span>{columnSearch.trim() ? `${pickerIpoColumns.length} results` : `${pickerIpoColumns.filter(column => column.id === 'company' || selectedIpoColumnIds.includes(column.id)).length} selected in ${columnGroup.toLowerCase()}`}</span><div>
-          <button type="button" className="button button-ghost" onClick={() => setSavedIpoColumnIds(ipoColumns.map(column => column.id))}>Select all</button>
-          <button type="button" className="button button-ghost" onClick={() => setSavedIpoColumnIds(IPO_DEFAULT_COLUMNS)}>Reset</button>
+          <Button variant="ghost" onClick={() => setSavedIpoColumnIds(ipoColumns.map(column => column.id))}>Select all</Button>
+          <Button variant="ghost" onClick={() => setSavedIpoColumnIds(IPO_DEFAULT_COLUMNS)}>Reset</Button>
         </div></div>
         {!columnSearch.trim() && (
           <div className="column-category-tabs" role="tablist" aria-label="IPO column categories">

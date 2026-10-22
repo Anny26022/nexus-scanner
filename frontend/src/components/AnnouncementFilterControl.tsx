@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
 import { filterAnnouncements, type AnnouncementFilter } from '../api/announcements';
 import { DataUnavailableError, retryAnnouncement } from '../api/dataErrors';
+import { Button } from './Button';
 
 type Props = { revision?: string; value?: AnnouncementFilter; onChange: (value?: AnnouncementFilter) => void };
 export function AnnouncementFilterControl({ revision, value, onChange }: Props) {
@@ -34,7 +35,7 @@ export function AnnouncementFilterControl({ revision, value, onChange }: Props) 
       <input aria-label="Find announcement category" placeholder="Find a category" value={search} onChange={event => setSearch(event.target.value)}
         className="mb-3 w-full rounded border border-slate-200 p-2" />
       {data.isPending && <p role="status">Loading announcements…</p>}
-      {data.isError && <p role="alert" className="notice">{data.error.message}{!(data.error instanceof DataUnavailableError && data.error.reason === 'not_published') && <button type="button" className="button button-ghost" onClick={() => void data.refetch()}>Retry</button>}</p>}
+      {data.isError && <p role="alert" className="notice">{data.error.message}{!(data.error instanceof DataUnavailableError && data.error.reason === 'not_published') && <Button variant="ghost" onClick={() => void data.refetch()}>Retry</Button>}</p>}
       {data.data && <>
         <p className="mb-2 text-[11px] text-slate-500">Mainboard filings · snapshot {new Date(data.data.index.publishedAt).toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}</p>
         <label className="flex gap-2 py-2"><input type="checkbox" checked={Boolean(value && !value.topics.length)}

@@ -29,6 +29,7 @@ import { IndicatorsCatalogModal } from './IndicatorsCatalogModal';
 import { IndicatorSettingsModal } from './IndicatorSettingsModal';
 import { WatchlistDock } from './WatchlistDock';
 import { Download, Upload } from 'lucide-react';
+import { Button } from './Button';
 
 const ranges=[[1,'1mo'],[3,'3mo'],[6,'6mo'],[12,'1y'],[24,'2y'],[null,'All']] as const;
 
@@ -312,10 +313,10 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       />
       <div className="chart-actions-zone" role="group" aria-label="Chart controls">
         <div className="chart-actions">
-          <button type="button" className="button button-icon" aria-label="Zoom in" title="Zoom in (+)" onClick={() => {markCustomRange();engine.current?.zoom(.8);}}><Plus size={15}/></button>
-          <button type="button" className="button button-icon" aria-label="Zoom out" title="Zoom out (-)" onClick={() => {markCustomRange();engine.current?.zoom(1.25);}}><Minus size={15}/></button>
-          <button type="button" className="button button-icon" aria-label="Reset chart view" title="Reset chart view (Home)" onClick={() => {markCustomRange();engine.current?.reset();}}><RotateCcw size={14}/></button>
-          <button type="button" className="button button-ghost chart-auto-btn" title="Restore automatic price scaling" onClick={() => engine.current?.resetPriceScale()}>Auto</button>
+          <Button aria-label="Zoom in" title="Zoom in (+)" onClick={() => {markCustomRange();engine.current?.zoom(.8);}}><Plus size={15}/></Button>
+          <Button aria-label="Zoom out" title="Zoom out (-)" onClick={() => {markCustomRange();engine.current?.zoom(1.25);}}><Minus size={15}/></Button>
+          <Button aria-label="Reset chart view" title="Reset chart view (Home)" onClick={() => {markCustomRange();engine.current?.reset();}}><RotateCcw size={14}/></Button>
+          <Button variant="ghost" className="chart-auto-btn" title="Restore automatic price scaling" onClick={() => engine.current?.resetPriceScale()}>Auto</Button>
         </div>
       </div>
       {error ? <p role="alert" className="notice">{error}</p> : <div ref={attach} className="nexus-chart-canvas" role="group" tabIndex={0} onContextMenu={event=>{event.preventDefault();setContext({x:event.clientX,y:event.clientY});}} onKeyDownCapture={event=>{
@@ -637,16 +638,15 @@ function ChartTile({
       </div>
       <select className="chart-interval-select" aria-label="Candle interval" value={interval} onChange={event=>changeInterval(event.target.value as Interval)}><option value="D">1D</option><option value="W">1W</option><option value="M">1M</option></select></>;
   const viewControls = (
-    <button
-      type="button"
-      className="button button-icon chart-expand"
+    <Button
+      className="chart-expand"
       aria-label={expanded ? 'Restore chart' : 'Maximize chart'}
       aria-pressed={Boolean(expanded)}
       title={`${expanded ? 'Restore' : 'Maximize'} chart (Alt/⌥ Enter)`}
       onClick={onToggleExpand}
     >
       {expanded ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
-    </button>
+    </Button>
   );
   return <section style={{gridArea:area}} className={`chart-workspace${expanded?' chart-workspace-expanded':''}`} aria-label={expanded?'Nexus charts':`Chart ${Number(tileId)+1} · ${symbol}`}
     role={expanded?'dialog':undefined} aria-modal={expanded?true:undefined} onKeyDown={event=>{
@@ -661,7 +661,7 @@ function ChartTile({
     }}>
     {(chart.isError || chart.isPending || !candles.length) && <header className="chart-topbar">{symbolControls}<span className="chart-topbar-spacer"/>{layoutControls}{viewControls}</header>}
     {inputError && <p role="alert" className="notice">{inputError}</p>}
-    {chart.isError ? <div role="alert" className="chart-status"><p>{chart.error.message}</p><button type="button" className="button button-ghost" onClick={() => void chart.refetch()}>Retry</button></div>
+    {chart.isError ? <div role="alert" className="chart-status"><p>{chart.error.message}</p><Button variant="ghost" onClick={() => void chart.refetch()}>Retry</Button></div>
       : chart.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
       : !candles.length ? <p className="chart-status" role="status">No published candles for {symbol}.</p>
       : <ChartScene key={`${datasetRevision}:${sessionDate}:${symbol}:${interval}`} candles={candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}

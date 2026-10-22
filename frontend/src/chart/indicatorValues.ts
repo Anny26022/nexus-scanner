@@ -23,6 +23,8 @@ export interface IndicatorSnapshot {
   rsi: number | null;
   atr: number | null;
   stochastic: { k: number | null; d: number | null } | null;
+  /** Registry studies keyed `${id}:${line}`. */
+  extras: Record<string, number | null>;
 }
 
 const metricFormatter = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
@@ -42,13 +44,16 @@ export function formatIndicatorValue(value: number | null | undefined, precision
 }
 
 import type { StudyConfigs } from './studyConfigs';
+import { computeExtraStudies } from './extraStudies';
 
 export function computeIndicatorSeries(
   candles: readonly Candle[],
   emaLines: readonly EmaLine[],
   studies: ChartStudies,
-  studyConfigs?: StudyConfigs
+  studyConfigs?: StudyConfigs,
+  benchmark?: ReadonlyMap<string, number>,
 ) {
+  const extraSeries = computeExtraStudies(candles, studyConfigs?.extras, {benchmark});
   const emaMap = new Map<string, (number | null)[]>();
   for (const line of emaLines) {
     emaMap.set(line.id, ema(candles, line.period));
@@ -114,6 +119,7 @@ export function computeIndicatorSeries(
         stochastic: stochData
           ? { k: stochData.k[idx] ?? null, d: stochData.d[idx] ?? null }
           : null,
+        extras: Object.fromEntries([...extraSeries].map(([key, values]) => [key, values[idx] ?? null])),
       };
     },
   };
@@ -128,7 +134,11 @@ export function updateLiveIndicatorDom(container: HTMLElement, snapshot: Indicat
     const key = el.dataset.indVal;
     if (!key) continue;
 
-    if (key.startsWith('ema-')) {
+    if (key.startsWith('x:')) {
+      const [, id, line] = key.split(':');
+      const precision = Number(el.dataset.indPrecision ?? 2);
+      el.textContent = formatted(snapshot.extras[`${id}:${line}`], precision);
+    } else if (key.startsWith('ema-')) {
       const id = key.slice(4);
       el.textContent = formatted(snapshot.ema[id]);
     } else if (key === 'vol' || key === 'volume-pane') {

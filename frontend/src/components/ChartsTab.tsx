@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, Maximize2, Minimize2, Minus, Pause, Pencil, Play, Plus, RotateCcw, Settings2, SkipBack, SkipForward, SlidersHorizontal, X } from 'lucide-react';
+import { Maximize2, Minimize2, Minus, Pause, Pencil, Play, Plus, RotateCcw, Settings2, SkipBack, SkipForward, SlidersHorizontal, X, Keyboard } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { ChartEngine, type ChartAppearance, type ChartStudies, type ChartStyle } from '../chart/ChartEngine';
 import { ReplayClock } from '../chart/ReplayClock';
@@ -12,11 +12,10 @@ import { EMA_PREFS_KEY, loadEmaLines } from './EmaSettings';
 import { ChartLegend, updateCandleValues, type ChartMetrics } from './ChartLegend';
 import { ChartDialog } from './ChartDialog';
 import { ChartContextMenu } from './ChartContextMenu';
-import { SymbolWithLogo } from './SymbolWithLogo';
 import { ChartComparison } from './ChartComparison';
 import { chartEvents, revealedThrough, type ChartEvent } from '../chart/events';
 import { defaultStudies } from '../chart/studies';
-import { chartStorage, loadGrid, loadScene, loadNamedLayouts, saveNamedLayouts, exportWorkspaceDocumentJson, importWorkspaceDocumentJson, readChartStorage, writeChartStorage, savedDrawingBook, type GridSettings, type SceneSettings, type TileSettings, type SavedLayout } from '../chart/storage';
+import { chartStorage, loadGrid, loadScene, loadNamedLayouts, saveNamedLayouts, exportWorkspaceDocumentJson, importWorkspaceDocumentJson, readChartStorage, writeChartStorage, savedDrawingBook, WATCHLIST_KEY, type GridSettings, type SceneSettings, type TileSettings, type SavedLayout } from '../chart/storage';
 import { ChartSync } from '../chart/ChartSync';
 import { ChartLayoutPicker } from './ChartLayoutPicker';
 import { chartLayout, layoutAreas, MAX_CHARTS } from '../chart/layouts';
@@ -27,6 +26,11 @@ import { computeIndicatorSeries, updateLiveIndicatorDom } from '../chart/indicat
 import { type StudyConfigs, defaultStudyConfigs, isIndicatorVisibleForInterval } from '../chart/studyConfigs';
 import { IndicatorsCatalogModal } from './IndicatorsCatalogModal';
 import { IndicatorSettingsModal } from './IndicatorSettingsModal';
+import { ExtraStudySettingsDialog } from './ExtraStudySettingsDialog';
+import { ChartSymbolSearch } from './ChartSymbolSearch';
+import { ChartShortcutsDialog } from './ChartShortcutsDialog';
+import { useMountEffect } from '../hooks/useMountEffect';
+import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../chart/extraStudies';
 import { WatchlistDock } from './WatchlistDock';
 import { Download, Upload } from 'lucide-react';
 import { Button } from './Button';
@@ -41,7 +45,26 @@ function filterStudiesForInterval(rawStudies: ChartStudies, configs: StudyConfig
   return visible;
 }
 
-function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionDate,symbolControls,viewControls,layoutControls,events,revision,interval,tileId,sync}: {candles: readonly Candle[]; symbol: string;book:DrawingBook;firstDate:string;lastDate:string;metrics?:ChartMetrics;sessionDate:string;symbolControls:ReactNode;viewControls:ReactNode;layoutControls?:ReactNode;events:readonly ChartEvent[];revision:string;interval:Interval;tileId:string;sync:ChartSync}) {
+/** 'consume' prevents the browser default; 'focus' moved focus and lets the key reach the new target. */
+type TileShortcutHandler = (event: KeyboardEvent) => 'consume' | 'focus' | null;
+// Each mounted tile registers its shortcut handler against its section element.
+const tileShortcutHandlers = new WeakMap<Element, TileShortcutHandler>();
+const INTERVALS: readonly Interval[] = ['D', 'W', 'M'];
+const isEditable = (target: EventTarget | null) => target instanceof HTMLElement
+  && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+
+/** Scene-level commands that keyboard shortcuts on the tile can invoke. */
+export interface ChartSceneActions {
+  openIndicators: () => void;
+  toggleLegend: () => void;
+  toggleAllIndicators: () => void;
+  toggleDrawings: () => void;
+  resetView: () => void;
+  saveImage: () => void;
+  openSettings: () => void;
+}
+
+function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionDate,symbolControls,viewControls,layoutControls,events,revision,interval,tileId,sync,benchmark,actionsRef}: {benchmark?: ReadonlyMap<string, number>; actionsRef?: { current: ChartSceneActions | null };candles: readonly Candle[]; symbol: string;book:DrawingBook;firstDate:string;lastDate:string;metrics?:ChartMetrics;sessionDate:string;symbolControls:ReactNode;viewControls:ReactNode;layoutControls?:ReactNode;events:readonly ChartEvent[];revision:string;interval:Interval;tileId:string;sync:ChartSync}) {
   const [saved]=useState(()=>loadScene(tileId));
   const paneChoice=useRef(saved.paneWeights);
   const engine = useRef<ChartEngine | null>(null);
@@ -72,8 +95,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const overlayRef = useRef<HTMLDivElement>(null);
   const candleIndexByDate = useMemo(() => new Map(candles.map((b, i) => [b.date, i])), [candles]);
   const indicatorSeries = useMemo(() => {
-    return computeIndicatorSeries(candles, emaLines, visibleStudies, studyConfigs);
-  }, [candles, emaLines, visibleStudies, studyConfigs]);
+    return computeIndicatorSeries(candles, emaLines, visibleStudies, studyConfigs, benchmark);
+  }, [candles, emaLines, visibleStudies, studyConfigs, benchmark]);
   const indicatorSeriesRef = useRef(indicatorSeries);
   indicatorSeriesRef.current = indicatorSeries;
   const [hiddenStudies, setHiddenStudies] = useState<Record<string, boolean>>({});
@@ -82,6 +105,17 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     for (const [id, hidden] of Object.entries(hiddenStudiesChoice.current)) {
       if (hidden) chart.setStudyVisibility(id, false);
     }
+  };
+  const [allHidden, setAllHidden] = useState(false);
+  const toggleAllIndicators = () => {
+    const hide = !allHidden;
+    setAllHidden(hide);
+    const ids = [...Object.entries(studyChoice.current).filter(([, on]) => on).map(([id]) => id),
+      ...Object.entries(studyConfigsChoice.current.extras ?? {}).filter(([, state]) => state?.enabled).map(([id]) => id), 'volume'];
+    hiddenStudiesChoice.current = {...hiddenStudiesChoice.current, ...Object.fromEntries(ids.map(id => [id, hide]))};
+    setHiddenStudies(hiddenStudiesChoice.current);
+    for (const id of ids) engine.current?.setStudyVisibility(id, !hide);
+    engine.current?.setEmaLines(hide ? [] : emaChoice.current);
   };
   const toggleStudyVisibility = (id: string) => {
     const hidden = !hiddenStudiesChoice.current[id];
@@ -115,6 +149,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     persist({ studyConfigs: next });
     if (engine.current) setPaneOffsets(engine.current.getPaneOffsets?.() ?? []);
   };
+  const applyExtras = (next: ExtraStudies) => applyStudyConfigs({...studyConfigsChoice.current, extras: next});
   const applyComparison=(next:typeof comparison)=>{setComparison(next);persist({comparison:next});if(!next) onComparison('',[],false);};
   const [eventDetails,setEventDetails]=useState<readonly ChartEvent[]|null>(null);
   const [clock]=useState(()=>new ReplayClock(candles.length));
@@ -166,6 +201,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       chart.setStyle(styleChoice.current);
       chart.setAppearance(appearanceChoice.current);
       chart.setStudyConfigs?.(studyConfigsChoice.current);
+      chart.setBenchmark(benchmark);
       chart.setStudies(filterStudiesForInterval(studyChoice.current, studyConfigsChoice.current, interval));
       restoreHiddenStudies(chart);
       chart.setEvents(events,revealedThrough(candles,clock.getSnapshot().index,lastDate));
@@ -222,12 +258,22 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       setError(cause instanceof Error ? cause.message : 'Chart rendering unavailable.');
       return;
     }
-  }, [candles,activeBook,clock,previousByDate,startReplay,cancelSelection,events,lastDate,interval,sync,tileId]);
+  }, [candles,activeBook,clock,previousByDate,startReplay,cancelSelection,events,lastDate,interval,sync,tileId,benchmark]);
+  const saveImage=()=>{const image=engine.current?.takeScreenshot();if(image){const link=document.createElement('a');link.download=`${symbol}-chart.png`;link.href=image.toDataURL('image/png');link.click();}};
   const applyAppearance=(change:Partial<typeof appearance>)=>{
     const next={...appearanceChoice.current,...change};
     appearanceChoice.current=next;setAppearance(next);engine.current?.setAppearance(next);
     persist({appearance:next});
     if (engine.current) setPaneOffsets(engine.current.getPaneOffsets());
+  };
+  if (actionsRef) actionsRef.current = {
+    openIndicators: () => setIndicatorsOpen(true),
+    toggleLegend: () => applyAppearance({legendCollapsed: !appearanceChoice.current.legendCollapsed}),
+    toggleAllIndicators,
+    toggleDrawings: () => activeBook.options({hideAll: !activeBook.getSnapshot().hideAll}),
+    resetView: () => { markCustomRange(); engine.current?.reset(); },
+    saveImage,
+    openSettings: () => setSettingsOpen(true),
   };
   return <>
     <header className="chart-topbar">
@@ -292,6 +338,11 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           onUpdateAppearance={applyAppearance}
           hiddenStudies={hiddenStudies}
           onToggleStudyVisibility={toggleStudyVisibility}
+          onUpdateExtras={applyExtras}
+          collapsed={Boolean(appearance.legendCollapsed)}
+          onToggleCollapsed={() => applyAppearance({legendCollapsed: !appearanceChoice.current.legendCollapsed})}
+          allHidden={allHidden}
+          onToggleAllHidden={toggleAllIndicators}
         />
       </div>
       <SubPaneLegends
@@ -310,6 +361,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         onUpdateAppearance={applyAppearance}
         hiddenStudies={hiddenStudies}
         onToggleStudyVisibility={toggleStudyVisibility}
+        onUpdateExtras={applyExtras}
       />
       <div className="chart-actions-zone" role="group" aria-label="Chart controls">
         <div className="chart-actions">
@@ -331,7 +383,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         <button type="button" role="menuitem" onClick={()=>{engine.current?.resetPriceScale();setContext(null);}}>Restore automatic scale</button>
         <button type="button" role="menuitem" onClick={()=>{setSettingsOpen(true);setContext(null);}}>Chart settings</button>
         <button type="button" role="menuitem" onClick={()=>{selectBar();setContext(null);}}>Start bar replay</button>
-        <button type="button" role="menuitem" onClick={()=>{const image=engine.current?.takeScreenshot();if(image){const link=document.createElement('a');link.download=`${symbol}-chart.png`;link.href=image.toDataURL('image/png');link.click();}setContext(null);}}>Save chart image</button>
+        <button type="button" role="menuitem" onClick={()=>{saveImage();setContext(null);}}>Save chart image</button>
       </ChartContextMenu>}
       </div>
     </div>
@@ -354,6 +406,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           try { localStorage.setItem(EMA_PREFS_KEY, JSON.stringify(lines)); } catch { /* ignore */ }
         }}
         onApplyAppearance={applyAppearance}
+        extras={studyConfigs.extras}
+        onApplyExtras={applyExtras}
         onOpenIndicatorSettings={id => {
           setIndicatorsOpen(false);
           setActiveIndicatorSetting(id);
@@ -361,7 +415,15 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         onClose={() => setIndicatorsOpen(false)}
       />
     )}
-    {activeIndicatorSetting && (
+    {activeIndicatorSetting && EXTRA_STUDY_BY_ID.has(activeIndicatorSetting as ExtraStudyId) && (
+      <ExtraStudySettingsDialog
+        def={EXTRA_STUDY_BY_ID.get(activeIndicatorSetting as ExtraStudyId)!}
+        state={studyConfigs.extras?.[activeIndicatorSetting as ExtraStudyId]}
+        onApply={next => applyExtras({...studyConfigsChoice.current.extras, [activeIndicatorSetting]: next})}
+        onClose={() => setActiveIndicatorSetting(null)}
+      />
+    )}
+    {activeIndicatorSetting && !EXTRA_STUDY_BY_ID.has(activeIndicatorSetting as ExtraStudyId) && (
       <IndicatorSettingsModal
         indicatorId={activeIndicatorSetting}
         configs={studyConfigs}
@@ -390,6 +452,22 @@ export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision
   const [grid,setGrid]=useState(()=>loadGrid());
   const gridChoice=useRef(grid);
   const [sync]=useState(()=>Object.assign(new ChartSync(),{enabled:true,dates:grid.links.dates,crosshairs:grid.links.crosshair}));
+  const [shortcutsOpen,setShortcutsOpen]=useState(false);
+  useMountEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat || isEditable(event.target)) return;
+      // Open dialogs and focused menus own the keyboard (an expanded chart tile is not a dialog here).
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+      if (document.activeElement instanceof Element && document.activeElement.closest('[role="menu"], [role="listbox"]')) return;
+      if (event.key === '?' && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); setShortcutsOpen(true); return; }
+      const focused = document.activeElement instanceof Element ? document.activeElement.closest('.chart-workspace') : null;
+      const tile = document.querySelector('.chart-workspace-expanded') ?? focused ?? document.querySelector('.chart-workspace');
+      const result = tile ? tileShortcutHandlers.get(tile)?.(event) : null;
+      if (result === 'consume') event.preventDefault();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
   const [layouts,setLayouts]=useState(loadNamedLayouts);
   const [layoutsOpen,setLayoutsOpen]=useState(false);
   const [layoutName,setLayoutName]=useState('');
@@ -433,6 +511,7 @@ export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision
 
   const layoutControls = (
     <div className="chart-desk-toolbar" role="group" aria-label="Chart layout">
+      <button type="button" className="chart-shortcuts-button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" onClick={()=>setShortcutsOpen(true)}><Keyboard size={15}/></button>
       <button type="button" onClick={()=>setLayoutsOpen(true)}>Layouts</button>
       <ChartLayoutPicker
         value={grid.layout}
@@ -482,6 +561,7 @@ export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision
         onSelectSymbol={selectWatchlistSymbol}
       />
     </div>
+    {shortcutsOpen&&<ChartShortcutsDialog onClose={()=>setShortcutsOpen(false)}/>}
     {layoutsOpen&&<ChartDialog title="Saved layouts" className="chart-layouts-dialog" onClose={()=>setLayoutsOpen(false)}><div className="chart-layouts">
       <form className="chart-layouts-form" onSubmit={event=>{
         event.preventDefault();const name=layoutName.trim();
@@ -595,8 +675,9 @@ function ChartTile({
   onCloseExpand: () => void;
   layoutControls?: ReactNode;
 }) {
-  const [draft, setDraft] = useState(initial.symbol);
   const {symbol,interval}=initial;
+  const searchRef = useRef<HTMLInputElement>(null);
+  const sceneActions = useRef<ChartSceneActions | null>(null);
   const [inputError, setInputError] = useState('');
   const book=savedDrawingBook(symbol);
   const changeInterval=(next:Interval)=>onChange(tileId,{symbol,interval:next});
@@ -619,24 +700,59 @@ function ChartTile({
     retry: false,
     staleTime: Infinity,
   });
+  // Loaded with the candles so relative-strength studies render without rebuilding the chart.
+  const benchmark = useQuery({
+    queryKey: ['benchmark', datasetRevision],
+    queryFn: async () => (await screenerApi.getBenchmark(datasetRevision)) ?? null,
+    enabled: Boolean(datasetRevision), retry: false, staleTime: Infinity,
+  });
   const candles = useMemo(() => aggregate(chart.data?.candles ?? [], interval), [chart.data, interval]);
   const events=useMemo(()=>chart.data?chartEvents(chart.data):[],[chart.data]);
-  const symbolControls=<><form className="chart-symbol-search" onSubmit={event => {
-        event.preventDefault();
-        const next = draft.trim().toUpperCase();
-        if (!/^[A-Z0-9_&.\-]{1,40}$/.test(next)) { setInputError('Enter a scanner symbol, such as RELIANCE.'); return; }
-        setInputError(''); setDraft(next);onChange(tileId,{symbol:next,interval});
-      }}>
-        <SymbolWithLogo symbol={symbol} showText={false} className="chart-symbol-logo"/>
-        <input aria-label="Chart symbol" placeholder="Symbol..." value={draft} onChange={event => setDraft(event.target.value)} autoComplete="off" spellCheck={false}/>
-        <button type="submit" className="chart-load-btn" aria-label="Load" title="Load symbol"><ArrowRight size={13}/></button>
-      </form>
+  const symbolControls=<><ChartSymbolSearch key={symbol} symbol={symbol} datasetRevision={datasetRevision} sessionDate={sessionDate}
+        inputRef={searchRef} onError={setInputError} onSelect={next => onChange(tileId, {symbol: next, interval})} />
       <div className="chart-bar-divider" aria-hidden="true" />
       <div className="chart-intervals" role="group" aria-label="Candle interval">
         {(['D', 'W', 'M'] as const).map(value => <button type="button" key={value} aria-pressed={interval === value}
           aria-label={value === 'D' ? 'Daily candles' : value === 'W' ? 'Weekly candles' : 'Monthly candles'} onClick={() => changeInterval(value)}>{value==='D'?'1D':value==='W'?'1W':'1M'}</button>)}
       </div>
       <select className="chart-interval-select" aria-label="Candle interval" value={interval} onChange={event=>changeInterval(event.target.value as Interval)}><option value="D">1D</option><option value="W">1W</option><option value="M">1M</option></select></>;
+  const stepWatchlist = (direction: 1 | -1) => {
+    const stored = readChartStorage(WATCHLIST_KEY);
+    const symbols = Array.isArray(stored) ? stored.filter((item): item is string => typeof item === 'string' && !item.startsWith('###')) : [];
+    if (!symbols.length) return;
+    const index = symbols.indexOf(symbol);
+    const next = symbols[index < 0 ? 0 : (index + direction + symbols.length) % symbols.length];
+    if (next !== symbol) onChange(tileId, {symbol: next, interval});
+  };
+  const handleShortcut: TileShortcutHandler = event => {
+    const actions = sceneActions.current;
+    if (event.altKey && !event.ctrlKey && !event.metaKey) {
+      const digit = /^Digit([1-3])$/.exec(event.code);
+      if (digit) { changeInterval(INTERVALS[Number(digit[1]) - 1]); return 'consume'; }
+      const command = ({KeyI: actions?.openIndicators, KeyL: actions?.toggleLegend, KeyV: actions?.toggleAllIndicators,
+        KeyH: actions?.toggleDrawings, KeyR: actions?.resetView, KeyS: actions?.saveImage} as Record<string, (() => void) | undefined>)[event.code];
+      if (command) { command(); return 'consume'; }
+      return null;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) return null;
+    if (event.key === '[' || event.key === ']') {
+      const index = INTERVALS.indexOf(interval);
+      changeInterval(INTERVALS[Math.min(INTERVALS.length - 1, Math.max(0, index + (event.key === ']' ? 1 : -1)))]);
+      return 'consume';
+    }
+    if (event.key === ',' || event.key === '.') { stepWatchlist(event.key === '.' ? 1 : -1); return 'consume'; }
+    if (event.key === '/') { searchRef.current?.focus(); return 'consume'; }
+    // Typing a ticker anywhere starts a symbol search; the key lands in the focused box.
+    if (/^[A-Za-z0-9&]$/.test(event.key)) { searchRef.current?.focus(); return 'focus'; }
+    return null;
+  };
+  const handleShortcutRef = useRef(handleShortcut);
+  handleShortcutRef.current = handleShortcut;
+  const registerShortcuts = (element: HTMLElement | null) => {
+    if (!element) return;
+    tileShortcutHandlers.set(element, event => handleShortcutRef.current(event));
+    return () => { tileShortcutHandlers.delete(element); };
+  };
   const viewControls = (
     <Button
       className="chart-expand"
@@ -648,7 +764,7 @@ function ChartTile({
       {expanded ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
     </Button>
   );
-  return <section style={{gridArea:area}} className={`chart-workspace${expanded?' chart-workspace-expanded':''}`} aria-label={expanded?'Nexus charts':`Chart ${Number(tileId)+1} · ${symbol}`}
+  return <section ref={registerShortcuts} style={{gridArea:area}} className={`chart-workspace${expanded?' chart-workspace-expanded':''}`} aria-label={expanded?'Nexus charts':`Chart ${Number(tileId)+1} · ${symbol}`}
     role={expanded?'dialog':undefined} aria-modal={expanded?true:undefined} onKeyDown={event=>{
       if (event.altKey && event.key==='Enter') { event.preventDefault(); onToggleExpand(); }
       if (expanded && event.key==='Escape') { event.preventDefault(); onCloseExpand(); }
@@ -662,9 +778,9 @@ function ChartTile({
     {(chart.isError || chart.isPending || !candles.length) && <header className="chart-topbar">{symbolControls}<span className="chart-topbar-spacer"/>{layoutControls}{viewControls}</header>}
     {inputError && <p role="alert" className="notice">{inputError}</p>}
     {chart.isError ? <div role="alert" className="chart-status"><p>{chart.error.message}</p><Button variant="ghost" onClick={() => void chart.refetch()}>Retry</Button></div>
-      : chart.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
+      : chart.isPending || benchmark.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
       : !candles.length ? <p className="chart-status" role="status">No published candles for {symbol}.</p>
       : <ChartScene key={`${datasetRevision}:${sessionDate}:${symbol}:${interval}`} candles={candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
-          firstDate={chart.data.candles[0].date} lastDate={chart.data.candles.at(-1)!.date} metrics={metadata.data??undefined} sessionDate={chart.data.asOfDate} events={events} revision={datasetRevision!} interval={interval} tileId={tileId} sync={sync}/>}
+          firstDate={chart.data.candles[0].date} lastDate={chart.data.candles.at(-1)!.date} metrics={metadata.data??undefined} sessionDate={chart.data.asOfDate} events={events} revision={datasetRevision!} interval={interval} tileId={tileId} sync={sync} benchmark={benchmark.data ?? undefined} actionsRef={sceneActions}/>}
   </section>;
 }

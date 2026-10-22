@@ -1,8 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
-import { useQuery } from '@tanstack/react-query';
 import { Bookmark, CandlestickChart, CornerDownLeft, Gauge, Moon, Rocket, ScanSearch, Search, Sun } from 'lucide-react';
-import { screenerApi } from '../api/screenerApi';
+import { rankSymbols, useSymbolDirectory } from '../hooks/useSymbolDirectory';
 import { parseSavedScreens, SAVED_SCREENS_KEY, type ScreenDefinition } from '../utils/savedScreens';
 import { describeScreen } from './SavedScreensMenu';
 import type { AppTab } from './Navbar';
@@ -46,16 +45,7 @@ export function CommandPalette({onClose, onNavigate, onLoadScreen, onOpenSymbol,
   const savedScreens = useMemo(readSavedScreens, []);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const symbols = useQuery({
-    queryKey: ['palette-symbols', datasetRevision, sessionDate],
-    queryFn: async () => (await screenerApi.getExportRows({
-      expressionTree: {type: 'group', operator: 'all', children: []},
-      universe: 'mainboard', asOfDate: sessionDate ?? '', datasetRevision,
-      sort: {field: 'marketCap', direction: 'desc'}, page: 1, pageSize: 100,
-    })).map(row => ({symbol: row.symbol, name: row.name ?? ''})),
-    enabled: Boolean(sessionDate),
-    staleTime: Infinity,
-  });
+  const symbols = useSymbolDirectory(datasetRevision, sessionDate);
 
   const items = useMemo<PaletteItem[]>(() => {
     const needle = query.trim().toLowerCase();
@@ -67,15 +57,10 @@ export function CommandPalette({onClose, onNavigate, onLoadScreen, onOpenSymbol,
       id: `screen:${item.id}`, group: 'Saved screens', label: item.name, hint: describeScreen(item.screen), icon: <Bookmark size={15} />,
       run: () => onLoadScreen(item.screen),
     }));
-    const symbolItems: PaletteItem[] = !needle ? [] : (symbols.data ?? [])
-      .map(row => ({row, rank: row.symbol.toLowerCase().startsWith(needle) ? 0 : row.symbol.toLowerCase().includes(needle) ? 1 : row.name.toLowerCase().includes(needle) ? 2 : 3}))
-      .filter(entry => entry.rank < 3)
-      .sort((a, b) => a.rank - b.rank)
-      .slice(0, MAX_SYMBOLS)
-      .map(({row}) => ({
-        id: `symbol:${row.symbol}`, group: 'Symbols', label: row.symbol, hint: row.name, icon: <CandlestickChart size={15} />,
-        run: () => onOpenSymbol(row.symbol),
-      }));
+    const symbolItems: PaletteItem[] = rankSymbols(symbols.data ?? [], needle, MAX_SYMBOLS).map(row => ({
+      id: `symbol:${row.symbol}`, group: 'Symbols', label: row.symbol, hint: row.name, icon: <CandlestickChart size={15} />,
+      run: () => onOpenSymbol(row.symbol),
+    }));
     const appearance: PaletteItem[] = [
       {id: 'theme:light', group: 'Appearance', label: 'Light appearance', keywords: 'theme mode', icon: <Sun size={15} />, run: () => onThemeChange('light')},
       {id: 'theme:dark', group: 'Appearance', label: 'Dark appearance', keywords: 'theme mode night', icon: <Moon size={15} />, run: () => onThemeChange('dark')},

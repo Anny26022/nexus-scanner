@@ -8,6 +8,7 @@ import { ema, validEmaLine, type Candle, type EmaLine } from './model';
 import { DrawingBook, hitDrawing, indexTime, timeIndex, type DrawingProjection, type Pixel } from './drawings';
 import { DrawingLayer } from './DrawingLayer';
 import { rsi, macd, sma, bollinger, atr, stochastic, monthlyVwap, supertrend, defaultStudies, getPriceSource, type ChartStudies } from './studies';
+import { computeExtraStudies, enabledExtraStudies, studyLineColor, studyParams, studyTitle } from './extraStudies';
 export type { ChartStudies } from './studies';
 import { type StudyConfigs } from './studyConfigs';
 export type { StudyConfigs } from './studyConfigs';
@@ -18,6 +19,8 @@ export const CHART_PALETTE = {up:'#089981',down:'#ef5350',volumeUp:'rgba(8,153,1
 export type ChartStyle = 'candles'|'hollowCandles'|'volumeCandles'|'bars'|'highLow'|'line'|'lineWithMarkers'|'stepLine'|'area'|'hlcArea'|'baseline';
 export type ScaleMode = 'normal'|'logarithmic'|'percentage'|'indexed';
 export type ChartAppearance = {
+  /** Price-pane legend shows only a summary chip. */
+  legendCollapsed?:boolean;
   horizontalGrid:boolean;
   verticalGrid:boolean;
   crosshair:boolean;
@@ -114,6 +117,9 @@ export class ChartEngine {
   private studyConfigs:StudyConfigs={};
   private studySeries:ISeriesApi<'Line'|'Histogram'>[]=[];
   private studySeriesByPane=new Map<string,ISeriesApi<'Line'|'Histogram'>[]>();
+  // Price overlays share the 'price' pane key, so visibility is also tracked per study.
+  private studySeriesById=new Map<string,ISeriesApi<'Line'|'Histogram'>[]>();
+  private benchmark:ReadonlyMap<string,number>|undefined;
   private onPanesChange?:()=>void;
   private maximizedPane:number|null=null;
   private hostObserver?:ResizeObserver;
@@ -502,6 +508,8 @@ export class ChartEngine {
     }
     this.markers.setMarkers([...this.markerEvents].sort(([a],[b])=>a.localeCompare(b)).map(([id,events]):SeriesMarker<Time>=>({id,time:id.slice(7),position:'belowBar',shape:'circle',color:events.some(event=>event.kind==='earnings')?'#049981':events.some(event=>event.kind==='action')?'#f59e0b':'#187669',size:.6})));
   }
+  /** Benchmark closes by session date, for relative-strength studies. Rebuild with setStudies after changing. */
+  setBenchmark(benchmark:ReadonlyMap<string,number>|undefined) { this.benchmark=benchmark; }
   setStudyConfigs(configs:StudyConfigs) {
     // The caller applies the new visibility with setStudies immediately after.
     // Rebuilding here would create and remove every native series twice.
@@ -513,7 +521,7 @@ export class ChartEngine {
   }
   setStudies(studies:Partial<ChartStudies>) {
     for(const series of this.studySeries) this.chart.removeSeries(series);
-    this.studySeries=[];this.studySeriesByPane.clear();this.studies={...defaultStudies(),...studies};
+    this.studySeries=[];this.studySeriesByPane.clear();this.studySeriesById.clear();this.studies={...defaultStudies(),...studies};
     const panes=new Map<string,number>();
     const plots=this.studyPlots();
     for(const plot of plots) {
@@ -525,7 +533,8 @@ export class ChartEngine {
         lineStyle:plot.lineStyle??LineStyle.Solid,
         title:plot.title,
         priceLineVisible:false,
-        lastValueVisible:!plot.histogram
+        lastValueVisible:!plot.histogram&&!plot.dots,
+        ...(plot.dots?{lineVisible:false,pointMarkersVisible:true,pointMarkersRadius:1.5}:{})
       },pane);
       if(plot.pane!=='price') series.getPane().setStretchFactor(.3);
       for(const level of plot.levels??[]) {
@@ -538,6 +547,10 @@ export class ChartEngine {
         });
       }
       this.studySeries.push(series);
+      if(plot.id) {
+        if(!this.studySeriesById.has(plot.id)) this.studySeriesById.set(plot.id,[]);
+        this.studySeriesById.get(plot.id)!.push(series);
+      }
       if(!this.studySeriesByPane.has(plot.pane)) this.studySeriesByPane.set(plot.pane,[]);
       this.studySeriesByPane.get(plot.pane)!.push(series);
     }
@@ -556,6 +569,8 @@ export class ChartEngine {
       lineWidth?:number;
       lineStyle?:LineStyle;
       levels?:Array<{price:number;color?:string;lineStyle?:LineStyle}>;
+      id?:string;
+      dots?:boolean;
     }>=[];
     const add=(title:string,color:string,values:(number|null)[],pane='price',lineWidth=1,lineStyle=LineStyle.Solid,levels?:Array<{price:number;color?:string;lineStyle?:LineStyle}>)=>plots.push({title,color,values,pane,lineWidth,lineStyle,levels});
 
@@ -642,6 +657,17 @@ export class ChartEngine {
       const period=cfg?.period??10,multiplier=cfg?.multiplier??3;
       const st=supertrend(this.candles,period,multiplier);
       add(`Supertrend ${period} ${multiplier}`,st.directions.at(-1)===-1?(cfg?.downColor??'#ef5350'):(cfg?.upColor??'#089981'),st.values,'price',cfg?.lineWidth??2,toLineStyle(cfg?.lineStyle));
+    }
+    const extras=this.studyConfigs.extras;
+    const extraValues=computeExtraStudies(this.candles,extras,{benchmark:this.benchmark});
+    for(const def of enabledExtraStudies(extras)) {
+      const state=extras?.[def.id],title=studyTitle(def,studyParams(def,state));
+      const levels=def.levels?.map(price=>({price,color:'#aab8c5',lineStyle:LineStyle.Dashed}));
+      def.lines.forEach((line,index)=>plots.push({
+        title:index===0?title:'',color:studyLineColor(line,state),values:extraValues.get(`${def.id}:${line.key}`)!,
+        pane:def.pane==='price'?'price':def.id,lineWidth:line.dots?2:1,lineStyle:line.dashed?LineStyle.Dashed:LineStyle.Solid,
+        levels:index===0?levels:undefined,id:def.id,dots:line.dots,
+      }));
     }
     return plots;
   }
@@ -789,7 +815,7 @@ export class ChartEngine {
       this.volumeSeries.applyOptions({visible,lastValueVisible:visible&&this.volumeSeries.getPane().paneIndex()!==0});
       return;
     }
-    const seriesList=this.studySeriesByPane.get(studyId);
+    const seriesList=this.studySeriesById.get(studyId)??this.studySeriesByPane.get(studyId);
     if(seriesList) {
       for(const s of seriesList) s.applyOptions({visible});
     }

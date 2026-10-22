@@ -1,7 +1,9 @@
 """Compact market overview (breadth, sectors, key indices) for one published session."""
+import csv
 import gzip
 import json
 import math
+from pathlib import Path
 
 MARKET_OVERVIEW_VERSION = 1
 BREADTH_SESSIONS = 60
@@ -82,3 +84,43 @@ def market_overview(source_bytes, session):
         'sectors': _sectors(_load(source_bytes, 'sector_analytics.json.gz')),
         'indices': _indices(_load(source_bytes, 'all_indices_history_v2.json.gz'), session),
     }
+
+
+BENCHMARK_SYMBOL = 'NIFTY'
+BENCHMARK_VERSION = 1
+
+
+def _csv_closes(path):
+    closes = {}
+    try:
+        with open(path, newline='') as handle:
+            for row in csv.DictReader(handle):
+                close = _number(_float(row.get('Close')))
+                if row.get('Date') and close is not None:
+                    closes[row['Date'][:10]] = close
+    except OSError:
+        return {}
+    return closes
+
+
+def _float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def benchmark_series(root, source_bytes, session):
+    """Nifty 50 daily closes up to the session: long CSV history, refreshed by the index snapshot."""
+    closes = _csv_closes(Path(root) / 'indices_ohlcv_data' / f'{BENCHMARK_SYMBOL}.csv')
+    history = _load(source_bytes, 'all_indices_history_v2.json.gz') or {}
+    index = next((i for i in history.get('indices', []) if isinstance(i, dict) and i.get('symbol') == BENCHMARK_SYMBOL), None)
+    for record in (index or {}).get('records', []):
+        close = _number(record.get('close')) if isinstance(record, dict) else None
+        if close is not None and isinstance(record.get('date'), str):
+            closes[record['date']] = close
+    records = [[date, closes[date]] for date in sorted(closes) if date <= session]
+    if len(records) < 2:
+        return None
+    return {'schemaVersion': BENCHMARK_VERSION, 'symbol': BENCHMARK_SYMBOL, 'name': (index or {}).get('name') or 'Nifty 50',
+            'asOfDate': session, 'records': records}

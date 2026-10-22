@@ -6,12 +6,12 @@ import ChartsTab from '../components/ChartsTab';
 import { screenerApi } from '../api/screenerApi';
 import { ChartEngine } from '../chart/ChartEngine';
 
-vi.mock('../api/screenerApi', () => ({screenerApi:{getChart:vi.fn(),runScreen:vi.fn(async()=>({rows:[{symbol:'RELIANCE',marketCapCrore:5,freeFloatPct:50,circuitLimit:'5'}],immutableRevision:'a'.repeat(64)}))}}));
+vi.mock('../api/screenerApi', () => ({screenerApi:{getChart:vi.fn(),getBenchmark:vi.fn(async()=>undefined),runScreen:vi.fn(async()=>({rows:[{symbol:'RELIANCE',marketCapCrore:5,freeFloatPct:50,circuitLimit:'5'}],immutableRevision:'a'.repeat(64)}))}}));
 vi.mock('../chart/ChartEngine', () => ({ChartEngine:vi.fn(class {
   timeScale={subscribeVisibleTimeRangeChange:vi.fn(),unsubscribeVisibleTimeRangeChange:vi.fn()};
   chart={timeScale:()=>this.timeScale,subscribeCrosshairMove:vi.fn(),unsubscribeCrosshairMove:vi.fn()};
   savedView=vi.fn(()=>undefined);paneWeights=vi.fn(()=>[1]);restoreView=vi.fn();restorePaneWeights=vi.fn();
-  zoom=vi.fn(); reset=vi.fn(); resetPriceScale=vi.fn(); setEmaLines=vi.fn(); setStyle=vi.fn(); setAppearance=vi.fn(); setRange=vi.fn(); setCandles=vi.fn(); setReplayPicker=vi.fn(); setStudies=vi.fn(); setComparison=vi.fn(); setEvents=vi.fn(); latest=vi.fn(); goToDate=vi.fn(()=>true); destroy=vi.fn();
+  zoom=vi.fn(); reset=vi.fn(); resetPriceScale=vi.fn(); setEmaLines=vi.fn(); setStyle=vi.fn(); setAppearance=vi.fn(); setRange=vi.fn(); setCandles=vi.fn(); setReplayPicker=vi.fn(); setStudies=vi.fn(); setBenchmark=vi.fn(); setComparison=vi.fn(); setEvents=vi.fn(); latest=vi.fn(); goToDate=vi.fn(()=>true); destroy=vi.fn();
   setOnPanesChange=vi.fn(); getPaneOffsets=vi.fn(()=>[]); getStudyPaneIndex=vi.fn(()=>1); movePane=vi.fn(); maximizePane=vi.fn(); setStudyVisibility=vi.fn();
   setStudyConfigs=vi.fn();
 })}));

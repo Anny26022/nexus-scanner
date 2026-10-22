@@ -178,6 +178,16 @@ class RealDataAdapter {
     }
     return data;
   }
+  /** Nifty 50 closes by session date, or undefined when the release has no benchmark. */
+  async getBenchmark(revision?: string): Promise<ReadonlyMap<string, number> | undefined> {
+    const release = await releaseFor(revision);
+    if (!release.benchmarkUrl) return undefined;
+    const data = await cached(releaseCache, release.benchmarkUrl,
+      () => getIpoJson<{schemaVersion?: number; asOfDate?: string; records?: unknown}>(release.benchmarkUrl!, 'Benchmark'), 6);
+    if (data.schemaVersion !== 1 || data.asOfDate !== release.sessionDate || !Array.isArray(data.records)) throw new Error('Benchmark release mismatch');
+    return new Map(data.records.filter((row): row is [string, number] => Array.isArray(row) && typeof row[0] === 'string'
+      && /^\d{4}-\d{2}-\d{2}$/.test(row[0]) && row[0] <= release.sessionDate && typeof row[1] === 'number' && Number.isFinite(row[1]) && row[1] > 0));
+  }
   async getMarketOverview(revision?: string) {
     const release = await releaseFor(revision);
     if (!release.marketOverviewUrl) throw new DataUnavailableError('Market overview is published with the next data refresh.', 'not_published');

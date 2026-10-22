@@ -1,3 +1,4 @@
+import type { ExtraStudies } from './extraStudies';
 export type PriceSource = 'close' | 'open' | 'high' | 'low' | 'hl2' | 'hlc3' | 'ohlc4';
 
 export type PlotLineStyle = 'solid' | 'dashed' | 'dotted';
@@ -149,6 +150,8 @@ export interface VolumeConfig {
 }
 
 export interface StudyConfigs {
+  /** Registry indicators (see extraStudies.ts), persisted with the scene and saved layouts. */
+  extras?: ExtraStudies;
   rsi?: RsiConfig;
   macd?: MacdConfig;
   supertrend?: SupertrendConfig;

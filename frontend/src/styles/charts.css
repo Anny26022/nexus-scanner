@@ -1741,6 +1741,9 @@
   flex: 1;
 }
 
+.catalog-item-left:has(.catalog-item-description) { flex-wrap: wrap; row-gap: 2px; }
+.catalog-item-description { flex-basis: 100%; overflow: hidden; color: var(--muted); font-size: 11.5px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+
 .catalog-item-title-group {
   display: flex;
   align-items: baseline;
@@ -2311,3 +2314,19 @@
 }
 @media (hover: none) { .chart-actions { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); } }
 @media (prefers-reduced-motion: reduce) { .chart-actions { transition: none; } }
+
+/* Symbol search autocomplete */
+.chart-symbol-search { position: relative; }
+.chart-symbol-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: var(--z-chart-menu); width: 320px; max-height: 340px; margin: 0; padding: 5px; overflow-y: auto; list-style: none; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-pop); animation: pop-in .14s var(--ease-out); }
+.chart-symbol-menu-label { padding: 6px 9px 4px; color: var(--muted); font-size: 11.5px; font-weight: 500; }
+.chart-symbol-option { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 6px 9px; border-radius: 7px; cursor: pointer; }
+.chart-symbol-option.is-active { background: var(--surface-hover); }
+.chart-symbol-option-logo > img, .chart-symbol-option-logo > span { width: 20px; height: 20px; padding: 0; border-radius: 50%; }
+.chart-symbol-option-symbol { flex-shrink: 0; color: var(--text); font-size: 12.5px; font-weight: 600; }
+.chart-symbol-option-name { min-width: 0; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Legend chrome */
+.chart-legend-tools { display: flex; gap: 2px; margin: 2px 0 2px -4px; }
+.chart-legend-toggle { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 500; cursor: pointer; pointer-events: auto; }
+.chart-legend-toggle:hover, .chart-legend-toggle[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); }
+.chart-desk-toolbar > .chart-shortcuts-button { width: 30px; padding: 0; justify-content: center; color: var(--muted); }

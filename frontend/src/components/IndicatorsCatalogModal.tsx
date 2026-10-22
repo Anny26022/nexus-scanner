@@ -4,6 +4,7 @@ import type { ChartStudies } from '../chart/studies';
 import type { ChartAppearance } from '../chart/ChartEngine';
 import type { EmaLine, Interval } from '../chart/model';
 import { ChartDialog } from './ChartDialog';
+import { EXTRA_STUDIES, studyParams, studyTitle, type ExtraStudies, type ExtraStudyDef } from '../chart/extraStudies';
 
 export interface IndicatorsCatalogModalProps {
   studies: ChartStudies;
@@ -14,11 +15,14 @@ export interface IndicatorsCatalogModalProps {
   onApplyEmaLines: (next: EmaLine[]) => void;
   onApplyAppearance?: (next: Partial<ChartAppearance>) => void;
   onOpenIndicatorSettings: (indicatorId: string) => void;
+  extras?: ExtraStudies;
+  onApplyExtras?: (next: ExtraStudies) => void;
   onClose: () => void;
 }
 
 interface CatalogItem {
-  id: keyof ChartStudies | 'ema' | 'volume';
+  id: keyof ChartStudies | 'ema' | 'volume' | ExtraStudyDef['id'];
+  extra?: ExtraStudyDef;
   name: string;
   shortName: string;
   category: 'Trend' | 'Oscillators' | 'Volatility' | 'Volume';
@@ -36,6 +40,8 @@ export function IndicatorsCatalogModal({
   onApplyEmaLines,
   onApplyAppearance,
   onOpenIndicatorSettings,
+  extras = {},
+  onApplyExtras,
   onClose,
 }: IndicatorsCatalogModalProps) {
   const [search, setSearch] = useState('');
@@ -125,6 +131,18 @@ export function IndicatorsCatalogModal({
     },
   ];
 
+  const extraItems: CatalogItem[] = EXTRA_STUDIES.map(def => ({
+    id: def.id,
+    extra: def,
+    name: def.label,
+    shortName: studyTitle(def, studyParams(def, extras[def.id])),
+    category: def.category === 'Momentum' ? 'Oscillators' : def.category === 'Relative strength' ? 'Trend' : def.category,
+    type: def.pane === 'price' ? 'Overlay' : 'Sub-pane',
+    ariaLabel: def.label,
+  }));
+  catalog.splice(1, 0, ...extraItems.filter(item => item.id === 'rs'));
+  catalog.push(...extraItems.filter(item => item.id !== 'rs'));
+
   const filtered = useMemo(() => {
     return catalog.filter(item => {
       if (category !== 'All' && item.category !== category) return false;
@@ -138,10 +156,12 @@ export function IndicatorsCatalogModal({
       }
       return true;
     });
-  }, [category, search]);
+  }, [category, search, extras]);
 
   const handleToggle = (item: CatalogItem, checked: boolean) => {
-    if (item.id === 'ema') {
+    if (item.extra) {
+      onApplyExtras?.({...extras, [item.extra.id]: {...extras[item.extra.id], enabled: checked}});
+    } else if (item.id === 'ema') {
       if (checked) {
         const hasEnabled = emaLines.some(l => l.enabled);
         onApplyEmaLines(
@@ -206,8 +226,9 @@ export function IndicatorsCatalogModal({
       <div className="catalog-list-scroll">
         <div className="catalog-list">
           {filtered.map(item => {
-            const isChecked =
-              item.id === 'ema'
+            const isChecked = item.extra
+              ? !!extras[item.extra.id]?.enabled
+              : item.id === 'ema'
                 ? emaLines.some(l => l.enabled)
                 : item.id === 'volume'
                 ? !!appearance.volume
@@ -223,6 +244,7 @@ export function IndicatorsCatalogModal({
                     <span className="catalog-item-name">{item.name}</span>
                     <span className="catalog-item-short">{item.shortName}</span>
                   </div>
+                  {item.extra && <span className="catalog-item-description">{item.extra.description}</span>}
                   <span className="catalog-type-tag">{item.type}</span>
                 </div>
 

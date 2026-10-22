@@ -15,12 +15,13 @@ import type { StockRow } from '../types/screener';
 type QuickChartsViewProps = {
   rows: StockRow[];
   revision?: string;
+  sessionDate?: string;
   matchCount?: number;
   matchedSymbols?: string[];
   loadRows?: () => Promise<StockRow[]>;
   busy: boolean;
   firstRank?: number;
-  onOpenFullChart?: (symbol: string, revision?: string) => void;
+  onOpenFullChart?: (symbol: string, revision?: string, sessionDate?: string) => void;
 };
 
 const price = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
@@ -88,15 +89,15 @@ function MiniChart({ candles, symbol, onEngineChange }: { candles: readonly Cand
   return <div ref={hostRef} className="quick-chart-canvas" aria-label="Interactive chart using the saved chart style, indicators, and drawings. Drag to pan; scroll or pinch to zoom, and select drawings to edit them." role="group" tabIndex={0} />;
 }
 
-function QuickChartCard({ row, revision, rank, observe, onOpenFullChart }: { row: StockRow; revision?: string; rank: number; observe: ObserveCard; onOpenFullChart?: (symbol: string, revision?: string) => void }) {
+function QuickChartCard({ row, revision, sessionDate, rank, observe, onOpenFullChart }: { row: StockRow; revision?: string; sessionDate?: string; rank: number; observe: ObserveCard; onOpenFullChart?: (symbol: string, revision?: string, sessionDate?: string) => void }) {
   const [activated, setActivated] = useState(false);
   const attach = useCallback((node: HTMLElement | null) => observe(node, () => setActivated(true)), [observe]);
   const engineRef = useRef<ChartEngine | null>(null);
   const onEngineChange = useCallback((engine: ChartEngine | null) => { engineRef.current = engine; }, []);
   const chart = useQuery({
-    queryKey: ['quick-chart', revision, row.symbol],
+    queryKey: ['quick-chart', revision, row.symbol, sessionDate],
     queryFn: async () => {
-      const snapshot = await screenerApi.getChart(row.symbol, revision);
+      const snapshot = await screenerApi.getChart(row.symbol, revision, sessionDate);
       return { ...snapshot, candles: validateCandles(snapshot.candles) };
     },
     enabled: activated && Boolean(revision),
@@ -112,7 +113,7 @@ function QuickChartCard({ row, revision, rank, observe, onOpenFullChart }: { row
       ...grid,
       tiles: [{ ...grid.tiles[0], symbol: row.symbol }, ...grid.tiles.slice(1)],
     });
-    onOpenFullChart(row.symbol, revision);
+    onOpenFullChart(row.symbol, revision, sessionDate);
   };
   return <article ref={attach} className="quick-chart-card" aria-label={`${row.symbol} quick chart`}>
     <header className="quick-chart-header">
@@ -140,7 +141,7 @@ function QuickChartCard({ row, revision, rank, observe, onOpenFullChart }: { row
         <div className="quick-chart-skeleton" aria-label="Loading chart" />
       ) : chart.data?.candles.length ? (
         <>
-          <MiniChart key={`${row.symbol}-${revision}`} candles={chart.data.candles} symbol={row.symbol} onEngineChange={onEngineChange} />
+          <MiniChart key={`${row.symbol}-${revision}-${sessionDate}`} candles={chart.data.candles} symbol={row.symbol} onEngineChange={onEngineChange} />
           <div className="chart-actions-zone" role="group" aria-label={`${row.symbol} chart controls`}>
             <div className="chart-actions">
               <button type="button" className="button button-icon" aria-label="Zoom in" title="Zoom in (+)" onClick={() => engineRef.current?.zoom(.8)}><Plus size={15}/></button>
@@ -166,18 +167,18 @@ function QuickChartCard({ row, revision, rank, observe, onOpenFullChart }: { row
   </article>;
 }
 
-export function QuickChartsView({ rows, revision, matchCount = rows.length, matchedSymbols, loadRows, busy, firstRank = 1, onOpenFullChart }: QuickChartsViewProps) {
+export function QuickChartsView({ rows, revision, sessionDate, matchCount = rows.length, matchedSymbols, loadRows, busy, firstRank = 1, onOpenFullChart }: QuickChartsViewProps) {
   const observe = useNearViewportWatcher();
   const fullResultKey = matchedSymbols?.length === matchCount ? matchedSymbols.join(',') : rows.map(row => row.symbol).join(',');
   const allRows = useQuery({
-    queryKey: ['quick-chart-rows', revision, matchCount, fullResultKey],
+    queryKey: ['quick-chart-rows', revision, matchCount, fullResultKey, sessionDate],
     queryFn: () => loadRows!(),
     enabled: Boolean(loadRows && revision && matchCount > rows.length),
     staleTime: Infinity,
     retry: 1,
   });
   const chartRows = allRows.data ?? rows;
-  const gridWindow = useGridWindow(chartRows, `${revision}-${fullResultKey}`);
+  const gridWindow = useGridWindow(chartRows, `${revision}-${sessionDate}-${fullResultKey}`);
   const baseRank = allRows.data ? 1 : firstRank;
 
   if ((busy || allRows.isPending) && !chartRows.length) return <div className="quick-charts-grid" aria-busy="true">{Array.from({ length: 6 }, (_, index) => <div className="quick-chart-card quick-chart-card-skeleton" key={index} />)}</div>;
@@ -191,6 +192,7 @@ export function QuickChartsView({ rows, revision, matchCount = rows.length, matc
           key={row.symbol}
           row={row}
           revision={revision}
+          sessionDate={sessionDate}
           rank={baseRank + gridWindow.firstIndex + index}
           observe={observe}
           onOpenFullChart={onOpenFullChart}

@@ -33,7 +33,7 @@ interface ResultsTableProps {
   pageSize?: number;
   onSortChange: (field: string, direction: 'asc' | 'desc') => void;
   currentSort?: { field: string; direction: 'asc' | 'desc' };
-  onOpenFullChart?: (symbol: string, revision?: string) => void;
+  onOpenFullChart?: (symbol: string, revision?: string, sessionDate?: string) => void;
   resultView?: 'table' | 'charts';
   onResultViewChange?: (view: 'table' | 'charts') => void;
 }
@@ -250,7 +250,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
     </Dialog>}
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
     {chartsMounted && !isError && <div style={{display: resultView === 'charts' ? 'contents' : 'none'}}>
-      <QuickChartsView rows={rows} revision={data?.immutableRevision} matchCount={data?.matchCount} matchedSymbols={data?.matchedSymbols} loadRows={loadExportRows} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} />
+      <QuickChartsView rows={rows} revision={data?.immutableRevision} sessionDate={data?.resolvedSession?.date} matchCount={data?.matchCount} matchedSymbols={data?.matchedSymbols} loadRows={loadExportRows} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} />
     </div>}
     <div className="table-viewport" aria-busy={busy} style={{display: resultView === 'table' || isError ? undefined : 'none'}}>
       <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>

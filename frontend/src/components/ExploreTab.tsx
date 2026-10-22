@@ -30,7 +30,7 @@ interface ExploreTabProps {
   onRefreshRevision: () => Promise<string | undefined>;
   availableSessions?: Array<{ date: string; label: string; isHistorical: boolean; revision: string }>;
   onSelectSession?: (date: string) => void;
-  onOpenFullChart?: (symbol: string, revision?: string) => void;
+  onOpenFullChart?: (symbol: string, revision?: string, sessionDate?: string) => void;
 }
 
 const DEFAULT_CONDITIONS: Record<string, ActiveCondition> = {

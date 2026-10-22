@@ -338,7 +338,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       <div className="chart-ranges" role="group" aria-label="Visible date range">{ranges.map(([months,label])=><button type="button" key={label} aria-pressed={range===months} onClick={()=>{setRange(months);rangeChoice.current=months;engine.current?.setRange(months);persist({range:months,view:undefined});}}>{label}</button>)}</div>
       <select className="chart-range-select" aria-label="Visible date range" value={range===undefined?'custom':range===null?'all':range} onChange={event=>{const months=event.target.value==='all'?null:Number(event.target.value);setRange(months);rangeChoice.current=months;engine.current?.setRange(months);persist({range:months,view:undefined});}}><option value="custom" disabled>Range</option>{ranges.map(([months,label])=><option key={label} value={months??'all'}>{label}</option>)}</select>
       <button type="button" className="chart-latest" onClick={()=>engine.current?.latest()}>Latest</button>
-      {comparison && <ChartComparison {...comparison} revision={revision} interval={interval} onData={onComparison}/>}
+      {comparison && <ChartComparison {...comparison} revision={revision} sessionDate={sessionDate} interval={interval} onData={onComparison}/>}
     </footer>
     {indicatorsOpen && (
       <IndicatorsCatalogModal
@@ -385,7 +385,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   </>;
 }
 
-export default function ChartsTab({datasetRevision}:{datasetRevision?:string}) {
+export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision?:string;sessionDate?:string}) {
   const [grid,setGrid]=useState(()=>loadGrid());
   const gridChoice=useRef(grid);
   const [sync]=useState(()=>Object.assign(new ChartSync(),{enabled:true,dates:grid.links.dates,crosshairs:grid.links.crosshair}));
@@ -460,6 +460,7 @@ export default function ChartsTab({datasetRevision}:{datasetRevision?:string}) {
             <ChartTile
               key={`${generation}:${index}:${tile.symbol}:${tile.interval}`}
               datasetRevision={datasetRevision}
+              sessionDate={sessionDate}
               tileId={tileId}
               initial={tile}
               onChange={updateTile}
@@ -475,6 +476,7 @@ export default function ChartsTab({datasetRevision}:{datasetRevision?:string}) {
       </div>
       <WatchlistDock
         datasetRevision={datasetRevision}
+        sessionDate={sessionDate}
         activeSymbol={grid.tiles[Number(activeExpandedTile ?? '0')]?.symbol}
         onSelectSymbol={selectWatchlistSymbol}
       />
@@ -569,6 +571,7 @@ export default function ChartsTab({datasetRevision}:{datasetRevision?:string}) {
 
 function ChartTile({
   datasetRevision,
+  sessionDate,
   tileId,
   initial,
   onChange,
@@ -580,6 +583,7 @@ function ChartTile({
   layoutControls,
 }: {
   datasetRevision?: string;
+  sessionDate?: string;
   tileId: string;
   initial: TileSettings;
   onChange: (tileId: string, settings: TileSettings) => void;
@@ -596,18 +600,18 @@ function ChartTile({
   const book=savedDrawingBook(symbol);
   const changeInterval=(next:Interval)=>onChange(tileId,{symbol,interval:next});
   const metadata=useQuery({
-    queryKey:['chart-metrics',datasetRevision,symbol],
+    queryKey:['chart-metrics',datasetRevision,symbol,sessionDate],
     queryFn:async()=>{
-      const result=await screenerApi.runScreen({datasetRevision,universe:'custom',customSymbols:[symbol],asOfDate:'',page:1,pageSize:1,expressionTree:{type:'group',operator:'all',children:[]}});
+      const result=await screenerApi.runScreen({datasetRevision,universe:'custom',customSymbols:[symbol],asOfDate:sessionDate ?? '',page:1,pageSize:1,expressionTree:{type:'group',operator:'all',children:[]}});
       if (result.immutableRevision!==datasetRevision) throw new Error('Chart metrics revision mismatch');
       return result.rows.find(row=>row.symbol===symbol)??null;
     },
     enabled:Boolean(datasetRevision),retry:false,staleTime:Infinity,
   });
   const chart = useQuery({
-    queryKey: ['chart', datasetRevision, symbol],
+    queryKey: ['chart', datasetRevision, symbol, sessionDate],
     queryFn: async () => {
-      const snapshot = await screenerApi.getChart(symbol, datasetRevision);
+      const snapshot = await screenerApi.getChart(symbol, datasetRevision, sessionDate);
       return {...snapshot, candles: validateCandles(snapshot.candles)};
     },
     enabled: Boolean(datasetRevision),
@@ -660,7 +664,7 @@ function ChartTile({
     {chart.isError ? <div role="alert" className="chart-status"><p>{chart.error.message}</p><button type="button" className="button button-ghost" onClick={() => void chart.refetch()}>Retry</button></div>
       : chart.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
       : !candles.length ? <p className="chart-status" role="status">No published candles for {symbol}.</p>
-      : <ChartScene key={`${datasetRevision}:${symbol}:${interval}`} candles={candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
+      : <ChartScene key={`${datasetRevision}:${sessionDate}:${symbol}:${interval}`} candles={candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
           firstDate={chart.data.candles[0].date} lastDate={chart.data.candles.at(-1)!.date} metrics={metadata.data??undefined} sessionDate={chart.data.asOfDate} events={events} revision={datasetRevision!} interval={interval} tileId={tileId} sync={sync}/>}
   </section>;
 }

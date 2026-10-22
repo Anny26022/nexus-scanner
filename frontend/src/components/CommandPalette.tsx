@@ -136,12 +136,12 @@ export function CommandPalette({onClose, onNavigate, onLoadScreen, onOpenSymbol,
                     ref={element => { if (isActive) element?.scrollIntoView({block: 'nearest'}); }}
                     onMouseMove={() => setActive(index)}
                     onClick={() => choose(item)}
-                    className={`flex cursor-pointer items-center gap-3 rounded-(--radius-md) px-3 py-2 ${isActive ? 'bg-accent text-(--on-accent)' : 'text-text'}`}
+                    className={`flex cursor-pointer items-center gap-3 rounded-(--radius-md) px-3 py-2 ${isActive ? 'bg-surface-hover text-text' : 'text-text'}`}
                   >
-                    <span className={isActive ? 'text-(--on-accent)' : 'text-muted'} aria-hidden="true">{item.icon}</span>
+                    <span className={isActive ? 'text-text' : 'text-muted'} aria-hidden="true">{item.icon}</span>
                     <span className="truncate text-[13.5px] font-medium">{item.label}</span>
-                    {item.hint && <span className={`truncate text-[12.5px] ${isActive ? 'text-(--on-accent)/80' : 'text-muted'}`}>{item.hint}</span>}
-                    {isActive && <CornerDownLeft size={13} className="ml-auto shrink-0" aria-hidden="true" />}
+                    {item.hint && <span className={`truncate text-[12.5px] text-muted`}>{item.hint}</span>}
+                    {isActive && <CornerDownLeft size={13} className="ml-auto shrink-0 text-muted" aria-hidden="true" />}
                   </div>
                 </div>;
               })}

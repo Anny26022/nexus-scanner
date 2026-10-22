@@ -44,7 +44,7 @@ it('rejects unknown fields and old releases instead of dropping the condition', 
   expect(supportsSnapshotCondition(condition('TV_PERFORMANCE','unknown'))).toBe(false);
   expect(() => screenSnapshot({...data,tradingViewMetricsVersion:undefined},{...request,
     expressionTree:{type:'condition',condition:condition('TV_PERFORMANCE','market.rvol10')}}))
-    .toThrow('These filters need a newer dataset');
+    .toThrow(`The ${data.asOfDate} snapshot has no archived TradingView values for: Relative volume (10d, ×)`);
 });
 
 it('only offers metrics actually populated for the loaded release session', async () => {

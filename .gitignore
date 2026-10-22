@@ -77,6 +77,7 @@ frontend/public/data/revisions/*/charts/
 
 # Shared immutable browser objects are delivered through R2.
 frontend/public/data/objects/
+frontend/public/data/snapshots/
 
 # Keep the weekly Tijori cache and summary; omit local intermediates.
 reference/tijori/*

@@ -3,6 +3,8 @@
 ## 1. Overview
 Nexus Scanner supports point-in-time historical screening up to 5 years into the past (e.g., 2021–2026). This document details how historical daily snapshots are accumulated, what data is available from official exchange sources vs. what is ephemeral, and how the production engine operates.
 
+Daily publication uploads and verifies one immutable scanner archive per session at `snapshots/YYYY-MM-DD.json.gz`, then registers it in `frontend/public/data/sessions.json`. Different dates have separate files; reruns preserve the original archived date and revision while the latest release can still advance. Daily/weekly refreshes and backfills share a workflow queue to avoid losing session entries.
+
 ---
 
 ## 2. Point-in-Time Data Feasibility Matrix

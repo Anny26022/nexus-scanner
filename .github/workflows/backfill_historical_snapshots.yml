@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: backfill-historical-snapshots
+  group: daily-data-refresh
   cancel-in-progress: false
 
 jobs:

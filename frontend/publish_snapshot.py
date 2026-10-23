@@ -17,6 +17,7 @@ from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
 from session_history import archive_daily_snapshot, register_session
+from revision_retention import retain_revisions
 import price_band_history
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
@@ -423,8 +424,15 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     manifest['universeClassificationUrl'] = f'/data/revisions/{revision}/universe-classification.json'
     started = elapsed('serialization and compression', started)
     session_record = archive_daily_snapshot(output, manifest)
+    current_path = output / 'current.json'
+    previous_revision = json.loads(current_path.read_text()).get('revision') if current_path.exists() else None
     manifest = complete_release(chart_root, output, manifest)
     register_session(output / 'sessions.json', session_record)
+    # Only once the new release is live: keep it and the one tabs may still be on.
+    if previous_revision != manifest['revision']:
+        removed = retain_revisions(output, manifest['revision'], previous_revision)
+        if removed:
+            print(f'Removed {len(removed)} superseded scanner revisions from the served release', flush=True)
     elapsed('release completion', started)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest

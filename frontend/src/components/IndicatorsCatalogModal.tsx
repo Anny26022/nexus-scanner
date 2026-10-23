@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, X, Settings } from 'lucide-react';
+import { Search, X, Settings, Check } from 'lucide-react';
 import type { ChartStudies } from '../chart/studies';
 import type { ChartAppearance } from '../chart/ChartEngine';
 import type { EmaLine, Interval } from '../chart/model';
@@ -60,7 +60,8 @@ export function IndicatorsCatalogModal({
   onClose,
 }: IndicatorsCatalogModalProps) {
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState<'All' | 'Trend' | 'Oscillators' | 'Volatility' | 'Volume'>('All');
+  const [category, setCategory] = useState<'All' | 'Active' | typeof CATEGORIES[number]>('All');
+  const [hovered, setHovered] = useState<CatalogItem | null>(null);
 
   const catalog: CatalogItem[] = [
     {
@@ -160,9 +161,19 @@ export function IndicatorsCatalogModal({
   catalog.push(...extraItems.filter(item => item.id !== 'rs'));
   for (const item of catalog) item.description ??= DESCRIPTIONS[item.id];
 
+  const isOn = (item: CatalogItem) => item.extra
+    ? !!extras[item.extra.id]?.enabled
+    : item.id === 'ema'
+      ? emaLines.some(l => l.enabled)
+      : item.id === 'volume'
+      ? !!appearance.volume
+      : !!studies[item.id as keyof ChartStudies];
+  const activeCount = catalog.filter(isOn).length;
+
   const filtered = useMemo(() => {
     return catalog.filter(item => {
-      if (category !== 'All' && item.category !== category) return false;
+      if (category === 'Active' && !isOn(item)) return false;
+      if (category !== 'All' && category !== 'Active' && item.category !== category) return false;
       if (search.trim()) {
         const query = search.toLowerCase();
         return (
@@ -173,7 +184,7 @@ export function IndicatorsCatalogModal({
       }
       return true;
     });
-  }, [category, search, extras]);
+  }, [category, search, extras, studies, emaLines, appearance]);
 
   const handleToggle = (item: CatalogItem, checked: boolean) => {
     if (item.extra) {
@@ -199,102 +210,63 @@ export function IndicatorsCatalogModal({
 
   return (
     <ChartDialog title="Indicators" className="indicators-catalog-dialog" onClose={onClose}>
-      <div className="catalog-toolbar">
-        <div className="catalog-search-wrap">
-          <Search size={15} className="catalog-search-icon" aria-hidden="true" />
-          <input
-            type="search"
-            placeholder="Search indicators"
-            aria-label="Search indicators"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="catalog-search-input"
-            autoFocus
-          />
-          {search && (
-            <button type="button" className="catalog-search-clear" onClick={() => setSearch('')} aria-label="Clear search" title="Clear search">
-              <X size={13} />
-            </button>
-          )}
-        </div>
-        <div className="catalog-tabs" role="tablist" aria-label="Indicator category">
-          {(['All', ...CATEGORIES] as const).map(cat => (
-            <button
-              key={cat}
-              type="button"
-              role="tab"
-              aria-selected={category === cat}
-              className={`catalog-tab${category === cat ? ' active' : ''}`}
-              onClick={() => setCategory(cat)}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+      <div className="ic-search">
+        <Search size={15} className="ic-search-icon" aria-hidden="true" />
+        <input
+          type="search"
+          placeholder="Search indicators"
+          aria-label="Search indicators"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="ic-search-input"
+          autoFocus
+        />
+        {search && <button type="button" className="ic-search-clear" onClick={() => setSearch('')} aria-label="Clear search" title="Clear search"><X size={12} /></button>}
       </div>
 
-      <div className="catalog-list-scroll">
-        {filtered.length === 0 && <p className="catalog-empty">No indicators match “{search}”.</p>}
-        {CATEGORIES.map(group => {
-          const rows = filtered.filter(item => item.category === group);
-          if (!rows.length) return null;
-          return <section key={group} className="catalog-group" aria-label={group}>
-            {category === 'All' && <h3 className="catalog-group-title">{group}</h3>}
-            <div className="catalog-list">
+      <div className="ic-body">
+        <nav className="ic-nav" role="tablist" aria-label="Indicator category" aria-orientation="vertical">
+          {(['All', 'Active', ...CATEGORIES] as const).map(cat => {
+            const count = cat === 'All' ? catalog.length : cat === 'Active' ? activeCount : catalog.filter(item => item.category === cat).length;
+            return <button key={cat} type="button" role="tab" aria-label={cat} aria-selected={category === cat} className={`ic-nav-btn${category === cat ? ' active' : ''}`} onClick={() => setCategory(cat)}>
+              <span>{cat}</span><span className="ic-nav-count">{count}</span>
+            </button>;
+          })}
+        </nav>
+
+        <div className="ic-list" onMouseLeave={() => setHovered(null)}>
+          {filtered.length === 0 && <p className="ic-empty">{category === 'Active' && !search ? 'No indicators on this chart yet.' : `No indicators match “${search}”.`}</p>}
+          {CATEGORIES.map(group => {
+            const rows = filtered.filter(item => item.category === group);
+            if (!rows.length) return null;
+            return <section key={group} aria-label={group}>
+              {(category === 'All' || category === 'Active') && <h3 className="ic-group">{group}</h3>}
               {rows.map(item => {
-                const isChecked = item.extra
-                  ? !!extras[item.extra.id]?.enabled
-                  : item.id === 'ema'
-                    ? emaLines.some(l => l.enabled)
-                    : item.id === 'volume'
-                    ? !!appearance.volume
-                    : !!studies[item.id as keyof ChartStudies];
-                return (
-                  <div key={item.id} className={`catalog-item-row${isChecked ? ' is-active' : ''}${item.disabled ? ' is-disabled' : ''}`}>
-                    <label className="catalog-item-left">
-                      <span className="catalog-item-title-group">
-                        <span className="catalog-item-name">{item.name}</span>
-                        <span className="catalog-item-short">{item.shortName}</span>
-                        <span className="catalog-type-tag">{item.type === 'Overlay' ? 'On price' : 'Own pane'}</span>
-                      </span>
-                      {item.description && <span className="catalog-item-description" title={item.description}>{item.description}</span>}
-                      <span className="catalog-switch">
-                        <input
-                          type="checkbox"
-                          role="switch"
-                          aria-label={item.ariaLabel}
-                          checked={isChecked}
-                          disabled={item.disabled}
-                          onChange={e => handleToggle(item, e.target.checked)}
-                        />
-                        <span className="catalog-switch-slider" aria-hidden="true" />
-                      </span>
-                    </label>
-                    <button
-                      type="button"
-                      className="catalog-item-settings-btn"
-                      aria-label={`Customize ${item.name}`}
-                      title={`Customize ${item.name}`}
-                      onClick={() => onOpenIndicatorSettings(item.id)}
-                    >
-                      <Settings size={14} />
-                    </button>
-                  </div>
-                );
+                const on = isOn(item);
+                return <div key={item.id} className={`ic-row${on ? ' is-on' : ''}${item.disabled ? ' is-disabled' : ''}`}
+                  onMouseEnter={() => setHovered(item)} onFocus={() => setHovered(item)}>
+                  <label className="ic-main" title={item.description}>
+                    <input type="checkbox" role="switch" aria-label={item.ariaLabel} checked={on} disabled={item.disabled}
+                      onChange={e => handleToggle(item, e.target.checked)} />
+                    <span className="ic-check" aria-hidden="true"><Check size={11} strokeWidth={3} /></span>
+                    <span className="ic-name">{item.name}</span>
+                    <span className="ic-short">{item.shortName}</span>
+                  </label>
+                  <span className="ic-kind">{item.type === 'Overlay' ? 'Price' : 'Pane'}</span>
+                  <button type="button" className="ic-settings" aria-label={`Customize ${item.name}`} title={`Customize ${item.name}`}
+                    onClick={() => onOpenIndicatorSettings(item.id)}>
+                    <Settings size={13} />
+                  </button>
+                </div>;
               })}
-            </div>
-          </section>;
-        })}
+            </section>;
+          })}
+        </div>
       </div>
 
-      <footer className="catalog-footer">
-        <button
-          type="button"
-          className="catalog-btn-done"
-          onClick={onClose}
-        >
-          Done
-        </button>
+      <footer className="ic-footer" aria-live="polite">
+        {hovered ? <><b>{hovered.name}</b><span>{hovered.description}</span></>
+          : <span>{activeCount} active · click a row to add or remove it</span>}
       </footer>
     </ChartDialog>
   );

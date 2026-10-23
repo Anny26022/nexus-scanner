@@ -112,7 +112,7 @@ it('renders Volume as an indicator in catalog, supports category tab, toggling, 
 
   // Volume tab filter
   fireEvent.click(screen.getByRole('tab', { name: 'Volume' }));
-  expect(screen.getByText('Volume', { selector: '.catalog-item-name' })).toBeInTheDocument();
+  expect(screen.getByText('Volume', { selector: '.ic-name' })).toBeInTheDocument();
   expect(screen.getByText('Vol')).toBeInTheDocument();
 
   // Volume is checked

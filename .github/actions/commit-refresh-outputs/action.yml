@@ -55,6 +55,9 @@ runs:
         git add reference/index-constituent-mappings.json.gz
         git add reference/index-constituent-mappings.manifest.json
         git add frontend/public/data/current.json frontend/public/data/revisions frontend/public/data/sessions.json frontend/public/data/price-band-history.json
+        if [ -f frontend/public/data/earningspulse/index.json ]; then
+          git add frontend/public/data/earningspulse/index.json
+        fi
         if [ "$WEEKLY_REFRESH" = "true" ]; then
           git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
           git add frontend/public/data/tijori/current.json frontend/public/data/tijori/revisions

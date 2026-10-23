@@ -85,3 +85,6 @@ reference/tijori/*
 !reference/tijori/summary.json
 # Exclude interrupted atomic publication writes.
 frontend/public/data/tijori/**/*.tmp
+
+# Optional source diagnostics are uploaded as Actions artifacts.
+frontend/earningspulse-refresh-report.json

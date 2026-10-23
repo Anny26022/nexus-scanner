@@ -3,6 +3,7 @@ import { Search, X, Settings, Check } from 'lucide-react';
 import type { ChartStudies } from '../chart/studies';
 import type { ChartAppearance } from '../chart/ChartEngine';
 import type { EmaLine, Interval } from '../chart/model';
+import type { FundamentalsConfig } from '../chart/fundamentals';
 import { ChartDialog } from './ChartDialog';
 import { EXTRA_STUDIES, studyParams, studyTitle, type ExtraStudies, type ExtraStudyDef } from '../chart/extraStudies';
 
@@ -15,24 +16,26 @@ export interface IndicatorsCatalogModalProps {
   onApplyEmaLines: (next: EmaLine[]) => void;
   onApplyAppearance?: (next: Partial<ChartAppearance>) => void;
   onOpenIndicatorSettings: (indicatorId: string) => void;
+  fundamentals?: FundamentalsConfig;
+  onApplyFundamentals?: (next: FundamentalsConfig) => void;
   extras?: ExtraStudies;
   onApplyExtras?: (next: ExtraStudies) => void;
   onClose: () => void;
 }
 
 interface CatalogItem {
-  id: keyof ChartStudies | 'ema' | 'volume' | ExtraStudyDef['id'];
+  id: keyof ChartStudies | 'ema' | 'volume' | 'fundamentals' | ExtraStudyDef['id'];
   extra?: ExtraStudyDef;
   name: string;
   shortName: string;
-  category: 'Trend' | 'Oscillators' | 'Volatility' | 'Volume';
+  category: 'Trend' | 'Oscillators' | 'Volatility' | 'Volume' | 'Fundamentals';
   type: 'Overlay' | 'Sub-pane';
   ariaLabel: string;
   description?: string;
   disabled?: boolean;
 }
 
-const CATEGORIES = ['Trend', 'Oscillators', 'Volatility', 'Volume'] as const;
+const CATEGORIES = ['Trend', 'Oscillators', 'Volatility', 'Volume', 'Fundamentals'] as const;
 const DESCRIPTIONS: Record<string, string> = {
   ema: 'Up to six exponential averages that weight recent prices more.',
   sma: 'The plain average of the last 50 closes.',
@@ -55,6 +58,8 @@ export function IndicatorsCatalogModal({
   onApplyEmaLines,
   onApplyAppearance,
   onOpenIndicatorSettings,
+  fundamentals,
+  onApplyFundamentals,
   extras = {},
   onApplyExtras,
   onClose,
@@ -159,10 +164,13 @@ export function IndicatorsCatalogModal({
   }));
   catalog.splice(1, 0, ...extraItems.filter(item => item.id === 'rs'));
   catalog.push(...extraItems.filter(item => item.id !== 'rs'));
+  catalog.push({id: 'fundamentals', name: 'Earnings & Price Bands', shortName: 'QE + Band', category: 'Fundamentals', type: 'Overlay',
+    ariaLabel: 'Earnings & Price Bands', description: 'Quarterly and annual results, EPS/PAT growth, surveillance and price-band guides.'});
   for (const item of catalog) item.description ??= DESCRIPTIONS[item.id];
 
   const isOn = (item: CatalogItem) => item.extra
     ? !!extras[item.extra.id]?.enabled
+    : item.id === 'fundamentals' ? !!fundamentals?.enabled
     : item.id === 'ema'
       ? emaLines.some(l => l.enabled)
       : item.id === 'volume'
@@ -184,10 +192,12 @@ export function IndicatorsCatalogModal({
       }
       return true;
     });
-  }, [category, search, extras, studies, emaLines, appearance]);
+  }, [category, search, extras, studies, emaLines, appearance, fundamentals]);
 
   const handleToggle = (item: CatalogItem, checked: boolean) => {
-    if (item.extra) {
+    if (item.id === 'fundamentals') {
+      onApplyFundamentals?.({...fundamentals, enabled: checked});
+    } else if (item.extra) {
       onApplyExtras?.({...extras, [item.extra.id]: {...extras[item.extra.id], enabled: checked}});
     } else if (item.id === 'ema') {
       if (checked) {

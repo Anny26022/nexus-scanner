@@ -24,6 +24,8 @@ import { ChartStylePicker } from './ChartStylePicker';
 import { PricePaneLegend, SubPaneLegends } from './PaneOverlayLegends';
 import { computeIndicatorSeries, updateLiveIndicatorDom } from '../chart/indicatorValues';
 import { type StudyConfigs, defaultStudyConfigs, isIndicatorVisibleForInterval } from '../chart/studyConfigs';
+import { FundamentalsIndicator, FundamentalsSettingsDialog } from './FundamentalsIndicator';
+import { priceBandGuides } from '../chart/fundamentals';
 import { IndicatorsCatalogModal } from './IndicatorsCatalogModal';
 import { IndicatorSettingsModal } from './IndicatorSettingsModal';
 import { ExtraStudySettingsDialog } from './ExtraStudySettingsDialog';
@@ -112,11 +114,12 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     const hide = !allHidden;
     setAllHidden(hide);
     const ids = [...Object.entries(studyChoice.current).filter(([, on]) => on).map(([id]) => id),
-      ...Object.entries(studyConfigsChoice.current.extras ?? {}).filter(([, state]) => state?.enabled).map(([id]) => id), 'volume'];
+      ...Object.entries(studyConfigsChoice.current.extras ?? {}).filter(([, state]) => state?.enabled).map(([id]) => id), 'fundamentals', 'volume'];
     hiddenStudiesChoice.current = {...hiddenStudiesChoice.current, ...Object.fromEntries(ids.map(id => [id, hide]))};
     setHiddenStudies(hiddenStudiesChoice.current);
     for (const id of ids) engine.current?.setStudyVisibility(id, !hide);
     engine.current?.setEmaLines(hide ? [] : emaChoice.current);
+    if (engine.current) updateBandGuides(engine.current);
   };
   const toggleStudyVisibility = (id: string) => {
     const hidden = !hiddenStudiesChoice.current[id];
@@ -145,6 +148,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     studyConfigsChoice.current = next;
     setStudyConfigs(next);
     engine.current?.setStudyConfigs?.(next);
+    if (engine.current) updateBandGuides(engine.current);
     engine.current?.setStudies(filterStudiesForInterval(studyChoice.current, next, interval));
     if (engine.current) restoreHiddenStudies(engine.current);
     persist({ studyConfigs: next });
@@ -155,6 +159,11 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const [eventDetails,setEventDetails]=useState<readonly ChartEvent[]|null>(null);
   const [clock]=useState(()=>new ReplayClock(candles.length));
   const replay=useSyncExternalStore(clock.subscribe,clock.getSnapshot,clock.getSnapshot);
+  const updateBandGuides = (chart: ChartEngine) => {
+    const config = studyConfigsChoice.current.fundamentals;
+    chart.setPriceBandGuides?.(config?.enabled && config.guides && !hiddenStudiesChoice.current.fundamentals && clock.getSnapshot().index === null
+      ? priceBandGuides(metrics?.circuitLimit, candles[candles.length - 1].close, metrics?.isFno) : []);
+  };
   const markCustomRange=()=>{
     if(rangeChoice.current===undefined || clock.getSnapshot().index!==null) return;
     rangeChoice.current=undefined;setRange(undefined);persist({range:undefined});
@@ -218,9 +227,10 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       let previousIndex=clock.getSnapshot().index;
       const unsubscribe=clock.subscribe(()=>{
         const index=clock.getSnapshot().index;
-        if (index!==previousIndex) { previousIndex=index; chart.setCandles(revealed());chart.setEvents(events,revealedThrough(candles,index,lastDate)); }
+        if (index!==previousIndex) { previousIndex=index; chart.setCandles(revealed());updateBandGuides(chart);chart.setEvents(events,revealedThrough(candles,index,lastDate)); }
       });
       engine.current = chart;
+      updateBandGuides(chart);
       const normalView=clock.getSnapshot().index===null,epoch=sync.persistenceEpoch;
       const unlink=normalView?sync.connect(chart,host):()=>{};
       let timer:ReturnType<typeof setTimeout>|undefined;
@@ -260,7 +270,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       setError(cause instanceof Error ? cause.message : 'Chart rendering unavailable.');
       return;
     }
-  }, [candles,activeBook,clock,previousByDate,startReplay,cancelSelection,events,lastDate,interval,sync,tileId,benchmark]);
+  }, [candles,activeBook,clock,previousByDate,startReplay,cancelSelection,events,lastDate,interval,sync,tileId,benchmark,metrics]);
   const saveImage=()=>{const image=engine.current?.takeScreenshot();if(image){const link=document.createElement('a');link.download=`${symbol}-chart.png`;link.href=image.toDataURL('image/png');link.click();}};
   const applyAppearance=(change:Partial<typeof appearance>)=>{
     const next={...appearanceChoice.current,...change};
@@ -323,6 +333,10 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           onCloseMenu={() => setDrawingsOpen(false)}
         />
         <DrawingContextToolbar book={activeBook} />
+      {studyConfigs.fundamentals?.enabled && !allHidden && <FundamentalsIndicator
+        symbol={symbol} revision={revision} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}
+        metrics={metrics} config={studyConfigs.fundamentals} onSettings={() => setActiveIndicatorSetting('fundamentals')}
+        onRemove={() => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: {...studyConfigsChoice.current.fundamentals, enabled: false}})}/>}
       <div className="chart-overlay-legend">
         <ChartLegend symbol={symbol} bar={currentBar} previous={previousByDate.get(currentBar.date)} quoteRef={quote}
           status={{logo:appearance.statusLogo!==false,title:appearance.statusTitle!==false,titleMode:appearance.statusTitleMode??'symbol',
@@ -413,6 +427,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           try { localStorage.setItem(EMA_PREFS_KEY, JSON.stringify(lines)); } catch { /* ignore */ }
         }}
         onApplyAppearance={applyAppearance}
+        fundamentals={studyConfigs.fundamentals}
+        onApplyFundamentals={next => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: next})}
         extras={studyConfigs.extras}
         onApplyExtras={applyExtras}
         onOpenIndicatorSettings={id => {
@@ -430,7 +446,9 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         onClose={() => setActiveIndicatorSetting(null)}
       />
     )}
-    {activeIndicatorSetting && !EXTRA_STUDY_BY_ID.has(activeIndicatorSetting as ExtraStudyId) && (
+    {activeIndicatorSetting === 'fundamentals' && <FundamentalsSettingsDialog config={studyConfigs.fundamentals}
+      onApply={next => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: next})} onClose={() => setActiveIndicatorSetting(null)}/>}
+    {activeIndicatorSetting && activeIndicatorSetting !== 'fundamentals' && !EXTRA_STUDY_BY_ID.has(activeIndicatorSetting as ExtraStudyId) && (
       <IndicatorSettingsModal
         indicatorId={activeIndicatorSetting}
         configs={studyConfigs}

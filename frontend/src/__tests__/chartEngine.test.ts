@@ -294,3 +294,26 @@ it('paints every highest-volume record sky blue, including down days',()=>{
   expect(volume.setData.mock.lastCall![0][1].color).toBe('#87ceeb');
   engine.destroy();
 });
+it('replaces band guides cleanly and retains them across chart styles', () => {
+  const {engine}=setup();
+  const price=native.series[0];
+  engine.setPriceBandGuides([105,95]);
+  expect(price.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({price:105,title:'Upper est.'}));
+  engine.setStyle('bars');
+  expect(price.removePriceLine).toHaveBeenCalledTimes(2);
+  const next=native.series.at(-1)!;
+  expect(next.createPriceLine).toHaveBeenCalledTimes(2);
+  engine.setPriceBandGuides([]);
+  expect(next.removePriceLine).toHaveBeenCalledTimes(2);
+  engine.destroy();
+});
+it('earnings indicator markers respect replay cutoffs and visibility', () => {
+  const {engine}=setup();
+  engine.setStudyConfigs({...defaultStudyConfigs(),fundamentals:{enabled:true}});
+  engine.setEvents([{id:'past',date:'2026-10-01',kind:'earnings',title:'Quarterly results'}, {id:'future',date:'2026-10-05',kind:'earnings',title:'Future results'}],'2026-10-02');
+  const events=()=>native.markers.setMarkers.mock.lastCall![0].filter((marker:{id:string})=>marker.id.startsWith('events:'));
+  expect(events()).toEqual([expect.objectContaining({time:'2026-10-01'})]);
+  engine.setStudyVisibility('fundamentals',false);
+  expect(events()).toEqual([]);
+  engine.destroy();
+});

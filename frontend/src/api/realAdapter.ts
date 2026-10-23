@@ -168,6 +168,21 @@ async function snapshotSource(revision?: string, sessionDate?: string): Promise<
 }
 
 class RealDataAdapter {
+  async getFinancialHistory(symbol: string, revision: string) {
+    const release = await releaseFor(revision);
+    if (release.revision !== revision || !release.financialHistoryUrl) throw new Error('Financial history was not published with this snapshot.');
+    const histories = await cached(releaseCache, release.financialHistoryUrl,
+      () => getIpoJson<Record<string, import('../chart/fundamentals').FinancialHistory>>(release.financialHistoryUrl!, 'Financial history'), 3);
+    return histories[symbol] ?? null;
+  }
+  async getEarningsSchedule(symbol: string, revision: string) {
+    const release = await releaseFor(revision);
+    if (release.revision !== revision || !release.earningsCalendarUrl) return null;
+    const calendar = await cached(releaseCache, release.earningsCalendarUrl,
+      () => getIpoJson<{fetched_at: string; events: Array<{symbol: string; scheduled_date: string; date_conflict?: boolean}>}>(release.earningsCalendarUrl!, 'Earnings calendar'), 3);
+    return {observedOn: calendar.fetched_at?.slice(0, 10), events: calendar.events.filter(event => event.symbol === symbol)};
+  }
+
   async getThemeClassification(revision?: string) {
     const release = await releaseFor(revision);
     if (!release.themeClassificationUrl || !release.themeClassificationVersion) throw new Error('Theme classifications are unavailable in this release.');

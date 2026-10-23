@@ -379,6 +379,15 @@ export class ChartEngine {
   private setPriceData() {this.price.setData(this.candles.map((bar,index)=>this.priceData(bar,index)));this.updateHighLowLines();}
   private highLowLines:{series:ISeriesApi<'Candlestick'|'Bar'|'Line'|'Area'|'Baseline'>;lines:IPriceLine[]}|null=null;
   private highLowFrame=0;
+  private bandGuideValues: readonly number[] = [];
+  private bandGuideLines: IPriceLine[] = [];
+  setPriceBandGuides(values: readonly number[]) {
+    for (const line of this.bandGuideLines) this.price.removePriceLine(line);
+    this.bandGuideValues = values;
+    this.bandGuideLines = values.filter(value => Number.isFinite(value) && value > 0).map((price, index) => this.price.createPriceLine({
+      price, title: index === 0 ? 'Upper est.' : 'Lower est.', color: '#8b8b94', lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true,
+    }));
+  }
   /** High and low of the visible bars, drawn as labelled price lines. */
   private updateHighLowLines() {
     if(this.highLowLines) {
@@ -425,11 +434,14 @@ export class ChartEngine {
     const range=this.chart.timeScale().getVisibleLogicalRange();
     for(const line of this.priceLines.values()) this.activeSeries().removePriceLine(line);
     this.priceLines.clear();this.markers.detach();
+    for (const line of this.bandGuideLines) this.price.removePriceLine(line);
+    this.bandGuideLines = [];
     this.activeSeries().detachPrimitive(this.primitive);
     const previous=this.price;
     this.style=style;
     const order=previous.seriesOrder();
     this.price=this.createPriceSeries();this.setPriceData();this.price.setSeriesOrder(order);this.chart.removeSeries(previous);
+    this.setPriceBandGuides(this.bandGuideValues);
     this.activeSeries().attachPrimitive(this.primitive);
     this.markers=createSeriesMarkers(this.activeSeries(),[],{autoScale:false});this.refreshMarkers();
     if(range) this.chart.timeScale().setVisibleLogicalRange(range);
@@ -628,7 +640,8 @@ export class ChartEngine {
   private refreshMarkers() {
     if(!this.markers) return;
     this.markerEvents.clear();
-    for(const event of this.showEvents?this.eventData:[]) {
+    for(const event of this.eventData) {
+      if (!this.showEvents && !(this.studyConfigs.fundamentals?.enabled && this.studyConfigs.fundamentals.earningsMarkers !== false && this.fundamentalsVisible && event.kind === 'earnings')) continue;
       if(event.date>this.eventCutoff||event.date<this.candles[0].date) continue;
       // Events fall on the closed aggregate containing them; daily holidays use the preceding session.
       let low=0,high=this.candles.length;
@@ -650,6 +663,7 @@ export class ChartEngine {
     // Rebuilding here would create and remove every native series twice.
     const previous=this.studyConfigs.volume;
     this.studyConfigs=configs;
+    this.refreshMarkers();
     if(JSON.stringify({...previous,visibility:undefined,separatePane:undefined})!==JSON.stringify({...configs.volume,visibility:undefined,separatePane:undefined})) {
       this.computeVolume();
       this.volumeSeries.setData(this.candles.map((bar,index)=>this.volumeData(bar,index)));
@@ -947,7 +961,9 @@ export class ChartEngine {
     this.updatePaneObservers();
     this.notifyPanesChange();
   }
+  private fundamentalsVisible = true;
   setStudyVisibility(studyId:string,visible:boolean) {
+    if (studyId === 'fundamentals') {this.fundamentalsVisible = visible; this.refreshMarkers(); return;}
     if(studyId==='volume') {
       this.volumeSeries.applyOptions({visible,lastValueVisible:visible&&this.volumeSeries.getPane().paneIndex()!==0});
       return;

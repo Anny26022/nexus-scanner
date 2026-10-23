@@ -23,7 +23,7 @@ export function updateCandleValues(output:HTMLOutputElement,bar:Candle,previous?
     if (key==='change') field.dataset.tone=values.tone;
   }
 }
-export type ChartMetrics=Pick<StockRow,'marketCapCrore'|'freeFloatPct'|'circuitLimit'>&Partial<Pick<StockRow,'name'>>;
+export type ChartMetrics=Pick<StockRow,'marketCapCrore'|'freeFloatPct'|'circuitLimit'>&Partial<Pick<StockRow,'name'|'sector'|'isFno'|'surveillanceAvailable'|'surveillanceAsOfDate'|'isAsm'|'asmStage'|'isGsm'|'gsmStage'>>;
 /** What the status line shows; each maps to a Chart settings → Status line option. */
 export interface StatusLineOptions {
   logo:boolean;title:boolean;titleMode:'symbol'|'description'|'ticker';marketStatus:boolean;ohlc:boolean;change:boolean;volume:boolean;

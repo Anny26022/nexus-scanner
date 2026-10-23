@@ -2219,3 +2219,38 @@
 /* Volume's Avg / RVol / U/D numbers are meaningless without their labels. */
 .chart-pane-val-item:has([data-ind-val^="vol-"]) .chart-pane-val-label { display: inline; }
 .chart-volume-stat { margin-left: 6px; }
+
+/* Native earnings and price-band overlay; chart gestures remain available outside it. */
+.fundamentals-overlay{position:absolute;z-index:26;display:flex;flex-direction:column;max-height:calc(100% - 100px);right:82px;top:72px;max-width:calc(100% - 104px);width:max-content;min-width:min(300px,calc(100% - 104px));background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:8px;box-shadow:0 3px 14px #0000000a;font-size:var(--fundamentals-font,11px);pointer-events:auto;overflow:hidden}
+.fundamentals-overlay.bottom-right{top:auto;bottom:44px}
+.fundamentals-overlay.bottom-left{top:auto;right:auto;left:14px;bottom:44px}
+.fundamentals-overlay>header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:7px 10px;border-bottom:1px solid var(--line)}
+.fundamentals-overlay>header>div{display:flex;gap:3px}
+.fundamentals-overlay button{display:grid;place-items:center;background:transparent;border:0;border-radius:4px;color:var(--muted);padding:3px;cursor:pointer}
+.fundamentals-overlay button:hover{background:var(--field);color:var(--text)}
+.fundamentals-overlay button:focus-visible,.fundamentals-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.fundamentals-badges{display:flex;flex-wrap:wrap;gap:5px;padding:7px 10px}
+.fundamentals-badges>span{padding:2px 6px;background:var(--field);border-radius:4px;white-space:nowrap}
+.fundamentals-badges .fundamentals-warning{color:#b45309}
+.fundamentals-company{padding:0 10px 6px;color:var(--muted);max-width:500px}
+.fundamentals-scroll{min-height:0;overflow:auto;max-height:min(330px,45vh);overscroll-behavior:contain}
+.fundamentals-scroll table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:inherit}
+.fundamentals-scroll caption{text-align:left;padding:5px 10px;color:var(--muted);font-size:.9em}
+.fundamentals-scroll th,.fundamentals-scroll td{padding:5px 9px;text-align:right;white-space:nowrap;border-top:1px solid var(--line)}
+.fundamentals-scroll th:first-child{text-align:left}
+.fundamentals-scroll thead th{position:sticky;top:0;background:var(--surface);color:var(--muted);font-weight:500}
+.fundamentals-scroll tbody th{font-weight:500;position:sticky;left:0;z-index:1;background:var(--surface)}
+.fundamentals-scroll thead th:first-child{left:0;z-index:2}
+.fundamentals-overlay>header,.fundamentals-badges,.fundamentals-company,.fundamentals-overlay>footer,.fundamentals-guide-note{flex-shrink:0}
+.fundamentals-scroll td[data-tone=up]{color:var(--positive,#167b68)}
+.fundamentals-scroll td[data-tone=down]{color:var(--negative,#df4365)}
+.fundamentals-scroll>p{padding:12px 10px;max-width:360px;color:var(--muted)}
+.fundamentals-overlay>footer{display:flex;justify-content:space-between;gap:16px;padding:6px 10px;border-top:1px solid var(--line);font-size:.9em;color:var(--muted)}
+.fundamentals-guide-note{max-width:420px;padding:0 10px 7px;margin:0;color:var(--muted);font-size:.9em}
+.fundamentals-settings{display:flex;flex-direction:column;gap:12px;padding:16px 20px;width:min(440px,calc(100vw - 32px));max-height:75vh;overflow:auto;font-size:13px}
+.fundamentals-settings p{margin:0;color:var(--muted);line-height:1.5}
+.fundamentals-settings label{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.fundamentals-settings select,.fundamentals-settings input[type=number]{border:1px solid var(--line);background:var(--field);color:var(--text);border-radius:5px;padding:5px;max-width:190px}
+.fundamentals-settings input[type=number]{width:65px}
+.fundamentals-settings>footer{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:12px}
+@media(max-width:640px){.fundamentals-overlay{right:58px;top:88px;max-width:calc(100% - 66px);min-width:0}.fundamentals-overlay>header{gap:8px}.fundamentals-overlay>footer{flex-wrap:wrap;gap:3px}}

@@ -20,6 +20,8 @@ const getAdapter = () => USE_MOCK_API
   : Promise.resolve(realAdapter);
 
 export const screenerApi = {
+  getFinancialHistory: realAdapter.getFinancialHistory.bind(realAdapter),
+  getEarningsSchedule: realAdapter.getEarningsSchedule.bind(realAdapter),
   getThemeClassification: realAdapter.getThemeClassification.bind(realAdapter),
   async getExportRows(request: ScreenerRunRequest) {
     const req = {...request, page:1, pageSize:100};

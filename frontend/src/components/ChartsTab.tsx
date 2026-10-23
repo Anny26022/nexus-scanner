@@ -27,7 +27,7 @@ import { type StudyConfigs, defaultStudyConfigs, isIndicatorVisibleForInterval }
 import { IndicatorsCatalogModal } from './IndicatorsCatalogModal';
 import { IndicatorSettingsModal } from './IndicatorSettingsModal';
 import { ExtraStudySettingsDialog } from './ExtraStudySettingsDialog';
-import { ChartSymbolSearch } from './ChartSymbolSearch';
+import { ChartSymbolSearch, type ChartSymbolSearchHandle } from './ChartSymbolSearch';
 import { ChartShortcutsDialog } from './ChartShortcutsDialog';
 import { useMountEffect } from '../hooks/useMountEffect';
 import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../chart/extraStudies';
@@ -677,7 +677,7 @@ function ChartTile({
   layoutControls?: ReactNode;
 }) {
   const {symbol,interval}=initial;
-  const searchRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<ChartSymbolSearchHandle>(null);
   const sceneActions = useRef<ChartSceneActions | null>(null);
   const [inputError, setInputError] = useState('');
   const book=savedDrawingBook(symbol);
@@ -710,7 +710,7 @@ function ChartTile({
   const candles = useMemo(() => aggregate(chart.data?.candles ?? [], interval), [chart.data, interval]);
   const events=useMemo(()=>chart.data?chartEvents(chart.data):[],[chart.data]);
   const symbolControls=<><ChartSymbolSearch key={symbol} symbol={symbol} datasetRevision={datasetRevision} sessionDate={sessionDate}
-        inputRef={searchRef} onError={setInputError} onSelect={next => onChange(tileId, {symbol: next, interval})} />
+        handleRef={searchRef} onError={setInputError} onSelect={next => onChange(tileId, {symbol: next, interval})} />
       <div className="chart-bar-divider" aria-hidden="true" />
       <div className="chart-intervals" role="group" aria-label="Candle interval">
         {(['D', 'W', 'M'] as const).map(value => <button type="button" key={value} aria-pressed={interval === value}
@@ -742,9 +742,9 @@ function ChartTile({
       return 'consume';
     }
     if (event.key === ',' || event.key === '.') { stepWatchlist(event.key === '.' ? 1 : -1); return 'consume'; }
-    if (event.key === '/') { searchRef.current?.focus(); return 'consume'; }
+    if (event.key === '/') { searchRef.current?.open(); return 'consume'; }
     // Typing a ticker anywhere starts a symbol search; the key lands in the focused box.
-    if (/^[A-Za-z0-9&]$/.test(event.key)) { searchRef.current?.focus(); return 'focus'; }
+    if (/^[A-Za-z0-9&]$/.test(event.key)) { searchRef.current?.open(event.key.toUpperCase()); return 'consume'; }
     return null;
   };
   const handleShortcutRef = useRef(handleShortcut);

@@ -28,6 +28,12 @@ function chooseGrid(count:1|2) {
   fireEvent.click(screen.getByRole('button',{name:count===1?'1 chart · Single chart':'2 charts · Side by side'}));
 }
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
+const loadSymbol=(scope:{getByRole:typeof screen.getByRole},value:string)=>{
+  fireEvent.click(scope.getByRole('button',{name:/^Search symbol/}));
+  const input=screen.getByRole('combobox',{name:'Chart symbol'});
+  fireEvent.change(input,{target:{value}});
+  fireEvent.submit(input.closest('form')!);
+};
 it('selects one year for a fresh chart without overriding saved ranges', async () => {
   vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
   setup();
@@ -53,8 +59,7 @@ it('uses the selected duration instead of a stale viewport when the symbol chang
   expect(vi.mocked(ChartEngine).mock.results[0].value.restoreView).not.toHaveBeenCalled();
 
   fireEvent.click(screen.getByRole('button',{name:'6mo'}));
-  fireEvent.change(screen.getByLabelText('Chart symbol'),{target:{value:'TCS'}});
-  fireEvent.click(screen.getByRole('button',{name:'Load'}));
+  loadSymbol(screen,'TCS');
   await screen.findByLabelText('TCS candlestick and volume chart');
   const next=vi.mocked(ChartEngine).mock.results.at(-1)!.value;
   expect(screen.getByRole('button',{name:'6mo'})).toHaveAttribute('aria-pressed','true');
@@ -72,8 +77,7 @@ it('carries a manually adjusted date window to the next symbol', async () => {
   first.timeScale.subscribeVisibleTimeRangeChange.mock.calls[1][0]();
   expect(first.savedView).toHaveBeenCalledTimes(2);
   expect(screen.getByRole('button',{name:'1y'})).toHaveAttribute('aria-pressed','false');
-  fireEvent.change(screen.getByLabelText('Chart symbol'),{target:{value:'TCS'}});
-  fireEvent.click(screen.getByRole('button',{name:'Load'}));
+  loadSymbol(screen,'TCS');
   await screen.findByLabelText('TCS candlestick and volume chart');
   expect(JSON.parse(localStorage.getItem('nexus.chart.scene.0.v1')!)).toMatchObject({view:{from:'2025-12-01',to:'2026-10-02'}});
   const next=vi.mocked(ChartEngine).mock.results.at(-1)!.value;
@@ -172,8 +176,7 @@ it('handles empty history and rejects invalid symbol input before requesting it'
   vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:null,candles:[],volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
   setup();
   await screen.findByText('No published candles for RELIANCE.');
-  fireEvent.change(screen.getByLabelText('Chart symbol'),{target:{value:'BAD SYMBOL'}});
-  fireEvent.click(screen.getByRole('button',{name:'Load'}));
+  loadSymbol(screen,'BAD SYMBOL');
   expect(screen.getByRole('alert')).toHaveTextContent('Enter a scanner symbol');
   expect(screenerApi.getChart).toHaveBeenCalledTimes(1);
 });
@@ -266,7 +269,7 @@ it('links subsequent symbol and interval changes independently',async()=>{
   expect(screen.getByRole('region',{name:'Chart 2 · TCS'})).toHaveTextContent('1W');
   fireEvent.click(screen.getByRole('switch',{name:'Sync interval'}));fireEvent.click(screen.getByRole('switch',{name:'Sync symbol'}));
   const first=within(screen.getByRole('region',{name:'Chart 1 · RELIANCE'}));
-  fireEvent.change(first.getByLabelText('Chart symbol'),{target:{value:'INFY'}});fireEvent.click(first.getByRole('button',{name:'Load'}));
+  loadSymbol(first,'INFY');
   await screen.findByRole('region',{name:'Chart 2 · INFY'});
   fireEvent.click(within(screen.getByRole('region',{name:'Chart 1 · INFY'})).getByRole('button',{name:'Monthly candles'}));
   expect(screen.getByRole('region',{name:'Chart 1 · INFY'})).toHaveTextContent('1M');

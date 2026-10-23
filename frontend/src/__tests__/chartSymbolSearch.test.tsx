@@ -15,6 +15,13 @@ const directory = [
 ];
 
 beforeEach(() => localStorage.clear());
+
+it('lists the watchlist when the box is empty', () => {
+  localStorage.setItem('nexus.chart.watchlist.v2', JSON.stringify(['###Ideas', 'TCS', 'RELIANCE']));
+  renderSearch();
+  expect(screen.getByRole('group', {name: 'Watchlist'})).toHaveTextContent('TCS');
+  expect(screen.getByRole('group', {name: 'Watchlist'})).not.toHaveTextContent('RELIANCE');
+});
 afterEach(cleanup);
 
 it('ranks an exact ticker first, then prefixes, substrings and company names', () => {
@@ -27,21 +34,23 @@ function renderSearch(onSelect = vi.fn()) {
   render(<QueryClientProvider client={new QueryClient()}>
     <ChartSymbolSearch symbol="RELIANCE" datasetRevision={'a'.repeat(64)} sessionDate="2026-10-22" onSelect={onSelect} onError={vi.fn()} />
   </QueryClientProvider>);
+  fireEvent.click(screen.getByRole('button', {name: 'Search symbol · RELIANCE'}));
   return {onSelect, input: screen.getByRole('combobox', {name: 'Chart symbol'})};
 }
 
-it('suggests matches by ticker or company and picks one with the keyboard', async () => {
+it('opens a palette that suggests matches by ticker or company and picks one with the keyboard', async () => {
   const {onSelect, input} = renderSearch();
-  fireEvent.focus(input);
+  expect(screen.getByRole('dialog', {name: 'Symbol search'})).toBeInTheDocument();
   fireEvent.change(input, {target: {value: 'tata'}});
   expect(await screen.findByRole('option', {name: /TATAPOWER/})).toBeInTheDocument();
   expect(screen.getByRole('option', {name: /TCS Tata Consultancy/})).toBeInTheDocument();
   fireEvent.keyDown(input, {key: 'ArrowDown'});
   fireEvent.submit(input.closest('form')!);
   expect(onSelect).toHaveBeenCalledWith('TATASTEEL');
+  expect(screen.queryByRole('dialog', {name: 'Symbol search'})).not.toBeInTheDocument();
 });
 
-it('remembers chosen symbols as recents and rejects invalid input', () => {
+it('remembers chosen symbols as recents and rejects invalid input', async () => {
   const {onSelect, input} = renderSearch();
   fireEvent.change(input, {target: {value: 'infy'}});
   fireEvent.submit(input.closest('form')!);
@@ -50,9 +59,9 @@ it('remembers chosen symbols as recents and rejects invalid input', () => {
   cleanup();
 
   const second = renderSearch();
-  fireEvent.focus(second.input);
-  expect(screen.getByRole('listbox', {name: 'Recent symbols'})).toBeInTheDocument();
+  expect(await screen.findByRole('group', {name: 'Recent'})).toHaveTextContent('INFY');
   fireEvent.change(second.input, {target: {value: 'bad symbol!'}});
   fireEvent.submit(second.input.closest('form')!);
   expect(second.onSelect).not.toHaveBeenCalled();
+  expect(screen.getByText(/Enter a scanner symbol/)).toBeInTheDocument();
 });

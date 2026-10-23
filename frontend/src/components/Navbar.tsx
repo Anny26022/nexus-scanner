@@ -17,9 +17,9 @@ const SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navi
 
 const NAV_ITEMS = [
   { id: 'screener', label: 'Screener', Icon: ScanSearch },
-  { id: 'market', label: 'Market', Icon: Gauge },
   { id: 'ipo', label: 'IPO Catalogue', Icon: Rocket },
   { id: 'charts', label: 'Charts', Icon: CandlestickChart },
+  { id: 'market', label: 'Market', Icon: Gauge },
 ] as const;
 
 export function Navbar({ activeTab, onTabChange, onHideSidebar, onOpenSearch, theme: choice, onThemeChange: setChoice, sessionControl }: NavbarProps) {

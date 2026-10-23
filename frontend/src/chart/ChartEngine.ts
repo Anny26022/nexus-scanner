@@ -178,6 +178,7 @@ export class ChartEngine {
         if (!projection) return;
         this.layer.draw(context,projection,this.accent);
         this.drawUpcomingEarnings(context,projection.bottom);
+        this.drawBandChanges(context);
         if (this.replayPicker) {
           const x=this.chart.timeScale().logicalToCoordinate(this.replayIndex as Logical);
           if(x===null) return;
@@ -408,7 +409,39 @@ export class ChartEngine {
   private upcomingEarnings:{date:string;line:boolean}|null=null;
   private bandChanges:readonly {date:string;from:string;to:string}[]=[];
   /** Past NSE price-band changes, drawn as labels above the candle on each change date. */
-  setBandChanges(changes:readonly {date:string;from:string;to:string}[]) {this.bandChanges=changes;this.refreshMarkers();}
+  setBandChanges(changes:readonly {date:string;from:string;to:string}[]) {this.bandChanges=changes;this.invalidate();}
+  /** Bar index for each visible band change (the bar containing its date), within the replay cutoff. */
+  private bandChangeBars() {
+    const out:{index:number;to:string}[]=[];
+    for(const change of this.bandChanges) {
+      if(change.date>this.eventCutoff||!this.candles.length||change.date<this.candles[0].date) continue;
+      let low=0,high=this.candles.length;
+      while(low<high) {const mid=(low+high)>>>1;if(this.candles[mid].date<=change.date) low=mid+1;else high=mid;}
+      out.push({index:Math.max(0,low-1),to:change.to});
+    }
+    return out;
+  }
+  /** As in the reference script: the new band as text, a small coloured square, and a fine dotted line down to the candle. */
+  private drawBandChanges(context:CanvasRenderingContext2D) {
+    if(!this.bandChanges.length) return;
+    const scale=this.chart.timeScale(),text=getComputedStyle(this.host).getPropertyValue('--band-label').trim()||'#1a3a8f';
+    context.save();
+    context.font='12px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif';
+    context.textAlign='center';context.textBaseline='bottom';
+    for(const {index,to} of this.bandChangeBars()) {
+      const x=scale.logicalToCoordinate(index as Logical),top=this.price.priceToCoordinate(this.candles[index].high);
+      if(x===null||top===null) continue;
+      const band=Number.parseFloat(to);
+      const color=band===20?'#2962ff':band===10?'#4caf50':band===5?'#fbc02d':band===2?'#f23645':'#9598a1';
+      const square=top-22;
+      context.strokeStyle=color;context.lineWidth=1;context.setLineDash([1.5,2.5]);
+      context.beginPath();context.moveTo(Math.round(x)+.5,square+6);context.lineTo(Math.round(x)+.5,top-3);context.stroke();
+      context.setLineDash([]);
+      context.fillStyle=color;context.fillRect(Math.round(x)-3,square,6,6);
+      context.fillStyle=text;context.fillText(to==='No Band'?'NB':`${to}%`,x,square-3);
+    }
+    context.restore();
+  }
   /** Bar position of a date: an existing bar, or bars counted past the last one (weekdays, weeks or months). */
   private logicalForDate(date:string):number|null {
     const count=this.candles.length;
@@ -735,18 +768,7 @@ export class ChartEngine {
     const snorts=this.simpleVolume&&this.studyConfigs.volume?.showSnort!==false
       ? this.simpleVolume.snorts.filter(index=>index<this.candles.length).map((index):SeriesMarker<Time>=>({id:`snort:${this.candles[index].date}`,time:this.candles[index].date,position:'belowBar',shape:'square',size:.5,color:this.studyConfigs.volume?.snortColor??SIMPLE_VOLUME_COLORS.snort}))
       : [];
-    // Band changes land on the bar containing the date (weekly/monthly bars too) and respect the replay cutoff.
-    const bandMarkers:SeriesMarker<Time>[]=[];
-    for(const change of this.bandChanges) {
-      if(change.date>this.eventCutoff||!this.candles.length||change.date<this.candles[0].date) continue;
-      let low=0,high=this.candles.length;
-      while(low<high) {const mid=(low+high)>>>1;if(this.candles[mid].date<=change.date) low=mid+1;else high=mid;}
-      const time=this.candles[Math.max(0,low-1)].date;
-      const band=Number.parseFloat(change.to);
-      bandMarkers.push({id:`band:${change.date}`,time,position:'aboveBar',shape:'square',size:.6,text:change.to==='No Band'?'NB':`${change.to}%`,
-        color:band===20?'#2962ff':band===10?'#16a34a':band<=5?'#dc2626':'#787d8a'});
-    }
-    this.markers.setMarkers([...eventMarkers,...snorts,...bandMarkers].sort((a,b)=>String(a.time).localeCompare(String(b.time))));
+    this.markers.setMarkers([...eventMarkers,...snorts].sort((a,b)=>String(a.time).localeCompare(String(b.time))));
   }
   /** Benchmark closes by session date, for relative-strength studies. Rebuild with setStudies after changing. */
   setBenchmark(benchmark:ReadonlyMap<string,number>|undefined) { this.benchmark=benchmark; }

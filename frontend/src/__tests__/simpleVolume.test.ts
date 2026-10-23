@@ -56,3 +56,16 @@ it('keeps defaults for options passed as undefined', () => {
   const candles = Array.from({length: 60}, (_, index) => bar(index, 10, 100));
   expect(computeSimpleVolume(candles, {maLength: undefined, ppvLength: undefined}).average[59]).toBe(100);
 });
+
+it('derives TradingView-style volume pills: average traded value, projected RVol and 1-minute liquidity', async () => {
+  const { computeIndicatorSeries, formatCrore, formatLakh, formatTimes } = await import('../chart/indicatorValues');
+  const { defaultStudies } = await import('../chart/studies');
+  // 50 bars at ₹100 with 1,00,00,000 shares: ₹100 Cr traded per day.
+  const candles = Array.from({length: 50}, (_, index) => bar(index, 100, 10_000_000));
+  const snapshot = computeIndicatorSeries(candles, [], defaultStudies()).getSnapshot(49);
+  expect(formatCrore(snapshot.volumeTurnoverAvg)).toBe('100.00 Cr');
+  // 1,00,00,000 / 375 minutes × ₹100 = ₹26.67 lakh a minute.
+  expect(formatLakh(snapshot.volumeMinuteLiquidity)).toBe('26.67 L');
+  expect(formatTimes(160)).toBe('1.6x');
+  expect(formatTimes(null)).toBe('-');
+});

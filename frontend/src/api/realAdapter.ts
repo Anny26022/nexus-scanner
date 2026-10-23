@@ -186,9 +186,17 @@ class RealDataAdapter {
   /** This symbol's dated bands ([date, band] pairs, first = starting band), or null when the release has none. */
   async getPriceBandHistory(symbol: string, revision: string) {
     const release = await releaseFor(revision);
-    if (release.revision !== revision || !release.priceBandHistoryUrl) return null;
-    const ledger = await cached(releaseCache, release.priceBandHistoryUrl,
-      () => getIpoJson<{version: number; from: string; through: string; bands: Record<string, Array<[string, string]>>}>(release.priceBandHistoryUrl!, 'Price-band history'), 3);
+    if (release.revision !== revision) return null;
+    type Ledger = {version: number; from: string; through: string; bands: Record<string, Array<[string, string]>>};
+    // Releases published before the ledger existed fall back to the committed ledger file.
+    const url = release.priceBandHistoryUrl ?? '/data/price-band-history.json';
+    const ledger = await cached(releaseCache, url, async () => {
+      if (release.priceBandHistoryUrl) return getIpoJson<Ledger>(url, 'Price-band history');
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Price-band history unavailable (HTTP ${response.status})`);
+      return response.json() as Promise<Ledger>;
+    }, 3).catch(() => null);
+    if (!ledger) return null;
     if (ledger.version !== 1) return null;
     return {from: ledger.from, through: ledger.through, bands: ledger.bands[symbol] ?? []};
   }

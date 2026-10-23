@@ -328,17 +328,12 @@ it('places the upcoming results label on the future session and brings it into v
   engine.setUpcomingEarnings(null);
   engine.destroy();
 });
-it('labels past band changes on the bar containing the date, coloured by the new band',()=>{
+it('places past band changes on the bar containing the date, within the replay cutoff',()=>{
   const {engine}=setup();
   engine.setEvents([],'2026-10-05');
   engine.setBandChanges([{date:'2026-10-03',from:'5',to:'20'},{date:'2026-10-05',from:'20',to:'No Band'},{date:'2026-10-09',from:'20',to:'10'}]);
-  const markers=native.markers.setMarkers.mock.lastCall![0];
-  // Saturday 3 Oct falls on Friday's bar; 9 Oct is after the cutoff.
-  expect(markers).toEqual(expect.arrayContaining([
-    expect.objectContaining({id:'band:2026-10-03',time:'2026-10-02',text:'20%',color:'#2962ff',position:'aboveBar'}),
-    expect.objectContaining({id:'band:2026-10-05',time:'2026-10-05',text:'NB',color:'#787d8a'}),
-  ]));
-  expect(markers.some((marker:{id:string})=>marker.id==='band:2026-10-09')).toBe(false);
+  // Saturday 3 Oct falls on Friday's bar (index 1); 9 Oct is after the cutoff.
+  expect((engine as unknown as {bandChangeBars:()=>unknown}).bandChangeBars()).toEqual([{index:1,to:'20'},{index:2,to:'No Band'}]);
   engine.destroy();
 });
 it('zooms on the wheel with the right edge fixed and pans on a sideways swipe, like TradingView',()=>{

@@ -65,6 +65,7 @@ class EtfSnapshotTests(unittest.TestCase):
             old.mkdir(parents=True)
             (old/'etfs.json.gz').write_bytes(b'old ETF snapshot')
             (old/'stocks.json.gz').write_bytes(b'preserved stock snapshot')
+            (output/'current.json').write_text(json.dumps({'revision':'b'*64, 'sessionDate':'2026-09-29'}))
             (root/'etf_snapshot.json.gz').write_bytes(gzip.compress(json.dumps(self.source('2026-09-30')).encode()))
             with patch('publish_snapshot.list_presets', return_value=[]):
                 manifest = publish(root, output)

@@ -11,6 +11,7 @@ import { defaultEmaLines, type EmaLine } from '../chart/model';
 import type { ChartAppearance } from '../chart/ChartEngine';
 import { ChartDialog } from './ChartDialog';
 import { ColorPalette } from './ColorPalette';
+import { MarkerStyleRow } from './MarkerStyleRow';
 
 export interface IndicatorSettingsModalProps {
   indicatorId: string;
@@ -1437,9 +1438,12 @@ export function IndicatorSettingsModal({
                 <>
                   {([['ppvColor', 'Pocket pivot', SIMPLE_VOLUME_COLORS.ppv], ['aboveUpColor', 'Up above average', SIMPLE_VOLUME_COLORS.up],
                     ['aboveDownColor', 'Down above average', SIMPLE_VOLUME_COLORS.down], ['dryColor', 'Dry volume', SIMPLE_VOLUME_COLORS.dry],
-                    ['noiseColor', 'Other volume', '#7c7c87'], ['snortColor', 'Bull Snort', SIMPLE_VOLUME_COLORS.snort], ['recordColor', 'Highest volume (HVE/HVY/HVQ)', SIMPLE_VOLUME_COLORS.record]] as const).map(([key, label, fallback]) =>
+                    ['noiseColor', 'Other volume', '#7c7c87'], ['recordColor', 'Highest volume (HVE/HVY/HVQ)', SIMPLE_VOLUME_COLORS.record]] as const).map(([key, label, fallback]) =>
                     <PlotStyleRow key={key} label={label} color={draftConfigs.volume?.[key] ?? fallback}
                       onColorChange={c => setDraftConfigs(prev => ({...prev, volume: {...prev.volume!, [key]: c}}))} />)}
+                  <MarkerStyleRow label="Bull Snort"
+                    style={{visible: draftConfigs.volume?.showSnort !== false, color: draftConfigs.volume?.snortColor ?? SIMPLE_VOLUME_COLORS.snort, shape: draftConfigs.volume?.snortShape ?? 'square'}}
+                    onChange={next => setDraftConfigs(prev => ({...prev, volume: {...prev.volume!, showSnort: next.visible, snortColor: next.color, snortShape: next.shape}}))} />
                 </>
               )}
               {normId === 'volume' && draftConfigs.volume?.mode === 'classic' && (

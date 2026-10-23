@@ -21,3 +21,22 @@ export function revealedThrough(candles:readonly Candle[],index:number|null,asOf
   if(index===null||index===candles.length-1) return asOf;
   return new Date(Date.parse(candles[index+1].date)-86_400_000).toISOString().slice(0,10);
 }
+
+/** TradingView-style lettered badges for the event strip: N news, E earnings, S split, B bonus, D dividend, R rights, C other actions. */
+export const EVENT_BADGES = [
+  ['news', 'N', 'News', '#2962ff'], ['earnings', 'E', 'Earnings', '#f23645'], ['split', 'S', 'Split', '#9c27b0'],
+  ['bonus', 'B', 'Bonus', '#089981'], ['dividend', 'D', 'Dividend', '#ff9800'], ['rights', 'R', 'Rights issue', '#00bcd4'],
+  ['action', 'C', 'Other corporate action', '#787b86'],
+] as const;
+export type EventBadgeKey = typeof EVENT_BADGES[number][0];
+export type EventBadgeStyles = Partial<Record<EventBadgeKey, {visible?: boolean; color?: string}>>;
+
+export function eventBadgeKey(event: Pick<ChartEvent, 'kind' | 'title'>): EventBadgeKey {
+  if (event.kind !== 'action') return event.kind;
+  const title = event.title.toLowerCase();
+  if (/split|sub-?division/.test(title)) return 'split';
+  if (/bonus/.test(title)) return 'bonus';
+  if (/dividend/.test(title)) return 'dividend';
+  if (/rights/.test(title)) return 'rights';
+  return 'action';
+}

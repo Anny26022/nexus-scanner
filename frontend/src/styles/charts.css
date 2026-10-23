@@ -554,7 +554,10 @@
 
 .chart-actions-zone { position: absolute; z-index: 10; inset: auto 0 0; height: 54px; }
 .chart-actions { position: absolute; left: 50%; bottom: 14px; transform: translate(-50%, 6px); display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-pop); opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity .2s var(--ease-out), transform .2s var(--ease-out); }
-.chart-actions-zone:hover .chart-actions, .chart-actions-zone:focus-within .chart-actions { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+/* The zone never takes clicks (the event badges sit there); the plot reveals the controls when the pointer nears the bottom. */
+.chart-actions-zone { pointer-events: none; }
+.chart-actions-zone .chart-actions { pointer-events: none; }
+.chart-plot[data-near-bottom="true"] .chart-actions, .chart-actions-zone:focus-within .chart-actions { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
 .chart-actions .button { min-height: 28px; height: 28px; padding: 0 8px; border: 0; border-radius: 7px; color: var(--secondary); font-size: 12.5px; font-weight: 500; cursor: pointer; }
 .chart-actions .button:hover { background: var(--surface-hover); color: var(--text); }
 .chart-actions .chart-auto-btn { font-size: 11px; font-weight: 600; }
@@ -2350,3 +2353,17 @@
 .chart-jump-latest:hover { color: var(--text); background: var(--surface-hover); }
 .chart-attribution { color: var(--muted); font-size: 11.5px; text-decoration: none; }
 .chart-attribution:hover { color: var(--text); text-decoration: underline; }
+
+/* Marker style rows: checkbox, colour and TradingView's shape dropdown. */
+.ms-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; font-size: 13px; color: var(--text); }
+.ms-check { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.ms-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.ms-controls { display: flex; align-items: center; gap: 6px; }
+.ms-trigger { display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 6px 0 2px; border: 0; border-radius: var(--radius-sm); background: var(--field); color: var(--text); cursor: pointer; }
+.ms-trigger:hover { background: var(--surface-hover); }
+.ms-trigger[data-state="open"] { box-shadow: 0 0 0 2px var(--accent); }
+.ms-icon { width: 22px; height: 22px; color: var(--text); }
+.ms-menu { z-index: calc(var(--z-dialog) + 5); width: 210px; max-height: 340px; overflow-y: auto; padding: 6px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-pop); animation: pop-in .14s var(--ease-out); }
+.ms-option { display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 8px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.ms-option:hover, .ms-option[aria-selected="true"] { background: var(--surface-hover); }
+.pb-band-styles { padding-left: 26px; }

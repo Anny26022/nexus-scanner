@@ -270,7 +270,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       engine.current = chart;
       updateBandGuides(chart);
       chart.setUpcomingEarnings?.(earningsChoice.current);
-      chart.setBandChanges?.(bandChoice.current);
+      chart.setBandChanges?.(bandChoice.current,studyConfigsChoice.current.fundamentals?.bandStyles);
       const normalView=clock.getSnapshot().index===null,epoch=sync.persistenceEpoch;
       const unlink=normalView?sync.connect(chart,host):()=>{};
       let timer:ReturnType<typeof setTimeout>|undefined;
@@ -369,6 +369,9 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     </div>}
     <div className={`chart-stage${selecting || replay.index!==null?' chart-stage-replay':''}`}>
       <div className="chart-plot" ref={overlayRef} data-indicator-values={appearance.statusIndicators===false?'hidden':undefined}
+        // Reveal the zoom/reset controls near the bottom edge, set on the element directly to avoid re-rendering per move.
+        onMouseMove={event => { const box = event.currentTarget.getBoundingClientRect(); event.currentTarget.dataset.nearBottom = String(event.clientY > box.bottom - 70); }}
+        onMouseLeave={event => { event.currentTarget.dataset.nearBottom = 'false'; }}
         onPointerUp={syncAutoScale} onWheel={() => requestAnimationFrame(syncAutoScale)} onKeyUp={() => requestAnimationFrame(syncAutoScale)}
         onDoubleClick={() => requestAnimationFrame(syncAutoScale)}>
         <p className="sr-only" aria-live="polite" id={`chart-announce-${tileId}`}>{announcement}</p>
@@ -393,7 +396,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         <DrawingContextToolbar book={activeBook} />
       <EngineSync key={`${earningsChoice.current?.date ?? ''}|${earningsChoice.current?.line ?? ''}`} run={() => engine.current?.setUpcomingEarnings?.(earningsChoice.current)} />
       <EngineSync key={`guides:${metrics?.circuitLimit}:${metrics?.isFno}`} run={() => { if(engine.current) updateBandGuides(engine.current); }} />
-      <EngineSync key={`bands:${bandChoice.current.map(change => change.date + change.to).join(',')}`} run={() => engine.current?.setBandChanges?.(bandChoice.current)} />
+      <EngineSync key={`bands:${bandChoice.current.map(change => change.date + change.to).join(',')}:${JSON.stringify(studyConfigs.fundamentals?.bandStyles ?? {})}`}
+        run={() => engine.current?.setBandChanges?.(bandChoice.current, studyConfigsChoice.current.fundamentals?.bandStyles)} />
       {studyConfigs.fundamentals?.enabled && !allHidden && !hiddenStudies.fundamentals && <FundamentalsIndicator
         symbol={symbol} revision={revision} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}
         metrics={metrics} config={studyConfigs.fundamentals}

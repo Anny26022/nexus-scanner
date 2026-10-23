@@ -203,7 +203,10 @@ it('groups optional event markers and excludes future events and comparison sess
   engine.setAppearance({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',events:true,volumePane:false,crosshairMode:'ohlc'});
   expect(native.series[1].applyOptions).toHaveBeenCalledWith(expect.objectContaining({priceScaleId:'volume',lastValueVisible:false,visible:true}));
   engine.setAppearance({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',events:true,volumePane:true,crosshairMode:'ohlc'});
-  expect(native.markers.setMarkers.mock.lastCall?.[0]).toEqual([expect.objectContaining({time:'2026-10-01',id:'events:2026-10-01'})]);
+  // Events are lettered badges in the bottom strip: E and N on 1 Oct; the 5 Oct split is after the cutoff.
+  expect((engine as unknown as {eventStrip:{key:string;badges:{letter:string}[]}[]}).eventStrip).toEqual([{index:0,key:'events:2026-10-01',badges:[{letter:'E',color:'#f23645'},{letter:'N',color:'#2962ff'}]}]);
+  engine.setAppearance({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',events:true,volumePane:true,eventStyles:{news:{visible:false}}});
+  expect((engine as unknown as {eventStrip:{key:string;badges:{letter:string}[]}[]}).eventStrip[0].badges.map(badge=>badge.letter)).toEqual(['E']);
   engine.setComparison('TCS',[...candles,{...candles[1],date:'2026-10-03'}]);
   const comparison=native.series.at(-1)!;
   expect(comparison.setData.mock.lastCall?.[0]).toEqual([{time:'2026-10-01',value:11},{time:'2026-10-02',value:10}]);
@@ -284,7 +287,7 @@ it('colours Simple Volume bars as pocket pivots, above-average up/down, dry and 
   // With labels off, the 500 pocket pivot (also the highest volume ever) stays deep blue; with them on it's the sky-blue HVE.
   expect(native.markers.setMarkers).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({id:'vol:HVE',text:'HVE',color:'#87ceeb'})]));
   // Bull Snort: 500 >= 3x the ~108 average, close in the top 35% of the range, above the previous close.
-  expect(native.markers.setMarkers).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({id:'snort:2026-03-03',shape:'square'})]));
+  expect((engine as unknown as {simpleVolume:{snorts:number[]}}).simpleVolume.snorts).toContain(61);
   engine.destroy();
 });
 it('paints every highest-volume record sky blue, including down days',()=>{
@@ -311,8 +314,8 @@ it('earnings indicator markers respect replay cutoffs and visibility', () => {
   const {engine}=setup();
   engine.setStudyConfigs({...defaultStudyConfigs(),fundamentals:{enabled:true}});
   engine.setEvents([{id:'past',date:'2026-10-01',kind:'earnings',title:'Quarterly results'}, {id:'future',date:'2026-10-05',kind:'earnings',title:'Future results'}],'2026-10-02');
-  const events=()=>native.markers.setMarkers.mock.lastCall![0].filter((marker:{id:string})=>marker.id.startsWith('events:'));
-  expect(events()).toEqual([expect.objectContaining({time:'2026-10-01'})]);
+  const events=()=>(engine as unknown as {eventStrip:{key:string;badges:{letter:string}[]}[]}).eventStrip.map(group=>group.key);
+  expect(events()).toEqual(['events:2026-10-01']);
   engine.setStudyVisibility('fundamentals',false);
   expect(events()).toEqual([]);
   engine.destroy();
@@ -441,4 +444,10 @@ it('copies, pastes and duplicates the selected drawing five bars later',()=>{
   expect(drawings[1].kind).toBe('trendline');
   expect(drawings[1].a.time).toBeGreaterThan(first.a.time);
   engine.destroy();
+});
+it('classifies corporate actions into TradingView event letters', async () => {
+  const {eventBadgeKey}=await import('../chart/events');
+  expect(['Stock split from Rs 10 to Rs 2','Bonus 1:1','Interim Dividend','Rights issue','AGM'].map(title=>eventBadgeKey({kind:'action',title})))
+    .toEqual(['split','bonus','dividend','rights','action']);
+  expect(eventBadgeKey({kind:'news',title:'x'})).toBe('news');
 });

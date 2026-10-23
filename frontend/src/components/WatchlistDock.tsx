@@ -1,5 +1,6 @@
 import { memo, useState, useMemo, useCallback, useRef, useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { prefetchCharts } from '../chart/chartQuery';
 import {
   Search,
   X,
@@ -372,6 +373,12 @@ export const WatchlistDock = memo(function WatchlistDock({
     });
   }, [items, filterQuery, quoteMap, sortColumn, sortDir]);
   const filteredSymbols = useMemo(() => filteredItems.filter(item => !isSection(item)), [filteredItems]);
+  const queryClient = useQueryClient();
+  // Opening a name also loads the next few, so stepping down the list is instant.
+  const selectSymbol = useCallback((symbol: string) => {
+    onSelectSymbol(symbol);
+    prefetchCharts(queryClient, filteredSymbols, symbol, datasetRevision, sessionDate);
+  }, [onSelectSymbol, queryClient, filteredSymbols, datasetRevision, sessionDate]);
   const sectionCounts = useMemo(() => {
     const counts = new Map<number, number>();
     let sectionIndex = -1;
@@ -446,12 +453,12 @@ export const WatchlistDock = memo(function WatchlistDock({
       const targetSym = filteredSymbols[nextIdx];
       if (targetSym) {
         setLocalActiveSymbol(targetSym);
-        onSelectSymbol(targetSym);
+        selectSymbol(targetSym);
         scrollToRow(filteredItems.indexOf(targetSym));
         requestAnimationFrame(() => rowRefs.current.get(targetSym)?.focus());
       }
     },
-    [filteredSymbols, filteredItems, currentEffectiveSymbol, onSelectSymbol]
+    [filteredSymbols, filteredItems, currentEffectiveSymbol, selectSymbol]
   );
 
   const handleContainerKeyDown = (e: React.KeyboardEvent) => {
@@ -688,7 +695,7 @@ export const WatchlistDock = memo(function WatchlistDock({
                 navigateSymbol('first');
               } else if (e.key === 'Enter' && filteredSymbols.length > 0) {
                 e.preventDefault();
-                onSelectSymbol(filteredSymbols[0]);
+                selectSymbol(filteredSymbols[0]);
               }
             }}
             className="watchlist-search-input"
@@ -815,7 +822,7 @@ export const WatchlistDock = memo(function WatchlistDock({
                 onContextMenu={event => { event.preventDefault(); setMenuFor({symbol: sym, x: event.clientX, y: event.clientY}); }}
                 onClick={() => {
                   setLocalActiveSymbol(sym);
-                  onSelectSymbol(sym);
+                  selectSymbol(sym);
                 }}
                 onKeyDown={e => {
                   if (e.key === 'ArrowDown' || e.key === 'j') {
@@ -838,7 +845,7 @@ export const WatchlistDock = memo(function WatchlistDock({
                     e.preventDefault();
                     e.stopPropagation();
                     setLocalActiveSymbol(sym);
-                    onSelectSymbol(sym);
+                    selectSymbol(sym);
                   } else if (e.altKey && e.code === 'KeyF') {
                     e.preventDefault();
                     e.stopPropagation();

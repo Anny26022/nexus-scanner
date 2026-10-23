@@ -4,7 +4,7 @@ import { Maximize2, Minimize2, Minus, Pause, Pencil, Play, Plus, RotateCcw, Sett
 import { screenerApi } from '../api/screenerApi';
 import { ChartEngine, type ChartAppearance, type ChartStudies, type ChartStyle } from '../chart/ChartEngine';
 import { ReplayClock } from '../chart/ReplayClock';
-import { aggregate, validateCandles, type Candle, type EmaLine, type Interval } from '../chart/model';
+import { aggregate, type Candle, type EmaLine, type Interval } from '../chart/model';
 import { DrawingBook } from '../chart/drawings';
 import { DrawingToolbar } from './DrawingToolbar';
 import { DrawingContextToolbar } from './DrawingContextToolbar';
@@ -38,6 +38,7 @@ import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../char
 import { WatchlistDock } from './WatchlistDock';
 import { Download, Upload } from 'lucide-react';
 import { ChartEventItem } from './ChartEventItem';
+import { chartQuery } from '../chart/chartQuery';
 import { currentTheme, forTheme, withThemeColors } from '../chart/themeColors';
 import { PositionSizingIndicator, PositionSizingSettingsDialog } from './PositionSizingIndicator';
 import { positionSizing, positionSizingConfig } from '../chart/positionSizing';
@@ -814,16 +815,7 @@ function ChartTile({
     },
     enabled:Boolean(datasetRevision),retry:false,staleTime:Infinity,
   });
-  const chart = useQuery({
-    queryKey: ['chart', datasetRevision, symbol, sessionDate],
-    queryFn: async () => {
-      const snapshot = await screenerApi.getChart(symbol, datasetRevision, sessionDate);
-      return {...snapshot, candles: validateCandles(snapshot.candles)};
-    },
-    enabled: Boolean(datasetRevision),
-    retry: false,
-    staleTime: Infinity,
-  });
+  const chart = useQuery({...chartQuery(datasetRevision, symbol, sessionDate), enabled: Boolean(datasetRevision)});
   // Loaded with the candles so relative-strength studies render without rebuilding the chart.
   const benchmark = useQuery({
     queryKey: ['benchmark', datasetRevision],

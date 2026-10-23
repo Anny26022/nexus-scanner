@@ -42,3 +42,24 @@ test('does not expose other bucket prefixes or write methods', async () => {
   assert.equal(missing.headers.get('Access-Control-Allow-Origin'), '*');
   assert.equal((await worker.fetch(new Request('https://data.example.com/objects/file', { method: 'PUT' }), env)).status, 405);
 });
+
+test('answers repeat GETs from the edge cache without reading R2', async () => {
+  const store = new Map();
+  globalThis.caches = { default: {
+    async match(request) { return store.get(request.url)?.clone(); },
+    async put(request, response) { store.set(request.url, response); },
+  } };
+  const pending = [];
+  const ctx = { waitUntil(promise) { pending.push(promise); } };
+  try {
+    const before = calls.length;
+    const first = await worker.fetch(new Request('https://data.example.com/objects/cached.json.gz'), env, ctx);
+    assert.equal(await first.text(), 'published bytes');
+    await Promise.all(pending);
+    const second = await worker.fetch(new Request('https://data.example.com/objects/cached.json.gz'), env, ctx);
+    assert.equal(await second.text(), 'published bytes');
+    assert.equal(calls.length, before + 1); // only the first read reached R2
+  } finally {
+    delete globalThis.caches;
+  }
+});

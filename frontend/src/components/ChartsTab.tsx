@@ -38,6 +38,7 @@ import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../char
 import { WatchlistDock } from './WatchlistDock';
 import { Download, Upload } from 'lucide-react';
 import { ChartEventItem } from './ChartEventItem';
+import { currentTheme, forTheme, withThemeColors } from '../chart/themeColors';
 import { PositionSizingIndicator, PositionSizingSettingsDialog } from './PositionSizingIndicator';
 import { positionSizing, positionSizingConfig } from '../chart/positionSizing';
 import { Button } from './Button';
@@ -558,8 +559,9 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
         onClose={() => setActiveIndicatorSetting(null)}
       />
     )}
-    {settingsOpen && <ChartSettingsDialog appearance={appearance} chartStyle={style} symbol={symbol} comparison={comparison} firstDate={firstDate} lastDate={currentBar.date} onClose={()=>setSettingsOpen(false)} onApply={(nextAppearance,nextStyle,nextComparison)=>{
-      applyAppearance(nextAppearance);
+    {settingsOpen && <ChartSettingsDialog appearance={forTheme(appearance,currentTheme())} chartStyle={style} symbol={symbol} comparison={comparison} firstDate={firstDate} lastDate={currentBar.date} onClose={()=>setSettingsOpen(false)} onApply={(nextAppearance,nextStyle,nextComparison)=>{
+      // Colours edited now belong to the theme the app is in.
+      applyAppearance(withThemeColors(nextAppearance,appearanceChoice.current,currentTheme()));
       if(nextStyle!==style) {setStyle(nextStyle);styleChoice.current=nextStyle;engine.current?.setStyle(nextStyle);persist({style:nextStyle});}
       applyComparison(nextComparison);
     }} onGoToDate={date=>{const moved=engine.current?.goToDate(date)??false;if(moved) markCustomRange();return moved;}} onEvents={()=>setEventDetails(events.filter(event=>event.date<=revealedThrough(candles,replay.index,lastDate)))}/>}

@@ -13,6 +13,7 @@ export type { ChartStudies } from './studies';
 import { type StudyConfigs } from './studyConfigs';
 export type { StudyConfigs } from './studyConfigs';
 import { EVENT_BADGES, eventBadgeKey, type ChartEvent, type EventBadgeStyles } from './events';
+import { currentTheme, forTheme } from './themeColors';
 import { drawMarkerShape, markerStyle, type MarkerShape, type MarkerStyle } from './markerShapes';
 import { computeSimpleVolume, type SimpleVolumeResult } from './simpleVolume';
 import { SIMPLE_VOLUME_COLORS } from './studyConfigs';
@@ -81,6 +82,8 @@ export type ChartAppearance = {
   lineWidth?:number;
   /** Canvas and scale text. */
   backgroundColor?:string;
+  /** Colours picked per theme (see themeColors.ts); the top-level colour fields are the resolved view. */
+  themeColors?:Partial<Record<'light'|'dark',import('./themeColors').ThemeColors>>;
   scaleTextColor?:string;
   scaleFontSize?:number;
   /** Last-value label on the price scale. */
@@ -327,8 +330,8 @@ export class ChartEngine {
       grid:{vertLines:{color:token('chart-grid','#f0f0f0')},horzLines:{color:token('chart-grid','#f0f0f0')}},
       crosshair:{vertLine:{color:token('chart-crosshair','#aab8c5'),labelBackgroundColor:token('text','#131722')},horzLine:{color:token('chart-crosshair','#aab8c5'),labelBackgroundColor:token('text','#131722')}},
     });
-    // Theme tokens are defaults; the user's own colours win.
-    if(this.currentAppearance) this.applyAppearanceColors(this.currentAppearance);
+    // Theme tokens are defaults; the user's own colours for this theme win.
+    if(this.savedAppearance) this.setAppearance(this.savedAppearance);
     else this.price.applyOptions(this.priceOptions());
     this.invalidate();
   }
@@ -815,7 +818,10 @@ export class ChartEngine {
     this.updatePrevCloseLine();
   }
   private barColorSignature='';
-  setAppearance(appearance:ChartAppearance) {
+  private savedAppearance?:ChartAppearance;
+  setAppearance(saved:ChartAppearance) {
+    this.savedAppearance=saved;
+    const appearance=forTheme(saved,currentTheme());
     this.currentAppearance=appearance;
     this.scaleMode=appearance.scaleMode;
     this.applyAppearanceColors(appearance);

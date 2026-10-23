@@ -287,3 +287,10 @@ it('colours Simple Volume bars as pocket pivots, above-average up/down, dry and 
   expect(native.markers.setMarkers).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({id:'snort:2026-03-03',shape:'square'})]));
   engine.destroy();
 });
+it('paints every highest-volume record sky blue, including down days',()=>{
+  const bars:Candle[]=[{date:'2026-10-01',open:10,high:11,low:9,close:10,volume:100},{date:'2026-10-02',open:10,high:11,low:8,close:9,volume:900}];
+  const {engine}=setup(bars);
+  const volume=native.series.find(series=>series.type==='Histogram')!;
+  expect(volume.setData.mock.lastCall![0][1].color).toBe('#87ceeb');
+  engine.destroy();
+});

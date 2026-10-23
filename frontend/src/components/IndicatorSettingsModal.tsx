@@ -743,7 +743,7 @@ export function IndicatorSettingsModal({
                     </div>
                     {([['showDry', 'Show dry volume (orange)'], ['showLabels', 'Highest/lowest volume labels (HVE, HVY, HVQ, Y, Q)'], ['recordUpOnly', 'Sky-blue record bars only on up days'], ['showSnort', 'Bull Snort markers']] as const).map(([key, label]) =>
                       <label key={key} className="setting-visibility-item">
-                        <input type="checkbox" checked={vol[key] !== false} onChange={e => setVol({[key]: e.target.checked})} />
+                        <input type="checkbox" checked={key === 'recordUpOnly' ? vol[key] === true : vol[key] !== false} onChange={e => setVol({[key]: e.target.checked})} />
                         {label}
                       </label>)}
                   </>}

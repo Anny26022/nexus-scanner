@@ -317,7 +317,7 @@ export class ChartEngine {
     const record=result.labels.some(label=>label.index===index&&label.text.startsWith('HV'));
     if(!record) return null;
     const up=index>0&&this.candles[index].close>this.candles[index-1].close;
-    return up||cfg?.recordUpOnly===false?cfg?.recordColor??SIMPLE_VOLUME_COLORS.record:null;
+    return up||cfg?.recordUpOnly!==true?cfg?.recordColor??SIMPLE_VOLUME_COLORS.record:null;
   }
   private simpleVolumeColor(index:number) {
     const kind=this.simpleVolume?.kinds[index];
@@ -339,7 +339,7 @@ export class ChartEngine {
       const bar=this.candles[label.index];
       const low=label.text.startsWith('L');
       markers.push({id:`vol:${label.text}`,time:bar.date,position:'aboveBar',shape:'circle',size:0,text:low?label.text.slice(2):label.text,
-        color:low?cfg?.dryColor??SIMPLE_VOLUME_COLORS.dry:this.simpleVolumeColor(label.index)??SIMPLE_VOLUME_COLORS.ppv});
+        color:low?cfg?.dryColor??SIMPLE_VOLUME_COLORS.dry:cfg?.recordColor??SIMPLE_VOLUME_COLORS.record});
     }
     this.volumeMarkers.setMarkers(markers);
   }

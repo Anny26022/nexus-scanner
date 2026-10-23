@@ -163,7 +163,7 @@ export interface VolumeConfig {
   /** Unset follows the theme (--volume-noise). */
   noiseColor?: string;
   snortColor?: string;
-  /** HVE/HVY/HVQ bars and labels (light sky blue); by default only on up days, like the original. */
+  /** HVE/HVY/HVQ bars and labels (light sky blue) on every record day; `recordUpOnly` limits the bar colour to up days. */
   recordColor?: string;
   recordUpOnly?: boolean;
 }

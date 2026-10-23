@@ -1,12 +1,11 @@
 import { expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import {loadPublishedSnapshot} from './fixtures/publishedSnapshot';
 import configurations from '../data/snapshotTechnicals.json';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { screenSnapshot, supportsSnapshotCondition, type Snapshot } from '../api/snapshotScreen';
 import type { ScreenerRunRequest } from '../types/screener';
 
-const manifest = JSON.parse(readFileSync('public/data/current.json','utf8'));
-const data: Snapshot = JSON.parse(readFileSync(`public${manifest.datasetUrl}`,'utf8'));
+const data = loadPublishedSnapshot().snapshot;
 const stock = {...data.stocks[0], asOfDate:data.asOfDate, historyAligned:true, metadataAsOfDate:data.asOfDate};
 const run = (id:string, parameters:Record<string,unknown>, metrics = stock.metrics, negated = false) => screenSnapshot({...data,stocks:[{...stock,metrics}]}, {
   universe:'mainboard', asOfDate:data.asOfDate, page:1,pageSize:100,

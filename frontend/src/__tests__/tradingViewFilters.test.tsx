@@ -1,6 +1,6 @@
 import {afterEach, expect, it, vi} from 'vitest';
 import {cleanup, fireEvent, render, screen, within} from '@testing-library/react';
-import {readFileSync} from 'node:fs';
+import {loadPublishedSnapshot} from './fixtures/publishedSnapshot';
 import {screenSnapshot, supportsSnapshotCondition, type Snapshot} from '../api/snapshotScreen';
 import {createSnapshotEngine} from '../api/snapshotEngine';
 import {tradingViewMetrics, tradingViewFilterGroups} from '../data/tradingViewMetrics';
@@ -9,8 +9,7 @@ import {ResultsTable} from '../components/ResultsTable';
 import type {ScreenerRunRequest} from '../types/screener';
 
 afterEach(cleanup);
-const manifest = JSON.parse(readFileSync('public/data/current.json', 'utf8'));
-const original:Snapshot = JSON.parse(readFileSync(`public${manifest.datasetUrl}`, 'utf8'));
+const original = loadPublishedSnapshot().snapshot;
 const stock = {...original.stocks[0],symbol:'TVTEST',close:100};
 const request:ScreenerRunRequest = {universe:'mainboard',asOfDate:original.asOfDate,page:1,pageSize:15,
   expressionTree:{type:'group',operator:'all',children:[]}};

@@ -1,11 +1,10 @@
 import { expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import {loadPublishedSnapshot} from './fixtures/publishedSnapshot';
 import { screenSnapshot, supportsSnapshotCondition, type Snapshot } from '../api/snapshotScreen';
 import { snapshotFundamentals } from '../data/snapshotFundamentals';
 import type { ScreenerRunRequest } from '../types/screener';
 
-const manifest = JSON.parse(readFileSync('public/data/current.json', 'utf8'));
-const snapshot: Snapshot = JSON.parse(readFileSync(`public${manifest.datasetUrl}`, 'utf8'));
+const snapshot = loadPublishedSnapshot().snapshot;
 const base: ScreenerRunRequest = {asOfDate:snapshot.asOfDate, universe:'mainboard', page:1, pageSize:100,
   expressionTree:{type:'group', operator:'all', children:[]}};
 const run = (id: string, parameters: Record<string, unknown>, data = snapshot, negated = false) => screenSnapshot(data, {

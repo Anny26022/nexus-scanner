@@ -23,6 +23,7 @@ import { ChartSettingsDialog } from './ChartSettingsDialog';
 import { ChartStylePicker } from './ChartStylePicker';
 import { PricePaneLegend, SubPaneLegends } from './PaneOverlayLegends';
 import { computeIndicatorSeries, updateLiveIndicatorDom } from '../chart/indicatorValues';
+import { StudyStore } from '../chart/studyStore';
 import { type StudyConfigs, defaultStudyConfigs, isIndicatorVisibleForInterval } from '../chart/studyConfigs';
 import { FundamentalsIndicator, FundamentalsSettingsDialog } from './FundamentalsIndicator';
 import { bandChanges, fundamentalsConfig, priceBandGuides, upcomingResults } from '../chart/fundamentals';
@@ -118,9 +119,14 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
   const [announcement, setAnnouncement] = useState('');
   const overlayRef = useRef<HTMLDivElement>(null);
   const candleIndexByDate = useMemo(() => new Map(candles.map((b, i) => [b.date, i])), [candles]);
+  // One store per chart: each indicator is computed once, in a background worker, for the chart and its legend.
+  const [studyStore] = useState(() => new StudyStore());
+  studyStore.setInputs(candles, benchmark); // identity checks only, so safe on every render
+  const studyVersion = useSyncExternalStore(studyStore.subscribe, studyStore.getVersion, studyStore.getVersion);
   const indicatorSeries = useMemo(() => {
-    return computeIndicatorSeries(candles, emaLines, visibleStudies, numericalConfigs, benchmark, interval);
-  }, [candles, emaLines, visibleStudies, numericalConfigs, benchmark, interval]);
+    return computeIndicatorSeries(candles, emaLines, visibleStudies, numericalConfigs, benchmark, interval, studyStore);
+    // studyVersion re-reads the store once background results arrive.
+  }, [candles, emaLines, visibleStudies, numericalConfigs, benchmark, interval, studyStore, studyVersion]);
   const indicatorSeriesRef = useRef(indicatorSeries);
   indicatorSeriesRef.current = indicatorSeries;
   const [hiddenStudies, setHiddenStudies] = useState<Record<string, boolean>>({});
@@ -259,6 +265,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
           updateLiveIndicatorDom(overlayRef.current, snap, studyConfigsChoice.current);
         }
       },activeBook,setEventDetails);
+      chart.setStudyStore?.(studyStore);
       chart.onEventHover?.(setEventHover);
       chart.setOnPanesChange?.(() => {
         setPaneOffsets(chart.getPaneOffsets?.() ?? []);
@@ -419,6 +426,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
         />
         <DrawingContextToolbar book={activeBook} />
       <EngineSync key={`benchmark:${benchmark ? 'ready' : 'pending'}`} run={() => engine.current?.setBenchmark(benchmark)} />
+      <EngineSync key={`studies:${studyVersion}`} run={() => { if (engine.current) { engine.current.refreshStudies?.(); restoreHiddenStudies(engine.current); } }} />
       <EngineSync key={`${earningsChoice.current?.date ?? ''}|${earningsChoice.current?.line ?? ''}`} run={() => engine.current?.setUpcomingEarnings?.(earningsChoice.current)} />
       <EngineSync key={`guides:${metrics?.circuitLimit}:${metrics?.isFno}`} run={() => { if(engine.current) updateBandGuides(engine.current); }} />
       <EngineSync key={`bands:${bandChoice.current.map(change => change.date + change.to).join(',')}:${JSON.stringify(studyConfigs.fundamentals?.bandStyles ?? {})}`}

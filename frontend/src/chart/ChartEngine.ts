@@ -4,11 +4,13 @@ import {
   type IChartApi, type IPrimitivePaneView, type ISeriesApi, type ISeriesPrimitive, type ITextWatermarkPluginApi,
   type IPriceLine, type ISeriesMarkersPluginApi, type SeriesMarker, type LineWidth, type Logical, type MouseEventParams, type SeriesAttachedParameter, type Time,
 } from 'lightweight-charts';
-import { ema, validEmaLine, type Candle, type EmaLine } from './model';
+import { validEmaLine, type Candle, type EmaLine } from './model';
 import { DrawingBook, hitDrawing, indexTime, timeIndex, type DrawingProjection, type Pixel } from './drawings';
 import { DrawingLayer } from './DrawingLayer';
-import { rsi, macd, sma, bollinger, atr, stochastic, monthlyVwap, supertrend, defaultStudies, getPriceSource, type ChartStudies } from './studies';
-import { computeExtraStudies, enabledExtraStudies, studyLineColor, studyParams, studyTitle } from './extraStudies';
+import { defaultStudies, type ChartStudies } from './studies';
+import { enabledExtraStudies, studyLineColor, studyParams, studyTitle } from './extraStudies';
+import { studyKey, type StudyLines } from './studyCompute';
+import { StudyStore } from './studyStore';
 export type { ChartStudies } from './studies';
 import { type StudyConfigs } from './studyConfigs';
 export type { StudyConfigs } from './studyConfigs';
@@ -20,6 +22,14 @@ import { SIMPLE_VOLUME_COLORS } from './studyConfigs';
 
 // Match the reference screener's native candle and bar palette.
 export const CHART_PALETTE = {up:'#089981',down:'#ef5350',volumeUp:'rgba(8,153,129,0.5)',volumeDown:'rgba(239,83,80,0.5)'};
+type StudyPlot={
+  /** Identity: result key, line, pane and shape; a plot with the same key reuses its series. */
+  key:string;
+  title:string;color:string;values:(number|null)[];pane:string;
+  histogram?:boolean;lineWidth?:number;lineStyle?:LineStyle;
+  levels?:Array<{price:number;color?:string;lineStyle?:LineStyle}>;
+  id?:string;dots?:boolean;
+};
 export type ChartStyle = 'candles'|'hollowCandles'|'volumeCandles'|'bars'|'highLow'|'line'|'lineWithMarkers'|'stepLine'|'area'|'hlcArea'|'baseline';
 export type ScaleMode = 'normal'|'logarithmic'|'percentage'|'indexed';
 export type ChartAppearance = {
@@ -154,6 +164,13 @@ export class ChartEngine {
   private studies:ChartStudies=defaultStudies();
   private studyConfigs:StudyConfigs={};
   private studySeries:ISeriesApi<'Line'|'Histogram'>[]=[];
+  /** Drawn indicator lines by identity, so setStudies keeps the ones that did not change. */
+  private studyEntries=new Map<string,{series:ISeriesApi<'Line'|'Histogram'>;values:(number|null)[];candles:readonly Candle[]}>();
+  private studyPlotList:StudyPlot[]=[];
+  // Indicator results. Without a shared store the engine computes its own on this thread.
+  private studyStore=new StudyStore(false);
+  private ownStudyStore=true;
+  private missingStudies=new Set<string>();
   private studySeriesByPane=new Map<string,ISeriesApi<'Line'|'Histogram'>[]>();
   // Price overlays share the 'price' pane key, so visibility is also tracked per study.
   private studySeriesById=new Map<string,ISeriesApi<'Line'|'Histogram'>[]>();
@@ -761,8 +778,29 @@ export class ChartEngine {
     this.setLatestRange(Math.max(0,this.candles.length-Math.round(count)));
   }
   private setEmaData(series:ISeriesApi<'Line'>,line:EmaLine) {
-    const values=ema(this.candles,line.period);
-    series.setData(this.candles.map((bar,index)=>values[index]===null?{time:bar.date}:{time:bar.date,value:values[index]!}));
+    const values=this.studyLines(studyKey.ema(line.period))?.value;
+    this.requestMissingStudies();
+    series.setData(values?this.candles.map((bar,index)=>values[index]===null?{time:bar.date}:{time:bar.date,value:values[index]!}):[]);
+  }
+  /**
+   * Shares a chart's indicator results with its legend. The store holds the full history and computes in a
+   * background worker, so replayed prefixes read cached values and nothing recomputes per bar.
+   */
+  setStudyStore(store:StudyStore) {this.studyStore=store;this.ownStudyStore=false;}
+  /** Redraws indicators whose results arrived since the last draw. */
+  refreshStudies() {
+    this.setStudies(this.studies);
+    for(const {series,line} of this.averages.values()) this.setEmaData(series,line);
+  }
+  private studyLines(key:string):StudyLines|undefined {
+    if(this.ownStudyStore) {this.studyStore.setInputs(this.candles,this.benchmark);return this.studyStore.getNow(key);}
+    const lines=this.studyStore.take(key);
+    if(!lines) this.missingStudies.add(key);
+    return lines;
+  }
+  private requestMissingStudies() {
+    if(!this.missingStudies.size) return;
+    this.studyStore.request([...this.missingStudies]);this.missingStudies.clear();
   }
   setEmaLines(lines:readonly EmaLine[]) {
     if(lines.length>5 || !lines.every(validEmaLine)) return;
@@ -954,7 +992,7 @@ export class ChartEngine {
       this.computeVolume(true);
       this.volumeSeries.update(this.volumeData(bar,candles.length-1));
       for(const {series,line} of this.averages.values()) {
-        const value=ema(candles,line.period).at(-1);
+        const value=this.studyLines(studyKey.ema(line.period))?.value[candles.length-1];
         series.update(value===null || value===undefined?{time:bar.date}:{time:bar.date,value});
       }
     } else if(shortened) {
@@ -1032,162 +1070,182 @@ export class ChartEngine {
     }
   }
   setStudies(studies:Partial<ChartStudies>) {
-    for(const series of this.studySeries) this.chart.removeSeries(series);
-    this.studySeries=[];this.studySeriesByPane.clear();this.studySeriesById.clear();this.studies={...defaultStudies(),...studies};
-    const panes=new Map<string,number>();
+    this.studies={...defaultStudies(),...studies};
     const plots=this.studyPlots();
+    const next=new Map<string,{series:ISeriesApi<'Line'|'Histogram'>;values:(number|null)[];candles:readonly Candle[]}>();
+    const wanted=new Set(plots.map(plot=>plot.key));
+    // Lines that stay are kept as they are; only removed or new ones touch the chart.
+    for(const [key,entry] of this.studyEntries) if(!wanted.has(key)) this.chart.removeSeries(entry.series);
+    const paneOf=new Map<string,number>(),created=new Set<string>();
     for(const plot of plots) {
-      if(plot.pane!=='price'&&!panes.has(plot.pane)) panes.set(plot.pane,this.chart.panes().length);
-      const pane=plot.pane==='price'?0:panes.get(plot.pane)!;
-      const series=this.chart.addSeries(plot.histogram?HistogramSeries:LineSeries,{
-        color:plot.color,
-        lineWidth:(plot.lineWidth??1) as LineWidth,
-        lineStyle:plot.lineStyle??LineStyle.Solid,
-        title:plot.title,
-        priceLineVisible:false,
-        lastValueVisible:!plot.histogram&&!plot.dots,
-        ...(plot.dots?{lineVisible:false,pointMarkersVisible:true,pointMarkersRadius:1.5}:{})
-      },pane);
-      if(plot.pane!=='price') series.getPane().setStretchFactor(.3);
-      for(const level of plot.levels??[]) {
-        series.createPriceLine({
-          price:level.price,
-          color:level.color??'#aab8c5',
-          lineWidth:1 as LineWidth,
-          lineStyle:level.lineStyle??LineStyle.Dashed,
-          axisLabelVisible:true
-        });
+      const kept=this.studyEntries.get(plot.key);
+      if(kept&&plot.pane!=='price') paneOf.set(plot.pane,kept.series.getPane().paneIndex());
+    }
+    this.studySeries=[];this.studySeriesByPane.clear();this.studySeriesById.clear();
+    for(const plot of plots) {
+      const options={color:plot.color,lineWidth:(plot.lineWidth??1) as LineWidth,lineStyle:plot.lineStyle??LineStyle.Solid,title:plot.title};
+      let entry=this.studyEntries.get(plot.key);
+      if(entry) entry.series.applyOptions(options);
+      else {
+        if(plot.pane!=='price'&&!paneOf.has(plot.pane)) {paneOf.set(plot.pane,this.chart.panes().length);created.add(plot.pane);}
+        const series=this.chart.addSeries(plot.histogram?HistogramSeries:LineSeries,{
+          ...options,
+          priceLineVisible:false,
+          lastValueVisible:!plot.histogram&&!plot.dots,
+          ...(plot.dots?{lineVisible:false,pointMarkersVisible:true,pointMarkersRadius:1.5}:{})
+        },plot.pane==='price'?0:paneOf.get(plot.pane)!);
+        if(created.delete(plot.pane)) series.getPane().setStretchFactor(.3);
+        for(const level of plot.levels??[]) {
+          series.createPriceLine({
+            price:level.price,
+            color:level.color??'#aab8c5',
+            lineWidth:1 as LineWidth,
+            lineStyle:level.lineStyle??LineStyle.Dashed,
+            axisLabelVisible:true
+          });
+        }
+        entry={series,values:[],candles:[]};
       }
-      this.studySeries.push(series);
+      if(entry.values!==plot.values||entry.candles!==this.candles) {
+        entry.series.setData(this.studyData(plot));
+        entry.values=plot.values;entry.candles=this.candles;
+      }
+      next.set(plot.key,entry);
+      this.studySeries.push(entry.series);
       if(plot.id) {
         if(!this.studySeriesById.has(plot.id)) this.studySeriesById.set(plot.id,[]);
-        this.studySeriesById.get(plot.id)!.push(series);
+        this.studySeriesById.get(plot.id)!.push(entry.series);
       }
       if(!this.studySeriesByPane.has(plot.pane)) this.studySeriesByPane.set(plot.pane,[]);
-      this.studySeriesByPane.get(plot.pane)!.push(series);
+      this.studySeriesByPane.get(plot.pane)!.push(entry.series);
     }
-    this.updateStudies(false,plots);
+    this.studyEntries=next;this.studyPlotList=plots;
     this.updatePaneObservers();
     this.notifyPanesChange();
   }
-  private studyPlots() {
+  /**
+   * What each enabled indicator draws. Values come from the study store; an indicator whose result is still
+   * being computed is left out and appears on the next refreshStudies.
+   */
+  private studyPlots():StudyPlot[] {
     const toLineStyle=(s?:string)=>s==='dashed'?LineStyle.Dashed:s==='dotted'?LineStyle.Dotted:LineStyle.Solid;
-    const plots:Array<{
-      title:string;
-      color:string;
-      values:(number|null)[];
-      pane:string;
-      histogram?:boolean;
-      lineWidth?:number;
-      lineStyle?:LineStyle;
-      levels?:Array<{price:number;color?:string;lineStyle?:LineStyle}>;
-      id?:string;
-      dots?:boolean;
-    }>=[];
-    const add=(title:string,color:string,values:(number|null)[],pane='price',lineWidth=1,lineStyle=LineStyle.Solid,levels?:Array<{price:number;color?:string;lineStyle?:LineStyle}>)=>plots.push({title,color,values,pane,lineWidth,lineStyle,levels});
+    const plots:StudyPlot[]=[];
+    const add=(key:string,line:string,title:string,color:string,pane='price',lineWidth=1,lineStyle=LineStyle.Solid,levels?:StudyPlot['levels'],extra:Partial<StudyPlot>={})=>{
+      const values=this.studyLines(key)?.[line];
+      if(!values) return;
+      plots.push({key:[key,line,pane,extra.histogram?1:0,extra.dots?1:0,JSON.stringify(levels??[])].join('|'),title,color,values,pane,lineWidth,lineStyle,levels,...extra});
+    };
 
     if(this.studies.rsi) {
       const cfg=this.studyConfigs.rsi;
       const period=cfg?.period??14;
-      const source=cfg?.source??'close';
       const levels=cfg?.bandsVisible!==false?[
         {price:cfg?.oversold??30,color:cfg?.bandColor??'#aab8c5',lineStyle:LineStyle.Dashed},
         {price:cfg?.overbought??70,color:cfg?.bandColor??'#aab8c5',lineStyle:LineStyle.Dashed},
       ]:undefined;
       if(cfg?.lineVisible!==false) {
-        add(`RSI ${period}`,cfg?.color??'#8b5cf6',rsi(this.candles,period,source),'rsi',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle),levels);
+        add(studyKey.rsi(period,cfg?.source??'close'),'value',`RSI ${period}`,cfg?.color??'#8b5cf6','rsi',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle),levels);
       }
     }
     if(this.studies.macd) {
       const cfg=this.studyConfigs.macd;
       const fast=cfg?.fast??12,slow=cfg?.slow??26,signal=cfg?.signal??9;
-      const source=cfg?.source??'close';
-      const values=macd(this.candles,fast,slow,signal,source);
+      const key=studyKey.macd(fast,slow,signal,cfg?.source??'close');
       if(cfg?.macdVisible!==false) {
-        add(`MACD ${fast}/${slow}`,cfg?.macdColor??this.accent,values.line,'macd',cfg?.macdWidth??1,toLineStyle(cfg?.macdStyle));
+        add(key,'line',`MACD ${fast}/${slow}`,cfg?.macdColor??this.accent,'macd',cfg?.macdWidth??1,toLineStyle(cfg?.macdStyle));
       }
       if(cfg?.signalVisible!==false) {
-        add(`Signal ${signal}`,cfg?.signalColor??'#f59e0b',values.signal,'macd',cfg?.signalWidth??1,toLineStyle(cfg?.signalStyle));
+        add(key,'signal',`Signal ${signal}`,cfg?.signalColor??'#f59e0b','macd',cfg?.signalWidth??1,toLineStyle(cfg?.signalStyle));
       }
       if(cfg?.histVisible!==false) {
-        plots.push({title:'MACD histogram',color:cfg?.histColor??CHART_PALETTE.volumeUp,values:values.histogram,pane:'macd',histogram:true});
+        add(key,'histogram','MACD histogram',cfg?.histColor??CHART_PALETTE.volumeUp,'macd',1,LineStyle.Solid,undefined,{histogram:true});
       }
     }
     if(this.studies.sma) {
       const cfg=this.studyConfigs.sma;
       const period=cfg?.period??50;
-      const source=cfg?.source??'close';
       if(cfg?.visible!==false) {
-        add(`SMA ${period}`,cfg?.color??'#3b82f6',sma(this.candles.map(bar=>getPriceSource(bar,source)),period),'price',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle));
+        add(studyKey.sma(period,cfg?.source??'close'),'value',`SMA ${period}`,cfg?.color??'#3b82f6','price',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle));
       }
     }
     if(this.studies.bollinger) {
       const cfg=this.studyConfigs.bollinger;
       const period=cfg?.period??20,multiplier=cfg?.multiplier??2;
-      const source=cfg?.source??'close';
-      const values=bollinger(this.candles,period,multiplier,source);
+      const key=studyKey.bollinger(period,multiplier,cfg?.source??'close');
       if(cfg?.upperVisible!==false) {
-        add(`BB ${period} · upper`,cfg?.upperColor??'#78909c',values.upper,'price',cfg?.upperWidth??1,toLineStyle(cfg?.upperStyle));
+        add(key,'upper',`BB ${period} · upper`,cfg?.upperColor??'#78909c','price',cfg?.upperWidth??1,toLineStyle(cfg?.upperStyle));
       }
       if(cfg?.middleVisible!==false) {
-        add(`BB ${period} · middle`,cfg?.middleColor??'#78909c',values.middle,'price',cfg?.middleWidth??1,toLineStyle(cfg?.middleStyle??'dashed'));
+        add(key,'middle',`BB ${period} · middle`,cfg?.middleColor??'#78909c','price',cfg?.middleWidth??1,toLineStyle(cfg?.middleStyle??'dashed'));
       }
       if(cfg?.lowerVisible!==false) {
-        add(`BB ${period} · lower`,cfg?.lowerColor??'#78909c',values.lower,'price',cfg?.lowerWidth??1,toLineStyle(cfg?.lowerStyle));
+        add(key,'lower',`BB ${period} · lower`,cfg?.lowerColor??'#78909c','price',cfg?.lowerWidth??1,toLineStyle(cfg?.lowerStyle));
       }
     }
     if(this.studies.vwap) {
       const cfg=this.studyConfigs.vwap;
       if(cfg?.visible!==false) {
-        add('Monthly VWAP',cfg?.color??'#e09b26',monthlyVwap(this.candles),'price',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle));
+        add(studyKey.vwap(),'value','Monthly VWAP',cfg?.color??'#e09b26','price',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle));
       }
     }
     if(this.studies.atr) {
       const cfg=this.studyConfigs.atr;
       const period=cfg?.period??14;
       if(cfg?.visible!==false) {
-        add(`ATR ${period}`,cfg?.color??'#e09b26',atr(this.candles,period),'atr',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle));
+        add(studyKey.atr(period),'value',`ATR ${period}`,cfg?.color??'#e09b26','atr',cfg?.lineWidth??1,toLineStyle(cfg?.lineStyle));
       }
     }
     if(this.studies.stochastic) {
       const cfg=this.studyConfigs.stochastic;
       const period=cfg?.period??14,dPeriod=cfg?.dPeriod??3;
-      const values=stochastic(this.candles,period,dPeriod);
+      const key=studyKey.stochastic(period,dPeriod);
       const levels=cfg?.bandsVisible!==false?[
         {price:cfg?.lower??20,color:cfg?.bandColor??'#aab8c5',lineStyle:LineStyle.Dashed},
         {price:cfg?.upper??80,color:cfg?.bandColor??'#aab8c5',lineStyle:LineStyle.Dashed},
       ]:undefined;
       if(cfg?.kVisible!==false) {
-        add(`Stoch %K ${period}`,cfg?.kColor??this.accent,values.k,'stochastic',cfg?.kWidth??1,toLineStyle(cfg?.kStyle),levels);
+        add(key,'k',`Stoch %K ${period}`,cfg?.kColor??this.accent,'stochastic',cfg?.kWidth??1,toLineStyle(cfg?.kStyle),levels);
       }
       if(cfg?.dVisible!==false) {
-        add(`Stoch %D ${dPeriod}`,cfg?.dColor??'#ef5350',values.d,'stochastic',cfg?.dWidth??1,toLineStyle(cfg?.dStyle));
+        add(key,'d',`Stoch %D ${dPeriod}`,cfg?.dColor??'#ef5350','stochastic',cfg?.dWidth??1,toLineStyle(cfg?.dStyle));
       }
     }
     if(this.studies.supertrend) {
       const cfg=this.studyConfigs.supertrend;
       const period=cfg?.period??10,multiplier=cfg?.multiplier??3;
-      const st=supertrend(this.candles,period,multiplier);
-      add(`Supertrend ${period} ${multiplier}`,st.directions.at(-1)===-1?(cfg?.downColor??'#ef5350'):(cfg?.upColor??'#089981'),st.values,'price',cfg?.lineWidth??2,toLineStyle(cfg?.lineStyle));
+      const key=studyKey.supertrend(period,multiplier);
+      // Coloured by the direction at the latest shown bar (a replayed prefix reads the full history).
+      const direction=this.studyLines(key)?.direction[this.candles.length-1];
+      add(key,'value',`Supertrend ${period} ${multiplier}`,direction===-1?(cfg?.downColor??'#ef5350'):(cfg?.upColor??'#089981'),'price',cfg?.lineWidth??2,toLineStyle(cfg?.lineStyle));
     }
     const extras=this.studyConfigs.extras;
-    const extraValues=computeExtraStudies(this.candles,extras,{benchmark:this.benchmark});
     for(const def of enabledExtraStudies(extras)) {
-      const state=extras?.[def.id],title=studyTitle(def,studyParams(def,state));
+      const state=extras?.[def.id],params=studyParams(def,state),title=studyTitle(def,params),key=studyKey.extra(def.id,params);
       const levels=def.levels?.map(price=>({price,color:'#aab8c5',lineStyle:LineStyle.Dashed}));
-      def.lines.forEach((line,index)=>plots.push({
-        title:index===0?title:'',color:studyLineColor(line,state),values:extraValues.get(`${def.id}:${line.key}`)!,
-        pane:def.pane==='price'?'price':def.id,lineWidth:line.dots?2:1,lineStyle:line.dashed?LineStyle.Dashed:LineStyle.Solid,
-        levels:index===0?levels:undefined,id:def.id,dots:line.dots,
-      }));
+      def.lines.forEach((line,index)=>add(key,line.key,index===0?title:'',studyLineColor(line,state),
+        def.pane==='price'?'price':def.id,line.dots?2:1,line.dashed?LineStyle.Dashed:LineStyle.Solid,index===0?levels:undefined,{id:def.id,dots:line.dots}));
     }
+    this.requestMissingStudies();
     return plots;
   }
-  private updateStudies(appended=false,plots=this.studyPlots()) {
-    for(const [index,plot] of plots.entries()) {
-      const data=this.candles.map((bar,i)=>plot.values[i]===null?{time:bar.date}:{time:bar.date,value:plot.values[i]!,...(plot.histogram?{color:plot.values[i]!>=0?CHART_PALETTE.volumeUp:CHART_PALETTE.volumeDown}:{})});
-      if(appended) this.studySeries[index].update(data.at(-1)!);else this.studySeries[index].setData(data);
+  private studyData(plot:StudyPlot) {
+    return this.candles.map((bar,i)=>plot.values[i]===null||plot.values[i]===undefined?{time:bar.date}:{time:bar.date,value:plot.values[i]!,...(plot.histogram?{color:plot.values[i]!>=0?CHART_PALETTE.volumeUp:CHART_PALETTE.volumeDown}:{})});
+  }
+  /** New candles: a replay step appends one point per line; anything else redraws from the store. */
+  private updateStudies(appended=false) {
+    if(!appended) {this.setStudies(this.studies);return;}
+    // A shared store already holds the full history; an engine's own store recomputes for the new prefix.
+    const plots=this.ownStudyStore?this.studyPlots():this.studyPlotList;
+    const index=this.candles.length-1,bar=this.candles[index];
+    for(const plot of plots) {
+      const entry=this.studyEntries.get(plot.key);
+      if(!entry) continue;
+      entry.values=plot.values;
+      const value=plot.values[index];
+      entry.series.update(value===null||value===undefined?{time:bar.date}:{time:bar.date,value,...(plot.histogram?{color:value>=0?CHART_PALETTE.volumeUp:CHART_PALETTE.volumeDown}:{})});
+      entry.candles=this.candles;
     }
+    this.studyPlotList=plots;
   }
   setOnPanesChange(cb:()=>void) { this.onPanesChange=cb; }
   private updatePaneObservers() {

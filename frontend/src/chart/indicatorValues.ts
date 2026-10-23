@@ -1,16 +1,5 @@
-import { ema, type Candle, type EmaLine, type Interval } from './model';
-import {
-  rsi,
-  macd,
-  atr,
-  stochastic,
-  bollinger,
-  supertrend,
-  sma,
-  monthlyVwap,
-  getPriceSource,
-  type ChartStudies,
-} from './studies';
+import type { Candle, EmaLine, Interval } from './model';
+import type { ChartStudies } from './studies';
 import { computeSimpleVolume } from './simpleVolume';
 
 export interface IndicatorSnapshot {
@@ -63,8 +52,14 @@ export function formatIndicatorValue(value: number | null | undefined, precision
 }
 
 import type { StudyConfigs } from './studyConfigs';
-import { computeExtraStudies } from './extraStudies';
+import { EXTRA_STUDY_BY_ID, enabledExtraStudies, studyParams } from './extraStudies';
+import { studyKey, type StudyLines } from './studyCompute';
+import { StudyStore } from './studyStore';
 
+/**
+ * Legend values at any bar. With the chart's study store it reads the results the chart already has (and
+ * shows '-' for ones still computing); without one it computes them here.
+ */
 export function computeIndicatorSeries(
   candles: readonly Candle[],
   emaLines: readonly EmaLine[],
@@ -72,8 +67,17 @@ export function computeIndicatorSeries(
   studyConfigs?: StudyConfigs,
   benchmark?: ReadonlyMap<string, number>,
   interval: Interval = 'D',
+  store?: StudyStore,
 ) {
-  const extraSeries = computeExtraStudies(candles, studyConfigs?.extras, {benchmark});
+  let local: StudyStore | undefined;
+  if (!store) { local = new StudyStore(false); local.setInputs(candles, benchmark); }
+  const missing: string[] = [];
+  const read = (key: string): StudyLines | undefined => {
+    if (local) return local.getNow(key);
+    const lines = store!.take(key);
+    if (!lines) missing.push(key);
+    return lines;
+  };
   const volumeStats = computeSimpleVolume(candles, {ppvLength: studyConfigs?.volume?.ppvLength, maLength: studyConfigs?.volume?.maLength});
   const turnoverLength = studyConfigs?.volume?.maLength ?? 50;
   const turnoverAvg: (number | null)[] = [];
@@ -85,31 +89,30 @@ export function computeIndicatorSeries(
   });
   const emaMap = new Map<string, (number | null)[]>();
   for (const line of emaLines) {
-    emaMap.set(line.id, ema(candles, line.period));
+    const values = read(studyKey.ema(line.period))?.value;
+    if (values) emaMap.set(line.id, values);
+  }
+  const extraSeries = new Map<string, (number | null)[]>();
+  for (const def of enabledExtraStudies(studyConfigs?.extras)) {
+    const lines = read(studyKey.extra(def.id, studyParams(def, studyConfigs?.extras?.[def.id])));
+    if (lines) for (const line of EXTRA_STUDY_BY_ID.get(def.id)!.lines) extraSeries.set(`${def.id}:${line.key}`, lines[line.key]);
   }
 
   const macdCfg = studyConfigs?.macd;
-  const macdData = studies.macd
-    ? macd(candles, macdCfg?.fast ?? 12, macdCfg?.slow ?? 26, macdCfg?.signal ?? 9, macdCfg?.source ?? 'close')
-    : null;
+  const macdData = studies.macd ? read(studyKey.macd(macdCfg?.fast ?? 12, macdCfg?.slow ?? 26, macdCfg?.signal ?? 9, macdCfg?.source ?? 'close')) : undefined;
   const rsiCfg = studyConfigs?.rsi;
-  const rsiData = studies.rsi ? rsi(candles, rsiCfg?.period ?? 14, rsiCfg?.source ?? 'close') : null;
-  const atrData = studies.atr ? atr(candles, studyConfigs?.atr?.period ?? 14) : null;
+  const rsiData = studies.rsi ? read(studyKey.rsi(rsiCfg?.period ?? 14, rsiCfg?.source ?? 'close'))?.value : undefined;
+  const atrData = studies.atr ? read(studyKey.atr(studyConfigs?.atr?.period ?? 14))?.value : undefined;
   const stochCfg = studyConfigs?.stochastic;
-  const stochData = studies.stochastic
-    ? stochastic(candles, stochCfg?.period ?? 14, stochCfg?.dPeriod ?? 3)
-    : null;
+  const stochData = studies.stochastic ? read(studyKey.stochastic(stochCfg?.period ?? 14, stochCfg?.dPeriod ?? 3)) : undefined;
   const bbCfg = studyConfigs?.bollinger;
-  const bbData = studies.bollinger
-    ? bollinger(candles, bbCfg?.period ?? 20, bbCfg?.multiplier ?? 2, bbCfg?.source ?? 'close')
-    : null;
+  const bbData = studies.bollinger ? read(studyKey.bollinger(bbCfg?.period ?? 20, bbCfg?.multiplier ?? 2, bbCfg?.source ?? 'close')) : undefined;
   const stCfg = studyConfigs?.supertrend;
-  const stData = studies.supertrend
-    ? supertrend(candles, stCfg?.period ?? 10, stCfg?.multiplier ?? 3)
-    : null;
+  const stData = studies.supertrend ? read(studyKey.supertrend(stCfg?.period ?? 10, stCfg?.multiplier ?? 3)) : undefined;
   const smaCfg = studyConfigs?.sma;
-  const smaData = studies.sma ? sma(candles.map(b => getPriceSource(b, smaCfg?.source ?? 'close')), smaCfg?.period ?? 50) : null;
-  const vwapData = studies.vwap ? monthlyVwap(candles) : null;
+  const smaData = studies.sma ? read(studyKey.sma(smaCfg?.period ?? 50, smaCfg?.source ?? 'close'))?.value : undefined;
+  const vwapData = studies.vwap ? read(studyKey.vwap())?.value : undefined;
+  if (missing.length) store?.request(missing);
 
   return {
     getSnapshot(index: number): IndicatorSnapshot {
@@ -130,7 +133,7 @@ export function computeIndicatorSeries(
         volumeTurnoverAvg: turnoverAvg[idx] ?? null,
         volumeMinuteLiquidity: interval === 'D' && bar && volumeStats.average[idx] !== null && volumeStats.average[idx] !== undefined ? volumeStats.average[idx]! / 375 * bar.close / 1e5 : null,
         supertrend: stData
-          ? { value: stData.values[idx] ?? null, direction: stData.directions[idx] ?? 1 }
+          ? { value: stData.value[idx] ?? null, direction: stData.direction[idx] === -1 ? -1 : 1 }
           : null,
         bollinger: bbData
           ? {

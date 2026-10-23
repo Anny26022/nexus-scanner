@@ -147,6 +147,48 @@ it('applies study configs with one native series rebuild',()=>{
   expect(native.chart.addSeries).toHaveBeenCalledWith('Line',expect.objectContaining({title:'RSI 7'}),1);
   engine.destroy();
 });
+it('keeps unchanged indicator lines when another indicator is added or removed',()=>{
+  const {engine}=setup();
+  engine.setStudies({sma:true,bollinger:true});
+  const kept=native.series.slice(2);
+  expect(kept).toHaveLength(4);
+  for(const series of kept) series.setData.mockClear();
+  native.chart.removeSeries.mockClear();native.chart.addSeries.mockClear();
+  engine.setStudies({sma:true,bollinger:true,rsi:true});
+  expect(native.chart.addSeries).toHaveBeenCalledTimes(1);
+  expect(native.chart.removeSeries).not.toHaveBeenCalled();
+  for(const series of kept) expect(series.setData).not.toHaveBeenCalled();
+  engine.setStudies({sma:true,rsi:true});
+  expect(native.chart.removeSeries).toHaveBeenCalledTimes(3); // only the three Bollinger lines
+  expect(native.chart.addSeries).toHaveBeenCalledTimes(1);
+  engine.destroy();
+});
+it('draws indicators from a shared store once their results arrive, and replays from cached values',async()=>{
+  const {StudyStore}=await import('../chart/studyStore');
+  const history=Array.from({length:40},(_,index)=>({...candles[0],date:new Date(Date.UTC(2026,0,index+1)).toISOString().slice(0,10),close:index+11,high:index+12,low:index+9,open:index+10}));
+  const store=new StudyStore();
+  store.setInputs(history);
+  // Results still computing: over the main-thread budget, and the worker has not answered.
+  const take=vi.spyOn(store,'take').mockImplementation(()=>undefined);
+  const request=vi.spyOn(store,'request').mockImplementation(()=>undefined);
+  const {engine}=setup(history.slice(0,30));
+  engine.setStudyStore(store);
+  native.chart.addSeries.mockClear();
+  engine.setStudies({rsi:true});
+  expect(native.chart.addSeries).not.toHaveBeenCalled();
+  expect(request).toHaveBeenCalledWith(['rsi:14:close']);
+  take.mockRestore();request.mockRestore();
+  store.request(['rsi:14:close']); // no Worker in tests: computed right away
+  engine.refreshStudies();
+  expect(native.chart.addSeries).toHaveBeenCalledTimes(1);
+  const rsi=native.series.at(-1)!;
+  expect(rsi.setData.mock.lastCall?.[0]).toHaveLength(30);
+  const get=vi.spyOn(store,'getNow');
+  engine.setCandles(history.slice(0,31));
+  expect(rsi.update).toHaveBeenCalledWith(expect.objectContaining({time:history[30].date,value:store.get('rsi:14:close')!.value[30]}));
+  expect(get).not.toHaveBeenCalled(); // nothing recomputed for the replay step
+  engine.destroy();
+});
 it('applies configured volume colors to both price and separate panes',()=>{
   const {engine}=setup(candles.map((bar,index)=>index===1?{...bar,volume:150}:bar));
   const volume=native.series.find(series=>series.type==='Histogram')!;

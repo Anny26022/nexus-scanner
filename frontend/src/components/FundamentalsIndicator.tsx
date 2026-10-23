@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
+import { memo, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
 import {
@@ -8,6 +8,7 @@ import {
 import type { ChartMetrics } from './ChartLegend';
 import { ChartDialog } from './ChartDialog';
 import { Button } from './Button';
+import { useMountEffect } from '../hooks/useMountEffect';
 
 type Offset = {x: number; y: number};
 const croreFormat = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
@@ -27,9 +28,11 @@ const RESULT_ROWS = [
 const ESSENTIAL = new Set(['sales', 'expenses', 'operating_profit', 'opm', 'profit_before_tax', 'net_profit', 'eps']);
 const LOWER_IS_BETTER = new Set(['expenses', 'interest', 'depreciation', 'tax_expenses']);
 
-/** Drag anywhere on an element to move it within the chart; arrow keys nudge it. Positions are fractions of the free space. */
+/** Drag the badge or card handle; arrow keys nudge a focused overlay. */
 function useOverlayDrag(onMove?: (offset: Offset) => void) {
   const [live, setLive] = useState<Offset | null>(null);
+  const frame = useRef(0);
+  useMountEffect(() => () => cancelAnimationFrame(frame.current));
   const drag = useRef<{id: number; x: number; y: number; left: number; top: number; width: number; height: number; offset: Offset; moved: boolean} | null>(null);
   const measure = (element: HTMLElement) => {
     const bounds = element.getBoundingClientRect(), parent = element.parentElement!.getBoundingClientRect();
@@ -41,7 +44,9 @@ function useOverlayDrag(onMove?: (offset: Offset) => void) {
     live,
     handlers: {
       onPointerDown: (event: PointerEvent<HTMLElement>) => {
-        if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+        const target = event.target as HTMLElement;
+        if (event.button !== 0 || target.closest('button')) return;
+        if (event.currentTarget.classList.contains('pb-card') && !target.closest('.pb-drag-handle')) return;
         event.preventDefault(); event.stopPropagation();
         const position = measure(event.currentTarget);
         drag.current = {id: event.pointerId, x: event.clientX, y: event.clientY, ...position, offset: {x: position.left / position.width, y: position.top / position.height}, moved: false};
@@ -53,16 +58,16 @@ function useOverlayDrag(onMove?: (offset: Offset) => void) {
         event.stopPropagation();
         current.moved ||= Math.abs(event.clientX - current.x) + Math.abs(event.clientY - current.y) > 3;
         current.offset = {x: clamp((current.left + event.clientX - current.x) / current.width), y: clamp((current.top + event.clientY - current.y) / current.height)};
-        if (current.moved) setLive(current.offset);
+        if (current.moved && !frame.current) frame.current = requestAnimationFrame(() => { frame.current = 0; setLive(drag.current?.offset ?? null); });
       },
       onPointerUp: (event: PointerEvent<HTMLElement>) => {
         const current = drag.current;
         if (current?.id !== event.pointerId) return;
         if (current.moved) onMove?.(current.offset);
-        drag.current = null; setLive(null);
+        cancelAnimationFrame(frame.current); frame.current = 0; drag.current = null; setLive(null);
         event.currentTarget.releasePointerCapture(event.pointerId);
       },
-      onPointerCancel: () => { drag.current = null; setLive(null); },
+      onPointerCancel: () => { cancelAnimationFrame(frame.current); frame.current = 0; drag.current = null; setLive(null); },
       onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
         const direction = ({ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]} as Record<string, number[]>)[event.key];
         if (!direction || event.target !== event.currentTarget) return;
@@ -82,7 +87,7 @@ export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, me
   symbol: string; revision: string; cutoff: string; sessionDate: string; metrics?: ChartMetrics; config: FundamentalsConfig;
   onMoveBadge?: (offset: Offset) => void; onMove?: (offset: Offset) => void;
 }) {
-  const config = fundamentalsConfig(raw);
+  const config = useMemo(() => fundamentalsConfig(raw), [raw]);
   const badgeDrag = useOverlayDrag(onMoveBadge);
   const cardDrag = useOverlayDrag(onMove);
   const history = useQuery({queryKey: ['financial-history', revision, symbol], queryFn: () => screenerApi.getFinancialHistory(symbol, revision), staleTime: Infinity, retry: false, enabled: config.table});
@@ -104,8 +109,8 @@ export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, me
     ...surveillance.map(label => `Surveillance: ${label}`),
   ].filter(Boolean).join('\n');
 
-  const rows = config.table ? visibleFinancials(history.data, config.period, cutoff) : [];
-  const shown = rows.slice(0, config.count);
+  const rows = useMemo(() => config.table ? visibleFinancials(history.data, config.period, cutoff) : [], [history.data, config.table, config.period, cutoff]);
+  const shown = useMemo(() => rows.slice(0, config.count), [rows, config.count]);
 
   return <>
     {config.band && metadata && <div className="pb-badge" role="group" tabIndex={0} aria-label={`${symbol} price band`} title={`${bandTitle}\nDrag to move`}
@@ -116,8 +121,9 @@ export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, me
       </span>
       {surveillance.map(label => <span key={label} className="pb-status">{label}</span>)}
     </div>}
-    {config.table && <section className={`pb-card${config.layout === 'compact' ? '' : ' is-results'}`} tabIndex={0} aria-label={`${symbol} results`} title="Drag to move"
+    {config.table && <section className={`pb-card${config.layout === 'compact' ? '' : ' is-results'}`} tabIndex={0} aria-label={`${symbol} results`} title="Drag the handle to move; arrow keys nudge when focused"
       style={placed(cardDrag.live ?? config.offset, {'--pb-scale': config.tableScale} as CSSProperties)} {...cardDrag.handlers}>
+      <div className="pb-drag-handle" aria-hidden="true">•••</div>
       {shown.length ? (config.layout === 'compact'
         ? <CompactTable rows={rows} shown={shown} config={config} metadata={metadata} />
         : <ResultsTable shown={shown} config={config} metadata={metadata} />)
@@ -146,7 +152,7 @@ function ChangeCell({value}: {value: number | null}) {
   return <td className="pb-change" data-trend={rounded > 0 ? 'up' : rounded < 0 ? 'down' : 'flat'}>{rounded > 0 ? `+${rounded}` : rounded}%</td>;
 }
 
-function CompactTable({rows, shown, config, metadata}: {rows: FinancialPeriod[]; shown: FinancialPeriod[]; config: Required<FundamentalsConfig>; metadata?: ChartMetrics}) {
+const CompactTable = memo(function CompactTable({rows, shown, config, metadata}: {rows: FinancialPeriod[]; shown: FinancialPeriod[]; config: Required<FundamentalsConfig>; metadata?: ChartMetrics}) {
   const quarterly = config.period === 'quarterly';
   const profit = config.profit;
   const summary = [metadata?.sector, metadata?.industry].filter(value => value && value !== 'Unclassified').join(' | ');
@@ -177,16 +183,16 @@ function CompactTable({rows, shown, config, metadata}: {rows: FinancialPeriod[];
       })}</tbody>
     </table>
   </>;
-}
+});
 
 /** Screener-style results grid, oldest period first; a value beyond every earlier one is highlighted. */
-function ResultsTable({shown, config, metadata}: {shown: FinancialPeriod[]; config: Required<FundamentalsConfig>; metadata?: ChartMetrics}) {
+const ResultsTable = memo(function ResultsTable({shown, config, metadata}: {shown: FinancialPeriod[]; config: Required<FundamentalsConfig>; metadata?: ChartMetrics}) {
   const periods = [...shown].reverse();
   const keys = RESULT_ROWS.filter(([key]) => (config.layout === 'results' || ESSENTIAL.has(key)) && periods.some(row => financialNumber(row[key]) !== null));
   return <>
     <Meta metadata={metadata} />
     <table className="pb-results">
-      <thead><tr><th scope="col" /> {periods.map(row => <th scope="col" key={row.period_end}>{periodLabel(row.period_end)}</th>)}</tr></thead>
+      <thead><tr><th scope="col" />{periods.map(row => <th scope="col" key={row.period_end}>{periodLabel(row.period_end)}</th>)}</tr></thead>
       <tbody>{keys.map(([key, label]) => {
         const values = periods.map(row => financialNumber(row[key]));
         return <tr key={key}><th scope="row">{label}</th>{values.map((current, index) => {
@@ -202,7 +208,7 @@ function ResultsTable({shown, config, metadata}: {shown: FinancialPeriod[]; conf
       })}</tbody>
     </table>
   </>;
-}
+});
 
 export function FundamentalsSettingsDialog({config: raw, onApply, onClose}: {config?: FundamentalsConfig; onApply: (next: FundamentalsConfig) => void; onClose: () => void}) {
   const [config, setConfig] = useState(() => fundamentalsConfig(raw));
@@ -241,7 +247,7 @@ export function FundamentalsSettingsDialog({config: raw, onApply, onClose}: {con
       <label className="pb-setting-row">Table size
         <input type="range" min={0.8} max={1.5} step={0.05} value={config.tableScale} disabled={!config.table} onChange={event => set({tableScale: Number(event.target.value)})} />
         <output>{Math.round(config.tableScale * 100)}%</output></label>
-      <p className="pb-settings-note">Drag the badge or the table to move them; arrow keys nudge a focused one. UC/LC are the latest close × band, before exchange rounding, and are hidden in replay and for F&O stocks.</p>
+      <p className="pb-settings-note">Drag the badge or table handle to move them; arrow keys nudge a focused one. UC/LC are the latest close × band, before exchange rounding, and are hidden in replay and for F&O stocks.</p>
       <footer>
         <Button variant="ghost" onClick={() => setConfig(fundamentalsConfig({enabled: config.enabled}))}>Reset</Button>
         <div className="flex gap-2"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" type="submit">Apply</Button></div>

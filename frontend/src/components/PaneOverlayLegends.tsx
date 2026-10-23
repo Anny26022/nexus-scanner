@@ -715,15 +715,15 @@ export function SubPaneLegends({
         );
 
         // TradingView's volume stats: a row of pills at the top right of the volume pane.
-        const content = pane.id === 'volume' && !isHidden ? <>
+        const content = pane.id === 'volume' && !isHidden ? <div key={pane.id} className="chart-volume-overlay">
           {legendBar}
           <div key="volume-pills" className={`chart-volume-pills${targetElement ? '' : ' is-floating'}`}
             style={targetElement ? undefined : {top: `${Math.max(0, pane.top) + 6}px`}} aria-label="Volume statistics">
-            {volumePills(latest).map(pill => <span key={pill.valKey} className="chart-volume-pill" title={pill.title}>
+            {volumePills(latest, studyConfigs?.volume?.maLength ?? 50).map(pill => <span key={pill.valKey} className="chart-volume-pill" title={pill.title}>
               {pill.label}: <span data-ind-val={pill.valKey}>{pill.value}</span>
             </span>)}
           </div>
-        </> : legendBar;
+        </div> : legendBar;
         if (targetElement) {
           return createPortal(content, targetElement, `${pane.id}-${pane.paneIndex}`);
         }
@@ -742,10 +742,10 @@ function volumeStatPlots(latest: IndicatorSnapshot) {
   ];
 }
 
-function volumePills(latest: IndicatorSnapshot) {
+function volumePills(latest: IndicatorSnapshot, length: number) {
   return [
-    {label: 'Avg₹Vol', valKey: 'vol-turnover', value: formatCrore(latest.volumeTurnoverAvg), title: '50-day average traded value (close × volume)'},
-    {label: 'RVol', valKey: 'vol-rel', value: formatRelativeVolume(latest.volumeRel), title: 'Volume vs its 50-day average'},
+    {label: 'Avg₹Vol', valKey: 'vol-turnover', value: formatCrore(latest.volumeTurnoverAvg), title: `${length}-bar average traded value (close × volume)`},
+    {label: 'RVol', valKey: 'vol-rel', value: formatRelativeVolume(latest.volumeRel), title: `Volume vs its ${length}-bar average`},
     // Daily bars are complete, so the projected multiple equals the actual one.
     {label: 'Proj RVol', valKey: 'vol-proj', value: formatTimes(latest.volumeRel), title: 'Projected relative volume for the session (equals RVol on completed daily bars)'},
     {label: '1mL', valKey: 'vol-1ml', value: formatLakh(latest.volumeMinuteLiquidity), title: 'One-minute liquidity: average volume per minute (375-minute session) × close'},

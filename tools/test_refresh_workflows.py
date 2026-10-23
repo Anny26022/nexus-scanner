@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "ddb5e0a7429c128cff5f7943870a95aae948033623d629495e7a959d0a372700",
-    "weekly_eod2_refresh.yml": "1a5e8c5f93f79bf19d7745d41e3dfbad0c82077e76b11e7ac48884eb8459ae10",
+    "daily_refresh.yml": "19edbd652e251981f2ba4633a5dee0581e0e982d2f554735df8c34f83cabe686",
+    "weekly_eod2_refresh.yml": "0486d18f004492b0703d379c80f406f25838f3108662f0369f9fa4f625f9250b",
 }
 
 
@@ -181,6 +181,7 @@ class RefreshWorkflowTests(unittest.TestCase):
                 calls = [line.rstrip('\0').split('\0') for line in result.stdout.splitlines()]
                 self.assertEqual(sum(call[0] == 'add' for call in calls), additions)
                 self.assertEqual(['add', 'reference/dhan/group-stocks.json'] in calls, weekly == 'true')
+                self.assertTrue(any(call[0] == 'add' and 'frontend/public/data/price-band-history.json' in call for call in calls))
                 self.assertIn(['reset', '--mixed', 'origin/main'], calls)
                 self.assertIn(['commit', '-m', message], calls)
                 self.assertEqual(calls[-1], ['push'])

@@ -3,6 +3,7 @@ import gzip
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 from collections import deque
@@ -353,6 +354,15 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     history_temporary = history_path.with_name(history_path.name+'.tmp')
     history_temporary.write_bytes(gzip.compress(json.dumps(histories, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
     history_temporary.replace(history_path)
+    history_dir = generation/'financial-history'
+    history_dir.mkdir(exist_ok=True)
+    for symbol in context['stocks']:
+        if not re.fullmatch(r'[A-Z0-9&_.-]+', symbol):
+            raise ValueError('Invalid financial history symbol')
+        target = history_dir/f'{symbol}.json.gz'
+        temporary = target.with_suffix('.tmp')
+        temporary.write_bytes(gzip.compress(json.dumps(histories.get(symbol), separators=(',', ':'), allow_nan=False).encode(), mtime=0))
+        temporary.replace(target)
     compressed=gzip.compress(stock_bytes,compresslevel=6,mtime=0)
     compressed_path=generation/'stocks.json.gz'
     temporary=compressed_path.with_name(compressed_path.name+'.tmp')
@@ -400,6 +410,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     band_temporary.replace(band_path)
     manifest['priceBandHistoryUrl'] = f'/data/revisions/{revision}/price-band-history.json.gz'
     manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'
+    manifest['financialHistoryUrlTemplate'] = f'/data/revisions/{revision}/financial-history/{{symbol}}.json.gz'
     manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'
     manifest['themeClassificationUrl'] = f'/data/revisions/{revision}/theme-classification.json.gz'
     manifest['themeClassificationVersion'] = taxonomy['version']

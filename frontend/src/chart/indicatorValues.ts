@@ -1,4 +1,4 @@
-import { ema, type Candle, type EmaLine } from './model';
+import { ema, type Candle, type EmaLine, type Interval } from './model';
 import {
   rsi,
   macd,
@@ -71,6 +71,7 @@ export function computeIndicatorSeries(
   studies: ChartStudies,
   studyConfigs?: StudyConfigs,
   benchmark?: ReadonlyMap<string, number>,
+  interval: Interval = 'D',
 ) {
   const extraSeries = computeExtraStudies(candles, studyConfigs?.extras, {benchmark});
   const volumeStats = computeSimpleVolume(candles, {ppvLength: studyConfigs?.volume?.ppvLength, maLength: studyConfigs?.volume?.maLength});
@@ -127,7 +128,7 @@ export function computeIndicatorSeries(
         volumeRel: volumeStats.relative[idx] ?? null,
         volumeUpDown: volumeStats.upDown[idx] ?? null,
         volumeTurnoverAvg: turnoverAvg[idx] ?? null,
-        volumeMinuteLiquidity: bar && volumeStats.average[idx] !== null && volumeStats.average[idx] !== undefined ? volumeStats.average[idx]! / 375 * bar.close / 1e5 : null,
+        volumeMinuteLiquidity: interval === 'D' && bar && volumeStats.average[idx] !== null && volumeStats.average[idx] !== undefined ? volumeStats.average[idx]! / 375 * bar.close / 1e5 : null,
         supertrend: stData
           ? { value: stData.values[idx] ?? null, direction: stData.directions[idx] ?? 1 }
           : null,

@@ -139,3 +139,19 @@ it('turns dated bands into changes up to the cutoff', () => {
   expect(bandChanges(undefined, '2026-10-22')).toEqual([]);
   expect(fundamentalsConfig({enabled: true}).bandHistory).toBe(true);
 });
+
+it('leaves the results body scrollable and captures only handle drags', async () => {
+  renderOverlay();
+  await screen.findByRole('table');
+  const panel=screen.getByRole('region',{name:'TEST results'});
+  panel.setPointerCapture=vi.fn();
+  const bodyEvent=new MouseEvent('pointerdown',{bubbles:true,cancelable:true,button:0});
+  fireEvent(panel.querySelector('table')!,bodyEvent);
+  expect(bodyEvent.defaultPrevented).toBe(false);
+  expect(panel.setPointerCapture).not.toHaveBeenCalled();
+  const handleEvent=new MouseEvent('pointerdown',{bubbles:true,cancelable:true,button:0});
+  fireEvent(panel.querySelector('.pb-drag-handle')!,handleEvent);
+  expect(handleEvent.defaultPrevented).toBe(true);
+  expect(panel.setPointerCapture).toHaveBeenCalledOnce();
+  fireEvent.pointerCancel(panel);
+});

@@ -2250,7 +2250,7 @@
   background: color-mix(in srgb, var(--surface) 97%, transparent); color: var(--text);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--line-strong) 60%, transparent), 0 18px 34px rgb(15 23 42 / .1);
   font-variant-numeric: tabular-nums;
-  cursor: grab; user-select: none; touch-action: none; pointer-events: auto; scrollbar-width: none;
+  cursor: default; user-select: none; pointer-events: auto; scrollbar-width: thin;
   zoom: var(--pb-scale);
 }
 :root[data-theme="dark"] .pb-card { box-shadow: 0 0 0 1px var(--line), 0 18px 34px rgb(0 0 0 / .4); }
@@ -2342,3 +2342,5 @@
 .chart-volume-pill { padding: 4px 8px; border-radius: 2px; background: color-mix(in srgb, #4caf50 12%, var(--surface)); color: var(--secondary); font-size: 12px; line-height: 1.2; white-space: nowrap; font-variant-numeric: tabular-nums; }
 :root[data-theme="dark"] .chart-volume-pill { background: color-mix(in srgb, #4caf50 14%, var(--surface)); }
 @container (max-width: 560px) { .chart-volume-pill:nth-child(n+3) { display: none; } }
+
+.pb-drag-handle { cursor: grab; touch-action: none; text-align: center; color: var(--muted); line-height: 12px; margin: -6px 0 4px; }

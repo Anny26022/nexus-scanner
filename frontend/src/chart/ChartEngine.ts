@@ -89,7 +89,10 @@ export type ChartAppearance = {
   lastValueLabel?:boolean;
 };
 const scaleModes = {normal:PriceScaleMode.Normal,logarithmic:PriceScaleMode.Logarithmic,percentage:PriceScaleMode.Percentage,indexed:PriceScaleMode.IndexedTo100};
-const withAlpha = (hex:string,opacity:number) => `${hex}${Math.round(opacity*255).toString(16).padStart(2,'0')}`;
+const withAlpha = (hex:string,opacity:number) => {
+  const alpha=hex.length===9?parseInt(hex.slice(7),16)/255:1;
+  return `${hex.slice(0,7)}${Math.round(alpha*opacity*255).toString(16).padStart(2,'0')}`;
+};
 const RIGHT_EDGE_BARS = 6;
 const RIGHT_EDGE_PIXELS = 32;
 const SCROLL_WITHOUT_WHEEL = {mouseWheel:false,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true} as const;
@@ -315,10 +318,10 @@ export class ChartEngine {
   }
   private simpleMode() { return (this.studyConfigs.volume?.mode??'simple')==='simple'; }
   /** Recomputes Simple Volume colours, labels and snorts for the current candles. */
-  private computeVolume() {
+  private computeVolume(appended=false) {
     const cfg=this.studyConfigs.volume;
     this.simpleVolume=this.simpleMode()?computeSimpleVolume(this.candles,{ppvLength:cfg?.ppvLength??10,maLength:cfg?.maLength??50,dryFraction:cfg?.dryFraction??.2}):null;
-    this.syncVolumeAverage();
+    this.syncVolumeAverage(appended);
     this.refreshVolumeMarkers();
     this.refreshMarkers();
   }
@@ -344,7 +347,7 @@ export class ChartEngine {
     if(kind==='dry'&&cfg?.showDry!==false) return cfg?.dryColor??SIMPLE_VOLUME_COLORS.dry;
     return cfg?.noiseColor??this.volumeNoise;
   }
-  private syncVolumeAverage() {
+  private syncVolumeAverage(appended=false) {
     if(!this.volumeSeries) return;
     const pane=this.volumeSeries.getPane().paneIndex();
     const show=pane!==0&&this.volumeVisible&&this.currentAppearance?.volume!==false&&Boolean(this.simpleVolume);
@@ -353,9 +356,15 @@ export class ChartEngine {
       return;
     }
     if(this.volumeAverage&&this.volumeAverage.getPane().paneIndex()!==pane) {this.chart.removeSeries(this.volumeAverage);this.volumeAverage=null;}
+    const existing=Boolean(this.volumeAverage);
     this.volumeAverage??=this.chart.addSeries(LineSeries,{color:'#8e2a35',lineVisible:false,pointMarkersVisible:false,crosshairMarkerVisible:false,
       priceLineVisible:false,lastValueVisible:true,priceFormat:{type:'volume'},title:''},pane);
     const average=this.simpleVolume!.average;
+    if(appended&&existing) {
+      const index=this.candles.length-1,bar=this.candles[index],value=average[index];
+      this.volumeAverage.update(value==null?{time:bar.date}:{time:bar.date,value});
+      return;
+    }
     this.volumeAverage.setData(this.candles.map((bar,index)=>average[index]===null||average[index]===undefined?{time:bar.date}:{time:bar.date,value:average[index]!}));
   }
   private refreshVolumeMarkers() {
@@ -710,7 +719,7 @@ export class ChartEngine {
     if(appended) {
       const bar=candles.at(-1)!;
       this.price.update(this.priceData(bar,candles.length-1));
-      this.computeVolume();
+      this.computeVolume(true);
       this.volumeSeries.update(this.volumeData(bar,candles.length-1));
       for(const {series,line} of this.averages.values()) {
         const value=ema(candles,line.period).at(-1);
@@ -718,7 +727,7 @@ export class ChartEngine {
       }
     } else if(shortened) {
       const count=previous.length-candles.length;
-      for(const series of [this.price,this.volumeSeries,...[...this.averages.values()].map(entry=>entry.series),...this.studySeries]) series.pop(count);
+      for(const series of [this.price,this.volumeSeries,...[...this.averages.values()].map(entry=>entry.series),...this.studySeries,...(this.volumeAverage?[this.volumeAverage]:[])]) series.pop(count);
     } else this.setData();
     // Native append following honors a user who has panned away. Rewinds preserve the view.
     if(!appended&&range) this.chart.timeScale().setVisibleLogicalRange(range);

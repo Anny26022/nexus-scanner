@@ -18,7 +18,7 @@ export const defaultEmaLines = (): EmaLine[] => [
 ];
 export function validEmaLine(line:EmaLine):boolean {
   return !!line && typeof line.id==='string' && Number.isInteger(line.period) && line.period>=1 && line.period<=500
-    && /^#[0-9a-f]{6}$/i.test(line.color) && typeof line.enabled==='boolean'
+    && /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(line.color) && typeof line.enabled==='boolean'
     && Number.isFinite(line.width) && line.width>=1 && line.width<=4
     && ['solid','dashed','dotted'].includes(line.style) && Number.isFinite(line.opacity) && line.opacity>=.1 && line.opacity<=1;
 }

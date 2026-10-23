@@ -1,5 +1,7 @@
 import { expect, it } from 'vitest';
 import { computeSimpleVolume, periodBars } from '../chart/simpleVolume';
+import { computeIndicatorSeries } from '../chart/indicatorValues';
+import { defaultStudies } from '../chart/studies';
 import type { Candle } from '../chart/model';
 
 const day = (index: number) => new Date(Date.UTC(2024, 0, 1 + index)).toISOString().slice(0, 10);
@@ -68,4 +70,11 @@ it('derives TradingView-style volume pills: average traded value, projected RVol
   expect(formatLakh(snapshot.volumeMinuteLiquidity)).toBe('26.67 L');
   expect(formatTimes(160)).toBe('1.6x');
   expect(formatTimes(null)).toBe('-');
+});
+
+it('does not treat aggregated bar volume as daily minute liquidity', () => {
+  const candles = Array.from({length: 60}, (_, index) => ({date: new Date(Date.UTC(2025,0,1+index)).toISOString().slice(0,10),open:100,high:100,low:100,close:100,volume:375000}));
+  const daily = computeIndicatorSeries(candles, [], defaultStudies(), undefined, undefined, 'D').getSnapshot(59);
+  expect(daily.volumeMinuteLiquidity).toBe(1);
+  for (const interval of ['W','M'] as const) expect(computeIndicatorSeries(candles, [], defaultStudies(), undefined, undefined, interval).getSnapshot(59).volumeMinuteLiquidity).toBeNull();
 });

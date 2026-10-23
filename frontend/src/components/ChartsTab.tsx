@@ -96,7 +96,9 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const studyChoice=useRef(studies);
   const [studyConfigs, setStudyConfigs] = useState<StudyConfigs>(() => saved.studyConfigs ?? defaultStudyConfigs());
   const studyConfigsChoice = useRef(studyConfigs);
-  const visibleStudies = useMemo(() => filterStudiesForInterval(studies, studyConfigs, interval), [studies, studyConfigs, interval]);
+  const numericalConfigKey = JSON.stringify({...studyConfigs, fundamentals: undefined});
+  const numericalConfigs = useMemo<StudyConfigs>(() => JSON.parse(numericalConfigKey), [numericalConfigKey]);
+  const visibleStudies = useMemo(() => filterStudiesForInterval(studies, numericalConfigs, interval), [studies, numericalConfigs, interval]);
   const [activeIndicatorSetting, setActiveIndicatorSetting] = useState<string | null>(null);
   const [comparison,setComparison]=useState<{symbol:string;separate:boolean}|null>(saved.comparison??null);
   const persist=(change:Partial<SceneSettings>)=>writeChartStorage(`scene.${tileId}.v1`,{...loadScene(tileId),...change});
@@ -108,8 +110,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const overlayRef = useRef<HTMLDivElement>(null);
   const candleIndexByDate = useMemo(() => new Map(candles.map((b, i) => [b.date, i])), [candles]);
   const indicatorSeries = useMemo(() => {
-    return computeIndicatorSeries(candles, emaLines, visibleStudies, studyConfigs, benchmark);
-  }, [candles, emaLines, visibleStudies, studyConfigs, benchmark]);
+    return computeIndicatorSeries(candles, emaLines, visibleStudies, numericalConfigs, benchmark, interval);
+  }, [candles, emaLines, visibleStudies, numericalConfigs, benchmark, interval]);
   const indicatorSeriesRef = useRef(indicatorSeries);
   indicatorSeriesRef.current = indicatorSeries;
   const [hiddenStudies, setHiddenStudies] = useState<Record<string, boolean>>({});
@@ -136,6 +138,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     hiddenStudiesChoice.current = { ...hiddenStudiesChoice.current, [id]: hidden };
     setHiddenStudies(hiddenStudiesChoice.current);
     engine.current?.setStudyVisibility(id, !hidden);
+    if (id === 'fundamentals' && engine.current) updateBandGuides(engine.current);
   };
   const updateEmaLines = (next: EmaLine[]) => {
     setEmaLines(next);
@@ -155,11 +158,12 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     if (engine.current) setPaneOffsets(engine.current.getPaneOffsets?.() ?? []);
   };
   const applyStudyConfigs = (next: StudyConfigs) => {
+    const studiesChanged = JSON.stringify({...studyConfigsChoice.current, fundamentals: undefined}) !== JSON.stringify({...next, fundamentals: undefined});
     studyConfigsChoice.current = next;
     setStudyConfigs(next);
     engine.current?.setStudyConfigs?.(next);
     if (engine.current) updateBandGuides(engine.current);
-    engine.current?.setStudies(filterStudiesForInterval(studyChoice.current, next, interval));
+    if (studiesChanged) engine.current?.setStudies(filterStudiesForInterval(studyChoice.current, next, interval));
     if (engine.current) restoreHiddenStudies(engine.current);
     persist({ studyConfigs: next });
     if (engine.current) setPaneOffsets(engine.current.getPaneOffsets?.() ?? []);
@@ -182,7 +186,10 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   bandChoice.current = fundamentals?.bandHistory && !allHidden && !hiddenStudies.fundamentals ? bandChanges(bandHistory.data?.bands, sessionDate) : [];
   const earningsChoice = useRef<{date: string; line: boolean} | null>(null);
   earningsChoice.current = nextResults ? {date: nextResults.scheduled_date, line: fundamentals!.earningsLine} : null;
+  const metricsChoice = useRef(metrics);
+  metricsChoice.current = metrics;
   const updateBandGuides = (chart: ChartEngine) => {
+    const metrics = metricsChoice.current;
     const config = studyConfigsChoice.current.fundamentals;
     chart.setPriceBandGuides?.(config?.enabled && config.guides !== false && !hiddenStudiesChoice.current.fundamentals && clock.getSnapshot().index === null
       ? priceBandGuides(metrics?.circuitLimit, candles[candles.length - 1].close, metrics?.isFno) : []);
@@ -295,7 +302,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       setError(cause instanceof Error ? cause.message : 'Chart rendering unavailable.');
       return;
     }
-  }, [candles,activeBook,clock,previousByDate,startReplay,cancelSelection,events,lastDate,interval,sync,tileId,benchmark,metrics]);
+  }, [candles,activeBook,clock,previousByDate,startReplay,cancelSelection,events,lastDate,interval,sync,tileId,benchmark]);
   const saveImage=()=>{const image=engine.current?.takeScreenshot();if(image){const link=document.createElement('a');link.download=`${symbol}-chart.png`;link.href=image.toDataURL('image/png');link.click();}};
   const applyAppearance=(change:Partial<typeof appearance>)=>{
     const next={...appearanceChoice.current,...change};
@@ -366,6 +373,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         />
         <DrawingContextToolbar book={activeBook} />
       <EngineSync key={`${earningsChoice.current?.date ?? ''}|${earningsChoice.current?.line ?? ''}`} run={() => engine.current?.setUpcomingEarnings?.(earningsChoice.current)} />
+      <EngineSync key={`guides:${metrics?.circuitLimit}:${metrics?.isFno}`} run={() => { if(engine.current) updateBandGuides(engine.current); }} />
       <EngineSync key={`bands:${bandChoice.current.map(change => change.date + change.to).join(',')}`} run={() => engine.current?.setBandChanges?.(bandChoice.current)} />
       {studyConfigs.fundamentals?.enabled && !allHidden && !hiddenStudies.fundamentals && <FundamentalsIndicator
         symbol={symbol} revision={revision} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}

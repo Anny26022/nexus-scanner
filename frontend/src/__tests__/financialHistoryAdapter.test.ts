@@ -23,3 +23,13 @@ it('retains the schedule observation date and only returns the requested symbol'
   const {realAdapter}=await import('../api/realAdapter');
   expect(await realAdapter.getEarningsSchedule('TEST',revision)).toEqual({observedOn:'2026-10-22',events:[{symbol:'TEST',scheduled_date:'2026-10-25'}]});
 });
+
+it('uses the symbol asset when published instead of downloading every company',async()=>{
+  const template='/data/revisions/'+revision+'/financial-history/{symbol}.json.gz';
+  const fetch=vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({...manifest,financialHistoryUrlTemplate:template})}).mockResolvedValue(response({observed_on:'2026-10-22'}));
+  vi.stubGlobal('fetch',fetch);
+  const {realAdapter}=await import('../api/realAdapter');
+  expect(await realAdapter.getFinancialHistory('TEST',revision)).toMatchObject({observed_on:'2026-10-22'});
+  expect(fetch).toHaveBeenCalledWith(template.replace('{symbol}','TEST'));
+  expect(fetch).not.toHaveBeenCalledWith(manifest.financialHistoryUrl);
+});

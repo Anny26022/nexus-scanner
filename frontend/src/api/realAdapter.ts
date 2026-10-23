@@ -1,3 +1,5 @@
+import { getIpoJson } from './gzipJson';
+import { legacyFinancialHistory } from './financialHistoryClient';
 import type { ScreenerRunRequest, ScreenerRunResponse, IPORow, ExplainRequest, ExplainResponse,
   SymbolComparisonRequest, SymbolComparisonResponse, RevisionCurrentResponse } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
@@ -73,6 +75,7 @@ async function getChartJson<T>(url: string, resource = 'Chart'): Promise<T> {
 
 // Content-addressed URLs survive release changes. Share pending reads and parsed data.
 const objectCache = new Map<string, Promise<unknown>>();
+const financialCache = new Map<string, Promise<unknown>>();
 const releaseCache = new Map<string, Promise<unknown>>();
 function cached<T>(cache: Map<string, Promise<unknown>>, key: string, load: () => Promise<T>, limit: number): Promise<T> {
   let promise = cache.get(key);
@@ -141,27 +144,6 @@ async function companyAnnouncements(release: Manifest, symbol: string) {
   return history;
 }
 
-async function getIpoJson<T>(url: string, resource = 'IPO catalogue'): Promise<T> {
-  if (!url.endsWith('.gz')) return getJson<T>(url);
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (!bytes.length) throw new Error('Empty IPO catalogue');
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-      if (typeof DecompressionStream === 'undefined') throw new Error('Gzip unsupported');
-      const stream = new Response(bytes).body!.pipeThrough(new DecompressionStream('gzip'));
-      return JSON.parse(await new Response(stream).text()) as T;
-    }
-    // Fetch decodes Content-Encoding before returning bytes (including Vite 8).
-    if (response.headers.get('Content-Encoding')?.toLowerCase() === 'gzip') {
-      return JSON.parse(new TextDecoder().decode(bytes)) as T;
-    }
-    throw new Error('Expected gzip');
-  } catch {
-    throw new Error(`${resource} unavailable`);
-  }
-}
 
 async function snapshotSource(revision?: string, sessionDate?: string): Promise<SnapshotSource> {
   return manifestSnapshotSource(await getManifest(), revision, sessionDate);
@@ -170,8 +152,11 @@ async function snapshotSource(revision?: string, sessionDate?: string): Promise<
 class RealDataAdapter {
   async getFinancialHistory(symbol: string, revision: string) {
     const release = await releaseFor(revision);
-    if (release.revision !== revision || !release.financialHistoryUrl) throw new Error('Financial history was not published with this snapshot.');
-    const histories = await cached(releaseCache, release.financialHistoryUrl,
+    validSymbol(symbol);
+    if (release.revision !== revision || (!release.financialHistoryUrl && !release.financialHistoryUrlTemplate)) throw new Error('Financial history was not published with this snapshot.');
+    if (release.financialHistoryUrlTemplate) return getIpoJson<import('../chart/fundamentals').FinancialHistory | null>(release.financialHistoryUrlTemplate.replace('{symbol}', encodeURIComponent(symbol)), 'Financial history');
+    if (typeof Worker !== 'undefined') return legacyFinancialHistory(release.financialHistoryUrl!, symbol);
+    const histories = await cached(financialCache, release.financialHistoryUrl!,
       () => getIpoJson<Record<string, import('../chart/fundamentals').FinancialHistory>>(release.financialHistoryUrl!, 'Financial history'), 3);
     return histories[symbol] ?? null;
   }

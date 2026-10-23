@@ -16,7 +16,7 @@ import scanner_bridge as bridge
 from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
-from session_history import archive_daily_snapshot, register_session
+from session_history import archive_daily_snapshot, offload_plain_snapshot, register_session
 from revision_retention import retain_revisions
 import price_band_history
 from edl_pipeline.scanner.presets import list_presets
@@ -424,6 +424,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     manifest['universeClassificationUrl'] = f'/data/revisions/{revision}/universe-classification.json'
     started = elapsed('serialization and compression', started)
     session_record = archive_daily_snapshot(output, manifest)
+    manifest = offload_plain_snapshot(output, manifest)
     current_path = output / 'current.json'
     previous_revision = json.loads(current_path.read_text()).get('revision') if current_path.exists() else None
     manifest = complete_release(chart_root, output, manifest)

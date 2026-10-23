@@ -1,4 +1,5 @@
 import {readFile, writeFile, mkdir, stat} from 'node:fs/promises';
+import {gunzipSync} from 'node:zlib';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
@@ -8,11 +9,14 @@ export async function buildAiFilterChoices() {
   const manifest = JSON.parse(await readFile(path.join(data, 'current.json'), 'utf8'));
   if (!/^[a-f0-9]{64}$/.test(manifest.revision)) throw new Error('Invalid AI catalogue revision');
   const target = path.join(data,'ai-filter-choices.json');
-  const source = path.join(data,'revisions',manifest.revision,'stocks.json');
+  // Releases keep the compressed list; the plain one is served from R2 for old browsers only.
+  const revision = path.join(data,'revisions',manifest.revision);
+  const source = await stat(path.join(revision,'stocks.json.gz')).then(()=>path.join(revision,'stocks.json.gz'),()=>path.join(revision,'stocks.json'));
   const existing = await readFile(target,'utf8').then(JSON.parse).catch(()=>null);
   const modified = (await stat(source)).mtimeMs;
   if (existing?.revision === manifest.revision && existing.sourceModified === modified) return;
-  const snapshot = JSON.parse(await readFile(source,'utf8'));
+  const bytes = await readFile(source);
+  const snapshot = JSON.parse((source.endsWith('.gz') ? gunzipSync(bytes) : bytes).toString('utf8'));
   if (snapshot.revision !== manifest.revision || !Array.isArray(snapshot.stocks)) throw new Error('AI catalogue dataset mismatch');
   const fields = {SECTOR:'sector', INDUSTRY:'industry', SERIES:'series', PRICE_BAND:'circuitLimit', INDEX_MEMBERSHIP:'indexMemberships'};
   const choices = Object.fromEntries(Object.entries(fields).map(([id, field]) => [id,

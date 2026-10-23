@@ -13,8 +13,11 @@ it('reads a superseded revision from its gzip copy, which is all it keeps', () =
   expect(manifestSnapshotSource(manifest).url).toBe(manifest.datasetPackedGzipUrl);
 });
 
-it('falls back to plain JSON only where the browser cannot decompress', () => {
+it('falls back to plain JSON only where the browser cannot decompress, from R2 once releases use it', () => {
   vi.stubGlobal('DecompressionStream', undefined);
   expect(manifestSnapshotSource(manifest, previous).url).toBe(`/data/revisions/${previous}/stocks.json`);
   expect(manifestSnapshotSource(manifest).url).toBe(manifest.datasetUrl);
+  const r2 = {...manifest, datasetUrl: `https://data.example.com/releases/${current}/stocks.json`, objectUrlTemplate: 'https://data.example.com/objects/{hash}.json.gz'};
+  expect(manifestSnapshotSource(r2, previous).url).toBe(`https://data.example.com/releases/${previous}/stocks.json`);
+  expect(manifestSnapshotSource(r2).url).toBe(r2.datasetUrl);
 });

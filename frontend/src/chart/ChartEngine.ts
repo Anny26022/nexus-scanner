@@ -13,6 +13,8 @@ export type { ChartStudies } from './studies';
 import { type StudyConfigs } from './studyConfigs';
 export type { StudyConfigs } from './studyConfigs';
 import type { ChartEvent } from './events';
+import { computeSimpleVolume, type SimpleVolumeResult } from './simpleVolume';
+import { SIMPLE_VOLUME_COLORS } from './studyConfigs';
 
 // Match the reference screener's native candle and bar palette.
 export const CHART_PALETTE = {up:'#089981',down:'#ef5350',volumeUp:'rgba(8,153,129,0.5)',volumeDown:'rgba(239,83,80,0.5)'};
@@ -118,6 +120,9 @@ export class ChartEngine {
   private disposed=false;
   private priceLines=new Map<string,IPriceLine>();
   private markers:ISeriesMarkersPluginApi<Time>;
+  private volumeMarkers?:ISeriesMarkersPluginApi<Time>;
+  private simpleVolume:SimpleVolumeResult|null=null;
+  private volumeNoise='#787b86';
   private eventData:readonly ChartEvent[]=[];
   private eventCutoff='';
   private showEvents=false;
@@ -281,6 +286,11 @@ export class ChartEngine {
     const style=getComputedStyle(this.host);
     const token=(name:string,fallback:string)=>style.getPropertyValue(`--${name}`).trim()||fallback;
     this.accent=token('accent','#187669');
+    const noise=token('volume-noise','#787b86');
+    if(noise!==this.volumeNoise) {
+      this.volumeNoise=noise;
+      if(this.simpleVolume&&this.candles.length) this.volumeSeries.setData(this.candles.map((bar,index)=>this.volumeData(bar,index)));
+    }
     this.chart.applyOptions({
       layout:{background:{type:ColorType.Solid,color:token('chart-background',token('surface','#ffffff'))},textColor:token('muted','#787b86'),panes:{separatorColor:token('line','#e8e8ed'),separatorHoverColor:token('line-strong','#d2d2d7')}},
       grid:{vertLines:{color:token('chart-grid','#f0f0f0')},horzLines:{color:token('chart-grid','#f0f0f0')}},
@@ -291,8 +301,41 @@ export class ChartEngine {
     else this.price.applyOptions(this.priceOptions());
     this.invalidate();
   }
-  private volumeData(bar:Candle) {
+  private simpleMode() { return (this.studyConfigs.volume?.mode??'simple')==='simple'; }
+  /** Recomputes Simple Volume colours, labels and snorts for the current candles. */
+  private computeVolume() {
+    const cfg=this.studyConfigs.volume;
+    this.simpleVolume=this.simpleMode()?computeSimpleVolume(this.candles,{ppvLength:cfg?.ppvLength??10,maLength:cfg?.maLength??50,dryFraction:cfg?.dryFraction??.2}):null;
+    this.refreshVolumeMarkers();
+    this.refreshMarkers();
+  }
+  /** Simple Volume's colour for a bar, or null for classic colouring. */
+  private simpleVolumeColor(index:number) {
+    const kind=this.simpleVolume?.kinds[index];
+    if(!kind) return null;
+    const cfg=this.studyConfigs.volume;
+    if(kind==='ppv') return cfg?.ppvColor??SIMPLE_VOLUME_COLORS.ppv;
+    if(kind==='up') return cfg?.aboveUpColor??SIMPLE_VOLUME_COLORS.up;
+    if(kind==='down') return cfg?.aboveDownColor??SIMPLE_VOLUME_COLORS.down;
+    if(kind==='dry'&&cfg?.showDry!==false) return cfg?.dryColor??SIMPLE_VOLUME_COLORS.dry;
+    return cfg?.noiseColor??this.volumeNoise;
+  }
+  private refreshVolumeMarkers() {
+    const result=this.simpleVolume,cfg=this.studyConfigs.volume;
+    if(!this.volumeMarkers) this.volumeMarkers=createSeriesMarkers(this.volumeSeries,[],{autoScale:true});
+    const markers:SeriesMarker<Time>[]=[];
+    if(result&&cfg?.showLabels!==false) for(const label of result.labels) {
+      const bar=this.candles[label.index];
+      const low=label.text.startsWith('L');
+      markers.push({id:`vol:${label.text}`,time:bar.date,position:'aboveBar',shape:'circle',size:0,text:low?label.text.slice(2):label.text,
+        color:low?cfg?.dryColor??SIMPLE_VOLUME_COLORS.dry:this.simpleVolumeColor(label.index)??SIMPLE_VOLUME_COLORS.ppv});
+    }
+    this.volumeMarkers.setMarkers(markers);
+  }
+  private volumeData(bar:Candle,index=this.candles.indexOf(bar)) {
     if(bar.volume===null) return {time:bar.date};
+    const simple=this.simpleVolumeColor(index);
+    if(simple) return {time:bar.date,value:bar.volume,color:simple};
     const color=bar.close>=bar.open
       ? (this.studyConfigs.volume?.upColor ? withAlpha(this.studyConfigs.volume.upColor,.5) : CHART_PALETTE.volumeUp)
       : (this.studyConfigs.volume?.downColor ? withAlpha(this.studyConfigs.volume.downColor,.5) : CHART_PALETTE.volumeDown);
@@ -300,7 +343,8 @@ export class ChartEngine {
   }
   private setData() {
     this.setPriceData();
-    this.volumeSeries.setData(this.candles.map(bar=>this.volumeData(bar)));
+    this.computeVolume();
+    this.volumeSeries.setData(this.candles.map((bar,index)=>this.volumeData(bar,index)));
     for(const {series,line} of this.averages.values()) this.setEmaData(series,line);
   }
   private isBarType():boolean {
@@ -529,7 +573,8 @@ export class ChartEngine {
     if(appended) {
       const bar=candles.at(-1)!;
       this.price.update(this.priceData(bar,candles.length-1));
-      this.volumeSeries.update(this.volumeData(bar));
+      this.computeVolume();
+      this.volumeSeries.update(this.volumeData(bar,candles.length-1));
       for(const {series,line} of this.averages.values()) {
         const value=ema(candles,line.period).at(-1);
         series.update(value===null || value===undefined?{time:bar.date}:{time:bar.date,value});
@@ -580,7 +625,12 @@ export class ChartEngine {
       const time=this.candles[Math.max(0,low-1)].date,key=`events:${time}`,entry=this.markerEvents.get(key);
       if(entry) entry.push(event);else this.markerEvents.set(key,[event]);
     }
-    this.markers.setMarkers([...this.markerEvents].sort(([a],[b])=>a.localeCompare(b)).map(([id,events]):SeriesMarker<Time>=>({id,time:id.slice(7),position:'belowBar',shape:'circle',color:events.some(event=>event.kind==='earnings')?'#049981':events.some(event=>event.kind==='action')?'#f59e0b':'#187669',size:.6})));
+    const eventMarkers=[...this.markerEvents].map(([id,events]):SeriesMarker<Time>=>({id,time:id.slice(7),position:'belowBar',shape:'circle',color:events.some(event=>event.kind==='earnings')?'#049981':events.some(event=>event.kind==='action')?'#f59e0b':'#187669',size:.6}));
+    // Bull Snorts: a small purple square under the candle.
+    const snorts=this.simpleVolume&&this.studyConfigs.volume?.showSnort!==false
+      ? this.simpleVolume.snorts.filter(index=>index<this.candles.length).map((index):SeriesMarker<Time>=>({id:`snort:${this.candles[index].date}`,time:this.candles[index].date,position:'belowBar',shape:'square',size:.5,color:this.studyConfigs.volume?.snortColor??SIMPLE_VOLUME_COLORS.snort}))
+      : [];
+    this.markers.setMarkers([...eventMarkers,...snorts].sort((a,b)=>String(a.time).localeCompare(String(b.time))));
   }
   /** Benchmark closes by session date, for relative-strength studies. Rebuild with setStudies after changing. */
   setBenchmark(benchmark:ReadonlyMap<string,number>|undefined) { this.benchmark=benchmark; }
@@ -589,8 +639,10 @@ export class ChartEngine {
     // Rebuilding here would create and remove every native series twice.
     const previous=this.studyConfigs.volume;
     this.studyConfigs=configs;
-    if(previous?.upColor!==configs.volume?.upColor || previous?.downColor!==configs.volume?.downColor) {
-      this.volumeSeries.setData(this.candles.map(bar=>this.volumeData(bar)));
+    if(JSON.stringify({...previous,visibility:undefined,separatePane:undefined})!==JSON.stringify({...configs.volume,visibility:undefined,separatePane:undefined})) {
+      this.computeVolume();
+      this.volumeSeries.setData(this.candles.map((bar,index)=>this.volumeData(bar,index)));
+      this.refreshMarkers();
     }
   }
   setStudies(studies:Partial<ChartStudies>) {

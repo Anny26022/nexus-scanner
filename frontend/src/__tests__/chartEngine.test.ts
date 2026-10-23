@@ -44,10 +44,11 @@ it('uses matching reference bodies, borders and wicks with thicker HLC bars and 
   expect(native.chart.addSeries).toHaveBeenCalledWith('Candlestick',expect.objectContaining({upColor:'#089981',downColor:'#ef5350',wickUpColor:'#089981',wickDownColor:'#ef5350',borderVisible:true,borderUpColor:'#089981',borderDownColor:'#ef5350'}));
   expect(CHART_PALETTE.volumeUp).toBe('rgba(8,153,129,0.5)');
   const volume=native.series.find(series=>series.type==='Histogram')!;
+  // Simple Volume is the default: too little history for an average, so every bar is grey noise.
   expect(volume.setData).toHaveBeenCalledWith([
-    {time:'2026-10-01',value:100,color:CHART_PALETTE.volumeUp},
+    {time:'2026-10-01',value:100,color:'#787b86'},
     {time:'2026-10-02'},
-    {time:'2026-10-05',value:200,color:CHART_PALETTE.volumeUp},
+    {time:'2026-10-05',value:200,color:'#787b86'},
   ]);
   const primitive=native.series[0].attachPrimitive.mock.calls[0][0];
   engine.setStyle('bars');
@@ -150,7 +151,7 @@ it('applies configured volume colors to both price and separate panes',()=>{
   const {engine}=setup(candles.map((bar,index)=>index===1?{...bar,volume:150}:bar));
   const volume=native.series.find(series=>series.type==='Histogram')!;
   const configs=defaultStudyConfigs();
-  configs.volume={...configs.volume!,upColor:'#123456',downColor:'#abcdef'};
+  configs.volume={...configs.volume!,mode:'classic',upColor:'#123456',downColor:'#abcdef'};
   engine.setStudyConfigs(configs);
   expect(volume.setData).toHaveBeenLastCalledWith([
     {time:'2026-10-01',value:100,color:'#12345680'},
@@ -263,5 +264,24 @@ it('applies precision, previous-close colouring, high/low lines and horizontal-o
   engine.setAppearance({...base,mousePan:'horizontal'});
   expect(native.chart.applyOptions).toHaveBeenCalledWith(expect.objectContaining({handleScale:expect.objectContaining({axisPressedMouseMove:{time:true,price:false}})}));
   expect(native.scale.applyOptions).toHaveBeenCalledWith({autoScale:true});
+  engine.destroy();
+});
+it('colours Simple Volume bars as pocket pivots, above-average up/down, dry and noise',()=>{
+  // 60 quiet bars alternating down/up, then a down day, a pocket pivot and an above-average down day.
+  const bars:Candle[]=[];
+  for(let index=0;index<60;index++) bars.push({date:new Date(Date.UTC(2026,0,1+index)).toISOString().slice(0,10),open:10,high:11,low:9,close:index%2?10.5:10,volume:100});
+  bars.push({date:'2026-03-02',open:10,high:11,low:9,close:9.5,volume:120});
+  bars.push({date:'2026-03-03',open:9.5,high:12,low:9.4,close:11.9,volume:500});
+  bars.push({date:'2026-03-04',open:11.9,high:12,low:10,close:10.2,volume:400});
+  bars.push({date:'2026-03-05',open:10.2,high:10.6,low:10,close:10.5,volume:10});
+  const {engine}=setup(bars);
+  const volume=native.series.find(series=>series.type==='Histogram')!;
+  const data=volume.setData.mock.lastCall![0];
+  expect(data.at(-4).color).toBe('#f23645');
+  expect(data.at(-3).color).toBe('#2962ff');
+  expect(data.at(-2).color).toBe('#f23645');
+  expect(data.at(-1).color).toBe('#ff9800');
+  // Bull Snort: 500 >= 3x the ~108 average, close in the top 35% of the range, above the previous close.
+  expect(native.markers.setMarkers).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({id:'snort:2026-03-03',shape:'square'})]));
   engine.destroy();
 });

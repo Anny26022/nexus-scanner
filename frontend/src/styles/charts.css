@@ -2216,3 +2216,6 @@
 .chart-clock { position: absolute; z-index: 10; right: 72px; bottom: 34px; display: flex; align-items: center; gap: 10px; padding: 3px 8px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
 .chart-clock-time b { color: var(--text); font-weight: 600; }
 .chart-clock-countdown { color: var(--secondary); }
+/* Volume's Avg / RVol / U/D numbers are meaningless without their labels. */
+.chart-pane-val-item:has([data-ind-val^="vol-"]) .chart-pane-val-label { display: inline; }
+.chart-volume-stat { margin-left: 6px; }

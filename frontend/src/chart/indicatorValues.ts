@@ -11,10 +11,15 @@ import {
   getPriceSource,
   type ChartStudies,
 } from './studies';
+import { computeSimpleVolume } from './simpleVolume';
 
 export interface IndicatorSnapshot {
   ema: Record<string, number | null>;
   volume: number | null;
+  /** Simple Volume readouts: 50-bar SMA, volume as % of it, and the up/down volume ratio. */
+  volumeAvg: number | null;
+  volumeRel: number | null;
+  volumeUpDown: number | null;
   supertrend: { value: number | null; direction: 1 | -1 } | null;
   bollinger: { upper: number | null; middle: number | null; lower: number | null } | null;
   sma: number | null;
@@ -28,6 +33,10 @@ export interface IndicatorSnapshot {
 }
 
 const metricFormatter = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
+
+export function formatRelativeVolume(value: number | null): string {
+  return value === null || !Number.isFinite(value) ? '-' : `${Math.round(value)}%`;
+}
 
 export function formatVolumeValue(volume: number | null): string {
   if (volume === null || !Number.isFinite(volume)) return '-';
@@ -54,6 +63,7 @@ export function computeIndicatorSeries(
   benchmark?: ReadonlyMap<string, number>,
 ) {
   const extraSeries = computeExtraStudies(candles, studyConfigs?.extras, {benchmark});
+  const volumeStats = computeSimpleVolume(candles, {ppvLength: studyConfigs?.volume?.ppvLength, maLength: studyConfigs?.volume?.maLength});
   const emaMap = new Map<string, (number | null)[]>();
   for (const line of emaLines) {
     emaMap.set(line.id, ema(candles, line.period));
@@ -95,6 +105,9 @@ export function computeIndicatorSeries(
       return {
         ema: emaVals,
         volume: bar ? bar.volume : null,
+        volumeAvg: volumeStats.average[idx] ?? null,
+        volumeRel: volumeStats.relative[idx] ?? null,
+        volumeUpDown: volumeStats.upDown[idx] ?? null,
         supertrend: stData
           ? { value: stData.values[idx] ?? null, direction: stData.directions[idx] ?? 1 }
           : null,
@@ -143,6 +156,12 @@ export function updateLiveIndicatorDom(container: HTMLElement, snapshot: Indicat
       el.textContent = formatted(snapshot.ema[id]);
     } else if (key === 'vol' || key === 'volume-pane') {
       el.textContent = formatVolumeValue(snapshot.volume);
+    } else if (key === 'vol-avg') {
+      el.textContent = formatVolumeValue(snapshot.volumeAvg);
+    } else if (key === 'vol-rel') {
+      el.textContent = formatRelativeVolume(snapshot.volumeRel);
+    } else if (key === 'vol-ud') {
+      el.textContent = formatted(snapshot.volumeUpDown, 2);
     } else if (key === 'macd-line') {
       el.textContent = formatted(snapshot.macd?.line, configs?.macd?.precision);
     } else if (key === 'macd-signal') {

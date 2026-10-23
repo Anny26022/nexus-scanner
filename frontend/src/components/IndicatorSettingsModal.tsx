@@ -6,7 +6,7 @@ import type {
   PlotLineStyle,
   IndicatorVisibility,
 } from '../chart/studyConfigs';
-import { defaultStudyConfigs, defaultVisibility } from '../chart/studyConfigs';
+import { SIMPLE_VOLUME_COLORS, defaultStudyConfigs, defaultVisibility } from '../chart/studyConfigs';
 import { defaultEmaLines, type EmaLine } from '../chart/model';
 import type { ChartAppearance } from '../chart/ChartEngine';
 import { ChartDialog } from './ChartDialog';
@@ -709,6 +709,46 @@ export function IndicatorSettingsModal({
                   </div>
                 </div>
               )}
+              {normId === 'volume' && (() => {
+                const vol = draftConfigs.volume!;
+                const setVol = (change: Partial<NonNullable<StudyConfigs['volume']>>) => setDraftConfigs(prev => ({...prev, volume: {...prev.volume!, ...change}}));
+                const simple = (vol.mode ?? 'simple') === 'simple';
+                return <>
+                  <div className="setting-field-row">
+                    <label htmlFor="volume-mode">Colouring</label>
+                    <select id="volume-mode" aria-label="Volume colouring" value={vol.mode ?? 'simple'} onChange={e => setVol({mode: e.target.value as 'simple' | 'classic'})}>
+                      <option value="simple">Simple volume (pocket pivots)</option>
+                      <option value="classic">Classic up / down</option>
+                    </select>
+                  </div>
+                  {simple && <>
+                    <div className="setting-field-row">
+                      <label htmlFor="volume-ppv">Pocket pivot lookback</label>
+                      <select id="volume-ppv" aria-label="Pocket pivot lookback" value={vol.ppvLength ?? 10} onChange={e => setVol({ppvLength: Number(e.target.value) as 5 | 10 | 20})}>
+                        <option value={5}>5 bars</option>
+                        <option value={10}>10 bars</option>
+                        <option value={20}>20 bars</option>
+                      </select>
+                    </div>
+                    <div className="setting-field-row">
+                      <label htmlFor="volume-ma">Average length</label>
+                      <input id="volume-ma" aria-label="Volume average length" type="number" min={5} max={200} value={vol.maLength ?? 50}
+                        onChange={e => setVol({maLength: Math.max(5, Math.min(200, Number(e.target.value) || 50))})} />
+                    </div>
+                    <div className="setting-field-row">
+                      <label htmlFor="volume-dry">Dry volume at or below</label>
+                      <select id="volume-dry" aria-label="Dry volume fraction" value={vol.dryFraction ?? 0.2} onChange={e => setVol({dryFraction: Number(e.target.value)})}>
+                        {[[0.1, '1/10'], [0.2, '1/5'], [0.25, '1/4'], [1 / 3, '1/3']].map(([value, label]) => <option key={label} value={value}>{label} of average</option>)}
+                      </select>
+                    </div>
+                    {([['showDry', 'Show dry volume (orange)'], ['showLabels', 'Highest/lowest volume labels (HVE, HVY, HVQ, Y, Q)'], ['showSnort', 'Bull Snort markers']] as const).map(([key, label]) =>
+                      <label key={key} className="setting-visibility-item">
+                        <input type="checkbox" checked={vol[key] !== false} onChange={e => setVol({[key]: e.target.checked})} />
+                        {label}
+                      </label>)}
+                  </>}
+                </>;
+              })()}
             </div>
           )}
 
@@ -1398,7 +1438,16 @@ export function IndicatorSettingsModal({
               )}
 
               {/* Volume Style */}
-              {normId === 'volume' && (
+              {normId === 'volume' && (draftConfigs.volume?.mode ?? 'simple') === 'simple' && (
+                <>
+                  {([['ppvColor', 'Pocket pivot', SIMPLE_VOLUME_COLORS.ppv], ['aboveUpColor', 'Up above average', SIMPLE_VOLUME_COLORS.up],
+                    ['aboveDownColor', 'Down above average', SIMPLE_VOLUME_COLORS.down], ['dryColor', 'Dry volume', SIMPLE_VOLUME_COLORS.dry],
+                    ['noiseColor', 'Other volume', '#787b86'], ['snortColor', 'Bull Snort', SIMPLE_VOLUME_COLORS.snort]] as const).map(([key, label, fallback]) =>
+                    <PlotStyleRow key={key} label={label} color={draftConfigs.volume?.[key] ?? fallback}
+                      onColorChange={c => setDraftConfigs(prev => ({...prev, volume: {...prev.volume!, [key]: c}}))} />)}
+                </>
+              )}
+              {normId === 'volume' && draftConfigs.volume?.mode === 'classic' && (
                 <>
                   <PlotStyleRow
                     label="Up Volume"

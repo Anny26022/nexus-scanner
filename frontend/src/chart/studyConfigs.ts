@@ -144,10 +144,28 @@ export interface VwapConfig {
 
 export interface VolumeConfig {
   separatePane: boolean;
+  /** Classic mode colours. */
   upColor: string;
   downColor: string;
   visibility?: IndicatorVisibility;
+  /** "simple" is Simple Volume with Pocket Pivots (see simpleVolume.ts); "classic" colours every bar up/down. */
+  mode?: 'simple' | 'classic';
+  ppvLength?: 5 | 10 | 20;
+  maLength?: number;
+  dryFraction?: number;
+  showDry?: boolean;
+  showLabels?: boolean;
+  showSnort?: boolean;
+  ppvColor?: string;
+  aboveUpColor?: string;
+  aboveDownColor?: string;
+  dryColor?: string;
+  /** Unset follows the theme (--volume-noise). */
+  noiseColor?: string;
+  snortColor?: string;
 }
+
+export const SIMPLE_VOLUME_COLORS = {ppv: '#2962ff', up: '#089981', down: '#f23645', dry: '#ff9800', snort: '#9c27b0'} as const;
 
 export interface StudyConfigs {
   /** Registry indicators (see extraStudies.ts), persisted with the scene and saved layouts. */
@@ -275,5 +293,12 @@ export const defaultStudyConfigs = (): StudyConfigs => ({
     upColor: '#089981',
     downColor: '#ef5350',
     visibility: defaultVisibility(),
+    mode: 'simple',
+    ppvLength: 10,
+    maLength: 50,
+    dryFraction: 0.2,
+    showDry: true,
+    showLabels: true,
+    showSnort: true,
   },
 });

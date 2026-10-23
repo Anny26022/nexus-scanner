@@ -17,7 +17,9 @@ import type { StudyConfigs } from '../chart/studyConfigs';
 import {
   computeIndicatorSeries,
   formatIndicatorValue,
+  formatRelativeVolume,
   formatVolumeValue,
+  type IndicatorSnapshot,
 } from '../chart/indicatorValues';
 
 export interface LegendProps {
@@ -125,6 +127,9 @@ export function PricePaneLegend({
             <span className="chart-indicator-val" data-ind-val="vol">
               {formatVolumeValue(latest.volume)}
             </span>
+            {volumeStatPlots(latest).map(plot => <span key={plot.valKey} className="chart-indicator-val chart-volume-stat">
+              <span className="chart-pane-val-label">{plot.label}</span> <span data-ind-val={plot.valKey}>{plot.defaultVal}</span>
+            </span>)}
           </span>
           <span className="chart-indicator-actions">
             <button
@@ -553,6 +558,7 @@ export function SubPaneLegends({
             color: 'var(--text)',
             defaultVal: formatVolumeValue(latest.volume),
           },
+          ...volumeStatPlots(latest),
         ],
       });
     }
@@ -698,4 +704,13 @@ export function SubPaneLegends({
       })}
     </>
   );
+}
+
+/** Avg (50 SMA, which Simple Volume doesn't draw), relative volume and up/down volume ratio. */
+function volumeStatPlots(latest: IndicatorSnapshot) {
+  return [
+    {label: 'Avg', valKey: 'vol-avg', color: 'var(--muted)', defaultVal: formatVolumeValue(latest.volumeAvg)},
+    {label: 'RVol', valKey: 'vol-rel', color: 'var(--muted)', defaultVal: formatRelativeVolume(latest.volumeRel)},
+    {label: 'U/D', valKey: 'vol-ud', color: 'var(--muted)', defaultVal: formatIndicatorValue(latest.volumeUpDown, 2)},
+  ];
 }

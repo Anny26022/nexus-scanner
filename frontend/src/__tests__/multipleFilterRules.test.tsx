@@ -4,7 +4,7 @@ import {ScreenerModal} from '../components/ScreenerModal';
 import {NEXUS_CONDITION_CATALOG} from '../data/conditionCatalog';
 import {explainCondition} from '../utils/nqlParser';
 import type {ActiveCondition} from '../types/screener';
-import {readFileSync} from 'node:fs';
+import {loadPublishedSnapshot} from './fixtures/publishedSnapshot';
 import {screenSnapshot, type Snapshot} from '../api/snapshotScreen';
 
 afterEach(cleanup);
@@ -57,8 +57,7 @@ it('describes metric and period independently for repeated rule chips', () => {
 });
 
 it('evaluates repeated fundamental and return rules with existing AND/OR semantics', () => {
-  const manifest = JSON.parse(readFileSync('public/data/current.json', 'utf8'));
-  const published: Snapshot = JSON.parse(readFileSync(`public${manifest.datasetUrl}`, 'utf8'));
+  const published = loadPublishedSnapshot().snapshot;
   const snapshot: Snapshot = {...published, stocks:[{...published.stocks[0],
     asOfDate:published.asOfDate, metadataAsOfDate:published.asOfDate, historyAligned:true,
     roePct:20, rocePct:10, changePct:3, metrics:{return21:12}}]};

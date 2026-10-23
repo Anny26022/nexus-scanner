@@ -76,6 +76,15 @@ export type ChartAppearance = {
   zoomEnabled?:boolean;
   mousePan?:'both'|'horizontal';
   defaultVisibleBars?:number;
+  /** Line, step, marker and area styles. */
+  lineColor?:string;
+  lineWidth?:number;
+  /** Canvas and scale text. */
+  backgroundColor?:string;
+  scaleTextColor?:string;
+  scaleFontSize?:number;
+  /** Last-value label on the price scale. */
+  lastValueLabel?:boolean;
 };
 const scaleModes = {normal:PriceScaleMode.Normal,logarithmic:PriceScaleMode.Logarithmic,percentage:PriceScaleMode.Percentage,indexed:PriceScaleMode.IndexedTo100};
 const withAlpha = (hex:string,opacity:number) => `${hex}${Math.round(opacity*255).toString(16).padStart(2,'0')}`;
@@ -194,13 +203,17 @@ export class ChartEngine {
   private activeSeries():ISeriesApi<'Candlestick'|'Bar'|'Line'|'Area'|'Baseline'> {
     return this.price;
   }
-  private createPriceSeries() {
+  /** Colours and lines for the current style, from the appearance; shared by creation and live updates. */
+  private priceOptions() {
     const a=this.currentAppearance;
     const up=a?.upColor??CHART_PALETTE.up;
     const down=a?.downColor??CHART_PALETTE.down;
+    const line=a?.lineColor??this.accent;
+    const lineWidth=Math.max(1,Math.min(4,Math.round(a?.lineWidth??2))) as LineWidth;
+    const common={priceLineVisible:a?.priceLineVisible!==false,lastValueVisible:a?.lastValueLabel!==false};
     switch(this.style) {
       case 'candles':
-      case 'volumeCandles':return this.chart.addSeries(CandlestickSeries,{
+      case 'volumeCandles':return {...common,
         upColor:a?.bodyVisible===false?'transparent':up,
         downColor:a?.bodyVisible===false?'transparent':down,
         borderVisible:a?.borderVisible!==false,
@@ -209,27 +222,41 @@ export class ChartEngine {
         wickVisible:a?.wickVisible!==false,
         wickUpColor:a?.wickUpColor??up,
         wickDownColor:a?.wickDownColor??down,
-        priceLineVisible:a?.priceLineVisible!==false,
-      });
-      case 'hollowCandles':return this.chart.addSeries(CandlestickSeries,{
+      };
+      case 'hollowCandles':return {...common,
         upColor:'transparent',
-        downColor:down,
+        downColor:a?.bodyVisible===false?'transparent':down,
         borderVisible:true,
-        borderUpColor:up,
-        borderDownColor:down,
-        wickVisible:true,
-        wickUpColor:up,
-        wickDownColor:down,
-        priceLineVisible:a?.priceLineVisible!==false,
-      });
-      case 'bars':return this.chart.addSeries(BarSeries,{upColor:up,downColor:down,thinBars:false,openVisible:false,priceLineVisible:a?.priceLineVisible!==false});
-      case 'highLow':return this.chart.addSeries(BarSeries,{upColor:up,downColor:down,thinBars:true,openVisible:false,priceLineVisible:a?.priceLineVisible!==false});
-      case 'line':return this.chart.addSeries(LineSeries,{color:this.accent,lineWidth:2,lineType:LineType.Simple});
-      case 'lineWithMarkers':return this.chart.addSeries(LineSeries,{color:this.accent,lineWidth:2,lineType:LineType.Simple,crosshairMarkerVisible:true,pointMarkersVisible:true});
-      case 'stepLine':return this.chart.addSeries(LineSeries,{color:this.accent,lineWidth:2,lineType:LineType.WithSteps});
-      case 'area':return this.chart.addSeries(AreaSeries,{lineColor:this.accent,topColor:withAlpha(this.accent,.2),bottomColor:withAlpha(this.accent,0),lineWidth:2});
-      case 'hlcArea':return this.chart.addSeries(AreaSeries,{lineColor:this.accent,topColor:withAlpha(this.accent,.35),bottomColor:withAlpha(this.accent,.05),lineWidth:2});
-      case 'baseline':return this.chart.addSeries(BaselineSeries,{baseValue:{type:'price',price:this.candles[0]?.close??0},topLineColor:CHART_PALETTE.up,bottomLineColor:CHART_PALETTE.down});
+        borderUpColor:a?.borderUpColor??up,
+        borderDownColor:a?.borderDownColor??down,
+        wickVisible:a?.wickVisible!==false,
+        wickUpColor:a?.wickUpColor??up,
+        wickDownColor:a?.wickDownColor??down,
+      };
+      case 'bars':
+      case 'highLow':return {...common,upColor:up,downColor:down};
+      case 'line':
+      case 'lineWithMarkers':
+      case 'stepLine':return {...common,color:line,lineWidth};
+      case 'area':return {...common,lineColor:line,topColor:withAlpha(line.slice(0,7),.2),bottomColor:withAlpha(line.slice(0,7),0),lineWidth};
+      case 'hlcArea':return {...common,lineColor:line,topColor:withAlpha(line.slice(0,7),.35),bottomColor:withAlpha(line.slice(0,7),.05),lineWidth};
+      case 'baseline':return {...common,topLineColor:up,bottomLineColor:down,topFillColor1:withAlpha(up.slice(0,7),.28),topFillColor2:withAlpha(up.slice(0,7),.05),bottomFillColor1:withAlpha(down.slice(0,7),.05),bottomFillColor2:withAlpha(down.slice(0,7),.28),lineWidth};
+    }
+  }
+  private createPriceSeries() {
+    const options=this.priceOptions();
+    switch(this.style) {
+      case 'candles':
+      case 'volumeCandles':
+      case 'hollowCandles':return this.chart.addSeries(CandlestickSeries,options);
+      case 'bars':return this.chart.addSeries(BarSeries,{...options,thinBars:false,openVisible:false});
+      case 'highLow':return this.chart.addSeries(BarSeries,{...options,thinBars:true,openVisible:false});
+      case 'line':return this.chart.addSeries(LineSeries,{...options,lineType:LineType.Simple});
+      case 'lineWithMarkers':return this.chart.addSeries(LineSeries,{...options,lineType:LineType.Simple,crosshairMarkerVisible:true,pointMarkersVisible:true});
+      case 'stepLine':return this.chart.addSeries(LineSeries,{...options,lineType:LineType.WithSteps});
+      case 'area':
+      case 'hlcArea':return this.chart.addSeries(AreaSeries,options);
+      case 'baseline':return this.chart.addSeries(BaselineSeries,{...options,baseValue:{type:'price',price:this.candles[0]?.close??0}});
     }
   }
   private syncPriceLines() {
@@ -256,8 +283,9 @@ export class ChartEngine {
       grid:{vertLines:{color:token('chart-grid','#f0f0f0')},horzLines:{color:token('chart-grid','#f0f0f0')}},
       crosshair:{vertLine:{color:token('chart-crosshair','#aab8c5'),labelBackgroundColor:token('text','#131722')},horzLine:{color:token('chart-crosshair','#aab8c5'),labelBackgroundColor:token('text','#131722')}},
     });
-    if(this.style==='line'||this.style==='lineWithMarkers'||this.style==='stepLine') this.price.applyOptions({color:this.accent});
-    if(this.style==='area'||this.style==='hlcArea') this.price.applyOptions({lineColor:this.accent,topColor:withAlpha(this.accent,.2),bottomColor:withAlpha(this.accent,0)});
+    // Theme tokens are defaults; the user's own colours win.
+    if(this.currentAppearance) this.applyAppearanceColors(this.currentAppearance);
+    else this.price.applyOptions(this.priceOptions());
     this.invalidate();
   }
   private volumeData(bar:Candle) {
@@ -311,9 +339,26 @@ export class ChartEngine {
     if(range) this.chart.timeScale().setVisibleLogicalRange(range);
     this.invalidate();
   }
+  private applyAppearanceColors(appearance:ChartAppearance) {
+    const style=getComputedStyle(this.host);
+    const token=(name:string,fallback:string)=>style.getPropertyValue(`--${name}`).trim()||fallback;
+    this.chart.applyOptions({
+      layout:{
+        background:{type:ColorType.Solid,color:appearance.backgroundColor||token('chart-background',token('surface','#ffffff'))},
+        textColor:appearance.scaleTextColor||token('muted','#787b86'),
+        fontSize:Math.max(9,Math.min(16,Math.round(appearance.scaleFontSize??11))),
+      },
+      grid:{
+        horzLines:appearance.horzGridColor?{color:appearance.horzGridColor}:{},
+        vertLines:appearance.vertGridColor?{color:appearance.vertGridColor}:{},
+      },
+    });
+    this.price.applyOptions(this.priceOptions());
+  }
   setAppearance(appearance:ChartAppearance) {
     this.currentAppearance=appearance;
     this.scaleMode=appearance.scaleMode;
+    this.applyAppearanceColors(appearance);
     const toLwcLineStyle=(s?:string)=>s==='dashed'?LineStyle.Dashed:s==='dotted'?LineStyle.Dotted:LineStyle.Solid;
     this.chart.applyOptions({
       timeScale:{
@@ -367,35 +412,11 @@ export class ChartEngine {
           vertAlign:'center',
           lines:[{
             text:appearance.watermarkText||'',
-            color:appearance.watermarkColor||'rgba(154, 164, 178, 0.15)',
+            color:appearance.watermarkColor?withAlpha(appearance.watermarkColor.slice(0,7),appearance.watermarkOpacity??.15):'rgba(154, 164, 178, 0.15)',
             fontSize:48,
           }],
         });
       } catch { /* watermark is optional enhancement */ }
-    }
-
-    if(this.style==='candles') {
-      const up=appearance.upColor??CHART_PALETTE.up;
-      const down=appearance.downColor??CHART_PALETTE.down;
-      this.price.applyOptions({
-        upColor:appearance.bodyVisible===false?'transparent':up,
-        downColor:appearance.bodyVisible===false?'transparent':down,
-        borderVisible:appearance.borderVisible!==false,
-        borderUpColor:appearance.borderUpColor??up,
-        borderDownColor:appearance.borderDownColor??down,
-        wickVisible:appearance.wickVisible!==false,
-        wickUpColor:appearance.wickUpColor??up,
-        wickDownColor:appearance.wickDownColor??down,
-        priceLineVisible:appearance.priceLineVisible!==false,
-      });
-    } else if(this.style==='bars') {
-      const up=appearance.upColor??CHART_PALETTE.up;
-      const down=appearance.downColor??CHART_PALETTE.down;
-      this.price.applyOptions({
-        upColor:up,
-        downColor:down,
-        priceLineVisible:appearance.priceLineVisible!==false,
-      });
     }
 
     const separate=!!appearance.volumePane&&appearance.volume;

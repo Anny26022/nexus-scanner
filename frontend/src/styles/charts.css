@@ -463,7 +463,7 @@
 }
 .chart-grid-1 .chart-workspace { border: 1px solid var(--line); border-radius: 6px; }
 .chart-workspace:focus-within { outline: 1px solid var(--line-strong); outline-offset: -1px; z-index: 2; }
-.chart-workspace.chart-workspace-expanded { position: fixed; inset: 0 320px 0 0; z-index: var(--z-chart-overlay); width: auto; height: 100dvh; border: 0; border-radius: 0; }
+.chart-workspace.chart-workspace-expanded { position: fixed; inset: 0 var(--watchlist-width, 300px) 0 0; z-index: var(--z-chart-overlay); width: auto; height: 100dvh; border: 0; border-radius: 0; }
 .chart-desk-body-expanded .chart-watchlist-dock { position: fixed; inset: 0 0 0 auto; z-index: calc(var(--z-chart-overlay) + 1); height: 100dvh; }
 @media (max-width: 700px) {
   .chart-workspace.chart-workspace-expanded { right: 38px; }
@@ -507,29 +507,30 @@
     height: 100dvh;
   }
 }
-.chart-topbar { display: flex; align-items: center; gap: 4px; flex-shrink: 0; height: 48px; min-width: 0; padding: 0 10px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.chart-topbar { display: flex; align-items: center; gap: 2px; flex-shrink: 0; height: 40px; min-width: 0; padding: 0 8px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .chart-topbar-spacer { flex: 1; }
-.chart-bar-divider { width: 1px; height: 18px; margin-inline: 4px; background: var(--line); flex-shrink: 0; }
-.chart-symbol-search { display: flex; align-items: center; gap: 6px; flex: 0 1 170px; min-width: 110px; padding: 0 6px 0 8px; height: 32px; border-radius: var(--radius-md); background: var(--field); transition: background-color .16s var(--ease-out), box-shadow .16s var(--ease-out); }
-.chart-symbol-search:focus-within { background: var(--surface); box-shadow: var(--ring); }
+.chart-bar-divider { width: 1px; height: 16px; margin-inline: 4px; background: var(--line); flex-shrink: 0; }
+.chart-symbol-search { display: flex; align-items: center; gap: 6px; flex: 0 1 156px; min-width: 104px; padding: 0 4px 0 6px; height: 28px; border-radius: var(--radius-sm); background: transparent; transition: background-color .16s var(--ease-out), box-shadow .16s var(--ease-out); }
+.chart-symbol-search:hover { background: var(--surface-hover); }
+.chart-symbol-search:focus-within { background: var(--field); box-shadow: none; }
 .chart-symbol-logo { flex-shrink: 0; }
 .chart-symbol-logo > img, .chart-symbol-logo > span { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; }
 .chart-symbol-search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; letter-spacing: 0; }
 .chart-load-btn { display: grid; place-items: center; flex-shrink: 0; width: 20px; height: 24px; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; transition: color 0.12s; }
 .chart-load-btn:hover { color: var(--accent); }
-.chart-intervals { display: flex; gap: 2px; padding: 2px; border-radius: var(--radius-md); background: var(--field); }
+.chart-intervals { display: flex; gap: 1px; }
 .chart-interval-select { display: none; }
 .chart-topbar button:not(.chart-load-btn), .chart-interval-select {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
-  height: 32px; min-height: 32px; padding: 0 10px; border: 0; border-radius: var(--radius-md);
-  background: transparent; color: var(--secondary); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;
+  height: 28px; min-height: 28px; padding: 0 8px; border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--secondary); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; white-space: nowrap;
 }
 .chart-topbar button:not(.chart-load-btn):hover { background: var(--surface-hover); color: var(--text); }
 .chart-topbar .chart-interval-select { display: none; }
 .chart-topbar button[aria-pressed="true"] { color: var(--accent); background: var(--accent-soft); }
-.chart-topbar .chart-icon-button, .chart-topbar .chart-expand { width: 32px; min-width: 32px; padding: 0; }
-.chart-topbar .chart-intervals button { height: 28px; min-height: 28px; padding: 0 9px; border-radius: 7px; }
-.chart-topbar .chart-intervals button[aria-pressed="true"] { color: var(--text); font-weight: 600; background: var(--surface); box-shadow: var(--shadow-control); }
+.chart-topbar .chart-icon-button, .chart-topbar .chart-expand { width: 28px; min-width: 28px; padding: 0; }
+.chart-topbar .chart-intervals button { height: 28px; min-height: 28px; padding: 0 7px; border-radius: var(--radius-sm); }
+.chart-topbar .chart-intervals button[aria-pressed="true"] { color: var(--text); font-weight: 650; background: var(--field); box-shadow: none; }
 .chart-stage { position: relative; display: flex; flex: 1; min-width: 0; min-height: 180px; }
 .chart-plot { position: relative; display: flex; flex: 1; min-width: 0; }
 .nexus-chart-canvas { position: relative; display: block; flex: 1 1 0; min-width: 0; min-height: 180px; width: 100%; height: 100%; background: var(--chart-background, var(--surface)); touch-action: none; }
@@ -1008,40 +1009,69 @@
 .chart-modal .chart-icon-button:hover { background: var(--field); }
 .chart-shortcuts-dialog { width: min(720px, calc(100vw - 20px)); }
 
-.chart-settings-dialog { width: min(860px, calc(100vw - 20px)); border-radius: var(--radius-xl); }
-.chart-settings-dialog .chart-modal-heading { min-height: 56px; padding: 0 12px 0 20px; border-bottom: 1px solid var(--line); }
+/* Chart settings: tabs on the left, one flat panel on the right (TradingView's layout, lighter). */
+.chart-settings-dialog { width: min(720px, calc(100vw - 20px)); height: min(560px, calc(100dvh - 36px)); min-height: 0; max-height: calc(100dvh - 36px); }
+.chart-settings-dialog .chart-modal-heading { min-height: 52px; padding: 0 12px 0 20px; border-bottom: 1px solid var(--line); }
 .chart-settings-dialog .chart-modal-heading h2 { font-size: 15px; font-weight: 650; }
-.chart-settings-layout { grid-template-columns: 200px minmax(0, 1fr); }
-.chart-settings-nav { gap: 1px; padding: 12px 10px; background: var(--surface); }
-.chart-settings-nav-btn { height: 34px; min-height: 34px; padding: 0 10px; border-radius: var(--radius-md); color: var(--secondary); transition: background-color .14s var(--ease-out), color .14s var(--ease-out); }
-.chart-settings-nav-btn svg { color: var(--muted); }
-.chart-settings-nav-btn:hover { background: var(--surface-hover); }
-.chart-settings-nav-btn.active, .chart-settings-nav-btn[aria-current="page"] { background: var(--field); color: var(--text); }
-.chart-settings-nav-btn.active svg, .chart-settings-nav-btn[aria-current="page"] svg { color: var(--text); }
-.chart-settings-content { padding: 20px 28px 28px; background: var(--surface-subtle); }
-.chart-settings-section { gap: 12px; padding-bottom: 0; margin-bottom: 28px; border-bottom: 0; }
-.chart-settings-section-header h3 { font-size: 15px; font-weight: 650; letter-spacing: -0.015em; }
-/* Each group is an inset card; rows are separated by hairlines, like macOS settings. */
-.chart-settings-group { gap: 0; margin-top: 0; padding: 4px 16px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-control); }
-.chart-settings-group-title { margin: 0 -16px; padding: 10px 16px 6px; color: var(--muted); font-size: 11.5px; font-weight: 600; }
-.chart-settings-group > :is(.chart-setting-row, .chart-setting-toggle, .chart-setting-pair-row, .chart-setting-switch-row, .chart-transparency-container, .chart-settings-note) + :is(.chart-setting-row, .chart-setting-toggle, .chart-setting-pair-row, .chart-setting-switch-row, .chart-transparency-container) { border-top: 1px solid var(--line); }
-.chart-setting-row, .chart-setting-toggle, .chart-setting-pair-row { min-height: 42px; gap: 12px; }
-.chart-setting-row select, .chart-settings-select, .chart-setting-row input:not([type="checkbox"]):not([type="color"]):not([type="range"]) {
-  width: min(220px, 50%); height: 30px; min-height: 30px; padding: 0 10px; border: 0; border-radius: var(--radius-md);
-  background-color: var(--field); color: var(--text); font-size: 12.5px; transition: background-color .14s var(--ease-out), box-shadow .14s var(--ease-out);
+.chart-settings-layout { grid-template-columns: 184px minmax(0, 1fr); }
+.chart-settings-nav { gap: 1px; padding: 10px 8px; border-right: 1px solid var(--line); background: var(--surface); }
+.chart-settings-nav-btn { gap: 9px; height: 32px; min-height: 32px; padding: 0 10px; border-radius: var(--radius-md); color: var(--secondary); font-size: 13px; transition: background-color .14s var(--ease-out), color .14s var(--ease-out); }
+.chart-settings-nav-btn svg { flex-shrink: 0; color: var(--muted); }
+.chart-settings-nav-btn:hover { background: var(--surface-hover); color: var(--text); }
+.chart-settings-nav-btn.active { background: var(--field); color: var(--text); font-weight: 600; }
+.chart-settings-nav-btn.active svg { color: var(--text); }
+.chart-settings-nav-btn:focus-visible { outline: none; box-shadow: var(--ring); }
+.chart-settings-content { padding: 4px 24px 20px; background: var(--surface); }
+.cs-subhead { margin: 18px 0 4px; color: var(--muted); font-size: 11.5px; font-weight: 600; letter-spacing: 0; }
+.cs-subhead:first-child { margin-top: 14px; }
+.cs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; color: var(--text); font-size: 13px; }
+.cs-row.is-indent { padding-left: 26px; }
+.cs-row.is-disabled .cs-check span { color: var(--muted); }
+.cs-label { min-width: 0; color: var(--text); }
+.cs-control { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-shrink: 0; }
+.cs-check { display: inline-flex; align-items: center; gap: 10px; min-width: 0; cursor: pointer; }
+.cs-row.is-disabled .cs-check { cursor: default; }
+.cs-check input {
+  appearance: none; -webkit-appearance: none; position: relative; flex-shrink: 0; width: 16px; height: 16px; margin: 0;
+  border: 1.5px solid var(--line-strong); border-radius: 4px; background: var(--surface); cursor: pointer;
+  transition: background-color .12s, border-color .12s;
 }
-.chart-setting-row select:focus, .chart-settings-select:focus, .chart-setting-row input:not([type="checkbox"]):not([type="color"]):not([type="range"]):focus { background-color: var(--surface); box-shadow: var(--ring); }
-.chart-setting-toggle input[type="checkbox"], .chart-setting-pair-label input[type="checkbox"] { width: 17px; height: 17px; border-radius: 5px; }
-.chart-setting-toggle input[type="checkbox"]:checked::after, .chart-setting-pair-label input[type="checkbox"]:checked::after { top: 2px; left: 5px; }
-.chart-color-swatch { width: 26px; height: 26px; border: 0; border-radius: 7px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .1); }
-.chart-color-swatch:hover { transform: scale(1.06); }
-.chart-color-swatch-fill { border-radius: 7px; }
-.chart-settings-note { margin: 0 0 10px 27px; }
-.chart-settings-secondary, .chart-settings-apply { height: 32px; padding: 0 16px; border: 0; border-radius: var(--radius-md); font-size: 13px; }
-.chart-settings-secondary { background: var(--field); }
-.chart-settings-secondary:hover:not(:disabled) { background: var(--surface-hover); border-color: transparent; }
-.chart-settings-apply:hover { filter: brightness(1.08); }
-.chart-settings-footer { height: 60px; min-height: 60px; padding: 0 16px 0 20px; background: var(--surface); }
+.cs-check input:hover:not(:disabled) { border-color: var(--muted); }
+.cs-check input:checked { border-color: var(--accent); background: var(--accent); }
+.cs-check input:checked::after { content: ""; position: absolute; top: 1px; left: 4.5px; width: 3.5px; height: 7.5px; border: solid var(--on-accent); border-width: 0 1.75px 1.75px 0; transform: rotate(45deg); }
+.cs-check input:disabled { opacity: .45; cursor: default; }
+.cs-check input:focus-visible { outline: none; box-shadow: var(--ring); }
+.cs-select, .cs-input {
+  width: 176px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--radius-sm);
+  background-color: var(--field); color: var(--text); font: inherit; font-size: 12.5px; outline: none;
+  transition: background-color .12s, box-shadow .12s;
+}
+.cs-select { padding-right: 4px; cursor: pointer; }
+.cs-select.is-narrow { width: 84px; }
+.cs-input.is-number { width: 64px; font-variant-numeric: tabular-nums; }
+.cs-input[type="date"] { width: 150px; }
+.cs-select:hover:not(:disabled), .cs-input:hover:not(:disabled) { background-color: var(--surface-hover); }
+.cs-select:focus, .cs-input:focus { background-color: var(--surface); box-shadow: 0 0 0 1px var(--line-strong), var(--ring); }
+.cs-select:disabled, .cs-input:disabled { opacity: .45; cursor: default; }
+.cs-swatch { position: relative; display: inline-flex; width: 28px; height: 28px; flex-shrink: 0; padding: 4px; border-radius: var(--radius-sm); background: var(--field); cursor: pointer; }
+.cs-swatch span { width: 100%; height: 100%; border-radius: 3px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .1); }
+.cs-swatch input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.cs-swatch:hover { background: var(--surface-hover); }
+.cs-swatch:focus-within { box-shadow: var(--ring); }
+.cs-swatch.is-disabled { opacity: .4; pointer-events: none; }
+.cs-range { width: 120px; accent-color: var(--accent); }
+.cs-value { width: 36px; color: var(--muted); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.cs-note { margin: 2px 0 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.cs-button { height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-sm); background: var(--field); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.cs-button:hover:not(:disabled) { background: var(--surface-hover); }
+.cs-button:disabled { opacity: .45; cursor: default; }
+.cs-button:focus-visible, .cs-link:focus-visible { outline: none; box-shadow: var(--ring); }
+.cs-button.is-primary { padding: 0 18px; background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.cs-button.is-primary:hover { background: var(--accent); filter: brightness(1.1); }
+.cs-link { height: 28px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--secondary); font: inherit; font-size: 12.5px; cursor: pointer; }
+.cs-link:hover { color: var(--text); background: var(--surface-hover); }
+.chart-settings-footer { justify-content: space-between; height: 56px; min-height: 56px; padding: 0 16px 0 14px; background: var(--surface); }
+.chart-settings-footer .cs-button { height: 32px; }
 
 /* Modern Settings Toggle Switch & Slider Controls (TradingView / OpenAlgo style) */
 .chart-setting-switch-row {
@@ -2116,7 +2146,6 @@
   .chart-settings-dialog .chart-modal-heading h2 { font-size: 18px; }
   .chart-settings-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0,1fr); gap: 10px; padding: 0 12px 12px; }
   .chart-settings-nav { display: flex; flex-direction: row; gap: 2px; overflow-x: auto; padding: 8px 0 2px; border-right: 0; scrollbar-width: none; }
-  .chart-settings-content { border-radius: var(--radius-lg); }
   .chart-settings-nav button { flex: 0 0 auto; min-height: 34px; padding: 0 9px; font-size: 11px; }
   .chart-settings-nav button svg { width: 14px; height: 14px; }
   .chart-settings-content { max-width: none; padding: 12px 4px; }

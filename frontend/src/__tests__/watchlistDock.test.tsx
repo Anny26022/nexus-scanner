@@ -458,3 +458,15 @@ it('creates, switches and copies between named lists from the menus', () => {
   const lists = readChartStorage('watchlists.v1') as { lists: { name: string; items: string[] }[] };
   expect(lists.lists.find(list => list.name === 'Momentum')?.items).toEqual(['DIXON']);
 });
+
+it('resizes the dock from its edge and remembers the width', () => {
+  render(<WatchlistDock onSelectSymbol={vi.fn()} />, { wrapper: createWrapper() });
+  const handle = screen.getByRole('separator', { name: 'Resize watchlist' });
+  expect(handle).toHaveAttribute('aria-valuenow', '300');
+  fireEvent.keyDown(handle, { key: 'ArrowLeft' });
+  expect(handle).toHaveAttribute('aria-valuenow', '316');
+  expect(readChartStorage('watchlist-width.v1')).toBe(316);
+  expect(document.documentElement.style.getPropertyValue('--watchlist-width')).toBe('316px');
+  fireEvent.doubleClick(handle);
+  expect(readChartStorage('watchlist-width.v1')).toBe(300);
+});

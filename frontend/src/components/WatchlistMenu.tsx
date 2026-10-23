@@ -81,13 +81,13 @@ export function WatchlistMenu({store, flags, view, title, count, onSwitch, onVie
             })}
           </div>
           <div className="watchlist-menu-divider" />
-          <button type="button" className="watchlist-menu-row" onClick={() => startEditing('new')}><FolderPlus size={14} /><span className="watchlist-menu-name">Create new list…</span></button>
+          <button type="button" className="watchlist-menu-row" onClick={() => startEditing('new')}><FolderPlus size={13} /><span className="watchlist-menu-name">Create new list…</span></button>
           {!view && <>
-            <button type="button" className="watchlist-menu-row" onClick={() => startEditing('rename', activeName)}><Pencil size={14} /><span className="watchlist-menu-name">Rename “{activeName}”…</span></button>
-            <button type="button" className="watchlist-menu-row" onClick={() => startEditing('section')}><Heading size={14} /><span className="watchlist-menu-name">Add section…</span></button>
-            <button type="button" className="watchlist-menu-row" disabled={!count} onClick={() => { onClear(); close(); }}><Eraser size={14} /><span className="watchlist-menu-name">Clear list</span></button>
+            <button type="button" className="watchlist-menu-row" onClick={() => startEditing('rename', activeName)}><Pencil size={13} /><span className="watchlist-menu-name">Rename “{activeName}”…</span></button>
+            <button type="button" className="watchlist-menu-row" onClick={() => startEditing('section')}><Heading size={13} /><span className="watchlist-menu-name">Add section…</span></button>
+            <button type="button" className="watchlist-menu-row" disabled={!count} onClick={() => { onClear(); close(); }}><Eraser size={13} /><span className="watchlist-menu-name">Clear list</span></button>
             <button type="button" className="watchlist-menu-row is-danger" onClick={() => { onDelete(); close(); }}>
-              <Trash2 size={14} /><span className="watchlist-menu-name">{store.lists.length > 1 ? 'Delete list' : 'Clear entire list'}</span>
+              <Trash2 size={13} /><span className="watchlist-menu-name">{store.lists.length > 1 ? 'Delete list' : 'Clear entire list'}</span>
             </button>
           </>}
         </>}

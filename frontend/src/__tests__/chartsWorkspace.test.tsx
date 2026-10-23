@@ -192,16 +192,20 @@ it('connects native panes, styles, settings, date navigation and release-pinned 
   expect(screen.getByRole('dialog',{name:'Chart settings'}).parentElement?.parentElement).toBe(document.body);
   expect(screen.queryByRole('link',{name:'Charts by TradingView'})).not.toBeInTheDocument();
   expect(within(screen.getByRole('dialog',{name:'Chart settings'})).queryByRole('link',{name:'TradingView, Inc.'})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab',{name:'Status line'}));
   expect(screen.getByLabelText('Volume in separate pane')).toBeChecked();
   fireEvent.click(screen.getByLabelText('Volume in separate pane'));
+  fireEvent.click(screen.getByRole('tab',{name:'Canvas'}));
   fireEvent.change(screen.getByLabelText('Crosshair snapping'),{target:{value:'ohlc'}});
   expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({volumePane:false,crosshairMode:'ohlc'}));
+  fireEvent.click(screen.getByRole('tab',{name:'Symbol'}));
   fireEvent.change(screen.getByLabelText('Compare symbol'),{target:{value:'TCS'}});
   fireEvent.click(screen.getByRole('button',{name:'Add'}));
   await waitFor(()=>expect(engine.setComparison).toHaveBeenLastCalledWith('TCS',candles,false));
   expect(screenerApi.getChart).toHaveBeenCalledWith('TCS','a'.repeat(64),'2026-10-02');
   fireEvent.click(screen.getByLabelText('Comparison in synced pane'));
   await waitFor(()=>expect(engine.setComparison).toHaveBeenLastCalledWith('TCS',candles,true));
+  fireEvent.click(screen.getByRole('tab',{name:'Navigation'}));
   fireEvent.change(screen.getByLabelText('Go to date'),{target:{value:'2026-10-01'}});
   fireEvent.click(screen.getByRole('button',{name:'Go'}));
   expect(engine.goToDate).toHaveBeenCalledWith('2026-10-01');
@@ -214,6 +218,7 @@ it('keeps an explicitly saved volume overlay preference',async()=>{
   setup();await screen.findByLabelText('RELIANCE candlestick and volume chart');
   expect(vi.mocked(ChartEngine).mock.results[0].value.setAppearance).toHaveBeenCalledWith(expect.objectContaining({volumePane:false}));
   fireEvent.click(screen.getByRole('button',{name:'Chart settings'}));
+  fireEvent.click(screen.getByRole('tab',{name:'Status line'}));
   expect(screen.getByLabelText('Volume in separate pane')).not.toBeChecked();
 });
 it.each(['Cancel', 'Escape', 'Close', 'Backdrop'] as const)(
@@ -225,6 +230,7 @@ it.each(['Cancel', 'Escape', 'Close', 'Backdrop'] as const)(
     const engine=vi.mocked(ChartEngine).mock.results[0].value;
     fireEvent.click(screen.getByRole('button',{name:'Chart settings'}));
     const dialog=screen.getByRole('dialog',{name:'Chart settings'});
+    fireEvent.click(within(dialog).getByRole('tab',{name:'Status line'}));
     fireEvent.click(within(dialog).getByLabelText('Volume in separate pane'));
     expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({volumePane:false}));
 
@@ -368,6 +374,7 @@ it('configures crosshair transparency and inverted scale in chart settings', asy
   expect(dialog).toBeInTheDocument();
 
   // Test Transparency slider in Crosshair section
+  fireEvent.click(screen.getByRole('tab', { name: 'Canvas' }));
   const transparencySlider = screen.getByLabelText('Transparency');
   expect(transparencySlider).toBeInTheDocument();
   expect(transparencySlider).toHaveValue('0');
@@ -378,6 +385,7 @@ it('configures crosshair transparency and inverted scale in chart settings', asy
   expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({ crosshairTransparency: 45 }));
 
   // Test Invert scale toggle
+  fireEvent.click(screen.getByRole('tab', { name: 'Scales and lines' }));
   const invertToggle = screen.getByLabelText('Invert scale');
   expect(invertToggle).not.toBeChecked();
   fireEvent.click(invertToggle);
@@ -385,7 +393,8 @@ it('configures crosshair transparency and inverted scale in chart settings', asy
   expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({ invertScale: true }));
 
   // Test Vertical grid toggle
-  const vertToggle = screen.getByLabelText('Vertical grid');
+  fireEvent.click(screen.getByRole('tab', { name: 'Canvas' }));
+  const vertToggle = screen.getByLabelText('Vertical grid lines');
   expect(vertToggle).toBeChecked();
   fireEvent.click(vertToggle);
   expect(vertToggle).not.toBeChecked();

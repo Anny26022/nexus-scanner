@@ -16,12 +16,13 @@ import {
 import * as Popover from '@radix-ui/react-popover';
 import { screenerApi } from '../api/screenerApi';
 import type { StockRow } from '../types/screener';
-import { writeChartStorage } from '../chart/storage';
+import { readChartStorage, writeChartStorage } from '../chart/storage';
 import {
   FLAGS_KEY, FLAG_BY_ID, FLAG_COLORS, activeList, createList, deleteList, flaggedSymbols, loadFlags, loadWatchlistStore,
   moveItem, renameList, saveWatchlistStore, setFlag, switchList, withActiveItems, type FlagColor, type WatchlistFlags, type WatchlistStore,
 } from '../chart/watchlists';
 import { WatchlistMenu } from './WatchlistMenu';
+import { useMountEffect } from '../hooks/useMountEffect';
 import { SymbolWithLogo } from './SymbolWithLogo';
 
 const isSection = (item: string) => item.startsWith('###');
@@ -135,7 +136,10 @@ export interface WatchlistDockProps {
 
 type SortColumn = 'symbol' | 'last' | 'changePct';
 type SortDirection = 'asc' | 'desc';
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT = 32;
+const WIDTH_KEY = 'watchlist-width.v1';
+const DEFAULT_WIDTH = 300;
+const clampWidth = (width: number) => Math.round(Math.max(220, Math.min(560, width)));
 const OVERSCAN = 6;
 
 function useScrollToActiveItem(ref: RefObject<HTMLDivElement | null>, items: readonly string[], active: string | undefined, setTop: Dispatch<SetStateAction<number>>) {
@@ -162,6 +166,38 @@ export const WatchlistDock = memo(function WatchlistDock({
   onClose,
 }: WatchlistDockProps) {
   const [store, setStore] = useState<WatchlistStore>(loadWatchlistStore);
+  const [width, setWidth] = useState(() => {
+    const saved = readChartStorage(WIDTH_KEY);
+    return typeof saved === 'number' && Number.isFinite(saved) ? clampWidth(saved) : DEFAULT_WIDTH;
+  });
+  // The expanded chart workspace also leaves room for the dock, so the width lives on the root too.
+  const applyWidth = (next: number) => { setWidth(next); document.documentElement.style.setProperty('--watchlist-width', `${next}px`); };
+  const saveWidth = (next: number) => { applyWidth(next); writeChartStorage(WIDTH_KEY, next); };
+  useMountEffect(() => {
+    document.documentElement.style.setProperty('--watchlist-width', `${width}px`);
+    return () => document.documentElement.style.removeProperty('--watchlist-width');
+  });
+  // Dragging the left edge resizes the dock, like TradingView's right panel.
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const startX = event.clientX;
+    const startWidth = width;
+    let latest = startWidth;
+    const move = (moveEvent: PointerEvent) => { latest = clampWidth(startWidth + startX - moveEvent.clientX); applyWidth(latest); };
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+      handle.removeEventListener('pointercancel', end);
+      document.body.classList.remove('is-resizing-dock');
+      saveWidth(latest);
+    };
+    document.body.classList.add('is-resizing-dock');
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+  };
   const storeChoice = useRef(store);
   const [flags, setFlags] = useState<WatchlistFlags>(loadFlags);
   // null shows the active named list; a colour shows that flag's list.
@@ -459,7 +495,27 @@ export const WatchlistDock = memo(function WatchlistDock({
     <aside
       className={`chart-watchlist-dock${mobileOpen ? ' is-mobile-open' : ''}`}
       aria-label="Watchlist panel"
+      style={{'--watchlist-width': `${width}px`} as React.CSSProperties}
     >
+      <div
+        className="watchlist-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize watchlist"
+        aria-valuemin={220}
+        aria-valuemax={560}
+        aria-valuenow={width}
+        tabIndex={0}
+        title="Drag to resize · double-click to reset"
+        onPointerDown={startResize}
+        onDoubleClick={() => saveWidth(DEFAULT_WIDTH)}
+        onKeyDown={event => {
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            saveWidth(clampWidth(width + (event.key === 'ArrowLeft' ? 16 : -16)));
+          }
+        }}
+      />
       <button
         type="button"
         className="watchlist-mobile-toggle"
@@ -883,7 +939,7 @@ function FlagPicker({symbol, flag, onFlag}: {symbol: string; flag?: FlagColor; o
     <Popover.Trigger asChild>
       <button type="button" className={`watchlist-flag-btn${flag ? ' is-flagged' : ''}`} aria-label={flag ? `${symbol} flagged ${flag}, change flag` : `Flag ${symbol}`}
         title={flag ? 'Change flag' : 'Flag'} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
-        <Flag size={12} fill={flag ? 'currentColor' : 'none'} />
+        <Flag size={11} fill={flag ? 'currentColor' : 'none'} />
       </button>
     </Popover.Trigger>
     <Popover.Portal>
@@ -913,8 +969,8 @@ function WatchlistRowMenu({symbol, x, y, flag, inList, otherLists, onClose, onFl
         <FlagSwatches flag={flag} onFlag={color => { onFlag(color); onClose(); }} />
         <div className="watchlist-menu-divider" />
         {inList && <>
-          <button type="button" className="watchlist-menu-row" onClick={act(() => onMove('top'))}><ArrowUp size={14} /><span className="watchlist-menu-name">Move to top</span></button>
-          <button type="button" className="watchlist-menu-row" onClick={act(() => onMove('bottom'))}><ArrowDown size={14} /><span className="watchlist-menu-name">Move to bottom</span></button>
+          <button type="button" className="watchlist-menu-row" onClick={act(() => onMove('top'))}><ArrowUp size={13} /><span className="watchlist-menu-name">Move to top</span></button>
+          <button type="button" className="watchlist-menu-row" onClick={act(() => onMove('bottom'))}><ArrowDown size={13} /><span className="watchlist-menu-name">Move to bottom</span></button>
         </>}
         {otherLists.length > 0 && <>
           <div className="watchlist-menu-label">Add to list</div>
@@ -925,7 +981,7 @@ function WatchlistRowMenu({symbol, x, y, flag, inList, otherLists, onClose, onFl
         </>}
         <div className="watchlist-menu-divider" />
         <button type="button" className="watchlist-menu-row is-danger" onClick={act(onRemove)}>
-          <Trash2 size={14} /><span className="watchlist-menu-name">{inList ? 'Remove from list' : 'Remove flag'}</span>
+          <Trash2 size={13} /><span className="watchlist-menu-name">{inList ? 'Remove from list' : 'Remove flag'}</span>
         </button>
       </Popover.Content>
     </Popover.Portal>

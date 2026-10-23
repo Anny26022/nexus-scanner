@@ -29,6 +29,7 @@ import { IndicatorSettingsModal } from './IndicatorSettingsModal';
 import { ExtraStudySettingsDialog } from './ExtraStudySettingsDialog';
 import { ChartSymbolSearch, type ChartSymbolSearchHandle } from './ChartSymbolSearch';
 import { ChartShortcutsDialog } from './ChartShortcutsDialog';
+import { ChartClock } from './ChartClock';
 import { useMountEffect } from '../hooks/useMountEffect';
 import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../chart/extraStudies';
 import { WatchlistDock } from './WatchlistDock';
@@ -211,6 +212,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       // saved viewport. Restore exact dates only for an explicitly custom view.
       const customView=selectedRange===undefined&&clock.getSnapshot().index===null?latestScene.view:undefined;
       if(customView) chart.restoreView(customView);
+      else if(selectedRange===undefined&&(appearanceChoice.current.defaultVisibleBars??0)>0) chart.showLastBars(appearanceChoice.current.defaultVisibleBars!);
       if(paneChoice.current) chart.restorePaneWeights(paneChoice.current);
       if (selectingChoice.current) chart.setReplayPicker(startReplay,cancelSelection);
       let previousIndex=clock.getSnapshot().index;
@@ -311,7 +313,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       <button type="button" aria-label="Exit replay" title="Return to latest data" onClick={exitReplay}><X size={15}/></button>
     </div>}
     <div className={`chart-stage${selecting || replay.index!==null?' chart-stage-replay':''}`}>
-      <div className="chart-plot" ref={overlayRef}>
+      <div className="chart-plot" ref={overlayRef} data-indicator-values={appearance.statusIndicators===false?'hidden':undefined}>
+        {(appearance.sessionClock||appearance.barCountdown)&&<ChartClock timezone={appearance.timezone??'Asia/Kolkata'} clock={Boolean(appearance.sessionClock)} countdown={Boolean(appearance.barCountdown)} />}
         <DrawingToolbar
           book={activeBook}
           firstDate={firstDate}
@@ -322,6 +325,10 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         <DrawingContextToolbar book={activeBook} />
       <div className="chart-overlay-legend">
         <ChartLegend symbol={symbol} bar={currentBar} previous={previousByDate.get(currentBar.date)} quoteRef={quote}
+          status={{logo:appearance.statusLogo!==false,title:appearance.statusTitle!==false,titleMode:appearance.statusTitleMode??'symbol',
+            marketStatus:appearance.statusMarketStatus!==false,ohlc:appearance.statusOhlc!==false,change:appearance.statusBarChange!==false,
+            volume:appearance.statusVolume!==false,interval:interval==='D'?'1D':interval==='W'?'1W':'1M',name:metrics?.name,
+            background:appearance.statusBackground?{color:appearance.statusBackgroundColor,opacity:appearance.statusBackgroundOpacity??.8}:undefined}}
           metrics={replay.index===null&&!selecting?metrics:undefined} sessionDate={replay.index===null&&!selecting?sessionDate:undefined}/>
         <PricePaneLegend
           engine={engine.current}

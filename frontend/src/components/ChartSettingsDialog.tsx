@@ -312,11 +312,6 @@ export function ChartSettingsDialog({
                 {['0', '1', '2', '3', '4'].map(value => <option key={value} value={value}>{value === '0' ? '1' : `1/${10 ** Number(value)}`}</option>)}
               </select>
             </Row>
-            <Row label="Timezone">
-              <select aria-label="Timezone" className="cs-select" value={draft.timezone ?? 'Asia/Kolkata'} onChange={(e) => update({ timezone: e.target.value })}>
-                {TIMEZONES.map((tz) => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
-              </select>
-            </Row>
 
             <h4 className="cs-subhead">Compare</h4>
             <Row label="Symbol">
@@ -342,12 +337,14 @@ export function ChartSettingsDialog({
             <Check label="Market status" checked={draft.statusMarketStatus !== false} onChange={(checked) => update({ statusMarketStatus: checked })} />
             <Check label="Open, high, low, close" checked={draft.statusOhlc !== false} onChange={(checked) => update({ statusOhlc: checked })} />
             <Check label="Bar change values" checked={draft.statusBarChange !== false} onChange={(checked) => update({ statusBarChange: checked })} />
-            <Check label="Volume" checked={draft.volume} onChange={(checked) => update({ volume: checked })} />
+            <Check label="Volume value" checked={draft.statusVolume !== false} onChange={(checked) => update({ statusVolume: checked })} />
+            <h4 className="cs-subhead">Volume</h4>
+            <Check label="Volume bars" checked={draft.volume} onChange={(checked) => update({ volume: checked })} />
             <Check label="Volume in separate pane" indent disabled={!draft.volume} checked={draft.volumePane ?? false} onChange={(checked) => update({ volumePane: checked })} />
             <h4 className="cs-subhead">Indicators</h4>
             <Check label="Indicator values" checked={draft.statusIndicators !== false} onChange={(checked) => update({ statusIndicators: checked })} />
             <Check label="Background" checked={draft.statusBackground ?? false} onChange={(checked) => update({ statusBackground: checked })}>
-              <ColorPicker ariaLabel="Background color" disabled={!draft.statusBackground} value={draft.statusBackgroundColor ?? '#131722'} onChange={(val) => update({ statusBackgroundColor: val })} />
+              <ColorPicker ariaLabel="Background color" disabled={!draft.statusBackground} value={draft.statusBackgroundColor ?? themeColor('surface', isDarkTheme() ? '#161618' : '#ffffff')} onChange={(val) => update({ statusBackgroundColor: val })} />
               <input aria-label="Background opacity" className="cs-input is-number" type="number" min="0.1" max="1" step="0.05" disabled={!draft.statusBackground}
                 value={draft.statusBackgroundOpacity ?? 0.8} onChange={(e) => update({ statusBackgroundOpacity: Number(e.target.value) })} />
             </Check>
@@ -374,7 +371,13 @@ export function ChartSettingsDialog({
             <Check label="High and low price lines" checked={draft.highLowPriceLines ?? false} onChange={(checked) => update({ highLowPriceLines: checked })} />
             <h4 className="cs-subhead">Time scale</h4>
             <Check label="Corner clock" checked={draft.sessionClock ?? false} onChange={(checked) => update({ sessionClock: checked })} />
-            <Check label="Countdown to bar close" checked={draft.barCountdown ?? false} onChange={(checked) => update({ barCountdown: checked })} />
+            <Row label="Clock timezone" indent>
+              <select aria-label="Timezone" className="cs-select" disabled={!draft.sessionClock} value={draft.timezone ?? 'Asia/Kolkata'} onChange={(e) => update({ timezone: e.target.value })}>
+                {TIMEZONES.map((tz) => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
+              </select>
+            </Row>
+            <Check label="Countdown to session close" checked={draft.barCountdown ?? false} onChange={(checked) => update({ barCountdown: checked })} />
+            <p className="cs-note">Bars are end-of-day; the countdown tracks the NSE session (09:15–15:30 IST, weekdays).</p>
           </>}
 
           {section === 'appearance' && <>

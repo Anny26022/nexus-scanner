@@ -35,3 +35,12 @@ it('shows one tab at a time', () => {
   expect(screen.getByRole('tab', { name: 'Scales and lines' })).toHaveAttribute('aria-selected', 'true');
   expect(screen.getByLabelText('Invert scale')).toBeInTheDocument();
 });
+
+it('keeps volume bars and the status-line volume value as separate options', () => {
+  const onApply = open('candles');
+  fireEvent.click(screen.getByRole('tab', { name: 'Status line' }));
+  fireEvent.click(screen.getByLabelText('Volume value'));
+  expect(onApply).toHaveBeenLastCalledWith(expect.objectContaining({ statusVolume: false, volume: true }), 'candles', null);
+  fireEvent.click(screen.getByLabelText('Volume bars'));
+  expect(onApply).toHaveBeenLastCalledWith(expect.objectContaining({ volume: false }), 'candles', null);
+});

@@ -12,7 +12,7 @@ const native=vi.hoisted(()=>{
   function makeSeries(type:string) {
     return {type,setData:vi.fn(),update:vi.fn(),pop:vi.fn(),applyOptions:vi.fn(),attachPrimitive:vi.fn((primitive:{attached?:(input:unknown)=>void})=>primitive.attached?.({requestUpdate:vi.fn()})),detachPrimitive:vi.fn(),priceToCoordinate:vi.fn((price:number)=>price),coordinateToPrice:vi.fn((y:number)=>y),priceScale:vi.fn(()=>scale),getPane:vi.fn(()=>pane),moveToPane:vi.fn(),seriesOrder:vi.fn(()=>0),setSeriesOrder:vi.fn(),createPriceLine:vi.fn(()=>({applyOptions:vi.fn()})),removePriceLine:vi.fn()};
   }
-  const time={getVisibleLogicalRange:vi.fn(()=>({from:0,to:5})),setVisibleLogicalRange:vi.fn(),setVisibleRange:vi.fn(),fitContent:vi.fn(),width:vi.fn(()=>800),logicalToCoordinate:vi.fn((index:number)=>index*10),coordinateToLogical:vi.fn((x:number)=>x/10),timeToCoordinate:vi.fn(()=>null),coordinateToTime:vi.fn(()=>null),timeToIndex:vi.fn(()=>1),scrollToPosition:vi.fn()};
+  const time={getVisibleLogicalRange:vi.fn(()=>({from:0,to:5})),setVisibleLogicalRange:vi.fn(),setVisibleRange:vi.fn(),fitContent:vi.fn(),width:vi.fn(()=>800),logicalToCoordinate:vi.fn((index:number)=>index*10),coordinateToLogical:vi.fn((x:number)=>x/10),timeToCoordinate:vi.fn(()=>null),coordinateToTime:vi.fn(()=>null),timeToIndex:vi.fn(()=>1),scrollToPosition:vi.fn(),subscribeVisibleLogicalRangeChange:vi.fn(),unsubscribeVisibleLogicalRangeChange:vi.fn()};
   const chart={
     addSeries:vi.fn((type:string)=>{
       const result=makeSeries(type);
@@ -243,5 +243,25 @@ it('provides pane count and safe pane elements for DOM portaling',()=>{
   (native.pane as any).getHTMLElement = vi.fn(() => mockTr);
   expect(engine.getPaneElement(0)).toBe(mockDiv);
   delete (native.pane as any).getHTMLElement;
+  engine.destroy();
+});
+it('applies precision, previous-close colouring, high/low lines and horizontal-only drag from chart settings',()=>{
+  const {engine}=setup();
+  const base={horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal' as const};
+  const price=native.series[0];
+  engine.setAppearance({...base,precision:'3'});
+  expect(price.applyOptions).toHaveBeenLastCalledWith(expect.objectContaining({priceFormat:{type:'price',precision:3,minMove:.001}}));
+  // Bar 2 closes below bar 1's close even though it is a "green" candle by open in neither case: direction comes from the previous close.
+  engine.setAppearance({...base,colorByPreviousClose:true,upColor:'#00ff00',downColor:'#ff0000'});
+  const data=price.setData.mock.lastCall![0];
+  expect(data[1]).toMatchObject({color:'#ff0000',borderColor:'#ff0000',wickColor:'#ff0000'});
+  expect(data[2]).toMatchObject({color:'#00ff00'});
+  expect(data[0].color).toBeUndefined();
+  engine.setAppearance({...base,highLowPriceLines:true});
+  expect(price.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({price:14,title:'H'}));
+  expect(price.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({price:9,title:'L'}));
+  engine.setAppearance({...base,mousePan:'horizontal'});
+  expect(native.chart.applyOptions).toHaveBeenCalledWith(expect.objectContaining({handleScale:expect.objectContaining({axisPressedMouseMove:{time:true,price:false}})}));
+  expect(native.scale.applyOptions).toHaveBeenCalledWith({autoScale:true});
   engine.destroy();
 });

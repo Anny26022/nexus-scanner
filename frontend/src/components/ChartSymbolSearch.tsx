@@ -1,6 +1,6 @@
 import { useId, useImperativeHandle, useMemo, useState, type Ref } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
-import { Clock, CornerDownLeft, Search, X } from 'lucide-react';
+import { Clock, CornerDownLeft, Search } from 'lucide-react';
 import { WATCHLIST_KEY, readChartStorage, validSymbol, writeChartStorage } from '../chart/storage';
 import { rankSymbols, useSymbolDirectory, type SymbolEntry } from '../hooks/useSymbolDirectory';
 import { SymbolWithLogo } from './SymbolWithLogo';
@@ -115,7 +115,6 @@ export function ChartSymbolSearch({symbol, datasetRevision, sessionDate, onSelec
               else if (event.key === 'Enter' && !query && rows[selected]) { event.preventDefault(); choose(rows[selected].symbol); }
             }}
           />
-          {draft && <button type="button" className="symbol-palette-clear" aria-label="Clear search" onClick={() => { setDraft(''); setActive(0); }}><X size={12} /></button>}
           <RadixDialog.Close asChild><button type="button" className="symbol-palette-esc" aria-label="Close symbol search">Esc</button></RadixDialog.Close>
         </form>
 

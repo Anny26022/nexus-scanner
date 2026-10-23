@@ -1,4 +1,6 @@
-import type { Ref } from 'react';
+import type { CSSProperties, Ref } from 'react';
+import { marketOpen } from '../chart/marketHours';
+import { SymbolWithLogo } from './SymbolWithLogo';
 import type { Candle } from '../chart/model';
 import type { StockRow } from '../types/screener';
 
@@ -21,8 +23,14 @@ export function updateCandleValues(output:HTMLOutputElement,bar:Candle,previous?
     if (key==='change') field.dataset.tone=values.tone;
   }
 }
-export type ChartMetrics=Pick<StockRow,'marketCapCrore'|'freeFloatPct'|'circuitLimit'>;
-export function ChartLegend({symbol,bar,previous,metrics,sessionDate,quoteRef}:{symbol:string;bar:Candle;previous?:Candle;metrics?:ChartMetrics;sessionDate?:string;quoteRef?:Ref<HTMLOutputElement>}) {
+export type ChartMetrics=Pick<StockRow,'marketCapCrore'|'freeFloatPct'|'circuitLimit'>&Partial<Pick<StockRow,'name'>>;
+/** What the status line shows; each maps to a Chart settings → Status line option. */
+export interface StatusLineOptions {
+  logo:boolean;title:boolean;titleMode:'symbol'|'description'|'ticker';marketStatus:boolean;ohlc:boolean;change:boolean;volume:boolean;
+  interval?:string;name?:string;background?:{color?:string;opacity:number};
+}
+const DEFAULT_STATUS:StatusLineOptions={logo:true,title:true,titleMode:'symbol',marketStatus:true,ohlc:true,change:true,volume:true};
+export function ChartLegend({symbol,bar,previous,metrics,sessionDate,quoteRef,status=DEFAULT_STATUS}:{symbol:string;bar:Candle;previous?:Candle;metrics?:ChartMetrics;sessionDate?:string;quoteRef?:Ref<HTMLOutputElement>;status?:StatusLineOptions}) {
   const values=candleValues(bar,previous);
   const cap=metrics?.marketCapCrore;
   const float=metrics?.freeFloatPct;
@@ -31,11 +39,22 @@ export function ChartLegend({symbol,bar,previous,metrics,sessionDate,quoteRef}:{
   const circuit=typeof metrics?.circuitLimit==='string' && /^\s*\d+(?:\.\d+)?\s*%?\s*$/.test(metrics.circuitLimit)?Number.parseFloat(metrics.circuitLimit):null;
   const noBand=typeof metrics?.circuitLimit==='string' && metrics.circuitLimit.trim().toLowerCase()==='no band';
   const hasMetrics=validCap || floatCap!==null || (circuit!==null && circuit>0 && circuit<=100) || noBand;
-  return <div className="chart-legend">
+  const title=status.titleMode==='description'?(status.name||metrics?.name||symbol):status.titleMode==='ticker'?`NSE:${symbol}`:symbol;
+  const open=marketOpen();
+  // No chosen colour follows the theme surface, so the plate stays readable in light and dark.
+  const opacity=Math.round(Math.max(0,Math.min(1,status.background?.opacity??.8))*100);
+  const plate:CSSProperties|undefined=status.background?{background:`color-mix(in srgb, ${status.background.color?.slice(0,7)??'var(--surface)'} ${opacity}%, transparent)`}:undefined;
+  return <div className={`chart-legend${plate?' has-plate':''}`} style={plate}>
     <output className="chart-readout" ref={quoteRef} aria-label={`${symbol} candle values`}>
-      {(['open','high','low','close'] as const).map((key,index)=><span className="chart-quote-price" key={key}><span>{['O','H','L','C'][index]}</span><b data-quote={key}>{values[key]}</b></span>)}
-      <b className="chart-quote-change" data-quote="change" data-tone={values.tone}>{values.change}</b>
-      <span className="chart-quote-volume"><span>Vol</span><span data-quote="volume">{values.volume}</span></span>
+      {(status.logo||status.title||status.marketStatus)&&<span className="chart-status-title">
+        {status.logo&&<SymbolWithLogo symbol={symbol} showText={false} className="chart-status-logo" />}
+        {status.title&&<b>{title}</b>}
+        {status.title&&status.interval&&<span className="chart-status-interval">· {status.interval}</span>}
+        {status.marketStatus&&<span className="chart-status-market" data-open={open} title={open?'NSE market open':'NSE market closed'} aria-label={open?'Market open':'Market closed'} />}
+      </span>}
+      {status.ohlc&&(['open','high','low','close'] as const).map((key,index)=><span className="chart-quote-price" key={key}><span>{['O','H','L','C'][index]}</span><b data-quote={key}>{values[key]}</b></span>)}
+      {status.change&&<b className="chart-quote-change" data-quote="change" data-tone={values.tone}>{values.change}</b>}
+      {status.volume&&<span className="chart-quote-volume"><span>Vol</span><span data-quote="volume">{values.volume}</span></span>}
       <span className="chart-quote-date" data-quote="date">{values.date}</span>
     </output>
     {hasMetrics && <div className="chart-symbol-strip" role="group" tabIndex={0} aria-label={`${symbol} snapshot metrics`} title={sessionDate?`Published snapshot: ${sessionDate}. Metrics are not historical.`:undefined}>

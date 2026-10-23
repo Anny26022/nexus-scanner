@@ -2176,13 +2176,12 @@
   overflow: hidden; border-radius: var(--radius-xl); background: var(--surface); color: var(--text);
   box-shadow: var(--shadow-pop), 0 30px 80px -20px rgb(0 0 0 / .35); outline: none;
 }
-.symbol-palette-search { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 14px 0 20px; border-bottom: 1px solid var(--line); }
+.symbol-palette-search { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 16px 0 20px; border-bottom: 1px solid var(--line); }
 .symbol-palette-search-icon { flex-shrink: 0; color: var(--muted); }
 .symbol-palette .symbol-palette-search input, .symbol-palette .symbol-palette-search input:focus { box-shadow: none; outline: none; border: 0; border-radius: 0; appearance: none; }
 .symbol-palette-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 16px; font-weight: 500; letter-spacing: -0.01em; }
 .symbol-palette-search input::placeholder { color: var(--muted); font-weight: 400; }
-.symbol-palette-clear { display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 9999px; background: var(--line-strong); color: var(--surface); cursor: pointer; }
-.symbol-palette-esc { height: 22px; padding: 0 7px; border: 0; border-radius: 6px; background: var(--field); color: var(--muted); font: inherit; font-size: 11px; font-weight: 500; cursor: pointer; }
+.symbol-palette-esc { flex-shrink: 0; height: 22px; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 11px; font-weight: 500; cursor: pointer; box-shadow: none; }
 .symbol-palette-esc:hover { color: var(--text); }
 .symbol-palette-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 8px 10px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
 .symbol-palette-group { padding: 10px 12px 4px; color: var(--muted); font-size: 11.5px; font-weight: 600; }
@@ -2204,3 +2203,16 @@
   .symbol-palette-exchange, .symbol-palette-footer { display: none; }
   .symbol-palette-symbol { min-width: 0; }
 }
+
+/* Status line title, market dot, background plate and hidden indicator values. */
+.chart-status-title { display: inline-flex; align-items: center; gap: 6px; align-self: center; margin-right: 2px; white-space: nowrap; }
+.chart-status-title b { font-size: 12.5px; font-weight: 650; }
+.chart-status-logo > img, .chart-status-logo > span { width: 16px !important; height: 16px !important; border-radius: 50% !important; }
+.chart-status-interval { color: var(--muted); }
+.chart-status-market { width: 6px; height: 6px; border-radius: 9999px; background: var(--muted); }
+.chart-status-market[data-open="true"] { background: var(--positive); }
+.chart-legend.has-plate { width: fit-content; padding: 6px 8px; border-radius: var(--radius-md); }
+.chart-plot[data-indicator-values="hidden"] [data-ind-val] { display: none; }
+.chart-clock { position: absolute; z-index: 10; right: 72px; bottom: 34px; display: flex; align-items: center; gap: 10px; padding: 3px 8px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--surface) 85%, transparent); color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
+.chart-clock-time b { color: var(--text); font-weight: 600; }
+.chart-clock-countdown { color: var(--secondary); }

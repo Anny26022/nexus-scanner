@@ -180,6 +180,7 @@ export class ChartEngine {
     this.setData();
     this.chart.subscribeCrosshairMove(this.crosshair);
     this.chart.subscribeClick(this.click);
+    this.chart.timeScale().subscribeVisibleLogicalRangeChange(this.onVisibleRange);
     this.theme=new MutationObserver(()=>this.readTheme());
     this.theme.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
     this.readTheme();
@@ -210,7 +211,9 @@ export class ChartEngine {
     const down=a?.downColor??CHART_PALETTE.down;
     const line=a?.lineColor??this.accent;
     const lineWidth=Math.max(1,Math.min(4,Math.round(a?.lineWidth??2))) as LineWidth;
-    const common={priceLineVisible:a?.priceLineVisible!==false,lastValueVisible:a?.lastValueLabel!==false};
+    const digits=a?.precision&&a.precision!=='default'?Math.max(0,Math.min(4,Number(a.precision))):null;
+    const common={priceLineVisible:a?.priceLineVisible!==false,lastValueVisible:a?.lastValueLabel!==false,
+      priceFormat:digits===null?{type:'price' as const,precision:2,minMove:.01}:{type:'price' as const,precision:digits,minMove:1/10**digits}};
     switch(this.style) {
       case 'candles':
       case 'volumeCandles':return {...common,
@@ -303,12 +306,50 @@ export class ChartEngine {
   private isBarType():boolean {
     return ['candles','hollowCandles','volumeCandles','bars','highLow'].includes(this.style);
   }
-  private priceData(bar:Candle) {
-    return this.isBarType()
-      ? {time:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close}
-      : {time:bar.date,value:this.style==='hlcArea'?(bar.high+bar.low+bar.close)/3:bar.close};
+  private priceData(bar:Candle,index=this.candles.indexOf(bar)) {
+    if(!this.isBarType()) return {time:bar.date,value:this.style==='hlcArea'?(bar.high+bar.low+bar.close)/3:bar.close};
+    const ohlc={time:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close};
+    const a=this.currentAppearance;
+    const previous=index>0?this.candles[index-1]:undefined;
+    if(!a?.colorByPreviousClose||!previous) return ohlc;
+    // Direction is today's close against yesterday's close, not against today's open.
+    const up=bar.close>=previous.close;
+    const body=up?a.upColor??CHART_PALETTE.up:a.downColor??CHART_PALETTE.down;
+    if(this.style==='bars'||this.style==='highLow') return {...ohlc,color:body};
+    const border=up?a.borderUpColor??body:a.borderDownColor??body;
+    const wick=up?a.wickUpColor??body:a.wickDownColor??body;
+    const hollow=this.style==='hollowCandles'&&bar.close>bar.open;
+    return {...ohlc,color:a.bodyVisible===false||hollow?'transparent':body,borderColor:border,wickColor:wick};
   }
-  private setPriceData() {this.price.setData(this.candles.map(bar=>this.priceData(bar)));}
+  private setPriceData() {this.price.setData(this.candles.map((bar,index)=>this.priceData(bar,index)));this.updateHighLowLines();}
+  private highLowLines:{series:ISeriesApi<'Candlestick'|'Bar'|'Line'|'Area'|'Baseline'>;lines:IPriceLine[]}|null=null;
+  private highLowFrame=0;
+  /** High and low of the visible bars, drawn as labelled price lines. */
+  private updateHighLowLines() {
+    if(this.highLowLines) {
+      if(this.highLowLines.series===this.price) for(const line of this.highLowLines.lines) this.price.removePriceLine(line);
+      this.highLowLines=null;
+    }
+    if(!this.currentAppearance?.highLowPriceLines||!this.candles.length) return;
+    const range=this.chart.timeScale().getVisibleLogicalRange();
+    const from=Math.max(0,Math.floor(range?.from??0)),to=Math.min(this.candles.length-1,Math.ceil(range?.to??this.candles.length-1));
+    if(to<from) return;
+    let high=-Infinity,low=Infinity;
+    for(let index=from;index<=to;index++) {high=Math.max(high,this.candles[index].high);low=Math.min(low,this.candles[index].low);}
+    const muted=getComputedStyle(this.host).getPropertyValue('--muted').trim()||'#86868b';
+    const line=(price:number,title:string)=>this.price.createPriceLine({price,title,color:muted,lineWidth:1,lineStyle:LineStyle.Dashed,axisLabelVisible:true});
+    this.highLowLines={series:this.price,lines:[line(high,'H'),line(low,'L')]};
+  }
+  private onVisibleRange=()=>{
+    if(!this.currentAppearance?.highLowPriceLines) return;
+    cancelAnimationFrame(this.highLowFrame);
+    this.highLowFrame=requestAnimationFrame(()=>this.updateHighLowLines());
+  };
+  /** Shows the latest `count` bars (the "Default visible bars" setting). */
+  showLastBars(count:number) {
+    if(!this.candles.length||count<=0) return;
+    this.setLatestRange(Math.max(0,this.candles.length-Math.round(count)));
+  }
   private setEmaData(series:ISeriesApi<'Line'>,line:EmaLine) {
     const values=ema(this.candles,line.period);
     series.setData(this.candles.map((bar,index)=>values[index]===null?{time:bar.date}:{time:bar.date,value:values[index]!}));
@@ -354,7 +395,15 @@ export class ChartEngine {
       },
     });
     this.price.applyOptions(this.priceOptions());
+    const signature=JSON.stringify([appearance.colorByPreviousClose,appearance.upColor,appearance.downColor,appearance.borderUpColor,appearance.borderDownColor,appearance.wickUpColor,appearance.wickDownColor,appearance.bodyVisible]);
+    if(signature!==this.barColorSignature) {
+      const perBar=appearance.colorByPreviousClose||JSON.parse(this.barColorSignature||'[false]')[0];
+      this.barColorSignature=signature;
+      if(perBar&&this.candles.length) this.setPriceData();
+    }
+    this.updateHighLowLines();
   }
+  private barColorSignature='';
   setAppearance(appearance:ChartAppearance) {
     this.currentAppearance=appearance;
     this.scaleMode=appearance.scaleMode;
@@ -397,8 +446,12 @@ export class ChartEngine {
         },
       },
       handleScroll:this.scrollOptions(),
-      handleScale:appearance.zoomEnabled!==false?SCALE_WITH_WHEEL:false,
+      handleScale:appearance.zoomEnabled!==false
+        ? {...SCALE_WITH_WHEEL,axisPressedMouseMove:{time:true,price:appearance.mousePan!=='horizontal'}}
+        : false,
     });
+    // Horizontal-only drag keeps the price scale fitted to the visible bars.
+    if(appearance.mousePan==='horizontal') this.chart.priceScale('right').applyOptions({autoScale:true});
 
     if(this.watermarkPlugin) {
       this.watermarkPlugin.detach();
@@ -475,7 +528,7 @@ export class ChartEngine {
     this.drawingBars=candles.map((bar,index)=>({...bar,time:this.times[index]}));
     if(appended) {
       const bar=candles.at(-1)!;
-      this.price.update(this.priceData(bar));
+      this.price.update(this.priceData(bar,candles.length-1));
       this.volumeSeries.update(this.volumeData(bar));
       for(const {series,line} of this.averages.values()) {
         const value=ema(candles,line.period).at(-1);
@@ -916,7 +969,7 @@ export class ChartEngine {
   }
   private scrollOptions() {
     return !this.replayPicker && this.book.getSnapshot().tool==='select' && this.currentAppearance?.panEnabled!==false
-      ? SCROLL_WITHOUT_WHEEL : false;
+      ? (this.currentAppearance?.mousePan==='horizontal'?{...SCROLL_WITHOUT_WHEEL,vertTouchDrag:false}:SCROLL_WITHOUT_WHEEL) : false;
   }
   private pickReplay(index:number) {const picker=this.replayPicker;this.setReplayPicker(null);picker?.pick(index);}
   private key=(event:KeyboardEvent)=>{
@@ -945,6 +998,7 @@ export class ChartEngine {
     this.hostObserver?.disconnect();
     this.paneObserver?.disconnect();
     this.events.abort();this.theme.disconnect();this.unsubscribe();this.layer.destroy();
+    cancelAnimationFrame(this.highLowFrame);this.chart.timeScale().unsubscribeVisibleLogicalRangeChange(this.onVisibleRange);
     this.chart.unsubscribeCrosshairMove(this.crosshair);this.chart.unsubscribeClick(this.click);this.markers.detach();this.chart.remove();
   }
 }

@@ -2179,11 +2179,21 @@
   .chart-topbar .chart-toolbar-button { width: 32px; padding: 0; }
 }
 
-/* Phone: the single toolbar scrolls sideways so every control stays reachable. */
+/* Phone: one row with what a phone needs (symbol, interval, indicators, draw, replay, settings).
+   Chart type lives in Chart settings; grids, layouts, shortcuts and full screen (the chart already fills a phone) are desktop tools. */
 @media (max-width: 700px) {
-  .chart-topbar { overflow-x: auto; scrollbar-width: none; }
+  .chart-topbar { overflow-x: auto; scrollbar-width: none; padding-right: 40px; }
   .chart-topbar::-webkit-scrollbar { display: none; }
   .chart-topbar > * { flex-shrink: 0; }
+  .chart-topbar .chart-symbol-trigger { flex: none; max-width: 110px; }
+  .chart-topbar .chart-style-picker, .chart-topbar button.chart-expand, .chart-topbar button.chart-shortcuts-button, .chart-topbar button.chart-layouts-button, .chart-topbar .chart-grid-picker { display: none; }
+  .chart-topbar .chart-desk-toolbar { margin-left: 0; padding-left: 0; border-left: 0; }
+  /* The closed watchlist is just its button, over the toolbar's right end, so the chart gets the full width. */
+  .chart-desk-body .chart-watchlist-dock:not(.is-mobile-open) {
+    position: absolute; top: 0; right: 0; z-index: 3; height: 42px; border: 0; background: transparent;
+  }
+  .chart-desk-body .watchlist-mobile-toggle { display: grid; height: 42px; border-bottom: 0; background: transparent; }
+  .chart-watchlist-dock.is-mobile-open { width: 100%; box-shadow: none; }
 }
 
 /* Symbol search palette (opened from the toolbar symbol, "/" or by typing on a chart). */

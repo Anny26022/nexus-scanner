@@ -99,7 +99,8 @@ const ScreenerAppContent: React.FC = () => {
   return (
     <div className={`app-frame${sidebarHidden ? ' app-frame--sidebar-hidden' : ''}`}>
       <a href="#workspace" className="skip-link">Skip to results workspace</a>
-      {!sidebarHidden && <Navbar
+      {/* Phones always get the top bar with the tabs; "hidden" only collapses the desktop sidebar. */}
+      <Navbar
         activeTab={activeTab}
         onTabChange={navigate}
         onHideSidebar={() => setSidebarHidden(true)}
@@ -112,7 +113,7 @@ const ScreenerAppContent: React.FC = () => {
           availableSessions={availableSessions}
           onChange={setCustomSessionDate}
         /> : undefined}
-      />}
+      />
 
       <main id="workspace" className={`workspace${activeTab === 'charts' ? ' workspace--charts' : ''}${sidebarHidden ? ' workspace--sidebar-hidden' : ''}`} tabIndex={-1}>
         {sidebarHidden && <button type="button" className="workspace-sidebar-reopen" aria-label="Show sidebar" title="Show sidebar" onClick={() => setSidebarHidden(false)}><PanelLeftOpen size={17}/></button>}

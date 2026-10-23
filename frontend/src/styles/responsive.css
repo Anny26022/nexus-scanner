@@ -1,4 +1,5 @@
 @media (min-width: 768px) {
+  .app-frame--sidebar-hidden > .app-sidebar { display: none; }
   .filter-modal-options > .filter-categories { margin-left: 24px; }
 }
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -13,6 +14,9 @@
   .fetch-status { display: none; }
 }
 @media (max-width: 767px) {
+  /* No reopen button on phones, so no space is kept for it. */
+  .workspace.workspace--sidebar-hidden .chart-topbar { padding-left: 5px; }
+  .workspace.workspace--sidebar-hidden:not(.workspace--charts) .screen-controls { padding-left: 0; }
   /* Phone workspace: fixed chrome, one independently scrolling results surface. */
   html { scrollbar-gutter: auto; }
   html, body, #root { width: 100%; height: 100%; }

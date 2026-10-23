@@ -19,6 +19,7 @@ export interface FundamentalsConfig {
   profit?: 'eps' | 'net_profit';
   count?: number;
   position?: 'top-right' | 'bottom-right' | 'bottom-left';
+  offset?: {x: number; y: number} | null;
   fontSize?: number;
   band?: boolean;
   guides?: boolean;
@@ -26,7 +27,7 @@ export interface FundamentalsConfig {
 }
 export const fundamentalsDefaults: FundamentalsConfig = {
   enabled: false, layout: 'compact', period: 'quarterly', profit: 'eps', count: 4,
-  position: 'top-right', fontSize: 11, band: true, guides: false, earningsMarkers: true,
+  position: 'top-right', offset: null, fontSize: 11, band: true, guides: false, earningsMarkers: true,
 };
 export function fundamentalsConfig(raw?: FundamentalsConfig): Required<FundamentalsConfig> {
   return {
@@ -37,6 +38,8 @@ export function fundamentalsConfig(raw?: FundamentalsConfig): Required<Fundament
     count: Math.max(3, Math.min(13, Math.round(raw?.count ?? 4) || 4)),
     fontSize: Math.max(10, Math.min(15, Math.round(raw?.fontSize ?? 11) || 11)),
     position: ['top-right', 'bottom-right', 'bottom-left'].includes(raw?.position ?? '') ? raw!.position! : 'top-right',
+    offset: raw?.offset && Number.isFinite(raw.offset.x) && Number.isFinite(raw.offset.y)
+      ? {x: Math.max(0, Math.min(1, raw.offset.x)), y: Math.max(0, Math.min(1, raw.offset.y))} : null,
     band: raw?.band !== false, guides: raw?.guides === true, earningsMarkers: raw?.earningsMarkers !== false,
   } as Required<FundamentalsConfig>;
 }

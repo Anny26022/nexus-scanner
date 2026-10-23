@@ -2254,3 +2254,10 @@
 .fundamentals-settings input[type=number]{width:65px}
 .fundamentals-settings>footer{display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:12px}
 @media(max-width:640px){.fundamentals-overlay{right:58px;top:88px;max-width:calc(100% - 66px);min-width:0}.fundamentals-overlay>header{gap:8px}.fundamentals-overlay>footer{flex-wrap:wrap;gap:3px}}
+
+.fundamentals-overlay .fundamentals-drag{display:flex;align-items:center;gap:4px;min-width:0;color:var(--text);cursor:grab;touch-action:none;user-select:none}
+.fundamentals-overlay .fundamentals-drag:active{cursor:grabbing}
+.fundamentals-classification{margin:0;padding:0 10px 6px;flex-shrink:0;max-width:500px;line-height:1.5}
+.fundamentals-classification>div{display:flex;gap:7px}
+.fundamentals-classification dt{color:var(--muted);min-width:42px}
+.fundamentals-classification dd{margin:0;overflow-wrap:anywhere}

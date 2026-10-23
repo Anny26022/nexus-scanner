@@ -42,7 +42,7 @@ const renderOverlay = (cutoff = '2026-10-22') => {
   vi.mocked(screenerApi.getFinancialHistory).mockResolvedValue(history);
   vi.mocked(screenerApi.getEarningsSchedule).mockResolvedValue({observedOn:'2026-10-22', events:[{symbol:'TEST',scheduled_date:'2026-10-25'}]});
   return render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}><FundamentalsIndicator
-    symbol="TEST" revision={'a'.repeat(64)} cutoff={cutoff} sessionDate="2026-10-22" metrics={{marketCapCrore:1000,circuitLimit:'5%',surveillanceAvailable:true,surveillanceAsOfDate:'2026-10-22',isAsm:true,asmStage:'I'}}
+    symbol="TEST" revision={'a'.repeat(64)} cutoff={cutoff} sessionDate="2026-10-22" metrics={{marketCapCrore:1000,circuitLimit:'5%',sector:'Consumer Discretionary',industry:'Diamond, Gems and Jewellery',nicheTags:['Lab-grown diamonds'],surveillanceAvailable:true,surveillanceAsOfDate:'2026-10-22',isAsm:true,asmStage:'I'}}
     config={{enabled:true}} onSettings={vi.fn()} onRemove={vi.fn()}/></QueryClientProvider>);
 };
 it('renders real growth, dated band and schedule; collapse preserves controls', async () => {
@@ -50,6 +50,8 @@ it('renders real growth, dated band and schedule; collapse preserves controls', 
   expect(await screen.findByRole('table')).toBeInTheDocument();
   expect(screen.getByText('5%')).toBeInTheDocument();
   expect(screen.getByText('ASM I')).toBeInTheDocument();
+  expect(screen.getByText('Diamond, Gems and Jewellery')).toBeInTheDocument();
+  expect(screen.getByText('Lab-grown diamonds')).toBeInTheDocument();
   expect(await screen.findByText(/Results 2026-10-25/)).toBeInTheDocument();
   const row = screen.getByRole('rowheader', {name:'Jun 26'}).closest('tr')!;
   expect(within(row).getByText('200')).toBeInTheDocument();
@@ -65,6 +67,8 @@ it('replay hides current bands, surveillance, schedule and unobserved statements
   expect(screen.getByText('Unavailable')).toBeInTheDocument();
   expect(screen.queryByText('5%')).not.toBeInTheDocument();
   expect(screen.queryByText('ASM I')).not.toBeInTheDocument();
+  expect(screen.queryByText('Diamond, Gems and Jewellery')).not.toBeInTheDocument();
+  expect(screen.queryByText('Lab-grown diamonds')).not.toBeInTheDocument();
   expect(screen.queryByText(/Results 2026-10-25/)).not.toBeInTheDocument();
 });
 it('lets users select results layout and annual periods', () => {
@@ -81,4 +85,19 @@ it('adds the native indicator through the Fundamentals catalogue category', () =
   fireEvent.click(screen.getByRole('tab', {name:'Fundamentals'}));
   fireEvent.click(screen.getByLabelText('Earnings & Price Bands'));
   expect(apply).toHaveBeenCalledWith({enabled:true});
+});
+
+it('moves the panel with the keyboard and clamps it inside the chart', () => {
+  const onMove = vi.fn();
+  vi.mocked(screenerApi.getFinancialHistory).mockResolvedValue(history);
+  vi.mocked(screenerApi.getEarningsSchedule).mockResolvedValue(null);
+  render(<QueryClientProvider client={new QueryClient()}><div><FundamentalsIndicator symbol="TEST" revision={'a'.repeat(64)} cutoff="2026-10-22" sessionDate="2026-10-22" config={{enabled:true}} onMove={onMove} onSettings={vi.fn()} onRemove={vi.fn()}/></div></QueryClientProvider>);
+  const panel = screen.getByRole('region', {name:'TEST earnings and price bands'});
+  panel.getBoundingClientRect = () => ({left:100,top:50,width:300,height:200} as DOMRect);
+  panel.parentElement!.getBoundingClientRect = () => ({left:0,top:0,width:800,height:600} as DOMRect);
+  fireEvent.keyDown(screen.getByLabelText('Move earnings panel'), {key:'ArrowRight'});
+  expect(onMove).toHaveBeenLastCalledWith({x:110/500,y:50/400});
+  panel.getBoundingClientRect = () => ({left:0,top:0,width:300,height:200} as DOMRect);
+  fireEvent.keyDown(screen.getByLabelText('Move earnings panel'), {key:'ArrowLeft'});
+  expect(onMove).toHaveBeenLastCalledWith({x:0,y:0});
 });

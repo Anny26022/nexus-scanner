@@ -335,7 +335,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         <DrawingContextToolbar book={activeBook} />
       {studyConfigs.fundamentals?.enabled && !allHidden && <FundamentalsIndicator
         symbol={symbol} revision={revision} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}
-        metrics={metrics} config={studyConfigs.fundamentals} onSettings={() => setActiveIndicatorSetting('fundamentals')}
+        metrics={metrics} config={studyConfigs.fundamentals}
+        onMove={offset => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: {...studyConfigsChoice.current.fundamentals!, offset}})} onSettings={() => setActiveIndicatorSetting('fundamentals')}
         onRemove={() => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: {...studyConfigsChoice.current.fundamentals, enabled: false}})}/>}
       <div className="chart-overlay-legend">
         <ChartLegend symbol={symbol} bar={currentBar} previous={previousByDate.get(currentBar.date)} quoteRef={quote}

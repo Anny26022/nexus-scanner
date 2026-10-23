@@ -89,11 +89,17 @@ export type ChartAppearance = {
   lastValueLabel?:boolean;
 };
 const scaleModes = {normal:PriceScaleMode.Normal,logarithmic:PriceScaleMode.Logarithmic,percentage:PriceScaleMode.Percentage,indexed:PriceScaleMode.IndexedTo100};
-const withAlpha = (hex:string,opacity:number) => `${hex}${Math.round(opacity*255).toString(16).padStart(2,'0')}`;
+const withAlpha = (hex:string,opacity:number) => {
+  const alpha=hex.length===9?parseInt(hex.slice(7),16)/255:1;
+  return `${hex.slice(0,7)}${Math.round(alpha*opacity*255).toString(16).padStart(2,'0')}`;
+};
 const RIGHT_EDGE_BARS = 6;
 const RIGHT_EDGE_PIXELS = 32;
 const SCROLL_WITHOUT_WHEEL = {mouseWheel:false,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true} as const;
-const SCALE_WITH_WHEEL = {mouseWheel:true,pinch:true,axisPressedMouseMove:true,axisDoubleClickReset:true} as const;
+// The wheel is handled by ChartEngine.wheel (TradingView-style); pinch and axis drags stay native.
+const SCALE_WITH_WHEEL = {mouseWheel:false,pinch:true,axisPressedMouseMove:true,axisDoubleClickReset:true} as const;
+/** Wheel zoom per pixel of vertical delta; ~10% per notch, like TradingView. */
+const WHEEL_ZOOM_RATE = .0011;
 
 /** Native TradingView rendering and navigation; Nexus owns data, tools and replay. */
 export class ChartEngine {
@@ -102,6 +108,9 @@ export class ChartEngine {
   private currentAppearance?:ChartAppearance;
   private watermarkPlugin?:ITextWatermarkPluginApi<Time>;
   private volumeSeries:ISeriesApi<'Histogram'>;
+  /** Invisible line that only puts the volume average's value on the volume scale, as TradingView does. */
+  private volumeAverage:ISeriesApi<'Line'>|null=null;
+  private volumeVisible=true;
   private averages = new Map<string,{series:ISeriesApi<'Line'>;line:EmaLine}>();
   private layer:DrawingLayer;
   private primitive:ISeriesPrimitive;
@@ -150,12 +159,15 @@ export class ChartEngine {
     this.byDate=new Map(candles.map(bar=>[bar.date,bar]));
     this.chart=createChart(host,{
       autoSize:true,
-      layout:{fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',fontSize:11,attributionLogo:false,panes:{enableResize:true}},
+      layout:{fontFamily:'-apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif',fontSize:12,attributionLogo:false,panes:{enableResize:true}},
+      // Grid lines start hidden; the Canvas settings turn them on.
+      grid:{vertLines:{visible:false},horzLines:{visible:false}},
       rightPriceScale:{borderVisible:false,scaleMargins:{top:.13,bottom:.22}},
       timeScale:{borderVisible:false,rightOffset:RIGHT_EDGE_BARS,rightOffsetPixels:RIGHT_EDGE_PIXELS,barSpacing:8,fixLeftEdge:false,lockVisibleTimeRangeOnResize:true,shiftVisibleRangeOnNewBar:true},
       crosshair:{mode:CrosshairMode.Normal},
       localization:{locale:'en-IN'},
-      kineticScroll:{mouse:true,touch:true},
+      // TradingView stops a mouse drag where you release it; touch keeps its momentum.
+      kineticScroll:{mouse:false,touch:true},
       handleScroll:SCROLL_WITHOUT_WHEEL,
       handleScale:SCALE_WITH_WHEEL,
     });
@@ -168,6 +180,9 @@ export class ChartEngine {
         const projection=this.projection();
         if (!projection) return;
         this.layer.draw(context,projection,this.accent);
+        this.drawUpcomingEarnings(context,projection.bottom);
+        this.drawBandChanges(context);
+        this.drawHoverPoint(context);
         if (this.replayPicker) {
           const x=this.chart.timeScale().logicalToCoordinate(this.replayIndex as Logical);
           if(x===null) return;
@@ -191,6 +206,7 @@ export class ChartEngine {
     this.readTheme();
     this.unsubscribe=book.subscribe(()=>{this.chart.applyOptions({handleScroll:this.scrollOptions()});});
     const options={signal:this.events.signal,capture:true};
+    host.addEventListener('wheel',this.wheel,{signal:this.events.signal,passive:false});
     host.addEventListener('pointerdown',this.down,options);
     host.addEventListener('pointermove',this.move,options);
     host.addEventListener('pointerup',this.up,options);
@@ -217,7 +233,7 @@ export class ChartEngine {
     const line=a?.lineColor??this.accent;
     const lineWidth=Math.max(1,Math.min(4,Math.round(a?.lineWidth??2))) as LineWidth;
     const digits=a?.precision&&a.precision!=='default'?Math.max(0,Math.min(4,Number(a.precision))):null;
-    const common={priceLineVisible:a?.priceLineVisible!==false,lastValueVisible:a?.lastValueLabel!==false,
+    const common={priceLineVisible:a?.priceLineVisible===true,lastValueVisible:a?.lastValueLabel!==false,
       priceFormat:digits===null?{type:'price' as const,precision:2,minMove:.01}:{type:'price' as const,precision:digits,minMove:1/10**digits}};
     switch(this.style) {
       case 'candles':
@@ -303,9 +319,10 @@ export class ChartEngine {
   }
   private simpleMode() { return (this.studyConfigs.volume?.mode??'simple')==='simple'; }
   /** Recomputes Simple Volume colours, labels and snorts for the current candles. */
-  private computeVolume() {
+  private computeVolume(appended=false) {
     const cfg=this.studyConfigs.volume;
     this.simpleVolume=this.simpleMode()?computeSimpleVolume(this.candles,{ppvLength:cfg?.ppvLength??10,maLength:cfg?.maLength??50,dryFraction:cfg?.dryFraction??.2}):null;
+    this.syncVolumeAverage(appended);
     this.refreshVolumeMarkers();
     this.refreshMarkers();
   }
@@ -330,6 +347,26 @@ export class ChartEngine {
     if(kind==='down') return cfg?.aboveDownColor??SIMPLE_VOLUME_COLORS.down;
     if(kind==='dry'&&cfg?.showDry!==false) return cfg?.dryColor??SIMPLE_VOLUME_COLORS.dry;
     return cfg?.noiseColor??this.volumeNoise;
+  }
+  private syncVolumeAverage(appended=false) {
+    if(!this.volumeSeries) return;
+    const pane=this.volumeSeries.getPane().paneIndex();
+    const show=pane!==0&&this.volumeVisible&&this.currentAppearance?.volume!==false&&Boolean(this.simpleVolume);
+    if(!show) {
+      if(this.volumeAverage) {this.chart.removeSeries(this.volumeAverage);this.volumeAverage=null;}
+      return;
+    }
+    if(this.volumeAverage&&this.volumeAverage.getPane().paneIndex()!==pane) {this.chart.removeSeries(this.volumeAverage);this.volumeAverage=null;}
+    const existing=Boolean(this.volumeAverage);
+    this.volumeAverage??=this.chart.addSeries(LineSeries,{color:'#8e2a35',lineVisible:false,pointMarkersVisible:false,crosshairMarkerVisible:false,
+      priceLineVisible:false,lastValueVisible:true,priceFormat:{type:'volume'},title:''},pane);
+    const average=this.simpleVolume!.average;
+    if(appended&&existing) {
+      const index=this.candles.length-1,bar=this.candles[index],value=average[index];
+      this.volumeAverage.update(value==null?{time:bar.date}:{time:bar.date,value});
+      return;
+    }
+    this.volumeAverage.setData(this.candles.map((bar,index)=>average[index]===null||average[index]===undefined?{time:bar.date}:{time:bar.date,value:average[index]!}));
   }
   private refreshVolumeMarkers() {
     const result=this.simpleVolume,cfg=this.studyConfigs.volume;
@@ -379,6 +416,109 @@ export class ChartEngine {
   private setPriceData() {this.price.setData(this.candles.map((bar,index)=>this.priceData(bar,index)));this.updateHighLowLines();}
   private highLowLines:{series:ISeriesApi<'Candlestick'|'Bar'|'Line'|'Area'|'Baseline'>;lines:IPriceLine[]}|null=null;
   private highLowFrame=0;
+  private crosshairLogical:number|null=null;
+  private drawHoverPoint(context:CanvasRenderingContext2D) {
+    if(this.crosshairLogical===null||this.currentAppearance?.crosshair===false||this.replayPicker) return;
+    const bar=this.candles[this.crosshairLogical];
+    if(!bar) return;
+    const x=this.chart.timeScale().logicalToCoordinate(this.crosshairLogical as Logical),y=this.price.priceToCoordinate(bar.close);
+    if(x===null||y===null) return;
+    context.save();context.fillStyle='#2962ff';
+    context.beginPath();context.arc(x,y,3,0,Math.PI*2);context.fill();context.restore();
+  }
+  private upcomingEarnings:{date:string;line:boolean}|null=null;
+  private bandChanges:readonly {date:string;from:string;to:string}[]=[];
+  /** Past NSE price-band changes, drawn as labels above the candle on each change date. */
+  setBandChanges(changes:readonly {date:string;from:string;to:string}[]) {this.bandChanges=changes;this.invalidate();}
+  /** Bar index for each visible band change (the bar containing its date), within the replay cutoff. */
+  private bandChangeBars() {
+    const out:{index:number;to:string}[]=[];
+    for(const change of this.bandChanges) {
+      if(change.date>this.eventCutoff||!this.candles.length||change.date<this.candles[0].date) continue;
+      let low=0,high=this.candles.length;
+      while(low<high) {const mid=(low+high)>>>1;if(this.candles[mid].date<=change.date) low=mid+1;else high=mid;}
+      out.push({index:Math.max(0,low-1),to:change.to});
+    }
+    return out;
+  }
+  /** As in the reference script: the new band as text, a small coloured square, and a fine dotted line down to the candle. */
+  private drawBandChanges(context:CanvasRenderingContext2D) {
+    if(!this.bandChanges.length) return;
+    const scale=this.chart.timeScale(),text=getComputedStyle(this.host).getPropertyValue('--band-label').trim()||'#1a3a8f';
+    context.save();
+    context.font='12px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif';
+    context.textAlign='center';context.textBaseline='bottom';
+    for(const {index,to} of this.bandChangeBars()) {
+      const x=scale.logicalToCoordinate(index as Logical),top=this.price.priceToCoordinate(this.candles[index].high);
+      if(x===null||top===null) continue;
+      const band=Number.parseFloat(to);
+      const color=band===20?'#2962ff':band===10?'#4caf50':band===5?'#fbc02d':band===2?'#f23645':'#9598a1';
+      const square=top-22;
+      context.strokeStyle=color;context.lineWidth=1;context.setLineDash([1.5,2.5]);
+      context.beginPath();context.moveTo(Math.round(x)+.5,square+6);context.lineTo(Math.round(x)+.5,top-3);context.stroke();
+      context.setLineDash([]);
+      context.fillStyle=color;context.fillRect(Math.round(x)-3,square,6,6);
+      context.fillStyle=text;context.fillText(to==='No Band'?'NB':`${to}%`,x,square-3);
+    }
+    context.restore();
+  }
+  /** Bar position of a date: an existing bar, or bars counted past the last one (weekdays, weeks or months). */
+  private logicalForDate(date:string):number|null {
+    const count=this.candles.length;
+    if(!count||!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+    const last=this.candles[count-1].date;
+    if(date<=last) {
+      let low=0,high=count;
+      while(low<high) {const mid=(low+high)>>>1;if(this.candles[mid].date<=date) low=mid+1;else high=mid;}
+      return Math.max(0,low-1);
+    }
+    const gaps:number[]=[];
+    for(let index=Math.max(1,count-20);index<count;index++) gaps.push((Date.parse(this.candles[index].date)-Date.parse(this.candles[index-1].date))/86_400_000);
+    gaps.sort((a,b)=>a-b);
+    const gap=gaps.length?gaps[gaps.length>>1]:1;
+    const from=new Date(`${last}T00:00:00Z`),to=new Date(`${date}T00:00:00Z`);
+    if(gap>=20) return count-1+(to.getUTCFullYear()-from.getUTCFullYear())*12+to.getUTCMonth()-from.getUTCMonth();
+    if(gap>=5) return count-1+Math.ceil((to.getTime()-from.getTime())/(7*86_400_000));
+    let sessions=0;
+    for(const day=new Date(from);day<to;) {day.setUTCDate(day.getUTCDate()+1);if(day.getUTCDay()%6!==0) sessions++;}
+    return count-1+sessions;
+  }
+  /** Upcoming results date: a purple "E" (and optional dotted line) on that future bar, as in the QE Ultra script. */
+  setUpcomingEarnings(value:{date:string;line:boolean}|null) {
+    const changed=value?.date!==this.upcomingEarnings?.date;
+    this.upcomingEarnings=value;
+    // Bring the label into view when the latest bar is on screen.
+    const logical=value?this.logicalForDate(value.date):null,scale=this.chart.timeScale(),range=scale.getVisibleLogicalRange();
+    if(changed&&logical!==null&&range&&range.to>=this.candles.length-1&&logical+8>range.to) scale.setVisibleLogicalRange({from:range.from,to:logical+8});
+    this.invalidate();
+  }
+  private drawUpcomingEarnings(context:CanvasRenderingContext2D,bottom:number) {
+    const value=this.upcomingEarnings,last=this.candles.at(-1);
+    if(!value||!last) return;
+    const logical=this.logicalForDate(value.date);
+    const x=logical===null?null:this.chart.timeScale().logicalToCoordinate(logical as Logical);
+    if(x===null||x<0) return;
+    // Along the bottom of the price pane, like TradingView's earnings icons, clear of the UC/LC tags.
+    const y=bottom-14;
+    const color='#9c27b0';
+    context.save();
+    if(value.line) {context.strokeStyle=color;context.lineWidth=2;context.setLineDash([2,3]);context.beginPath();context.moveTo(x,0);context.lineTo(x,bottom);context.stroke();context.setLineDash([]);}
+    context.fillStyle=color;
+    context.beginPath();context.roundRect(x-9,y-9,18,18,5);context.fill();
+    context.fillStyle='#ffffff';context.font='700 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';context.textAlign='center';context.textBaseline='middle';
+    context.fillText('E',x,y+.5);
+    context.restore();
+  }
+  private bandGuideValues: readonly number[] = [];
+  private bandGuideLines: IPriceLine[] = [];
+  setPriceBandGuides(values: readonly number[]) {
+    for (const line of this.bandGuideLines) this.price.removePriceLine(line);
+    this.bandGuideValues = values;
+    this.bandGuideLines = values.filter(value => Number.isFinite(value) && value > 0).map((price, index) => this.price.createPriceLine({
+      // Next-session upper (UC) and lower (LC) circuit, blue and red as in the reference indicator.
+      price, title: index === 0 ? 'UC' : 'LC', color: index === 0 ? '#2962ff' : '#f23645', lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true,
+    }));
+  }
   /** High and low of the visible bars, drawn as labelled price lines. */
   private updateHighLowLines() {
     if(this.highLowLines) {
@@ -425,11 +565,14 @@ export class ChartEngine {
     const range=this.chart.timeScale().getVisibleLogicalRange();
     for(const line of this.priceLines.values()) this.activeSeries().removePriceLine(line);
     this.priceLines.clear();this.markers.detach();
+    for (const line of this.bandGuideLines) this.price.removePriceLine(line);
+    this.bandGuideLines = [];
     this.activeSeries().detachPrimitive(this.primitive);
     const previous=this.price;
     this.style=style;
     const order=previous.seriesOrder();
     this.price=this.createPriceSeries();this.setPriceData();this.price.setSeriesOrder(order);this.chart.removeSeries(previous);
+    this.setPriceBandGuides(this.bandGuideValues);
     this.activeSeries().attachPrimitive(this.primitive);
     this.markers=createSeriesMarkers(this.activeSeries(),[],{autoScale:false});this.refreshMarkers();
     if(range) this.chart.timeScale().setVisibleLogicalRange(range);
@@ -442,7 +585,7 @@ export class ChartEngine {
       layout:{
         background:{type:ColorType.Solid,color:appearance.backgroundColor||token('chart-background',token('surface','#ffffff'))},
         textColor:appearance.scaleTextColor||token('muted','#787b86'),
-        fontSize:Math.max(9,Math.min(16,Math.round(appearance.scaleFontSize??11))),
+        fontSize:Math.max(9,Math.min(16,Math.round(appearance.scaleFontSize??12))),
       },
       grid:{
         horzLines:appearance.horzGridColor?{color:appearance.horzGridColor}:{},
@@ -485,6 +628,7 @@ export class ChartEngine {
         mode:appearance.crosshairMode==='magnet'?CrosshairMode.Magnet:appearance.crosshairMode==='ohlc'?CrosshairMode.MagnetOHLC:CrosshairMode.Normal,
         vertLine:{
           visible:appearance.crosshair,
+          width:1,
           labelVisible:appearance.crosshair,
           ...(appearance.crosshairTransparency !== undefined
             ? { color: withAlpha(appearance.crosshairColor || '#aab8c5', Math.max(0, Math.min(1, 1 - appearance.crosshairTransparency / 100))) }
@@ -492,7 +636,7 @@ export class ChartEngine {
           style:toLwcLineStyle(appearance.crosshairStyle),
         },
         horzLine:{
-          visible:appearance.crosshair,
+          visible:false,
           labelVisible:appearance.crosshair,
           ...(appearance.crosshairTransparency !== undefined
             ? { color: withAlpha(appearance.crosshairColor || '#aab8c5', Math.max(0, Math.min(1, 1 - appearance.crosshairTransparency / 100))) }
@@ -528,6 +672,8 @@ export class ChartEngine {
     }
 
     const separate=!!appearance.volumePane&&appearance.volume;
+    // Leave the volume pane empty before moving volume back, so the pane is removed.
+    if(!separate&&this.volumeAverage) {this.chart.removeSeries(this.volumeAverage);this.volumeAverage=null;}
     if((this.volumeSeries.getPane().paneIndex()!==0)!==separate) {
       this.volumeSeries.moveToPane(separate?this.chart.panes().length:0);
       if(separate) this.volumeSeries.getPane().setStretchFactor(.25);
@@ -538,6 +684,7 @@ export class ChartEngine {
       visible:appearance.volume,
     });
     this.volumeSeries.priceScale().applyOptions({scaleMargins:{top:separate?.1:.8,bottom:0},visible:separate});
+    this.syncVolumeAverage();
     const topMargin=typeof appearance.topMargin==='number'?appearance.topMargin/100:.13;
     const bottomMargin=typeof appearance.bottomMargin==='number'?appearance.bottomMargin/100:(appearance.volume&&!separate?.22:.06);
     this.chart.priceScale('right').applyOptions({
@@ -584,7 +731,7 @@ export class ChartEngine {
     if(appended) {
       const bar=candles.at(-1)!;
       this.price.update(this.priceData(bar,candles.length-1));
-      this.computeVolume();
+      this.computeVolume(true);
       this.volumeSeries.update(this.volumeData(bar,candles.length-1));
       for(const {series,line} of this.averages.values()) {
         const value=ema(candles,line.period).at(-1);
@@ -592,7 +739,7 @@ export class ChartEngine {
       }
     } else if(shortened) {
       const count=previous.length-candles.length;
-      for(const series of [this.price,this.volumeSeries,...[...this.averages.values()].map(entry=>entry.series),...this.studySeries]) series.pop(count);
+      for(const series of [this.price,this.volumeSeries,...[...this.averages.values()].map(entry=>entry.series),...this.studySeries,...(this.volumeAverage?[this.volumeAverage]:[])]) series.pop(count);
     } else this.setData();
     // Native append following honors a user who has panned away. Rewinds preserve the view.
     if(!appended&&range) this.chart.timeScale().setVisibleLogicalRange(range);
@@ -628,7 +775,8 @@ export class ChartEngine {
   private refreshMarkers() {
     if(!this.markers) return;
     this.markerEvents.clear();
-    for(const event of this.showEvents?this.eventData:[]) {
+    for(const event of this.eventData) {
+      if (!this.showEvents && !(this.studyConfigs.fundamentals?.enabled && this.studyConfigs.fundamentals.earningsMarkers !== false && this.fundamentalsVisible && event.kind === 'earnings')) continue;
       if(event.date>this.eventCutoff||event.date<this.candles[0].date) continue;
       // Events fall on the closed aggregate containing them; daily holidays use the preceding session.
       let low=0,high=this.candles.length;
@@ -650,6 +798,7 @@ export class ChartEngine {
     // Rebuilding here would create and remove every native series twice.
     const previous=this.studyConfigs.volume;
     this.studyConfigs=configs;
+    this.refreshMarkers();
     if(JSON.stringify({...previous,visibility:undefined,separatePane:undefined})!==JSON.stringify({...configs.volume,visibility:undefined,separatePane:undefined})) {
       this.computeVolume();
       this.volumeSeries.setData(this.candles.map((bar,index)=>this.volumeData(bar,index)));
@@ -947,9 +1096,12 @@ export class ChartEngine {
     this.updatePaneObservers();
     this.notifyPanesChange();
   }
+  private fundamentalsVisible = true;
   setStudyVisibility(studyId:string,visible:boolean) {
+    if (studyId === 'fundamentals') {this.fundamentalsVisible = visible; this.refreshMarkers(); return;}
     if(studyId==='volume') {
       this.volumeSeries.applyOptions({visible,lastValueVisible:visible&&this.volumeSeries.getPane().paneIndex()!==0});
+      this.volumeVisible=visible;this.syncVolumeAverage();
       return;
     }
     const seriesList=this.studySeriesById.get(studyId)??this.studySeriesByPane.get(studyId);
@@ -1014,6 +1166,8 @@ export class ChartEngine {
   };
   private cancelPointer=()=>{this.layer.cancelPointer();this.drawingPointer=null;this.blockMouse=false;};
   private crosshair=(event:MouseEventParams<Time>)=>{
+    const logical=event.logical===undefined||!event.point||(event.paneIndex??0)!==0?null:Math.round(event.logical);
+    if(logical!==this.crosshairLogical) {this.crosshairLogical=logical;this.invalidate();}
     if(this.replayPicker&&event.logical!==undefined) {this.replayIndex=Math.max(0,Math.min(this.candles.length-1,Math.round(event.logical)));this.invalidate();}
     const data=event.seriesData.get(this.activeSeries());
     const time=data?.time;
@@ -1030,6 +1184,35 @@ export class ChartEngine {
     const range=this.chart.timeScale().getVisibleLogicalRange();this.replayIndex=Math.max(0,Math.min(this.candles.length-1,Math.round(range?(range.from+range.to)/2:0)));
     this.chart.applyOptions({handleScroll:this.scrollOptions()});this.invalidate();
   }
+  /**
+   * TradingView's wheel: vertical scroll zooms with the right edge fixed, a sideways swipe
+   * (or Shift + wheel) pans through time, and a trackpad pinch (Ctrl + wheel) zooms.
+   */
+  private wheel=(event:WheelEvent)=>{
+    const appearance=this.currentAppearance;
+    if(this.replayPicker||!this.candles.length) return;
+    const scale=this.chart.timeScale(),range=scale.getVisibleLogicalRange(),width=scale.width();
+    if(!range||width<=0) return;
+    const unit=event.deltaMode===1?16:event.deltaMode===2?width:1;
+    const dx=(event.shiftKey&&!event.deltaX?event.deltaY:event.deltaX)*unit,dy=(event.shiftKey?0:event.deltaY)*unit;
+    const bars=range.to-range.from;
+    if(Math.abs(dx)>Math.abs(dy)) {
+      if(appearance?.panEnabled===false) return;
+      event.preventDefault();
+      const shift=dx/(width/bars);
+      scale.setVisibleLogicalRange({from:range.from+shift,to:range.to+shift});
+      return;
+    }
+    if(!dy||appearance?.zoomEnabled===false) return;
+    event.preventDefault();
+    // Pinch gestures arrive as ctrl+wheel with small deltas; scale them up to feel the same.
+    const factor=Math.exp(dy*WHEEL_ZOOM_RATE*(event.ctrlKey?4:1));
+    const count=Math.max(5,Math.min(this.candles.length*1.5+RIGHT_EDGE_BARS,bars*factor));
+    scale.setVisibleLogicalRange({from:range.to-count,to:range.to});
+  };
+  /** Price-scale auto-fit (TradingView's "A"); dragging the price axis turns it off. */
+  isAutoScale() {return this.chart.priceScale('right').options().autoScale!==false;}
+  setAutoScale(on:boolean) {this.chart.priceScale('right').applyOptions({autoScale:on});}
   private scrollOptions() {
     return !this.replayPicker && this.book.getSnapshot().tool==='select' && this.currentAppearance?.panEnabled!==false
       ? (this.currentAppearance?.mousePan==='horizontal'?{...SCROLL_WITHOUT_WHEEL,vertTouchDrag:false}:SCROLL_WITHOUT_WHEEL) : false;

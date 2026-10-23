@@ -53,7 +53,8 @@ export function periodBars(candles: readonly Candle[]): {quarter: number; year: 
 }
 
 export function computeSimpleVolume(candles: readonly Candle[], options: Partial<SimpleVolumeOptions> = {}): SimpleVolumeResult {
-  const opts = {...SIMPLE_VOLUME_DEFAULTS, ...options};
+  // Unset options (undefined) keep their defaults instead of overwriting them.
+  const opts = {...SIMPLE_VOLUME_DEFAULTS, ...Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined))} as SimpleVolumeOptions;
   const count = candles.length;
   const kinds: (SimpleVolumeKind | null)[] = new Array(count).fill(null);
   const average: (number | null)[] = new Array(count).fill(null);

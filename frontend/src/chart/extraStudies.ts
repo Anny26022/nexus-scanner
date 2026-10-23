@@ -287,7 +287,7 @@ export function studyParams(def: ExtraStudyDef, state?: ExtraStudyState): Record
 
 export function studyLineColor(line: StudyLine, state?: ExtraStudyState) {
   const color = state?.colors?.[line.key];
-  return typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color) ? color : line.color;
+  return typeof color === 'string' && /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(color) ? color : line.color;
 }
 
 export function studyTitle(def: ExtraStudyDef, params: Record<string, number>) {

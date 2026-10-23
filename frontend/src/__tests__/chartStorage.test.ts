@@ -41,7 +41,7 @@ it('saves and loads OpenAlgo workspace documents with export and import',()=>{
     name: 'Two charts',
     grid: { ...loadGrid(), layout: '2H', count: 2 },
     scenes: [
-      { style: 'area' as const, view: { from: '2025-12-01', to: '2026-10-01' }, studyConfigs: { rsi: { period: 9 } }, paneWeights: [3, 1] },
+      { style: 'area' as const, view: { from: '2025-12-01', to: '2026-10-01' }, studyConfigs: { rsi: { period: 9 }, fundamentals: {enabled:true,layout:'results' as const,period:'annual' as const} }, paneWeights: [3, 1] },
       { style: 'line' as const, range: null },
       ...Array.from({ length: 14 }, () => ({})),
     ],
@@ -52,7 +52,7 @@ it('saves and loads OpenAlgo workspace documents with export and import',()=>{
   const loaded = loadNamedLayouts();
   expect(loaded[0]).toMatchObject({ name: 'Two charts', grid: { count: 2, layout: '2H' } });
   expect(loaded[0].scenes[0]).toMatchObject({ style: 'area' });
-  expect(loaded[0].scenes[0]).toMatchObject({ view: { from: '2025-12-01', to: '2026-10-01' }, studyConfigs: { rsi: { period: 9 } }, paneWeights: [3, 1] });
+  expect(loaded[0].scenes[0]).toMatchObject({ view: { from: '2025-12-01', to: '2026-10-01' }, studyConfigs: { rsi: { period: 9 }, fundamentals: {enabled:true,layout:'results' as const,period:'annual' as const} }, paneWeights: [3, 1] });
   expect(loaded[0].scenes[0].range).toBeUndefined();
   expect(loaded[0].scenes[1]).toMatchObject({ style: 'line', range: null });
 
@@ -62,13 +62,18 @@ it('saves and loads OpenAlgo workspace documents with export and import',()=>{
   expect(imported?.grid.layout).toBe('2H');
   expect(imported?.scenes[0].range).toBeUndefined();
   expect(imported?.scenes[1].range).toBeNull();
-  expect(imported?.scenes[0]).toMatchObject({ studyConfigs: { rsi: { period: 9 } }, paneWeights: [3, 1] });
+  expect(imported?.scenes[0]).toMatchObject({ studyConfigs: { rsi: { period: 9 }, fundamentals: {enabled:true,layout:'results' as const,period:'annual' as const} }, paneWeights: [3, 1] });
   const malformed = JSON.parse(json) as { panes: Array<{ settings: { studies: string } }> };
   malformed.panes[0].settings.studies = '{bad json';
   expect(importWorkspaceDocumentJson(JSON.stringify(malformed))?.scenes[0]).toMatchObject({
-    studyConfigs: { rsi: { period: 9 } }, paneWeights: [3, 1],
+    studyConfigs: { rsi: { period: 9 }, fundamentals: {enabled:true,layout:'results' as const,period:'annual' as const} }, paneWeights: [3, 1],
   });
 
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
   expect(writeChartStorage('grid.v1', loadGrid())).toBe(false);
+});
+
+it('keeps saved candle colours when an older save lacks basic appearance flags', () => {
+  const scene = loadScene('7', {appearance: {upColor: '#000000', downColor: '#000000'}} as never);
+  expect(scene.appearance).toMatchObject({upColor: '#000000', downColor: '#000000', horizontalGrid: false, crosshair: true, volume: true, scaleMode: 'normal'});
 });

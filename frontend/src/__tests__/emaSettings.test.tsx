@@ -16,7 +16,8 @@ it('uses the verified colors/defaults, validates saved preferences and permits n
 it('edits periods, colors and styles without applying incomplete drafts, and adds/removes lines',()=>{
   const apply=vi.fn(); render(<EmaSettings lines={defaultEmaLines()} onApply={apply}/>);
   fireEvent.change(screen.getByLabelText('EMA 1 period'),{target:{value:'21'}});
-  fireEvent.change(screen.getByLabelText('EMA 1 color'),{target:{value:'#d8870c'}});
+  fireEvent.click(screen.getByRole('button',{name:'EMA 1 color'}));
+  fireEvent.change(screen.getByLabelText('EMA 1 color custom'),{target:{value:'#d8870c'}});
   fireEvent.change(screen.getByLabelText('EMA 1 style'),{target:{value:'dashed'}});
   fireEvent.change(screen.getByLabelText('EMA 1 width'),{target:{value:'3'}});
   fireEvent.change(screen.getByLabelText('EMA 1 opacity'),{target:{value:'0.5'}});

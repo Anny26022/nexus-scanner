@@ -17,7 +17,10 @@ import type { StudyConfigs } from '../chart/studyConfigs';
 import {
   computeIndicatorSeries,
   formatIndicatorValue,
+  formatCrore,
+  formatLakh,
   formatRelativeVolume,
+  formatTimes,
   formatVolumeValue,
   type IndicatorSnapshot,
 } from '../chart/indicatorValues';
@@ -39,6 +42,7 @@ export interface LegendProps {
   hiddenStudies: Readonly<Record<string, boolean>>;
   onToggleStudyVisibility: (id: string) => void;
   onUpdateExtras?: (next: ExtraStudies) => void;
+  onUpdateFundamentals?: (next: NonNullable<StudyConfigs['fundamentals']>) => void;
   /** Legend chrome: collapse the indicator rows and hide every indicator at once. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -64,6 +68,7 @@ export function PricePaneLegend({
   hiddenStudies,
   onToggleStudyVisibility,
   onUpdateExtras,
+  onUpdateFundamentals,
   collapsed = false,
   onToggleCollapsed,
   allHidden = false,
@@ -118,6 +123,19 @@ export function PricePaneLegend({
           </span>
         </div>;
       })}
+      {studyConfigs?.fundamentals?.enabled && <div className="chart-indicator-row">
+        <span className="chart-indicator-title" style={{color: '#2962ff'}} onClick={() => openSettings('fundamentals')}>
+          <span className="chart-indicator-bullet">●</span>
+          <span>Price Band & Results</span>
+        </span>
+        <span className="chart-indicator-actions">
+          <button type="button" className="chart-indicator-action-btn" title={hiddenStudies.fundamentals ? 'Show' : 'Hide'} onClick={() => onToggleStudyVisibility('fundamentals')}>
+            {hiddenStudies.fundamentals ? <EyeOff size={12} /> : <Eye size={12} />}
+          </button>
+          <button type="button" className="chart-indicator-action-btn" title="Settings" onClick={() => openSettings('fundamentals')}><Settings size={12} /></button>
+          {onUpdateFundamentals && <button type="button" className="chart-indicator-action-btn delete" title="Remove" onClick={() => onUpdateFundamentals({...studyConfigs.fundamentals!, enabled: false})}><Trash2 size={12} /></button>}
+        </span>
+      </div>}
       {/* Volume Overlay (when in price pane) */}
       {appearance.volume && !appearance.volumePane && (
         <div className="chart-indicator-row">
@@ -558,7 +576,6 @@ export function SubPaneLegends({
             color: 'var(--text)',
             defaultVal: formatVolumeValue(latest.volume),
           },
-          ...volumeStatPlots(latest),
         ],
       });
     }
@@ -697,10 +714,20 @@ export function SubPaneLegends({
           </div>
         );
 
+        // TradingView's volume stats: a row of pills at the top right of the volume pane.
+        const content = pane.id === 'volume' && !isHidden ? <div key={pane.id} className="chart-volume-overlay">
+          {legendBar}
+          <div key="volume-pills" className={`chart-volume-pills${targetElement ? '' : ' is-floating'}`}
+            style={targetElement ? undefined : {top: `${Math.max(0, pane.top) + 6}px`}} aria-label="Volume statistics">
+            {volumePills(latest, studyConfigs?.volume?.maLength ?? 50).map(pill => <span key={pill.valKey} className="chart-volume-pill" title={pill.title}>
+              {pill.label}: <span data-ind-val={pill.valKey}>{pill.value}</span>
+            </span>)}
+          </div>
+        </div> : legendBar;
         if (targetElement) {
-          return createPortal(legendBar, targetElement, `${pane.id}-${pane.paneIndex}`);
+          return createPortal(content, targetElement, `${pane.id}-${pane.paneIndex}`);
         }
-        return legendBar;
+        return content;
       })}
     </>
   );
@@ -712,5 +739,15 @@ function volumeStatPlots(latest: IndicatorSnapshot) {
     {label: 'Avg', valKey: 'vol-avg', color: 'var(--muted)', defaultVal: formatVolumeValue(latest.volumeAvg)},
     {label: 'RVol', valKey: 'vol-rel', color: 'var(--muted)', defaultVal: formatRelativeVolume(latest.volumeRel)},
     {label: 'U/D', valKey: 'vol-ud', color: 'var(--muted)', defaultVal: formatIndicatorValue(latest.volumeUpDown, 2)},
+  ];
+}
+
+function volumePills(latest: IndicatorSnapshot, length: number) {
+  return [
+    {label: 'Avg₹Vol', valKey: 'vol-turnover', value: formatCrore(latest.volumeTurnoverAvg), title: `${length}-bar average traded value (close × volume)`},
+    {label: 'RVol', valKey: 'vol-rel', value: formatRelativeVolume(latest.volumeRel), title: `Volume vs its ${length}-bar average`},
+    // Daily bars are complete, so the projected multiple equals the actual one.
+    {label: 'Proj RVol', valKey: 'vol-proj', value: formatTimes(latest.volumeRel), title: 'Projected relative volume for the session (equals RVol on completed daily bars)'},
+    {label: '1mL', valKey: 'vol-1ml', value: formatLakh(latest.volumeMinuteLiquidity), title: 'One-minute liquidity: average volume per minute (375-minute session) × close'},
   ];
 }

@@ -223,6 +223,9 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(row['promoterHoldingPct'],50.48)
             self.assertEqual(row['fiiChangePctQoq'],-1.47)
             self.assertEqual(row['diiChangePctQoq'],0.0)
+            symbol_file=output/first['financialHistoryUrlTemplate'].replace('{symbol}', 'TEST').removeprefix('/data/')
+            with gzip.open(symbol_file,'rt') as handle:
+                self.assertEqual(json.load(handle), stocks[0]['financial_statement_history'])
             stocks[0].update(promoter_holding_percent=None,fii_percent_change_qoq=None,dii_percent_change_qoq=2.25)
             with gzip.open(source,'wt') as handle:
                 json.dump(stocks,handle)
@@ -289,6 +292,9 @@ class SnapshotPublicationTests(unittest.TestCase):
             history_file=output/first['financialHistoryUrl'].removeprefix('/data/')
             with gzip.open(history_file,'rt') as handle:
                 self.assertEqual(json.load(handle)['TEST'],stocks[0]['financial_statement_history'])
+            symbol_file=output/first['financialHistoryUrlTemplate'].replace('{symbol}', 'TEST').removeprefix('/data/')
+            with gzip.open(symbol_file,'rt') as handle:
+                self.assertEqual(json.load(handle), stocks[0]['financial_statement_history'])
             stocks[0].update(promoter_holding_percent=None,fii_percent_change_qoq=None,dii_percent_change_qoq=2.25)
             with gzip.open(source,'wt') as handle:
                 json.dump(stocks,handle)

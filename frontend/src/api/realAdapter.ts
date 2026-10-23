@@ -1,3 +1,4 @@
+import { getIpoJson } from './gzipJson';
 import type { ScreenerRunRequest, ScreenerRunResponse, IPORow, ExplainRequest, ExplainResponse,
   SymbolComparisonRequest, SymbolComparisonResponse, RevisionCurrentResponse } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
@@ -141,33 +142,47 @@ async function companyAnnouncements(release: Manifest, symbol: string) {
   return history;
 }
 
-async function getIpoJson<T>(url: string, resource = 'IPO catalogue'): Promise<T> {
-  if (!url.endsWith('.gz')) return getJson<T>(url);
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (!bytes.length) throw new Error('Empty IPO catalogue');
-    if (bytes[0] === 0x1f && bytes[1] === 0x8b) {
-      if (typeof DecompressionStream === 'undefined') throw new Error('Gzip unsupported');
-      const stream = new Response(bytes).body!.pipeThrough(new DecompressionStream('gzip'));
-      return JSON.parse(await new Response(stream).text()) as T;
-    }
-    // Fetch decodes Content-Encoding before returning bytes (including Vite 8).
-    if (response.headers.get('Content-Encoding')?.toLowerCase() === 'gzip') {
-      return JSON.parse(new TextDecoder().decode(bytes)) as T;
-    }
-    throw new Error('Expected gzip');
-  } catch {
-    throw new Error(`${resource} unavailable`);
-  }
-}
 
 async function snapshotSource(revision?: string, sessionDate?: string): Promise<SnapshotSource> {
   return manifestSnapshotSource(await getManifest(), revision, sessionDate);
 }
 
 class RealDataAdapter {
+  async getFinancialHistory(symbol: string, revision: string) {
+    const release = await releaseFor(revision);
+    validSymbol(symbol);
+    if (release.revision !== revision || (!release.financialHistoryUrl && !release.financialHistoryUrlTemplate)) throw new Error('Financial history was not published with this snapshot.');
+    if (release.financialHistoryUrlTemplate) return getIpoJson<import('../chart/fundamentals').FinancialHistory | null>(release.financialHistoryUrlTemplate.replace('{symbol}', encodeURIComponent(symbol)), 'Financial history');
+    const result = await runSnapshotTask({type:'financialHistory', source:{revision, url:release.financialHistoryUrl!}, symbol});
+    if (result.type !== 'financialHistory') throw new Error('Unexpected financial history response');
+    return result.result;
+  }
+  async getEarningsSchedule(symbol: string, revision: string) {
+    const release = await releaseFor(revision);
+    if (release.revision !== revision || !release.earningsCalendarUrl) return null;
+    const calendar = await cached(releaseCache, release.earningsCalendarUrl,
+      () => getIpoJson<{fetched_at: string; events: Array<{symbol: string; scheduled_date: string; date_conflict?: boolean}>}>(release.earningsCalendarUrl!, 'Earnings calendar'), 3);
+    return {observedOn: calendar.fetched_at?.slice(0, 10), events: calendar.events.filter(event => event.symbol === symbol)};
+  }
+
+  /** This symbol's dated bands ([date, band] pairs, first = starting band), or null when the release has none. */
+  async getPriceBandHistory(symbol: string, revision: string) {
+    const release = await releaseFor(revision);
+    if (release.revision !== revision) return null;
+    type Ledger = {version: number; from: string; through: string; bands: Record<string, Array<[string, string]>>};
+    // Releases published before the ledger existed fall back to the committed ledger file.
+    const url = release.priceBandHistoryUrl ?? '/data/price-band-history.json';
+    const ledger = await cached(releaseCache, url, async () => {
+      if (release.priceBandHistoryUrl) return getIpoJson<Ledger>(url, 'Price-band history');
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Price-band history unavailable (HTTP ${response.status})`);
+      return response.json() as Promise<Ledger>;
+    }, 3).catch(() => null);
+    if (!ledger) return null;
+    if (ledger.version !== 1) return null;
+    return {from: ledger.from, through: ledger.through, bands: ledger.bands[symbol] ?? []};
+  }
+
   async getThemeClassification(revision?: string) {
     const release = await releaseFor(revision);
     if (!release.themeClassificationUrl || !release.themeClassificationVersion) throw new Error('Theme classifications are unavailable in this release.');

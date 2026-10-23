@@ -114,7 +114,9 @@ export function loadScene(id: string, input: unknown = readChartStorage(`scene.$
   if (Array.isArray(raw.emaLines) && raw.emaLines.length <= 5 && raw.emaLines.every(validEmaLine) && new Set(raw.emaLines.map(line => line.id)).size === raw.emaLines.length) result.emaLines = raw.emaLines;
   if (raw.studies && typeof raw.studies === 'object') result.studies = Object.fromEntries(Object.keys(defaultStudies()).map(key => [key, raw.studies![key as keyof ChartStudies] === true])) as ChartStudies;
   if (raw.studyConfigs && typeof raw.studyConfigs === 'object') result.studyConfigs = raw.studyConfigs;
-  const a = raw.appearance;
+  // Missing basics take their defaults, so one absent flag never discards the user's colours and other choices.
+  const a = raw.appearance && typeof raw.appearance === 'object'
+    ? {horizontalGrid: false, verticalGrid: false, crosshair: true, volume: true, scaleMode: 'normal' as const, ...(raw.appearance as Partial<ChartAppearance>)} as ChartAppearance : undefined;
   if (a && ['normal', 'logarithmic', 'percentage', 'indexed'].includes(a.scaleMode) && ['horizontalGrid', 'verticalGrid', 'crosshair', 'volume'].every(key => typeof a[key as keyof ChartAppearance] === 'boolean')
     && (a.crosshairMode === undefined || ['normal', 'magnet', 'ohlc'].includes(a.crosshairMode)) && ['volumePane', 'events', 'conflation'].every(key => a[key as keyof ChartAppearance] === undefined || typeof a[key as keyof ChartAppearance] === 'boolean')) result.appearance = a;
   if (raw.range === null || [1, 3, 6, 12, 24].includes(raw.range!)) result.range = raw.range;

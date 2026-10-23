@@ -29,7 +29,7 @@ export function validDrawing(value:unknown):value is Drawing {
   return typeof d.id==='string'&&d.id.length<=100&&DRAWING_TOOLS.some(tool=>tool.id!=='select'&&tool.id===d.kind)
     &&!!d.a&&!!d.b&&[d.a.time,d.a.price,d.b.time,d.b.price,d.width].every(Number.isFinite)
     &&[d.a.time,d.b.time].every(time=>time>=Date.UTC(1900,0,1)&&time<=Date.UTC(2200,0,1))&&d.width>=1&&d.width<=4
-    &&typeof d.text==='string'&&d.text.length<=120&&(d.color==='accent'||/^#[0-9a-f]{6}$/i.test(d.color))
+    &&typeof d.text==='string'&&d.text.length<=120&&(d.color==='accent'||/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(d.color))
     &&(d.version===undefined||d.version===2)&&['locked','hidden'].every(key=>d[key as 'locked'|'hidden']===undefined||typeof d[key as 'locked'|'hidden']==='boolean')
     &&(d.dash===undefined||['solid','dashed','dotted'].includes(d.dash))
     &&(d.levels===undefined||Array.isArray(d.levels)&&d.levels.length>0&&d.levels.length<=24&&d.levels.every(v=>Number.isFinite(v)&&Math.abs(v)<=100))

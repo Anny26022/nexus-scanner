@@ -13,6 +13,7 @@ export const CHART_SHORTCUTS: ReadonlyArray<{group: string; items: ReadonlyArray
     [[MOD, 'K'], 'Command palette'],
   ]},
   {group: 'Timeframe', items: [
+    [['1', 'D'], 'Type an interval (1D, 1W, 1M) + Enter'],
     [[ALT, '1'], 'Daily candles'],
     [[ALT, '2'], 'Weekly candles'],
     [[ALT, '3'], 'Monthly candles'],

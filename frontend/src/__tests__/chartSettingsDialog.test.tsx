@@ -14,15 +14,18 @@ const open = (chartStyle: ChartStyle, onApply = vi.fn()) => {
 it.each(['candles', 'hollowCandles', 'volumeCandles'] as const)('offers candle colours for %s', style => {
   const onApply = open(style);
   expect(screen.getByLabelText('Chart type')).toHaveValue(style);
-  fireEvent.input(screen.getByLabelText('Candle up body color'), { target: { value: '#123456' } });
-  expect(onApply).toHaveBeenLastCalledWith(expect.objectContaining({ upColor: '#123456' }), style, null);
+  fireEvent.click(screen.getByRole('button', { name: 'Candle up body color' }));
+  fireEvent.click(screen.getByRole('option', { name: '#2962ff' }));
+  expect(onApply).toHaveBeenLastCalledWith(expect.objectContaining({ upColor: '#2962ff' }), style, null);
 });
 
 it('offers line colour and width for line styles, and resets colours', () => {
   const onApply = open('line');
-  fireEvent.input(screen.getByLabelText('Line color'), { target: { value: '#ff0000' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Line color' }));
+  fireEvent.click(screen.getByRole('option', { name: '#f23645' }));
+  fireEvent.change(screen.getByLabelText('Line color opacity percent'), { target: { value: '50' } });
   fireEvent.change(screen.getByLabelText('Line width'), { target: { value: '3' } });
-  expect(onApply).toHaveBeenLastCalledWith(expect.objectContaining({ lineColor: '#ff0000', lineWidth: 3 }), 'line', null);
+  expect(onApply).toHaveBeenLastCalledWith(expect.objectContaining({ lineColor: '#f2364580', lineWidth: 3 }), 'line', null);
   fireEvent.click(screen.getByRole('button', { name: 'Reset to defaults' }));
   expect(onApply.mock.lastCall![0]).not.toHaveProperty('lineColor');
   expect(onApply.mock.lastCall![0]).toMatchObject({ volume: true, scaleMode: 'normal' });
@@ -43,4 +46,12 @@ it('keeps volume bars and the status-line volume value as separate options', () 
   expect(onApply).toHaveBeenLastCalledWith(expect.objectContaining({ statusVolume: false, volume: true }), 'candles', null);
   fireEvent.click(screen.getByLabelText('Volume bars'));
   expect(onApply).toHaveBeenLastCalledWith(expect.objectContaining({ volume: false }), 'candles', null);
+});
+
+it('splits and joins colours with opacity', async () => {
+  const { splitColor, joinColor } = await import('../components/ColorPalette');
+  expect(splitColor('#2962ff80')).toEqual({ base: '#2962ff', opacity: 50 });
+  expect(splitColor('bad')).toEqual({ base: '#000000', opacity: 100 });
+  expect(joinColor('#2962ff', 100)).toBe('#2962ff');
+  expect(joinColor('#2962ff', 0)).toBe('#2962ff00');
 });

@@ -1,4 +1,4 @@
-import { ema, type Candle, type EmaLine } from './model';
+import { ema, type Candle, type EmaLine, type Interval } from './model';
 import {
   rsi,
   macd,
@@ -20,6 +20,10 @@ export interface IndicatorSnapshot {
   volumeAvg: number | null;
   volumeRel: number | null;
   volumeUpDown: number | null;
+  /** 50-bar average traded value (close × volume), in ₹ crore. */
+  volumeTurnoverAvg: number | null;
+  /** Average volume per minute of the 375-minute NSE session × close, in ₹ lakh (an estimate from daily bars). */
+  volumeMinuteLiquidity: number | null;
   supertrend: { value: number | null; direction: 1 | -1 } | null;
   bollinger: { upper: number | null; middle: number | null; lower: number | null } | null;
   sma: number | null;
@@ -33,6 +37,12 @@ export interface IndicatorSnapshot {
 }
 
 const metricFormatter = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
+
+const twoDecimals = new Intl.NumberFormat('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+export const formatCrore = (value: number | null) => value === null || !Number.isFinite(value) ? '-' : `${twoDecimals.format(value)} Cr`;
+export const formatLakh = (value: number | null) => value === null || !Number.isFinite(value) ? '-' : `${twoDecimals.format(value)} L`;
+/** Relative volume as a multiple: 160% → "1.6x". */
+export const formatTimes = (percent: number | null) => percent === null || !Number.isFinite(percent) ? '-' : `${(percent / 100).toFixed(1)}x`;
 
 export function formatRelativeVolume(value: number | null): string {
   return value === null || !Number.isFinite(value) ? '-' : `${Math.round(value)}%`;
@@ -61,9 +71,18 @@ export function computeIndicatorSeries(
   studies: ChartStudies,
   studyConfigs?: StudyConfigs,
   benchmark?: ReadonlyMap<string, number>,
+  interval: Interval = 'D',
 ) {
   const extraSeries = computeExtraStudies(candles, studyConfigs?.extras, {benchmark});
   const volumeStats = computeSimpleVolume(candles, {ppvLength: studyConfigs?.volume?.ppvLength, maLength: studyConfigs?.volume?.maLength});
+  const turnoverLength = studyConfigs?.volume?.maLength ?? 50;
+  const turnoverAvg: (number | null)[] = [];
+  let turnoverSum = 0;
+  candles.forEach((bar, index) => {
+    turnoverSum += bar.close * (bar.volume ?? 0);
+    if (index >= turnoverLength) turnoverSum -= candles[index - turnoverLength].close * (candles[index - turnoverLength].volume ?? 0);
+    turnoverAvg.push(index >= turnoverLength - 1 ? turnoverSum / turnoverLength / 1e7 : null);
+  });
   const emaMap = new Map<string, (number | null)[]>();
   for (const line of emaLines) {
     emaMap.set(line.id, ema(candles, line.period));
@@ -108,6 +127,8 @@ export function computeIndicatorSeries(
         volumeAvg: volumeStats.average[idx] ?? null,
         volumeRel: volumeStats.relative[idx] ?? null,
         volumeUpDown: volumeStats.upDown[idx] ?? null,
+        volumeTurnoverAvg: turnoverAvg[idx] ?? null,
+        volumeMinuteLiquidity: interval === 'D' && bar && volumeStats.average[idx] !== null && volumeStats.average[idx] !== undefined ? volumeStats.average[idx]! / 375 * bar.close / 1e5 : null,
         supertrend: stData
           ? { value: stData.values[idx] ?? null, direction: stData.directions[idx] ?? 1 }
           : null,
@@ -160,6 +181,12 @@ export function updateLiveIndicatorDom(container: HTMLElement, snapshot: Indicat
       el.textContent = formatVolumeValue(snapshot.volumeAvg);
     } else if (key === 'vol-rel') {
       el.textContent = formatRelativeVolume(snapshot.volumeRel);
+    } else if (key === 'vol-turnover') {
+      el.textContent = formatCrore(snapshot.volumeTurnoverAvg);
+    } else if (key === 'vol-proj') {
+      el.textContent = formatTimes(snapshot.volumeRel);
+    } else if (key === 'vol-1ml') {
+      el.textContent = formatLakh(snapshot.volumeMinuteLiquidity);
     } else if (key === 'vol-ud') {
       el.textContent = formatted(snapshot.volumeUpDown, 2);
     } else if (key === 'macd-line') {

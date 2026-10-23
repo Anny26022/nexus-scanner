@@ -171,6 +171,7 @@ export interface VolumeConfig {
 export const SIMPLE_VOLUME_COLORS = {ppv: '#2196f3', record: '#87ceeb', up: '#4caf50', down: '#ff5252', dry: '#ff9800', snort: '#9c27b0'} as const;
 
 export interface StudyConfigs {
+  fundamentals?: import('./fundamentals').FundamentalsConfig;
   /** Registry indicators (see extraStudies.ts), persisted with the scene and saved layouts. */
   extras?: ExtraStudies;
   rsi?: RsiConfig;

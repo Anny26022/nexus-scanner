@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { type ChartAppearance, type ChartStyle, type ScaleMode } from '../chart/ChartEngine';
 import { ChartDialog } from './ChartDialog';
+import { ColorPalette } from './ColorPalette';
 import { CHART_STYLE_OPTIONS } from './ChartStylePicker';
 
 const DEFAULT_UP = '#089981';
@@ -74,23 +75,8 @@ function themeColor(name: string, fallback: string) {
 }
 const isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark';
 
-function ColorPicker({
-  value,
-  onChange,
-  ariaLabel,
-  disabled = false,
-}: {
-  value: string;
-  onChange: (val: string) => void;
-  ariaLabel: string;
-  disabled?: boolean;
-}) {
-  return (
-    <label className={`cs-swatch${disabled ? ' is-disabled' : ''}`} title={ariaLabel}>
-      <input type="color" aria-label={ariaLabel} value={value.slice(0, 7)} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
-      <span style={{ backgroundColor: value }} />
-    </label>
-  );
+function ColorPicker(props: {value: string; onChange: (val: string) => void; ariaLabel: string; disabled?: boolean}) {
+  return <ColorPalette {...props} />;
 }
 
 /** Checkbox row; extra controls (colours, selects) sit on the right. */
@@ -225,7 +211,7 @@ export function ChartSettingsDialog({
   };
 
   const reset = () => {
-    const next: ChartAppearance = { ...draft, verticalGrid: true, horizontalGrid: true, crosshair: true, crosshairMode: 'normal' };
+    const next: ChartAppearance = { ...draft, verticalGrid: false, horizontalGrid: false, crosshair: true, crosshairMode: 'normal' };
     for (const key of RESET_KEYS) delete next[key];
     setDraft(next);
     onApply(next, style, currentComparison);
@@ -325,16 +311,16 @@ export function ChartSettingsDialog({
 
           {section === 'readout' && <>
             <h4 className="cs-subhead">Symbol</h4>
-            <Check label="Logo" checked={draft.statusLogo !== false} onChange={(checked) => update({ statusLogo: checked })} />
-            <Check label="Title" checked={draft.statusTitle !== false} onChange={(checked) => update({ statusTitle: checked })}>
-              <select aria-label="Title shows" className="cs-select" disabled={draft.statusTitle === false} value={draft.statusTitleMode ?? 'symbol'}
+            <Check label="Logo" checked={draft.statusLogo === true} onChange={(checked) => update({ statusLogo: checked })} />
+            <Check label="Title" checked={draft.statusTitle === true} onChange={(checked) => update({ statusTitle: checked })}>
+              <select aria-label="Title shows" className="cs-select" disabled={draft.statusTitle !== true} value={draft.statusTitleMode ?? 'symbol'}
                 onChange={(e) => update({ statusTitleMode: e.target.value as 'symbol' | 'description' | 'ticker' })}>
                 <option value="symbol">Symbol</option>
                 <option value="description">Description</option>
                 <option value="ticker">Ticker</option>
               </select>
             </Check>
-            <Check label="Market status" checked={draft.statusMarketStatus !== false} onChange={(checked) => update({ statusMarketStatus: checked })} />
+            <Check label="Market status" checked={draft.statusMarketStatus === true} onChange={(checked) => update({ statusMarketStatus: checked })} />
             <Check label="Open, high, low, close" checked={draft.statusOhlc !== false} onChange={(checked) => update({ statusOhlc: checked })} />
             <Check label="Bar change values" checked={draft.statusBarChange !== false} onChange={(checked) => update({ statusBarChange: checked })} />
             <Check label="Volume value" checked={draft.statusVolume !== false} onChange={(checked) => update({ statusVolume: checked })} />
@@ -367,7 +353,7 @@ export function ChartSettingsDialog({
               <input aria-label="Bottom margin %" className="cs-input is-number" type="number" min="0" max="49" value={draft.bottomMargin ?? 10} onChange={(e) => update({ bottomMargin: Number(e.target.value) })} />
             </Row>
             <h4 className="cs-subhead">Lines</h4>
-            <Check label="Last price line" checked={draft.priceLineVisible !== false} onChange={(checked) => update({ priceLineVisible: checked })} />
+            <Check label="Last price line" checked={draft.priceLineVisible === true} onChange={(checked) => update({ priceLineVisible: checked })} />
             <Check label="High and low price lines" checked={draft.highLowPriceLines ?? false} onChange={(checked) => update({ highLowPriceLines: checked })} />
             <h4 className="cs-subhead">Time scale</h4>
             <Check label="Corner clock" checked={draft.sessionClock ?? false} onChange={(checked) => update({ sessionClock: checked })} />
@@ -418,7 +404,7 @@ export function ChartSettingsDialog({
             <h4 className="cs-subhead">Scales</h4>
             <Row label="Text">
               <ColorPicker ariaLabel="Scale text color" value={draft.scaleTextColor ?? themeColor('muted', '#86868b')} onChange={(val) => update({ scaleTextColor: val })} />
-              <select aria-label="Scale text size" className="cs-select is-narrow" value={draft.scaleFontSize ?? 11} onChange={(e) => update({ scaleFontSize: Number(e.target.value) })}>
+              <select aria-label="Scale text size" className="cs-select is-narrow" value={draft.scaleFontSize ?? 12} onChange={(e) => update({ scaleFontSize: Number(e.target.value) })}>
                 {[10, 11, 12, 13, 14].map(size => <option key={size} value={size}>{size}</option>)}
               </select>
             </Row>

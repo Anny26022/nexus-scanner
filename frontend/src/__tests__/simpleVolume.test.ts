@@ -1,5 +1,7 @@
 import { expect, it } from 'vitest';
 import { computeSimpleVolume, periodBars } from '../chart/simpleVolume';
+import { computeIndicatorSeries } from '../chart/indicatorValues';
+import { defaultStudies } from '../chart/studies';
 import type { Candle } from '../chart/model';
 
 const day = (index: number) => new Date(Date.UTC(2024, 0, 1 + index)).toISOString().slice(0, 10);
@@ -50,4 +52,29 @@ it('labels the latest record volumes and spots bull snorts', () => {
 it('computes the up/down volume ratio over the lookback', () => {
   const candles = [bar(0, 10, 100), bar(1, 11, 300, 10), bar(2, 10, 100, 11)];
   expect(computeSimpleVolume(candles, {udLength: 2}).upDown[2]).toBe(3);
+});
+
+it('keeps defaults for options passed as undefined', () => {
+  const candles = Array.from({length: 60}, (_, index) => bar(index, 10, 100));
+  expect(computeSimpleVolume(candles, {maLength: undefined, ppvLength: undefined}).average[59]).toBe(100);
+});
+
+it('derives TradingView-style volume pills: average traded value, projected RVol and 1-minute liquidity', async () => {
+  const { computeIndicatorSeries, formatCrore, formatLakh, formatTimes } = await import('../chart/indicatorValues');
+  const { defaultStudies } = await import('../chart/studies');
+  // 50 bars at ₹100 with 1,00,00,000 shares: ₹100 Cr traded per day.
+  const candles = Array.from({length: 50}, (_, index) => bar(index, 100, 10_000_000));
+  const snapshot = computeIndicatorSeries(candles, [], defaultStudies()).getSnapshot(49);
+  expect(formatCrore(snapshot.volumeTurnoverAvg)).toBe('100.00 Cr');
+  // 1,00,00,000 / 375 minutes × ₹100 = ₹26.67 lakh a minute.
+  expect(formatLakh(snapshot.volumeMinuteLiquidity)).toBe('26.67 L');
+  expect(formatTimes(160)).toBe('1.6x');
+  expect(formatTimes(null)).toBe('-');
+});
+
+it('does not treat aggregated bar volume as daily minute liquidity', () => {
+  const candles = Array.from({length: 60}, (_, index) => ({date: new Date(Date.UTC(2025,0,1+index)).toISOString().slice(0,10),open:100,high:100,low:100,close:100,volume:375000}));
+  const daily = computeIndicatorSeries(candles, [], defaultStudies(), undefined, undefined, 'D').getSnapshot(59);
+  expect(daily.volumeMinuteLiquidity).toBe(1);
+  for (const interval of ['W','M'] as const) expect(computeIndicatorSeries(candles, [], defaultStudies(), undefined, undefined, interval).getSnapshot(59).volumeMinuteLiquidity).toBeNull();
 });

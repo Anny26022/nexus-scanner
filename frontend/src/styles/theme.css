@@ -103,6 +103,7 @@
   --series-2: #6366f1;
   --chart-grid: rgba(0, 0, 0, 0.045);
   --volume-noise: #7c7c87;
+  --band-label: #1a3a8f;
   --chart-crosshair: rgba(0, 0, 0, 0.22);
   --chart-scale-bg: #ffffff;
   /* Stacking registry for UI that escapes its panel, lowest to highest.
@@ -150,6 +151,7 @@
   --series-2: #7178ec;
   --chart-grid: rgba(255, 255, 255, 0.05);
   --volume-noise: #4a4d57;
+  --band-label: #8fb0ff;
   --chart-crosshair: rgba(255, 255, 255, 0.18);
   --chart-scale-bg: #161618;
   --chart-background: #111113;

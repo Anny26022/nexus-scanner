@@ -36,11 +36,13 @@ assert installed.is_relative_to(Path(__import__('sys').prefix).resolve()), insta
 for module in pkgutil.walk_packages(edl_pipeline.__path__, edl_pipeline.__name__ + '.'):
     importlib.import_module(module.name)
 for module in ('announcement_artifacts', 'build_chart_artifacts', 'nse_delivery',
-               'nse_fno_ban', 'screen_trend_conditions', 'sync_local_scanner_history'):
+               'nse_fno_ban', 'screen_trend_conditions', 'sync_local_scanner_history', 'fetch_etf_snapshot'):
     importlib.import_module(module)
 for script in SCRIPT_OUTPUT_SPECS:
     assert (installed / script).is_file(), script
 assert load_methodology(pipeline_utils.resource_path('breadth_methodology.json'))
+for name in ('etf_fields.json', 'etf_enum_labels.json'):
+    assert pipeline_utils.load_json(pipeline_utils.resource_path(name))
 assert source_label_mapping() == json.loads(Path('filing_source_labels.json').read_text())['fields']
 assert classification_rules()[-1] == pipeline_utils.file_fingerprint(Path('filing_source_labels.json'))
 for name in ('breadth_methodology.json', 'filing_source_labels.json'):

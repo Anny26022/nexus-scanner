@@ -6,7 +6,7 @@
 ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 @media (max-width: 1279px) {
-  .app-frame { grid-template-columns: 200px minmax(0,1fr); }
+  .app-frame { --sidebar-width: 200px; }
   .workspace { padding: 18px 20px 14px; }
   .screen-toolbar { flex-wrap: wrap; }
   .screen-buttons { width: 100%; justify-content: flex-end; }
@@ -20,6 +20,8 @@
   .app-frame { --results-min-height: 0px; display: flex; flex-direction: column; height: 100dvh; min-height: 0; background: var(--page); }
   .app-sidebar {
     position: relative;
+    inset: auto;
+    width: auto;
     flex: 0 0 auto;
     height: auto;
     padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));

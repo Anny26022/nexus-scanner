@@ -151,6 +151,8 @@ export class ChartEngine {
     this.chart=createChart(host,{
       autoSize:true,
       layout:{fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',fontSize:11,attributionLogo:false,panes:{enableResize:true}},
+      // Grid lines start hidden; the Canvas settings turn them on.
+      grid:{vertLines:{visible:false},horzLines:{visible:false}},
       rightPriceScale:{borderVisible:false,scaleMargins:{top:.13,bottom:.22}},
       timeScale:{borderVisible:false,rightOffset:RIGHT_EDGE_BARS,rightOffsetPixels:RIGHT_EDGE_PIXELS,barSpacing:8,fixLeftEdge:false,lockVisibleTimeRangeOnResize:true,shiftVisibleRangeOnNewBar:true},
       crosshair:{mode:CrosshairMode.Normal},

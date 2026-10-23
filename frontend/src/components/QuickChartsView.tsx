@@ -73,7 +73,7 @@ function MiniChart({ candles, symbol, onEngineChange }: { candles: readonly Cand
     engine.setStudyConfigs(scene.studyConfigs ?? defaultStudyConfigs());
     engine.setStudies(scene.studies ?? defaultStudies());
     engine.setAppearance({
-      horizontalGrid: true,
+      horizontalGrid: false,
       verticalGrid: false,
       crosshair: true,
       volume: true,

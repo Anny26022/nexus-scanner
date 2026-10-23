@@ -53,7 +53,7 @@ export function IndicatorsCatalogModal({
   studies,
   emaLines,
   interval,
-  appearance = { horizontalGrid: true, verticalGrid: true, crosshair: true, volume: true, scaleMode: 'normal' },
+  appearance = { horizontalGrid: false, verticalGrid: false, crosshair: true, volume: true, scaleMode: 'normal' },
   onApplyStudies,
   onApplyEmaLines,
   onApplyAppearance,

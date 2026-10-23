@@ -42,14 +42,14 @@ export const CHART_SHORTCUTS: ReadonlyArray<{group: string; items: ReadonlyArray
 
 export function ChartShortcutsDialog({onClose}: {onClose: () => void}) {
   return <ChartDialog title="Keyboard shortcuts" className="chart-shortcuts-dialog" onClose={onClose}>
-    <div className="grid max-h-[min(70vh,560px)] gap-x-8 gap-y-5 overflow-y-auto px-5 pb-5 pt-4 sm:grid-cols-2 lg:w-[680px]">
+    <div className="grid max-h-[min(70vh,560px)] gap-x-10 gap-y-6 overflow-y-auto px-5 pb-6 pt-1 sm:grid-cols-2">
       {CHART_SHORTCUTS.map(section => <section key={section.group}>
-        <h3 className="m-0 mb-2 text-[12px] font-semibold text-muted">{section.group}</h3>
-        <dl className="m-0 flex flex-col gap-1.5">
-          {section.items.map(([keys, label]) => <div key={label} className="flex items-center justify-between gap-4 text-[12.5px]">
-            <dt className="text-secondary">{label}</dt>
+        <h3 className="m-0 mb-1.5 text-[11.5px] font-semibold text-muted">{section.group}</h3>
+        <dl className="m-0 flex flex-col">
+          {section.items.map(([keys, label]) => <div key={label} className="flex min-h-8 items-center justify-between gap-4 border-b border-line text-[13px] last:border-b-0">
+            <dt className="min-w-0 text-text">{label}</dt>
             <dd className="m-0 flex shrink-0 gap-1">{keys.map(key => <kbd key={key}
-              className="min-w-[22px] rounded-md bg-field px-1.5 py-0.5 text-center font-sans text-[11.5px] font-medium text-text shadow-(--shadow-control)">{key}</kbd>)}</dd>
+              className="min-w-[22px] rounded-md bg-field px-1.5 py-0.5 text-center font-sans text-[11.5px] font-medium text-secondary shadow-(--shadow-control)">{key}</kbd>)}</dd>
           </div>)}
         </dl>
       </section>)}

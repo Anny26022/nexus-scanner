@@ -28,8 +28,23 @@ interface CatalogItem {
   category: 'Trend' | 'Oscillators' | 'Volatility' | 'Volume';
   type: 'Overlay' | 'Sub-pane';
   ariaLabel: string;
+  description?: string;
   disabled?: boolean;
 }
+
+const CATEGORIES = ['Trend', 'Oscillators', 'Volatility', 'Volume'] as const;
+const DESCRIPTIONS: Record<string, string> = {
+  ema: 'Up to six exponential averages that weight recent prices more.',
+  sma: 'The plain average of the last 50 closes.',
+  supertrend: 'ATR-based trailing line that flips with the trend.',
+  vwap: 'Monthly volume-weighted average price. Daily bars only.',
+  rsi: 'Momentum from 0 to 100; above 70 is overbought, below 30 oversold.',
+  macd: 'Gap between two EMAs, with a signal line and histogram.',
+  stochastic: 'Where the close sits in the recent high–low range.',
+  bollinger: 'A 20-bar average with bands two standard deviations away.',
+  atr: 'Average daily range, a gauge of volatility.',
+  volume: 'Traded volume per bar, coloured by direction.',
+};
 
 export function IndicatorsCatalogModal({
   studies,
@@ -139,9 +154,11 @@ export function IndicatorsCatalogModal({
     category: def.category === 'Momentum' ? 'Oscillators' : def.category === 'Relative strength' ? 'Trend' : def.category,
     type: def.pane === 'price' ? 'Overlay' : 'Sub-pane',
     ariaLabel: def.label,
+    description: def.description,
   }));
   catalog.splice(1, 0, ...extraItems.filter(item => item.id === 'rs'));
   catalog.push(...extraItems.filter(item => item.id !== 'rs'));
+  for (const item of catalog) item.description ??= DESCRIPTIONS[item.id];
 
   const filtered = useMemo(() => {
     return catalog.filter(item => {
@@ -182,32 +199,26 @@ export function IndicatorsCatalogModal({
 
   return (
     <ChartDialog title="Indicators" className="indicators-catalog-dialog" onClose={onClose}>
-      {/* Sleek Search & Category Filter */}
       <div className="catalog-toolbar">
         <div className="catalog-search-wrap">
-          <Search size={14} className="catalog-search-icon" />
+          <Search size={15} className="catalog-search-icon" aria-hidden="true" />
           <input
-            type="text"
-            placeholder="Search indicators..."
+            type="search"
+            placeholder="Search indicators"
+            aria-label="Search indicators"
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="catalog-search-input"
             autoFocus
           />
           {search && (
-            <button
-              type="button"
-              className="catalog-search-clear"
-              onClick={() => setSearch('')}
-              title="Clear search"
-            >
-              <X size={12} />
+            <button type="button" className="catalog-search-clear" onClick={() => setSearch('')} aria-label="Clear search" title="Clear search">
+              <X size={13} />
             </button>
           )}
         </div>
-
-        <div className="catalog-tabs" role="tablist">
-          {(['All', 'Trend', 'Oscillators', 'Volatility', 'Volume'] as const).map(cat => (
+        <div className="catalog-tabs" role="tablist" aria-label="Indicator category">
+          {(['All', ...CATEGORIES] as const).map(cat => (
             <button
               key={cat}
               type="button"
@@ -222,56 +233,58 @@ export function IndicatorsCatalogModal({
         </div>
       </div>
 
-      {/* Clean, Sleek Indicators List */}
       <div className="catalog-list-scroll">
-        <div className="catalog-list">
-          {filtered.map(item => {
-            const isChecked = item.extra
-              ? !!extras[item.extra.id]?.enabled
-              : item.id === 'ema'
-                ? emaLines.some(l => l.enabled)
-                : item.id === 'volume'
-                ? !!appearance.volume
-                : !!studies[item.id as keyof ChartStudies];
-
-            return (
-              <div
-                key={item.id}
-                className={`catalog-item-row${isChecked ? ' is-active' : ''}`}
-              >
-                <div className="catalog-item-left">
-                  <div className="catalog-item-title-group">
-                    <span className="catalog-item-name">{item.name}</span>
-                    <span className="catalog-item-short">{item.shortName}</span>
+        {filtered.length === 0 && <p className="catalog-empty">No indicators match “{search}”.</p>}
+        {CATEGORIES.map(group => {
+          const rows = filtered.filter(item => item.category === group);
+          if (!rows.length) return null;
+          return <section key={group} className="catalog-group" aria-label={group}>
+            {category === 'All' && <h3 className="catalog-group-title">{group}</h3>}
+            <div className="catalog-list">
+              {rows.map(item => {
+                const isChecked = item.extra
+                  ? !!extras[item.extra.id]?.enabled
+                  : item.id === 'ema'
+                    ? emaLines.some(l => l.enabled)
+                    : item.id === 'volume'
+                    ? !!appearance.volume
+                    : !!studies[item.id as keyof ChartStudies];
+                return (
+                  <div key={item.id} className={`catalog-item-row${isChecked ? ' is-active' : ''}${item.disabled ? ' is-disabled' : ''}`}>
+                    <label className="catalog-item-left">
+                      <span className="catalog-item-title-group">
+                        <span className="catalog-item-name">{item.name}</span>
+                        <span className="catalog-item-short">{item.shortName}</span>
+                        <span className="catalog-type-tag">{item.type === 'Overlay' ? 'On price' : 'Own pane'}</span>
+                      </span>
+                      {item.description && <span className="catalog-item-description" title={item.description}>{item.description}</span>}
+                      <span className="catalog-switch">
+                        <input
+                          type="checkbox"
+                          role="switch"
+                          aria-label={item.ariaLabel}
+                          checked={isChecked}
+                          disabled={item.disabled}
+                          onChange={e => handleToggle(item, e.target.checked)}
+                        />
+                        <span className="catalog-switch-slider" aria-hidden="true" />
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      className="catalog-item-settings-btn"
+                      aria-label={`Customize ${item.name}`}
+                      title={`Customize ${item.name}`}
+                      onClick={() => onOpenIndicatorSettings(item.id)}
+                    >
+                      <Settings size={14} />
+                    </button>
                   </div>
-                  {item.extra && <span className="catalog-item-description">{item.extra.description}</span>}
-                  <span className="catalog-type-tag">{item.type}</span>
-                </div>
-
-                <div className="catalog-item-actions">
-                  <button
-                    type="button"
-                    className="catalog-item-settings-btn"
-                    title={`Customize ${item.name}`}
-                    onClick={() => onOpenIndicatorSettings(item.id)}
-                  >
-                    <Settings size={13} />
-                  </button>
-                  <label className="catalog-switch" title={isChecked ? 'Disable' : 'Enable'}>
-                    <input
-                      type="checkbox"
-                      aria-label={item.ariaLabel}
-                      checked={isChecked}
-                      disabled={item.disabled}
-                      onChange={e => handleToggle(item, e.target.checked)}
-                    />
-                    <span className="catalog-switch-slider" />
-                  </label>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          </section>;
+        })}
       </div>
 
       <footer className="catalog-footer">

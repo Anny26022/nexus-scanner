@@ -320,6 +320,7 @@ it('allows a heading-only paste and clears it without a legacy storage key', () 
   fireEvent.submit(textarea.closest('form')!);
   expect(screen.getByText('Ideas')).toBeInTheDocument();
   expect(readChartStorage('watchlist.v2')).toEqual(['###Ideas']);
+  fireEvent.click(screen.getByTitle('Watchlist options'));
   fireEvent.click(screen.getByRole('button', { name: /Clear entire list/i }));
   expect(screen.getByText('Your watchlist is empty')).toBeInTheDocument();
   expect(readChartStorage('watchlist.v2')).toEqual([]);
@@ -413,4 +414,47 @@ it('opens dropdown menu beside watchlist and clears entire list', () => {
   // 3. Watchlist is now empty
   expect(screen.getByText('Your watchlist is empty')).toBeInTheDocument();
   expect(screen.queryByText('DIXON')).not.toBeInTheDocument();
+});
+
+it('flags symbols, shows a flag list and unflags on remove there', () => {
+  writeChartStorage('watchlist.v2', ['DIXON', 'RELIANCE', 'TCS']);
+  render(<WatchlistDock onSelectSymbol={vi.fn()} />, { wrapper: createWrapper() });
+
+  fireEvent.click(screen.getByRole('button', { name: 'Flag RELIANCE' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Red flag' }));
+  expect(readChartStorage('watchlist-flags.v1')).toEqual({ RELIANCE: 'red' });
+
+  fireEvent.click(screen.getByTitle('Watchlist options'));
+  fireEvent.click(screen.getByRole('button', { name: /Red list/ }));
+  expect(screen.getByTitle('Watchlist options')).toHaveTextContent('Red list');
+  expect(screen.queryByText('DIXON')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove RELIANCE' }));
+  expect(readChartStorage('watchlist-flags.v1')).toEqual({});
+  expect(readChartStorage('watchlist.v2')).toEqual(['DIXON', 'RELIANCE', 'TCS']);
+});
+
+it('creates, switches and copies between named lists from the menus', () => {
+  writeChartStorage('watchlist.v2', ['DIXON', 'TCS']);
+  render(<WatchlistDock onSelectSymbol={vi.fn()} />, { wrapper: createWrapper() });
+
+  fireEvent.click(screen.getByTitle('Watchlist options'));
+  fireEvent.click(screen.getByRole('button', { name: /Create new list/ }));
+  fireEvent.change(screen.getByLabelText('New watchlist'), { target: { value: 'Momentum' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+  expect(screen.getByTitle('Watchlist options')).toHaveTextContent('Momentum');
+  expect(readChartStorage('watchlist.v2')).toEqual([]);
+
+  fireEvent.click(screen.getByTitle('Watchlist options'));
+  fireEvent.click(screen.getByRole('button', { name: /^Watchlist\s*2$/ }));
+  expect(readChartStorage('watchlist.v2')).toEqual(['DIXON', 'TCS']);
+
+  fireEvent.contextMenu(screen.getByText('TCS'));
+  fireEvent.click(screen.getByRole('button', { name: /Move to top/ }));
+  expect(readChartStorage('watchlist.v2')).toEqual(['TCS', 'DIXON']);
+
+  fireEvent.contextMenu(screen.getByText('DIXON'));
+  fireEvent.click(screen.getByRole('button', { name: /Momentum/ }));
+  const lists = readChartStorage('watchlists.v1') as { lists: { name: string; items: string[] }[] };
+  expect(lists.lists.find(list => list.name === 'Momentum')?.items).toEqual(['DIXON']);
 });

@@ -97,10 +97,11 @@ export function manifestSnapshotSource(manifest: Manifest, revision = manifest.r
       url,
     };
   }
-  // Historical revisions keep their original URL; current releases advertise gzip.
+  // A tab still on the previous release reads its gzip copy: older revisions keep only compressed stocks files.
+  const gzip = typeof DecompressionStream !== 'undefined';
   return {revision, url:revision === manifest.revision
-    ? (typeof DecompressionStream !== 'undefined' ? manifest.datasetPackedGzipUrl ?? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
-    : `/data/revisions/${revision}/stocks.json`,
+    ? (gzip ? manifest.datasetPackedGzipUrl ?? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
+    : `/data/revisions/${revision}/stocks.json${gzip ? '.gz' : ''}`,
   sessionDate:revision === manifest.revision ? manifest.sessionDate : undefined};
 }
 

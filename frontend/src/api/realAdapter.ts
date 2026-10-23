@@ -183,6 +183,16 @@ class RealDataAdapter {
     return {observedOn: calendar.fetched_at?.slice(0, 10), events: calendar.events.filter(event => event.symbol === symbol)};
   }
 
+  /** This symbol's dated bands ([date, band] pairs, first = starting band), or null when the release has none. */
+  async getPriceBandHistory(symbol: string, revision: string) {
+    const release = await releaseFor(revision);
+    if (release.revision !== revision || !release.priceBandHistoryUrl) return null;
+    const ledger = await cached(releaseCache, release.priceBandHistoryUrl,
+      () => getIpoJson<{version: number; from: string; through: string; bands: Record<string, Array<[string, string]>>}>(release.priceBandHistoryUrl!, 'Price-band history'), 3);
+    if (ledger.version !== 1) return null;
+    return {from: ledger.from, through: ledger.through, bands: ledger.bands[symbol] ?? []};
+  }
+
   async getThemeClassification(revision?: string) {
     const release = await releaseFor(revision);
     if (!release.themeClassificationUrl || !release.themeClassificationVersion) throw new Error('Theme classifications are unavailable in this release.');

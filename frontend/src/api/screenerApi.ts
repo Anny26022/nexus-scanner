@@ -22,6 +22,7 @@ const getAdapter = () => USE_MOCK_API
 export const screenerApi = {
   getFinancialHistory: realAdapter.getFinancialHistory.bind(realAdapter),
   getEarningsSchedule: realAdapter.getEarningsSchedule.bind(realAdapter),
+  getPriceBandHistory: (symbol: string, revision: string) => realAdapter.getPriceBandHistory(symbol, revision),
   getThemeClassification: realAdapter.getThemeClassification.bind(realAdapter),
   async getExportRows(request: ScreenerRunRequest) {
     const req = {...request, page:1, pageSize:100};

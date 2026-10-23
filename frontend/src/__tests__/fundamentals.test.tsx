@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { comparisonPeriod, fundamentalsConfig, growth, priceBandGuides, priceBandLabel, upcomingResults, visibleFinancials, type FinancialHistory, type FundamentalsConfig } from '../chart/fundamentals';
+import { bandChanges, comparisonPeriod, fundamentalsConfig, growth, priceBandGuides, priceBandLabel, upcomingResults, visibleFinancials, type FinancialHistory, type FundamentalsConfig } from '../chart/fundamentals';
 import { FundamentalsIndicator, FundamentalsSettingsDialog } from '../components/FundamentalsIndicator';
 import { screenerApi } from '../api/screenerApi';
 import { IndicatorsCatalogModal } from '../components/IndicatorsCatalogModal';
@@ -131,4 +131,11 @@ it('finds the next results date within 90 days once the calendar is observed', (
   expect(upcomingResults({...schedule, events: [{scheduled_date: '2027-03-01'}]}, '2026-10-22')).toBeNull();
   expect(upcomingResults({...schedule, observedOn: '2026-10-25'}, '2026-10-22')).toBeNull();
   expect(fundamentalsConfig({enabled: true})).toMatchObject({earningsLabel: true, earningsLine: false});
+});
+it('turns dated bands into changes up to the cutoff', () => {
+  const bands = [['2021-10-01', '20'], ['2023-01-19', '5'], ['2023-10-19', '10'], ['2026-11-01', '20']] as const;
+  expect(bandChanges(bands, '2026-10-22')).toEqual([{date: '2023-01-19', from: '20', to: '5'}, {date: '2023-10-19', from: '5', to: '10'}]);
+  expect(bandChanges([['2021-10-01', '20']], '2026-10-22')).toEqual([]);
+  expect(bandChanges(undefined, '2026-10-22')).toEqual([]);
+  expect(fundamentalsConfig({enabled: true}).bandHistory).toBe(true);
 });

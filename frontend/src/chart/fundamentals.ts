@@ -34,6 +34,8 @@ export interface FundamentalsConfig {
   /** Purple "E" on the upcoming results date (within 90 days), and an optional dotted line there. */
   earningsLabel?: boolean;
   earningsLine?: boolean;
+  /** Labels on past price-band change dates. */
+  bandHistory?: boolean;
   /** Drag positions as fractions of the free space in the chart (null = default corner). */
   badgeOffset?: {x: number; y: number} | null;
   offset?: {x: number; y: number} | null;
@@ -45,7 +47,7 @@ export interface FundamentalsConfig {
 }
 export const fundamentalsDefaults: FundamentalsConfig = {
   enabled: false, band: true, resultDate: true, table: true, layout: 'compact', period: 'quarterly', profit: 'eps', count: 5,
-  guides: true, earningsMarkers: true, earningsLabel: true, earningsLine: false, badgeOffset: null, offset: null, badgeScale: 1, tableScale: 1,
+  guides: true, earningsMarkers: true, earningsLabel: true, earningsLine: false, bandHistory: true, badgeOffset: null, offset: null, badgeScale: 1, tableScale: 1,
 };
 const point = (value?: {x: number; y: number} | null) => value && Number.isFinite(value.x) && Number.isFinite(value.y)
   ? {x: Math.max(0, Math.min(1, value.x)), y: Math.max(0, Math.min(1, value.y))} : null;
@@ -59,7 +61,7 @@ export function fundamentalsConfig(raw?: FundamentalsConfig): Required<Fundament
     profit: raw?.profit === 'net_profit' ? 'net_profit' : 'eps',
     count: Math.max(3, Math.min(13, Math.round(raw?.count ?? 5) || 5)),
     guides: raw?.guides !== false, earningsMarkers: raw?.earningsMarkers !== false,
-    earningsLabel: raw?.earningsLabel !== false, earningsLine: raw?.earningsLine === true,
+    earningsLabel: raw?.earningsLabel !== false, earningsLine: raw?.earningsLine === true, bandHistory: raw?.bandHistory !== false,
     badgeOffset: point(raw?.badgeOffset), offset: point(raw?.offset),
     badgeScale: scale(raw?.badgeScale, 1),
     // Older saves stored a table text size (10–15px, 11 default).
@@ -137,4 +139,15 @@ export function upcomingResults(schedule: {observedOn?: string; events: {schedul
   const last = limit.toISOString().slice(0, 10);
   return schedule.events.filter(event => /^\d{4}-\d{2}-\d{2}$/.test(event.scheduled_date) && event.scheduled_date >= cutoff && event.scheduled_date <= last)
     .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))[0] ?? null;
+}
+
+/** Band changes from a symbol's dated bands ([date, band], first = starting band) up to `cutoff`. */
+export function bandChanges(bands: readonly (readonly [string, string])[] | undefined, cutoff: string) {
+  const changes: {date: string; from: string; to: string}[] = [];
+  for (let index = 1; index < (bands?.length ?? 0); index++) {
+    const [date, to] = bands![index];
+    if (date > cutoff) break;
+    changes.push({date, from: bands![index - 1][1], to});
+  }
+  return changes;
 }

@@ -207,13 +207,14 @@ function ResultsTable({shown, config, metadata}: {shown: FinancialPeriod[]; conf
 export function FundamentalsSettingsDialog({config: raw, onApply, onClose}: {config?: FundamentalsConfig; onApply: (next: FundamentalsConfig) => void; onClose: () => void}) {
   const [config, setConfig] = useState(() => fundamentalsConfig(raw));
   const set = (change: Partial<FundamentalsConfig>) => setConfig(current => ({...current, ...change}));
-  const check = (key: 'band' | 'resultDate' | 'table' | 'guides' | 'earningsMarkers' | 'earningsLabel' | 'earningsLine', label: string, disabled = false) =>
+  const check = (key: 'band' | 'resultDate' | 'table' | 'guides' | 'earningsMarkers' | 'earningsLabel' | 'earningsLine' | 'bandHistory', label: string, disabled = false) =>
     <label className="pb-setting-check"><input type="checkbox" checked={config[key]} disabled={disabled} onChange={event => set({[key]: event.target.checked})} /><span>{label}</span></label>;
   return <ChartDialog title="Price Band & Results" onClose={onClose} className="pb-settings-dialog">
     <form className="pb-settings" onSubmit={event => { event.preventDefault(); onApply(config); onClose(); }}>
       <h4>Price band</h4>
       {check('band', 'Price band badge (band, ASM/GSM)')}
       {check('resultDate', 'Results countdown in the badge', !config.band)}
+      {check('bandHistory', 'Past band changes on the chart')}
       {check('guides', 'Upper and lower circuit lines (UC / LC)')}
       {check('earningsLabel', 'Upcoming results "E" label on the chart')}
       {check('earningsLine', 'Dotted line on the results date', !config.earningsLabel)}

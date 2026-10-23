@@ -16,6 +16,7 @@ from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
 from session_history import archive_daily_snapshot, register_session
+import price_band_history
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
 from edl_pipeline.scanner.calculation_cache import calculation_cache
@@ -390,6 +391,14 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         manifest['benchmarkUrl']=f'/data/revisions/{revision}/benchmark.json.gz'
     if market is not None:
         manifest['marketOverviewUrl']=f'/data/revisions/{revision}/market-overview.json.gz'
+    # Dated band history: fold today's bands into the persistent ledger (rebuilt once with price_band_history.py).
+    band_ledger = price_band_history.apply_session(price_band_history.load_ledger(output/price_band_history.LEDGER_NAME), session, rows)
+    band_bytes = price_band_history.write_ledger(output/price_band_history.LEDGER_NAME, band_ledger)
+    band_path = generation/'price-band-history.json.gz'
+    band_temporary = band_path.with_name(band_path.name+'.tmp')
+    band_temporary.write_bytes(gzip.compress(band_bytes, compresslevel=9, mtime=0))
+    band_temporary.replace(band_path)
+    manifest['priceBandHistoryUrl'] = f'/data/revisions/{revision}/price-band-history.json.gz'
     manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'
     manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'
     manifest['themeClassificationUrl'] = f'/data/revisions/{revision}/theme-classification.json.gz'

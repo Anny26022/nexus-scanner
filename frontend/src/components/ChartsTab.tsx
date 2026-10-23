@@ -25,7 +25,7 @@ import { PricePaneLegend, SubPaneLegends } from './PaneOverlayLegends';
 import { computeIndicatorSeries, updateLiveIndicatorDom } from '../chart/indicatorValues';
 import { type StudyConfigs, defaultStudyConfigs, isIndicatorVisibleForInterval } from '../chart/studyConfigs';
 import { FundamentalsIndicator, FundamentalsSettingsDialog } from './FundamentalsIndicator';
-import { fundamentalsConfig, priceBandGuides, upcomingResults } from '../chart/fundamentals';
+import { bandChanges, fundamentalsConfig, priceBandGuides, upcomingResults } from '../chart/fundamentals';
 import { IndicatorsCatalogModal } from './IndicatorsCatalogModal';
 import { IndicatorSettingsModal } from './IndicatorSettingsModal';
 import { ExtraStudySettingsDialog } from './ExtraStudySettingsDialog';
@@ -171,6 +171,11 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     staleTime: Infinity, retry: false, enabled: Boolean(fundamentals?.earningsLabel)});
   const nextResults = fundamentals?.earningsLabel && !allHidden && !hiddenStudies.fundamentals && replay.index === null
     ? upcomingResults(earningsSchedule.data, sessionDate) : null;
+  const bandHistory = useQuery({queryKey: ['price-band-history', revision, symbol], queryFn: () => screenerApi.getPriceBandHistory(symbol, revision),
+    staleTime: Infinity, retry: false, enabled: Boolean(fundamentals?.bandHistory)});
+  const bandChoice = useRef<readonly {date: string; from: string; to: string}[]>([]);
+  // The engine applies its own replay cutoff, so pass every change through the snapshot date.
+  bandChoice.current = fundamentals?.bandHistory && !allHidden && !hiddenStudies.fundamentals ? bandChanges(bandHistory.data?.bands, sessionDate) : [];
   const earningsChoice = useRef<{date: string; line: boolean} | null>(null);
   earningsChoice.current = nextResults ? {date: nextResults.scheduled_date, line: fundamentals!.earningsLine} : null;
   const updateBandGuides = (chart: ChartEngine) => {
@@ -246,6 +251,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       engine.current = chart;
       updateBandGuides(chart);
       chart.setUpcomingEarnings?.(earningsChoice.current);
+      chart.setBandChanges?.(bandChoice.current);
       const normalView=clock.getSnapshot().index===null,epoch=sync.persistenceEpoch;
       const unlink=normalView?sync.connect(chart,host):()=>{};
       let timer:ReturnType<typeof setTimeout>|undefined;
@@ -349,6 +355,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         />
         <DrawingContextToolbar book={activeBook} />
       <EngineSync key={`${earningsChoice.current?.date ?? ''}|${earningsChoice.current?.line ?? ''}`} run={() => engine.current?.setUpcomingEarnings?.(earningsChoice.current)} />
+      <EngineSync key={`bands:${bandChoice.current.map(change => change.date + change.to).join(',')}`} run={() => engine.current?.setBandChanges?.(bandChoice.current)} />
       {studyConfigs.fundamentals?.enabled && !allHidden && !hiddenStudies.fundamentals && <FundamentalsIndicator
         symbol={symbol} revision={revision} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}
         metrics={metrics} config={studyConfigs.fundamentals}

@@ -381,6 +381,9 @@ export class ChartEngine {
   private highLowLines:{series:ISeriesApi<'Candlestick'|'Bar'|'Line'|'Area'|'Baseline'>;lines:IPriceLine[]}|null=null;
   private highLowFrame=0;
   private upcomingEarnings:{date:string;line:boolean}|null=null;
+  private bandChanges:readonly {date:string;from:string;to:string}[]=[];
+  /** Past NSE price-band changes, drawn as labels above the candle on each change date. */
+  setBandChanges(changes:readonly {date:string;from:string;to:string}[]) {this.bandChanges=changes;this.refreshMarkers();}
   /** Bar position of a date: an existing bar, or bars counted past the last one (weekdays, weeks or months). */
   private logicalForDate(date:string):number|null {
     const count=this.candles.length;
@@ -704,7 +707,18 @@ export class ChartEngine {
     const snorts=this.simpleVolume&&this.studyConfigs.volume?.showSnort!==false
       ? this.simpleVolume.snorts.filter(index=>index<this.candles.length).map((index):SeriesMarker<Time>=>({id:`snort:${this.candles[index].date}`,time:this.candles[index].date,position:'belowBar',shape:'square',size:.5,color:this.studyConfigs.volume?.snortColor??SIMPLE_VOLUME_COLORS.snort}))
       : [];
-    this.markers.setMarkers([...eventMarkers,...snorts].sort((a,b)=>String(a.time).localeCompare(String(b.time))));
+    // Band changes land on the bar containing the date (weekly/monthly bars too) and respect the replay cutoff.
+    const bandMarkers:SeriesMarker<Time>[]=[];
+    for(const change of this.bandChanges) {
+      if(change.date>this.eventCutoff||!this.candles.length||change.date<this.candles[0].date) continue;
+      let low=0,high=this.candles.length;
+      while(low<high) {const mid=(low+high)>>>1;if(this.candles[mid].date<=change.date) low=mid+1;else high=mid;}
+      const time=this.candles[Math.max(0,low-1)].date;
+      const band=Number.parseFloat(change.to);
+      bandMarkers.push({id:`band:${change.date}`,time,position:'aboveBar',shape:'square',size:.6,text:change.to==='No Band'?'NB':`${change.to}%`,
+        color:band===20?'#2962ff':band===10?'#16a34a':band<=5?'#dc2626':'#787d8a'});
+    }
+    this.markers.setMarkers([...eventMarkers,...snorts,...bandMarkers].sort((a,b)=>String(a.time).localeCompare(String(b.time))));
   }
   /** Benchmark closes by session date, for relative-strength studies. Rebuild with setStudies after changing. */
   setBenchmark(benchmark:ReadonlyMap<string,number>|undefined) { this.benchmark=benchmark; }

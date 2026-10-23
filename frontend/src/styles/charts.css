@@ -1054,6 +1054,8 @@
 .cs-swatch span { width: 100%; height: 100%; border-radius: 3px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .1); }
 .cs-swatch input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; }
 .cs-swatch:hover { background: var(--surface-hover); }
+.cs-swatch { border: 0; } .cs-swatch:disabled { opacity: .4; cursor: default; }
+.cs-swatch[data-state="open"] { box-shadow: 0 0 0 2px var(--accent); }
 .cs-swatch:focus-within { box-shadow: var(--ring); }
 .cs-swatch.is-disabled { opacity: .4; pointer-events: none; }
 .cs-range { width: 120px; accent-color: var(--accent); }
@@ -2296,3 +2298,28 @@
 .pb-setting-row :disabled { opacity: .45; }
 .pb-settings-note { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .pb-settings footer { display: flex; justify-content: space-between; margin: 14px -20px 0; padding: 12px 20px 0; border-top: 1px solid var(--line); }
+
+/* Colour palette popover (TradingView layout). */
+.cp-panel { z-index: calc(var(--z-dialog) + 5); width: 248px; padding: 12px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-pop); animation: pop-in .14s var(--ease-out); }
+.cp-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+.cp-tints { margin-top: 10px; }
+.cp-swatch { aspect-ratio: 1; width: 100%; padding: 0; border: 0; border-radius: 3px; cursor: pointer; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08); transition: transform .1s; }
+.cp-swatch:hover { transform: scale(1.12); }
+.cp-swatch[aria-selected="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--text); }
+.cp-swatch:focus-visible { outline: none; box-shadow: var(--ring); }
+.cp-divider { height: 1px; margin: 12px 0 10px; background: var(--line); }
+.cp-custom { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: center; }
+.cp-add { position: relative; display: grid; place-items: center; aspect-ratio: 1; border-radius: 3px; color: var(--secondary); cursor: pointer; }
+.cp-add:hover { background: var(--surface-hover); color: var(--text); }
+.cp-add input { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.cp-opacity-label { margin: 12px 0 6px; color: var(--muted); font-size: 12px; }
+.cp-opacity { display: flex; align-items: center; gap: 10px; }
+.cp-opacity input[type="range"] {
+  flex: 1; height: 8px; margin: 0; border-radius: 9999px; appearance: none; -webkit-appearance: none; cursor: pointer;
+  background: linear-gradient(to right, transparent, var(--cp-color)), repeating-conic-gradient(#8884 0% 25%, transparent 0% 50%) 0 0 / 8px 8px;
+}
+.cp-opacity input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border: 2px solid var(--text); border-radius: 9999px; background: var(--surface); }
+.cp-opacity input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid var(--text); border-radius: 9999px; background: var(--surface); }
+.cp-percent { display: flex; align-items: center; gap: 2px; height: 28px; padding: 0 8px; border-radius: var(--radius-sm); background: var(--field); color: var(--secondary); font-size: 12.5px; }
+.cp-percent input { width: 30px; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; text-align: right; outline: none; -moz-appearance: textfield; }
+.cp-percent input::-webkit-inner-spin-button { -webkit-appearance: none; }

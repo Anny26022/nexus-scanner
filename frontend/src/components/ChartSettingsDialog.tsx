@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { type ChartAppearance, type ChartStyle, type ScaleMode } from '../chart/ChartEngine';
 import { ChartDialog } from './ChartDialog';
+import { ColorPalette } from './ColorPalette';
 import { CHART_STYLE_OPTIONS } from './ChartStylePicker';
 
 const DEFAULT_UP = '#089981';
@@ -74,23 +75,8 @@ function themeColor(name: string, fallback: string) {
 }
 const isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark';
 
-function ColorPicker({
-  value,
-  onChange,
-  ariaLabel,
-  disabled = false,
-}: {
-  value: string;
-  onChange: (val: string) => void;
-  ariaLabel: string;
-  disabled?: boolean;
-}) {
-  return (
-    <label className={`cs-swatch${disabled ? ' is-disabled' : ''}`} title={ariaLabel}>
-      <input type="color" aria-label={ariaLabel} value={value.slice(0, 7)} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
-      <span style={{ backgroundColor: value }} />
-    </label>
-  );
+function ColorPicker(props: {value: string; onChange: (val: string) => void; ariaLabel: string; disabled?: boolean}) {
+  return <ColorPalette {...props} />;
 }
 
 /** Checkbox row; extra controls (colours, selects) sit on the right. */

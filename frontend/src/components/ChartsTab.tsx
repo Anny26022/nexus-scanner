@@ -25,7 +25,7 @@ import { PricePaneLegend, SubPaneLegends } from './PaneOverlayLegends';
 import { computeIndicatorSeries, updateLiveIndicatorDom } from '../chart/indicatorValues';
 import { type StudyConfigs, defaultStudyConfigs, isIndicatorVisibleForInterval } from '../chart/studyConfigs';
 import { FundamentalsIndicator, FundamentalsSettingsDialog } from './FundamentalsIndicator';
-import { priceBandGuides } from '../chart/fundamentals';
+import { fundamentalsConfig, priceBandGuides, upcomingResults } from '../chart/fundamentals';
 import { IndicatorsCatalogModal } from './IndicatorsCatalogModal';
 import { IndicatorSettingsModal } from './IndicatorSettingsModal';
 import { ExtraStudySettingsDialog } from './ExtraStudySettingsDialog';
@@ -65,6 +65,12 @@ export interface ChartSceneActions {
   resetView: () => void;
   saveImage: () => void;
   openSettings: () => void;
+}
+
+/** Runs `run` once per mount; give it a `key` that changes with the value it applies to the chart. */
+function EngineSync({run}: {run: () => void}) {
+  useMountEffect(run);
+  return null;
 }
 
 function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionDate,symbolControls,viewControls,layoutControls,events,revision,interval,tileId,sync,benchmark,actionsRef}: {benchmark?: ReadonlyMap<string, number>; actionsRef?: { current: ChartSceneActions | null };candles: readonly Candle[]; symbol: string;book:DrawingBook;firstDate:string;lastDate:string;metrics?:ChartMetrics;sessionDate:string;symbolControls:ReactNode;viewControls:ReactNode;layoutControls?:ReactNode;events:readonly ChartEvent[];revision:string;interval:Interval;tileId:string;sync:ChartSync}) {
@@ -159,6 +165,14 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const [eventDetails,setEventDetails]=useState<readonly ChartEvent[]|null>(null);
   const [clock]=useState(()=>new ReplayClock(candles.length));
   const replay=useSyncExternalStore(clock.subscribe,clock.getSnapshot,clock.getSnapshot);
+  // Upcoming results "E" label: the schedule query is shared with the indicator's badge.
+  const fundamentals = studyConfigs.fundamentals?.enabled ? fundamentalsConfig(studyConfigs.fundamentals) : null;
+  const earningsSchedule = useQuery({queryKey: ['earnings-schedule', revision, symbol], queryFn: () => screenerApi.getEarningsSchedule(symbol, revision),
+    staleTime: Infinity, retry: false, enabled: Boolean(fundamentals?.earningsLabel)});
+  const nextResults = fundamentals?.earningsLabel && !allHidden && !hiddenStudies.fundamentals && replay.index === null
+    ? upcomingResults(earningsSchedule.data, sessionDate) : null;
+  const earningsChoice = useRef<{date: string; line: boolean} | null>(null);
+  earningsChoice.current = nextResults ? {date: nextResults.scheduled_date, line: fundamentals!.earningsLine} : null;
   const updateBandGuides = (chart: ChartEngine) => {
     const config = studyConfigsChoice.current.fundamentals;
     chart.setPriceBandGuides?.(config?.enabled && config.guides !== false && !hiddenStudiesChoice.current.fundamentals && clock.getSnapshot().index === null
@@ -231,6 +245,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       });
       engine.current = chart;
       updateBandGuides(chart);
+      chart.setUpcomingEarnings?.(earningsChoice.current);
       const normalView=clock.getSnapshot().index===null,epoch=sync.persistenceEpoch;
       const unlink=normalView?sync.connect(chart,host):()=>{};
       let timer:ReturnType<typeof setTimeout>|undefined;
@@ -333,6 +348,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           onCloseMenu={() => setDrawingsOpen(false)}
         />
         <DrawingContextToolbar book={activeBook} />
+      <EngineSync key={`${earningsChoice.current?.date ?? ''}|${earningsChoice.current?.line ?? ''}`} run={() => engine.current?.setUpcomingEarnings?.(earningsChoice.current)} />
       {studyConfigs.fundamentals?.enabled && !allHidden && !hiddenStudies.fundamentals && <FundamentalsIndicator
         symbol={symbol} revision={revision} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}
         metrics={metrics} config={studyConfigs.fundamentals}

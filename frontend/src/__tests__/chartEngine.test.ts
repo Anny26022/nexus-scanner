@@ -317,3 +317,14 @@ it('earnings indicator markers respect replay cutoffs and visibility', () => {
   expect(events()).toEqual([]);
   engine.destroy();
 });
+it('places the upcoming results label on the future session and brings it into view',()=>{
+  const {engine}=setup();
+  // Last bar is Mon 2026-10-05; Thu 2026-10-08 is three sessions later (logical 5).
+  engine.setUpcomingEarnings({date:'2026-10-08',line:false});
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:0,to:13});
+  native.time.setVisibleLogicalRange.mockClear();
+  engine.setUpcomingEarnings({date:'2026-10-08',line:true});
+  expect(native.time.setVisibleLogicalRange).not.toHaveBeenCalled();
+  engine.setUpcomingEarnings(null);
+  engine.destroy();
+});

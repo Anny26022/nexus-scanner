@@ -2,7 +2,7 @@ import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerE
 import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
 import {
-  comparisonPeriod, financialNumber, fundamentalsConfig, growth, priceBandPercent, resultsCountdown, surveillanceLabels, visibleFinancials,
+  comparisonPeriod, financialNumber, fundamentalsConfig, growth, priceBandPercent, resultsCountdown, surveillanceLabels, upcomingResults, visibleFinancials,
   type FinancialPeriod, type FundamentalsConfig,
 } from '../chart/fundamentals';
 import type { ChartMetrics } from './ChartLegend';
@@ -91,9 +91,8 @@ export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, me
   // Snapshot-only metadata is unavailable before its dated observation during replay.
   const metadata = cutoff >= sessionDate ? snapshot : undefined;
   const surveillance = metadata?.surveillanceAvailable && metadata.surveillanceAsOfDate && metadata.surveillanceAsOfDate <= cutoff ? surveillanceLabels(metadata) : [];
-  const next = schedule.data?.observedOn && schedule.data.observedOn <= cutoff
-    ? schedule.data.events.filter(event => /^\d{4}-\d{2}-\d{2}$/.test(event.scheduled_date) && event.scheduled_date >= cutoff)
-      .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))[0] : undefined;
+  // Within 90 days, like the reference script.
+  const next = upcomingResults(schedule.data, cutoff);
   const band = priceBandPercent(metadata?.circuitLimit);
   const fno = Boolean(metadata?.isFno);
   const bandText = band !== null ? `${band}%` : fno ? 'F&O' : 'NB';
@@ -208,7 +207,7 @@ function ResultsTable({shown, config, metadata}: {shown: FinancialPeriod[]; conf
 export function FundamentalsSettingsDialog({config: raw, onApply, onClose}: {config?: FundamentalsConfig; onApply: (next: FundamentalsConfig) => void; onClose: () => void}) {
   const [config, setConfig] = useState(() => fundamentalsConfig(raw));
   const set = (change: Partial<FundamentalsConfig>) => setConfig(current => ({...current, ...change}));
-  const check = (key: 'band' | 'resultDate' | 'table' | 'guides' | 'earningsMarkers', label: string, disabled = false) =>
+  const check = (key: 'band' | 'resultDate' | 'table' | 'guides' | 'earningsMarkers' | 'earningsLabel' | 'earningsLine', label: string, disabled = false) =>
     <label className="pb-setting-check"><input type="checkbox" checked={config[key]} disabled={disabled} onChange={event => set({[key]: event.target.checked})} /><span>{label}</span></label>;
   return <ChartDialog title="Price Band & Results" onClose={onClose} className="pb-settings-dialog">
     <form className="pb-settings" onSubmit={event => { event.preventDefault(); onApply(config); onClose(); }}>
@@ -216,6 +215,8 @@ export function FundamentalsSettingsDialog({config: raw, onApply, onClose}: {con
       {check('band', 'Price band badge (band, ASM/GSM)')}
       {check('resultDate', 'Results countdown in the badge', !config.band)}
       {check('guides', 'Upper and lower circuit lines (UC / LC)')}
+      {check('earningsLabel', 'Upcoming results "E" label on the chart')}
+      {check('earningsLine', 'Dotted line on the results date', !config.earningsLabel)}
       {check('earningsMarkers', 'Earnings filing markers on candles')}
       <label className="pb-setting-row">Badge size
         <input type="range" min={0.8} max={1.5} step={0.05} value={config.badgeScale} disabled={!config.band} onChange={event => set({badgeScale: Number(event.target.value)})} />

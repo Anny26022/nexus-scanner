@@ -31,6 +31,9 @@ export interface FundamentalsConfig {
   /** Upper and lower circuit (UC/LC) price lines for the next session. */
   guides?: boolean;
   earningsMarkers?: boolean;
+  /** Purple "E" on the upcoming results date (within 90 days), and an optional dotted line there. */
+  earningsLabel?: boolean;
+  earningsLine?: boolean;
   /** Drag positions as fractions of the free space in the chart (null = default corner). */
   badgeOffset?: {x: number; y: number} | null;
   offset?: {x: number; y: number} | null;
@@ -42,7 +45,7 @@ export interface FundamentalsConfig {
 }
 export const fundamentalsDefaults: FundamentalsConfig = {
   enabled: false, band: true, resultDate: true, table: true, layout: 'compact', period: 'quarterly', profit: 'eps', count: 5,
-  guides: true, earningsMarkers: true, badgeOffset: null, offset: null, badgeScale: 1, tableScale: 1,
+  guides: true, earningsMarkers: true, earningsLabel: true, earningsLine: false, badgeOffset: null, offset: null, badgeScale: 1, tableScale: 1,
 };
 const point = (value?: {x: number; y: number} | null) => value && Number.isFinite(value.x) && Number.isFinite(value.y)
   ? {x: Math.max(0, Math.min(1, value.x)), y: Math.max(0, Math.min(1, value.y))} : null;
@@ -56,6 +59,7 @@ export function fundamentalsConfig(raw?: FundamentalsConfig): Required<Fundament
     profit: raw?.profit === 'net_profit' ? 'net_profit' : 'eps',
     count: Math.max(3, Math.min(13, Math.round(raw?.count ?? 5) || 5)),
     guides: raw?.guides !== false, earningsMarkers: raw?.earningsMarkers !== false,
+    earningsLabel: raw?.earningsLabel !== false, earningsLine: raw?.earningsLine === true,
     badgeOffset: point(raw?.badgeOffset), offset: point(raw?.offset),
     badgeScale: scale(raw?.badgeScale, 1),
     // Older saves stored a table text size (10–15px, 11 default).
@@ -123,4 +127,14 @@ export function priceBandLabel(value?: string): string {
   if (!value?.trim()) return 'Unavailable';
   if (/^\s*\d+(?:\.\d+)?\s*%?\s*$/.test(value)) return `${Number.parseFloat(value)}%`;
   return /^no band$/i.test(value.trim()) ? 'No band' : value;
+}
+
+/** The next scheduled results date on or after `cutoff`, within `days`; null when the calendar wasn't observed by then. */
+export function upcomingResults(schedule: {observedOn?: string; events: {scheduled_date: string; date_conflict?: boolean}[]} | null | undefined, cutoff: string, days = 90) {
+  if (!schedule?.observedOn || schedule.observedOn > cutoff) return null;
+  const limit = new Date(`${cutoff}T00:00:00Z`);
+  limit.setUTCDate(limit.getUTCDate() + days);
+  const last = limit.toISOString().slice(0, 10);
+  return schedule.events.filter(event => /^\d{4}-\d{2}-\d{2}$/.test(event.scheduled_date) && event.scheduled_date >= cutoff && event.scheduled_date <= last)
+    .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))[0] ?? null;
 }

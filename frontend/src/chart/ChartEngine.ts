@@ -168,6 +168,7 @@ export class ChartEngine {
         const projection=this.projection();
         if (!projection) return;
         this.layer.draw(context,projection,this.accent);
+        this.drawUpcomingEarnings(context,projection.bottom);
         if (this.replayPicker) {
           const x=this.chart.timeScale().logicalToCoordinate(this.replayIndex as Logical);
           if(x===null) return;
@@ -379,6 +380,54 @@ export class ChartEngine {
   private setPriceData() {this.price.setData(this.candles.map((bar,index)=>this.priceData(bar,index)));this.updateHighLowLines();}
   private highLowLines:{series:ISeriesApi<'Candlestick'|'Bar'|'Line'|'Area'|'Baseline'>;lines:IPriceLine[]}|null=null;
   private highLowFrame=0;
+  private upcomingEarnings:{date:string;line:boolean}|null=null;
+  /** Bar position of a date: an existing bar, or bars counted past the last one (weekdays, weeks or months). */
+  private logicalForDate(date:string):number|null {
+    const count=this.candles.length;
+    if(!count||!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+    const last=this.candles[count-1].date;
+    if(date<=last) {
+      let low=0,high=count;
+      while(low<high) {const mid=(low+high)>>>1;if(this.candles[mid].date<=date) low=mid+1;else high=mid;}
+      return Math.max(0,low-1);
+    }
+    const gaps:number[]=[];
+    for(let index=Math.max(1,count-20);index<count;index++) gaps.push((Date.parse(this.candles[index].date)-Date.parse(this.candles[index-1].date))/86_400_000);
+    gaps.sort((a,b)=>a-b);
+    const gap=gaps.length?gaps[gaps.length>>1]:1;
+    const from=new Date(`${last}T00:00:00Z`),to=new Date(`${date}T00:00:00Z`);
+    if(gap>=20) return count-1+(to.getUTCFullYear()-from.getUTCFullYear())*12+to.getUTCMonth()-from.getUTCMonth();
+    if(gap>=5) return count-1+Math.ceil((to.getTime()-from.getTime())/(7*86_400_000));
+    let sessions=0;
+    for(const day=new Date(from);day<to;) {day.setUTCDate(day.getUTCDate()+1);if(day.getUTCDay()%6!==0) sessions++;}
+    return count-1+sessions;
+  }
+  /** Upcoming results date: a purple "E" (and optional dotted line) on that future bar, as in the QE Ultra script. */
+  setUpcomingEarnings(value:{date:string;line:boolean}|null) {
+    const changed=value?.date!==this.upcomingEarnings?.date;
+    this.upcomingEarnings=value;
+    // Bring the label into view when the latest bar is on screen.
+    const logical=value?this.logicalForDate(value.date):null,scale=this.chart.timeScale(),range=scale.getVisibleLogicalRange();
+    if(changed&&logical!==null&&range&&range.to>=this.candles.length-1&&logical+8>range.to) scale.setVisibleLogicalRange({from:range.from,to:logical+8});
+    this.invalidate();
+  }
+  private drawUpcomingEarnings(context:CanvasRenderingContext2D,bottom:number) {
+    const value=this.upcomingEarnings,last=this.candles.at(-1);
+    if(!value||!last) return;
+    const logical=this.logicalForDate(value.date);
+    const x=logical===null?null:this.chart.timeScale().logicalToCoordinate(logical as Logical);
+    if(x===null||x<0) return;
+    // Along the bottom of the price pane, like TradingView's earnings icons, clear of the UC/LC tags.
+    const y=bottom-14;
+    const color='#9c27b0';
+    context.save();
+    if(value.line) {context.strokeStyle=color;context.lineWidth=2;context.setLineDash([2,3]);context.beginPath();context.moveTo(x,0);context.lineTo(x,bottom);context.stroke();context.setLineDash([]);}
+    context.fillStyle=color;
+    context.beginPath();context.roundRect(x-9,y-9,18,18,5);context.fill();
+    context.fillStyle='#ffffff';context.font='700 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';context.textAlign='center';context.textBaseline='middle';
+    context.fillText('E',x,y+.5);
+    context.restore();
+  }
   private bandGuideValues: readonly number[] = [];
   private bandGuideLines: IPriceLine[] = [];
   setPriceBandGuides(values: readonly number[]) {

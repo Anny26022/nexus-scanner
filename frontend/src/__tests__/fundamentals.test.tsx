@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { comparisonPeriod, fundamentalsConfig, growth, priceBandGuides, priceBandLabel, visibleFinancials, type FinancialHistory, type FundamentalsConfig } from '../chart/fundamentals';
+import { comparisonPeriod, fundamentalsConfig, growth, priceBandGuides, priceBandLabel, upcomingResults, visibleFinancials, type FinancialHistory, type FundamentalsConfig } from '../chart/fundamentals';
 import { FundamentalsIndicator, FundamentalsSettingsDialog } from '../components/FundamentalsIndicator';
 import { screenerApi } from '../api/screenerApi';
 import { IndicatorsCatalogModal } from '../components/IndicatorsCatalogModal';
@@ -124,4 +124,11 @@ it('moves the badge and the table separately with the keyboard, clamped inside t
   fireEvent.keyDown(badge, {key:'ArrowDown'});
   expect(onMoveBadge).toHaveBeenLastCalledWith({x:700/740,y:20/576});
   expect(onMove).toHaveBeenCalledTimes(2);
+});
+it('finds the next results date within 90 days once the calendar is observed', () => {
+  const schedule = {observedOn: '2026-10-20', events: [{scheduled_date: '2027-03-01'}, {scheduled_date: '2026-11-03'}, {scheduled_date: '2026-10-01'}]};
+  expect(upcomingResults(schedule, '2026-10-22')?.scheduled_date).toBe('2026-11-03');
+  expect(upcomingResults({...schedule, events: [{scheduled_date: '2027-03-01'}]}, '2026-10-22')).toBeNull();
+  expect(upcomingResults({...schedule, observedOn: '2026-10-25'}, '2026-10-22')).toBeNull();
+  expect(fundamentalsConfig({enabled: true})).toMatchObject({earningsLabel: true, earningsLine: false});
 });

@@ -32,6 +32,7 @@ import { ExtraStudySettingsDialog } from './ExtraStudySettingsDialog';
 import { ChartSymbolSearch, type ChartSymbolSearchHandle } from './ChartSymbolSearch';
 import { ChartShortcutsDialog } from './ChartShortcutsDialog';
 import { ChartClock } from './ChartClock';
+import { IntervalPrompt } from './IntervalPrompt';
 import { useMountEffect } from '../hooks/useMountEffect';
 import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../chart/extraStudies';
 import { WatchlistDock } from './WatchlistDock';
@@ -101,6 +102,9 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const persist=(change:Partial<SceneSettings>)=>writeChartStorage(`scene.${tileId}.v1`,{...loadScene(tileId),...change});
   const comparisonChoice=useRef<{symbol:string;candles:readonly Candle[];separate:boolean}>({symbol:'',candles:[],separate:false});
   const [paneOffsets, setPaneOffsets] = useState<Array<{ paneIndex: number; top: number; height: number }>>([]);
+  // Mirrors the price scale's auto-fit, which a price-axis drag turns off and a double-click restores.
+  const [autoScale, setAutoScale] = useState(true);
+  const syncAutoScale = () => { const on = engine.current?.isAutoScale?.() ?? true; if (on !== autoScale) setAutoScale(on); };
   const overlayRef = useRef<HTMLDivElement>(null);
   const candleIndexByDate = useMemo(() => new Map(candles.map((b, i) => [b.date, i])), [candles]);
   const indicatorSeries = useMemo(() => {
@@ -344,7 +348,14 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       <button type="button" aria-label="Exit replay" title="Return to latest data" onClick={exitReplay}><X size={15}/></button>
     </div>}
     <div className={`chart-stage${selecting || replay.index!==null?' chart-stage-replay':''}`}>
-      <div className="chart-plot" ref={overlayRef} data-indicator-values={appearance.statusIndicators===false?'hidden':undefined}>
+      <div className="chart-plot" ref={overlayRef} data-indicator-values={appearance.statusIndicators===false?'hidden':undefined}
+        onPointerUp={syncAutoScale} onDoubleClick={() => requestAnimationFrame(syncAutoScale)}>
+        {paneOffsets[0] && <div className="chart-scale-buttons" style={{top: paneOffsets[0].top + paneOffsets[0].height - 28}}>
+          <button type="button" aria-pressed={autoScale} title="Auto (fits data to screen)" aria-label="Auto-scale price"
+            onClick={() => { engine.current?.setAutoScale?.(!autoScale); setAutoScale(!autoScale); }}>A</button>
+          <button type="button" aria-pressed={appearance.scaleMode === 'logarithmic'} title="Logarithmic scale" aria-label="Logarithmic price scale"
+            onClick={() => applyAppearance({scaleMode: appearance.scaleMode === 'logarithmic' ? 'normal' : 'logarithmic'})}>L</button>
+        </div>}
         {(appearance.sessionClock||appearance.barCountdown)&&<ChartClock timezone={appearance.timezone??'Asia/Kolkata'} clock={Boolean(appearance.sessionClock)} countdown={Boolean(appearance.barCountdown)} />}
         <DrawingToolbar
           book={activeBook}
@@ -732,6 +743,7 @@ function ChartTile({
   const [inputError, setInputError] = useState('');
   const book=savedDrawingBook(symbol);
   const changeInterval=(next:Interval)=>onChange(tileId,{symbol,interval:next});
+  const [intervalDraft,setIntervalDraft]=useState<string|null>(null);
   const metadata=useQuery({
     queryKey:['chart-metrics',datasetRevision,symbol,sessionDate],
     queryFn:async()=>{
@@ -759,7 +771,8 @@ function ChartTile({
   });
   const candles = useMemo(() => aggregate(chart.data?.candles ?? [], interval), [chart.data, interval]);
   const events=useMemo(()=>chart.data?chartEvents(chart.data):[],[chart.data]);
-  const symbolControls=<><ChartSymbolSearch key={symbol} symbol={symbol} datasetRevision={datasetRevision} sessionDate={sessionDate}
+  const symbolControls=<>{intervalDraft!==null&&<IntervalPrompt initial={intervalDraft} onInterval={changeInterval}
+      onSymbol={text=>searchRef.current?.open(text)} onClose={()=>setIntervalDraft(null)} />}<ChartSymbolSearch key={symbol} symbol={symbol} datasetRevision={datasetRevision} sessionDate={sessionDate}
         handleRef={searchRef} onError={setInputError} onSelect={next => onChange(tileId, {symbol: next, interval})} />
       <div className="chart-bar-divider" aria-hidden="true" />
       <div className="chart-intervals" role="group" aria-label="Candle interval">
@@ -793,8 +806,9 @@ function ChartTile({
     }
     if (event.key === ',' || event.key === '.') { stepWatchlist(event.key === '.' ? 1 : -1); return 'consume'; }
     if (event.key === '/') { searchRef.current?.open(); return 'consume'; }
-    // Typing a ticker anywhere starts a symbol search; the key lands in the focused box.
-    if (/^[A-Za-z0-9&]$/.test(event.key)) { searchRef.current?.open(event.key.toUpperCase()); return 'consume'; }
+    // As in TradingView: a digit opens the interval box, a letter starts a symbol search.
+    if (/^[0-9]$/.test(event.key)) { setIntervalDraft(event.key); return 'consume'; }
+    if (/^[A-Za-z&]$/.test(event.key)) { searchRef.current?.open(event.key.toUpperCase()); return 'consume'; }
     return null;
   };
   const handleShortcutRef = useRef(handleShortcut);

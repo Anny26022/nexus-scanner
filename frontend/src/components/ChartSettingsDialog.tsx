@@ -404,7 +404,7 @@ export function ChartSettingsDialog({
             <h4 className="cs-subhead">Scales</h4>
             <Row label="Text">
               <ColorPicker ariaLabel="Scale text color" value={draft.scaleTextColor ?? themeColor('muted', '#86868b')} onChange={(val) => update({ scaleTextColor: val })} />
-              <select aria-label="Scale text size" className="cs-select is-narrow" value={draft.scaleFontSize ?? 11} onChange={(e) => update({ scaleFontSize: Number(e.target.value) })}>
+              <select aria-label="Scale text size" className="cs-select is-narrow" value={draft.scaleFontSize ?? 12} onChange={(e) => update({ scaleFontSize: Number(e.target.value) })}>
                 {[10, 11, 12, 13, 14].map(size => <option key={size} value={size}>{size}</option>)}
               </select>
             </Row>

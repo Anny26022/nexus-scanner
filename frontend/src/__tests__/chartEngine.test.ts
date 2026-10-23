@@ -40,7 +40,7 @@ function setup(input:readonly Candle[]=candles) {
 }
 it('uses matching reference bodies, borders and wicks with thicker HLC bars and preserves missing volume',()=>{
   const {engine}=setup();
-  expect(native.createChart).toHaveBeenCalledWith(expect.any(HTMLElement),expect.objectContaining({autoSize:true,layout:expect.objectContaining({attributionLogo:false}),handleScroll:expect.objectContaining({mouseWheel:false,pressedMouseMove:true}),handleScale:expect.objectContaining({mouseWheel:true,pinch:true})}));
+  expect(native.createChart).toHaveBeenCalledWith(expect.any(HTMLElement),expect.objectContaining({autoSize:true,layout:expect.objectContaining({attributionLogo:false}),handleScroll:expect.objectContaining({mouseWheel:false,pressedMouseMove:true}),handleScale:expect.objectContaining({mouseWheel:false,pinch:true}),kineticScroll:{mouse:false,touch:true}}));
   expect(native.chart.addSeries).toHaveBeenCalledWith('Candlestick',expect.objectContaining({upColor:'#089981',downColor:'#ef5350',wickUpColor:'#089981',wickDownColor:'#ef5350',borderVisible:true,borderUpColor:'#089981',borderDownColor:'#ef5350'}));
   expect(CHART_PALETTE.volumeUp).toBe('rgba(8,153,129,0.5)');
   const volume=native.series.find(series=>series.type==='Histogram')!;
@@ -77,7 +77,7 @@ it('keeps unrevealed prices and indicator values out of replay and appends the n
 it('wires native scale modes, crosshair readouts, image export and teardown',()=>{
   const {engine,inspect}=setup();
   engine.setAppearance({horizontalGrid:false,verticalGrid:true,crosshair:false,volume:false,scaleMode:'logarithmic'});
-  expect(native.chart.applyOptions).toHaveBeenLastCalledWith(expect.objectContaining({handleScroll:expect.objectContaining({mouseWheel:false,pressedMouseMove:true}),handleScale:expect.objectContaining({mouseWheel:true,pinch:true})}));
+  expect(native.chart.applyOptions).toHaveBeenLastCalledWith(expect.objectContaining({handleScroll:expect.objectContaining({mouseWheel:false,pressedMouseMove:true}),handleScale:expect.objectContaining({mouseWheel:false,pinch:true})}));
   expect(native.scale.applyOptions).toHaveBeenLastCalledWith(expect.objectContaining({mode:1,scaleMargins:{top:.13,bottom:.06}}));
   const crosshair=native.chart.subscribeCrosshairMove.mock.calls[0][0];
   crosshair({seriesData:new Map([[native.series[0],{time:{year:2026,month:10,day:2}}]])});
@@ -339,5 +339,27 @@ it('labels past band changes on the bar containing the date, coloured by the new
     expect.objectContaining({id:'band:2026-10-05',time:'2026-10-05',text:'NB',color:'#787d8a'}),
   ]));
   expect(markers.some((marker:{id:string})=>marker.id==='band:2026-10-09')).toBe(false);
+  engine.destroy();
+});
+it('zooms on the wheel with the right edge fixed and pans on a sideways swipe, like TradingView',()=>{
+  const host=document.createElement('div');document.body.append(host);
+  const engine=new ChartEngine(host,candles,vi.fn());
+  native.time.getVisibleLogicalRange.mockReturnValue({from:0,to:5});
+  native.time.setVisibleLogicalRange.mockClear();
+  const wheel=(init:WheelEventInit)=>{const event=new WheelEvent('wheel',{cancelable:true,...init});host.dispatchEvent(event);return event;};
+  // Scrolling down zooms out; the right edge (5) stays put.
+  expect(wheel({deltaY:100}).defaultPrevented).toBe(true);
+  const out=native.time.setVisibleLogicalRange.mock.lastCall![0];
+  expect(out.to).toBe(5);expect(out.from).toBeLessThan(0);
+  // A sideways swipe pans: 800px wide over 5 bars is 160px per bar.
+  wheel({deltaX:160});
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:1,to:6});
+  // Shift + wheel pans too.
+  wheel({deltaY:-160,shiftKey:true});
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:-1,to:4});
+  engine.setAppearance({horizontalGrid:false,verticalGrid:false,crosshair:true,volume:true,scaleMode:'normal',zoomEnabled:false});
+  native.time.setVisibleLogicalRange.mockClear();
+  expect(wheel({deltaY:100}).defaultPrevented).toBe(false);
+  expect(native.time.setVisibleLogicalRange).not.toHaveBeenCalled();
   engine.destroy();
 });

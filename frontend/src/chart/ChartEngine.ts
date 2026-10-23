@@ -93,7 +93,10 @@ const withAlpha = (hex:string,opacity:number) => `${hex}${Math.round(opacity*255
 const RIGHT_EDGE_BARS = 6;
 const RIGHT_EDGE_PIXELS = 32;
 const SCROLL_WITHOUT_WHEEL = {mouseWheel:false,pressedMouseMove:true,horzTouchDrag:true,vertTouchDrag:true} as const;
-const SCALE_WITH_WHEEL = {mouseWheel:true,pinch:true,axisPressedMouseMove:true,axisDoubleClickReset:true} as const;
+// The wheel is handled by ChartEngine.wheel (TradingView-style); pinch and axis drags stay native.
+const SCALE_WITH_WHEEL = {mouseWheel:false,pinch:true,axisPressedMouseMove:true,axisDoubleClickReset:true} as const;
+/** Wheel zoom per pixel of vertical delta; ~10% per notch, like TradingView. */
+const WHEEL_ZOOM_RATE = .0011;
 
 /** Native TradingView rendering and navigation; Nexus owns data, tools and replay. */
 export class ChartEngine {
@@ -102,6 +105,9 @@ export class ChartEngine {
   private currentAppearance?:ChartAppearance;
   private watermarkPlugin?:ITextWatermarkPluginApi<Time>;
   private volumeSeries:ISeriesApi<'Histogram'>;
+  /** Invisible line that only puts the volume average's value on the volume scale, as TradingView does. */
+  private volumeAverage:ISeriesApi<'Line'>|null=null;
+  private volumeVisible=true;
   private averages = new Map<string,{series:ISeriesApi<'Line'>;line:EmaLine}>();
   private layer:DrawingLayer;
   private primitive:ISeriesPrimitive;
@@ -150,14 +156,15 @@ export class ChartEngine {
     this.byDate=new Map(candles.map(bar=>[bar.date,bar]));
     this.chart=createChart(host,{
       autoSize:true,
-      layout:{fontFamily:'-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',fontSize:11,attributionLogo:false,panes:{enableResize:true}},
+      layout:{fontFamily:'-apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif',fontSize:12,attributionLogo:false,panes:{enableResize:true}},
       // Grid lines start hidden; the Canvas settings turn them on.
       grid:{vertLines:{visible:false},horzLines:{visible:false}},
       rightPriceScale:{borderVisible:false,scaleMargins:{top:.13,bottom:.22}},
       timeScale:{borderVisible:false,rightOffset:RIGHT_EDGE_BARS,rightOffsetPixels:RIGHT_EDGE_PIXELS,barSpacing:8,fixLeftEdge:false,lockVisibleTimeRangeOnResize:true,shiftVisibleRangeOnNewBar:true},
       crosshair:{mode:CrosshairMode.Normal},
       localization:{locale:'en-IN'},
-      kineticScroll:{mouse:true,touch:true},
+      // TradingView stops a mouse drag where you release it; touch keeps its momentum.
+      kineticScroll:{mouse:false,touch:true},
       handleScroll:SCROLL_WITHOUT_WHEEL,
       handleScale:SCALE_WITH_WHEEL,
     });
@@ -194,6 +201,7 @@ export class ChartEngine {
     this.readTheme();
     this.unsubscribe=book.subscribe(()=>{this.chart.applyOptions({handleScroll:this.scrollOptions()});});
     const options={signal:this.events.signal,capture:true};
+    host.addEventListener('wheel',this.wheel,{signal:this.events.signal,passive:false});
     host.addEventListener('pointerdown',this.down,options);
     host.addEventListener('pointermove',this.move,options);
     host.addEventListener('pointerup',this.up,options);
@@ -309,6 +317,7 @@ export class ChartEngine {
   private computeVolume() {
     const cfg=this.studyConfigs.volume;
     this.simpleVolume=this.simpleMode()?computeSimpleVolume(this.candles,{ppvLength:cfg?.ppvLength??10,maLength:cfg?.maLength??50,dryFraction:cfg?.dryFraction??.2}):null;
+    this.syncVolumeAverage();
     this.refreshVolumeMarkers();
     this.refreshMarkers();
   }
@@ -333,6 +342,20 @@ export class ChartEngine {
     if(kind==='down') return cfg?.aboveDownColor??SIMPLE_VOLUME_COLORS.down;
     if(kind==='dry'&&cfg?.showDry!==false) return cfg?.dryColor??SIMPLE_VOLUME_COLORS.dry;
     return cfg?.noiseColor??this.volumeNoise;
+  }
+  private syncVolumeAverage() {
+    if(!this.volumeSeries) return;
+    const pane=this.volumeSeries.getPane().paneIndex();
+    const show=pane!==0&&this.volumeVisible&&this.currentAppearance?.volume!==false&&Boolean(this.simpleVolume);
+    if(!show) {
+      if(this.volumeAverage) {this.chart.removeSeries(this.volumeAverage);this.volumeAverage=null;}
+      return;
+    }
+    if(this.volumeAverage&&this.volumeAverage.getPane().paneIndex()!==pane) {this.chart.removeSeries(this.volumeAverage);this.volumeAverage=null;}
+    this.volumeAverage??=this.chart.addSeries(LineSeries,{color:'#8e2a35',lineVisible:false,pointMarkersVisible:false,crosshairMarkerVisible:false,
+      priceLineVisible:false,lastValueVisible:true,priceFormat:{type:'volume'},title:''},pane);
+    const average=this.simpleVolume!.average;
+    this.volumeAverage.setData(this.candles.map((bar,index)=>average[index]===null||average[index]===undefined?{time:bar.date}:{time:bar.date,value:average[index]!}));
   }
   private refreshVolumeMarkers() {
     const result=this.simpleVolume,cfg=this.studyConfigs.volume;
@@ -509,7 +532,7 @@ export class ChartEngine {
       layout:{
         background:{type:ColorType.Solid,color:appearance.backgroundColor||token('chart-background',token('surface','#ffffff'))},
         textColor:appearance.scaleTextColor||token('muted','#787b86'),
-        fontSize:Math.max(9,Math.min(16,Math.round(appearance.scaleFontSize??11))),
+        fontSize:Math.max(9,Math.min(16,Math.round(appearance.scaleFontSize??12))),
       },
       grid:{
         horzLines:appearance.horzGridColor?{color:appearance.horzGridColor}:{},
@@ -595,6 +618,8 @@ export class ChartEngine {
     }
 
     const separate=!!appearance.volumePane&&appearance.volume;
+    // Leave the volume pane empty before moving volume back, so the pane is removed.
+    if(!separate&&this.volumeAverage) {this.chart.removeSeries(this.volumeAverage);this.volumeAverage=null;}
     if((this.volumeSeries.getPane().paneIndex()!==0)!==separate) {
       this.volumeSeries.moveToPane(separate?this.chart.panes().length:0);
       if(separate) this.volumeSeries.getPane().setStretchFactor(.25);
@@ -605,6 +630,7 @@ export class ChartEngine {
       visible:appearance.volume,
     });
     this.volumeSeries.priceScale().applyOptions({scaleMargins:{top:separate?.1:.8,bottom:0},visible:separate});
+    this.syncVolumeAverage();
     const topMargin=typeof appearance.topMargin==='number'?appearance.topMargin/100:.13;
     const bottomMargin=typeof appearance.bottomMargin==='number'?appearance.bottomMargin/100:(appearance.volume&&!separate?.22:.06);
     this.chart.priceScale('right').applyOptions({
@@ -1032,6 +1058,7 @@ export class ChartEngine {
     if (studyId === 'fundamentals') {this.fundamentalsVisible = visible; this.refreshMarkers(); return;}
     if(studyId==='volume') {
       this.volumeSeries.applyOptions({visible,lastValueVisible:visible&&this.volumeSeries.getPane().paneIndex()!==0});
+      this.volumeVisible=visible;this.syncVolumeAverage();
       return;
     }
     const seriesList=this.studySeriesById.get(studyId)??this.studySeriesByPane.get(studyId);
@@ -1112,6 +1139,35 @@ export class ChartEngine {
     const range=this.chart.timeScale().getVisibleLogicalRange();this.replayIndex=Math.max(0,Math.min(this.candles.length-1,Math.round(range?(range.from+range.to)/2:0)));
     this.chart.applyOptions({handleScroll:this.scrollOptions()});this.invalidate();
   }
+  /**
+   * TradingView's wheel: vertical scroll zooms with the right edge fixed, a sideways swipe
+   * (or Shift + wheel) pans through time, and a trackpad pinch (Ctrl + wheel) zooms.
+   */
+  private wheel=(event:WheelEvent)=>{
+    const appearance=this.currentAppearance;
+    if(this.replayPicker||!this.candles.length) return;
+    const scale=this.chart.timeScale(),range=scale.getVisibleLogicalRange(),width=scale.width();
+    if(!range||width<=0) return;
+    const unit=event.deltaMode===1?16:event.deltaMode===2?width:1;
+    const dx=(event.shiftKey&&!event.deltaX?event.deltaY:event.deltaX)*unit,dy=(event.shiftKey?0:event.deltaY)*unit;
+    const bars=range.to-range.from;
+    if(Math.abs(dx)>Math.abs(dy)) {
+      if(appearance?.panEnabled===false) return;
+      event.preventDefault();
+      const shift=dx/(width/bars);
+      scale.setVisibleLogicalRange({from:range.from+shift,to:range.to+shift});
+      return;
+    }
+    if(!dy||appearance?.zoomEnabled===false) return;
+    event.preventDefault();
+    // Pinch gestures arrive as ctrl+wheel with small deltas; scale them up to feel the same.
+    const factor=Math.exp(dy*WHEEL_ZOOM_RATE*(event.ctrlKey?4:1));
+    const count=Math.max(5,Math.min(this.candles.length*1.5+RIGHT_EDGE_BARS,bars*factor));
+    scale.setVisibleLogicalRange({from:range.to-count,to:range.to});
+  };
+  /** Price-scale auto-fit (TradingView's "A"); dragging the price axis turns it off. */
+  isAutoScale() {return this.chart.priceScale('right').options().autoScale!==false;}
+  setAutoScale(on:boolean) {this.chart.priceScale('right').applyOptions({autoScale:on});}
   private scrollOptions() {
     return !this.replayPicker && this.book.getSnapshot().tool==='select' && this.currentAppearance?.panEnabled!==false
       ? (this.currentAppearance?.mousePan==='horizontal'?{...SCROLL_WITHOUT_WHEEL,vertTouchDrag:false}:SCROLL_WITHOUT_WHEEL) : false;

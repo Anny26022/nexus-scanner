@@ -375,9 +375,9 @@ export const WatchlistDock = memo(function WatchlistDock({
   const filteredSymbols = useMemo(() => filteredItems.filter(item => !isSection(item)), [filteredItems]);
   const queryClient = useQueryClient();
   // Warm the next name once the selected chart has loaded.
-  const selectSymbol = useCallback((symbol: string) => {
+  const selectSymbol = useCallback((symbol: string, direction: 1 | -1 = 1) => {
     onSelectSymbol(symbol);
-    prefetchCharts(queryClient, filteredSymbols, symbol, datasetRevision, sessionDate);
+    prefetchCharts(queryClient, filteredSymbols, symbol, datasetRevision, sessionDate, direction);
   }, [onSelectSymbol, queryClient, filteredSymbols, datasetRevision, sessionDate]);
   const sectionCounts = useMemo(() => {
     const counts = new Map<number, number>();
@@ -453,7 +453,7 @@ export const WatchlistDock = memo(function WatchlistDock({
       const targetSym = filteredSymbols[nextIdx];
       if (targetSym) {
         setLocalActiveSymbol(targetSym);
-        selectSymbol(targetSym);
+        selectSymbol(targetSym, nextIdx < currentIdx ? -1 : 1);
         scrollToRow(filteredItems.indexOf(targetSym));
         requestAnimationFrame(() => rowRefs.current.get(targetSym)?.focus());
       }

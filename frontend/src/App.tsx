@@ -11,7 +11,8 @@ import { Button } from './components/Button';
 import { CommandPalette } from './components/CommandPalette';
 import { useTheme } from './hooks/useTheme';
 import { useMountEffect } from './hooks/useMountEffect';
-import { openSymbolInCharts } from './chart/storage';
+import { loadGrid, openSymbolInCharts } from './chart/storage';
+import { chartQuery } from './chart/chartQuery';
 import { writeScreenToStorage, type ScreenDefinition } from './utils/savedScreens';
 
 const queryClient = new QueryClient({
@@ -95,6 +96,12 @@ const ScreenerAppContent: React.FC = () => {
   const selectedAsOfDate = customSessionDate || latestDate;
   const selectedSessionMeta = availableSessions.find((s) => s.date === selectedAsOfDate);
   const activeRevision = selectedSessionMeta?.revision || latestRevision;
+  // Start the saved chart's data request while the lazy workspace code loads.
+  useQuery({
+    ...chartQuery(chartSnapshot?.revision ?? activeRevision, loadGrid().tiles[0].symbol, chartSnapshot?.sessionDate ?? selectedAsOfDate),
+    enabled: activeTab === 'charts' && Boolean(chartSnapshot?.revision ?? activeRevision),
+    notifyOnChangeProps: [],
+  });
 
   return (
     <div className={`app-frame${sidebarHidden ? ' app-frame--sidebar-hidden' : ''}`}>

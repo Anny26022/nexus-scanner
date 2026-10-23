@@ -13,17 +13,13 @@ export const chartQuery = (datasetRevision: string | undefined, symbol: string, 
   retry: false,
 });
 
-/**
- * Warms the charts around `symbol` in a list: each costs about two round trips to the data server,
- * so stepping down a watchlist finds the next charts already loaded. Failures stay silent; opening
- * the chart retries and shows its own error.
- */
-export function prefetchCharts(client: QueryClient, symbols: readonly string[], symbol: string, datasetRevision?: string, sessionDate?: string) {
+/** Warm one neighbour after the selected chart finishes, without competing with its requests. */
+export function prefetchCharts(client: QueryClient, symbols: readonly string[], symbol: string, datasetRevision?: string, sessionDate?: string, direction: 1 | -1 = 1) {
   if (!datasetRevision) return;
   const at = symbols.indexOf(symbol);
-  if (at === -1) return;
-  for (const next of [at + 1, at + 2, at + 3, at - 1]) {
-    const neighbour = symbols[next];
-    if (neighbour) void client.prefetchQuery(chartQuery(datasetRevision, neighbour, sessionDate));
-  }
+  if (at === -1 || symbols.length < 2) return;
+  const neighbour = symbols[(at + direction + symbols.length) % symbols.length];
+  void client.fetchQuery(chartQuery(datasetRevision, symbol, sessionDate))
+    .then(() => client.prefetchQuery(chartQuery(datasetRevision, neighbour, sessionDate)))
+    .catch(() => undefined);
 }

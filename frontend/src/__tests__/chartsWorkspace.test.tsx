@@ -443,3 +443,13 @@ it('moves the fundamentals card without rebuilding studies',async()=>{
   fireEvent.keyDown(panel,{key:'ArrowRight'});
   expect(engine.setStudies).not.toHaveBeenCalled();
 });
+
+it('replenishes the next chart when stepping through the watchlist with chart shortcuts', async () => {
+  localStorage.setItem('nexus.chart.watchlist.v2', JSON.stringify(['RELIANCE', 'TCS', 'INFY', 'SBIN']));
+  vi.mocked(screenerApi.getChart).mockImplementation(async symbol => ({schemaVersion:2,symbol,asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]}));
+  setup();
+  fireEvent.keyDown(await screen.findByLabelText('RELIANCE candlestick and volume chart'), {key:'.'});
+  await screen.findByLabelText('TCS candlestick and volume chart');
+  await waitFor(() => expect(screenerApi.getChart).toHaveBeenCalledWith('INFY', 'a'.repeat(64), '2026-10-02'));
+  expect(screenerApi.getChart).not.toHaveBeenCalledWith('SBIN', 'a'.repeat(64), '2026-10-02');
+});

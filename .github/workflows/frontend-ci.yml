@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'frontend/**'
+      - 'workers/r2-delivery/**'
       - 'DO NOT DELETE EDL PIPELINE/requirements.txt'
       - '.nvmrc'
       - '.github/workflows/frontend-ci.yml'
@@ -14,6 +15,7 @@ on:
       - main
     paths:
       - 'frontend/**'
+      - 'workers/r2-delivery/**'
       - 'DO NOT DELETE EDL PIPELINE/requirements.txt'
       - '.nvmrc'
       - '.github/workflows/frontend-ci.yml'
@@ -47,6 +49,8 @@ jobs:
         run: npm audit --audit-level=high
       - name: Run frontend tests
         run: npm test
+      - name: Test data Worker
+        run: node --test ../workers/r2-delivery/test.mjs
       - name: Build frontend
         run: npm run build
       - name: Set up Python

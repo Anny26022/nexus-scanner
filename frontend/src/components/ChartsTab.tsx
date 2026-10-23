@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Maximize2, Minimize2, Minus, Pause, Pencil, Play, Plus, RotateCcw, Settings2, SkipBack, SkipForward, SlidersHorizontal, X, Keyboard, LayoutTemplate } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { ChartEngine, type ChartAppearance, type ChartStudies, type ChartStyle } from '../chart/ChartEngine';
@@ -38,7 +38,7 @@ import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../char
 import { WatchlistDock } from './WatchlistDock';
 import { Download, Upload } from 'lucide-react';
 import { ChartEventItem } from './ChartEventItem';
-import { chartQuery } from '../chart/chartQuery';
+import { chartQuery, prefetchCharts } from '../chart/chartQuery';
 import { currentTheme, forTheme, withThemeColors } from '../chart/themeColors';
 import { PositionSizingIndicator, PositionSizingSettingsDialog } from './PositionSizingIndicator';
 import { positionSizing, positionSizingConfig } from '../chart/positionSizing';
@@ -800,6 +800,7 @@ function ChartTile({
   layoutControls?: ReactNode;
 }) {
   const {symbol,interval}=initial;
+  const queryClient = useQueryClient();
   const searchRef = useRef<ChartSymbolSearchHandle>(null);
   const sceneActions = useRef<ChartSceneActions | null>(null);
   const [inputError, setInputError] = useState('');
@@ -839,7 +840,10 @@ function ChartTile({
     if (!symbols.length) return;
     const index = symbols.indexOf(symbol);
     const next = symbols[index < 0 ? 0 : (index + direction + symbols.length) % symbols.length];
-    if (next !== symbol) onChange(tileId, {symbol: next, interval});
+    if (next !== symbol) {
+      onChange(tileId, {symbol: next, interval});
+      prefetchCharts(queryClient, symbols, next, datasetRevision, sessionDate, direction);
+    }
   };
   const handleShortcut: TileShortcutHandler = event => {
     const actions = sceneActions.current;

@@ -9,7 +9,8 @@
     "dev:ai": "wrangler dev --config wrangler.dev.jsonc --ip 127.0.0.1 --port 8787",
     "types": "wrangler types",
     "check:worker": "npm run types && node frontend/node_modules/typescript/bin/tsc -p tsconfig.worker.json",
-    "deploy": "wrangler deploy"
+    "deploy:data": "wrangler deploy --config workers/r2-delivery/wrangler.jsonc",
+    "deploy": "npm run deploy:data && wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^4.151.1"

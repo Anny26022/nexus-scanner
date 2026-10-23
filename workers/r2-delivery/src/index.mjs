@@ -1,8 +1,8 @@
 const prefixes = /^(?:objects|releases|daily|monthly|snapshots)\//;
 
 export default {
-  async fetch(request, env, ctx) {
-    const cors = { 'Access-Control-Allow-Origin': '*' };
+  async fetch(request, env) {
+    const cors = { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' };
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return new Response(null, { status: 405, headers: { ...cors, Allow: 'GET, HEAD' } });
     }
@@ -16,22 +16,17 @@ export default {
       return new Response(null, { status: 404, headers: cors });
     }
 
-    // Published files never change, so the edge cache answers repeat reads without a trip to R2 (~500ms).
-    const cache = request.method === 'GET' && typeof caches !== 'undefined' ? caches.default : null;
-    const hit = cache && await cache.match(request);
-    if (hit) return hit;
-
     const object = request.method === 'HEAD' ? await env.DATA.head(key) : await env.DATA.get(key);
     if (!object) return new Response(null, { status: 404, headers: cors });
 
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set('ETag', object.httpEtag);
-    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    // Only content-addressed objects and frozen releases are immutable.
+    headers.set('Cache-Control', /^(objects|releases)\//.test(key)
+      ? 'public, max-age=31536000, immutable' : 'no-cache');
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('X-Content-Type-Options', 'nosniff');
-    const response = new Response(request.method === 'HEAD' ? null : object.body, { headers });
-    if (cache && ctx) ctx.waitUntil(cache.put(request, response.clone()));
-    return response;
+    return new Response(request.method === 'HEAD' ? null : object.body, { headers });
   },
 };

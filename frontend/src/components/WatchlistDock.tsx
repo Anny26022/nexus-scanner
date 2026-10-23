@@ -374,7 +374,7 @@ export const WatchlistDock = memo(function WatchlistDock({
   }, [items, filterQuery, quoteMap, sortColumn, sortDir]);
   const filteredSymbols = useMemo(() => filteredItems.filter(item => !isSection(item)), [filteredItems]);
   const queryClient = useQueryClient();
-  // Opening a name also loads the next few, so stepping down the list is instant.
+  // Warm the next name once the selected chart has loaded.
   const selectSymbol = useCallback((symbol: string) => {
     onSelectSymbol(symbol);
     prefetchCharts(queryClient, filteredSymbols, symbol, datasetRevision, sessionDate);

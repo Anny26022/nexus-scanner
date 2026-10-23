@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "19edbd652e251981f2ba4633a5dee0581e0e982d2f554735df8c34f83cabe686",
-    "weekly_eod2_refresh.yml": "0486d18f004492b0703d379c80f406f25838f3108662f0369f9fa4f625f9250b",
+    "daily_refresh.yml": "943f7434df91787085856e839989108985d9793e40806a44ccae325b77b3aa30",
+    "weekly_eod2_refresh.yml": "113db1d0b2d713d1f72078947c1527c8f03c7d4d22a1b5b498ca19426cf2bbf2",
 }
 
 
@@ -172,7 +172,7 @@ class RefreshWorkflowTests(unittest.TestCase):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
         fake_git = "git() { printf '%s\\0' \"$@\"; printf '\\n'; };\n"
-        for weekly, additions in [('false', 30), ('true', 33)]:
+        for weekly, additions in [('false', 3), ('true', 6)]:
             with self.subTest(weekly=weekly):
                 message = 'literal $(false) commit message'
                 env = dict(os.environ, WEEKLY_REFRESH=weekly, REFRESH_COMMIT_MESSAGE=message)
@@ -185,6 +185,28 @@ class RefreshWorkflowTests(unittest.TestCase):
                 self.assertIn(['reset', '--mixed', 'origin/main'], calls)
                 self.assertIn(['commit', '-m', message], calls)
                 self.assertEqual(calls[-1], ['push'])
+                # Carried-over pipeline files go to R2 (tools/pipeline_state.py), never into Git history.
+                staged = {path for call in calls if call[0] == 'add' for path in call[1:]}
+                self.assertFalse(any(path.startswith('DO NOT DELETE EDL PIPELINE/') for path in staged))
+
+    def test_pipeline_state_is_pulled_before_fetch_and_pushed_after_a_successful_build(self):
+        for name in ('daily_refresh.yml', 'weekly_eod2_refresh.yml'):
+            with self.subTest(workflow=name):
+                job, = document('.github/workflows/' + name)['jobs'].values()
+                names = [step['name'] for step in job['steps']]
+                pull, push = names.index('Pull pipeline state from R2'), names.index('Push pipeline state to R2')
+                self.assertLess(names.index('Install R2 uploader'), pull)
+                self.assertLess(pull, names.index('Fetch refresh inputs'))
+                self.assertLess(names.index('Build and publish validated data'), push)
+                self.assertLess(push, names.index('Commit and Push Results'))
+                step = job['steps'][push]
+                # Default success(): a failed build never pushes, and a failed push stops the commit.
+                self.assertNotIn('if', step)
+                self.assertNotIn('continue-on-error', step)
+        job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
+        names = [step['name'] for step in job['steps']]
+        self.assertLess(names.index('Pull pipeline state from R2'), names.index('Generate Historical Snapshots'))
+        self.assertNotIn('Push pipeline state to R2', names)
 
 
 if __name__ == '__main__':

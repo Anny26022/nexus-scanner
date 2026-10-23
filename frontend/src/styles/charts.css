@@ -2411,3 +2411,7 @@
 .ps-settings input.ps-wide[type="number"] { width: 130px; }
 .ps-stop .pb-setting-check { min-height: 0; }
 .ps-stop-controls { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+
+/* These wrappers are the field, so they carry the focus state (see theme.css). */
+.drawing-menu-search:focus-within { border-color: var(--accent); }
+.ic-search:focus-within { border-bottom-color: var(--accent); }

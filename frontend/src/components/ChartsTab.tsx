@@ -96,8 +96,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const studyChoice=useRef(studies);
   const [studyConfigs, setStudyConfigs] = useState<StudyConfigs>(() => saved.studyConfigs ?? defaultStudyConfigs());
   const studyConfigsChoice = useRef(studyConfigs);
-  const numericalConfigKey = JSON.stringify({...studyConfigs, fundamentals: undefined});
-  const numericalConfigs = useMemo<StudyConfigs>(() => JSON.parse(numericalConfigKey), [numericalConfigKey]);
+  const [numericalConfigs, setNumericalConfigs] = useState(studyConfigs);
   const visibleStudies = useMemo(() => filterStudiesForInterval(studies, numericalConfigs, interval), [studies, numericalConfigs, interval]);
   const [activeIndicatorSetting, setActiveIndicatorSetting] = useState<string | null>(null);
   const [comparison,setComparison]=useState<{symbol:string;separate:boolean}|null>(saved.comparison??null);
@@ -157,17 +156,21 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     persist({studies:next});
     if (engine.current) setPaneOffsets(engine.current.getPaneOffsets?.() ?? []);
   };
-  const applyStudyConfigs = (next: StudyConfigs) => {
-    const studiesChanged = JSON.stringify({...studyConfigsChoice.current, fundamentals: undefined}) !== JSON.stringify({...next, fundamentals: undefined});
+  const applyStudyConfigs = (next: StudyConfigs, rebuildStudies = true) => {
     studyConfigsChoice.current = next;
     setStudyConfigs(next);
     engine.current?.setStudyConfigs?.(next);
     if (engine.current) updateBandGuides(engine.current);
-    if (studiesChanged) engine.current?.setStudies(filterStudiesForInterval(studyChoice.current, next, interval));
+    if (rebuildStudies) {
+      setNumericalConfigs(next);
+      engine.current?.setStudies(filterStudiesForInterval(studyChoice.current, next, interval));
+    }
     if (engine.current) restoreHiddenStudies(engine.current);
     persist({ studyConfigs: next });
     if (engine.current) setPaneOffsets(engine.current.getPaneOffsets?.() ?? []);
   };
+  const applyFundamentals = (fundamentals: NonNullable<StudyConfigs['fundamentals']>) =>
+    applyStudyConfigs({...studyConfigsChoice.current, fundamentals}, false);
   const applyExtras = (next: ExtraStudies) => applyStudyConfigs({...studyConfigsChoice.current, extras: next});
   const applyComparison=(next:typeof comparison)=>{setComparison(next);persist({comparison:next});if(!next) onComparison('',[],false);};
   const [eventDetails,setEventDetails]=useState<readonly ChartEvent[]|null>(null);
@@ -378,8 +381,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       {studyConfigs.fundamentals?.enabled && !allHidden && !hiddenStudies.fundamentals && <FundamentalsIndicator
         symbol={symbol} revision={revision} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}
         metrics={metrics} config={studyConfigs.fundamentals}
-        onMoveBadge={badgeOffset => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: {...studyConfigsChoice.current.fundamentals!, badgeOffset}})}
-        onMove={offset => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: {...studyConfigsChoice.current.fundamentals!, offset}})}/>}
+        onMoveBadge={badgeOffset => applyFundamentals({...studyConfigsChoice.current.fundamentals!, badgeOffset})}
+        onMove={offset => applyFundamentals({...studyConfigsChoice.current.fundamentals!, offset})}/>}
       <div className="chart-overlay-legend">
         <ChartLegend symbol={symbol} bar={currentBar} previous={previousByDate.get(currentBar.date)} quoteRef={quote}
           // The toolbar already names the symbol, so the status line's own title is opt-in.
@@ -404,7 +407,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           hiddenStudies={hiddenStudies}
           onToggleStudyVisibility={toggleStudyVisibility}
           onUpdateExtras={applyExtras}
-          onUpdateFundamentals={next => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: next})}
+          onUpdateFundamentals={applyFundamentals}
           collapsed={Boolean(appearance.legendCollapsed)}
           onToggleCollapsed={() => applyAppearance({legendCollapsed: !appearanceChoice.current.legendCollapsed})}
           allHidden={allHidden}
@@ -473,7 +476,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         }}
         onApplyAppearance={applyAppearance}
         fundamentals={studyConfigs.fundamentals}
-        onApplyFundamentals={next => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: next})}
+        onApplyFundamentals={applyFundamentals}
         extras={studyConfigs.extras}
         onApplyExtras={applyExtras}
         onOpenIndicatorSettings={id => {
@@ -492,7 +495,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       />
     )}
     {activeIndicatorSetting === 'fundamentals' && <FundamentalsSettingsDialog config={studyConfigs.fundamentals}
-      onApply={next => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: next})} onClose={() => setActiveIndicatorSetting(null)}/>}
+      onApply={applyFundamentals} onClose={() => setActiveIndicatorSetting(null)}/>}
     {activeIndicatorSetting && activeIndicatorSetting !== 'fundamentals' && !EXTRA_STUDY_BY_ID.has(activeIndicatorSetting as ExtraStudyId) && (
       <IndicatorSettingsModal
         indicatorId={activeIndicatorSetting}

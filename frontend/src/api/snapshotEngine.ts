@@ -1,3 +1,5 @@
+import { getIpoJson } from './gzipJson';
+import type { FinancialHistory } from '../chart/fundamentals';
 import { unpackSnapshot } from './packedSnapshot';
 import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
@@ -7,11 +9,13 @@ export interface SnapshotSource { revision: string; url: string; sessionDate?: s
 import type {FilterChoices} from '../types/filterChoices';
 export type {FilterChoices} from '../types/filterChoices';
 export type SnapshotTask =
+  | { type:'financialHistory'; source:SnapshotSource; symbol:string }
   | { type:'warm'; source:SnapshotSource }
   | { type:'filterChoices'; source:SnapshotSource }
   | { type:'screen'; source:SnapshotSource; request:ScreenerRunRequest; allRows?:boolean }
   | { type:'compare'; source:SnapshotSource; symbols:string[] };
 export type SnapshotResult =
+  | { type:'financialHistory'; result:FinancialHistory | null }
   | { type:'warm' }
   | { type:'filterChoices'; result:FilterChoices }
   | { type:'screen'; result:ScreenerRunResponse | null; revision:string; sessionDate:string }
@@ -41,6 +45,7 @@ async function readSnapshot(source: SnapshotSource, signal?: AbortSignal): Promi
 
 export function createSnapshotEngine(loader = readSnapshot) {
   const snapshots = new Map<string, Snapshot>();
+  const financialHistories = new Map<string, Promise<Record<string, FinancialHistory>>>();
 
   interface Subscriber {
     signal?: AbortSignal;
@@ -146,6 +151,17 @@ export function createSnapshotEngine(loader = readSnapshot) {
 
   return async (task: SnapshotTask, signal?: AbortSignal): Promise<SnapshotResult> => {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (task.type === 'financialHistory') {
+      const url = task.source.url;
+      let history = financialHistories.get(url);
+      if (!history) {
+        history = getIpoJson<Record<string, FinancialHistory>>(url, 'Financial history');
+        financialHistories.set(url, history);
+        if (financialHistories.size > 2) financialHistories.delete(financialHistories.keys().next().value!);
+        history.catch(() => { if (financialHistories.get(url) === history) financialHistories.delete(url); });
+      }
+      return {type:'financialHistory', result:(await history)[task.symbol] ?? null};
+    }
     const data = await load(task.source, signal);
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (task.type === 'warm') return {type:'warm'};

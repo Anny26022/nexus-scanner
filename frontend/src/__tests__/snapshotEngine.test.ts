@@ -332,3 +332,13 @@ it.each(['compressed', 'decompressed'])('screens packed gzip with %s HTTP delive
  const originalResult = await createSnapshotEngine(async () => snapshot)({type:'screen',source,request});
  expect(packedResult).toStrictEqual(originalResult);
 });
+
+
+it('shares old-release financial history loads and returns only the requested symbol', async () => {
+ const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({TEST:{observed_on:'2026-10-22'}}),{headers:{'Content-Encoding':'gzip'}}));
+ vi.stubGlobal('fetch',fetch);
+ const run=createSnapshotEngine(), historySource={...source,url:'/financial-history.json.gz'};
+ expect(await run({type:'financialHistory',source:historySource,symbol:'TEST'})).toEqual({type:'financialHistory',result:{observed_on:'2026-10-22'}});
+ expect(await run({type:'financialHistory',source:historySource,symbol:'OTHER'})).toEqual({type:'financialHistory',result:null});
+ expect(fetch).toHaveBeenCalledTimes(1);
+});

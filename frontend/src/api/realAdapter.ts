@@ -1,5 +1,4 @@
 import { getIpoJson } from './gzipJson';
-import { legacyFinancialHistory } from './financialHistoryClient';
 import type { ScreenerRunRequest, ScreenerRunResponse, IPORow, ExplainRequest, ExplainResponse,
   SymbolComparisonRequest, SymbolComparisonResponse, RevisionCurrentResponse } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
@@ -75,7 +74,6 @@ async function getChartJson<T>(url: string, resource = 'Chart'): Promise<T> {
 
 // Content-addressed URLs survive release changes. Share pending reads and parsed data.
 const objectCache = new Map<string, Promise<unknown>>();
-const financialCache = new Map<string, Promise<unknown>>();
 const releaseCache = new Map<string, Promise<unknown>>();
 function cached<T>(cache: Map<string, Promise<unknown>>, key: string, load: () => Promise<T>, limit: number): Promise<T> {
   let promise = cache.get(key);
@@ -155,10 +153,9 @@ class RealDataAdapter {
     validSymbol(symbol);
     if (release.revision !== revision || (!release.financialHistoryUrl && !release.financialHistoryUrlTemplate)) throw new Error('Financial history was not published with this snapshot.');
     if (release.financialHistoryUrlTemplate) return getIpoJson<import('../chart/fundamentals').FinancialHistory | null>(release.financialHistoryUrlTemplate.replace('{symbol}', encodeURIComponent(symbol)), 'Financial history');
-    if (typeof Worker !== 'undefined') return legacyFinancialHistory(release.financialHistoryUrl!, symbol);
-    const histories = await cached(financialCache, release.financialHistoryUrl!,
-      () => getIpoJson<Record<string, import('../chart/fundamentals').FinancialHistory>>(release.financialHistoryUrl!, 'Financial history'), 3);
-    return histories[symbol] ?? null;
+    const result = await runSnapshotTask({type:'financialHistory', source:{revision, url:release.financialHistoryUrl!}, symbol});
+    if (result.type !== 'financialHistory') throw new Error('Unexpected financial history response');
+    return result.result;
   }
   async getEarningsSchedule(symbol: string, revision: string) {
     const release = await releaseFor(revision);

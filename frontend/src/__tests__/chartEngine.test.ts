@@ -358,3 +358,44 @@ it('zooms on the wheel with the right edge fixed and pans on a sideways swipe, l
   expect(native.time.setVisibleLogicalRange).not.toHaveBeenCalled();
   engine.destroy();
 });
+
+it('trims the volume-average series on replay rewind',()=>{
+  const input=candles.map((bar,index)=>({...bar,volume:(index+1)*100}));
+  const {engine}=setup(input);
+  native.pane.paneIndex.mockReturnValue(1);
+  const configs=defaultStudyConfigs(); configs.volume={...configs.volume!,maLength:2}; engine.setStudyConfigs(configs);
+  engine.setAppearance({horizontalGrid:false,verticalGrid:false,crosshair:true,volume:true,volumePane:true,scaleMode:'normal'});
+  const average=native.series.find(series=>series.type==='Line')!;
+  expect(average.setData.mock.lastCall![0]).toHaveLength(3);
+  expect(average.setData.mock.lastCall![0].at(-1)).toEqual({time:'2026-10-05',value:250});
+  average.setData.mockClear(); average.pop.mockClear();
+  engine.setCandles(input.slice(0,2));
+  expect(average.setData).not.toHaveBeenCalled();
+  expect(average.pop).toHaveBeenCalledWith(1);
+  engine.destroy(); native.pane.paneIndex.mockReturnValue(0);
+});
+it('composes classic-volume opacity with transparent colors',()=>{
+  const {engine}=setup(); const configs=defaultStudyConfigs();
+  configs.volume={...configs.volume!,mode:'classic',upColor:'#12345680'};
+  engine.setStudyConfigs(configs);
+  const volume=native.series.find(series=>series.type==='Histogram')!;
+  expect(volume.setData.mock.lastCall![0][0].color).toBe('#12345640');
+  engine.destroy();
+});
+
+it('round-trips transparent EMA and drawing colors', () => {
+  const {engine}=setup(); engine.setEmaLines([{...defaultEmaLines()[0],color:'#12345680'}]);
+  expect(native.series.at(-1)!.applyOptions).toHaveBeenCalledWith(expect.objectContaining({color:'#12345680'}));
+  const book=new DrawingBook(); book.add('horizontal',{time:Date.parse(candles[0].date),price:11});
+  const id=book.getSnapshot().drawings[0].id; book.update(id,{color:'#12345680'});
+  expect(book.getSnapshot().drawings[0].color).toBe('#12345680'); engine.destroy();
+});
+
+it('updates the volume average incrementally on replay append',()=>{
+  const {engine}=setup(candles.slice(0,2)); native.pane.paneIndex.mockReturnValue(1);
+  engine.setAppearance({horizontalGrid:false,verticalGrid:false,crosshair:true,volume:true,volumePane:true,scaleMode:'normal'});
+  const average=native.series.find(series=>series.type==='Line')!; average.setData.mockClear();
+  engine.setCandles(candles);
+  expect(average.setData).not.toHaveBeenCalled(); expect(average.update).toHaveBeenCalledOnce();
+  engine.destroy(); native.pane.paneIndex.mockReturnValue(0);
+});

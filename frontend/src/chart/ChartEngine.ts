@@ -182,6 +182,7 @@ export class ChartEngine {
         this.layer.draw(context,projection,this.accent);
         this.drawUpcomingEarnings(context,projection.bottom);
         this.drawBandChanges(context);
+        this.drawHoverPoint(context);
         if (this.replayPicker) {
           const x=this.chart.timeScale().logicalToCoordinate(this.replayIndex as Logical);
           if(x===null) return;
@@ -232,7 +233,7 @@ export class ChartEngine {
     const line=a?.lineColor??this.accent;
     const lineWidth=Math.max(1,Math.min(4,Math.round(a?.lineWidth??2))) as LineWidth;
     const digits=a?.precision&&a.precision!=='default'?Math.max(0,Math.min(4,Number(a.precision))):null;
-    const common={priceLineVisible:a?.priceLineVisible!==false,lastValueVisible:a?.lastValueLabel!==false,
+    const common={priceLineVisible:a?.priceLineVisible===true,lastValueVisible:a?.lastValueLabel!==false,
       priceFormat:digits===null?{type:'price' as const,precision:2,minMove:.01}:{type:'price' as const,precision:digits,minMove:1/10**digits}};
     switch(this.style) {
       case 'candles':
@@ -415,6 +416,16 @@ export class ChartEngine {
   private setPriceData() {this.price.setData(this.candles.map((bar,index)=>this.priceData(bar,index)));this.updateHighLowLines();}
   private highLowLines:{series:ISeriesApi<'Candlestick'|'Bar'|'Line'|'Area'|'Baseline'>;lines:IPriceLine[]}|null=null;
   private highLowFrame=0;
+  private crosshairLogical:number|null=null;
+  private drawHoverPoint(context:CanvasRenderingContext2D) {
+    if(this.crosshairLogical===null||this.currentAppearance?.crosshair===false||this.replayPicker) return;
+    const bar=this.candles[this.crosshairLogical];
+    if(!bar) return;
+    const x=this.chart.timeScale().logicalToCoordinate(this.crosshairLogical as Logical),y=this.price.priceToCoordinate(bar.close);
+    if(x===null||y===null) return;
+    context.save();context.fillStyle='#2962ff';
+    context.beginPath();context.arc(x,y,3,0,Math.PI*2);context.fill();context.restore();
+  }
   private upcomingEarnings:{date:string;line:boolean}|null=null;
   private bandChanges:readonly {date:string;from:string;to:string}[]=[];
   /** Past NSE price-band changes, drawn as labels above the candle on each change date. */
@@ -617,6 +628,7 @@ export class ChartEngine {
         mode:appearance.crosshairMode==='magnet'?CrosshairMode.Magnet:appearance.crosshairMode==='ohlc'?CrosshairMode.MagnetOHLC:CrosshairMode.Normal,
         vertLine:{
           visible:appearance.crosshair,
+          width:1,
           labelVisible:appearance.crosshair,
           ...(appearance.crosshairTransparency !== undefined
             ? { color: withAlpha(appearance.crosshairColor || '#aab8c5', Math.max(0, Math.min(1, 1 - appearance.crosshairTransparency / 100))) }
@@ -624,7 +636,7 @@ export class ChartEngine {
           style:toLwcLineStyle(appearance.crosshairStyle),
         },
         horzLine:{
-          visible:appearance.crosshair,
+          visible:false,
           labelVisible:appearance.crosshair,
           ...(appearance.crosshairTransparency !== undefined
             ? { color: withAlpha(appearance.crosshairColor || '#aab8c5', Math.max(0, Math.min(1, 1 - appearance.crosshairTransparency / 100))) }
@@ -1154,6 +1166,8 @@ export class ChartEngine {
   };
   private cancelPointer=()=>{this.layer.cancelPointer();this.drawingPointer=null;this.blockMouse=false;};
   private crosshair=(event:MouseEventParams<Time>)=>{
+    const logical=event.logical===undefined||!event.point||(event.paneIndex??0)!==0?null:Math.round(event.logical);
+    if(logical!==this.crosshairLogical) {this.crosshairLogical=logical;this.invalidate();}
     if(this.replayPicker&&event.logical!==undefined) {this.replayIndex=Math.max(0,Math.min(this.candles.length-1,Math.round(event.logical)));this.invalidate();}
     const data=event.seriesData.get(this.activeSeries());
     const time=data?.time;

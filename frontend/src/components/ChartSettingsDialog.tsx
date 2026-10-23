@@ -353,7 +353,7 @@ export function ChartSettingsDialog({
               <input aria-label="Bottom margin %" className="cs-input is-number" type="number" min="0" max="49" value={draft.bottomMargin ?? 10} onChange={(e) => update({ bottomMargin: Number(e.target.value) })} />
             </Row>
             <h4 className="cs-subhead">Lines</h4>
-            <Check label="Last price line" checked={draft.priceLineVisible !== false} onChange={(checked) => update({ priceLineVisible: checked })} />
+            <Check label="Last price line" checked={draft.priceLineVisible === true} onChange={(checked) => update({ priceLineVisible: checked })} />
             <Check label="High and low price lines" checked={draft.highLowPriceLines ?? false} onChange={(checked) => update({ highLowPriceLines: checked })} />
             <h4 className="cs-subhead">Time scale</h4>
             <Check label="Corner clock" checked={draft.sessionClock ?? false} onChange={(checked) => update({ sessionClock: checked })} />

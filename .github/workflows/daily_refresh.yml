@@ -3,7 +3,12 @@ name: Daily Data Refresh
 on:
   schedule:
     - cron: '30 10 * * 1-5' # Runs at 4:00 PM IST (10:30 UTC) Mon-Fri
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      expected_session:
+        description: 'Optional ISO session override for special sessions (YYYY-MM-DD)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -81,6 +86,11 @@ jobs:
 
       - name: Install R2 uploader
         run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
+      - name: Pin expected trading session
+        env:
+          REQUESTED_SESSION: ${{ inputs.expected_session }}
+        run: python "DO NOT DELETE EDL PIPELINE/refresh_session.py"
 
       - name: Fetch refresh inputs
         id: fetch

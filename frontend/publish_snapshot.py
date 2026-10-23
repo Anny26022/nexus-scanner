@@ -24,6 +24,7 @@ from snapshot_technicals import technical_metrics, CONFIG_PATH
 from theme_classification import (classify, consolidated_classification, SOURCE_PATH as THEME_SOURCE_PATH,
                                   WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
 from pipeline_utils import resource_path
+from market_overview import market_overview
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
 TRADINGVIEW_FIELDS_PATH = resource_path('tradingview_fields.json')
@@ -370,9 +371,17 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         calendar_path=generation/'earnings-calendar.json.gz'
         temporary=calendar_path.with_name(calendar_path.name+'.tmp')
         temporary.write_bytes(calendar_bytes); temporary.replace(calendar_path)
+    market=market_overview(source_bytes, session)
+    if market is not None:
+        market_path=generation/'market-overview.json.gz'
+        temporary=market_path.with_name(market_path.name+'.tmp')
+        temporary.write_bytes(gzip.compress(json.dumps(market, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
+        temporary.replace(market_path)
     manifest={'revision':revision,'sessionDate':session,'publishedAt':f'{session}T00:00:00Z','schemaVersion':4,'totalStocks':len(rows),'datasetUrl':f'/data/revisions/{revision}/stocks.json','iposUrl':f'/data/revisions/{revision}/ipos.json.gz','datasetGzipUrl':f'/data/revisions/{revision}/stocks.json.gz'}
     if calendar_bytes is not None:
         manifest['earningsCalendarUrl']=f'/data/revisions/{revision}/earnings-calendar.json.gz'
+    if market is not None:
+        manifest['marketOverviewUrl']=f'/data/revisions/{revision}/market-overview.json.gz'
     manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'
     manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'
     manifest['themeClassificationUrl'] = f'/data/revisions/{revision}/theme-classification.json.gz'

@@ -44,6 +44,21 @@ export function writeChartStorage(key: string, value: unknown): boolean {
 export const validSymbol = (symbol: unknown): symbol is string =>
   typeof symbol === 'string' && /^[A-Z0-9_&.\-]{1,40}$/.test(symbol);
 
+export const WATCHLIST_KEY = 'watchlist.v2';
+
+/** Appends unseen symbols to the watchlist, optionally under a `###` section heading. */
+export function addSymbolsToWatchlist(symbols: readonly string[], heading?: string): {added: number; total: number} | null {
+  const stored = readChartStorage(WATCHLIST_KEY);
+  const items = Array.isArray(stored) ? stored.filter((item): item is string => typeof item === 'string') : [];
+  const existing = new Set(items.filter(item => !item.startsWith('###')));
+  const fresh = [...new Set(symbols.map(symbol => symbol.trim().toUpperCase()))].filter(symbol => validSymbol(symbol) && !existing.has(symbol));
+  const total = existing.size + fresh.length;
+  if (!fresh.length) return {added: 0, total};
+  const section = heading ? `###${heading.slice(0, 80)}` : undefined;
+  const next = [...items, ...(section && !items.includes(section) ? [section] : []), ...fresh];
+  return writeChartStorage(WATCHLIST_KEY, next) ? {added: fresh.length, total} : null;
+}
+
 export type TileSettings = { symbol: string; interval: Interval };
 export type GridSettings = { count: number; layout: string; links: SyncOptions; tiles: TileSettings[] };
 
@@ -68,6 +83,13 @@ export function loadGrid(input: unknown = readChartStorage('grid.v1')): GridSett
     }
   }
   return { layout, count: chartLayout(layout).count, links, tiles: [...raw.tiles, ...defaults.tiles.slice(raw.tiles.length)] };
+}
+
+/** Points the first chart tile at a symbol; the Charts tab reads it when it opens. */
+export function openSymbolInCharts(symbol: string): boolean {
+  if (!validSymbol(symbol)) return false;
+  const grid = loadGrid();
+  return writeChartStorage('grid.v1', {...grid, tiles: [{...grid.tiles[0], symbol}, ...grid.tiles.slice(1)]});
 }
 
 import type { StudyConfigs } from './studyConfigs';

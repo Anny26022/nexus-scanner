@@ -18,5 +18,5 @@
 :where(span.symbol-logo-mark) { display: grid; place-items: center; background: var(--surface-hover); color: var(--muted); font-size: 11px; font-weight: 700; }
 :where(.symbol-logo-text) { min-width: 0; }
 :where(.symbol-logo-symbol, .symbol-logo-name) { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-:where(.symbol-logo-symbol) { color: var(--text); font-size: 13px; font-weight: 600; line-height: 18px; letter-spacing: -0.01em; }
-:where(.symbol-logo-name) { color: var(--muted); font-size: 12px; line-height: 16px; }
+:where(.symbol-logo-symbol) { color: var(--text); font-size: 12px; font-weight: 600; line-height: 16px; }
+:where(.symbol-logo-name) { color: var(--muted); font-size: 11px; line-height: 15px; }

@@ -3,6 +3,7 @@ import type { ScreenerRunResponse } from '../types/screener';
 import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, Table2, ChartNoAxesCombined, X } from 'lucide-react';
 import {CopyResults} from './CopyResults';
 import {DownloadResults} from './DownloadResults';
+import {AddToWatchlist} from './AddToWatchlist';
 import { SymbolWithLogo } from './SymbolWithLogo';
 import { AnnouncementsPanel } from './AnnouncementsPanel';
 import { Pagination } from './Pagination';
@@ -202,6 +203,13 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
             if (rows.length !== data?.matchCount) throw new Error('All matching symbols are unavailable. Run the scan again.');
             return rows;
           })} revision={data?.immutableRevision} disabled={!rows.length || busy || isError}/>
+        <AddToWatchlist
+          loadSymbols={async () => data?.matchedSymbols?.length === data?.matchCount && data?.matchedSymbols
+            ? data.matchedSymbols
+            : (await (loadExportRows ?? (async () => rows))()).map(row => row.symbol)}
+          heading={data?.resolvedSession?.date ? `Screener · ${new Date(`${data.resolvedSession.date}T00:00:00`).toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}` : 'Screener'}
+          disabled={!rows.length || busy || isError}
+        />
         <DownloadResults
           loadRows={loadExportRows ?? (async () => rows)}
           columns={visibleColumns}

@@ -1,13 +1,18 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { screenerApi } from './api/screenerApi';
-import { Navbar } from './components/Navbar';
+import { Navbar, type AppTab } from './components/Navbar';
 import { ExploreTab } from './components/ExploreTab';
 import { NewListingsTab } from './components/NewListingsTab';
 import { SessionDatePicker } from './components/SessionDatePicker';
 import { PanelLeftOpen } from 'lucide-react';
 import { useLocalStorageState } from './hooks/useLocalStorageState';
 import { Button } from './components/Button';
+import { CommandPalette } from './components/CommandPalette';
+import { useTheme } from './hooks/useTheme';
+import { useMountEffect } from './hooks/useMountEffect';
+import { openSymbolInCharts } from './chart/storage';
+import { writeScreenToStorage, type ScreenDefinition } from './utils/savedScreens';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,15 +24,41 @@ const queryClient = new QueryClient({
 });
 
 const ChartsTab = React.lazy(() => import('./components/ChartsTab'));
+const MarketTab = React.lazy(() => import('./components/MarketTab'));
 
 const ScreenerAppContent: React.FC = () => {
-  const [storedTab, setActiveTab] = useLocalStorageState<'screener' | 'ipo' | 'charts' | 'news'>('nexus-scanner.ui.active-tab.v1', 'screener');
+  const [storedTab, setActiveTab] = useLocalStorageState<AppTab | 'news'>('nexus-scanner.ui.active-tab.v1', 'screener');
   // Live News is temporarily hidden; restore saved News sessions to the screener.
   const activeTab = storedTab === 'news' ? 'screener' : storedTab;
   const [screenerMounted, setScreenerMounted] = React.useState(activeTab === 'screener');
   if (activeTab === 'screener' && !screenerMounted) setScreenerMounted(true);
   const [sidebarHidden, setSidebarHidden] = useLocalStorageState('nexus-scanner.ui.sidebar-hidden.v1', false);
   const [chartSnapshot, setChartSnapshot] = React.useState<{revision?: string; sessionDate: string}>();
+  const {choice: theme, setChoice: setTheme} = useTheme();
+  const [paletteOpen, setPaletteOpen] = React.useState(false);
+  // Bumped when a saved screen is loaded from outside the Screener so it re-reads its stored state.
+  const [screenerKey, setScreenerKey] = React.useState(0);
+
+  useMountEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen(open => !open);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
+  const navigate = (tab: AppTab) => { setChartSnapshot(undefined); setActiveTab(tab); };
+  const loadScreen = (screen: ScreenDefinition) => {
+    writeScreenToStorage(screen);
+    setScreenerKey(key => key + 1);
+    navigate('screener');
+  };
+  const openSymbol = (symbol: string) => {
+    if (openSymbolInCharts(symbol)) navigate('charts');
+  };
 
   const { data: revisionData, isError: revisionFailed, refetch: refreshRevision } = useQuery({
     queryKey: ['revisionCurrent'],
@@ -70,8 +101,11 @@ const ScreenerAppContent: React.FC = () => {
       <a href="#workspace" className="skip-link">Skip to results workspace</a>
       {!sidebarHidden && <Navbar
         activeTab={activeTab}
-        onTabChange={tab => { setChartSnapshot(undefined); setActiveTab(tab); }}
+        onTabChange={navigate}
         onHideSidebar={() => setSidebarHidden(true)}
+        onOpenSearch={() => setPaletteOpen(true)}
+        theme={theme}
+        onThemeChange={setTheme}
         sessionControl={activeTab === 'screener' ? <SessionDatePicker
           selectedDate={selectedAsOfDate}
           latestDate={latestDate}
@@ -85,6 +119,7 @@ const ScreenerAppContent: React.FC = () => {
         {revisionFailed && <p role="alert" className="notice">The latest data release could not be loaded. <Button variant="ghost" onClick={() => void refreshRevision()}>Retry</Button></p>}
         {screenerMounted && <div style={{display: activeTab === 'screener' ? 'contents' : 'none'}}>
           <ExploreTab
+            key={screenerKey}
             selectedAsOfDate={selectedAsOfDate}
             datasetRevision={activeRevision}
             onRefreshRevision={async () => (await refreshRevision()).data?.immutableRevision}
@@ -97,10 +132,30 @@ const ScreenerAppContent: React.FC = () => {
           <React.Suspense fallback={<p role="status">Loading chart workspace…</p>}>
             <ChartsTab datasetRevision={chartSnapshot?.revision ?? activeRevision} sessionDate={chartSnapshot?.sessionDate ?? selectedAsOfDate}/>
           </React.Suspense>
+        ) : activeTab === 'market' ? (
+          <React.Suspense fallback={<p role="status">Loading market overview…</p>}>
+            <MarketTab
+              datasetRevision={activeRevision}
+              sessionDate={selectedAsOfDate}
+              onScreenSector={sector => loadScreen({
+                universe: 'mainboard', matchMode: 'all', query: '', sort: {field: 'marketCap', direction: 'desc'},
+                conditions: {sector: {instanceId: 'sector', conditionId: 'SECTOR', parameters: {values: [sector]}}},
+              })}
+            />
+          </React.Suspense>
         ) : activeTab === 'ipo' ? (
           <NewListingsTab key={latestRevision} datasetRevision={latestRevision} selectedAsOfDate={latestDate} />
         ) : null}
       </main>
+      {paletteOpen && <CommandPalette
+        onClose={() => setPaletteOpen(false)}
+        onNavigate={navigate}
+        onLoadScreen={loadScreen}
+        onOpenSymbol={openSymbol}
+        onThemeChange={setTheme}
+        datasetRevision={activeRevision}
+        sessionDate={selectedAsOfDate}
+      />}
     </div>
   );
 };

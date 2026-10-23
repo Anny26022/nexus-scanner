@@ -24,6 +24,8 @@ import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS
 import { AiScreenerModal } from './AiScreenerModal';
 import { ScanHistoryPanel } from './ScanHistoryPanel';
 import { Button } from './Button';
+import { SavedScreensMenu } from './SavedScreensMenu';
+import type { ScreenDefinition } from '../utils/savedScreens';
 
 
 interface ExploreTabProps {
@@ -165,6 +167,19 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
 
   const filterCount = Object.keys(activeConditionsMap).length;
 
+  const currentScreen: ScreenDefinition = {universe, matchMode, conditions: activeConditionsMap, query: activeQuery, sort};
+  const loadScreen = (screen: ScreenDefinition) => {
+    setAiDraft(null);
+    setUniverse(screen.universe);
+    setMatchMode(screen.matchMode);
+    setActiveConditionsMap(screen.conditions);
+    setActiveQuery(screen.query);
+    setQueryText(screen.query);
+    setSort(screen.sort);
+    setSymbolSearch('');
+    setPage(1);
+  };
+
   const showBacktest = availableSessions.length > 0 && resultView !== 'charts';
   const openBacktest = () => {
     setIsScanHistoryOpen(true);
@@ -206,20 +221,19 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
         <div className="screen-buttons">
           {(filterCount > 0 || activeQuery || symbolSearch) && <Button variant="ghost" onClick={handleReset}><RotateCcw size={14} />Reset</Button>}
           <Button
-            variant="secondary"
+            variant="ghost"
             onClick={() => setIsAiModalOpen(true)}
             title="Describe stocks in English or Hinglish"
           >
             <Sparkles size={13} />
             <span>Ask AI</span>
           </Button>
-          <Button variant="secondary" onClick={() => setIsModalOpen(true)}><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</Button>
+          <Button variant="ghost" onClick={() => setIsModalOpen(true)}><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</Button>
           <Button variant="primary" onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable}><Play size={14} />Run</Button>
+          <SavedScreensMenu current={currentScreen} onLoad={loadScreen} />
           {showBacktest && <>
-            <span className="toolbar-divider" aria-hidden="true" />
-            <Button variant="ghost" className="backtest-trigger" onClick={openBacktest} aria-expanded={isScanHistoryOpen} aria-label="Backtest" title={`Backtest this screen across ${availableSessions.length} sessions`}>
+            <Button variant="ghost" className="toolbar-icon-button backtest-trigger" onClick={openBacktest} aria-expanded={isScanHistoryOpen} aria-label="Backtest" title={`Backtest this screen across ${availableSessions.length} sessions`}>
               <BarChart3 size={14} aria-hidden="true" />
-              <span>Backtest</span>
             </Button>
           </>}
         </div>
@@ -229,7 +243,10 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
           : Object.entries(activeConditionsMap).filter(([, cond]) => isAvailableCondition(cond)).map(([key, cond]) => {
             const def = NEXUS_CONDITION_CATALOG.find(c => c.id === cond.conditionId) || PRESET_CATALOG.find(c => c.id === cond.conditionId);
             const label = ['FUNDAMENTAL_METRIC', 'mom_return', 'PRICE_CHANGE_PCT'].includes(cond.conditionId)
-              ? explainCondition(cond).explanation : def?.label ?? cond.conditionId;
+              ? explainCondition(cond).explanation
+              : ['SECTOR', 'INDUSTRY'].includes(cond.conditionId) && Array.isArray(cond.parameters.values) && cond.parameters.values.length
+                ? `${def?.label ?? cond.conditionId}: ${cond.parameters.values.join(', ')}`
+                : def?.label ?? cond.conditionId;
             return <span key={key} className="filter-chip">{label}<button aria-label={`Remove ${label}`} onClick={() => handleRemove(key)}><X size={13} /></button></span>;
           })}
       </div>}

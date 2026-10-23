@@ -172,7 +172,9 @@ class RefreshWorkflowTests(unittest.TestCase):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
         fake_git = "git() { printf '%s\\0' \"$@\"; printf '\\n'; };\n"
-        for weekly, additions in [('false', 3), ('true', 6)]:
+        # The Earnings Pulse index is staged only once it exists in the checkout.
+        optional = int((ROOT / 'frontend/public/data/earningspulse/index.json').is_file())
+        for weekly, additions in [('false', 3 + optional), ('true', 6 + optional)]:
             with self.subTest(weekly=weekly):
                 message = 'literal $(false) commit message'
                 env = dict(os.environ, WEEKLY_REFRESH=weekly, REFRESH_COMMIT_MESSAGE=message)

@@ -437,7 +437,8 @@ it('moves the fundamentals card without rebuilding studies',async()=>{
   localStorage.setItem('nexus.chart.scene.0.v1',JSON.stringify({studyConfigs:{fundamentals:{enabled:true}}}));
   vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
   setup(); await screen.findByLabelText('RELIANCE candlestick and volume chart');
-  const panel=await screen.findByRole('region',{name:'RELIANCE results'});
+  // No results are published here, so the badge is the overlay to move.
+  const panel=await screen.findByRole('group',{name:'RELIANCE price band'});
   const engine=vi.mocked(ChartEngine).mock.results.at(-1)!.value; engine.setStudies.mockClear();
   fireEvent.keyDown(panel,{key:'ArrowRight'});
   expect(engine.setStudies).not.toHaveBeenCalled();

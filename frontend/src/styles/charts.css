@@ -2306,7 +2306,6 @@
 .pb-results td[data-breakout="down"] { color: #b91c1c; background: rgb(239 68 68 / .11); box-shadow: inset 0 0 0 1px rgb(239 68 68 / .18); }
 :root[data-theme="dark"] .pb-results td[data-breakout="up"] { color: #34d399; }
 :root[data-theme="dark"] .pb-results td[data-breakout="down"] { color: #f87171; }
-.pb-empty { margin: 0; color: var(--muted); font-size: 11px; }
 @media (max-width: 700px) {
   .pb-badge { top: 6px; right: 58px; }
   .pb-card { top: 40px; right: 58px; max-width: calc(100% - 70px); }

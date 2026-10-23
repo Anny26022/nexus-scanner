@@ -123,13 +123,13 @@ export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, me
       </span>
       {surveillance.map(label => <span key={label} className="pb-status">{label}</span>)}
     </div>}
-    {config.table && <section className={`pb-card${config.layout === 'compact' ? '' : ' is-results'}`} tabIndex={0} aria-label={`${symbol} results`} title="Drag the handle to move; arrow keys nudge when focused"
+    {/* No card at all while loading or when nothing is published: an empty table only covers the chart. */}
+    {config.table && shown.length > 0 && <section className={`pb-card${config.layout === 'compact' ? '' : ' is-results'}`} tabIndex={0} aria-label={`${symbol} results`} title="Drag the handle to move; arrow keys nudge when focused"
       style={placed(cardDrag.live ?? config.offset, {'--pb-scale': config.tableScale} as CSSProperties)} {...cardDrag.handlers}>
       <div className="pb-drag-handle" aria-hidden="true">•••</div>
-      {shown.length ? (config.layout === 'compact'
+      {config.layout === 'compact'
         ? <CompactTable rows={rows} shown={shown} config={config} metadata={metadata} />
-        : <ResultsTable shown={shown} config={config} metadata={metadata} />)
-        : <p className="pb-empty" role="status">{history.isPending ? 'Loading results…' : history.isError ? 'Results unavailable for this snapshot.' : `No results published by ${cutoff}.`}</p>}
+        : <ResultsTable shown={shown} config={config} metadata={metadata} />}
     </section>}
   </>;
 }

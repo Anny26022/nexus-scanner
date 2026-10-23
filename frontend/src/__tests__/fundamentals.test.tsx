@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, waitFor, fireEvent, render, screen, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { bandChanges, comparisonPeriod, fundamentalsConfig, growth, priceBandGuides, priceBandLabel, upcomingResults, visibleFinancials, type FinancialHistory, type FundamentalsConfig } from '../chart/fundamentals';
 import { FundamentalsIndicator, FundamentalsSettingsDialog } from '../components/FundamentalsIndicator';
@@ -81,7 +81,8 @@ it('highlights record values in the results layout', async () => {
 });
 it('replay hides current bands, surveillance, schedule and unobserved statements', async () => {
   renderOverlay('2026-10-10');
-  expect(await screen.findByText('No results published by 2026-10-10.')).toBeInTheDocument();
+  // Nothing published by then, so no empty results card covers the chart.
+  await waitFor(() => expect(screen.queryByRole('region', {name: 'TEST results'})).not.toBeInTheDocument());
   expect(screen.queryByRole('group', {name: 'TEST price band'})).not.toBeInTheDocument();
   expect(screen.queryByText('LTASM - I')).not.toBeInTheDocument();
 });
@@ -105,13 +106,13 @@ it('adds the indicator through the Fundamentals catalogue category', () => {
 it('migrates older saved settings', () => {
   expect(fundamentalsConfig({enabled: true, fontSize: 13.2, offset: {x: 2, y: -1}} as never)).toMatchObject({tableScale: 1.2, offset: {x: 1, y: 0}, badgeOffset: null, guides: true, count: 5});
 });
-it('moves the badge and the table separately with the keyboard, clamped inside the chart', () => {
+it('moves the badge and the table separately with the keyboard, clamped inside the chart', async () => {
   const onMove = vi.fn(), onMoveBadge = vi.fn();
   vi.mocked(screenerApi.getFinancialHistory).mockResolvedValue(history);
   vi.mocked(screenerApi.getEarningsSchedule).mockResolvedValue(null);
   render(<QueryClientProvider client={new QueryClient()}><div><FundamentalsIndicator symbol="TEST" revision={'a'.repeat(64)} cutoff="2026-10-22" sessionDate="2026-10-22"
     metrics={{marketCapCrore: 1, circuitLimit: '10%'}} config={{enabled:true}} onMove={onMove} onMoveBadge={onMoveBadge}/></div></QueryClientProvider>);
-  const panel = screen.getByRole('region', {name:'TEST results'});
+  const panel = await screen.findByRole('region', {name:'TEST results'});
   panel.getBoundingClientRect = () => ({left:100,top:50,width:300,height:200} as DOMRect);
   panel.parentElement!.getBoundingClientRect = () => ({left:0,top:0,width:800,height:600} as DOMRect);
   fireEvent.keyDown(panel, {key:'ArrowRight'});

@@ -157,6 +157,7 @@ def _filing_events(payload, as_of):
             if symbol and date and date <= as_of:
                 events[symbol].append({"date": date, "publishedAt": filing.get("news_date"),
                     "category": "Regulatory filing", "headline": filing.get("caption") or filing.get("descriptor"),
+                    "body": filing.get("news_body"),
                     "url": filing.get("file_url"), "filingId": filing.get("filingId"),
                     "classification": filing['classification'],
                     **({"documentExtraction": {k: v for k, v in filing["documentExtraction"].items() if k in ("status", "sha256", "pagesExamined", "totalPages", "truncated", "error")}} if filing.get("documentExtraction") else {}),

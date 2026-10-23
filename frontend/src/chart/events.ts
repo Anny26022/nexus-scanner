@@ -1,7 +1,8 @@
 import type { ChartSnapshot } from '../api/realAdapter';
 import type { Candle } from './model';
 
-export type ChartEvent={id:string;date:string;kind:'earnings'|'action'|'news';title:string};
+export type ChartEvent={id:string;date:string;kind:'earnings'|'action'|'news';title:string;detail?:string;source?:string;url?:string};
+const text=(value:unknown)=>typeof value==='string'&&value.trim()?value.trim():undefined;
 export function chartEvents(snapshot:Pick<ChartSnapshot,'earnings'|'corporateActions'|'marketNews'|'regulatoryAnnouncements'>):ChartEvent[] {
   const groups=[['earnings',snapshot.earnings,'filing_date'],['action',snapshot.corporateActions,'ex_date'],['news',[...snapshot.marketNews,...snapshot.regulatoryAnnouncements??[]],'date']] as const;
   const unique=new Map<string,ChartEvent>();
@@ -11,7 +12,12 @@ export function chartEvents(snapshot:Pick<ChartSnapshot,'earnings'|'corporateAct
     const title=String(kind==='action'?row.source_details??row.action_type??'Corporate action':kind==='earnings'?row.filing_caption??row.filing_descriptor??'Earnings filing':row.headline??'News');
     // Some published ledger rows link a trading-window notice, not a results filing.
     const eventKind=kind==='earnings'&&/trading\s+window/i.test(title)?'news':kind;
-    const id=`${eventKind}:${date}:${title}`;unique.set(id,{id,date,kind:eventKind,title});
+    const id=`${eventKind}:${date}:${title}`;
+    // News carries a summary, filings their body text; only web links are kept.
+    const detail=text(row.summary)??text(row.body);
+    const url=[row.url,row.filing_url].map(text).find(link=>link&&/^https?:\/\//i.test(link));
+    const source=text(row.source);
+    unique.set(id,{id,date,kind:eventKind,title,...(detail&&detail!==title?{detail}:{}),...(source?{source}:{}),...(url?{url}:{})});
   }
   return [...unique.values()].sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
 }

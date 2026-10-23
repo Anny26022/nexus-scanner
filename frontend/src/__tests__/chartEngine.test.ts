@@ -44,11 +44,11 @@ it('uses matching reference bodies, borders and wicks with thicker HLC bars and 
   expect(native.chart.addSeries).toHaveBeenCalledWith('Candlestick',expect.objectContaining({upColor:'#089981',downColor:'#ef5350',wickUpColor:'#089981',wickDownColor:'#ef5350',borderVisible:true,borderUpColor:'#089981',borderDownColor:'#ef5350'}));
   expect(CHART_PALETTE.volumeUp).toBe('rgba(8,153,129,0.5)');
   const volume=native.series.find(series=>series.type==='Histogram')!;
-  // Simple Volume is the default: too little history for an average, so every bar is grey noise.
+  // Simple Volume is the default: too little history for an average, so bars are grey noise, except the up-day highest volume ever (sky blue).
   expect(volume.setData).toHaveBeenCalledWith([
-    {time:'2026-10-01',value:100,color:'#787b86'},
+    {time:'2026-10-01',value:100,color:'#7c7c87'},
     {time:'2026-10-02'},
-    {time:'2026-10-05',value:200,color:'#787b86'},
+    {time:'2026-10-05',value:200,color:'#87ceeb'},
   ]);
   const primitive=native.series[0].attachPrimitive.mock.calls[0][0];
   engine.setStyle('bars');
@@ -277,10 +277,12 @@ it('colours Simple Volume bars as pocket pivots, above-average up/down, dry and 
   const {engine}=setup(bars);
   const volume=native.series.find(series=>series.type==='Histogram')!;
   const data=volume.setData.mock.lastCall![0];
-  expect(data.at(-4).color).toBe('#f23645');
-  expect(data.at(-3).color).toBe('#2962ff');
-  expect(data.at(-2).color).toBe('#f23645');
+  expect(data.at(-4).color).toBe('#ff5252');
+  expect(data.at(-3).color).toBe('#87ceeb');
+  expect(data.at(-2).color).toBe('#ff5252');
   expect(data.at(-1).color).toBe('#ff9800');
+  // With labels off, the 500 pocket pivot (also the highest volume ever) stays deep blue; with them on it's the sky-blue HVE.
+  expect(native.markers.setMarkers).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({id:'vol:HVE',text:'HVE',color:'#87ceeb'})]));
   // Bull Snort: 500 >= 3x the ~108 average, close in the top 35% of the range, above the previous close.
   expect(native.markers.setMarkers).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({id:'snort:2026-03-03',shape:'square'})]));
   engine.destroy();

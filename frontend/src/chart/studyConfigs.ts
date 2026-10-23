@@ -163,9 +163,12 @@ export interface VolumeConfig {
   /** Unset follows the theme (--volume-noise). */
   noiseColor?: string;
   snortColor?: string;
+  /** HVE/HVY/HVQ bars and labels (light sky blue); by default only on up days, like the original. */
+  recordColor?: string;
+  recordUpOnly?: boolean;
 }
 
-export const SIMPLE_VOLUME_COLORS = {ppv: '#2962ff', up: '#089981', down: '#f23645', dry: '#ff9800', snort: '#9c27b0'} as const;
+export const SIMPLE_VOLUME_COLORS = {ppv: '#2196f3', record: '#87ceeb', up: '#4caf50', down: '#ff5252', dry: '#ff9800', snort: '#9c27b0'} as const;
 
 export interface StudyConfigs {
   /** Registry indicators (see extraStudies.ts), persisted with the scene and saved layouts. */

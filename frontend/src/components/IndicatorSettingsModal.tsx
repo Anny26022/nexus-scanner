@@ -741,7 +741,7 @@ export function IndicatorSettingsModal({
                         {[[0.1, '1/10'], [0.2, '1/5'], [0.25, '1/4'], [1 / 3, '1/3']].map(([value, label]) => <option key={label} value={value}>{label} of average</option>)}
                       </select>
                     </div>
-                    {([['showDry', 'Show dry volume (orange)'], ['showLabels', 'Highest/lowest volume labels (HVE, HVY, HVQ, Y, Q)'], ['showSnort', 'Bull Snort markers']] as const).map(([key, label]) =>
+                    {([['showDry', 'Show dry volume (orange)'], ['showLabels', 'Highest/lowest volume labels (HVE, HVY, HVQ, Y, Q)'], ['recordUpOnly', 'Sky-blue record bars only on up days'], ['showSnort', 'Bull Snort markers']] as const).map(([key, label]) =>
                       <label key={key} className="setting-visibility-item">
                         <input type="checkbox" checked={vol[key] !== false} onChange={e => setVol({[key]: e.target.checked})} />
                         {label}
@@ -1442,7 +1442,7 @@ export function IndicatorSettingsModal({
                 <>
                   {([['ppvColor', 'Pocket pivot', SIMPLE_VOLUME_COLORS.ppv], ['aboveUpColor', 'Up above average', SIMPLE_VOLUME_COLORS.up],
                     ['aboveDownColor', 'Down above average', SIMPLE_VOLUME_COLORS.down], ['dryColor', 'Dry volume', SIMPLE_VOLUME_COLORS.dry],
-                    ['noiseColor', 'Other volume', '#787b86'], ['snortColor', 'Bull Snort', SIMPLE_VOLUME_COLORS.snort]] as const).map(([key, label, fallback]) =>
+                    ['noiseColor', 'Other volume', '#7c7c87'], ['snortColor', 'Bull Snort', SIMPLE_VOLUME_COLORS.snort], ['recordColor', 'Highest volume (HVE/HVY/HVQ)', SIMPLE_VOLUME_COLORS.record]] as const).map(([key, label, fallback]) =>
                     <PlotStyleRow key={key} label={label} color={draftConfigs.volume?.[key] ?? fallback}
                       onColorChange={c => setDraftConfigs(prev => ({...prev, volume: {...prev.volume!, [key]: c}}))} />)}
                 </>

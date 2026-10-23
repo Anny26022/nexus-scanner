@@ -122,7 +122,7 @@ export class ChartEngine {
   private markers:ISeriesMarkersPluginApi<Time>;
   private volumeMarkers?:ISeriesMarkersPluginApi<Time>;
   private simpleVolume:SimpleVolumeResult|null=null;
-  private volumeNoise='#787b86';
+  private volumeNoise='#7c7c87';
   private eventData:readonly ChartEvent[]=[];
   private eventCutoff='';
   private showEvents=false;
@@ -286,7 +286,7 @@ export class ChartEngine {
     const style=getComputedStyle(this.host);
     const token=(name:string,fallback:string)=>style.getPropertyValue(`--${name}`).trim()||fallback;
     this.accent=token('accent','#187669');
-    const noise=token('volume-noise','#787b86');
+    const noise=token('volume-noise','#7c7c87');
     if(noise!==this.volumeNoise) {
       this.volumeNoise=noise;
       if(this.simpleVolume&&this.candles.length) this.volumeSeries.setData(this.candles.map((bar,index)=>this.volumeData(bar,index)));
@@ -310,10 +310,21 @@ export class ChartEngine {
     this.refreshMarkers();
   }
   /** Simple Volume's colour for a bar, or null for classic colouring. */
+  /** Sky blue for highest-volume records (HVE/HVY/HVQ), or null when the bar isn't one. */
+  private recordVolumeColor(index:number) {
+    const cfg=this.studyConfigs.volume,result=this.simpleVolume;
+    if(!result||cfg?.showLabels===false) return null;
+    const record=result.labels.some(label=>label.index===index&&label.text.startsWith('HV'));
+    if(!record) return null;
+    const up=index>0&&this.candles[index].close>this.candles[index-1].close;
+    return up||cfg?.recordUpOnly===false?cfg?.recordColor??SIMPLE_VOLUME_COLORS.record:null;
+  }
   private simpleVolumeColor(index:number) {
     const kind=this.simpleVolume?.kinds[index];
     if(!kind) return null;
     const cfg=this.studyConfigs.volume;
+    const record=this.recordVolumeColor(index);
+    if(record) return record;
     if(kind==='ppv') return cfg?.ppvColor??SIMPLE_VOLUME_COLORS.ppv;
     if(kind==='up') return cfg?.aboveUpColor??SIMPLE_VOLUME_COLORS.up;
     if(kind==='down') return cfg?.aboveDownColor??SIMPLE_VOLUME_COLORS.down;

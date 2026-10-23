@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "19edbd652e251981f2ba4633a5dee0581e0e982d2f554735df8c34f83cabe686",
+    "daily_refresh.yml": "10101b983f3f7282f67fff4a459bd066b0696f46d3ebc5ed4e846e1f07adf1f9",
     "weekly_eod2_refresh.yml": "0486d18f004492b0703d379c80f406f25838f3108662f0369f9fa4f625f9250b",
 }
 
@@ -48,9 +48,14 @@ class RefreshWorkflowTests(unittest.TestCase):
                 workflow = document('.github/workflows/' + name)
                 cron = '30 10 * * 1-5' if name == 'daily_refresh.yml' else '30 3 * * 0'
                 # PyYAML YAML 1.1 treats the unquoted GitHub "on" key as True.
-                self.assertEqual(workflow.get('on', workflow.get(True)), {
-                    'schedule': [{'cron': cron}], 'workflow_dispatch': None,
-                })
+                triggers = workflow.get('on', workflow.get(True))
+                self.assertEqual(triggers['schedule'], [{'cron': cron}])
+                if name == 'daily_refresh.yml':
+                    self.assertEqual(triggers['workflow_dispatch']['inputs']['expected_session']['type'], 'string')
+                    pin = next(step for step in workflow['jobs']['refresh-data']['steps'] if step['name'] == 'Pin expected trading session')
+                    self.assertIn('refresh_session.py', pin['run'])
+                else:
+                    self.assertIsNone(triggers['workflow_dispatch'])
                 self.assertEqual(workflow['concurrency'], {'group': 'daily-data-refresh', 'cancel-in-progress': False})
                 self.assertEqual(workflow['permissions'], {'contents': 'write'})
                 job, = workflow['jobs'].values()

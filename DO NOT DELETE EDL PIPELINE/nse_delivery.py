@@ -95,14 +95,19 @@ def latest_delivery_file(report_payload: dict) -> dict:
     return max(candidates, key=lambda item: parse_nse_date(item["tradingDate"]))
 
 
-def fetch_latest_full_bhavcopy(session: requests.Session | None = None) -> tuple[dict, list[dict], list[dict]]:
+def fetch_latest_full_bhavcopy(session: requests.Session | None = None, expected_date: str | None = None) -> tuple[dict, list[dict], list[dict]]:
     """Download one official file for both daily OHLCV and delivery data."""
     session = session or requests.Session()
     session.headers.update(NSE_HEADERS)
-    reports = session.get(NSE_DAILY_REPORTS_URL, timeout=30)
-    reports.raise_for_status()
-    descriptor = latest_delivery_file(reports.json())
-    url = urljoin(descriptor["filePath"].rstrip("/") + "/", descriptor["fileActlName"])
+    if expected_date:
+        day = date.fromisoformat(expected_date)
+        url = HISTORICAL_FILE_URL.format(date=day.strftime('%d%m%Y'))
+        descriptor = {'fileActlName': url.rsplit('/', 1)[-1], 'tradingDate': day.strftime('%d-%b-%Y')}
+    else:
+        reports = session.get(NSE_DAILY_REPORTS_URL, timeout=30)
+        reports.raise_for_status()
+        descriptor = latest_delivery_file(reports.json())
+        url = urljoin(descriptor["filePath"].rstrip("/") + "/", descriptor["fileActlName"])
     response = session.get(url, timeout=60)
     response.raise_for_status()
     rows = list(csv.DictReader(StringIO(response.content.decode("utf-8-sig"))))

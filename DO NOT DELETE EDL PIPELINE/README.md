@@ -118,6 +118,12 @@ an existing cache with an unknown price basis remain for provider sync and
 the existing completeness checks. Recovery I/O failures also fall through to
 provider sync; they do not bypass validation.
 
+### Daily freshness gate
+
+The daily GitHub job pins `EDL_EXPECTED_SESSION` using NSE's cash-market holiday calendar and the 15:30 IST close. It fetches that session's dated bhavcopy directly, with five attempts one minute apart, and checks both the report and row dates. A missing or stale report fails with **Data not advanced**, leaves the published snapshot unchanged, and writes a job summary. Final publication must match the same pinned session.
+
+Manual daily runs can set `expected_session` (ISO date) for special trading sessions or calendar coverage gaps. An unavailable calendar fails closed. Weekly refresh behavior is unchanged.
+
 ### Optional EOD2 historical bootstrap
 
 The normal daily refresh uses the official NSE full bhavcopy for the latest

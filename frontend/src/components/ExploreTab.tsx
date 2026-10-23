@@ -222,7 +222,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
               }
               setUniverse(next); onUniverseChange?.(next); setPage(1);
             }}>
-              <option value="etf">ETFs</option><option value="mainboard">Mainboard</option><option value="nifty50">Nifty 50</option><option value="nifty500">Nifty 500</option><option value="midsmall400">MidSmall 400</option>
+              <option value="mainboard">Mainboard</option><option value="nifty50">Nifty 50</option><option value="nifty500">Nifty 500</option><option value="midsmall400">MidSmall 400</option><option value="etf">ETFs</option>
             </select><ChevronDown size={14} />
           </span>
         </div>

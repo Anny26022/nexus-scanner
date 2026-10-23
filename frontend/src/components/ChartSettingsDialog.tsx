@@ -211,7 +211,7 @@ export function ChartSettingsDialog({
   };
 
   const reset = () => {
-    const next: ChartAppearance = { ...draft, verticalGrid: true, horizontalGrid: true, crosshair: true, crosshairMode: 'normal' };
+    const next: ChartAppearance = { ...draft, verticalGrid: false, horizontalGrid: false, crosshair: true, crosshairMode: 'normal' };
     for (const key of RESET_KEYS) delete next[key];
     setDraft(next);
     onApply(next, style, currentComparison);

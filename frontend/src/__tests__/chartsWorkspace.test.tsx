@@ -398,10 +398,11 @@ it('configures crosshair transparency and inverted scale in chart settings', asy
   // Test Vertical grid toggle
   fireEvent.click(screen.getByRole('tab', { name: 'Canvas' }));
   const vertToggle = screen.getByLabelText('Vertical grid lines');
-  expect(vertToggle).toBeChecked();
-  fireEvent.click(vertToggle);
+  // Grid lines start off, like a clean TradingView chart.
   expect(vertToggle).not.toBeChecked();
-  expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({ verticalGrid: false }));
+  fireEvent.click(vertToggle);
+  expect(vertToggle).toBeChecked();
+  expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({ verticalGrid: true }));
 
   fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
   expect(screen.queryByRole('dialog', { name: 'Chart settings' })).not.toBeInTheDocument();

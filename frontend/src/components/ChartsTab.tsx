@@ -89,7 +89,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const [indicatorsOpen,setIndicatorsOpen]=useState(false);
   const [settingsOpen,setSettingsOpen]=useState(false);
   const [context,setContext]=useState<{x:number;y:number}|null>(null);
-  const [appearance,setAppearance]=useState<ChartAppearance>({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',...saved.appearance,volumePane:saved.appearance?.volumePane??true});
+  const [appearance,setAppearance]=useState<ChartAppearance>({horizontalGrid:false,verticalGrid:false,crosshair:true,volume:true,scaleMode:'normal',...saved.appearance,volumePane:saved.appearance?.volumePane??true});
   const appearanceChoice=useRef(appearance);
   const [studies,setStudies]=useState<ChartStudies>(saved.studies??defaultStudies());
   const studyChoice=useRef(studies);

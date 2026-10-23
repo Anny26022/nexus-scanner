@@ -72,3 +72,8 @@ it('saves and loads OpenAlgo workspace documents with export and import',()=>{
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
   expect(writeChartStorage('grid.v1', loadGrid())).toBe(false);
 });
+
+it('keeps saved candle colours when an older save lacks basic appearance flags', () => {
+  const scene = loadScene('7', {appearance: {upColor: '#000000', downColor: '#000000'}} as never);
+  expect(scene.appearance).toMatchObject({upColor: '#000000', downColor: '#000000', horizontalGrid: false, crosshair: true, volume: true, scaleMode: 'normal'});
+});

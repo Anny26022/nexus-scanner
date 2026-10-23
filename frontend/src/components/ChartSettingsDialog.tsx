@@ -355,6 +355,7 @@ export function ChartSettingsDialog({
             <h4 className="cs-subhead">Lines</h4>
             <Check label="Last price line" checked={draft.priceLineVisible === true} onChange={(checked) => update({ priceLineVisible: checked })} />
             <Check label="High and low price lines" checked={draft.highLowPriceLines ?? false} onChange={(checked) => update({ highLowPriceLines: checked })} />
+            <Check label="Previous close line" checked={draft.prevCloseLine === true} onChange={(checked) => update({ prevCloseLine: checked })} />
             <h4 className="cs-subhead">Time scale</h4>
             <Check label="Corner clock" checked={draft.sessionClock ?? false} onChange={(checked) => update({ sessionClock: checked })} />
             <Row label="Clock timezone" indent>
@@ -448,7 +449,11 @@ export function ChartSettingsDialog({
       </div>
 
       <footer className="chart-settings-footer">
-        <button type="button" className="cs-link" onClick={reset}>Reset to defaults</button>
+        <div className="flex items-center gap-3">
+          <button type="button" className="cs-link" onClick={reset}>Reset to defaults</button>
+          {/* Lightweight Charts licence: attribution to TradingView. */}
+          <a className="chart-attribution" href="https://www.tradingview.com/" target="_blank" rel="noreferrer">Lightweight Charts™ by TradingView</a>
+        </div>
         <div className="chart-settings-footer-actions">
           <button type="button" className="cs-button" onClick={cancel}>Cancel</button>
           <button type="button" className="cs-button is-primary" onClick={apply}>Apply</button>

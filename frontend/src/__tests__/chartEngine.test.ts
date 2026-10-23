@@ -6,7 +6,7 @@ import { defaultStudyConfigs } from '../chart/studyConfigs';
 
 const native=vi.hoisted(()=>{
   const series:Array<ReturnType<typeof makeSeries>>=[];
-  const scale={applyOptions:vi.fn(),setAutoScale:vi.fn()};
+  const scale={applyOptions:vi.fn(),setAutoScale:vi.fn(),options:vi.fn(()=>({autoScale:true})),getVisibleRange:vi.fn(()=>({from:100,to:200})),setVisibleRange:vi.fn()};
   const pane={paneIndex:vi.fn(()=>0),setStretchFactor:vi.fn()};
   const markers={setMarkers:vi.fn(),detach:vi.fn()};
   function makeSeries(type:string) {
@@ -398,4 +398,47 @@ it('updates the volume average incrementally on replay append',()=>{
   engine.setCandles(candles);
   expect(average.setData).not.toHaveBeenCalled(); expect(average.update).toHaveBeenCalledOnce();
   engine.destroy(); native.pane.paneIndex.mockReturnValue(0);
+});
+it('formats the crosshair date with the weekday, as TradingView does',async()=>{
+  const {crosshairDate}=await import('../chart/ChartEngine');
+  expect(crosshairDate('2024-08-09')).toBe("Fri 09 Aug '24");
+});
+it('pans 2 bars per arrow (10 with Ctrl), pans prices with Up/Down and announces the latest visible bar',()=>{
+  const {engine}=setup();
+  const announce=vi.fn();engine.announce=announce;
+  native.time.getVisibleLogicalRange.mockReturnValue({from:0,to:5});
+  const host=document.body.lastElementChild as HTMLElement;
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:2,to:7});
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',ctrlKey:true,bubbles:true,cancelable:true}));
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:-10,to:-5});
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true,cancelable:true}));
+  expect(native.scale.setVisibleRange).toHaveBeenLastCalledWith({from:110,to:210});
+  expect(announce).toHaveBeenLastCalledWith(expect.stringContaining('close 13'));
+  engine.destroy();
+});
+it('draws an opt-in previous-close line and keeps one per series',()=>{
+  const {engine}=setup();
+  const price=native.series[0];
+  expect(price.createPriceLine).not.toHaveBeenCalled();
+  engine.setAppearance({horizontalGrid:false,verticalGrid:false,crosshair:true,volume:true,scaleMode:'normal',prevCloseLine:true});
+  expect(price.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({price:10,axisLabelVisible:true}));
+  engine.setAppearance({horizontalGrid:false,verticalGrid:false,crosshair:true,volume:true,scaleMode:'normal',prevCloseLine:false});
+  expect(price.removePriceLine).toHaveBeenCalled();
+  engine.destroy();
+});
+it('copies, pastes and duplicates the selected drawing five bars later',()=>{
+  const host=document.createElement('div');document.body.append(host);
+  const book=new DrawingBook();
+  const engine=new ChartEngine(host,candles,vi.fn(),book);
+  book.addPoints('trendline',[{time:Date.parse('2026-10-01'),price:10},{time:Date.parse('2026-10-02'),price:11}]);
+  const first=book.getSnapshot().drawings[0];
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'d',metaKey:true,bubbles:true,cancelable:true}));
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'c',metaKey:true,bubbles:true,cancelable:true}));
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'v',metaKey:true,bubbles:true,cancelable:true}));
+  const drawings=book.getSnapshot().drawings;
+  expect(drawings).toHaveLength(3);
+  expect(drawings[1].kind).toBe('trendline');
+  expect(drawings[1].a.time).toBeGreaterThan(first.a.time);
+  engine.destroy();
 });

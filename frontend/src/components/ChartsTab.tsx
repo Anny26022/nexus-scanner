@@ -66,6 +66,8 @@ export interface ChartSceneActions {
   resetView: () => void;
   saveImage: () => void;
   openSettings: () => void;
+  fitAll: () => void;
+  toggleMagnet: () => void;
 }
 
 /** Runs `run` once per mount; give it a `key` that changes with the value it applies to the chart. */
@@ -106,6 +108,9 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   // Mirrors the price scale's auto-fit, which a price-axis drag turns off and a double-click restores.
   const [autoScale, setAutoScale] = useState(true);
   const syncAutoScale = () => { const on = engine.current?.isAutoScale?.() ?? true; if (on !== autoScale) setAutoScale(on); };
+  // ">>" appears once the latest bar scrolls off screen, as in TradingView.
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
   const overlayRef = useRef<HTMLDivElement>(null);
   const candleIndexByDate = useMemo(() => new Map(candles.map((b, i) => [b.date, i])), [candles]);
   const indicatorSeries = useMemo(() => {
@@ -297,10 +302,13 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       const onWheel=()=>markCustomRange();
       const onPan=(event:PointerEvent)=>{if(event.buttons===1&&activeBook.getSnapshot().tool==='select') markCustomRange();};
       chart.chart.timeScale().subscribeVisibleTimeRangeChange(scheduleSave);
+      const trackLatest=()=>setAwayFromLatest(!(chart.isLatestVisible?.() ?? true));
+      chart.chart.timeScale().subscribeVisibleLogicalRangeChange?.(trackLatest);
+      chart.announce=setAnnouncement;
       host.addEventListener('wheel',onWheel,{capture:true,passive:true});
       host.addEventListener('pointermove',onPan,true);
       host.addEventListener('pointerup',scheduleSave,true);window.addEventListener('pagehide',saveView);
-      return () => { if(restoreFrame!==undefined) cancelAnimationFrame(restoreFrame);clearTimeout(timer);saveView();window.removeEventListener('pagehide',saveView);host.removeEventListener('pointerup',scheduleSave,true);host.removeEventListener('pointermove',onPan,true);host.removeEventListener('wheel',onWheel,true);chart.chart.timeScale().unsubscribeVisibleTimeRangeChange(scheduleSave);unlink();unsubscribe(); chart.destroy(); if (engine.current === chart) engine.current = null; };
+      return () => { if(restoreFrame!==undefined) cancelAnimationFrame(restoreFrame);clearTimeout(timer);saveView();window.removeEventListener('pagehide',saveView);host.removeEventListener('pointerup',scheduleSave,true);host.removeEventListener('pointermove',onPan,true);host.removeEventListener('wheel',onWheel,true);chart.chart.timeScale().unsubscribeVisibleTimeRangeChange(scheduleSave);chart.chart.timeScale().unsubscribeVisibleLogicalRangeChange?.(trackLatest);unlink();unsubscribe(); chart.destroy(); if (engine.current === chart) engine.current = null; };
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Chart rendering unavailable.');
       return;
@@ -321,6 +329,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     resetView: () => { markCustomRange(); engine.current?.reset(); },
     saveImage,
     openSettings: () => setSettingsOpen(true),
+    fitAll: () => { markCustomRange(); engine.current?.fitAll(); },
+    toggleMagnet: () => applyAppearance({crosshairMode: (appearanceChoice.current.crosshairMode ?? 'normal') === 'normal' ? 'magnet' : 'normal'}),
   };
   return <>
     <header className="chart-topbar">
@@ -359,10 +369,16 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     </div>}
     <div className={`chart-stage${selecting || replay.index!==null?' chart-stage-replay':''}`}>
       <div className="chart-plot" ref={overlayRef} data-indicator-values={appearance.statusIndicators===false?'hidden':undefined}
-        onPointerUp={syncAutoScale} onDoubleClick={() => requestAnimationFrame(syncAutoScale)}>
+        onPointerUp={syncAutoScale} onWheel={() => requestAnimationFrame(syncAutoScale)} onKeyUp={() => requestAnimationFrame(syncAutoScale)}
+        onDoubleClick={() => requestAnimationFrame(syncAutoScale)}>
+        <p className="sr-only" aria-live="polite" id={`chart-announce-${tileId}`}>{announcement}</p>
+        {awayFromLatest && paneOffsets[0] && <button type="button" className="chart-jump-latest" aria-label="Scroll to the latest bar" title="Scroll to the latest bar"
+          style={{top: paneOffsets[0].top + paneOffsets[0].height - 30}} onClick={() => engine.current?.latest()}>»</button>}
         {paneOffsets[0] && <div className="chart-scale-buttons" style={{top: paneOffsets[0].top + paneOffsets[0].height - 28}}>
           <button type="button" aria-pressed={autoScale} title="Auto (fits data to screen)" aria-label="Auto-scale price"
             onClick={() => { engine.current?.setAutoScale?.(!autoScale); setAutoScale(!autoScale); }}>A</button>
+          <button type="button" aria-pressed={appearance.scaleMode === 'percentage'} title="Percentage scale" aria-label="Percentage price scale"
+            onClick={() => applyAppearance({scaleMode: appearance.scaleMode === 'percentage' ? 'normal' : 'percentage'})}>%</button>
           <button type="button" aria-pressed={appearance.scaleMode === 'logarithmic'} title="Logarithmic scale" aria-label="Logarithmic price scale"
             onClick={() => applyAppearance({scaleMode: appearance.scaleMode === 'logarithmic' ? 'normal' : 'logarithmic'})}>L</button>
         </div>}
@@ -440,12 +456,12 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           <Button variant="ghost" className="chart-auto-btn" title="Restore automatic price scaling" onClick={() => engine.current?.resetPriceScale()}>Auto</Button>
         </div>
       </div>
-      {error ? <p role="alert" className="notice">{error}</p> : <div ref={attach} className="nexus-chart-canvas" role="group" tabIndex={0} onContextMenu={event=>{event.preventDefault();setContext({x:event.clientX,y:event.clientY});}} onKeyDownCapture={event=>{
+      {error ? <p role="alert" className="notice">{error}</p> : <div ref={attach} className="nexus-chart-canvas" role="group" aria-roledescription="interactive chart" tabIndex={0} onContextMenu={event=>{event.preventDefault();setContext({x:event.clientX,y:event.clientY});}} onKeyDownCapture={event=>{
         if ((event.key==='ContextMenu') || (event.key==='F10' && event.shiftKey)) {event.preventDefault();const rect=event.currentTarget.getBoundingClientRect();setContext({x:rect.left+24,y:rect.top+24});}
         if (replay.index===null && ['ArrowLeft','ArrowRight','Home','+','=','-'].includes(event.key)) markCustomRange();
         if (replay.index!==null && [' ','ArrowRight','ArrowLeft'].includes(event.key)) {event.preventDefault();event.stopPropagation(); if(event.key===' ') clock.toggle();else clock.step(event.key==='ArrowLeft'?-1:1);}
       }}
-        aria-label={`${symbol} ${style==='candles'?'candlestick':style==='bars'?'HLC':style}${appearance.volume?' and volume':''} chart`} aria-describedby={`chart-keyboard-help-${tileId}`}
+        aria-label={`${symbol} ${style==='candles'?'candlestick':style==='bars'?'HLC':style}${appearance.volume?' and volume':''} chart`} aria-describedby={`chart-keyboard-help-${tileId} chart-announce-${tileId}`}
       />}
       {context && <ChartContextMenu {...context} onClose={()=>setContext(null)}>
         <button type="button" role="menuitem" onClick={()=>{markCustomRange();engine.current?.reset();setContext(null);}}>Reset chart view</button>
@@ -806,7 +822,7 @@ function ChartTile({
       const digit = /^Digit([1-3])$/.exec(event.code);
       if (digit) { changeInterval(INTERVALS[Number(digit[1]) - 1]); return 'consume'; }
       const command = ({KeyI: actions?.openIndicators, KeyL: actions?.toggleLegend, KeyV: actions?.toggleAllIndicators,
-        KeyH: actions?.toggleDrawings, KeyR: actions?.resetView, KeyS: actions?.saveImage} as Record<string, (() => void) | undefined>)[event.code];
+        KeyH: actions?.toggleDrawings, KeyR: actions?.resetView, KeyS: actions?.saveImage, KeyF: actions?.fitAll, KeyM: actions?.toggleMagnet} as Record<string, (() => void) | undefined>)[event.code];
       if (command) { command(); return 'consume'; }
       return null;
     }

@@ -10,6 +10,8 @@ import {
 import { type ChartAppearance, type ChartStyle, type ScaleMode } from '../chart/ChartEngine';
 import { ChartDialog } from './ChartDialog';
 import { ColorPalette } from './ColorPalette';
+import { MarkerStyleRow } from './MarkerStyleRow';
+import { EVENT_BADGES } from '../chart/events';
 import { CHART_STYLE_OPTIONS } from './ChartStylePicker';
 
 const DEFAULT_UP = '#089981';
@@ -414,7 +416,11 @@ export function ChartSettingsDialog({
           {section === 'trading' && <>
             <h4 className="cs-subhead">Events</h4>
             <Check label="Show published event markers" checked={draft.events ?? false} onChange={(checked) => update({ events: checked })} />
-            <p className="cs-note">Earnings, corporate actions and market news appear on the dates they happened.</p>
+            <p className="cs-note">Lettered badges along the bottom of the chart, on the date each happened. Click one for details.</p>
+            <h4 className="cs-subhead">Badges</h4>
+            {EVENT_BADGES.map(([key, letter, label, color]) => <MarkerStyleRow key={key} label={`${letter} · ${label}`} shapes={false}
+              style={{visible: draft.eventStyles?.[key]?.visible !== false, color: draft.eventStyles?.[key]?.color ?? color, shape: 'circle'}}
+              onChange={next => update({eventStyles: {...draft.eventStyles, [key]: {visible: next.visible, color: next.color}}})} />)}
             <div className="cs-row">
               <button className="cs-button" type="button" onClick={() => { onEvents(); onClose(); }}>View published events</button>
             </div>

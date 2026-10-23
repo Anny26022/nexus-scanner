@@ -12,7 +12,8 @@ import { computeExtraStudies, enabledExtraStudies, studyLineColor, studyParams, 
 export type { ChartStudies } from './studies';
 import { type StudyConfigs } from './studyConfigs';
 export type { StudyConfigs } from './studyConfigs';
-import type { ChartEvent } from './events';
+import { EVENT_BADGES, eventBadgeKey, type ChartEvent, type EventBadgeStyles } from './events';
+import { drawMarkerShape, markerStyle, type MarkerShape, type MarkerStyle } from './markerShapes';
 import { computeSimpleVolume, type SimpleVolumeResult } from './simpleVolume';
 import { SIMPLE_VOLUME_COLORS } from './studyConfigs';
 
@@ -87,6 +88,8 @@ export type ChartAppearance = {
   scaleFontSize?:number;
   /** Last-value label on the price scale. */
   lastValueLabel?:boolean;
+  /** Colour and visibility of each event letter in the bottom strip. */
+  eventStyles?:EventBadgeStyles;
   /** Dotted line and axis label at the previous bar's close (opt-in, like the other price guides). */
   prevCloseLine?:boolean;
 };
@@ -194,6 +197,7 @@ export class ChartEngine {
         this.layer.draw(context,projection,this.accent);
         this.drawUpcomingEarnings(context,projection.bottom);
         this.drawBandChanges(context);
+        this.drawSnorts(context);
         this.drawHoverPoint(context);
         this.drawMeasure(context);
         if (this.replayPicker) {
@@ -430,6 +434,85 @@ export class ChartEngine {
   private highLowLines:{series:ISeriesApi<'Candlestick'|'Bar'|'Line'|'Area'|'Baseline'>;lines:IPriceLine[]}|null=null;
   private highLowFrame=0;
   private upcomingEarnings:{date:string;line:boolean}|null=null;
+  private eventPane:ReturnType<IChartApi['panes']>[number]|null=null;
+  private eventStrip:{index:number;key:string;badges:{letter:string;color:string}[]}[]=[];
+  private eventStripPrimitive={
+    paneViews:()=>[{zOrder:()=>'top' as const,renderer:()=>({draw:(target:{useMediaCoordinateSpace:(f:(scope:{context:CanvasRenderingContext2D;mediaSize:{width:number;height:number}})=>void)=>void})=>
+      target.useMediaCoordinateSpace(({context,mediaSize})=>this.drawEventStrip(context,mediaSize.height))})}],
+    hitTest:(x:number,y:number)=>this.eventStripHit(x,y),
+  };
+  /** Group visible events by bar into lettered badges, honouring each letter's style. */
+  private syncEventStrip() {
+    const styles=this.currentAppearance?.eventStyles;
+    this.eventStrip=[...this.markerEvents].map(([key,events])=>{
+      const date=key.slice(7);
+      let low=0,high=this.candles.length;
+      while(low<high) {const mid=(low+high)>>>1;if(this.candles[mid].date<=date) low=mid+1;else high=mid;}
+      const seen=new Set<string>(),badges:{letter:string;color:string}[]=[];
+      for(const event of events) {
+        const badgeKey=eventBadgeKey(event),definition=EVENT_BADGES.find(item=>item[0]===badgeKey)!;
+        if(styles?.[badgeKey]?.visible===false||seen.has(badgeKey)) continue;
+        seen.add(badgeKey);badges.push({letter:definition[1],color:styles?.[badgeKey]?.color??definition[3]});
+      }
+      return {index:Math.max(0,low-1),key,badges};
+    }).filter(group=>group.badges.length);
+    // Keep a clear row under the volume bars for the badges, as TradingView does.
+    const separate=this.volumeSeries&&this.volumeSeries.getPane().paneIndex()!==0;
+    if(separate) this.volumeSeries.priceScale().applyOptions({scaleMargins:{top:.1,bottom:this.eventStrip.length?.24:0}});
+    this.attachEventStrip();
+  }
+  /** The strip lives in the lowest pane, like TradingView's events row above the time axis. */
+  private attachEventStrip() {
+    const panes=this.chart.panes?.();
+    const lowest=panes?.at(-1)??null;
+    if(lowest===this.eventPane) {this.invalidate();return;}
+    try {this.eventPane?.detachPrimitive(this.eventStripPrimitive as never);} catch { /* pane already removed */ }
+    this.eventPane=lowest;
+    lowest?.attachPrimitive?.(this.eventStripPrimitive as never);
+    this.invalidate();
+  }
+  private eventStripX(index:number,badge:number,count:number) {
+    const x=this.chart.timeScale().logicalToCoordinate(index as Logical);
+    return x===null?null:x+(badge-(count-1)/2)*15;
+  }
+  private drawEventStrip(context:CanvasRenderingContext2D,height:number) {
+    if(!this.eventStrip.length) return;
+    const surface=getComputedStyle(this.host).getPropertyValue('--surface').trim()||'#ffffff';
+    context.save();
+    context.font='600 9px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif';
+    context.textAlign='center';context.textBaseline='middle';
+    const y=height-11;
+    for(const group of this.eventStrip) group.badges.forEach((badge,i)=>{
+      const x=this.eventStripX(group.index,i,group.badges.length);
+      if(x===null) return;
+      context.beginPath();context.arc(x,y,6.5,0,Math.PI*2);
+      context.fillStyle=surface;context.fill();
+      context.lineWidth=1.25;context.strokeStyle=badge.color;context.stroke();
+      context.fillStyle=badge.color;context.fillText(badge.letter,x,y+.5);
+    });
+    context.restore();
+  }
+  private eventStripHit(x:number,y:number) {
+    const height=this.eventPane?.getHeight?.()??0;
+    if(!height||Math.abs(y-(height-11))>9) return null;
+    for(const group of this.eventStrip) for(let i=0;i<group.badges.length;i++) {
+      const at=this.eventStripX(group.index,i,group.badges.length);
+      if(at!==null&&Math.abs(x-at)<=8) return {externalId:group.key,zOrder:'top' as const,cursorStyle:'pointer'};
+    }
+    return null;
+  }
+  /** Bull Snorts below the candle, in the volume settings' shape and colour. */
+  private drawSnorts(context:CanvasRenderingContext2D) {
+    const cfg=this.studyConfigs.volume;
+    if(!this.simpleVolume||cfg?.showSnort===false) return;
+    const scale=this.chart.timeScale();
+    for(const index of this.simpleVolume.snorts) {
+      const bar=this.candles[index];if(!bar) continue;
+      const x=scale.logicalToCoordinate(index as Logical),y=this.price.priceToCoordinate(bar.low);
+      if(x===null||y===null) continue;
+      drawMarkerShape(context,cfg?.snortShape??'square',x,y+10,8,cfg?.snortColor??SIMPLE_VOLUME_COLORS.snort);
+    }
+  }
   private crosshairLogical:number|null=null;
   private measure:{from:{logical:number;price:number};to:{logical:number;price:number}}|null=null;
   private measurePointer:number|null=null;
@@ -511,7 +594,8 @@ export class ChartEngine {
   }
   private bandChanges:readonly {date:string;from:string;to:string}[]=[];
   /** Past NSE price-band changes, drawn as labels above the candle on each change date. */
-  setBandChanges(changes:readonly {date:string;from:string;to:string}[]) {this.bandChanges=changes;this.invalidate();}
+  private bandStyles:Partial<Record<string,MarkerStyle>>={};
+  setBandChanges(changes:readonly {date:string;from:string;to:string}[],styles:Partial<Record<string,MarkerStyle>>={}) {this.bandChanges=changes;this.bandStyles=styles;this.invalidate();}
   /** Bar index for each visible band change (the bar containing its date), within the replay cutoff. */
   private bandChangeBars() {
     const out:{index:number;to:string}[]=[];
@@ -533,13 +617,15 @@ export class ChartEngine {
     for(const {index,to} of this.bandChangeBars()) {
       const x=scale.logicalToCoordinate(index as Logical),top=this.price.priceToCoordinate(this.candles[index].high);
       if(x===null||top===null) continue;
-      const band=Number.parseFloat(to);
-      const color=band===20?'#2962ff':band===10?'#4caf50':band===5?'#fbc02d':band===2?'#f23645':'#9598a1';
-      const square=top-22;
+      const band=Number.parseFloat(to),key=to==='No Band'?'NB':String(band);
+      const style=markerStyle(this.bandStyles[key],{visible:true,shape:'square' as MarkerShape,
+        color:band===20?'#2962ff':band===10?'#4caf50':band===5?'#fbc02d':band===2?'#f23645':'#9598a1'});
+      if(!style.visible) continue;
+      const color=style.color,square=top-22;
       context.strokeStyle=color;context.lineWidth=1;context.setLineDash([1.5,2.5]);
       context.beginPath();context.moveTo(Math.round(x)+.5,square+6);context.lineTo(Math.round(x)+.5,top-3);context.stroke();
       context.setLineDash([]);
-      context.fillStyle=color;context.fillRect(Math.round(x)-3,square,6,6);
+      drawMarkerShape(context,style.shape,Math.round(x),square+3,7,color);
       context.fillStyle=text;context.fillText(to==='No Band'?'NB':`${to}%`,x,square-3);
     }
     context.restore();
@@ -868,11 +954,13 @@ export class ChartEngine {
       const time=this.candles[Math.max(0,low-1)].date,key=`events:${time}`,entry=this.markerEvents.get(key);
       if(entry) entry.push(event);else this.markerEvents.set(key,[event]);
     }
-    const eventMarkers=[...this.markerEvents].map(([id,events]):SeriesMarker<Time>=>({id,time:id.slice(7),position:'belowBar',shape:'circle',color:events.some(event=>event.kind==='earnings')?'#049981':events.some(event=>event.kind==='action')?'#f59e0b':'#187669',size:.6}));
+    // Events are drawn as lettered badges in the bottom strip (see drawEventStrip), not as candle markers.
+    const eventMarkers:SeriesMarker<Time>[]=[];
+    this.syncEventStrip();
     // Bull Snorts: a small purple square under the candle.
-    const snorts=this.simpleVolume&&this.studyConfigs.volume?.showSnort!==false
-      ? this.simpleVolume.snorts.filter(index=>index<this.candles.length).map((index):SeriesMarker<Time>=>({id:`snort:${this.candles[index].date}`,time:this.candles[index].date,position:'belowBar',shape:'square',size:.5,color:this.studyConfigs.volume?.snortColor??SIMPLE_VOLUME_COLORS.snort}))
-      : [];
+    // Bull Snorts are drawn on the canvas with their configurable shape (drawSnorts).
+    const snorts:SeriesMarker<Time>[]=[];
+    this.invalidate();
     this.markers.setMarkers([...eventMarkers,...snorts].sort((a,b)=>String(a.time).localeCompare(String(b.time))));
   }
   /** Benchmark closes by session date, for relative-strength studies. Rebuild with setStudies after changing. */
@@ -1062,6 +1150,7 @@ export class ChartEngine {
     }
   }
   notifyPanesChange() {
+    this.attachEventStrip();
     this.onPanesChange?.();
     if(typeof requestAnimationFrame!=='undefined') {
       requestAnimationFrame(()=>{
@@ -1286,7 +1375,14 @@ export class ChartEngine {
   private dateString(time:Time) {return typeof time==='string'?time:typeof time==='number'?new Date(time*1000).toISOString().slice(0,10):`${time.year}-${String(time.month).padStart(2,'0')}-${String(time.day).padStart(2,'0')}`;}
   private click=(event:MouseEventParams<Time>)=>{
     if(this.replayPicker&&event.logical!==undefined&&event.point&&event.point.y<=this.chart.paneSize(0).height) this.pickReplay(Math.max(0,Math.min(this.candles.length-1,Math.round(event.logical))));
-    else if(typeof event.hoveredObjectId==='string') {const events=this.markerEvents.get(event.hoveredObjectId);if(events) this.inspectEvents(events);}
+    else {
+      // Event badges live in the lowest pane; resolve the click there as well as through hit testing.
+      const lowest=(this.chart.panes?.().length??1)-1;
+      const hit=typeof event.hoveredObjectId==='string'?event.hoveredObjectId
+        :event.point&&(event as {paneIndex?:number}).paneIndex===lowest?this.eventStripHit(event.point.x,event.point.y)?.externalId:undefined;
+      const events=hit?this.markerEvents.get(hit):undefined;
+      if(events) this.inspectEvents(events);
+    }
   };
   setReplayPicker(pick:((index:number)=>void)|null,cancel:()=>void=()=>{}) {
     this.layer.cancel();this.replayPicker=pick?{pick,cancel}:null;

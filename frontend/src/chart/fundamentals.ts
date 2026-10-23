@@ -36,6 +36,8 @@ export interface FundamentalsConfig {
   earningsLine?: boolean;
   /** Labels on past price-band change dates. */
   bandHistory?: boolean;
+  /** Colour, shape and visibility of each band's change marker, keyed '20' | '10' | '5' | '2' | 'NB'. */
+  bandStyles?: Partial<Record<string, import('./markerShapes').MarkerStyle>>;
   /** Drag positions as fractions of the free space in the chart (null = default corner). */
   badgeOffset?: {x: number; y: number} | null;
   offset?: {x: number; y: number} | null;
@@ -47,7 +49,7 @@ export interface FundamentalsConfig {
 }
 export const fundamentalsDefaults: FundamentalsConfig = {
   enabled: false, band: true, resultDate: true, table: true, layout: 'compact', period: 'quarterly', profit: 'eps', count: 5,
-  guides: true, earningsMarkers: true, earningsLabel: true, earningsLine: false, bandHistory: true, badgeOffset: null, offset: null, badgeScale: 1, tableScale: 1,
+  guides: true, earningsMarkers: true, earningsLabel: true, earningsLine: false, bandHistory: true, bandStyles: {}, badgeOffset: null, offset: null, badgeScale: 1, tableScale: 1,
 };
 const point = (value?: {x: number; y: number} | null) => value && Number.isFinite(value.x) && Number.isFinite(value.y)
   ? {x: Math.max(0, Math.min(1, value.x)), y: Math.max(0, Math.min(1, value.y))} : null;
@@ -63,6 +65,7 @@ export function fundamentalsConfig(raw?: FundamentalsConfig): Required<Fundament
     guides: raw?.guides !== false, earningsMarkers: raw?.earningsMarkers !== false,
     earningsLabel: raw?.earningsLabel !== false, earningsLine: raw?.earningsLine === true, bandHistory: raw?.bandHistory !== false,
     badgeOffset: point(raw?.badgeOffset), offset: point(raw?.offset),
+    bandStyles: raw?.bandStyles && typeof raw.bandStyles === 'object' ? raw.bandStyles : {},
     badgeScale: scale(raw?.badgeScale, 1),
     // Older saves stored a table text size (10–15px, 11 default).
     tableScale: scale(raw?.tableScale, typeof raw?.fontSize === 'number' ? raw.fontSize / 11 : 1),
@@ -151,3 +154,5 @@ export function bandChanges(bands: readonly (readonly [string, string])[] | unde
   }
   return changes;
 }
+
+export const BAND_MARKERS = [['20', '20%', '#2962ff'], ['10', '10%', '#4caf50'], ['5', '5%', '#fbc02d'], ['2', '2%', '#f23645'], ['NB', 'No band', '#9598a1']] as const;

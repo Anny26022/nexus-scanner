@@ -166,6 +166,8 @@ export interface VolumeConfig {
   /** HVE/HVY/HVQ bars and labels (light sky blue) on every record day; `recordUpOnly` limits the bar colour to up days. */
   recordColor?: string;
   recordUpOnly?: boolean;
+  /** Bull Snort marker shape (TradingView plotshape shapes). */
+  snortShape?: import('./markerShapes').MarkerShape;
 }
 
 export const SIMPLE_VOLUME_COLORS = {ppv: '#2196f3', record: '#87ceeb', up: '#4caf50', down: '#ff5252', dry: '#ff9800', snort: '#9c27b0'} as const;

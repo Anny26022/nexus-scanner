@@ -2,12 +2,14 @@ import { memo, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent
 import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
 import {
-  comparisonPeriod, financialNumber, fundamentalsConfig, growth, priceBandPercent, resultsCountdown, surveillanceLabels, upcomingResults, visibleFinancials,
+  BAND_MARKERS, comparisonPeriod, financialNumber, fundamentalsConfig, growth, priceBandPercent, resultsCountdown, surveillanceLabels, upcomingResults, visibleFinancials,
   type FinancialPeriod, type FundamentalsConfig,
 } from '../chart/fundamentals';
 import type { ChartMetrics } from './ChartLegend';
 import { ChartDialog } from './ChartDialog';
 import { Button } from './Button';
+import { MarkerStyleRow } from './MarkerStyleRow';
+import { markerStyle } from '../chart/markerShapes';
 import { useMountEffect } from '../hooks/useMountEffect';
 
 type Offset = {x: number; y: number};
@@ -221,6 +223,11 @@ export function FundamentalsSettingsDialog({config: raw, onApply, onClose}: {con
       {check('band', 'Price band badge (band, ASM/GSM)')}
       {check('resultDate', 'Results countdown in the badge', !config.band)}
       {check('bandHistory', 'Past band changes on the chart')}
+      {config.bandHistory && <div className="pb-band-styles">
+        {BAND_MARKERS.map(([key, label, color]) => <MarkerStyleRow key={key} label={label}
+          style={markerStyle(config.bandStyles[key], {visible: true, color, shape: 'square'})}
+          onChange={next => set({bandStyles: {...config.bandStyles, [key]: next}})} />)}
+      </div>}
       {check('guides', 'Upper and lower circuit lines (UC / LC)')}
       {check('earningsLabel', 'Upcoming results "E" label on the chart')}
       {check('earningsLine', 'Dotted line on the results date', !config.earningsLabel)}

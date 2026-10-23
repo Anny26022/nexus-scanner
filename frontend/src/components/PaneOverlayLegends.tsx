@@ -39,6 +39,7 @@ export interface LegendProps {
   hiddenStudies: Readonly<Record<string, boolean>>;
   onToggleStudyVisibility: (id: string) => void;
   onUpdateExtras?: (next: ExtraStudies) => void;
+  onUpdateFundamentals?: (next: NonNullable<StudyConfigs['fundamentals']>) => void;
   /** Legend chrome: collapse the indicator rows and hide every indicator at once. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -64,6 +65,7 @@ export function PricePaneLegend({
   hiddenStudies,
   onToggleStudyVisibility,
   onUpdateExtras,
+  onUpdateFundamentals,
   collapsed = false,
   onToggleCollapsed,
   allHidden = false,
@@ -118,6 +120,19 @@ export function PricePaneLegend({
           </span>
         </div>;
       })}
+      {studyConfigs?.fundamentals?.enabled && <div className="chart-indicator-row">
+        <span className="chart-indicator-title" style={{color: '#2962ff'}} onClick={() => openSettings('fundamentals')}>
+          <span className="chart-indicator-bullet">●</span>
+          <span>Price Band & Results</span>
+        </span>
+        <span className="chart-indicator-actions">
+          <button type="button" className="chart-indicator-action-btn" title={hiddenStudies.fundamentals ? 'Show' : 'Hide'} onClick={() => onToggleStudyVisibility('fundamentals')}>
+            {hiddenStudies.fundamentals ? <EyeOff size={12} /> : <Eye size={12} />}
+          </button>
+          <button type="button" className="chart-indicator-action-btn" title="Settings" onClick={() => openSettings('fundamentals')}><Settings size={12} /></button>
+          {onUpdateFundamentals && <button type="button" className="chart-indicator-action-btn delete" title="Remove" onClick={() => onUpdateFundamentals({...studyConfigs.fundamentals!, enabled: false})}><Trash2 size={12} /></button>}
+        </span>
+      </div>}
       {/* Volume Overlay (when in price pane) */}
       {appearance.volume && !appearance.volumePane && (
         <div className="chart-indicator-row">

@@ -164,8 +164,8 @@ export function IndicatorsCatalogModal({
   }));
   catalog.splice(1, 0, ...extraItems.filter(item => item.id === 'rs'));
   catalog.push(...extraItems.filter(item => item.id !== 'rs'));
-  catalog.push({id: 'fundamentals', name: 'Earnings & Price Bands', shortName: 'QE + Band', category: 'Fundamentals', type: 'Overlay',
-    ariaLabel: 'Earnings & Price Bands', description: 'Quarterly and annual results, EPS/PAT growth, surveillance and price-band guides.'});
+  catalog.push({id: 'fundamentals', name: 'Price Band & Results', shortName: 'Band · QE', category: 'Fundamentals', type: 'Overlay',
+    ariaLabel: 'Price Band & Results', description: 'Price-band badge with results countdown and ASM/GSM, UC/LC lines and an EPS/Sales results table.'});
   for (const item of catalog) item.description ??= DESCRIPTIONS[item.id];
 
   const isOn = (item: CatalogItem) => item.extra

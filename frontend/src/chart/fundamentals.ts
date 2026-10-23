@@ -12,35 +12,55 @@ export interface FinancialHistory {
   quarterly: FinancialPeriod[];
   annual: FinancialPeriod[];
 }
+/**
+ * "Price Band & Results" indicator settings. Saved as `studyConfigs.fundamentals`.
+ * Mirrors the Price Band extension: a band badge (band %, results countdown,
+ * ASM/GSM status) and a separate results card, each draggable on the chart.
+ */
 export interface FundamentalsConfig {
   enabled: boolean;
+  /** Band badge with results countdown and surveillance status. */
+  band?: boolean;
+  resultDate?: boolean;
+  /** Results card. */
+  table?: boolean;
   layout?: 'compact' | 'results' | 'essential';
   period?: 'quarterly' | 'annual';
   profit?: 'eps' | 'net_profit';
   count?: number;
-  position?: 'top-right' | 'bottom-right' | 'bottom-left';
-  offset?: {x: number; y: number} | null;
-  fontSize?: number;
-  band?: boolean;
+  /** Upper and lower circuit (UC/LC) price lines for the next session. */
   guides?: boolean;
   earningsMarkers?: boolean;
+  /** Drag positions as fractions of the free space in the chart (null = default corner). */
+  badgeOffset?: {x: number; y: number} | null;
+  offset?: {x: number; y: number} | null;
+  badgeScale?: number;
+  tableScale?: number;
+  /** Older saves: table text size in px and preset position. */
+  fontSize?: number;
+  position?: string;
 }
 export const fundamentalsDefaults: FundamentalsConfig = {
-  enabled: false, layout: 'compact', period: 'quarterly', profit: 'eps', count: 4,
-  position: 'top-right', offset: null, fontSize: 11, band: true, guides: false, earningsMarkers: true,
+  enabled: false, band: true, resultDate: true, table: true, layout: 'compact', period: 'quarterly', profit: 'eps', count: 5,
+  guides: true, earningsMarkers: true, badgeOffset: null, offset: null, badgeScale: 1, tableScale: 1,
 };
+const point = (value?: {x: number; y: number} | null) => value && Number.isFinite(value.x) && Number.isFinite(value.y)
+  ? {x: Math.max(0, Math.min(1, value.x)), y: Math.max(0, Math.min(1, value.y))} : null;
+const scale = (value: unknown, fallback: number) => typeof value === 'number' && Number.isFinite(value) ? Math.max(0.8, Math.min(1.5, Math.round(value * 20) / 20)) : fallback;
 export function fundamentalsConfig(raw?: FundamentalsConfig): Required<FundamentalsConfig> {
   return {
     ...fundamentalsDefaults, ...raw, enabled: raw?.enabled === true,
+    band: raw?.band !== false, resultDate: raw?.resultDate !== false, table: raw?.table !== false,
     layout: ['compact', 'results', 'essential'].includes(raw?.layout ?? '') ? raw!.layout! : 'compact',
     period: raw?.period === 'annual' ? 'annual' : 'quarterly',
     profit: raw?.profit === 'net_profit' ? 'net_profit' : 'eps',
-    count: Math.max(3, Math.min(13, Math.round(raw?.count ?? 4) || 4)),
-    fontSize: Math.max(10, Math.min(15, Math.round(raw?.fontSize ?? 11) || 11)),
-    position: ['top-right', 'bottom-right', 'bottom-left'].includes(raw?.position ?? '') ? raw!.position! : 'top-right',
-    offset: raw?.offset && Number.isFinite(raw.offset.x) && Number.isFinite(raw.offset.y)
-      ? {x: Math.max(0, Math.min(1, raw.offset.x)), y: Math.max(0, Math.min(1, raw.offset.y))} : null,
-    band: raw?.band !== false, guides: raw?.guides === true, earningsMarkers: raw?.earningsMarkers !== false,
+    count: Math.max(3, Math.min(13, Math.round(raw?.count ?? 5) || 5)),
+    guides: raw?.guides !== false, earningsMarkers: raw?.earningsMarkers !== false,
+    badgeOffset: point(raw?.badgeOffset), offset: point(raw?.offset),
+    badgeScale: scale(raw?.badgeScale, 1),
+    // Older saves stored a table text size (10–15px, 11 default).
+    tableScale: scale(raw?.tableScale, typeof raw?.fontSize === 'number' ? raw.fontSize / 11 : 1),
+    fontSize: 11, position: 'top-right',
   } as Required<FundamentalsConfig>;
 }
 const date = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -73,6 +93,30 @@ export function priceBandGuides(band: string | undefined, close: number, isFno?:
   if (!(percent > 0 && percent <= 20 && Number.isFinite(close) && close > 0)) return [];
   // Reference levels only; official tick rounding and exchange adjustments are not available.
   return [close * (1 + percent / 100), close * (1 - percent / 100)];
+}
+
+/** Band percentage for badge colouring: 20, 10, 5, 2; null for no band or F&O. */
+export function priceBandPercent(value?: string): number | null {
+  return value && /^\s*\d+(?:\.\d+)?\s*%?\s*$/.test(value) ? Number.parseFloat(value) : null;
+}
+
+/** "TODAY", "TOMORROW", "12 DAYS" until a results date, counting from `from` (both YYYY-MM-DD). */
+export function resultsCountdown(date: string, from: string): string {
+  const days = Math.round((Date.parse(date) - Date.parse(from)) / 86_400_000);
+  if (days <= 0) return 'TODAY';
+  if (days === 1) return 'TOMORROW';
+  return `${days} DAYS`;
+}
+
+/** Surveillance label as the exchange writes it, e.g. "LTASM - I", "GSM 0", "ASM STAGE II". */
+export function surveillanceLabels(meta: {isAsm?: boolean | null; asmStage?: string | null; isGsm?: boolean | null; gsmStage?: string | null}): string[] {
+  const label = (kind: string, stage?: string | null) => {
+    // Stages arrive as e.g. "LTASM - I (13)"; the bracketed number is an internal code.
+    const clean = stage?.replace(/\s*\(\d+\)\s*$/, '').trim().toUpperCase() ?? '';
+    if (!clean) return kind;
+    return clean.includes(kind) ? clean : `${kind} ${clean}`;
+  };
+  return [meta.isAsm ? label('ASM', meta.asmStage) : '', meta.isGsm ? label('GSM', meta.gsmStage) : ''].filter(Boolean);
 }
 
 export function priceBandLabel(value?: string): string {

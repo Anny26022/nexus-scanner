@@ -298,7 +298,7 @@ it('replaces band guides cleanly and retains them across chart styles', () => {
   const {engine}=setup();
   const price=native.series[0];
   engine.setPriceBandGuides([105,95]);
-  expect(price.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({price:105,title:'Upper est.'}));
+  expect(price.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({price:105,title:'UC',color:'#2962ff'}));
   engine.setStyle('bars');
   expect(price.removePriceLine).toHaveBeenCalledTimes(2);
   const next=native.series.at(-1)!;

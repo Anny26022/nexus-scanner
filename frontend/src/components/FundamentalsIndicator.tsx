@@ -1,148 +1,249 @@
-import { useRef, useState, type CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, GripVertical, Settings2, X } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
-import { comparisonPeriod, financialNumber, fundamentalsConfig, growth, priceBandGuides, priceBandLabel, visibleFinancials, type FundamentalsConfig } from '../chart/fundamentals';
+import {
+  comparisonPeriod, financialNumber, fundamentalsConfig, growth, priceBandPercent, resultsCountdown, surveillanceLabels, visibleFinancials,
+  type FinancialPeriod, type FundamentalsConfig,
+} from '../chart/fundamentals';
 import type { ChartMetrics } from './ChartLegend';
 import { ChartDialog } from './ChartDialog';
 import { Button } from './Button';
 
-const number = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2});
-const format = (value: unknown) => { const n = financialNumber(value); return n === null ? '—' : number.format(n); };
-const periodLabel = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', {month: 'short', year: '2-digit', timeZone: 'UTC'});
-const metrics = [
-  ['sales', 'Sales'], ['expenses', 'Expenses'], ['operating_profit', 'Operating profit'], ['opm', 'OPM %'],
-  ['other_income', 'Other income'], ['interest', 'Interest'], ['depreciation', 'Depreciation'],
-  ['profit_before_tax', 'Profit before tax'], ['tax_expenses', 'Tax'], ['net_profit', 'Net profit'], ['eps', 'EPS ₹'],
-] as const;
+type Offset = {x: number; y: number};
+const croreFormat = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
+const decimalFormat = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 1});
+// Values that round to zero print "0", never "-0".
+const crore = {format: (value: number) => croreFormat.format(Math.round(value) || 0)};
+const decimal = {format: (value: number) => decimalFormat.format(Math.round(value * 10) / 10 || 0)};
+const periodLabel = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {month: 'short', year: '2-digit', timeZone: 'UTC'}).replace(' ', '-');
+/** Whole-number % change like the extension: +12%, -8%, 0%. */
+const change = (value: number | null) => value === null ? null : Math.round(value);
 
-export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, metrics: snapshot, config: raw, onSettings, onRemove, onMove}: {
-  symbol: string; revision: string; cutoff: string; sessionDate: string; metrics?: ChartMetrics;
-  onMove?: (offset: {x: number; y: number}) => void;
-  config: FundamentalsConfig; onSettings: () => void; onRemove: () => void;
-}) {
-  const config = fundamentalsConfig(raw);
-  const [dragOffset, setDragOffset] = useState<{x: number; y: number} | null>(null);
-  const drag = useRef<{id: number; x: number; y: number; left: number; top: number; width: number; height: number; offset: {x: number; y: number}} | null>(null);
-  const panelPosition = (handle: HTMLElement) => {
-    const panel = handle.closest<HTMLElement>('.fundamentals-overlay')!;
-    const bounds = panel.getBoundingClientRect(), parent = panel.parentElement!.getBoundingClientRect();
+const RESULT_ROWS = [
+  ['sales', 'Sales'], ['expenses', 'Expenses'], ['operating_profit', 'Operating Profit'], ['opm', 'OPM %'],
+  ['other_income', 'Other Income'], ['interest', 'Interest'], ['depreciation', 'Depreciation'],
+  ['profit_before_tax', 'Profit before tax'], ['tax_expenses', 'Tax'], ['net_profit', 'Net Profit'], ['eps', 'EPS in Rs'],
+] as const;
+const ESSENTIAL = new Set(['sales', 'expenses', 'operating_profit', 'opm', 'profit_before_tax', 'net_profit', 'eps']);
+const LOWER_IS_BETTER = new Set(['expenses', 'interest', 'depreciation', 'tax_expenses']);
+
+/** Drag anywhere on an element to move it within the chart; arrow keys nudge it. Positions are fractions of the free space. */
+function useOverlayDrag(onMove?: (offset: Offset) => void) {
+  const [live, setLive] = useState<Offset | null>(null);
+  const drag = useRef<{id: number; x: number; y: number; left: number; top: number; width: number; height: number; offset: Offset; moved: boolean} | null>(null);
+  const measure = (element: HTMLElement) => {
+    const bounds = element.getBoundingClientRect(), parent = element.parentElement!.getBoundingClientRect();
     return {left: bounds.left - parent.left, top: bounds.top - parent.top,
       width: Math.max(1, parent.width - bounds.width), height: Math.max(1, parent.height - bounds.height)};
   };
-  const offset = dragOffset ?? config.offset;
-  const panelStyle = {'--fundamentals-font': `${config.fontSize}px`, ...(offset ? {
-    left: `${offset.x * 100}%`, top: `${offset.y * 100}%`, right: 'auto', bottom: 'auto',
-    transform: `translate(${-offset.x * 100}%, ${-offset.y * 100}%)`,
-  } : {})} as CSSProperties;
-  const [collapsed, setCollapsed] = useState(false);
-  const history = useQuery({queryKey: ['financial-history', revision, symbol], queryFn: () => screenerApi.getFinancialHistory(symbol, revision), staleTime: Infinity, retry: false});
-  const schedule = useQuery({queryKey: ['earnings-schedule', revision, symbol], queryFn: () => screenerApi.getEarningsSchedule(symbol, revision), staleTime: Infinity, retry: false});
-  const rows = visibleFinancials(history.data, config.period, cutoff);
-  const shown = rows.slice(0, config.count);
+  const clamp = (value: number) => Math.max(0, Math.min(1, value));
+  return {
+    live,
+    handlers: {
+      onPointerDown: (event: PointerEvent<HTMLElement>) => {
+        if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+        event.preventDefault(); event.stopPropagation();
+        const position = measure(event.currentTarget);
+        drag.current = {id: event.pointerId, x: event.clientX, y: event.clientY, ...position, offset: {x: position.left / position.width, y: position.top / position.height}, moved: false};
+        event.currentTarget.setPointerCapture(event.pointerId);
+      },
+      onPointerMove: (event: PointerEvent<HTMLElement>) => {
+        const current = drag.current;
+        if (!current || current.id !== event.pointerId) return;
+        event.stopPropagation();
+        current.moved ||= Math.abs(event.clientX - current.x) + Math.abs(event.clientY - current.y) > 3;
+        current.offset = {x: clamp((current.left + event.clientX - current.x) / current.width), y: clamp((current.top + event.clientY - current.y) / current.height)};
+        if (current.moved) setLive(current.offset);
+      },
+      onPointerUp: (event: PointerEvent<HTMLElement>) => {
+        const current = drag.current;
+        if (current?.id !== event.pointerId) return;
+        if (current.moved) onMove?.(current.offset);
+        drag.current = null; setLive(null);
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      },
+      onPointerCancel: () => { drag.current = null; setLive(null); },
+      onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+        const direction = ({ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]} as Record<string, number[]>)[event.key];
+        if (!direction || event.target !== event.currentTarget) return;
+        event.preventDefault(); event.stopPropagation();
+        const position = measure(event.currentTarget), step = event.shiftKey ? 30 : 10;
+        onMove?.({x: clamp((position.left + direction[0] * step) / position.width), y: clamp((position.top + direction[1] * step) / position.height)});
+      },
+    },
+  };
+}
+const placed = (offset: Offset | null, extra: CSSProperties = {}): CSSProperties => offset ? {
+  ...extra, left: `${offset.x * 100}%`, top: `${offset.y * 100}%`, right: 'auto', bottom: 'auto',
+  translate: `${-offset.x * 100}% ${-offset.y * 100}%`,
+} : extra;
+
+export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, metrics: snapshot, config: raw, onMoveBadge, onMove}: {
+  symbol: string; revision: string; cutoff: string; sessionDate: string; metrics?: ChartMetrics; config: FundamentalsConfig;
+  onMoveBadge?: (offset: Offset) => void; onMove?: (offset: Offset) => void;
+}) {
+  const config = fundamentalsConfig(raw);
+  const badgeDrag = useOverlayDrag(onMoveBadge);
+  const cardDrag = useOverlayDrag(onMove);
+  const history = useQuery({queryKey: ['financial-history', revision, symbol], queryFn: () => screenerApi.getFinancialHistory(symbol, revision), staleTime: Infinity, retry: false, enabled: config.table});
+  const schedule = useQuery({queryKey: ['earnings-schedule', revision, symbol], queryFn: () => screenerApi.getEarningsSchedule(symbol, revision), staleTime: Infinity, retry: false, enabled: config.band && config.resultDate});
+
   // Snapshot-only metadata is unavailable before its dated observation during replay.
   const metadata = cutoff >= sessionDate ? snapshot : undefined;
-  const surveillance = metadata?.surveillanceAvailable && metadata.surveillanceAsOfDate && metadata.surveillanceAsOfDate <= cutoff
-    ? [metadata.isAsm ? `ASM ${metadata.asmStage ?? ''}`.trim() : '', metadata.isGsm ? `GSM ${metadata.gsmStage ?? ''}`.trim() : ''].filter(Boolean) : [];
+  const surveillance = metadata?.surveillanceAvailable && metadata.surveillanceAsOfDate && metadata.surveillanceAsOfDate <= cutoff ? surveillanceLabels(metadata) : [];
   const next = schedule.data?.observedOn && schedule.data.observedOn <= cutoff
-    ? schedule.data.events.filter(event => event.scheduled_date >= cutoff && /^\d{4}-\d{2}-\d{2}$/.test(event.scheduled_date)).sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))[0] : undefined;
-  const days = next ? Math.round((Date.parse(next.scheduled_date) - Date.parse(cutoff)) / 86400000) : null;
-  const compact = config.layout === 'compact';
-  const profit = config.profit === 'eps' ? 'EPS ₹' : 'PAT Cr';
-  return <section className={`fundamentals-overlay ${config.position}`} style={panelStyle} aria-label={`${symbol} earnings and price bands`}>
-    <header>
-      <button type="button" className="fundamentals-drag" aria-label="Move earnings panel" title="Drag to move; use arrow keys to adjust"
-        onPointerDown={event => {
-          if (event.button !== 0) return;
-          event.preventDefault(); event.stopPropagation();
-          const position = panelPosition(event.currentTarget);
-          drag.current = {id: event.pointerId, x: event.clientX, y: event.clientY, ...position,
-            offset: {x: position.left / position.width, y: position.top / position.height}};
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }}
-        onPointerMove={event => {
-          const current = drag.current;
-          if (!current || current.id !== event.pointerId) return;
-          event.stopPropagation();
-          current.offset = {x: Math.max(0, Math.min(1, (current.left + event.clientX - current.x) / current.width)),
-            y: Math.max(0, Math.min(1, (current.top + event.clientY - current.y) / current.height))};
-          setDragOffset(current.offset);
-        }}
-        onPointerUp={event => {
-          if (drag.current?.id !== event.pointerId) return;
-          onMove?.(drag.current.offset); drag.current = null; setDragOffset(null);
-          event.currentTarget.releasePointerCapture(event.pointerId);
-        }}
-        onPointerCancel={() => {drag.current = null; setDragOffset(null);}}
-        onKeyDown={event => {
-          const direction = {ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1]}[event.key];
-          if (!direction) return;
-          event.preventDefault(); event.stopPropagation();
-          const position = panelPosition(event.currentTarget), step = event.shiftKey ? 30 : 10;
-          onMove?.({x: Math.max(0, Math.min(1, (position.left + direction[0] * step) / position.width)),
-            y: Math.max(0, Math.min(1, (position.top + direction[1] * step) / position.height))});
-        }}><GripVertical size={13}/><strong>Earnings & Price Bands</strong></button>
-      <div>
-        <button type="button" aria-label="Earnings and price bands settings" title="Settings" onClick={onSettings}><Settings2 size={13}/></button>
-        <button type="button" aria-label={collapsed ? 'Expand earnings table' : 'Collapse earnings table'} onClick={() => setCollapsed(!collapsed)}>{collapsed ? <ChevronDown size={13}/> : <ChevronUp size={13}/>}</button>
-        <button type="button" aria-label="Remove Earnings & Price Bands" title="Remove indicator" onClick={onRemove}><X size={13}/></button>
-      </div>
-    </header>
-    {config.band && <div className="fundamentals-badges">
-      <span>Band <b>{priceBandLabel(metadata?.circuitLimit)}</b></span>
-      {metadata?.isFno && <span>F&O</span>}
-      {surveillance.map(label => <span key={label} className="fundamentals-warning">{label}</span>)}
-      {next && <span title={`Calendar observed ${schedule.data!.observedOn}${next.date_conflict ? '; source dates disagree' : ''}`}>Results {next.scheduled_date} · {days === 0 ? 'today' : `in ${days}d`}{next.date_conflict ? ' (unconfirmed)' : ''}</span>}
+    ? schedule.data.events.filter(event => /^\d{4}-\d{2}-\d{2}$/.test(event.scheduled_date) && event.scheduled_date >= cutoff)
+      .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date))[0] : undefined;
+  const band = priceBandPercent(metadata?.circuitLimit);
+  const fno = Boolean(metadata?.isFno);
+  const bandText = band !== null ? `${band}%` : fno ? 'F&O' : 'NB';
+  const bandTone = band === 20 ? '20' : band === 10 ? '10' : band !== null && band <= 5 ? '5' : 'none';
+  const countdown = next && config.resultDate ? resultsCountdown(next.scheduled_date, cutoff) : '';
+  const bandTitle = [
+    band !== null ? `Price band ${band}%` : fno ? 'F&O stock: no price band' : 'No price band',
+    next ? `Results ${next.scheduled_date}${next.date_conflict ? ' (sources disagree)' : ''}` : '',
+    ...surveillance.map(label => `Surveillance: ${label}`),
+  ].filter(Boolean).join('\n');
+
+  const rows = config.table ? visibleFinancials(history.data, config.period, cutoff) : [];
+  const shown = rows.slice(0, config.count);
+
+  return <>
+    {config.band && metadata && <div className="pb-badge" role="group" tabIndex={0} aria-label={`${symbol} price band`} title={`${bandTitle}\nDrag to move`}
+      style={placed(badgeDrag.live ?? config.badgeOffset, {'--pb-scale': config.badgeScale} as CSSProperties)} {...badgeDrag.handlers}>
+      <span className="pb-band" data-band={bandTone}>
+        <b>{bandText}</b>
+        {countdown && <span className="pb-days">{countdown}</span>}
+      </span>
+      {surveillance.map(label => <span key={label} className="pb-status">{label}</span>)}
     </div>}
-    {!collapsed && <>
-      {metadata && <div className="fundamentals-company">{metadata.name || symbol}{metadata.marketCapCrore > 0 && ` · ₹${format(metadata.marketCapCrore)} Cr`}</div>}
-      {metadata && <dl className="fundamentals-classification">
-        {[['Sector', metadata.sector], ['Industry', metadata.industry], ['Niche', metadata.nicheTags?.join(' · ')]].map(([label, value]) =>
-          <div key={label}><dt>{label}</dt><dd>{value && value !== 'Unclassified' ? value : 'Unavailable'}</dd></div>)}
-      </dl>}
-      <div className="fundamentals-scroll" tabIndex={0} aria-label="Scrollable financial results">
-        {shown.length ? <table>
-          <caption>{config.period === 'quarterly' ? 'Quarterly' : 'Annual'} · {history.data?.report_type?.toLowerCase()} · ₹ Cr except EPS and %</caption>
-          {compact ? <>
-            <thead><tr>{['Period', profit, 'YoY %', ...(config.period === 'quarterly' ? ['QoQ %'] : []), 'Sales Cr', 'YoY %', ...(config.period === 'quarterly' ? ['QoQ %'] : []), 'OPM %'].map((label, i) => <th key={i} scope="col">{label}</th>)}</tr></thead>
-            <tbody>{shown.map(row => {
-              const previousYear = comparisonPeriod(rows, row, 12), previousQuarter = comparisonPeriod(rows, row, 3);
-              const values = [financialNumber(row[config.profit]), growth(row[config.profit], previousYear?.[config.profit]),
-                ...(config.period === 'quarterly' ? [growth(row[config.profit], previousQuarter?.[config.profit])] : []),
-                financialNumber(row.sales), growth(row.sales, previousYear?.sales), ...(config.period === 'quarterly' ? [growth(row.sales, previousQuarter?.sales)] : []), financialNumber(row.opm)];
-              return <tr key={row.period_end}><th scope="row">{periodLabel(row.period_end)}</th>{values.map((value, i) => {
-                const isGrowth = i === 1 || (config.period === 'quarterly' ? i === 2 || i === 4 || i === 5 : i === 3);
-                return <td key={i} data-tone={isGrowth && value !== null ? value > 0 ? 'up' : value < 0 ? 'down' : undefined : undefined}>{format(value)}</td>;
-              })}</tr>;
-            })}</tbody>
-          </> : <>
-            <thead><tr><th scope="col">Metric</th>{shown.map(row => <th scope="col" key={row.period_end}>{periodLabel(row.period_end)}</th>)}</tr></thead>
-            <tbody>{metrics.filter(([key]) => config.layout === 'results' || ['sales', 'expenses', 'operating_profit', 'opm', 'profit_before_tax', 'net_profit', 'eps'].includes(key)).map(([key, label]) => <tr key={key}><th scope="row">{label}</th>{shown.map(row => <td key={row.period_end}>{format(row[key])}</td>)}</tr>)}</tbody>
-          </>}
-        </table> : <p role="status">{history.isPending ? 'Loading financial results…' : history.isError ? 'Financial history unavailable for this snapshot.' : `No financial results observed by ${cutoff}.`}</p>}
-      </div>
-      <footer>{rows.length > 0 ? `${history.data?.source} · observed ${history.data?.observed_on}` : `As of ${cutoff}`}<span>— unavailable</span></footer>
-      {config.guides && <p className="fundamentals-guide-note">{metadata && priceBandGuides(metadata.circuitLimit, 1, metadata.isFno).length ? 'Dashed levels: next-session estimates from close × band. Exchange limits may differ.' : 'Band guides unavailable for this date or security.'}</p>}
-    </>}
-  </section>;
+    {config.table && <section className={`pb-card${config.layout === 'compact' ? '' : ' is-results'}`} tabIndex={0} aria-label={`${symbol} results`} title="Drag to move"
+      style={placed(cardDrag.live ?? config.offset, {'--pb-scale': config.tableScale} as CSSProperties)} {...cardDrag.handlers}>
+      {shown.length ? (config.layout === 'compact'
+        ? <CompactTable rows={rows} shown={shown} config={config} metadata={metadata} />
+        : <ResultsTable shown={shown} config={config} metadata={metadata} />)
+        : <p className="pb-empty" role="status">{history.isPending ? 'Loading results…' : history.isError ? 'Results unavailable for this snapshot.' : `No results published by ${cutoff}.`}</p>}
+    </section>}
+  </>;
+}
+
+function Meta({metadata, children}: {metadata?: ChartMetrics; children?: ReactNode}) {
+  const cap = metadata?.marketCapCrore;
+  const float = metadata?.freeFloatPct;
+  // Listing dates arrive as "06-OCT-2008" or ISO; only the year is shown.
+  const listed = metadata?.listingDate?.match(/\b(?:19|20)\d{2}\b/)?.[0] ?? '';
+  const parts = [
+    cap && cap > 0 ? `MCAP ${crore.format(cap)} CR` : '',
+    cap && cap > 0 && typeof float === 'number' && float > 0 && float <= 100 ? `FF ${crore.format(cap * float / 100)} CR` : '',
+    listed ? `LISTED ${listed}` : '',
+  ].filter(Boolean);
+  if (!parts.length && !children) return null;
+  return <div className="pb-meta">{parts.join(' | ')}{children}</div>;
+}
+
+function ChangeCell({value}: {value: number | null}) {
+  const rounded = change(value);
+  if (rounded === null) return <td className="pb-change" data-trend="flat">—</td>;
+  return <td className="pb-change" data-trend={rounded > 0 ? 'up' : rounded < 0 ? 'down' : 'flat'}>{rounded > 0 ? `+${rounded}` : rounded}%</td>;
+}
+
+function CompactTable({rows, shown, config, metadata}: {rows: FinancialPeriod[]; shown: FinancialPeriod[]; config: Required<FundamentalsConfig>; metadata?: ChartMetrics}) {
+  const quarterly = config.period === 'quarterly';
+  const profit = config.profit;
+  const summary = [metadata?.sector, metadata?.industry].filter(value => value && value !== 'Unclassified').join(' | ');
+  const value = (row: FinancialPeriod, key: string, digits = false) => {
+    const n = financialNumber(row[key]);
+    return n === null ? '—' : digits ? decimal.format(n) : crore.format(n);
+  };
+  return <>
+    <Meta metadata={metadata} />
+    {summary && <div className="pb-summary">{summary}</div>}
+    <table className="pb-table">
+      <thead><tr>
+        <th scope="col">{quarterly ? 'FQ' : 'FY'}</th>
+        <th scope="col">{profit === 'eps' ? 'EPS' : 'PAT'}</th><th scope="col">YoY</th>{quarterly && <th scope="col">QoQ</th>}
+        <th scope="col">Sales</th><th scope="col">YoY</th>{quarterly && <th scope="col">QoQ</th>}
+      </tr></thead>
+      <tbody>{shown.map(row => {
+        const year = comparisonPeriod(rows, row, 12), quarter = comparisonPeriod(rows, row, 3);
+        return <tr key={row.period_end}>
+          <th scope="row">{periodLabel(row.period_end)}</th>
+          <td>{value(row, profit, profit === 'eps')}</td>
+          <ChangeCell value={growth(row[profit], year?.[profit])} />
+          {quarterly && <ChangeCell value={growth(row[profit], quarter?.[profit])} />}
+          <td>{value(row, 'sales')}</td>
+          <ChangeCell value={growth(row.sales, year?.sales)} />
+          {quarterly && <ChangeCell value={growth(row.sales, quarter?.sales)} />}
+        </tr>;
+      })}</tbody>
+    </table>
+  </>;
+}
+
+/** Screener-style results grid, oldest period first; a value beyond every earlier one is highlighted. */
+function ResultsTable({shown, config, metadata}: {shown: FinancialPeriod[]; config: Required<FundamentalsConfig>; metadata?: ChartMetrics}) {
+  const periods = [...shown].reverse();
+  const keys = RESULT_ROWS.filter(([key]) => (config.layout === 'results' || ESSENTIAL.has(key)) && periods.some(row => financialNumber(row[key]) !== null));
+  return <>
+    <Meta metadata={metadata} />
+    <table className="pb-results">
+      <thead><tr><th scope="col" /> {periods.map(row => <th scope="col" key={row.period_end}>{periodLabel(row.period_end)}</th>)}</tr></thead>
+      <tbody>{keys.map(([key, label]) => {
+        const values = periods.map(row => financialNumber(row[key]));
+        return <tr key={key}><th scope="row">{label}</th>{values.map((current, index) => {
+          const earlier = values.slice(0, index).filter((n): n is number => n !== null);
+          let tone: 'up' | 'down' | undefined;
+          if (current !== null && earlier.length) {
+            const higher = current > Math.max(...earlier), lower = current < Math.min(...earlier);
+            tone = LOWER_IS_BETTER.has(key) ? lower ? 'up' : higher ? 'down' : undefined : higher ? 'up' : lower ? 'down' : undefined;
+          }
+          const text = current === null ? '—' : key === 'eps' || key === 'opm' ? decimal.format(current) : crore.format(current);
+          return <td key={periods[index].period_end} data-breakout={tone}>{text}{key === 'opm' && current !== null ? '%' : ''}</td>;
+        })}</tr>;
+      })}</tbody>
+    </table>
+  </>;
 }
 
 export function FundamentalsSettingsDialog({config: raw, onApply, onClose}: {config?: FundamentalsConfig; onApply: (next: FundamentalsConfig) => void; onClose: () => void}) {
   const [config, setConfig] = useState(() => fundamentalsConfig(raw));
-  return <ChartDialog title="Earnings & Price Bands settings" onClose={onClose}>
-    <form className="fundamentals-settings" onSubmit={event => {event.preventDefault(); onApply(config); onClose();}}>
-      <p>Financial results follow the snapshot and replay date. Amounts are in ₹ crore; EPS is ₹ per share.</p>
-      <label>Layout<select value={config.layout} onChange={event => setConfig({...config, layout: event.target.value as typeof config.layout})}><option value="compact">Compact growth table</option><option value="essential">Essential results</option><option value="results">Full results</option></select></label>
-      <label>Period<select value={config.period} onChange={event => setConfig({...config, period: event.target.value as typeof config.period})}><option value="quarterly">Quarterly</option><option value="annual">Annual</option></select></label>
-      <label>Profit metric<select value={config.profit} onChange={event => setConfig({...config, profit: event.target.value as typeof config.profit})}><option value="eps">EPS</option><option value="net_profit">Net profit (PAT)</option></select></label>
-      <label>Periods<input type="number" min="3" max="13" value={config.count} onChange={event => setConfig({...config, count: Number(event.target.value)})}/></label>
-      <label>Position<select value={config.offset ? 'custom' : config.position} onChange={event => setConfig({...config, position: event.target.value as typeof config.position, offset: null})}>{config.offset && <option value="custom" disabled>Custom (dragged)</option>}<option value="top-right">Top right</option><option value="bottom-right">Bottom right</option><option value="bottom-left">Bottom left</option></select></label>
-      <label>Text size<input type="number" min="10" max="15" value={config.fontSize} onChange={event => setConfig({...config, fontSize: Number(event.target.value)})}/></label>
-      <label><span>Price band, surveillance and results date</span><input type="checkbox" checked={config.band} onChange={event => setConfig({...config, band: event.target.checked})}/></label>
-      <label><span>Earnings filing markers</span><input type="checkbox" checked={config.earningsMarkers} onChange={event => setConfig({...config, earningsMarkers: event.target.checked})}/></label>
-      <label><span>Estimated next-session band guides</span><input type="checkbox" checked={config.guides} onChange={event => setConfig({...config, guides: event.target.checked})}/></label>
-      <p>Guides use close × band before exchange rounding. They are hidden during historical replay and for F&O securities.</p>
-      <footer><Button variant="ghost" onClick={() => setConfig(fundamentalsConfig({enabled: config.enabled}))}>Reset</Button><Button variant="primary" type="submit">Apply</Button></footer>
+  const set = (change: Partial<FundamentalsConfig>) => setConfig(current => ({...current, ...change}));
+  const check = (key: 'band' | 'resultDate' | 'table' | 'guides' | 'earningsMarkers', label: string, disabled = false) =>
+    <label className="pb-setting-check"><input type="checkbox" checked={config[key]} disabled={disabled} onChange={event => set({[key]: event.target.checked})} /><span>{label}</span></label>;
+  return <ChartDialog title="Price Band & Results" onClose={onClose} className="pb-settings-dialog">
+    <form className="pb-settings" onSubmit={event => { event.preventDefault(); onApply(config); onClose(); }}>
+      <h4>Price band</h4>
+      {check('band', 'Price band badge (band, ASM/GSM)')}
+      {check('resultDate', 'Results countdown in the badge', !config.band)}
+      {check('guides', 'Upper and lower circuit lines (UC / LC)')}
+      {check('earningsMarkers', 'Earnings filing markers on candles')}
+      <label className="pb-setting-row">Badge size
+        <input type="range" min={0.8} max={1.5} step={0.05} value={config.badgeScale} disabled={!config.band} onChange={event => set({badgeScale: Number(event.target.value)})} />
+        <output>{Math.round(config.badgeScale * 100)}%</output></label>
+      <h4>Results table</h4>
+      {check('table', 'Show results table')}
+      <label className="pb-setting-row">Layout
+        <select value={config.layout} disabled={!config.table} onChange={event => set({layout: event.target.value as typeof config.layout})}>
+          <option value="compact">Compact (EPS / Sales growth)</option><option value="essential">Essential results</option><option value="results">Full results</option>
+        </select></label>
+      <label className="pb-setting-row">Period
+        <select value={config.period} disabled={!config.table} onChange={event => set({period: event.target.value as typeof config.period})}>
+          <option value="quarterly">Quarterly</option><option value="annual">Annual</option>
+        </select></label>
+      <label className="pb-setting-row">Profit
+        <select value={config.profit} disabled={!config.table || config.layout !== 'compact'} onChange={event => set({profit: event.target.value as typeof config.profit})}>
+          <option value="eps">EPS</option><option value="net_profit">Net profit (PAT)</option>
+        </select></label>
+      <label className="pb-setting-row">Periods
+        <input type="number" min={3} max={13} value={config.count} disabled={!config.table} onChange={event => set({count: Number(event.target.value)})} /></label>
+      <label className="pb-setting-row">Table size
+        <input type="range" min={0.8} max={1.5} step={0.05} value={config.tableScale} disabled={!config.table} onChange={event => set({tableScale: Number(event.target.value)})} />
+        <output>{Math.round(config.tableScale * 100)}%</output></label>
+      <p className="pb-settings-note">Drag the badge or the table to move them; arrow keys nudge a focused one. UC/LC are the latest close × band, before exchange rounding, and are hidden in replay and for F&O stocks.</p>
+      <footer>
+        <Button variant="ghost" onClick={() => setConfig(fundamentalsConfig({enabled: config.enabled}))}>Reset</Button>
+        <div className="flex gap-2"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" type="submit">Apply</Button></div>
+      </footer>
     </form>
   </ChartDialog>;
 }

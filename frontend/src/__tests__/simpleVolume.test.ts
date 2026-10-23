@@ -51,3 +51,8 @@ it('computes the up/down volume ratio over the lookback', () => {
   const candles = [bar(0, 10, 100), bar(1, 11, 300, 10), bar(2, 10, 100, 11)];
   expect(computeSimpleVolume(candles, {udLength: 2}).upDown[2]).toBe(3);
 });
+
+it('keeps defaults for options passed as undefined', () => {
+  const candles = Array.from({length: 60}, (_, index) => bar(index, 10, 100));
+  expect(computeSimpleVolume(candles, {maLength: undefined, ppvLength: undefined}).average[59]).toBe(100);
+});

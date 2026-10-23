@@ -161,7 +161,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const replay=useSyncExternalStore(clock.subscribe,clock.getSnapshot,clock.getSnapshot);
   const updateBandGuides = (chart: ChartEngine) => {
     const config = studyConfigsChoice.current.fundamentals;
-    chart.setPriceBandGuides?.(config?.enabled && config.guides && !hiddenStudiesChoice.current.fundamentals && clock.getSnapshot().index === null
+    chart.setPriceBandGuides?.(config?.enabled && config.guides !== false && !hiddenStudiesChoice.current.fundamentals && clock.getSnapshot().index === null
       ? priceBandGuides(metrics?.circuitLimit, candles[candles.length - 1].close, metrics?.isFno) : []);
   };
   const markCustomRange=()=>{
@@ -333,11 +333,11 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           onCloseMenu={() => setDrawingsOpen(false)}
         />
         <DrawingContextToolbar book={activeBook} />
-      {studyConfigs.fundamentals?.enabled && !allHidden && <FundamentalsIndicator
+      {studyConfigs.fundamentals?.enabled && !allHidden && !hiddenStudies.fundamentals && <FundamentalsIndicator
         symbol={symbol} revision={revision} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}
         metrics={metrics} config={studyConfigs.fundamentals}
-        onMove={offset => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: {...studyConfigsChoice.current.fundamentals!, offset}})} onSettings={() => setActiveIndicatorSetting('fundamentals')}
-        onRemove={() => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: {...studyConfigsChoice.current.fundamentals, enabled: false}})}/>}
+        onMoveBadge={badgeOffset => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: {...studyConfigsChoice.current.fundamentals!, badgeOffset}})}
+        onMove={offset => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: {...studyConfigsChoice.current.fundamentals!, offset}})}/>}
       <div className="chart-overlay-legend">
         <ChartLegend symbol={symbol} bar={currentBar} previous={previousByDate.get(currentBar.date)} quoteRef={quote}
           status={{logo:appearance.statusLogo!==false,title:appearance.statusTitle!==false,titleMode:appearance.statusTitleMode??'symbol',
@@ -361,6 +361,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           hiddenStudies={hiddenStudies}
           onToggleStudyVisibility={toggleStudyVisibility}
           onUpdateExtras={applyExtras}
+          onUpdateFundamentals={next => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: next})}
           collapsed={Boolean(appearance.legendCollapsed)}
           onToggleCollapsed={() => applyAppearance({legendCollapsed: !appearanceChoice.current.legendCollapsed})}
           allHidden={allHidden}

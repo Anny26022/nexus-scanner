@@ -385,7 +385,8 @@ export class ChartEngine {
     for (const line of this.bandGuideLines) this.price.removePriceLine(line);
     this.bandGuideValues = values;
     this.bandGuideLines = values.filter(value => Number.isFinite(value) && value > 0).map((price, index) => this.price.createPriceLine({
-      price, title: index === 0 ? 'Upper est.' : 'Lower est.', color: '#8b8b94', lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true,
+      // Next-session upper (UC) and lower (LC) circuit, blue and red as in the reference indicator.
+      price, title: index === 0 ? 'UC' : 'LC', color: index === 0 ? '#2962ff' : '#f23645', lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: true,
     }));
   }
   /** High and low of the visible bars, drawn as labelled price lines. */

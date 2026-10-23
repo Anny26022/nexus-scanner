@@ -36,7 +36,8 @@ import { IntervalPrompt } from './IntervalPrompt';
 import { useMountEffect } from '../hooks/useMountEffect';
 import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../chart/extraStudies';
 import { WatchlistDock } from './WatchlistDock';
-import { Download, ExternalLink, FileText, Upload } from 'lucide-react';
+import { Download, Upload } from 'lucide-react';
+import { ChartEventItem } from './ChartEventItem';
 import { Button } from './Button';
 
 const ranges=[[1,'1mo'],[3,'3mo'],[6,'6mo'],[12,'1y'],[24,'2y'],[null,'All']] as const;
@@ -179,6 +180,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   const applyExtras = (next: ExtraStudies) => applyStudyConfigs({...studyConfigsChoice.current, extras: next});
   const applyComparison=(next:typeof comparison)=>{setComparison(next);persist({comparison:next});if(!next) onComparison('',[],false);};
   const [eventDetails,setEventDetails]=useState<readonly ChartEvent[]|null>(null);
+  const [eventHover,setEventHover]=useState<{events:readonly ChartEvent[];x:number;bottom:number}|null>(null);
   const [clock]=useState(()=>new ReplayClock(candles.length));
   const replay=useSyncExternalStore(clock.subscribe,clock.getSnapshot,clock.getSnapshot);
   // Upcoming results "E" label: the schedule query is shared with the indicator's badge.
@@ -241,6 +243,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           updateLiveIndicatorDom(overlayRef.current, snap, studyConfigsChoice.current);
         }
       },activeBook,setEventDetails);
+      chart.onEventHover?.(setEventHover);
       chart.setOnPanesChange?.(() => {
         setPaneOffsets(chart.getPaneOffsets?.() ?? []);
       });
@@ -375,6 +378,10 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         onPointerUp={syncAutoScale} onWheel={() => requestAnimationFrame(syncAutoScale)} onKeyUp={() => requestAnimationFrame(syncAutoScale)}
         onDoubleClick={() => requestAnimationFrame(syncAutoScale)}>
         <p className="sr-only" aria-live="polite" id={`chart-announce-${tileId}`}>{announcement}</p>
+        {eventHover && <div className="chart-event-hover" role="tooltip" style={{left:`clamp(156px, ${eventHover.x}px, calc(100% - 156px))`,bottom:eventHover.bottom}}>
+          {eventHover.events.slice(0,3).map(event=><ChartEventItem key={event.id} event={event} styles={appearance.eventStyles}/>)}
+          {eventHover.events.length>3 && <p className="chart-event-more">+{eventHover.events.length-3} more · click to see all</p>}
+        </div>}
         {awayFromLatest && paneOffsets[0] && <button type="button" className="chart-jump-latest" aria-label="Scroll to the latest bar" title="Scroll to the latest bar"
           style={{top: paneOffsets[0].top + paneOffsets[0].height - 30}} onClick={() => engine.current?.latest()}>»</button>}
         {paneOffsets[0] && <div className="chart-scale-buttons" style={{top: paneOffsets[0].top + paneOffsets[0].height - 28}}>
@@ -536,7 +543,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       if(nextStyle!==style) {setStyle(nextStyle);styleChoice.current=nextStyle;engine.current?.setStyle(nextStyle);persist({style:nextStyle});}
       applyComparison(nextComparison);
     }} onGoToDate={date=>{const moved=engine.current?.goToDate(date)??false;if(moved) markCustomRange();return moved;}} onEvents={()=>setEventDetails(events.filter(event=>event.date<=revealedThrough(candles,replay.index,lastDate)))}/>}
-    {eventDetails && <ChartDialog title="Published events" onClose={()=>setEventDetails(null)}><div className="chart-event-list">{eventDetails.length?eventDetails.map(event=><article key={event.id}><small>{event.date} · {event.kind==='action'?'Corporate action':event.kind==='earnings'?'Earnings filing':'News'}</small><p>{event.title}</p>{event.detail&&<p className="chart-event-detail">{event.detail}</p>}{(event.source||event.url)&&<footer>{event.source&&<span>{event.source}</span>}{event.url&&<a href={event.url} target="_blank" rel="noopener noreferrer"><FileText size={12} aria-hidden="true"/> Document <ExternalLink size={11} aria-hidden="true"/></a>}</footer>}</article>):<p>No published events in this history.</p>}</div></ChartDialog>}
+    {eventDetails && <ChartDialog title="Published events" onClose={()=>setEventDetails(null)}><div className="chart-event-list">{eventDetails.length?eventDetails.map(event=><ChartEventItem key={event.id} event={event} styles={appearance.eventStyles}/>):<p>No published events in this history.</p>}</div></ChartDialog>}
     <p id={`chart-keyboard-help-${tileId}`} className="sr-only">Two clicks or drag to draw. Select to move; drag handles to reshape. Delete removes. Ctrl or Command Z undoes. Escape cancels. Scroll or pinch zooms. Drag the right price scale to stretch or compress prices; double-click it to restore automatic scaling. Drag pane separators to resize. Alt Enter maximizes or restores the chart. While selecting a replay bar, use Left and Right then Enter, or click a bar. During replay, Space plays or pauses and Left or Right steps one bar.</p>
   </>;
 }

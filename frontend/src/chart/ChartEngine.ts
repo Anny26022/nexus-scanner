@@ -492,14 +492,34 @@ export class ChartEngine {
     });
     context.restore();
   }
-  private eventStripHit(x:number,y:number) {
+  private eventStripAt(x:number,y:number) {
     const height=this.eventPane?.getHeight?.()??0;
     if(!height||Math.abs(y-(height-11))>9) return null;
     for(const group of this.eventStrip) for(let i=0;i<group.badges.length;i++) {
       const at=this.eventStripX(group.index,i,group.badges.length);
-      if(at!==null&&Math.abs(x-at)<=8) return {externalId:group.key,zOrder:'top' as const,cursorStyle:'pointer'};
+      if(at!==null&&Math.abs(x-at)<=8) return {key:group.key,x:at};
     }
     return null;
+  }
+  private eventStripHit(x:number,y:number) {
+    const hit=this.eventStripAt(x,y);
+    return hit&&{externalId:hit.key,zOrder:'top' as const,cursorStyle:'pointer'};
+  }
+  private hoveredEvent:string|null=null;
+  private eventHover:(hover:{events:readonly ChartEvent[];x:number;bottom:number}|null)=>void=()=>{};
+  /** Reports the badge under the pointer: its centre x and the distance from the host's bottom to the badge's top. */
+  onEventHover(callback:typeof this.eventHover) {this.eventHover=callback;}
+  private syncEventHover(event:MouseEventParams<Time>) {
+    const lowest=(this.chart.panes?.().length??1)-1;
+    const hit=event.point&&(event.paneIndex??0)===lowest?this.eventStripAt(event.point.x,event.point.y):null;
+    const styles=this.currentAppearance?.eventStyles;
+    const events=hit?this.markerEvents.get(hit.key)?.filter(item=>styles?.[eventBadgeKey(item)]?.visible!==false):undefined;
+    const key=events?.length?hit!.key:null;
+    if(key===this.hoveredEvent) return;
+    this.hoveredEvent=key;
+    if(!key||!events||!hit) {this.eventHover(null);return;}
+    const left=this.chart.priceScale('left').width?.()??0;
+    this.eventHover({events,x:hit.x+left,bottom:(this.chart.timeScale().height?.()??0)+11+9});
   }
   /** Bull Snorts below the candle, in the volume settings' shape and colour. */
   private drawSnorts(context:CanvasRenderingContext2D) {
@@ -1371,6 +1391,7 @@ export class ChartEngine {
     const time=data?.time;
     const date=time===undefined?undefined:this.dateString(time);
     const bar=date?this.byDate.get(date):this.candles.at(-1);if(bar) this.inspect(bar);
+    this.syncEventHover(event);
   };
   private dateString(time:Time) {return typeof time==='string'?time:typeof time==='number'?new Date(time*1000).toISOString().slice(0,10):`${time.year}-${String(time.month).padStart(2,'0')}-${String(time.day).padStart(2,'0')}`;}
   private click=(event:MouseEventParams<Time>)=>{
@@ -1381,7 +1402,7 @@ export class ChartEngine {
       const hit=typeof event.hoveredObjectId==='string'?event.hoveredObjectId
         :event.point&&(event as {paneIndex?:number}).paneIndex===lowest?this.eventStripHit(event.point.x,event.point.y)?.externalId:undefined;
       const events=hit?this.markerEvents.get(hit):undefined;
-      if(events) this.inspectEvents(events);
+      if(events) {this.hoveredEvent=null;this.eventHover(null);this.inspectEvents(events);}
     }
   };
   setReplayPicker(pick:((index:number)=>void)|null,cancel:()=>void=()=>{}) {

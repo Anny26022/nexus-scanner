@@ -374,8 +374,9 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         onMove={offset => applyStudyConfigs({...studyConfigsChoice.current, fundamentals: {...studyConfigsChoice.current.fundamentals!, offset}})}/>}
       <div className="chart-overlay-legend">
         <ChartLegend symbol={symbol} bar={currentBar} previous={previousByDate.get(currentBar.date)} quoteRef={quote}
-          status={{logo:appearance.statusLogo!==false,title:appearance.statusTitle!==false,titleMode:appearance.statusTitleMode??'symbol',
-            marketStatus:appearance.statusMarketStatus!==false,ohlc:appearance.statusOhlc!==false,change:appearance.statusBarChange!==false,
+          // The toolbar already names the symbol, so the status line's own title is opt-in.
+          status={{logo:appearance.statusLogo===true,title:appearance.statusTitle===true,titleMode:appearance.statusTitleMode??'symbol',
+            marketStatus:appearance.statusMarketStatus===true,ohlc:appearance.statusOhlc!==false,change:appearance.statusBarChange!==false,
             volume:appearance.statusVolume!==false,interval:interval==='D'?'1D':interval==='W'?'1W':'1M',name:metrics?.name,
             background:appearance.statusBackground?{color:appearance.statusBackgroundColor,opacity:appearance.statusBackgroundOpacity??.8}:undefined}}
           metrics={replay.index===null&&!selecting?metrics:undefined} sessionDate={replay.index===null&&!selecting?sessionDate:undefined}/>

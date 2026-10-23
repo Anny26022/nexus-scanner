@@ -55,7 +55,6 @@ export function ChartLegend({symbol,bar,previous,metrics,sessionDate,quoteRef,st
       {status.ohlc&&(['open','high','low','close'] as const).map((key,index)=><span className="chart-quote-price" key={key}><span>{['O','H','L','C'][index]}</span><b data-quote={key}>{values[key]}</b></span>)}
       {status.change&&<b className="chart-quote-change" data-quote="change" data-tone={values.tone}>{values.change}</b>}
       {status.volume&&<span className="chart-quote-volume"><span>Vol</span><span data-quote="volume">{values.volume}</span></span>}
-      <span className="chart-quote-date" data-quote="date">{values.date}</span>
     </output>
     {hasMetrics && <div className="chart-symbol-strip" role="group" tabIndex={0} aria-label={`${symbol} snapshot metrics`} title={sessionDate?`Published snapshot: ${sessionDate}. Metrics are not historical.`:undefined}>
       {validCap && <span className="chart-pill-metric"><span className="chart-metric-label">MCap</span><b>₹{metric.format(cap)} Cr</b></span>}

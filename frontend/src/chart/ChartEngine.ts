@@ -87,7 +87,19 @@ export type ChartAppearance = {
   scaleFontSize?:number;
   /** Last-value label on the price scale. */
   lastValueLabel?:boolean;
+  /** Dotted line and axis label at the previous bar's close (opt-in, like the other price guides). */
+  prevCloseLine?:boolean;
 };
+const WEEKDAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+/** Crosshair time label as TradingView writes it: "Fri 09 Aug '24". */
+export function crosshairDate(date:string) {
+  const parsed=new Date(`${date}T00:00:00Z`);
+  if(Number.isNaN(parsed.getTime())) return date;
+  return `${WEEKDAYS[parsed.getUTCDay()]} ${String(parsed.getUTCDate()).padStart(2,'0')} ${MONTHS[parsed.getUTCMonth()]} '${String(parsed.getUTCFullYear()).slice(2)}`;
+}
+/** Drawings copied with Ctrl/⌘+C, shared by every chart on the page. */
+let drawingClipboard:import('./drawings').Drawing|null=null;
 const scaleModes = {normal:PriceScaleMode.Normal,logarithmic:PriceScaleMode.Logarithmic,percentage:PriceScaleMode.Percentage,indexed:PriceScaleMode.IndexedTo100};
 const withAlpha = (hex:string,opacity:number) => {
   const alpha=hex.length===9?parseInt(hex.slice(7),16)/255:1;
@@ -165,7 +177,7 @@ export class ChartEngine {
       rightPriceScale:{borderVisible:false,scaleMargins:{top:.13,bottom:.22}},
       timeScale:{borderVisible:false,rightOffset:RIGHT_EDGE_BARS,rightOffsetPixels:RIGHT_EDGE_PIXELS,barSpacing:8,fixLeftEdge:false,lockVisibleTimeRangeOnResize:true,shiftVisibleRangeOnNewBar:true},
       crosshair:{mode:CrosshairMode.Normal},
-      localization:{locale:'en-IN'},
+      localization:{locale:'en-IN',timeFormatter:(time:Time)=>crosshairDate(this.dateString(time))},
       // TradingView stops a mouse drag where you release it; touch keeps its momentum.
       kineticScroll:{mouse:false,touch:true},
       handleScroll:SCROLL_WITHOUT_WHEEL,
@@ -183,6 +195,7 @@ export class ChartEngine {
         this.drawUpcomingEarnings(context,projection.bottom);
         this.drawBandChanges(context);
         this.drawHoverPoint(context);
+        this.drawMeasure(context);
         if (this.replayPicker) {
           const x=this.chart.timeScale().logicalToCoordinate(this.replayIndex as Logical);
           if(x===null) return;
@@ -413,10 +426,17 @@ export class ChartEngine {
     const hollow=this.style==='hollowCandles'&&bar.close>bar.open;
     return {...ohlc,color:a.bodyVisible===false||hollow?'transparent':body,borderColor:border,wickColor:wick};
   }
-  private setPriceData() {this.price.setData(this.candles.map((bar,index)=>this.priceData(bar,index)));this.updateHighLowLines();}
+  private setPriceData() {this.price.setData(this.candles.map((bar,index)=>this.priceData(bar,index)));this.updateHighLowLines();this.updatePrevCloseLine();}
   private highLowLines:{series:ISeriesApi<'Candlestick'|'Bar'|'Line'|'Area'|'Baseline'>;lines:IPriceLine[]}|null=null;
   private highLowFrame=0;
+  private upcomingEarnings:{date:string;line:boolean}|null=null;
   private crosshairLogical:number|null=null;
+  private measure:{from:{logical:number;price:number};to:{logical:number;price:number}}|null=null;
+  private measurePointer:number|null=null;
+  private dragStart:{y:number;auto:boolean}|null=null;
+  private prevCloseLine:{series:ISeriesApi<'Candlestick'|'Bar'|'Line'|'Area'|'Baseline'>;line:IPriceLine}|null=null;
+  /** Called with a short spoken summary after keyboard navigation (for an aria-live region). */
+  announce:(text:string)=>void=()=>{};
   private drawHoverPoint(context:CanvasRenderingContext2D) {
     if(this.crosshairLogical===null||this.currentAppearance?.crosshair===false||this.replayPicker) return;
     const bar=this.candles[this.crosshairLogical];
@@ -426,7 +446,69 @@ export class ChartEngine {
     context.save();context.fillStyle='#2962ff';
     context.beginPath();context.arc(x,y,3,0,Math.PI*2);context.fill();context.restore();
   }
-  private upcomingEarnings:{date:string;line:boolean}|null=null;
+  /** Previous bar's close as a dashed line with an axis label. */
+  private updatePrevCloseLine() {
+    if(this.prevCloseLine) {
+      if(this.prevCloseLine.series===this.price) this.price.removePriceLine(this.prevCloseLine.line);
+      this.prevCloseLine=null;
+    }
+    const previous=this.candles.at(-2);
+    if(this.currentAppearance?.prevCloseLine!==true||!previous) return;
+    const muted=getComputedStyle(this.host).getPropertyValue('--muted').trim()||'#86868b';
+    this.prevCloseLine={series:this.price,line:this.price.createPriceLine({price:previous.close,color:muted,lineWidth:1,lineStyle:LineStyle.Dotted,axisLabelVisible:true,title:''})};
+  }
+  /** Shift + drag: price change, %, bars and days between two points, like TradingView's quick measure. */
+  private drawMeasure(context:CanvasRenderingContext2D) {
+    const m=this.measure;
+    if(!m) return;
+    const scale=this.chart.timeScale(),series=this.activeSeries();
+    const x1=scale.logicalToCoordinate(m.from.logical as Logical),x2=scale.logicalToCoordinate(m.to.logical as Logical);
+    const y1=series.priceToCoordinate(m.from.price),y2=series.priceToCoordinate(m.to.price);
+    if(x1===null||x2===null||y1===null||y2===null) return;
+    const up=m.to.price>=m.from.price,color=up?'#2962ff':'#f23645';
+    const change=m.to.price-m.from.price,percent=m.from.price?change/Math.abs(m.from.price)*100:0;
+    const bars=Math.round(m.to.logical-m.from.logical);
+    const day=(logical:number)=>{const index=Math.round(logical),candle=this.candles[Math.max(0,Math.min(this.candles.length-1,index))];
+      return candle?Date.parse(candle.date)+(index-Math.max(0,Math.min(this.candles.length-1,index)))*86_400_000:0;};
+    const days=Math.round((day(m.to.logical)-day(m.from.logical))/86_400_000);
+    context.save();
+    context.fillStyle=up?'rgba(41,98,255,.12)':'rgba(242,54,69,.12)';
+    context.fillRect(Math.min(x1,x2),Math.min(y1,y2),Math.abs(x2-x1),Math.abs(y2-y1));
+    context.strokeStyle=color;context.lineWidth=1;
+    const midX=(x1+x2)/2,midY=(y1+y2)/2;
+    const arrow=(fromX:number,fromY:number,toX:number,toY:number)=>{
+      context.beginPath();context.moveTo(fromX,fromY);context.lineTo(toX,toY);context.stroke();
+      const angle=Math.atan2(toY-fromY,toX-fromX);
+      context.beginPath();context.moveTo(toX,toY);context.lineTo(toX-6*Math.cos(angle-.5),toY-6*Math.sin(angle-.5));
+      context.moveTo(toX,toY);context.lineTo(toX-6*Math.cos(angle+.5),toY-6*Math.sin(angle+.5));context.stroke();
+    };
+    if(Math.abs(y2-y1)>8) arrow(midX,y1,midX,y2);
+    if(Math.abs(x2-x1)>8) arrow(x1,midY,x2,midY);
+    const lines=[`${change>=0?'':'−'}${Math.abs(change).toFixed(2)} (${percent>=0?'':'−'}${Math.abs(percent).toFixed(2)}%)`,`${bars} bars, ${days}d`];
+    context.font='12px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif';
+    const width=Math.max(...lines.map(line=>context.measureText(line).width))+16,height=38;
+    const boxX=midX-width/2,boxY=up?Math.min(y1,y2)-height-6:Math.max(y1,y2)+6;
+    context.fillStyle=color;context.beginPath();context.roundRect(boxX,boxY,width,height,4);context.fill();
+    context.fillStyle='#ffffff';context.textAlign='center';context.textBaseline='middle';
+    context.fillText(lines[0],midX,boxY+12);context.fillText(lines[1],midX,boxY+27);
+    context.restore();
+  }
+  /** Whether the latest bar is on screen (otherwise the chart offers "jump to latest"). */
+  isLatestVisible() {
+    // By position, not index: the time scale's logical indices need not match this.candles.
+    const last=this.candles.at(-1),scale=this.chart.timeScale();
+    if(!last) return true;
+    const x=scale.timeToCoordinate(last.date);
+    return x!==null&&x<=scale.width();
+  }
+  /** Fit every bar on screen. */
+  fitAll() {this.setRange(null);}
+  private describeLatestVisible() {
+    const range=this.chart.timeScale().getVisibleLogicalRange();
+    const index=Math.max(0,Math.min(this.candles.length-1,Math.floor(range?.to??this.candles.length-1)));
+    const bar=this.candles[index];
+    if(bar) this.announce(`${crosshairDate(bar.date)}: open ${bar.open}, high ${bar.high}, low ${bar.low}, close ${bar.close}`);
+  }
   private bandChanges:readonly {date:string;from:string;to:string}[]=[];
   /** Past NSE price-band changes, drawn as labels above the candle on each change date. */
   setBandChanges(changes:readonly {date:string;from:string;to:string}[]) {this.bandChanges=changes;this.invalidate();}
@@ -600,6 +682,7 @@ export class ChartEngine {
       if(perBar&&this.candles.length) this.setPriceData();
     }
     this.updateHighLowLines();
+    this.updatePrevCloseLine();
   }
   private barColorSignature='';
   setAppearance(appearance:ChartAppearance) {
@@ -731,6 +814,7 @@ export class ChartEngine {
     if(appended) {
       const bar=candles.at(-1)!;
       this.price.update(this.priceData(bar,candles.length-1));
+      this.updatePrevCloseLine();
       this.computeVolume(true);
       this.volumeSeries.update(this.volumeData(bar,candles.length-1));
       for(const {series,line} of this.averages.values()) {
@@ -1151,15 +1235,40 @@ export class ChartEngine {
     this.host.focus({preventScroll:true});const point=this.point(event),projection=this.projection();
     if(!projection || point.x>projection.width || point.y>projection.bottom) return;
     if(this.replayPicker) return;
+    // Shift + drag measures; a plain click clears the last measurement.
+    if(event.shiftKey&&this.book.getSnapshot().tool==='select'&&point.y<=this.chart.paneSize(0).height) {
+      const logical=this.chart.timeScale().coordinateToLogical(point.x),price=this.activeSeries().coordinateToPrice(point.y);
+      if(logical!==null&&price!==null) {
+        const at={logical:Math.round(logical),price};
+        this.measure={from:at,to:{...at}};this.measurePointer=event.pointerId;this.blockMouse=true;
+        this.host.setPointerCapture(event.pointerId);event.preventDefault();event.stopPropagation();this.invalidate();
+        return;
+      }
+    }
+    if(this.measure) {this.measure=null;this.invalidate();}
+    this.dragStart={y:event.clientY,auto:this.isAutoScale()};
     if(this.layer.down(point,event.pointerId)) {
       this.drawingPointer=event.pointerId;this.blockMouse=true;this.host.setPointerCapture(event.pointerId);event.preventDefault();event.stopPropagation();
     }
   };
   private move=(event:PointerEvent)=>{
     if(this.replayPicker) return;
+    if(this.measurePointer===event.pointerId&&this.measure) {
+      const point=this.point(event),logical=this.chart.timeScale().coordinateToLogical(point.x),price=this.activeSeries().coordinateToPrice(point.y);
+      if(logical!==null&&price!==null) {this.measure={...this.measure,to:{logical:Math.round(logical),price}};this.invalidate();}
+      event.stopPropagation();return;
+    }
     if(this.layer.move(this.point(event),event.pointerId)) {event.stopPropagation();}
   };
   private up=(event:PointerEvent)=>{
+    if(this.measurePointer===event.pointerId) {
+      this.measurePointer=null;this.blockMouse=false;
+      if(this.host.hasPointerCapture(event.pointerId)) this.host.releasePointerCapture(event.pointerId);
+      return;
+    }
+    // A drag that barely moved vertically should not have switched auto-fit off (3px wobble, as in TradingView).
+    const start=this.dragStart;this.dragStart=null;
+    if(start?.auto&&Math.abs(event.clientY-start.y)<=3&&!this.isAutoScale()) this.setAutoScale(true);
     if(this.drawingPointer!==event.pointerId) return;
     this.layer.up(this.point(event),event.pointerId);this.drawingPointer=null;
     if(this.host.hasPointerCapture(event.pointerId)) this.host.releasePointerCapture(event.pointerId);
@@ -1194,6 +1303,17 @@ export class ChartEngine {
     const scale=this.chart.timeScale(),range=scale.getVisibleLogicalRange(),width=scale.width();
     if(!range||width<=0) return;
     const unit=event.deltaMode===1?16:event.deltaMode===2?width:1;
+    // Over the price axis, the wheel stretches prices around the pointer, as in TradingView.
+    const rect=this.host.getBoundingClientRect(),pointX=event.clientX-rect.left,pointY=event.clientY-rect.top;
+    if(pointX>width&&pointY<this.chart.paneSize(0).height&&!event.shiftKey) {
+      const priceScale=this.chart.priceScale('right'),visible=priceScale.getVisibleRange?.(),anchor=this.activeSeries().coordinateToPrice(pointY);
+      if(!visible||anchor===null||appearance?.zoomEnabled===false) return;
+      event.preventDefault();
+      const factor=Math.exp(event.deltaY*unit*WHEEL_ZOOM_RATE);
+      priceScale.applyOptions({autoScale:false});
+      priceScale.setVisibleRange({from:anchor+(visible.from-anchor)*factor,to:anchor+(visible.to-anchor)*factor});
+      return;
+    }
     const dx=(event.shiftKey&&!event.deltaX?event.deltaY:event.deltaX)*unit,dy=(event.shiftKey?0:event.deltaY)*unit;
     const bars=range.to-range.from;
     if(Math.abs(dx)>Math.abs(dy)) {
@@ -1217,6 +1337,22 @@ export class ChartEngine {
     return !this.replayPicker && this.book.getSnapshot().tool==='select' && this.currentAppearance?.panEnabled!==false
       ? (this.currentAppearance?.mousePan==='horizontal'?{...SCROLL_WITHOUT_WHEEL,vertTouchDrag:false}:SCROLL_WITHOUT_WHEEL) : false;
   }
+  /** Ctrl/⌘ + C copies the selected drawing, V pastes it a few bars later, D duplicates it. */
+  private drawingClipboardKey(event:KeyboardEvent) {
+    if(!(event.ctrlKey||event.metaKey)||event.altKey) return false;
+    const key=event.key.toLowerCase(),state=this.book.getSnapshot(),selected=state.drawings.find(item=>item.id===state.selectedId);
+    if(key==='c'&&selected) {drawingClipboard=selected;event.preventDefault();return true;}
+    if((key==='v'&&drawingClipboard)||(key==='d'&&selected)) {
+      const source=key==='d'?selected!:drawingClipboard!;
+      const gap=this.times.length>1?(this.times.at(-1)!-this.times[0])/(this.times.length-1):86_400_000;
+      const shift=(anchor:{time:number;price:number})=>({...anchor,time:anchor.time+gap*5});
+      this.book.addPoints(source.kind,(source.points??[source.a,source.b]).map(shift));
+      const added=this.book.getSnapshot().selectedId;
+      if(added) this.book.update(added,{color:source.color,width:source.width,dash:source.dash,text:source.text,levels:source.levels});
+      event.preventDefault();return true;
+    }
+    return false;
+  }
   private pickReplay(index:number) {const picker=this.replayPicker;this.setReplayPicker(null);picker?.pick(index);}
   private key=(event:KeyboardEvent)=>{
     if(event.defaultPrevented) return;
@@ -1232,12 +1368,24 @@ export class ChartEngine {
       }
       return;
     }
+    if(event.key==='Escape'&&this.measure) {event.preventDefault();this.measure=null;this.invalidate();return;}
+    if(this.drawingClipboardKey(event)) return;
     if(this.layer.key(event)) return;
-    if(!['Home','+','=','-','ArrowLeft','ArrowRight'].includes(event.key)) return;
+    if(!['Home','+','=','-','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) return;
     event.preventDefault();
+    const command=event.ctrlKey||event.metaKey;
     if(event.key==='Home') this.reset();
-    else if(event.key==='ArrowLeft'||event.key==='ArrowRight') {const scale=this.chart.timeScale(),range=scale.getVisibleLogicalRange();if(range){const delta=(range.to-range.from)*.1*(event.key==='ArrowLeft'?-1:1);scale.setVisibleLogicalRange({from:range.from+delta,to:range.to+delta});}}
+    else if(event.key==='ArrowLeft'||event.key==='ArrowRight') {
+      // Two bars a press, ten with Ctrl/⌘, as in TradingView.
+      const scale=this.chart.timeScale(),range=scale.getVisibleLogicalRange();
+      if(range){const delta=(command?10:2)*(event.key==='ArrowLeft'?-1:1);scale.setVisibleLogicalRange({from:range.from+delta,to:range.to+delta});}
+    }
+    else if(event.key==='ArrowUp'||event.key==='ArrowDown') {
+      const priceScale=this.chart.priceScale('right'),visible=priceScale.getVisibleRange?.();
+      if(visible){const delta=(visible.to-visible.from)*.1*(event.key==='ArrowUp'?1:-1);priceScale.applyOptions({autoScale:false});priceScale.setVisibleRange({from:visible.from+delta,to:visible.to+delta});}
+    }
     else this.zoom(event.key==='-'?1.25:.8);
+    this.describeLatestVisible();
   };
   destroy() {
     if(this.disposed) return;this.disposed=true;

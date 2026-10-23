@@ -3,6 +3,8 @@ import {
   ActiveCondition,
   ExplainResponse,
 } from '../types/screener';
+import {etfGroup, etfFieldLabel, isEtfCondition} from '../data/etfFields';
+import {comparisonLabel} from './filterPresentation';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 import { presetEligibilitySummary } from '../data/presetEligibility';
@@ -32,7 +34,12 @@ export function explainCondition(condition: ActiveCondition): {
   const p = condition.parameters;
   let explanation = '';
 
-  switch (condition.conditionId) {
+  if (isEtfCondition(condition.conditionId)) {
+    const group = etfGroup(condition.conditionId);
+    explanation = group?.type === 'number'
+      ? `${def.label} ${comparisonLabel(condition.conditionId,p.comparison,p.comparison)} ${p.value}${group.fields.length > 1 ? ` (${etfFieldLabel(p.metric)})` : ''}`
+      : `${def.label} matches ${p.values?.length ?? 0} selected values`;
+  } else switch (condition.conditionId) {
     case 'FUNDAMENTAL_METRIC': {
       const metric = def.parameters.find(parameter => parameter.id === 'metric')?.options?.find(option => option.value === p.metric);
       const operator = ({ABOVE:'≥', BELOW:'≤', GREATER:'>', LESS:'<', EQUAL:'='} as Record<string, string>)[p.comparison] ?? p.comparison;

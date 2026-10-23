@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { ScreenerRunResponse } from '../types/screener';
 import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, Table2, ChartNoAxesCombined, X } from 'lucide-react';
 import {CopyResults} from './CopyResults';
@@ -17,9 +17,11 @@ import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { tableLayout } from '../utils/tableLayout';
 import { tradingViewMetrics } from '../data/tradingViewMetrics';
 import { QuickChartsView } from './QuickChartsView';
+import {etfGroups, etfFieldLabel} from '../data/etfFields';
 import { Button } from './Button';
 
 interface ResultsTableProps {
+  etf?: boolean;
   loadExportRows?:()=>Promise<ScreenerRunResponse['rows']>;
   symbolSearch?: string;
   onSymbolSearchChange?: (value: string) => void;
@@ -127,6 +129,16 @@ const columns: ResultColumn[] = [
     group:metric.category === 'fundamentals' ? 'Fundamental' : 'Technical',
     getValue:row => row.tradingview?.values[metric.id]})),
 ];
+const etfColumns: ResultColumn[] = [columns[0], ...columns.filter(column => ['close','changePct','volume','rupeeVolumeCrore'].includes(column.id)),
+  ...[...new Map(etfGroups.flatMap(group => group.fields.map(field => [field, group] as const))).entries()].map(([field, group]): ResultColumn => ({
+    id:`etf.${field}`, label:group.fields.length === 1 ? group.label : `${group.label} · ${etfFieldLabel(field)}`,
+    group:group.category === 'technicals' ? 'Technical' : group.category === 'analysis' || group.category === 'dividends' ? 'Fundamental' : 'Overview',
+    format:group.label.includes('%') ? 'percent' : 'number',
+    sortField:group.type === 'number' ? `etf.${field}` : undefined,
+    getValue:row => row.etf?.[field],
+  })),
+];
+const ETF_DEFAULT_COLUMNS = ['company','close','changePct','volume','etf.aum','etf.expense_ratio','etf.nav','etf.asset_class'];
 const DEFAULT_COLUMNS = ['company','sector','close','changePct','rvol','marketCapCrore','rsRsi','deliveryPct'];
 const COLUMN_GROUPS: ColumnGroup[] = ['Overview','Technical','Fundamental','Other'];
 const numberFormatter = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2});
@@ -149,31 +161,39 @@ const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
 
 export function ResultsTable({ data, isLoading, isError, isFetching = false, error, onRetry,
   onPageChange, onPageSizeChange, page, pageSize, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows, onOpenFullChart,
-  resultView: propResultView, onResultViewChange }: ResultsTableProps) {
+  resultView: propResultView, onResultViewChange, etf = false }: ResultsTableProps) {
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [internalResultView, setInternalResultView] = useLocalStorageState<'table' | 'charts'>('nexus-scanner.screener.result-view.v1', 'table');
-  const resultView = propResultView ?? internalResultView;
+  const resultView = etf ? 'table' : propResultView ?? internalResultView;
   const setResultView = onResultViewChange ?? setInternalResultView;
   const [chartsMounted, setChartsMounted] = useState(resultView === 'charts');
   if (resultView === 'charts' && !chartsMounted) setChartsMounted(true);
   const [columnSearch, setColumnSearch] = useState('');
   const [columnGroup, setColumnGroup] = useState<ColumnGroup>('Overview');
-  const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>('nexus-scanner.screener.columns.v1', DEFAULT_COLUMNS);
-  const selectedColumnIds = Array.isArray(savedColumnIds) ? savedColumnIds : DEFAULT_COLUMNS;
+  const defaults = etf ? ETF_DEFAULT_COLUMNS : DEFAULT_COLUMNS;
+  const tableColumns = useMemo(() => etf ? etfColumns.map(column => ({...column,
+    getValue:(row: ScreenerRunResponse['rows'][number]) => {
+      const value = column.getValue(row);
+      return data?.etfLabels?.[column.id.slice(4)]?.[String(value)] ?? value;
+    },
+  })) : columns, [etf, data?.etfLabels]);
+  const [columnLimit, setColumnLimit] = useState(100);
+  const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>(`nexus-scanner.screener.${etf ? 'etf-' : ''}columns.v1`, defaults);
+  const selectedColumnIds = Array.isArray(savedColumnIds) ? savedColumnIds : defaults;
   const phone = usePhoneLayout();
   const hasTradingView = Boolean(data?.rows.some(row => row.tradingview));
   const hasFnoBan = Boolean(data?.rows.some(row => row.fnoBan != null));
-  const activeColumns = columns.filter(column => {
+  const activeColumns = tableColumns.filter(column => {
     if (column.id === 'company') return true;
     if (column.id.startsWith('tv.') && !hasTradingView) return false;
     if (column.id === 'fnoBan' && !hasFnoBan) return false;
     return selectedColumnIds.includes(column.id);
   });
-  const usingCustomColumns = selectedColumnIds.length !== DEFAULT_COLUMNS.length || DEFAULT_COLUMNS.some(id => !selectedColumnIds.includes(id));
+  const usingCustomColumns = selectedColumnIds.length !== defaults.length || defaults.some(id => !selectedColumnIds.includes(id));
   const layout = tableLayout(activeColumns, 'screener', phone, usingCustomColumns);
   const visibleColumns = layout.columns;
-  const customizableColumns = columns.filter(column => column.id !== 'company'
+  const customizableColumns = tableColumns.filter(column => column.id !== 'company'
     && (!column.id.startsWith('tv.') || hasTradingView)
     && (column.id !== 'fnoBan' || hasFnoBan));
   const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
@@ -190,14 +210,14 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const busy = isLoading || isFetching;
   return <section className="results-surface" aria-label="Screener results">
     <div className="results-toolbar">
-      <div className="result-count"><strong>{data?.matchCount.toLocaleString('en-IN') ?? '-'}</strong><span>matched equities <span className="result-universe">/ {data?.totalUniverseCount.toLocaleString('en-IN') ?? '-'} universe</span></span></div>
+      <div className="result-count"><strong>{data?.matchCount.toLocaleString('en-IN') ?? '-'}</strong><span>matched {etf ? 'ETFs' : 'equities'} <span className="result-universe">/ {data?.totalUniverseCount.toLocaleString('en-IN') ?? '-'} universe</span></span></div>
       {onSymbolSearchChange && <label className="results-symbol-search"><Search size={13} aria-hidden="true" /><input type="search" aria-label="Search symbol or company" placeholder="Search symbol" value={symbolSearch} onChange={event => {resetScroll(); onSymbolSearchChange(event.target.value);}} /></label>}
       <div className="results-actions">
         {(isError || busy) && <span role="status" className="fetch-status">{isError ? 'Query failed' : 'Updating results'}</span>}
-        <div className="results-view-toggle" role="group" aria-label="Result view">
+        {!etf && <div className="results-view-toggle" role="group" aria-label="Result view">
           <button type="button" aria-pressed={resultView === 'table'} onClick={() => setResultView('table')}><Table2 size={14}/><span>List</span></button>
           <button type="button" aria-pressed={resultView === 'charts'} onClick={() => setResultView('charts')}><ChartNoAxesCombined size={14}/><span>Charts</span></button>
-        </div>
+        </div>}
         <CopyResults symbols={data?.matchedSymbols?.length === data?.matchCount ? data?.matchedSymbols : undefined}
           loadRows={loadExportRows ?? (async()=>{
             if (rows.length !== data?.matchCount) throw new Error('All matching symbols are unavailable. Run the scan again.');
@@ -225,7 +245,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
         <label className="column-search"><Search size={14} /><input type="search" aria-label="Search columns" placeholder="Search columns" value={columnSearch} onChange={event => setColumnSearch(event.target.value)} /></label>
         <div className="column-dialog-toolbar"><span>{columnSearch.trim() ? `${pickerColumns.length} results` : `${pickerColumns.filter(column => selectedColumnIds.includes(column.id)).length} selected in ${columnGroup.toLowerCase()}`}</span><div>
           <Button variant="ghost" onClick={() => { resetScroll(); setSavedColumnIds(customizableColumns.map(column => column.id)); }}>Select all</Button>
-          <Button variant="ghost" onClick={() => { resetScroll(); setSavedColumnIds(DEFAULT_COLUMNS); }}>Reset</Button>
+          <Button variant="ghost" onClick={() => { resetScroll(); setSavedColumnIds(defaults); }}>Reset</Button>
         </div></div>
         {!columnSearch.trim() && <div className="column-category-tabs" role="tablist" aria-label="Column categories">
           {COLUMN_GROUPS.map(group => {
@@ -247,13 +267,14 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
           })}
         </div>}
         <div className="column-options" role="group" aria-label={columnSearch.trim() ? 'Search results' : `${columnGroup} columns`}>
-          {pickerColumns.length ? pickerColumns.map(column => <label key={column.id} className="column-picker-option">
+          {pickerColumns.length ? (etf ? pickerColumns.slice(0,columnLimit) : pickerColumns).map(column => <label key={column.id} className="column-picker-option">
             <input type="checkbox" aria-label={column.label} checked={selectedColumnIds.includes(column.id)}
               onChange={event => { resetScroll(); setSavedColumnIds(current => event.target.checked
-                ? [...new Set([...(Array.isArray(current) ? current : DEFAULT_COLUMNS), column.id])]
-                : (Array.isArray(current) ? current : DEFAULT_COLUMNS).filter(id => id !== column.id)); }} />
+                ? [...new Set([...(Array.isArray(current) ? current : defaults), column.id])]
+                : (Array.isArray(current) ? current : defaults).filter(id => id !== column.id)); }} />
             <span>{column.label}</span>{columnSearch.trim() && <small>{column.group}</small>}
           </label>) : <p className="column-search-empty">No matching columns.</p>}
+          {etf && pickerColumns.length > columnLimit && <Button variant="ghost" onClick={() => setColumnLimit(value => value + 100)}>Show more columns</Button>}
         </div>
       </div>
     </Dialog>}
@@ -262,9 +283,9 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       <QuickChartsView rows={rows} revision={data?.immutableRevision} sessionDate={data?.resolvedSession?.date} matchCount={data?.matchCount} matchedSymbols={data?.matchedSymbols} loadRows={loadExportRows} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} />
     </div>}
     <div className="table-viewport" aria-busy={busy} style={{display: resultView === 'table' || isError ? undefined : 'none'}}>
-      <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label="Equity results table, scroll for more columns" onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
+      <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label={`${etf ? "ETF" : "Equity"} results table, scroll for more columns`} onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
         <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
-          <caption className="sr-only">Equities matching the current screen</caption>
+          <caption className="sr-only">{etf ? "ETFs" : "Equities"} matching the current screen</caption>
           <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: layout.columnWidth(column)}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
           <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} title={column.label} data-column={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
             aria-sort={column.sortField ? currentSort?.field === column.sortField ? currentSort.direction === 'asc' ? 'ascending' : 'descending' : 'none' : undefined}>
@@ -276,10 +297,10 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
             {rowWindow.top > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={columnSpan} style={{height: rowWindow.top}} /></tr>}
             {isError ? <tr><td colSpan={columnSpan}><div className="data-state" role="alert"><AlertTriangle size={28} /><h2>Screener query failed</h2><p>{error?.message || 'The query could not be completed.'}</p>{onRetry && <Button variant="secondary" onClick={onRetry}>Retry</Button>}</div></td></tr>
               : !data ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{columnWindow.left > 0 && <td aria-hidden="true" />}{renderedColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}{columnWindow.right > 0 && <td aria-hidden="true" />}</tr>)
-              : !rows.length ? <tr><td colSpan={columnSpan}><div className="data-state"><SearchX size={28} /><h2>No equities matched</h2><p>Adjust your filters or choose a broader universe.</p></div></td></tr>
+              : !rows.length ? <tr><td colSpan={columnSpan}><div className="data-state"><SearchX size={28} /><h2>No {etf ? 'ETFs' : 'equities'} matched</h2><p>Adjust your filters or choose a broader universe.</p></div></td></tr>
               // Page slots have no company-local state; reuse their cells instead of remounting thousands.
               : rowWindow.rows.map((row, index) => <tr key={rowWindow.first + index} aria-rowindex={rowWindow.first + index + 2}>{columnWindow.left > 0 && <td aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, columnIndex) => <td key={column.id} aria-colindex={columnWindow.first + columnIndex + 1} className={column.id === 'company' ? '' : 'numeric'}>
-                {column.id === 'company' ? <div className="company-cell"><button type="button" className="ipo-company-trigger" aria-label={`View ${row.symbol} company snapshot`}
+                {column.id === 'company' ? <div className="company-cell">{etf ? <SymbolWithLogo symbol={row.symbol} name={row.name} /> : <button type="button" className="ipo-company-trigger" aria-label={`View ${row.symbol} company snapshot`}
                   aria-haspopup="dialog" aria-expanded={overview.active?.row.symbol === row.symbol}
                   onMouseEnter={event => { if (!phone) overview.open(row, event.currentTarget); }}
                   onMouseLeave={() => { if (!phone) overview.scheduleClose(); }}
@@ -292,8 +313,8 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
                   onBlur={event => {if (!phone && !document.getElementById(`company-overview-${row.symbol}`)?.contains(event.relatedTarget)) overview.scheduleClose();}}
                   onClick={event => overview.active?.row.symbol === row.symbol && overview.active.pinned
                     ? overview.dismiss() : overview.open(row, event.currentTarget, true)}>
-                    <SymbolWithLogo symbol={row.symbol} name={row.name} badge={row.isFno && <span className="fno-label">F&amp;O</span>} /></button>
-                  <div className="company-tools"><button type="button" className="icon-button filing-button" aria-label={`View ${row.symbol} announcements`} title="View announcements" onClick={() => setFilingSymbol(row.symbol)} disabled={busy}><FileText size={14} strokeWidth={1.8} /></button></div></div>
+                    <SymbolWithLogo symbol={row.symbol} name={row.name} badge={row.isFno && <span className="fno-label">F&amp;O</span>} /></button>}
+                  {!etf && <div className="company-tools"><button type="button" className="icon-button filing-button" aria-label={`View ${row.symbol} announcements`} title="View announcements" onClick={() => setFilingSymbol(row.symbol)} disabled={busy}><FileText size={14} strokeWidth={1.8} /></button></div>}</div>
                   : column.id === 'sector' ? <><div className={row.sector === 'Unclassified' ? 'cell-muted truncate' : 'cell-label truncate'} title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></>
                   : column.id === 'deliveryPct' && row.deliveryPct == null ? <span className="cell-muted">Unavailable</span>
                   : column.id === 'changePct' && row.changePct != null ? <span className={row.changePct >= 0 ? 'positive' : 'negative'}>{row.changePct >= 0 ? '+' : ''}{displayValue(column.getValue(row), column.format)}</span>

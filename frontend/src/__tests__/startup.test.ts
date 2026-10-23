@@ -75,3 +75,13 @@ it('does not preload real data in mock mode', async () => {
   expect(startWorker).not.toHaveBeenCalled();
   expect(runTask).not.toHaveBeenCalled();
 });
+
+it('warms only the ETF snapshot when reopening a saved ETF universe', async () => {
+  localStorage.setItem('nexus-scanner.screener.universe.v1', JSON.stringify('etf'));
+  const release = {...manifest, etfDatasetUrl:'/data/etfs.json.gz'};
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(release))));
+  await import('../startup');
+  await vi.waitFor(() => expect(runTask).toHaveBeenCalledOnce());
+  expect(runTask).toHaveBeenCalledWith({type:'warm', source:{revision:manifest.revision,
+    sessionDate:manifest.sessionDate, url:release.etfDatasetUrl}});
+});

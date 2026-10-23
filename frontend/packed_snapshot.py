@@ -14,7 +14,7 @@ def pack_records(records):
 def pack_snapshot(payload):
     rows = [dict(row) for row in payload['stocks']]
     nested = {}
-    for field in NESTED_FIELDS:
+    for field in (*NESTED_FIELDS, *(('etf',) if any('etf' in row for row in rows) else ())):
         indexes = [i for i, row in enumerate(rows) if isinstance(row.get(field), dict)]
         nested[field] = {'indexes': indexes, 'table': pack_records([rows[i].pop(field) for i in indexes])}
     return {

@@ -1,1 +1,1 @@
-export type FilterChoices = Record<'SECTOR' | 'INDUSTRY' | 'SERIES' | 'PRICE_BAND' | 'INDEX_MEMBERSHIP', string[]> & {TRADINGVIEW_METRIC?:string[]};
+export type FilterChoices = Record<'SECTOR' | 'INDUSTRY' | 'SERIES' | 'PRICE_BAND' | 'INDEX_MEMBERSHIP', string[]> & {TRADINGVIEW_METRIC?:string[]; ETF_FIELDS?:string[]; ETF_VALUES?:Record<string, string[]>; ETF_LABELS?:Record<string, Record<string, string>>};

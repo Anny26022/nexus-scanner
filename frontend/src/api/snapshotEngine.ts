@@ -3,6 +3,7 @@ import type { FinancialHistory } from '../chart/fundamentals';
 import { unpackSnapshot } from './packedSnapshot';
 import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
+import {etfGroups} from '../data/etfFields';
 import {tradingViewMetrics} from '../data/tradingViewMetrics';
 
 export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
@@ -66,7 +67,7 @@ export function createSnapshotEngine(loader = readSnapshot) {
     if (!/^[a-f0-9]{64}$/.test(source.revision)) throw new Error('Invalid dataset revision');
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    const key = source.sessionDate ? `${source.revision}:${source.sessionDate}` : source.revision;
+    const key = `${source.url}:${source.revision}:${source.sessionDate ?? ''}`;
 
     const cached = snapshots.get(key);
     if (cached) {
@@ -167,7 +168,7 @@ export function createSnapshotEngine(loader = readSnapshot) {
     if (task.type === 'warm') return {type:'warm'};
     if (task.type === 'filterChoices') {
       const fields = {SECTOR:'sector', INDUSTRY:'industry', SERIES:'series', PRICE_BAND:'circuitLimit', INDEX_MEMBERSHIP:'indexMemberships'} as const;
-      const result = Object.fromEntries(Object.entries(fields).map(([id, field]) => {
+      const result: FilterChoices = Object.fromEntries(Object.entries(fields).map(([id, field]) => {
         const values = new Map<string, string>();
         for (const stock of data.stocks) {
           const raw = stock[field];
@@ -176,7 +177,18 @@ export function createSnapshotEngine(loader = readSnapshot) {
           }
         }
         return [id, [...values.values()].sort((a,b) => a.localeCompare(b))];
-      })) as FilterChoices;
+      })) as Record<keyof typeof fields, string[]>;
+      if (data.assetType === 'etf') {
+        result.ETF_FIELDS = [];
+        result.ETF_VALUES = {};
+        result.ETF_LABELS = data.etfLabels;
+        const currentRows = data.stocks.filter(stock => stock.asOfDate === data.asOfDate);
+        for (const group of etfGroups) for (const field of group.fields) {
+          const values = currentRows.map(stock => stock.etf?.[field]).filter(value => value != null);
+          if (values.length) result.ETF_FIELDS.push(field);
+          if (group.type !== 'number') result.ETF_VALUES[field] = [...new Set(values.map(String))].sort();
+        }
+      }
       if (data.tradingViewMetricsVersion === 1) {
         result.TRADINGVIEW_METRIC = tradingViewMetrics.filter(metric => data.stocks.some(stock =>
           stock.tradingview?.asOfDate === data.asOfDate && typeof stock.tradingview.values[metric.id] === 'number'

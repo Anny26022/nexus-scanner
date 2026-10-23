@@ -3,6 +3,8 @@ DO NOT DELETE EDL PIPELINE/*.json
 !DO NOT DELETE EDL PIPELINE/filing_source_labels.json
 !DO NOT DELETE EDL PIPELINE/taxonomy_overrides.json
 !DO NOT DELETE EDL PIPELINE/stockscans_classification.json
+!DO NOT DELETE EDL PIPELINE/etf_fields.json
+!DO NOT DELETE EDL PIPELINE/etf_enum_labels.json
 DO NOT DELETE EDL PIPELINE/*.csv
 DO NOT DELETE EDL PIPELINE/company_filings/
 DO NOT DELETE EDL PIPELINE/market_news/
@@ -24,6 +26,8 @@ outputs/
 # daily workflow; publish it through an object store when repository delivery
 # is needed.
 DO NOT DELETE EDL PIPELINE/filing_history.json.gz
+# ETF staging data is retained in the published packed snapshot, not duplicated in Git.
+DO NOT DELETE EDL PIPELINE/etf_snapshot.json.gz
 
 # Tracked generated outputs
 !DO NOT DELETE EDL PIPELINE/all_stocks_fundamental_analysis.json.gz

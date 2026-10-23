@@ -3,6 +3,7 @@ import nativeConditions from './nativeConditions.json';
 import { snapshotFundamentals } from './snapshotFundamentals';
 import technicalConfigurations from './snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from './movingAverageRules';
+import { etfConditionCatalog } from './etfFields';
 import { tradingViewConditionCatalog } from './tradingViewMetrics';
 
 export const RETIRED_TECHNICAL_LABELS: Record<string, string> = {
@@ -107,6 +108,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
     }),
   })),
   ...tradingViewConditionCatalog,
+  ...etfConditionCatalog,
   // --- TREND ---
   {
     id: 'trend_price_vs_ma',
@@ -761,5 +763,5 @@ export const REDUNDANT_CATALOG_CONDITIONS = new Set([
 // Keep internal/saved condition definitions evaluable in NEXUS_CONDITION_CATALOG,
 // but present a clean, non-duplicated catalog to the user.
 export const FILTER_CONDITION_CATALOG = NEXUS_CONDITION_CATALOG.filter(
-  def => !REDUNDANT_CATALOG_CONDITIONS.has(def.id),
+  def => !def.id.startsWith('ETF_') && !REDUNDANT_CATALOG_CONDITIONS.has(def.id),
 );

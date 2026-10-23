@@ -1,4 +1,4 @@
-export type UniverseType = 'mainboard' | 'nifty50' | 'nifty500' | 'midsmall400' | 'custom';
+export type UniverseType = 'etf' | 'mainboard' | 'nifty50' | 'nifty500' | 'midsmall400' | 'custom';
 
 export type MatchMode = 'all' | 'any';
 
@@ -73,6 +73,7 @@ export interface ScreenerRunRequest {
 }
 
 export interface StockRow {
+  etf?: Record<string, string | number | boolean | null>;
   tradingview?: {
     exchange?:string | null;
     isPrimary?:boolean | null;
@@ -208,6 +209,7 @@ export interface StockRow {
 }
 
 export interface ScreenerRunResponse {
+  etfLabels?: Record<string, Record<string, string>>;
   resolvedSession: {
     date: string;
     sessionId: string;

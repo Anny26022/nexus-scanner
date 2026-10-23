@@ -29,6 +29,7 @@ import type { ScreenDefinition } from '../utils/savedScreens';
 
 
 interface ExploreTabProps {
+  onUniverseChange?: (universe: UniverseType) => void;
   selectedAsOfDate: string;
   datasetRevision?: string;
   onRefreshRevision: () => Promise<string | undefined>;
@@ -52,6 +53,7 @@ const DEFAULT_CONDITIONS: Record<string, ActiveCondition> = {
 
 export const ExploreTab: React.FC<ExploreTabProps> = ({
   selectedAsOfDate,
+  onUniverseChange,
   datasetRevision,
   onRefreshRevision,
   availableSessions = [],
@@ -59,6 +61,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   onOpenFullChart,
 }) => {
   const [universe, setUniverse] = useLocalStorageState<UniverseType>('nexus-scanner.screener.universe.v1', 'mainboard');
+  const etf = universe === 'etf';
   const [resultView, setResultView] = useLocalStorageState<'table' | 'charts'>('nexus-scanner.screener.result-view.v1', 'table');
   const asOfDate = selectedAsOfDate;
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.screener.match-mode.v1', 'all');
@@ -66,7 +69,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   const [isScanHistoryOpen, setIsScanHistoryOpen] = useState(false);
   const [aiDraft, setAiDraft] = useState<{conditions: Record<string, ActiveCondition>; matchMode: MatchMode} | null>(null);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
-  const filterChoices = useFilterChoices(isModalOpen, datasetRevision, asOfDate);
+  const filterChoices = useFilterChoices(isModalOpen, datasetRevision, asOfDate, etf);
   const [activeQuery, setActiveQuery] = useLocalStorageState('nexus-scanner.screener.query.v1', '');
   const [queryText, setQueryText] = useState(activeQuery);
   const [activeConditionsMap, setActiveConditionsMap] =
@@ -171,16 +174,18 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
   const loadScreen = (screen: ScreenDefinition) => {
     setAiDraft(null);
     setUniverse(screen.universe);
+    onUniverseChange?.(screen.universe);
     setMatchMode(screen.matchMode);
     setActiveConditionsMap(screen.conditions);
     setActiveQuery(screen.query);
     setQueryText(screen.query);
     setSort(screen.sort);
     setSymbolSearch('');
+    setAnnouncementFilter(undefined);
     setPage(1);
   };
 
-  const showBacktest = availableSessions.length > 0 && resultView !== 'charts';
+  const showBacktest = !etf && availableSessions.length > 0 && resultView !== 'charts';
   const openBacktest = () => {
     setIsScanHistoryOpen(true);
     requestAnimationFrame(() => document.getElementById('backtest-history')?.scrollIntoView({behavior: 'smooth', block: 'start'}));
@@ -196,7 +201,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
               type="button"
               className="universe-info-button"
               data-tooltip={
-                universe === 'mainboard'
+                etf ? 'NSE ETF listings from the selected daily snapshot.' : universe === 'mainboard'
                   ? 'Mainboard: All active NSE mainboard listed equities (excludes SME, debt, and suspended listings).'
                   : universe === 'nifty50'
                   ? 'Nifty 50: The 50 largest, most liquid blue-chip equities representing the benchmark Indian index.'
@@ -210,24 +215,30 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
             </button>
           </div>
           <span className="select-wrap">
-            <select aria-label="Stock universe" value={universe} onChange={e => {setUniverse(e.target.value as UniverseType); setPage(1);}}>
-              <option value="mainboard">Mainboard</option><option value="nifty50">Nifty 50</option><option value="nifty500">Nifty 500</option><option value="midsmall400">MidSmall 400</option>
+            <select aria-label="Stock universe" value={universe} onChange={e => {
+              const next = e.target.value as UniverseType;
+              if ((next === 'etf') !== etf) {
+                handleReset(); setAiDraft(null); setSort({field:'symbol', direction:'asc'}); setResultView('table');
+              }
+              setUniverse(next); onUniverseChange?.(next); setPage(1);
+            }}>
+              <option value="etf">ETFs</option><option value="mainboard">Mainboard</option><option value="nifty50">Nifty 50</option><option value="nifty500">Nifty 500</option><option value="midsmall400">MidSmall 400</option>
             </select><ChevronDown size={14} />
           </span>
         </div>
         <label className="query-control"><span className="field-label sr-only">Scanner query</span><span className="query-input"><Search size={16} />
-          <input aria-label="Scanner query" value={queryText} onChange={event => setQueryText(event.target.value)}
-            onKeyDown={event => { if (event.key === 'Enter') void handleRun(); }} placeholder="e.g. P/E < 20 AND EPS > 10" /></span></label>
+          <input disabled={etf} aria-label="Scanner query" value={queryText} onChange={event => setQueryText(event.target.value)}
+            onKeyDown={event => { if (event.key === 'Enter') void handleRun(); }} placeholder={etf ? "Select ETF criteria with Filters" : "e.g. P/E < 20 AND EPS > 10"} /></span></label>
         <div className="screen-buttons">
           {(filterCount > 0 || activeQuery || symbolSearch) && <Button variant="ghost" onClick={handleReset}><RotateCcw size={14} />Reset</Button>}
-          <Button
+          {!etf && <Button
             variant="ghost"
             onClick={() => setIsAiModalOpen(true)}
             title="Describe stocks in English or Hinglish"
           >
             <Sparkles size={13} />
             <span>Ask AI</span>
-          </Button>
+          </Button>}
           <Button variant="ghost" onClick={() => setIsModalOpen(true)}><SlidersHorizontal size={15} />Filters{filterCount > 0 && <span className="count-badge">{filterCount}</span>}</Button>
           <Button variant="primary" onClick={() => void handleRun()} disabled={!asOfDate || isFetching || hasUnavailable}><Play size={14} />Run</Button>
           <SavedScreensMenu current={currentScreen} onLoad={loadScreen} />
@@ -253,7 +264,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       <UnavailableConditions conditions={activeConditionsMap} onRemove={handleRemove} />
       {!hasUnavailable && !activeQuery && explanationResult.compiledExplanations.length > 0 && <p className="criteria-summary">{explanationResult.compiledExplanations.map(e => e.humanReadableText).join(matchMode === 'all' ? '; ' : ' OR ')}</p>}
     </section>
-    {!hasUnavailable && <ResultsTable data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
+    {!hasUnavailable && <ResultsTable key={etf ? "etf" : "stocks"} etf={etf} data={data} isLoading={isLoading || !asOfDate} isFetching={isFetching} isError={isError} error={error}
       loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
       page={page} pageSize={pageSize}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
@@ -274,7 +285,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
         />
       </div>
     )}
-    <ScreenerModal key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => {setIsModalOpen(false); setAiDraft(null);}} activeConditionsMap={aiDraft?.conditions ?? activeConditionsMap} matchMode={aiDraft?.matchMode ?? matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />
+    <ScreenerModal etf={etf} key={isModalOpen ? 'open' : 'closed'} isOpen={isModalOpen} onClose={() => {setIsModalOpen(false); setAiDraft(null);}} activeConditionsMap={aiDraft?.conditions ?? activeConditionsMap} matchMode={aiDraft?.matchMode ?? matchMode} onApply={handleApply} choices={filterChoices.data} choicesLoading={filterChoices.isPending} choicesError={filterChoices.isError} retryChoices={() => void filterChoices.refetch()} />
     {isAiModalOpen && <AiScreenerModal
       datasetRevision={datasetRevision}
       isOpen={isAiModalOpen}

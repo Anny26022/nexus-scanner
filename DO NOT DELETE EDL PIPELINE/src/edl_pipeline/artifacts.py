@@ -9,6 +9,7 @@ INTERMEDIATE_FILES = [
     "mainboard_scanx_data.json",
     "fundamental_data.json",
     "advanced_indicator_data.json",
+    "etf_snapshot.json",
     "all_company_announcements.json",
     "nse_corporate_actions.json",
     "nse_corporate_action_adjustments.json",
@@ -45,6 +46,7 @@ INTERMEDIATE_DIRS = [
 ]
 
 FILES_TO_COMPRESS = {
+    "etf_snapshot.json": "etf_snapshot.json.gz",
     "all_stocks_fundamental_analysis.json": "all_stocks_fundamental_analysis.json.gz",
     "sector_analytics.json": "sector_analytics.json.gz",
     "market_breadth.csv": "market_breadth.json.gz",
@@ -88,6 +90,7 @@ PHASE2_SCRIPTS = [
     "fetch_company_filings.py",
     "fetch_new_announcements.py",
     "fetch_advanced_indicators.py",
+    "fetch_etf_snapshot.py",
     "fetch_market_news.py",
     "fetch_nse_corporate_actions.py",
     "fetch_corporate_actions.py",
@@ -195,6 +198,7 @@ SCRIPT_OUTPUT_SPECS = {
     "fetch_new_announcements.py": [
         ArtifactSpec("all_company_announcements.json", "json", min_count=0),
     ],
+    "fetch_etf_snapshot.py": [ArtifactSpec("etf_snapshot.json", "json", min_count=0, required_fields=("schemaVersion", "source", "fetchedAt", "records"), nested_min_counts=(("records", 0),))],
     "fetch_advanced_indicators.py": [
         ArtifactSpec("advanced_indicator_data.json", "json", min_count=0),
     ],
@@ -341,6 +345,7 @@ SCRIPT_OUTPUT_SPECS = {
 }
 
 FINAL_ARTIFACT_SPECS = [
+    ArtifactSpec("etf_snapshot.json.gz", "gzip_json", min_count=0, required_fields=("schemaVersion", "source", "fetchedAt", "records"), nested_min_counts=(("records", 0),)),
     ArtifactSpec(
         "all_stocks_fundamental_analysis.json.gz",
         "gzip_json",

@@ -10,6 +10,7 @@ import { SIMPLE_VOLUME_COLORS, defaultStudyConfigs, defaultVisibility } from '..
 import { defaultEmaLines, type EmaLine } from '../chart/model';
 import type { ChartAppearance } from '../chart/ChartEngine';
 import { ChartDialog } from './ChartDialog';
+import { ColorPalette } from './ColorPalette';
 
 export interface IndicatorSettingsModalProps {
   indicatorId: string;
@@ -126,13 +127,7 @@ function PlotStyleRow({
         <span>{label}</span>
       </label>
       <div className="setting-plot-controls">
-        <input
-          type="color"
-          value={color}
-          onChange={e => onColorChange(e.target.value)}
-          className="setting-color-picker"
-          title={`${label} color`}
-        />
+        <ColorPalette value={color} onChange={onColorChange} ariaLabel={`${label} color`} />
         {onLineWidthChange && (
           <select
             value={lineWidth}

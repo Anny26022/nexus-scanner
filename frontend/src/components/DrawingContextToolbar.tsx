@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { Lock, Unlock, Trash2, X } from 'lucide-react';
 import { type DrawingBook, type LineDash } from '../chart/drawings';
+import { ColorPalette } from './ColorPalette';
 
 const PALETTE = ['#187669', '#089981', '#ef5350', '#f59e0b', '#8b5cf6', '#06b6d4', '#ffffff', '#787b86'];
 const WIDTHS: readonly { value: number; label: string }[] = [
@@ -35,14 +36,7 @@ export function DrawingContextToolbar({ book }: { book: DrawingBook }) {
       aria-label="Drawing properties"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <label className="drawing-context-color" title="Drawing color">
-        <input
-          type="color"
-          value={currentColor}
-          onChange={(e) => book.update(drawing.id, { color: e.target.value })}
-        />
-        <span style={{ backgroundColor: currentColor }} />
-      </label>
+      <ColorPalette value={currentColor} onChange={(color) => book.update(drawing.id, { color })} ariaLabel="Drawing color" />
 
       <div className="drawing-context-palette">
         {PALETTE.map((color) => (

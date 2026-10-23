@@ -48,6 +48,7 @@ import { anchors, DRAWING_TOOLS, FIB_LEVELS, type Anchor, type DrawingBook, type
 import { annotationTool, TOOL_GROUPS, toolSpec, type DrawingKind } from '../chart/drawingTools';
 import { readChartStorage, writeChartStorage } from '../chart/storage';
 import { Button } from './Button';
+import { ColorPalette } from './ColorPalette';
 
 // Pixel-perfect custom SVG icons matching native OpenAlgo / TradingView drawing tools
 export function ParallelChannelIcon({ size = 16, strokeWidth = 1.75 }: { size?: number; strokeWidth?: number }) {
@@ -882,15 +883,11 @@ export function DrawingToolbar({
                 <Button variant="ghost" type="submit">
                   Apply edit
                 </Button>
-                <label>
+                <div className="drawing-edit-color">
                   Color
-                  <input
-                    type="color"
-                    aria-label="Drawing color"
-                    value={selected.color === 'accent' ? '#187669' : selected.color}
-                    onChange={event => book.update(selected.id, { color: event.target.value })}
-                  />
-                </label>
+                  <ColorPalette value={selected.color === 'accent' ? '#187669' : selected.color}
+                    onChange={color => book.update(selected.id, { color })} ariaLabel="Drawing color" />
+                </div>
                 <label>
                   Width
                   <select

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { defaultEmaLines, validEmaLine, type EmaLine } from '../chart/model';
+import { ColorPalette } from './ColorPalette';
 
 export const EMA_PREFS_KEY='nexus.chart.ema.v1';
 export function loadEmaLines():EmaLine[] {
@@ -26,7 +27,7 @@ export function EmaSettings({lines,onApply}:{lines:readonly EmaLine[];onApply:(l
       <div className="ema-setting-main">
         <label className="ema-enable"><input type="checkbox" aria-label={`Enable EMA ${index+1}`} checked={line.enabled} onChange={event=>update(line.id,{enabled:event.target.checked})}/>EMA</label>
         <input type="number" aria-label={`EMA ${index+1} period`} value={Number.isFinite(line.period)?line.period:''} min={1} max={500} step={1} required onChange={event=>update(line.id,{period:event.target.valueAsNumber})}/>
-        <input type="color" aria-label={`EMA ${index+1} color`} value={line.color} onChange={event=>update(line.id,{color:event.target.value})}/>
+        <ColorPalette value={line.color} onChange={color=>update(line.id,{color})} ariaLabel={`EMA ${index+1} color`}/>
         <button type="button" aria-label={`Remove EMA ${index+1}`} onClick={()=>setDraft(current=>current.filter(item=>item.id!==line.id))}><X size={14}/></button>
       </div>
       <div className="ema-setting-style">

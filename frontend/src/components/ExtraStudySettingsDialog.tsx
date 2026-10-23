@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChartDialog } from './ChartDialog';
 import { Button } from './Button';
 import { studyLineColor, studyParams, type ExtraStudyDef, type ExtraStudyState } from '../chart/extraStudies';
+import { ColorPalette } from './ColorPalette';
 
 /** Inputs and line colours for any registry indicator. */
 export function ExtraStudySettingsDialog({def, state, onApply, onClose}: {
@@ -35,12 +36,11 @@ export function ExtraStudySettingsDialog({def, state, onApply, onClose}: {
       </fieldset>}
       <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
         <legend className="mb-2 text-[12px] font-semibold text-secondary">Style</legend>
-        {def.lines.map(line => <label key={line.key} className="flex items-center justify-between gap-3 text-[12.5px] text-secondary">
+        {def.lines.map(line => <div key={line.key} className="flex items-center justify-between gap-3 text-[12.5px] text-secondary">
           {line.label}
-          <input type="color" aria-label={`${line.label} colour`} value={colors[line.key]}
-            onChange={event => setColors(current => ({...current, [line.key]: event.target.value}))}
-            className="h-7 w-10 cursor-pointer rounded-(--radius-sm) border-0 bg-transparent p-0" />
-        </label>)}
+          <ColorPalette value={colors[line.key]} ariaLabel={`${line.label} colour`}
+            onChange={color => setColors(current => ({...current, [line.key]: color}))} />
+        </div>)}
       </fieldset>
       <footer className="-mx-5 mt-1 flex items-center justify-between border-t border-line px-5 pt-3">
         <Button variant="ghost" onClick={reset}>Reset to defaults</Button>

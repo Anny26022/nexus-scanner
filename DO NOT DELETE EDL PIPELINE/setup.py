@@ -12,7 +12,8 @@ class BuildPy(build_py):
         target = Path(self.build_lib) / "edl_pipeline" / "data"
         target.mkdir(parents=True, exist_ok=True)
         for name in ("breadth_methodology.json", "filing_source_labels.json",
-                     "taxonomy_overrides.json", "stockscans_classification.json", "tradingview_fields.json"):
+                     "taxonomy_overrides.json", "stockscans_classification.json", "tradingview_fields.json",
+                     "etf_fields.json", "etf_enum_labels.json"):
             self.copy_file(str(Path(__file__).resolve().parent / name), str(target / name))
 
 

@@ -3,6 +3,7 @@ from datetime import datetime
 import math
 from zoneinfo import ZoneInfo
 
+import scanner_bridge  # noqa: F401  puts the pipeline checkout on sys.path, as for publish_snapshot
 from pipeline_utils import load_json, resource_path
 
 

@@ -71,6 +71,7 @@ py-modules = [
     "fetch_corporate_actions",
     "fetch_dhan_data",
     "fetch_etf_data",
+    "fetch_etf_snapshot",
     "fetch_fno_data",
     "fetch_fno_expiry",
     "fetch_fno_lot_sizes",

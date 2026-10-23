@@ -1,9 +1,11 @@
 import {cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {afterEach, expect, it, vi} from 'vitest';
 import App from '../App';
+import { screenerApi } from '../api/screenerApi';
 
 vi.mock('../api/screenerApi', () => ({screenerApi: {
   getCurrentRevision: vi.fn(async () => ({latestSessionDate:'2026-10-21', immutableRevision:'a'.repeat(64)})),
+  getChart: vi.fn(async () => ({candles:[]})),
   getAvailableSessions: vi.fn(async () => [{date:'2026-10-09', revision:'b'.repeat(64), isHistorical:true, label:'2026-10-09'}]),
 }}));
 vi.mock('../components/ExploreTab', () => ({ExploreTab: ({onOpenFullChart}: {onOpenFullChart: (symbol:string, revision:string, date:string)=>void}) => <>
@@ -22,6 +24,7 @@ it('retains the same Screener across sidebar Charts and IPO visits', async () =>
   fireEvent.change(draft, {target:{value:'unsaved query'}});
   fireEvent.click(screen.getByRole('button', {name:'Charts'}));
   await screen.findByText('Full chart workspace');
+  await waitFor(() => expect(screenerApi.getChart).toHaveBeenCalledWith('RELIANCE', 'a'.repeat(64), '2026-10-21'));
   expect(draft).not.toBeVisible();
   fireEvent.click(screen.getByRole('button', {name:'IPO Catalogue'}));
   await screen.findByText('IPO workspace');

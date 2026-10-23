@@ -437,7 +437,14 @@ repository variable `R2_PUBLIC_BASE_URL`, then run the full refresh to publish a
 schema-7 release. Set the public base to the read-only `workers/r2-delivery`
 Worker URL; it serves uploaded objects with CORS while the bucket's `r2.dev`
 endpoint stays disabled. Deploy that Worker before updating the variable or
-release pointers. Do not put storage credentials into `VITE_*` variables.
+release pointers. Run `npm run deploy` from the repository root to deploy both
+Workers (`npm run deploy:data` deploys only the data Worker). Set the production
+Cloudflare Builds deploy command to `npm run deploy`; preview builds must keep
+using `wrangler versions upload` so they cannot deploy the production data Worker.
+The data Worker's `cache.enabled` uses Cloudflare Workers Cache, including on
+`workers.dev`; verify repeated GETs return `Cf-Cache-Status: HIT` after deployment.
+Only immutable object/release paths get a year-long TTL; dated archives revalidate
+so corrections can become visible. Do not put storage credentials into `VITE_*` variables.
 
 For a missing-file error in a schema-7 release, verify the exact `dataIndexUrl`
 and content-addressed `objectUrlTemplate` references, HTTP status and CORS.
@@ -635,3 +642,8 @@ and saved unsupported settings are preserved for explicit correction.
 Old releases still load, but lack the new facts until the normal pipeline
 publishes a new immutable generation. Coverage and warnings distinguish missing
 data from genuine non-matches; unknown values stay unknown under negation.
+
+Charts use a release-pinned `chart-directory.json.gz` for names, quotes and header
+metrics; older releases retain the scanner-snapshot fallback. Candle history stays
+complete. The data Worker shares immutable cached responses across deployments;
+purge affected entries when changing delivery headers or cache policy.

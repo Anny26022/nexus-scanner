@@ -1,5 +1,6 @@
 import { memo, useState, useMemo, useCallback, useRef, useEffect, type RefObject, type Dispatch, type SetStateAction } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { prefetchCharts } from '../chart/chartQuery';
 import {
   Search,
   X,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { screenerApi } from '../api/screenerApi';
-import type { StockRow } from '../types/screener';
+import type { ChartRow } from '../api/realAdapter';
 import { readChartStorage, writeChartStorage } from '../chart/storage';
 import {
   FLAGS_KEY, FLAG_BY_ID, FLAG_COLORS, activeList, createList, deleteList, flaggedSymbols, loadFlags, loadWatchlistStore,
@@ -260,19 +261,12 @@ export const WatchlistDock = memo(function WatchlistDock({
   const { data: quoteMap, isPending: quotesPending, isError: quotesError, refetch: retryQuotes } = useQuery({
     queryKey: ['watchlist-quotes-all', datasetRevision, quoteSymbolsKey, sessionDate],
     queryFn: async () => {
-      if (!symbols.length) return new Map<string, StockRow>();
-      const rows = await screenerApi.getExportRows({
-        datasetRevision,
-        universe: 'custom',
-        customSymbols: symbols,
-        asOfDate: sessionDate ?? '',
-        page: 1,
-        pageSize: 100,
-        expressionTree: { type: 'group', operator: 'all', children: [] },
-      });
-      const map = new Map<string, StockRow>();
+      if (!symbols.length) return new Map<string, ChartRow>();
+      const rows = await screenerApi.getChartRows(datasetRevision, sessionDate);
+      const selected = new Set(symbols);
+      const map = new Map<string, ChartRow>();
       for (const row of rows) {
-        map.set(row.symbol, row);
+        if (selected.has(row.symbol)) map.set(row.symbol, row);
       }
       return map;
     },
@@ -372,6 +366,12 @@ export const WatchlistDock = memo(function WatchlistDock({
     });
   }, [items, filterQuery, quoteMap, sortColumn, sortDir]);
   const filteredSymbols = useMemo(() => filteredItems.filter(item => !isSection(item)), [filteredItems]);
+  const queryClient = useQueryClient();
+  // Warm the next name once the selected chart has loaded.
+  const selectSymbol = useCallback((symbol: string, direction: 1 | -1 = 1) => {
+    onSelectSymbol(symbol);
+    prefetchCharts(queryClient, filteredSymbols, symbol, datasetRevision, sessionDate, direction);
+  }, [onSelectSymbol, queryClient, filteredSymbols, datasetRevision, sessionDate]);
   const sectionCounts = useMemo(() => {
     const counts = new Map<number, number>();
     let sectionIndex = -1;
@@ -446,12 +446,12 @@ export const WatchlistDock = memo(function WatchlistDock({
       const targetSym = filteredSymbols[nextIdx];
       if (targetSym) {
         setLocalActiveSymbol(targetSym);
-        onSelectSymbol(targetSym);
+        selectSymbol(targetSym, nextIdx < currentIdx ? -1 : 1);
         scrollToRow(filteredItems.indexOf(targetSym));
         requestAnimationFrame(() => rowRefs.current.get(targetSym)?.focus());
       }
     },
-    [filteredSymbols, filteredItems, currentEffectiveSymbol, onSelectSymbol]
+    [filteredSymbols, filteredItems, currentEffectiveSymbol, selectSymbol]
   );
 
   const handleContainerKeyDown = (e: React.KeyboardEvent) => {
@@ -688,7 +688,7 @@ export const WatchlistDock = memo(function WatchlistDock({
                 navigateSymbol('first');
               } else if (e.key === 'Enter' && filteredSymbols.length > 0) {
                 e.preventDefault();
-                onSelectSymbol(filteredSymbols[0]);
+                selectSymbol(filteredSymbols[0]);
               }
             }}
             className="watchlist-search-input"
@@ -815,7 +815,7 @@ export const WatchlistDock = memo(function WatchlistDock({
                 onContextMenu={event => { event.preventDefault(); setMenuFor({symbol: sym, x: event.clientX, y: event.clientY}); }}
                 onClick={() => {
                   setLocalActiveSymbol(sym);
-                  onSelectSymbol(sym);
+                  selectSymbol(sym);
                 }}
                 onKeyDown={e => {
                   if (e.key === 'ArrowDown' || e.key === 'j') {
@@ -838,7 +838,7 @@ export const WatchlistDock = memo(function WatchlistDock({
                     e.preventDefault();
                     e.stopPropagation();
                     setLocalActiveSymbol(sym);
-                    onSelectSymbol(sym);
+                    selectSymbol(sym);
                   } else if (e.altKey && e.code === 'KeyF') {
                     e.preventDefault();
                     e.stopPropagation();

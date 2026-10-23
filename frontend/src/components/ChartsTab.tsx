@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Maximize2, Minimize2, Minus, Pause, Pencil, Play, Plus, RotateCcw, Settings2, SkipBack, SkipForward, SlidersHorizontal, X, Keyboard, LayoutTemplate } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { ChartEngine, type ChartAppearance, type ChartStudies, type ChartStyle } from '../chart/ChartEngine';
 import { ReplayClock } from '../chart/ReplayClock';
-import { aggregate, validateCandles, type Candle, type EmaLine, type Interval } from '../chart/model';
+import { aggregate, type Candle, type EmaLine, type Interval } from '../chart/model';
 import { DrawingBook } from '../chart/drawings';
 import { DrawingToolbar } from './DrawingToolbar';
 import { DrawingContextToolbar } from './DrawingContextToolbar';
@@ -37,6 +37,11 @@ import { useMountEffect } from '../hooks/useMountEffect';
 import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../chart/extraStudies';
 import { WatchlistDock } from './WatchlistDock';
 import { Download, Upload } from 'lucide-react';
+import { ChartEventItem } from './ChartEventItem';
+import { chartQuery, prefetchCharts } from '../chart/chartQuery';
+import { currentTheme, forTheme, withThemeColors } from '../chart/themeColors';
+import { PositionSizingIndicator, PositionSizingSettingsDialog } from './PositionSizingIndicator';
+import { positionSizing, positionSizingConfig } from '../chart/positionSizing';
 import { Button } from './Button';
 
 const ranges=[[1,'1mo'],[3,'3mo'],[6,'6mo'],[12,'1y'],[24,'2y'],[null,'All']] as const;
@@ -66,6 +71,8 @@ export interface ChartSceneActions {
   resetView: () => void;
   saveImage: () => void;
   openSettings: () => void;
+  fitAll: () => void;
+  toggleMagnet: () => void;
 }
 
 /** Runs `run` once per mount; give it a `key` that changes with the value it applies to the chart. */
@@ -74,7 +81,7 @@ function EngineSync({run}: {run: () => void}) {
   return null;
 }
 
-function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionDate,symbolControls,viewControls,layoutControls,events,revision,interval,tileId,sync,benchmark,actionsRef}: {benchmark?: ReadonlyMap<string, number>; actionsRef?: { current: ChartSceneActions | null };candles: readonly Candle[]; symbol: string;book:DrawingBook;firstDate:string;lastDate:string;metrics?:ChartMetrics;sessionDate:string;symbolControls:ReactNode;viewControls:ReactNode;layoutControls?:ReactNode;events:readonly ChartEvent[];revision:string;interval:Interval;tileId:string;sync:ChartSync}) {
+function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,sessionDate,symbolControls,viewControls,layoutControls,events,revision,interval,tileId,sync,benchmark,actionsRef}: {benchmark?: ReadonlyMap<string, number>; actionsRef?: { current: ChartSceneActions | null };candles: readonly Candle[]; daily: readonly Candle[]; symbol: string;book:DrawingBook;firstDate:string;lastDate:string;metrics?:ChartMetrics;sessionDate:string;symbolControls:ReactNode;viewControls:ReactNode;layoutControls?:ReactNode;events:readonly ChartEvent[];revision:string;interval:Interval;tileId:string;sync:ChartSync}) {
   const [saved]=useState(()=>loadScene(tileId));
   const paneChoice=useRef(saved.paneWeights);
   const engine = useRef<ChartEngine | null>(null);
@@ -106,6 +113,9 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   // Mirrors the price scale's auto-fit, which a price-axis drag turns off and a double-click restores.
   const [autoScale, setAutoScale] = useState(true);
   const syncAutoScale = () => { const on = engine.current?.isAutoScale?.() ?? true; if (on !== autoScale) setAutoScale(on); };
+  // ">>" appears once the latest bar scrolls off screen, as in TradingView.
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
   const overlayRef = useRef<HTMLDivElement>(null);
   const candleIndexByDate = useMemo(() => new Map(candles.map((b, i) => [b.date, i])), [candles]);
   const indicatorSeries = useMemo(() => {
@@ -125,7 +135,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     const hide = !allHidden;
     setAllHidden(hide);
     const ids = [...Object.entries(studyChoice.current).filter(([, on]) => on).map(([id]) => id),
-      ...Object.entries(studyConfigsChoice.current.extras ?? {}).filter(([, state]) => state?.enabled).map(([id]) => id), 'fundamentals', 'volume'];
+      ...Object.entries(studyConfigsChoice.current.extras ?? {}).filter(([, state]) => state?.enabled).map(([id]) => id), 'fundamentals', 'positionSizing', 'volume'];
     hiddenStudiesChoice.current = {...hiddenStudiesChoice.current, ...Object.fromEntries(ids.map(id => [id, hide]))};
     setHiddenStudies(hiddenStudiesChoice.current);
     for (const id of ids) engine.current?.setStudyVisibility(id, !hide);
@@ -171,9 +181,12 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   };
   const applyFundamentals = (fundamentals: NonNullable<StudyConfigs['fundamentals']>) =>
     applyStudyConfigs({...studyConfigsChoice.current, fundamentals}, false);
+  const applyPositionSizing = (positionSizing: NonNullable<StudyConfigs['positionSizing']>) =>
+    applyStudyConfigs({...studyConfigsChoice.current, positionSizing}, false);
   const applyExtras = (next: ExtraStudies) => applyStudyConfigs({...studyConfigsChoice.current, extras: next});
   const applyComparison=(next:typeof comparison)=>{setComparison(next);persist({comparison:next});if(!next) onComparison('',[],false);};
   const [eventDetails,setEventDetails]=useState<readonly ChartEvent[]|null>(null);
+  const [eventHover,setEventHover]=useState<{events:readonly ChartEvent[];x:number;bottom:number}|null>(null);
   const [clock]=useState(()=>new ReplayClock(candles.length));
   const replay=useSyncExternalStore(clock.subscribe,clock.getSnapshot,clock.getSnapshot);
   // Upcoming results "E" label: the schedule query is shared with the indicator's badge.
@@ -188,6 +201,14 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   // The engine applies its own replay cutoff, so pass every change through the snapshot date.
   bandChoice.current = fundamentals?.bandHistory && !allHidden && !hiddenStudies.fundamentals ? bandChanges(bandHistory.data?.bands, sessionDate) : [];
   const earningsChoice = useRef<{date: string; line: boolean} | null>(null);
+  const sizingLinesChoice = useRef<{lines: {price: number; color: string; label: string}[]; offset: number; length: number}>({lines: [], offset: 0, length: 0});
+  // Daily bars size the trade on every interval, like the script's request.security(..., "D").
+  const sizingThrough = revealedThrough(candles, replay.index, sessionDate);
+  const sizingConfig = studyConfigs.positionSizing?.enabled && !allHidden && !hiddenStudies.positionSizing ? positionSizingConfig(studyConfigs.positionSizing) : null;
+  const sizing = sizingConfig ? positionSizing(daily, sizingThrough, sizingConfig) : null;
+  sizingLinesChoice.current = sizing && sizingConfig?.showLines
+    ? {lines: sizing.rows.map(row => ({price: row.stopPrice, color: row.color, label: row.line})), offset: sizingConfig.lineOffset, length: sizingConfig.lineLength}
+    : {lines: [], offset: 0, length: 0};
   earningsChoice.current = nextResults ? {date: nextResults.scheduled_date, line: fundamentals!.earningsLine} : null;
   const metricsChoice = useRef(metrics);
   metricsChoice.current = metrics;
@@ -218,6 +239,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   };
   const exitReplay=()=>{cancelSelection();clock.exit();};
   // React 19 callback-ref cleanup owns the native chart lifecycle.
+  const benchmarkChoice = useRef(benchmark);
+  benchmarkChoice.current = benchmark;
   const attach = useCallback((host: HTMLDivElement | null) => {
     if (!host) return;
     let chart: ChartEngine;
@@ -236,6 +259,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           updateLiveIndicatorDom(overlayRef.current, snap, studyConfigsChoice.current);
         }
       },activeBook,setEventDetails);
+      chart.onEventHover?.(setEventHover);
       chart.setOnPanesChange?.(() => {
         setPaneOffsets(chart.getPaneOffsets?.() ?? []);
       });
@@ -244,7 +268,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       chart.setStyle(styleChoice.current);
       chart.setAppearance(appearanceChoice.current);
       chart.setStudyConfigs?.(studyConfigsChoice.current);
-      chart.setBenchmark(benchmark);
+      chart.setBenchmark(benchmarkChoice.current);
       chart.setStudies(filterStudiesForInterval(studyChoice.current, studyConfigsChoice.current, interval));
       restoreHiddenStudies(chart);
       chart.setEvents(events,revealedThrough(candles,clock.getSnapshot().index,lastDate));
@@ -265,7 +289,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       engine.current = chart;
       updateBandGuides(chart);
       chart.setUpcomingEarnings?.(earningsChoice.current);
-      chart.setBandChanges?.(bandChoice.current);
+      chart.setBandChanges?.(bandChoice.current,studyConfigsChoice.current.fundamentals?.bandStyles);
+      chart.setSizingLines?.(sizingLinesChoice.current.lines,sizingLinesChoice.current.offset,sizingLinesChoice.current.length);
       const normalView=clock.getSnapshot().index===null,epoch=sync.persistenceEpoch;
       const unlink=normalView?sync.connect(chart,host):()=>{};
       let timer:ReturnType<typeof setTimeout>|undefined;
@@ -297,15 +322,18 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       const onWheel=()=>markCustomRange();
       const onPan=(event:PointerEvent)=>{if(event.buttons===1&&activeBook.getSnapshot().tool==='select') markCustomRange();};
       chart.chart.timeScale().subscribeVisibleTimeRangeChange(scheduleSave);
+      const trackLatest=()=>setAwayFromLatest(!(chart.isLatestVisible?.() ?? true));
+      chart.chart.timeScale().subscribeVisibleLogicalRangeChange?.(trackLatest);
+      chart.announce=setAnnouncement;
       host.addEventListener('wheel',onWheel,{capture:true,passive:true});
       host.addEventListener('pointermove',onPan,true);
       host.addEventListener('pointerup',scheduleSave,true);window.addEventListener('pagehide',saveView);
-      return () => { if(restoreFrame!==undefined) cancelAnimationFrame(restoreFrame);clearTimeout(timer);saveView();window.removeEventListener('pagehide',saveView);host.removeEventListener('pointerup',scheduleSave,true);host.removeEventListener('pointermove',onPan,true);host.removeEventListener('wheel',onWheel,true);chart.chart.timeScale().unsubscribeVisibleTimeRangeChange(scheduleSave);unlink();unsubscribe(); chart.destroy(); if (engine.current === chart) engine.current = null; };
+      return () => { if(restoreFrame!==undefined) cancelAnimationFrame(restoreFrame);clearTimeout(timer);saveView();window.removeEventListener('pagehide',saveView);host.removeEventListener('pointerup',scheduleSave,true);host.removeEventListener('pointermove',onPan,true);host.removeEventListener('wheel',onWheel,true);chart.chart.timeScale().unsubscribeVisibleTimeRangeChange(scheduleSave);chart.chart.timeScale().unsubscribeVisibleLogicalRangeChange?.(trackLatest);unlink();unsubscribe(); chart.destroy(); if (engine.current === chart) engine.current = null; };
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Chart rendering unavailable.');
       return;
     }
-  }, [candles,activeBook,clock,previousByDate,startReplay,cancelSelection,events,lastDate,interval,sync,tileId,benchmark]);
+  }, [candles,activeBook,clock,previousByDate,startReplay,cancelSelection,events,lastDate,interval,sync,tileId]);
   const saveImage=()=>{const image=engine.current?.takeScreenshot();if(image){const link=document.createElement('a');link.download=`${symbol}-chart.png`;link.href=image.toDataURL('image/png');link.click();}};
   const applyAppearance=(change:Partial<typeof appearance>)=>{
     const next={...appearanceChoice.current,...change};
@@ -321,6 +349,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     resetView: () => { markCustomRange(); engine.current?.reset(); },
     saveImage,
     openSettings: () => setSettingsOpen(true),
+    fitAll: () => { markCustomRange(); engine.current?.fitAll(); },
+    toggleMagnet: () => applyAppearance({crosshairMode: (appearanceChoice.current.crosshairMode ?? 'normal') === 'normal' ? 'magnet' : 'normal'}),
   };
   return <>
     <header className="chart-topbar">
@@ -359,10 +389,23 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     </div>}
     <div className={`chart-stage${selecting || replay.index!==null?' chart-stage-replay':''}`}>
       <div className="chart-plot" ref={overlayRef} data-indicator-values={appearance.statusIndicators===false?'hidden':undefined}
-        onPointerUp={syncAutoScale} onDoubleClick={() => requestAnimationFrame(syncAutoScale)}>
+        // Reveal the zoom/reset controls near the bottom edge, set on the element directly to avoid re-rendering per move.
+        onMouseMove={event => { const box = event.currentTarget.getBoundingClientRect(); event.currentTarget.dataset.nearBottom = String(event.clientY > box.bottom - 70); }}
+        onMouseLeave={event => { event.currentTarget.dataset.nearBottom = 'false'; }}
+        onPointerUp={syncAutoScale} onWheel={() => requestAnimationFrame(syncAutoScale)} onKeyUp={() => requestAnimationFrame(syncAutoScale)}
+        onDoubleClick={() => requestAnimationFrame(syncAutoScale)}>
+        <p className="sr-only" aria-live="polite" id={`chart-announce-${tileId}`}>{announcement}</p>
+        {eventHover && <div className="chart-event-hover" role="tooltip" style={{left:`clamp(156px, ${eventHover.x}px, calc(100% - 156px))`,bottom:eventHover.bottom}}>
+          {eventHover.events.slice(0,3).map(event=><ChartEventItem key={event.id} event={event} styles={appearance.eventStyles}/>)}
+          {eventHover.events.length>3 && <p className="chart-event-more">+{eventHover.events.length-3} more · click to see all</p>}
+        </div>}
+        {awayFromLatest && paneOffsets[0] && <button type="button" className="chart-jump-latest" aria-label="Scroll to the latest bar" title="Scroll to the latest bar"
+          style={{top: paneOffsets[0].top + paneOffsets[0].height - 30}} onClick={() => engine.current?.latest()}>»</button>}
         {paneOffsets[0] && <div className="chart-scale-buttons" style={{top: paneOffsets[0].top + paneOffsets[0].height - 28}}>
           <button type="button" aria-pressed={autoScale} title="Auto (fits data to screen)" aria-label="Auto-scale price"
             onClick={() => { engine.current?.setAutoScale?.(!autoScale); setAutoScale(!autoScale); }}>A</button>
+          <button type="button" aria-pressed={appearance.scaleMode === 'percentage'} title="Percentage scale" aria-label="Percentage price scale"
+            onClick={() => applyAppearance({scaleMode: appearance.scaleMode === 'percentage' ? 'normal' : 'percentage'})}>%</button>
           <button type="button" aria-pressed={appearance.scaleMode === 'logarithmic'} title="Logarithmic scale" aria-label="Logarithmic price scale"
             onClick={() => applyAppearance({scaleMode: appearance.scaleMode === 'logarithmic' ? 'normal' : 'logarithmic'})}>L</button>
         </div>}
@@ -375,20 +418,24 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           onCloseMenu={() => setDrawingsOpen(false)}
         />
         <DrawingContextToolbar book={activeBook} />
+      <EngineSync key={`benchmark:${benchmark ? 'ready' : 'pending'}`} run={() => engine.current?.setBenchmark(benchmark)} />
       <EngineSync key={`${earningsChoice.current?.date ?? ''}|${earningsChoice.current?.line ?? ''}`} run={() => engine.current?.setUpcomingEarnings?.(earningsChoice.current)} />
       <EngineSync key={`guides:${metrics?.circuitLimit}:${metrics?.isFno}`} run={() => { if(engine.current) updateBandGuides(engine.current); }} />
-      <EngineSync key={`bands:${bandChoice.current.map(change => change.date + change.to).join(',')}`} run={() => engine.current?.setBandChanges?.(bandChoice.current)} />
+      <EngineSync key={`bands:${bandChoice.current.map(change => change.date + change.to).join(',')}:${JSON.stringify(studyConfigs.fundamentals?.bandStyles ?? {})}`}
+        run={() => engine.current?.setBandChanges?.(bandChoice.current, studyConfigsChoice.current.fundamentals?.bandStyles)} />
       {studyConfigs.fundamentals?.enabled && !allHidden && !hiddenStudies.fundamentals && <FundamentalsIndicator
         symbol={symbol} revision={revision} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}
         metrics={metrics} config={studyConfigs.fundamentals}
         onMoveBadge={badgeOffset => applyFundamentals({...studyConfigsChoice.current.fundamentals!, badgeOffset})}
         onMove={offset => applyFundamentals({...studyConfigsChoice.current.fundamentals!, offset})}/>}
+      <EngineSync key={`sizing:${JSON.stringify(sizingLinesChoice.current)}`}
+        run={() => engine.current?.setSizingLines?.(sizingLinesChoice.current.lines, sizingLinesChoice.current.offset, sizingLinesChoice.current.length)} />
+      {sizingConfig && <PositionSizingIndicator symbol={symbol} daily={daily} through={sizingThrough} config={sizingConfig}
+        onMove={offset => applyPositionSizing({...positionSizingConfig(studyConfigsChoice.current.positionSizing), offset})}/>}
       <div className="chart-overlay-legend">
         <ChartLegend symbol={symbol} bar={currentBar} previous={previousByDate.get(currentBar.date)} quoteRef={quote}
-          // The toolbar already names the symbol, so the status line's own title is opt-in.
-          status={{logo:appearance.statusLogo===true,title:appearance.statusTitle===true,titleMode:appearance.statusTitleMode??'symbol',
-            marketStatus:appearance.statusMarketStatus===true,ohlc:appearance.statusOhlc!==false,change:appearance.statusBarChange!==false,
-            volume:appearance.statusVolume!==false,interval:interval==='D'?'1D':interval==='W'?'1W':'1M',name:metrics?.name,
+          status={{marketStatus:appearance.statusMarketStatus===true,ohlc:appearance.statusOhlc!==false,change:appearance.statusBarChange!==false,
+            volume:appearance.statusVolume!==false,
             background:appearance.statusBackground?{color:appearance.statusBackgroundColor,opacity:appearance.statusBackgroundOpacity??.8}:undefined}}
           metrics={replay.index===null&&!selecting?metrics:undefined} sessionDate={replay.index===null&&!selecting?sessionDate:undefined}/>
         <PricePaneLegend
@@ -408,6 +455,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           onToggleStudyVisibility={toggleStudyVisibility}
           onUpdateExtras={applyExtras}
           onUpdateFundamentals={applyFundamentals}
+          onUpdatePositionSizing={applyPositionSizing}
           collapsed={Boolean(appearance.legendCollapsed)}
           onToggleCollapsed={() => applyAppearance({legendCollapsed: !appearanceChoice.current.legendCollapsed})}
           allHidden={allHidden}
@@ -440,12 +488,12 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           <Button variant="ghost" className="chart-auto-btn" title="Restore automatic price scaling" onClick={() => engine.current?.resetPriceScale()}>Auto</Button>
         </div>
       </div>
-      {error ? <p role="alert" className="notice">{error}</p> : <div ref={attach} className="nexus-chart-canvas" role="group" tabIndex={0} onContextMenu={event=>{event.preventDefault();setContext({x:event.clientX,y:event.clientY});}} onKeyDownCapture={event=>{
+      {error ? <p role="alert" className="notice">{error}</p> : <div ref={attach} className="nexus-chart-canvas" role="group" aria-roledescription="interactive chart" tabIndex={0} onContextMenu={event=>{event.preventDefault();setContext({x:event.clientX,y:event.clientY});}} onKeyDownCapture={event=>{
         if ((event.key==='ContextMenu') || (event.key==='F10' && event.shiftKey)) {event.preventDefault();const rect=event.currentTarget.getBoundingClientRect();setContext({x:rect.left+24,y:rect.top+24});}
         if (replay.index===null && ['ArrowLeft','ArrowRight','Home','+','=','-'].includes(event.key)) markCustomRange();
         if (replay.index!==null && [' ','ArrowRight','ArrowLeft'].includes(event.key)) {event.preventDefault();event.stopPropagation(); if(event.key===' ') clock.toggle();else clock.step(event.key==='ArrowLeft'?-1:1);}
       }}
-        aria-label={`${symbol} ${style==='candles'?'candlestick':style==='bars'?'HLC':style}${appearance.volume?' and volume':''} chart`} aria-describedby={`chart-keyboard-help-${tileId}`}
+        aria-label={`${symbol} ${style==='candles'?'candlestick':style==='bars'?'HLC':style}${appearance.volume?' and volume':''} chart`} aria-describedby={`chart-keyboard-help-${tileId} chart-announce-${tileId}`}
       />}
       {context && <ChartContextMenu {...context} onClose={()=>setContext(null)}>
         <button type="button" role="menuitem" onClick={()=>{markCustomRange();engine.current?.reset();setContext(null);}}>Reset chart view</button>
@@ -477,6 +525,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         onApplyAppearance={applyAppearance}
         fundamentals={studyConfigs.fundamentals}
         onApplyFundamentals={applyFundamentals}
+        positionSizing={studyConfigs.positionSizing}
+        onApplyPositionSizing={applyPositionSizing}
         extras={studyConfigs.extras}
         onApplyExtras={applyExtras}
         onOpenIndicatorSettings={id => {
@@ -496,7 +546,9 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     )}
     {activeIndicatorSetting === 'fundamentals' && <FundamentalsSettingsDialog config={studyConfigs.fundamentals}
       onApply={applyFundamentals} onClose={() => setActiveIndicatorSetting(null)}/>}
-    {activeIndicatorSetting && activeIndicatorSetting !== 'fundamentals' && !EXTRA_STUDY_BY_ID.has(activeIndicatorSetting as ExtraStudyId) && (
+    {activeIndicatorSetting === 'positionSizing' && <PositionSizingSettingsDialog config={studyConfigs.positionSizing}
+      onApply={applyPositionSizing} onClose={() => setActiveIndicatorSetting(null)}/>}
+    {activeIndicatorSetting && activeIndicatorSetting !== 'fundamentals' && activeIndicatorSetting !== 'positionSizing' && !EXTRA_STUDY_BY_ID.has(activeIndicatorSetting as ExtraStudyId) && (
       <IndicatorSettingsModal
         indicatorId={activeIndicatorSetting}
         configs={studyConfigs}
@@ -511,12 +563,13 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         onClose={() => setActiveIndicatorSetting(null)}
       />
     )}
-    {settingsOpen && <ChartSettingsDialog appearance={appearance} chartStyle={style} symbol={symbol} comparison={comparison} firstDate={firstDate} lastDate={currentBar.date} onClose={()=>setSettingsOpen(false)} onApply={(nextAppearance,nextStyle,nextComparison)=>{
-      applyAppearance(nextAppearance);
+    {settingsOpen && <ChartSettingsDialog appearance={forTheme(appearance,currentTheme())} chartStyle={style} symbol={symbol} comparison={comparison} firstDate={firstDate} lastDate={currentBar.date} onClose={()=>setSettingsOpen(false)} onApply={(nextAppearance,nextStyle,nextComparison)=>{
+      // Colours edited now belong to the theme the app is in.
+      applyAppearance(withThemeColors(nextAppearance,appearanceChoice.current,currentTheme()));
       if(nextStyle!==style) {setStyle(nextStyle);styleChoice.current=nextStyle;engine.current?.setStyle(nextStyle);persist({style:nextStyle});}
       applyComparison(nextComparison);
     }} onGoToDate={date=>{const moved=engine.current?.goToDate(date)??false;if(moved) markCustomRange();return moved;}} onEvents={()=>setEventDetails(events.filter(event=>event.date<=revealedThrough(candles,replay.index,lastDate)))}/>}
-    {eventDetails && <ChartDialog title="Published events" onClose={()=>setEventDetails(null)}><div className="chart-event-list">{eventDetails.length?eventDetails.map(event=><article key={event.id}><small>{event.date} · {event.kind==='action'?'Corporate action':event.kind==='earnings'?'Earnings filing':'News'}</small><p>{event.title}</p></article>):<p>No published events in this history.</p>}</div></ChartDialog>}
+    {eventDetails && <ChartDialog title="Published events" onClose={()=>setEventDetails(null)}><div className="chart-event-list">{eventDetails.length?eventDetails.map(event=><ChartEventItem key={event.id} event={event} styles={appearance.eventStyles}/>):<p>No published events in this history.</p>}</div></ChartDialog>}
     <p id={`chart-keyboard-help-${tileId}`} className="sr-only">Two clicks or drag to draw. Select to move; drag handles to reshape. Delete removes. Ctrl or Command Z undoes. Escape cancels. Scroll or pinch zooms. Drag the right price scale to stretch or compress prices; double-click it to restore automatic scaling. Drag pane separators to resize. Alt Enter maximizes or restores the chart. While selecting a replay bar, use Left and Right then Enter, or click a bar. During replay, Space plays or pauses and Left or Right steps one bar.</p>
   </>;
 }
@@ -750,6 +803,7 @@ function ChartTile({
   layoutControls?: ReactNode;
 }) {
   const {symbol,interval}=initial;
+  const queryClient = useQueryClient();
   const searchRef = useRef<ChartSymbolSearchHandle>(null);
   const sceneActions = useRef<ChartSceneActions | null>(null);
   const [inputError, setInputError] = useState('');
@@ -759,22 +813,11 @@ function ChartTile({
   const metadata=useQuery({
     queryKey:['chart-metrics',datasetRevision,symbol,sessionDate],
     queryFn:async()=>{
-      const result=await screenerApi.runScreen({datasetRevision,universe:'custom',customSymbols:[symbol],asOfDate:sessionDate ?? '',page:1,pageSize:1,expressionTree:{type:'group',operator:'all',children:[]}});
-      if (result.immutableRevision!==datasetRevision) throw new Error('Chart metrics revision mismatch');
-      return result.rows.find(row=>row.symbol===symbol)??null;
+      return (await screenerApi.getChartRows(datasetRevision, sessionDate)).find(row=>row.symbol===symbol)??null;
     },
     enabled:Boolean(datasetRevision),retry:false,staleTime:Infinity,
   });
-  const chart = useQuery({
-    queryKey: ['chart', datasetRevision, symbol, sessionDate],
-    queryFn: async () => {
-      const snapshot = await screenerApi.getChart(symbol, datasetRevision, sessionDate);
-      return {...snapshot, candles: validateCandles(snapshot.candles)};
-    },
-    enabled: Boolean(datasetRevision),
-    retry: false,
-    staleTime: Infinity,
-  });
+  const chart = useQuery({...chartQuery(datasetRevision, symbol, sessionDate), enabled: Boolean(datasetRevision)});
   // Loaded with the candles so relative-strength studies render without rebuilding the chart.
   const benchmark = useQuery({
     queryKey: ['benchmark', datasetRevision],
@@ -798,7 +841,10 @@ function ChartTile({
     if (!symbols.length) return;
     const index = symbols.indexOf(symbol);
     const next = symbols[index < 0 ? 0 : (index + direction + symbols.length) % symbols.length];
-    if (next !== symbol) onChange(tileId, {symbol: next, interval});
+    if (next !== symbol) {
+      onChange(tileId, {symbol: next, interval});
+      prefetchCharts(queryClient, symbols, next, datasetRevision, sessionDate, direction);
+    }
   };
   const handleShortcut: TileShortcutHandler = event => {
     const actions = sceneActions.current;
@@ -806,7 +852,7 @@ function ChartTile({
       const digit = /^Digit([1-3])$/.exec(event.code);
       if (digit) { changeInterval(INTERVALS[Number(digit[1]) - 1]); return 'consume'; }
       const command = ({KeyI: actions?.openIndicators, KeyL: actions?.toggleLegend, KeyV: actions?.toggleAllIndicators,
-        KeyH: actions?.toggleDrawings, KeyR: actions?.resetView, KeyS: actions?.saveImage} as Record<string, (() => void) | undefined>)[event.code];
+        KeyH: actions?.toggleDrawings, KeyR: actions?.resetView, KeyS: actions?.saveImage, KeyF: actions?.fitAll, KeyM: actions?.toggleMagnet} as Record<string, (() => void) | undefined>)[event.code];
       if (command) { command(); return 'consume'; }
       return null;
     }
@@ -855,9 +901,9 @@ function ChartTile({
     {(chart.isError || chart.isPending || !candles.length) && <header className="chart-topbar">{symbolControls}<span className="chart-topbar-spacer"/>{layoutControls}{viewControls}</header>}
     {inputError && <p role="alert" className="notice">{inputError}</p>}
     {chart.isError ? <div role="alert" className="chart-status"><p>{chart.error.message}</p><Button variant="ghost" onClick={() => void chart.refetch()}>Retry</Button></div>
-      : chart.isPending || benchmark.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
+      : chart.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
       : !candles.length ? <p className="chart-status" role="status">No published candles for {symbol}.</p>
-      : <ChartScene key={`${datasetRevision}:${sessionDate}:${symbol}:${interval}`} candles={candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
+      : <ChartScene key={`${datasetRevision}:${sessionDate}:${symbol}:${interval}`} candles={candles} daily={chart.data.candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
           firstDate={chart.data.candles[0].date} lastDate={chart.data.candles.at(-1)!.date} metrics={metadata.data??undefined} sessionDate={chart.data.asOfDate} events={events} revision={datasetRevision!} interval={interval} tileId={tileId} sync={sync} benchmark={benchmark.data ?? undefined} actionsRef={sceneActions}/>}
   </section>;
 }

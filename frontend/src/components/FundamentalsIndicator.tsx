@@ -2,12 +2,14 @@ import { memo, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent
 import { useQuery } from '@tanstack/react-query';
 import { screenerApi } from '../api/screenerApi';
 import {
-  comparisonPeriod, financialNumber, fundamentalsConfig, growth, priceBandPercent, resultsCountdown, surveillanceLabels, upcomingResults, visibleFinancials,
+  BAND_MARKERS, comparisonPeriod, financialNumber, fundamentalsConfig, growth, priceBandPercent, resultsCountdown, surveillanceLabels, upcomingResults, visibleFinancials,
   type FinancialPeriod, type FundamentalsConfig,
 } from '../chart/fundamentals';
 import type { ChartMetrics } from './ChartLegend';
 import { ChartDialog } from './ChartDialog';
 import { Button } from './Button';
+import { MarkerStyleRow } from './MarkerStyleRow';
+import { markerStyle } from '../chart/markerShapes';
 import { useMountEffect } from '../hooks/useMountEffect';
 
 type Offset = {x: number; y: number};
@@ -29,7 +31,7 @@ const ESSENTIAL = new Set(['sales', 'expenses', 'operating_profit', 'opm', 'prof
 const LOWER_IS_BETTER = new Set(['expenses', 'interest', 'depreciation', 'tax_expenses']);
 
 /** Drag the badge or card handle; arrow keys nudge a focused overlay. */
-function useOverlayDrag(onMove?: (offset: Offset) => void) {
+export function useOverlayDrag(onMove?: (offset: Offset) => void) {
   const [live, setLive] = useState<Offset | null>(null);
   const frame = useRef(0);
   useMountEffect(() => () => cancelAnimationFrame(frame.current));
@@ -78,7 +80,7 @@ function useOverlayDrag(onMove?: (offset: Offset) => void) {
     },
   };
 }
-const placed = (offset: Offset | null, extra: CSSProperties = {}): CSSProperties => offset ? {
+export const placed = (offset: Offset | null, extra: CSSProperties = {}): CSSProperties => offset ? {
   ...extra, left: `${offset.x * 100}%`, top: `${offset.y * 100}%`, right: 'auto', bottom: 'auto',
   translate: `${-offset.x * 100}% ${-offset.y * 100}%`,
 } : extra;
@@ -121,13 +123,13 @@ export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, me
       </span>
       {surveillance.map(label => <span key={label} className="pb-status">{label}</span>)}
     </div>}
-    {config.table && <section className={`pb-card${config.layout === 'compact' ? '' : ' is-results'}`} tabIndex={0} aria-label={`${symbol} results`} title="Drag the handle to move; arrow keys nudge when focused"
+    {/* No card at all while loading or when nothing is published: an empty table only covers the chart. */}
+    {config.table && shown.length > 0 && <section className={`pb-card${config.layout === 'compact' ? '' : ' is-results'}`} tabIndex={0} aria-label={`${symbol} results`} title="Drag the handle to move; arrow keys nudge when focused"
       style={placed(cardDrag.live ?? config.offset, {'--pb-scale': config.tableScale} as CSSProperties)} {...cardDrag.handlers}>
       <div className="pb-drag-handle" aria-hidden="true">•••</div>
-      {shown.length ? (config.layout === 'compact'
+      {config.layout === 'compact'
         ? <CompactTable rows={rows} shown={shown} config={config} metadata={metadata} />
-        : <ResultsTable shown={shown} config={config} metadata={metadata} />)
-        : <p className="pb-empty" role="status">{history.isPending ? 'Loading results…' : history.isError ? 'Results unavailable for this snapshot.' : `No results published by ${cutoff}.`}</p>}
+        : <ResultsTable shown={shown} config={config} metadata={metadata} />}
     </section>}
   </>;
 }
@@ -221,6 +223,11 @@ export function FundamentalsSettingsDialog({config: raw, onApply, onClose}: {con
       {check('band', 'Price band badge (band, ASM/GSM)')}
       {check('resultDate', 'Results countdown in the badge', !config.band)}
       {check('bandHistory', 'Past band changes on the chart')}
+      {config.bandHistory && <div className="pb-band-styles">
+        {BAND_MARKERS.map(([key, label, color]) => <MarkerStyleRow key={key} label={label}
+          style={markerStyle(config.bandStyles[key], {visible: true, color, shape: 'square'})}
+          onChange={next => set({bandStyles: {...config.bandStyles, [key]: next}})} />)}
+      </div>}
       {check('guides', 'Upper and lower circuit lines (UC / LC)')}
       {check('earningsLabel', 'Upcoming results "E" label on the chart')}
       {check('earningsLine', 'Dotted line on the results date', !config.earningsLabel)}

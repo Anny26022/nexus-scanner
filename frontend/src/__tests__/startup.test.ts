@@ -56,8 +56,8 @@ it.each(['offline', 'invalid'])('preserves query errors and retry after %s start
   expect(fetch).toHaveBeenCalledTimes(2);
 });
 
-it('does not download stock data or start a worker for a saved IPO tab', async () => {
-  localStorage.setItem('nexus-scanner.ui.active-tab.v1', JSON.stringify('ipo'));
+it.each(['ipo','charts','market'])('does not download stock data or start a worker for a saved %s tab', async tab => {
+  localStorage.setItem('nexus-scanner.ui.active-tab.v1', JSON.stringify(tab));
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(manifest))));
   await import('../startup');
   const {realAdapter} = await import('../api/realAdapter');

@@ -347,6 +347,11 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
     write_json(generation/'universe-classification.json', consolidated_classification(rows, taxonomy))
     stock_bytes=write_json(generation/'stocks.json',payload)
+    chart_fields = ('symbol', 'name', 'close', 'changePct', 'marketCapCrore', 'freeFloatPct', 'circuitLimit', 'series', 'sector', 'industry', 'nicheTags', 'isFno', 'surveillanceAvailable', 'surveillanceAsOfDate', 'isAsm', 'asmStage', 'isGsm', 'gsmStage', 'listingDate')
+    directory = dict(revision=revision, asOfDate=session, stocks=[
+        {key: row[key] for key in chart_fields if key in row} for row in rows])
+    (generation/'chart-directory.json.gz').write_bytes(gzip.compress(
+        json.dumps(directory, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
     # Keep the full financial series out of every lightweight scanner row.
     histories = {symbol: stock["financial_statement_history"] for symbol, stock in context['stocks'].items()
                  if stock.get("financial_statement_history")}
@@ -409,6 +414,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     band_temporary.write_bytes(gzip.compress(band_bytes, compresslevel=9, mtime=0))
     band_temporary.replace(band_path)
     manifest['priceBandHistoryUrl'] = f'/data/revisions/{revision}/price-band-history.json.gz'
+    manifest['chartDirectoryUrl'] = f'/data/revisions/{revision}/chart-directory.json.gz'
     manifest['datasetPackedGzipUrl'] = f'/data/revisions/{revision}/stocks.packed.json.gz'
     manifest['financialHistoryUrlTemplate'] = f'/data/revisions/{revision}/financial-history/{{symbol}}.json.gz'
     manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'

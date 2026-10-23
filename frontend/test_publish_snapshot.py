@@ -93,6 +93,14 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(values['financials.pe_ttm'],25.4)
             # Verify intelligent fallback populated the primary row!
             self.assertEqual(payload['stocks'][0]['peRatio'],25.4)
+            with gzip.open(path/'chart-directory.json.gz','rt') as handle:
+                directory = json.load(handle)
+            self.assertEqual(directory['revision'], manifest['revision'])
+            self.assertEqual(directory['asOfDate'], manifest['sessionDate'])
+            self.assertEqual(directory['stocks'][0]['symbol'], payload['stocks'][0]['symbol'])
+            self.assertEqual(directory['stocks'][0]['marketCapCrore'], payload['stocks'][0]['marketCapCrore'])
+            self.assertNotIn('tradingview', directory['stocks'][0])
+            self.assertTrue(manifest['chartDirectoryUrl'].endswith('/chart-directory.json.gz'))
             with gzip.open(path/'stocks.packed.json.gz','rt') as handle:
                 self.assertEqual(decode_packed_snapshot(json.load(handle)),payload)
 

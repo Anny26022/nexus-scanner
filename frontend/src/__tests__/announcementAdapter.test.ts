@@ -45,6 +45,16 @@ it('uses compact references for recent filings, categories, history and evidence
   await expect(realAdapter.getAnnouncementDetail('TEST', {...row, detailPage: hash('0')})).rejects.toThrow('not part of this release');
   expect(fetcher.mock.calls.some(([url]) => url.includes(hash('d')))).toBe(false);
 });
+it('reads the filing lookup from its own object when the index references it', async () => {
+  const {fetcher, values} = fixture();
+  const lookup = {publishedAt: catalog.publishedAt, taxonomy: catalog.taxonomy, index: catalog.index,
+    symbols: {TEST: {recent: hash('e'), years: [2026], history: hash('5')}}};
+  values['/index.json'] = {...values['/index.json'] as object, filingLookupObject: hash('6')};
+  values[`https://cdn.example.com/objects/${hash('6')}.json.gz`] = lookup;
+  const {realAdapter} = await import('../api/realAdapter');
+  expect(await realAdapter.getAnnouncements('TEST')).toEqual({symbol: 'TEST', records: [row], years: [2026], publishedAt: catalog.publishedAt});
+  expect(fetcher.mock.calls.some(([url]) => url.includes(hash('d')))).toBe(false); // no global catalog
+});
 it('opens only chart data and reuses the parsed object across release changes', async () => {
   const {fetcher, values} = fixture();
   const {realAdapter, refreshManifest} = await import('../api/realAdapter');

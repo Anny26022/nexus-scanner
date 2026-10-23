@@ -42,3 +42,16 @@ test('does not expose other bucket prefixes or write methods', async () => {
   assert.equal(missing.headers.get('Access-Control-Allow-Origin'), '*');
   assert.equal((await worker.fetch(new Request('https://data.example.com/objects/file', { method: 'PUT' }), env)).status, 405);
 });
+
+test('only immutable paths receive a long cache lifetime', async () => {
+  for (const path of ['objects/abc.json.gz', 'releases/abc/index.json']) {
+    const response = await worker.fetch(new Request(`https://data.example.com/${path}`), env);
+    assert.equal(response.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+  }
+  for (const path of ['snapshots/2026-10-23.json.gz', 'daily/abc.json.gz', 'monthly/abc.json.gz']) {
+    const response = await worker.fetch(new Request(`https://data.example.com/${path}`), env);
+    assert.equal(response.headers.get('Cache-Control'), 'no-cache');
+  }
+  const response = await worker.fetch(new Request('https://data.example.com/private/file'), env);
+  assert.equal(response.headers.get('Cache-Control'), 'no-store');
+});

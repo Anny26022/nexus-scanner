@@ -6,7 +6,7 @@ import { defaultStudyConfigs } from '../chart/studyConfigs';
 
 const native=vi.hoisted(()=>{
   const series:Array<ReturnType<typeof makeSeries>>=[];
-  const scale={applyOptions:vi.fn(),setAutoScale:vi.fn()};
+  const scale={applyOptions:vi.fn(),setAutoScale:vi.fn(),options:vi.fn(()=>({autoScale:true})),getVisibleRange:vi.fn(()=>({from:100,to:200})),setVisibleRange:vi.fn()};
   const pane={paneIndex:vi.fn(()=>0),setStretchFactor:vi.fn()};
   const markers={setMarkers:vi.fn(),detach:vi.fn()};
   function makeSeries(type:string) {
@@ -203,7 +203,10 @@ it('groups optional event markers and excludes future events and comparison sess
   engine.setAppearance({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',events:true,volumePane:false,crosshairMode:'ohlc'});
   expect(native.series[1].applyOptions).toHaveBeenCalledWith(expect.objectContaining({priceScaleId:'volume',lastValueVisible:false,visible:true}));
   engine.setAppearance({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',events:true,volumePane:true,crosshairMode:'ohlc'});
-  expect(native.markers.setMarkers.mock.lastCall?.[0]).toEqual([expect.objectContaining({time:'2026-10-01',id:'events:2026-10-01'})]);
+  // Events are lettered badges in the bottom strip: E and N on 1 Oct; the 5 Oct split is after the cutoff.
+  expect((engine as unknown as {eventStrip:{key:string;badges:{letter:string}[]}[]}).eventStrip).toEqual([{index:0,key:'events:2026-10-01',badges:[{letter:'E',color:'#f23645'},{letter:'N',color:'#2962ff'}]}]);
+  engine.setAppearance({horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal',events:true,volumePane:true,eventStyles:{news:{visible:false}}});
+  expect((engine as unknown as {eventStrip:{key:string;badges:{letter:string}[]}[]}).eventStrip[0].badges.map(badge=>badge.letter)).toEqual(['E']);
   engine.setComparison('TCS',[...candles,{...candles[1],date:'2026-10-03'}]);
   const comparison=native.series.at(-1)!;
   expect(comparison.setData.mock.lastCall?.[0]).toEqual([{time:'2026-10-01',value:11},{time:'2026-10-02',value:10}]);
@@ -284,7 +287,7 @@ it('colours Simple Volume bars as pocket pivots, above-average up/down, dry and 
   // With labels off, the 500 pocket pivot (also the highest volume ever) stays deep blue; with them on it's the sky-blue HVE.
   expect(native.markers.setMarkers).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({id:'vol:HVE',text:'HVE',color:'#87ceeb'})]));
   // Bull Snort: 500 >= 3x the ~108 average, close in the top 35% of the range, above the previous close.
-  expect(native.markers.setMarkers).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({id:'snort:2026-03-03',shape:'square'})]));
+  expect((engine as unknown as {simpleVolume:{snorts:number[]}}).simpleVolume.snorts).toContain(61);
   engine.destroy();
 });
 it('paints every highest-volume record sky blue, including down days',()=>{
@@ -311,8 +314,8 @@ it('earnings indicator markers respect replay cutoffs and visibility', () => {
   const {engine}=setup();
   engine.setStudyConfigs({...defaultStudyConfigs(),fundamentals:{enabled:true}});
   engine.setEvents([{id:'past',date:'2026-10-01',kind:'earnings',title:'Quarterly results'}, {id:'future',date:'2026-10-05',kind:'earnings',title:'Future results'}],'2026-10-02');
-  const events=()=>native.markers.setMarkers.mock.lastCall![0].filter((marker:{id:string})=>marker.id.startsWith('events:'));
-  expect(events()).toEqual([expect.objectContaining({time:'2026-10-01'})]);
+  const events=()=>(engine as unknown as {eventStrip:{key:string;badges:{letter:string}[]}[]}).eventStrip.map(group=>group.key);
+  expect(events()).toEqual(['events:2026-10-01']);
   engine.setStudyVisibility('fundamentals',false);
   expect(events()).toEqual([]);
   engine.destroy();
@@ -398,4 +401,69 @@ it('updates the volume average incrementally on replay append',()=>{
   engine.setCandles(candles);
   expect(average.setData).not.toHaveBeenCalled(); expect(average.update).toHaveBeenCalledOnce();
   engine.destroy(); native.pane.paneIndex.mockReturnValue(0);
+});
+it('formats the crosshair date with the weekday, as TradingView does',async()=>{
+  const {crosshairDate}=await import('../chart/ChartEngine');
+  expect(crosshairDate('2024-08-09')).toBe("Fri 09 Aug '24");
+});
+it('pans 2 bars per arrow (10 with Ctrl), pans prices with Up/Down and announces the latest visible bar',()=>{
+  const {engine}=setup();
+  const announce=vi.fn();engine.announce=announce;
+  native.time.getVisibleLogicalRange.mockReturnValue({from:0,to:5});
+  const host=document.body.lastElementChild as HTMLElement;
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:2,to:7});
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',ctrlKey:true,bubbles:true,cancelable:true}));
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:-10,to:-5});
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true,cancelable:true}));
+  expect(native.scale.setVisibleRange).toHaveBeenLastCalledWith({from:110,to:210});
+  expect(announce).toHaveBeenLastCalledWith(expect.stringContaining('close 13'));
+  engine.destroy();
+});
+it('draws an opt-in previous-close line and keeps one per series',()=>{
+  const {engine}=setup();
+  const price=native.series[0];
+  expect(price.createPriceLine).not.toHaveBeenCalled();
+  engine.setAppearance({horizontalGrid:false,verticalGrid:false,crosshair:true,volume:true,scaleMode:'normal',prevCloseLine:true});
+  expect(price.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({price:10,axisLabelVisible:true}));
+  engine.setAppearance({horizontalGrid:false,verticalGrid:false,crosshair:true,volume:true,scaleMode:'normal',prevCloseLine:false});
+  expect(price.removePriceLine).toHaveBeenCalled();
+  engine.destroy();
+});
+it('copies, pastes and duplicates the selected drawing five bars later',()=>{
+  const host=document.createElement('div');document.body.append(host);
+  const book=new DrawingBook();
+  const engine=new ChartEngine(host,candles,vi.fn(),book);
+  book.addPoints('trendline',[{time:Date.parse('2026-10-01'),price:10},{time:Date.parse('2026-10-02'),price:11}]);
+  const first=book.getSnapshot().drawings[0];
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'d',metaKey:true,bubbles:true,cancelable:true}));
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'c',metaKey:true,bubbles:true,cancelable:true}));
+  host.dispatchEvent(new KeyboardEvent('keydown',{key:'v',metaKey:true,bubbles:true,cancelable:true}));
+  const drawings=book.getSnapshot().drawings;
+  expect(drawings).toHaveLength(3);
+  expect(drawings[1].kind).toBe('trendline');
+  expect(drawings[1].a.time).toBeGreaterThan(first.a.time);
+  engine.destroy();
+});
+it('classifies corporate actions into TradingView event letters', async () => {
+  const {eventBadgeKey}=await import('../chart/events');
+  expect(['Stock split from Rs 10 to Rs 2','Bonus 1:1','Interim Dividend','Rights issue','AGM'].map(title=>eventBadgeKey({kind:'action',title})))
+    .toEqual(['split','bonus','dividend','rights','action']);
+  expect(eventBadgeKey({kind:'news',title:'x'})).toBe('news');
+});
+
+it('updates a late relative-strength benchmark without recreating native series',()=>{
+  const {engine}=setup();
+  engine.setStudyConfigs({...defaultStudyConfigs(),extras:{rs:{enabled:true,params:{maPeriod:0}}}});
+  const firstStudy=native.series.length;
+  engine.setStudies({});
+  const rs=native.series[firstStudy];
+  const count=native.chart.addSeries.mock.calls.length;
+  const before=rs.setData.mock.calls.length;
+  engine.setBenchmark(new Map(candles.map(bar=>[bar.date,100])));
+  expect(rs.setData.mock.calls.length).toBeGreaterThan(before);
+  expect(rs.setData.mock.lastCall?.[0].some((bar:{value?:number})=>Number.isFinite(bar.value))).toBe(true);
+  expect(native.chart.addSeries).toHaveBeenCalledTimes(count);
+  expect(native.chart.removeSeries).not.toHaveBeenCalled();
+  engine.destroy();
 });

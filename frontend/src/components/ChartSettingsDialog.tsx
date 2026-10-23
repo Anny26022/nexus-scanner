@@ -10,6 +10,8 @@ import {
 import { type ChartAppearance, type ChartStyle, type ScaleMode } from '../chart/ChartEngine';
 import { ChartDialog } from './ChartDialog';
 import { ColorPalette } from './ColorPalette';
+import { MarkerStyleRow } from './MarkerStyleRow';
+import { EVENT_BADGES } from '../chart/events';
 import { CHART_STYLE_OPTIONS } from './ChartStylePicker';
 
 const DEFAULT_UP = '#089981';
@@ -311,15 +313,6 @@ export function ChartSettingsDialog({
 
           {section === 'readout' && <>
             <h4 className="cs-subhead">Symbol</h4>
-            <Check label="Logo" checked={draft.statusLogo === true} onChange={(checked) => update({ statusLogo: checked })} />
-            <Check label="Title" checked={draft.statusTitle === true} onChange={(checked) => update({ statusTitle: checked })}>
-              <select aria-label="Title shows" className="cs-select" disabled={draft.statusTitle !== true} value={draft.statusTitleMode ?? 'symbol'}
-                onChange={(e) => update({ statusTitleMode: e.target.value as 'symbol' | 'description' | 'ticker' })}>
-                <option value="symbol">Symbol</option>
-                <option value="description">Description</option>
-                <option value="ticker">Ticker</option>
-              </select>
-            </Check>
             <Check label="Market status" checked={draft.statusMarketStatus === true} onChange={(checked) => update({ statusMarketStatus: checked })} />
             <Check label="Open, high, low, close" checked={draft.statusOhlc !== false} onChange={(checked) => update({ statusOhlc: checked })} />
             <Check label="Bar change values" checked={draft.statusBarChange !== false} onChange={(checked) => update({ statusBarChange: checked })} />
@@ -355,6 +348,7 @@ export function ChartSettingsDialog({
             <h4 className="cs-subhead">Lines</h4>
             <Check label="Last price line" checked={draft.priceLineVisible === true} onChange={(checked) => update({ priceLineVisible: checked })} />
             <Check label="High and low price lines" checked={draft.highLowPriceLines ?? false} onChange={(checked) => update({ highLowPriceLines: checked })} />
+            <Check label="Previous close line" checked={draft.prevCloseLine === true} onChange={(checked) => update({ prevCloseLine: checked })} />
             <h4 className="cs-subhead">Time scale</h4>
             <Check label="Corner clock" checked={draft.sessionClock ?? false} onChange={(checked) => update({ sessionClock: checked })} />
             <Row label="Clock timezone" indent>
@@ -413,7 +407,11 @@ export function ChartSettingsDialog({
           {section === 'trading' && <>
             <h4 className="cs-subhead">Events</h4>
             <Check label="Show published event markers" checked={draft.events ?? false} onChange={(checked) => update({ events: checked })} />
-            <p className="cs-note">Earnings, corporate actions and market news appear on the dates they happened.</p>
+            <p className="cs-note">Lettered badges along the bottom of the chart, on the date each happened. Click one for details.</p>
+            <h4 className="cs-subhead">Badges</h4>
+            {EVENT_BADGES.map(([key, letter, label, color]) => <MarkerStyleRow key={key} label={`${letter} · ${label}`} shapes={false}
+              style={{visible: draft.eventStyles?.[key]?.visible !== false, color: draft.eventStyles?.[key]?.color ?? color, shape: 'circle'}}
+              onChange={next => update({eventStyles: {...draft.eventStyles, [key]: {visible: next.visible, color: next.color}}})} />)}
             <div className="cs-row">
               <button className="cs-button" type="button" onClick={() => { onEvents(); onClose(); }}>View published events</button>
             </div>
@@ -448,7 +446,11 @@ export function ChartSettingsDialog({
       </div>
 
       <footer className="chart-settings-footer">
-        <button type="button" className="cs-link" onClick={reset}>Reset to defaults</button>
+        <div className="flex items-center gap-3">
+          <button type="button" className="cs-link" onClick={reset}>Reset to defaults</button>
+          {/* Lightweight Charts licence: attribution to TradingView. */}
+          <a className="chart-attribution" href="https://www.tradingview.com/" target="_blank" rel="noreferrer">Lightweight Charts™ by TradingView</a>
+        </div>
         <div className="chart-settings-footer-actions">
           <button type="button" className="cs-button" onClick={cancel}>Cancel</button>
           <button type="button" className="cs-button is-primary" onClick={apply}>Apply</button>

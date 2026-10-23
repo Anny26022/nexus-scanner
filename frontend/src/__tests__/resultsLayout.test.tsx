@@ -70,7 +70,7 @@ function quickChart(cached = false) {
   const snapshot = {candles: [{date: '2026-10-01', open: 1, high: 2, low: 0.5, close: 1.5, volume: 10}]};
   const getChart = vi.spyOn(screenerApi, 'getChart').mockResolvedValue(snapshot as never);
   const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
-  if (cached) client.setQueryData(['quick-chart', request.datasetRevision, row.symbol, request.asOfDate], snapshot);
+  if (cached) client.setQueryData(['chart', request.datasetRevision, row.symbol, request.asOfDate], snapshot);
   const view = render(<QueryClientProvider client={client}><ResultsTable {...props} data={data} /></QueryClientProvider>);
   fireEvent.click(screen.getByRole('button', {name: 'Charts'}));
   const card = screen.getByLabelText('AVTNPL quick chart');

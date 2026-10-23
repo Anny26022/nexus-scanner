@@ -157,6 +157,7 @@ def _filing_events(payload, as_of):
             if symbol and date and date <= as_of:
                 events[symbol].append({"date": date, "publishedAt": filing.get("news_date"),
                     "category": "Regulatory filing", "headline": filing.get("caption") or filing.get("descriptor"),
+                    "body": filing.get("news_body"),
                     "url": filing.get("file_url"), "filingId": filing.get("filingId"),
                     "classification": filing['classification'],
                     **({"documentExtraction": {k: v for k, v in filing["documentExtraction"].items() if k in ("status", "sha256", "pagesExamined", "totalPages", "truncated", "error")}} if filing.get("documentExtraction") else {}),
@@ -316,9 +317,16 @@ def main() -> int:
         print(f'Chart candles elapsed: {time.perf_counter() - candle_started:.2f}s', flush=True)
         announcements = announcement.result()
     count = len(tasks)
+    # Listing each chart's candle chunks lets the app fetch a chart record and its candles at once,
+    # instead of reading the record first (one R2 round trip saved per chart). The filing lookup is
+    # an object of its own so the index the chart path waits on stays small.
+    chart_chunks = {}
+    for symbol, digest in chart_objects.items():
+        with gzip.open(objects / f"{digest}.json.gz", "rt") as handle:
+            chart_chunks[symbol] = json.load(handle).get("candleChunks", [])
     index = {"schemaVersion": 2, "asOfDate": as_of, "symbols": count,
-             "chartObjects": chart_objects, "announcements": announcements,
-             "filingLookup": announcement_lookup(objects, announcements),
+             "chartObjects": chart_objects, "chartChunks": chart_chunks, "announcements": announcements,
+             "filingLookupObject": put_object(objects, announcement_lookup(objects, announcements)),
              "retention": {"highestEver": "all available history", "quarterlyQuarters": QUARTERLY_EVENT_LIMIT}}
     index["revision"] = hashlib.sha256(json.dumps(index, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     save_json(temporary / "index.json", index)

@@ -2,7 +2,7 @@ const prefixes = /^(?:objects|releases|daily|monthly|snapshots)\//;
 
 export default {
   async fetch(request, env) {
-    const cors = { 'Access-Control-Allow-Origin': '*' };
+    const cors = { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' };
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return new Response(null, { status: 405, headers: { ...cors, Allow: 'GET, HEAD' } });
     }
@@ -22,7 +22,9 @@ export default {
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set('ETag', object.httpEtag);
-    headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+    // Only content-addressed objects and frozen releases are immutable.
+    headers.set('Cache-Control', /^(objects|releases)\//.test(key)
+      ? 'public, max-age=31536000, immutable' : 'no-cache');
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('X-Content-Type-Options', 'nosniff');
     return new Response(request.method === 'HEAD' ? null : object.body, { headers });

@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChartNoAxesCombined, Maximize2, Minus, Plus, RefreshCw, RotateCcw } from 'lucide-react';
-import { screenerApi } from '../api/screenerApi';
-import { validateCandles, type Candle } from '../chart/model';
+import { chartQuery } from '../chart/chartQuery';
+import type { Candle } from '../chart/model';
 import { ChartEngine } from '../chart/ChartEngine';
 import { loadScene, openSymbolInCharts, savedDrawingBook } from '../chart/storage';
 import { defaultStudies } from '../chart/studies';
@@ -96,13 +96,8 @@ function QuickChartCard({ row, revision, sessionDate, rank, observe, onOpenFullC
   const engineRef = useRef<ChartEngine | null>(null);
   const onEngineChange = useCallback((engine: ChartEngine | null) => { engineRef.current = engine; }, []);
   const chart = useQuery({
-    queryKey: ['quick-chart', revision, row.symbol, sessionDate],
-    queryFn: async () => {
-      const snapshot = await screenerApi.getChart(row.symbol, revision, sessionDate);
-      return { ...snapshot, candles: validateCandles(snapshot.candles) };
-    },
+    ...chartQuery(revision, row.symbol, sessionDate),
     enabled: activated && Boolean(revision),
-    staleTime: Infinity,
     retry: 1,
   });
   const changePct = typeof row.changePct === 'number' && Number.isFinite(row.changePct) ? row.changePct : null;

@@ -554,7 +554,10 @@
 
 .chart-actions-zone { position: absolute; z-index: 10; inset: auto 0 0; height: 54px; }
 .chart-actions { position: absolute; left: 50%; bottom: 14px; transform: translate(-50%, 6px); display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-pop); opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity .2s var(--ease-out), transform .2s var(--ease-out); }
-.chart-actions-zone:hover .chart-actions, .chart-actions-zone:focus-within .chart-actions { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+/* The zone never takes clicks (the event badges sit there); the plot reveals the controls when the pointer nears the bottom. */
+.chart-actions-zone { pointer-events: none; }
+.chart-actions-zone .chart-actions { pointer-events: none; }
+.chart-plot[data-near-bottom="true"] .chart-actions, .chart-actions-zone:focus-within .chart-actions { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
 .chart-actions .button { min-height: 28px; height: 28px; padding: 0 8px; border: 0; border-radius: 7px; color: var(--secondary); font-size: 12.5px; font-weight: 500; cursor: pointer; }
 .chart-actions .button:hover { background: var(--surface-hover); color: var(--text); }
 .chart-actions .chart-auto-btn { font-size: 11px; font-weight: 600; }
@@ -2090,9 +2093,23 @@
 .ema-setting-actions button[type="submit"] { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 .chart-comparison-status { min-width: 0; max-width: 160px; margin-inline: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b27b1d; font-size: 10px; }
 .chart-event-list { padding: 0 14px 14px; }
-.chart-event-list article { padding-block: 12px; border-bottom: 1px solid var(--line); }
-.chart-event-list small { color: var(--muted); font-size: 10px; }
 .chart-event-list p { margin: 5px 0 0; color: var(--text); font-size: 12px; line-height: 1.5; }
+.chart-event-item { padding-block: 12px; border-bottom: 1px solid var(--line); }
+.chart-event-item:last-child { border-bottom: 0; }
+.chart-event-item header { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
+.chart-event-kind { display: inline-grid; place-items: center; width: 16px; height: 16px; border: 1.25px solid; border-radius: 50%; font-size: 9px; font-weight: 600; line-height: 1; }
+.chart-event-label { color: var(--text); font-weight: 500; }
+.chart-event-item time { margin-left: auto; font-variant-numeric: tabular-nums; }
+.chart-event-item h3 { margin: 6px 0 0; color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.4; }
+.chart-event-item p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.chart-event-item footer { display: flex; align-items: center; gap: 12px; margin-top: 8px; color: var(--muted); font-size: 11px; }
+.chart-event-item footer a { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: #2962ff; text-decoration: none; }
+.chart-event-item footer a:hover { text-decoration: underline; }
+.chart-event-hover { position: absolute; z-index: 20; width: 300px; max-height: 320px; overflow: hidden; padding: 0 12px; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 16px rgb(0 0 0 / 14%); pointer-events: none; }
+.chart-event-hover .chart-event-item { padding-block: 10px; }
+.chart-event-hover .chart-event-item p { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.chart-event-more { margin: 0; padding: 0 0 10px; color: var(--muted); font-size: 11px; }
 .chart-context-menu { position: fixed; z-index: var(--z-context-menu); display: grid; min-width: 190px; padding: 4px; border: 0; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-pop); }
 .chart-context-menu button { min-height: 30px; padding: 0 8px; border: 0; border-radius: var(--radius-lg); background: transparent; color: var(--text); font: inherit; font-size: 12px; text-align: left; }
 .chart-context-menu button:hover, .chart-context-menu button:focus-visible { background: var(--surface-hover); outline: none; }
@@ -2162,11 +2179,21 @@
   .chart-topbar .chart-toolbar-button { width: 32px; padding: 0; }
 }
 
-/* Phone: the single toolbar scrolls sideways so every control stays reachable. */
+/* Phone: one row with what a phone needs (symbol, interval, indicators, draw, replay, settings).
+   Chart type lives in Chart settings; grids, layouts, shortcuts and full screen (the chart already fills a phone) are desktop tools. */
 @media (max-width: 700px) {
-  .chart-topbar { overflow-x: auto; scrollbar-width: none; }
+  .chart-topbar { overflow-x: auto; scrollbar-width: none; padding-right: 40px; }
   .chart-topbar::-webkit-scrollbar { display: none; }
   .chart-topbar > * { flex-shrink: 0; }
+  .chart-topbar .chart-symbol-trigger { flex: none; max-width: 110px; }
+  .chart-topbar .chart-style-picker, .chart-topbar button.chart-expand, .chart-topbar button.chart-shortcuts-button, .chart-topbar button.chart-layouts-button, .chart-topbar .chart-grid-picker { display: none; }
+  .chart-topbar .chart-desk-toolbar { margin-left: 0; padding-left: 0; border-left: 0; }
+  /* The closed watchlist is just its button, over the toolbar's right end, so the chart gets the full width. */
+  .chart-desk-body .chart-watchlist-dock:not(.is-mobile-open) {
+    position: absolute; top: 0; right: 0; z-index: 3; height: 42px; border: 0; background: transparent;
+  }
+  .chart-desk-body .watchlist-mobile-toggle { display: grid; height: 42px; border-bottom: 0; background: transparent; }
+  .chart-watchlist-dock.is-mobile-open { width: 100%; box-shadow: none; }
 }
 
 /* Symbol search palette (opened from the toolbar symbol, "/" or by typing on a chart). */
@@ -2279,7 +2306,6 @@
 .pb-results td[data-breakout="down"] { color: #b91c1c; background: rgb(239 68 68 / .11); box-shadow: inset 0 0 0 1px rgb(239 68 68 / .18); }
 :root[data-theme="dark"] .pb-results td[data-breakout="up"] { color: #34d399; }
 :root[data-theme="dark"] .pb-results td[data-breakout="down"] { color: #f87171; }
-.pb-empty { margin: 0; color: var(--muted); font-size: 11px; }
 @media (max-width: 700px) {
   .pb-badge { top: 6px; right: 58px; }
   .pb-card { top: 40px; right: 58px; max-width: calc(100% - 70px); }
@@ -2331,10 +2357,10 @@
 .chart-scale-buttons button[aria-pressed="true"] { color: #2962ff; box-shadow: 0 0 0 1px #2962ff66; }
 
 /* Interval box opened by typing a digit on the chart (TradingView). */
-.interval-prompt { position: fixed; z-index: calc(var(--z-dialog) + 1); top: 40%; left: 50%; transform: translate(-50%, -50%); width: 220px; padding: 14px 16px 12px; border-radius: var(--radius-lg); background: var(--surface); color: var(--text); box-shadow: var(--shadow-pop); outline: none; }
-.interval-prompt-title { margin: 0 0 8px; color: var(--muted); font-size: 12px; font-weight: 600; }
-.interval-prompt input { width: 100%; height: 38px; padding: 0 10px; border: 0; border-radius: var(--radius-md); background: var(--field); color: var(--text); font: inherit; font-size: 18px; font-weight: 600; letter-spacing: .02em; outline: none; box-shadow: 0 0 0 1px #2962ff; }
-.interval-prompt-hint { margin: 8px 0 0; color: var(--muted); font-size: 11.5px; }
+.interval-prompt { position: fixed; z-index: calc(var(--z-dialog) + 1); top: 50%; left: 50%; transform: translate(-50%, -50%); width: 176px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / .12); outline: none; text-align: center; }
+.interval-prompt-title { margin: 0 0 6px; color: var(--muted); font-size: 11px; font-weight: 500; }
+.interval-prompt input { width: 100%; height: 30px; padding: 0 8px; border: 0; border-radius: var(--radius-sm); background: var(--field); color: var(--text); font: inherit; font-size: 15px; font-weight: 500; text-align: center; outline: none; box-shadow: 0 0 0 1px #2962ff; }
+.interval-prompt-hint { margin: 6px 0 0; color: var(--muted); font-size: 10.5px; line-height: 1.4; }
 
 /* Volume statistics pills, top right of the volume pane (TradingView's Simple Volume table). */
 .chart-volume-pills { position: absolute; z-index: 10; top: 6px; right: 8px; display: flex; gap: 4px; pointer-events: auto; }
@@ -2344,3 +2370,57 @@
 @container (max-width: 560px) { .chart-volume-pill:nth-child(n+3) { display: none; } }
 
 .pb-drag-handle { cursor: grab; touch-action: none; text-align: center; color: var(--muted); line-height: 12px; margin: -6px 0 4px; }
+
+/* TradingView's "scroll to the latest bar" button. */
+.chart-jump-latest { position: absolute; z-index: 12; right: 84px; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: var(--surface); color: var(--secondary); font-size: 17px; line-height: 1; cursor: pointer; box-shadow: 0 0 0 1px var(--line), 0 2px 6px rgb(0 0 0 / .08); }
+.chart-jump-latest:hover { color: var(--text); background: var(--surface-hover); }
+.chart-attribution { color: var(--muted); font-size: 11.5px; text-decoration: none; }
+.chart-attribution:hover { color: var(--text); text-decoration: underline; }
+
+/* Marker style rows: checkbox, colour and TradingView's shape dropdown. */
+.ms-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; font-size: 13px; color: var(--text); }
+.ms-check { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.ms-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.ms-controls { display: flex; align-items: center; gap: 6px; }
+.ms-trigger { display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 6px 0 2px; border: 0; border-radius: var(--radius-sm); background: var(--field); color: var(--text); cursor: pointer; }
+.ms-trigger:hover { background: var(--surface-hover); }
+.ms-trigger[data-state="open"] { box-shadow: 0 0 0 2px var(--accent); }
+.ms-icon { width: 22px; height: 22px; color: var(--text); }
+.ms-menu { z-index: calc(var(--z-dialog) + 5); width: 210px; max-height: 340px; overflow-y: auto; padding: 6px; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-pop); animation: pop-in .14s var(--ease-out); }
+.ms-option { display: flex; align-items: center; gap: 10px; width: 100%; height: 34px; padding: 0 8px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.ms-option:hover, .ms-option[aria-selected="true"] { background: var(--surface-hover); }
+.pb-band-styles { padding-left: 26px; }
+.chart-plot:has(.chart-event-hover) .chart-actions { opacity: 0; }
+
+/* Position Sizing Calculator: the table sits in one of nine spots until it is dragged. */
+.ps-card { --ps-font: 10px; padding: 6px 10px 8px; border-radius: 10px; font-size: var(--ps-font); }
+.ps-card[data-size="small"] { --ps-font: 11px; }
+.ps-card[data-size="normal"] { --ps-font: 12px; }
+.ps-card[data-size="large"] { --ps-font: 14px; }
+.ps-card[data-size="huge"] { --ps-font: 16px; }
+.ps-card[data-position^="top"] { top: 48px; bottom: auto; }
+.ps-card[data-position^="middle"] { top: 50%; bottom: auto; translate: 0 -50%; }
+.ps-card[data-position^="bottom"] { top: auto; bottom: 64px; }
+.ps-card[data-position$="left"] { left: 64px; right: auto; }
+.ps-card[data-position$="right"] { left: auto; right: 76px; }
+.ps-card[data-position$="center"] { left: 50%; right: auto; translate: -50% 0; }
+.ps-card[data-position="middle-center"] { translate: -50% -50%; }
+.ps-card table { border-collapse: collapse; white-space: nowrap; }
+.ps-card th, .ps-card td { padding: 3px 7px; text-align: right; }
+.ps-card thead th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+.ps-card thead th:first-child, .ps-card tbody th { text-align: left; }
+.ps-card thead th[data-side="long"] { color: #089981; }
+.ps-card thead th[data-side="short"] { color: #f23645; }
+.ps-card tbody th { font-weight: 600; }
+.ps-card tbody tr + tr > * { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.ps-card .ps-alloc { color: #00766c; font-weight: 600; }
+:root[data-theme="dark"] .ps-card .ps-alloc { color: #5aa0ff; }
+.ps-swatch { display: inline-block; width: 8px; height: 2px; margin: 0 6px 0 0; vertical-align: middle; border-radius: 1px; }
+.ps-card tfoot td { padding-top: 5px; border-top: 1px solid var(--line); color: var(--muted); font-weight: 600; text-align: center; }
+.ps-settings input.ps-wide[type="number"] { width: 130px; }
+.ps-stop .pb-setting-check { min-height: 0; }
+.ps-stop-controls { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+
+/* These wrappers are the field, so they carry the focus state (see theme.css). */
+.drawing-menu-search:focus-within { border-color: var(--accent); }
+.ic-search:focus-within { border-bottom-color: var(--accent); }

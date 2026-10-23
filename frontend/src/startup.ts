@@ -4,7 +4,7 @@ import { startSnapshotWorker, runSnapshotTask } from './api/snapshotClient';
 // The small entry starts data loading before importing the UI bundle.
 if (import.meta.env.VITE_USE_MOCK !== 'true') {
   let screener = true;
-  try { screener = JSON.parse(localStorage.getItem('nexus-scanner.ui.active-tab.v1') ?? 'null') !== 'ipo'; } catch {}
+  try { screener = [null, 'screener', 'news'].includes(JSON.parse(localStorage.getItem('nexus-scanner.ui.active-tab.v1') ?? 'null')); } catch {}
   if (screener) startSnapshotWorker();
   void preloadManifest().then(manifest => screener
     ? runSnapshotTask({type:'warm', source:manifestSnapshotSource(manifest)}) : undefined).catch(() => {

@@ -4,6 +4,7 @@ import type { ChartStudies } from '../chart/studies';
 import type { ChartAppearance } from '../chart/ChartEngine';
 import type { EmaLine, Interval } from '../chart/model';
 import type { FundamentalsConfig } from '../chart/fundamentals';
+import { positionSizingConfig, type PositionSizingConfig } from '../chart/positionSizing';
 import { ChartDialog } from './ChartDialog';
 import { EXTRA_STUDIES, studyParams, studyTitle, type ExtraStudies, type ExtraStudyDef } from '../chart/extraStudies';
 
@@ -17,6 +18,8 @@ export interface IndicatorsCatalogModalProps {
   onApplyAppearance?: (next: Partial<ChartAppearance>) => void;
   onOpenIndicatorSettings: (indicatorId: string) => void;
   fundamentals?: FundamentalsConfig;
+  positionSizing?: PositionSizingConfig;
+  onApplyPositionSizing?: (next: PositionSizingConfig) => void;
   onApplyFundamentals?: (next: FundamentalsConfig) => void;
   extras?: ExtraStudies;
   onApplyExtras?: (next: ExtraStudies) => void;
@@ -24,7 +27,7 @@ export interface IndicatorsCatalogModalProps {
 }
 
 interface CatalogItem {
-  id: keyof ChartStudies | 'ema' | 'volume' | 'fundamentals' | ExtraStudyDef['id'];
+  id: keyof ChartStudies | 'ema' | 'volume' | 'fundamentals' | 'positionSizing' | ExtraStudyDef['id'];
   extra?: ExtraStudyDef;
   name: string;
   shortName: string;
@@ -59,6 +62,8 @@ export function IndicatorsCatalogModal({
   onApplyAppearance,
   onOpenIndicatorSettings,
   fundamentals,
+  positionSizing,
+  onApplyPositionSizing,
   onApplyFundamentals,
   extras = {},
   onApplyExtras,
@@ -166,11 +171,14 @@ export function IndicatorsCatalogModal({
   catalog.push(...extraItems.filter(item => item.id !== 'rs'));
   catalog.push({id: 'fundamentals', name: 'Price Band & Results', shortName: 'Band · QE', category: 'Fundamentals', type: 'Overlay',
     ariaLabel: 'Price Band & Results', description: 'Price-band badge with results countdown and ASM/GSM, UC/LC lines and an EPS/Sales results table.'});
+  catalog.push({id: 'positionSizing', name: 'Position Sizing Calculator', shortName: 'Sizing', category: 'Fundamentals', type: 'Overlay',
+    ariaLabel: 'Position Sizing Calculator', description: 'Quantity, stop % and allocation for your capital and portfolio risk, using day-low, previous-day-low and fixed % stops, with stop lines.'});
   for (const item of catalog) item.description ??= DESCRIPTIONS[item.id];
 
   const isOn = (item: CatalogItem) => item.extra
     ? !!extras[item.extra.id]?.enabled
     : item.id === 'fundamentals' ? !!fundamentals?.enabled
+    : item.id === 'positionSizing' ? !!positionSizing?.enabled
     : item.id === 'ema'
       ? emaLines.some(l => l.enabled)
       : item.id === 'volume'
@@ -192,11 +200,13 @@ export function IndicatorsCatalogModal({
       }
       return true;
     });
-  }, [category, search, extras, studies, emaLines, appearance, fundamentals]);
+  }, [category, search, extras, studies, emaLines, appearance, fundamentals, positionSizing]);
 
   const handleToggle = (item: CatalogItem, checked: boolean) => {
     if (item.id === 'fundamentals') {
       onApplyFundamentals?.({...fundamentals, enabled: checked});
+    } else if (item.id === 'positionSizing') {
+      onApplyPositionSizing?.({...positionSizingConfig(positionSizing), enabled: checked});
     } else if (item.extra) {
       onApplyExtras?.({...extras, [item.extra.id]: {...extras[item.extra.id], enabled: checked}});
     } else if (item.id === 'ema') {

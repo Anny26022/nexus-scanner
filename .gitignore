@@ -89,3 +89,6 @@ reference/tijori/*
 !reference/tijori/summary.json
 # Exclude interrupted atomic publication writes.
 frontend/public/data/tijori/**/*.tmp
+
+# Plain stock lists (~25 MiB, at the static-asset file limit) are served from R2; releases keep the gzip copies.
+frontend/public/data/revisions/*/stocks.json

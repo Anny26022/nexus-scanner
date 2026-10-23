@@ -147,6 +147,48 @@ it('applies study configs with one native series rebuild',()=>{
   expect(native.chart.addSeries).toHaveBeenCalledWith('Line',expect.objectContaining({title:'RSI 7'}),1);
   engine.destroy();
 });
+it('keeps unchanged indicator lines when another indicator is added or removed',()=>{
+  const {engine}=setup();
+  engine.setStudies({sma:true,bollinger:true});
+  const kept=native.series.slice(2);
+  expect(kept).toHaveLength(4);
+  for(const series of kept) series.setData.mockClear();
+  native.chart.removeSeries.mockClear();native.chart.addSeries.mockClear();
+  engine.setStudies({sma:true,bollinger:true,rsi:true});
+  expect(native.chart.addSeries).toHaveBeenCalledTimes(1);
+  expect(native.chart.removeSeries).not.toHaveBeenCalled();
+  for(const series of kept) expect(series.setData).not.toHaveBeenCalled();
+  engine.setStudies({sma:true,rsi:true});
+  expect(native.chart.removeSeries).toHaveBeenCalledTimes(3); // only the three Bollinger lines
+  expect(native.chart.addSeries).toHaveBeenCalledTimes(1);
+  engine.destroy();
+});
+it('draws indicators from a shared store once their results arrive, and replays from cached values',async()=>{
+  const {StudyStore}=await import('../chart/studyStore');
+  const history=Array.from({length:40},(_,index)=>({...candles[0],date:new Date(Date.UTC(2026,0,index+1)).toISOString().slice(0,10),close:index+11,high:index+12,low:index+9,open:index+10}));
+  const store=new StudyStore();
+  store.setInputs(history);
+  // Results still computing: over the main-thread budget, and the worker has not answered.
+  const take=vi.spyOn(store,'take').mockImplementation(()=>undefined);
+  const request=vi.spyOn(store,'request').mockImplementation(()=>undefined);
+  const {engine}=setup(history.slice(0,30));
+  engine.setStudyStore(store);
+  native.chart.addSeries.mockClear();
+  engine.setStudies({rsi:true});
+  expect(native.chart.addSeries).not.toHaveBeenCalled();
+  expect(request).toHaveBeenCalledWith(['rsi:14:close']);
+  take.mockRestore();request.mockRestore();
+  store.request(['rsi:14:close']); // no Worker in tests: computed right away
+  engine.refreshStudies();
+  expect(native.chart.addSeries).toHaveBeenCalledTimes(1);
+  const rsi=native.series.at(-1)!;
+  expect(rsi.setData.mock.lastCall?.[0]).toHaveLength(30);
+  const get=vi.spyOn(store,'getNow');
+  engine.setCandles(history.slice(0,31));
+  expect(rsi.update).toHaveBeenCalledWith(expect.objectContaining({time:history[30].date,value:store.get('rsi:14:close')!.value[30]}));
+  expect(get).not.toHaveBeenCalled(); // nothing recomputed for the replay step
+  engine.destroy();
+});
 it('applies configured volume colors to both price and separate panes',()=>{
   const {engine}=setup(candles.map((bar,index)=>index===1?{...bar,volume:150}:bar));
   const volume=native.series.find(series=>series.type==='Histogram')!;
@@ -466,4 +508,56 @@ it('updates a late relative-strength benchmark without recreating native series'
   expect(native.chart.addSeries).toHaveBeenCalledTimes(count);
   expect(native.chart.removeSeries).not.toHaveBeenCalled();
   engine.destroy();
+});
+it('adopts another symbol without rebuilding panes or series and drops the old symbol overlays',()=>{
+  const {engine,inspect}=setup();
+  engine.setStudies({rsi:true,sma:true});
+  engine.setComparison('TCS',[...candles]);
+  engine.setPriceBandGuides([105,95]);
+  engine.setBandChanges([{date:'2026-10-02',from:'5',to:'20'}]);
+  engine.setEvents([{id:'n',date:'2026-10-02',kind:'news',title:'Old'}],'2026-10-05');
+  const series=[...native.series];
+  native.chart.addSeries.mockClear();native.chart.removeSeries.mockClear();
+  for(const item of series) item.setData.mockClear();
+  const next:Candle[]=[{date:'2026-09-01',open:50,high:52,low:49,close:51,volume:10},{date:'2026-09-02',open:51,high:55,low:50,close:54,volume:20}];
+  const inspectNext=vi.fn(),book=new DrawingBook();
+  engine.adopt(next,inspectNext,book);
+  expect(native.chart.addSeries).not.toHaveBeenCalled(); // panes and series are kept
+  // Only the comparison and band guides of the old symbol are removed.
+  expect(native.chart.removeSeries).toHaveBeenCalledTimes(1);
+  expect(series[0].setData).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({time:'2026-09-02',close:54})]));
+  expect(inspectNext).toHaveBeenCalledWith(next[1]);
+  expect(inspect).not.toHaveBeenCalledWith(next[1]);
+  expect((engine as unknown as {eventStrip:unknown[]}).eventStrip).toEqual([]);
+  expect((engine as unknown as {bandChanges:unknown[]}).bandChanges).toEqual([]);
+  expect((engine as unknown as {book:DrawingBook}).book).toBe(book);
+  engine.destroy();
+});
+it('takes keyboard shortcuts on the key target the scene gives it',()=>{
+  const {engine}=setup();
+  const container=document.createElement('div');document.body.append(container);
+  engine.setKeyTarget(container);
+  native.time.getVisibleLogicalRange.mockReturnValue({from:0,to:5});
+  native.time.setVisibleLogicalRange.mockClear();
+  container.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+  expect(native.time.setVisibleLogicalRange).toHaveBeenLastCalledWith({from:2,to:7});
+  engine.destroy();
+});
+it('hands a parked engine back to the same tile and destroys one nobody adopts',async()=>{
+  vi.useFakeTimers();
+  try {
+    const {adoptEngine,parkEngine}=await import('../chart/enginePool');
+    const {engine}=setup();
+    const host=document.createElement('div');document.body.append(host);
+    const destroy=vi.spyOn(engine,'destroy');
+    parkEngine('7',engine,host);
+    expect(host.isConnected).toBe(false);
+    expect(adoptEngine('8')).toBeNull();
+    expect(adoptEngine('7')).toEqual({engine,host});
+    expect(adoptEngine('7')).toBeNull();
+    parkEngine('7',engine,host);
+    vi.advanceTimersByTime(20_000);
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(adoptEngine('7')).toBeNull();
+  } finally { vi.useRealTimers(); }
 });

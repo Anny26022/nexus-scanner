@@ -105,10 +105,15 @@ export function manifestSnapshotSource(manifest: Manifest, revision = manifest.r
       url,
     };
   }
-  // Historical revisions keep their original URL; current releases advertise gzip.
+  // A tab still on the previous release reads its gzip copy. Plain JSON, only for browsers that cannot
+  // decompress, is served from R2 (at ~25 MiB it is too large for static assets).
+  const gzip = typeof DecompressionStream !== 'undefined';
+  const plain = manifest.objectUrlTemplate
+    ? `${manifest.objectUrlTemplate.replace(/\/objects\/\{hash\}\.json\.gz$/, '')}/releases/${revision}/stocks.json`
+    : `/data/revisions/${revision}/stocks.json`;
   return {revision, url:revision === manifest.revision
-    ? (typeof DecompressionStream !== 'undefined' ? manifest.datasetPackedGzipUrl ?? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
-    : `/data/revisions/${revision}/stocks.json`,
+    ? (gzip ? manifest.datasetPackedGzipUrl ?? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
+    : gzip ? `/data/revisions/${revision}/stocks.json.gz` : plain,
   sessionDate:revision === manifest.revision ? manifest.sessionDate : undefined};
 }
 

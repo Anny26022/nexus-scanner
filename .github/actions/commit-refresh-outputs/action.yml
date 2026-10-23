@@ -25,33 +25,8 @@ runs:
         # Mixed reset retains the generated working files while refreshing
         # the index too, so unrelated code merged during this run is kept.
         git reset --mixed origin/main
-        git add "DO NOT DELETE EDL PIPELINE/all_stocks_fundamental_analysis.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/sector_analytics.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/market_breadth.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/market_breadth_v2.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/sector_breadth_v2.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/market_breadth_contributions_v2.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/breadth_universe_snapshot.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/all_indices_history_v2.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/all_indices_list.json"
-        git add "DO NOT DELETE EDL PIPELINE/corporate_action_ledger.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/nse_corporate_actions.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/nse_corporate_action_adjustments.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/data_quality.json"
-        git add "DO NOT DELETE EDL PIPELINE/pipeline_report.json"
-        git add "DO NOT DELETE EDL PIPELINE/nse_universe_reconciliation.json"
-        git add "DO NOT DELETE EDL PIPELINE/mainboard_universe_report.json"
-        git add "DO NOT DELETE EDL PIPELINE/sme_market_data.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/nse_fno_ban.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/earnings_calendar.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/rs_rating_daily.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/ipo_screener.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/ipo_provider_listed_archive.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/ipo_provider_details_archive.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_listed_archive.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/scanx_ipo_details_archive.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/shareholding_history.json.gz"
-        git add "DO NOT DELETE EDL PIPELINE/quarterly_financial_history.json.gz"
+        # Carried-over pipeline files are stored in R2 (tools/pipeline_state.py), not committed:
+        # every committed version stayed in Git history (~41 MiB per refresh).
         git add reference/index-constituent-mappings.json.gz
         git add reference/index-constituent-mappings.manifest.json
         git add frontend/public/data/current.json frontend/public/data/revisions frontend/public/data/sessions.json frontend/public/data/price-band-history.json

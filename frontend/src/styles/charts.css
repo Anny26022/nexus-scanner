@@ -2096,6 +2096,10 @@
 .chart-event-list article { padding-block: 12px; border-bottom: 1px solid var(--line); }
 .chart-event-list small { color: var(--muted); font-size: 10px; }
 .chart-event-list p { margin: 5px 0 0; color: var(--text); font-size: 12px; line-height: 1.5; }
+.chart-event-list .chart-event-detail { color: var(--muted); }
+.chart-event-list footer { display: flex; align-items: center; gap: 12px; margin-top: 6px; color: var(--muted); font-size: 11px; }
+.chart-event-list footer a { display: inline-flex; align-items: center; gap: 4px; color: var(--accent, #2962ff); text-decoration: none; }
+.chart-event-list footer a:hover { text-decoration: underline; }
 .chart-context-menu { position: fixed; z-index: var(--z-context-menu); display: grid; min-width: 190px; padding: 4px; border: 0; border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-pop); }
 .chart-context-menu button { min-height: 30px; padding: 0 8px; border: 0; border-radius: var(--radius-lg); background: transparent; color: var(--text); font: inherit; font-size: 12px; text-align: left; }
 .chart-context-menu button:hover, .chart-context-menu button:focus-visible { background: var(--surface-hover); outline: none; }

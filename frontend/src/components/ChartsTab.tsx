@@ -36,7 +36,7 @@ import { IntervalPrompt } from './IntervalPrompt';
 import { useMountEffect } from '../hooks/useMountEffect';
 import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../chart/extraStudies';
 import { WatchlistDock } from './WatchlistDock';
-import { Download, Upload } from 'lucide-react';
+import { Download, ExternalLink, FileText, Upload } from 'lucide-react';
 import { Button } from './Button';
 
 const ranges=[[1,'1mo'],[3,'3mo'],[6,'6mo'],[12,'1y'],[24,'2y'],[null,'All']] as const;
@@ -536,7 +536,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       if(nextStyle!==style) {setStyle(nextStyle);styleChoice.current=nextStyle;engine.current?.setStyle(nextStyle);persist({style:nextStyle});}
       applyComparison(nextComparison);
     }} onGoToDate={date=>{const moved=engine.current?.goToDate(date)??false;if(moved) markCustomRange();return moved;}} onEvents={()=>setEventDetails(events.filter(event=>event.date<=revealedThrough(candles,replay.index,lastDate)))}/>}
-    {eventDetails && <ChartDialog title="Published events" onClose={()=>setEventDetails(null)}><div className="chart-event-list">{eventDetails.length?eventDetails.map(event=><article key={event.id}><small>{event.date} · {event.kind==='action'?'Corporate action':event.kind==='earnings'?'Earnings filing':'News'}</small><p>{event.title}</p></article>):<p>No published events in this history.</p>}</div></ChartDialog>}
+    {eventDetails && <ChartDialog title="Published events" onClose={()=>setEventDetails(null)}><div className="chart-event-list">{eventDetails.length?eventDetails.map(event=><article key={event.id}><small>{event.date} · {event.kind==='action'?'Corporate action':event.kind==='earnings'?'Earnings filing':'News'}</small><p>{event.title}</p>{event.detail&&<p className="chart-event-detail">{event.detail}</p>}{(event.source||event.url)&&<footer>{event.source&&<span>{event.source}</span>}{event.url&&<a href={event.url} target="_blank" rel="noopener noreferrer"><FileText size={12} aria-hidden="true"/> Document <ExternalLink size={11} aria-hidden="true"/></a>}</footer>}</article>):<p>No published events in this history.</p>}</div></ChartDialog>}
     <p id={`chart-keyboard-help-${tileId}`} className="sr-only">Two clicks or drag to draw. Select to move; drag handles to reshape. Delete removes. Ctrl or Command Z undoes. Escape cancels. Scroll or pinch zooms. Drag the right price scale to stretch or compress prices; double-click it to restore automatic scaling. Drag pane separators to resize. Alt Enter maximizes or restores the chart. While selecting a replay bar, use Left and Right then Enter, or click a bar. During replay, Space plays or pauses and Left or Right steps one bar.</p>
   </>;
 }

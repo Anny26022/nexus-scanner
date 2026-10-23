@@ -72,3 +72,9 @@ it('uses configured precision for live study values and safely formats malformed
   expect(host.querySelector('[data-ind-val="rsi"]')?.textContent).toBe('52');
   expect(host.querySelector('[data-ind-val="macd-line"]')?.textContent).toBe('1.234');
 });
+it('keeps news summaries, filing bodies and web document links on chart events',()=>{
+  const [filing,news]=chartEvents({earnings:[],corporateActions:[],marketNews:[{date:'2026-10-22',headline:'Fire at unit',summary:'₹2 crore loss.',source:'companies',url:'javascript:alert(1)'}],
+    regulatoryAnnouncements:[{date:'2026-10-21',headline:'Reg 30 update',body:'Fire incident at subsidiary.',url:'https://www.bseindia.com/a.pdf'}]});
+  expect(filing).toMatchObject({detail:'Fire incident at subsidiary.',url:'https://www.bseindia.com/a.pdf'});
+  expect(news).toMatchObject({detail:'₹2 crore loss.',source:'companies'}); expect(news.url).toBeUndefined();
+});

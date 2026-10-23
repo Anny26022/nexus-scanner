@@ -86,5 +86,7 @@ reference/tijori/*
 # Exclude interrupted atomic publication writes.
 frontend/public/data/tijori/**/*.tmp
 
+# Optional source diagnostics are uploaded as Actions artifacts.
+frontend/earningspulse-refresh-report.json
 # Plain stock lists (~25 MiB, at the static-asset file limit) are served from R2; releases keep the gzip copies.
 frontend/public/data/revisions/*/stocks.json

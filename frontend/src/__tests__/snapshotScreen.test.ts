@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import {loadPublishedSnapshot} from './fixtures/publishedSnapshot';
 import { screenSnapshot, type Snapshot } from '../api/snapshotScreen';
 import { supportsSnapshotCondition } from '../api/snapshotScreen';
 import type { ScreenerRunRequest } from '../types/screener';
 
-const manifest = JSON.parse(readFileSync('public/data/current.json','utf8'));
-const snapshot: Snapshot = JSON.parse(readFileSync(`public${manifest.datasetUrl}`,'utf8'));
+const {manifest, snapshot} = loadPublishedSnapshot();
 const condition = (id: string, parameters = {}) => ({type:'condition' as const,condition:{instanceId:id,conditionId:id,parameters}});
 const request: ScreenerRunRequest = {asOfDate:snapshot.asOfDate,universe:'mainboard',page:1,pageSize:15,
   expressionTree:{type:'group',operator:'all',children:[condition('mom_rvol',{minRvol:1.5,maxRvol:20}),condition('trend_price_vs_ma',{maType:'SMA',maPeriod:50,operator:'above',thresholdPct:0})]}};

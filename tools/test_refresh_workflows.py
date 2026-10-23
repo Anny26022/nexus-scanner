@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "943f7434df91787085856e839989108985d9793e40806a44ccae325b77b3aa30",
-    "weekly_eod2_refresh.yml": "113db1d0b2d713d1f72078947c1527c8f03c7d4d22a1b5b498ca19426cf2bbf2",
+    "daily_refresh.yml": "1b1c9156a67feed1995247e863fab68bc2d5524017ada0ac368d7e63fba41938",
+    "weekly_eod2_refresh.yml": "9519a19994bf8037df9147760b99f29bbcb817ae221a365109be39cca6a12fa2",
 }
 
 

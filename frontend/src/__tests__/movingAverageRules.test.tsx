@@ -1,12 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { readFileSync } from 'node:fs';
+import {loadPublishedSnapshot} from './fixtures/publishedSnapshot';
 import { ScreenerModal } from '../components/ScreenerModal';
-import { screenSnapshot, supportsSnapshotCondition, type Snapshot } from '../api/snapshotScreen';
+import { screenSnapshot, supportsSnapshotCondition } from '../api/snapshotScreen';
 
 afterEach(cleanup);
-const manifest = JSON.parse(readFileSync('public/data/current.json', 'utf8'));
-const snapshot: Snapshot = JSON.parse(readFileSync(`public${manifest.datasetUrl}`, 'utf8'));
+const snapshot = loadPublishedSnapshot().snapshot;
 const rules = ['ABOVE_EMA_10', 'ABOVE_EMA_50', 'ABOVE_EMA_200'];
 const run = (metrics: Record<string, number | null>, isNegated = false, selected = rules) => screenSnapshot({
   ...snapshot, stocks:[{...snapshot.stocks[0],close:100,asOfDate:snapshot.asOfDate,historyAligned:true,metrics}],

@@ -130,6 +130,17 @@ jobs:
         with:
           phase: build
 
+      - name: Refresh optional Earnings Pulse history
+        continue-on-error: true
+        timeout-minutes: 25
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/earningspulse_history.py
+
       # Only after a successful build; a failed push stops the run before anything is committed.
       - name: Push pipeline state to R2
         env:
@@ -153,6 +164,7 @@ jobs:
           name: pipeline-diagnostics
           if-no-files-found: ignore
           path: |
+            frontend/earningspulse-refresh-report.json
             DO NOT DELETE EDL PIPELINE/pipeline_report.json
             DO NOT DELETE EDL PIPELINE/pipeline_failure_report.json
             DO NOT DELETE EDL PIPELINE/price_validation_report.json

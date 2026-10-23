@@ -20,6 +20,7 @@ const getAdapter = () => USE_MOCK_API
   : Promise.resolve(realAdapter);
 
 export const screenerApi = {
+  getChartRows: realAdapter.getChartRows.bind(realAdapter),
   getFinancialHistory: realAdapter.getFinancialHistory.bind(realAdapter),
   getEarningsSchedule: realAdapter.getEarningsSchedule.bind(realAdapter),
   getPriceBandHistory: (symbol: string, revision: string) => realAdapter.getPriceBandHistory(symbol, revision),

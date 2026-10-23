@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 const fixtures = vi.hoisted(() => {
   const adapter = () => ({
     getCatalog: vi.fn(async () => []), explainScreen: vi.fn(async () => ({})),
-    getFinancialHistory: vi.fn(async () => null), getEarningsSchedule: vi.fn(async () => null),
+    getChartRows: vi.fn(async () => []), getFinancialHistory: vi.fn(async () => null), getEarningsSchedule: vi.fn(async () => null),
     getFilterChoices: vi.fn(async () => ({})),
     getThemeClassification: vi.fn(async () => ({})),
     runScreen: vi.fn(async () => ({})), getIpos: vi.fn(async () => [{symbol: 'TEST'}]),

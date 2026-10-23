@@ -11,6 +11,7 @@ export interface Manifest {
   themeClassificationVersion?: string;
   marketOverviewUrl?: string;
   benchmarkUrl?: string;
+  chartDirectoryUrl?: string;
   financialHistoryUrl?: string;
   financialHistoryUrlTemplate?: string;
   earningsCalendarUrl?: string;
@@ -42,6 +43,7 @@ export function validateManifest(value: unknown): Manifest {
           || !/^[a-f0-9]{64}$/.test(manifest.themeClassificationVersion ?? '')))
       || (manifest.financialHistoryUrlTemplate !== undefined && (!validUrl(manifest.financialHistoryUrlTemplate) || !manifest.financialHistoryUrlTemplate.endsWith('.json.gz') || manifest.financialHistoryUrlTemplate.split('{symbol}').length !== 2))
       || [manifest.financialHistoryUrl, manifest.earningsCalendarUrl, manifest.priceBandHistoryUrl].some(url => url !== undefined && (!validUrl(url) || !url.endsWith('.json.gz')))
+      || (manifest.chartDirectoryUrl !== undefined && (!validUrl(manifest.chartDirectoryUrl) || !manifest.chartDirectoryUrl.endsWith('.json.gz')))
       || (manifest.benchmarkUrl !== undefined && (!validUrl(manifest.benchmarkUrl) || !manifest.benchmarkUrl.endsWith('.json.gz')))
       || (manifest.marketOverviewUrl !== undefined && (!validUrl(manifest.marketOverviewUrl) || !manifest.marketOverviewUrl.endsWith('.json.gz')))
       || !validDate(manifest.sessionDate) || !validUrl(manifest.datasetUrl) || !validUrl(manifest.iposUrl)

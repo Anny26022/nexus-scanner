@@ -7,11 +7,8 @@ export interface SymbolEntry { symbol: string; name: string }
 export function useSymbolDirectory(datasetRevision: string | undefined, sessionDate: string | undefined, enabled = true) {
   return useQuery({
     queryKey: ['symbol-directory', datasetRevision, sessionDate],
-    queryFn: async (): Promise<SymbolEntry[]> => (await screenerApi.getExportRows({
-      expressionTree: {type: 'group', operator: 'all', children: []},
-      universe: 'mainboard', asOfDate: sessionDate ?? '', datasetRevision,
-      sort: {field: 'marketCap', direction: 'desc'}, page: 1, pageSize: 100,
-    })).map(row => ({symbol: row.symbol, name: row.name ?? ''})),
+    queryFn: async (): Promise<SymbolEntry[]> => (await screenerApi.getChartRows(datasetRevision, sessionDate))
+      .map(row => ({symbol: row.symbol, name: row.name ?? ''})),
     enabled: enabled && Boolean(sessionDate),
     staleTime: Infinity,
   });

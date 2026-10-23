@@ -642,3 +642,8 @@ and saved unsupported settings are preserved for explicit correction.
 Old releases still load, but lack the new facts until the normal pipeline
 publishes a new immutable generation. Coverage and warnings distinguish missing
 data from genuine non-matches; unknown values stay unknown under negation.
+
+Charts use a release-pinned `chart-directory.json.gz` for names, quotes and header
+metrics; older releases retain the scanner-snapshot fallback. Candle history stays
+complete. The data Worker shares immutable cached responses across deployments;
+purge affected entries when changing delivery headers or cache policy.

@@ -1,6 +1,6 @@
 import { getIpoJson } from './gzipJson';
 import type { ScreenerRunRequest, ScreenerRunResponse, IPORow, ExplainRequest, ExplainResponse,
-  SymbolComparisonRequest, SymbolComparisonResponse, RevisionCurrentResponse } from '../types/screener';
+  StockRow, SymbolComparisonRequest, SymbolComparisonResponse, RevisionCurrentResponse } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import type { IpoCatalogue } from '../types/screener';
 import { runSnapshotTask } from './snapshotClient';
@@ -16,6 +16,8 @@ const finiteAmount = (value: unknown): number | null => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+export type ChartRow = Pick<StockRow, 'symbol' | 'name' | 'close' | 'changePct' | 'marketCapCrore' | 'freeFloatPct' | 'circuitLimit' | 'series' | 'sector' | 'industry' | 'nicheTags' | 'isFno' | 'surveillanceAvailable' | 'surveillanceAsOfDate' | 'isAsm' | 'asmStage' | 'isGsm' | 'gsmStage' | 'listingDate'>;
 
 export interface ChartSnapshot {
   schemaVersion: number;
@@ -159,6 +161,25 @@ async function snapshotSource(revision?: string, sessionDate?: string): Promise<
 }
 
 class RealDataAdapter {
+  async getChartRows(revision?: string, sessionDate?: string): Promise<ChartRow[]> {
+    const release = await releaseFor(revision);
+    if (revision && release.revision !== revision) throw new Error('Chart directory revision mismatch');
+    if (!release.chartDirectoryUrl || (sessionDate && sessionDate !== release.sessionDate)) {
+      const result = await this.runScreen({datasetRevision:release.revision, universe:'mainboard',
+        asOfDate:sessionDate ?? release.sessionDate, page:1, pageSize:100,
+        sort:{field:'marketCap',direction:'desc'}, expressionTree:{type:'group',operator:'all',children:[]}}, true);
+      if (result.immutableRevision !== release.revision) throw new Error('Chart directory revision mismatch');
+      return result.rows;
+    }
+    const data = await cached(releaseCache, release.chartDirectoryUrl,
+      () => getIpoJson<{revision:string;asOfDate:string;stocks:ChartRow[]}>(release.chartDirectoryUrl!, 'Chart directory'), 6);
+    if (data.revision !== release.revision || data.asOfDate !== release.sessionDate || !Array.isArray(data.stocks)
+        || data.stocks.length !== release.totalStocks || data.stocks.some(row => !row || typeof row.symbol !== 'string')
+        || new Set(data.stocks.map(row => row.symbol)).size !== data.stocks.length) throw new Error('Invalid chart directory');
+    return data.stocks.filter(row => Number.isFinite(row.close))
+      .sort((a,b) => b.marketCapCrore - a.marketCapCrore || a.symbol.localeCompare(b.symbol));
+  }
+
   async getFinancialHistory(symbol: string, revision: string) {
     const release = await releaseFor(revision);
     validSymbol(symbol);

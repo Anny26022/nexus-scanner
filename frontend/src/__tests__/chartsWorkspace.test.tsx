@@ -6,7 +6,7 @@ import ChartsTab from '../components/ChartsTab';
 import { screenerApi } from '../api/screenerApi';
 import { ChartEngine } from '../chart/ChartEngine';
 
-vi.mock('../api/screenerApi', () => ({screenerApi:{getChart:vi.fn(),getFinancialHistory:vi.fn(async()=>null),getEarningsSchedule:vi.fn(async()=>null),getPriceBandHistory:vi.fn(async()=>null),getBenchmark:vi.fn(async()=>undefined),runScreen:vi.fn(async()=>({rows:[{symbol:'RELIANCE',marketCapCrore:5,freeFloatPct:50,circuitLimit:'5'}],immutableRevision:'a'.repeat(64)}))}}));
+vi.mock('../api/screenerApi', () => ({screenerApi:{getChart:vi.fn(),getChartRows:vi.fn(async()=>[{symbol:"RELIANCE",marketCapCrore:5,freeFloatPct:50,circuitLimit:"5"}]),getFinancialHistory:vi.fn(async()=>null),getEarningsSchedule:vi.fn(async()=>null),getPriceBandHistory:vi.fn(async()=>null),getBenchmark:vi.fn(async()=>undefined),runScreen:vi.fn(async()=>({rows:[{symbol:'RELIANCE',marketCapCrore:5,freeFloatPct:50,circuitLimit:'5'}],immutableRevision:'a'.repeat(64)}))}}));
 vi.mock('../chart/ChartEngine', () => ({ChartEngine:vi.fn(class {
   timeScale={subscribeVisibleTimeRangeChange:vi.fn(),unsubscribeVisibleTimeRangeChange:vi.fn()};
   chart={timeScale:()=>this.timeScale,subscribeCrosshairMove:vi.fn(),unsubscribeCrosshairMove:vi.fn()};
@@ -423,12 +423,12 @@ it('hides circuit guides with the fundamentals indicator',async()=>{
 });
 it('applies late metadata without recreating the chart',async()=>{
   let resolveMetrics!: (data:any)=>void;
-  vi.mocked(screenerApi.runScreen).mockImplementationOnce(()=>new Promise(resolve=>{resolveMetrics=resolve;}));
+  vi.mocked(screenerApi.getChartRows).mockImplementationOnce(()=>new Promise(resolve=>{resolveMetrics=resolve;}));
   vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
   setup();await screen.findByLabelText('RELIANCE candlestick and volume chart');
   const first=vi.mocked(ChartEngine).mock.results.at(-1)!.value;
   const count=vi.mocked(ChartEngine).mock.calls.length;
-  await act(async()=>resolveMetrics({rows:[{symbol:'RELIANCE',marketCapCrore:5,circuitLimit:'5'}],immutableRevision:'a'.repeat(64)}));
+  await act(async()=>resolveMetrics([{symbol:'RELIANCE',marketCapCrore:5,circuitLimit:'5'}]));
   await waitFor(()=>expect(ChartEngine).toHaveBeenCalledTimes(count));
   expect(first.destroy).not.toHaveBeenCalled();
 });
@@ -452,4 +452,16 @@ it('replenishes the next chart when stepping through the watchlist with chart sh
   await screen.findByLabelText('TCS candlestick and volume chart');
   await waitFor(() => expect(screenerApi.getChart).toHaveBeenCalledWith('INFY', 'a'.repeat(64), '2026-10-02'));
   expect(screenerApi.getChart).not.toHaveBeenCalledWith('SBIN', 'a'.repeat(64), '2026-10-02');
+});
+
+it('paints candles before the benchmark arrives and enriches the same chart', async () => {
+  let finish!: (value: ReadonlyMap<string,number>) => void;
+  vi.mocked(screenerApi.getBenchmark).mockImplementationOnce(() => new Promise(resolve => {finish=resolve;}));
+  vi.mocked(screenerApi.getChart).mockImplementation(async symbol=>({schemaVersion:2,symbol,asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]}));
+  setup();
+  await screen.findByLabelText('RELIANCE candlestick and volume chart');
+  const benchmark=new Map([['2026-10-02',25000]]);
+  await act(async()=>finish(benchmark));
+  await waitFor(()=>expect(vi.mocked(ChartEngine).mock.results[0].value.setBenchmark).toHaveBeenLastCalledWith(benchmark));
+  expect(ChartEngine).toHaveBeenCalledTimes(1);
 });

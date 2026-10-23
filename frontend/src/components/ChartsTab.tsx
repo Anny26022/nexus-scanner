@@ -239,6 +239,8 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
   };
   const exitReplay=()=>{cancelSelection();clock.exit();};
   // React 19 callback-ref cleanup owns the native chart lifecycle.
+  const benchmarkChoice = useRef(benchmark);
+  benchmarkChoice.current = benchmark;
   const attach = useCallback((host: HTMLDivElement | null) => {
     if (!host) return;
     let chart: ChartEngine;
@@ -266,7 +268,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
       chart.setStyle(styleChoice.current);
       chart.setAppearance(appearanceChoice.current);
       chart.setStudyConfigs?.(studyConfigsChoice.current);
-      chart.setBenchmark(benchmark);
+      chart.setBenchmark(benchmarkChoice.current);
       chart.setStudies(filterStudiesForInterval(studyChoice.current, studyConfigsChoice.current, interval));
       restoreHiddenStudies(chart);
       chart.setEvents(events,revealedThrough(candles,clock.getSnapshot().index,lastDate));
@@ -331,7 +333,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
       setError(cause instanceof Error ? cause.message : 'Chart rendering unavailable.');
       return;
     }
-  }, [candles,activeBook,clock,previousByDate,startReplay,cancelSelection,events,lastDate,interval,sync,tileId,benchmark]);
+  }, [candles,activeBook,clock,previousByDate,startReplay,cancelSelection,events,lastDate,interval,sync,tileId]);
   const saveImage=()=>{const image=engine.current?.takeScreenshot();if(image){const link=document.createElement('a');link.download=`${symbol}-chart.png`;link.href=image.toDataURL('image/png');link.click();}};
   const applyAppearance=(change:Partial<typeof appearance>)=>{
     const next={...appearanceChoice.current,...change};
@@ -416,6 +418,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
           onCloseMenu={() => setDrawingsOpen(false)}
         />
         <DrawingContextToolbar book={activeBook} />
+      <EngineSync key={`benchmark:${benchmark ? 'ready' : 'pending'}`} run={() => engine.current?.setBenchmark(benchmark)} />
       <EngineSync key={`${earningsChoice.current?.date ?? ''}|${earningsChoice.current?.line ?? ''}`} run={() => engine.current?.setUpcomingEarnings?.(earningsChoice.current)} />
       <EngineSync key={`guides:${metrics?.circuitLimit}:${metrics?.isFno}`} run={() => { if(engine.current) updateBandGuides(engine.current); }} />
       <EngineSync key={`bands:${bandChoice.current.map(change => change.date + change.to).join(',')}:${JSON.stringify(studyConfigs.fundamentals?.bandStyles ?? {})}`}
@@ -810,9 +813,7 @@ function ChartTile({
   const metadata=useQuery({
     queryKey:['chart-metrics',datasetRevision,symbol,sessionDate],
     queryFn:async()=>{
-      const result=await screenerApi.runScreen({datasetRevision,universe:'custom',customSymbols:[symbol],asOfDate:sessionDate ?? '',page:1,pageSize:1,expressionTree:{type:'group',operator:'all',children:[]}});
-      if (result.immutableRevision!==datasetRevision) throw new Error('Chart metrics revision mismatch');
-      return result.rows.find(row=>row.symbol===symbol)??null;
+      return (await screenerApi.getChartRows(datasetRevision, sessionDate)).find(row=>row.symbol===symbol)??null;
     },
     enabled:Boolean(datasetRevision),retry:false,staleTime:Infinity,
   });
@@ -900,7 +901,7 @@ function ChartTile({
     {(chart.isError || chart.isPending || !candles.length) && <header className="chart-topbar">{symbolControls}<span className="chart-topbar-spacer"/>{layoutControls}{viewControls}</header>}
     {inputError && <p role="alert" className="notice">{inputError}</p>}
     {chart.isError ? <div role="alert" className="chart-status"><p>{chart.error.message}</p><Button variant="ghost" onClick={() => void chart.refetch()}>Retry</Button></div>
-      : chart.isPending || benchmark.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
+      : chart.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
       : !candles.length ? <p className="chart-status" role="status">No published candles for {symbol}.</p>
       : <ChartScene key={`${datasetRevision}:${sessionDate}:${symbol}:${interval}`} candles={candles} daily={chart.data.candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
           firstDate={chart.data.candles[0].date} lastDate={chart.data.candles.at(-1)!.date} metrics={metadata.data??undefined} sessionDate={chart.data.asOfDate} events={events} revision={datasetRevision!} interval={interval} tileId={tileId} sync={sync} benchmark={benchmark.data ?? undefined} actionsRef={sceneActions}/>}

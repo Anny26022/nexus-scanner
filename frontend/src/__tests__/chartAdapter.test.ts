@@ -111,3 +111,32 @@ it('caps fallback charts before aggregation and excludes future events', async (
   expect((await screenerApi.getChart('TEST')).candles).toEqual(candles);
   await expect(screenerApi.getChart('TEST', revision, '2026-02-30')).rejects.toThrow('Invalid chart session date');
 });
+
+it.each(['valid', 'wrong revision', 'wrong date', 'duplicate symbols'])(
+  'reads only the lightweight chart directory and validates it: %s', async mode => {
+    const rows = [{symbol:'LOW',close:10,marketCapCrore:1}, {symbol:'HIGH',close:20,marketCapCrore:2}];
+    const payload = {revision: mode === 'wrong revision' ? 'c'.repeat(64) : revision,
+      asOfDate:mode === 'wrong date' ? '2026-09-30' : manifest.sessionDate,
+      stocks:mode === 'duplicate symbols' ? [rows[0],rows[0]] : rows};
+    const fetcher = vi.fn(async (url: string) => url === '/data/current.json'
+      ? new Response(JSON.stringify({...manifest,totalStocks:2,chartDirectoryUrl:'/directory.json.gz'}))
+      : new Response(JSON.stringify(payload), {headers:{'Content-Encoding':'gzip'}}));
+    vi.stubGlobal('fetch',fetcher);
+    const {realAdapter} = await import('../api/realAdapter');
+    if (mode === 'valid') {
+      const result = await Promise.all([realAdapter.getChartRows(revision),realAdapter.getChartRows(revision)]);
+      expect(result[0].map(row=>row.symbol)).toEqual(['HIGH','LOW']);
+      expect(fetcher.mock.calls.filter(([url])=>url === '/directory.json.gz')).toHaveLength(1);
+    } else await expect(realAdapter.getChartRows(revision)).rejects.toThrow('Invalid chart directory');
+    expect(fetcher.mock.calls.every(([url])=>['/data/current.json','/directory.json.gz'].includes(url))).toBe(true);
+  });
+
+it.each([false,true])('keeps full snapshot fallback for older releases or historical dates: %s',async historical => {
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify({...manifest,
+    ...(historical ? {chartDirectoryUrl:'/directory.json.gz'} : {})}))));
+  const {realAdapter} = await import('../api/realAdapter');
+  const screen = vi.spyOn(realAdapter,'runScreen').mockResolvedValue({rows:[],immutableRevision:revision} as never);
+  await realAdapter.getChartRows(revision,historical ? '2026-09-30' : manifest.sessionDate);
+  expect(screen).toHaveBeenCalledWith(expect.objectContaining({datasetRevision:revision,
+    asOfDate:historical ? '2026-09-30' : manifest.sessionDate}),true);
+});

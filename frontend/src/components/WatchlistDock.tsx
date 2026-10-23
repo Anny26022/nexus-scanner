@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import * as Popover from '@radix-ui/react-popover';
 import { screenerApi } from '../api/screenerApi';
-import type { StockRow } from '../types/screener';
+import type { ChartRow } from '../api/realAdapter';
 import { readChartStorage, writeChartStorage } from '../chart/storage';
 import {
   FLAGS_KEY, FLAG_BY_ID, FLAG_COLORS, activeList, createList, deleteList, flaggedSymbols, loadFlags, loadWatchlistStore,
@@ -261,19 +261,12 @@ export const WatchlistDock = memo(function WatchlistDock({
   const { data: quoteMap, isPending: quotesPending, isError: quotesError, refetch: retryQuotes } = useQuery({
     queryKey: ['watchlist-quotes-all', datasetRevision, quoteSymbolsKey, sessionDate],
     queryFn: async () => {
-      if (!symbols.length) return new Map<string, StockRow>();
-      const rows = await screenerApi.getExportRows({
-        datasetRevision,
-        universe: 'custom',
-        customSymbols: symbols,
-        asOfDate: sessionDate ?? '',
-        page: 1,
-        pageSize: 100,
-        expressionTree: { type: 'group', operator: 'all', children: [] },
-      });
-      const map = new Map<string, StockRow>();
+      if (!symbols.length) return new Map<string, ChartRow>();
+      const rows = await screenerApi.getChartRows(datasetRevision, sessionDate);
+      const selected = new Set(symbols);
+      const map = new Map<string, ChartRow>();
       for (const row of rows) {
-        map.set(row.symbol, row);
+        if (selected.has(row.symbol)) map.set(row.symbol, row);
       }
       return map;
     },

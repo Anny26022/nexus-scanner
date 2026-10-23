@@ -81,7 +81,7 @@ it('renders symbols list, filters symbols, and handles symbol selection', async 
   const onSelectSymbol = vi.fn();
   const onClose = vi.fn();
 
-  vi.spyOn(screenerApi, 'getExportRows').mockResolvedValue([
+  vi.spyOn(screenerApi, 'getChartRows').mockResolvedValue([
       {
         symbol: 'DIXON',
         name: 'Dixon Technologies',
@@ -158,14 +158,12 @@ it('renders symbols list, filters symbols, and handles symbol selection', async 
 it('shows prices beyond page 1 without rendering the entire watchlist', async () => {
   const symbols = Array.from({ length: 250 }, (_, index) => `TEST${index}`);
   writeChartStorage('watchlist.v2', symbols);
-  const getRows = vi.spyOn(screenerApi, 'getExportRows').mockResolvedValue(symbols.map((symbol, index) => ({
+  const getRows = vi.spyOn(screenerApi, 'getChartRows').mockResolvedValue(symbols.map((symbol, index) => ({
     symbol, name: symbol, close: index + 100, changePct: 1.25,
   })) as any);
   const view = render(<WatchlistDock datasetRevision="rev123" onSelectSymbol={vi.fn()} />, { wrapper: createWrapper() });
 
-  await waitFor(() => expect(getRows).toHaveBeenCalledWith(expect.objectContaining({
-    universe: 'custom', customSymbols: symbols, pageSize: 100,
-  })));
+  await waitFor(() => expect(getRows).toHaveBeenCalledWith('rev123', undefined));
   expect(view.container.querySelectorAll('.watchlist-row').length).toBeLessThan(50);
   const list = screen.getByRole('table', { name: 'Watchlist stocks' });
   fireEvent.scroll(list, { target: { scrollTop: 249 * 40 } });
@@ -179,7 +177,7 @@ it('shows prices beyond page 1 without rendering the entire watchlist', async ()
 it('keeps the viewport at the top while changing sort direction, even when the active symbol moves to the end', async () => {
   const symbols = Array.from({ length: 80 }, (_, index) => `TEST${String(index).padStart(2, '0')}`);
   writeChartStorage('watchlist.v2', symbols);
-  vi.spyOn(screenerApi, 'getExportRows').mockResolvedValue(symbols.map((symbol, index) => ({
+  vi.spyOn(screenerApi, 'getChartRows').mockResolvedValue(symbols.map((symbol, index) => ({
     symbol, close: 100 + index, changePct: index,
   })) as any);
   render(<WatchlistDock datasetRevision="rev123" activeSymbol="TEST79" onSelectSymbol={vi.fn()} />, { wrapper: createWrapper() });
@@ -209,7 +207,7 @@ it('still scrolls to a symbol selected outside the watchlist', () => {
 
 it('keeps unavailable prices and changes below valid values in both sort directions', async () => {
   writeChartStorage('watchlist.v2', ['MISSING', 'LOW', 'HIGH']);
-  vi.spyOn(screenerApi, 'getExportRows').mockResolvedValue([
+  vi.spyOn(screenerApi, 'getChartRows').mockResolvedValue([
     { symbol: 'LOW', close: 10, changePct: -2 },
     { symbol: 'HIGH', close: 20, changePct: 3 },
   ] as any);
@@ -226,7 +224,7 @@ it('keeps unavailable prices and changes below valid values in both sort directi
 
 it('distinguishes symbols missing from the snapshot from a loading quote', async () => {
   writeChartStorage('watchlist.v2', ['MISSING']);
-  vi.spyOn(screenerApi, 'getExportRows').mockResolvedValue([]);
+  vi.spyOn(screenerApi, 'getChartRows').mockResolvedValue([]);
   render(<WatchlistDock datasetRevision="rev123" onSelectSymbol={vi.fn()} />, { wrapper: createWrapper() });
   await waitFor(() => expect(screen.getByText('No data')).toBeInTheDocument());
   expect(screen.getByText('1 symbol not in this snapshot')).toBeInTheDocument();
@@ -234,7 +232,7 @@ it('distinguishes symbols missing from the snapshot from a loading quote', async
 
 it('shows a retry action when snapshot prices fail to load', async () => {
   writeChartStorage('watchlist.v2', ['BEL']);
-  const getRows = vi.spyOn(screenerApi, 'getExportRows').mockRejectedValueOnce(new Error('offline'))
+  const getRows = vi.spyOn(screenerApi, 'getChartRows').mockRejectedValueOnce(new Error('offline'))
     .mockResolvedValueOnce([{ symbol: 'BEL', close: 382.35, changePct: 0.62 }] as any);
   render(<WatchlistDock datasetRevision="rev123" onSelectSymbol={vi.fn()} />, { wrapper: createWrapper() });
   await waitFor(() => expect(screen.getByText('Prices could not load.')).toBeInTheDocument());
@@ -294,16 +292,14 @@ it('writes the watchlist once per add or remove action under Strict Mode', () =>
 
 it('sorts within pasted sections and excludes headings from quote requests', async () => {
   writeChartStorage('watchlist.v2', ['###Capital Goods', 'BEL', 'HAL', '###Banks', 'HDFCBANK']);
-  const getRows = vi.spyOn(screenerApi, 'getExportRows').mockResolvedValue([
+  const getRows = vi.spyOn(screenerApi, 'getChartRows').mockResolvedValue([
     { symbol: 'BEL', close: 100, changePct: 1 },
     { symbol: 'HAL', close: 200, changePct: 2 },
     { symbol: 'HDFCBANK', close: 300, changePct: 3 },
   ] as any);
   render(<WatchlistDock datasetRevision="rev123" onSelectSymbol={vi.fn()} />, { wrapper: createWrapper() });
 
-  await waitFor(() => expect(getRows).toHaveBeenCalledWith(expect.objectContaining({
-    customSymbols: ['BEL', 'HAL', 'HDFCBANK'],
-  })));
+  await waitFor(() => expect(getRows).toHaveBeenCalledWith('rev123', undefined));
   expect(screen.getByText('Capital Goods')).toBeInTheDocument();
   expect(screen.getByText('Banks')).toBeInTheDocument();
   const order = () => Array.from(document.querySelectorAll('.watchlist-section-title, .watchlist-row .watchlist-symbol-name'), node => node.textContent);

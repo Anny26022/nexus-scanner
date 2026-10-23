@@ -451,3 +451,19 @@ it('classifies corporate actions into TradingView event letters', async () => {
     .toEqual(['split','bonus','dividend','rights','action']);
   expect(eventBadgeKey({kind:'news',title:'x'})).toBe('news');
 });
+
+it('updates a late relative-strength benchmark without recreating native series',()=>{
+  const {engine}=setup();
+  engine.setStudyConfigs({...defaultStudyConfigs(),extras:{rs:{enabled:true,params:{maPeriod:0}}}});
+  const firstStudy=native.series.length;
+  engine.setStudies({});
+  const rs=native.series[firstStudy];
+  const count=native.chart.addSeries.mock.calls.length;
+  const before=rs.setData.mock.calls.length;
+  engine.setBenchmark(new Map(candles.map(bar=>[bar.date,100])));
+  expect(rs.setData.mock.calls.length).toBeGreaterThan(before);
+  expect(rs.setData.mock.lastCall?.[0].some((bar:{value?:number})=>Number.isFinite(bar.value))).toBe(true);
+  expect(native.chart.addSeries).toHaveBeenCalledTimes(count);
+  expect(native.chart.removeSeries).not.toHaveBeenCalled();
+  engine.destroy();
+});

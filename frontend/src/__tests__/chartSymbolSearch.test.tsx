@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { rankSymbols } from '../hooks/useSymbolDirectory';
 import { ChartSymbolSearch } from '../components/ChartSymbolSearch';
 
-vi.mock('../api/screenerApi', () => ({screenerApi: {getExportRows: vi.fn(async () => [
+vi.mock('../api/screenerApi', () => ({screenerApi: {getChartRows: vi.fn(async () => [
   {symbol: 'TATAPOWER', name: 'Tata Power'}, {symbol: 'TATASTEEL', name: 'Tata Steel'},
   {symbol: 'TCS', name: 'Tata Consultancy Services'}, {symbol: 'RELIANCE', name: 'Reliance Industries'},
 ])}}));

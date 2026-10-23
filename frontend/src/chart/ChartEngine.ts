@@ -1013,8 +1013,12 @@ export class ChartEngine {
     this.invalidate();
     this.markers.setMarkers([...eventMarkers,...snorts].sort((a,b)=>String(a.time).localeCompare(String(b.time))));
   }
-  /** Benchmark closes by session date, for relative-strength studies. Rebuild with setStudies after changing. */
-  setBenchmark(benchmark:ReadonlyMap<string,number>|undefined) { this.benchmark=benchmark; }
+  /** Late benchmark data refreshes relative strength without rebuilding the chart or its panes. */
+  setBenchmark(benchmark:ReadonlyMap<string,number>|undefined) {
+    if (this.benchmark === benchmark) return;
+    this.benchmark=benchmark;
+    if (this.studySeries.length && this.studyConfigs.extras?.rs?.enabled) this.updateStudies();
+  }
   setStudyConfigs(configs:StudyConfigs) {
     // The caller applies the new visibility with setStudies immediately after.
     // Rebuilding here would create and remove every native series twice.

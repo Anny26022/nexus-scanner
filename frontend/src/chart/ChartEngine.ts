@@ -227,7 +227,7 @@ export class ChartEngine {
       });
     }})}];
     this.primitive={attached:({requestUpdate}:SeriesAttachedParameter)=>{this.invalidate=()=>{this.syncPriceLines();requestUpdate();};},paneViews:()=>paneViews,
-      hitTest:(x,y)=>{const p=this.projection(),state=book.getSnapshot();const hit=p&&!state.hideAll?hitDrawing(state.drawings,{x,y},p,state.selectedId):null;return hit?{externalId:hit.drawing.id,zOrder:'top',cursorStyle:hit.handle!==null?'crosshair':'move'}:null;},
+      hitTest:(x,y)=>{const p=this.projection(),state=this.book.getSnapshot();const hit=p&&!state.hideAll?hitDrawing(state.drawings,{x,y},p,state.selectedId):null;return hit?{externalId:hit.drawing.id,zOrder:'top',cursorStyle:hit.handle!==null?'crosshair':'move'}:null;},
       priceAxisViews:()=>this.axisViews('price'),timeAxisViews:()=>this.axisViews('time'),
     };
     this.price.attachPrimitive(this.primitive);
@@ -239,7 +239,7 @@ export class ChartEngine {
     this.theme=new MutationObserver(()=>this.readTheme());
     this.theme.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
     this.readTheme();
-    this.unsubscribe=book.subscribe(()=>{this.chart.applyOptions({handleScroll:this.scrollOptions()});});
+    this.unsubscribe=this.watchBook();
     const options={signal:this.events.signal,capture:true};
     host.addEventListener('wheel',this.wheel,{signal:this.events.signal,passive:false});
     host.addEventListener('pointerdown',this.down,options);
@@ -250,7 +250,7 @@ export class ChartEngine {
     // Lightweight Charts uses mouse/touch events; suppress only gestures owned by the drawing layer.
     host.addEventListener('mousedown',event=>{if(this.blockMouse){event.preventDefault();event.stopPropagation();}},options);
     host.addEventListener('touchstart',event=>{if(this.blockMouse){event.preventDefault();event.stopPropagation();}},{...options,passive:false});
-    host.addEventListener('keydown',this.key,options);
+    this.setKeyTarget(host);
     host.addEventListener('dblclick',event=>{if(this.layer.finish()) {event.preventDefault();event.stopPropagation();}},options);
     this.hostObserver=typeof ResizeObserver!=='undefined'?new ResizeObserver(()=>{this.notifyPanesChange();}):undefined;
     this.hostObserver?.observe(host);
@@ -1433,7 +1433,7 @@ export class ChartEngine {
   private point(event:MouseEvent):Pixel {const rect=this.host.getBoundingClientRect();return {x:event.clientX-rect.left,y:event.clientY-rect.top};}
   private down=(event:PointerEvent)=>{
     this.blockMouse=false;if(event.button!==0) return;
-    this.host.focus({preventScroll:true});const point=this.point(event),projection=this.projection();
+    this.keyTarget.focus({preventScroll:true});const point=this.point(event),projection=this.projection();
     if(!projection || point.x>projection.width || point.y>projection.bottom) return;
     if(this.replayPicker) return;
     // Shift + drag measures; a plain click clears the last measurement.
@@ -1596,11 +1596,44 @@ export class ChartEngine {
     else this.zoom(event.key==='-'?1.25:.8);
     this.describeLatestVisible();
   };
+  private keyTarget!:HTMLElement;
+  private keyEvents=new AbortController();
+  /** The focusable element that takes keyboard shortcuts: the scene's container, wherever the canvas lives. */
+  setKeyTarget(target:HTMLElement) {
+    this.keyEvents.abort();this.keyEvents=new AbortController();this.keyTarget=target;
+    target.addEventListener('keydown',this.key,{signal:this.keyEvents.signal,capture:true});
+  }
+  private watchBook() {return this.book.subscribe(()=>{this.chart.applyOptions({handleScroll:this.scrollOptions()});});}
+  /**
+   * Shows another symbol or interval on this chart. Panes, indicator series and settings are kept, so a switch
+   * only replaces data instead of tearing the chart down and rebuilding every pane (the slow part of a switch).
+   * The caller re-applies the new symbol's overlays (events, bands, comparison, view) right after.
+   */
+  adopt(candles:readonly Candle[],inspect:(bar:Candle)=>void,book:DrawingBook,inspectEvents:(events:readonly ChartEvent[])=>void=()=>{}) {
+    this.inspect=inspect;this.inspectEvents=inspectEvents;
+    if(book!==this.book) {
+      this.unsubscribe();this.layer.destroy();
+      this.book=book;this.layer=new DrawingLayer(book,()=>this.projection(),()=>this.invalidate());
+      this.unsubscribe=this.watchBook();
+      this.chart.applyOptions({handleScroll:this.scrollOptions()});
+    }
+    // Nothing from the previous symbol may show on the new one.
+    this.eventData=[];this.bandChanges=[];this.upcomingEarnings=null;this.sizingLines={lines:[],offset:3,length:4};
+    this.setPriceBandGuides([]);this.setComparison('',[]);
+    this.measure=null;this.measurePointer=null;this.replayPicker=null;this.hoveredEvent=null;this.eventHover(null);
+    this.setCandles(candles);
+    this.latest();
+  }
+  /** Detaches the previous scene's callbacks while the engine waits to be adopted. */
+  park() {
+    this.onPanesChange=undefined;this.eventHover=()=>{};this.inspect=()=>{};this.inspectEvents=()=>{};
+    this.announce=()=>{};this.replayPicker=null;
+  }
   destroy() {
     if(this.disposed) return;this.disposed=true;
     this.hostObserver?.disconnect();
     this.paneObserver?.disconnect();
-    this.events.abort();this.theme.disconnect();this.unsubscribe();this.layer.destroy();
+    this.events.abort();this.keyEvents.abort();this.theme.disconnect();this.unsubscribe();this.layer.destroy();
     cancelAnimationFrame(this.highLowFrame);this.chart.timeScale().unsubscribeVisibleLogicalRangeChange(this.onVisibleRange);
     this.chart.unsubscribeCrosshairMove(this.crosshair);this.chart.unsubscribeClick(this.click);this.markers.detach();this.chart.remove();
   }

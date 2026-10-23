@@ -313,15 +313,6 @@ export function ChartSettingsDialog({
 
           {section === 'readout' && <>
             <h4 className="cs-subhead">Symbol</h4>
-            <Check label="Logo" checked={draft.statusLogo === true} onChange={(checked) => update({ statusLogo: checked })} />
-            <Check label="Title" checked={draft.statusTitle === true} onChange={(checked) => update({ statusTitle: checked })}>
-              <select aria-label="Title shows" className="cs-select" disabled={draft.statusTitle !== true} value={draft.statusTitleMode ?? 'symbol'}
-                onChange={(e) => update({ statusTitleMode: e.target.value as 'symbol' | 'description' | 'ticker' })}>
-                <option value="symbol">Symbol</option>
-                <option value="description">Description</option>
-                <option value="ticker">Ticker</option>
-              </select>
-            </Check>
             <Check label="Market status" checked={draft.statusMarketStatus === true} onChange={(checked) => update({ statusMarketStatus: checked })} />
             <Check label="Open, high, low, close" checked={draft.statusOhlc !== false} onChange={(checked) => update({ statusOhlc: checked })} />
             <Check label="Bar change values" checked={draft.statusBarChange !== false} onChange={(checked) => update({ statusBarChange: checked })} />

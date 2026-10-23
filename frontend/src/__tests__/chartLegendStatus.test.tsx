@@ -1,22 +1,20 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { ChartLegend } from '../components/ChartLegend';
 import { formatDuration, marketOpen, secondsToNextBoundary } from '../chart/marketHours';
 
-vi.mock('../components/SymbolWithLogo', () => ({ SymbolWithLogo: () => <span data-testid="logo" /> }));
 afterEach(cleanup);
 const bar = { date: '2026-10-02', open: 10, high: 12, low: 9, close: 11, volume: 1000 };
-const status = { logo: true, title: true, titleMode: 'description' as const, marketStatus: true, ohlc: true, change: true, volume: true, interval: '1D', name: 'Tata Consultancy Services' };
+const status = { marketStatus: true, ohlc: true, change: true, volume: true };
 
 it('shows and hides each status-line element', () => {
   const { rerender } = render(<ChartLegend symbol="TCS" bar={bar} status={status} />);
-  expect(screen.getByText('Tata Consultancy Services')).toBeInTheDocument();
-  expect(screen.getByTestId('logo')).toBeInTheDocument();
+  // The toolbar already names the symbol, so the status line never repeats it.
+  expect(screen.queryByText('TCS')).not.toBeInTheDocument();
+  expect(screen.getByLabelText(/Market (open|closed)/)).toBeInTheDocument();
   expect(screen.getByText('O')).toBeInTheDocument();
   expect(screen.getByText('Vol')).toBeInTheDocument();
-  rerender(<ChartLegend symbol="TCS" bar={bar} status={{ ...status, logo: false, titleMode: 'ticker', ohlc: false, volume: false, marketStatus: false }} />);
-  expect(screen.getByText('NSE:TCS')).toBeInTheDocument();
-  expect(screen.queryByTestId('logo')).not.toBeInTheDocument();
+  rerender(<ChartLegend symbol="TCS" bar={bar} status={{ ...status, ohlc: false, volume: false, marketStatus: false }} />);
   expect(screen.queryByText('O')).not.toBeInTheDocument();
   expect(screen.queryByText('Vol')).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/Market (open|closed)/)).not.toBeInTheDocument();

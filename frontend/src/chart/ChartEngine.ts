@@ -60,9 +60,6 @@ export type ChartAppearance = {
   watermarkOpacity?:number;
   topMargin?:number;
   bottomMargin?:number;
-  statusLogo?:boolean;
-  statusTitle?:boolean;
-  statusTitleMode?:'symbol'|'description'|'ticker';
   statusMarketStatus?:boolean;
   statusOhlc?:boolean;
   statusBarChange?:boolean;

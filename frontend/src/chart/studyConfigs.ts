@@ -174,6 +174,7 @@ export const SIMPLE_VOLUME_COLORS = {ppv: '#2196f3', record: '#87ceeb', up: '#4c
 
 export interface StudyConfigs {
   fundamentals?: import('./fundamentals').FundamentalsConfig;
+  positionSizing?: import('./positionSizing').PositionSizingConfig;
   /** Registry indicators (see extraStudies.ts), persisted with the scene and saved layouts. */
   extras?: ExtraStudies;
   rsi?: RsiConfig;

@@ -43,6 +43,7 @@ export interface LegendProps {
   onToggleStudyVisibility: (id: string) => void;
   onUpdateExtras?: (next: ExtraStudies) => void;
   onUpdateFundamentals?: (next: NonNullable<StudyConfigs['fundamentals']>) => void;
+  onUpdatePositionSizing?: (next: NonNullable<StudyConfigs['positionSizing']>) => void;
   /** Legend chrome: collapse the indicator rows and hide every indicator at once. */
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -69,6 +70,7 @@ export function PricePaneLegend({
   onToggleStudyVisibility,
   onUpdateExtras,
   onUpdateFundamentals,
+  onUpdatePositionSizing,
   collapsed = false,
   onToggleCollapsed,
   allHidden = false,
@@ -134,6 +136,19 @@ export function PricePaneLegend({
           </button>
           <button type="button" className="chart-indicator-action-btn" title="Settings" onClick={() => openSettings('fundamentals')}><Settings size={12} /></button>
           {onUpdateFundamentals && <button type="button" className="chart-indicator-action-btn delete" title="Remove" onClick={() => onUpdateFundamentals({...studyConfigs.fundamentals!, enabled: false})}><Trash2 size={12} /></button>}
+        </span>
+      </div>}
+      {studyConfigs?.positionSizing?.enabled && <div className="chart-indicator-row">
+        <span className="chart-indicator-title" style={{color: '#00766c'}} onClick={() => openSettings('positionSizing')}>
+          <span className="chart-indicator-bullet">●</span>
+          <span>Position Sizing</span>
+        </span>
+        <span className="chart-indicator-actions">
+          <button type="button" className="chart-indicator-action-btn" title={hiddenStudies.positionSizing ? 'Show' : 'Hide'} onClick={() => onToggleStudyVisibility('positionSizing')}>
+            {hiddenStudies.positionSizing ? <EyeOff size={12} /> : <Eye size={12} />}
+          </button>
+          <button type="button" className="chart-indicator-action-btn" title="Settings" onClick={() => openSettings('positionSizing')}><Settings size={12} /></button>
+          {onUpdatePositionSizing && <button type="button" className="chart-indicator-action-btn delete" title="Remove" onClick={() => onUpdatePositionSizing({...studyConfigs.positionSizing!, enabled: false})}><Trash2 size={12} /></button>}
         </span>
       </div>}
       {/* Volume Overlay (when in price pane) */}

@@ -2382,3 +2382,32 @@
 .ms-option:hover, .ms-option[aria-selected="true"] { background: var(--surface-hover); }
 .pb-band-styles { padding-left: 26px; }
 .chart-plot:has(.chart-event-hover) .chart-actions { opacity: 0; }
+
+/* Position Sizing Calculator: the table sits in one of nine spots until it is dragged. */
+.ps-card { --ps-font: 10px; padding: 6px 10px 8px; border-radius: 10px; font-size: var(--ps-font); }
+.ps-card[data-size="small"] { --ps-font: 11px; }
+.ps-card[data-size="normal"] { --ps-font: 12px; }
+.ps-card[data-size="large"] { --ps-font: 14px; }
+.ps-card[data-size="huge"] { --ps-font: 16px; }
+.ps-card[data-position^="top"] { top: 48px; bottom: auto; }
+.ps-card[data-position^="middle"] { top: 50%; bottom: auto; translate: 0 -50%; }
+.ps-card[data-position^="bottom"] { top: auto; bottom: 64px; }
+.ps-card[data-position$="left"] { left: 64px; right: auto; }
+.ps-card[data-position$="right"] { left: auto; right: 76px; }
+.ps-card[data-position$="center"] { left: 50%; right: auto; translate: -50% 0; }
+.ps-card[data-position="middle-center"] { translate: -50% -50%; }
+.ps-card table { border-collapse: collapse; white-space: nowrap; }
+.ps-card th, .ps-card td { padding: 3px 7px; text-align: right; }
+.ps-card thead th { color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+.ps-card thead th:first-child, .ps-card tbody th { text-align: left; }
+.ps-card thead th[data-side="long"] { color: #089981; }
+.ps-card thead th[data-side="short"] { color: #f23645; }
+.ps-card tbody th { font-weight: 600; }
+.ps-card tbody tr + tr > * { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.ps-card .ps-alloc { color: #00766c; font-weight: 600; }
+:root[data-theme="dark"] .ps-card .ps-alloc { color: #5aa0ff; }
+.ps-swatch { display: inline-block; width: 8px; height: 2px; margin: 0 6px 0 0; vertical-align: middle; border-radius: 1px; }
+.ps-card tfoot td { padding-top: 5px; border-top: 1px solid var(--line); color: var(--muted); font-weight: 600; text-align: center; }
+.ps-settings input.ps-wide[type="number"] { width: 130px; }
+.ps-stop .pb-setting-check { min-height: 0; }
+.ps-stop-controls { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }

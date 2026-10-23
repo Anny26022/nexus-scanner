@@ -38,6 +38,8 @@ import { EXTRA_STUDY_BY_ID, type ExtraStudies, type ExtraStudyId } from '../char
 import { WatchlistDock } from './WatchlistDock';
 import { Download, Upload } from 'lucide-react';
 import { ChartEventItem } from './ChartEventItem';
+import { PositionSizingIndicator, PositionSizingSettingsDialog } from './PositionSizingIndicator';
+import { positionSizing, positionSizingConfig } from '../chart/positionSizing';
 import { Button } from './Button';
 
 const ranges=[[1,'1mo'],[3,'3mo'],[6,'6mo'],[12,'1y'],[24,'2y'],[null,'All']] as const;
@@ -77,7 +79,7 @@ function EngineSync({run}: {run: () => void}) {
   return null;
 }
 
-function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionDate,symbolControls,viewControls,layoutControls,events,revision,interval,tileId,sync,benchmark,actionsRef}: {benchmark?: ReadonlyMap<string, number>; actionsRef?: { current: ChartSceneActions | null };candles: readonly Candle[]; symbol: string;book:DrawingBook;firstDate:string;lastDate:string;metrics?:ChartMetrics;sessionDate:string;symbolControls:ReactNode;viewControls:ReactNode;layoutControls?:ReactNode;events:readonly ChartEvent[];revision:string;interval:Interval;tileId:string;sync:ChartSync}) {
+function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,sessionDate,symbolControls,viewControls,layoutControls,events,revision,interval,tileId,sync,benchmark,actionsRef}: {benchmark?: ReadonlyMap<string, number>; actionsRef?: { current: ChartSceneActions | null };candles: readonly Candle[]; daily: readonly Candle[]; symbol: string;book:DrawingBook;firstDate:string;lastDate:string;metrics?:ChartMetrics;sessionDate:string;symbolControls:ReactNode;viewControls:ReactNode;layoutControls?:ReactNode;events:readonly ChartEvent[];revision:string;interval:Interval;tileId:string;sync:ChartSync}) {
   const [saved]=useState(()=>loadScene(tileId));
   const paneChoice=useRef(saved.paneWeights);
   const engine = useRef<ChartEngine | null>(null);
@@ -131,7 +133,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     const hide = !allHidden;
     setAllHidden(hide);
     const ids = [...Object.entries(studyChoice.current).filter(([, on]) => on).map(([id]) => id),
-      ...Object.entries(studyConfigsChoice.current.extras ?? {}).filter(([, state]) => state?.enabled).map(([id]) => id), 'fundamentals', 'volume'];
+      ...Object.entries(studyConfigsChoice.current.extras ?? {}).filter(([, state]) => state?.enabled).map(([id]) => id), 'fundamentals', 'positionSizing', 'volume'];
     hiddenStudiesChoice.current = {...hiddenStudiesChoice.current, ...Object.fromEntries(ids.map(id => [id, hide]))};
     setHiddenStudies(hiddenStudiesChoice.current);
     for (const id of ids) engine.current?.setStudyVisibility(id, !hide);
@@ -177,6 +179,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   };
   const applyFundamentals = (fundamentals: NonNullable<StudyConfigs['fundamentals']>) =>
     applyStudyConfigs({...studyConfigsChoice.current, fundamentals}, false);
+  const applyPositionSizing = (positionSizing: NonNullable<StudyConfigs['positionSizing']>) =>
+    applyStudyConfigs({...studyConfigsChoice.current, positionSizing}, false);
   const applyExtras = (next: ExtraStudies) => applyStudyConfigs({...studyConfigsChoice.current, extras: next});
   const applyComparison=(next:typeof comparison)=>{setComparison(next);persist({comparison:next});if(!next) onComparison('',[],false);};
   const [eventDetails,setEventDetails]=useState<readonly ChartEvent[]|null>(null);
@@ -195,6 +199,14 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
   // The engine applies its own replay cutoff, so pass every change through the snapshot date.
   bandChoice.current = fundamentals?.bandHistory && !allHidden && !hiddenStudies.fundamentals ? bandChanges(bandHistory.data?.bands, sessionDate) : [];
   const earningsChoice = useRef<{date: string; line: boolean} | null>(null);
+  const sizingLinesChoice = useRef<{lines: {price: number; color: string; label: string}[]; offset: number; length: number}>({lines: [], offset: 0, length: 0});
+  // Daily bars size the trade on every interval, like the script's request.security(..., "D").
+  const sizingThrough = revealedThrough(candles, replay.index, sessionDate);
+  const sizingConfig = studyConfigs.positionSizing?.enabled && !allHidden && !hiddenStudies.positionSizing ? positionSizingConfig(studyConfigs.positionSizing) : null;
+  const sizing = sizingConfig ? positionSizing(daily, sizingThrough, sizingConfig) : null;
+  sizingLinesChoice.current = sizing && sizingConfig?.showLines
+    ? {lines: sizing.rows.map(row => ({price: row.stopPrice, color: row.color, label: row.line})), offset: sizingConfig.lineOffset, length: sizingConfig.lineLength}
+    : {lines: [], offset: 0, length: 0};
   earningsChoice.current = nextResults ? {date: nextResults.scheduled_date, line: fundamentals!.earningsLine} : null;
   const metricsChoice = useRef(metrics);
   metricsChoice.current = metrics;
@@ -274,6 +286,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
       updateBandGuides(chart);
       chart.setUpcomingEarnings?.(earningsChoice.current);
       chart.setBandChanges?.(bandChoice.current,studyConfigsChoice.current.fundamentals?.bandStyles);
+      chart.setSizingLines?.(sizingLinesChoice.current.lines,sizingLinesChoice.current.offset,sizingLinesChoice.current.length);
       const normalView=clock.getSnapshot().index===null,epoch=sync.persistenceEpoch;
       const unlink=normalView?sync.connect(chart,host):()=>{};
       let timer:ReturnType<typeof setTimeout>|undefined;
@@ -410,6 +423,10 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         metrics={metrics} config={studyConfigs.fundamentals}
         onMoveBadge={badgeOffset => applyFundamentals({...studyConfigsChoice.current.fundamentals!, badgeOffset})}
         onMove={offset => applyFundamentals({...studyConfigsChoice.current.fundamentals!, offset})}/>}
+      <EngineSync key={`sizing:${JSON.stringify(sizingLinesChoice.current)}`}
+        run={() => engine.current?.setSizingLines?.(sizingLinesChoice.current.lines, sizingLinesChoice.current.offset, sizingLinesChoice.current.length)} />
+      {sizingConfig && <PositionSizingIndicator symbol={symbol} daily={daily} through={sizingThrough} config={sizingConfig}
+        onMove={offset => applyPositionSizing({...positionSizingConfig(studyConfigsChoice.current.positionSizing), offset})}/>}
       <div className="chart-overlay-legend">
         <ChartLegend symbol={symbol} bar={currentBar} previous={previousByDate.get(currentBar.date)} quoteRef={quote}
           status={{marketStatus:appearance.statusMarketStatus===true,ohlc:appearance.statusOhlc!==false,change:appearance.statusBarChange!==false,
@@ -433,6 +450,7 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
           onToggleStudyVisibility={toggleStudyVisibility}
           onUpdateExtras={applyExtras}
           onUpdateFundamentals={applyFundamentals}
+          onUpdatePositionSizing={applyPositionSizing}
           collapsed={Boolean(appearance.legendCollapsed)}
           onToggleCollapsed={() => applyAppearance({legendCollapsed: !appearanceChoice.current.legendCollapsed})}
           allHidden={allHidden}
@@ -502,6 +520,8 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
         onApplyAppearance={applyAppearance}
         fundamentals={studyConfigs.fundamentals}
         onApplyFundamentals={applyFundamentals}
+        positionSizing={studyConfigs.positionSizing}
+        onApplyPositionSizing={applyPositionSizing}
         extras={studyConfigs.extras}
         onApplyExtras={applyExtras}
         onOpenIndicatorSettings={id => {
@@ -521,7 +541,9 @@ function ChartScene({candles, symbol, book, firstDate, lastDate,metrics,sessionD
     )}
     {activeIndicatorSetting === 'fundamentals' && <FundamentalsSettingsDialog config={studyConfigs.fundamentals}
       onApply={applyFundamentals} onClose={() => setActiveIndicatorSetting(null)}/>}
-    {activeIndicatorSetting && activeIndicatorSetting !== 'fundamentals' && !EXTRA_STUDY_BY_ID.has(activeIndicatorSetting as ExtraStudyId) && (
+    {activeIndicatorSetting === 'positionSizing' && <PositionSizingSettingsDialog config={studyConfigs.positionSizing}
+      onApply={applyPositionSizing} onClose={() => setActiveIndicatorSetting(null)}/>}
+    {activeIndicatorSetting && activeIndicatorSetting !== 'fundamentals' && activeIndicatorSetting !== 'positionSizing' && !EXTRA_STUDY_BY_ID.has(activeIndicatorSetting as ExtraStudyId) && (
       <IndicatorSettingsModal
         indicatorId={activeIndicatorSetting}
         configs={studyConfigs}
@@ -882,7 +904,7 @@ function ChartTile({
     {chart.isError ? <div role="alert" className="chart-status"><p>{chart.error.message}</p><Button variant="ghost" onClick={() => void chart.refetch()}>Retry</Button></div>
       : chart.isPending || benchmark.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
       : !candles.length ? <p className="chart-status" role="status">No published candles for {symbol}.</p>
-      : <ChartScene key={`${datasetRevision}:${sessionDate}:${symbol}:${interval}`} candles={candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
+      : <ChartScene key={`${datasetRevision}:${sessionDate}:${symbol}:${interval}`} candles={candles} daily={chart.data.candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
           firstDate={chart.data.candles[0].date} lastDate={chart.data.candles.at(-1)!.date} metrics={metadata.data??undefined} sessionDate={chart.data.asOfDate} events={events} revision={datasetRevision!} interval={interval} tileId={tileId} sync={sync} benchmark={benchmark.data ?? undefined} actionsRef={sceneActions}/>}
   </section>;
 }

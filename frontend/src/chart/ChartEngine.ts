@@ -195,6 +195,7 @@ export class ChartEngine {
         this.drawUpcomingEarnings(context,projection.bottom);
         this.drawBandChanges(context);
         this.drawSnorts(context);
+        this.drawSizingLines(context);
         this.drawHoverPoint(context);
         this.drawMeasure(context);
         if (this.replayPicker) {
@@ -517,6 +518,32 @@ export class ChartEngine {
     if(!key||!events||!hit) {this.eventHover(null);return;}
     const left=this.chart.priceScale('left').width?.()??0;
     this.eventHover({events,x:hit.x+left,bottom:(this.chart.timeScale().height?.()??0)+11+9});
+  }
+  private sizingLines:{lines:readonly {price:number;color:string;label:string}[];offset:number;length:number}={lines:[],offset:3,length:4};
+  /** Position-sizing stops: short lines `offset` bars past the last bar, `length` bars long, labelled on the right. */
+  setSizingLines(lines:readonly {price:number;color:string;label:string}[],offset=3,length=4) {
+    this.sizingLines={lines,offset,length};this.invalidate();
+  }
+  private drawSizingLines(context:CanvasRenderingContext2D) {
+    const {lines,offset,length}=this.sizingLines;
+    if(!lines.length||!this.candles.length) return;
+    const scale=this.chart.timeScale(),last=this.candles.length-1;
+    const start=scale.logicalToCoordinate((last+offset) as Logical),end=scale.logicalToCoordinate((last+offset+length) as Logical);
+    if(start===null||end===null) return;
+    // Keep the line inside the pane so its label, drawn above the right end, is never cut by the price axis.
+    const width=scale.width(),x2=Math.min(end,width-4),x1=Math.min(start,x2-12);
+    context.save();
+    context.font='11px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif';
+    context.textAlign='right';context.textBaseline='bottom';context.lineWidth=1;
+    context.fillStyle=getComputedStyle(this.host).getPropertyValue('--text').trim()||'#131722';
+    for(const line of lines) {
+      const y=this.price.priceToCoordinate(line.price);
+      if(y===null) continue;
+      const at=Math.round(y)+.5;
+      context.strokeStyle=line.color;context.beginPath();context.moveTo(x1,at);context.lineTo(x2,at);context.stroke();
+      context.fillText(line.label,x2,at-2);
+    }
+    context.restore();
   }
   /** Bull Snorts below the candle, in the volume settings' shape and colour. */
   private drawSnorts(context:CanvasRenderingContext2D) {

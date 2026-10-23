@@ -31,7 +31,7 @@ const ESSENTIAL = new Set(['sales', 'expenses', 'operating_profit', 'opm', 'prof
 const LOWER_IS_BETTER = new Set(['expenses', 'interest', 'depreciation', 'tax_expenses']);
 
 /** Drag the badge or card handle; arrow keys nudge a focused overlay. */
-function useOverlayDrag(onMove?: (offset: Offset) => void) {
+export function useOverlayDrag(onMove?: (offset: Offset) => void) {
   const [live, setLive] = useState<Offset | null>(null);
   const frame = useRef(0);
   useMountEffect(() => () => cancelAnimationFrame(frame.current));
@@ -80,7 +80,7 @@ function useOverlayDrag(onMove?: (offset: Offset) => void) {
     },
   };
 }
-const placed = (offset: Offset | null, extra: CSSProperties = {}): CSSProperties => offset ? {
+export const placed = (offset: Offset | null, extra: CSSProperties = {}): CSSProperties => offset ? {
   ...extra, left: `${offset.x * 100}%`, top: `${offset.y * 100}%`, right: 'auto', bottom: 'auto',
   translate: `${-offset.x * 100}% ${-offset.y * 100}%`,
 } : extra;

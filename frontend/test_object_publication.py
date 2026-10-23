@@ -94,7 +94,8 @@ class ObjectPublicationTests(unittest.TestCase):
                 complete_release(self.build(root, '2026-10-07'), output,
                                  {'revision': 'b'*64, 'sessionDate': '2026-10-07'}, store)
             weekly = store.references['releases/' + 'b'*64 + '/index.json']
-            self.assertEqual(weekly['archivesAsOf'], weekly['filingLookup']['publishedAt'])
+            lookup = json.loads(gzip.decompress(store.objects[weekly['filingLookupObject'] + '.json.gz']))
+            self.assertEqual(weekly['archivesAsOf'], lookup['publishedAt'])
             self.assertIn('classified', weekly['archives'])
 
     def test_missing_chunk_prevents_publication_and_preserves_pointer(self):
@@ -131,7 +132,11 @@ class ObjectPublicationTests(unittest.TestCase):
             index = store.references['releases/' + 'a'*64 + '/index.json']
             self.assertEqual(set(index['archives']), {'raw', 'classified'})
             chart_hash = index['chartObjects']['TEST']
-            lookup = index['filingLookup']
+            # The lookup lives in its own object so the index the chart path waits on stays small.
+            self.assertNotIn('filingLookup', index)
+            lookup = json.loads(gzip.decompress(store.objects[index['filingLookupObject'] + '.json.gz']))
+            chart = json.loads(gzip.decompress(store.objects[chart_hash + '.json.gz']))
+            self.assertEqual(index['chartChunks']['TEST'], chart['candleChunks'])
             catalog = json.loads(gzip.decompress(store.objects[index['announcements'] + '.json.gz']))
             self.assertEqual(lookup['publishedAt'], catalog['publishedAt'])
             self.assertEqual(lookup['symbols']['TEST']['recent'], catalog['symbols']['TEST']['recent'])

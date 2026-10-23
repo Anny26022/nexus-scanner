@@ -66,6 +66,16 @@ def charts_enabled():
     return mode == 'local' or not missing_r2_settings()
 
 
+def filing_lookup(root, index):
+    """The filing lookup, inline in older indexes or stored as its own object."""
+    if 'filingLookupObject' in index:
+        digest = str(index['filingLookupObject'])
+        if not re.fullmatch(r'[a-f0-9]{64}', digest):
+            raise RuntimeError('Invalid filing lookup hash')
+        return json.loads(gzip.decompress((root / 'objects' / f'{digest}.json.gz').read_bytes()))
+    return index.get('filingLookup')
+
+
 def chart_preflight(root, session):
     if not (root / 'index.json').is_file():
         raise RuntimeError('Chart artifacts are missing; run build_chart_artifacts.py before publishing the snapshot')
@@ -105,6 +115,8 @@ def chart_revision(root, session):
                 references = chart.get('candleChunks')
                 if not isinstance(references, list) or len(references) > 2 or len(set(references)) != len(references):
                     raise RuntimeError('Invalid chart chunk references')
+                if 'chartChunks' in index and index['chartChunks'].get(symbol) != references:
+                    raise RuntimeError('Index chart chunks do not match the chart object: ' + symbol)
                 candles = []
                 for reference in references:
                     if not re.fullmatch(r'[a-f0-9]{64}', str(reference)):
@@ -117,7 +129,7 @@ def chart_revision(root, session):
                 if (dates != sorted(set(dates)) or any(date > session for date in dates)
                         or chart.get('historyStartDate') != (dates[0] if dates else None)):
                     raise RuntimeError('Chart chunk dates do not match release')
-        validate_announcement_objects(root / 'objects', index['announcements'], session, set(index['chartObjects']), index.get('filingLookup'))
+        validate_announcement_objects(root / 'objects', index['announcements'], session, set(index['chartObjects']), filing_lookup(root, index))
         return revision
     digest = hashlib.sha256()
     for file in files:
@@ -451,7 +463,7 @@ def complete_object_release(chart_root, output, manifest, store=None):
     print(f'Archive preparation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
     index = dict(index, archives=archives)
     if archives:
-        index['archivesAsOf'] = index.get('filingLookup', {}).get('publishedAt', manifest['sessionDate'])
+        index['archivesAsOf'] = (filing_lookup(chart_root, index) or {}).get('publishedAt', manifest['sessionDate'])
     if store:
         base = store.base_url
         started = time.perf_counter()

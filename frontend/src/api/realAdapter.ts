@@ -91,7 +91,13 @@ interface FilingLookup {
   publishedAt: string; taxonomy: string; index: string;
   symbols: Record<string, {recent: string; years: number[]; history: string; fetchStatus?: Record<string, unknown>}>;
 }
-interface DataIndex { revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string; filingLookup?: FilingLookup }
+interface DataIndex {
+  revision: string; asOfDate: string; chartObjects: Record<string, string>; announcements: string;
+  /** Each chart's candle chunks, so the record and candles can load together (newer releases). */
+  chartChunks?: Record<string, string[]>;
+  /** Inline in older releases; newer ones keep it in its own object to keep this index small. */
+  filingLookup?: FilingLookup; filingLookupObject?: string;
+}
 async function releaseFor(revision?: string): Promise<Manifest> {
   const latest = await getManifest();
   const selected = revision ?? latest.revision;
@@ -128,12 +134,17 @@ async function announcementCatalog(release: Manifest): Promise<AnnouncementCatal
   return catalog;
 }
 
+async function filingLookup(release: Manifest): Promise<FilingLookup | undefined> {
+  const index = await dataIndex(release);
+  return index.filingLookup ?? (index.filingLookupObject ? object<FilingLookup>(release, index.filingLookupObject) : undefined);
+}
+
 async function announcementReferences(release: Manifest) {
-  return (await dataIndex(release)).filingLookup ?? announcementCatalog(release);
+  return (await filingLookup(release)) ?? announcementCatalog(release);
 }
 
 async function companyAnnouncements(release: Manifest, symbol: string) {
-  const lookup = (await dataIndex(release)).filingLookup;
+  const lookup = await filingLookup(release);
   if (!lookup) return (await announcementCatalog(release)).symbols[symbol];
   const entry = lookup.symbols[symbol];
   if (!entry) throw new Error('Announcement history unavailable for this symbol');
@@ -408,13 +419,19 @@ class RealDataAdapter {
     const release = await releaseFor(revision);
     if (release.schemaVersion === 7) {
       const index = await dataIndex(release);
+      type Chunk = {schemaVersion:number;symbol:string;candles:ChartSnapshot['candles']};
+      // When the index lists the candle chunks, fetch them alongside the record rather than after it.
+      const listed = index.chartChunks?.[symbol];
+      const early = Array.isArray(listed) && listed.length <= 2 ? listed.map(hash => object<Chunk>(release, hash, 'Chart')) : null;
+      early?.forEach(request => request.catch(() => undefined)); // a failure surfaces through the record path below
       const chart = await object<ChartSnapshot & {candleChunks?: string[]}>(release, index.chartObjects[symbol], 'Chart');
       if (chart.symbol !== symbol || ![2, 3].includes(chart.schemaVersion)) throw new Error('Chart symbol/schema mismatch');
       if (chart.schemaVersion === 3) {
         const {candleChunks, ...metadata} = chart;
         if (!Array.isArray(candleChunks) || candleChunks.length > 2 || new Set(candleChunks).size !== candleChunks.length)
           throw new Error('Invalid chart chunk references');
-        const chunks = await Promise.all(candleChunks.map(hash => object<{schemaVersion:number;symbol:string;candles:ChartSnapshot['candles']}>(release, hash, 'Chart')));
+        const sameChunks = early && listed!.length === candleChunks.length && listed!.every((hash, i) => hash === candleChunks[i]);
+        const chunks = await Promise.all(sameChunks ? early : candleChunks.map(hash => object<Chunk>(release, hash, 'Chart')));
         if (chunks.some(chunk => chunk.symbol !== symbol || chunk.schemaVersion !== 1 || !Array.isArray(chunk.candles)))
           throw new Error('Chart chunk symbol/schema mismatch');
         const candles = chunks.flatMap(chunk => chunk.candles);
@@ -448,7 +465,7 @@ class RealDataAdapter {
   async getAnnouncements(symbol: string, revision?: string): Promise<{records: Announcement[]; years: number[]; publishedAt: string}> {
     validSymbol(symbol);
     const release = await releaseFor(revision);
-    const lookup = (await dataIndex(release)).filingLookup;
+    const lookup = await filingLookup(release);
     if (lookup) {
       const entry = lookup.symbols[symbol];
       if (!entry) throw new Error('Announcement history unavailable for this symbol');

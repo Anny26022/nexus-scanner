@@ -56,6 +56,36 @@ it.each<{schemaVersion:number; invalid?:string}>([
   }
 });
 
+it('fetches listed candle chunks alongside the chart record', async () => {
+  const hash = (letter: string) => letter.repeat(64);
+  const candles = ['2025-12-31', '2026-10-01'].map(date => ({date, open:10, high:12, low:9, close:11, volume:100}));
+  const metadata = {symbol:'TEST', historyStartDate:'2025-12-31', volumeEvents:{}, corporateActions:[], earnings:[], marketNews:[]};
+  const object = (letter: string) => `https://charts.example.com/${hash(letter)}.json.gz`;
+  const values: Record<string, unknown> = {
+    '/data/current.json': {...manifest, schemaVersion:7, dataIndexUrl:'/index.json', objectUrlTemplate:'https://charts.example.com/{hash}.json.gz'},
+    '/index.json': {revision:hash('b'), asOfDate:'2026-10-01', chartObjects:{TEST:hash('c')}, chartChunks:{TEST:[hash('d'), hash('e')]}},
+    [object('c')]: {schemaVersion:3, ...metadata, candleChunks:[hash('d'), hash('e')]},
+    [object('d')]: {schemaVersion:1, symbol:'TEST', candles:[candles[0]]},
+    [object('e')]: {schemaVersion:1, symbol:'TEST', candles:[candles[1]]},
+  };
+  // Hold the record back: the chunks must already be requested while it is pending.
+  let releaseRecord!: () => void;
+  const recordGate = new Promise<void>(resolve => { releaseRecord = resolve; });
+  const requested: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    requested.push(url);
+    if (url === object('c')) await recordGate;
+    return {ok:true, json:async()=>values[url], arrayBuffer:async()=>new TextEncoder().encode(JSON.stringify(values[url])).buffer,
+      headers:new Headers({'Content-Encoding':'gzip'})};
+  }));
+  const {realAdapter} = await import('../api/realAdapter');
+  const chart = realAdapter.getChart('TEST');
+  await vi.waitFor(() => expect(requested).toEqual(expect.arrayContaining([object('c'), object('d'), object('e')])));
+  releaseRecord();
+  await expect(chart).resolves.toEqual({schemaVersion:2, ...metadata, candles, asOfDate:'2026-10-01'});
+  expect(requested.filter(url => url === object('d'))).toHaveLength(1);
+});
+
 it('caps fallback charts before aggregation and excludes future events', async () => {
   const candles = ['2026-09-28', '2026-09-29', '2026-09-30'].map((date, i) =>
     ({date, open:10, high:i === 2 ? 999 : 12, low:9, close:i === 2 ? 900 : 11, volume:100}));

@@ -450,7 +450,7 @@ export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision
   );
 
   return <div className="chart-desk">
-    {!activeExpandedTile && layoutControls}
+    {!activeExpandedTile && <div className="chart-desk-header">{layoutControls}</div>}
     {warning&&<p role="status" className="notice">{warning}</p>}
     <div className={`chart-desk-body${activeExpandedTile ? ' chart-desk-body-expanded' : ''}`}>
       <div className={`chart-grid chart-grid-${grid.count}`} style={{gridTemplateColumns:`repeat(${chartLayout(grid.layout).columns},minmax(${chartLayout(grid.layout).minColumnWidth}px,1fr))`,gridTemplateRows:`repeat(${chartLayout(grid.layout).rows.length},minmax(260px,1fr))`,gridTemplateAreas:layoutAreas(chartLayout(grid.layout).rows)}}>

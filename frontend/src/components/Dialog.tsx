@@ -23,6 +23,11 @@ export function Dialog({
             ref={contentRef}
             aria-label={label}
             className={`dialog pointer-events-auto outline-none animate-in fade-in zoom-in-95 duration-150 ${className}`}
+            onOpenAutoFocus={event => {
+              // Keep focus on the dialog itself so no control shows a focus ring on open; autofocused fields keep focus.
+              event.preventDefault();
+              if (!contentRef.current?.contains(document.activeElement)) contentRef.current?.focus();
+            }}
             onEscapeKeyDown={event => {
               if (contentRef.current?.querySelector('[data-escape-layer]')) event.preventDefault();
             }}

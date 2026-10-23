@@ -79,12 +79,18 @@ def load_ledger(path: Path) -> dict:
 
 
 def write_ledger(path: Path, ledger: dict) -> bytes:
-    """Write the persistent ledger and return its compact JSON bytes for publication."""
-    payload = json.dumps(ledger, separators=(",", ":"), sort_keys=True).encode()
+    """Write the persistent ledger and return its compact JSON bytes for publication.
+
+    The ledger is committed with each daily refresh, so it is written one symbol per
+    line: a day's commit then only touches the symbols whose band changed.
+    """
+    head = {key: ledger[key] for key in ("version", "from", "through")}
+    lines = [f"  {json.dumps(symbol)}: {json.dumps(history, separators=(',', ':'))}" for symbol, history in sorted(ledger["bands"].items())]
+    text = json.dumps(head, sort_keys=True)[:-1] + ', "bands": {\n' + ",\n".join(lines) + "\n}}\n"
     temporary = path.with_name(path.name + ".tmp")
-    temporary.write_bytes(payload)
+    temporary.write_text(text)
     temporary.replace(path)
-    return payload
+    return json.dumps(ledger, separators=(",", ":"), sort_keys=True).encode()
 
 
 def _snapshot_rows(base_url: str, session: str, revision: str, attempts: int = 5):

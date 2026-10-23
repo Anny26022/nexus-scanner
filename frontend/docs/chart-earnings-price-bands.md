@@ -21,6 +21,6 @@ Data comes from the release's published financial history and earnings calendar,
 Every archived daily snapshot (from 1 Oct 2021) stores each stock's band for that date. `price_band_history.py` folds them, in date order, into a ledger: a stock's first observed band, then one entry each time it differs from the previous one. Days where a stock is missing or its band is blank change nothing. The ledger is `price-band-history.json` next to `sessions.json`, and each release publishes it as `price-band-history.json.gz` (`priceBandHistoryUrl` in the manifest).
 
 - **One-time rebuild:** `python price_band_history.py rebuild` downloads every archived snapshot (about 650 KB each) and writes the ledger. Sessions that still fail after retries are listed and skipped.
-- **Daily:** `publish_snapshot.py` folds in only the new session, so the ledger stays current. Without a rebuild, it starts from the first published day.
+- **Daily:** `publish_snapshot.py` folds in only the new session, and the refresh workflow commits `frontend/public/data/price-band-history.json` alongside `sessions.json`. The file has one stock per line, so each day's commit only touches stocks whose band changed. Without a rebuild, the ledger starts from the first published day.
 
 Bands that changed before 1 Oct 2021 are unknown; the first archived band is treated as the starting point, not a change.

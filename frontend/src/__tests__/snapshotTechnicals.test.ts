@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import {loadPublishedSnapshot} from './fixtures/publishedSnapshot';
 import configurations from '../data/snapshotTechnicals.json';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
-import { screenSnapshot, supportsSnapshotCondition, type Snapshot } from '../api/snapshotScreen';
+import { screenSnapshot, supportsSnapshotCondition } from '../api/snapshotScreen';
 import type { ScreenerRunRequest } from '../types/screener';
 
 const data = loadPublishedSnapshot().snapshot;

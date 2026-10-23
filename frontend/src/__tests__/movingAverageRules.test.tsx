@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import {loadPublishedSnapshot} from './fixtures/publishedSnapshot';
 import { ScreenerModal } from '../components/ScreenerModal';
-import { screenSnapshot, supportsSnapshotCondition, type Snapshot } from '../api/snapshotScreen';
+import { screenSnapshot, supportsSnapshotCondition } from '../api/snapshotScreen';
 
 afterEach(cleanup);
 const snapshot = loadPublishedSnapshot().snapshot;

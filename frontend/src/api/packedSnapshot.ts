@@ -24,7 +24,7 @@ export function unpackSnapshot(value: unknown): unknown {
   if (value.stockEncoding !== 'columnar-v1' || !object(value.nestedTables)) return invalid();
   const stocks = records(value.stocksTable);
   for (const [field, nested] of Object.entries(value.nestedTables)) {
-    if (!['presetMatches', 'metrics', 'financialMetadata', 'historyMetadata'].includes(field)
+    if (!['presetMatches', 'metrics', 'financialMetadata', 'historyMetadata', 'etf'].includes(field)
         || !object(nested)) return invalid();
     const positions = indexes(nested.indexes, stocks.length), children = records(nested.table);
     if (positions.length !== children.length) return invalid();

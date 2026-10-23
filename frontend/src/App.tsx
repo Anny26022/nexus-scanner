@@ -54,6 +54,7 @@ const ScreenerAppContent: React.FC = () => {
   const navigate = (tab: AppTab) => { setChartSnapshot(undefined); setActiveTab(tab); };
   const loadScreen = (screen: ScreenDefinition) => {
     writeScreenToStorage(screen);
+    setEtfUniverse(screen.universe === 'etf');
     setScreenerKey(key => key + 1);
     navigate('screener');
   };
@@ -75,6 +76,9 @@ const ScreenerAppContent: React.FC = () => {
     staleTime: 60_000,
   });
 
+  const [etfUniverse, setEtfUniverse] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('nexus-scanner.screener.universe.v1') ?? 'null') === 'etf'; } catch { return false; }
+  });
   const [customSessionDate, setCustomSessionDate] = React.useState<string | null>(null);
 
   const latestDate = revisionData?.latestSessionDate || '';
@@ -93,7 +97,7 @@ const ScreenerAppContent: React.FC = () => {
     return list;
   }, [sessionsList, latestDate, latestRevision]);
 
-  const selectedAsOfDate = customSessionDate || latestDate;
+  const selectedAsOfDate = etfUniverse && activeTab === 'screener' ? latestDate : customSessionDate || latestDate;
   const selectedSessionMeta = availableSessions.find((s) => s.date === selectedAsOfDate);
   const activeRevision = selectedSessionMeta?.revision || latestRevision;
   // Start the saved chart's data request while the lazy workspace code loads.
@@ -114,7 +118,7 @@ const ScreenerAppContent: React.FC = () => {
         onOpenSearch={() => setPaletteOpen(true)}
         theme={theme}
         onThemeChange={setTheme}
-        sessionControl={activeTab === 'screener' ? <SessionDatePicker
+        sessionControl={activeTab === 'screener' ? etfUniverse ? <span className="field-label">Latest ETF snapshot</span> : <SessionDatePicker
           selectedDate={selectedAsOfDate}
           latestDate={latestDate}
           availableSessions={availableSessions}
@@ -128,6 +132,7 @@ const ScreenerAppContent: React.FC = () => {
         {screenerMounted && <div style={{display: activeTab === 'screener' ? 'contents' : 'none'}}>
           <ExploreTab
             key={screenerKey}
+            onUniverseChange={universe => setEtfUniverse(universe === 'etf')}
             selectedAsOfDate={selectedAsOfDate}
             datasetRevision={activeRevision}
             onRefreshRevision={async () => (await refreshRevision()).data?.immutableRevision}

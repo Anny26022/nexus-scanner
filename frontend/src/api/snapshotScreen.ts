@@ -1,4 +1,5 @@
 import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
+import {etfGroup, isEtfCondition} from '../data/etfFields';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 import { PRESET_ELIGIBILITY, presetEligibilityTargets, hasCustomPresetEligibility } from '../data/presetEligibility';
 import { snapshotFundamentals } from '../data/snapshotFundamentals';
@@ -22,6 +23,8 @@ export interface SnapshotStock extends StockRow {
   freeFloatPct: number | null;
 }
 export interface Snapshot {
+  assetType?: 'etf';
+  etfLabels?: Record<string, Record<string, string>>;
   tradingViewMetricsVersion?: number;
   presetRuleMatchesVersion?: number;
   technicalMetricsVersion?: number;
@@ -63,6 +66,20 @@ const maPeriods = SNAPSHOT_MA_PERIODS;
 
 function leaf(c: ActiveCondition, session: string): Predicate | null {
   const p = c.parameters;
+  if (isEtfCondition(c.conditionId)) {
+    const group = etfGroup(c.conditionId);
+    if (!group || !group.fields.includes(p.metric)) return null;
+    if (group.type !== 'number' && !Array.isArray(p.values)) return null;
+    if (group.type === 'number' && (!['ABOVE','BELOW','GREATER','LESS','EQUAL'].includes(p.comparison)
+        || String(p.value ?? '').trim() === '' || !Number.isFinite(Number(p.value)))) return null;
+    const wanted = new Set<string>(Array.isArray(p.values) ? p.values.map(String) : []);
+    return s => {
+      const value = s.asOfDate === session ? s.etf?.[p.metric] : null;
+      const result = value == null ? null : group.type === 'number' ? compare(value, p.comparison, Number(p.value))
+        : wanted.size ? wanted.has(String(value)) : null;
+      return result == null ? null : c.isNegated ? !result : result;
+    };
+  }
   if (isTradingViewCondition(c.conditionId)) {
     const metric = tradingViewMetrics.find(metric => metric.id === p.metric
       && metric.category === tradingViewFilterGroups[c.conditionId].category);
@@ -347,6 +364,12 @@ interface Matches { rows: SnapshotStock[]; universeCount: number; coverage:Cover
 const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
 export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allRows = false): ScreenerRunResponse | null {
+  const etf = request.universe === 'etf';
+  if (etf !== (data.assetType === 'etf')) throw new Error('Snapshot universe mismatch');
+  if (etf && request.textQuery?.trim()) throw new Error('Use the ETF filters to build this screen.');
+  const wrongCatalog = (node: ExpressionNode): boolean => node.type === 'group'
+    ? node.children.some(wrongCatalog) : isEtfCondition(node.condition.conditionId) !== etf;
+  if (wrongCatalog(request.expressionTree)) throw new Error('Select filters for the current universe.');
   if (request.textQuery?.trim()) return null;
   const usesTradingView = (node:ExpressionNode):boolean => node.type === 'group'
     ? node.children.some(usesTradingView) : isTradingViewCondition(node.condition.conditionId);
@@ -377,7 +400,7 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
     };
     const symbols = new Set(request.customSymbols?.map(s => s.toUpperCase()));
     const universe = data.stocks.filter(s => request.universe === 'custom' ? symbols.has(s.symbol)
-      : request.universe === 'mainboard' || s.indexMemberships.some(label => labels[request.universe]?.includes(label.toUpperCase())));
+      : request.universe === 'mainboard' || request.universe === 'etf' || s.indexMemberships.some(label => labels[request.universe]?.includes(label.toUpperCase())));
     const announcementSymbols = request.announcementSymbols ? new Set(request.announcementSymbols) : null;
     const candidates = universe.filter(s => !announcementSymbols || announcementSymbols.has(s.symbol));
     const rows = candidates.filter(s => predicate(s) === true && number(s.close) != null);
@@ -389,7 +412,8 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
     }
     const field = (request.sort?.field ?? 'symbol') as keyof SnapshotStock;
     rows.sort((a,b) => {
-      const x = a[field], y = b[field];
+      const x = String(field).startsWith('etf.') ? a.etf?.[String(field).slice(4)] : a[field];
+      const y = String(field).startsWith('etf.') ? b.etf?.[String(field).slice(4)] : b[field];
       const order = x == null ? y == null ? 0 : -1 : y == null ? 1 : x < y ? -1 : x > y ? 1 : 0;
       return request.sort?.direction === 'desc' ? -order : order;
     });
@@ -408,7 +432,7 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
     const s = row.sector?.trim() || 'Others';
     sectorCounts[s] = (sectorCounts[s] || 0) + 1;
   }
-  return { resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
+  return { ...(data.etfLabels ? {etfLabels:data.etfLabels} : {}), resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
     immutableRevision:data.revision,
     rows:request.countsOnly ? [] : (allRows ? rows : rows.slice((page-1)*size,page*size)),
     matchedSymbols:request.countsOnly ? [] : rows.map(row=>row.symbol),

@@ -17,6 +17,7 @@ from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
 from session_history import archive_daily_snapshot, register_session
+from etf_snapshot import build_etf_snapshot, prune_etf_snapshots
 import price_band_history
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.scanner.financials import financial_value, finite_number
@@ -300,6 +301,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH,Path(__file__).with_name('theme_classification.py'),THEME_SOURCE_PATH,THEME_WEB_OVERRIDES_PATH,Path(__file__).parent/'src/data/presetEligibility.json']
     code_files.append(resource_path('taxonomy_overrides.json'))
     code_files.append(resource_path('stockscans_classification.json'))
+    code_files.extend([Path(__file__).with_name('etf_snapshot.py'), resource_path('etf_fields.json'), resource_path('etf_enum_labels.json')])
     code_files.append(TRADINGVIEW_FIELDS_PATH)
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
@@ -319,11 +321,21 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         raise RuntimeError('Source data changed during snapshot publication; previous revision remains active. Retry publication.')
     digest.update(json.dumps(rows,sort_keys=True,separators=(',',':')).encode())
     revision=digest.hexdigest()
+    etf_source = source_bytes.get('etf_snapshot.json.gz')
+    etf_bytes = None
+    if etf_source:
+        try:
+            etfs = build_etf_snapshot(json.loads(gzip.decompress(etf_source)), session, revision)
+            etf_bytes = json.dumps(pack_snapshot(etfs), separators=(',', ':'), allow_nan=False).encode()
+        except (ValueError, KeyError, TypeError, OverflowError, OSError) as error:
+            print(f'WARNING: ETF snapshot unavailable for {session}: {error}', flush=True)
     generation=output/'revisions'/revision
     backend=root/'.scanner_cache/revisions'/revision
     generation.mkdir(parents=True,exist_ok=True); backend.mkdir(parents=True,exist_ok=True)
     # Freeze backend inputs before exposing the revision. History is numeric NPZ.
     for name, data in {**source_bytes,**delivery_bytes}.items():
+        if name == 'etf_snapshot.json.gz':
+            continue  # ETF screening is latest-only; no historical backend input copy.
         destination=backend/name
         if not destination.exists():
             destination.parent.mkdir(parents=True,exist_ok=True)
@@ -347,6 +359,8 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
     write_json(generation/'universe-classification.json', consolidated_classification(rows, taxonomy))
     stock_bytes=write_json(generation/'stocks.json',payload)
+    if etf_bytes is not None:
+        (generation/'etfs.json.gz').write_bytes(gzip.compress(etf_bytes, mtime=0))
     chart_fields = ('symbol', 'name', 'close', 'changePct', 'marketCapCrore', 'freeFloatPct', 'circuitLimit', 'series', 'sector', 'industry', 'nicheTags', 'isFno', 'surveillanceAvailable', 'surveillanceAsOfDate', 'isAsm', 'asmStage', 'isGsm', 'gsmStage', 'listingDate')
     directory = dict(revision=revision, asOfDate=session, stocks=[
         {key: row[key] for key in chart_fields if key in row} for row in rows])
@@ -422,9 +436,12 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     manifest['themeClassificationVersion'] = taxonomy['version']
     manifest['universeClassificationUrl'] = f'/data/revisions/{revision}/universe-classification.json'
     started = elapsed('serialization and compression', started)
+    if etf_bytes is not None:
+        manifest['etfDatasetUrl'] = f'/data/revisions/{revision}/etfs.json.gz'
     session_record = archive_daily_snapshot(output, manifest)
     manifest = complete_release(chart_root, output, manifest)
     register_session(output / 'sessions.json', session_record)
+    prune_etf_snapshots(output, revision)
     elapsed('release completion', started)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest

@@ -16,10 +16,12 @@ import technicalConfigurations from '../data/snapshotTechnicals.json';
 import {isTradingViewCondition, tradingViewMetrics} from '../data/tradingViewMetrics';
 import type { FilterChoices } from '../api/snapshotEngine';
 import { SNAPSHOT_MA_PERIODS } from '../api/snapshotScreen';
+import {etfConditionCatalog, etfCategoryTabs, etfGroup, etfFieldLabel, isEtfCondition} from '../data/etfFields';
 import { Button } from './Button';
 
 interface ScreenerModalProps {
   isOpen: boolean;
+  etf?: boolean;
   onClose: () => void;
   activeConditionsMap: Record<string, ActiveCondition>;
   matchMode: MatchMode;
@@ -174,7 +176,7 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
       onChange={e => updateParam(defId, p.id, e.target.value)}
       className="w-24 bg-white border border-gray-200 rounded-md px-1.5 py-0.5 text-[11px]" />;
   } else if (p.type === 'multiselect') {
-    control = <MultiSelectDropdown label={p.label} options={p.options || []} value={val}
+    control = <MultiSelectDropdown searchable={isEtfCondition(defId)} label={p.label} options={p.options || []} value={val}
       onChange={(newVal: string[]) => updateParam(defId, p.id, newVal)} />;
   } else if (p.type === 'select') {
     control = <select
@@ -217,12 +219,15 @@ const FilterParameter = memo(function FilterParameter({ defId, parameters, p, va
 const FilterRule = memo(function FilterRule({def, parameters, updateParam}: {
   def: ConditionDef; parameters: ActiveCondition['parameters']; updateParam: FilterRowProps['updateParam'];
 }) {
-  const fixed = technicalConfigurations.find(config => config.id === def.id)?.fixed ?? {};
+  const fixed: Record<string, unknown> = {...technicalConfigurations.find(config => config.id === def.id)?.fixed,
+    ...(isEtfCondition(def.id) && def.parameters[0]?.options?.length === 1 && parameters.metric === def.parameters[0].options[0].value ? {metric:def.parameters[0].options[0].value} : {})};
   if (def.parameters.every(parameter => Object.hasOwn(fixed, parameter.id))) return null;
   const field = (p: ParameterSpec, display: Pick<FilterParameterProps, 'label' | 'prefix' | 'unit'> = {}) => {
     if (Object.hasOwn(fixed, p.id)) return null;
     const savedMetric = isTradingViewCondition(def.id) && p.id === 'metric'
-      ? tradingViewMetrics.find(metric => metric.id === parameters.metric) : undefined;
+      ? tradingViewMetrics.find(metric => metric.id === parameters.metric)
+      : isEtfCondition(def.id) && p.id === 'metric' && etfGroup(def.id)?.fields.includes(parameters.metric)
+        ? {id:parameters.metric, label:etfFieldLabel(parameters.metric)} : undefined;
     const parameter = savedMetric && !p.options?.some(option => option.value === savedMetric.id)
       ? {...p, options:[...(p.options ?? []), {value:savedMetric.id,label:savedMetric.label}]} : p;
     return <FilterParameter key={p.id} defId={def.id} parameters={parameters} p={parameter} val={parameters[p.id]} updateParam={updateParam} {...display} />;
@@ -378,7 +383,9 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   choicesLoading,
   choicesError,
   retryChoices,
+  etf = false,
 }) => {
+  const categoryTabs = etf ? etfCategoryTabs : CATEGORY_TABS;
   const [category, setCategory] = useState<ConditionCategory | 'all'>('all');
   const [localMap, setLocalMap] = useState<Record<string, ActiveCondition>>(() => Object.fromEntries(
     Object.entries(activeConditionsMap).filter(([, condition]) => !(condition.conditionId === 'PRICE_VS_MAS'
@@ -387,17 +394,23 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const [localMode, setLocalMode] = useState<MatchMode>(matchMode);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
-  const customCatalog = useMemo(() => FILTER_CONDITION_CATALOG.map(def => {
+  const customCatalog = useMemo(() => (etf ? etfConditionCatalog : FILTER_CONDITION_CATALOG).map(def => {
+    if (isEtfCondition(def.id)) {
+      const options = def.parameters[0].options?.filter(option => choices?.ETF_FIELDS?.includes(option.value)) ?? [];
+      return {...def, parameters:def.parameters.map(parameter => parameter.id === 'metric'
+        ? {...parameter, options, defaultValue:options[0]?.value ?? parameter.defaultValue} : parameter)};
+    }
     if (isTradingViewCondition(def.id)) return {...def, parameters:def.parameters.map(parameter => {
       if (parameter.id !== 'metric') return parameter;
       const options = parameter.options?.filter(option => choices?.TRADINGVIEW_METRIC?.includes(option.value)) ?? [];
       return {...parameter, options, defaultValue:options[0]?.value ?? parameter.defaultValue};
     })};
-    const values = def.id === 'MA_STACK' ? SNAPSHOT_MA_PERIODS.map(String) : choices?.[def.id as keyof FilterChoices];
+    const raw = choices?.[def.id as keyof FilterChoices];
+    const values = def.id === 'MA_STACK' ? SNAPSHOT_MA_PERIODS.map(String) : Array.isArray(raw) ? raw : [];
     if (def.id !== 'MA_STACK' && !['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(def.id)) return def;
     return {...def, parameters:def.parameters.map(parameter => parameter.type === 'string'
       ? {...parameter, options:(values ?? []).map(value => ({value, label:def.id === 'PRICE_BAND' && /^\d+$/.test(value) ? `${value}%` : value}))} : parameter)};
-  }), [choices]);
+  }), [choices, etf]);
 
   const toggle = useCallback((def: ConditionDef, ruleKey: string) => {
     setLocalMap((prev) => {
@@ -424,7 +437,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         delete next[condId];
         return next;
       }
-      const def = NEXUS_CONDITION_CATALOG.find((c) => c.id === definitionId);
+      const def = (isEtfCondition(definitionId) ? customCatalog : NEXUS_CONDITION_CATALOG).find((c) => c.id === definitionId);
       if (!existing && def) {
         const params = availableFilterParameters(def);
         if (!params) return prev;
@@ -439,6 +452,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       }
       if (!existing) return prev;
       const parameters = { ...existing.parameters, [paramId]: value };
+      if (isEtfCondition(definitionId) && paramId === 'metric') parameters.values = [];
       if (definitionId === 'MARKET_BREADTH' && paramId === 'metric') {
         parameters.value = breadthMetricDefault(value);
       }
@@ -447,7 +461,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         [condId]: { ...existing, parameters },
       };
     });
-  }, []);
+  }, [customCatalog]);
 
   const addRule = useCallback((def: ConditionDef) => {
     const parameters = availableFilterParameters(def);
@@ -461,7 +475,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const catalogToUse = activeTab === 'custom' ? customCatalog : PRESET_CATALOG;
 
   const filtered = catalogToUse.filter((c) => {
-    if (isTradingViewCondition(c.id) && !c.parameters.find(p => p.id === 'metric')?.options?.length
+    if ((isTradingViewCondition(c.id) || isEtfCondition(c.id)) && !c.parameters.find(p => p.id === 'metric')?.options?.length
         && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
     if ((c.id === 'fund_roe' || REDUNDANT_CATALOG_CONDITIONS.has(c.id)) && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
     return (activeTab === 'presets' || category === 'all' || c.category === category)
@@ -481,7 +495,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     <div className="dialog-header"><div><h2>Refine your screen</h2><p>Select conditions and adjust their parameters.</p></div><button type="button" className="icon-button" aria-label="Close filters" onClick={onClose}><X size={20} /></button></div>
     <div className="filter-modal-tabs" role="group" aria-label="Filter source">
       <button aria-pressed={activeTab === 'custom'} onClick={() => {setActiveTab('custom'); setSearch('');}}><SlidersHorizontal className="inline mr-2" size={14} />Custom Filters</button>
-      <button aria-pressed={activeTab === 'presets'} onClick={() => {setActiveTab('presets'); setSearch('');}}><Library className="inline mr-2" size={14} />Pre-built Scans</button>
+      {!etf && <button aria-pressed={activeTab === 'presets'} onClick={() => {setActiveTab('presets'); setSearch('');}}><Library className="inline mr-2" size={14} />Pre-built Scans</button>}
       <div className="match-mode" role="group" aria-label="Match mode"><span>Selected filters</span><button title="Every selected filter must match" aria-pressed={localMode === 'all'} onClick={() => setLocalMode('all')}>AND (All)</button><button title="At least one selected filter must match" aria-pressed={localMode === 'any'} onClick={() => setLocalMode('any')}>OR (Any)</button></div>
     </div>
     <div className="filter-modal-options">
@@ -502,7 +516,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       </div>
       {activeTab === 'custom' && (
         <div className="filter-categories" role="group" aria-label="Filter categories">
-          {CATEGORY_TABS.map(tab => {
+          {categoryTabs.map(tab => {
             const count = tab.id === 'all'
               ? Object.keys(localMap).length
               : Object.values(localMap).filter(cond => {
@@ -537,11 +551,11 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         {filtered.map((def, index) => {
           const instances = Object.entries(localMap).filter(([, condition]) => condition.conditionId === def.id);
           const repeatable = activeTab === 'custom' && (def.category === 'fundamentals' && def.parameters.length > 0
-            || isTradingViewCondition(def.id) || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id));
+            || isEtfCondition(def.id) || isTradingViewCondition(def.id) || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id));
           
           const prevDef = index > 0 ? filtered[index - 1] : null;
           const showSectionDivider = activeTab === 'custom' && category === 'all' && (!prevDef || prevDef.category !== def.category);
-          const categoryTitle = showSectionDivider ? (CATEGORY_TABS.find(t => t.id === def.category)?.label ?? def.category) : null;
+          const categoryTitle = showSectionDivider ? (categoryTabs.find(t => t.id === def.category)?.label ?? def.category) : null;
 
           return (
             <React.Fragment key={def.id}>
@@ -553,7 +567,11 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
               )}
               <div className="filter-family">
                 {(instances.length ? instances : [[def.id, undefined] as const]).map(([key, condition]) =>
-                  <FilterRow key={key} ruleKey={key} def={def} active={condition} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}
+                  <FilterRow key={key} ruleKey={key} def={isEtfCondition(def.id) ? {...def, parameters:def.parameters.map(parameter => {
+                    if (parameter.id !== 'values') return parameter;
+                    const field = condition?.parameters.metric ?? def.parameters[0].defaultValue;
+                    return {...parameter, options:(choices?.ETF_VALUES?.[field] ?? []).map(value => ({value, label:choices?.ETF_LABELS?.[field]?.[value] ?? (value === 'true' ? 'Yes' : value === 'false' ? 'No' : value)}))};
+                  })} : def} active={condition} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}
                 {repeatable && instances.length > 0 && availableFilterParameters(def) && <button type="button" className="add-filter-rule"
                   aria-label={`Add ${def.label} rule`} onClick={() => addRule(def)}>+ Add rule</button>}
               </div>

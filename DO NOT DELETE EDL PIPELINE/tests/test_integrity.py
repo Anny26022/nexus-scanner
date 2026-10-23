@@ -477,6 +477,7 @@ class IntegrityTests(unittest.TestCase):
                 'High':last['High'],'Low':last['Low'],'Volume':last['Volume'],
             }])
             self.write(root,'sme_market_data.json',[])
+            self.write(root,'etf_snapshot.json',{'schemaVersion':1,'source':'test','fetchedAt':str(today),'records':[]})
             self.write(root,'mainboard_universe_report.json',{
                 'raw_scanx_count':1,'excluded_sme_count':0,
                 'mainboard_count':1,'mainboard_scanx_count':1,

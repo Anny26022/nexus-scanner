@@ -1,5 +1,6 @@
 import type { ActiveCondition, MatchMode, UniverseType } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
+import {etfGroups} from '../data/etfFields';
 import { PRESET_CATALOG } from '../data/presetCatalog';
 
 /** Everything that defines a screen; results, pages and sessions are derived. */
@@ -37,7 +38,7 @@ export const SCREEN_STORAGE_KEYS = {
   activeTab: 'nexus-scanner.ui.active-tab.v1',
 } as const;
 
-const SHAREABLE_UNIVERSES: readonly UniverseType[] = ['mainboard', 'nifty50', 'nifty500', 'midsmall400'];
+const SHAREABLE_UNIVERSES: readonly UniverseType[] = ['etf', 'mainboard', 'nifty50', 'nifty500', 'midsmall400'];
 const KNOWN_CONDITIONS = new Set([...NEXUS_CONDITION_CATALOG, ...PRESET_CATALOG].map(def => def.id));
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const isPrimitive = (value: unknown) => value === null || typeof value === 'string' || typeof value === 'boolean'
@@ -65,7 +66,7 @@ export function parseScreenDefinition(value: unknown): ScreenDefinition | null {
   if (value.matchMode !== 'all' && value.matchMode !== 'any') return null;
   if (typeof value.query !== 'string' || value.query.length > MAX_QUERY_LENGTH) return null;
   const {field, direction} = value.sort;
-  if (typeof field !== 'string' || !/^[A-Za-z0-9_.]{1,60}$/.test(field) || (direction !== 'asc' && direction !== 'desc')) return null;
+  if (typeof field !== 'string' || !(/^[A-Za-z0-9_.]{1,60}$/.test(field) || field.startsWith('etf.') && etfGroups.some(group => group.fields.includes(field.slice(4)))) || (direction !== 'asc' && direction !== 'desc')) return null;
   const entries = Object.entries(value.conditions);
   if (entries.length > MAX_CONDITIONS) return null;
   const conditions: Record<string, ActiveCondition> = {};

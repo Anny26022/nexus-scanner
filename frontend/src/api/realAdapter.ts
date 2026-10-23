@@ -156,8 +156,8 @@ async function companyAnnouncements(release: Manifest, symbol: string) {
 }
 
 
-async function snapshotSource(revision?: string, sessionDate?: string): Promise<SnapshotSource> {
-  return manifestSnapshotSource(await getManifest(), revision, sessionDate);
+async function snapshotSource(revision?: string, sessionDate?: string, etf = false): Promise<SnapshotSource> {
+  return manifestSnapshotSource(await getManifest(), revision, sessionDate, etf);
 }
 
 class RealDataAdapter {
@@ -242,8 +242,8 @@ class RealDataAdapter {
       () => getIpoJson<unknown>(release.marketOverviewUrl!, 'Market overview'), 6);
     return parseMarketOverview(data, release.sessionDate);
   }
-  async getFilterChoices(revision?: string, sessionDate?: string) {
-    const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision, sessionDate)});
+  async getFilterChoices(revision?: string, sessionDate?: string, etf = false) {
+    const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision, sessionDate, etf)});
     if (response.type !== 'filterChoices') throw new Error('Unexpected filter choices response');
     return response.result;
   }
@@ -254,6 +254,7 @@ class RealDataAdapter {
   }
 
   async runScreen(req: ScreenerRunRequest, allRows = false): Promise<ScreenerRunResponse> {
+    if (req.universe === 'etf' && (req.textQuery?.trim() || req.announcementFilter)) throw new Error('Use the ETF filters to build this screen.');
     const announcementFilter = req.announcementFilter;
     if (announcementFilter) {
       const release = await releaseFor(req.datasetRevision);
@@ -262,7 +263,7 @@ class RealDataAdapter {
       const matches = filterAnnouncements(index, announcementFilter);
       req = {...req, announcementSymbols: [...new Set(matches.map(row => row.symbol!))]};
     }
-    const source = await snapshotSource(req.datasetRevision, req.asOfDate);
+    const source = await snapshotSource(req.datasetRevision, req.asOfDate, req.universe === 'etf');
 
     const snapshot = req.textQuery?.trim()
       ? {type:'screen' as const, source, revision:source.revision, sessionDate:source.sessionDate ?? req.asOfDate, result:null}

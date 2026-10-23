@@ -5,6 +5,7 @@ export interface Manifest {
   revision: string;
   sessionDate: string;
   datasetUrl: string;
+  etfDatasetUrl?: string;
   datasetGzipUrl?: string;
   datasetPackedGzipUrl?: string;
   themeClassificationUrl?: string;
@@ -42,7 +43,7 @@ export function validateManifest(value: unknown): Manifest {
       || (manifest.themeClassificationUrl !== undefined && (!validUrl(manifest.themeClassificationUrl) || !manifest.themeClassificationUrl.endsWith('.json.gz')
           || !/^[a-f0-9]{64}$/.test(manifest.themeClassificationVersion ?? '')))
       || (manifest.financialHistoryUrlTemplate !== undefined && (!validUrl(manifest.financialHistoryUrlTemplate) || !manifest.financialHistoryUrlTemplate.endsWith('.json.gz') || manifest.financialHistoryUrlTemplate.split('{symbol}').length !== 2))
-      || [manifest.financialHistoryUrl, manifest.earningsCalendarUrl, manifest.priceBandHistoryUrl].some(url => url !== undefined && (!validUrl(url) || !url.endsWith('.json.gz')))
+      || [manifest.etfDatasetUrl, manifest.financialHistoryUrl, manifest.earningsCalendarUrl, manifest.priceBandHistoryUrl].some(url => url !== undefined && (!validUrl(url) || !url.endsWith('.json.gz')))
       || (manifest.chartDirectoryUrl !== undefined && (!validUrl(manifest.chartDirectoryUrl) || !manifest.chartDirectoryUrl.endsWith('.json.gz')))
       || (manifest.benchmarkUrl !== undefined && (!validUrl(manifest.benchmarkUrl) || !manifest.benchmarkUrl.endsWith('.json.gz')))
       || (manifest.marketOverviewUrl !== undefined && (!validUrl(manifest.marketOverviewUrl) || !manifest.marketOverviewUrl.endsWith('.json.gz')))
@@ -84,8 +85,15 @@ export function preloadManifest(): Promise<Manifest> {
 
 export const getManifest = () => current ? Promise.resolve(current) : refreshManifest();
 
-export function manifestSnapshotSource(manifest: Manifest, revision = manifest.revision, sessionDate?: string): SnapshotSource {
+export function manifestSnapshotSource(manifest: Manifest, revision = manifest.revision, sessionDate?: string, etf = false): SnapshotSource {
   if (!/^[a-f0-9]{64}$/.test(revision)) throw new Error('Invalid dataset revision');
+  if (etf) {
+    if (!manifest.etfDatasetUrl) throw new Error('ETF snapshots will be available after the next daily refresh.');
+    if (revision !== manifest.revision || sessionDate && sessionDate !== manifest.sessionDate) {
+      throw new Error('ETF screens support only the latest snapshot.');
+    }
+    return {revision, sessionDate:manifest.sessionDate, url:manifest.etfDatasetUrl};
+  }
   if (sessionDate && sessionDate !== manifest.sessionDate) {
     const baseUrl = manifest.objectUrlTemplate
       ? manifest.objectUrlTemplate.replace(/\/objects\/\{hash\}\.json\.gz$/, '')

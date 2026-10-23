@@ -23,6 +23,8 @@ import { ChartSettingsDialog } from './ChartSettingsDialog';
 import { ChartStylePicker } from './ChartStylePicker';
 import { PricePaneLegend, SubPaneLegends } from './PaneOverlayLegends';
 import { computeIndicatorSeries, updateLiveIndicatorDom } from '../chart/indicatorValues';
+import { StudyStore } from '../chart/studyStore';
+import { adoptEngine, parkEngine } from '../chart/enginePool';
 import { type StudyConfigs, defaultStudyConfigs, isIndicatorVisibleForInterval } from '../chart/studyConfigs';
 import { FundamentalsIndicator, FundamentalsSettingsDialog } from './FundamentalsIndicator';
 import { bandChanges, fundamentalsConfig, priceBandGuides, upcomingResults } from '../chart/fundamentals';
@@ -118,9 +120,14 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
   const [announcement, setAnnouncement] = useState('');
   const overlayRef = useRef<HTMLDivElement>(null);
   const candleIndexByDate = useMemo(() => new Map(candles.map((b, i) => [b.date, i])), [candles]);
+  // One store per chart: each indicator is computed once, in a background worker, for the chart and its legend.
+  const [studyStore] = useState(() => new StudyStore());
+  studyStore.setInputs(candles, benchmark); // identity checks only, so safe on every render
+  const studyVersion = useSyncExternalStore(studyStore.subscribe, studyStore.getVersion, studyStore.getVersion);
   const indicatorSeries = useMemo(() => {
-    return computeIndicatorSeries(candles, emaLines, visibleStudies, numericalConfigs, benchmark, interval);
-  }, [candles, emaLines, visibleStudies, numericalConfigs, benchmark, interval]);
+    return computeIndicatorSeries(candles, emaLines, visibleStudies, numericalConfigs, benchmark, interval, studyStore);
+    // studyVersion re-reads the store once background results arrive.
+  }, [candles, emaLines, visibleStudies, numericalConfigs, benchmark, interval, studyStore, studyVersion]);
   const indicatorSeriesRef = useRef(indicatorSeries);
   indicatorSeriesRef.current = indicatorSeries;
   const [hiddenStudies, setHiddenStudies] = useState<Record<string, boolean>>({});
@@ -244,6 +251,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
   const attach = useCallback((host: HTMLDivElement | null) => {
     if (!host) return;
     let chart: ChartEngine;
+    let engineHost: HTMLDivElement | undefined;
     try {
       // Read after the preceding symbol's ref cleanup persisted its final view.
       const latestScene=loadScene(tileId);
@@ -251,14 +259,27 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
       rangeChoice.current=selectedRange;
       setRange(current=>current===selectedRange?current:selectedRange);
       const revealed=()=>clock.getSnapshot().index===null?candles:candles.slice(0,clock.getSnapshot().index!+1);
-      chart = new ChartEngine(host, revealed(), bar => {
+      const inspectBar = (bar: Candle) => {
         if (quote.current) updateCandleValues(quote.current,bar,previousByDate.get(bar.date));
         if (overlayRef.current) {
           const idx = candleIndexByDate.get(bar.date) ?? candles.length - 1;
           const snap = indicatorSeriesRef.current.getSnapshot(idx);
           updateLiveIndicatorDom(overlayRef.current, snap, studyConfigsChoice.current);
         }
-      },activeBook,setEventDetails);
+      };
+      // The tile keeps one engine across symbol switches: adopt the previous scene's instead of rebuilding it.
+      const parked = adoptEngine(tileId);
+      engineHost = parked?.host ?? Object.assign(document.createElement('div'), {className: 'nexus-chart-engine'});
+      host.append(engineHost);
+      if (parked) {
+        chart = parked.engine;
+        chart.setStudyStore?.(studyStore);
+        chart.adopt(revealed(), inspectBar, activeBook, setEventDetails);
+      } else {
+        chart = new ChartEngine(engineHost, revealed(), inspectBar, activeBook, setEventDetails);
+        chart.setStudyStore?.(studyStore);
+      }
+      chart.setKeyTarget?.(host);
       chart.onEventHover?.(setEventHover);
       chart.setOnPanesChange?.(() => {
         setPaneOffsets(chart.getPaneOffsets?.() ?? []);
@@ -328,7 +349,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
       host.addEventListener('wheel',onWheel,{capture:true,passive:true});
       host.addEventListener('pointermove',onPan,true);
       host.addEventListener('pointerup',scheduleSave,true);window.addEventListener('pagehide',saveView);
-      return () => { if(restoreFrame!==undefined) cancelAnimationFrame(restoreFrame);clearTimeout(timer);saveView();window.removeEventListener('pagehide',saveView);host.removeEventListener('pointerup',scheduleSave,true);host.removeEventListener('pointermove',onPan,true);host.removeEventListener('wheel',onWheel,true);chart.chart.timeScale().unsubscribeVisibleTimeRangeChange(scheduleSave);chart.chart.timeScale().unsubscribeVisibleLogicalRangeChange?.(trackLatest);unlink();unsubscribe(); chart.destroy(); if (engine.current === chart) engine.current = null; };
+      return () => { if(restoreFrame!==undefined) cancelAnimationFrame(restoreFrame);clearTimeout(timer);saveView();window.removeEventListener('pagehide',saveView);host.removeEventListener('pointerup',scheduleSave,true);host.removeEventListener('pointermove',onPan,true);host.removeEventListener('wheel',onWheel,true);chart.chart.timeScale().unsubscribeVisibleTimeRangeChange(scheduleSave);chart.chart.timeScale().unsubscribeVisibleLogicalRangeChange?.(trackLatest);unlink();unsubscribe(); parkEngine(tileId, chart, engineHost!); if (engine.current === chart) engine.current = null; };
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Chart rendering unavailable.');
       return;
@@ -419,6 +440,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
         />
         <DrawingContextToolbar book={activeBook} />
       <EngineSync key={`benchmark:${benchmark ? 'ready' : 'pending'}`} run={() => engine.current?.setBenchmark(benchmark)} />
+      <EngineSync key={`studies:${studyVersion}`} run={() => { if (engine.current) { engine.current.refreshStudies?.(); restoreHiddenStudies(engine.current); } }} />
       <EngineSync key={`${earningsChoice.current?.date ?? ''}|${earningsChoice.current?.line ?? ''}`} run={() => engine.current?.setUpcomingEarnings?.(earningsChoice.current)} />
       <EngineSync key={`guides:${metrics?.circuitLimit}:${metrics?.isFno}`} run={() => { if(engine.current) updateBandGuides(engine.current); }} />
       <EngineSync key={`bands:${bandChoice.current.map(change => change.date + change.to).join(',')}:${JSON.stringify(studyConfigs.fundamentals?.bandStyles ?? {})}`}

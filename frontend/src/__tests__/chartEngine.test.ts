@@ -12,7 +12,7 @@ const native=vi.hoisted(()=>{
   function makeSeries(type:string) {
     return {type,setData:vi.fn(),update:vi.fn(),pop:vi.fn(),applyOptions:vi.fn(),attachPrimitive:vi.fn((primitive:{attached?:(input:unknown)=>void})=>primitive.attached?.({requestUpdate:vi.fn()})),detachPrimitive:vi.fn(),priceToCoordinate:vi.fn((price:number)=>price),coordinateToPrice:vi.fn((y:number)=>y),priceScale:vi.fn(()=>scale),getPane:vi.fn(()=>pane),moveToPane:vi.fn(),seriesOrder:vi.fn(()=>0),setSeriesOrder:vi.fn(),createPriceLine:vi.fn(()=>({applyOptions:vi.fn()})),removePriceLine:vi.fn()};
   }
-  const time={getVisibleLogicalRange:vi.fn(()=>({from:0,to:5})),setVisibleLogicalRange:vi.fn(),setVisibleRange:vi.fn(),fitContent:vi.fn(),width:vi.fn(()=>800),logicalToCoordinate:vi.fn((index:number)=>index*10),coordinateToLogical:vi.fn((x:number)=>x/10),timeToCoordinate:vi.fn(()=>null),coordinateToTime:vi.fn(()=>null),timeToIndex:vi.fn(()=>1),scrollToPosition:vi.fn()};
+  const time={getVisibleLogicalRange:vi.fn(()=>({from:0,to:5})),setVisibleLogicalRange:vi.fn(),setVisibleRange:vi.fn(),fitContent:vi.fn(),width:vi.fn(()=>800),logicalToCoordinate:vi.fn((index:number)=>index*10),coordinateToLogical:vi.fn((x:number)=>x/10),timeToCoordinate:vi.fn(()=>null),coordinateToTime:vi.fn(()=>null),timeToIndex:vi.fn(()=>1),scrollToPosition:vi.fn(),subscribeVisibleLogicalRangeChange:vi.fn(),unsubscribeVisibleLogicalRangeChange:vi.fn()};
   const chart={
     addSeries:vi.fn((type:string)=>{
       const result=makeSeries(type);
@@ -44,10 +44,11 @@ it('uses matching reference bodies, borders and wicks with thicker HLC bars and 
   expect(native.chart.addSeries).toHaveBeenCalledWith('Candlestick',expect.objectContaining({upColor:'#089981',downColor:'#ef5350',wickUpColor:'#089981',wickDownColor:'#ef5350',borderVisible:true,borderUpColor:'#089981',borderDownColor:'#ef5350'}));
   expect(CHART_PALETTE.volumeUp).toBe('rgba(8,153,129,0.5)');
   const volume=native.series.find(series=>series.type==='Histogram')!;
+  // Simple Volume is the default: too little history for an average, so bars are grey noise, except the up-day highest volume ever (sky blue).
   expect(volume.setData).toHaveBeenCalledWith([
-    {time:'2026-10-01',value:100,color:CHART_PALETTE.volumeUp},
+    {time:'2026-10-01',value:100,color:'#7c7c87'},
     {time:'2026-10-02'},
-    {time:'2026-10-05',value:200,color:CHART_PALETTE.volumeUp},
+    {time:'2026-10-05',value:200,color:'#87ceeb'},
   ]);
   const primitive=native.series[0].attachPrimitive.mock.calls[0][0];
   engine.setStyle('bars');
@@ -150,7 +151,7 @@ it('applies configured volume colors to both price and separate panes',()=>{
   const {engine}=setup(candles.map((bar,index)=>index===1?{...bar,volume:150}:bar));
   const volume=native.series.find(series=>series.type==='Histogram')!;
   const configs=defaultStudyConfigs();
-  configs.volume={...configs.volume!,upColor:'#123456',downColor:'#abcdef'};
+  configs.volume={...configs.volume!,mode:'classic',upColor:'#123456',downColor:'#abcdef'};
   engine.setStudyConfigs(configs);
   expect(volume.setData).toHaveBeenLastCalledWith([
     {time:'2026-10-01',value:100,color:'#12345680'},
@@ -243,5 +244,53 @@ it('provides pane count and safe pane elements for DOM portaling',()=>{
   (native.pane as any).getHTMLElement = vi.fn(() => mockTr);
   expect(engine.getPaneElement(0)).toBe(mockDiv);
   delete (native.pane as any).getHTMLElement;
+  engine.destroy();
+});
+it('applies precision, previous-close colouring, high/low lines and horizontal-only drag from chart settings',()=>{
+  const {engine}=setup();
+  const base={horizontalGrid:true,verticalGrid:true,crosshair:true,volume:true,scaleMode:'normal' as const};
+  const price=native.series[0];
+  engine.setAppearance({...base,precision:'3'});
+  expect(price.applyOptions).toHaveBeenLastCalledWith(expect.objectContaining({priceFormat:{type:'price',precision:3,minMove:.001}}));
+  // Bar 2 closes below bar 1's close even though it is a "green" candle by open in neither case: direction comes from the previous close.
+  engine.setAppearance({...base,colorByPreviousClose:true,upColor:'#00ff00',downColor:'#ff0000'});
+  const data=price.setData.mock.lastCall![0];
+  expect(data[1]).toMatchObject({color:'#ff0000',borderColor:'#ff0000',wickColor:'#ff0000'});
+  expect(data[2]).toMatchObject({color:'#00ff00'});
+  expect(data[0].color).toBeUndefined();
+  engine.setAppearance({...base,highLowPriceLines:true});
+  expect(price.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({price:14,title:'H'}));
+  expect(price.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({price:9,title:'L'}));
+  engine.setAppearance({...base,mousePan:'horizontal'});
+  expect(native.chart.applyOptions).toHaveBeenCalledWith(expect.objectContaining({handleScale:expect.objectContaining({axisPressedMouseMove:{time:true,price:false}})}));
+  expect(native.scale.applyOptions).toHaveBeenCalledWith({autoScale:true});
+  engine.destroy();
+});
+it('colours Simple Volume bars as pocket pivots, above-average up/down, dry and noise',()=>{
+  // 60 quiet bars alternating down/up, then a down day, a pocket pivot and an above-average down day.
+  const bars:Candle[]=[];
+  for(let index=0;index<60;index++) bars.push({date:new Date(Date.UTC(2026,0,1+index)).toISOString().slice(0,10),open:10,high:11,low:9,close:index%2?10.5:10,volume:100});
+  bars.push({date:'2026-03-02',open:10,high:11,low:9,close:9.5,volume:120});
+  bars.push({date:'2026-03-03',open:9.5,high:12,low:9.4,close:11.9,volume:500});
+  bars.push({date:'2026-03-04',open:11.9,high:12,low:10,close:10.2,volume:400});
+  bars.push({date:'2026-03-05',open:10.2,high:10.6,low:10,close:10.5,volume:10});
+  const {engine}=setup(bars);
+  const volume=native.series.find(series=>series.type==='Histogram')!;
+  const data=volume.setData.mock.lastCall![0];
+  expect(data.at(-4).color).toBe('#ff5252');
+  expect(data.at(-3).color).toBe('#87ceeb');
+  expect(data.at(-2).color).toBe('#ff5252');
+  expect(data.at(-1).color).toBe('#ff9800');
+  // With labels off, the 500 pocket pivot (also the highest volume ever) stays deep blue; with them on it's the sky-blue HVE.
+  expect(native.markers.setMarkers).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({id:'vol:HVE',text:'HVE',color:'#87ceeb'})]));
+  // Bull Snort: 500 >= 3x the ~108 average, close in the top 35% of the range, above the previous close.
+  expect(native.markers.setMarkers).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({id:'snort:2026-03-03',shape:'square'})]));
+  engine.destroy();
+});
+it('paints every highest-volume record sky blue, including down days',()=>{
+  const bars:Candle[]=[{date:'2026-10-01',open:10,high:11,low:9,close:10,volume:100},{date:'2026-10-02',open:10,high:11,low:8,close:9,volume:900}];
+  const {engine}=setup(bars);
+  const volume=native.series.find(series=>series.type==='Histogram')!;
+  expect(volume.setData.mock.lastCall![0][1].color).toBe('#87ceeb');
   engine.destroy();
 });

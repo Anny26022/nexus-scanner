@@ -382,9 +382,10 @@ export function DrawingToolbar({
   const [error, setError] = useState('');
 
   // Floating slider drag position
-  const [favPos, setFavPos] = useState<{ x: number; y: number }>(() => {
-    const saved = readChartStorage('drawing-favorites-pos.v1') as { x: number; y: number } | null;
-    return saved && Number.isFinite(saved.x) && Number.isFinite(saved.y) ? saved : { x: 28, y: 16 };
+  // Null keeps the rail docked on the left edge; dragging gives it a saved position.
+  const [favPos, setFavPos] = useState<{ x: number; y: number } | null>(() => {
+    const saved = readChartStorage('drawing-favorites-pos.v2') as { x: number; y: number } | null;
+    return saved && Number.isFinite(saved.x) && Number.isFinite(saved.y) ? saved : null;
   });
   const isDraggingFav = useRef<{ startX: number; startY: number; initX: number; initY: number } | null>(null);
 
@@ -394,11 +395,12 @@ export function DrawingToolbar({
     e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
+    const bar = e.currentTarget.parentElement;
     isDraggingFav.current = {
       startX: e.clientX,
       startY: e.clientY,
-      initX: favPos.x,
-      initY: favPos.y,
+      initX: favPos?.x ?? bar?.offsetLeft ?? 8,
+      initY: favPos?.y ?? bar?.offsetTop ?? 120,
     };
   }, [favPos]);
 
@@ -420,7 +422,7 @@ export function DrawingToolbar({
     isDraggingFav.current = null;
     const pos = { x: finalX, y: finalY };
     setFavPos(pos);
-    writeChartStorage('drawing-favorites-pos.v1', pos);
+    writeChartStorage('drawing-favorites-pos.v2', pos);
   }, []);
 
   const choose = useCallback((tool: DrawingTool) => {
@@ -482,10 +484,11 @@ export function DrawingToolbar({
       {/* 1. Floating Slider on Chart for Favorited Drawing Tools (Image 2) */}
       {showFavorites && favorites.length > 0 && (
         <div
-          className="drawing-floating-slider drawing-favorites-bar"
+          className={`drawing-floating-slider drawing-favorites-bar${favPos ? '' : ' is-docked'}`}
           role="toolbar"
+          aria-orientation="vertical"
           aria-label="Favorite drawing tools"
-          style={{ left: favPos.x, top: favPos.y }}
+          style={favPos ? { left: favPos.x, top: favPos.y } : undefined}
         >
           {/* 6-dot drag handle ::: */}
           <span

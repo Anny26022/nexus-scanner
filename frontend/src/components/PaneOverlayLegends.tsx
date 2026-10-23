@@ -7,7 +7,9 @@ import {
   ChevronDown,
   Maximize2,
   Trash2,
+  ChevronRight,
 } from 'lucide-react';
+import { enabledExtraStudies, studyLineColor, studyParams, studyTitle, type ExtraStudies } from '../chart/extraStudies';
 import type { ChartEngine, ChartAppearance } from '../chart/ChartEngine';
 import type { EmaLine } from '../chart/model';
 import type { ChartStudies } from '../chart/studies';
@@ -15,7 +17,9 @@ import type { StudyConfigs } from '../chart/studyConfigs';
 import {
   computeIndicatorSeries,
   formatIndicatorValue,
+  formatRelativeVolume,
   formatVolumeValue,
+  type IndicatorSnapshot,
 } from '../chart/indicatorValues';
 
 export interface LegendProps {
@@ -34,6 +38,12 @@ export interface LegendProps {
   onUpdateAppearance: (app: Partial<ChartAppearance>) => void;
   hiddenStudies: Readonly<Record<string, boolean>>;
   onToggleStudyVisibility: (id: string) => void;
+  onUpdateExtras?: (next: ExtraStudies) => void;
+  /** Legend chrome: collapse the indicator rows and hide every indicator at once. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  allHidden?: boolean;
+  onToggleAllHidden?: () => void;
 }
 
 /**
@@ -53,16 +63,61 @@ export function PricePaneLegend({
   onUpdateAppearance,
   hiddenStudies,
   onToggleStudyVisibility,
+  onUpdateExtras,
+  collapsed = false,
+  onToggleCollapsed,
+  allHidden = false,
+  onToggleAllHidden,
 }: LegendProps) {
   const openSettings = (id: string) => (onOpenSettings ? onOpenSettings(id) : onOpenIndicators());
   const latest = indicatorSeries.getSnapshot(snapshotIndex);
+  const extras = studyConfigs?.extras;
+  const overlayExtras = enabledExtraStudies(extras).filter(def => def.pane === 'price');
+  const indicatorCount = emaLines.filter(line => line.enabled).length + Object.values(studies).filter(Boolean).length
+    + enabledExtraStudies(extras).length + (appearance.volume ? 1 : 0);
 
   const stCfg = studyConfigs?.supertrend;
   const bbCfg = studyConfigs?.bollinger;
   const smaCfg = studyConfigs?.sma;
 
+  if (collapsed) {
+    return <div className="chart-indicator-legend">
+      <button type="button" className="chart-legend-toggle" aria-expanded={false} title="Show legend (Alt+L)" onClick={onToggleCollapsed}>
+        <ChevronRight size={12} aria-hidden="true" />{indicatorCount} {indicatorCount === 1 ? 'indicator' : 'indicators'}
+      </button>
+    </div>;
+  }
+
   return (
     <div className="chart-indicator-legend">
+      {indicatorCount > 0 && (onToggleCollapsed || onToggleAllHidden) && <div className="chart-legend-tools">
+        {onToggleCollapsed && <button type="button" className="chart-legend-toggle" aria-expanded title="Collapse legend (Alt+L)" onClick={onToggleCollapsed}>
+          <ChevronDown size={12} aria-hidden="true" />Legend
+        </button>}
+        {onToggleAllHidden && <button type="button" className="chart-legend-toggle" aria-pressed={allHidden} title={`${allHidden ? 'Show' : 'Hide'} all indicators (Alt+V)`} onClick={onToggleAllHidden}>
+          {allHidden ? <EyeOff size={12} aria-hidden="true" /> : <Eye size={12} aria-hidden="true" />}{allHidden ? 'Show all' : 'Hide all'}
+        </button>}
+      </div>}
+      {overlayExtras.map(def => {
+        const state = extras?.[def.id];
+        const params = studyParams(def, state);
+        const color = studyLineColor(def.lines[0], state);
+        return <div key={def.id} className="chart-indicator-row">
+          <span className="chart-indicator-title" style={{color}} onClick={() => openSettings(def.id)}>
+            <span className="chart-indicator-bullet">●</span>
+            <span>{studyTitle(def, params)}</span>
+            {def.lines.map(line => <span key={line.key} className="chart-indicator-val" data-ind-val={`x:${def.id}:${line.key}`} data-ind-precision={def.precision}
+              style={{color: studyLineColor(line, state)}}>{formatIndicatorValue(latest.extras[`${def.id}:${line.key}`], def.precision)}</span>)}
+          </span>
+          <span className="chart-indicator-actions">
+            <button type="button" className="chart-indicator-action-btn" title={hiddenStudies[def.id] ? 'Show' : 'Hide'} onClick={() => onToggleStudyVisibility(def.id)}>
+              {hiddenStudies[def.id] ? <EyeOff size={12} /> : <Eye size={12} />}
+            </button>
+            <button type="button" className="chart-indicator-action-btn" title="Settings" onClick={() => openSettings(def.id)}><Settings size={12} /></button>
+            <button type="button" className="chart-indicator-action-btn delete" title="Remove" onClick={() => onUpdateExtras?.({...extras, [def.id]: {...state, enabled: false}})}><Trash2 size={12} /></button>
+          </span>
+        </div>;
+      })}
       {/* Volume Overlay (when in price pane) */}
       {appearance.volume && !appearance.volumePane && (
         <div className="chart-indicator-row">
@@ -72,6 +127,9 @@ export function PricePaneLegend({
             <span className="chart-indicator-val" data-ind-val="vol">
               {formatVolumeValue(latest.volume)}
             </span>
+            {volumeStatPlots(latest).map(plot => <span key={plot.valKey} className="chart-indicator-val chart-volume-stat">
+              <span className="chart-pane-val-label">{plot.label}</span> <span data-ind-val={plot.valKey}>{plot.defaultVal}</span>
+            </span>)}
           </span>
           <span className="chart-indicator-actions">
             <button
@@ -319,6 +377,7 @@ export function SubPaneLegends({
   onUpdateAppearance,
   hiddenStudies,
   onToggleStudyVisibility,
+  onUpdateExtras,
 }: LegendProps) {
   const openSettings = (id: string) => (onOpenSettings ? onOpenSettings(id) : onOpenIndicators());
   const latest = indicatorSeries.getSnapshot(snapshotIndex);
@@ -341,7 +400,8 @@ export function SubPaneLegends({
     paneIndex: number;
     top: number;
     height: number;
-    plots: Array<{ label?: string; valKey: string; color?: string; defaultVal: string }>;
+    plots: Array<{ label?: string; valKey: string; color?: string; defaultVal: string; precision?: number }>;
+    onRemove?: () => void;
   }> = [];
 
   if (studies.macd) {
@@ -498,9 +558,36 @@ export function SubPaneLegends({
             color: 'var(--text)',
             defaultVal: formatVolumeValue(latest.volume),
           },
+          ...volumeStatPlots(latest),
         ],
       });
     }
+  }
+
+  const extras = studyConfigs?.extras;
+  for (const def of enabledExtraStudies(extras).filter(item => item.pane === 'separate')) {
+    const paneIdx = engine?.getStudyPaneIndex(def.id) ?? -1;
+    if (paneIdx <= 0) continue;
+    const state = extras?.[def.id];
+    const offset = getOffset(paneIdx);
+    const params = studyParams(def, state);
+    subPanes.push({
+      id: def.id,
+      title: def.short,
+      params: def.inputs.length ? def.inputs.map(input => params[input.id]).filter(value => value !== 0).join(' ') : undefined,
+      color: studyLineColor(def.lines[0], state),
+      paneIndex: paneIdx,
+      top: offset.top,
+      height: offset.height,
+      plots: def.lines.map(line => ({
+        label: def.lines.length > 1 ? line.label : undefined,
+        valKey: `x:${def.id}:${line.key}`,
+        color: studyLineColor(line, state),
+        defaultVal: formatIndicatorValue(latest.extras[`${def.id}:${line.key}`], def.precision),
+        precision: def.precision,
+      })),
+      onRemove: () => onUpdateExtras?.({...extras, [def.id]: {...state, enabled: false}}),
+    });
   }
 
   if (subPanes.length === 0) return null;
@@ -537,6 +624,7 @@ export function SubPaneLegends({
                     <span
                       className="chart-pane-val-num"
                       data-ind-val={plot.valKey}
+                      data-ind-precision={plot.precision}
                       style={{ color: plot.color }}
                     >
                       {plot.defaultVal}
@@ -594,7 +682,9 @@ export function SubPaneLegends({
                 className="chart-pane-tool-btn delete"
                 title="Remove pane"
                 onClick={() => {
-                  if (pane.id === 'volume') {
+                  if (pane.onRemove) {
+                    pane.onRemove();
+                  } else if (pane.id === 'volume') {
                     onUpdateAppearance({ volume: false });
                   } else {
                     onUpdateStudies({ ...studies, [pane.id]: false });
@@ -614,4 +704,13 @@ export function SubPaneLegends({
       })}
     </>
   );
+}
+
+/** Avg (50 SMA, which Simple Volume doesn't draw), relative volume and up/down volume ratio. */
+function volumeStatPlots(latest: IndicatorSnapshot) {
+  return [
+    {label: 'Avg', valKey: 'vol-avg', color: 'var(--muted)', defaultVal: formatVolumeValue(latest.volumeAvg)},
+    {label: 'RVol', valKey: 'vol-rel', color: 'var(--muted)', defaultVal: formatRelativeVolume(latest.volumeRel)},
+    {label: 'U/D', valKey: 'vol-ud', color: 'var(--muted)', defaultVal: formatIndicatorValue(latest.volumeUpDown, 2)},
+  ];
 }

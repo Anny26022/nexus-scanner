@@ -2,7 +2,10 @@ import gzip
 import json
 import unittest
 
-from market_overview import BREADTH_SESSIONS, market_overview
+import tempfile
+from pathlib import Path
+
+from market_overview import BREADTH_SESSIONS, benchmark_series, market_overview
 
 
 def gz(payload):
@@ -58,6 +61,23 @@ class MarketOverviewTest(unittest.TestCase):
         self.assertEqual(len(result['indices']), 1)
         card = result['indices'][0]
         self.assertEqual((card['date'], card['close'], card['changePct'], card['series']), ('2026-10-21', 110.0, 10.0, [100.0, 110.0]))
+
+
+class BenchmarkSeriesTest(unittest.TestCase):
+    def test_merges_csv_history_with_fresher_index_closes_and_caps_at_session(self):
+        with tempfile.TemporaryDirectory() as root:
+            folder = Path(root) / 'indices_ohlcv_data'
+            folder.mkdir()
+            (folder / 'NIFTY.csv').write_text('Date,Open,High,Low,Close,Volume\n2026-10-19,1,1,1,100,1\n2026-10-20,1,1,1,101,1\nbad,1,1,1,x,1\n')
+            indices = {'indices': [{'symbol': 'NIFTY', 'name': 'Nifty 50', 'records': [
+                {'date': '2026-10-20', 'close': 102.0}, {'date': '2026-10-21', 'close': 103.0}, {'date': '2026-10-22', 'close': 104.0}]}]}
+            result = benchmark_series(root, {'all_indices_history_v2.json.gz': gz(indices)}, '2026-10-21')
+        self.assertEqual(result['records'], [['2026-10-19', 100.0], ['2026-10-20', 102.0], ['2026-10-21', 103.0]])
+        self.assertEqual((result['symbol'], result['name'], result['asOfDate']), ('NIFTY', 'Nifty 50', '2026-10-21'))
+
+    def test_returns_none_without_enough_history(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.assertIsNone(benchmark_series(root, {}, '2026-10-21'))
 
 
 if __name__ == '__main__':

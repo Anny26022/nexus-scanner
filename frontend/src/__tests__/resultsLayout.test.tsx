@@ -10,7 +10,7 @@ import { pagePlaceholder } from '../utils/pagePlaceholder';
 import type { ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 
 vi.mock('../chart/ChartEngine', () => ({ChartEngine: vi.fn(class {
-  setStyle=vi.fn(); setEmaLines=vi.fn(); setStudyConfigs=vi.fn(); setStudies=vi.fn();
+  setStyle=vi.fn(); setEmaLines=vi.fn(); setStudyConfigs=vi.fn(); setStudies=vi.fn(); setBenchmark=vi.fn();
   setAppearance=vi.fn(); setRange=vi.fn(); destroy=vi.fn();
 })}));
 

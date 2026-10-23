@@ -6,12 +6,12 @@ import ChartsTab from '../components/ChartsTab';
 import { screenerApi } from '../api/screenerApi';
 import { ChartEngine } from '../chart/ChartEngine';
 
-vi.mock('../api/screenerApi', () => ({screenerApi:{getChart:vi.fn(),runScreen:vi.fn(async()=>({rows:[{symbol:'RELIANCE',marketCapCrore:5,freeFloatPct:50,circuitLimit:'5'}],immutableRevision:'a'.repeat(64)}))}}));
+vi.mock('../api/screenerApi', () => ({screenerApi:{getChart:vi.fn(),getBenchmark:vi.fn(async()=>undefined),runScreen:vi.fn(async()=>({rows:[{symbol:'RELIANCE',marketCapCrore:5,freeFloatPct:50,circuitLimit:'5'}],immutableRevision:'a'.repeat(64)}))}}));
 vi.mock('../chart/ChartEngine', () => ({ChartEngine:vi.fn(class {
   timeScale={subscribeVisibleTimeRangeChange:vi.fn(),unsubscribeVisibleTimeRangeChange:vi.fn()};
   chart={timeScale:()=>this.timeScale,subscribeCrosshairMove:vi.fn(),unsubscribeCrosshairMove:vi.fn()};
   savedView=vi.fn(()=>undefined);paneWeights=vi.fn(()=>[1]);restoreView=vi.fn();restorePaneWeights=vi.fn();
-  zoom=vi.fn(); reset=vi.fn(); resetPriceScale=vi.fn(); setEmaLines=vi.fn(); setStyle=vi.fn(); setAppearance=vi.fn(); setRange=vi.fn(); setCandles=vi.fn(); setReplayPicker=vi.fn(); setStudies=vi.fn(); setComparison=vi.fn(); setEvents=vi.fn(); latest=vi.fn(); goToDate=vi.fn(()=>true); destroy=vi.fn();
+  zoom=vi.fn(); reset=vi.fn(); resetPriceScale=vi.fn(); setEmaLines=vi.fn(); setStyle=vi.fn(); setAppearance=vi.fn(); setRange=vi.fn(); setCandles=vi.fn(); setReplayPicker=vi.fn(); setStudies=vi.fn(); setBenchmark=vi.fn(); setComparison=vi.fn(); setEvents=vi.fn(); latest=vi.fn(); goToDate=vi.fn(()=>true); destroy=vi.fn();
   setOnPanesChange=vi.fn(); getPaneOffsets=vi.fn(()=>[]); getStudyPaneIndex=vi.fn(()=>1); movePane=vi.fn(); maximizePane=vi.fn(); setStudyVisibility=vi.fn();
   setStudyConfigs=vi.fn();
 })}));
@@ -28,6 +28,12 @@ function chooseGrid(count:1|2) {
   fireEvent.click(screen.getByRole('button',{name:count===1?'1 chart · Single chart':'2 charts · Side by side'}));
 }
 afterEach(() => { cleanup(); vi.clearAllMocks(); localStorage.clear(); });
+const loadSymbol=(scope:{getByRole:typeof screen.getByRole},value:string)=>{
+  fireEvent.click(scope.getByRole('button',{name:/^Search symbol/}));
+  const input=screen.getByRole('combobox',{name:'Chart symbol'});
+  fireEvent.change(input,{target:{value}});
+  fireEvent.submit(input.closest('form')!);
+};
 it('selects one year for a fresh chart without overriding saved ranges', async () => {
   vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:'2026-10-01',candles,volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
   setup();
@@ -53,8 +59,7 @@ it('uses the selected duration instead of a stale viewport when the symbol chang
   expect(vi.mocked(ChartEngine).mock.results[0].value.restoreView).not.toHaveBeenCalled();
 
   fireEvent.click(screen.getByRole('button',{name:'6mo'}));
-  fireEvent.change(screen.getByLabelText('Chart symbol'),{target:{value:'TCS'}});
-  fireEvent.click(screen.getByRole('button',{name:'Load'}));
+  loadSymbol(screen,'TCS');
   await screen.findByLabelText('TCS candlestick and volume chart');
   const next=vi.mocked(ChartEngine).mock.results.at(-1)!.value;
   expect(screen.getByRole('button',{name:'6mo'})).toHaveAttribute('aria-pressed','true');
@@ -72,8 +77,7 @@ it('carries a manually adjusted date window to the next symbol', async () => {
   first.timeScale.subscribeVisibleTimeRangeChange.mock.calls[1][0]();
   expect(first.savedView).toHaveBeenCalledTimes(2);
   expect(screen.getByRole('button',{name:'1y'})).toHaveAttribute('aria-pressed','false');
-  fireEvent.change(screen.getByLabelText('Chart symbol'),{target:{value:'TCS'}});
-  fireEvent.click(screen.getByRole('button',{name:'Load'}));
+  loadSymbol(screen,'TCS');
   await screen.findByLabelText('TCS candlestick and volume chart');
   expect(JSON.parse(localStorage.getItem('nexus.chart.scene.0.v1')!)).toMatchObject({view:{from:'2025-12-01',to:'2026-10-02'}});
   const next=vi.mocked(ChartEngine).mock.results.at(-1)!.value;
@@ -172,8 +176,7 @@ it('handles empty history and rejects invalid symbol input before requesting it'
   vi.mocked(screenerApi.getChart).mockResolvedValue({schemaVersion:2,symbol:'RELIANCE',asOfDate:'2026-10-02',historyStartDate:null,candles:[],volumeEvents:{},corporateActions:[],earnings:[],marketNews:[]});
   setup();
   await screen.findByText('No published candles for RELIANCE.');
-  fireEvent.change(screen.getByLabelText('Chart symbol'),{target:{value:'BAD SYMBOL'}});
-  fireEvent.click(screen.getByRole('button',{name:'Load'}));
+  loadSymbol(screen,'BAD SYMBOL');
   expect(screen.getByRole('alert')).toHaveTextContent('Enter a scanner symbol');
   expect(screenerApi.getChart).toHaveBeenCalledTimes(1);
 });
@@ -192,16 +195,20 @@ it('connects native panes, styles, settings, date navigation and release-pinned 
   expect(screen.getByRole('dialog',{name:'Chart settings'}).parentElement?.parentElement).toBe(document.body);
   expect(screen.queryByRole('link',{name:'Charts by TradingView'})).not.toBeInTheDocument();
   expect(within(screen.getByRole('dialog',{name:'Chart settings'})).queryByRole('link',{name:'TradingView, Inc.'})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab',{name:'Status line'}));
   expect(screen.getByLabelText('Volume in separate pane')).toBeChecked();
   fireEvent.click(screen.getByLabelText('Volume in separate pane'));
+  fireEvent.click(screen.getByRole('tab',{name:'Canvas'}));
   fireEvent.change(screen.getByLabelText('Crosshair snapping'),{target:{value:'ohlc'}});
   expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({volumePane:false,crosshairMode:'ohlc'}));
+  fireEvent.click(screen.getByRole('tab',{name:'Symbol'}));
   fireEvent.change(screen.getByLabelText('Compare symbol'),{target:{value:'TCS'}});
   fireEvent.click(screen.getByRole('button',{name:'Add'}));
   await waitFor(()=>expect(engine.setComparison).toHaveBeenLastCalledWith('TCS',candles,false));
   expect(screenerApi.getChart).toHaveBeenCalledWith('TCS','a'.repeat(64),'2026-10-02');
   fireEvent.click(screen.getByLabelText('Comparison in synced pane'));
   await waitFor(()=>expect(engine.setComparison).toHaveBeenLastCalledWith('TCS',candles,true));
+  fireEvent.click(screen.getByRole('tab',{name:'Navigation'}));
   fireEvent.change(screen.getByLabelText('Go to date'),{target:{value:'2026-10-01'}});
   fireEvent.click(screen.getByRole('button',{name:'Go'}));
   expect(engine.goToDate).toHaveBeenCalledWith('2026-10-01');
@@ -214,6 +221,7 @@ it('keeps an explicitly saved volume overlay preference',async()=>{
   setup();await screen.findByLabelText('RELIANCE candlestick and volume chart');
   expect(vi.mocked(ChartEngine).mock.results[0].value.setAppearance).toHaveBeenCalledWith(expect.objectContaining({volumePane:false}));
   fireEvent.click(screen.getByRole('button',{name:'Chart settings'}));
+  fireEvent.click(screen.getByRole('tab',{name:'Status line'}));
   expect(screen.getByLabelText('Volume in separate pane')).not.toBeChecked();
 });
 it.each(['Cancel', 'Escape', 'Close', 'Backdrop'] as const)(
@@ -225,6 +233,7 @@ it.each(['Cancel', 'Escape', 'Close', 'Backdrop'] as const)(
     const engine=vi.mocked(ChartEngine).mock.results[0].value;
     fireEvent.click(screen.getByRole('button',{name:'Chart settings'}));
     const dialog=screen.getByRole('dialog',{name:'Chart settings'});
+    fireEvent.click(within(dialog).getByRole('tab',{name:'Status line'}));
     fireEvent.click(within(dialog).getByLabelText('Volume in separate pane'));
     expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({volumePane:false}));
 
@@ -260,7 +269,7 @@ it('links subsequent symbol and interval changes independently',async()=>{
   expect(screen.getByRole('region',{name:'Chart 2 · TCS'})).toHaveTextContent('1W');
   fireEvent.click(screen.getByRole('switch',{name:'Sync interval'}));fireEvent.click(screen.getByRole('switch',{name:'Sync symbol'}));
   const first=within(screen.getByRole('region',{name:'Chart 1 · RELIANCE'}));
-  fireEvent.change(first.getByLabelText('Chart symbol'),{target:{value:'INFY'}});fireEvent.click(first.getByRole('button',{name:'Load'}));
+  loadSymbol(first,'INFY');
   await screen.findByRole('region',{name:'Chart 2 · INFY'});
   fireEvent.click(within(screen.getByRole('region',{name:'Chart 1 · INFY'})).getByRole('button',{name:'Monthly candles'}));
   expect(screen.getByRole('region',{name:'Chart 1 · INFY'})).toHaveTextContent('1M');
@@ -368,6 +377,7 @@ it('configures crosshair transparency and inverted scale in chart settings', asy
   expect(dialog).toBeInTheDocument();
 
   // Test Transparency slider in Crosshair section
+  fireEvent.click(screen.getByRole('tab', { name: 'Canvas' }));
   const transparencySlider = screen.getByLabelText('Transparency');
   expect(transparencySlider).toBeInTheDocument();
   expect(transparencySlider).toHaveValue('0');
@@ -378,6 +388,7 @@ it('configures crosshair transparency and inverted scale in chart settings', asy
   expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({ crosshairTransparency: 45 }));
 
   // Test Invert scale toggle
+  fireEvent.click(screen.getByRole('tab', { name: 'Scales and lines' }));
   const invertToggle = screen.getByLabelText('Invert scale');
   expect(invertToggle).not.toBeChecked();
   fireEvent.click(invertToggle);
@@ -385,7 +396,8 @@ it('configures crosshair transparency and inverted scale in chart settings', asy
   expect(engine.setAppearance).toHaveBeenLastCalledWith(expect.objectContaining({ invertScale: true }));
 
   // Test Vertical grid toggle
-  const vertToggle = screen.getByLabelText('Vertical grid');
+  fireEvent.click(screen.getByRole('tab', { name: 'Canvas' }));
+  const vertToggle = screen.getByLabelText('Vertical grid lines');
   expect(vertToggle).toBeChecked();
   fireEvent.click(vertToggle);
   expect(vertToggle).not.toBeChecked();

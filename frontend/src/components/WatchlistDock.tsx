@@ -9,11 +9,20 @@ import {
   ArrowDown,
   Bookmark,
   Trash2,
-  ChevronDown,
+  Flag,
+  Check,
+  GripVertical,
 } from 'lucide-react';
+import * as Popover from '@radix-ui/react-popover';
 import { screenerApi } from '../api/screenerApi';
 import type { StockRow } from '../types/screener';
 import { readChartStorage, writeChartStorage } from '../chart/storage';
+import {
+  FLAGS_KEY, FLAG_BY_ID, FLAG_COLORS, activeList, createList, deleteList, flaggedSymbols, loadFlags, loadWatchlistStore,
+  moveItem, renameList, saveWatchlistStore, setFlag, switchList, withActiveItems, type FlagColor, type WatchlistFlags, type WatchlistStore,
+} from '../chart/watchlists';
+import { WatchlistMenu } from './WatchlistMenu';
+import { useMountEffect } from '../hooks/useMountEffect';
 import { SymbolWithLogo } from './SymbolWithLogo';
 
 const isSection = (item: string) => item.startsWith('###');
@@ -127,7 +136,10 @@ export interface WatchlistDockProps {
 
 type SortColumn = 'symbol' | 'last' | 'changePct';
 type SortDirection = 'asc' | 'desc';
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT = 32;
+const WIDTH_KEY = 'watchlist-width.v1';
+const DEFAULT_WIDTH = 300;
+const clampWidth = (width: number) => Math.round(Math.max(220, Math.min(560, width)));
 const OVERSCAN = 6;
 
 function useScrollToActiveItem(ref: RefObject<HTMLDivElement | null>, items: readonly string[], active: string | undefined, setTop: Dispatch<SetStateAction<number>>) {
@@ -153,16 +165,69 @@ export const WatchlistDock = memo(function WatchlistDock({
   onSelectSymbol,
   onClose,
 }: WatchlistDockProps) {
-  const [items, setItems] = useState<string[]>(() => {
-    const saved = readChartStorage('watchlist.v2');
-    return Array.isArray(saved) ? saved.filter((item): item is string => typeof item === 'string') : [];
+  const [store, setStore] = useState<WatchlistStore>(loadWatchlistStore);
+  const [width, setWidth] = useState(() => {
+    const saved = readChartStorage(WIDTH_KEY);
+    return typeof saved === 'number' && Number.isFinite(saved) ? clampWidth(saved) : DEFAULT_WIDTH;
   });
-  const itemsChoice = useRef(items);
-  const saveItems = (next: string[]) => {
-    itemsChoice.current = next;
-    setItems(next);
-    writeChartStorage('watchlist.v2', next);
+  // The expanded chart workspace also leaves room for the dock, so the width lives on the root too.
+  const applyWidth = (next: number) => { setWidth(next); document.documentElement.style.setProperty('--watchlist-width', `${next}px`); };
+  const saveWidth = (next: number) => { applyWidth(next); writeChartStorage(WIDTH_KEY, next); };
+  useMountEffect(() => {
+    document.documentElement.style.setProperty('--watchlist-width', `${width}px`);
+    return () => document.documentElement.style.removeProperty('--watchlist-width');
+  });
+  // Dragging the left edge resizes the dock, like TradingView's right panel.
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const startX = event.clientX;
+    const startWidth = width;
+    let latest = startWidth;
+    const move = (moveEvent: PointerEvent) => { latest = clampWidth(startWidth + startX - moveEvent.clientX); applyWidth(latest); };
+    const end = () => {
+      handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', end);
+      handle.removeEventListener('pointercancel', end);
+      document.body.classList.remove('is-resizing-dock');
+      saveWidth(latest);
+    };
+    document.body.classList.add('is-resizing-dock');
+    handle.addEventListener('pointermove', move);
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
   };
+  const storeChoice = useRef(store);
+  const [flags, setFlags] = useState<WatchlistFlags>(loadFlags);
+  // null shows the active named list; a colour shows that flag's list.
+  const [view, setView] = useState<FlagColor | null>(null);
+  const items = useMemo(() => view ? flaggedSymbols(flags, view) : activeList(store).items, [view, flags, store]);
+  const commitStore = (next: WatchlistStore) => {
+    storeChoice.current = next;
+    setStore(next);
+    saveWatchlistStore(next);
+  };
+  const updateFlags = (next: WatchlistFlags) => {
+    setFlags(next);
+    writeChartStorage(FLAGS_KEY, next);
+  };
+  const saveItems = (next: string[]) => {
+    if (view) {
+      // In a flag list, removing a symbol clears its flag.
+      updateFlags(items.filter(item => !next.includes(item)).reduce((current, symbol) => setFlag(current, symbol, null), flags));
+      return;
+    }
+    commitStore(withActiveItems(storeChoice.current, next));
+  };
+  const flagSymbol = (symbol: string, color: FlagColor | null) => updateFlags(setFlag(flags, symbol, color));
+  const [drag, setDrag] = useState<{from: number; over: number} | null>(null);
+  const [menuFor, setMenuFor] = useState<{symbol: string; x: number; y: number} | null>(null);
+  const copyToList = (symbol: string, id: string) => commitStore({
+    ...storeChoice.current,
+    lists: storeChoice.current.lists.map(list => list.id === id && !list.items.includes(symbol) ? {...list, items: [...list.items, symbol]} : list),
+  });
+  const listTitle = view ? `${FLAG_BY_ID.get(view)!.label} list` : activeList(store).name;
   const symbols = useMemo(() => items.filter(item => !isSection(item)), [items]);
 
   // Search filter
@@ -240,7 +305,8 @@ export const WatchlistDock = memo(function WatchlistDock({
       return;
     }
     setAddError('');
-    const previous = itemsChoice.current;
+    setView(null);
+    const previous = activeList(storeChoice.current).items;
     const existing = new Set(previous.filter(item => !isSection(item)));
     const hasSections = extracted.some(isSection);
     const toAdd = pastedSymbols.filter(symbol => !existing.has(symbol));
@@ -248,7 +314,7 @@ export const WatchlistDock = memo(function WatchlistDock({
     const next = hasSections
       ? [...extracted, ...previous.filter(item => isSection(item) || !pastedSet.has(item))]
       : [...toAdd, ...previous];
-    saveItems(next);
+    commitStore(withActiveItems(storeChoice.current, next));
     setAddSuccess(
       `Added ${toAdd.length} symbol${toAdd.length === 1 ? '' : 's'}${hasSections ? ` and ${extracted.length - pastedSymbols.length} heading${extracted.length - pastedSymbols.length === 1 ? '' : 's'}` : ''}${pastedSymbols.length > toAdd.length ? ` (${pastedSymbols.length - toAdd.length} already existed)` : ''}`
     );
@@ -262,7 +328,7 @@ export const WatchlistDock = memo(function WatchlistDock({
   // Remove symbol from watchlist
   const handleRemoveSymbol = (sym: string, e: React.SyntheticEvent) => {
     e.stopPropagation();
-    saveItems(itemsChoice.current.filter(item => item !== sym));
+    saveItems(items.filter(item => item !== sym));
   };
 
   // Clear entire list
@@ -329,6 +395,16 @@ export const WatchlistDock = memo(function WatchlistDock({
       container.scrollTop = top + ROW_HEIGHT - container.clientHeight;
     setScrollTop(container.scrollTop);
   };
+  // Drag-to-reorder only when the rows on screen are the list's own order.
+  const canReorder = !view && !sortColumn && !filterQuery.trim();
+  const dragProps = (rowIndex: number) => canReorder ? {
+    draggable: true,
+    onDragStart: (event: React.DragEvent) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', filteredItems[rowIndex]); setDrag({from: rowIndex, over: rowIndex}); },
+    onDragOver: (event: React.DragEvent) => { if (!drag) return; event.preventDefault(); if (drag.over !== rowIndex) setDrag({...drag, over: rowIndex}); },
+    onDrop: (event: React.DragEvent) => { event.preventDefault(); if (drag) saveItems(moveItem(items, drag.from, drag.over)); setDrag(null); },
+    onDragEnd: () => setDrag(null),
+  } : {};
+  const dropClass = (rowIndex: number) => drag && drag.over === rowIndex && drag.from !== rowIndex ? (drag.from < rowIndex ? ' is-drop-after' : ' is-drop-before') : '';
   const resetScroll = () => {
     if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = 0;
     setScrollTop(0);
@@ -419,7 +495,27 @@ export const WatchlistDock = memo(function WatchlistDock({
     <aside
       className={`chart-watchlist-dock${mobileOpen ? ' is-mobile-open' : ''}`}
       aria-label="Watchlist panel"
+      style={{'--watchlist-width': `${width}px`} as React.CSSProperties}
     >
+      <div
+        className="watchlist-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize watchlist"
+        aria-valuemin={220}
+        aria-valuemax={560}
+        aria-valuenow={width}
+        tabIndex={0}
+        title="Drag to resize · double-click to reset"
+        onPointerDown={startResize}
+        onDoubleClick={() => saveWidth(DEFAULT_WIDTH)}
+        onKeyDown={event => {
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            saveWidth(clampWidth(width + (event.key === 'ArrowLeft' ? 16 : -16)));
+          }
+        }}
+      />
       <button
         type="button"
         className="watchlist-mobile-toggle"
@@ -432,34 +528,16 @@ export const WatchlistDock = memo(function WatchlistDock({
       {/* 1. Header with title, count badge, and actions */}
       <div className="watchlist-header">
         <div className="watchlist-title-group">
-          <Bookmark size={15} className="watchlist-title-icon" />
-          <h2 className="watchlist-title">Watchlist</h2>
-          <span className="watchlist-badge" title={`${filteredSymbols.length} symbols`}>
-            {filteredSymbols.length}
-          </span>
-          <details className="watchlist-menu-dropdown">
-            <summary
-              className="watchlist-dropdown-trigger"
-              aria-label="Watchlist options"
-              title="Watchlist options"
-            >
-              <ChevronDown size={12} />
-            </summary>
-            <div className="watchlist-dropdown-menu">
-              <button
-                type="button"
-                className="watchlist-menu-item is-danger"
-                disabled={items.length === 0}
-                onClick={e => {
-                  (e.currentTarget.closest('details') as HTMLDetailsElement | null)?.removeAttribute('open');
-                  handleClearEntireList();
-                }}
-              >
-                <Trash2 size={13} />
-                <span>Clear entire list</span>
-              </button>
-            </div>
-          </details>
+          <WatchlistMenu
+            store={store} flags={flags} view={view} title={listTitle} count={filteredSymbols.length}
+            onSwitch={id => { setView(null); resetScroll(); commitStore(switchList(storeChoice.current, id)); }}
+            onView={flag => { setView(flag); resetScroll(); }}
+            onCreate={name => { setView(null); resetScroll(); commitStore(createList(storeChoice.current, name)); }}
+            onRename={name => commitStore(renameList(storeChoice.current, storeChoice.current.activeId, name))}
+            onAddSection={name => commitStore(withActiveItems(storeChoice.current, [`###${name.trim().slice(0, 80)}`, ...activeList(storeChoice.current).items]))}
+            onClear={handleClearEntireList}
+            onDelete={() => storeChoice.current.lists.length > 1 ? commitStore(deleteList(storeChoice.current, storeChoice.current.activeId)) : handleClearEntireList()}
+          />
         </div>
         <div className="watchlist-header-actions">
           <button
@@ -699,11 +777,14 @@ export const WatchlistDock = memo(function WatchlistDock({
             if (isSection(item)) {
               const rowIndex = startIndex + visibleIndex;
               return (
-                <div key={`section-${rowIndex}`} className="watchlist-section-row" role="row">
+                <div key={`section-${rowIndex}`} className={`watchlist-section-row${dropClass(rowIndex)}`} role="row" {...dragProps(rowIndex)}>
                   <div className="watchlist-section-header" role="cell">
+                    {canReorder && <GripVertical size={12} className="watchlist-grip" aria-hidden="true" />}
                     <span className="watchlist-section-title">{sectionTitle(item)}</span>
                     <span className="watchlist-section-count">{sectionCounts.get(rowIndex) ?? 0}</span>
                     <span className="watchlist-section-rule" aria-hidden="true" />
+                    {!view && <button type="button" className="watchlist-row-delete-btn" aria-label={`Remove section ${sectionTitle(item)}`} title="Remove section (keeps its symbols)"
+                      onClick={() => saveItems(items.filter((_, index) => index !== items.indexOf(item)))}><X size={12} /></button>}
                   </div>
                 </div>
               );
@@ -715,6 +796,8 @@ export const WatchlistDock = memo(function WatchlistDock({
             const unavailable = quoteMap ? 'Not in the current scanner snapshot' : quotesError ? 'Prices could not load' : 'Loading snapshot prices';
             const isUp = typeof changePct === 'number' && changePct >= 0;
             const isSelected = (currentEffectiveSymbol || activeSymbol) === sym;
+            const rowIndex = startIndex + visibleIndex;
+            const flag = flags[sym];
 
             return (
               <div
@@ -726,7 +809,10 @@ export const WatchlistDock = memo(function WatchlistDock({
                 role="row"
                 tabIndex={0}
                 aria-selected={isSelected}
-                className={`watchlist-row ${isSelected ? 'is-selected' : ''}`}
+                className={`watchlist-row${isSelected ? ' is-selected' : ''}${dropClass(rowIndex)}`}
+                style={flag ? {'--flag': FLAG_BY_ID.get(flag)!.color} as React.CSSProperties : undefined}
+                {...dragProps(rowIndex)}
+                onContextMenu={event => { event.preventDefault(); setMenuFor({symbol: sym, x: event.clientX, y: event.clientY}); }}
                 onClick={() => {
                   setLocalActiveSymbol(sym);
                   onSelectSymbol(sym);
@@ -753,6 +839,14 @@ export const WatchlistDock = memo(function WatchlistDock({
                     e.stopPropagation();
                     setLocalActiveSymbol(sym);
                     onSelectSymbol(sym);
+                  } else if (e.altKey && e.code === 'KeyF') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    flagSymbol(sym, flag ? null : 'red');
+                  } else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setMenuFor({symbol: sym, x: rect.left + 24, y: rect.bottom});
                   } else if (e.key === 'Delete' || e.key === 'Backspace') {
                     e.preventDefault();
                     e.stopPropagation();
@@ -762,6 +856,7 @@ export const WatchlistDock = memo(function WatchlistDock({
               >
                 {/* SYMBOL column with logo + symbol name */}
                 <div className="watchlist-cell cell-symbol" role="cell">
+                  <FlagPicker symbol={sym} flag={flag} onFlag={color => flagSymbol(sym, color)} />
                   <SymbolWithLogo symbol={sym} showText={false} size="sm" className="watchlist-symbol-logo" />
                   <span className="watchlist-symbol-name" title={sym}>{sym}</span>
                 </div>
@@ -810,6 +905,85 @@ export const WatchlistDock = memo(function WatchlistDock({
           </div>
         )}
       </div>
+      {menuFor && <WatchlistRowMenu
+        {...menuFor}
+        flag={flags[menuFor.symbol]}
+        inList={!view}
+        otherLists={store.lists.filter(list => view || list.id !== store.activeId)}
+        onClose={() => setMenuFor(null)}
+        onFlag={color => flagSymbol(menuFor.symbol, color)}
+        onMove={where => {
+          const from = items.indexOf(menuFor.symbol);
+          saveItems(moveItem(items, from, where === 'top' ? 0 : items.length - 1));
+        }}
+        onCopy={id => copyToList(menuFor.symbol, id)}
+        onRemove={() => saveItems(items.filter(item => item !== menuFor.symbol))}
+      />}
     </aside>
   );
 });
+
+function FlagSwatches({flag, onFlag}: {flag?: FlagColor; onFlag: (color: FlagColor | null) => void}) {
+  return <div className="watchlist-flag-swatches" role="group" aria-label="Flag colour">
+    {FLAG_COLORS.map(option => <button key={option.id} type="button" className="watchlist-flag-swatch" aria-pressed={flag === option.id}
+      aria-label={`${option.label} flag`} title={`${option.label} flag`} style={{'--flag': option.color} as React.CSSProperties}
+      onClick={() => onFlag(flag === option.id ? null : option.id)} />)}
+    <button type="button" className="watchlist-flag-swatch is-none" aria-label="Remove flag" title="Remove flag" disabled={!flag} onClick={() => onFlag(null)}><X size={11} /></button>
+  </div>;
+}
+
+/** The flag in a row's gutter: shows the colour when set, a faint outline on hover otherwise. */
+function FlagPicker({symbol, flag, onFlag}: {symbol: string; flag?: FlagColor; onFlag: (color: FlagColor | null) => void}) {
+  const [open, setOpen] = useState(false);
+  return <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Trigger asChild>
+      <button type="button" className={`watchlist-flag-btn${flag ? ' is-flagged' : ''}`} aria-label={flag ? `${symbol} flagged ${flag}, change flag` : `Flag ${symbol}`}
+        title={flag ? 'Change flag' : 'Flag'} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+        <Flag size={11} fill={flag ? 'currentColor' : 'none'} />
+      </button>
+    </Popover.Trigger>
+    <Popover.Portal>
+      <Popover.Content side="right" align="center" sideOffset={6} collisionPadding={12} className="watchlist-menu is-compact" onClick={event => event.stopPropagation()}>
+        <FlagSwatches flag={flag} onFlag={color => { onFlag(color); setOpen(false); }} />
+      </Popover.Content>
+    </Popover.Portal>
+  </Popover.Root>;
+}
+
+/** Right-click menu for a symbol row. */
+function WatchlistRowMenu({symbol, x, y, flag, inList, otherLists, onClose, onFlag, onMove, onCopy, onRemove}: {
+  symbol: string; x: number; y: number; flag?: FlagColor; inList: boolean;
+  otherLists: {id: string; name: string; items: string[]}[];
+  onClose: () => void;
+  onFlag: (color: FlagColor | null) => void;
+  onMove: (where: 'top' | 'bottom') => void;
+  onCopy: (id: string) => void;
+  onRemove: () => void;
+}) {
+  const act = (fn: () => void) => () => { fn(); onClose(); };
+  return <Popover.Root open onOpenChange={next => { if (!next) onClose(); }}>
+    <Popover.Anchor asChild><span style={{position: 'fixed', left: x, top: y, width: 0, height: 0}} /></Popover.Anchor>
+    <Popover.Portal>
+      <Popover.Content align="start" side="bottom" sideOffset={2} collisionPadding={12} className="watchlist-menu" aria-label={`${symbol} actions`}>
+        <div className="watchlist-menu-label">{symbol}</div>
+        <FlagSwatches flag={flag} onFlag={color => { onFlag(color); onClose(); }} />
+        <div className="watchlist-menu-divider" />
+        {inList && <>
+          <button type="button" className="watchlist-menu-row" onClick={act(() => onMove('top'))}><ArrowUp size={13} /><span className="watchlist-menu-name">Move to top</span></button>
+          <button type="button" className="watchlist-menu-row" onClick={act(() => onMove('bottom'))}><ArrowDown size={13} /><span className="watchlist-menu-name">Move to bottom</span></button>
+        </>}
+        {otherLists.length > 0 && <>
+          <div className="watchlist-menu-label">Add to list</div>
+          {otherLists.map(list => <button key={list.id} type="button" className="watchlist-menu-row" disabled={list.items.includes(symbol)} onClick={act(() => onCopy(list.id))}>
+            <span className="watchlist-menu-check">{list.items.includes(symbol) && <Check size={13} />}</span>
+            <span className="watchlist-menu-name">{list.name}</span>
+          </button>)}
+        </>}
+        <div className="watchlist-menu-divider" />
+        <button type="button" className="watchlist-menu-row is-danger" onClick={act(onRemove)}>
+          <Trash2 size={13} /><span className="watchlist-menu-name">{inList ? 'Remove from list' : 'Remove flag'}</span>
+        </button>
+      </Popover.Content>
+    </Popover.Portal>
+  </Popover.Root>;
+}

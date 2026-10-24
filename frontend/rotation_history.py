@@ -9,6 +9,8 @@ Values are delta-coded natural logs scaled by 10,000 (0.01% resolution), which g
 Stocks are split into a core shard (the broad index) and the rest, so most views load one small file.
 """
 from datetime import date
+from array import array
+from bisect import bisect_left
 import gzip
 import hashlib
 import json
@@ -59,7 +61,7 @@ def aligned(points, dates):
     for day in dates:
         while cursor < len(points) and points[cursor][0] <= day:
             close = points[cursor][1]
-            if close is not None and close > 0 and math.isfinite(close):
+            if close is None or (close > 0 and math.isfinite(close)):
                 last = close
             cursor += 1
         values.append(last)
@@ -73,10 +75,36 @@ def encode(values):
         return None
     coded, previous = [start], None
     for value in values[start:]:
-        current = round(math.log(value) * SCALE) if value is not None else previous
+        if value is None:
+            coded.append(None)  # Explicit missing coverage, not a flat return.
+            continue
+        current = round(math.log(value) * SCALE)
         coded.append(current if previous is None else current - previous)
         previous = current
     return coded
+
+
+def accumulate(total, count, closes, ranges):
+    for start, end in ranges:
+        for index in range(max(1, start), min(end, len(total))):
+            close, previous = closes[index], closes[index - 1]
+            if close is not None and previous is not None:
+                total[index] += min(max(close / previous - 1, MAX_DAILY_RETURN[0]), MAX_DAILY_RETURN[1])
+                count[index] += 1
+
+
+def chain(total, count):
+    levels, level, started = [], 100.0, False
+    for index in range(len(total)):
+        if count[index] < MIN_MEMBERS:
+            levels.append(None)
+            started = False  # Resume at the retained level; never bridge an uncovered return.
+            continue
+        if started:
+            level *= 1 + total[index] / count[index]
+        started = True
+        levels.append(level)
+    return levels
 
 
 def composite(members, length):
@@ -85,22 +113,10 @@ def composite(members, length):
     members: (closes, spans) pairs, where spans are the [start, end) calendar ranges in which the stock
     belonged to the group. A stock counts only on days it was a member, so membership can change over time.
     """
-    total, count = [0.0] * length, [0] * length
-    for closes, spans in members:
-        for start, end in spans:
-            for index in range(max(1, start), min(end, length)):
-                close, previous = closes[index], closes[index - 1]
-                if close is not None and previous is not None:
-                    total[index] += min(max(close / previous - 1, MAX_DAILY_RETURN[0]), MAX_DAILY_RETURN[1])
-                    count[index] += 1
-    levels, level, started = [], 100.0, False
-    for index in range(length):
-        if started and count[index]:
-            level *= 1 + total[index] / count[index]
-        # The group starts at 100 on the first day enough members trade; earlier returns do not count.
-        started = started or count[index] >= MIN_MEMBERS
-        levels.append(level if started else None)
-    return levels
+    total, count = array('d', [0]) * length, array('I', [0]) * length
+    for closes, ranges in members:
+        accumulate(total, count, closes, ranges)
+    return chain(total, count)
 
 
 IGNORED_LABELS = ('unclassified', 'others', 'other', 'n/a')
@@ -114,12 +130,13 @@ def labels_of(row, taxonomy):
     return [label if label and label.lower() not in IGNORED_LABELS else None for label in cleaned]
 
 
-def record_memberships(ledger, session, labels):
+def record_memberships(ledger, session, labels, eligibility=None):
     """Append today's labels for every stock whose labels changed. The ledger only grows, by date."""
     if not isinstance(ledger, dict) or ledger.get('version') != 1 or list(ledger.get('levels', [])) != list(LEVELS):
         ledger = {'version': 1, 'levels': list(LEVELS), 'records': {}}
     records = ledger['records']
-    for symbol, current in labels.items():
+    for symbol in sorted(set(records) | set(labels)):
+        current = labels.get(symbol, [None] * len(LEVELS))
         history = records.setdefault(symbol, [])
         if history and history[-1][0] > session:
             raise ValueError('Membership ledger is ahead of this session')
@@ -128,6 +145,18 @@ def record_memberships(ledger, session, labels):
                 history[-1] = [session, current]
             else:
                 history.append([session, current])
+    if eligibility is not None:
+        eligible = ledger.setdefault('eligibility', {})
+        for symbol in records:
+            current = bool(eligibility.get(symbol, False))
+            history = eligible.setdefault(symbol, [])
+            if history and history[-1][0] > session:
+                raise ValueError('Eligibility ledger is ahead of this session')
+            if not history or history[-1][1] != current:
+                if history and history[-1][0] == session:
+                    history[-1] = [session, current]
+                else:
+                    history.append([session, current])
     return ledger
 
 
@@ -136,13 +165,17 @@ def spans(history, days, level):
     if not history:
         return {}
     out = {}
-    starts = [0] + [next((i for i, day in enumerate(days) if day >= date), len(days)) for date, _ in history[1:]]
+    starts = [0] + [bisect_left(days, day) for day, _ in history[1:]]
     ends = starts[1:] + [len(days)]
     for (_, labels), start, end in zip(history, starts, ends):
         label = labels[level]
         if label and end > start:
             out.setdefault(label, []).append((start, end))
     return out
+
+
+def intersect(left, right):
+    return [(max(a, c), min(b, d)) for a, b in left for c, d in right if max(a, c) < min(b, d)]
 
 
 def number(value):
@@ -161,7 +194,7 @@ def group_eligible(row):
 def build(session, rows, closes, benchmarks, taxonomy, ledger=None):
     """Rotation history objects for one release.
 
-    rows: published stock rows; closes: {symbol: [(date, close), ...]} ascending; benchmarks: {'N50': [...],
+    rows: published stock rows; closes: a symbol loader or {symbol: [(date, close), ...]} ascending; benchmarks: {'N50': [...],
     'N500': [...]} in the same form; taxonomy: {symbol: {'theme', 'subIndustry', 'block', 'macro'}};
     ledger: the dated membership ledger from earlier runs (None to start one).
     Returns (index, shards, ledger): shards maps a shard name to its payload; ledger includes today.
@@ -176,11 +209,37 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None):
     def series(points):
         return {frame: encode(aligned(points, dates)) for frame, dates in frames.items()}
 
-    stocks, shards = [], {'core': {frame: {} for frame in frames}, 'rest': {frame: {} for frame in frames}}
-    for row in sorted(rows, key=lambda item: item['symbol']):
-        symbol = row['symbol']
-        points = closes.get(symbol) or []
+    rows_by_symbol = {row['symbol']: row for row in rows}
+    today = {symbol: labels_of(row, taxonomy) for symbol, row in rows_by_symbol.items()}
+    ledger = record_memberships(ledger, session, today,
+                                {symbol: group_eligible(row) for symbol, row in rows_by_symbol.items()})
+    stocks, shards = [], {name: {frame: {} for frame in frames} for name in ('core', 'rest', 'groups')}
+    members, sums = {}, {}
+    length = len(composite_days)
+
+    def add(key, values, ranges):
+        if not ranges:
+            return
+        if key not in sums:
+            sums[key] = (array('d', [0]) * length, array('I', [0]) * length)
+        accumulate(*sums[key], values, ranges)
+
+    # One symbol's raw prices at a time. Historical constituents remain in the ledger after removal.
+    for symbol, history in sorted(ledger['records'].items()):
+        points = (closes(symbol) if callable(closes) else closes.get(symbol)) or []
         if not points:
+            continue
+        allowed = spans([(day, [eligible]) for day, eligible in ledger['eligibility'][symbol]], composite_days, 0).get(True, [])
+        values = aligned(points, composite_days)
+        add('EW', values, allowed)
+        for position, level in enumerate(LEVELS):
+            for label, ranges in spans(history, composite_days, position).items():
+                key = f'{level}:{label}'
+                add(key, values, intersect(ranges, allowed))
+                if symbol in today and today[symbol][position] == label and ledger['eligibility'][symbol][-1][1]:
+                    members.setdefault(key, []).append(symbol)
+        row = rows_by_symbol.get(symbol)
+        if row is None:
             continue
         memberships = set(row.get('indexMemberships') or [])
         universes = [code for code, name in UNIVERSES.items() if name in memberships]
@@ -202,40 +261,20 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None):
             entry['b'] = str(row['circuitLimit'])
         stocks.append(entry)
 
-    # Group membership is point in time: the ledger records each stock's labels by date, and a stock counts
-    # towards a group only on the days it belonged. Before the ledger began, the earliest known labels apply.
-    today = {row['symbol']: labels_of(row, taxonomy) for row in rows if row['symbol'] in closes}
-    ledger = record_memberships(ledger, session, today)
-    eligible = sorted(row['symbol'] for row in rows if group_eligible(row) and row['symbol'] in closes)
-    members = {level: {} for level in LEVELS}
-    for symbol in eligible:
-        for position, level in enumerate(LEVELS):
-            if today[symbol][position]:
-                members[level].setdefault(today[symbol][position], []).append(symbol)
-    daily_closes = {symbol: aligned(closes[symbol], composite_days) for symbol in eligible}
-    groups, shards['groups'] = [], {frame: {} for frame in frames}
-    if len(eligible) >= MIN_MEMBERS:
-        levels = composite([(daily_closes[symbol], [(0, len(composite_days))]) for symbol in eligible], len(composite_days))
-        benchmarks = dict(benchmarks, EW=[(day, value) for day, value in zip(composite_days, levels) if value is not None])
-    history_spans = {symbol: [spans(ledger['records'].get(symbol, []), composite_days, position) for position in range(len(LEVELS))]
-                     for symbol in eligible}
-    for position, level in enumerate(LEVELS):
-        by_label = {}
-        for symbol in eligible:
-            for label, ranges in history_spans[symbol][position].items():
-                by_label.setdefault(label, []).append((daily_closes[symbol], ranges))
-        for label, symbols in sorted(members[level].items()):
-            if len(symbols) < MIN_MEMBERS:
-                continue
-            levels = composite(by_label.get(label, []), len(composite_days))
-            points = [(day, value) for day, value in zip(composite_days, levels) if value is not None]
-            if not points:
-                continue
-            key = f'{level}:{label}'
-            for frame, coded in series(points).items():
-                if coded is not None:
-                    shards['groups'][frame][key] = coded
-            groups.append({'id': key, 'l': level, 'n': label, 'm': sorted(symbols)})
+    groups = []
+    for key, (total, count) in sorted(sums.items()):
+        levels = chain(total, count)
+        if not any(value is not None for value in levels):
+            continue
+        points = list(zip(composite_days, levels))
+        if key == 'EW':
+            benchmarks = dict(benchmarks, EW=points)
+            continue
+        for frame, coded in series(points).items():
+            if coded is not None:
+                shards['groups'][frame][key] = coded
+        level, label = key.split(':', 1)
+        groups.append({'id': key, 'l': level, 'n': label, 'm': sorted(members.get(key, []))})
 
     index = {
         'schemaVersion': SCHEMA_VERSION, 'asOfDate': session, 'scale': SCALE,

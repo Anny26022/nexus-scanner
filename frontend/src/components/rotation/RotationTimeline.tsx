@@ -31,7 +31,12 @@ export function RotationTimeline({dates, closes, start, end, cursor, tail, bread
   const low = Math.min(...values), high = Math.max(...values);
   const y = (value: number) => 2 + (1 - (value - low) / Math.max(1e-9, high - low)) * (LINE - 4);
   let path = '';
-  for (let i = start; i <= end; i++) if (Number.isFinite(closes[i])) path += `${path ? 'L' : 'M'}${x(i).toFixed(1)},${y(closes[i]).toFixed(1)}`;
+  let connected = false;
+  for (let i = start; i <= end; i++) {
+    if (!Number.isFinite(closes[i])) { connected = false; continue; }
+    path += `${connected ? 'L' : 'M'}${x(i).toFixed(1)},${y(closes[i]).toFixed(1)}`;
+    connected = true;
+  }
 
   // Stacked shares, leading at the top so the ribbon reads like the chart's upper-right corner.
   const order: Quadrant[] = ['leading', 'improving', 'weakening', 'lagging'];

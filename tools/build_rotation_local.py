@@ -44,7 +44,8 @@ def main():
     rows = json.loads(gzip.decompress((generation / 'stocks.json.gz').read_bytes()))['stocks']
     taxonomy = json.loads(gzip.decompress((generation / 'theme-classification.json.gz').read_bytes()))['records']
     started = time.perf_counter()
-    stock_closes = {row['symbol']: closes(PIPELINE / 'ohlcv_data' / f"{row['symbol']}.csv", session) for row in rows}
+    def stock_closes(symbol):
+        return closes(PIPELINE / 'ohlcv_data' / f'{symbol}.csv', session)
     benchmarks = {code: closes(PIPELINE / 'indices_ohlcv_data' / f'{safe_symbol(symbol)}.csv', session)
                   for code, symbol in rotation_history.BENCHMARK_INDICES.items()}
     missing = sorted(code for code, points in benchmarks.items() if not points)

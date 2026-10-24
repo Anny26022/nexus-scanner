@@ -1,4 +1,5 @@
 import { CandlestickChart, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 import type { RotationItem } from '../../api/rotation';
 import { QUADRANTS, type Quadrant, type RotationPoint } from '../../utils/rrg';
 import { Button } from '../Button';
@@ -16,6 +17,7 @@ export interface TrackerRow {
 export type TrackerSort = 'quadrant' | 'moved' | 'ratio' | 'momentum' | 'name';
 
 const LABEL: Record<Quadrant, string> = {leading: 'Leading', weakening: 'Weakening', lagging: 'Lagging', improving: 'Improving'};
+const PAGE_SIZE = 50;
 
 /** The item's trail as a tiny rotation chart on the same scale as the main one. */
 function Spark({trail, quadrant, half}: {trail: RotationPoint[]; quadrant: Quadrant; half: {x: number; y: number}}) {
@@ -42,11 +44,15 @@ interface Props {
 
 /** Every item ranked by where it sits and how far it moved, grouped by quadrant. */
 export function RotationTracker({rows, half, sort, onSort, onOpen, onShow}: Props) {
+  const [pageChoice, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const page = Math.min(pageChoice, pages - 1), from = page * PAGE_SIZE;
+  const visible = rows.slice(from, from + PAGE_SIZE);
   const peak = Math.max(1e-9, ...rows.map(row => row.moved));
   const header = (key: TrackerSort, label: string, className = '') => <button type="button" className={`rot-th ${className}`}
     aria-pressed={sort === key} onClick={() => onSort(key)}>{label}</button>;
-  const sections = sort === 'quadrant' ? QUADRANTS.map(quadrant => [quadrant, rows.filter(row => row.quadrant === quadrant)] as const)
-    : [[null, rows] as const];
+  const sections = sort === 'quadrant' ? QUADRANTS.map(quadrant => [quadrant, visible.filter(row => row.quadrant === quadrant)] as const)
+    : [[null, visible] as const];
   return <div className="rot-tracker">
     <div className="rot-trow is-head">
       <span>#</span>{header('name', 'Name')}{header('quadrant', 'Quadrant')}<span>Trail</span><span>Heading</span>
@@ -54,8 +60,8 @@ export function RotationTracker({rows, half, sort, onSort, onOpen, onShow}: Prop
     </div>
     {sections.map(([quadrant, list]) => list.length > 0 && <section key={quadrant ?? 'all'} className="rot-tsection">
       {quadrant && <h3 data-quadrant={quadrant}><i />{LABEL[quadrant]}<span>{list.length}</span></h3>}
-      {list.map((row, rank) => <div key={row.item.id} className="rot-trow" data-quadrant={row.quadrant}>
-        <span className="rot-rank">{rank + 1}</span>
+      {list.map(row => <div key={row.item.id} className="rot-trow" data-quadrant={row.quadrant}>
+        <span className="rot-rank">{from + visible.indexOf(row) + 1}</span>
         <button type="button" className="rot-name" onClick={() => onShow(row.item.id)} title="Show on chart">
           <b>{row.item.label}</b><span>{row.item.detail}</span>
         </button>
@@ -72,6 +78,11 @@ export function RotationTracker({rows, half, sort, onSort, onOpen, onShow}: Prop
         </Button>
       </div>)}
     </section>)}
+    {pages > 1 && <nav className="rot-pagination" aria-label="Tracker pages">
+      <Button variant="ghost" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</Button>
+      <span role="status">{from + 1}–{Math.min(from + PAGE_SIZE, rows.length)} of {rows.length}</span>
+      <Button variant="ghost" disabled={page === pages - 1} onClick={() => setPage(page + 1)}>Next</Button>
+    </nav>}
     {!rows.length && <p className="rot-state">Nothing matches.</p>}
   </div>;
 }

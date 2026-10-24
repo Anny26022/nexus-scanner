@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bounds, heading, quadrantOf, rotation } from '../utils/rrg';
+import { bounds, fitSelection, heading, quadrantOf, rotation } from '../utils/rrg';
 import { decode, displayLabel, itemsFor, rangeLength, type RotationIndex } from '../api/rotation';
 
 const index = {
@@ -13,6 +13,15 @@ const index = {
 } as RotationIndex;
 
 describe('rotation maths', () => {
+  it('fits the selected outlier path and restarts warm-up after missing coverage', () => {
+    expect(fitSelection({x: 2, y: 1}, [NaN, 160, 101], [NaN, 80, 101], 0, 2)).toEqual({x: 69, y: 23});
+    const price = Array.from({length: 90}, () => 100);
+    price[45] = NaN;
+    const {ratio, momentum} = rotation(price, Array.from({length: 90}, () => 100));
+    expect(Number.isNaN(ratio[46])).toBe(true);
+    expect(Number.isNaN(momentum[70])).toBe(true);
+    expect(momentum[89]).toBe(100);
+  });
   it('rotates from leading into weakening once outperformance fades', () => {
     const benchmark = Array.from({length: 120}, () => 100);
     // Flat, a steady climb against the benchmark, then flat again at the higher level.
@@ -43,6 +52,12 @@ describe('rotation maths', () => {
 });
 
 describe('rotation history', () => {
+  it('preserves missing composite periods through decoding', () => {
+    const values = decode([0, 46052, null, 953], 3, 10_000);
+    expect(values[0]).toBeCloseTo(100, 1);
+    expect(Number.isNaN(values[1])).toBe(true);
+    expect(values[2]).toBeCloseTo(110, 1);
+  });
   it('decodes delta-coded logs with an offset', () => {
     const values = decode([1, 46052, 0, 953], 4, 10_000);
     expect(Number.isNaN(values[0])).toBe(true);

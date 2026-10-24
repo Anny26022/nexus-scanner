@@ -56,13 +56,12 @@ def rotation_history_object(root, cache, rows, taxonomy, source_bytes, session, 
     """Write the Rotation page's price history into the release objects; returns its index hash."""
     # The longest view (ten years of months plus lookback) never needs more than about thirteen years.
     since = f'{int(session[:4]) - 13}{session[4:]}'
-    closes = {}
-    for row in rows:
-        frame = cache.frame(root, row['symbol'], session)
+    def closes(symbol):
+        frame = cache.frame(root, symbol, session)
         if frame is None or frame.empty:
-            continue
+            return []
         frame = frame.loc[frame['Date'] >= since]
-        closes[row['symbol']] = list(zip(frame['Date'].dt.strftime('%Y-%m-%d'), frame['Close'].astype(float)))
+        return list(zip(frame['Date'].dt.strftime('%Y-%m-%d'), frame['Close'].astype(float)))
     from fetch_indices_ohlcv import get_safe_sym  # The index fetcher's own file naming.
     benchmarks = {code: index_closes(root, source_bytes, symbol, session, csv_name=get_safe_sym(symbol))[0]
                   for code, symbol in rotation_history.BENCHMARK_INDICES.items()}
@@ -326,6 +325,16 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = elapsed('stock metrics and presets', started)
     cache.save_frames(root)
     started = elapsed('history packing', started)
+    published_rows = public(rows)
+    taxonomy = public(classify(published_rows, session))
+    rotation_hash = None
+    if include_charts:
+        try:
+            rotation_hash = rotation_history_object(
+                root, cache, published_rows, taxonomy, source_bytes, session, chart_root / 'rotation')
+        except (ValueError, KeyError, TypeError, OSError, RuntimeError) as error:
+            print(f'WARNING: rotation history unavailable for {session}: {error}', flush=True)
+        started = elapsed('rotation history', started)
     code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH,Path(__file__).with_name('theme_classification.py'),THEME_SOURCE_PATH,THEME_WEB_OVERRIDES_PATH,Path(__file__).parent/'src/data/presetEligibility.json']
     code_files.append(resource_path('taxonomy_overrides.json'))
     code_files.append(resource_path('stockscans_classification.json'))
@@ -337,6 +346,8 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     for file in code_files:
         digest.update(file.name.encode()); digest.update(file.read_bytes())
     digest.update(b'charts-enabled' if include_charts else b'scanner-only')
+    # The output hash covers dated eligibility, membership and benchmark inputs as well as prices.
+    digest.update((rotation_hash or 'no-rotation').encode())
     for file in sorted(chart_root.glob('*.json*')) if include_charts else []:
         digest.update(file.name.encode()); digest.update(file.read_bytes())
     packed=root/'.scanner_cache/history.npz'
@@ -349,7 +360,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         raise RuntimeError('Source data changed during snapshot publication; previous revision remains active. Retry publication.')
     digest.update(json.dumps(rows,sort_keys=True,separators=(',',':')).encode())
     revision=digest.hexdigest()
-    rows=public(rows)
+    rows=published_rows
     etf_source = source_bytes.get('etf_snapshot.json.gz')
     etf_bytes = None
     if etf_source:
@@ -383,7 +394,6 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'technicalMetricsVersion':1,'referenceCounts':{'rvol15Sma50':default_count}}
     payload['extendedMetricsVersion'] = 1
     payload['presetRuleMatchesVersion'] = 1
-    taxonomy = public(classify(rows, session))
     taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
     (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
     write_json(generation/'universe-classification.json', consolidated_classification(rows, taxonomy))
@@ -469,15 +479,8 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = elapsed('serialization and compression', started)
     if etf_bytes is not None:
         manifest['etfDatasetUrl'] = f'/data/revisions/{revision}/etfs.json.gz'
-    if include_charts:
-        started = time.perf_counter()
-        try:
-            manifest['rotationHistoryObject'] = rotation_history_object(
-                root, cache, rows, taxonomy, source_bytes, session, chart_root / 'rotation')
-        except (ValueError, KeyError, OSError) as error:
-            # Optional: the scanner release must not fail because the rotation view cannot be built.
-            print(f'WARNING: rotation history unavailable for {session}: {error}', flush=True)
-        elapsed('rotation history', started)
+    if rotation_hash:
+        manifest['rotationHistoryObject'] = rotation_hash
     session_record = archive_daily_snapshot(output, manifest)
     manifest = offload_plain_snapshot(output, manifest)
     current_path = output / 'current.json'

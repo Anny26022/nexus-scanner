@@ -175,7 +175,7 @@ export function RotationPlot(props: Props) {
         let started = false;
         for (let i = props.rangeStart; i <= Math.floor(index); i++) {
           const point = at(focused.track, i);
-          if (!point) continue;
+          if (!point) { started = false; continue; }
           if (started) ctx.lineTo(px(point.x), py(point.y)); else { ctx.moveTo(px(point.x), py(point.y)); started = true; }
         }
         ctx.stroke();

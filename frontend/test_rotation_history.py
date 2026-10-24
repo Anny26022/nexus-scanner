@@ -5,6 +5,8 @@ import math
 from pathlib import Path
 import tempfile
 import unittest
+from copy import deepcopy
+import weakref
 
 import rotation_history as rh
 
@@ -27,6 +29,25 @@ def decode(coded):
 
 
 class RotationHistoryTests(unittest.TestCase):
+    def test_symbol_loader_does_not_retain_raw_histories(self):
+        class Prices(list):
+            pass
+        days = sessions(340)
+        benchmark = [(day, 100.) for day in days]
+        rows = [{'symbol': f'S{i}', 'sector': 'Banks', 'marketCapCrore': 1000,
+                 'metrics': {'turnover30': 5}} for i in range(20)]
+        references = []
+
+        def load(symbol):
+            self.assertLessEqual(sum(ref() is not None for ref in references), 1)
+            values = Prices((day, 100.) for day in days)
+            references.append(weakref.ref(values))
+            return values
+
+        index, _, _ = rh.build(days[-1], rows, load, {'N50': benchmark}, {})
+        self.assertEqual(len(index['stocks']), len(rows))
+        self.assertFalse(any(ref() is not None for ref in references))
+
     def test_calendars_close_each_week_and_month_on_its_last_session(self):
         frames = rh.calendars(['2026-09-28', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-05'])
         self.assertEqual(frames['W'], ['2026-10-02', '2026-10-05'])
@@ -56,6 +77,39 @@ class RotationHistoryTests(unittest.TestCase):
         levels = rh.composite(members, len(days))
         self.assertAlmostEqual(levels[1], 100.0)
         self.assertAlmostEqual(levels[2], 100.0 * (1 + 0.1 / 4))
+
+    def test_coverage_gaps_are_not_flat_returns_or_single_stock_indices(self):
+        full = [(0, 6)]
+        levels = rh.composite([
+            ([100., 100., 110., 121., 133.1, 146.41], full),
+            ([100.] * 6, [(0, 2), (4, 6)]), ([100.] * 6, [(0, 2), (4, 6)]),
+        ], 6)
+        self.assertEqual(levels[:5], [None, 100., None, None, 100.])
+        self.assertAlmostEqual(levels[5], 100 * (1 + .1 / 3))
+        coded = rh.encode(levels)
+        self.assertEqual(coded[2:4], [None, None])
+        self.assertEqual(rh.aligned([('a', 100.), ('b', None), ('c', 110.)], ['a', 'b', 'c']), [100., None, 110.])
+
+    def test_liquidity_changes_and_removals_preserve_prior_group_and_benchmark(self):
+        days = sessions(360)
+        flat = [(day, 100.) for day in days]
+        rows = [{'symbol': symbol, 'sector': 'Banks', 'marketCapCrore': 1000,
+                 'metrics': {'turnover30': 5}} for symbol in ('A', 'B', 'C', 'D')]
+        prices = {row['symbol']: flat for row in rows}
+        prices['D'] = [(day, 100 * 1.002 ** i) for i, day in enumerate(days)]
+        first, shards, ledger = rh.build(days[-2], rows, prices.get, {'N50': flat}, {})
+        for removed in (False, True):
+            changed = deepcopy(rows)
+            if removed:
+                changed.pop()
+            else:
+                changed[-1]['metrics']['turnover30'] = .5
+            second, newer, _ = rh.build(days[-1], changed, prices.get, {'N50': flat}, {}, deepcopy(ledger))
+            for old, new in [(shards['groups']['D']['sector:Banks'], newer['groups']['D']['sector:Banks']),
+                             (first['benchmarks']['EW']['series']['D'], second['benchmarks']['EW']['series']['D'])]:
+                a, b = decode(old)[1], decode(new)[1]
+                self.assertAlmostEqual(a[-1], b[-2], places=7)
+            self.assertEqual(next(group for group in second['groups'] if group['id'] == 'sector:Banks')['m'], ['A', 'B', 'C'])
 
     def test_ledger_records_only_changes_and_maps_dates_to_spans(self):
         ledger = rh.record_memberships(None, '2026-10-01', {'A': ['Banks', None, None, 'Lending', None, None]})

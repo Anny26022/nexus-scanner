@@ -8,7 +8,7 @@ export type RotationShardName = 'core' | 'rest' | 'groups';
 export const LEVELS = ['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const;
 export type Level = typeof LEVELS[number];
 /** Delta-coded natural logs: [offset into the calendar, first value, deltas…], scaled by `scale`. */
-type Coded = number[];
+type Coded = [number, ...(number | null)[]];
 
 export interface RotationIndex {
   schemaVersion: 1;
@@ -66,7 +66,9 @@ export function decode(coded: Coded | null | undefined, length: number, scale: n
   if (!coded || coded.length < 2) return values;
   let level = 0;
   for (let i = 1; i < coded.length; i++) {
-    level = i === 1 ? coded[1] : level + coded[i];
+    const value = coded[i];
+    if (value === null) continue;
+    level = i === 1 ? value : level + value;
     const at = coded[0] + i - 1;
     if (at < length) values[at] = Math.exp(level / scale);
   }

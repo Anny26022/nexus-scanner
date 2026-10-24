@@ -379,9 +379,10 @@ class R2Store:
 
     def upload_rotation(self, source):
         """Rotation history goes under daily/, where the bucket's lifecycle rule expires it after 90 days."""
-        self.run('copy', str(source), self.remote(ROTATION_PREFIX), '--include', '*.json.gz', '--immutable', '--checksum',
+        # Four small objects: use the bounded transport, not the bulk upload's 45-minute timeout.
+        self.cache_command('copy', str(source), self.remote(ROTATION_PREFIX), '--include', '*.json.gz', '--immutable', '--checksum',
                  '--metadata', '--metadata-set', 'content-type=application/gzip')
-        self.run('check', str(source), self.remote(ROTATION_PREFIX), '--include', '*.json.gz', '--one-way', '--download', '--checkers', '4')
+        self.cache_command('check', str(source), self.remote(ROTATION_PREFIX), '--include', '*.json.gz', '--one-way', '--download', '--checkers', '4')
 
     def write_release(self, manifest, key):
         with tempfile.TemporaryDirectory() as folder:
@@ -459,6 +460,7 @@ def complete_object_release(chart_root, output, manifest, store=None):
     manifest = dict(manifest, schemaVersion=7, chartRevision=revision)
     manifest.pop('verifiedObjectsSha256', None)
     existing_path = output / 'revisions' / manifest['revision'] / 'release.json'
+    existing = None
     if existing_path.exists():
         existing = json.loads(existing_path.read_text())
         if existing.get('chartRevision') != revision:
@@ -467,6 +469,11 @@ def complete_object_release(chart_root, output, manifest, store=None):
             manifest['publishedAt'] = existing['publishedAt']
         if existing.get('verifiedObjectsSha256'):
             manifest['verifiedObjectsSha256'] = existing['verifiedObjectsSha256']
+        # A retry cannot change the optional feature binding of an immutable release.
+        for key in ('rotationHistoryObject', 'rotationUrlTemplate'):
+            manifest.pop(key, None)
+            if key in existing:
+                manifest[key] = existing[key]
     if store is None and os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':
         store = R2Store()
     started = time.perf_counter()
@@ -481,9 +488,16 @@ def complete_object_release(chart_root, output, manifest, store=None):
         verified = store.load_inventory(previous)
         files = store.upload_objects(chart_root / 'objects', verified)
         rotation = chart_root / 'rotation'
-        if manifest.get('rotationHistoryObject') and rotation.is_dir():
-            store.upload_rotation(rotation)
-            manifest['rotationUrlTemplate'] = f'{base}/{ROTATION_PREFIX}/{{hash}}.json.gz'
+        if existing is None and manifest.get('rotationHistoryObject'):
+            try:
+                if not rotation.is_dir():
+                    raise OSError('Missing rotation objects')
+                store.upload_rotation(rotation)
+                manifest['rotationUrlTemplate'] = f'{base}/{ROTATION_PREFIX}/{{hash}}.json.gz'
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
+                print(f'WARNING: rotation upload unavailable; publishing scanner without rotation: {error}', flush=True)
+                manifest.pop('rotationHistoryObject', None)
+                manifest.pop('rotationUrlTemplate', None)
         print(f'Object upload and verification elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         manifest['publishedAt'] = manifest['sessionDate'] + 'T00:00:00Z'
         manifest['dataIndexUrl'] = f"{base}/releases/{manifest['revision']}/index.json"
@@ -508,11 +522,18 @@ def complete_object_release(chart_root, output, manifest, store=None):
         manifest['dataIndexUrl'] = f"/data/revisions/{manifest['revision']}/data-index.json"
         manifest['objectUrlTemplate'] = '/data/objects/{hash}.json.gz'
         rotation = chart_root / 'rotation'
-        if manifest.get('rotationHistoryObject') and rotation.is_dir():
-            (output / 'rotation').mkdir(exist_ok=True)
-            for file in rotation.glob('*.json.gz'):
-                shutil.copyfile(file, output / 'rotation' / file.name)
-            manifest['rotationUrlTemplate'] = '/data/rotation/{hash}.json.gz'
+        if existing is None and manifest.get('rotationHistoryObject'):
+            try:
+                if not rotation.is_dir():
+                    raise OSError('Missing rotation objects')
+                (output / 'rotation').mkdir(exist_ok=True)
+                for file in rotation.glob('*.json.gz'):
+                    shutil.copyfile(file, output / 'rotation' / file.name)
+                manifest['rotationUrlTemplate'] = '/data/rotation/{hash}.json.gz'
+            except OSError as error:
+                print(f'WARNING: local rotation unavailable; publishing scanner without rotation: {error}', flush=True)
+                manifest.pop('rotationHistoryObject', None)
+                manifest.pop('rotationUrlTemplate', None)
     write_json(output / 'revisions' / manifest['revision'] / 'data-index.json', index)
     write_json(existing_path, manifest)
     write_json(output / 'current.json', manifest)

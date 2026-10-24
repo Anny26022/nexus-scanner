@@ -8,7 +8,7 @@ import {
 import { screenerApi } from '../api/screenerApi';
 import { activeList, loadWatchlistStore } from '../chart/watchlists';
 import { useMountEffect } from '../hooks/useMountEffect';
-import { bounds, QUADRANTS, quadrantOf, type Quadrant } from '../utils/rrg';
+import { bounds, fitSelection, QUADRANTS, quadrantOf, type Quadrant } from '../utils/rrg';
 import { Button } from './Button';
 import { NO_FILTERS, RotationFilters, passes, type LiquidityFilters } from './rotation/RotationFilters';
 import { RotationList, type ListRow } from './rotation/RotationList';
@@ -116,8 +116,11 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
     for (const track of allTracks) for (let i = Math.max(0, start - tail); i <= end; i += stride) {
       if (Number.isFinite(track.ratio[i]) && Number.isFinite(track.momentum[i])) points.push({x: track.ratio[i], y: track.momentum[i]});
     }
-    return bounds(points);
-  }, [allTracks, start, end, tail]);
+    const reach = bounds(points);
+    // Keep the robust overview scale, but always fit a selected item's replay path.
+    const focused = allTracks.find(track => track.item.id === focusId);
+    return focused ? fitSelection(reach, focused.ratio, focused.momentum, start - tail, end) : reach;
+  }, [allTracks, start, end, tail, focusId]);
   const breadth = useMemo(() => Array.from({length: Math.max(0, end - start + 1)}, (_, k) => {
     const counts: Record<Quadrant, number> = {leading: 0, weakening: 0, lagging: 0, improving: 0};
     for (const track of allTracks) {
@@ -149,7 +152,7 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
   const peak = Math.max(1e-9, ...moved.values());
   const emphasis = new Map([...moved].map(([id, value]) => [id, (value / peak) ** 0.75]));
   const labelled = new Set([...moved].sort((a, b) => b[1] - a[1]).slice(0, LABELLED).map(([id]) => id));
-  // Where money is flowing: RS-Ratio rising (gaining relative strength) or falling over the trail.
+  // Change in relative strength over the trail; this is not a capital-flow measure.
   const flow = live.map(track => {
     let from = Math.max(0, cursor - tail);
     while (from < cursor && !Number.isFinite(track.ratio[from])) from++;
@@ -299,7 +302,7 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
           {view === 'tracker' && search}
         </div>
         {ready && (flowingIn.length > 0 || flowingOut.length > 0) && <div className="rot-flow" aria-label={`Flow over the last ${tail}${unit}`}>
-          {([['in', 'Money flowing in', flowingIn], ['out', 'Flowing out', flowingOut]] as const).map(([side, title, list]) => list.length > 0 &&
+          {([['in', 'Gaining relative strength', flowingIn], ['out', 'Losing relative strength', flowingOut]] as const).map(([side, title, list]) => list.length > 0 &&
             <div key={side} className="rot-flow-side" data-side={side}>
               <span>{title}<small> · {tail}{unit}</small></span>
               {list.map(({track}) => <button key={track.item.id} type="button" data-quadrant={quadrantOf(at(track))}
@@ -312,7 +315,7 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
             focusId={focusId} onHover={setHover} onSelect={setFocus} dateLabel={dateLabel}
             onOpen={id => { const item = allTracks.find(track => track.item.id === id)?.item; if (item) open(item); }} />}
         </section> : <section className="rot-stage is-table" aria-label="Rotation tracker">
-          {state ?? <RotationTracker rows={rows} half={half} sort={sort} onSort={setSort} onOpen={open}
+          {state ?? <RotationTracker key={`${universeKey(universe)}:${sort}:${query}:${quadrant}`} rows={rows} half={half} sort={sort} onSort={setSort} onOpen={open}
             onShow={id => { setView('chart'); setFocus(id); }} />}
         </section>}
         {ready && <footer className="rot-dock">

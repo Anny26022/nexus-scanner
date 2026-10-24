@@ -23,7 +23,7 @@ function ema(values: ArrayLike<number>, period: number, settle = period): Float6
   let level = NaN, seen = 0;
   for (let i = 0; i < values.length; i++) {
     const value = values[i];
-    if (!Number.isFinite(value)) { if (seen) out[i] = NaN; continue; }
+    if (!Number.isFinite(value)) { level = NaN; seen = 0; continue; }
     level = seen ? level + alpha * (value - level) : value;
     seen++;
     if (seen >= settle) out[i] = level;
@@ -64,6 +64,16 @@ export function bounds(points: readonly RotationPoint[], minimum = 0.25): {x: nu
     return sorted.length ? Math.max(minimum, sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.98))] * 1.15) : minimum * 4;
   };
   return {x: reach(points.map(point => point.x)), y: reach(points.map(point => point.y))};
+}
+
+/** Fit the selected replay path without allowing unselected outliers to compress the overview. */
+export function fitSelection(half: {x: number; y: number}, ratio: ArrayLike<number>, momentum: ArrayLike<number>, start: number, end: number) {
+  const reach = {...half};
+  for (let i = Math.max(0, start); i <= end; i++) {
+    if (Number.isFinite(ratio[i])) reach.x = Math.max(reach.x, Math.abs(ratio[i] - 100) * 1.15);
+    if (Number.isFinite(momentum[i])) reach.y = Math.max(reach.y, Math.abs(momentum[i] - 100) * 1.15);
+  }
+  return reach;
 }
 
 /** Point on the straight path between two observations, for smooth replay between periods. */

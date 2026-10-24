@@ -39,7 +39,7 @@ export function Heading({ angle }: { angle: number | null }) {
 /** The rail beside the chart: where each item is and which way it is heading. */
 export function RotationList({ rows, total, focusId, hoverId, onFocus, onOpen }: Props) {
   return (
-    <div className="rot-scroll flex flex-1 flex-col gap-1.5 overflow-y-auto px-1 py-1" role="list">
+    <div className="rot-scroll flex flex-col gap-1.5 px-1 py-1 md:flex-1 md:overflow-y-auto" role="list">
       {rows.map(({ item, point, quadrant, angle }) => {
         const isFocused = focusId === item.id;
         const isHovered = hoverId === item.id;
@@ -108,7 +108,7 @@ export function RotationList({ rows, total, focusId, hoverId, onFocus, onOpen }:
               }}
               aria-label={item.kind === 'group' ? `Open ${item.label} members` : `Open ${item.label} chart`}
               title={item.kind === 'group' ? 'Explore member stocks' : 'Open in Charts'}
-              className="!h-6 !w-6 !p-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded-full hover:bg-surface text-muted hover:text-text shrink-0"
+              className="!h-6 !w-6 !p-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity rounded-full hover:bg-surface text-muted hover:text-text shrink-0"
             >
               {item.kind === 'group' ? <ChevronRight size={14} /> : <CandlestickChart size={13} />}
             </Button>

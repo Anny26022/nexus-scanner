@@ -91,7 +91,7 @@ export function RotationTracker({ rows, half, sort, onSort, onOpen, onShow }: Pr
       : ([[null, visible] as const] as readonly [Quadrant | null, TrackerRow[]][]);
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto px-4 py-2">
+    <div className="flex flex-1 flex-col overflow-y-auto px-4 py-2 max-md:overflow-visible max-md:px-2">
       <div className="rot-trow is-head sticky top-0 z-10 border-b border-line bg-surface py-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
         <span>#</span>
         {header('name', 'Name')}
@@ -120,7 +120,7 @@ export function RotationTracker({ rows, half, sort, onSort, onOpen, onShow }: Pr
             {list.map((row) => (
               <div
                 key={row.item.id}
-                className="rot-trow min-h-[44px] rounded-lg px-2 py-1.5 transition hover:bg-surface-hover"
+                className="rot-trow group min-h-[44px] rounded-lg px-2 py-1.5 transition hover:bg-surface-hover"
                 data-quadrant={row.quadrant}
               >
                 <span className="text-xs font-medium tabular-nums text-muted">{from + visible.indexOf(row) + 1}</span>
@@ -174,7 +174,7 @@ export function RotationTracker({ rows, half, sort, onSort, onOpen, onShow }: Pr
                   onClick={() => onOpen(row.item)}
                   aria-label={row.item.kind === 'group' ? `Open ${row.item.label} members` : `Open ${row.item.label} chart`}
                   title={row.item.kind === 'group' ? 'Open member stocks' : 'Open in Charts'}
-                  className="!h-7 !w-7 !p-0 opacity-0 group-hover:opacity-100 rounded-full text-muted hover:text-text hover:bg-surface-subtle"
+                  className="!h-7 !w-7 !p-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100 rounded-full text-muted hover:text-text hover:bg-surface-subtle"
                 >
                   {row.item.kind === 'group' ? <ChevronRight size={14} /> : <CandlestickChart size={13} />}
                 </Button>

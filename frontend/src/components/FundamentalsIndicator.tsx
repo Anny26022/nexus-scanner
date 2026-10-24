@@ -85,8 +85,8 @@ export const placed = (offset: Offset | null, extra: CSSProperties = {}): CSSPro
   translate: `${-offset.x * 100}% ${-offset.y * 100}%`,
 } : extra;
 
-export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, metrics: snapshot, config: raw, onMoveBadge, onMove}: {
-  symbol: string; revision: string; cutoff: string; sessionDate: string; metrics?: ChartMetrics; config: FundamentalsConfig;
+export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, metrics: snapshot, config: raw, latest = false, onMoveBadge, onMove}: {
+  symbol: string; revision: string; cutoff: string; sessionDate: string; metrics?: ChartMetrics; config: FundamentalsConfig; latest?: boolean;
   onMoveBadge?: (offset: Offset) => void; onMove?: (offset: Offset) => void;
 }) {
   const config = useMemo(() => fundamentalsConfig(raw), [raw]);
@@ -111,7 +111,7 @@ export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, me
     ...surveillance.map(label => `Surveillance: ${label}`),
   ].filter(Boolean).join('\n');
 
-  const rows = useMemo(() => config.table ? visibleFinancials(history.data, config.period, cutoff) : [], [history.data, config.table, config.period, cutoff]);
+  const rows = useMemo(() => config.table ? visibleFinancials(history.data, config.period, cutoff, latest) : [], [history.data, config.table, config.period, cutoff, latest]);
   const shown = useMemo(() => rows.slice(0, config.count), [rows, config.count]);
 
   return <>

@@ -39,7 +39,7 @@ import {
 import { screenerApi } from '../api/screenerApi';
 import { activeList, loadWatchlistStore } from '../chart/watchlists';
 import { useMountEffect } from '../hooks/useMountEffect';
-import { bounds, QUADRANTS, quadrantOf, type Quadrant } from '../utils/rrg';
+import { bounds, QUADRANTS, quadrantOf, type Quadrant, fitSelection } from '../utils/rrg';
 import { Button } from './Button';
 import { NO_FILTERS, RotationFilters, passes, type LiquidityFilters } from './rotation/RotationFilters';
 import { RotationList, type ListRow } from './rotation/RotationList';
@@ -296,6 +296,19 @@ export default function RotationTab({
   const peak = Math.max(1e-9, ...moved.values());
   const emphasis = new Map([...moved].map(([id, value]) => [id, (value / peak) ** 0.75]));
   const labelled = new Set([...moved].sort((a, b) => b[1] - a[1]).slice(0, LABELLED).map(([id]) => id));
+  // A selected item keeps its whole replay path in view; the overview keeps its robust bounds.
+  const focusedTrack = focusId ? allTracks.find((track) => track.item.id === focusId) : undefined;
+  const plotHalf = focusedTrack ? fitSelection(half, focusedTrack.ratio, focusedTrack.momentum, start - tail, end) : half;
+  // Change in RS-Ratio over the trail: where relative strength is rotating. Not a measure of capital flows.
+  const shifts = live
+    .map((track) => {
+      let from = Math.max(0, cursor - tail);
+      while (from < cursor && !Number.isFinite(track.ratio[from])) from++;
+      return { track, change: (track.ratio[cursor] - track.ratio[from]) / half.x };
+    })
+    .filter((entry) => Number.isFinite(entry.change) && entry.change !== 0);
+  const gaining = shifts.filter((entry) => entry.change > 0).sort((a, b) => b.change - a.change).slice(0, 4);
+  const losing = shifts.filter((entry) => entry.change < 0).sort((a, b) => a.change - b.change).slice(0, 4);
 
   const playback = useRef({ playing, speed, cursor, start, end });
   playback.current = { playing, speed, cursor, start, end };
@@ -735,6 +748,38 @@ export default function RotationTab({
             </div>
           </div>
 
+          {/* Relative-strength shifts over the trail, in one quiet line */}
+          {ready && view === 'chart' && (gaining.length > 0 || losing.length > 0) && (
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line/50 px-3.5 py-1.5 text-[11.5px]">
+              {([['Gaining strength', gaining, 'text-(--rrg-leading)'], ['Losing strength', losing, 'text-(--rrg-lagging)']] as const).map(
+                ([title, list, tone]) =>
+                  list.length > 0 && (
+                    <div key={title} className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none]">
+                      <span className={`shrink-0 font-semibold ${tone}`} title="Change in RS-Ratio over the trail; not a measure of capital flows">
+                        {title} · {tail}
+                        {unit}
+                      </span>
+                      {list.map(({ track }) => (
+                        <button
+                          key={track.item.id}
+                          type="button"
+                          data-quadrant={quadrantOf(at(track))}
+                          aria-pressed={focusId === track.item.id}
+                          onClick={() => setFocus(focusId === track.item.id ? null : track.item.id)}
+                          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 cursor-pointer transition ${
+                            focusId === track.item.id ? 'bg-text text-surface' : 'text-text hover:bg-field'
+                          }`}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--q)' }} />
+                          {track.item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )
+              )}
+            </div>
+          )}
+
           {/* Plot Stage or Tracker View */}
           <div className="relative flex-1 min-h-0 w-full overflow-hidden flex flex-col">
             {view === 'chart' ? (
@@ -744,7 +789,7 @@ export default function RotationTab({
                   cursor={cursor}
                   rangeStart={start}
                   tail={tail}
-                  half={half}
+                  half={plotHalf}
                   glide={glide}
                   emphasis={emphasis}
                   labelled={labelled}

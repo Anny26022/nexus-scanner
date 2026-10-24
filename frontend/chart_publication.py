@@ -21,6 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'DO NOT DELETE EDL 
 from edl_pipeline.config import env_bool
 
 
+# Rotation history is replaced every day, so it lives where the bucket's 90-day lifecycle rule cleans up.
+ROTATION_PREFIX = 'daily/rotation'
+
+
 def write_json(path, payload):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + '.tmp')
@@ -373,6 +377,13 @@ class R2Store:
         self.write_release(archived, f'monthly/{month}/{previous["chartRevision"]}/releases/{previous["revision"]}.json')
         return archived
 
+    def upload_rotation(self, source):
+        """Rotation history goes under daily/, where the bucket's lifecycle rule expires it after 90 days."""
+        # Four small objects: use the bounded transport, not the bulk upload's 45-minute timeout.
+        self.cache_command('copy', str(source), self.remote(ROTATION_PREFIX), '--include', '*.json.gz', '--immutable', '--checksum',
+                 '--metadata', '--metadata-set', 'content-type=application/gzip')
+        self.cache_command('check', str(source), self.remote(ROTATION_PREFIX), '--include', '*.json.gz', '--one-way', '--download', '--checkers', '4')
+
     def write_release(self, manifest, key):
         with tempfile.TemporaryDirectory() as folder:
             file = Path(folder) / 'release.json'
@@ -385,7 +396,7 @@ def complete_release(chart_root, output, manifest, store=None):
     if store is None and not charts_enabled():
         print('WARNING: R2 configuration missing (' + ', '.join(missing_r2_settings()) + '); publishing scanner data without charts.', flush=True)
         manifest = dict(manifest, schemaVersion=4)
-        for key in ('chartRevision', 'chartUrlTemplate', 'chartObjectPrefix', 'dataIndexUrl', 'objectUrlTemplate'):
+        for key in ('chartRevision', 'chartUrlTemplate', 'chartObjectPrefix', 'dataIndexUrl', 'objectUrlTemplate', 'rotationHistoryObject', 'rotationUrlTemplate'):
             manifest.pop(key, None)
         write_json(output / 'revisions' / manifest['revision'] / 'release.json', manifest)
         write_json(output / 'current.json', manifest)
@@ -395,6 +406,7 @@ def complete_release(chart_root, output, manifest, store=None):
         return complete_object_release(chart_root, output, manifest, store)
     revision = chart_revision(chart_root, manifest['sessionDate'])
     manifest = dict(manifest, schemaVersion=6, chartRevision=revision)
+    manifest.pop('rotationHistoryObject', None)  # Legacy chart releases publish no rotation history.
     existing_release = output / 'revisions' / manifest['revision'] / 'release.json'
     if existing_release.exists():
         existing = json.loads(existing_release.read_text())
@@ -448,6 +460,7 @@ def complete_object_release(chart_root, output, manifest, store=None):
     manifest = dict(manifest, schemaVersion=7, chartRevision=revision)
     manifest.pop('verifiedObjectsSha256', None)
     existing_path = output / 'revisions' / manifest['revision'] / 'release.json'
+    existing = None
     if existing_path.exists():
         existing = json.loads(existing_path.read_text())
         if existing.get('chartRevision') != revision:
@@ -456,6 +469,11 @@ def complete_object_release(chart_root, output, manifest, store=None):
             manifest['publishedAt'] = existing['publishedAt']
         if existing.get('verifiedObjectsSha256'):
             manifest['verifiedObjectsSha256'] = existing['verifiedObjectsSha256']
+        # A retry cannot change the optional feature binding of an immutable release.
+        for key in ('rotationHistoryObject', 'rotationUrlTemplate'):
+            manifest.pop(key, None)
+            if key in existing:
+                manifest[key] = existing[key]
     if store is None and os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':
         store = R2Store()
     started = time.perf_counter()
@@ -469,6 +487,17 @@ def complete_object_release(chart_root, output, manifest, store=None):
         started = time.perf_counter()
         verified = store.load_inventory(previous)
         files = store.upload_objects(chart_root / 'objects', verified)
+        rotation = chart_root / 'rotation'
+        if existing is None and manifest.get('rotationHistoryObject'):
+            try:
+                if not rotation.is_dir():
+                    raise OSError('Missing rotation objects')
+                store.upload_rotation(rotation)
+                manifest['rotationUrlTemplate'] = f'{base}/{ROTATION_PREFIX}/{{hash}}.json.gz'
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
+                print(f'WARNING: rotation upload unavailable; publishing scanner without rotation: {error}', flush=True)
+                manifest.pop('rotationHistoryObject', None)
+                manifest.pop('rotationUrlTemplate', None)
         print(f'Object upload and verification elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         manifest['publishedAt'] = manifest['sessionDate'] + 'T00:00:00Z'
         manifest['dataIndexUrl'] = f"{base}/releases/{manifest['revision']}/index.json"
@@ -492,6 +521,19 @@ def complete_object_release(chart_root, output, manifest, store=None):
                 shutil.copyfile(file, target)
         manifest['dataIndexUrl'] = f"/data/revisions/{manifest['revision']}/data-index.json"
         manifest['objectUrlTemplate'] = '/data/objects/{hash}.json.gz'
+        rotation = chart_root / 'rotation'
+        if existing is None and manifest.get('rotationHistoryObject'):
+            try:
+                if not rotation.is_dir():
+                    raise OSError('Missing rotation objects')
+                (output / 'rotation').mkdir(exist_ok=True)
+                for file in rotation.glob('*.json.gz'):
+                    shutil.copyfile(file, output / 'rotation' / file.name)
+                manifest['rotationUrlTemplate'] = '/data/rotation/{hash}.json.gz'
+            except OSError as error:
+                print(f'WARNING: local rotation unavailable; publishing scanner without rotation: {error}', flush=True)
+                manifest.pop('rotationHistoryObject', None)
+                manifest.pop('rotationUrlTemplate', None)
     write_json(output / 'revisions' / manifest['revision'] / 'data-index.json', index)
     write_json(existing_path, manifest)
     write_json(output / 'current.json', manifest)

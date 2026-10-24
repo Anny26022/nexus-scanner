@@ -25,6 +25,8 @@ export const screenerApi = {
   getEarningsSchedule: realAdapter.getEarningsSchedule.bind(realAdapter),
   getPriceBandHistory: (symbol: string, revision: string) => realAdapter.getPriceBandHistory(symbol, revision),
   getThemeClassification: realAdapter.getThemeClassification.bind(realAdapter),
+  getRotationIndex: realAdapter.getRotationIndex.bind(realAdapter),
+  getRotationShard: realAdapter.getRotationShard.bind(realAdapter),
   async getExportRows(request: ScreenerRunRequest) {
     const req = {...request, page:1, pageSize:100};
     const adapter = await getAdapter();

@@ -9,6 +9,7 @@ import { filterAnnouncements, type Announcement, type AnnouncementCatalog, type 
 import { DataUnavailableError } from './dataErrors';
 import { getManifest, refreshManifest, validateManifest, validDate, manifestSnapshotSource, type Manifest } from './manifest';
 import { parseMarketOverview } from '../utils/marketOverview';
+import type { RotationIndex, RotationShard, RotationShardName } from './rotation';
 export { refreshManifest } from './manifest';
 const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
 const finiteAmount = (value: unknown): number | null => {
@@ -126,6 +127,17 @@ async function object<T>(release: Manifest, hash: string, resource = 'Announceme
   const url = release.objectUrlTemplate.replace('{hash}', hash);
   return cached(objectCache, url, () => getChartJson<T>(url, resource), 128);
 }
+/**
+ * Where the release's rotation history lives: its index hash and a URL template for its files. In the dev
+ * server only, a release without one falls back to tools/build_rotation_local.py's local.json pointer.
+ */
+async function rotationSource(release: Manifest): Promise<{index: string; template: string} | null> {
+  if (release.rotationHistoryObject && release.rotationUrlTemplate) return {index: release.rotationHistoryObject, template: release.rotationUrlTemplate};
+  if (!import.meta.env.DEV) return null;
+  const local = await fetch('/data/rotation/local.json', {cache: 'no-cache'}).then(response => response.ok ? response.json() : null).catch(() => null);
+  return local && /^[a-f0-9]{64}$/.test(local.index) && local.sessionDate === release.sessionDate
+    ? {index: local.index, template: '/data/rotation/{hash}.json.gz'} : null;
+}
 function validSymbol(symbol: string) {
   if (!/^[A-Z0-9&_-]+$/.test(symbol)) throw new Error('Invalid symbol');
 }
@@ -224,6 +236,26 @@ class RealDataAdapter {
       throw new Error('Theme classification release mismatch');
     }
     return data;
+  }
+  /** The Rotation page's price-history index, or null when the release did not publish one. */
+  async getRotationIndex(revision?: string): Promise<RotationIndex | null> {
+    const release = await releaseFor(revision);
+    const source = await rotationSource(release);
+    if (!source) return null;
+    const url = source.template.replace('{hash}', source.index);
+    const index = await cached(objectCache, url, () => getChartJson<RotationIndex>(url, 'Rotation history'), 128);
+    if (index.schemaVersion !== 1 || index.asOfDate !== release.sessionDate) throw new Error('Rotation history release mismatch');
+    return index;
+  }
+  async getRotationShard(revision: string | undefined, name: RotationShardName): Promise<RotationShard> {
+    const release = await releaseFor(revision);
+    const [source, index] = await Promise.all([rotationSource(release), this.getRotationIndex(revision)]);
+    const hash = index?.shards[name];
+    if (!source || !hash || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('Rotation history is unavailable in this release.');
+    const url = source.template.replace('{hash}', hash);
+    const shard = await cached(objectCache, url, () => getChartJson<RotationShard>(url, 'Rotation history'), 128);
+    if (shard.schemaVersion !== 1 || shard.shard !== name || shard.asOfDate !== index!.asOfDate) throw new Error('Rotation history shard mismatch');
+    return shard;
   }
   /** Nifty 50 closes by session date, or undefined when the release has no benchmark. */
   async getBenchmark(revision?: string): Promise<ReadonlyMap<string, number> | undefined> {

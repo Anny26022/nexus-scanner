@@ -29,6 +29,13 @@ test('serves published historical snapshots', async () => {
   assert.deepEqual(calls.pop(), ['get', 'snapshots/2021-10-14.json.gz']);
 });
 
+test('caches content-addressed rotation history as immutable, other daily files not', async () => {
+  const rotation = await worker.fetch(new Request(`https://data.example.com/daily/rotation/${'a'.repeat(64)}.json.gz`), env);
+  assert.equal(rotation.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+  const chart = await worker.fetch(new Request('https://data.example.com/daily/2026-10-23/abc/charts/TEST.json.gz'), env);
+  assert.equal(chart.headers.get('Cache-Control'), 'no-cache');
+});
+
 test('HEAD returns metadata without a body', async () => {
   const response = await worker.fetch(new Request('https://data.example.com/releases/abc/index.json', { method: 'HEAD' }), env);
   assert.equal(response.status, 200);

@@ -160,6 +160,10 @@ def classify(stocks, as_of, source_path=SOURCE_PATH):
                                                       stock.get('providerIndustry', stock.get('industry'))))
             if bridge_theme:
                 assign(bridge_theme, 'scanner-industry-bridge')
+        # An age cohort supplements the business theme; it must not prevent its lookup.
+        history_sessions = (stock.get('metrics') or {}).get('historySessions')
+        if history_sessions is not None and 1 <= history_sessions <= 100:
+            assign('IPO / Young Bases', 'curated-rule')
         # Mirror groups are aliases/aggregations, not extra business exposures.
         def matches(name, visiting):
             if name in memberships:

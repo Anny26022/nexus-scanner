@@ -170,7 +170,7 @@
   button:focus-visible, summary:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible { outline: none; box-shadow: var(--ring); }
   /* A bare input inside a field-like wrapper: the wrapper draws the one focus ring, never a second box inside it. */
   :is(.watchlist-search-wrap, .query-input, .results-symbol-search, .column-search, .preset-eligibility-input-wrap, .scan-history-search,
-    .ai-composer-card, .symbol-palette-search, .drawing-menu-search, .ic-search) :is(input, textarea):focus-visible { outline: none; box-shadow: none; }
+    .ai-composer-card, .symbol-palette-search, .drawing-menu-search, .ic-search, .rot-field) :is(input, textarea, select):focus-visible { outline: none; box-shadow: none; }
   input, select { color: var(--text); background: var(--surface); accent-color: var(--accent); transition: border-color 0.15s ease, box-shadow 0.15s ease; }
   input::placeholder { color: var(--muted); opacity: 0.85; }
   button:not(:disabled):active { transform: scale(0.98); }

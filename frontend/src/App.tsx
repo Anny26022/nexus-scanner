@@ -27,6 +27,7 @@ const queryClient = new QueryClient({
 const ChartsTab = React.lazy(() => import('./components/ChartsTab'));
 const MarketTab = React.lazy(() => import('./components/MarketTab'));
 const EarningsTab = React.lazy(() => import('./components/EarningsTab'));
+const RotationTab = React.lazy(() => import('./components/RotationTab'));
 
 const ScreenerAppContent: React.FC = () => {
   const [storedTab, setActiveTab] = useLocalStorageState<AppTab | 'news'>('nexus-scanner.ui.active-tab.v1', 'screener');
@@ -160,6 +161,10 @@ const ScreenerAppContent: React.FC = () => {
         ) : activeTab === 'earnings' ? (
           <React.Suspense fallback={<p role="status">Loading earnings…</p>}>
             <EarningsTab datasetRevision={activeRevision} onOpenChart={openSymbol} />
+          </React.Suspense>
+        ) : activeTab === 'rotation' ? (
+          <React.Suspense fallback={<p role="status">Loading rotation…</p>}>
+            <RotationTab datasetRevision={activeRevision} onOpenChart={openSymbol} />
           </React.Suspense>
         ) : activeTab === 'ipo' ? (
           <NewListingsTab key={latestRevision} datasetRevision={latestRevision} selectedAsOfDate={latestDate} />

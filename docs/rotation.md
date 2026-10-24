@@ -22,7 +22,13 @@ Values are delta-coded natural logs at 0.01% resolution.
   built like the groups. Comparing equal-weight groups with a cap-weighted index would make every group look strong
   whenever small and mid caps outperform.
 
-History uses today's group membership, so it is not a point-in-time backtest.
+Group membership is point in time going forward. Each run records every stock's six labels in
+`rotation_membership_ledger.json.gz`, storing only changes. The ledger is carried between runs in private
+pipeline state (`tools/pipeline_state.py`), and a stock counts toward a group only on the days it belonged.
+Before the ledger began, a stock's earliest recorded labels apply, so older history still reflects the
+first known classification.
+
+Theme classification has only existed since October 2026, so no earlier dated memberships exist to backfill.
 
 ## Maths (`frontend/src/utils/rrg.ts`)
 
@@ -37,9 +43,12 @@ Periods follow the chosen calendar, and the first 35 periods are warm-up.
 
 ## Page
 
-- **Chart:** the chart opens with trails for the eight items that moved furthest over the trail. Everything
-  else shows as a faint dot. Ticking an item in the rail adds its trail.
+- **Chart:** every item is plotted with its trail. Trails draw stronger the further an item moved, and the ten
+  biggest movers carry names, so the flow reads without picking anything.
+- **Flow line:** above the chart, "Money flowing in" and "Flowing out" name the items whose RS-Ratio rose or
+  fell most over the trail.
 - **Replay:** steps one period at a time with gliding motion. Quadrant counts and the rail update live.
 - **Benchmark strip:** shows the benchmark and a breadth ribbon, the share of items in each quadrant over
   time. Drag it to move through time.
 - **Tracker:** ranks every item by quadrant and by how far it moved, with a trail sparkline and drill-down.
+- **Default view:** thematic blocks (about 30 groups), which stay readable with every trail drawn.

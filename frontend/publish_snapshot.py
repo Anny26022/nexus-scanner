@@ -66,8 +66,15 @@ def rotation_history_object(root, cache, rows, taxonomy, source_bytes, session, 
     from fetch_indices_ohlcv import get_safe_sym  # The index fetcher's own file naming.
     benchmarks = {code: index_closes(root, source_bytes, symbol, session, csv_name=get_safe_sym(symbol))[0]
                   for code, symbol in rotation_history.BENCHMARK_INDICES.items()}
-    index, shards = rotation_history.build(session, rows, closes, benchmarks, taxonomy.get('records', {}))
-    return rotation_history.write_objects(objects, index, shards)
+    # Dated group memberships: carried between runs in private pipeline state (tools/pipeline_state.py).
+    ledger_path = root / rotation_history.LEDGER_NAME
+    ledger = json.loads(gzip.decompress(ledger_path.read_bytes())) if ledger_path.exists() else None
+    index, shards, ledger = rotation_history.build(session, rows, closes, benchmarks, taxonomy.get('records', {}), ledger)
+    digest = rotation_history.write_objects(objects, index, shards)
+    temporary = ledger_path.with_name(ledger_path.name + '.tmp')
+    temporary.write_bytes(gzip.compress(json.dumps(ledger, separators=(',', ':'), sort_keys=True).encode(), mtime=0))
+    temporary.replace(ledger_path)
+    return digest
 
 
 def write_json(path, payload):

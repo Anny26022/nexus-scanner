@@ -42,12 +42,32 @@ class RotationHistoryTests(unittest.TestCase):
         self.assertIsNone(rh.encode([None, None]))
 
     def test_composite_waits_for_members_and_averages_returns(self):
-        days = ['d1', 'd2', 'd3']
-        members = [[100.0, 110.0, 110.0], [50.0, 50.0, 55.0], [None, 10.0, 10.0]]
-        levels = rh.composite(members, days)
-        self.assertEqual(levels[0], None)  # Only two members trade on the first day.
-        self.assertEqual(levels[1], 100.0)
-        self.assertAlmostEqual(levels[2], 100.0 * (1 + 0.1 / 3))
+        full = [(0, 3)]
+        members = [([100.0, 110.0, 110.0], full), ([50.0, 50.0, 55.0], full), ([None, 10.0, 10.0], full)]
+        levels = rh.composite(members, 3)
+        self.assertEqual(levels[:2], [None, None])  # Two members have a return on day two; three are needed.
+        self.assertAlmostEqual(levels[2], 100.0)
+
+    def test_members_count_only_on_days_they_belonged(self):
+        days = ['d0', 'd1', 'd2', 'd3']
+        rising, flat = [100.0, 110.0, 121.0, 133.1], [100.0, 100.0, 100.0, 100.0]
+        # The riser joins on d2, so the d1 return is the average of the three flat members only.
+        members = [(flat, [(0, 4)]), (flat, [(0, 4)]), (flat, [(0, 4)]), (rising, [(2, 4)])]
+        levels = rh.composite(members, len(days))
+        self.assertAlmostEqual(levels[1], 100.0)
+        self.assertAlmostEqual(levels[2], 100.0 * (1 + 0.1 / 4))
+
+    def test_ledger_records_only_changes_and_maps_dates_to_spans(self):
+        ledger = rh.record_memberships(None, '2026-10-01', {'A': ['Banks', None, None, 'Lending', None, None]})
+        ledger = rh.record_memberships(ledger, '2026-10-02', {'A': ['Banks', None, None, 'Lending', None, None]})
+        self.assertEqual(len(ledger['records']['A']), 1)
+        ledger = rh.record_memberships(ledger, '2026-10-05', {'A': ['Banks', None, None, 'Fintech', None, None]})
+        self.assertEqual([entry[0] for entry in ledger['records']['A']], ['2026-10-01', '2026-10-05'])
+        days = ['2026-09-30', '2026-10-01', '2026-10-02', '2026-10-05', '2026-10-06']
+        # Before the ledger began, the earliest known label applies.
+        self.assertEqual(rh.spans(ledger['records']['A'], days, 3), {'Lending': [(0, 3)], 'Fintech': [(3, 5)]})
+        with self.assertRaises(ValueError):
+            rh.record_memberships(ledger, '2026-10-01', {'A': ['X', None, None, None, None, None]})
 
     def test_build_shards_stocks_and_groups_and_writes_hashed_objects(self):
         days = sessions(rh.PERIODS['D'] + 40)
@@ -57,7 +77,7 @@ class RotationHistoryTests(unittest.TestCase):
                  'indexMemberships': ['NIFTY 500', 'Nifty 50'] if i < 2 else []} for i in range(4)]
         closes = {row['symbol']: rise for row in rows}
         taxonomy = {row['symbol']: {'theme': 'Lending', 'subIndustry': None, 'block': 'Finance', 'macro': None} for row in rows}
-        index, shards = rh.build(days[-1], rows, closes, {'N50': rise, 'N500': rise}, taxonomy)
+        index, shards, ledger = rh.build(days[-1], rows, closes, {'N50': rise, 'N500': rise}, taxonomy)
         self.assertEqual([stock['h'] for stock in index['stocks']], ['core', 'core', 'rest', 'rest'])
         self.assertEqual(index['stocks'][0]['u'], ['N50', 'N500'])
         self.assertEqual({group['id'] for group in index['groups']},
@@ -66,7 +86,8 @@ class RotationHistoryTests(unittest.TestCase):
         self.assertIn('S0', shards['core']['W'])
         self.assertIn('theme:Lending', shards['groups']['M'])
         self.assertEqual(set(index['benchmarks']), {'N50', 'N500', 'EW'})
-        index, _ = rh.build(days[-1], rows, closes, {'N50': rise, 'N500': rise, 'MS400': []}, taxonomy)
+        self.assertEqual(ledger['records']['S0'], [[days[-1], ['Banks', 'Private Banks', None, 'Lending', 'Finance', None]]])
+        index, _, _ = rh.build(days[-1], rows, closes, {'N50': rise, 'N500': rise, 'MS400': []}, taxonomy)
         self.assertNotIn('MS400', index['benchmarks'])
         with tempfile.TemporaryDirectory() as folder:
             digest = rh.write_objects(Path(folder), index, shards)
@@ -80,7 +101,7 @@ class RotationHistoryTests(unittest.TestCase):
         series = [(day, 10.0) for day in days]
         rows = [{'symbol': f'S{i}', 'sector': 'Tiny' if i < 2 else 'Thin', 'marketCapCrore': 5000 if i < 2 else 50,
                  'metrics': {'turnover30': 20}} for i in range(5)]
-        index, _ = rh.build(days[-1], rows, {row['symbol']: series for row in rows}, {'N50': series, 'N500': series}, {})
+        index, _, _ = rh.build(days[-1], rows, {row['symbol']: series for row in rows}, {'N50': series, 'N500': series}, {})
         self.assertEqual(index['groups'], [])
 
 

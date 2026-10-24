@@ -11,8 +11,6 @@ import { DataUnavailableError } from '../api/dataErrors';
 import { screenerApi } from '../api/screenerApi';
 import { SymbolWithLogo } from './SymbolWithLogo';
 
-const PAGE = 60;
-const FACETS = 14;
 const crore = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
 const day = (date: string, options: Intl.DateTimeFormatOptions = {day: 'numeric', month: 'short'}) =>
   new Date(`${date}T00:00:00Z`).toLocaleDateString('en-IN', {...options, timeZone: 'UTC'});
@@ -199,9 +197,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
   const [session, setSession] = useState<Session | null>(null);
   const [lens, setLens] = useState<Lens>('grade');
   const [focus, setFocus] = useState<string | null>(null);
-  const [allFacets, setAllFacets] = useState(false);
   const [sort, setSort] = useState<SortKey>('filing_day');
-  const [shown, setShown] = useState(PAGE);
   const [selected, setSelected] = useState<EarningsRecord | null>(null);
   const [activeDay, setActiveDay] = useState<string | null>(null);
   const todayDate = today();
@@ -270,9 +266,8 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
   const peakFacet = Math.max(1, ...facets.map(facet => facet.records.length));
   const history = selected && !historyFiles.some(file => file.isPending) ? companyHistory(historyFiles.map(file => file.data ?? []), selected.symbol) : null;
 
-  const resetPaging = () => setShown(PAGE);
   const sortButton = (value: SortKey, label: string, className = '') => <button type="button" className={`ep-sort ${className}`} aria-pressed={sort === value}
-    onClick={() => { setSort(value); resetPaging(); }}>{label}{sort === value && <ArrowDown size={10} aria-hidden="true" />}</button>;
+    onClick={() => { setSort(value); }}>{label}{sort === value && <ArrowDown size={10} aria-hidden="true" />}</button>;
 
   if (index.isPending) return <div className="ep"><p className="ep-state" role="status">Loading earnings…</p></div>;
   if (index.isError || !season) {
@@ -291,7 +286,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
     <header className="ep-hero">
       <div className="ep-hero-top">
         <label className="ep-period"><span className="sr-only">Quarter</span>
-          <select value={season.periodEnd} onChange={event => { setPeriodChoice(event.target.value); setActiveDay(null); setFocus(null); resetPaging(); }}>
+          <select value={season.periodEnd} onChange={event => { setPeriodChoice(event.target.value); setActiveDay(null); setFocus(null); }}>
             {allSeasons.map(item => <option key={item.periodEnd} value={item.periodEnd}>{item.label} quarter</option>)}
           </select><ChevronDown size={12} aria-hidden="true" /></label>
         <span className="ep-checked">Updated {new Date(season.checkedAt).toLocaleString('en-IN', {day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'})}</span>
@@ -308,7 +303,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
         {isLatest && <div><dt>Next 7 days</dt><dd>{nextWeek.toLocaleString('en-IN')} <small>to report</small></dd></div>}
       </dl>}
       {days.length > 0 && <Timeline days={days} todayDate={todayDate} active={picked?.date ?? null}
-        onPick={date => { setActiveDay(date); setFocus(null); resetPaging(); }} />}
+        onPick={date => { setActiveDay(date); setFocus(null); }} />}
       <div className="ep-tl-key" aria-hidden="true">
         {QUALITY_ORDER.map(grade => <span key={grade} data-grade={grade.toLowerCase()}><i />{grade}</span>)}
         {isLatest && <span><i className="is-upcoming" />Scheduled</span>}
@@ -320,34 +315,31 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
       <aside className="ep-lens" aria-label="Break down">
         <label className="ep-lens-pick"><span>Break down by</span>
           <span className="ep-lens-select">
-            <select value={lens} onChange={event => { setLens(event.target.value as Lens); setFocus(null); setAllFacets(false); resetPaging(); }}>
+            <select value={lens} onChange={event => { setLens(event.target.value as Lens); setFocus(null); }}>
               {LENSES.map(([value, label]) => <option key={value} value={value}>{value === 'grade' && scheduleMode ? 'Size' : label}</option>)}
             </select><ChevronDown size={12} aria-hidden="true" /></span>
         </label>
         {classifying ? <p className="ep-lens-state" role="status">Loading classification…</p>
           : <ul className="ep-facets">
-            {(allFacets ? facets : facets.slice(0, FACETS)).map(facet => <li key={facet.label}>
+            {facets.map(facet => <li key={facet.label}>
               <button type="button" aria-pressed={focus === facet.label} data-grade={facet.grade?.toLowerCase()}
-                onClick={() => { setFocus(focus === facet.label ? null : facet.label); resetPaging(); }}>
+                onClick={() => { setFocus(focus === facet.label ? null : facet.label); }}>
                 <span className="ep-facet-name">{facet.grade && <i aria-hidden="true" />}{facet.label}</span>
                 <span className="ep-facet-count">{facet.records.length}</span>
                 {facet.medianPatYoy != null && <span className={`ep-facet-growth ${tone(facet.medianPatYoy)}`}>{pct(facet.medianPatYoy)}</span>}
                 <span className="ep-facet-bar" aria-hidden="true"><s style={{width: `${facet.records.length / peakFacet * 100}%`}} /></span>
               </button></li>)}
-            {facets.length > FACETS && <li><button type="button" className="ep-facets-more" onClick={() => setAllFacets(all => !all)}>
-              {allFacets ? 'Show fewer' : `All ${facets.length}`}</button></li>}
           </ul>}
-        {lens !== 'grade' && !classifying && <p className="ep-lens-note">Count · median profit growth</p>}
       </aside>
 
       <main className="ep-main">
         <div className="ep-bar">
           <label className="ep-search"><Search size={13} aria-hidden="true" />
-            <input type="search" placeholder="Find a company" aria-label="Search company" value={query} onChange={event => { setQuery(event.target.value); resetPaging(); }} />
+            <input type="search" placeholder="Find a company" aria-label="Search company" value={query} onChange={event => { setQuery(event.target.value); }} />
           </label>
           <label className="ep-when" data-active={session ? true : undefined}><Clock size={13} aria-hidden="true" />
             <span className="sr-only">Filing time</span>
-            <select value={session ?? ''} onChange={event => { setSession((event.target.value || null) as Session | null); resetPaging(); }}>
+            <select value={session ?? ''} onChange={event => { setSession((event.target.value || null) as Session | null); }}>
               <option value="">Any time</option>{SESSIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select><ChevronDown size={12} aria-hidden="true" /></label>
           {focused && <button type="button" className="ep-pill" onClick={() => setFocus(null)}>{focused.label} <X size={11} aria-label="Clear" /></button>}
@@ -369,9 +361,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
               <span>Company</span>{sortButton('quality', 'Grade')}{sortButton('revenue_yoy', 'Sales', 'ep-num')}{sortButton('pat_yoy', 'Profit', 'ep-num')}
               {sortButton('eps_yoy', 'EPS', 'ep-num ep-wide')}{sortButton('post_earnings_pct', 'Reaction', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
             </div>
-            {sorted.slice(0, shown).map(record => <Row key={record.symbol} record={record} onOpen={() => setSelected(record)} />)}
-            {shown < sorted.length && <button type="button" className="ep-more" onClick={() => setShown(count => count + PAGE)}>
-              Show more · {(sorted.length - shown).toLocaleString('en-IN')} left</button>}
+            {sorted.map(record => <Row key={record.symbol} record={record} onOpen={() => setSelected(record)} />)}
           </section>}
       </main>
     </div>

@@ -1,6 +1,5 @@
 [
   {
-    "wire": "SMA5",
     "key": "sma5",
     "section": "technicals",
     "category": "trend",
@@ -8,7 +7,6 @@
     "divisor": 1
   },
   {
-    "wire": "EMA5",
     "key": "ema5",
     "section": "technicals",
     "category": "trend",
@@ -16,7 +14,6 @@
     "divisor": 1
   },
   {
-    "wire": "SMA100",
     "key": "sma100",
     "section": "technicals",
     "category": "trend",
@@ -24,7 +21,6 @@
     "divisor": 1
   },
   {
-    "wire": "EMA100",
     "key": "ema100",
     "section": "technicals",
     "category": "trend",
@@ -32,7 +28,6 @@
     "divisor": 1
   },
   {
-    "wire": "MACD.macd",
     "key": "macd_macd",
     "section": "technicals",
     "category": "trend",
@@ -40,7 +35,6 @@
     "divisor": 1
   },
   {
-    "wire": "MACD.signal",
     "key": "macd_signal",
     "section": "technicals",
     "category": "trend",
@@ -48,7 +42,6 @@
     "divisor": 1
   },
   {
-    "wire": "AvgValue.Traded_10d",
     "key": "turnover10_crore",
     "section": "market",
     "category": "liquidity",
@@ -56,7 +49,6 @@
     "divisor": 10000000
   },
   {
-    "wire": "AvgValue.Traded_30d",
     "key": "turnover30_crore",
     "section": "market",
     "category": "liquidity",
@@ -64,7 +56,6 @@
     "divisor": 10000000
   },
   {
-    "wire": "average_volume_30d_calc",
     "key": "average_volume30",
     "section": "market",
     "category": "liquidity",
@@ -72,7 +63,6 @@
     "divisor": 1
   },
   {
-    "wire": "relative_volume_10d_calc",
     "key": "rvol10",
     "section": "market",
     "category": "momentum",
@@ -80,7 +70,6 @@
     "divisor": 1
   },
   {
-    "wire": "Perf.W",
     "key": "performance_1w_pct",
     "section": "market",
     "category": "momentum",
@@ -88,7 +77,6 @@
     "divisor": 1
   },
   {
-    "wire": "Perf.YTD",
     "key": "performance_ytd_pct",
     "section": "market",
     "category": "momentum",
@@ -96,7 +84,6 @@
     "divisor": 1
   },
   {
-    "wire": "Perf.3Y",
     "key": "performance_3y_pct",
     "section": "market",
     "category": "momentum",
@@ -104,7 +91,6 @@
     "divisor": 1
   },
   {
-    "wire": "Perf.10Y",
     "key": "performance_10y_pct",
     "section": "market",
     "category": "momentum",
@@ -112,7 +98,6 @@
     "divisor": 1
   },
   {
-    "wire": "Perf.All",
     "key": "performance_all_time_pct",
     "section": "market",
     "category": "momentum",
@@ -120,7 +105,6 @@
     "divisor": 1
   },
   {
-    "wire": "ADRP",
     "key": "adr14_pct",
     "section": "market",
     "category": "momentum",
@@ -128,7 +112,6 @@
     "divisor": 1
   },
   {
-    "wire": "enterprise_value_ebitda_ttm",
     "key": "ev_ebitda_ttm",
     "section": "financials",
     "category": "fundamentals",
@@ -136,7 +119,6 @@
     "divisor": 1
   },
   {
-    "wire": "earnings_per_share_diluted_yoy_growth_ttm",
     "key": "eps_diluted_growth_ttm_pct",
     "section": "financials",
     "category": "fundamentals",
@@ -144,7 +126,6 @@
     "divisor": 1
   },
   {
-    "wire": "total_current_assets_fy",
     "key": "current_assets_fy_crore",
     "section": "financials",
     "category": "fundamentals",
@@ -152,7 +133,6 @@
     "divisor": 10000000
   },
   {
-    "wire": "total_current_liabilities_fy",
     "key": "current_liabilities_fy_crore",
     "section": "financials",
     "category": "fundamentals",
@@ -160,7 +140,6 @@
     "divisor": 10000000
   },
   {
-    "wire": "total_liabilities_fy",
     "key": "total_liabilities_fy_crore",
     "section": "financials",
     "category": "fundamentals",
@@ -168,7 +147,6 @@
     "divisor": 10000000
   },
   {
-    "wire": "total_debt_fy",
     "key": "total_debt_fy_crore",
     "section": "financials",
     "category": "fundamentals",
@@ -176,7 +154,6 @@
     "divisor": 10000000
   },
   {
-    "wire": "High.All",
     "key": "all_time_high",
     "section": "market",
     "category": "momentum",
@@ -184,7 +161,6 @@
     "divisor": 1
   },
   {
-    "wire": "Low.All",
     "key": "all_time_low",
     "section": "market",
     "category": "momentum",
@@ -192,7 +168,6 @@
     "divisor": 1
   },
   {
-    "wire": "Perf.5Y",
     "key": "performance_5y_pct",
     "section": "market",
     "category": "momentum",
@@ -200,7 +175,6 @@
     "divisor": 1
   },
   {
-    "wire": "price_earnings_ttm",
     "key": "pe_ttm",
     "section": "financials",
     "category": "fundamentals",
@@ -208,7 +182,6 @@
     "divisor": 1
   },
   {
-    "wire": "price_earnings_growth_ttm",
     "key": "peg_ttm",
     "section": "financials",
     "category": "fundamentals",
@@ -216,7 +189,6 @@
     "divisor": 1
   },
   {
-    "wire": "total_revenue_yoy_growth_ttm",
     "key": "revenue_yoy_growth_ttm_pct",
     "section": "financials",
     "category": "fundamentals",
@@ -224,7 +196,6 @@
     "divisor": 1
   },
   {
-    "wire": "net_income_yoy_growth_ttm",
     "key": "net_income_yoy_growth_ttm_pct",
     "section": "financials",
     "category": "fundamentals",
@@ -232,7 +203,6 @@
     "divisor": 1
   },
   {
-    "wire": "average_volume_10d_calc",
     "key": "average_volume10",
     "section": "market",
     "category": "liquidity",
@@ -240,7 +210,6 @@
     "divisor": 1
   },
   {
-    "wire": "average_volume_60d_calc",
     "key": "average_volume60",
     "section": "market",
     "category": "liquidity",
@@ -248,7 +217,6 @@
     "divisor": 1
   },
   {
-    "wire": "average_volume_90d_calc",
     "key": "average_volume90",
     "section": "market",
     "category": "liquidity",
@@ -256,7 +224,6 @@
     "divisor": 1
   },
   {
-    "wire": "EMA9",
     "key": "ema9",
     "section": "technicals",
     "category": "trend",
@@ -264,7 +231,6 @@
     "divisor": 1
   },
   {
-    "wire": "Perf.1M",
     "key": "performance_1m_pct",
     "section": "market",
     "category": "momentum",
@@ -272,7 +238,6 @@
     "divisor": 1
   },
   {
-    "wire": "Perf.3M",
     "key": "performance_3m_pct",
     "section": "market",
     "category": "momentum",

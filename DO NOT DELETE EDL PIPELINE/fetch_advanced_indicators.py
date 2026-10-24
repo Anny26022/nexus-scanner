@@ -16,7 +16,10 @@ PERIODS = (5, 9, 10, 20, 21, 50, 100, 150, 200)
 INDICATORS = {"RSI": "RSI(14)", "ATR": "ATR(14)", "ADX": "ADX(14)",
               "MACD.macd": "MACD(12,26)", "MACD.signal": "MACD Signal(9)"}
 # Shared with the filter catalogue and daily publisher; no parallel field lists.
-FIELD_DEFINITIONS = load_json(resource_path("tradingview_fields.json"))
+# The upstream column names stay in a pipeline-only map so the browser bundle never carries them.
+WIRE_NAMES = load_json(resource_path("tradingview_wire.json"))
+FIELD_DEFINITIONS = [{**field, "wire": WIRE_NAMES[f"{field['section']}.{field['key']}"]}
+                     for field in load_json(resource_path("tradingview_fields.json"))]
 MARKET_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "market"}
 FINANCIAL_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "financials"}
 TECHNICAL_FIELDS = {f["wire"]: (f["key"], f["divisor"]) for f in FIELD_DEFINITIONS if f["section"] == "technicals"}

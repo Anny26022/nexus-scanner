@@ -1,5 +1,5 @@
 include breadth_methodology.json filing_source_labels.json
 include taxonomy_overrides.json
 include stockscans_classification.json
-include tradingview_fields.json
+include tradingview_fields.json tradingview_wire.json
 include etf_fields.json etf_enum_labels.json

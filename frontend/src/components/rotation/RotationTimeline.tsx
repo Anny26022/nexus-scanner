@@ -16,24 +16,39 @@ interface Props {
 }
 
 const WIDTH = 1000;
-const LINE = 26;
-const RIBBON = 4;
+const LINE = 24;
+const RIBBON = 5;
 
 /**
  * Benchmark line over the replay range with a ribbon underneath showing how breadth moved between
  * quadrants. The highlighted window is the trail on the chart; drag anywhere to move it.
  */
-export function RotationTimeline({dates, closes, start, end, cursor, tail, breadth, onScrub, dateLabel}: Props) {
+export function RotationTimeline({
+  dates,
+  closes,
+  start,
+  end,
+  cursor,
+  tail,
+  breadth,
+  onScrub,
+  dateLabel,
+}: Props) {
   const svg = useRef<SVGSVGElement>(null);
   const span = Math.max(1, end - start);
-  const x = (index: number) => (index - start) / span * WIDTH;
-  const values = Array.from({length: end - start + 1}, (_, i) => closes[start + i]).filter(Number.isFinite);
-  const low = Math.min(...values), high = Math.max(...values);
+  const x = (index: number) => ((index - start) / span) * WIDTH;
+  const values = Array.from({ length: end - start + 1 }, (_, i) => closes[start + i]).filter(Number.isFinite);
+  const low = Math.min(...values),
+    high = Math.max(...values);
   const y = (value: number) => 2 + (1 - (value - low) / Math.max(1e-9, high - low)) * (LINE - 4);
+
   let path = '';
   let connected = false;
   for (let i = start; i <= end; i++) {
-    if (!Number.isFinite(closes[i])) { connected = false; continue; }
+    if (!Number.isFinite(closes[i])) {
+      connected = false;
+      continue;
+    }
     path += `${connected ? 'L' : 'M'}${x(i).toFixed(1)},${y(closes[i]).toFixed(1)}`;
     connected = true;
   }
@@ -41,7 +56,8 @@ export function RotationTimeline({dates, closes, start, end, cursor, tail, bread
   // Stacked shares, leading at the top so the ribbon reads like the chart's upper-right corner.
   const order: Quadrant[] = ['leading', 'improving', 'weakening', 'lagging'];
   const bands = order.map((quadrant, layer) => {
-    const upper: string[] = [], lower: string[] = [];
+    const upper: string[] = [],
+      lower: string[] = [];
     breadth.forEach((counts, i) => {
       const total = QUADRANTS.reduce((sum, q) => sum + counts[q], 0) || 1;
       const before = order.slice(0, layer).reduce((sum, q) => sum + counts[q], 0) / total;
@@ -60,20 +76,61 @@ export function RotationTimeline({dates, closes, start, end, cursor, tail, bread
   const windowStart = Math.max(start, cursor - tail);
   const ticks = [start, Math.round((start + end) / 2), end];
 
-  return <div className="rot-timeline">
-    <svg ref={svg} viewBox={`0 0 ${WIDTH} ${LINE + RIBBON + 3}`} preserveAspectRatio="none" role="slider"
-      aria-label="Replay date" aria-valuemin={start} aria-valuemax={end} aria-valuenow={cursor} aria-valuetext={dateLabel(cursor)} tabIndex={0}
-      onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); scrub(event); }}
-      onPointerMove={event => { if (event.buttons) scrub(event); }}
-      onKeyDown={event => {
-        if (event.key === 'ArrowLeft') { event.preventDefault(); onScrub(Math.max(start, cursor - 1)); }
-        if (event.key === 'ArrowRight') { event.preventDefault(); onScrub(Math.min(end, cursor + 1)); }
-      }}>
-      <rect className="rot-window" x={x(windowStart)} width={Math.max(2, x(cursor) - x(windowStart))} y={0} height={LINE + RIBBON + 3} />
-      <path className="rot-line" d={path} vectorEffect="non-scaling-stroke" />
-      {bands}
-      <line className="rot-cursor" x1={x(cursor)} x2={x(cursor)} y1={0} y2={LINE + RIBBON + 3} vectorEffect="non-scaling-stroke" />
-    </svg>
-    <div className="rot-ticks" aria-hidden="true">{ticks.map(index => <span key={index}>{dates[index] ? dateLabel(index) : ''}</span>)}</div>
-  </div>;
+  return (
+    <div className="rot-timeline flex min-w-0 flex-1 flex-col">
+      <svg
+        ref={svg}
+        viewBox={`0 0 ${WIDTH} ${LINE + RIBBON + 3}`}
+        preserveAspectRatio="none"
+        role="slider"
+        aria-label="Replay date"
+        aria-valuemin={start}
+        aria-valuemax={end}
+        aria-valuenow={cursor}
+        aria-valuetext={dateLabel(cursor)}
+        tabIndex={0}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          scrub(event);
+        }}
+        onPointerMove={(event) => {
+          if (event.buttons) scrub(event);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            onScrub(Math.max(start, cursor - 1));
+          }
+          if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            onScrub(Math.min(end, cursor + 1));
+          }
+        }}
+        className="h-7 w-full cursor-ew-resize rounded transition focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <rect
+          className="rot-window"
+          x={x(windowStart)}
+          width={Math.max(2, x(cursor) - x(windowStart))}
+          y={0}
+          height={LINE + RIBBON + 3}
+        />
+        <path className="rot-line" d={path} vectorEffect="non-scaling-stroke" />
+        {bands}
+        <line
+          className="rot-cursor"
+          x1={x(cursor)}
+          x2={x(cursor)}
+          y1={0}
+          y2={LINE + RIBBON + 3}
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      <div className="flex justify-between pt-0.5 text-[10px] font-medium tabular-nums text-muted" aria-hidden="true">
+        {ticks.map((index) => (
+          <span key={index}>{dates[index] ? dateLabel(index) : ''}</span>
+        ))}
+      </div>
+    </div>
+  );
 }

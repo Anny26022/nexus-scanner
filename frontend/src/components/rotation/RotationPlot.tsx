@@ -238,18 +238,18 @@ export function RotationPlot(props: Props) {
         ctx.fillText(text, box.x + 6, box.y + 12.5);
       }
       ctx.restore();
-      // Live quadrant names, quietly in each corner.
-      ctx.font = '650 10.5px Inter, system-ui, sans-serif';
+      // Live quadrant watermark labels in each corner.
+      ctx.font = '600 11px Inter, system-ui, sans-serif';
       const corner = (quadrant: Quadrant, x: number, y: number, align: CanvasTextAlign) => {
         ctx.textAlign = align;
         ctx.fillStyle = palette[quadrant];
-        ctx.globalAlpha = 0.85;
-        ctx.fillText(LABEL[quadrant], x, y);
+        ctx.globalAlpha = 0.75;
+        ctx.fillText(LABEL[quadrant].toUpperCase(), x, y);
       };
-      corner('improving', left + 12, top + 20, 'left');
-      corner('leading', left + width - 12, top + 20, 'right');
-      corner('lagging', left + 12, top + height - 12, 'left');
-      corner('weakening', left + width - 12, top + height - 12, 'right');
+      corner('improving', left + 14, top + 20, 'left');
+      corner('leading', left + width - 14, top + 20, 'right');
+      corner('lagging', left + 14, top + height - 12, 'left');
+      corner('weakening', left + width - 14, top + height - 12, 'right');
       ctx.globalAlpha = 1;
       if (state.hover) showTip(state.hover, index);
     };
@@ -317,8 +317,10 @@ export function RotationPlot(props: Props) {
     };
   });
 
-  return <div ref={wrap} className="rot-plot">
-    <canvas ref={canvas} role="img" aria-label="Relative rotation graph: RS-Ratio against RS-Momentum" />
-    <div ref={tip} className="rot-tip" hidden />
-  </div>;
+  return (
+    <div ref={wrap} className="relative flex-1 min-h-[360px] w-full h-full">
+      <canvas ref={canvas} role="img" aria-label="Relative rotation graph: RS-Ratio against RS-Momentum" className="absolute inset-0 block w-full h-full" />
+      <div ref={tip} className="rot-tip" hidden />
+    </div>
+  );
 }

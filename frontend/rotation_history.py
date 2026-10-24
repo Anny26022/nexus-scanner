@@ -224,6 +224,13 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None):
             sums[key] = (array('d', [0]) * length, array('I', [0]) * length)
         accumulate(*sums[key], values, ranges)
 
+    # Curated / emerging themes that allow multiple membership:
+    emerging = {}
+    for s, r in taxonomy.items():
+        for m, basis in (r.get('memberships') or {}).items():
+            if basis == 'curated-rule' and m and m.lower() not in IGNORED_LABELS:
+                emerging.setdefault(s, set()).add(m)
+
     # One symbol's raw prices at a time. Historical constituents remain in the ledger after removal.
     for symbol, history in sorted(ledger['records'].items()):
         points = (closes(symbol) if callable(closes) else closes.get(symbol)) or []
@@ -237,6 +244,13 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None):
                 key = f'{level}:{label}'
                 add(key, values, intersect(ranges, allowed))
                 if symbol in today and today[symbol][position] == label and ledger['eligibility'][symbol][-1][1]:
+                    members.setdefault(key, []).append(symbol)
+        # Include emerging / curated themes under the 'theme' group level
+        if symbol in emerging and allowed:
+            for theme_name in emerging[symbol]:
+                key = f'theme:{theme_name}'
+                add(key, values, allowed)
+                if ledger['eligibility'][symbol][-1][1]:
                     members.setdefault(key, []).append(symbol)
         row = rows_by_symbol.get(symbol)
         if row is None:

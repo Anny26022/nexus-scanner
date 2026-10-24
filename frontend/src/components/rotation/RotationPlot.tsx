@@ -15,8 +15,10 @@ interface Props {
   /** Milliseconds a step takes to glide; 0 jumps (scrubbing). */
   glide: number;
   focusId: string | null;
-  /** Items drawn with trails and labels; the rest stay as faint dots. */
-  spotlight: ReadonlySet<string>;
+  /** 0–1 per item: how strongly its trail is drawn, from how far it moved. Everything is plotted. */
+  emphasis: ReadonlyMap<string, number>;
+  /** Items that carry a name label (the biggest movers); the focused item is always labelled. */
+  labelled: ReadonlySet<string>;
   onHover: (id: string | null) => void;
   onSelect: (id: string | null) => void;
   onOpen: (id: string) => void;
@@ -149,27 +151,21 @@ export function RotationPlot(props: Props) {
       const focus = props.focusId ?? state.hover;
       const counts: Record<Quadrant, number> = {leading: 0, weakening: 0, lagging: 0, improving: 0};
       heads.clear();
-      const visible: {track: Track; head: RotationPoint; quadrant: Quadrant; lit: boolean}[] = [];
+      const visible: {track: Track; head: RotationPoint; quadrant: Quadrant; weight: number}[] = [];
       for (const track of props.tracks) {
         const head = at(track, index);
         if (!head) continue;
         const quadrant = quadrantOf(head);
         counts[quadrant]++;
-        // Spotlit items carry trails and labels; everything else is a quiet dot for context.
-        visible.push({track, head, quadrant, lit: track.item.id === focus || (!focus && props.spotlight.has(track.item.id))});
+        // Every item is plotted; the ones that moved most draw strongest, so the flow reads at a glance.
+        const weight = focus ? (track.item.id === focus ? 1 : 0.06) : 0.12 + 0.88 * (props.emphasis.get(track.item.id) ?? 0);
+        visible.push({track, head, quadrant, weight});
       }
+      visible.sort((a, b) => a.weight - b.weight);
       ctx.save();
       ctx.beginPath(); ctx.rect(left, top, width, height); ctx.clip();
       const surface = color('--rrg-surface');
-      for (const {track, head, quadrant, lit} of visible) {
-        if (lit) continue;
-        const x = px(head.x), y = py(head.y);
-        heads.set(track.item.id, {x, y});
-        ctx.globalAlpha = focus ? 0.12 : 0.32;
-        ctx.fillStyle = palette[quadrant];
-        ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill();
-      }
-      const lit = visible.filter(entry => entry.lit);
+      const lit = visible;
       // The focused item also shows its whole path through the replay window.
       const focused = focus ? lit.find(entry => entry.track.item.id === focus) : undefined;
       if (focused) {
@@ -189,7 +185,7 @@ export function RotationPlot(props: Props) {
       }
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      for (const {track, head, quadrant} of lit) {
+      for (const {track, head, quadrant, weight} of lit) {
         // A smooth tapered trail: the oldest end fades out and thins.
         const points = [head];
         for (let k = 1; k <= props.tail; k++) {
@@ -200,29 +196,32 @@ export function RotationPlot(props: Props) {
         ctx.strokeStyle = palette[quadrant];
         for (let k = 1; k < points.length; k++) {
           const share = 1 - (k - 1) / Math.max(1, points.length - 1);
-          ctx.globalAlpha = 0.15 + 0.75 * share;
-          ctx.lineWidth = 0.8 + 1.8 * share;
+          ctx.globalAlpha = weight * (0.15 + 0.75 * share);
+          ctx.lineWidth = (0.6 + 2 * share) * (0.6 + 0.4 * weight);
           ctx.beginPath(); ctx.moveTo(px(points[k - 1].x), py(points[k - 1].y)); ctx.lineTo(px(points[k].x), py(points[k].y)); ctx.stroke();
         }
         for (let k = 1; k < points.length; k++) {
-          ctx.globalAlpha = 0.25 + 0.5 * (1 - k / points.length);
+          ctx.globalAlpha = weight * (0.25 + 0.5 * (1 - k / points.length));
           ctx.fillStyle = palette[quadrant];
           ctx.beginPath(); ctx.arc(px(points[k].x), py(points[k].y), 1.6, 0, Math.PI * 2); ctx.fill();
         }
       }
       ctx.globalAlpha = 1;
-      for (const {track, head, quadrant} of lit) {
+      for (const {track, head, quadrant, weight} of lit) {
         const x = px(head.x), y = py(head.y);
         heads.set(track.item.id, {x, y});
+        ctx.globalAlpha = Math.max(0.35, weight);
         ctx.fillStyle = palette[quadrant];
         ctx.strokeStyle = surface;
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(x, y, track.item.id === focus ? 6 : 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(x, y, track.item.id === focus ? 6 : 2.5 + 2 * weight, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       }
+      ctx.globalAlpha = 1;
       // Labels only for spotlit items, as quiet pills, skipping any that would collide.
       const placed: {x: number; y: number; w: number; h: number}[] = [];
       ctx.font = '600 11px Inter, system-ui, sans-serif';
-      for (const {track, head} of [...lit].sort((a, b) => (b.track.item.id === focus ? 1 : 0) - (a.track.item.id === focus ? 1 : 0))) {
+      const named = lit.filter(entry => focus ? entry.track.item.id === focus : props.labelled.has(entry.track.item.id));
+      for (const {track, head} of named.sort((a, b) => b.weight - a.weight)) {
         const text = track.item.label.length > 22 ? `${track.item.label.slice(0, 21).trimEnd()}…` : track.item.label;
         const w = ctx.measureText(text).width + 12, h = 18;
         const x0 = px(head.x), y0 = py(head.y);

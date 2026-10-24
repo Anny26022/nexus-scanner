@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { Check, ChevronDown, Copy, Minus, Pause, Play, Plus, Search, SkipBack, SkipForward, X } from 'lucide-react';
 import {
-  DEFAULT_RANGE, DEFAULT_TAIL, FRAME_LABEL, LEVELS, LEVEL_LABEL, RANGES, benchmarkCloses, itemsFor, rangeLength, tracks, travel,
+  DEFAULT_RANGE, DEFAULT_TAIL, FRAME_LABEL, LEVELS, LEVEL_LABEL, RANGES, benchmarkCloses, displayLabel, itemsFor, rangeLength, tracks, travel,
   type Benchmark, type BenchmarkCode, type Frame, type RotationItem, type RotationShardName, type Track, type Universe,
 } from '../api/rotation';
 import { screenerApi } from '../api/screenerApi';
@@ -23,8 +23,10 @@ const SPEEDS = [0.5, 1, 2];
 const BENCHMARK_ORDER: BenchmarkCode[] = ['EW', 'N50', 'N100', 'N500', 'MID150', 'SML250', 'MS400', 'TOTAL'];
 const STEP_MS = 620;
 const LIST_LIMIT = 150;
-/** Trails drawn by default: the items that rotated furthest, so the chart opens on what matters. */
-const AUTO_SPOTLIGHT = 8;
+/** Names on the chart: the items that moved furthest over the trail. Everything is plotted regardless. */
+const LABELLED = 10;
+/** Items named in the flow summary on each side. */
+const FLOW_NAMES = 4;
 type ListSort = TrackerSort;
 
 const universeKey = (universe: Universe) => universe.kind === 'stocks' ? `stocks:${universe.code}`
@@ -45,7 +47,8 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
   const index = useQuery({queryKey: ['rotation-index', datasetRevision], queryFn: () => screenerApi.getRotationIndex(datasetRevision),
     staleTime: Infinity, retry: 1});
   const [view, setView] = useState<'chart' | 'tracker'>('chart');
-  const [universe, setUniverse] = useState<Universe>({kind: 'level', level: 'sector'});
+  // Thematic blocks (about 30) read cleanly with every trail drawn; finer levels are one click away.
+  const [universe, setUniverse] = useState<Universe>({kind: 'level', level: 'block'});
   const [back, setBack] = useState<Universe | null>(null);
   const [frame, setFrame] = useState<Frame>('W');
   const [range, setRange] = useState(DEFAULT_RANGE.W);
@@ -59,7 +62,6 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
   const [focusId, setFocus] = useState<string | null>(null);
   const [hoverId, setHover] = useState<string | null>(null);
   const [quadrant, setQuadrant] = useState<Quadrant | null>(null);
-  const [picked, setPicked] = useState<ReadonlySet<string> | null>(null);
   const [filters, setFilters] = useState<LiquidityFilters>(NO_FILTERS);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ListSort>('quadrant');
@@ -77,7 +79,7 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
     const code = benchmarkChoice && benchmarkChoice !== 'GROUP' ? benchmarkChoice : isGroups ? 'EW' : own;
     benchmark = data?.benchmarks[code] ? code : 'N500';
   }
-  const benchmarkName = typeof benchmark === 'string' ? data?.benchmarks[benchmark]?.name : group?.n;
+  const benchmarkName = typeof benchmark === 'string' ? data?.benchmarks[benchmark]?.name : group && displayLabel(group.n);
 
   const items = useMemo(() => {
     const all = data ? itemsFor(data, universe, watchlist) : [];
@@ -123,11 +125,6 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
     }
     return counts;
   }), [allTracks, start, end]);
-  // The default spotlight is chosen at the latest period and kept through replay, so trails do not hop.
-  const auto = useMemo(() => new Set([...allTracks].sort((a, b) => travel(b, end, tail, half) - travel(a, end, tail, half))
-    .slice(0, AUTO_SPOTLIGHT).map(track => track.item.id)), [allTracks, end, tail, half]);
-  const spotlight = picked ?? auto;
-
   const at = (track: Track, i = cursor) => ({x: track.ratio[i], y: track.momentum[i]});
   const live = allTracks.filter(track => Number.isFinite(track.ratio[cursor]) && Number.isFinite(track.momentum[cursor]));
   const counts = Object.fromEntries(QUADRANTS.map(q => [q, live.filter(track => quadrantOf(at(track)) === q).length])) as Record<Quadrant, number>;
@@ -146,6 +143,19 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
     : sort === 'ratio' ? b.point.x - a.point.x : sort === 'momentum' ? b.point.y - a.point.y : sort === 'moved' ? b.moved - a.moved
     : QUADRANTS.indexOf(a.quadrant) - QUADRANTS.indexOf(b.quadrant) || b.moved - a.moved;
   const rows = matching.map(describe).sort(order);
+  // How strongly each trail draws and which carry names: by how far each moved over the trail, right now.
+  const moved = new Map(inQuadrant.map(track => [track.item.id, travel(track, cursor, tail, half)]));
+  const peak = Math.max(1e-9, ...moved.values());
+  const emphasis = new Map([...moved].map(([id, value]) => [id, (value / peak) ** 0.75]));
+  const labelled = new Set([...moved].sort((a, b) => b[1] - a[1]).slice(0, LABELLED).map(([id]) => id));
+  // Where money is flowing: RS-Ratio rising (gaining relative strength) or falling over the trail.
+  const flow = live.map(track => {
+    let from = Math.max(0, cursor - tail);
+    while (from < cursor && !Number.isFinite(track.ratio[from])) from++;
+    return {track, change: (track.ratio[cursor] - track.ratio[from]) / half.x};
+  }).filter(entry => Number.isFinite(entry.change));
+  const flowingIn = flow.filter(entry => entry.change > 0).sort((a, b) => b.change - a.change).slice(0, FLOW_NAMES);
+  const flowingOut = flow.filter(entry => entry.change < 0).sort((a, b) => a.change - b.change).slice(0, FLOW_NAMES);
 
   // Playback: one step per tick, gliding between steps; stops at the latest period.
   const playback = useRef({playing, speed, cursor, start, end});
@@ -188,15 +198,10 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
     setGlide(280);
     setCursor(Math.min(state.end, Math.max(state.start, target)));
   }
-  const resetView = () => { setCursor(null); setPlaying(false); setFocus(null); setQuadrant(null); setPicked(null); };
+  const resetView = () => { setCursor(null); setPlaying(false); setFocus(null); setQuadrant(null); };
   const chooseUniverse = (next: Universe, from: Universe | null = null) => { setUniverse(next); setBack(from); setBenchmark(null); resetView(); setQuery(''); };
   const chooseFrame = (next: Frame) => { setFrame(next); setRange(DEFAULT_RANGE[next]); setTail(DEFAULT_TAIL[next]); resetView(); };
   const open = (item: RotationItem) => item.kind === 'group' ? chooseUniverse({kind: 'members', group: item.id}, universe) : onOpenChart(item.id);
-  const toggleSpotlight = (id: string) => setPicked(current => {
-    const next = new Set(current ?? auto);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
   const copySymbols = async () => {
     const symbols = isGroups
       ? [...new Set((focusId ? matching.filter(track => track.item.id === focusId) : matching).flatMap(track => track.item.members ?? []))]
@@ -207,7 +212,7 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
       setTimeout(() => setCopied(false), 1400);
     } catch { /* Clipboard access can be refused; nothing else to do. */ }
   };
-  const scopeLabel = group ? group.n : universe.kind === 'level' ? LEVEL_LABEL[universe.level]
+  const scopeLabel = group ? displayLabel(group.n) : universe.kind === 'level' ? LEVEL_LABEL[universe.level]
     : universe.kind === 'stocks' ? STOCK_UNIVERSES.find(([code]) => code === universe.code)?.[1] ?? '' : '';
   const unit = frame === 'D' ? 'd' : frame === 'W' ? 'w' : 'm';
 
@@ -245,7 +250,7 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
           {RANGES[frame].map(([label]) => <option key={label} value={label}>{label}</option>)}
         </Select>
         <Select label="Benchmark" value={typeof benchmark === 'string' ? benchmark : 'GROUP'} onChange={value => setBenchmark(value as BenchmarkCode | 'GROUP')}>
-          {group && <option value="GROUP">vs {group.n}</option>}
+          {group && <option value="GROUP">vs {displayLabel(group.n)}</option>}
           {BENCHMARK_ORDER.filter(code => data.benchmarks[code]).map(code => <option key={code} value={code}>vs {data.benchmarks[code]!.name}</option>)}
         </Select>
         <div className="rot-stepper" aria-label="Trail length">
@@ -253,7 +258,7 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
           <span>{tail}{unit}<small> trail</small></span>
           <button type="button" aria-label="Longer trail" disabled={tail >= 30} onClick={() => setTail(value => Math.min(30, value + 1))}><Plus size={12} /></button>
         </div>
-        <RotationFilters filters={filters} onChange={next => { setFilters(next); setPicked(null); }} disabled={isGroups} />
+        <RotationFilters filters={filters} onChange={setFilters} disabled={isGroups} />
       </div>
     </header>
 
@@ -271,19 +276,14 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
             <option value="momentum">RS-Momentum</option><option value="name">Name</option>
           </Select>
         </div>
-        <div className="rot-spot">
-          <span>Trails</span>
-          <button type="button" aria-pressed={picked === null} onClick={() => setPicked(null)}>Top movers</button>
-          <button type="button" aria-pressed={picked !== null && picked.size === 0} onClick={() => setPicked(new Set())}>None</button>
-        </div>
-        <RotationList rows={rows.slice(0, LIST_LIMIT) as ListRow[]} total={rows.length} focusId={focusId} hoverId={hoverId} spotlight={spotlight}
-          onFocus={setFocus} onSpotlight={toggleSpotlight} onOpen={open} />
+        <RotationList rows={rows.slice(0, LIST_LIMIT) as ListRow[]} total={rows.length} focusId={focusId} hoverId={hoverId}
+          onFocus={setFocus} onOpen={open} />
       </aside>}
 
       <main className="rot-main">
         <div className="rot-bar">
           {group ? <div className="rot-crumb"><button type="button" onClick={() => back && chooseUniverse(back)}>{back?.kind === 'level' ? LEVEL_LABEL[back.level] : 'Back'}</button>
-            <span>/</span><b>{group.n}</b><button type="button" aria-label="Close group" onClick={() => back && chooseUniverse(back)}><X size={12} /></button></div>
+            <span>/</span><b>{displayLabel(group.n)}</b><button type="button" aria-label="Close group" onClick={() => back && chooseUniverse(back)}><X size={12} /></button></div>
             : <span className="rot-date">{dateLabel(cursor)}</span>}
           <div className="rot-chips" role="group" aria-label="Filter by quadrant">
             {CHIP_ORDER.map(q => <button key={q} type="button" data-quadrant={q} aria-pressed={quadrant === q}
@@ -291,8 +291,17 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
           </div>
           {view === 'tracker' && search}
         </div>
+        {ready && (flowingIn.length > 0 || flowingOut.length > 0) && <div className="rot-flow" aria-label={`Flow over the last ${tail}${unit}`}>
+          {([['in', 'Money flowing in', flowingIn], ['out', 'Flowing out', flowingOut]] as const).map(([side, title, list]) => list.length > 0 &&
+            <div key={side} className="rot-flow-side" data-side={side}>
+              <span>{title}<small> · {tail}{unit}</small></span>
+              {list.map(({track}) => <button key={track.item.id} type="button" data-quadrant={quadrantOf(at(track))}
+                aria-pressed={focusId === track.item.id} onClick={() => setFocus(focusId === track.item.id ? null : track.item.id)}>
+                <i />{track.item.label}</button>)}
+            </div>)}
+        </div>}
         {view === 'chart' ? <section className="rot-stage" aria-label="Rotation chart">
-          {state ?? <RotationPlot tracks={inQuadrant} cursor={cursor} rangeStart={start} tail={tail} half={half} glide={glide} spotlight={spotlight}
+          {state ?? <RotationPlot tracks={inQuadrant} cursor={cursor} rangeStart={start} tail={tail} half={half} glide={glide} emphasis={emphasis} labelled={labelled}
             focusId={focusId} onHover={setHover} onSelect={setFocus} dateLabel={dateLabel}
             onOpen={id => { const item = allTracks.find(track => track.item.id === id)?.item; if (item) open(item); }} />}
         </section> : <section className="rot-stage is-table" aria-label="Rotation tracker">

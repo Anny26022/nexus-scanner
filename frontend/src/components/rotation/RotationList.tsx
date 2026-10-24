@@ -1,4 +1,4 @@
-import { CandlestickChart, Check, ChevronRight } from 'lucide-react';
+import { CandlestickChart, ChevronRight } from 'lucide-react';
 import type { RotationItem } from '../../api/rotation';
 import type { Quadrant, RotationPoint } from '../../utils/rrg';
 
@@ -15,9 +15,7 @@ interface Props {
   total: number;
   focusId: string | null;
   hoverId: string | null;
-  spotlight: ReadonlySet<string>;
   onFocus: (id: string | null) => void;
-  onSpotlight: (id: string) => void;
   onOpen: (item: RotationItem) => void;
 }
 
@@ -27,17 +25,13 @@ export function Heading({angle}: {angle: number | null}) {
   </span>;
 }
 
-/** The rail beside the chart: tick an item to give it a trail, click it to focus. */
-export function RotationList({rows, total, focusId, hoverId, spotlight, onFocus, onSpotlight, onOpen}: Props) {
+/** The rail beside the chart: where each item is and which way it is heading. Click one to follow it. */
+export function RotationList({rows, total, focusId, hoverId, onFocus, onOpen}: Props) {
   return <div className="rot-list" role="list">
     {rows.map(({item, point, quadrant, angle}) => {
-      const lit = spotlight.has(item.id);
       return <div key={item.id} role="listitem" className="rot-row" data-quadrant={quadrant}
         data-focus={focusId === item.id || undefined} data-hover={hoverId === item.id || undefined}>
-        <button type="button" className="rot-check" role="checkbox" aria-checked={lit}
-          aria-label={lit ? `Hide ${item.label} trail` : `Show ${item.label} trail`} onClick={() => onSpotlight(item.id)}>
-          {lit && <Check size={11} strokeWidth={3} />}
-        </button>
+        <i className="rot-dot" aria-hidden="true" />
         <button type="button" className="rot-name" onClick={() => onFocus(focusId === item.id ? null : item.id)} title={item.detail}>
           <b>{item.label}</b><span>{item.detail}</span>
         </button>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { bounds, heading, quadrantOf, rotation } from '../utils/rrg';
-import { decode, itemsFor, rangeLength, type RotationIndex } from '../api/rotation';
+import { decode, displayLabel, itemsFor, rangeLength, type RotationIndex } from '../api/rotation';
 
 const index = {
   schemaVersion: 1, asOfDate: '2026-10-23', scale: 10_000,
@@ -82,4 +82,12 @@ describe('rotation views', () => {
     const withFields = {...index, stocks: [{s: 'A', n: 'Alpha', u: ['N50'], h: 'core' as const, c: 1200, t: 8, b: '20'}]};
     expect(itemsFor(withFields, {kind: 'stocks', code: 'N50'}, new Set())[0]).toMatchObject({cap: 1200, turnover: 8, band: '20'});
   });
+});
+
+it('softens shouting labels but keeps acronyms', () => {
+  expect(displayLabel('FMCG CLUSTERS')).toBe('FMCG Clusters');
+  expect(displayLabel('BANKING & FINANCIAL SERVICES')).toBe('Banking & Financial Services');
+  expect(displayLabel('Lifestyle & Retail')).toBe('Lifestyle & Retail');
+  expect(displayLabel('DATA CENTER ECOSYSTEM')).toBe('Data Center Ecosystem');
+  expect(displayLabel('IT PSU')).toBe('IT PSU');
 });

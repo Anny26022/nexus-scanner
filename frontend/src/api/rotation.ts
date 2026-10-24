@@ -73,6 +73,10 @@ export function decode(coded: Coded | null | undefined, length: number, scale: n
   return values;
 }
 
+/** Classification labels arrive in mixed case; shouting ones read as title case, keeping acronyms (FMCG, IT, PSU). */
+export const displayLabel = (label: string) => label !== label.toUpperCase() ? label
+  : label.replace(/[A-Z][A-Z]+/g, word => word.length <= 3 || !/[AEIOU]/.test(word) ? word : word[0] + word.slice(1).toLowerCase());
+
 export function itemsFor(index: RotationIndex, universe: Universe, watchlist: ReadonlySet<string>): RotationItem[] {
   const stock = (row: RotationIndex['stocks'][number]): RotationItem =>
     ({id: row.s, label: row.s, detail: row.n, kind: 'stock', shard: row.h, cap: row.c, turnover: row.t, band: row.b});
@@ -84,7 +88,7 @@ export function itemsFor(index: RotationIndex, universe: Universe, watchlist: Re
   }
   if (universe.kind === 'level') {
     return index.groups.filter(group => group.l === universe.level)
-      .map(group => ({id: group.id, label: group.n, detail: `${group.m.length} stocks`, kind: 'group', shard: 'groups', members: group.m}));
+      .map(group => ({id: group.id, label: displayLabel(group.n), detail: `${group.m.length} stocks`, kind: 'group', shard: 'groups', members: group.m}));
   }
   const members = new Set(index.groups.find(group => group.id === universe.group)?.m ?? []);
   return index.stocks.filter(row => members.has(row.s)).map(stock);

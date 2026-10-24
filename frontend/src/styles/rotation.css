@@ -52,18 +52,11 @@
 .rot-search:focus-within { box-shadow: var(--ring); }
 .rot-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; outline: none; }
 .rot-search input:focus-visible { box-shadow: none; }
-.rot-spot { display: flex; align-items: center; gap: 4px; padding: 0 4px; color: var(--muted); font-size: 11.5px; }
-.rot-spot span { margin-right: auto; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; font-size: 10.5px; }
-.rot-spot button { height: 24px; padding: 0 9px; border: 0; border-radius: 999px; background: none; color: var(--secondary); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
-.rot-spot button:hover { color: var(--text); }
-.rot-spot [aria-pressed="true"] { background: var(--field); color: var(--text); }
 .rot-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px; scrollbar-width: thin; }
-.rot-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) 22px 46px 24px; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px; border-radius: 10px; }
+.rot-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) 22px 46px 24px; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px; border-radius: 10px; }
 .rot-row:hover, .rot-row[data-hover] { background: var(--surface-hover); }
 .rot-row[data-focus] { background: color-mix(in srgb, var(--q) 11%, transparent); }
-.rot-check { display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 1.5px solid color-mix(in srgb, var(--q) 70%, transparent);
-  border-radius: 6px; background: transparent; color: var(--surface); cursor: pointer; }
-.rot-check[aria-checked="true"] { border-color: var(--q); background: var(--q); }
+.rot-dot { width: 8px; height: 8px; margin: 0 auto; border-radius: 50%; background: var(--q); }
 .rot-name { display: flex; flex-direction: column; min-width: 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .rot-name b { overflow: hidden; font-size: 12.5px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }
 .rot-name span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
@@ -89,6 +82,18 @@
 .rot-chips [aria-pressed="true"] { background: color-mix(in srgb, var(--q) 14%, transparent); color: var(--text); }
 .rot-chips:has([aria-pressed="true"]) button:not([aria-pressed="true"]) { opacity: .45; }
 .rot-bar .rot-search { flex: 0 1 240px; }
+/* Flow summary: the answer to "where is money going" in one line. */
+.rot-flow { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: -2px; }
+.rot-flow-side { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.rot-flow-side > span { margin-right: 4px; color: var(--muted); font-size: 11.5px; font-weight: 640; }
+.rot-flow-side > span small { font-weight: 500; }
+.rot-flow-side[data-side="in"] > span { color: var(--rrg-leading); }
+.rot-flow-side[data-side="out"] > span { color: var(--rrg-lagging); }
+.rot-flow-side button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 0; border-radius: 999px;
+  background: var(--field); color: var(--text); font: inherit; font-size: 12px; font-weight: 580; cursor: pointer; }
+.rot-flow-side button i { width: 6px; height: 6px; border-radius: 50%; background: var(--q); }
+.rot-flow-side button:hover { background: color-mix(in srgb, var(--q) 12%, var(--field)); }
+.rot-flow-side [aria-pressed="true"] { background: var(--text); color: var(--surface); }
 .rot-crumb { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 12px; border-radius: 999px; background: var(--text); color: var(--surface); font-size: 12px; }
 .rot-crumb button { display: grid; place-items: center; padding: 0; border: 0; background: none; color: color-mix(in srgb, var(--surface) 70%, transparent); font: inherit; cursor: pointer; }
 .rot-crumb button:last-child { width: 20px; height: 20px; border-radius: 50%; }
@@ -174,7 +179,7 @@
 @media (max-width: 860px) {
   .rot { overflow-y: auto; gap: 12px; padding: 12px 14px 20px; }
   .rot > * { flex-shrink: 0; }
-  .rot-controls { flex-wrap: nowrap; width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .rot-controls { flex: 1 1 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .rot-controls::-webkit-scrollbar { display: none; }
   .rot-controls > * { flex: none; }
   .rot-body { display: flex; flex: none; flex-direction: column-reverse; gap: 14px; min-height: auto; }
@@ -186,6 +191,11 @@
   .rot-rail { gap: 8px; }
   .rot-list { overflow: visible; }
   .rot-chips { margin-left: 0; }
+  .rot-flow { flex-direction: column; gap: 6px; }
+  .rot-flow-side { flex-wrap: nowrap; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .rot-flow-side::-webkit-scrollbar { display: none; }
+  .rot-flow-side > * { flex: none; }
+  .rot-flow-side button { white-space: nowrap; }
   .rot-dock { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .rot-trow { grid-template-columns: 24px minmax(0, 1fr) 84px 60px 24px; }
   .rot-trow > :nth-child(3), .rot-trow > :nth-child(5), .rot-trow > :nth-child(6), .rot-trow > :nth-child(8) { display: none; }

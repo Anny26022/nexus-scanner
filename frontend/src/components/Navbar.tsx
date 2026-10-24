@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { Sun, Moon, ArrowUpRight, PanelLeftClose, ScanSearch, Rocket, CandlestickChart, Gauge, Search } from 'lucide-react';
+import { Sun, Moon, ArrowUpRight, PanelLeftClose, ScanSearch, Rocket, CandlestickChart, Gauge, Search, CalendarCheck } from 'lucide-react';
 
-export type AppTab = 'screener' | 'market' | 'ipo' | 'charts';
+export type AppTab = 'screener' | 'market' | 'earnings' | 'ipo' | 'charts';
 
 interface NavbarProps {
   activeTab: AppTab;
@@ -17,6 +17,7 @@ const SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navi
 
 const NAV_ITEMS = [
   { id: 'screener', label: 'Screener', Icon: ScanSearch },
+  { id: 'earnings', label: 'Earnings', Icon: CalendarCheck },
   { id: 'ipo', label: 'IPO Catalogue', Icon: Rocket },
   { id: 'charts', label: 'Charts', Icon: CandlestickChart },
   { id: 'market', label: 'Market', Icon: Gauge },

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
-import { Bookmark, CandlestickChart, CornerDownLeft, Gauge, Moon, Rocket, ScanSearch, Search, Sun } from 'lucide-react';
+import { Bookmark, CandlestickChart, CornerDownLeft, Gauge, Moon, Rocket, ScanSearch, Search, Sun, CalendarCheck } from 'lucide-react';
 import { rankSymbols, useSymbolDirectory } from '../hooks/useSymbolDirectory';
 import { parseSavedScreens, SAVED_SCREENS_KEY, type ScreenDefinition } from '../utils/savedScreens';
 import { describeScreen } from './SavedScreensMenu';
@@ -29,6 +29,7 @@ interface CommandPaletteProps {
 const PAGES: {tab: AppTab; label: string; keywords: string; Icon: typeof ScanSearch}[] = [
   {tab: 'screener', label: 'Screener', keywords: 'scan filter stocks', Icon: ScanSearch},
   {tab: 'market', label: 'Market overview', keywords: 'breadth sectors indices nifty', Icon: Gauge},
+  {tab: 'earnings', label: 'Earnings', keywords: 'results quarterly eps profit calendar upcoming', Icon: CalendarCheck},
   {tab: 'ipo', label: 'IPO Catalogue', keywords: 'listings new ipos', Icon: Rocket},
   {tab: 'charts', label: 'Charts', keywords: 'chart watchlist drawing', Icon: CandlestickChart},
 ];

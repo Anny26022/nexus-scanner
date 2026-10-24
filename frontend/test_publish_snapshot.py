@@ -295,7 +295,7 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(row['totalTaxExpensesLakh'],743400)
             self.assertEqual(row['debtToEquity'],0.44)
             self.assertEqual(row['financialUnitsVersion'],1)
-            self.assertEqual(row['debtToEquitySource'],'SCANX_Debt2Eq')
+            self.assertNotIn('debtToEquitySource', row)  # Names the upstream feed; never published.
             self.assertEqual(row['ttmRevenueGrowthPct'],20)
             self.assertEqual(row['financialHistoryObservedOn'],'2026-09-30')
             self.assertNotIn('financialStatementHistory',row)

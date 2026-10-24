@@ -29,7 +29,8 @@ from theme_classification import (classify, consolidated_classification, SOURCE_
                                   WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
 from pipeline_utils import resource_path
 from public_payload import public, public_ipos
-from market_overview import benchmark_series, market_overview
+from market_overview import benchmark_series, index_closes, market_overview
+import rotation_history
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
 TRADINGVIEW_FIELDS_PATH = resource_path('tradingview_fields.json')
@@ -49,6 +50,24 @@ def tradingview_row(stock, session):
             'fetchedAt':source.get('fetched_at'), 'updateMode':source.get('update_mode'),
             'exchange':source.get('exchange'), 'isPrimary':source.get('is_primary'),
             'primaryExchange':source.get('primary_exchange'), 'listingSymbol':source.get('listing_symbol'), 'values':values}
+
+
+def rotation_history_object(root, cache, rows, taxonomy, source_bytes, session, objects):
+    """Write the Rotation page's price history into the release objects; returns its index hash."""
+    # The longest view (ten years of months plus lookback) never needs more than about thirteen years.
+    since = f'{int(session[:4]) - 13}{session[4:]}'
+    closes = {}
+    for row in rows:
+        frame = cache.frame(root, row['symbol'], session)
+        if frame is None or frame.empty:
+            continue
+        frame = frame.loc[frame['Date'] >= since]
+        closes[row['symbol']] = list(zip(frame['Date'].dt.strftime('%Y-%m-%d'), frame['Close'].astype(float)))
+    from fetch_indices_ohlcv import get_safe_sym  # The index fetcher's own file naming.
+    benchmarks = {code: index_closes(root, source_bytes, symbol, session, csv_name=get_safe_sym(symbol))[0]
+                  for code, symbol in rotation_history.BENCHMARK_INDICES.items()}
+    index, shards = rotation_history.build(session, rows, closes, benchmarks, taxonomy.get('records', {}))
+    return rotation_history.write_objects(objects, index, shards)
 
 
 def write_json(path, payload):
@@ -304,7 +323,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     code_files.append(resource_path('taxonomy_overrides.json'))
     code_files.append(resource_path('stockscans_classification.json'))
     code_files.extend([Path(__file__).with_name('etf_snapshot.py'), resource_path('etf_fields.json'), resource_path('etf_enum_labels.json')])
-    code_files.extend([TRADINGVIEW_FIELDS_PATH, Path(__file__).with_name('public_payload.py')])
+    code_files.extend([TRADINGVIEW_FIELDS_PATH, Path(__file__).with_name('public_payload.py'), Path(__file__).with_name('rotation_history.py')])
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
@@ -443,6 +462,15 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = elapsed('serialization and compression', started)
     if etf_bytes is not None:
         manifest['etfDatasetUrl'] = f'/data/revisions/{revision}/etfs.json.gz'
+    if include_charts:
+        started = time.perf_counter()
+        try:
+            manifest['rotationHistoryObject'] = rotation_history_object(
+                root, cache, rows, taxonomy, source_bytes, session, chart_root / 'objects')
+        except (ValueError, KeyError, OSError) as error:
+            # Optional: the scanner release must not fail because the rotation view cannot be built.
+            print(f'WARNING: rotation history unavailable for {session}: {error}', flush=True)
+        elapsed('rotation history', started)
     session_record = archive_daily_snapshot(output, manifest)
     manifest = offload_plain_snapshot(output, manifest)
     current_path = output / 'current.json'

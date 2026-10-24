@@ -385,7 +385,7 @@ def complete_release(chart_root, output, manifest, store=None):
     if store is None and not charts_enabled():
         print('WARNING: R2 configuration missing (' + ', '.join(missing_r2_settings()) + '); publishing scanner data without charts.', flush=True)
         manifest = dict(manifest, schemaVersion=4)
-        for key in ('chartRevision', 'chartUrlTemplate', 'chartObjectPrefix', 'dataIndexUrl', 'objectUrlTemplate'):
+        for key in ('chartRevision', 'chartUrlTemplate', 'chartObjectPrefix', 'dataIndexUrl', 'objectUrlTemplate', 'rotationHistoryObject'):
             manifest.pop(key, None)
         write_json(output / 'revisions' / manifest['revision'] / 'release.json', manifest)
         write_json(output / 'current.json', manifest)
@@ -395,6 +395,7 @@ def complete_release(chart_root, output, manifest, store=None):
         return complete_object_release(chart_root, output, manifest, store)
     revision = chart_revision(chart_root, manifest['sessionDate'])
     manifest = dict(manifest, schemaVersion=6, chartRevision=revision)
+    manifest.pop('rotationHistoryObject', None)  # Legacy chart releases publish no shared objects.
     existing_release = output / 'revisions' / manifest['revision'] / 'release.json'
     if existing_release.exists():
         existing = json.loads(existing_release.read_text())

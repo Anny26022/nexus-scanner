@@ -28,6 +28,7 @@ from snapshot_technicals import technical_metrics, CONFIG_PATH
 from theme_classification import (classify, consolidated_classification, SOURCE_PATH as THEME_SOURCE_PATH,
                                   WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
 from pipeline_utils import resource_path
+from public_payload import public, public_ipos
 from market_overview import benchmark_series, market_overview
 
 OUTPUT = Path(__file__).resolve().parent/'public/data'
@@ -44,7 +45,7 @@ def tradingview_row(stock, session):
         currency = source.get('financial_currency' if field['section'] == 'financials' else 'currency')
         section = source.get(field['section']) or {}
         values[f"{field['section']}.{field['key']}"] = finite_number(section.get(field['key'])) if currency == 'INR' else None
-    return {'source':source['source'], 'asOfDate':source['as_of_date'],
+    return {'asOfDate':source['as_of_date'],
             'fetchedAt':source.get('fetched_at'), 'updateMode':source.get('update_mode'),
             'exchange':source.get('exchange'), 'isPrimary':source.get('is_primary'),
             'primaryExchange':source.get('primary_exchange'), 'listingSymbol':source.get('listing_symbol'), 'values':values}
@@ -131,7 +132,7 @@ def _stock_row(task, context, session, presets, default, memo_keys):
     row['metrics']=metrics
     tradingview = tradingview_row(stock, session)
     if tradingview is not None:
-        row['tradingview'] = tradingview
+        row['extended'] = tradingview
         # Intelligent fallback: If primary Nexus exchange data is missing/clipped, backfill from verified TV snapshot.
         tv_vals = tradingview.get('values') or {}
         if row.get('peRatio') is None and tv_vals.get('financials.pe_ttm') is not None:
@@ -303,7 +304,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     code_files.append(resource_path('taxonomy_overrides.json'))
     code_files.append(resource_path('stockscans_classification.json'))
     code_files.extend([Path(__file__).with_name('etf_snapshot.py'), resource_path('etf_fields.json'), resource_path('etf_enum_labels.json')])
-    code_files.append(TRADINGVIEW_FIELDS_PATH)
+    code_files.extend([TRADINGVIEW_FIELDS_PATH, Path(__file__).with_name('public_payload.py')])
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
@@ -322,11 +323,12 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         raise RuntimeError('Source data changed during snapshot publication; previous revision remains active. Retry publication.')
     digest.update(json.dumps(rows,sort_keys=True,separators=(',',':')).encode())
     revision=digest.hexdigest()
+    rows=public(rows)
     etf_source = source_bytes.get('etf_snapshot.json.gz')
     etf_bytes = None
     if etf_source:
         try:
-            etfs = build_etf_snapshot(json.loads(gzip.decompress(etf_source)), session, revision)
+            etfs = public(build_etf_snapshot(json.loads(gzip.decompress(etf_source)), session, revision))
             etf_bytes = json.dumps(pack_snapshot(etfs), separators=(',', ':'), allow_nan=False).encode()
         except (ValueError, KeyError, TypeError, OverflowError, OSError) as error:
             print(f'WARNING: ETF snapshot unavailable for {session}: {error}', flush=True)
@@ -353,9 +355,9 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         write_json(backend/'scanner_revision.json',{'revision':revision,'historyRevision':history_revision})
     started = elapsed('revision hashing and backend freezing', started)
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'technicalMetricsVersion':1,'referenceCounts':{'rvol15Sma50':default_count}}
-    payload['tradingViewMetricsVersion'] = 1
+    payload['extendedMetricsVersion'] = 1
     payload['presetRuleMatchesVersion'] = 1
-    taxonomy = classify(rows, session)
+    taxonomy = public(classify(rows, session))
     taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
     (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
     write_json(generation/'universe-classification.json', consolidated_classification(rows, taxonomy))
@@ -368,7 +370,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     (generation/'chart-directory.json.gz').write_bytes(gzip.compress(
         json.dumps(directory, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
     # Keep the full financial series out of every lightweight scanner row.
-    histories = {symbol: stock["financial_statement_history"] for symbol, stock in context['stocks'].items()
+    histories = {symbol: public(stock["financial_statement_history"]) for symbol, stock in context['stocks'].items()
                  if stock.get("financial_statement_history")}
     history_path = generation/'financial-history.json.gz'
     history_temporary = history_path.with_name(history_path.name+'.tmp')
@@ -394,14 +396,16 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     temporary.replace(packed_path)
     with gzip.open(root/'ipo_screener.json.gz','rt') as handle:
         ipos=json.load(handle)
-    ipo_payload=ipos if isinstance(ipos,dict) else {'records':ipos}
+    ipo_payload=public_ipos(ipos if isinstance(ipos,dict) else {'records':ipos})
     ipo_bytes=json.dumps(ipo_payload,separators=(',', ':'),allow_nan=False).encode()
     (generation/'ipos.json.gz').write_bytes(gzip.compress(ipo_bytes,compresslevel=9,mtime=0))
     calendar_bytes=source_bytes.get('earnings_calendar.json.gz')
     if calendar_bytes is not None:
         calendar_path=generation/'earnings-calendar.json.gz'
         temporary=calendar_path.with_name(calendar_path.name+'.tmp')
-        temporary.write_bytes(calendar_bytes); temporary.replace(calendar_path)
+        calendar=public(json.loads(gzip.decompress(calendar_bytes)))
+        temporary.write_bytes(gzip.compress(json.dumps(calendar, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
+        temporary.replace(calendar_path)
     benchmark=benchmark_series(root, source_bytes, session)
     if benchmark is not None:
         benchmark_path=generation/'benchmark.json.gz'

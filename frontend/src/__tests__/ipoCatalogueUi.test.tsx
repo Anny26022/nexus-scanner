@@ -105,8 +105,8 @@ it('opens the company IPO research card on hover and allows it to stay open by c
       offer: {issueSizeCrore: 365.76, freshIssueCrore: 499.83},
       subscription: {total: 2.5, retail: 1.12, nii: 3.93},
       provider: {listingPrice: 298.95, listingGainPct: -1.98, gmp: -5, gmpPct: -1.66},
-      ipoDecode: {fetchedAt: null, endpoints: []},
-      conflicts: [{field: 'issue_price', provider: 302, scanx: 305}],
+      issueDetail: {fetchedAt: null, endpoints: []},
+      conflicts: [{field: 'issue_price', provider: 302, secondary: 305}],
     },
   }]});
   const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
@@ -116,12 +116,12 @@ it('opens the company IPO research card on hover and allows it to stay open by c
   expect(await screen.findByRole('dialog', {name: 'Runwal Enterprises IPO details'})).toBeInTheDocument();
   expect(screen.getByText('₹302')).toBeInTheDocument();
   expect(screen.getByText('₹298.95')).toBeInTheDocument();
-  expect(screen.getByText(/issue price differs: IPO Decode 302; ScanX 305/i)).toBeInTheDocument();
+  expect(screen.getByText(/issue price differs: primary 302; secondary 305/i)).toBeInTheDocument();
   fireEvent.click(company);
   fireEvent.mouseLeave(company);
   const card = screen.getByRole('dialog', {name: 'Runwal Enterprises IPO details'});
   expect(card).toBeInTheDocument();
-  expect(screen.queryByRole('tab', {name: 'IPO Decode'})).not.toBeInTheDocument();
+  expect(screen.queryByRole('tab', {name: 'Details'})).not.toBeInTheDocument();
   fireEvent.keyDown(card, {key: 'Escape'});
   expect(screen.queryByRole('dialog', {name: 'Runwal Enterprises IPO details'})).not.toBeInTheDocument();
 });

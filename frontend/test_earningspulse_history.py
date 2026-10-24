@@ -143,6 +143,27 @@ class EarningsHistoryTests(unittest.TestCase):
             raw = store.objects[entry['published']['sha256']+'.json.gz']
             self.assertEqual(json.loads(gzip.decompress(raw))['records'][0]['quality'], 'Great')
 
+    def test_published_files_never_name_their_source(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output, store = Path(folder)/'index.json', Store()
+            self.run_refresh(output, store, lambda label: [{**self.row(label), 'summary_uri': 'https://provider/x.json'}])
+            index = json.loads(output.read_text())
+            self.assertNotIn('source', index)
+            payload = json.loads(gzip.decompress(store.objects[index['quarters']['2026-Q4']['published']['sha256']+'.json.gz']))
+            self.assertNotIn('source', payload)
+            self.assertNotIn('summary_uri', payload['records'][0])
+
+    def test_legacy_index_with_a_source_rewrites_every_quarter_once(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output, store = Path(folder)/'index.json', Store()
+            self.run_refresh(output, store)
+            output.write_text(json.dumps({**json.loads(output.read_text()), 'source': 'https://provider'}))
+            report = self.run_refresh(output, store, checked_at='2026-10-25T16:00:00+05:30')
+            self.assertEqual(set(report['quarters']), set(quarters_until(self.today)))
+            self.assertNotIn('source', json.loads(output.read_text()))
+            report = self.run_refresh(output, store, checked_at='2026-10-26T16:00:00+05:30')
+            self.assertEqual(set(report['quarters']), {'2026-Q3','2026-Q4'})
+
     def test_new_quarter_and_year_boundaries(self):
         self.assertEqual(quarter_bounds('2024-Q4'), (date(2024,10,1), date(2024,12,31)))
         self.assertEqual(quarters_until(date(2027,1,1))[-2:], ['2026-Q4','2027-Q1'])

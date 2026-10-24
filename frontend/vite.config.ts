@@ -124,6 +124,8 @@ export default defineConfig({
       });
     },
   }, localAiWorker()],
+  // Never ship source maps: they would publish the original source, comments included.
+  build: {sourcemap: false},
   server: {proxy: {'/api/screener/ai-compile': aiProxy}},
   preview: {proxy: {'/api/screener/ai-compile': aiProxy}},
   resolve: {

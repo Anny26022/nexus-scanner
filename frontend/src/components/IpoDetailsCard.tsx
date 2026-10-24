@@ -44,18 +44,18 @@ const Detail = ({label, value, featured = false}: {label: string; value: string 
 export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, top, placement, onClose, onMouseEnter, onMouseLeave}) => {
   if (typeof document === 'undefined') return null;
   const research = row.ipoResearch;
-  const scanx = research?.scanx;
+  const profile = research?.profile;
   const provider = research?.provider;
-  const decode = research?.ipoDecode;
+  const decode = research?.issueDetail;
   const hasSubscription = research?.subscription && [research.subscription.total, research.subscription.retail,
     research.subscription.nii, research.subscription.institutional].some(value => value != null);
   const hasOverview = [research?.issuePrice, provider?.listingPrice, row.currentPrice, provider?.listingGainPct,
     row.listingDate, row.marketCapCrore, row.turnoverCrore, row.deliveryPct, provider?.gmp,
     research?.offer?.issueSizeCrore, research?.offer?.freshIssueCrore, research?.offer?.offerForSaleCrore,
-    scanx?.issueSize, scanx?.offer?.floorPrice, scanx?.offer?.ceilingPrice, scanx?.offer?.lotSize,
-    scanx?.offer?.startDate, scanx?.offer?.endDate, research?.ipoDecode?.issue?.priceBandLow,
-    research?.ipoDecode?.issue?.priceBandHigh, research?.ipoDecode?.issue?.lotSize,
-    research?.ipoDecode?.issue?.minInvestment].some(value => value != null && value !== '') || Boolean(hasSubscription) || Boolean(research?.conflicts?.length);
+    profile?.issueSize, profile?.offer?.floorPrice, profile?.offer?.ceilingPrice, profile?.offer?.lotSize,
+    profile?.offer?.startDate, profile?.offer?.endDate, research?.issueDetail?.issue?.priceBandLow,
+    research?.issueDetail?.issue?.priceBandHigh, research?.issueDetail?.issue?.lotSize,
+    research?.issueDetail?.issue?.minInvestment].some(value => value != null && value !== '') || Boolean(hasSubscription) || Boolean(research?.conflicts?.length);
   const hasDecode = Boolean(decode && (decode.endpoints?.length || decode.fetchedAt || decode.allotmentStatus || decode.registrar ||
     decode.allotmentDate || decode.refundDate || decode.dematCreditDate || decode.documentCount != null ||
     decode.issue?.issueType || decode.issue?.qualityGrade || decode.issue?.totalApplications != null || decode.issue?.peAtUpper != null ||
@@ -63,11 +63,11 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
     decode.issue?.about || decode.gmpHistory?.length || decode.documents?.length ||
     Object.values(decode.valuation ?? {}).some(value => value != null && value !== '') ||
     Object.values(decode.peerAvailability ?? {}).some(value => value != null && value !== '')));
-  const hasResearch = Boolean(scanx?.allotmentDate || scanx?.companyDetail?.trim() || scanx?.financials?.length || scanx?.purpose?.length ||
-    scanx?.strengths?.length || scanx?.risks?.length || scanx?.management?.length || externalUrl(scanx?.drhpUrl) || research?.conflicts?.length);
+  const hasResearch = Boolean(profile?.allotmentDate || profile?.companyDetail?.trim() || profile?.financials?.length || profile?.purpose?.length ||
+    profile?.strengths?.length || profile?.risks?.length || profile?.management?.length || externalUrl(profile?.drhpUrl) || research?.conflicts?.length);
   const tabs = [
     ...(hasOverview ? [{id: 'overview' as const, label: 'Overview'}] : []),
-    ...(hasDecode ? [{id: 'decode' as const, label: 'IPO Decode'}] : []),
+    ...(hasDecode ? [{id: 'decode' as const, label: 'Details'}] : []),
     ...(hasResearch ? [{id: 'research' as const, label: 'Research'}] : []),
   ];
   const [requestedTab, setRequestedTab] = useState<'overview' | 'decode' | 'research'>('overview');
@@ -119,20 +119,20 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
         </div>
       </section>
 
-      {(research?.offer || scanx?.offer || scanx?.issueSize != null || [decode?.issue?.priceBandLow, decode?.issue?.priceBandHigh, decode?.issue?.lotSize, decode?.issue?.minInvestment].some(value => value != null)) && <section className="ipo-details-section">
+      {(research?.offer || profile?.offer || profile?.issueSize != null || [decode?.issue?.priceBandLow, decode?.issue?.priceBandHigh, decode?.issue?.lotSize, decode?.issue?.minInvestment].some(value => value != null)) && <section className="ipo-details-section">
         <h3>Offer</h3>
         <div className="ipo-details-grid">
-          <Detail label="Issue size" value={crore(research?.offer?.issueSizeCrore ?? scanx?.issueSize)} />
+          <Detail label="Issue size" value={crore(research?.offer?.issueSizeCrore ?? profile?.issueSize)} />
           <Detail label="Fresh issue" value={crore(research?.offer?.freshIssueCrore)} />
           <Detail label="Offer for sale" value={crore(research?.offer?.offerForSaleCrore)} />
-          <Detail label="Price band" value={scanx?.offer?.floorPrice != null || scanx?.offer?.ceilingPrice != null
-            ? `${currency(scanx.offer.floorPrice) ?? 'Not available'}-${currency(scanx.offer.ceilingPrice) ?? 'Not available'}`
-            : research?.ipoDecode?.issue?.priceBandLow != null || research?.ipoDecode?.issue?.priceBandHigh != null
-              ? `${currency(research.ipoDecode.issue.priceBandLow) ?? 'Not available'}-${currency(research.ipoDecode.issue.priceBandHigh) ?? 'Not available'}` : null} />
-          <Detail label="Lot size" value={number(scanx?.offer?.lotSize ?? research?.ipoDecode?.issue?.lotSize, 0)} />
-          <Detail label="Minimum investment" value={currency(research?.ipoDecode?.issue?.minInvestment)} />
-          <Detail label="Offer dates" value={scanx?.offer?.startDate || scanx?.offer?.endDate
-            ? `${date(scanx.offer.startDate) ?? 'Not available'} - ${date(scanx.offer.endDate) ?? 'Not available'}` : null} />
+          <Detail label="Price band" value={profile?.offer?.floorPrice != null || profile?.offer?.ceilingPrice != null
+            ? `${currency(profile.offer.floorPrice) ?? 'Not available'}-${currency(profile.offer.ceilingPrice) ?? 'Not available'}`
+            : research?.issueDetail?.issue?.priceBandLow != null || research?.issueDetail?.issue?.priceBandHigh != null
+              ? `${currency(research.issueDetail.issue.priceBandLow) ?? 'Not available'}-${currency(research.issueDetail.issue.priceBandHigh) ?? 'Not available'}` : null} />
+          <Detail label="Lot size" value={number(profile?.offer?.lotSize ?? research?.issueDetail?.issue?.lotSize, 0)} />
+          <Detail label="Minimum investment" value={currency(research?.issueDetail?.issue?.minInvestment)} />
+          <Detail label="Offer dates" value={profile?.offer?.startDate || profile?.offer?.endDate
+            ? `${date(profile.offer.startDate) ?? 'Not available'} - ${date(profile.offer.endDate) ?? 'Not available'}` : null} />
         </div>
       </section>}
 
@@ -147,13 +147,13 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
       </section>}
       {research?.conflicts?.length ? <section className="ipo-details-section ipo-details-conflict">
         <h3>Source differences</h3>
-        {research.conflicts.map(conflict => <p className="ipo-details-copy" key={conflict.field}>{conflict.field.replaceAll('_', ' ')} differs: IPO Decode {conflict.provider == null ? 'not reported' : number(conflict.provider)}; ScanX {conflict.scanx == null ? 'not reported' : number(conflict.scanx)}. Both values are kept distinct.</p>)}
+        {research.conflicts.map(conflict => <p className="ipo-details-copy" key={conflict.field}>{conflict.field.replaceAll('_', ' ')} differs: primary {conflict.provider == null ? 'not reported' : number(conflict.provider)}; secondary {conflict.secondary == null ? 'not reported' : number(conflict.secondary)}. Both values are kept distinct.</p>)}
       </section> : null}
       </>}
 
       {activeTab === 'decode' && decode && <>
       <section className="ipo-details-section">
-        <div className="ipo-details-section-heading"><h3>IPO Decode</h3>{decode.endpoints?.length ? <span>{decode.endpoints.length} records</span> : null}</div>
+        <div className="ipo-details-section-heading"><h3>Issue details</h3>{decode.endpoints?.length ? <span>{decode.endpoints.length} records</span> : null}</div>
         {!decode.endpoints?.length && <p className="ipo-details-note">No company-specific detail sources are present in this snapshot.</p>}
         <div className="ipo-details-grid">
           <Detail label="Last updated" value={decode.fetchedAt ? `${date(decode.fetchedAt)}, ${new Date(decode.fetchedAt).toLocaleTimeString('en-IN', {hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata'})} IST` : null} />
@@ -195,28 +195,28 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
           : <p className="ipo-details-copy" key={`${item.kind ?? 'document'}-${index}`}>{item.label ?? item.kind}</p>)}</details> : null}
       </section>
       </>}
-      {activeTab === 'research' && scanx && hasResearch && <section className="ipo-details-section">
-        <h3>ScanX research</h3>
-        {scanx.allotmentDate && <div className="ipo-details-grid"><Detail label="Allotment date" value={date(scanx.allotmentDate)} /></div>}
-        {scanx.companyDetail && <details className="ipo-detail-disclosure"><summary>Company overview</summary><p className="ipo-details-copy">{scanx.companyDetail}</p></details>}
-        {scanx.financials?.length ? <details className="ipo-detail-disclosure"><summary>Financials <span>{scanx.financials.length} periods</span></summary><div className="ipo-details-grid">
-          {scanx.financials.map((item, index) => <React.Fragment key={`${item.date ?? 'period'}-${index}`}>
+      {activeTab === 'research' && profile && hasResearch && <section className="ipo-details-section">
+        <h3>Research</h3>
+        {profile.allotmentDate && <div className="ipo-details-grid"><Detail label="Allotment date" value={date(profile.allotmentDate)} /></div>}
+        {profile.companyDetail && <details className="ipo-detail-disclosure"><summary>Company overview</summary><p className="ipo-details-copy">{profile.companyDetail}</p></details>}
+        {profile.financials?.length ? <details className="ipo-detail-disclosure"><summary>Financials <span>{profile.financials.length} periods</span></summary><div className="ipo-details-grid">
+          {profile.financials.map((item, index) => <React.Fragment key={`${item.date ?? 'period'}-${index}`}>
             <Detail label={`${item.date ?? 'Period'} revenue`} value={item.revenue == null ? null : `${item.unit === 'crores' ? '₹' : ''}${number(item.revenue)}${item.unit === 'crores' ? ' Cr' : ''}`} />
             <Detail label={`${item.date ?? 'Period'} profit`} value={item.profit == null ? null : `${item.unit === 'crores' ? '₹' : ''}${number(item.profit)}${item.unit === 'crores' ? ' Cr' : ''}`} />
           </React.Fragment>)}
         </div></details> : null}
-        {scanx.purpose?.length ? <details className="ipo-detail-disclosure"><summary>Use of proceeds <span>{scanx.purpose.length}</span></summary>{scanx.purpose.map((item, index) => <article className="ipo-details-paragraph" key={`${item.title ?? 'purpose'}-${index}`}>
+        {profile.purpose?.length ? <details className="ipo-detail-disclosure"><summary>Use of proceeds <span>{profile.purpose.length}</span></summary>{profile.purpose.map((item, index) => <article className="ipo-details-paragraph" key={`${item.title ?? 'purpose'}-${index}`}>
           <strong>{item.title}</strong>{item.amount != null && <span>{` (${item.amount} ${item.unit ?? ''})`}</span>}{item.description && <p>{item.description}</p>}
         </article>)}</details> : null}
-        {scanx.strengths?.length ? <details className="ipo-detail-disclosure"><summary>Strengths <span>{scanx.strengths.length}</span></summary>{scanx.strengths.map((item, index) => <article className="ipo-details-paragraph" key={`${item.title ?? 'strength'}-${index}`}><strong>{item.title}</strong>{item.description && <p>{item.description}</p>}</article>)}</details> : null}
-        {scanx.risks?.length ? <details className="ipo-detail-disclosure"><summary>Risk factors <span>{scanx.risks.length}</span></summary>{scanx.risks.map((item, index) => <article className="ipo-details-paragraph" key={`${item.title ?? 'risk'}-${index}`}><strong>{item.title}</strong>{item.description && <p>{item.description}</p>}</article>)}</details> : null}
-        {scanx.management?.length ? <details className="ipo-detail-disclosure"><summary>Management <span>{scanx.management.length}</span></summary><p className="ipo-details-copy">{scanx.management.map(person => person.designation ? `${person.name} (${person.designation})` : person.name).join(', ')}</p></details> : null}
-        {externalUrl(scanx.drhpUrl) && <a className="ipo-details-link" href={externalUrl(scanx.drhpUrl)!} target="_blank" rel="noreferrer">Open offer document <ExternalLink size={13} /></a>}
+        {profile.strengths?.length ? <details className="ipo-detail-disclosure"><summary>Strengths <span>{profile.strengths.length}</span></summary>{profile.strengths.map((item, index) => <article className="ipo-details-paragraph" key={`${item.title ?? 'strength'}-${index}`}><strong>{item.title}</strong>{item.description && <p>{item.description}</p>}</article>)}</details> : null}
+        {profile.risks?.length ? <details className="ipo-detail-disclosure"><summary>Risk factors <span>{profile.risks.length}</span></summary>{profile.risks.map((item, index) => <article className="ipo-details-paragraph" key={`${item.title ?? 'risk'}-${index}`}><strong>{item.title}</strong>{item.description && <p>{item.description}</p>}</article>)}</details> : null}
+        {profile.management?.length ? <details className="ipo-detail-disclosure"><summary>Management <span>{profile.management.length}</span></summary><p className="ipo-details-copy">{profile.management.map(person => person.designation ? `${person.name} (${person.designation})` : person.name).join(', ')}</p></details> : null}
+        {externalUrl(profile.drhpUrl) && <a className="ipo-details-link" href={externalUrl(profile.drhpUrl)!} target="_blank" rel="noreferrer">Open offer document <ExternalLink size={13} /></a>}
       </section>}
 
       {activeTab === 'research' && research?.conflicts?.length ? <section className="ipo-details-section ipo-details-conflict">
         <h3>Source differences</h3>
-        {research.conflicts.map(conflict => <p className="ipo-details-copy" key={conflict.field}>{conflict.field.replaceAll('_', ' ')} differs: IPO Decode {conflict.provider == null ? 'not reported' : number(conflict.provider)}; ScanX {conflict.scanx == null ? 'not reported' : number(conflict.scanx)}. Both values are kept distinct.</p>)}
+        {research.conflicts.map(conflict => <p className="ipo-details-copy" key={conflict.field}>{conflict.field.replaceAll('_', ' ')} differs: primary {conflict.provider == null ? 'not reported' : number(conflict.provider)}; secondary {conflict.secondary == null ? 'not reported' : number(conflict.secondary)}. Both values are kept distinct.</p>)}
       </section> : null}
       </div>}
     </div>

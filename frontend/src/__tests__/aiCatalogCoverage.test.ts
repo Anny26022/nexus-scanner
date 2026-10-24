@@ -6,10 +6,10 @@ import {conditionValidationError} from '../utils/conditionValidation';
 import {FILTER_CONDITION_CATALOG} from '../data/conditionCatalog';
 import {PRESET_CATALOG} from '../data/presetCatalog';
 import {availableFilterParameters} from '../utils/filterAvailability';
-import {tradingViewMetrics} from '../data/tradingViewMetrics';
+import {extendedMetrics} from '../data/extendedMetrics';
 
 const choices={SECTOR:['BANKS','INFORMATION TECHNOLOGY'],INDUSTRY:['PRIVATE BANKS','SOFTWARE'],SERIES:['EQ','BE'],
-  PRICE_BAND:['2','5','10','20','NO BAND'],INDEX_MEMBERSHIP:['NIFTY 50','NIFTY 500'],TRADINGVIEW_METRIC:tradingViewMetrics.map(m=>m.id)};
+  PRICE_BAND:['2','5','10','20','NO BAND'],INDEX_MEMBERSHIP:['NIFTY 50','NIFTY 500'],TRADINGVIEW_METRIC:extendedMetrics.map(m=>m.id)};
 const catalog=createAiFilterCatalog(choices);
 const compile=(id:string,parameters:Record<string,unknown>,negated=false)=>validateAiScreenResult({name:'Audit',summary:'Audit',matchMode:'all',
   clauses:[{sourceText:'audit',status:'EXACT',conditionId:id,parameters,isNegated:negated}]},catalog);

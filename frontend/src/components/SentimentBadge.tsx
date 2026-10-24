@@ -1,19 +1,14 @@
 import React from 'react';
 
-export interface DhanSentimentBadgeProps {
+export interface SentimentBadgeProps {
   sentiment: 'positive' | 'negative' | 'neutral' | string;
   showLabel?: boolean;
   className?: string;
   size?: 'sm' | 'md';
 }
 
-/**
- * Authentic Dhan-style sentiment badge / icon matching Dhan Web & ScanX news feeds:
- * - Positive: ArrowUpRight / Growth curve in emerald (#10b981 / bg: rgba(16, 185, 129, 0.1))
- * - Negative: ArrowDownRight / Decline curve in rose (#f43f5e / bg: rgba(244, 63, 94, 0.1))
- * - Neutral: Minus / Horizontal dash in slate (#64748b / bg: rgba(100, 116, 139, 0.1))
- */
-export const DhanSentimentBadge: React.FC<DhanSentimentBadgeProps> = ({
+/** Sentiment badge: an up, down or flat mark in green, red or slate. */
+export const SentimentBadge: React.FC<SentimentBadgeProps> = ({
   sentiment,
   showLabel = false,
   className = '',
@@ -31,10 +26,10 @@ export const DhanSentimentBadge: React.FC<DhanSentimentBadgeProps> = ({
 
   return (
     <span
-      className={`dhan-sentiment-badge is-${norm} ${showLabel ? 'has-label' : ''} ${className}`}
+      className={`sentiment-badge is-${norm} ${showLabel ? 'has-label' : ''} ${className}`}
       title={`${labels[norm]} sentiment`}
     >
-      <span className="dhan-sentiment-icon-wrap" aria-hidden="true">
+      <span className="sentiment-icon-wrap" aria-hidden="true">
         {norm === 'positive' ? (
           <svg
             width={iconSize}
@@ -78,7 +73,7 @@ export const DhanSentimentBadge: React.FC<DhanSentimentBadgeProps> = ({
           </svg>
         )}
       </span>
-      {showLabel && <span className="dhan-sentiment-text">{labels[norm]}</span>}
+      {showLabel && <span className="sentiment-text">{labels[norm]}</span>}
     </span>
   );
 };

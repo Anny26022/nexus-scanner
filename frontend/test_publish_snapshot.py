@@ -80,12 +80,14 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(sessions[0]['revision'], manifest['revision'])
             self.assertEqual((output/'snapshots'/f"{manifest['sessionDate']}.json.gz").read_bytes(),
                              (path/'stocks.json.gz').read_bytes())
-            self.assertEqual(payload['tradingViewMetricsVersion'],1)
-            self.assertEqual(payload['stocks'][0]['tradingview']['exchange'],'NSE')
-            self.assertIs(payload['stocks'][0]['tradingview']['isPrimary'],True)
-            self.assertEqual(payload['stocks'][0]['tradingview']['primaryExchange'],'NSE')
-            self.assertEqual(payload['stocks'][0]['tradingview']['listingSymbol'],'NSE:TEST')
-            values=payload['stocks'][0]['tradingview']['values']
+            self.assertEqual(payload['extendedMetricsVersion'],1)
+            self.assertNotIn('source', payload['stocks'][0]['extended'])
+            self.assertNotIn(b'tradingview', (path/'stocks.json').read_bytes().lower())
+            self.assertEqual(payload['stocks'][0]['extended']['exchange'],'NSE')
+            self.assertIs(payload['stocks'][0]['extended']['isPrimary'],True)
+            self.assertEqual(payload['stocks'][0]['extended']['primaryExchange'],'NSE')
+            self.assertEqual(payload['stocks'][0]['extended']['listingSymbol'],'NSE:TEST')
+            values=payload['stocks'][0]['extended']['values']
             self.assertEqual(values['market.rvol10'],2.5)
             self.assertEqual(values['market.turnover30_crore'],5)
             self.assertEqual(values['market.adr14_pct'],1.5)
@@ -99,7 +101,7 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(directory['asOfDate'], manifest['sessionDate'])
             self.assertEqual(directory['stocks'][0]['symbol'], payload['stocks'][0]['symbol'])
             self.assertEqual(directory['stocks'][0]['marketCapCrore'], payload['stocks'][0]['marketCapCrore'])
-            self.assertNotIn('tradingview', directory['stocks'][0])
+            self.assertNotIn('extended', directory['stocks'][0])
             self.assertTrue(manifest['chartDirectoryUrl'].endswith('/chart-directory.json.gz'))
             with gzip.open(path/'stocks.packed.json.gz','rt') as handle:
                 self.assertEqual(decode_packed_snapshot(json.load(handle)),payload)
@@ -338,7 +340,7 @@ class SnapshotPublicationTests(unittest.TestCase):
                 self.assertEqual(json.load(handle)['provider_data']['analytics']['year_summary']['year'], '2026')
             self.assertTrue((output/'revisions'/first['revision']/'earnings-calendar.json.gz').exists())
             with gzip.open(output/'revisions'/first['revision']/'earnings-calendar.json.gz','rt') as handle:
-                self.assertEqual(json.load(handle),{'source':'BSE forthcoming results calendar','fetched_at':'2026-10-01T00:00:00+00:00','events':[],'available':True})
+                self.assertEqual(json.load(handle),{'fetched_at':'2026-10-01T00:00:00+00:00','events':[],'available':True})
             self.assertEqual(first['earningsCalendarUrl'], f"/data/revisions/{first['revision']}/earnings-calendar.json.gz")
             self.fixture(root,cap=6000)
             second=publish(root,output)

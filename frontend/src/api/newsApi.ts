@@ -1,9 +1,6 @@
-/**
- * API client for Dhan Live News & Catalyst Intelligence feed.
- * Fully supports CORS in browser without proxies or auth headers.
- */
+/** Live market news feed client. */
 
-export interface DhanNewsArticle {
+export interface NewsArticle {
   article_id: number;
   article_slug: string;
   article_cat: string;
@@ -44,7 +41,7 @@ export interface NewsFetchParams {
 }
 
 export interface NewsFetchResult {
-  articles: DhanNewsArticle[];
+  articles: NewsArticle[];
   firstTs: number;
   lastTs: number;
   hasMore: boolean;
@@ -82,12 +79,12 @@ export async function fetchLiveNews(params: NewsFetchParams = {}): Promise<NewsF
   });
 
   if (!response.ok) {
-    throw new Error(`Dhan news request failed (HTTP ${response.status})`);
+    throw new Error(`News request failed (HTTP ${response.status})`);
   }
 
   const json = await response.json();
   const data = json?.data ?? {};
-  const rawArticles: DhanNewsArticle[] = (pageNo === 0 ? data.latest_news : data.next_news) || [];
+  const rawArticles: NewsArticle[] = (pageNo === 0 ? data.latest_news : data.next_news) || [];
 
   const firstTs = rawArticles.length > 0 ? rawArticles[0].publish_date : firstNewsTimeStamp;
   const lastTs = rawArticles.length > 0 ? rawArticles[rawArticles.length - 1].publish_date : lastNewsTimeStamp;

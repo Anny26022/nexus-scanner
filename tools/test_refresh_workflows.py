@@ -173,7 +173,7 @@ class RefreshWorkflowTests(unittest.TestCase):
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
         fake_git = "git() { printf '%s\\0' \"$@\"; printf '\\n'; };\n"
         # The Earnings Pulse index is staged only once it exists in the checkout.
-        optional = int((ROOT / 'frontend/public/data/earningspulse/index.json').is_file())
+        optional = int((ROOT / 'frontend/public/data/results/index.json').is_file())
         for weekly, additions in [('false', 3 + optional), ('true', 6 + optional)]:
             with self.subTest(weekly=weekly):
                 message = 'literal $(false) commit message'

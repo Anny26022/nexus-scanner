@@ -4,7 +4,7 @@ import { snapshotFundamentals } from './snapshotFundamentals';
 import technicalConfigurations from './snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from './movingAverageRules';
 import { etfConditionCatalog } from './etfFields';
-import { tradingViewConditionCatalog } from './tradingViewMetrics';
+import { extendedConditionCatalog } from './extendedMetrics';
 
 export const RETIRED_TECHNICAL_LABELS: Record<string, string> = {
   INDICATOR_COMPARE: 'Indicator Compare / Crossover',
@@ -107,7 +107,7 @@ export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
         ? parameter.defaultValue : periods[0], options:periods.map(value => ({value, label:String(value)}))} : parameter;
     }),
   })),
-  ...tradingViewConditionCatalog,
+  ...extendedConditionCatalog,
   ...etfConditionCatalog,
   // --- TREND ---
   {

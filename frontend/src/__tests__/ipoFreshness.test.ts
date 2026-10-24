@@ -22,10 +22,10 @@ it('maps IPO identity, listing age, and the anchor unlock schedule from live cat
   expect(missing.listingAgeCalendarDays).toBeNull();
 });
 
-it('keeps the issue registrar and converts ScanX financial strings to finite amounts', async () => {
+it('keeps the issue registrar and converts profile financial strings to finite amounts', async () => {
   const manifest = {revision: 'f'.repeat(64), schemaVersion: 4, sessionDate: '2026-10-09', totalStocks: 1,
     datasetUrl: '/stocks.json', iposUrl: '/ipos.json'};
-  const payload = {records: [{symbol: 'TEST', provider: {id: 'test'}, scanx: {details: {financials: [
+  const payload = {records: [{symbol: 'TEST', provider: {id: 'test'}, profile: {details: {financials: [
     {pl: {total_revenue: '50.25', total_profit: '4.5'}},
     {pl: {total_revenue: 'not available', total_profit: ''}},
   ]}}}], provider_data: {details: {test: {data: {issue: {ipo: {registrar: 'Issue Registrar'}}}}}}};
@@ -33,8 +33,8 @@ it('keeps the issue registrar and converts ScanX financial strings to finite amo
     .mockResolvedValueOnce({ok: true, json: async () => payload}));
   const {realAdapter} = await import('../api/realAdapter');
   const [row] = (await realAdapter.getIpoCatalogue()).records;
-  expect(row.ipoResearch?.ipoDecode?.registrar).toBe('Issue Registrar');
-  expect(row.ipoResearch?.scanx?.financials).toMatchObject([
+  expect(row.ipoResearch?.issueDetail?.registrar).toBe('Issue Registrar');
+  expect(row.ipoResearch?.profile?.financials).toMatchObject([
     {revenue: 50.25, profit: 4.5}, {revenue: null, profit: null},
   ]);
 });
@@ -75,7 +75,7 @@ it('maps detail freshness by matched provider ID and exposes only endpoint names
   const manifest = {revision, schemaVersion: 4, sessionDate: '2026-10-06', totalStocks: 4,
     datasetUrl: '/data/stocks.json', iposUrl: '/data/ipos.json'};
   const payload = {records: [
-    {symbol: 'TEST', issue_price: 302, offer_structure: {issue_size_crore: 365.76}, provider: {id: 'matched', listing_price: 298.95}, scanx: {listed: {ipo_start_date: '2026-09-25'}, details: {floor_price: 300, ceiling_price: 305, trading_lot: 10, drhp_doc: 'https://example.com/rhp.pdf', financials: [{date: '2026', unit: 'crores', pl: {total_revenue: 50, total_profit: 4}}]}}, enrichment_conflicts: [{field: 'issue_price', provider: 302, scanx: 305}]},
+    {symbol: 'TEST', issue_price: 302, offer_structure: {issue_size_crore: 365.76}, provider: {id: 'matched', listing_price: 298.95}, profile: {listed: {ipo_start_date: '2026-09-25'}, details: {floor_price: 300, ceiling_price: 305, trading_lot: 10, drhp_doc: 'https://example.com/rhp.pdf', financials: [{date: '2026', unit: 'crores', pl: {total_revenue: 50, total_profit: 4}}]}}, enrichment_conflicts: [{field: 'issue_price', provider: 302, profile: 305}]},
     {symbol: 'MISSING', provider: {id: 'not_fetched'}},
     {symbol: 'INVALID', provider: {id: 'invalid'}},
     {symbol: 'NO_PROVIDER'},
@@ -96,9 +96,9 @@ it('maps detail freshness by matched provider ID and exposes only endpoint names
     issuePrice: 302,
     offer: {issueSizeCrore: 365.76},
     provider: {listingPrice: 298.95},
-    ipoDecode: {endpoints: ['issue', 'gmp_history', 'documents'], issue: {priceBandLow: 290, priceBandHigh: 302, qualityGrade: 'B+'}, gmpHistory: [{gmp: 4}], documents: [{url: 'https://example.com/rhp.pdf'}]},
-    scanx: {offer: {floorPrice: 300, ceilingPrice: 305, lotSize: 10}, drhpUrl: 'https://example.com/rhp.pdf', financials: [{revenue: 50, profit: 4}]},
-    conflicts: [{field: 'issue_price', provider: 302, scanx: 305}],
+    issueDetail: {endpoints: ['issue', 'gmp_history', 'documents'], issue: {priceBandLow: 290, priceBandHigh: 302, qualityGrade: 'B+'}, gmpHistory: [{gmp: 4}], documents: [{url: 'https://example.com/rhp.pdf'}]},
+    profile: {offer: {floorPrice: 300, ceilingPrice: 305, lotSize: 10}, drhpUrl: 'https://example.com/rhp.pdf', financials: [{revenue: 50, profit: 4}]},
+    conflicts: [{field: 'issue_price', provider: 302, secondary: 305}],
   });
   expect(rows[1].ipoDetailStatus).toEqual({lastSuccessAt: null, failedEndpoints: []});
   expect(rows[2].ipoDetailStatus?.lastSuccessAt).toBeNull();

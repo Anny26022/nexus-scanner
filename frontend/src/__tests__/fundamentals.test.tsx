@@ -8,7 +8,7 @@ import { IndicatorsCatalogModal } from '../components/IndicatorsCatalogModal';
 import { defaultStudies } from '../chart/studies';
 import { defaultEmaLines } from '../chart/model';
 vi.mock('../api/screenerApi', () => ({screenerApi: {getFinancialHistory: vi.fn(), getEarningsSchedule: vi.fn()}}));
-const history: FinancialHistory = {source: 'ScanX', report_type: 'CONSOLIDATED', amount_unit: 'INR_CRORE', observed_on: '2026-10-11', annual: [], quarterly: [
+const history: FinancialHistory = {report_type: 'CONSOLIDATED', amount_unit: 'INR_CRORE', observed_on: '2026-10-11', annual: [], quarterly: [
   {period_end: '2025-06-30', eps: -2, net_profit: -20, sales: 100, opm: 10, profit_before_tax: -0.2},
   {period_end: '2026-03-31', eps: 1, net_profit: 10, sales: 120, opm: 12},
   {period_end: '2026-06-30', eps: 2, net_profit: 20, sales: 150, opm: 15},

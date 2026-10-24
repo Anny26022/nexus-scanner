@@ -10,12 +10,12 @@ import { Pagination } from './Pagination';
 import { Dialog } from './Dialog';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { useSymbolHoverCard } from '../hooks/useSymbolHoverCard';
-import { TijoriDetailsCard } from './TijoriDetailsCard';
+import { CompanySnapshotCard } from './CompanySnapshotCard';
 import { useTableWindow } from '../hooks/useTableWindow';
 import { useColumnWindow } from '../hooks/useColumnWindow';
 import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { tableLayout } from '../utils/tableLayout';
-import { tradingViewMetrics } from '../data/tradingViewMetrics';
+import { extendedMetrics } from '../data/extendedMetrics';
 import { QuickChartsView } from './QuickChartsView';
 import {etfGroups, etfFieldLabel} from '../data/etfFields';
 import { Button } from './Button';
@@ -125,9 +125,9 @@ const columns: ResultColumn[] = [
   valueColumn('isAsm', 'ASM', 'Other', 'boolean'), valueColumn('asmStage', 'ASM stage', 'Other'),
   valueColumn('isGsm', 'GSM', 'Other', 'boolean'), valueColumn('gsmStage', 'GSM stage', 'Other'),
   valueColumn('surveillanceAvailable', 'Surveillance data available', 'Other', 'boolean'),
-  ...tradingViewMetrics.map((metric):ResultColumn => ({id:`tv.${metric.id}`, label:metric.label,
+  ...extendedMetrics.map((metric):ResultColumn => ({id:`tv.${metric.id}`, label:metric.label,
     group:metric.category === 'fundamentals' ? 'Fundamental' : 'Technical',
-    getValue:row => row.tradingview?.values[metric.id]})),
+    getValue:row => row.extended?.values[metric.id]})),
 ];
 const etfColumns: ResultColumn[] = [columns[0], ...columns.filter(column => ['close','changePct','volume','rupeeVolumeCrore'].includes(column.id)),
   ...[...new Map(etfGroups.flatMap(group => group.fields.map(field => [field, group] as const))).entries()].map(([field, group]): ResultColumn => ({
@@ -182,11 +182,11 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>(`nexus-scanner.screener.${etf ? 'etf-' : ''}columns.v1`, defaults);
   const selectedColumnIds = Array.isArray(savedColumnIds) ? savedColumnIds : defaults;
   const phone = usePhoneLayout();
-  const hasTradingView = Boolean(data?.rows.some(row => row.tradingview));
+  const hasExtended = Boolean(data?.rows.some(row => row.extended));
   const hasFnoBan = Boolean(data?.rows.some(row => row.fnoBan != null));
   const activeColumns = tableColumns.filter(column => {
     if (column.id === 'company') return true;
-    if (column.id.startsWith('tv.') && !hasTradingView) return false;
+    if (column.id.startsWith('tv.') && !hasExtended) return false;
     if (column.id === 'fnoBan' && !hasFnoBan) return false;
     return selectedColumnIds.includes(column.id);
   });
@@ -194,7 +194,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const layout = tableLayout(activeColumns, 'screener', phone, usingCustomColumns);
   const visibleColumns = layout.columns;
   const customizableColumns = tableColumns.filter(column => column.id !== 'company'
-    && (!column.id.startsWith('tv.') || hasTradingView)
+    && (!column.id.startsWith('tv.') || hasExtended)
     && (column.id !== 'fnoBan' || hasFnoBan));
   const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerColumns = columnSearch.trim() ? matchingColumns : customizableColumns.filter(column => column.group === columnGroup);
@@ -328,7 +328,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
       <Pagination page={data?.page ?? page ?? 1} pageSize={pageSize ?? data?.pageSize ?? 15} total={data?.matchCount} busy={busy || isError || !data} onPageChange={page => {resetScroll(); onPageChange(page);}} onPageSizeChange={onPageSizeChange && (size => {resetScroll(); onPageSizeChange(size);})} />
     </div>
     {overview.active && overview.id && !busy && !isError && !columnPickerOpen && !filingSymbol && rows.some(row => row.symbol === overview.active!.row.symbol) &&
-      <TijoriDetailsCard key={overview.active.row.symbol} {...overview.active} id={overview.id}
+      <CompanySnapshotCard key={overview.active.row.symbol} {...overview.active} id={overview.id}
         onClose={overview.close} onMouseEnter={overview.cancelClose} onMouseLeave={overview.scheduleClose} />}
     {filingSymbol && data && <AnnouncementsPanel key={`${filingSymbol}:${data.immutableRevision}`} symbol={filingSymbol} revision={data.immutableRevision} onClose={() => setFilingSymbol(null)} />}
   </section>;

@@ -5,7 +5,7 @@ import { PRESET_ELIGIBILITY, presetEligibilityTargets, hasCustomPresetEligibilit
 import { snapshotFundamentals } from '../data/snapshotFundamentals';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
-import { isTradingViewCondition, tradingViewFilterGroups, tradingViewMetrics } from '../data/tradingViewMetrics';
+import { isExtendedCondition, extendedFilterGroups, extendedMetrics } from '../data/extendedMetrics';
 
 const presetIds = new Set(PRESET_CATALOG.map(preset => preset.id));
 
@@ -25,7 +25,7 @@ export interface SnapshotStock extends StockRow {
 export interface Snapshot {
   assetType?: 'etf';
   etfLabels?: Record<string, Record<string, string>>;
-  tradingViewMetricsVersion?: number;
+  extendedMetricsVersion?: number;
   presetRuleMatchesVersion?: number;
   technicalMetricsVersion?: number;
   referenceCounts?: Record<string, number>;
@@ -80,13 +80,13 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       return result == null ? null : c.isNegated ? !result : result;
     };
   }
-  if (isTradingViewCondition(c.conditionId)) {
-    const metric = tradingViewMetrics.find(metric => metric.id === p.metric
-      && metric.category === tradingViewFilterGroups[c.conditionId].category);
+  if (isExtendedCondition(c.conditionId)) {
+    const metric = extendedMetrics.find(metric => metric.id === p.metric
+      && metric.category === extendedFilterGroups[c.conditionId].category);
     if (!metric || !['ABOVE','BELOW','GREATER','LESS','EQUAL'].includes(p.comparison)
         || String(p.value ?? '').trim() === '' || !Number.isFinite(Number(p.value))) return null;
     return s => {
-      const value = s.tradingview?.asOfDate === session ? s.tradingview.values[metric.id] : null;
+      const value = s.extended?.asOfDate === session ? s.extended.values[metric.id] : null;
       const result = compare(value, p.comparison, Number(p.value));
       return result == null ? null : c.isNegated ? !result : result;
     };
@@ -281,9 +281,9 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       if (!windows.includes(Number(p.recentDays)) || !windows.includes(Number(p.baseDays))
           || Number(p.recentDays) >= Number(p.baseDays)) return null;
       fn = s => {
-        if (s.tradingview?.asOfDate !== session) return null;
-        const recent = number(s.tradingview.values[`market.average_volume${p.recentDays}`]);
-        const base = number(s.tradingview.values[`market.average_volume${p.baseDays}`]);
+        if (s.extended?.asOfDate !== session) return null;
+        const recent = number(s.extended.values[`market.average_volume${p.recentDays}`]);
+        const base = number(s.extended.values[`market.average_volume${p.baseDays}`]);
         const ratio = recent !== null && base !== null && base > 0 ? recent / base : null;
         return compare(ratio, p.comparison, p.ratio);
       };
@@ -371,14 +371,14 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
     ? node.children.some(wrongCatalog) : isEtfCondition(node.condition.conditionId) !== etf;
   if (wrongCatalog(request.expressionTree)) throw new Error('Select filters for the current universe.');
   if (request.textQuery?.trim()) return null;
-  const usesTradingView = (node:ExpressionNode):boolean => node.type === 'group'
-    ? node.children.some(usesTradingView) : isTradingViewCondition(node.condition.conditionId);
+  const usesExtended = (node:ExpressionNode):boolean => node.type === 'group'
+    ? node.children.some(usesExtended) : isExtendedCondition(node.condition.conditionId);
   const usesFnoBan = (node:ExpressionNode):boolean => node.type === 'group'
     ? node.children.some(usesFnoBan) : node.condition.conditionId === 'FNO_BAN';
   if (usesFnoBan(request.expressionTree) && !data.stocks.some(s => s.fnoBan != null)) {
     throw new Error('Historical F&O ban status is not archived by the exchange and is only available for live sessions.');
   }
-  if (data.tradingViewMetricsVersion !== 1 && usesTradingView(request.expressionTree)) {
+  if (data.extendedMetricsVersion !== 1 && usesExtended(request.expressionTree)) {
     throw new Error('These filters need a newer dataset. Try after the next daily data refresh.');
   }
   const customPreset = (node: ExpressionNode): boolean => node.type === 'group'
@@ -419,7 +419,7 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
     });
     const newerMetricsNeeded = data.technicalMetricsVersion !== 1 && needsExpandedMetrics(request.expressionTree);
     const warnings = diagnostics.length && newerMetricsNeeded
-      ? ['This published snapshot predates the expanded technical filters. A new pipeline release is needed for their results.'] : [];
+      ? ['This published snapshot predates the expanded technical filters. Their results appear with the next data release.'] : [];
     matches = {rows,universeCount:universe.length,coverage,diagnostics,warnings};
     cache.set(key,matches);
     if (cache.size > 4) cache.delete(cache.keys().next().value!);

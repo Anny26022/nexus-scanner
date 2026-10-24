@@ -1,18 +1,17 @@
-export interface TijoriOverview {
+export interface CompanySnapshot {
   name: string;
-  sourceUrl?: string;
   as_of: string | null;
   the_read: string[];
   what_to_watch: Array<{title: string; window: string; body: string}>;
   key_events: Array<{chart_date: string; label: string}>;
 }
 
-export async function getTijoriOverviews(): Promise<Record<string, TijoriOverview>> {
-  const manifestResponse = await fetch('/data/tijori/current.json', {cache: 'no-cache'});
+export async function getCompanySnapshots(): Promise<Record<string, CompanySnapshot>> {
+  const manifestResponse = await fetch('/data/company/current.json', {cache: 'no-cache'});
   if (!manifestResponse.ok) throw new Error('Company snapshots could not be loaded.');
   const manifest = await manifestResponse.json();
   if (manifest.schemaVersion !== 1 || !/^[a-f0-9]{64}$/.test(manifest.revision) ||
-    manifest.datasetUrl !== `/data/tijori/revisions/${manifest.revision}/overviews.json.gz`) {
+    manifest.datasetUrl !== `/data/company/revisions/${manifest.revision}/overviews.json.gz`) {
     throw new Error('Company snapshot reference is invalid.');
   }
   const response = await fetch(manifest.datasetUrl);
@@ -30,7 +29,6 @@ export async function getTijoriOverviews(): Promise<Record<string, TijoriOvervie
   const strings = (value: unknown, keys: string[]) => object(value) && keys.every(key => typeof value[key] === 'string');
   for (const report of Object.values(reports) as unknown[]) {
     if (!object(report) || typeof report.name !== 'string'
-        || (report.sourceUrl !== undefined && typeof report.sourceUrl !== 'string')
         || (report.as_of !== null && typeof report.as_of !== 'string')
         || !Array.isArray(report.the_read) || !report.the_read.every(item => typeof item === 'string')
         || !Array.isArray(report.what_to_watch) || !report.what_to_watch.every(item => strings(item, ['title', 'window', 'body']))

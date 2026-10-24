@@ -17,7 +17,9 @@ from chart_publication import R2Store, write_json
 
 SOURCE = 'https://earningspulse.ai/earnings'
 START = '2024-Q3'
-OUTPUT = Path(__file__).parent / 'public/data/earningspulse/index.json'
+OUTPUT = Path(__file__).parent / 'public/data/results/index.json'
+# Provider-side links the app never reads; they would only identify where the data came from.
+PRIVATE_FIELDS = frozenset({'summary_uri'})
 REPORT = Path(__file__).parent / 'earningspulse-refresh-report.json'
 
 
@@ -93,12 +95,14 @@ def fetch_quarter(session, label, today):
 
 
 def refresh(output, store, fetch, *, today, checked_at, recheck_oldest=False):
-    previous = json.loads(output.read_text()) if output.exists() else {'version': 1, 'source': SOURCE, 'quarters': {}}
-    if previous.get('version') != 1 or previous.get('source') != SOURCE or not isinstance(previous.get('quarters'), dict):
+    previous = json.loads(output.read_text()) if output.exists() else {'version': 1, 'quarters': {}}
+    if previous.get('version') != 1 or not isinstance(previous.get('quarters'), dict):
         raise ValueError('Invalid earnings history index; refusing to discard it')
+    # An index that still names its source predates neutral publication: rewrite every quarter once.
+    legacy = 'source' in previous
     entries = dict(previous['quarters'])
     labels = quarters_until(today)
-    selected = set(labels[-2:]) | (set(labels) - entries.keys())
+    selected = set(labels) if legacy else set(labels[-2:]) | (set(labels) - entries.keys())
     older = [label for label in labels[:-2] if label in entries]
     if recheck_oldest and older:
         selected.add(min(older, key=lambda label: entries[label]['checkedAt']))
@@ -107,7 +111,8 @@ def refresh(output, store, fetch, *, today, checked_at, recheck_oldest=False):
         objects = Path(folder)
 
         def pack(rows, label, status):
-            payload = dict(schemaVersion=1, source=SOURCE, calendarQuarter=label, status=status, records=rows)
+            records = [{key: value for key, value in row.items() if key not in PRIVATE_FIELDS} for row in rows]
+            payload = dict(schemaVersion=1, calendarQuarter=label, status=status, records=records)
             raw = json.dumps(payload, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
             compressed = gzip.compress(raw, mtime=0)
             digest = hashlib.sha256(compressed).hexdigest()
@@ -136,7 +141,7 @@ def refresh(output, store, fetch, *, today, checked_at, recheck_oldest=False):
                      for item in (entry['published'], entry['upcoming'])
                      if item['url'] == f"{store.base_url}/objects/{item['sha256']}.json.gz"}
             store.upload_objects(objects, known)
-            write_json(output, {**previous, 'quarters': dict(sorted(entries.items()))})
+            write_json(output, {'version': 1, 'quarters': dict(sorted(entries.items()))})
     return report
 
 

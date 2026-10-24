@@ -1,7 +1,7 @@
 import { getManifest, manifestSnapshotSource } from './manifest';
 import { runSnapshotTask } from './snapshotClient';
 import type { ScreenerRunRequest, ExpressionNode, UniverseType } from '../types/screener';
-import { isTradingViewCondition } from '../data/tradingViewMetrics';
+import { isExtendedCondition } from '../data/extendedMetrics';
 
 export interface ScanSession {
   date: string;
@@ -112,8 +112,8 @@ export function checkScanCompatibility(tree: ExpressionNode): ScanCompatibilityR
     if (id === 'FNO_BAN') {
       return 'F&O Ban status is an exchange live-session metric and is not archived in historical snapshots.';
     }
-    if (isTradingViewCondition(id)) {
-      return 'TradingView technical metrics are available on live sessions only and are not archived historically.';
+    if (isExtendedCondition(id)) {
+      return 'Extended technical metrics are available on live sessions only and are not archived historically.';
     }
     return null;
   }

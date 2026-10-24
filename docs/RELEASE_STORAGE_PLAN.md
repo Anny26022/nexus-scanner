@@ -63,4 +63,4 @@ backend hosting must be selected before implementation.
 Cloudflare's [public-bucket documentation](https://developers.cloudflare.com/r2/buckets/public-buckets/)
 describes production custom-domain delivery and cache configuration; `r2.dev` is
 for non-production use. Existing chart publication behavior is documented in
-[r2-chart-publication.md](r2-chart-publication.md).
+r2-chart-publication.md (private notes).

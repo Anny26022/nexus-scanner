@@ -13,7 +13,7 @@ import { availableFilterParameters, isAvailableCondition } from '../utils/filter
 import { comparisonLabel, filterLogicHint, parameterPresentation, RANGE_FILTERS } from '../utils/filterPresentation';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
-import {isTradingViewCondition, tradingViewMetrics} from '../data/tradingViewMetrics';
+import {isExtendedCondition, extendedMetrics} from '../data/extendedMetrics';
 import type { FilterChoices } from '../api/snapshotEngine';
 import { SNAPSHOT_MA_PERIODS } from '../api/snapshotScreen';
 import {etfConditionCatalog, etfCategoryTabs, etfGroup, etfFieldLabel, isEtfCondition} from '../data/etfFields';
@@ -224,8 +224,8 @@ const FilterRule = memo(function FilterRule({def, parameters, updateParam}: {
   if (def.parameters.every(parameter => Object.hasOwn(fixed, parameter.id))) return null;
   const field = (p: ParameterSpec, display: Pick<FilterParameterProps, 'label' | 'prefix' | 'unit'> = {}) => {
     if (Object.hasOwn(fixed, p.id)) return null;
-    const savedMetric = isTradingViewCondition(def.id) && p.id === 'metric'
-      ? tradingViewMetrics.find(metric => metric.id === parameters.metric)
+    const savedMetric = isExtendedCondition(def.id) && p.id === 'metric'
+      ? extendedMetrics.find(metric => metric.id === parameters.metric)
       : isEtfCondition(def.id) && p.id === 'metric' && etfGroup(def.id)?.fields.includes(parameters.metric)
         ? {id:parameters.metric, label:etfFieldLabel(parameters.metric)} : undefined;
     const parameter = savedMetric && !p.options?.some(option => option.value === savedMetric.id)
@@ -400,7 +400,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       return {...def, parameters:def.parameters.map(parameter => parameter.id === 'metric'
         ? {...parameter, options, defaultValue:options[0]?.value ?? parameter.defaultValue} : parameter)};
     }
-    if (isTradingViewCondition(def.id)) return {...def, parameters:def.parameters.map(parameter => {
+    if (isExtendedCondition(def.id)) return {...def, parameters:def.parameters.map(parameter => {
       if (parameter.id !== 'metric') return parameter;
       const options = parameter.options?.filter(option => choices?.TRADINGVIEW_METRIC?.includes(option.value)) ?? [];
       return {...parameter, options, defaultValue:options[0]?.value ?? parameter.defaultValue};
@@ -475,7 +475,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const catalogToUse = activeTab === 'custom' ? customCatalog : PRESET_CATALOG;
 
   const filtered = catalogToUse.filter((c) => {
-    if ((isTradingViewCondition(c.id) || isEtfCondition(c.id)) && !c.parameters.find(p => p.id === 'metric')?.options?.length
+    if ((isExtendedCondition(c.id) || isEtfCondition(c.id)) && !c.parameters.find(p => p.id === 'metric')?.options?.length
         && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
     if ((c.id === 'fund_roe' || REDUNDANT_CATALOG_CONDITIONS.has(c.id)) && !Object.values(localMap).some(condition => condition.conditionId === c.id)) return false;
     return (activeTab === 'presets' || category === 'all' || c.category === category)
@@ -551,7 +551,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         {filtered.map((def, index) => {
           const instances = Object.entries(localMap).filter(([, condition]) => condition.conditionId === def.id);
           const repeatable = activeTab === 'custom' && (def.category === 'fundamentals' && def.parameters.length > 0
-            || isEtfCondition(def.id) || isTradingViewCondition(def.id) || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id));
+            || isEtfCondition(def.id) || isExtendedCondition(def.id) || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id));
           
           const prevDef = index > 0 ? filtered[index - 1] : null;
           const showSectionDivider = activeTab === 'custom' && category === 'all' && (!prevDef || prevDef.category !== def.category);

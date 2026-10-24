@@ -74,12 +74,11 @@ export interface ScreenerRunRequest {
 
 export interface StockRow {
   etf?: Record<string, string | number | boolean | null>;
-  tradingview?: {
+  extended?: {
     exchange?:string | null;
     isPrimary?:boolean | null;
     primaryExchange?:string | null;
     listingSymbol?:string | null;
-    source:string;
     asOfDate:string;
     fetchedAt:string;
     updateMode:string;
@@ -91,7 +90,7 @@ export interface StockRow {
   sector: string; // "Unclassified" if missing
   industry: string; // "Unclassified" if missing
   nicheTags?: string[];
-  nicheEvidence?: {tags:string[]; sourceUrls:string[]; reviewedOn:string; exposure:'direct'|'joint_venture'|'mixed'};
+  nicheEvidence?: {tags:string[]; reviewedOn:string; exposure:'direct'|'joint_venture'|'mixed'};
   providerSector?: string | null;
   providerIndustry?: string | null;
   series: string;
@@ -271,7 +270,7 @@ export interface IPORow {
     offer?: { issueSizeCrore?: number | null; freshIssueCrore?: number | null; offerForSaleCrore?: number | null };
     subscription?: { total?: number | null; retail?: number | null; nii?: number | null; institutional?: number | null };
     provider?: { listingPrice?: number | null; listingGainPct?: number | null; gmp?: number | null; gmpPct?: number | null };
-    ipoDecode?: {
+    issueDetail?: {
       fetchedAt?: string | null; endpoints?: string[]; registrar?: string | null; allotmentStatus?: string | null;
       allotmentDate?: string | null; refundDate?: string | null; dematCreditDate?: string | null;
       documentCount?: number | null; timelineStatus?: string | null;
@@ -281,7 +280,7 @@ export interface IPORow {
       valuation?: { pe?: number | null; pb?: number | null; evEbitda?: number | null; peerMedianPe?: number | null; verdict?: string | null };
       peerAvailability?: { available?: boolean; reason?: string | null };
     };
-    scanx?: {
+    profile?: {
       offer?: { floorPrice?: number | null; ceilingPrice?: number | null; lotSize?: number | null; startDate?: string | null; endDate?: string | null };
       issueSize?: number | null;
       allotmentDate?: string | null;
@@ -293,7 +292,7 @@ export interface IPORow {
       management?: Array<{ name?: string; designation?: string }>;
       drhpUrl?: string | null;
     };
-    conflicts?: Array<{ field: string; provider?: number | null; scanx?: number | null }>;
+    conflicts?: Array<{ field: string; provider?: number | null; secondary?: number | null }>;
   };
   // Retained for the mock fixture; the live catalogue does not publish IPO terms.
   issuePrice?: number | null;

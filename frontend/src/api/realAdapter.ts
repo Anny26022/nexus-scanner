@@ -337,7 +337,7 @@ class RealDataAdapter {
                 gmp: r.provider?.gmp ?? null,
                 gmpPct: r.provider?.gmp_percent ?? null,
               },
-              ipoDecode: r.provider?.id ? {
+              issueDetail: r.provider?.id ? {
                 fetchedAt: lastSuccessAt,
                 endpoints: endpointNames,
                 registrar: detailData.allotment?.registrar ?? detailData.allotment_check?.registrar ?? decodedIssue?.registrar ?? null,
@@ -373,33 +373,33 @@ class RealDataAdapter {
                 } : undefined,
                 peerAvailability: detailData.peer_valuation ? {available: detailData.peer_valuation.available, reason: detailData.peer_valuation.reason ?? null} : undefined,
               } : undefined,
-              scanx: r.scanx ? {
-                offer: r.scanx.listed ? {
-                  floorPrice: r.scanx.details?.floor_price ?? null,
-                  ceilingPrice: r.scanx.details?.ceiling_price ?? null,
-                  lotSize: r.scanx.details?.trading_lot ?? null,
-                  startDate: r.scanx.listed.ipo_start_date ?? null,
-                  endDate: r.scanx.listed.ipo_end_date ?? null,
+              profile: r.profile ? {
+                offer: r.profile.listed ? {
+                  floorPrice: r.profile.details?.floor_price ?? null,
+                  ceilingPrice: r.profile.details?.ceiling_price ?? null,
+                  lotSize: r.profile.details?.trading_lot ?? null,
+                  startDate: r.profile.listed.ipo_start_date ?? null,
+                  endDate: r.profile.listed.ipo_end_date ?? null,
                 } : undefined,
-                issueSize: r.scanx.details?.issue_size ?? null,
-                allotmentDate: r.scanx.details?.allotment_date ?? null,
-                companyDetail: r.scanx.details?.company_detail ?? null,
-                financials: Array.isArray(r.scanx.details?.financials) ? r.scanx.details.financials.map((item: any) => ({
+                issueSize: r.profile.details?.issue_size ?? null,
+                allotmentDate: r.profile.details?.allotment_date ?? null,
+                companyDetail: r.profile.details?.company_detail ?? null,
+                financials: Array.isArray(r.profile.details?.financials) ? r.profile.details.financials.map((item: any) => ({
                   date: item.date, unit: item.unit,
                   revenue: finiteAmount(item.pl?.revenue_from_operations ?? item.pl?.total_revenue),
                   profit: finiteAmount(item.pl?.total_profit),
                 })) : [],
-                purpose: Array.isArray(r.scanx.details?.ipoPurpose) ? r.scanx.details.ipoPurpose.map((item: any) => ({
+                purpose: Array.isArray(r.profile.details?.ipoPurpose) ? r.profile.details.ipoPurpose.map((item: any) => ({
                   title: item.title, description: item.description, amount: item.total_amount, unit: item.unit,
                 })) : [],
-                strengths: Array.isArray(r.scanx.details?.strengths) ? r.scanx.details.strengths.map((item: any) => ({title: item.title, description: item.description})) : [],
-                risks: Array.isArray(r.scanx.details?.riskFactors) ? r.scanx.details.riskFactors.map((item: any) => ({title: item.title, description: item.description})) : [],
-                management: Array.isArray(r.scanx.details?.managementTeam) ? r.scanx.details.managementTeam.map((item: any) => ({name: item.name, designation: item.designation})) : [],
-                drhpUrl: r.scanx.details?.drhp_doc ?? r.scanx.details?.sym_doc_url ?? null,
+                strengths: Array.isArray(r.profile.details?.strengths) ? r.profile.details.strengths.map((item: any) => ({title: item.title, description: item.description})) : [],
+                risks: Array.isArray(r.profile.details?.riskFactors) ? r.profile.details.riskFactors.map((item: any) => ({title: item.title, description: item.description})) : [],
+                management: Array.isArray(r.profile.details?.managementTeam) ? r.profile.details.managementTeam.map((item: any) => ({name: item.name, designation: item.designation})) : [],
+                drhpUrl: r.profile.details?.drhp_doc ?? r.profile.details?.sym_doc_url ?? null,
               } : undefined,
               conflicts: Array.isArray(r.enrichment_conflicts) ? r.enrichment_conflicts
                 .filter((item: any) => typeof item?.field === 'string')
-                .map((item: any) => ({field: item.field, provider: item.provider ?? null, scanx: item.scanx ?? null})) : [],
+                .map((item: any) => ({field: item.field, provider: item.provider ?? null, secondary: item.profile ?? null})) : [],
             },
           };
         });

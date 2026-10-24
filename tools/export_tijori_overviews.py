@@ -92,19 +92,20 @@ def atomic_json(path, value):
 
 def publish(public_root, rows, metadata):
     reports = {
-        row['symbol']: {'name': row['name'], 'sourceUrl': row['sourceUrl'], **row['memory_overview']}
+        # The public file carries the report only; where it was collected from stays in the private cache.
+        row['symbol']: {'name': row['name'], **row['memory_overview']}
         for row in rows if row['status'] == 'available'
     }
     if not reports:
         return  # Preserve the current publication if no reports could be collected.
     content = json.dumps(reports, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
     revision = hashlib.sha256(content).hexdigest()
-    root = public_root / 'data/tijori'
+    root = public_root / 'data/company'
     dataset = root / 'revisions' / revision / 'overviews.json.gz'
     dataset.parent.mkdir(parents=True, exist_ok=True)
     if dataset.exists():
         if gzip.decompress(dataset.read_bytes()) != content:
-            raise ValueError('Existing Tijori revision does not match its content hash')
+            raise ValueError('Existing company snapshot revision does not match its content hash')
     else:
         temporary = dataset.with_suffix('.tmp')
         temporary.write_bytes(gzip.compress(content, mtime=0))
@@ -113,7 +114,7 @@ def publish(public_root, rows, metadata):
         'schemaVersion': 1, 'revision': revision, 'updatedAt': metadata['exportedAt'],
         'reportCount': len(reports), 'universeSessionDate': metadata['universeSessionDate'],
         'universeRevision': metadata['universeRevision'], 'encoding': 'gzip',
-        'datasetUrl': f'/data/tijori/revisions/{revision}/overviews.json.gz',
+        'datasetUrl': f'/data/company/revisions/{revision}/overviews.json.gz',
     })
 
 

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, X, RefreshCw } from 'lucide-react';
-import { getTijoriOverviews } from '../api/tijori';
-import { fetchLiveNews } from '../api/dhanNewsApi';
+import { X, RefreshCw } from 'lucide-react';
+import { getCompanySnapshots } from '../api/companySnapshots';
+import { fetchLiveNews } from '../api/newsApi';
 import symbolIsinMap from '../data/symbolIsinMap.json';
 import { SymbolWithLogo } from './SymbolWithLogo';
-import { DhanSentimentBadge } from './DhanSentimentBadge';
+import { SentimentBadge } from './SentimentBadge';
 import type { companyPopoverPosition } from '../utils/companyPopoverPosition';
 import { Button } from './Button';
 
@@ -33,8 +33,8 @@ function formatRelative(epochMs: number): string {
   return `${diffDay}d ago`;
 }
 
-export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMouseEnter, onMouseLeave}: Props) {
-  const query = useQuery({queryKey: ['tijori-overviews'], queryFn: getTijoriOverviews,
+export function CompanySnapshotCard({row, id, left, top, placement, onClose, onMouseEnter, onMouseLeave}: Props) {
+  const query = useQuery({queryKey: ['company-snapshots'], queryFn: getCompanySnapshots,
     staleTime: 30 * 60 * 1000, gcTime: 60 * 60 * 1000, retry: 1});
   const report = query.data?.[row.symbol];
 
@@ -56,9 +56,8 @@ export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMou
   ];
   const [requestedTab, setRequestedTab] = useState<Tab>('snapshot');
   const activeTab = tabs.some(tab => tab.id === requestedTab) ? requestedTab : tabs[0]?.id;
-  const sourceUrl = report?.sourceUrl?.startsWith('https://www.tijorifinance.com/company/') ? report.sourceUrl : undefined;
 
-  return createPortal(<section id={id} className="ipo-details-card tijori-details-card" role="dialog" aria-label={`${row.symbol} company snapshot`}
+  return createPortal(<section id={id} className="ipo-details-card snapshot-card" role="dialog" aria-label={`${row.symbol} company snapshot`}
     style={{left, top, transformOrigin: placement === 'left' ? 'right 24px' : placement === 'sheet' ? 'center bottom' : 'left 24px'}}
     onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} onFocus={onMouseEnter}
     onBlur={event => {if (!event.currentTarget.contains(event.relatedTarget)) onMouseLeave();}}>
@@ -80,18 +79,18 @@ export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMou
         }}>{tab.label}</button>)}
     </div>}
     <div key={activeTab ?? 'status'} className="ipo-details-content">
-      {query.isPending && activeTab !== 'news' ? <div className="tijori-loading" role="status" aria-label="Loading company snapshot">
+      {query.isPending && activeTab !== 'news' ? <div className="snapshot-loading" role="status" aria-label="Loading company snapshot">
         <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
       </div> : query.isError && activeTab !== 'news' ? <div className="ipo-details-empty" role="alert"><p>Company snapshot could not be loaded.</p>
         <Button variant="ghost" onClick={() => void query.refetch()}>Retry</Button></div>
-        : !tabs.length ? <p className="ipo-details-empty">No Tijori snapshot is available for this company.</p>
+        : !tabs.length ? <p className="ipo-details-empty">No snapshot is available for this company.</p>
           : <div role="tabpanel" id={`${id}-${activeTab}-panel`} aria-labelledby={`${id}-${activeTab}-tab`} tabIndex={0}>
-            {activeTab === 'snapshot' && report && <ul className="tijori-snapshot-list">{report.the_read.map((text, index) => <li key={index}>{text}</li>)}</ul>}
+            {activeTab === 'snapshot' && report && <ul className="snapshot-list">{report.the_read.map((text, index) => <li key={index}>{text}</li>)}</ul>}
             
             {activeTab === 'news' && (
               <div className="hover-news-stream">
                 {newsQuery.isPending ? (
-                  <div className="tijori-loading" role="status" aria-label="Loading stock news">
+                  <div className="snapshot-loading" role="status" aria-label="Loading stock news">
                     <span className="skeleton" /><span className="skeleton" />
                   </div>
                 ) : newsQuery.isError ? (
@@ -110,7 +109,7 @@ export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMou
                       return (
                         <article key={article.article_id} className="hover-news-item">
                           <div className="hover-news-row">
-                            <DhanSentimentBadge sentiment={sentiment} size="sm" className="hover-dhan-badge" />
+                            <SentimentBadge sentiment={sentiment} size="sm" className="hover-sentiment-badge" />
                             <div className="hover-news-content">
                               <h4 className="hover-news-title">{article.news_object?.title}</h4>
                               <div className="hover-news-meta">
@@ -134,19 +133,18 @@ export function TijoriDetailsCard({row, id, left, top, placement, onClose, onMou
               </div>
             )}
 
-            {activeTab === 'watch' && report && <div className="tijori-watch-list">{report.what_to_watch.map((item, index) => <article key={index}>
-              <h3>{item.title}</h3>{item.window && <span className="tijori-watch-window">{item.window}</span>}
+            {activeTab === 'watch' && report && <div className="snapshot-watch-list">{report.what_to_watch.map((item, index) => <article key={index}>
+              <h3>{item.title}</h3>{item.window && <span className="snapshot-watch-window">{item.window}</span>}
               {item.body && <p>{item.body}</p>}
             </article>)}</div>}
 
-            {activeTab === 'events' && report && <div className="tijori-watch-list">{report.key_events.map((event, index) => <article key={index}>
-              {event.chart_date && <time className="tijori-watch-window" dateTime={event.chart_date}>{date(event.chart_date)}</time>}
+            {activeTab === 'events' && report && <div className="snapshot-watch-list">{report.key_events.map((event, index) => <article key={index}>
+              {event.chart_date && <time className="snapshot-watch-window" dateTime={event.chart_date}>{date(event.chart_date)}</time>}
               <p>{event.label}</p>
             </article>)}</div>}
           </div>}
     </div>
-    {report && <footer className="tijori-details-footer">
-      {sourceUrl && <a href={sourceUrl} target="_blank" rel="noopener noreferrer" aria-label="View source" title="View source"><ExternalLink size={12} /></a>}
+    {report && <footer className="snapshot-footer">
       {report.as_of && <span>As of {date(report.as_of)}</span>}
     </footer>}
   </section>, document.body);

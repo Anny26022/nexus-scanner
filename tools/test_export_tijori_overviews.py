@@ -204,12 +204,13 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
             row = {'symbol': 'TEST', 'name': 'Test', 'status': 'available', 'sourceUrl': 'https://source', 'etag': 'private', 'memory_overview': {'as_of': '2026-10-06', 'the_read': ['saved'], 'what_to_watch': []}}
             meta = {'exportedAt': 'first', 'universeSessionDate': '2026-10-06', 'universeRevision': 'r'}
             exporter.publish(root, [row, {'symbol': 'MISSING', 'status': 'error'}], meta)
-            manifest_path = root / 'data/tijori/current.json'
+            manifest_path = root / 'data/company/current.json'
             first = json.loads(manifest_path.read_text())
             path = root / first['datasetUrl'].lstrip('/')
             data = json.loads(gzip.decompress(path.read_bytes()))
             self.assertEqual(set(data), {'TEST'})
             self.assertNotIn('etag', data['TEST'])
+            self.assertNotIn('sourceUrl', data['TEST'])
             self.assertEqual(first['reportCount'], 1)
             exporter.publish(root, [row], {**meta, 'exportedAt': 'second'})
             second = json.loads(manifest_path.read_text())
@@ -222,7 +223,7 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
     async def test_empty_publication_preserves_manifest(self):
         with TemporaryDirectory() as folder:
             root = Path(folder)
-            path = root / 'data/tijori/current.json'
+            path = root / 'data/company/current.json'
             path.parent.mkdir(parents=True)
             path.write_text('existing')
             exporter.publish(root, [], {})

@@ -9,9 +9,9 @@ import {
   ExternalLink,
   ChevronRight
 } from 'lucide-react';
-import { fetchLiveNews, type DhanNewsArticle } from '../api/dhanNewsApi';
+import { fetchLiveNews, type NewsArticle } from '../api/newsApi';
 import { SymbolWithLogo } from './SymbolWithLogo';
-import { DhanSentimentBadge } from './DhanSentimentBadge';
+import { SentimentBadge } from './SentimentBadge';
 import symbolIsinMapData from '../data/symbolIsinMap.json';
 
 const SYMBOL_ISIN_MAP: Record<string, string> = symbolIsinMapData;
@@ -57,7 +57,7 @@ export function NewsTab() {
   const [activeStockSymbol, setActiveStockSymbol] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [accumulatedArticles, setAccumulatedArticles] = useState<DhanNewsArticle[]>([]);
+  const [accumulatedArticles, setAccumulatedArticles] = useState<NewsArticle[]>([]);
   const [pageCursor, setPageCursor] = useState<{ page: number; firstTs: number; lastTs: number }>({
     page: 0,
     firstTs: 0,
@@ -66,7 +66,7 @@ export function NewsTab() {
 
   const queryIsin = activeStockIsin || 'ALL';
   const { data: pageResult, isPending, isFetching, error, refetch } = useQuery({
-    queryKey: ['dhanLiveNews', queryIsin, pageCursor.page, pageCursor.firstTs, pageCursor.lastTs],
+    queryKey: ['liveNews', queryIsin, pageCursor.page, pageCursor.firstTs, pageCursor.lastTs],
     queryFn: ({ signal }) =>
       fetchLiveNews({
         stockIsin: queryIsin,
@@ -111,7 +111,7 @@ export function NewsTab() {
     }));
   };
 
-  const handleFilterStock = (article: DhanNewsArticle, e: React.MouseEvent) => {
+  const handleFilterStock = (article: NewsArticle, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!article.isin_code) return;
     setActiveStockIsin(article.isin_code);
@@ -127,7 +127,7 @@ export function NewsTab() {
     setPageCursor({ page: 0, firstTs: 0, lastTs: 0 });
   };
 
-  const handleCopy = (article: DhanNewsArticle, e: React.MouseEvent) => {
+  const handleCopy = (article: NewsArticle, e: React.MouseEvent) => {
     e.stopPropagation();
     const text = `${article.sm_symbol} · ${article.news_object.title}\n${article.news_object.text}\nDate: ${formatFullDate(article.publish_date)}`;
     navigator.clipboard.writeText(text);
@@ -384,9 +384,9 @@ export function NewsTab() {
                   }
                 }}
               >
-                {/* Dhan-style Sentiment Indicator Column */}
+                {/* Sentiment column */}
                 <div className="ap-entry-dot-col">
-                  <DhanSentimentBadge sentiment={sentiment} size="sm" />
+                  <SentimentBadge sentiment={sentiment} size="sm" />
                 </div>
 
                 {/* Main Content Area */}

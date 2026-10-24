@@ -2,10 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ResultsTable } from '../components/ResultsTable';
-import { getTijoriOverviews } from '../api/tijori';
+import { getCompanySnapshots } from '../api/companySnapshots';
 import type { ScreenerRunResponse, StockRow } from '../types/screener';
 
-vi.mock('../api/tijori', () => ({getTijoriOverviews: vi.fn()}));
+vi.mock('../api/companySnapshots', () => ({getCompanySnapshots: vi.fn()}));
 afterEach(() => {cleanup(); vi.clearAllMocks();});
 const data = {rows: [{symbol: 'TEST', name: 'Test company', close: 100} as StockRow],
   matchCount: 1, totalUniverseCount: 2600, page: 1, pageSize: 15} as ScreenerRunResponse;
@@ -18,9 +18,9 @@ function mount() {
 }
 
 it('loads on symbol hover, hides empty tabs, supports keyboard tabs and reuses cached reports', async () => {
-  vi.mocked(getTijoriOverviews).mockResolvedValue({TEST: report});
+  vi.mocked(getCompanySnapshots).mockResolvedValue({TEST: report});
   mount();
-  expect(getTijoriOverviews).not.toHaveBeenCalled();
+  expect(getCompanySnapshots).not.toHaveBeenCalled();
   const trigger = screen.getByRole('button', {name: 'View TEST company snapshot'});
   fireEvent.mouseEnter(trigger);
   expect(await screen.findByText('Makes industrial equipment.')).toBeInTheDocument();
@@ -33,11 +33,11 @@ it('loads on symbol hover, hides empty tabs, supports keyboard tabs and reuses c
   expect(trigger).toHaveFocus();
   fireEvent.mouseEnter(trigger);
   expect(await screen.findByText('Makes industrial equipment.')).toBeInTheDocument();
-  expect(getTijoriOverviews).toHaveBeenCalledTimes(1);
+  expect(getCompanySnapshots).toHaveBeenCalledTimes(1);
 });
 
 it('allows pointer travel into the panel and closes when the table scrolls', async () => {
-  vi.mocked(getTijoriOverviews).mockResolvedValue({TEST: report});
+  vi.mocked(getCompanySnapshots).mockResolvedValue({TEST: report});
   mount();
   const trigger = screen.getByRole('button', {name: 'View TEST company snapshot'});
   fireEvent.mouseEnter(trigger);
@@ -51,17 +51,17 @@ it('allows pointer travel into the panel and closes when the table scrolls', asy
 });
 
 it('offers a contextual empty state for an uncovered symbol', async () => {
-  vi.mocked(getTijoriOverviews).mockResolvedValue({});
+  vi.mocked(getCompanySnapshots).mockResolvedValue({});
   mount();
   fireEvent.click(screen.getByRole('button', {name: 'View TEST company snapshot'}));
-  expect(await screen.findByText('No Tijori snapshot is available for this company.')).toBeInTheDocument();
+  expect(await screen.findByText('No snapshot is available for this company.')).toBeInTheDocument();
   expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
   fireEvent.pointerDown(document.body);
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
 
 it.each(['ArrowDown', 'Enter', ' '])('enters the portal with %s and restores trigger focus on close', async key => {
-  vi.mocked(getTijoriOverviews).mockResolvedValue({TEST:report});
+  vi.mocked(getCompanySnapshots).mockResolvedValue({TEST:report});
   mount();
   const trigger = screen.getByRole('button', {name:'View TEST company snapshot'});
   fireEvent.keyDown(trigger, {key});
@@ -74,7 +74,7 @@ it.each(['ArrowDown', 'Enter', ' '])('enters the portal with %s and restores tri
 });
 
 it('keeps tapped cards open during scrolling and repositions them after resize', async () => {
-  vi.mocked(getTijoriOverviews).mockResolvedValue({TEST: report});
+  vi.mocked(getCompanySnapshots).mockResolvedValue({TEST: report});
   const media = {matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn()};
   vi.stubGlobal('matchMedia', () => media);
   vi.stubGlobal('innerWidth', 390);

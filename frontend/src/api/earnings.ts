@@ -2,8 +2,8 @@ import { copyFormats, type CopyGroup } from '../utils/copyResults';
 import { getIpoJson } from './gzipJson';
 import { DataUnavailableError } from './dataErrors';
 
-/** Earnings Pulse history: a small index in the app, quarter files in R2 (see docs/earningspulse-history.md). */
-const EARNINGS_INDEX_URL = '/data/earningspulse/index.json';
+/** Quarterly results history: a small index in the app, quarter files in object storage. */
+const EARNINGS_INDEX_URL = '/data/results/index.json';
 
 export const QUALITY_ORDER = ['Excellent', 'Great', 'Good', 'Ok', 'Weak'] as const;
 export type Quality = typeof QUALITY_ORDER[number];
@@ -11,7 +11,6 @@ export type Quality = typeof QUALITY_ORDER[number];
 interface FileRef { sha256: string; url: string; count: number }
 export interface EarningsIndex {
   version: 1;
-  source: string;
   quarters: Record<string, {checkedAt: string; published: FileRef; upcoming: FileRef}>;
 }
 

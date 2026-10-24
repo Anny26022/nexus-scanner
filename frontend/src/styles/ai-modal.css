@@ -342,18 +342,17 @@
 .ipo-gmp-history > strong { color: var(--text); font-weight: 550; font-variant-numeric: tabular-nums; }
 .ipo-details-conflict { border-radius: 7px; background: var(--surface-subtle); padding-inline: 10px; }
 .ipo-details-empty { padding: 14px 0; }
-.tijori-details-card .ipo-details-tabs > button { font-size: 12px; }
-.tijori-snapshot-list { display: grid; gap: 14px; margin: 0; padding: 16px 0 4px 15px; color: var(--secondary); list-style: disc; font-size: 13px; line-height: 1.65; }
-.tijori-snapshot-list > li { padding-left: 3px; overflow-wrap: anywhere; }
-.tijori-snapshot-list > li::marker { color: var(--muted); }
-.tijori-watch-list { display: grid; gap: 20px; padding: 16px 0 4px; font-size: 13px; line-height: 1.65; }
-.tijori-watch-list h3 { margin: 0 0 3px; color: var(--text); font-size: 13px; font-weight: 600; }
-.tijori-watch-window { display: block; margin-bottom: 5px; color: var(--muted); font-size: 11px; }
-.tijori-watch-list p { margin: 0; color: var(--secondary); overflow-wrap: anywhere; }
-.tijori-details-footer { display: flex; flex: 0 0 auto; justify-content: space-between; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
-.tijori-details-footer > a { display: inline-flex; align-items: center; gap: 5px; color: var(--secondary); }
-.tijori-loading { display: grid; gap: 16px; padding: 20px 0; }
-.tijori-loading .skeleton { height: 42px; }
+.snapshot-card .ipo-details-tabs > button { font-size: 12px; }
+.snapshot-list { display: grid; gap: 14px; margin: 0; padding: 16px 0 4px 15px; color: var(--secondary); list-style: disc; font-size: 13px; line-height: 1.65; }
+.snapshot-list > li { padding-left: 3px; overflow-wrap: anywhere; }
+.snapshot-list > li::marker { color: var(--muted); }
+.snapshot-watch-list { display: grid; gap: 20px; padding: 16px 0 4px; font-size: 13px; line-height: 1.65; }
+.snapshot-watch-list h3 { margin: 0 0 3px; color: var(--text); font-size: 13px; font-weight: 600; }
+.snapshot-watch-window { display: block; margin-bottom: 5px; color: var(--muted); font-size: 11px; }
+.snapshot-watch-list p { margin: 0; color: var(--secondary); overflow-wrap: anywhere; }
+.snapshot-footer { display: flex; flex: 0 0 auto; justify-content: space-between; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.snapshot-loading { display: grid; gap: 16px; padding: 20px 0; }
+.snapshot-loading .skeleton { height: 42px; }
 
 /* Sleek Minimal Stock News Stream inside Hover Card */
 .hover-news-stream {
@@ -391,8 +390,8 @@
   align-items: baseline;
 }
 
-/* Authentic Dhan-style Sentiment Badge */
-.dhan-sentiment-badge {
+/* Sentiment badge */
+.sentiment-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -404,22 +403,22 @@
   transform: translateY(2px);
 }
 
-.dhan-sentiment-badge.is-positive {
+.sentiment-badge.is-positive {
   color: #10b981;
   background-color: rgba(16, 185, 129, 0.1);
 }
 
-.dhan-sentiment-badge.is-negative {
+.sentiment-badge.is-negative {
   color: #f43f5e;
   background-color: rgba(244, 63, 94, 0.1);
 }
 
-.dhan-sentiment-badge.is-neutral {
+.sentiment-badge.is-neutral {
   color: #64748b;
   background-color: rgba(100, 116, 139, 0.08);
 }
 
-.dhan-sentiment-icon-wrap {
+.sentiment-icon-wrap {
   display: inline-flex;
   align-items: center;
   justify-content: center;

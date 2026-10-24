@@ -88,7 +88,7 @@ export function RotationFilters({
         <Popover.Content
           align="end"
           sideOffset={8}
-          className="z-50 flex w-[280px] flex-col gap-4 rounded-2xl border border-line bg-surface p-4 text-text shadow-pop animate-in fade-in-0 zoom-in-95"
+          className="z-50 flex w-[280px] flex-col gap-4 rounded-2xl border border-line bg-surface p-4 text-text shadow-(--shadow-pop) animate-in fade-in-0 zoom-in-95"
         >
           <div className="flex items-center justify-between border-b border-line pb-2.5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">Liquidity Filters</h3>
@@ -149,7 +149,7 @@ export function RotationFilters({
               Reset
             </button>
             <Popover.Close asChild>
-              <Button variant="primary" className="!h-7 !px-3 !text-xs">
+              <Button variant="primary" size="compact">
                 Done
               </Button>
             </Popover.Close>

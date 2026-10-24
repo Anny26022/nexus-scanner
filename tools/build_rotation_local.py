@@ -9,6 +9,7 @@ stock rows and theme classification, then writes the rotation objects to `fronte
 Run it again whenever the caches change; the daily pipeline publishes the real data. Standard library only.
 """
 import csv
+from collections import Counter
 import gzip
 import json
 from pathlib import Path
@@ -22,6 +23,7 @@ OUTPUT = PUBLIC / 'rotation'
 sys.path.insert(0, str(ROOT / 'frontend'))
 
 import rotation_history  # noqa: E402
+from market_overview import index_closes  # noqa: E402
 
 
 def safe_symbol(symbol):
@@ -46,14 +48,25 @@ def main():
     started = time.perf_counter()
     def stock_closes(symbol):
         return closes(PIPELINE / 'ohlcv_data' / f'{symbol}.csv', session)
-    benchmarks = {code: closes(PIPELINE / 'indices_ohlcv_data' / f'{safe_symbol(symbol)}.csv', session)
+    # A newer index snapshot must not turn stale stock caches into flat current prices.
+    latest = Counter()
+    for row in rows:
+        points = stock_closes(row['symbol'])
+        if points:
+            latest[points[-1][0]] += 1
+    price_date, covered = latest.most_common(1)[0] if latest else ('', 0)
+    if covered < .9 * len(rows):
+        sys.exit('Refresh the stock OHLCV caches: no session has 90% coverage.')
+    history_path = PIPELINE / 'all_indices_history_v2.json.gz'
+    source_bytes = {'all_indices_history_v2.json.gz': history_path.read_bytes()} if history_path.exists() else {}
+    benchmarks = {code: index_closes(PIPELINE, source_bytes, symbol, price_date, csv_name=safe_symbol(symbol))[0]
                   for code, symbol in rotation_history.BENCHMARK_INDICES.items()}
     missing = sorted(code for code, points in benchmarks.items() if not points)
     if not benchmarks['N50']:
         sys.exit('No Nifty 50 history in indices_ohlcv_data; run the pipeline once to fill the caches.')
     ledger_path = OUTPUT / 'ledger.json.gz'
     ledger = json.loads(gzip.decompress(ledger_path.read_bytes())) if ledger_path.exists() else None
-    index, shards, ledger = rotation_history.build(session, rows, stock_closes, benchmarks, taxonomy, ledger)
+    index, shards, ledger = rotation_history.build(session, rows, stock_closes, benchmarks, taxonomy, ledger, price_date=price_date)
     for stale in OUTPUT.glob('*.json.gz') if OUTPUT.exists() else []:
         if stale != ledger_path:
             stale.unlink()
@@ -63,6 +76,8 @@ def main():
     last = index['frames']['D'][-1]
     print(f"Rotation data for {session} (prices to {last}): {len(index['stocks'])} stocks, {len(index['groups'])} groups"
           f" in {time.perf_counter() - started:.1f}s -> {OUTPUT.relative_to(ROOT)}")
+    if last != session:
+        print(f'Stock caches end on {last}; refresh them to include the {session} release session.')
     if missing:
         print('No cached history for benchmarks: ' + ', '.join(missing) + ' (left out)')
 

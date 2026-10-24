@@ -56,7 +56,7 @@ def calendars(dates):
 
 
 def aligned(points, dates):
-    """Closes on each calendar date, carried forward over gaps; None before the first observation."""
+    """Carry internal gaps forward, but never extend a series past its last observation."""
     values, cursor, last = [], 0, None
     for day in dates:
         while cursor < len(points) and points[cursor][0] <= day:
@@ -64,7 +64,7 @@ def aligned(points, dates):
             if close is None or (close > 0 and math.isfinite(close)):
                 last = close
             cursor += 1
-        values.append(last)
+        values.append(last if points and day <= points[-1][0] else None)
     return values
 
 
@@ -127,7 +127,13 @@ def labels_of(row, taxonomy):
     raw = dict(sector=row.get('sector'), industry=row.get('industry'),
                **{key: (taxonomy.get(row['symbol']) or {}).get(key) for key in ('subIndustry', 'theme', 'block', 'macro')})
     cleaned = [(raw.get(level) or '').strip() for level in LEVELS]
-    return [label if label and label.lower() not in IGNORED_LABELS else None for label in cleaned]
+    labels = [label if label and label.lower() not in IGNORED_LABELS else None for label in cleaned]
+    themes = {name for name, basis in ((taxonomy.get(row['symbol']) or {}).get('memberships') or {}).items()
+              if basis == 'curated-rule' and name and name.lower() not in IGNORED_LABELS}
+    if labels[3]:
+        themes.add(labels[3])
+    labels[3] = sorted(themes) or None
+    return labels
 
 
 def record_memberships(ledger, session, labels, eligibility=None):
@@ -168,9 +174,10 @@ def spans(history, days, level):
     starts = [0] + [bisect_left(days, day) for day, _ in history[1:]]
     ends = starts[1:] + [len(days)]
     for (_, labels), start, end in zip(history, starts, ends):
-        label = labels[level]
-        if label and end > start:
-            out.setdefault(label, []).append((start, end))
+        labels_at_level = labels[level]
+        for label in labels_at_level if isinstance(labels_at_level, list) else [labels_at_level]:
+            if label and end > start:
+                out.setdefault(label, []).append((start, end))
     return out
 
 
@@ -191,7 +198,7 @@ def group_eligible(row):
     return cap is not None and cap >= MIN_GROUP_MARKET_CAP_CR and turnover is not None and turnover >= MIN_GROUP_TURNOVER30_CR
 
 
-def build(session, rows, closes, benchmarks, taxonomy, ledger=None):
+def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_date=None):
     """Rotation history objects for one release.
 
     rows: published stock rows; closes: a symbol loader or {symbol: [(date, close), ...]} ascending; benchmarks: {'N50': [...],
@@ -199,9 +206,12 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None):
     ledger: the dated membership ledger from earlier runs (None to start one).
     Returns (index, shards, ledger): shards maps a shard name to its payload; ledger includes today.
     """
-    daily = [day for day, _ in benchmarks['N50'] if day <= session]
+    price_date = price_date or session
+    daily = [day for day, _ in benchmarks['N50'] if day <= price_date]
     if len(daily) < PERIODS['D'] + 20:
         raise ValueError('Rotation history needs a longer benchmark history')
+    if daily[-1] != price_date:
+        raise ValueError(f'Rotation benchmark ends on {daily[-1]}, expected {price_date}')
     frames = calendars(daily)
     # Group composites are built once on the daily calendar back to the earliest monthly date.
     composite_days = [day for day in daily if day >= frames['M'][0]]
@@ -224,13 +234,6 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None):
             sums[key] = (array('d', [0]) * length, array('I', [0]) * length)
         accumulate(*sums[key], values, ranges)
 
-    # Curated / emerging themes that allow multiple membership:
-    emerging = {}
-    for s, r in taxonomy.items():
-        for m, basis in (r.get('memberships') or {}).items():
-            if basis == 'curated-rule' and m and m.lower() not in IGNORED_LABELS:
-                emerging.setdefault(s, set()).add(m)
-
     # One symbol's raw prices at a time. Historical constituents remain in the ledger after removal.
     for symbol, history in sorted(ledger['records'].items()):
         points = (closes(symbol) if callable(closes) else closes.get(symbol)) or []
@@ -243,14 +246,8 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None):
             for label, ranges in spans(history, composite_days, position).items():
                 key = f'{level}:{label}'
                 add(key, values, intersect(ranges, allowed))
-                if symbol in today and today[symbol][position] == label and ledger['eligibility'][symbol][-1][1]:
-                    members.setdefault(key, []).append(symbol)
-        # Include emerging / curated themes under the 'theme' group level
-        if symbol in emerging and allowed:
-            for theme_name in emerging[symbol]:
-                key = f'theme:{theme_name}'
-                add(key, values, allowed)
-                if ledger['eligibility'][symbol][-1][1]:
+                current = today.get(symbol, [None] * len(LEVELS))[position]
+                if label in (current if isinstance(current, list) else [current]) and ledger['eligibility'][symbol][-1][1]:
                     members.setdefault(key, []).append(symbol)
         row = rows_by_symbol.get(symbol)
         if row is None:

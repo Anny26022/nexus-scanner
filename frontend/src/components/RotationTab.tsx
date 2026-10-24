@@ -159,7 +159,7 @@ export default function RotationTab({
   const [quadrant, setQuadrant] = useState<Quadrant | null>(null);
   const [filters, setFilters] = useState<LiquidityFilters>(NO_FILTERS);
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<ListSort>('quadrant');
+  const [sort, setSort] = useState<ListSort>('ratio');
   const [copied, setCopied] = useState(false);
   const [watchlist] = useState(
     () => new Set(activeList(loadWatchlistStore()).items.filter((item) => !item.startsWith('###')))
@@ -289,7 +289,7 @@ export default function RotationTab({
       ? b.point.y - a.point.y
       : sort === 'moved'
       ? b.moved - a.moved
-      : QUADRANTS.indexOf(a.quadrant) - QUADRANTS.indexOf(b.quadrant) || b.moved - a.moved;
+      : QUADRANTS.indexOf(a.quadrant) - QUADRANTS.indexOf(b.quadrant) || b.point.x - a.point.x;
 
   const rows = matching.map(describe).sort(order);
   const moved = new Map(inQuadrant.map((track) => [track.item.id, travel(track, cursor, tail, half)]));

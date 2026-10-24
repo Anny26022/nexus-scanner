@@ -140,7 +140,7 @@ class RotationHistoryTests(unittest.TestCase):
         self.assertIn('S0', shards['core']['W'])
         self.assertIn('theme:Lending', shards['groups']['M'])
         self.assertEqual(set(index['benchmarks']), {'N50', 'N500', 'EW'})
-        self.assertEqual(ledger['records']['S0'], [[days[-1], ['Banks', 'Private Banks', None, 'Lending', 'Finance', None]]])
+        self.assertEqual(ledger['records']['S0'], [[days[-1], ['Banks', 'Private Banks', None, ['Lending'], 'Finance', None]]])
         index, _, _ = rh.build(days[-1], rows, closes, {'N50': rise, 'N500': rise, 'MS400': []}, taxonomy)
         self.assertNotIn('MS400', index['benchmarks'])
         with tempfile.TemporaryDirectory() as folder:
@@ -157,6 +157,39 @@ class RotationHistoryTests(unittest.TestCase):
                  'metrics': {'turnover30': 20}} for i in range(5)]
         index, _, _ = rh.build(days[-1], rows, {row['symbol']: series for row in rows}, {'N50': series, 'N500': series}, {})
         self.assertEqual(index['groups'], [])
+
+    def test_stale_prices_are_not_extended_and_stale_benchmarks_are_rejected(self):
+        days = sessions(340)
+        points = [(day, 100.) for day in days[:-1]]
+        self.assertEqual(rh.aligned(points, days)[-2:], [100., None])
+        with self.assertRaisesRegex(ValueError, 'Rotation benchmark ends'):
+            rh.build(days[-1], [], {}, {'N50': points}, {})
+        index, _, _ = rh.build(days[-1], [], {}, {'N50': points}, {}, price_date=days[-2])
+        self.assertEqual(index['asOfDate'], days[-1])
+        self.assertEqual(index['frames']['D'][-1], days[-2])
+
+    def test_curated_and_primary_themes_count_each_member_once_and_preserve_history(self):
+        days = sessions(360)
+        rows = [{'symbol': s, 'marketCapCrore': 1000, 'metrics': {'turnover30': 5}} for s in 'ABCD']
+        prices = {s: [(day, 100 * (1.01 if s == 'A' else 1) ** i) for i, day in enumerate(days)] for s in 'ABCD'}
+        primary = {s: {'theme': 'IPO / Young Bases'} for s in 'ABCD'}
+        duplicate = {s: {'theme': 'IPO / Young Bases',
+                         'memberships': {'IPO / Young Bases': 'curated-rule'} if s == 'A' else {}} for s in 'ABCD'}
+        benchmark = {'N50': [(day, 100.) for day in days]}
+        _, plain, _ = rh.build(days[-2], rows, prices, benchmark, primary)
+        _, curated, ledger = rh.build(days[-2], rows, prices, benchmark, duplicate)
+        key = 'theme:IPO / Young Bases'
+        self.assertEqual(plain['groups'], curated['groups'])
+        # A ages out; the other stocks retain the cohort as a secondary membership.
+        changed = {s: {'theme': 'Other', 'memberships': {} if s == 'A' else {'IPO / Young Bases': 'curated-rule'}} for s in 'ABCD'}
+        index, later, ledger = rh.build(days[-1], rows, prices, benchmark, changed, ledger)
+        self.assertEqual(next(g for g in index['groups'] if g['id'] == key)['m'], ['B', 'C', 'D'])
+        self.assertEqual(decode(curated['groups']['D'][key])[1][-1], decode(later['groups']['D'][key])[1][-2])
+        self.assertEqual(len(ledger['records']['A']), 2)
+        # Legacy scalar theme records remain readable during migration.
+        self.assertEqual(rh.spans([[days[-2], [None, None, None, 'Old', None, None]],
+                                   [days[-1], [None, None, None, ['Old', 'New'], None, None]]], days[-2:], 3),
+                         {'Old': [(0, 1), (1, 2)], 'New': [(1, 2)]})
 
 
 if __name__ == '__main__':

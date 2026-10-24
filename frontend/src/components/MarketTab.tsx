@@ -1,10 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { DataUnavailableError } from '../api/dataErrors';
 import { marketRegime } from '../utils/marketOverview';
-import type { BreadthSession, IndexCard, SectorBreadth } from '../types/market';
+import type { BreadthSession, IndexCard } from '../types/market';
 import { Button } from './Button';
 
 const formatDate = (date: string, withYear = true) => new Date(`${date}T00:00:00`)
@@ -143,68 +142,11 @@ function Stat({label, value, hint}: {label: string; value: string; hint?: string
   </div>;
 }
 
-const SECTOR_SORTS = [
-  {key: 'above_sma50_percent', label: '50-day'},
-  {key: 'above_sma200_percent', label: '200-day'},
-  {key: 'above_sma20_percent', label: '20-day'},
-] as const;
-type SectorSort = typeof SECTOR_SORTS[number]['key'];
-const SECTOR_COLUMNS = [
-  {key: 'above_sma20_percent', label: '> 20-day'},
-  {key: 'above_sma50_percent', label: '> 50-day'},
-  {key: 'above_sma200_percent', label: '> 200-day'},
-  {key: 'near_52w_high_5_percent', label: 'Near 52W high'},
-] as const;
-
-function heat(value: number | null) {
-  // Single-hue sequential scale: more stocks in trend, stronger accent.
-  return value == null ? undefined : `color-mix(in srgb, var(--accent) ${Math.round(Math.max(0, Math.min(100, value)) * 0.42)}%, var(--surface))`;
-}
-
-function SectorTable({sectors, onScreenSector}: {sectors: SectorBreadth[]; onScreenSector: (sector: string) => void}) {
-  const [sort, setSort] = useState<SectorSort>('above_sma50_percent');
-  const sorted = [...sectors].sort((a, b) => (b[sort] ?? -1) - (a[sort] ?? -1) || a.name.localeCompare(b.name));
-  return <Card title="Sectors" subtitle="Share of each sector's stocks in an uptrend · click a sector to screen it"
-    action={<div className="inline-flex gap-0.5 rounded-(--radius-md) bg-field p-0.5" role="group" aria-label="Rank sectors by">
-      {SECTOR_SORTS.map(option => <button key={option.key} type="button" aria-pressed={sort === option.key} onClick={() => setSort(option.key)}
-        className={`h-7 rounded-[7px] px-2.5 text-[12.5px] font-medium ${sort === option.key ? 'bg-surface text-text shadow-(--shadow-control)' : 'text-muted hover:text-text'}`}>{option.label}</button>)}
-    </div>}>
-    <div className="max-h-[520px] overflow-auto">
-      <table className="w-full border-separate border-spacing-0 text-[13px]">
-        <thead className="sticky top-0 z-[1] bg-surface">
-          <tr className="text-left text-[12px] text-muted">
-            <th className="border-b border-line py-2 pl-1 font-medium">Sector</th>
-            <th className="border-b border-line py-2 text-right font-medium">Stocks</th>
-            {SECTOR_COLUMNS.map(column => <th key={column.key} className="border-b border-line px-1 py-2 text-center font-medium">{column.label}</th>)}
-            <th className="border-b border-line py-2"><span className="sr-only">Screen</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map(sector => <tr key={sector.name} className="group cursor-pointer" onClick={() => onScreenSector(sector.name)}>
-            <td className="max-w-[260px] truncate border-b border-line py-1.5 pl-1 font-medium text-text group-hover:text-accent">{sector.name}</td>
-            <td className="border-b border-line py-1.5 pr-2 text-right text-secondary">{count(sector.stock_count)}</td>
-            {SECTOR_COLUMNS.map(column => <td key={column.key} className="border-b border-line px-1 py-1.5">
-              <div className="rounded-(--radius-sm) py-1 text-center text-[12.5px] font-medium text-text" style={{background: heat(sector[column.key])}}
-                title={`${sector.name}: ${pct(sector[column.key], 1)} ${column.label.toLowerCase()}`}>{pct(sector[column.key])}</div>
-            </td>)}
-            <td className="border-b border-line py-1.5 pl-1 text-right">
-              <button type="button" aria-label={`Screen ${sector.name} stocks`} onClick={event => { event.stopPropagation(); onScreenSector(sector.name); }}
-                className="inline-grid size-7 place-items-center rounded-(--radius-sm) text-muted opacity-0 hover:bg-surface-hover hover:text-text focus-visible:opacity-100 group-hover:opacity-100">
-                <ArrowRight size={14} aria-hidden="true" />
-              </button>
-            </td>
-          </tr>)}
-        </tbody>
-      </table>
-    </div>
-  </Card>;
-}
-
-/** Market breadth, key indices and sector strength for the selected session. */
-export default function MarketTab({datasetRevision, sessionDate, onScreenSector}: {
+/** Market breadth and key indices for the selected session. */
+export default function MarketTab({datasetRevision, sessionDate}: {
   datasetRevision?: string;
   sessionDate: string;
-  onScreenSector: (sector: string) => void;
+  onScreenSector?: (sector: string) => void;
 }) {
   const market = useQuery({
     queryKey: ['marketOverview', datasetRevision],
@@ -225,7 +167,7 @@ export default function MarketTab({datasetRevision, sessionDate, onScreenSector}
     </div></div>;
   }
 
-  const {breadth, indices, sectors, asOfDate} = market.data;
+  const {breadth, indices, asOfDate} = market.data;
   const latest = breadth.at(-1)!;
   const regime = marketRegime(latest);
   const toneClass = regime.tone === 'positive' ? 'bg-accent-soft text-positive' : regime.tone === 'negative' ? 'bg-negative-soft text-negative' : 'bg-field text-secondary';
@@ -262,7 +204,5 @@ export default function MarketTab({datasetRevision, sessionDate, onScreenSector}
         </div>
       </Card>
     </div>
-
-    {sectors.length > 0 && <SectorTable sectors={sectors} onScreenSector={onScreenSector} />}
   </div>;
 }

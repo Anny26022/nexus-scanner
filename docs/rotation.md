@@ -34,6 +34,11 @@ pipeline state (`tools/pipeline_state.py`), and a stock counts toward a group on
 Removed or newly illiquid stocks remain historical constituents. Before observations began, the earliest
 recorded labels and eligibility apply; older history is a reconstruction. Existing ledgers without eligibility
 bootstrap it from the first run after this change. Drill-down member lists describe the current universe.
+The theme label stores the union of primary and curated memberships, so a stock contributes once to each
+theme. Scalar labels in older ledgers remain readable. Curated membership changes, including entry to or
+exit from the young cohort, are dated from observation onward; earlier membership is a reconstruction.
+Prices are never carried past a stock's last observation. Publication requires the Nifty calendar to reach
+the requested session, so a stale benchmark cannot be presented as current Rotation data.
 
 The builder loads one symbol's prices at a time and accumulates returns in compact numeric arrays, rather
 than retaining all raw histories. A local benchmark for 2,590 stocks and 618 groups reduced peak resident
@@ -57,7 +62,8 @@ JdK's formula is unpublished; this is an open approximation.
 - RS-Momentum = 100 × RS-Ratio ÷ EMA₉(RS-Ratio): leads RS-Ratio and turns first.
 - Quadrants split at 100 on both axes.
 
-Periods follow the chosen calendar, and the first 35 periods are warm-up.
+Periods follow the chosen calendar. Both indicators require 34 consecutive observations; replay reserves
+35 periods for warm-up. Insufficient-history items remain outside the plotted and ranked universe.
 
 ## Page
 
@@ -68,7 +74,8 @@ Periods follow the chosen calendar, and the first 35 periods are warm-up.
 - **Replay:** steps one period at a time with gliding motion. Quadrant counts and the rail update live.
 - **Benchmark strip:** shows the benchmark and a breadth ribbon, the share of items in each quadrant over
   time. Drag it to move through time.
-- **Tracker:** ranks every item by quadrant and by how far it moved, with a trail sparkline and drill-down.
+- **Tracker:** defaults to descending RS-Ratio, with a trail sparkline and drill-down. The optional quadrant
+  sort uses RS-Ratio within each quadrant; trail movement remains a separate sort.
   It renders 50 rows per page; every item remains reachable. Selecting an outlier expands the chart to fit
   its replay path while the unselected overview retains robust percentile bounds.
 - **Default view:** thematic blocks (about 30 groups), which stay readable with every trail drawn.
@@ -76,6 +83,9 @@ Periods follow the chosen calendar, and the first 35 periods are warm-up.
 ## Local testing
 
 `python3 tools/build_rotation_local.py` builds the same data from this checkout's cached OHLCV and the current
-release's stock rows. It needs only the standard library; runtime depends on history size. The output goes to
+release's stock rows. Index history uses the publisher's reader, merging CSVs with the latest index snapshot.
+The replay stops at the stock session with at least 90% coverage, and the CLI reports when that predates the
+release; a newer index snapshot never fabricates newer stock candles. It needs only the standard library;
+runtime depends on history size. The output goes to
 `frontend/public/data/rotation/`, which is ignored by Git, and the dev server picks it up through `local.json`.
 Re-run it after the caches change.

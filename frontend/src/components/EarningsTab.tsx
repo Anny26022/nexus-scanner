@@ -3,7 +3,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { ArrowDown, ArrowUp, CandlestickChart, ChevronDown, Clock, ExternalLink, FileText, Minus, Search, X } from 'lucide-react';
 import {
-  GROUP_LABEL, QUALITY_ORDER, companyHistory, getEarningsFile, getEarningsIndex, groupRecords, median, periodLabel,
+  GROUP_LABEL, QUALITY_ORDER, THEME_LEVELS, companyHistory, getEarningsFile, getEarningsIndex, groupRecords, median, periodLabel,
   qualityRank, seasonRecords, seasons, summarize, upcomingByDate, upcomingQuarters,
   type Classification, type EarningsRecord, type GroupBy,
 } from '../api/earnings';
@@ -39,7 +39,8 @@ const sessionOf = (record: EarningsRecord): Session | null => {
   return record.timing === 'Before' ? 'before' : record.timing === 'During' ? 'during' : record.timing === 'After' ? 'after' : null;
 };
 type Lens = 'grade' | Exclude<GroupBy, 'none'>;
-const LENSES: [Lens, string][] = [['grade', 'Grade'], ['sector', GROUP_LABEL.sector], ['subsector', GROUP_LABEL.subsector], ['theme', GROUP_LABEL.theme]];
+const LENSES: [Lens, string][] = [['grade', 'Grade'], ...(['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const)
+  .map(level => [level, GROUP_LABEL[level]] as [Lens, string])];
 
 type SortKey = 'filing_day' | 'quality' | 'revenue_yoy' | 'pat_yoy' | 'eps_yoy' | 'post_earnings_pct';
 
@@ -209,11 +210,11 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
   const directory = useQuery({queryKey: ['chart-rows', datasetRevision], queryFn: () => screenerApi.getChartRows(datasetRevision),
     staleTime: Infinity, retry: false, enabled: lens !== 'grade'});
   const themes = useQuery({queryKey: ['theme-classification', datasetRevision], queryFn: () => screenerApi.getThemeClassification(datasetRevision),
-    staleTime: Infinity, retry: false, enabled: lens === 'theme'});
+    staleTime: Infinity, retry: false, enabled: THEME_LEVELS.has(lens)});
   const classification = useMemo(() => {
     const map = new Map<string, Classification>();
-    for (const row of directory.data ?? []) map.set(row.symbol, {sector: row.sector, subsector: row.industry, niches: row.nicheTags ?? []});
-    for (const [symbol, record] of Object.entries(themes.data?.records ?? {})) map.set(symbol, {...map.get(symbol), theme: record.theme});
+    for (const row of directory.data ?? []) map.set(row.symbol, {sector: row.sector, industry: row.industry, niches: row.nicheTags ?? []});
+    for (const [symbol, record] of Object.entries(themes.data?.records ?? {})) map.set(symbol, {...map.get(symbol), theme: record.theme, subIndustry: record.subIndustry, block: record.block, macro: record.macro});
     return map;
   }, [directory.data, themes.data]);
 
@@ -250,7 +251,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
     .reduce((sum, [, rows]) => sum + rows.filter(matches).length, 0);
 
   const classify = (symbol: string) => classification.get(symbol);
-  const classifying = lens !== 'grade' && (directory.isPending || (lens === 'theme' && themes.isPending));
+  const classifying = lens !== 'grade' && (directory.isPending || (THEME_LEVELS.has(lens) && themes.isPending));
   const facets: Facet[] = classifying ? [] : lens !== 'grade' ? groupRecords(base, lens, classify)
     : scheduleMode ? TIERS.map(([label]) => ({label, records: base.filter(row => tierOf(row) === label), medianPatYoy: null})).filter(facet => facet.records.length)
     : QUALITY_ORDER.map(grade => {
@@ -317,10 +318,12 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
 
     <div className="ep-desk">
       <aside className="ep-lens" aria-label="Break down">
-        <div className="ep-lens-tabs" role="tablist" aria-label="Break down by">
-          {LENSES.map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={lens === value}
-            onClick={() => { setLens(value); setFocus(null); setAllFacets(false); resetPaging(); }}>{value === 'grade' && scheduleMode ? 'Size' : label}</button>)}
-        </div>
+        <label className="ep-lens-pick"><span>Break down by</span>
+          <span className="ep-lens-select">
+            <select value={lens} onChange={event => { setLens(event.target.value as Lens); setFocus(null); setAllFacets(false); resetPaging(); }}>
+              {LENSES.map(([value, label]) => <option key={value} value={value}>{value === 'grade' && scheduleMode ? 'Size' : label}</option>)}
+            </select><ChevronDown size={12} aria-hidden="true" /></span>
+        </label>
         {classifying ? <p className="ep-lens-state" role="status">Loading classification…</p>
           : <ul className="ep-facets">
             {(allFacets ? facets : facets.slice(0, FACETS)).map(facet => <li key={facet.label}>

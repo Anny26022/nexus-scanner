@@ -30,6 +30,11 @@ describe('earnings', () => {
     expect(groups.map(group => [group.label, group.records.length])).toEqual([['EV', 2], ['Defence', 1], [UNCLASSIFIED, 2]]);
   });
 
+  it('groups by theme-file levels', () => {
+    const groups = groupRecords([rec('A'), rec('B'), rec('C')], 'macro', symbol => ({macro: symbol === 'C' ? null : 'Energy'}));
+    expect(groups.map(group => [group.label, group.records.length])).toEqual([['Energy', 2], [UNCLASSIFIED, 1]]);
+  });
+
   it('groups upcoming filings by date from today, largest first', () => {
     const days = upcomingByDate([rec('A', {filing_day: '2026-10-01'}), rec('B', {filing_day: '2026-10-25', market_cap: 1}),
       rec('C', {filing_day: '2026-10-25', market_cap: 9})], '2026-10-24');

@@ -225,9 +225,16 @@ export function companyHistory(files: readonly EarningsRecord[][], symbol: strin
 }
 
 /** Where a company sits in Nexus's own classification, joined by symbol (from the chart directory and theme file). */
-export interface Classification { sector?: string | null; subsector?: string | null; theme?: string | null; niches?: readonly string[] }
-export type GroupBy = 'none' | 'sector' | 'subsector' | 'theme' | 'niche';
-export const GROUP_LABEL: Record<GroupBy, string> = {none: 'All', sector: 'Sector', subsector: 'Subsector', theme: 'Theme', niche: 'Niche'};
+export interface Classification {
+  sector?: string | null; industry?: string | null; subIndustry?: string | null;
+  theme?: string | null; block?: string | null; macro?: string | null; niches?: readonly string[];
+}
+export type GroupBy = 'none' | 'sector' | 'industry' | 'subIndustry' | 'theme' | 'block' | 'macro' | 'niche';
+/** The screener's own names for each level. */
+export const GROUP_LABEL: Record<GroupBy, string> = {none: 'All', sector: 'Sector', industry: 'Industry', subIndustry: 'Sub-industry',
+  theme: 'Theme', block: 'Thematic block', macro: 'Macro pillar', niche: 'Niche'};
+/** Levels that come from the theme file rather than the chart directory. */
+export const THEME_LEVELS: ReadonlySet<string> = new Set<GroupBy>(['subIndustry', 'theme', 'block', 'macro']);
 export const UNCLASSIFIED = 'Unclassified';
 
 export interface EarningsGroup {
@@ -252,7 +259,7 @@ export function groupRecords(records: readonly EarningsRecord[], by: Exclude<Gro
   for (const record of records) {
     const known = classify(record.symbol);
     const labels = by === 'niche' ? (known?.niches?.length ? known.niches : [UNCLASSIFIED])
-      : [(by === 'sector' ? known?.sector ?? record.sector : by === 'subsector' ? known?.subsector ?? record.industry : known?.theme)?.trim() || UNCLASSIFIED];
+      : [(by === 'sector' ? known?.sector ?? record.sector : by === 'industry' ? known?.industry ?? record.industry : known?.[by])?.trim() || UNCLASSIFIED];
     for (const label of labels) groups.set(label, [...(groups.get(label) ?? []), record]);
   }
   return [...groups].map(([label, rows]) => {

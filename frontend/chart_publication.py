@@ -21,6 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'DO NOT DELETE EDL 
 from edl_pipeline.config import env_bool
 
 
+# Rotation history is replaced every day, so it lives where the bucket's 90-day lifecycle rule cleans up.
+ROTATION_PREFIX = 'daily/rotation'
+
+
 def write_json(path, payload):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(path.name + '.tmp')
@@ -373,37 +377,11 @@ class R2Store:
         self.write_release(archived, f'monthly/{month}/{previous["chartRevision"]}/releases/{previous["revision"]}.json')
         return archived
 
-    ROTATION_STATE = 'rotation-state/published.json'
-
-    def prune_rotation(self, objects, current, previous):
-        """Delete rotation history objects that neither this release nor the live one references.
-
-        Rotation files share objects/ with charts, so they are tracked by name in a private list (a prefix
-        the data Worker never serves); only names on that list are ever deleted. `previous` is the hash in
-        the manifest currently live in Git, so a run that uploaded but was never committed cannot cost
-        the live release its files. If the live release's files cannot be read, nothing is deleted.
-        """
-        def names(read, index_hash):
-            index = json.loads(gzip.decompress(read(index_hash)))
-            return {f'{index_hash}.json.gz', *(f'{digest}.json.gz' for digest in index['shards'].values())}
-        keep = names(lambda digest: (objects / f'{digest}.json.gz').read_bytes(), current)
-        if previous and previous != current:
-            keep |= names(lambda digest: self.cache_command('cat', self.remote(f'objects/{digest}.json.gz')), previous)
-        try:
-            published = set(json.loads(self.cache_command('cat', self.remote(self.ROTATION_STATE))))
-        except (subprocess.CalledProcessError, ValueError, TypeError):
-            published = set()  # First run: nothing recorded yet, so nothing to delete.
-        stale = sorted(published - keep)
-        if stale:
-            with tempfile.TemporaryDirectory() as folder:
-                listing = Path(folder) / 'stale.txt'
-                listing.write_text('\n'.join(stale) + '\n')
-                self.run('delete', self.remote('objects'), '--files-from', str(listing), '--no-traverse')
-        with tempfile.TemporaryDirectory() as folder:
-            record = Path(folder) / 'published.json'
-            record.write_text(json.dumps(sorted(keep)))
-            self.cache_command('copyto', str(record), self.remote(self.ROTATION_STATE), '--ignore-times')
-        return stale
+    def upload_rotation(self, source):
+        """Rotation history goes under daily/, where the bucket's lifecycle rule expires it after 90 days."""
+        self.run('copy', str(source), self.remote(ROTATION_PREFIX), '--include', '*.json.gz', '--immutable', '--checksum',
+                 '--metadata', '--metadata-set', 'content-type=application/gzip')
+        self.run('check', str(source), self.remote(ROTATION_PREFIX), '--include', '*.json.gz', '--one-way', '--download', '--checkers', '4')
 
     def write_release(self, manifest, key):
         with tempfile.TemporaryDirectory() as folder:
@@ -417,7 +395,7 @@ def complete_release(chart_root, output, manifest, store=None):
     if store is None and not charts_enabled():
         print('WARNING: R2 configuration missing (' + ', '.join(missing_r2_settings()) + '); publishing scanner data without charts.', flush=True)
         manifest = dict(manifest, schemaVersion=4)
-        for key in ('chartRevision', 'chartUrlTemplate', 'chartObjectPrefix', 'dataIndexUrl', 'objectUrlTemplate', 'rotationHistoryObject'):
+        for key in ('chartRevision', 'chartUrlTemplate', 'chartObjectPrefix', 'dataIndexUrl', 'objectUrlTemplate', 'rotationHistoryObject', 'rotationUrlTemplate'):
             manifest.pop(key, None)
         write_json(output / 'revisions' / manifest['revision'] / 'release.json', manifest)
         write_json(output / 'current.json', manifest)
@@ -427,7 +405,7 @@ def complete_release(chart_root, output, manifest, store=None):
         return complete_object_release(chart_root, output, manifest, store)
     revision = chart_revision(chart_root, manifest['sessionDate'])
     manifest = dict(manifest, schemaVersion=6, chartRevision=revision)
-    manifest.pop('rotationHistoryObject', None)  # Legacy chart releases publish no shared objects.
+    manifest.pop('rotationHistoryObject', None)  # Legacy chart releases publish no rotation history.
     existing_release = output / 'revisions' / manifest['revision'] / 'release.json'
     if existing_release.exists():
         existing = json.loads(existing_release.read_text())
@@ -502,6 +480,10 @@ def complete_object_release(chart_root, output, manifest, store=None):
         started = time.perf_counter()
         verified = store.load_inventory(previous)
         files = store.upload_objects(chart_root / 'objects', verified)
+        rotation = chart_root / 'rotation'
+        if manifest.get('rotationHistoryObject') and rotation.is_dir():
+            store.upload_rotation(rotation)
+            manifest['rotationUrlTemplate'] = f'{base}/{ROTATION_PREFIX}/{{hash}}.json.gz'
         print(f'Object upload and verification elapsed: {time.perf_counter() - started:.2f}s', flush=True)
         manifest['publishedAt'] = manifest['sessionDate'] + 'T00:00:00Z'
         manifest['dataIndexUrl'] = f"{base}/releases/{manifest['revision']}/index.json"
@@ -513,15 +495,6 @@ def complete_object_release(chart_root, output, manifest, store=None):
             store.write_inventory(files)
         except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
             print(f'WARNING: R2 verification cache not saved: {error}', flush=True)
-        if manifest.get('rotationHistoryObject') and hasattr(store, 'prune_rotation'):
-            # Each rotation release carries its whole history, so only this one and the live one are needed.
-            try:
-                removed = store.prune_rotation(chart_root / 'objects', manifest['rotationHistoryObject'],
-                                               (previous or {}).get('rotationHistoryObject'))
-                if removed:
-                    print(f'Removed {len(removed)} superseded rotation history objects', flush=True)
-            except Exception as error:  # Housekeeping only; never fail a completed release over it.
-                print(f'WARNING: rotation history pruning skipped: {error}', flush=True)
     else:
         destination = output / 'objects'
         destination.mkdir(exist_ok=True, parents=True)
@@ -534,6 +507,12 @@ def complete_object_release(chart_root, output, manifest, store=None):
                 shutil.copyfile(file, target)
         manifest['dataIndexUrl'] = f"/data/revisions/{manifest['revision']}/data-index.json"
         manifest['objectUrlTemplate'] = '/data/objects/{hash}.json.gz'
+        rotation = chart_root / 'rotation'
+        if manifest.get('rotationHistoryObject') and rotation.is_dir():
+            (output / 'rotation').mkdir(exist_ok=True)
+            for file in rotation.glob('*.json.gz'):
+                shutil.copyfile(file, output / 'rotation' / file.name)
+            manifest['rotationUrlTemplate'] = '/data/rotation/{hash}.json.gz'
     write_json(output / 'revisions' / manifest['revision'] / 'data-index.json', index)
     write_json(existing_path, manifest)
     write_json(output / 'current.json', manifest)

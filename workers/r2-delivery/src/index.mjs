@@ -22,8 +22,8 @@ export default {
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set('ETag', object.httpEtag);
-    // Only content-addressed objects and frozen releases are immutable.
-    headers.set('Cache-Control', /^(objects|releases)\//.test(key)
+    // Only content-addressed objects, frozen releases and rotation history (named by hash) are immutable.
+    headers.set('Cache-Control', /^(objects|releases|daily\/rotation)\//.test(key)
       ? 'public, max-age=31536000, immutable' : 'no-cache');
     headers.set('Access-Control-Allow-Origin', '*');
     headers.set('X-Content-Type-Options', 'nosniff');

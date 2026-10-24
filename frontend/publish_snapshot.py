@@ -473,7 +473,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         started = time.perf_counter()
         try:
             manifest['rotationHistoryObject'] = rotation_history_object(
-                root, cache, rows, taxonomy, source_bytes, session, chart_root / 'objects')
+                root, cache, rows, taxonomy, source_bytes, session, chart_root / 'rotation')
         except (ValueError, KeyError, OSError) as error:
             # Optional: the scanner release must not fail because the rotation view cannot be built.
             print(f'WARNING: rotation history unavailable for {session}: {error}', flush=True)

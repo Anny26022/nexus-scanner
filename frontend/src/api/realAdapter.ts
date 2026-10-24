@@ -132,7 +132,7 @@ function rotationObjectUrl(release: Manifest, hash?: string): string | undefined
   if (hash !== undefined && !/^[a-f0-9]{64}$/.test(hash)) return undefined;
   if (release.rotationHistoryUrl) return hash ? release.rotationHistoryUrl.replace(/[a-f0-9]{64}(\.json\.gz)$/, `${hash}$1`) : release.rotationHistoryUrl;
   const target = hash ?? release.rotationHistoryObject;
-  return target ? release.objectUrlTemplate?.replace('{hash}', target) : undefined;
+  return target ? release.rotationUrlTemplate?.replace('{hash}', target) : undefined;
 }
 function validSymbol(symbol: string) {
   if (!/^[A-Z0-9&_-]+$/.test(symbol)) throw new Error('Invalid symbol');

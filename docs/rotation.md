@@ -2,18 +2,17 @@
 
 ## Data
 
-`frontend/rotation_history.py` runs inside snapshot publication and writes four content-addressed objects
-next to the chart objects. The release manifest names the index as `rotationHistoryObject`.
+`frontend/rotation_history.py` runs inside snapshot publication and writes four content-addressed objects.
+The release manifest names the index as `rotationHistoryObject` and where to fetch it as `rotationUrlTemplate`.
 
 - **Index** (always loaded): calendars, benchmarks, every stock with its index memberships and liquidity
   fields, every group with its members, and the hashes of the three shards.
 - **Shards**: `core` (Nifty 500 stocks), `rest` (all other stocks) and `groups` (one composite per group).
   The page loads only the shards a view needs.
 
-Each release's files hold the whole replay window, so earlier releases' rotation files are not needed. After
-a release is uploaded, publication keeps only the new release's files and those of the release live in Git.
-It deletes the rest; their names are tracked in the private `rotation-state/published.json`, so chart objects
-in the same `objects/` prefix are never touched. If the live release's files cannot be read, nothing is deleted.
+Each release's files hold the whole replay window, so earlier releases' files are never read again. They are
+uploaded under `daily/rotation/`, where the bucket's existing `daily-charts-90-days` lifecycle rule expires them;
+no publication code deletes anything.
 
 Each series is one close per period on three calendars: the last 300 sessions, 290 ISO weeks and 144 months.
 Values are delta-coded natural logs at 0.01% resolution.

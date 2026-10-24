@@ -149,14 +149,12 @@ export function RotationPlot(props: Props) {
       ctx.fillText('↑ RS-Momentum', mid.x + 7, top + 10);
 
       const focus = props.focusId ?? state.hover;
-      const counts: Record<Quadrant, number> = {leading: 0, weakening: 0, lagging: 0, improving: 0};
       heads.clear();
       const visible: {track: Track; head: RotationPoint; quadrant: Quadrant; weight: number}[] = [];
       for (const track of props.tracks) {
         const head = at(track, index);
         if (!head) continue;
         const quadrant = quadrantOf(head);
-        counts[quadrant]++;
         // Every item is plotted; the ones that moved most draw strongest, so the flow reads at a glance.
         const weight = focus ? (track.item.id === focus ? 1 : 0.06) : 0.12 + 0.88 * (props.emphasis.get(track.item.id) ?? 0);
         visible.push({track, head, quadrant, weight});
@@ -240,13 +238,13 @@ export function RotationPlot(props: Props) {
         ctx.fillText(text, box.x + 6, box.y + 12.5);
       }
       ctx.restore();
-      // Live quadrant names and counts, quietly in each corner.
+      // Live quadrant names, quietly in each corner.
       ctx.font = '650 10.5px Inter, system-ui, sans-serif';
       const corner = (quadrant: Quadrant, x: number, y: number, align: CanvasTextAlign) => {
         ctx.textAlign = align;
         ctx.fillStyle = palette[quadrant];
         ctx.globalAlpha = 0.85;
-        ctx.fillText(`${LABEL[quadrant]} · ${counts[quadrant]}`, x, y);
+        ctx.fillText(LABEL[quadrant], x, y);
       };
       corner('improving', left + 12, top + 20, 'left');
       corner('leading', left + width - 12, top + 20, 'right');

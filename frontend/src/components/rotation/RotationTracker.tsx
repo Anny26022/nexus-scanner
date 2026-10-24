@@ -1,6 +1,7 @@
 import { CandlestickChart, ChevronRight } from 'lucide-react';
 import type { RotationItem } from '../../api/rotation';
 import { QUADRANTS, type Quadrant, type RotationPoint } from '../../utils/rrg';
+import { Button } from '../Button';
 import { Heading } from './RotationList';
 
 export interface TrackerRow {
@@ -64,11 +65,11 @@ export function RotationTracker({rows, half, sort, onSort, onOpen, onShow}: Prop
         <span className="rot-moved"><i style={{width: `${row.moved / peak * 100}%`}} /><b>{(row.moved * 100).toFixed(0)}</b></span>
         <span className="rot-num">{row.point.x.toFixed(2)}</span>
         <span className="rot-num">{row.point.y.toFixed(2)}</span>
-        <button type="button" className="rot-open" onClick={() => onOpen(row.item)}
+        <Button variant="ghost" className="rot-open" onClick={() => onOpen(row.item)}
           aria-label={row.item.kind === 'group' ? `Open ${row.item.label} members` : `Open ${row.item.label} chart`}
           title={row.item.kind === 'group' ? 'Open its stocks' : 'Open in Charts'}>
           {row.item.kind === 'group' ? <ChevronRight size={14} /> : <CandlestickChart size={13} />}
-        </button>
+        </Button>
       </div>)}
     </section>)}
     {!rows.length && <p className="rot-state">Nothing matches.</p>}

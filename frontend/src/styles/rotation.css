@@ -12,8 +12,10 @@
 .rot-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 28px; padding-bottom: 4px; }
 .rot-title { display: flex; align-items: center; gap: 20px; }
 .rot-title h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.03em; }
-/* Controls read as one calm line: plain text dropdowns, two segmented choices, generous gaps. */
-.rot-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; }
+/* Controls read as two calm groups: scope on the left, display settings on the right. */
+.rot-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.rot-control-group { display: flex; align-items: center; gap: 4px 8px; }
+.rot-control-divider { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
 .rot-select { position: relative; display: inline-flex; align-items: center; height: 34px; border-radius: 10px; transition: background .15s; }
 .rot-select:hover { background: var(--field); }
 .rot-select select { height: 100%; padding: 0 24px 0 8px; border: 0; border-radius: inherit; background: transparent; color: var(--text);
@@ -48,7 +50,7 @@
 .rot-rail-head > div { display: flex; flex-direction: column; min-width: 0; }
 .rot-rail-head b { overflow: hidden; font-size: 14px; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
 .rot-rail-head span { color: var(--muted); font-size: 11.5px; }
-.rot-icon { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: var(--field); color: var(--secondary); cursor: pointer; }
+.rot-icon { display: grid; place-items: center; flex: none; width: 30px; height: 30px; min-height: unset; padding: 0; border: 0; border-radius: 50%; background: var(--field); color: var(--secondary); cursor: pointer; }
 .rot-icon:hover { color: var(--text); }
 .rot-tools { display: flex; gap: 6px; }
 .rot-search { display: flex; flex: 1; align-items: center; gap: 7px; min-width: 0; height: 30px; padding: 0 12px; border-radius: 999px; background: var(--field); color: var(--muted); }
@@ -56,7 +58,7 @@
 .rot-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; outline: none; }
 .rot-search input:focus-visible { box-shadow: none; }
 .rot-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px; scrollbar-width: thin; }
-.rot-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) 22px 46px 24px; align-items: center; gap: 8px; min-height: 44px; padding: 0 6px; border-radius: 10px; }
+.rot-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) 22px 42px 24px; align-items: center; gap: 8px; min-height: 38px; padding: 0 6px; border-radius: 9px; }
 .rot-row:hover, .rot-row[data-hover] { background: var(--surface-hover); }
 .rot-row[data-focus] { background: color-mix(in srgb, var(--q) 11%, transparent); }
 .rot-dot { width: 8px; height: 8px; margin: 0 auto; border-radius: 50%; background: var(--q); }
@@ -65,9 +67,8 @@
 .rot-name span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .rot-heading { display: grid; place-items: center; color: var(--q); }
 .rot-heading svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; transition: transform .45s cubic-bezier(.2, .8, .2, 1); }
-.rot-num { display: flex; flex-direction: column; align-items: flex-end; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.rot-num small { color: var(--muted); font-size: 10.5px; font-weight: 500; }
-.rot-open { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .15s; }
+.rot-num { display: flex; align-items: center; justify-content: flex-end; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rot-open { display: grid; place-items: center; width: 24px; height: 24px; min-height: unset; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity .15s; }
 .rot-row:hover .rot-open, .rot-trow:hover .rot-open, .rot-open:focus-visible { opacity: 1; }
 .rot-open:hover { background: var(--field); color: var(--text); }
 .rot-more { margin: 8px 0; color: var(--muted); font-size: 11.5px; text-align: center; }
@@ -85,22 +86,22 @@
 .rot-chips [aria-pressed="true"] { background: color-mix(in srgb, var(--q) 14%, transparent); color: var(--text); }
 .rot-chips:has([aria-pressed="true"]) button:not([aria-pressed="true"]) { opacity: .45; }
 .rot-bar .rot-search { flex: 0 1 240px; }
-/* Flow summary: the answer to "where is money going" in one line. */
-.rot-flow { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: -2px; }
+/* Flow summary: the answer to "where is money going" in one compact line. */
+.rot-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: -3px; }
 .rot-flow-side { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.rot-flow-side > span { margin-right: 4px; color: var(--muted); font-size: 11.5px; font-weight: 640; }
-.rot-flow-side > span small { font-weight: 500; }
+.rot-flow-side > span { margin-right: 2px; color: var(--muted); font-size: 11px; font-weight: 620; white-space: nowrap; }
+.rot-flow-side > span small { font-weight: 500; opacity: 0.8; }
 .rot-flow-side[data-side="in"] > span { color: var(--rrg-leading); }
 .rot-flow-side[data-side="out"] > span { color: var(--rrg-lagging); }
-.rot-flow-side button { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 0; border-radius: 999px;
-  background: var(--field); color: var(--text); font: inherit; font-size: 12px; font-weight: 580; cursor: pointer; }
-.rot-flow-side button i { width: 6px; height: 6px; border-radius: 50%; background: var(--q); }
+.rot-flow-side button { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 0; border-radius: 999px;
+  background: var(--field); color: var(--text); font: inherit; font-size: 11px; font-weight: 550; cursor: pointer; }
+.rot-flow-side button i { width: 5px; height: 5px; border-radius: 50%; background: var(--q); }
 .rot-flow-side button:hover { background: color-mix(in srgb, var(--q) 12%, var(--field)); }
 .rot-flow-side [aria-pressed="true"] { background: var(--text); color: var(--surface); }
-.rot-crumb { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px 0 12px; border-radius: 999px; background: var(--text); color: var(--surface); font-size: 12px; }
-.rot-crumb button { display: grid; place-items: center; padding: 0; border: 0; background: none; color: color-mix(in srgb, var(--surface) 70%, transparent); font: inherit; cursor: pointer; }
-.rot-crumb button:last-child { width: 20px; height: 20px; border-radius: 50%; }
-.rot-crumb button:hover { color: var(--surface); }
+.rot-crumb { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 4px 0 10px; border-radius: 999px; background: var(--text); color: var(--surface); font-size: 12px; }
+.rot-crumb .button { display: grid; place-items: center; height: 100%; min-height: unset; padding: 0 4px; border: 0; background: none; color: color-mix(in srgb, var(--surface) 75%, transparent); font: inherit; cursor: pointer; }
+.rot-crumb .button:last-child { width: 20px; height: 20px; padding: 0; border-radius: 50%; }
+.rot-crumb .button:hover { color: var(--surface); background: transparent; }
 .rot-stage { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; border-radius: 20px; background: var(--surface);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent); overflow: hidden; }
 .rot-stage.is-table { overflow-y: auto; }

@@ -1,6 +1,7 @@
 import { CandlestickChart, ChevronRight } from 'lucide-react';
 import type { RotationItem } from '../../api/rotation';
 import type { Quadrant, RotationPoint } from '../../utils/rrg';
+import { Button } from '../Button';
 
 export interface ListRow {
   item: RotationItem;
@@ -36,12 +37,12 @@ export function RotationList({rows, total, focusId, hoverId, onFocus, onOpen}: P
           <b>{item.label}</b><span>{item.detail}</span>
         </button>
         <Heading angle={angle} />
-        <span className="rot-num">{point.x.toFixed(1)}<small>{point.y.toFixed(1)}</small></span>
-        <button type="button" className="rot-open" onClick={() => onOpen(item)}
+        <span className="rot-num">{point.x.toFixed(1)}</span>
+        <Button variant="ghost" className="rot-open" onClick={() => onOpen(item)}
           aria-label={item.kind === 'group' ? `Open ${item.label} members` : `Open ${item.label} chart`}
           title={item.kind === 'group' ? 'Open its stocks' : 'Open in Charts'}>
           {item.kind === 'group' ? <ChevronRight size={14} /> : <CandlestickChart size={13} />}
-        </button>
+        </Button>
       </div>;
     })}
     {total > rows.length && <p className="rot-more">{(total - rows.length).toLocaleString('en-IN')} more · search to narrow</p>}

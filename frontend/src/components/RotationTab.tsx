@@ -9,6 +9,7 @@ import { screenerApi } from '../api/screenerApi';
 import { activeList, loadWatchlistStore } from '../chart/watchlists';
 import { useMountEffect } from '../hooks/useMountEffect';
 import { bounds, QUADRANTS, quadrantOf, type Quadrant } from '../utils/rrg';
+import { Button } from './Button';
 import { NO_FILTERS, RotationFilters, passes, type LiquidityFilters } from './rotation/RotationFilters';
 import { RotationList, type ListRow } from './rotation/RotationList';
 import { RotationPlot } from './rotation/RotationPlot';
@@ -239,27 +240,32 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
         </div>
       </div>
       <div className="rot-controls">
-        <Select label="Universe" value={universe.kind === 'members' && back ? universeKey(back) : universeKey(universe)} onChange={key => chooseUniverse(parseUniverse(key))}>
-          <optgroup label="Groups">{LEVELS.map(level => <option key={level} value={`level:${level}`}>{LEVEL_LABEL[level]}</option>)}</optgroup>
-          <optgroup label="Stocks">{STOCK_UNIVERSES.map(([code, label]) => <option key={code} value={`stocks:${code}`} disabled={code === 'WATCH' && !watchlist.size}>{label}</option>)}</optgroup>
-        </Select>
-        <div className="rot-segment" role="radiogroup" aria-label="Timeframe">
-          {(['D', 'W', 'M'] as Frame[]).map(value => <button key={value} type="button" role="radio" aria-checked={frame === value} title={FRAME_LABEL[value]}
-            onClick={() => chooseFrame(value)}>{value}</button>)}
+        <div className="rot-control-group" aria-label="Scope controls">
+          <Select label="Universe" value={universe.kind === 'members' && back ? universeKey(back) : universeKey(universe)} onChange={key => chooseUniverse(parseUniverse(key))}>
+            <optgroup label="Groups">{LEVELS.map(level => <option key={level} value={`level:${level}`}>{LEVEL_LABEL[level]}</option>)}</optgroup>
+            <optgroup label="Stocks">{STOCK_UNIVERSES.map(([code, label]) => <option key={code} value={`stocks:${code}`} disabled={code === 'WATCH' && !watchlist.size}>{label}</option>)}</optgroup>
+          </Select>
+          <Select label="Benchmark" value={typeof benchmark === 'string' ? benchmark : 'GROUP'} onChange={value => setBenchmark(value as BenchmarkCode | 'GROUP')}>
+            {group && <option value="GROUP">vs {displayLabel(group.n)}</option>}
+            {BENCHMARK_ORDER.filter(code => data.benchmarks[code]).map(code => <option key={code} value={code}>vs {data.benchmarks[code]!.name}</option>)}
+          </Select>
         </div>
-        <Select label="Range" value={range} onChange={value => { setRange(value); resetView(); }}>
-          {RANGES[frame].map(([label]) => <option key={label} value={label}>{label}</option>)}
-        </Select>
-        <Select label="Benchmark" value={typeof benchmark === 'string' ? benchmark : 'GROUP'} onChange={value => setBenchmark(value as BenchmarkCode | 'GROUP')}>
-          {group && <option value="GROUP">vs {displayLabel(group.n)}</option>}
-          {BENCHMARK_ORDER.filter(code => data.benchmarks[code]).map(code => <option key={code} value={code}>vs {data.benchmarks[code]!.name}</option>)}
-        </Select>
-        <div className="rot-stepper" aria-label="Trail length">
-          <button type="button" aria-label="Shorter trail" disabled={tail <= 1} onClick={() => setTail(value => Math.max(1, value - 1))}><Minus size={12} /></button>
-          <span>{tail}{unit}<small> trail</small></span>
-          <button type="button" aria-label="Longer trail" disabled={tail >= 30} onClick={() => setTail(value => Math.min(30, value + 1))}><Plus size={12} /></button>
+        <div className="rot-control-divider" aria-hidden="true" />
+        <div className="rot-control-group" aria-label="Display controls">
+          <div className="rot-segment" role="radiogroup" aria-label="Timeframe">
+            {(['D', 'W', 'M'] as Frame[]).map(value => <button key={value} type="button" role="radio" aria-checked={frame === value} title={FRAME_LABEL[value]}
+              onClick={() => chooseFrame(value)}>{value}</button>)}
+          </div>
+          <Select label="Range" value={range} onChange={value => { setRange(value); resetView(); }}>
+            {RANGES[frame].map(([label]) => <option key={label} value={label}>{label}</option>)}
+          </Select>
+          <div className="rot-stepper" aria-label="Trail length">
+            <button type="button" aria-label="Shorter trail" disabled={tail <= 1} onClick={() => setTail(value => Math.max(1, value - 1))}><Minus size={12} /></button>
+            <span>{tail}{unit}<small> trail</small></span>
+            <button type="button" aria-label="Longer trail" disabled={tail >= 30} onClick={() => setTail(value => Math.min(30, value + 1))}><Plus size={12} /></button>
+          </div>
+          {!isGroups && <RotationFilters filters={filters} onChange={setFilters} />}
         </div>
-        {!isGroups && <RotationFilters filters={filters} onChange={setFilters} />}
       </div>
     </header>
 
@@ -267,9 +273,9 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
       {view === 'chart' && <aside className="rot-rail" aria-label="Items">
         <div className="rot-rail-head">
           <div><b>{scopeLabel}</b><span>{live.length.toLocaleString('en-IN')} {isGroups ? 'groups' : 'stocks'} · vs {benchmarkName}</span></div>
-          <button type="button" className="rot-icon" onClick={copySymbols} aria-label="Copy symbols"
+          <Button variant="ghost" className="rot-icon" onClick={copySymbols} aria-label="Copy symbols"
             title={isGroups ? (focusId ? 'Copy this group’s stocks' : 'Copy the stocks in these groups') : 'Copy these symbols'}>
-            {copied ? <Check size={14} /> : <Copy size={14} />}</button>
+            {copied ? <Check size={14} /> : <Copy size={14} />}</Button>
         </div>
         <div className="rot-tools">{search}
           <Select label="Sort" value={sort} onChange={value => setSort(value as ListSort)}>
@@ -283,8 +289,8 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
 
       <main className="rot-main">
         <div className="rot-bar">
-          {group ? <div className="rot-crumb"><button type="button" onClick={() => back && chooseUniverse(back)}>{back?.kind === 'level' ? LEVEL_LABEL[back.level] : 'Back'}</button>
-            <span>/</span><b>{displayLabel(group.n)}</b><button type="button" aria-label="Close group" onClick={() => back && chooseUniverse(back)}><X size={12} /></button></div>
+          {group ? <div className="rot-crumb"><Button variant="ghost" onClick={() => back && chooseUniverse(back)}>{back?.kind === 'level' ? LEVEL_LABEL[back.level] : 'Back'}</Button>
+            <span>/</span><b>{displayLabel(group.n)}</b><Button variant="ghost" aria-label="Close group" onClick={() => back && chooseUniverse(back)}><X size={12} /></Button></div>
             : <span className="rot-date">{dateLabel(cursor)}</span>}
           <div className="rot-chips" role="group" aria-label="Filter by quadrant">
             {CHIP_ORDER.map(q => <button key={q} type="button" data-quadrant={q} aria-pressed={quadrant === q}

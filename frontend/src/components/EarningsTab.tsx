@@ -9,6 +9,7 @@ import {
 } from '../api/earnings';
 import { DataUnavailableError } from '../api/dataErrors';
 import { screenerApi } from '../api/screenerApi';
+import { Button } from './Button';
 import { SymbolWithLogo } from './SymbolWithLogo';
 
 const crore = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
@@ -36,7 +37,7 @@ const sessionOf = (record: EarningsRecord): Session | null => {
   if (weekday === 0 || weekday === 6 || record.timing === 'Holiday') return 'closed';
   return record.timing === 'Before' ? 'before' : record.timing === 'During' ? 'during' : record.timing === 'After' ? 'after' : null;
 };
-type Lens = 'grade' | Exclude<GroupBy, 'none'>;
+type Lens = 'grade' | GroupBy;
 const LENSES: [Lens, string][] = [['grade', 'Grade'], ...(['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const)
   .map(level => [level, GROUP_LABEL[level]] as [Lens, string])];
 
@@ -145,9 +146,9 @@ function Sheet({record, history, onClose, onOpenChart}: {
         </section>
 
         <footer className="ep-sheet-foot">
-          {record.attachment_url && /^https:\/\//.test(record.attachment_url) && <a className="ep-button" href={record.attachment_url} target="_blank" rel="noopener noreferrer">
+          {record.attachment_url && /^https:\/\//.test(record.attachment_url) && <a className="button button-secondary ep-button" href={record.attachment_url} target="_blank" rel="noopener noreferrer">
             <FileText size={14} aria-hidden="true" /> Filing <ExternalLink size={11} aria-hidden="true" /></a>}
-          <button type="button" className="ep-button is-primary" onClick={onOpenChart}><CandlestickChart size={14} aria-hidden="true" /> Open chart</button>
+          <Button variant="primary" className="ep-button" onClick={onOpenChart}><CandlestickChart size={14} aria-hidden="true" /> Open chart</Button>
           <p className="ep-note">Grades, verdicts and call summaries come from Earnings Pulse.</p>
         </footer>
       </RadixDialog.Content>
@@ -209,7 +210,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
     staleTime: Infinity, retry: false, enabled: THEME_LEVELS.has(lens)});
   const classification = useMemo(() => {
     const map = new Map<string, Classification>();
-    for (const row of directory.data ?? []) map.set(row.symbol, {sector: row.sector, industry: row.industry, niches: row.nicheTags ?? []});
+    for (const row of directory.data ?? []) map.set(row.symbol, {sector: row.sector, industry: row.industry});
     for (const [symbol, record] of Object.entries(themes.data?.records ?? {})) map.set(symbol, {...map.get(symbol), theme: record.theme, subIndustry: record.subIndustry, block: record.block, macro: record.macro});
     return map;
   }, [directory.data, themes.data]);

@@ -24,10 +24,9 @@ describe('earnings', () => {
     expect(summary.reported).toBe(3);
   });
 
-  it('fans niches out and puts Unclassified last', () => {
-    const niches: Record<string, string[]> = {A: ['EV', 'Defence'], B: ['EV']};
-    const groups = groupRecords([rec('A'), rec('B'), rec('C'), rec('D')], 'niche', symbol => ({niches: niches[symbol]}));
-    expect(groups.map(group => [group.label, group.records.length])).toEqual([['EV', 2], ['Defence', 1], [UNCLASSIFIED, 2]]);
+  it('falls back to the provider sector and puts Unclassified last', () => {
+    const groups = groupRecords([rec('A', {sector: 'Banks'}), rec('B'), rec('C', {sector: 'Banks'})], 'sector', () => undefined);
+    expect(groups.map(group => [group.label, group.records.length])).toEqual([['Banks', 2], [UNCLASSIFIED, 1]]);
   });
 
   it('groups by theme-file levels', () => {

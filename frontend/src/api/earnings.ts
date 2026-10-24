@@ -1,14 +1,12 @@
+import { copyFormats, type CopyGroup } from '../utils/copyResults';
 import { getIpoJson } from './gzipJson';
 import { DataUnavailableError } from './dataErrors';
 
 /** Earnings Pulse history: a small index in the app, quarter files in R2 (see docs/earningspulse-history.md). */
-export const EARNINGS_INDEX_URL = '/data/earningspulse/index.json';
+const EARNINGS_INDEX_URL = '/data/earningspulse/index.json';
 
 export const QUALITY_ORDER = ['Excellent', 'Great', 'Good', 'Ok', 'Weak'] as const;
 export type Quality = typeof QUALITY_ORDER[number];
-export const VERDICTS = ['STRONG_BEAT', 'BEAT', 'IN-LINE', 'MISS', 'STRONG_MISS'] as const;
-export type Verdict = typeof VERDICTS[number];
-export const CAP_ORDER = ['Mega', 'Large', 'Mid', 'Small', 'Micro'] as const;
 
 interface FileRef { sha256: string; url: string; count: number }
 export interface EarningsIndex {
@@ -227,12 +225,11 @@ export function companyHistory(files: readonly EarningsRecord[][], symbol: strin
 /** Where a company sits in Nexus's own classification, joined by symbol (from the chart directory and theme file). */
 export interface Classification {
   sector?: string | null; industry?: string | null; subIndustry?: string | null;
-  theme?: string | null; block?: string | null; macro?: string | null; niches?: readonly string[];
+  theme?: string | null; block?: string | null; macro?: string | null;
 }
-export type GroupBy = 'none' | 'sector' | 'industry' | 'subIndustry' | 'theme' | 'block' | 'macro' | 'niche';
+export type GroupBy = Exclude<CopyGroup, 'symbols'>;
 /** The screener's own names for each level. */
-export const GROUP_LABEL: Record<GroupBy, string> = {none: 'All', sector: 'Sector', industry: 'Industry', subIndustry: 'Sub-industry',
-  theme: 'Theme', block: 'Thematic block', macro: 'Macro pillar', niche: 'Niche'};
+export const GROUP_LABEL = Object.fromEntries(copyFormats.map(({value, label}) => [value, label])) as Record<GroupBy, string>;
 /** Levels that come from the theme file rather than the chart directory. */
 export const THEME_LEVELS: ReadonlySet<string> = new Set<GroupBy>(['subIndustry', 'theme', 'block', 'macro']);
 export const UNCLASSIFIED = 'Unclassified';
@@ -250,17 +247,15 @@ export interface EarningsGroup {
 }
 
 /**
- * Results grouped like the screener's grouped results. A company with several niches appears under each, as
- * it does in niche screens. Unclassified companies form the last group.
+ * Results grouped like the screener's grouped results; unclassified companies form the last group.
  */
-export function groupRecords(records: readonly EarningsRecord[], by: Exclude<GroupBy, 'none'>,
+export function groupRecords(records: readonly EarningsRecord[], by: GroupBy,
   classify: (symbol: string) => Classification | undefined): EarningsGroup[] {
   const groups = new Map<string, EarningsRecord[]>();
   for (const record of records) {
     const known = classify(record.symbol);
-    const labels = by === 'niche' ? (known?.niches?.length ? known.niches : [UNCLASSIFIED])
-      : [(by === 'sector' ? known?.sector ?? record.sector : by === 'industry' ? known?.industry ?? record.industry : known?.[by])?.trim() || UNCLASSIFIED];
-    for (const label of labels) groups.set(label, [...(groups.get(label) ?? []), record]);
+    const label = (by === 'sector' ? known?.sector ?? record.sector : by === 'industry' ? known?.industry ?? record.industry : known?.[by])?.trim() || UNCLASSIFIED;
+    groups.set(label, [...(groups.get(label) ?? []), record]);
   }
   return [...groups].map(([label, rows]) => {
     const quality = summarize(rows).quality;

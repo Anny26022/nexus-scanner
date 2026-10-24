@@ -63,7 +63,7 @@
 }
 .ep-lens-pick { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 10px; color: var(--muted); font-size: 12px; font-weight: 550; }
 .ep-lens-select { position: relative; display: inline-flex; align-items: center; }
-.ep-lens-select select { height: 30px; padding: 0 26px 0 12px; border: 0; border-radius: 999px; background: var(--field); color: var(--text);
+.ep-lens-select select { height: 32px; padding: 0 26px 0 12px; border: 0; border-radius: 999px; background: var(--field); color: var(--text);
   font: inherit; font-size: 12.5px; font-weight: 620; appearance: none; field-sizing: content; cursor: pointer; }
 .ep-lens-select svg { position: absolute; right: 10px; color: var(--muted); pointer-events: none; }
 .ep-facets { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
@@ -103,7 +103,8 @@
 .ep-when select:focus-visible { box-shadow: none; outline: none; }
 .ep-when[data-active] { background: var(--text); color: var(--surface); }
 .ep-when[data-active] select { color: var(--surface); }
-.ep-main > .ep-bar { margin-bottom: 8px; }
+.ep-main > .ep-bar { margin-bottom: 8px; padding-top: 0; }
+.ep-lens-pick { min-height: 32px; }
 .ep-bar { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0;
   background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: saturate(160%) blur(12px); }
 .ep-spacer { flex: 1; }

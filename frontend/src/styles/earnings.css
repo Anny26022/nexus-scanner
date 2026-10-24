@@ -54,6 +54,13 @@
 /* Desk: a lens on the left breaks the season down; the list on the right follows it. */
 .ep-desk { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 36px; align-items: start; }
 .ep-lens { display: flex; flex-direction: column; gap: 18px; }
+/* Desktop: the lens stays in view beside the results and scrolls on its own; its bar shows only while you use it. */
+@media (min-width: 861px) {
+  .ep-lens { position: sticky; top: 12px; max-height: calc(100vh - 140px); min-height: 0; }
+  .ep-facets { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: transparent transparent;
+    mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
+  .ep-facets:hover { scrollbar-color: color-mix(in srgb, var(--text) 22%, transparent) transparent; }
+}
 .ep-lens-pick { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 10px; color: var(--muted); font-size: 12px; font-weight: 550; }
 .ep-lens-select { position: relative; display: inline-flex; align-items: center; }
 .ep-lens-select select { height: 30px; padding: 0 26px 0 12px; border: 0; border-radius: 999px; background: var(--field); color: var(--text);

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchLiveNews } from '../api/dhanNewsApi';
+import { fetchLiveNews } from '../api/newsApi';
 
-describe('dhanNewsApi', () => {
+describe('newsApi', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
@@ -92,6 +92,6 @@ describe('dhanNewsApi', () => {
       status: 500,
     }));
 
-    await expect(fetchLiveNews()).rejects.toThrow('Dhan news request failed (HTTP 500)');
+    await expect(fetchLiveNews()).rejects.toThrow('News request failed (HTTP 500)');
   });
 });

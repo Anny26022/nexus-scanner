@@ -59,7 +59,7 @@ it('distinguishes an old snapshot from partial coverage in a new generation', ()
   const base: ScreenerRunRequest = {universe:'mainboard',asOfDate:data.asOfDate,page:1,pageSize:100,
     expressionTree:{type:'condition',condition:{instanceId:'adx',conditionId:'ADX',parameters:{period:14,comparison:'ABOVE',value:25}}}};
   const old = {...data,technicalMetricsVersion:undefined,stocks:[{...stock,metrics:{}}]};
-  expect(screenSnapshot(old,base)!.warnings[0]).toContain('new pipeline release');
+  expect(screenSnapshot(old,base)!.warnings[0]).toContain('next data release');
   const partial = screenSnapshot({...old,technicalMetricsVersion:1},base)!;
   expect(partial.warnings).toEqual([]);
   expect(partial.matchCount).toBe(0);

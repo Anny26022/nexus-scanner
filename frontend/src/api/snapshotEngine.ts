@@ -4,7 +4,7 @@ import { unpackSnapshot } from './packedSnapshot';
 import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
 import {etfGroups} from '../data/etfFields';
-import {tradingViewMetrics} from '../data/tradingViewMetrics';
+import {extendedMetrics} from '../data/extendedMetrics';
 
 export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
 import type {FilterChoices} from '../types/filterChoices';
@@ -189,10 +189,10 @@ export function createSnapshotEngine(loader = readSnapshot) {
           if (group.type !== 'number') result.ETF_VALUES[field] = [...new Set(values.map(String))].sort();
         }
       }
-      if (data.tradingViewMetricsVersion === 1) {
-        result.TRADINGVIEW_METRIC = tradingViewMetrics.filter(metric => data.stocks.some(stock =>
-          stock.tradingview?.asOfDate === data.asOfDate && typeof stock.tradingview.values[metric.id] === 'number'
-          && Number.isFinite(stock.tradingview.values[metric.id]))).map(metric => metric.id);
+      if (data.extendedMetricsVersion === 1) {
+        result.TRADINGVIEW_METRIC = extendedMetrics.filter(metric => data.stocks.some(stock =>
+          stock.extended?.asOfDate === data.asOfDate && typeof stock.extended.values[metric.id] === 'number'
+          && Number.isFinite(stock.extended.values[metric.id]))).map(metric => metric.id);
       }
       return {type:'filterChoices', result};
     }

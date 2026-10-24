@@ -6,7 +6,7 @@ import {PRESET_ELIGIBILITY} from '../data/presetEligibility';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
 import {SNAPSHOT_MA_PERIODS} from './snapshotScreen';
 import {availableFilterParameters, isAvailableCondition} from '../utils/filterAvailability';
-import {isTradingViewCondition} from '../data/tradingViewMetrics';
+import {isExtendedCondition} from '../data/extendedMetrics';
 
 export type AiParameter = ParameterSpec & {nullable?: boolean};
 export type AiFilterDefinition = Omit<ConditionDef, 'parameters'> & {parameters: AiParameter[]};
@@ -40,7 +40,7 @@ export function createAiFilterCatalog(choices?: FilterChoices): AiFilterDefiniti
         p = {...p,options:p.options?.filter(option=>isAvailableCondition({instanceId:'catalog',conditionId:def.id,
           parameters:{...defaults,[p.id]:option.value}}))};
       }
-      if (isTradingViewCondition(def.id) && p.id === 'metric' && choices) {
+      if (isExtendedCondition(def.id) && p.id === 'metric' && choices) {
         p = {...p,options:p.options?.filter(option=>choices.TRADINGVIEW_METRIC?.includes(option.value))};
         p.defaultValue = p.options?.[0]?.value;
       }

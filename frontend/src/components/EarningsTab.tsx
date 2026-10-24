@@ -149,7 +149,6 @@ function Sheet({record, history, onClose, onOpenChart}: {
           {record.attachment_url && /^https:\/\//.test(record.attachment_url) && <a className="button button-secondary ep-button" href={record.attachment_url} target="_blank" rel="noopener noreferrer">
             <FileText size={14} aria-hidden="true" /> Filing <ExternalLink size={11} aria-hidden="true" /></a>}
           <Button variant="primary" className="ep-button" onClick={onOpenChart}><CandlestickChart size={14} aria-hidden="true" /> Open chart</Button>
-          <p className="ep-note">Grades, verdicts and call summaries come from Earnings Pulse.</p>
         </footer>
       </RadixDialog.Content>
     </RadixDialog.Portal>

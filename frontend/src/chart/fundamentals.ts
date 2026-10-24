@@ -5,7 +5,6 @@ export interface FinancialPeriod {
   [metric: string]: number | string | null | undefined;
 }
 export interface FinancialHistory {
-  source: string;
   report_type: string;
   amount_unit: string;
   observed_on: string;

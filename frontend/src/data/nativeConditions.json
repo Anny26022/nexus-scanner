@@ -659,7 +659,7 @@
     "id": "PCT_FROM_ATH",
     "label": "% From All-Time High",
     "category": "momentum",
-    "description": "Distance below the split- and bonus-adjusted all-time high from the weekly EOD2 history refresh. Stocks without mapped EOD2 history are unavailable rather than included.",
+    "description": "Distance below the split- and bonus-adjusted all-time high from the weekly history refresh. Stocks without mapped long-run history are unavailable rather than included.",
     "parameters": [
       {
         "id": "comparison",

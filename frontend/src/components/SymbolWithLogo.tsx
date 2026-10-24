@@ -13,10 +13,10 @@ interface SymbolWithLogoProps {
 const logoSources = (sym: string) => [
   `https://images.dhan.co/symbol/${sym}.png`,
   `https://www.stockscans.in/api/company/logos/NSE:${sym}`,
-  'https://s3-symbol-logo.tradingview.com/country/IN.svg',
+  'https://s3-symbol-logo.extended.com/country/IN.svg',
 ];
 
-/** Nexus Ultimate's compact company mark with Dhan, StockScans, and India fallbacks. */
+/** Compact company mark; falls back through several logo hosts, then the India flag. */
 export const SymbolWithLogo: React.FC<SymbolWithLogoProps> = ({ symbol, name, size = 'sm', showText = true, className = '', badge }) => {
   const cleanSymbol = symbol.trim().toUpperCase();
   const [source, setSource] = useState({symbol: cleanSymbol, index: 0});

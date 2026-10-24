@@ -449,7 +449,7 @@ export function ChartSettingsDialog({
         <div className="flex items-center gap-3">
           <button type="button" className="cs-link" onClick={reset}>Reset to defaults</button>
           {/* Lightweight Charts licence: attribution to TradingView. */}
-          <a className="chart-attribution" href="https://www.tradingview.com/" target="_blank" rel="noreferrer">Lightweight Charts™ by TradingView</a>
+          <a className="chart-attribution" href="https://www.extended.com/" target="_blank" rel="noreferrer">Lightweight Charts™ by TradingView</a>
         </div>
         <div className="chart-settings-footer-actions">
           <button type="button" className="cs-button" onClick={cancel}>Cancel</button>

@@ -95,3 +95,11 @@
   align-items: center;
   gap: 10px;
 }
+
+/* Phones: name, trail and the two coordinates; rank, quadrant, heading and travel stay on wider screens. */
+@media (max-width: 767px) {
+  .rot-trow { grid-template-columns: minmax(0, 1fr) 56px 54px 54px 24px; gap: 6px; }
+  .rot-trow.is-head { letter-spacing: 0; }
+  .rot-trow > :is(:nth-child(1), :nth-child(3), :nth-child(5), :nth-child(6)) { display: none !important; }
+  .rot-spark { width: 60px; }
+}

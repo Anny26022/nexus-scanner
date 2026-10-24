@@ -9,6 +9,7 @@ import { filterAnnouncements, type Announcement, type AnnouncementCatalog, type 
 import { DataUnavailableError } from './dataErrors';
 import { getManifest, refreshManifest, validateManifest, validDate, manifestSnapshotSource, type Manifest } from './manifest';
 import { parseMarketOverview } from '../utils/marketOverview';
+import type { RotationIndex, RotationShard, RotationShardName } from './rotation';
 export { refreshManifest } from './manifest';
 const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
 const finiteAmount = (value: unknown): number | null => {
@@ -126,6 +127,13 @@ async function object<T>(release: Manifest, hash: string, resource = 'Announceme
   const url = release.objectUrlTemplate.replace('{hash}', hash);
   return cached(objectCache, url, () => getChartJson<T>(url, resource), 128);
 }
+/** Rotation objects sit beside each other in the object store, named by content hash. */
+function rotationObjectUrl(release: Manifest, hash?: string): string | undefined {
+  if (hash !== undefined && !/^[a-f0-9]{64}$/.test(hash)) return undefined;
+  if (release.rotationHistoryUrl) return hash ? release.rotationHistoryUrl.replace(/[a-f0-9]{64}(\.json\.gz)$/, `${hash}$1`) : release.rotationHistoryUrl;
+  const target = hash ?? release.rotationHistoryObject;
+  return target ? release.objectUrlTemplate?.replace('{hash}', target) : undefined;
+}
 function validSymbol(symbol: string) {
   if (!/^[A-Z0-9&_-]+$/.test(symbol)) throw new Error('Invalid symbol');
 }
@@ -224,6 +232,24 @@ class RealDataAdapter {
       throw new Error('Theme classification release mismatch');
     }
     return data;
+  }
+  /** The Rotation page's price-history index, or null when the release did not publish one. */
+  async getRotationIndex(revision?: string): Promise<RotationIndex | null> {
+    const release = await releaseFor(revision);
+    const url = rotationObjectUrl(release);
+    if (!url) return null;
+    const index = await cached(objectCache, url, () => getChartJson<RotationIndex>(url, 'Rotation history'), 128);
+    if (index.schemaVersion !== 1 || index.asOfDate !== release.sessionDate) throw new Error('Rotation history release mismatch');
+    return index;
+  }
+  async getRotationShard(revision: string | undefined, name: RotationShardName): Promise<RotationShard> {
+    const release = await releaseFor(revision);
+    const index = await this.getRotationIndex(revision);
+    const url = index && rotationObjectUrl(release, index.shards[name]);
+    if (!index || !url) throw new Error('Rotation history is unavailable in this release.');
+    const shard = await cached(objectCache, url, () => getChartJson<RotationShard>(url, 'Rotation history'), 128);
+    if (shard.schemaVersion !== 1 || shard.shard !== name || shard.asOfDate !== index.asOfDate) throw new Error('Rotation history shard mismatch');
+    return shard;
   }
   /** Nifty 50 closes by session date, or undefined when the release has no benchmark. */
   async getBenchmark(revision?: string): Promise<ReadonlyMap<string, number> | undefined> {

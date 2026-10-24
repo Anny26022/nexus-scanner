@@ -25,6 +25,9 @@ export interface Manifest {
   chartRevision?: string;
   dataIndexUrl?: string;
   objectUrlTemplate?: string;
+  /** Rotation page price history: an object hash, or (local development only) a direct URL. */
+  rotationHistoryObject?: string;
+  rotationHistoryUrl?: string;
 }
 let current: Manifest | undefined;
 let pending: Promise<Manifest> | undefined;
@@ -50,6 +53,8 @@ export function validateManifest(value: unknown): Manifest {
       || !validDate(manifest.sessionDate) || !validUrl(manifest.datasetUrl) || !validUrl(manifest.iposUrl)
       || !Number.isInteger(manifest.totalStocks) || manifest.totalStocks < 0
       || (manifest.chartRevision !== undefined && !/^[a-f0-9]{64}$/.test(manifest.chartRevision))
+      || (manifest.rotationHistoryObject !== undefined && !/^[a-f0-9]{64}$/.test(manifest.rotationHistoryObject))
+      || (manifest.rotationHistoryUrl !== undefined && (!validUrl(manifest.rotationHistoryUrl) || !/[a-f0-9]{64}\.json\.gz$/.test(manifest.rotationHistoryUrl)))
       || (manifest.schemaVersion === 6 && !manifest.chartUrlTemplate)
       || (manifest.schemaVersion === 7 && (!validUrl(manifest.dataIndexUrl) || !manifest.chartRevision
           || !validUrl(manifest.objectUrlTemplate) || manifest.objectUrlTemplate?.split('{hash}').length !== 2))

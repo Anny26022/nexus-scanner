@@ -13,4 +13,5 @@
 @import "./styles/news.css" layer(components);
 @import "./styles/ai-modal.css" layer(components);
 @import "./styles/earnings.css" layer(components);
+@import "./styles/rotation.css" layer(components);
 @import "./styles/responsive.css" layer(components);

@@ -1,105 +1,291 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { DataUnavailableError } from '../api/dataErrors';
 import { marketRegime } from '../utils/marketOverview';
+import {
+  AVERAGES, GROUPINGS, PERIODS, STAGES, STAGE_HINT, STAGE_LABEL,
+  breakdown, participation, stageCounts, themeMoves,
+  type Grouping, type Period, type PulseRow,
+} from '../utils/marketPulse';
 import type { BreadthSession, IndexCard } from '../types/market';
 import { Button } from './Button';
 
 const formatDate = (date: string, withYear = true) => new Date(`${date}T00:00:00`)
   .toLocaleDateString('en-IN', {day: 'numeric', month: 'short', ...(withYear ? {year: 'numeric'} : {})});
 const pct = (value: number | null | undefined, digits = 0) => value == null ? '—' : `${value.toFixed(digits)}%`;
+const share = (value: number) => `${Math.round(value * 100)}%`;
 const count = (value: number | null | undefined) => value == null ? '—' : value.toLocaleString('en-IN');
+const signed = (value: number, digits = 2) => `${value > 0 ? '+' : ''}${value.toFixed(digits)}%`;
 
-function Card({title, subtitle, action, children, className = ''}: {title: string; subtitle?: string; action?: ReactNode; children: ReactNode; className?: string}) {
-  return <section className={`rounded-(--radius-lg) bg-surface p-5 shadow-(--shadow-card) ${className}`} aria-label={title}>
-    <header className="mb-4 flex items-start justify-between gap-3">
-      <div>
-        <h2 className="m-0 text-[15px] font-semibold tracking-[-0.01em] text-text">{title}</h2>
-        {subtitle && <p className="m-0 mt-0.5 text-[12.5px] text-muted">{subtitle}</p>}
-      </div>
-      {action}
+function Panel({title, aside, children, className = ''}: {title: string; aside?: ReactNode; children: ReactNode; className?: string}) {
+  return <section className={`flex min-w-0 flex-col gap-5 rounded-(--radius-xl) bg-surface p-5 shadow-(--shadow-card) max-md:p-4 ${className}`} aria-label={title}>
+    <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <h2 className="m-0 text-[15px] font-semibold tracking-[-0.01em] text-text">{title}</h2>
+      {aside}
     </header>
     {children}
   </section>;
 }
 
+function Segmented<T extends string>({label, value, options, onChange}: {label: string; value: T; options: [T, string][]; onChange: (value: T) => void}) {
+  return <div className="inline-flex rounded-(--radius-md) bg-field p-0.5" role="radiogroup" aria-label={label}>
+    {options.map(([key, text]) => <button key={key} type="button" role="radio" aria-checked={value === key} onClick={() => onChange(key)}
+      className={`h-7 rounded-[7px] px-2.5 text-[12px] font-semibold transition ${value === key ? 'bg-surface text-text shadow-(--shadow-control)' : 'text-muted hover:text-text'}`}>
+      {text}
+    </button>)}
+  </div>;
+}
+
 function Sparkline({series, positive}: {series: number[]; positive: boolean}) {
   if (series.length < 2) return null;
   const min = Math.min(...series), max = Math.max(...series), span = max - min || 1;
-  const points = series.map((value, index) => `${(index / (series.length - 1)) * 100},${34 - ((value - min) / span) * 30}`);
-  const tone = positive ? 'var(--positive)' : 'var(--negative)';
-  return <svg viewBox="0 0 100 36" preserveAspectRatio="none" className="h-9 w-full" aria-hidden="true">
-    <path d={`M0,36 L${points.join(' L')} L100,36 Z`} fill={tone} opacity="0.08" />
-    <polyline points={points.join(' ')} fill="none" stroke={tone} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+  const points = series.map((value, index) => `${(index / (series.length - 1)) * 100},${22 - ((value - min) / span) * 20}`);
+  return <svg viewBox="0 0 100 24" preserveAspectRatio="none" className="h-6 w-full" aria-hidden="true">
+    <polyline points={points.join(' ')} fill="none" stroke={positive ? 'var(--positive)' : 'var(--negative)'} strokeWidth="1.5"
+      vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
   </svg>;
 }
 
-function IndexTile({index}: {index: IndexCard}) {
-  const positive = (index.changePct ?? 0) >= 0;
-  return <div className="flex min-w-0 flex-col gap-1 rounded-(--radius-lg) bg-surface px-4 pb-3 pt-3.5 shadow-(--shadow-card)"
-    title={`${index.name}: ${index.series.length} sessions to ${formatDate(index.date)}`}>
-    <span className="truncate text-[12.5px] font-medium text-muted">{index.name}</span>
-    <span className="text-[19px] font-semibold tracking-[-0.02em] text-text">{index.close.toLocaleString('en-IN', {maximumFractionDigits: 2})}</span>
-    <span className={`text-[12.5px] font-medium ${positive ? 'text-positive' : 'text-negative'}`}>
-      {index.changePct == null ? '—' : `${positive ? '+' : ''}${index.changePct.toFixed(2)}%`}
-    </span>
-    <Sparkline series={index.series} positive={(index.series.at(-1) ?? 0) >= (index.series[0] ?? 0)} />
+function IndexRibbon({indices}: {indices: IndexCard[]}) {
+  return <div className="mkt-ribbon shrink-0 rounded-(--radius-xl) bg-surface shadow-(--shadow-card)" aria-label="Key indices">
+    {indices.map(index => {
+      const positive = (index.changePct ?? 0) >= 0;
+      return <div key={index.symbol} className="flex min-w-0 flex-col gap-1 px-4 py-3" title={`${index.name}: ${index.series.length} sessions to ${formatDate(index.date)}`}>
+        <span className="truncate text-[11.5px] font-medium text-muted">{index.name}</span>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[16px] font-semibold tabular-nums tracking-[-0.02em] text-text">{index.close.toLocaleString('en-IN', {maximumFractionDigits: 2})}</span>
+          <span className={`text-[12px] font-semibold tabular-nums ${positive ? 'text-positive' : 'text-negative'}`}>{index.changePct == null ? '—' : signed(index.changePct)}</span>
+        </div>
+        <Sparkline series={index.series} positive={(index.series.at(-1) ?? 0) >= (index.series[0] ?? 0)} />
+      </div>;
+    })}
   </div>;
 }
 
-function Meter({label, value}: {label: string; value: number | null}) {
-  return <div className="flex flex-col gap-1.5">
-    <div className="flex items-baseline justify-between gap-2">
-      <span className="text-[12.5px] text-secondary">{label}</span>
-      <span className="text-[15px] font-semibold text-text">{pct(value)}</span>
+/** Two counts as one bar: the left side's share is the headline. */
+function Versus({title, left, right, leftLabel, rightLabel}: {title: string; left: number; right: number; leftLabel: string; rightLabel: string}) {
+  const total = left + right, ratio = total ? left / total : 0;
+  return <div className="flex flex-col gap-2">
+    <div className="flex items-baseline justify-between gap-3">
+      <h3 className="m-0 text-[13px] font-semibold text-text">{title}</h3>
+      <span className="text-[17px] font-semibold tabular-nums tracking-[-0.02em]" data-tone={ratio >= 0.5 ? 'up' : 'down'} style={{color: 'var(--tone)'}}>{total ? share(ratio) : '—'}</span>
     </div>
-    <div className="h-1.5 overflow-hidden rounded-full bg-field" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={value ?? 0}>
-      <div className="h-full rounded-full bg-accent" style={{width: `${Math.max(0, Math.min(100, value ?? 0))}%`}} />
+    <div className="flex h-2 gap-0.5" role="img" aria-label={`${left} ${leftLabel}, ${right} ${rightLabel}`}>
+      {left > 0 && <span className="rounded-full" data-tone="up" style={{flex: left, background: 'var(--tone)'}} />}
+      {right > 0 && <span className="rounded-full" data-tone="down" style={{flex: right, background: 'var(--tone)'}} />}
+      {!total && <span className="flex-1 rounded-full bg-field" />}
+    </div>
+    <div className="flex justify-between text-[12px] tabular-nums text-muted">
+      <span><b className="font-semibold text-secondary">{count(left)}</b> {leftLabel}</span>
+      <span><b className="font-semibold text-secondary">{count(right)}</b> {rightLabel}</span>
     </div>
   </div>;
+}
+
+function Pulse({rows}: {rows: PulseRow[]}) {
+  const highs = rows.filter(row => row.newHigh).length, lows = rows.filter(row => row.newLow).length;
+  const up = rows.filter(row => (row.returns.d1 ?? 0) > 0).length, down = rows.filter(row => (row.returns.d1 ?? 0) < 0).length;
+  const stages = stageCounts(rows), staged = STAGES.reduce((sum, stage) => sum + stages[stage], 0);
+  const above = participation(rows);
+  return <Panel title="Market pulse" aside={<span className="text-[12px] text-muted">{count(rows.length)} stocks</span>}>
+    <Versus title="New highs vs new lows" left={highs} right={lows} leftLabel="highs" rightLabel="lows" />
+    <Versus title="Advancing vs declining" left={up} right={down} leftLabel="up" rightLabel="down" />
+    <div className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="m-0 text-[13px] font-semibold text-text">Trend stages</h3>
+        <span className="text-[12px] text-muted">vs 150-day average</span>
+      </div>
+      <div className="flex h-2 gap-0.5" role="img" aria-label={STAGES.map(stage => `Stage ${stage}: ${stages[stage]}`).join(', ')}>
+        {STAGES.map(stage => stages[stage] > 0 && <span key={stage} className="rounded-full" data-stage={stage} style={{flex: stages[stage], background: 'var(--tone)'}} />)}
+      </div>
+      <dl className="m-0 grid grid-cols-4 gap-2 max-sm:grid-cols-2 max-sm:gap-y-3">
+        {STAGES.map(stage => <div key={stage} className="flex min-w-0 flex-col gap-0.5" data-stage={stage} title={STAGE_HINT[stage]}>
+          <dt className="flex items-center gap-1.5 text-[12px] font-medium text-secondary">
+            <span className="size-1.5 shrink-0 rounded-full" style={{background: 'var(--tone)'}} />
+            <span className="truncate">{stage} · {STAGE_LABEL[stage]}</span>
+          </dt>
+          <dd className="m-0 text-[12px] tabular-nums text-muted"><b className="text-[14px] font-semibold text-text">{count(stages[stage])}</b> · {staged ? share(stages[stage] / staged) : '—'}</dd>
+        </div>)}
+      </dl>
+    </div>
+    <div className="flex flex-col gap-3">
+      <h3 className="m-0 text-[13px] font-semibold text-text">Above moving averages</h3>
+      <div className="grid grid-cols-4 gap-3">
+        {AVERAGES.map(period => <div key={period} className="flex flex-col gap-1.5">
+          <div className="flex items-baseline justify-between gap-1">
+            <span className="text-[12px] text-muted">{period}D</span>
+            <span className="text-[13px] font-semibold tabular-nums text-text">{above[period] == null ? '—' : share(above[period]!)}</span>
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-field" role="meter" aria-label={`Above ${period}-day average`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((above[period] ?? 0) * 100)}>
+            <div className="h-full rounded-full bg-text" style={{width: `${(above[period] ?? 0) * 100}%`}} />
+          </div>
+        </div>)}
+      </div>
+    </div>
+  </Panel>;
+}
+
+type Side = 'highs' | 'lows';
+const GROUP_LIMIT = 10;
+
+/** New highs and new lows, and where they cluster: by sector, industry or theme. */
+function Extremes({rows, taxonomy, onOpenChart, onScreenSector}: {
+  rows: PulseRow[];
+  taxonomy?: Parameters<typeof breakdown>[2];
+  onOpenChart: (symbol: string) => void;
+  onScreenSector?: (sector: string) => void;
+}) {
+  const [side, setSide] = useState<Side>('highs');
+  const [grouping, setGrouping] = useState<Grouping>('sector');
+  const [open, setOpen] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
+  const sets = useMemo(() => ({highs: rows.filter(row => row.newHigh), lows: rows.filter(row => row.newLow)}), [rows]);
+  const leaders = useMemo(() => ({highs: breakdown(sets.highs, 'sector').slice(0, 3), lows: breakdown(sets.lows, 'sector').slice(0, 3)}), [sets]);
+  const groups = useMemo(() => breakdown(sets[side], grouping, taxonomy), [sets, side, grouping, taxonomy]);
+  const names = useMemo(() => new Map(rows.map(row => [row.symbol, row.name])), [rows]);
+  const peak = groups[0]?.count ?? 1;
+  const choose = (next: Side) => { setSide(next); setOpen(null); setAll(false); };
+  const visible = all ? groups : groups.slice(0, GROUP_LIMIT);
+
+  return <Panel title="Highs & lows" aside={<span className="text-[12px] text-muted">52-week closes</span>}>
+    <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="New highs or new lows">
+      {(['highs', 'lows'] as const).map(key => {
+        const active = side === key;
+        return <button key={key} type="button" role="radio" aria-checked={active} onClick={() => choose(key)} data-tone={key === 'highs' ? 'up' : 'down'}
+          className={`flex min-w-0 flex-col gap-3 rounded-(--radius-lg) p-3.5 text-left transition ${active ? 'bg-surface ring-[1.5px] ring-(--tone) shadow-(--shadow-card)' : 'bg-surface-subtle hover:bg-surface-hover'}`}>
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-[11.5px] font-bold uppercase tracking-[0.06em]" style={{color: 'var(--tone)'}}>New {key}</span>
+            <span className={`grid size-4 place-items-center rounded-full border-[1.5px] ${active ? 'border-(--tone)' : 'border-line-strong'}`} aria-hidden="true">
+              {active && <span className="size-2 rounded-full" style={{background: 'var(--tone)'}} />}
+            </span>
+          </span>
+          <span className="text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-text">{count(sets[key].length)}</span>
+          <span className="flex flex-col gap-1">
+            {leaders[key].length ? leaders[key].map(group => <span key={group.name} className="flex items-baseline justify-between gap-2 text-[12px]">
+              <span className="truncate text-secondary">{group.name}</span>
+              <span className="shrink-0 font-semibold tabular-nums" style={{color: 'var(--tone)'}}>{share(group.share)}</span>
+            </span>) : <span className="text-[12px] text-muted">None this session</span>}
+          </span>
+        </button>;
+      })}
+    </div>
+
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[13px] font-semibold text-text">New {side} by <span className="font-normal text-muted">· {groups.length} groups</span></span>
+        <Segmented label="Group by" value={grouping} options={GROUPINGS} onChange={value => { setGrouping(value); setOpen(null); setAll(false); }} />
+      </div>
+      {groups.length ? <ul className="m-0 flex list-none flex-col p-0" data-tone={side === 'highs' ? 'up' : 'down'}>
+        {visible.map(group => {
+          const expanded = open === group.name;
+          return <li key={group.name} className="border-t border-line first:border-t-0">
+            <button type="button" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : group.name)}
+              className="flex w-full flex-col gap-1.5 py-2.5 text-left">
+              <span className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate text-[13.5px] font-semibold text-text">{group.name}</span>
+                <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
+                  <span className="text-[12px] text-muted">{group.count}</span>
+                  <span className="w-10 text-right text-[13.5px] font-semibold" style={{color: 'var(--tone)'}}>{share(group.share)}</span>
+                  <ChevronDown size={14} className={`self-center text-muted transition ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                </span>
+              </span>
+              <span className="h-1 overflow-hidden rounded-full bg-field"><span className="block h-full rounded-full" style={{width: `${(group.count / peak) * 100}%`, background: 'var(--tone)'}} /></span>
+              {grouping === 'sector' && <span className="text-[11.5px] text-muted">{group.children} {group.children === 1 ? 'industry' : 'industries'}</span>}
+            </button>
+            {expanded && <div className="flex flex-col gap-2.5 pb-3.5">
+              <div className="flex flex-wrap gap-1.5">
+                {group.symbols.map(symbol => <button key={symbol} type="button" onClick={() => onOpenChart(symbol)} title={`${names.get(symbol) ?? symbol}: open in Charts`}
+                  className="h-7 rounded-full bg-field px-2.5 text-[12px] font-semibold text-text transition hover:bg-surface-hover">
+                  {symbol}
+                </button>)}
+              </div>
+              {grouping === 'sector' && onScreenSector && group.name !== 'Unclassified' && <button type="button" onClick={() => onScreenSector(group.name)}
+                className="inline-flex items-center gap-1.5 self-start text-[12px] font-medium text-muted hover:text-text">
+                <SlidersHorizontal size={12} aria-hidden="true" />Screen all {group.name} stocks
+              </button>}
+            </div>}
+          </li>;
+        })}
+      </ul> : <p className="m-0 py-6 text-center text-[12.5px] text-muted">No new {side} this session.</p>}
+      {groups.length > GROUP_LIMIT && <button type="button" onClick={() => setAll(!all)} className="self-center text-[12px] font-medium text-muted hover:text-text">
+        {all ? 'Top groups only' : `All ${groups.length} groups`}
+      </button>}
+    </div>
+  </Panel>;
+}
+
+/** Each theme's median move, tinted by strength; the share of members up sits underneath. */
+function Themes({rows, taxonomy}: {rows: PulseRow[]; taxonomy?: Parameters<typeof themeMoves>[2]}) {
+  const [period, setPeriod] = useState<Period>('d1');
+  const [side, setSide] = useState<'lead' | 'lag'>('lead');
+  const moves = useMemo(() => themeMoves(rows, period, taxonomy), [rows, period, taxonomy]);
+  const shown = (side === 'lead' ? moves : [...moves].reverse()).slice(0, 12);
+  const peak = Math.max(1e-9, ...moves.map(move => Math.abs(move.median)));
+  return <Panel title="Theme tracker" className="xl:col-span-2" aside={<div className="flex flex-wrap items-center gap-2">
+    <Segmented label="Leaders or laggards" value={side} options={[['lead', 'Leaders'], ['lag', 'Laggards']]} onChange={setSide} />
+    <Segmented label="Period" value={period} options={PERIODS} onChange={setPeriod} />
+  </div>}>
+    {taxonomy ? <ul className="m-0 grid list-none grid-cols-4 gap-2.5 p-0 max-xl:grid-cols-3 max-lg:grid-cols-2">
+      {shown.map(move => {
+        const tone = move.median >= 0 ? 'up' : 'down', strength = Math.min(1, Math.abs(move.median) / peak);
+        return <li key={move.name} data-tone={tone} title={`${move.name}: median of ${move.members} stocks, ${share(move.advancing)} of them up`}
+          className="flex min-w-0 flex-col gap-1.5 rounded-(--radius-lg) px-3.5 py-3"
+          style={{background: `color-mix(in srgb, var(--tone) ${4 + strength * 12}%, var(--surface))`}}>
+          <span className="truncate text-[12.5px] font-medium text-secondary">{move.name}</span>
+          <span className="flex items-baseline justify-between gap-2">
+            <span className="text-[17px] font-semibold tabular-nums tracking-[-0.02em]" style={{color: 'var(--tone)'}}>{signed(move.median)}</span>
+            <span className="whitespace-nowrap text-[11px] tabular-nums text-muted">{share(move.advancing)} up</span>
+          </span>
+          <span className="h-1 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" aria-hidden="true">
+            <span className="block h-full rounded-full bg-(--mkt-up)" style={{width: `${move.advancing * 100}%`}} />
+          </span>
+        </li>;
+      })}
+    </ul> : <p className="m-0 text-[12.5px] text-muted">Themes are unavailable in this release.</p>}
+  </Panel>;
 }
 
 const TREND_SERIES = [
-  {key: 'above_50_pct', label: 'Above 50-day', short: '50-day', color: 'var(--series-1)'},
-  {key: 'above_200_pct', label: 'Above 200-day', short: '200-day', color: 'var(--series-2)'},
+  {key: 'above_50_pct', label: 'Above 50-day', short: '50D', color: 'var(--series-1)'},
+  {key: 'above_200_pct', label: 'Above 200-day', short: '200D', color: 'var(--series-2)'},
 ] as const;
 
 /** Share of stocks above their 50- and 200-day averages over recent sessions, with a hover crosshair. */
 function BreadthTrend({sessions}: {sessions: BreadthSession[]}) {
   const [hover, setHover] = useState<number | null>(null);
-  const width = 640, height = 180, padLeft = 30, padRight = 96, padTop = 8, padBottom = 22;
+  const width = 640, height = 200, padLeft = 28, padRight = 52, padTop = 8, padBottom = 22;
   const plotW = width - padLeft - padRight, plotH = height - padTop - padBottom;
   const x = (index: number) => padLeft + (sessions.length < 2 ? 0 : (index / (sessions.length - 1)) * plotW);
   const y = (value: number) => padTop + (1 - value / 100) * plotH;
   const active = hover == null ? null : sessions[hover];
-  return <figure className="m-0">
-    <div className="mb-2 flex gap-4 text-[12px] text-secondary" aria-hidden="true">
-      {TREND_SERIES.map(series => <span key={series.key} className="inline-flex items-center gap-1.5">
-        <span className="h-0.5 w-3.5 rounded-full" style={{background: series.color}} />{series.label}
-      </span>)}
-    </div>
-    <div className="relative">
-      <svg viewBox={`0 0 ${width} ${height}`} className="block h-auto w-full" role="img"
+  return <Panel title="Participation" aside={<div className="flex gap-3 text-[12px] text-muted" aria-hidden="true">
+    {TREND_SERIES.map(series => <span key={series.key} className="inline-flex items-center gap-1.5">
+      <span className="h-0.5 w-3 rounded-full" style={{background: series.color}} />{series.label}
+    </span>)}
+  </div>}>
+    <figure className="relative m-0">
+      <svg viewBox={`0 0 ${width} ${height}`} className="block h-auto w-full touch-pan-y" role="img"
         aria-label={`Share of stocks above their 50- and 200-day averages over the last ${sessions.length} sessions`}
-        onMouseLeave={() => setHover(null)}
-        onMouseMove={event => {
+        onPointerLeave={() => setHover(null)}
+        onPointerMove={event => {
           const box = event.currentTarget.getBoundingClientRect();
           const plotX = ((event.clientX - box.left) / box.width) * width - padLeft;
           setHover(Math.max(0, Math.min(sessions.length - 1, Math.round((plotX / plotW) * (sessions.length - 1)))));
         }}>
-        {[0, 25, 50, 75, 100].map(tick => <g key={tick}>
-          <line x1={padLeft} x2={padLeft + plotW} y1={y(tick)} y2={y(tick)} stroke="var(--line)" strokeWidth="1" />
+        {[0, 50, 100].map(tick => <g key={tick}>
+          <line x1={padLeft} x2={padLeft + plotW} y1={y(tick)} y2={y(tick)} stroke="var(--line)" strokeWidth="1" strokeDasharray={tick === 50 ? '3 4' : undefined} />
           <text x={padLeft - 6} y={y(tick) + 3.5} textAnchor="end" fontSize="10" fill="var(--muted)">{tick}</text>
         </g>)}
-        {[0, Math.floor((sessions.length - 1) / 2), sessions.length - 1].map(index => sessions[index] &&
-          <text key={index} x={x(index)} y={height - 6} textAnchor={index === 0 ? 'start' : index === sessions.length - 1 ? 'end' : 'middle'} fontSize="10" fill="var(--muted)">{formatDate(sessions[index].date, false)}</text>)}
+        {[0, sessions.length - 1].map(index => sessions[index] &&
+          <text key={index} x={x(index)} y={height - 6} textAnchor={index === 0 ? 'start' : 'end'} fontSize="10" fill="var(--muted)">{formatDate(sessions[index].date, false)}</text>)}
         {TREND_SERIES.map(series => {
           const points = sessions.flatMap((session, index) => session[series.key] == null ? [] : [`${x(index)},${y(session[series.key]!)}`]);
           const last = sessions.at(-1)?.[series.key];
           return <g key={series.key}>
             <polyline points={points.join(' ')} fill="none" stroke={series.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-            {last != null && <text x={padLeft + plotW + 8} y={y(last) + 4} fontSize="11" fill="var(--secondary)">{series.short} {pct(last)}</text>}
+            {last != null && <text x={padLeft + plotW + 8} y={y(last) + 4} fontSize="11" fontWeight="600" fill="var(--secondary)">{pct(last)}</text>}
           </g>;
         })}
         {active && hover != null && <g pointerEvents="none">
@@ -112,40 +298,18 @@ function BreadthTrend({sessions}: {sessions: BreadthSession[]}) {
         style={{left: `${(x(hover) / width) * 100}%`, transform: `translateX(${hover > sessions.length / 2 ? 'calc(-100% - 10px)' : '10px'})`}}>
         <div className="mb-0.5 font-medium text-text">{formatDate(active.date)}</div>
         {TREND_SERIES.map(series => <div key={series.key} className="flex items-center gap-1.5 text-secondary">
-          <span className="size-2 rounded-full" style={{background: series.color}} />{series.label}<span className="ml-auto pl-3 font-medium text-text">{pct(active[series.key], 1)}</span>
+          <span className="size-2 rounded-full" style={{background: series.color}} />{series.short}<span className="ml-auto pl-3 font-medium text-text">{pct(active[series.key], 1)}</span>
         </div>)}
       </div>}
-    </div>
-  </figure>;
+    </figure>
+  </Panel>;
 }
 
-function AdvanceDecline({session}: {session: BreadthSession}) {
-  const up = session.advances ?? 0, down = session.declines ?? 0, flat = session.unchanged ?? 0, total = up + down + flat || 1;
-  return <div className="flex flex-col gap-2">
-    <div className="flex items-baseline justify-between text-[12.5px]">
-      <span className="text-positive"><strong className="text-[17px] font-semibold text-text">{count(up)}</strong> advancing</span>
-      <span className="text-negative">declining <strong className="text-[17px] font-semibold text-text">{count(down)}</strong></span>
-    </div>
-    <div className="flex h-2 gap-0.5 overflow-hidden rounded-full" role="img" aria-label={`${up} advancing, ${down} declining, ${flat} unchanged`}>
-      <div className="rounded-l-full bg-positive" style={{width: `${(up / total) * 100}%`}} />
-      {flat > 0 && <div className="bg-line-strong" style={{width: `${(flat / total) * 100}%`}} />}
-      <div className="rounded-r-full bg-negative" style={{width: `${(down / total) * 100}%`}} />
-    </div>
-  </div>;
-}
-
-function Stat({label, value, hint}: {label: string; value: string; hint?: string}) {
-  return <div className="flex flex-col gap-0.5 rounded-(--radius-md) bg-surface-subtle px-3 py-2.5">
-    <span className="text-[12px] text-muted">{label}</span>
-    <span className="text-[17px] font-semibold tracking-[-0.01em] text-text">{value}</span>
-    {hint && <span className="text-[11.5px] text-muted">{hint}</span>}
-  </div>;
-}
-
-/** Market breadth and key indices for the selected session. */
-export default function MarketTab({datasetRevision, sessionDate}: {
+/** Market breadth, where highs and lows cluster, and which themes lead, for the selected session. */
+export default function MarketTab({datasetRevision, sessionDate, onOpenChart, onScreenSector}: {
   datasetRevision?: string;
   sessionDate: string;
+  onOpenChart: (symbol: string) => void;
   onScreenSector?: (sector: string) => void;
 }) {
   const market = useQuery({
@@ -154,9 +318,24 @@ export default function MarketTab({datasetRevision, sessionDate}: {
     enabled: Boolean(sessionDate),
     staleTime: Infinity,
   });
+  const pulse = useQuery({
+    queryKey: ['marketPulse', datasetRevision],
+    queryFn: () => screenerApi.getMarketPulse(datasetRevision),
+    enabled: Boolean(sessionDate),
+    staleTime: Infinity,
+  });
+  // Themes are optional: without them the page still shows sectors and industries.
+  const taxonomy = useQuery({
+    queryKey: ['themeClassification', datasetRevision],
+    queryFn: () => screenerApi.getThemeClassification(datasetRevision),
+    enabled: Boolean(sessionDate),
+    staleTime: Infinity,
+    retry: false,
+  });
 
-  if (market.isPending) return <div className="market-view" role="status" aria-label="Loading market overview">
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{Array.from({length: 4}, (_, index) => <div key={index} className="skeleton h-[128px]! w-full! rounded-(--radius-lg)!" />)}</div>
+  if (market.isPending) return <div className="market-view mkt" role="status" aria-label="Loading market overview">
+    <div className="skeleton h-[92px]! w-full! rounded-(--radius-xl)!" />
+    <div className="grid gap-4 xl:grid-cols-2">{Array.from({length: 2}, (_, index) => <div key={index} className="skeleton h-[420px]! w-full! rounded-(--radius-xl)!" />)}</div>
   </div>;
   if (market.isError) {
     const unpublished = market.error instanceof DataUnavailableError && market.error.reason === 'not_published';
@@ -168,41 +347,37 @@ export default function MarketTab({datasetRevision, sessionDate}: {
   }
 
   const {breadth, indices, asOfDate} = market.data;
-  const latest = breadth.at(-1)!;
-  const regime = marketRegime(latest);
-  const toneClass = regime.tone === 'positive' ? 'bg-accent-soft text-positive' : regime.tone === 'negative' ? 'bg-negative-soft text-negative' : 'bg-field text-secondary';
+  const regime = marketRegime(breadth.at(-1)!);
+  const rows = pulse.data?.rows;
 
-  return <div className="market-view">
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span className={`inline-flex h-7 items-center rounded-full px-3 text-[12.5px] font-semibold ${toneClass}`}>{regime.label}</span>
-      <span className="text-[13px] text-muted">Breadth across {count((latest.advances ?? 0) + (latest.declines ?? 0) + (latest.unchanged ?? 0))} NSE stocks · {formatDate(asOfDate)}</span>
-    </div>
+  return <div className="market-view mkt">
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <h1 className="m-0 text-[20px] font-semibold tracking-[-0.02em] text-text">Market</h1>
+      <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-surface px-2.5 text-[12px] font-semibold text-text shadow-(--shadow-control)"
+        data-tone={regime.tone === 'negative' ? 'down' : 'up'}>
+        {regime.tone !== 'neutral' && <span className="size-1.5 rounded-full" style={{background: 'var(--tone)'}} />}{regime.label}
+      </span>
+      <span className="text-[12.5px] text-muted">{formatDate(asOfDate)}</span>
+    </header>
 
-    {indices.length > 0 && <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Key indices">
-      {indices.map(index => <IndexTile key={index.symbol} index={index} />)}
-    </div>}
+    {indices.length > 0 && <IndexRibbon indices={indices} />}
 
-    <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-      <Card title="Breadth" subtitle="Share of stocks trading above their moving averages">
-        <div className="mb-5 grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
-          <Meter label="Above 10-day" value={latest.above_10_pct} />
-          <Meter label="Above 20-day" value={latest.above_20_pct} />
-          <Meter label="Above 50-day" value={latest.above_50_pct} />
-          <Meter label="Above 200-day" value={latest.above_200_pct} />
-        </div>
+    <div className="grid shrink-0 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+      <div className="flex min-w-0 flex-col gap-4">
+        {rows ? <Pulse rows={rows} /> : <PulseState pending={pulse.isPending} error={pulse.error} />}
         <BreadthTrend sessions={breadth} />
-      </Card>
-      <Card title="Today" subtitle={formatDate(latest.date)}>
-        <AdvanceDecline session={latest} />
-        <div className="mt-5 grid grid-cols-2 gap-2.5">
-          <Stat label="Up 4%+" value={count(latest.up_4)} />
-          <Stat label="Down 4%+" value={count(latest.down_4)} />
-          <Stat label="New 52W highs" value={count(latest.new_52w_high)} />
-          <Stat label="New 52W lows" value={count(latest.new_52w_low)} />
-          <Stat label="Net new highs" value={latest.nnh_52w == null ? '—' : `${latest.nnh_52w > 0 ? '+' : ''}${count(latest.nnh_52w)}`} hint="52-week highs minus lows" />
-          <Stat label="Benchmark" value={latest.index_change_pct == null ? '—' : `${latest.index_change_pct > 0 ? '+' : ''}${latest.index_change_pct.toFixed(2)}%`} hint="Nifty 50 change" />
-        </div>
-      </Card>
+      </div>
+      {rows ? <Extremes rows={rows} taxonomy={taxonomy.data} onOpenChart={onOpenChart} onScreenSector={onScreenSector} />
+        : <PulseState pending={pulse.isPending} error={pulse.error} />}
+      {rows && <Themes rows={rows} taxonomy={taxonomy.data} />}
     </div>
   </div>;
+}
+
+function PulseState({pending, error}: {pending: boolean; error: Error | null}) {
+  return pending
+    ? <div className="skeleton h-[420px]! w-full! rounded-(--radius-xl)!" role="status" aria-label="Loading stock breadth" />
+    : <div role="alert" className="rounded-(--radius-xl) bg-surface p-5 text-[12.5px] text-muted shadow-(--shadow-card)">
+      Stock breadth could not be loaded{error ? `: ${error.message}` : '.'}
+    </div>;
 }

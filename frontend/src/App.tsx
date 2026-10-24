@@ -144,7 +144,7 @@ const ScreenerAppContent: React.FC = () => {
         </div>}
         {activeTab === 'charts' ? (
           <React.Suspense fallback={<p role="status">Loading chart workspace…</p>}>
-            <ChartsTab datasetRevision={chartSnapshot?.revision ?? activeRevision} sessionDate={chartSnapshot?.sessionDate ?? selectedAsOfDate}/>
+            <ChartsTab latestRevision={(chartSnapshot?.sessionDate ?? selectedAsOfDate) === latestDate ? latestRevision : undefined} datasetRevision={chartSnapshot?.revision ?? activeRevision} sessionDate={chartSnapshot?.sessionDate ?? selectedAsOfDate}/>
           </React.Suspense>
         ) : activeTab === 'market' ? (
           <React.Suspense fallback={<p role="status">Loading market overview…</p>}>

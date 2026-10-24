@@ -5,20 +5,25 @@ const ROW_HEIGHT = 50;
 const WINDOW_ROWS = 22;
 
 /** Bound wide-table DOM work while retaining the full page's scroll height. */
-export function useTableWindow<T>(rows: T[], key: unknown, columnCount: number) {
-  const [window, setWindow] = useState({key, first: 0});
-  const enabled = rows.length > WINDOW_ROWS && columnCount > 20;
-  const first = enabled && window.key === key ? Math.min(window.first, Math.max(0, rows.length - WINDOW_ROWS)) : 0;
-  const end = enabled ? Math.min(rows.length, first + WINDOW_ROWS) : rows.length;
+export function useTableWindow<T>(rows: T[], key: unknown, columnCount: number, options: {rowHeight?: number; headerHeight?: number; narrow?: boolean} = {}) {
+  const [window, setWindow] = useState({key, first: 0, rowHeight: options.rowHeight ?? ROW_HEIGHT, size: WINDOW_ROWS});
+  const {rowHeight, size} = window;
+  const enabled = rows.length > WINDOW_ROWS && (columnCount > 20 || options.narrow === true);
+  const first = enabled && window.key === key ? Math.min(window.first, Math.max(0, rows.length - size)) : 0;
+  const end = enabled ? Math.min(rows.length, first + size) : rows.length;
+  const update = (scrollTop: number, height?: number, pitch = rowHeight) => {
+    if (!enabled) return;
+    const size = height === undefined ? WINDOW_ROWS : Math.max(WINDOW_ROWS, Math.ceil(height / pitch) + 10);
+    const first = Math.max(0, Math.floor((scrollTop - (options.headerHeight ?? 42)) / pitch) - 5);
+    setWindow(current => current.key === key && current.first === first && current.rowHeight === pitch && current.size === size
+      ? current : {key, first, rowHeight: pitch, size});
+  };
   return {
     rows: rows.slice(first, end), first,
-    top: first * ROW_HEIGHT,
-    bottom: (rows.length - end) * ROW_HEIGHT,
+    top: first * rowHeight,
+    bottom: (rows.length - end) * rowHeight,
     enabled,
-    onScroll: (event: UIEvent<HTMLDivElement>) => {
-      if (!enabled) return;
-      const next = Math.max(0, Math.floor((event.currentTarget.scrollTop - 42) / ROW_HEIGHT) - 5);
-      setWindow(current => current.key === key && current.first === next ? current : {key, first: next});
-    },
+    update,
+    onScroll: (event: UIEvent<HTMLDivElement>) => update(event.currentTarget.scrollTop),
   };
 }

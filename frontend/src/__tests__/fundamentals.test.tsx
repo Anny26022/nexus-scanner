@@ -156,3 +156,14 @@ it('leaves the results body scrollable and captures only handle drags', async ()
   expect(panel.setPointerCapture).toHaveBeenCalledOnce();
   fireEvent.pointerCancel(panel);
 });
+
+it('shows overnight observations only in latest mode, retaining filing and replay cutoffs', () => {
+  const overnight = {...history, observed_on: '2026-10-24', quarterly: [
+    {period_end: '2026-06-30', eps: 2},
+    {period_end: '2026-09-30', filing_date: '2026-10-24', eps: 3},
+    {period_end: '2026-09-30', filing_date: '2026-10-25', eps: 4},
+  ]};
+  expect(visibleFinancials(overnight, 'quarterly', '2026-10-23')).toEqual([]);
+  expect(visibleFinancials(overnight, 'quarterly', '2026-10-23', true).map(row => row.eps)).toEqual([3, 2]);
+  expect(visibleFinancials({...overnight, observed_on: ''}, 'quarterly', '2026-10-23', true)).toEqual([]);
+});

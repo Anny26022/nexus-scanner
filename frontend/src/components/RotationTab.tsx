@@ -258,7 +258,7 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
           <span>{tail}{unit}<small> trail</small></span>
           <button type="button" aria-label="Longer trail" disabled={tail >= 30} onClick={() => setTail(value => Math.min(30, value + 1))}><Plus size={12} /></button>
         </div>
-        <RotationFilters filters={filters} onChange={setFilters} disabled={isGroups} />
+        {!isGroups && <RotationFilters filters={filters} onChange={setFilters} />}
       </div>
     </header>
 

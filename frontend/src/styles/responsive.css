@@ -130,7 +130,6 @@
   .screen-buttons .backtest-trigger { margin-left: auto; padding-inline: 8px; }
   .workspace-description { display: none; }
   .workspace-breadcrumb { display: none; }
-  .session-label { display: none; }
   .workspace h1 { font-size: 16px; }
   .research-view { gap: 0; }
   .screen-controls {
@@ -616,7 +615,13 @@
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   button:not(:disabled):active { transform: none; }
 }
-@media (prefers-reduced-transparency: reduce) { .dialog::backdrop { background: rgb(15 23 31 / 85%); } }
+@media (prefers-reduced-transparency: reduce) {
+  .dialog-backdrop, .chart-modal-backdrop, .app-sidebar, .rot-tip {
+    background: var(--surface) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
 @media (prefers-contrast: more) {
   :root { --muted: var(--secondary); --line: var(--line-strong); }
   .button-secondary, input, select { border-color: var(--secondary); }

@@ -242,8 +242,8 @@ export function RotationPlot(props: Props) {
       ctx.font = '600 11px Inter, system-ui, sans-serif';
       const corner = (quadrant: Quadrant, x: number, y: number, align: CanvasTextAlign) => {
         ctx.textAlign = align;
-        ctx.fillStyle = palette[quadrant];
-        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = color('--rrg-muted');
+        ctx.globalAlpha = 1;
         ctx.fillText(LABEL[quadrant].toUpperCase(), x, y);
       };
       corner('improving', left + 14, top + 20, 'left');

@@ -654,10 +654,11 @@ export default function RotationTab({
               </div>
               <Button
                 variant="ghost"
+                size="icon"
                 onClick={copySymbols}
                 aria-label="Copy symbols"
                 title={isGroups ? (focusId ? 'Copy this group’s stocks' : 'Copy stocks in these groups') : 'Copy symbols'}
-                className="!h-7 !w-7 !p-0 rounded-full text-muted hover:text-text hover:bg-surface-hover"
+                className="rounded-full text-muted hover:text-text hover:bg-surface-hover"
               >
                 {copied ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
               </Button>
@@ -757,11 +758,11 @@ export default function RotationTab({
           {/* Relative-strength shifts over the trail, in one quiet line */}
           {ready && view === 'chart' && (gaining.length > 0 || losing.length > 0) && (
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line/50 px-3.5 py-1.5 text-[11.5px]">
-              {([['Gaining strength', gaining, 'text-(--rrg-leading)'], ['Losing strength', losing, 'text-(--rrg-lagging)']] as const).map(
-                ([title, list, tone]) =>
+              {([['Gaining strength', gaining], ['Losing strength', losing]] as const).map(
+                ([title, list]) =>
                   list.length > 0 && (
                     <div key={title} className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none]">
-                      <span className={`shrink-0 font-semibold ${tone}`} title="Change in RS-Ratio over the trail; not a measure of capital flows">
+                      <span className="shrink-0 font-semibold text-secondary" title="Change in RS-Ratio over the trail; not a measure of capital flows">
                         {title} · {tail}
                         {unit}
                       </span>

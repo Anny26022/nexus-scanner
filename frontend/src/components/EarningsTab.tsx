@@ -13,6 +13,7 @@ import { useMountEffect } from '../hooks/useMountEffect';
 import { useTableWindow } from '../hooks/useTableWindow';
 import { Button } from './Button';
 import { SymbolWithLogo } from './SymbolWithLogo';
+import '../styles/earnings.css';
 
 const crore = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
 const day = (date: string, options: Intl.DateTimeFormatOptions = {day: 'numeric', month: 'short'}) =>

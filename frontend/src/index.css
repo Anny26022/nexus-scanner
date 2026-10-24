@@ -10,8 +10,6 @@
 @import "./styles/charts.css" layer(components);
 @import "./styles/watchlist.css" layer(components);
 @import "./styles/screener.css" layer(components);
-@import "./styles/news.css" layer(components);
 @import "./styles/ai-modal.css" layer(components);
-@import "./styles/earnings.css" layer(components);
 @import "./styles/rotation.css" layer(components);
 @import "./styles/responsive.css" layer(components);

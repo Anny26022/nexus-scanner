@@ -34,13 +34,19 @@ class SnapshotPublicationTests(unittest.TestCase):
                 same = publish(root, output)
             self.assertEqual(first['revision'], same['revision'])
 
-    def test_rotation_output_changes_release_identity_and_retries_are_stable(self):
+    def test_benchmark_csv_correction_changes_release_identity_and_retries_are_stable(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder) / 'edl'; root.mkdir(); output = Path(folder) / 'public'; self.fixture(root)
-            with patch('publish_snapshot.charts_enabled', return_value=True), \
-                    patch('publish_snapshot.rotation_history_object', side_effect=['a'*64, 'a'*64, 'b'*64]):
+            indices = root / 'indices_ohlcv_data'; indices.mkdir()
+            frame = pd.DataFrame({'Date': pd.bdate_range(end='2026-09-30', periods=340), 'Close': 100.})
+            frame.to_csv(indices / 'NIFTY.csv', index=False)
+            frame.to_csv(indices / 'NIFTY_500.csv', index=False)
+            with patch('publish_snapshot.charts_enabled', return_value=True):
                 first = publish(root, output)
                 same = publish(root, output)
+                # A deep benchmark correction changes no root gzip input or stock price.
+                frame.loc[339, 'Close'] = 110.
+                frame.to_csv(indices / 'NIFTY_500.csv', index=False)
                 changed = publish(root, output)
             self.assertEqual(first['revision'], same['revision'])
             self.assertNotEqual(first['revision'], changed['revision'])

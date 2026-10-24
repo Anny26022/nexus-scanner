@@ -2,7 +2,8 @@ import { WARM_UP, rotation } from '../utils/rrg';
 
 /** Calendars the history is published on: one close per session, ISO week and month. */
 export type Frame = 'D' | 'W' | 'M';
-export type BenchmarkCode = 'N50' | 'N500' | 'EW';
+/** A published index (codes match the stock universes) or EW, the equal-weight market built like the groups. */
+export type BenchmarkCode = 'N50' | 'N100' | 'N500' | 'MID150' | 'SML250' | 'MS400' | 'TOTAL' | 'EW';
 export type RotationShardName = 'core' | 'rest' | 'groups';
 export const LEVELS = ['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const;
 export type Level = typeof LEVELS[number];

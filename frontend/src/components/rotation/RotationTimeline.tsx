@@ -16,8 +16,8 @@ interface Props {
 }
 
 const WIDTH = 1000;
-const LINE = 46;
-const RIBBON = 14;
+const LINE = 26;
+const RIBBON = 4;
 
 /**
  * Benchmark line over the replay range with a ribbon underneath showing how breadth moved between
@@ -41,8 +41,8 @@ export function RotationTimeline({dates, closes, start, end, cursor, tail, bread
       const total = QUADRANTS.reduce((sum, q) => sum + counts[q], 0) || 1;
       const before = order.slice(0, layer).reduce((sum, q) => sum + counts[q], 0) / total;
       const after = before + counts[quadrant] / total;
-      upper.push(`${x(start + i).toFixed(1)},${(LINE + 4 + before * RIBBON).toFixed(1)}`);
-      lower.unshift(`${x(start + i).toFixed(1)},${(LINE + 4 + after * RIBBON).toFixed(1)}`);
+      upper.push(`${x(start + i).toFixed(1)},${(LINE + 3 + before * RIBBON).toFixed(1)}`);
+      lower.unshift(`${x(start + i).toFixed(1)},${(LINE + 3 + after * RIBBON).toFixed(1)}`);
     });
     return <polygon key={quadrant} points={[...upper, ...lower].join(' ')} className={`rot-band is-${quadrant}`} />;
   });
@@ -56,7 +56,7 @@ export function RotationTimeline({dates, closes, start, end, cursor, tail, bread
   const ticks = [start, Math.round((start + end) / 2), end];
 
   return <div className="rot-timeline">
-    <svg ref={svg} viewBox={`0 0 ${WIDTH} ${LINE + RIBBON + 6}`} preserveAspectRatio="none" role="slider"
+    <svg ref={svg} viewBox={`0 0 ${WIDTH} ${LINE + RIBBON + 3}`} preserveAspectRatio="none" role="slider"
       aria-label="Replay date" aria-valuemin={start} aria-valuemax={end} aria-valuenow={cursor} aria-valuetext={dateLabel(cursor)} tabIndex={0}
       onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); scrub(event); }}
       onPointerMove={event => { if (event.buttons) scrub(event); }}
@@ -64,10 +64,10 @@ export function RotationTimeline({dates, closes, start, end, cursor, tail, bread
         if (event.key === 'ArrowLeft') { event.preventDefault(); onScrub(Math.max(start, cursor - 1)); }
         if (event.key === 'ArrowRight') { event.preventDefault(); onScrub(Math.min(end, cursor + 1)); }
       }}>
-      <rect className="rot-window" x={x(windowStart)} width={Math.max(2, x(cursor) - x(windowStart))} y={0} height={LINE + RIBBON + 6} />
+      <rect className="rot-window" x={x(windowStart)} width={Math.max(2, x(cursor) - x(windowStart))} y={0} height={LINE + RIBBON + 3} />
       <path className="rot-line" d={path} vectorEffect="non-scaling-stroke" />
       {bands}
-      <line className="rot-cursor" x1={x(cursor)} x2={x(cursor)} y1={0} y2={LINE + RIBBON + 6} vectorEffect="non-scaling-stroke" />
+      <line className="rot-cursor" x1={x(cursor)} x2={x(cursor)} y1={0} y2={LINE + RIBBON + 3} vectorEffect="non-scaling-stroke" />
     </svg>
     <div className="rot-ticks" aria-hidden="true">{ticks.map(index => <span key={index}>{dates[index] ? dateLabel(index) : ''}</span>)}</div>
   </div>;

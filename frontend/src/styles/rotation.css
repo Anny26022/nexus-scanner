@@ -19,12 +19,11 @@
 .rot-select svg { position: absolute; right: 10px; color: var(--muted); pointer-events: none; }
 .rot-select:focus-within { box-shadow: var(--ring); }
 .rot-select select:focus-visible { box-shadow: none; outline: none; }
-.rot-segment, .rot-speed { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--field); }
-.rot-segment button, .rot-speed button { min-width: 28px; height: 26px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent;
+.rot-segment { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--field); }
+.rot-segment button { min-width: 28px; height: 26px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent;
   color: var(--secondary); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
-.rot-segment button:hover:not([aria-checked="true"]):not([aria-selected="true"]),
-.rot-speed button:hover:not([aria-checked="true"]) { color: var(--text); }
-.rot-segment [aria-checked="true"], .rot-segment [aria-selected="true"], .rot-speed [aria-checked="true"] {
+.rot-segment button:hover:not([aria-checked="true"]):not([aria-selected="true"]) { color: var(--text); }
+.rot-segment [aria-checked="true"], .rot-segment [aria-selected="true"] {
   background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / .1); }
 .rot-stepper { display: inline-flex; align-items: center; height: 30px; padding: 0 3px; border-radius: 999px; background: var(--field); }
 .rot-stepper button { display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: var(--secondary); cursor: pointer; }
@@ -110,24 +109,25 @@
 .rot-state { display: grid; place-content: center; flex: 1; min-height: 300px; margin: 0; color: var(--muted); font-size: 13px; text-align: center; }
 .rot-state h2 { margin: 0 0 6px; color: var(--text); font-size: 16px; }
 
-.rot-dock { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 18px; padding: 8px 14px 8px 10px; border-radius: 18px;
-  background: var(--surface); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent); }
-.rot-transport { display: flex; align-items: center; gap: 6px; }
-.rot-transport > button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--text); cursor: pointer; }
-.rot-transport > button:hover:not(:disabled) { background: var(--field); }
+.rot-dock { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px; padding: 2px 4px 0; }
+.rot-transport { display: flex; align-items: center; gap: 2px; }
+.rot-transport > button { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 50%; background: transparent; color: var(--secondary); cursor: pointer; }
+.rot-transport > button:hover:not(:disabled) { background: var(--field); color: var(--text); }
 .rot-transport > button:disabled { opacity: .3; cursor: default; }
-.rot-transport .rot-play { width: 40px; height: 40px; background: var(--text); color: var(--surface); }
-.rot-transport .rot-play:hover { background: var(--text); opacity: .88; }
+.rot-transport .rot-play { width: 30px; height: 30px; margin: 0 2px; background: var(--text); color: var(--surface); }
+.rot-transport .rot-play:hover:not(:disabled) { background: var(--text); color: var(--surface); opacity: .85; }
+.rot-transport .rot-speed { width: auto; min-width: 34px; height: 24px; margin-left: 6px; padding: 0 8px; border-radius: 999px;
+  color: var(--secondary); font: inherit; font-size: 11.5px; font-weight: 640; font-variant-numeric: tabular-nums; }
 .rot-timeline { min-width: 0; }
-.rot-timeline svg { display: block; width: 100%; height: 54px; overflow: visible; cursor: ew-resize; touch-action: none; outline: none; }
+.rot-timeline svg { display: block; width: 100%; height: 30px; overflow: visible; cursor: ew-resize; touch-action: none; outline: none; }
 .rot-timeline svg:focus-visible { box-shadow: var(--ring); border-radius: 6px; }
-.rot-line { fill: none; stroke: var(--text); stroke-width: 1.3; opacity: .55; }
-.rot-band { opacity: .7; }
+.rot-line { fill: none; stroke: var(--text); stroke-width: 1.2; opacity: .45; }
+.rot-band { opacity: .8; }
 .rot-band.is-leading { fill: var(--rrg-leading); } .rot-band.is-improving { fill: var(--rrg-improving); }
 .rot-band.is-weakening { fill: var(--rrg-weakening); } .rot-band.is-lagging { fill: var(--rrg-lagging); }
-.rot-window { fill: color-mix(in srgb, var(--text) 8%, transparent); }
+.rot-window { fill: color-mix(in srgb, var(--text) 7%, transparent); rx: 3px; }
 .rot-cursor { stroke: var(--text); stroke-width: 1.5; }
-.rot-ticks { display: flex; justify-content: space-between; margin-top: 3px; color: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.rot-ticks { display: flex; justify-content: space-between; margin-top: 2px; white-space: nowrap; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 
 /* Filters popover. */
 .rot-popover { z-index: 50; display: flex; flex-direction: column; gap: 14px; width: 270px; padding: 16px; border-radius: 16px; background: var(--surface);
@@ -186,7 +186,7 @@
   .rot-rail { gap: 8px; }
   .rot-list { overflow: visible; }
   .rot-chips { margin-left: 0; }
-  .rot-dock { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .rot-dock { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .rot-trow { grid-template-columns: 24px minmax(0, 1fr) 84px 60px 24px; }
   .rot-trow > :nth-child(3), .rot-trow > :nth-child(5), .rot-trow > :nth-child(6), .rot-trow > :nth-child(8) { display: none; }
 }

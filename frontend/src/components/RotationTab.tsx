@@ -20,6 +20,7 @@ const STOCK_UNIVERSES: [string, string][] = [['N50', 'Nifty 50'], ['N100', 'Nift
 const QUADRANT_LABEL: Record<Quadrant, string> = {leading: 'Leading', improving: 'Improving', weakening: 'Weakening', lagging: 'Lagging'};
 const CHIP_ORDER: Quadrant[] = ['leading', 'weakening', 'lagging', 'improving'];
 const SPEEDS = [0.5, 1, 2];
+const BENCHMARK_ORDER: BenchmarkCode[] = ['EW', 'N50', 'N100', 'N500', 'MID150', 'SML250', 'MS400', 'TOTAL'];
 const STEP_MS = 620;
 const LIST_LIMIT = 150;
 /** Trails drawn by default: the items that rotated furthest, so the chart opens on what matters. */
@@ -71,7 +72,9 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
   let benchmark: Benchmark;
   if (universe.kind === 'members' && (benchmarkChoice ?? 'GROUP') === 'GROUP') benchmark = {group: universe.group};
   else {
-    const code = benchmarkChoice && benchmarkChoice !== 'GROUP' ? benchmarkChoice : isGroups ? 'EW' : 'N500';
+    // Default: groups against the equal-weight market, an index's stocks against that index.
+    const own = universe.kind === 'stocks' ? universe.code as BenchmarkCode : 'N500';
+    const code = benchmarkChoice && benchmarkChoice !== 'GROUP' ? benchmarkChoice : isGroups ? 'EW' : own;
     benchmark = data?.benchmarks[code] ? code : 'N500';
   }
   const benchmarkName = typeof benchmark === 'string' ? data?.benchmarks[benchmark]?.name : group?.n;
@@ -243,8 +246,7 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
         </Select>
         <Select label="Benchmark" value={typeof benchmark === 'string' ? benchmark : 'GROUP'} onChange={value => setBenchmark(value as BenchmarkCode | 'GROUP')}>
           {group && <option value="GROUP">vs {group.n}</option>}
-          {data.benchmarks.EW && <option value="EW">vs equal-weight market</option>}
-          <option value="N500">vs Nifty 500</option><option value="N50">vs Nifty 50</option>
+          {BENCHMARK_ORDER.filter(code => data.benchmarks[code]).map(code => <option key={code} value={code}>vs {data.benchmarks[code]!.name}</option>)}
         </Select>
         <div className="rot-stepper" aria-label="Trail length">
           <button type="button" aria-label="Shorter trail" disabled={tail <= 1} onClick={() => setTail(value => Math.max(1, value - 1))}><Minus size={12} /></button>
@@ -299,13 +301,11 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
         </section>}
         {ready && <footer className="rot-dock">
           <div className="rot-transport">
-            <button type="button" aria-label="Previous period" onClick={() => stepTo(cursor - 1)} disabled={cursor <= start}><SkipBack size={14} /></button>
-            <button type="button" className="rot-play" aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay}>{playing ? <Pause size={15} /> : <Play size={15} />}</button>
-            <button type="button" aria-label="Next period" onClick={() => stepTo(cursor + 1)} disabled={cursor >= end}><SkipForward size={14} /></button>
-            <div className="rot-speed" role="radiogroup" aria-label="Speed">
-              {SPEEDS.map(value => <button key={value} type="button" role="radio" aria-checked={speed === value}
-                onClick={() => { setSpeed(value); if (playing) setGlide(STEP_MS * 0.92 / value); }}>{value}×</button>)}
-            </div>
+            <button type="button" aria-label="Previous period" onClick={() => stepTo(cursor - 1)} disabled={cursor <= start}><SkipBack size={13} /></button>
+            <button type="button" className="rot-play" aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay}>{playing ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}</button>
+            <button type="button" aria-label="Next period" onClick={() => stepTo(cursor + 1)} disabled={cursor >= end}><SkipForward size={13} /></button>
+            <button type="button" className="rot-speed" aria-label={`Speed ${speed}×, change`} title="Playback speed"
+              onClick={() => { const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; setSpeed(next); if (playing) setGlide(STEP_MS * 0.92 / next); }}>{speed}×</button>
           </div>
           <RotationTimeline dates={dates} closes={closes} start={start} end={end} cursor={cursor} tail={tail}
             breadth={breadth} dateLabel={dateLabel} onScrub={i => { setPlaying(false); setGlide(0); setCursor(i); }} />

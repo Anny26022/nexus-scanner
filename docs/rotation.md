@@ -17,8 +17,9 @@ Values are delta-coded natural logs at 0.01% resolution.
 - **Groups** cover every classification level the screener uses: sector, industry, sub-industry, theme,
   thematic block and macro pillar. Each is an equal-weight chain index of its current members' daily returns.
   Members need ₹300 Cr market cap and ₹1 Cr 30-day turnover, and a group needs three members.
-- **Benchmarks** are Nifty 50 and Nifty 500, from the refresh's index files, plus an equal-weight market built
-  like the groups. Comparing equal-weight groups with a cap-weighted index would make every group look strong
+- **Benchmarks** are Nifty 50, 100 and 500, Midcap 150, Smallcap 250, MidSmallCap 400 and Total Market, from
+  the refresh's index files. Each stock universe defaults to its own index. There is also an equal-weight market
+  built like the groups. Comparing equal-weight groups with a cap-weighted index would make every group look strong
   whenever small and mid caps outperform.
 
 History uses today's group membership, so it is not a point-in-time backtest.

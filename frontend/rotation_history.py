@@ -23,9 +23,13 @@ MIN_MEMBERS = 3
 MIN_GROUP_MARKET_CAP_CR = 300.0
 MIN_GROUP_TURNOVER30_CR = 1.0
 MAX_DAILY_RETURN = (-0.6, 1.5)
-BENCHMARKS = {'N50': 'Nifty 50', 'N500': 'Nifty 500', 'EW': 'Equal-weight market'}
-# Index symbols the refresh already fetches (indices_ohlcv_data and the daily index history).
-BENCHMARK_INDICES = {'N50': 'NIFTY', 'N500': 'NIFTY 500'}
+BENCHMARKS = {'N50': 'Nifty 50', 'N100': 'Nifty 100', 'N500': 'Nifty 500', 'MID150': 'Nifty Midcap 150',
+              'SML250': 'Nifty Smallcap 250', 'MS400': 'Nifty MidSmallCap 400', 'TOTAL': 'Nifty Total Market',
+              'EW': 'Equal-weight market'}
+# Index symbols the refresh already fetches (indices_ohlcv_data and the daily index history). Codes match the
+# stock universes, so each universe can be measured against its own index.
+BENCHMARK_INDICES = {'N50': 'NIFTY', 'N100': 'NIFTY 100', 'N500': 'NIFTY 500', 'MID150': 'NIFTY MIDCAP 150',
+                     'SML250': 'NIFTY SMALLCAP 250', 'MS400': 'NIFTY MIDSMALLCAP 400', 'TOTAL': 'NIFTY TOTAL MKT'}
 # Group composites are equal-weighted, so they are compared with an equal-weighted market built the same way:
 # against a cap-weighted index every group would look strong whenever small and mid caps outperform.
 # Index memberships offered as stock universes, keyed by the short codes the page uses.
@@ -186,7 +190,9 @@ def build(session, rows, closes, benchmarks, taxonomy):
     index = {
         'schemaVersion': SCHEMA_VERSION, 'asOfDate': session, 'scale': SCALE,
         'frames': frames,
-        'benchmarks': {code: {'name': BENCHMARKS[code], 'series': series(points)} for code, points in benchmarks.items()},
+        # An index the refresh could not supply this time is left out rather than published empty.
+        'benchmarks': {code: {'name': BENCHMARKS[code], 'series': series(points)} for code, points in benchmarks.items()
+                       if len(points) >= 2},
         'universes': {code: name for code, name in UNIVERSES.items()},
         'stocks': stocks, 'groups': groups,
     }

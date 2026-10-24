@@ -66,6 +66,8 @@ class RotationHistoryTests(unittest.TestCase):
         self.assertIn('S0', shards['core']['W'])
         self.assertIn('theme:Lending', shards['groups']['M'])
         self.assertEqual(set(index['benchmarks']), {'N50', 'N500', 'EW'})
+        index, _ = rh.build(days[-1], rows, closes, {'N50': rise, 'N500': rise, 'MS400': []}, taxonomy)
+        self.assertNotIn('MS400', index['benchmarks'])
         with tempfile.TemporaryDirectory() as folder:
             digest = rh.write_objects(Path(folder), index, shards)
             payload = json.loads(gzip.decompress((Path(folder) / f'{digest}.json.gz').read_bytes()))

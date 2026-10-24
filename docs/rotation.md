@@ -44,6 +44,7 @@ Rotation's output hash participates in the scanner revision. A failed rotation u
 and still publishes the scanner. Retries retain the already-published release's rotation binding; upload
 recovery becomes visible in a subsequent revision. Rotation copy/check operations each have a two-minute
 timeout, independent of the bulk uploader's longer limit.
+The private ledger stays staged until release publication succeeds, so a failed publication cannot advance it.
 
 Theme classification has only existed since October 2026, so no earlier dated memberships exist to backfill.
 

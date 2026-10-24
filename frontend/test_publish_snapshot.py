@@ -17,6 +17,23 @@ from edl_pipeline.scanner.calculation_cache import memoized
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def test_real_rotation_build_stages_private_state_until_publication(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'edl'; root.mkdir(); output = Path(folder) / 'public'; self.fixture(root)
+            benchmark = [(day.strftime('%Y-%m-%d'), 100.) for day in pd.bdate_range(end='2026-09-30', periods=340)]
+            with patch('publish_snapshot.charts_enabled', return_value=True), \
+                    patch('publish_snapshot.index_closes', return_value=(benchmark, None)):
+                with patch('publish_snapshot.complete_release', side_effect=RuntimeError('publication failed')):
+                    with self.assertRaisesRegex(RuntimeError, 'publication failed'):
+                        publish(root, output)
+                self.assertFalse((root / 'rotation_membership_ledger.json.gz').exists())
+                first = publish(root, output)
+                ledger = root / 'rotation_membership_ledger.json.gz'
+                self.assertTrue(ledger.is_file())
+                self.assertFalse(ledger.with_name(ledger.name + '.tmp').exists())
+                same = publish(root, output)
+            self.assertEqual(first['revision'], same['revision'])
+
     def test_rotation_output_changes_release_identity_and_retries_are_stable(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder) / 'edl'; root.mkdir(); output = Path(folder) / 'public'; self.fixture(root)

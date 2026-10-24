@@ -72,7 +72,7 @@ def rotation_history_object(root, cache, rows, taxonomy, source_bytes, session, 
     digest = rotation_history.write_objects(objects, index, shards)
     temporary = ledger_path.with_name(ledger_path.name + '.tmp')
     temporary.write_bytes(gzip.compress(json.dumps(ledger, separators=(',', ':'), sort_keys=True).encode(), mtime=0))
-    temporary.replace(ledger_path)
+    # Keep private state staged until source verification and release publication have completed.
     return digest
 
 
@@ -264,7 +264,9 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = time.perf_counter()
     cache=ScannerCache(); cache.refresh(root)
     starting_revision=cache.revision
-    source_files=[p for p in sorted(root.glob('*.json.gz')) if p.name!='filing_history.json.gz']
+    # Rotation's canonical output is fingerprinted below; its private carry-over ledger is not a scanner input.
+    source_files=[p for p in sorted(root.glob('*.json.gz'))
+                  if p.name not in ('filing_history.json.gz', rotation_history.LEDGER_NAME)]
     source_bytes={p.name:p.read_bytes() for p in source_files}
     context=bridge._load_context(root)
     session=context['financial_history_as_of']
@@ -486,6 +488,12 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     current_path = output / 'current.json'
     previous_revision = json.loads(current_path.read_text()).get('revision') if current_path.exists() else None
     manifest = complete_release(chart_root, output, manifest)
+    if rotation_hash:
+        ledger_path = root / rotation_history.LEDGER_NAME
+        try:
+            ledger_path.with_name(ledger_path.name + '.tmp').replace(ledger_path)
+        except OSError as error:
+            print(f'WARNING: rotation ledger was not saved: {error}', flush=True)
     register_session(output / 'sessions.json', session_record)
     # Only once the new release is live: keep it and the one tabs may still be on.
     if previous_revision != manifest['revision']:

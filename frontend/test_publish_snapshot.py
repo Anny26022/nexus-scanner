@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import scanner_bridge as bridge
 from publish_snapshot import publish, delivery_lookback
+from public_payload import public
 from session_history import archive_daily_snapshot, register_session
 from scanner_cache import ScannerCache
 from edl_pipeline.scanner import context, trend
@@ -235,7 +236,7 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(row['diiChangePctQoq'],0.0)
             symbol_file=output/first['financialHistoryUrlTemplate'].replace('{symbol}', 'TEST').removeprefix('/data/')
             with gzip.open(symbol_file,'rt') as handle:
-                self.assertEqual(json.load(handle), stocks[0]['financial_statement_history'])
+                self.assertEqual(json.load(handle), public(stocks[0]['financial_statement_history']))
             stocks[0].update(promoter_holding_percent=None,fii_percent_change_qoq=None,dii_percent_change_qoq=2.25)
             with gzip.open(source,'wt') as handle:
                 json.dump(stocks,handle)
@@ -302,10 +303,10 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(json.loads((output/'current.json').read_text())['financialHistoryUrl'],first['financialHistoryUrl'])
             history_file=output/first['financialHistoryUrl'].removeprefix('/data/')
             with gzip.open(history_file,'rt') as handle:
-                self.assertEqual(json.load(handle)['TEST'],stocks[0]['financial_statement_history'])
+                self.assertEqual(json.load(handle)['TEST'],public(stocks[0]['financial_statement_history']))
             symbol_file=output/first['financialHistoryUrlTemplate'].replace('{symbol}', 'TEST').removeprefix('/data/')
             with gzip.open(symbol_file,'rt') as handle:
-                self.assertEqual(json.load(handle), stocks[0]['financial_statement_history'])
+                self.assertEqual(json.load(handle), public(stocks[0]['financial_statement_history']))
             stocks[0].update(promoter_holding_percent=None,fii_percent_change_qoq=None,dii_percent_change_qoq=2.25)
             with gzip.open(source,'wt') as handle:
                 json.dump(stocks,handle)

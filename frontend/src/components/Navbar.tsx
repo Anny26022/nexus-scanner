@@ -17,9 +17,9 @@ const SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navi
 
 const NAV_ITEMS = [
   { id: 'screener', label: 'Screener', Icon: ScanSearch },
-  { id: 'earnings', label: 'Earnings', Icon: CalendarCheck },
   { id: 'ipo', label: 'IPO Catalogue', Icon: Rocket },
   { id: 'charts', label: 'Charts', Icon: CandlestickChart },
+  { id: 'earnings', label: 'Earnings', Icon: CalendarCheck },
   { id: 'market', label: 'Market', Icon: Gauge },
 ] as const;
 

@@ -73,12 +73,13 @@ export function fundamentalsConfig(raw?: FundamentalsConfig): Required<Fundament
 }
 const date = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
   && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
-export function visibleFinancials(history: FinancialHistory | null | undefined, period: 'quarterly' | 'annual', cutoff: string): FinancialPeriod[] {
+export function visibleFinancials(history: FinancialHistory | null | undefined, period: 'quarterly' | 'annual', cutoff: string, latest = false): FinancialPeriod[] {
   // An observation can contain revisions of older reports. Do not backdate those values.
-  if (!history || history.amount_unit !== 'INR_CRORE' || !date(history.observed_on) || history.observed_on > cutoff) return [];
+  if (!history || history.amount_unit !== 'INR_CRORE' || !date(history.observed_on) || (!latest && history.observed_on > cutoff)) return [];
+  const through = latest && history.observed_on > cutoff ? history.observed_on : cutoff;
   if (!Array.isArray(history[period])) return [];
-  return history[period].filter(row => row && date(row.period_end) && row.period_end <= cutoff
-    && (!row.filing_date || (date(row.filing_date) && row.filing_date <= cutoff)))
+  return history[period].filter(row => row && date(row.period_end) && row.period_end <= through
+    && (!row.filing_date || (date(row.filing_date) && row.filing_date <= through)))
     .sort((a, b) => b.period_end.localeCompare(a.period_end));
 }
 export const financialNumber = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;

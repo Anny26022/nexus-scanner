@@ -32,7 +32,7 @@ FILES = (
     'sme_market_data.json.gz', 'nse_fno_ban.json.gz', 'earnings_calendar.json.gz', 'rs_rating_daily.json.gz',
     'ipo_screener.json.gz', 'ipo_provider_listed_archive.json.gz', 'ipo_provider_details_archive.json.gz',
     'scanx_ipo_listed_archive.json.gz', 'scanx_ipo_details_archive.json.gz', 'shareholding_history.json.gz',
-    'quarterly_financial_history.json.gz',
+    'quarterly_financial_history.json.gz', 'rotation_membership_ledger.json.gz',
 )
 
 

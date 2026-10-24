@@ -32,6 +32,15 @@ class ThemeClassificationTests(unittest.TestCase):
         self.assertEqual(record['mappingConfidence'], 'medium')
         self.assertEqual(result['coverage']['unmapped'], [])
 
+    def test_young_cohort_preserves_business_theme_and_expires_after_100_sessions(self):
+        stock = {'symbol': 'UNREVIEWED', 'sector': 'Financial Services', 'industry': 'NBFC',
+                 'metrics': {'historySessions': 100}}
+        young = classify([stock], '2026-10-13')['records']['UNREVIEWED']
+        self.assertEqual(young['theme'], 'NBFC')
+        self.assertEqual(young['memberships'], {'NBFC': 'scanner-industry-bridge', 'IPO / Young Bases': 'curated-rule'})
+        older = classify([{**stock, 'metrics': {'historySessions': 101}}], '2026-10-14')['records']['UNREVIEWED']
+        self.assertEqual(older['memberships'], {'NBFC': 'scanner-industry-bridge'})
+
     def test_reviewed_sector_names_preserve_provider_based_theme_memberships(self):
         source = [{'symbol': 'ABMKNO', 'sector': 'Information Technology', 'industry': 'IT Enabled Services'}]
         baseline = classify(source, '2026-10-13')

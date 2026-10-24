@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parent.parent / 'DO NOT DELETE EDL PIPELINE'
 sys.path.insert(0, str(ROOT))
@@ -54,6 +54,39 @@ class ObjectStore:
 
 
 class ObjectPublicationTests(unittest.TestCase):
+    def test_optional_rotation_upload_failure_and_retry_preserve_release_binding(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); output = root / 'public'; output.mkdir()
+            charts = self.build(root, '2026-10-07'); (charts / 'rotation').mkdir()
+            store = ObjectStore()
+            store.upload_rotation = Mock(side_effect=subprocess.CalledProcessError(1, ['rclone', 'check']))
+            manifest = {'revision': 'a'*64, 'sessionDate': '2026-10-07', 'rotationHistoryObject': 'b'*64}
+            first = complete_release(charts, output, manifest, store)
+            self.assertNotIn('rotationHistoryObject', first)
+            self.assertTrue((output / 'current.json').exists())
+            store.upload_rotation.side_effect = None
+            self.assertEqual(complete_release(charts, output, manifest, store), first)
+            self.assertEqual(store.upload_rotation.call_count, 1)
+
+    def test_local_rotation_copy_failure_does_not_block_scanner(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); output = root / 'public'; output.mkdir()
+            charts = self.build(root, '2026-10-07'); rotation = charts / 'rotation'; rotation.mkdir()
+            (rotation / ('b'*64 + '.json.gz')).write_bytes(b'rotation')
+            copyfile = shutil.copyfile
+
+            def copy(source, target):
+                if Path(source).parent == rotation:
+                    raise OSError('rotation disk error')
+                return copyfile(source, target)
+
+            with patch('chart_publication.shutil.copyfile', side_effect=copy), \
+                    patch.dict(os.environ, {'EDL_CHART_STORAGE': 'local'}):
+                manifest = complete_release(charts, output, {
+                    'revision': 'a'*64, 'sessionDate': '2026-10-07', 'rotationHistoryObject': 'b'*64})
+            self.assertNotIn('rotationHistoryObject', manifest)
+            self.assertTrue((output / 'current.json').exists())
+
     def test_chart_chunks_reuse_history_and_refresh_corrections_and_year_rollover(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder); (root / 'ohlcv_data').mkdir()

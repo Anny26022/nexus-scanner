@@ -9,14 +9,48 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import scanner_bridge as bridge
 from publish_snapshot import publish, delivery_lookback
-from public_payload import public
 from session_history import archive_daily_snapshot, register_session
 from scanner_cache import ScannerCache
+from public_payload import public
 from edl_pipeline.scanner import context, trend
 from edl_pipeline.scanner.calculation_cache import memoized
 
 
 class SnapshotPublicationTests(unittest.TestCase):
+    def test_real_rotation_build_stages_private_state_until_publication(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'edl'; root.mkdir(); output = Path(folder) / 'public'; self.fixture(root)
+            benchmark = [(day.strftime('%Y-%m-%d'), 100.) for day in pd.bdate_range(end='2026-09-30', periods=340)]
+            with patch('publish_snapshot.charts_enabled', return_value=True), \
+                    patch('publish_snapshot.index_closes', return_value=(benchmark, None)):
+                with patch('publish_snapshot.complete_release', side_effect=RuntimeError('publication failed')):
+                    with self.assertRaisesRegex(RuntimeError, 'publication failed'):
+                        publish(root, output)
+                self.assertFalse((root / 'rotation_membership_ledger.json.gz').exists())
+                first = publish(root, output)
+                ledger = root / 'rotation_membership_ledger.json.gz'
+                self.assertTrue(ledger.is_file())
+                self.assertFalse(ledger.with_name(ledger.name + '.tmp').exists())
+                same = publish(root, output)
+            self.assertEqual(first['revision'], same['revision'])
+
+    def test_benchmark_csv_correction_changes_release_identity_and_retries_are_stable(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'edl'; root.mkdir(); output = Path(folder) / 'public'; self.fixture(root)
+            indices = root / 'indices_ohlcv_data'; indices.mkdir()
+            frame = pd.DataFrame({'Date': pd.bdate_range(end='2026-09-30', periods=340), 'Close': 100.})
+            frame.to_csv(indices / 'NIFTY.csv', index=False)
+            frame.to_csv(indices / 'NIFTY_500.csv', index=False)
+            with patch('publish_snapshot.charts_enabled', return_value=True):
+                first = publish(root, output)
+                same = publish(root, output)
+                # A deep benchmark correction changes no root gzip input or stock price.
+                frame.loc[339, 'Close'] = 110.
+                frame.to_csv(indices / 'NIFTY_500.csv', index=False)
+                changed = publish(root, output)
+            self.assertEqual(first['revision'], same['revision'])
+            self.assertNotEqual(first['revision'], changed['revision'])
+
     def test_archived_dates_survive_rollover_and_same_date_reruns(self):
         with tempfile.TemporaryDirectory() as folder, patch.dict('os.environ', {'EDL_CHART_STORAGE': 'local'}):
             output = Path(folder)
@@ -296,14 +330,14 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(row['totalTaxExpensesLakh'],743400)
             self.assertEqual(row['debtToEquity'],0.44)
             self.assertEqual(row['financialUnitsVersion'],1)
-            self.assertNotIn('debtToEquitySource', row)  # Names the upstream feed; never published.
+            self.assertNotIn('debtToEquitySource', row)  # Collection provenance stays private.
             self.assertEqual(row['ttmRevenueGrowthPct'],20)
             self.assertEqual(row['financialHistoryObservedOn'],'2026-09-30')
             self.assertNotIn('financialStatementHistory',row)
             self.assertEqual(json.loads((output/'current.json').read_text())['financialHistoryUrl'],first['financialHistoryUrl'])
             history_file=output/first['financialHistoryUrl'].removeprefix('/data/')
             with gzip.open(history_file,'rt') as handle:
-                self.assertEqual(json.load(handle)['TEST'],public(stocks[0]['financial_statement_history']))
+                self.assertEqual(json.load(handle)['TEST'], public(stocks[0]['financial_statement_history']))
             symbol_file=output/first['financialHistoryUrlTemplate'].replace('{symbol}', 'TEST').removeprefix('/data/')
             with gzip.open(symbol_file,'rt') as handle:
                 self.assertEqual(json.load(handle), public(stocks[0]['financial_statement_history']))

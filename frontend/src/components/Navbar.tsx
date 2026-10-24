@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { Sun, Moon, ArrowUpRight, PanelLeftClose, ScanSearch, Rocket, CandlestickChart, Gauge, Search, CalendarCheck } from 'lucide-react';
+import { Sun, Moon, ArrowUpRight, PanelLeftClose, ScanSearch, Rocket, CandlestickChart, Gauge, Search, CalendarCheck, Orbit } from 'lucide-react';
 
-export type AppTab = 'screener' | 'market' | 'earnings' | 'ipo' | 'charts';
+export type AppTab = 'screener' | 'market' | 'earnings' | 'rotation' | 'ipo' | 'charts';
 
 interface NavbarProps {
   activeTab: AppTab;
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { id: 'ipo', label: 'IPO Catalogue', Icon: Rocket },
   { id: 'charts', label: 'Charts', Icon: CandlestickChart },
   { id: 'earnings', label: 'Earnings', Icon: CalendarCheck },
+  { id: 'rotation', label: 'Rotation', Icon: Orbit },
   { id: 'market', label: 'Market', Icon: Gauge },
 ] as const;
 

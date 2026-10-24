@@ -110,16 +110,21 @@ def _float(value):
         return None
 
 
-def benchmark_series(root, source_bytes, session):
-    """Nifty 50 daily closes up to the session: long CSV history, refreshed by the index snapshot."""
-    closes = _csv_closes(Path(root) / 'indices_ohlcv_data' / f'{BENCHMARK_SYMBOL}.csv')
+def index_closes(root, source_bytes, symbol, session, csv_name=None):
+    """An index's daily closes up to the session: long CSV history, refreshed by the index snapshot."""
+    closes = _csv_closes(Path(root) / 'indices_ohlcv_data' / f'{csv_name or symbol}.csv')
     history = _load(source_bytes, 'all_indices_history_v2.json.gz') or {}
-    index = next((i for i in history.get('indices', []) if isinstance(i, dict) and i.get('symbol') == BENCHMARK_SYMBOL), None)
+    index = next((i for i in history.get('indices', []) if isinstance(i, dict) and i.get('symbol') == symbol), None)
     for record in (index or {}).get('records', []):
         close = _number(record.get('close')) if isinstance(record, dict) else None
         if close is not None and isinstance(record.get('date'), str):
             closes[record['date']] = close
-    records = [[date, closes[date]] for date in sorted(closes) if date <= session]
+    return [[date, closes[date]] for date in sorted(closes) if date <= session], index
+
+
+def benchmark_series(root, source_bytes, session):
+    """Nifty 50 daily closes up to the session."""
+    records, index = index_closes(root, source_bytes, BENCHMARK_SYMBOL, session)
     if len(records) < 2:
         return None
     return {'schemaVersion': BENCHMARK_VERSION, 'symbol': BENCHMARK_SYMBOL, 'name': (index or {}).get('name') or 'Nifty 50',

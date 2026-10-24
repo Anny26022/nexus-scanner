@@ -83,7 +83,7 @@ function EngineSync({run}: {run: () => void}) {
   return null;
 }
 
-function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,sessionDate,symbolControls,viewControls,layoutControls,events,revision,interval,tileId,sync,benchmark,actionsRef}: {benchmark?: ReadonlyMap<string, number>; actionsRef?: { current: ChartSceneActions | null };candles: readonly Candle[]; daily: readonly Candle[]; symbol: string;book:DrawingBook;firstDate:string;lastDate:string;metrics?:ChartMetrics;sessionDate:string;symbolControls:ReactNode;viewControls:ReactNode;layoutControls?:ReactNode;events:readonly ChartEvent[];revision:string;interval:Interval;tileId:string;sync:ChartSync}) {
+function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,sessionDate,symbolControls,viewControls,layoutControls,events,revision,latest,interval,tileId,sync,benchmark,actionsRef}: {benchmark?: ReadonlyMap<string, number>; actionsRef?: { current: ChartSceneActions | null };candles: readonly Candle[]; daily: readonly Candle[]; symbol: string;book:DrawingBook;firstDate:string;lastDate:string;metrics?:ChartMetrics;sessionDate:string;symbolControls:ReactNode;viewControls:ReactNode;layoutControls?:ReactNode;events:readonly ChartEvent[];revision:string;latest:boolean;interval:Interval;tileId:string;sync:ChartSync}) {
   const [saved]=useState(()=>loadScene(tileId));
   const paneChoice=useRef(saved.paneWeights);
   const engine = useRef<ChartEngine | null>(null);
@@ -446,7 +446,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
       <EngineSync key={`bands:${bandChoice.current.map(change => change.date + change.to).join(',')}:${JSON.stringify(studyConfigs.fundamentals?.bandStyles ?? {})}`}
         run={() => engine.current?.setBandChanges?.(bandChoice.current, studyConfigsChoice.current.fundamentals?.bandStyles)} />
       {studyConfigs.fundamentals?.enabled && !allHidden && !hiddenStudies.fundamentals && <FundamentalsIndicator
-        symbol={symbol} revision={revision} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}
+        symbol={symbol} revision={revision} latest={latest && replay.index === null} cutoff={revealedThrough(candles, replay.index, sessionDate)} sessionDate={sessionDate}
         metrics={metrics} config={studyConfigs.fundamentals}
         onMoveBadge={badgeOffset => applyFundamentals({...studyConfigsChoice.current.fundamentals!, badgeOffset})}
         onMove={offset => applyFundamentals({...studyConfigsChoice.current.fundamentals!, offset})}/>}
@@ -596,7 +596,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
   </>;
 }
 
-export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision?:string;sessionDate?:string}) {
+export default function ChartsTab({datasetRevision,sessionDate,latestRevision}:{datasetRevision?:string;sessionDate?:string;latestRevision?:string}) {
   const [grid,setGrid]=useState(()=>loadGrid());
   const gridChoice=useRef(grid);
   const [sync]=useState(()=>Object.assign(new ChartSync(),{enabled:true,dates:grid.links.dates,crosshairs:grid.links.crosshair}));
@@ -689,6 +689,7 @@ export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision
             <ChartTile
               key={`${generation}:${index}:${tile.symbol}:${tile.interval}`}
               datasetRevision={datasetRevision}
+              latestRevision={latestRevision}
               sessionDate={sessionDate}
               tileId={tileId}
               initial={tile}
@@ -800,6 +801,7 @@ export default function ChartsTab({datasetRevision,sessionDate}:{datasetRevision
 }
 
 function ChartTile({
+  latestRevision,
   datasetRevision,
   sessionDate,
   tileId,
@@ -813,6 +815,7 @@ function ChartTile({
   layoutControls,
 }: {
   datasetRevision?: string;
+  latestRevision?: string;
   sessionDate?: string;
   tileId: string;
   initial: TileSettings;
@@ -926,6 +929,6 @@ function ChartTile({
       : chart.isPending ? <p className="chart-status" role="status">Loading chart history…</p>
       : !candles.length ? <p className="chart-status" role="status">No published candles for {symbol}.</p>
       : <ChartScene key={`${datasetRevision}:${sessionDate}:${symbol}:${interval}`} candles={candles} daily={chart.data.candles} symbol={symbol} book={book} symbolControls={symbolControls} viewControls={viewControls} layoutControls={layoutControls}
-          firstDate={chart.data.candles[0].date} lastDate={chart.data.candles.at(-1)!.date} metrics={metadata.data??undefined} sessionDate={chart.data.asOfDate} events={events} revision={datasetRevision!} interval={interval} tileId={tileId} sync={sync} benchmark={benchmark.data ?? undefined} actionsRef={sceneActions}/>}
+          firstDate={chart.data.candles[0].date} lastDate={chart.data.candles.at(-1)!.date} metrics={metadata.data??undefined} sessionDate={chart.data.asOfDate} events={events} revision={datasetRevision!} latest={Boolean(latestRevision && datasetRevision === latestRevision)} interval={interval} tileId={tileId} sync={sync} benchmark={benchmark.data ?? undefined} actionsRef={sceneActions}/>}
   </section>;
 }

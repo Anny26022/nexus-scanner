@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { ArrowDown, ArrowUp, CandlestickChart, ChevronDown, Clock, ExternalLink, FileText, Minus, Search, X } from 'lucide-react';
@@ -9,6 +9,8 @@ import {
 } from '../api/earnings';
 import { DataUnavailableError } from '../api/dataErrors';
 import { screenerApi } from '../api/screenerApi';
+import { useMountEffect } from '../hooks/useMountEffect';
+import { useTableWindow } from '../hooks/useTableWindow';
 import { Button } from './Button';
 import { SymbolWithLogo } from './SymbolWithLogo';
 
@@ -74,6 +76,35 @@ function Row({record, onOpen}: {record: EarningsRecord; onOpen: () => void}) {
     <span className={`ep-num ${tone(record.post_earnings_pct)}`}>{pct(record.post_earnings_pct, 1)}</span>
     <span className="ep-num ep-wide is-muted">{day(record.filing_day)}</span>
   </button>;
+}
+
+/** Scroll updates stay here, leaving season aggregation and filters untouched. */
+export function EarningsResults({records, children, onOpen}: {records: EarningsRecord[]; children?: ReactNode; onOpen: (record: EarningsRecord) => void}) {
+  const window = useTableWindow(records, null, 7, {rowHeight: 56, headerHeight: 30, narrow: true});
+  const list = useRef<HTMLElement>(null);
+  const update = useRef(window.update);
+  update.current = window.update;
+  useMountEffect(() => {
+    const element = list.current!;
+    const viewport = element.closest<HTMLElement>('.ep');
+    if (!viewport) return;
+    const sync = () => {
+      const row = element.querySelector('.ep-row');
+      const pitch = row ? Number.parseFloat(getComputedStyle(row).minHeight) || 56 : 56;
+      update.current(viewport.getBoundingClientRect().top - element.getBoundingClientRect().top, viewport.clientHeight, pitch);
+    };
+    viewport.addEventListener('scroll', sync, {passive: true});
+    const resize = new ResizeObserver(sync);
+    resize.observe(viewport);
+    sync();
+    return () => { viewport.removeEventListener('scroll', sync); resize.disconnect(); };
+  });
+  return <section ref={list} className="ep-list" aria-label="Results">
+      {children}
+      <div aria-hidden="true" style={{height: window.top, flexShrink: 0}} />
+      {window.rows.map(record => <Row key={record.symbol} record={record} onOpen={() => onOpen(record)} />)}
+      <div aria-hidden="true" style={{height: window.bottom, flexShrink: 0}} />
+  </section>;
 }
 
 function Delta({label, value}: {label: string; value?: number | null}) {
@@ -356,13 +387,12 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
               <em>{record.company_name}</em>
               <span>{[record.cap_type && `${record.cap_type} cap`, record.industry ?? record.sector, record.timing && (TIMING[record.timing] ?? record.timing)].filter(Boolean).join(' · ')}</span>
             </button></li>)}</ul>
-          : <section className="ep-list" aria-label="Results">
+          : <EarningsResults key={JSON.stringify([season.periodEnd, activeDay, lens, focus, sort, query, session])} records={sorted} onOpen={setSelected}>
             <div className="ep-cols">
               <span>Company</span>{sortButton('quality', 'Grade')}{sortButton('revenue_yoy', 'Sales', 'ep-num')}{sortButton('pat_yoy', 'Profit', 'ep-num')}
               {sortButton('eps_yoy', 'EPS', 'ep-num ep-wide')}{sortButton('post_earnings_pct', 'Reaction', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
             </div>
-            {sorted.map(record => <Row key={record.symbol} record={record} onOpen={() => setSelected(record)} />)}
-          </section>}
+          </EarningsResults>}
       </main>
     </div>
 

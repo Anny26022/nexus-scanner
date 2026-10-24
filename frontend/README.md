@@ -119,7 +119,7 @@ The initial workspace uses RVOL between 1.5 and 20 and price above SMA 50, unles
 
 Choose 30 days, 90 days, six months, one year, or all published listings. Search by symbol/company and sort the catalogue. Its mapped fields are symbol/company, listing date, current price, daily turnover in ₹Cr, market cap in ₹Cr, delivery percentage, sector, and industry.
 
-Matched IPO Decode rows also show the last complete detail refresh in IST and any failed endpoint names. Missing timestamps display “no complete refresh recorded”; catalogue refresh time is not substituted. The detail lane keeps its 18-issue budget, reserving up to four slots for the full retained listed archive. Each lane prioritizes never-attempted and oldest-attempted eligible issues; unused slots go to either lane. Partial refreshes retain cached endpoints and the last complete timestamp, and remain eligible for retry. Saved errors contain endpoint labels rather than request commands or session headers, including when older caches are restored. The catalogue shows complete, partial or failed provider refresh status separately from issue-detail freshness, and file-load failures have a Retry action.
+Matched IPO rows also show the last complete detail refresh in IST and any failed endpoint names. Missing timestamps display “no complete refresh recorded”; catalogue refresh time is not substituted. The detail lane keeps its 18-issue budget, reserving up to four slots for the full retained listed archive. Each lane prioritizes never-attempted and oldest-attempted eligible issues; unused slots go to either lane. Partial refreshes retain cached endpoints and the last complete timestamp, and remain eligible for retry. Saved errors contain endpoint labels rather than request commands or session headers, including when older caches are restored. The catalogue shows complete, partial or failed provider refresh status separately from issue-detail freshness, and file-load failures have a Retry action.
 
 Listing windows are calendar-based and currently measured from the browser's current date; six months is represented by 183 days and one year by 365. This catalogue window is distinct from the scanner's published trading session. Catalogue pages contain 50 rows; main and IPO screening requests use 15 rows per page.
 
@@ -157,11 +157,11 @@ Descriptions summarize intent; the declarative expression and parameters determi
 - EMA persistence defaults to the engine's extreme-based reset rule, rather than requiring every close to remain above the EMA.
 - Weekly inside bars use ISO-week aggregates of daily OHLCV. Completed-week mode includes Friday-ended bars and excludes a developing Monday–Thursday week. Holiday-shortened weeks ending before Friday remain conservatively excluded without an exchange-calendar completeness marker. Current-week mode includes the latest week and marks the result provisional.
 
-See the [calculation guide](../README.md#calculation-conventions-and-formulas) and [condition engine documentation](../DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/TREND_CONDITION_ENGINE.md) for exact definitions and missing-data rules.
+See the [calculation guide](../README.md#calculation-conventions-and-formulas) and condition engine documentation (private notes) for exact definitions and missing-data rules.
 
 ## How data reaches the application
 
-### ScanX financial history
+### Financial history
 
 The existing fundamental fetch and normalization stages retain consolidated annual,
 quarterly, balance-sheet and cash-flow series aligned by period end. Statement
@@ -195,11 +195,11 @@ PBT), EPS, OPM, EBITDA, operating_profit, expenses, interest, depreciation,
 other_income and tax_expenses. These expressions require the Python scanner
 endpoint; no browser evaluator or filter-builder control is added for them.
 Historical borrowings remain excluded from the query interface, which accepts
-only annual/quarterly income-statement references. When supplied by ScanX,
+only annual/quarterly income-statement references. When supplied upstream,
 `bs_c.TOTAL_BORROWINGS` is retained in the separate balance-sheet history;
 availability varies by company. No dated ROCE series was supplied in the
-inspected response. These are ScanX-derived calculations, not a claim
-of identical StockScans definitions or complete NSE coverage.
+inspected response. These are derived calculations, not a claim
+of identical third-party definitions or complete NSE coverage.
 
 ### 1. Fetch and maintain inputs
 
@@ -314,7 +314,7 @@ Optional arrays can be empty. `historyStartDate` describes actual candle coverag
 
 The current application does not draw these charts. A viewer must add rendering, event markers, selected-symbol handling, and loading/error states. Fetch the requested symbol instead of downloading every chart.
 
-R2 retains daily revisions for 90 days and archives the prior month's latest successful release on rollover. Monthly archives are retained indefinitely. Long publication outages can allow daily objects to expire before archival. See the [R2 publication guide](../docs/r2-chart-publication.md).
+R2 retains daily revisions for 90 days and archives the prior month's latest successful release on rollover. Monthly archives are retained indefinitely. Long publication outages can allow daily objects to expire before archival. See the R2 publication guide (private notes).
 
 ## Caching and preferences
 
@@ -568,7 +568,7 @@ Tests verify contracts against fixtures. They do not establish complete live ups
 - Missing R2 configuration allows scanner-only publication; configured upload failures stop publication.
 - Chart viewers, named saved screens, durable raw-history recovery, and persistent watchlists need further integration.
 
-Read the [repository guide](../README.md), [data limitations](../DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/DATA_LIMITATIONS.md), and [R2 publication guide](../docs/r2-chart-publication.md) for wider operational detail.
+Read the [repository guide](../README.md), data limitations (private notes), and R2 publication guide (private notes) for wider operational detail.
 
 ### Rank-first RS rating
 

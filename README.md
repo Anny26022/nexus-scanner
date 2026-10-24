@@ -30,7 +30,7 @@ Every result is tied to one published trading session and one immutable revision
 | [`DO NOT DELETE EDL PIPELINE/`](DO%20NOT%20DELETE%20EDL%20PIPELINE/) | Python acquisition, history maintenance, calculations, condition engine, artifact validation, and publication. The directory name is preserved because existing workflows use it. |
 | [`.github/workflows/daily_refresh.yml`](.github/workflows/daily_refresh.yml) | Weekday refresh, tests, scanner publication, R2 upload when configured, and generated-data commit. |
 | [`.github/workflows/weekly_eod2_refresh.yml`](.github/workflows/weekly_eod2_refresh.yml) | Weekly adjusted-history overlay followed by the same validated publication flow. |
-| [`docs/r2-chart-publication.md`](docs/r2-chart-publication.md) | R2 object layout, retry behavior, retention, and chart fields. |
+| `docs/r2-chart-publication.md` (private notes) | R2 object layout, retry behavior, retention, and chart fields. |
 | [`frontend/README.md`](frontend/README.md) | Frontend API details and local UI development. |
 
 ## Technical architecture
@@ -78,7 +78,7 @@ Nexus is deliberately split into a data plane and an interaction plane.
 | `edl_pipeline.scanner.patterns` | Implements gaps, inside bars, range contraction, VCP, resistance, and related chart patterns. |
 | `edl_pipeline.scanner.presets` | Stores and validates the versioned 45-preset library. |
 | `edl_pipeline.breadth` | Builds eligible universes, benchmark alignment, breadth measures, and ratings inputs. |
-| `edl_pipeline.sources` | Encapsulates public Dhan, NSE archive, and news-source retrieval. |
+| `edl_pipeline.sources` | Encapsulates exchange archive, market-data and news retrieval. |
 | `edl_pipeline.transforms` | Produces fundamental, event, and market-breadth derived artifacts. |
 
 ## How people use this repository
@@ -245,7 +245,7 @@ The filter catalog is a typed contract. A condition has a name, documented input
 | EPS Last Year Higher | Latest annual EPS compared with the preceding annual EPS. |
 | Days Since Earnings | Trading sessions since the latest reported earnings event. |
 
-Financial amounts labelled in lakhs are converted from ScanX crore values. Statement periods and derived formulas are retained in metadata. D/E remains unavailable without actual borrowings; latest declared DPS is not annual DPS. See [published financial and price fields](docs/published-financial-and-price-fields.md) for source contracts, query examples and history coverage rules.
+Financial amounts labelled in lakhs are converted from crore values. Statement periods and derived formulas are retained in metadata. D/E remains unavailable without actual borrowings; latest declared DPS is not annual DPS. See published financial and price fields (private notes) for source contracts, query examples and history coverage rules.
 
 ### Built-in scans
 
@@ -296,7 +296,7 @@ Weekly bars group daily sessions by ISO year/week: first open, maximum high, min
 - `match OR unavailable` is a match; `no_match OR unavailable` remains unavailable. `no_match AND unavailable` is no match; `match AND unavailable` remains unavailable.
 - Historical classification, capitalisation, financial availability, and membership must satisfy their own date contracts. A future snapshot is not a valid substitute for an absent dated record.
 
-Exact condition inputs, pattern definitions, and availability rules are documented in the [trend engine guide](DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/TREND_CONDITION_ENGINE.md) and implemented under `src/edl_pipeline/scanner/`. These definitions establish local behavior; they do not guarantee identical results to another provider using different data or universe membership.
+Exact condition inputs, pattern definitions, and availability rules are documented in the trend engine guide (private notes) and implemented under `src/edl_pipeline/scanner/`. These definitions establish local behavior; they do not guarantee identical results to another provider using different data or universe membership.
 
 ## What happens at runtime
 
@@ -379,11 +379,11 @@ flowchart TD
 
 ### 1. Source collection
 
-The EDL pipeline collects public NSE archive data, Dhan ScanX/web data, official delivery files, corporate actions, filings, announcements, index data, F&O information, surveillance lists, and market data needed for the selected refresh. Source availability is not assumed: failed required stages stop publication.
+The EDL pipeline collects public NSE archive data, market and company data, official delivery files, corporate actions, filings, announcements, index data, F&O information, surveillance lists, and market data needed for the selected refresh. Source availability is not assumed: failed required stages stop publication.
 
 ### 2. History maintenance
 
-The pipeline maintains local OHLCV, index OHLCV, delivery, scanner-history, and filing-history caches. Weekday refreshes add official recent data. The weekly workflow overlays available EOD2 adjusted history so longer lookbacks can be retained without downloading full history on every weekday run.
+The pipeline maintains local OHLCV, index OHLCV, delivery, scanner-history, and filing-history caches. Weekday refreshes add official recent data. The weekly workflow overlays available adjusted history so longer lookbacks can be retained without downloading full history on every weekday run.
 
 ### 3. Normalization and calculations
 
@@ -480,7 +480,7 @@ R2 retention is:
 
 The 90-day lifecycle age is based on object upload time and deletion is asynchronous. If publication remains down for more than 90 days, an active daily revision can expire before rollover archival. Month-end retention therefore requires successful publication and monitoring; it is not a guarantee during an indefinite outage. Private raw-history backup and automatic restoration are planned, not implemented by chart publication.
 
-See [`docs/r2-chart-publication.md`](docs/r2-chart-publication.md) for the object layout and lifecycle details.
+See `docs/r2-chart-publication.md` (private notes) for the object layout and lifecycle details.
 
 ## Local development
 
@@ -551,7 +551,7 @@ VITE_API_BASE_URL=/api
 | `EDL_FETCH_OHLCV` | True; false selects diagnostic behavior rather than normal public promotion. |
 | `EDL_FETCH_OPTIONAL` | False; enables optional acquisition stages when selected. |
 | `EDL_CLEANUP_INTERMEDIATE` | True; temporary fetch directories are removed after their consumers run. |
-| `EDL_EOD2_DATA_DIR` | Existing EOD2 history checkout used for the adjusted-history overlay. |
+| `EDL_EOD2_DATA_DIR` | Existing long-history checkout used for the adjusted-history overlay. |
 | `EDL_CHART_STORAGE` | `local` by default; `r2` selects remote chart publication. Other values are rejected. |
 | `R2_ACCOUNT_ID` | Required for configured R2 publication; account containing the bucket. |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Required server-side S3-compatible credentials. Never place them in frontend variables or public artifacts. |
@@ -634,7 +634,7 @@ At 16:00 IST, Monday through Friday, the daily workflow restores available cache
 
 ### Weekly adjusted-history workflow
 
-At 09:00 IST each Sunday, the weekly workflow restores its history caches, updates the EOD2 adjusted-history checkout, overlays the long-history inputs, runs the same validation and publication sequence, and commits the result.
+At 09:00 IST each Sunday, the weekly workflow restores its history caches, updates the adjusted-history checkout, overlays the long-history inputs, runs the same validation and publication sequence, and commits the result.
 
 Both workflows use the same concurrency group. A daily release cannot race a weekly release.
 
@@ -675,15 +675,15 @@ Unavailable is a deliberate result. It is used for missing OHLCV history, insuff
 - Data sources can change format or fail; a successful code test does not prove a particular upstream source returned complete live data.
 - R2 charts are absent from scanner-only releases when R2 is not configured.
 
-Read [`DO NOT DELETE EDL PIPELINE/docs/DATA_LIMITATIONS.md`](DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/DATA_LIMITATIONS.md) and [`DO NOT DELETE EDL PIPELINE/docs/PIPELINE_INTEGRITY.md`](DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/PIPELINE_INTEGRITY.md) before operating a live refresh.
+Read `DO NOT DELETE EDL PIPELINE/docs/DATA_LIMITATIONS.md` (private notes) and `DO NOT DELETE EDL PIPELINE/docs/PIPELINE_INTEGRITY.md` (private notes) before operating a live refresh.
 
 ## Further reading
 
 - [Pipeline guide](DO%20NOT%20DELETE%20EDL%20PIPELINE/README.md)
-- [Trend condition engine](DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/TREND_CONDITION_ENGINE.md)
-- [Market breadth methodology](DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/BREADTH_METHODOLOGY.md)
-- [NSE delivery data](DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/NSE_DELIVERY_DATA.md)
-- [R2 chart publication](docs/r2-chart-publication.md)
+- Trend condition engine (private notes)
+- Market breadth methodology (private notes)
+- NSE delivery data (private notes)
+- R2 chart publication (private notes)
 - [Frontend guide](frontend/README.md)
 - [Contribution guide](CONTRIBUTING.md)
 

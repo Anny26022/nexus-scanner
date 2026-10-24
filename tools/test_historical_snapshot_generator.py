@@ -181,7 +181,7 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
             "isFno": None,
             "fnoBan": None,
             "indexMemberships": [],
-            "tradingview": None,
+            "extended": None,
             "pbRatio": None,
             "debtToEquity": None,
             "totalRevenueLakh": None,
@@ -194,7 +194,7 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
         # Verify critical PIT invariants
         self.assertIsNone(item["isFno"])
         self.assertIsNone(item["fnoBan"])
-        self.assertIsNone(item["tradingview"])
+        self.assertIsNone(item["extended"])
         self.assertEqual(item["indexMemberships"], [])
         self.assertIsNone(item["pbRatio"])
         self.assertIsNone(item["debtToEquity"])
@@ -211,7 +211,7 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
             "fnoEligibility": "unavailable",
             "fnoBan": "unavailable",
             "indexMemberships": "unavailable (constituent change history not backfilled)",
-            "tradingview": "unavailable",
+            "extended": "unavailable",
             "surveillance": "Reconstructed from official NSE circulars where complete",
         }
         self.assertEqual(coverage["fnoEligibility"], "unavailable")

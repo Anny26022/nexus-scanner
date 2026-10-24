@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { ArrowDown, ArrowUp, CandlestickChart, ChevronDown, Clock, ExternalLink, FileText, Minus, Search, X } from 'lucide-react';
@@ -9,6 +9,7 @@ import {
 } from '../api/earnings';
 import { DataUnavailableError } from '../api/dataErrors';
 import { screenerApi } from '../api/screenerApi';
+import { useMountEffect } from '../hooks/useMountEffect';
 import { useTableWindow } from '../hooks/useTableWindow';
 import { Button } from './Button';
 import { SymbolWithLogo } from './SymbolWithLogo';
@@ -79,15 +80,31 @@ function Row({record, onOpen}: {record: EarningsRecord; onOpen: () => void}) {
 
 /** Scroll updates stay here, leaving season aggregation and filters untouched. */
 export function EarningsResults({records, children, onOpen}: {records: EarningsRecord[]; children?: ReactNode; onOpen: (record: EarningsRecord) => void}) {
-  const window = useTableWindow(records, null, 7, {rowHeight: 60, headerHeight: 30, narrow: true});
-  return <div className="ep-results-scroll" tabIndex={0} aria-label="Earnings results, scroll for more companies" onScroll={window.onScroll}>
-    <section className="ep-list" aria-label="Results">
+  const window = useTableWindow(records, null, 7, {rowHeight: 56, headerHeight: 30, narrow: true});
+  const list = useRef<HTMLElement>(null);
+  const update = useRef(window.update);
+  update.current = window.update;
+  useMountEffect(() => {
+    const element = list.current!;
+    const viewport = element.closest<HTMLElement>('.ep');
+    if (!viewport) return;
+    const sync = () => {
+      const row = element.querySelector('.ep-row');
+      const pitch = row ? Number.parseFloat(getComputedStyle(row).minHeight) || 56 : 56;
+      update.current(viewport.getBoundingClientRect().top - element.getBoundingClientRect().top, viewport.clientHeight, pitch);
+    };
+    viewport.addEventListener('scroll', sync, {passive: true});
+    const resize = new ResizeObserver(sync);
+    resize.observe(viewport);
+    sync();
+    return () => { viewport.removeEventListener('scroll', sync); resize.disconnect(); };
+  });
+  return <section ref={list} className="ep-list" aria-label="Results">
       {children}
       <div aria-hidden="true" style={{height: window.top, flexShrink: 0}} />
       {window.rows.map(record => <Row key={record.symbol} record={record} onOpen={() => onOpen(record)} />)}
       <div aria-hidden="true" style={{height: window.bottom, flexShrink: 0}} />
-    </section>
-  </div>;
+  </section>;
 }
 
 function Delta({label, value}: {label: string; value?: number | null}) {

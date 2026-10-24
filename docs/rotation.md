@@ -10,6 +10,11 @@ next to the chart objects. The release manifest names the index as `rotationHist
 - **Shards**: `core` (Nifty 500 stocks), `rest` (all other stocks) and `groups` (one composite per group).
   The page loads only the shards a view needs.
 
+Each release's files hold the whole replay window, so earlier releases' rotation files are not needed. After
+a release is uploaded, publication keeps only the new release's files and those of the release live in Git.
+It deletes the rest; their names are tracked in the private `rotation-state/published.json`, so chart objects
+in the same `objects/` prefix are never touched. If the live release's files cannot be read, nothing is deleted.
+
 Each series is one close per period on three calendars: the last 300 sessions, 290 ISO weeks and 144 months.
 Values are delta-coded natural logs at 0.01% resolution.
 

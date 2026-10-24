@@ -373,6 +373,38 @@ class R2Store:
         self.write_release(archived, f'monthly/{month}/{previous["chartRevision"]}/releases/{previous["revision"]}.json')
         return archived
 
+    ROTATION_STATE = 'rotation-state/published.json'
+
+    def prune_rotation(self, objects, current, previous):
+        """Delete rotation history objects that neither this release nor the live one references.
+
+        Rotation files share objects/ with charts, so they are tracked by name in a private list (a prefix
+        the data Worker never serves); only names on that list are ever deleted. `previous` is the hash in
+        the manifest currently live in Git, so a run that uploaded but was never committed cannot cost
+        the live release its files. If the live release's files cannot be read, nothing is deleted.
+        """
+        def names(read, index_hash):
+            index = json.loads(gzip.decompress(read(index_hash)))
+            return {f'{index_hash}.json.gz', *(f'{digest}.json.gz' for digest in index['shards'].values())}
+        keep = names(lambda digest: (objects / f'{digest}.json.gz').read_bytes(), current)
+        if previous and previous != current:
+            keep |= names(lambda digest: self.cache_command('cat', self.remote(f'objects/{digest}.json.gz')), previous)
+        try:
+            published = set(json.loads(self.cache_command('cat', self.remote(self.ROTATION_STATE))))
+        except (subprocess.CalledProcessError, ValueError, TypeError):
+            published = set()  # First run: nothing recorded yet, so nothing to delete.
+        stale = sorted(published - keep)
+        if stale:
+            with tempfile.TemporaryDirectory() as folder:
+                listing = Path(folder) / 'stale.txt'
+                listing.write_text('\n'.join(stale) + '\n')
+                self.run('delete', self.remote('objects'), '--files-from', str(listing), '--no-traverse')
+        with tempfile.TemporaryDirectory() as folder:
+            record = Path(folder) / 'published.json'
+            record.write_text(json.dumps(sorted(keep)))
+            self.cache_command('copyto', str(record), self.remote(self.ROTATION_STATE), '--ignore-times')
+        return stale
+
     def write_release(self, manifest, key):
         with tempfile.TemporaryDirectory() as folder:
             file = Path(folder) / 'release.json'
@@ -481,6 +513,15 @@ def complete_object_release(chart_root, output, manifest, store=None):
             store.write_inventory(files)
         except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
             print(f'WARNING: R2 verification cache not saved: {error}', flush=True)
+        if manifest.get('rotationHistoryObject') and hasattr(store, 'prune_rotation'):
+            # Each rotation release carries its whole history, so only this one and the live one are needed.
+            try:
+                removed = store.prune_rotation(chart_root / 'objects', manifest['rotationHistoryObject'],
+                                               (previous or {}).get('rotationHistoryObject'))
+                if removed:
+                    print(f'Removed {len(removed)} superseded rotation history objects', flush=True)
+            except Exception as error:  # Housekeeping only; never fail a completed release over it.
+                print(f'WARNING: rotation history pruning skipped: {error}', flush=True)
     else:
         destination = output / 'objects'
         destination.mkdir(exist_ok=True, parents=True)

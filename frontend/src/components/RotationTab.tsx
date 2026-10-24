@@ -218,7 +218,8 @@ export default function RotationTab({datasetRevision, onOpenChart}: {datasetRevi
 
   if (index.isPending) return <div className="rot"><p className="rot-state" role="status">Loading rotation…</p></div>;
   if (!data) return <div className="rot"><div className="rot-state" role="alert">
-    <h2>Rotation is not published yet</h2><p>{failed ? String(failed) : 'It appears after the next daily refresh.'}</p></div></div>;
+    <h2>Rotation is not published yet</h2><p>{failed ? String(failed) : 'It appears after the next daily refresh.'}</p>
+    {import.meta.env.DEV && !failed && <p>Locally: run <code>python3 tools/build_rotation_local.py</code> and reload.</p>}</div></div>;
 
   const ready = !failed && !loading && allTracks.length > 0;
   const search = <label className="rot-search"><Search size={13} aria-hidden="true" />

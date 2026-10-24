@@ -56,3 +56,10 @@ Periods follow the chosen calendar, and the first 35 periods are warm-up.
   time. Drag it to move through time.
 - **Tracker:** ranks every item by quadrant and by how far it moved, with a trail sparkline and drill-down.
 - **Default view:** thematic blocks (about 30 groups), which stay readable with every trail drawn.
+
+## Local testing
+
+`python3 tools/build_rotation_local.py` builds the same data from this checkout's cached OHLCV and the current
+release's stock rows. It needs only the standard library and takes about 15 seconds. The output goes to
+`frontend/public/data/rotation/`, which is ignored by Git, and the dev server picks it up through `local.json`.
+Re-run it after the caches change.

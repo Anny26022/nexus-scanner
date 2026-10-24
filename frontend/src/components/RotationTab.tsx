@@ -114,7 +114,7 @@ function Select({
 }) {
   return (
     <label
-      className={`relative inline-flex items-center h-[30px] rounded-lg border border-line bg-surface hover:bg-surface-hover hover:border-line-strong transition focus-within:ring-2 focus-within:ring-accent/20 ${className}`}
+      className={`rot-field relative inline-flex items-center h-[30px] rounded-lg border border-line bg-surface hover:bg-surface-hover hover:border-line-strong transition focus-within:ring-2 focus-within:ring-accent/20 ${className}`}
     >
       <span className="sr-only">{label}</span>
       <select
@@ -646,7 +646,7 @@ export default function RotationTab({
 
             {/* Search & Sort */}
             <div className="flex items-center gap-1.5">
-              <div className="flex h-7 flex-1 items-center gap-1.5 rounded-lg border border-line bg-surface px-2 text-xs transition focus-within:border-accent">
+              <div className="rot-field flex h-7 flex-1 items-center gap-1.5 rounded-lg border border-line bg-surface px-2 text-xs transition focus-within:border-accent">
                 <Search size={12} className="text-muted shrink-0" />
                 <input
                   type="search"

@@ -288,7 +288,7 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None):
             if coded is not None:
                 shards['groups'][frame][key] = coded
         level, label = key.split(':', 1)
-        groups.append({'id': key, 'l': level, 'n': label, 'm': sorted(members.get(key, []))})
+        groups.append({'id': key, 'l': level, 'n': label, 'm': sorted(set(members.get(key, [])))})
 
     index = {
         'schemaVersion': SCHEMA_VERSION, 'asOfDate': session, 'scale': SCALE,

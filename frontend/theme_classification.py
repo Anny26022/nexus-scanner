@@ -145,6 +145,10 @@ def classify(stocks, as_of, source_path=SOURCE_PATH):
         assign(row.get('theme'), row.get('provenance') or 'production-public-asset')
         for name in row.get('curatedThemes') or []:
             assign(name, 'curated-rule')
+        # Young IPO cohort: any stock trading for 100 sessions or fewer
+        history_sessions = (stock.get('metrics') or {}).get('historySessions')
+        if history_sessions is not None and 1 <= history_sessions <= 100:
+            assign('IPO / Young Bases', 'curated-rule')
         # Preserve Tracker priority: canonical, curated, explicit symbols, industries.
         for name, theme in themes.items():
             if not theme.get('mirrorOf') and symbol in theme.get('symbols', []):

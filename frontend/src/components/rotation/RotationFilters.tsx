@@ -35,7 +35,7 @@ function AmountField({
   return (
     <label className="flex flex-col gap-1.5 text-xs">
       <span className="font-medium text-muted">{label}</span>
-      <div className="flex h-8 items-center gap-2 rounded-lg border border-line bg-field px-2.5 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-line">
+      <div className="rot-field flex h-8 items-center gap-2 rounded-lg border border-line bg-field px-2.5 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-line">
         <input
           type="number"
           min={0}

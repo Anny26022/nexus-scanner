@@ -1,16 +1,17 @@
-export type CopyGroup = 'symbols' | 'sector' | 'industry' | 'theme' | 'subIndustry' | 'block' | 'macro';
+export type CopyGroup = 'symbols' | 'sector' | 'industry' | 'theme' | 'subIndustry' | 'block' | 'macro' | 'cohort' | 'aggregate';
 export interface CopyRow { symbol:string; sector?:string; industry?:string }
 export interface ThemeClassification {
   schemaVersion:number;
   version:string;
   asOfDate:string;
-  records:Record<string, {theme:string|null; subIndustry:string|null; block:string|null; macro:string|null}>;
+  records:Record<string, {theme?:string|null; subIndustry?:string|null; block?:string|null; macro?:string|null; [key:string]:string|null|undefined}>;
 }
 export const copyFormats: Array<{value:CopyGroup; label:string}> = [
   {value:'symbols',label:'Symbols'}, {value:'sector',label:'Sector'},
   {value:'industry',label:'Industry'}, {value:'theme',label:'Theme'},
   {value:'subIndustry',label:'Sub-industry'}, {value:'block',label:'Thematic block'},
-  {value:'macro',label:'Macro pillar'},
+  {value:'macro',label:'Macro pillar'}, {value:'cohort',label:'Listing cohort'},
+  {value:'aggregate',label:'Theme aggregate'},
 ];
 export function formatCopyResults(rows:CopyRow[], group:CopyGroup, taxonomy?:ThemeClassification):string {
   const unique = [...new Map(rows.map(row => [row.symbol,row])).values()];

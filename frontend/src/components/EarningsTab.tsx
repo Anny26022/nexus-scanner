@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { ArrowDown, ArrowUp, CandlestickChart, ChevronDown, Clock, ExternalLink, FileText, Minus, Search, X } from 'lucide-react';
@@ -8,6 +8,8 @@ import {
   type Classification, type EarningsRecord, type GroupBy,
 } from '../api/earnings';
 import { DataUnavailableError } from '../api/dataErrors';
+import { decode } from '../api/rotation';
+import { RUN_UP, reaction, story, type Reaction } from '../utils/earningsReaction';
 import { screenerApi } from '../api/screenerApi';
 import { useMountEffect } from '../hooks/useMountEffect';
 import { useTableWindow } from '../hooks/useTableWindow';
@@ -44,7 +46,8 @@ type Lens = 'grade' | GroupBy;
 const LENSES: [Lens, string][] = [['grade', 'Grade'], ...(['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const)
   .map(level => [level, GROUP_LABEL[level]] as [Lens, string])];
 
-type SortKey = 'filing_day' | 'quality' | 'revenue_yoy' | 'pat_yoy' | 'eps_yoy' | 'post_earnings_pct';
+type SortKey = 'filing_day' | 'quality' | 'revenue_yoy' | 'pat_yoy' | 'eps_yoy' | 'run_up' | 'since';
+type ReactionOf = (record: EarningsRecord) => Reaction | null;
 
 function Grade({quality}: {quality?: string | null}) {
   return quality ? <span className="ep-grade" data-grade={quality.toLowerCase()}>{quality}</span> : <span className="is-muted">—</span>;
@@ -64,7 +67,24 @@ function Growth({value, wide = false}: {value?: number | null; wide?: boolean}) 
   </span>;
 }
 
-function Row({record, onOpen}: {record: EarningsRecord; onOpen: () => void}) {
+/** Closes around the result, divided by the close before it: the run-up in grey, the reaction in its colour. */
+function Path({value, height = 22, className = ''}: {value: Reaction; height?: number; className?: string}) {
+  const points = value.path.map((close, i) => [i, close] as const).filter(([, close]) => Number.isFinite(close));
+  if (points.length < 2) return null;
+  const width = 100, lows = Math.min(...points.map(([, close]) => close)), highs = Math.max(...points.map(([, close]) => close));
+  const span = highs - lows || 1, x = (i: number) => (i / Math.max(1, value.path.length - 1)) * width, y = (close: number) => height - 2 - ((close - lows) / span) * (height - 4);
+  const line = (part: readonly (readonly [number, number])[]) => part.map(([i, close]) => `${x(i)},${y(close)}`).join(' ');
+  return <svg className={`ep-path ${className}`} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true"
+    style={{'--before': `${(value.at / Math.max(1, value.path.length - 1)) * 100}%`} as CSSProperties}>
+    <line x1="0" x2={width} y1={y(1)} y2={y(1)} className="ep-path-base" vectorEffect="non-scaling-stroke" />
+    <line x1={x(value.at)} x2={x(value.at)} y1="0" y2={height} className="ep-path-mark" vectorEffect="non-scaling-stroke" />
+    <polyline points={line(points.filter(([i]) => i <= value.at))} className="ep-path-before" vectorEffect="non-scaling-stroke" />
+    <polyline points={line(points.filter(([i]) => i >= value.at))} className={`ep-path-after ${tone(value.since)}`} vectorEffect="non-scaling-stroke" />
+  </svg>;
+}
+
+function Row({record, move, onOpen}: {record: EarningsRecord; move: Reaction | null; onOpen: () => void}) {
+  const since = move?.since;
   return <button type="button" className="ep-row" onClick={onOpen}>
     <span className="ep-company">
       <SymbolWithLogo symbol={record.symbol} />
@@ -74,13 +94,18 @@ function Row({record, onOpen}: {record: EarningsRecord; onOpen: () => void}) {
     <Growth value={record.revenue_yoy} />
     <Growth value={record.pat_yoy} />
     <Growth value={record.eps_yoy} wide />
-    <span className={`ep-num ${tone(record.post_earnings_pct)}`}>{pct(record.post_earnings_pct, 1)}</span>
+    <span className={`ep-num ep-wide ${tone(move?.runUp)}`}>{pct(move?.runUp, 1)}</span>
+    <span className="ep-move" title={move ? story(move) : undefined}>
+      {move && <Path value={move} />}
+      {move && !move.sessions ? <span className="ep-num"><small>Next session</small></span>
+        : <span className="ep-num"><b className={tone(since)}>{pct(since, 1)}</b>{move?.day1 != null && <small>D1 <i className={tone(move.day1)}>{pct(move.day1, 1)}</i></small>}</span>}
+    </span>
     <span className="ep-num ep-wide is-muted">{day(record.filing_day)}</span>
   </button>;
 }
 
 /** Scroll updates stay here, leaving season aggregation and filters untouched. */
-export function EarningsResults({records, children, onOpen}: {records: EarningsRecord[]; children?: ReactNode; onOpen: (record: EarningsRecord) => void}) {
+export function EarningsResults({records, children, onOpen, reactionOf = () => null}: {records: EarningsRecord[]; children?: ReactNode; onOpen: (record: EarningsRecord) => void; reactionOf?: ReactionOf}) {
   const window = useTableWindow(records, null, 7, {rowHeight: 56, headerHeight: 30, narrow: true});
   const list = useRef<HTMLElement>(null);
   const update = useRef(window.update);
@@ -103,7 +128,7 @@ export function EarningsResults({records, children, onOpen}: {records: EarningsR
   return <section ref={list} className="ep-list" aria-label="Results">
       {children}
       <div aria-hidden="true" style={{height: window.top, flexShrink: 0}} />
-      {window.rows.map(record => <Row key={record.symbol} record={record} onOpen={() => onOpen(record)} />)}
+      {window.rows.map(record => <Row key={record.symbol} record={record} move={reactionOf(record)} onOpen={() => onOpen(record)} />)}
       <div aria-hidden="true" style={{height: window.bottom, flexShrink: 0}} />
   </section>;
 }
@@ -112,13 +137,16 @@ function Delta({label, value}: {label: string; value?: number | null}) {
   return <span className="ep-delta"><small>{label}</small><b className={tone(value)}>{pct(value, 1)}</b></span>;
 }
 
-function Sheet({record, history, onClose, onOpenChart}: {
-  record: EarningsRecord; history: EarningsRecord[] | null; onClose: () => void; onOpenChart: () => void;
+function Sheet({record, history, reactionOf, onClose, onOpenChart}: {
+  record: EarningsRecord; history: EarningsRecord[] | null; reactionOf: ReactionOf; onClose: () => void; onOpenChart: () => void;
 }) {
+  const move = reactionOf(record);
+  const past = (history ?? []).filter(row => row.filing_day < record.filing_day).slice(0, 4)
+    .map(row => ({row, move: reactionOf(row)})).filter(entry => entry.move);
   const quarters = [...(history ?? [])].reverse();
   const peak = Math.max(1, ...quarters.map(row => Math.abs(row.pat_yoy ?? 0)));
-  const reactions = ([['Opening gap', record.post_earnings_gap_pct], ['First day', record.post_earnings_first_day_pct], ['Since results', record.post_earnings_pct]] as const)
-    .filter(([, value]) => value != null);
+  const reactions = move ? ([[`${RUN_UP} days before`, move.runUp], ['First day', move.day1],
+    [`Since · ${move.sessions} ${move.sessions === 1 ? 'day' : 'days'}`, move.since]] as const).filter(([, value]) => value != null) : [];
   const guidance = ([['Growth', record.concall_guide_growth_txt, record.concall_guide_growth_dir], ['Margin', record.concall_guide_margin_txt, record.concall_guide_margin_dir],
     ['Capex', record.concall_guide_capex_txt, null]] as const).filter(([, text]) => text);
   return <RadixDialog.Root open onOpenChange={open => { if (!open) onClose(); }}>
@@ -154,8 +182,24 @@ function Sheet({record, history, onClose, onOpenChart}: {
         </section>
 
         {reactions.length > 0 && <section className="ep-sheet-block">
-          <h3>Price reaction</h3>
+          <h3>Around the result</h3>
+          {move && <p className="ep-story">{story(move)}</p>}
+          {move && <Path value={move} height={64} className="ep-path-lg" />}
           <div className="ep-reactions">{reactions.map(([label, value]) => <span key={label}><small>{label}</small><b className={tone(value)}>{pct(value, 1)}</b></span>)}</div>
+        </section>}
+
+        {past.length > 0 && <section className="ep-sheet-block">
+          <h3>How it took earlier results</h3>
+          <div className="ep-past" role="table" aria-label="Earlier reactions">
+            <div role="row" className="ep-past-head"><span role="columnheader">Quarter</span><span role="columnheader">{RUN_UP}d before</span>
+              <span role="columnheader">Day 1</span><span role="columnheader">{RUN_UP}d after</span></div>
+            {past.map(({row, move: then}) => <div role="row" key={row.filing_day}>
+              <span role="cell">{row.period_end ? periodLabel(row.period_end) : row.quarter_label}{row.quality && <i data-grade={row.quality.toLowerCase()} title={row.quality} />}</span>
+              <b role="cell" className={tone(then!.runUp)}>{pct(then!.runUp, 1)}</b>
+              <b role="cell" className={tone(then!.day1)}>{pct(then!.day1, 1)}</b>
+              <b role="cell" className={tone(then!.after)}>{pct(then!.after, 1)}</b>
+            </div>)}
+          </div>
         </section>}
 
         {(record.concall_sentiment || guidance.length > 0) && <section className="ep-sheet-block">
@@ -246,6 +290,36 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
     return map;
   }, [directory.data, themes.data]);
 
+  // Daily closes for every stock: the Rotation page's price history, shared through the same query keys.
+  const prices = useQuery({queryKey: ['rotation-index', datasetRevision], queryFn: () => screenerApi.getRotationIndex(datasetRevision), staleTime: Infinity, retry: 1});
+  const priceShards = useQueries({queries: (['core', 'rest'] as const).map(name => ({
+    queryKey: ['rotation-shard', datasetRevision, name], queryFn: () => screenerApi.getRotationShard(datasetRevision, name),
+    staleTime: Infinity, retry: 1, enabled: Boolean(prices.data),
+  }))});
+  const shardStamp = priceShards.map(shard => shard.dataUpdatedAt).join();
+  const reactionOf = useMemo<ReactionOf>(() => {
+    const index = prices.data, dates = index?.frames.D ?? [];
+    const shards = Object.fromEntries(priceShards.flatMap(shard => shard.data ? [[shard.data.shard, shard.data]] : []));
+    const shardOf = new Map(index?.stocks.map(row => [row.s, row.h]) ?? []);
+    const closes = new Map<string, Float64Array | null>(), moves = new Map<string, Reaction | null>();
+    const closesOf = (symbol: string) => {
+      if (!closes.has(symbol)) {
+        const coded = shards[shardOf.get(symbol) ?? '']?.series.D[symbol];
+        closes.set(symbol, coded && index ? decode(coded, dates.length, index.scale) : null);
+      }
+      return closes.get(symbol)!;
+    };
+    return record => {
+      const key = `${record.symbol}|${record.filing_day}`;
+      if (!moves.has(key)) {
+        const series = closesOf(record.symbol);
+        moves.set(key, series ? reaction(dates, series, record.filing_day, record.timing) : null);
+      }
+      return moves.get(key)!;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prices.data, shardStamp]);
+
   const fileQuery = (ref: {sha256: string; url: string; count: number}, enabled = true) => ({
     queryKey: ['earnings-file', ref.sha256], queryFn: () => getEarningsFile(ref), staleTime: Infinity, retry: 1, enabled,
   });
@@ -288,7 +362,8 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
     });
   const focused = facets.find(facet => facet.label === focus) ?? null;
   const visible = focused ? focused.records : base;
-  const key = (record: EarningsRecord) => sort === 'quality' ? -qualityRank(record.quality) : record[sort];
+  const key = (record: EarningsRecord) => sort === 'quality' ? -qualityRank(record.quality)
+    : sort === 'run_up' ? reactionOf(record)?.runUp : sort === 'since' ? reactionOf(record)?.since : record[sort];
   const sorted = [...visible].sort((a, b) => {
     const left = key(a), right = key(b);
     if (left == null || right == null) return left == null ? (right == null ? 0 : 1) : -1;
@@ -310,6 +385,8 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
     </div></div>;
   }
 
+  const medianRunUp = median(visible.map(row => reactionOf(row)?.runUp));
+  const medianSince = median(visible.map(row => reactionOf(row)?.since));
   const beats = (summary.verdicts.STRONG_BEAT ?? 0) + (summary.verdicts.BEAT ?? 0);
   const misses = (summary.verdicts.MISS ?? 0) + (summary.verdicts.STRONG_MISS ?? 0);
   const scope = [picked && day(picked.date, {weekday: 'long', day: 'numeric', month: 'short'}), focused?.label].filter(Boolean).join(' · ');
@@ -331,7 +408,8 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
         <div><dt>Sales</dt><dd className={tone(summary.medianRevenueYoy)}>{pct(summary.medianRevenueYoy, 1)}</dd></div>
         <div><dt>EPS</dt><dd className={tone(median(visible.map(row => row.eps_yoy)))}>{pct(median(visible.map(row => row.eps_yoy)), 1)}</dd></div>
         <div><dt>Beat · miss</dt><dd><span className="is-up">{beats}</span><span className="is-muted"> · </span><span className="is-down">{misses}</span></dd></div>
-        <div><dt>Price reaction</dt><dd className={tone(summary.medianReaction)}>{pct(summary.medianReaction, 1)}</dd></div>
+        <div><dt>Into results</dt><dd className={tone(medianRunUp)}>{pct(medianRunUp, 1)}</dd></div>
+        <div><dt>Since results</dt><dd className={tone(medianSince)}>{pct(medianSince, 1)}</dd></div>
         {isLatest && <div><dt>Next 7 days</dt><dd>{nextWeek.toLocaleString('en-IN')} <small>to report</small></dd></div>}
       </dl>}
       {days.length > 0 && <Timeline days={days} todayDate={todayDate} active={picked?.date ?? null}
@@ -388,16 +466,16 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
               <em>{record.company_name}</em>
               <span>{[record.cap_type && `${record.cap_type} cap`, record.industry ?? record.sector, record.timing && (TIMING[record.timing] ?? record.timing)].filter(Boolean).join(' · ')}</span>
             </button></li>)}</ul>
-          : <EarningsResults key={JSON.stringify([season.periodEnd, activeDay, lens, focus, sort, query, session])} records={sorted} onOpen={setSelected}>
+          : <EarningsResults key={JSON.stringify([season.periodEnd, activeDay, lens, focus, sort, query, session])} records={sorted} onOpen={setSelected} reactionOf={reactionOf}>
             <div className="ep-cols">
               <span>Company</span>{sortButton('quality', 'Grade')}{sortButton('revenue_yoy', 'Sales', 'ep-num')}{sortButton('pat_yoy', 'Profit', 'ep-num')}
-              {sortButton('eps_yoy', 'EPS', 'ep-num ep-wide')}{sortButton('post_earnings_pct', 'Reaction', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
+              {sortButton('eps_yoy', 'EPS', 'ep-num ep-wide')}{sortButton('run_up', 'Before', 'ep-num ep-wide')}{sortButton('since', 'Since result', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
             </div>
           </EarningsResults>}
       </main>
     </div>
 
-    {selected && <Sheet record={selected} history={history} onClose={() => setSelected(null)}
+    {selected && <Sheet record={selected} history={history} reactionOf={reactionOf} onClose={() => setSelected(null)}
       onOpenChart={() => { const symbol = selected.symbol; setSelected(null); onOpenChart(symbol); }} />}
   </div>;
 }

@@ -11,6 +11,18 @@ const request: ScreenerRunRequest = {asOfDate:snapshot.asOfDate,universe:'mainbo
 
 afterEach(() => vi.unstubAllGlobals());
 describe('published snapshots', () => {
+  it('ranks top gainers within the universe above the turnover floor, and runs library recipes', () => {
+    const make = (symbol: string, return21: number, turnover20: number) => ({...snapshot.stocks[0], symbol, name:symbol, historyAligned:true,
+      asOfDate:snapshot.asOfDate, metadataAsOfDate:snapshot.asOfDate, metrics:{...snapshot.stocks[0].metrics, return21, turnover20}});
+    const data = {...snapshot, stocks:[make('A',40,10), make('B',90,0.5), make('C',25,10), make('D',60,10)]};
+    const run = (tree: ScreenerRunRequest['expressionTree']) => screenSnapshot(data, {...request, expressionTree:tree})!.matchedSymbols.sort();
+    expect(run(condition('TOP_GAINERS',{overDays:'21',top:2,minTurnoverCr:5}))).toEqual(['A','D']);
+    expect(run(condition('TOP_GAINERS',{overDays:'21',top:2,minTurnoverCr:0}))).toEqual(['B','D']);
+    expect(supportsSnapshotCondition({instanceId:'x',conditionId:'TOP_GAINERS',parameters:{overDays:'10',top:2,minTurnoverCr:0}})).toBe(false);
+    expect(supportsSnapshotCondition({instanceId:'x',conditionId:'scan-top-gainers-6m',parameters:{}})).toBe(true);
+    expect(supportsSnapshotCondition({instanceId:'x',conditionId:'scan-near-high-breakout',parameters:{}})).toBe(true);
+  });
+
   it('searches symbols and company names across all matches before pagination', () => {
     const stocks = [
       {...snapshot.stocks[0], symbol:'OTHER', name:'Other Company'},

@@ -9,11 +9,11 @@ import { isAvailableCondition, isAvailableFilter } from '../utils/filterAvailabi
 afterEach(cleanup);
 
 it('keeps published filters and presets available but disables backend-only defaults', () => {
-  expect(NEXUS_CONDITION_CATALOG.filter(def => !def.id.startsWith('ETF_')).filter(isAvailableFilter)).toHaveLength(75);
+  expect(NEXUS_CONDITION_CATALOG.filter(def => !def.id.startsWith('ETF_')).filter(isAvailableFilter)).toHaveLength(76);
   for (const conditionId of ['EARNINGS_GROWTH','fund_earnings_growth','rs_1month','rs_3month']) {
     expect(isAvailableFilter(NEXUS_CONDITION_CATALOG.find(def=>def.id===conditionId)!)).toBe(false);
   }
-  expect(PRESET_CATALOG).toHaveLength(45);
+  expect(PRESET_CATALOG).toHaveLength(52);
   expect(PRESET_CATALOG.every(isAvailableFilter)).toBe(true);
   expect(isAvailableCondition({instanceId:'ma', conditionId:'MA_STACK', parameters:{periods:'50,173,200',maType:'EMA',priceAbove:false}})).toBe(false);
   expect(hasUnavailableConditions({unknown:{instanceId:'unknown',conditionId:'UNKNOWN',parameters:{}}})).toBe(true);
@@ -80,11 +80,12 @@ it('offers a supported SMA period and keeps stale SMA settings editable for reco
 it('keeps pre-built scans enabled in the same dialog', () => {
   const apply = vi.fn();
   render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={apply} />);
-  fireEvent.click(screen.getByRole('button', {name:'Pre-built Scans'}));
-  const presets = screen.getAllByRole('checkbox');
-  expect(presets).toHaveLength(45);
-  for (const preset of presets) expect(preset).toBeEnabled();
-  fireEvent.click(presets[0]);
+  fireEvent.click(screen.getByRole('button', {name:'Scan Library'}));
+  for (const preset of PRESET_CATALOG) expect(screen.getAllByRole('checkbox', {name:preset.label})[0]).toBeEnabled();
+  // Popular scans repeat in their category; either card toggles the same scan.
+  const [popular, listed] = screen.getAllByRole('checkbox', {name:'Top 1M Gainers'});
+  fireEvent.click(popular);
+  expect(listed).toHaveAttribute('aria-checked', 'true');
   fireEvent.click(screen.getByRole('button', {name:'Apply'}));
   expect(Object.values(apply.mock.calls[0][0])).toHaveLength(1);
 });
@@ -110,15 +111,39 @@ it('offers only supported ADR/ATR/gap windows and a clearly named overall RS hor
   expect(apply.mock.calls[0][0].SECTOR.parameters.values).toEqual(['HEALTHCARE']);
 });
 
-it('reveals and hides a preset explanation from its compact info button', () => {
-  render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={vi.fn()} />);
-  fireEvent.click(screen.getByRole('button', {name:'Pre-built Scans'}));
-  expect(screen.queryByText(/Above the 10 EMA for 20 days/)).not.toBeInTheDocument();
-  const info = screen.getByRole('button', {name:'Show Persistent Momentum description'});
-  expect(info).toHaveAttribute('data-tooltip', expect.stringContaining('Above the 10 EMA for 20 days'));
-  fireEvent.click(info);
-  expect(screen.getByText(/Above the 10 EMA for 20 days/)).toBeInTheDocument();
-  expect(info).toHaveAttribute('aria-expanded','true');
-  fireEvent.click(screen.getByRole('button', {name:'Hide Persistent Momentum description'}));
-  expect(screen.queryByText(/Above the 10 EMA for 20 days/)).not.toBeInTheDocument();
+it('describes each scan, searches the library and shows today\'s matches', () => {
+  render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={vi.fn()}
+    choices={{SECTOR:[],INDUSTRY:[],SERIES:[],PRICE_BAND:[],INDEX_MEMBERSHIP:[],SCAN_COUNTS:{'lib-persistent-momentum':312,'lib-vcp':0}}} />);
+  fireEvent.click(screen.getByRole('button', {name:'Scan Library'}));
+  const card = screen.getByRole('checkbox', {name:'Persistent Momentum'});
+  expect(card).toHaveAttribute('title', expect.stringContaining('Above the 10 EMA for 20 days'));
+  expect(within(card).getByText('312 today')).toBeInTheDocument();
+  expect(within(screen.getAllByRole('checkbox', {name:'VCP Contraction'})[0]).getByText('None today')).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', {name:'Search scans'}), {target:{value:'gainers'}});
+  expect(screen.getAllByRole('checkbox').map(item => item.getAttribute('aria-label'))).toEqual(
+    ['Top 1W Gainers','Top 1M Gainers','Top 3M Gainers','Top 6M Gainers','Top 1Y Gainers']);
+});
+
+it('saves a filter and a whole screen to My scans and brings them back', () => {
+  window.localStorage.clear();
+  const apply = vi.fn();
+  render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={apply} />);
+  fireEvent.click(screen.getByRole('checkbox', {name:'Relative Volume (RVOL):'}));
+  fireEvent.click(screen.getByRole('button', {name:'Save Relative Volume (RVOL) filter'}));
+  fireEvent.change(screen.getByRole('textbox', {name:'Scan name'}), {target:{value:'Big volume'}});
+  fireEvent.click(screen.getByRole('button', {name:'Save'}));
+  expect(screen.getByRole('status')).toHaveTextContent('Saved “Big volume” to My scans');
+  fireEvent.click(screen.getByRole('button', {name:'Scan Library'}));
+  fireEvent.click(screen.getAllByRole('checkbox', {name:'Near 52-Week High'})[0]);
+  fireEvent.click(screen.getByRole('button', {name:'Save as scan'}));
+  fireEvent.change(screen.getByRole('textbox', {name:'Scan name'}), {target:{value:'Volume near highs'}});
+  fireEvent.click(screen.getByRole('button', {name:'Save'}));
+  fireEvent.click(screen.getByRole('button', {name:'Reset'}));
+  fireEvent.click(screen.getByRole('button', {name:'Load Volume near highs'}));
+  fireEvent.click(screen.getByRole('button', {name:'Add Big volume'}));
+  fireEvent.click(screen.getByRole('button', {name:'Apply'}));
+  expect(Object.values(apply.mock.calls[0][0]).map(condition => (condition as {conditionId:string}).conditionId).sort())
+    .toEqual(['mom_rvol', 'mom_rvol', 'scan-near-52w-high']);
+  fireEvent.click(screen.getByRole('button', {name:'Delete Big volume'}));
+  expect(screen.queryByRole('button', {name:'Add Big volume'})).not.toBeInTheDocument();
 });

@@ -360,6 +360,58 @@
     ]
   },
   {
+    "id": "TOP_GAINERS",
+    "label": "Top Gainers (rank)",
+    "category": "momentum",
+    "description": "Keeps the biggest percentage gainers over a window, ranked within the selected universe among stocks that clear the turnover floor. Top 50 over 1 month keeps the 50 best one-month returns.",
+    "parameters": [
+      {
+        "id": "overDays",
+        "label": "Window",
+        "type": "select",
+        "defaultValue": "21",
+        "options": [
+          {
+            "value": "5",
+            "label": "1 week"
+          },
+          {
+            "value": "21",
+            "label": "1 month"
+          },
+          {
+            "value": "63",
+            "label": "3 months"
+          },
+          {
+            "value": "126",
+            "label": "6 months"
+          },
+          {
+            "value": "252",
+            "label": "1 year"
+          }
+        ]
+      },
+      {
+        "id": "top",
+        "label": "Keep top",
+        "type": "number",
+        "defaultValue": 50,
+        "min": 1,
+        "max": 500
+      },
+      {
+        "id": "minTurnoverCr",
+        "label": "Min avg turnover",
+        "type": "number",
+        "defaultValue": 5,
+        "min": 0,
+        "unit": "Cr"
+      }
+    ]
+  },
+  {
     "id": "CONSECUTIVE_UP_DAYS",
     "label": "Consecutive Up Days",
     "category": "momentum",

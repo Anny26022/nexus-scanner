@@ -45,7 +45,7 @@ const isPrimitive = (value: unknown) => value === null || typeof value === 'stri
   || (typeof value === 'number' && Number.isFinite(value));
 const isParameterValue = (value: unknown) => isPrimitive(value) || (Array.isArray(value) && value.length <= 50 && value.every(isPrimitive));
 
-function parseCondition(value: unknown): ActiveCondition | null {
+export function parseCondition(value: unknown): ActiveCondition | null {
   if (!isRecord(value) || typeof value.conditionId !== 'string' || !KNOWN_CONDITIONS.has(value.conditionId)
       || typeof value.instanceId !== 'string' || value.instanceId.length > 80 || !isRecord(value.parameters)) return null;
   const entries = Object.entries(value.parameters);

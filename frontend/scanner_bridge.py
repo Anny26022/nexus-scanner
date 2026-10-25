@@ -45,7 +45,21 @@ def band(kind, field, low, high, **params):
                  leaf(kind, comparison="less_or_equal", **{field: high}, **params))
 
 
+# Library scans the page builds from native filters (src/data/scanRecipes.json).
+RECIPES = {recipe["id"]: recipe["expression"] for recipe in json.loads((Path(__file__).parent / "src" / "data" / "scanRecipes.json").read_text())}
+
+
+def recipe_node(node):
+    if node["type"] == "group":
+        return group(node["op"], *(recipe_node(child) for child in node["children"]))
+    return translate(node["kind"], node["params"])
+
+
 def translate(identifier, p):
+    if identifier in RECIPES:
+        return recipe_node(RECIPES[identifier])
+    if identifier == "TOP_GAINERS":
+        return {"type": "top_gainers", "params": dict(p)}
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
         return {"type": "preset", "expression": preset["expression"], "eligibility": p}
@@ -196,6 +210,10 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
     if node["type"] == "not":
         value = evaluate(node["child"],s,frame,context,as_of,diagnostics,delivery)
         return None if value is None else not value
+    if node["type"] == "top_gainers":
+        # A rank across the whole universe; one stock's history cannot answer it.
+        diagnostics.add(("TOP_GAINERS", "cross_sectional_rank_unavailable"))
+        return None
     if node["type"] == "preset":
         baseline = preset_baseline(s, node.get('eligibility')) if s.get("as_of_date") == as_of else None
         if baseline is False:

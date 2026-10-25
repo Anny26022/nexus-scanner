@@ -1,0 +1,260 @@
+[
+  {
+    "id": "scan-top-gainers-1w",
+    "name": "Top 1W Gainers",
+    "category": "Top Gainers",
+    "horizon": "Swing",
+    "description": "The 50 biggest percentage gainers over a week, among stocks trading at least ₹5 Cr a day.",
+    "aka": [
+      "top gainers",
+      "1W gainers",
+      "best performers",
+      "biggest movers"
+    ],
+    "rules": [
+      "Ranked by close-to-close return over 5 sessions; top 50 kept",
+      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "TOP_GAINERS",
+          "params": {
+            "overDays": 5,
+            "top": 50,
+            "minTurnoverCr": 5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-top-gainers-1m",
+    "name": "Top 1M Gainers",
+    "category": "Top Gainers",
+    "horizon": "Swing",
+    "description": "The 50 biggest percentage gainers over a month, among stocks trading at least ₹5 Cr a day.",
+    "aka": [
+      "top gainers",
+      "1M gainers",
+      "best performers",
+      "biggest movers"
+    ],
+    "rules": [
+      "Ranked by close-to-close return over 21 sessions; top 50 kept",
+      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "TOP_GAINERS",
+          "params": {
+            "overDays": 21,
+            "top": 50,
+            "minTurnoverCr": 5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-top-gainers-3m",
+    "name": "Top 3M Gainers",
+    "category": "Top Gainers",
+    "horizon": "Positional",
+    "description": "The 50 biggest percentage gainers over three months, among stocks trading at least ₹5 Cr a day.",
+    "aka": [
+      "top gainers",
+      "3M gainers",
+      "best performers",
+      "biggest movers"
+    ],
+    "rules": [
+      "Ranked by close-to-close return over 63 sessions; top 50 kept",
+      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "TOP_GAINERS",
+          "params": {
+            "overDays": 63,
+            "top": 50,
+            "minTurnoverCr": 5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-top-gainers-6m",
+    "name": "Top 6M Gainers",
+    "category": "Top Gainers",
+    "horizon": "Positional",
+    "description": "The 50 biggest percentage gainers over six months, among stocks trading at least ₹5 Cr a day.",
+    "aka": [
+      "top gainers",
+      "6M gainers",
+      "best performers",
+      "biggest movers"
+    ],
+    "rules": [
+      "Ranked by close-to-close return over 126 sessions; top 50 kept",
+      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "TOP_GAINERS",
+          "params": {
+            "overDays": 126,
+            "top": 50,
+            "minTurnoverCr": 5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-top-gainers-1y",
+    "name": "Top 1Y Gainers",
+    "category": "Top Gainers",
+    "horizon": "Positional",
+    "description": "The 50 biggest percentage gainers over a year, among stocks trading at least ₹5 Cr a day.",
+    "aka": [
+      "top gainers",
+      "1Y gainers",
+      "best performers",
+      "biggest movers"
+    ],
+    "rules": [
+      "Ranked by close-to-close return over 252 sessions; top 50 kept",
+      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "TOP_GAINERS",
+          "params": {
+            "overDays": 252,
+            "top": 50,
+            "minTurnoverCr": 5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-near-52w-high",
+    "name": "Near 52-Week High",
+    "category": "Breakouts",
+    "horizon": "Positional",
+    "description": "Trading within 5% of the 52-week high, with real liquidity.",
+    "aka": [
+      "near high",
+      "52 week high",
+      "close to high"
+    ],
+    "rules": [
+      "Within 5% of the 52-week high",
+      "20-session average turnover ≥ ₹5 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "PCT_FROM_52W_HIGH",
+          "params": {
+            "comparison": "BELOW",
+            "pct": 5
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-near-high-breakout",
+    "name": "Near-High Breakout",
+    "category": "Breakouts",
+    "horizon": "Swing",
+    "description": "Up 3%+ today on above-average volume while within 5% of the yearly high — pushing into new-high territory.",
+    "aka": [
+      "breakout near high",
+      "52 week high breakout",
+      "near high breakout"
+    ],
+    "rules": [
+      "Within 5% of the 52-week high",
+      "Up at least 3% today",
+      "Volume at least 1.5× the 20-day average",
+      "20-session average turnover ≥ ₹5 Cr"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "PCT_FROM_52W_HIGH",
+          "params": {
+            "comparison": "BELOW",
+            "pct": 5
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "PRICE_CHANGE_PCT",
+          "params": {
+            "overDays": 1,
+            "comparison": "ABOVE",
+            "pct": 3
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "VOLUME_VS_AVG",
+          "params": {
+            "avgDays": 20,
+            "multiple": 1.5,
+            "withinDays": 1
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 5
+          }
+        }
+      ]
+    }
+  }
+]

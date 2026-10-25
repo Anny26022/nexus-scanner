@@ -9,7 +9,7 @@ import {
 } from '../api/earnings';
 import { DataUnavailableError } from '../api/dataErrors';
 import { decode } from '../api/rotation';
-import { RUN_UP, reaction, story, type Reaction } from '../utils/earningsReaction';
+import { PATTERNS, RUN_UP, patternsOf, reaction, story, type Pattern, type Reaction } from '../utils/earningsReaction';
 import { screenerApi } from '../api/screenerApi';
 import { useMountEffect } from '../hooks/useMountEffect';
 import { useTableWindow } from '../hooks/useTableWindow';
@@ -53,7 +53,8 @@ type Lens = 'grade' | GroupBy;
 const LENSES: [Lens, string][] = [['grade', 'Grade'], ...(['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const)
   .map(level => [level, GROUP_LABEL[level]] as [Lens, string])];
 
-type SortKey = 'filing_day' | 'quality' | 'revenue_yoy' | 'pat_yoy' | 'eps_yoy' | 'run_up' | 'since';
+type SortKey = 'filing_day' | 'quality' | 'revenue_yoy' | 'pat_yoy' | 'eps_yoy' | 'run_up' | 'day1' | 'since';
+type View = 'results' | 'reactions';
 type ReactionOf = (record: EarningsRecord) => Reaction | null;
 
 function Grade({quality}: {quality?: string | null}) {
@@ -91,8 +92,10 @@ function Path({value, height = 22, className = ''}: {value: Reaction; height?: n
   </svg>;
 }
 
+const Filed = ({record}: {record: EarningsRecord}) => <span className="ep-num ep-wide ep-filed">
+  {day(record.filing_day, {weekday: 'short', day: 'numeric', month: 'short'})}{filedAt(record) && <small>{filedAt(record)}</small>}</span>;
+
 function Row({record, move, onOpen}: {record: EarningsRecord; move: Reaction | null; onOpen: () => void}) {
-  const since = move?.since;
   return <button type="button" className="ep-row" onClick={onOpen}>
     <span className="ep-company">
       <SymbolWithLogo symbol={record.symbol} />
@@ -102,18 +105,30 @@ function Row({record, move, onOpen}: {record: EarningsRecord; move: Reaction | n
     <Growth value={record.revenue_yoy} amount={record.revenue} />
     <Growth value={record.pat_yoy} amount={record.net_income} />
     <Growth value={record.eps_yoy} wide />
-    <span className={`ep-num ep-wide ${tone(move?.runUp)}`}>{pct(move?.runUp, 1)}</span>
-    <span className="ep-move" title={move ? story(move) : undefined}>
-      {move && <Path value={move} />}
-      {move && !move.sessions ? <span className="ep-num"><small>Next session</small></span>
-        : <span className="ep-num"><b className={tone(since)}>{pct(since, 1)}</b>{move?.day1 != null && <small>D1 <i className={tone(move.day1)}>{pct(move.day1, 1)}</i></small>}</span>}
+    <span className={`ep-num ${tone(move?.since)}`}>{move && !move.sessions ? <small className="is-muted">Next session</small> : pct(move?.since, 1)}</span>
+    <Filed record={record} />
+  </button>;
+}
+
+/** The price story: the company with its one-line reading, the path, and the three moves that make it. */
+function ReactionRow({record, move, onOpen}: {record: EarningsRecord; move: Reaction | null; onOpen: () => void}) {
+  const waiting = move != null && !move.sessions;
+  return <button type="button" className="ep-row ep-rrow" onClick={onOpen}>
+    <span className="ep-rstory">
+      <span className="ep-company"><SymbolWithLogo symbol={record.symbol} /><Grade quality={record.quality} /></span>
+      <span className="ep-rline">{move ? story(move) : 'Not in the price history'}</span>
     </span>
-    <span className="ep-num ep-wide ep-filed">{day(record.filing_day, {weekday: 'short', day: 'numeric', month: 'short'})}{filedAt(record) && <small>{filedAt(record)}</small>}</span>
+    <span className="ep-rpath">{move && <Path value={move} height={30} />}</span>
+    <span className={`ep-num ep-wide ${tone(move?.runUp)}`}>{pct(move?.runUp, 1)}</span>
+    <span className={`ep-num ${tone(move?.day1)}`}>{waiting ? '' : pct(move?.day1, 1)}</span>
+    <span className={`ep-num ep-rsince ${tone(move?.since)}`}>{waiting ? <small className="is-muted">Next session</small> : pct(move?.since, 1)}</span>
+    <Filed record={record} />
   </button>;
 }
 
 /** Scroll updates stay here, leaving season aggregation and filters untouched. */
-export function EarningsResults({records, children, onOpen, reactionOf = () => null}: {records: EarningsRecord[]; children?: ReactNode; onOpen: (record: EarningsRecord) => void; reactionOf?: ReactionOf}) {
+export function EarningsResults({records, children, onOpen, reactionOf = () => null, view = 'results'}: {records: EarningsRecord[]; children?: ReactNode; onOpen: (record: EarningsRecord) => void; reactionOf?: ReactionOf; view?: View}) {
+  const Item = view === 'reactions' ? ReactionRow : Row;
   const window = useTableWindow(records, null, 7, {rowHeight: 56, headerHeight: 30, narrow: true});
   const list = useRef<HTMLElement>(null);
   const update = useRef(window.update);
@@ -136,7 +151,7 @@ export function EarningsResults({records, children, onOpen, reactionOf = () => n
   return <section ref={list} className="ep-list" aria-label="Results">
       {children}
       <div aria-hidden="true" style={{height: window.top, flexShrink: 0}} />
-      {window.rows.map(record => <Row key={record.symbol} record={record} move={reactionOf(record)} onOpen={() => onOpen(record)} />)}
+      {window.rows.map(record => <Item key={record.symbol} record={record} move={reactionOf(record)} onOpen={() => onOpen(record)} />)}
       <div aria-hidden="true" style={{height: window.bottom, flexShrink: 0}} />
   </section>;
 }
@@ -283,6 +298,8 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
   const [focus, setFocus] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>('filing_day');
   const [selected, setSelected] = useState<EarningsRecord | null>(null);
+  const [view, setView] = useState<View>('results');
+  const [pattern, setPattern] = useState<Pattern | null>(null);
   const [activeDay, setActiveDay] = useState<string | null>(null);
   const todayDate = today();
 
@@ -369,9 +386,18 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
       return {label: grade, grade, records: rows, medianPatYoy: summarize(rows).medianPatYoy};
     });
   const focused = facets.find(facet => facet.label === focus) ?? null;
-  const visible = focused ? focused.records : base;
+  const inFacet = focused ? focused.records : base;
+  const patternCounts = new Map<Pattern, number>();
+  if (view === 'reactions') for (const record of inFacet) {
+    const move = reactionOf(record);
+    for (const found of move ? patternsOf(move) : []) patternCounts.set(found, (patternCounts.get(found) ?? 0) + 1);
+  }
+  const visible = view === 'reactions' && pattern ? inFacet.filter(record => {
+    const move = reactionOf(record);
+    return move != null && patternsOf(move).includes(pattern);
+  }) : inFacet;
   const key = (record: EarningsRecord) => sort === 'quality' ? -qualityRank(record.quality)
-    : sort === 'run_up' ? reactionOf(record)?.runUp : sort === 'since' ? reactionOf(record)?.since : record[sort];
+    : sort === 'run_up' ? reactionOf(record)?.runUp : sort === 'day1' ? reactionOf(record)?.day1 : sort === 'since' ? reactionOf(record)?.since : record[sort];
   const sorted = [...visible].sort((a, b) => {
     const left = key(a), right = key(b);
     if (left == null || right == null) return left == null ? (right == null ? 0 : 1) : -1;
@@ -452,6 +478,10 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
 
       <main className="ep-main">
         <div className="ep-bar">
+          {!scheduleMode && <div className="ep-views" role="tablist" aria-label="View">
+            {([['results', 'Results'], ['reactions', 'Reactions']] as const).map(([value, label]) => <button key={value} type="button" role="tab"
+              aria-selected={view === value} onClick={() => { setView(value); setPattern(null); setSort(value === 'reactions' ? 'since' : 'filing_day'); }}>{label}</button>)}
+          </div>}
           <label className="ep-search"><Search size={13} aria-hidden="true" />
             <input type="search" placeholder="Find a company" aria-label="Search company" value={query} onChange={event => { setQuery(event.target.value); }} />
           </label>
@@ -474,11 +504,22 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
               <em>{record.company_name}</em>
               <span>{[record.cap_type && `${record.cap_type} cap`, record.industry ?? record.sector, record.timing && (TIMING[record.timing] ?? record.timing)].filter(Boolean).join(' · ')}</span>
             </button></li>)}</ul>
-          : <EarningsResults key={JSON.stringify([season.periodEnd, activeDay, lens, focus, sort, query, session])} records={sorted} onOpen={setSelected} reactionOf={reactionOf}>
-            <div className="ep-cols">
+          : <EarningsResults key={JSON.stringify([season.periodEnd, activeDay, lens, focus, sort, query, session, view, pattern])} records={sorted} onOpen={setSelected}
+            reactionOf={reactionOf} view={view}>
+            {view === 'reactions' ? <>
+              <div className="ep-patterns" role="group" aria-label="Reaction pattern">
+                <button type="button" aria-pressed={pattern === null} onClick={() => setPattern(null)}>All <span>{inFacet.length}</span></button>
+                {PATTERNS.map(([value, label, hint]) => <button key={value} type="button" aria-pressed={pattern === value} title={hint} data-pattern={value}
+                  disabled={!patternCounts.get(value)} onClick={() => setPattern(pattern === value ? null : value)}>{label} <span>{patternCounts.get(value) ?? 0}</span></button>)}
+              </div>
+              <div className="ep-cols ep-rcols">
+                <span>Company</span><span className="ep-rpath-head">{RUN_UP} days before · after</span>
+                {sortButton('run_up', 'Before', 'ep-num ep-wide')}{sortButton('day1', 'Day 1', 'ep-num')}{sortButton('since', 'Since', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
+              </div>
+            </> : <div className="ep-cols">
               <span>Company</span>{sortButton('quality', 'Grade')}{sortButton('revenue_yoy', 'Sales', 'ep-num')}{sortButton('pat_yoy', 'Profit', 'ep-num')}
-              {sortButton('eps_yoy', 'EPS', 'ep-num ep-wide')}{sortButton('run_up', 'Before', 'ep-num ep-wide')}{sortButton('since', 'Since result', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
-            </div>
+              {sortButton('eps_yoy', 'EPS', 'ep-num ep-wide')}{sortButton('since', 'Since result', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
+            </div>}
           </EarningsResults>}
       </main>
     </div>

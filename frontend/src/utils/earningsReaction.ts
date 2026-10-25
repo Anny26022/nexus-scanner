@@ -69,3 +69,25 @@ export function story(value: Reaction): string {
 }
 
 const signed = (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+
+export type Pattern = 'rallied' | 'soldOff' | 'soldNews' | 'keptGoing' | 'faded' | 'awaiting';
+export const PATTERNS: [Pattern, string, string][] = [
+  ['rallied', 'Rallied', `First day up ${MOVE}% or more`],
+  ['soldOff', 'Sold off', `First day down ${MOVE}% or more`],
+  ['soldNews', 'Sold the news', `Up ${RUN}% or more into results, then down ${MOVE}% or more on the day`],
+  ['keptGoing', 'Kept going', `Gained ${RUN} points or more after the first day`],
+  ['faded', 'Faded', `Lost ${RUN} points or more after the first day`],
+  ['awaiting', 'Awaiting', 'No session has traded on the result yet'],
+];
+
+/** The patterns a reaction shows; one reaction can show several (a rally that then faded). */
+export function patternsOf(value: Reaction): Pattern[] {
+  if (!value.sessions) return ['awaiting'];
+  const found: Pattern[] = [], day1 = value.day1 ?? 0, drift = value.since != null && value.day1 != null && value.sessions >= 3 ? value.since - value.day1 : 0;
+  if (day1 >= MOVE) found.push('rallied');
+  if (day1 <= -MOVE) found.push('soldOff');
+  if ((value.runUp ?? 0) >= RUN && day1 <= -MOVE) found.push('soldNews');
+  if (drift >= RUN) found.push('keptGoing');
+  if (drift <= -RUN) found.push('faded');
+  return found;
+}

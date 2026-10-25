@@ -6,8 +6,8 @@ import { DataUnavailableError } from '../api/dataErrors';
 import { marketRegime } from '../utils/marketOverview';
 import {
   AVERAGES, GROUPINGS, PERIODS, STAGES, STAGE_HINT, STAGE_LABEL,
-  breakdown, participation, stageCounts, themeMoves,
-  type Grouping, type Period, type PulseRow,
+  breakdown, participation, stageCounts, themeFlows,
+  type Grouping, type Period, type PulseRow, type ThemeFlow, POCKET_LEVEL,
 } from '../utils/marketPulse';
 import type { BreadthSession, IndexCard } from '../types/market';
 import { Button } from './Button';
@@ -222,31 +222,44 @@ function Extremes({rows, taxonomy, onOpenChart, onScreenSector}: {
   </Panel>;
 }
 
-/** Each theme's median move, tinted by strength; the share of members up sits underneath. */
-function Themes({rows, taxonomy}: {rows: PulseRow[]; taxonomy?: Parameters<typeof themeMoves>[2]}) {
-  const [period, setPeriod] = useState<Period>('d1');
+const crore = (value: number) => `₹${value >= 1000 ? `${(value / 1000).toFixed(1)}k` : Math.round(value).toLocaleString('en-IN')} Cr`;
+
+/** Where money moved: themes ranked by their value-weighted move, each naming the stocks that drove it. */
+function Themes({rows, taxonomy}: {rows: PulseRow[]; taxonomy?: Parameters<typeof themeFlows>[2]}) {
+  const [period, setPeriod] = useState<Period>('m1');
   const [side, setSide] = useState<'lead' | 'lag'>('lead');
-  const moves = useMemo(() => themeMoves(rows, period, taxonomy), [rows, period, taxonomy]);
-  const shown = (side === 'lead' ? moves : [...moves].reverse()).slice(0, 12);
-  const peak = Math.max(1e-9, ...moves.map(move => Math.abs(move.median)));
+  const flows = useMemo(() => themeFlows(rows, period, taxonomy, side === 'lead' ? 1 : -1), [rows, period, taxonomy, side]);
+  const shown = flows.filter(flow => !flow.cohort).slice(0, 16);
+  const cohorts = flows.filter(flow => flow.cohort);
+  const peak = Math.max(1e-9, ...shown.map(flow => Math.abs(flow.flow)));
+  const tile = (flow: ThemeFlow) => {
+    const tone = flow.flow >= 0 ? 'up' : 'down', strength = Math.min(1, Math.abs(flow.flow) / peak);
+    return <li key={flow.name} data-tone={tone} className="mkt-theme flex min-w-0 flex-col gap-1.5 px-4 py-3 max-sm:px-3"
+      style={{'--strength': `${10 + strength * 45}%`} as CSSProperties}
+      title={`${flow.name}: value-weighted move of ${flow.members} stocks trading ${crore(flow.traded)} a day`}>
+      <span className="flex items-start justify-between gap-3">
+        <span className="min-w-0 line-clamp-2 text-[14px] font-semibold leading-[1.25] text-text max-sm:text-[13px]">
+          {flow.name}
+        </span>
+        <span className="shrink-0 text-[14px] font-semibold tabular-nums max-sm:text-[13px]" style={{color: 'var(--tone)'}}>{signed(flow.flow, 1)}</span>
+      </span>
+      <span className="truncate text-[11.5px] tabular-nums text-muted">
+        {flow.leaders.map(leader => `${leader.symbol} ${leader.move > 0 ? '+' : ''}${leader.move.toFixed(0)}%`).join(' · ')}
+      </span>
+      <span className="text-[11px] tabular-nums text-muted"><b className="font-semibold text-secondary">{flow.cohort ? 'Cohort' : POCKET_LEVEL[flow.level]}</b> · {crore(flow.traded)}/day · {flow.movers} of {flow.members} {side === 'lead' ? 'up' : 'down'} {period === 'd1' ? '2' : '5'}%+</span>
+    </li>;
+  };
   return <Panel title="Theme Tracker" bare aside={<div className="flex items-center gap-2">
     <Segmented label="Period" value={period} options={PERIODS} onChange={setPeriod} />
     <button type="button" className="mkt-icon" aria-pressed={side === 'lag'} onClick={() => setSide(side === 'lead' ? 'lag' : 'lead')}
-      title={side === 'lead' ? 'Showing leaders. Show laggards' : 'Showing laggards. Show leaders'} aria-label="Show laggards">
+      title={side === 'lead' ? 'Showing where money went in. Show where it left' : 'Showing where money left. Show where it went in'} aria-label="Show laggards">
       <SlidersHorizontal size={15} aria-hidden="true" />
     </button>
   </div>}>
-    {side === 'lag' && <p className="m-0 -mt-1 text-[12px] text-muted">Weakest themes first</p>}
+    <p className="m-0 -mt-1 text-[12px] text-muted">{side === 'lead' ? 'Where money moved in' : 'Where money moved out'}: themes, industries and niches ranked by their move weighted by value traded, with the stocks that drove it.</p>
     {taxonomy ? <ul className="m-0 grid list-none grid-cols-4 gap-2.5 p-0 max-xl:grid-cols-3 max-lg:grid-cols-2">
-      {shown.map(move => {
-        const tone = move.median >= 0 ? 'up' : 'down', strength = Math.min(1, Math.abs(move.median) / peak);
-        return <li key={move.name} data-tone={tone} title={`${move.name}: median of ${move.members} stocks, ${share(move.advancing)} of them up`}
-          className="mkt-theme flex min-h-[58px] min-w-0 items-center justify-between gap-3 px-4 py-3 max-sm:gap-2 max-sm:px-3"
-          style={{'--strength': `${10 + strength * 45}%`} as CSSProperties}>
-          <span className="min-w-0 line-clamp-2 text-[14px] font-semibold leading-[1.25] text-text max-sm:text-[13px]">{move.name}</span>
-          <span className="shrink-0 text-[14px] font-semibold tabular-nums max-sm:text-[13px]" style={{color: 'var(--tone)'}}>{signed(move.median)}</span>
-        </li>;
-      })}
+      {shown.map(tile)}
+      {cohorts.map(tile)}
     </ul> : <p className="m-0 text-[12.5px] text-muted">Themes are unavailable in this release.</p>}
   </Panel>;
 }

@@ -25,6 +25,8 @@ export interface PulseRow {
   stage: Stage | null;
   /** Whether the close is above each simple moving average; null without one. */
   above: Record<Average, boolean | null>;
+  /** Average daily value traded (₹ crore) over the window matching each period. */
+  traded: Record<Period, number | null>;
 }
 
 export type Average = 10 | 20 | 50 | 200;
@@ -42,14 +44,32 @@ export function stageOf(close: unknown, sma50: unknown, sma150: unknown): Stage 
 
 export interface PulseSource {
   symbol: string; name: string; sector: string; industry: string; close: number; changePct: number;
+  rupeeVolumeCrore?: number | null;
   metrics?: Record<string, number | null>;
+}
+
+const SESSIONS: Record<Period, number> = {d1: 1, w1: 5, m1: 21, m3: 63, y1: 252};
+
+/** Average daily value traded over the window, or the longest shorter window a recent listing has. */
+const turnover = (m: Record<string, number | null>, window: 20 | 50 | 100) =>
+  [100, 50, 30, 20].filter(days => days <= window).map(days => finite(m[`turnover${days}`])).find(value => value != null) ?? null;
+
+/** The period's return; a stock listed more recently than the period uses its longest available return instead. */
+function periodReturn(m: Record<string, number | null>, period: Exclude<Period, 'd1'>): number | null {
+  const own = finite(m[`return${SESSIONS[period]}`]);
+  if (own != null) return own;
+  const sessions = finite(m.historySessions);
+  if (sessions == null || sessions >= SESSIONS[period]) return null;
+  for (const window of [63, 21, 5]) if (window < SESSIONS[period] && window <= sessions && finite(m[`return${window}`]) != null) return finite(m[`return${window}`]);
+  return null;
 }
 
 export function pulseRow(stock: PulseSource): PulseRow {
   const m = stock.metrics ?? {};
   return {
     symbol: stock.symbol, name: stock.name, sector: stock.sector || 'Unclassified', industry: stock.industry || 'Unclassified',
-    returns: {d1: finite(stock.changePct), w1: finite(m.return5), m1: finite(m.return21), m3: finite(m.return63), y1: finite(m.return252)},
+    returns: {d1: finite(stock.changePct), w1: periodReturn(m, 'w1'), m1: periodReturn(m, 'm1'), m3: periodReturn(m, 'm3'), y1: periodReturn(m, 'y1')},
+    traded: {d1: finite(stock.rupeeVolumeCrore), w1: turnover(m, 20), m1: turnover(m, 20), m3: turnover(m, 50), y1: turnover(m, 100)},
     newHigh: m.NEW_HIGH === 1, newLow: m.NEW_LOW === 1,
     stage: stageOf(stock.close, m.sma50, m.sma150),
     above: Object.fromEntries(AVERAGES.map(period => {
@@ -87,29 +107,74 @@ export function breakdown(rows: PulseRow[], grouping: Grouping, taxonomy?: Theme
   })).sort((a, b) => b.count - a.count || (a.name === 'Unclassified' ? 1 : b.name === 'Unclassified' ? -1 : a.name.localeCompare(b.name)));
 }
 
-export interface ThemeMove { name: string; median: number; advancing: number; members: number }
+export type PocketLevel = 'theme' | 'industry' | 'subIndustry';
+export const POCKET_LEVEL: Record<PocketLevel, string> = {theme: 'Theme', industry: 'Industry', subIndustry: 'Niche'};
 
-const median = (values: number[]) => {
-  const sorted = [...values].sort((a, b) => a - b), mid = sorted.length >> 1;
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-};
+export interface ThemeFlow {
+  name: string;
+  level: PocketLevel;
+  /** Move weighted by value traded: where the money actually went, not the typical member. */
+  flow: number;
+  /** Combined average daily value traded, ₹ crore. */
+  traded: number;
+  members: number;
+  /** Members up 5% or more over the period (2% for one day). */
+  movers: number;
+  leaders: {symbol: string; move: number}[];
+  cohort: boolean;
+}
 
-/** Each theme's median return over the period, strongest first; themes need three priced members. */
-export function themeMoves(rows: PulseRow[], period: Period, taxonomy?: ThemeClassification, minimum = 3): ThemeMove[] {
-  const themes = new Map<string, number[]>();
+export const COHORTS = new Set(['IPO / Young Bases']);
+/** A pocket needs a few traded names, real money, and more than one stock carrying it. */
+const MIN_MEMBERS = 4, MIN_TRADED_CR = 50, MAX_SINGLE_SHARE = 0.85;
+/** A pocket that mostly repeats one already listed (by value traded) is left out. */
+const MAX_OVERLAP = 0.6;
+// Corporate actions and thin listings can print absurd returns; they must not steer a pocket.
+const clip = (value: number) => Math.max(-90, Math.min(300, value));
+
+function labelsAt(row: PulseRow, level: PocketLevel, taxonomy?: ThemeClassification): string[] {
+  if (level === 'theme') return groupsOf(row, 'theme', taxonomy).filter(name => name !== 'Unclassified');
+  const label = level === 'industry' ? row.industry : taxonomy?.records[row.symbol]?.subIndustry;
+  return label && label !== 'Unclassified' && !/^(miscellaneous|others?|trading|diversified)$/i.test(label) ? [label] : [];
+}
+
+/**
+ * Money pockets: themes, industries and niches ranked together by their value-weighted move, each naming
+ * the stocks that drove it. A pocket that mostly repeats a higher-ranked one is dropped; cohorts are kept apart.
+ */
+export function themeFlows(rows: PulseRow[], period: Period, taxonomy?: ThemeClassification, direction: 1 | -1 = 1): ThemeFlow[] {
+  type Member = {symbol: string; move: number; weight: number; traded: number};
+  const groups = new Map<string, {name: string; level: PocketLevel; members: Member[]}>();
   for (const row of rows) {
-    const value = row.returns[period];
-    if (value == null) continue;
-    for (const name of groupsOf(row, 'theme', taxonomy)) {
-      if (name === 'Unclassified') continue;
-      const values = themes.get(name) ?? [];
-      values.push(value);
-      themes.set(name, values);
+    const move = row.returns[period], traded = row.traded[period];
+    if (move == null || traded == null || traded <= 0) continue;
+    for (const level of ['theme', 'industry', 'subIndustry'] as const) for (const name of labelsAt(row, level, taxonomy)) {
+      const key = `${level}:${name}`;
+      const group = groups.get(key) ?? groups.set(key, {name, level, members: []}).get(key)!;
+      group.members.push({symbol: row.symbol, move, weight: clip(move), traded});
     }
   }
-  return [...themes].filter(([, values]) => values.length >= minimum)
-    .map(([name, values]) => ({name, median: median(values), advancing: values.filter(value => value > 0).length / values.length, members: values.length}))
-    .sort((a, b) => b.median - a.median || a.name.localeCompare(b.name));
+  const threshold = period === 'd1' ? 2 : 5;
+  const pockets = [...groups.values()].flatMap(({name, level, members}) => {
+    const traded = members.reduce((sum, member) => sum + member.traded, 0);
+    const cohort = level === 'theme' && COHORTS.has(name);
+    if (!cohort && (members.length < MIN_MEMBERS || traded < MIN_TRADED_CR
+        || Math.max(...members.map(member => member.traded)) / traded > MAX_SINGLE_SHARE)) return [];
+    const flow = members.reduce((sum, member) => sum + member.weight * member.traded, 0) / traded;
+    return [{name, level, flow, traded, members, cohort}];
+  }).sort((a, b) => direction * (b.flow - a.flow) || a.name.localeCompare(b.name));
+  const taken = new Map<string, number>();
+  const result: ThemeFlow[] = [];
+  for (const pocket of pockets) {
+    const repeated = pocket.members.reduce((sum, member) => sum + (taken.has(member.symbol) ? member.traded : 0), 0) / pocket.traded;
+    if (!pocket.cohort && repeated >= MAX_OVERLAP) continue;
+    if (!pocket.cohort) for (const member of pocket.members) taken.set(member.symbol, member.traded);
+    const leaders = [...pocket.members].sort((a, b) => direction * (b.weight * b.traded - a.weight * a.traded)).slice(0, 3)
+      .map(({symbol, move}) => ({symbol, move}));
+    result.push({name: pocket.name, level: pocket.level, flow: pocket.flow, traded: pocket.traded, members: pocket.members.length,
+      movers: pocket.members.filter(member => direction > 0 ? member.move >= threshold : member.move <= -threshold).length, leaders, cohort: pocket.cohort});
+  }
+  return result;
 }
 
 export function stageCounts(rows: PulseRow[]): Record<Stage, number> {

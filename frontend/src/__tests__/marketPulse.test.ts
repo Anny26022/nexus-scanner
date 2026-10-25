@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { breakdown, groupsOf, participation, pulseRow, stageCounts, stageOf, themeMoves, type PulseSource } from '../utils/marketPulse';
+import { breakdown, groupsOf, participation, pulseRow, stageCounts, stageOf, themeFlows, type PulseSource } from '../utils/marketPulse';
 import type { ThemeClassification } from '../utils/copyResults';
 
 const stock = (symbol: string, sector: string, extra: Partial<PulseSource> & {m?: Record<string, number | null>} = {}): PulseSource => ({
@@ -41,6 +41,17 @@ describe('market pulse', () => {
     expect(groupsOf(pulseRow(stock('A', 'Health')), 'theme', taxonomy)).toEqual(['Pharma', 'Weight loss']);
     expect(groupsOf(pulseRow(stock('Z', 'Health')), 'theme', taxonomy)).toEqual(['Unclassified']);
     const rows = [stock('A', 'Health', {changePct: 3}), stock('B', 'Health', {changePct: -1}), stock('C', 'Health', {changePct: 1})].map(pulseRow);
-    expect(themeMoves(rows, 'd1', taxonomy)).toEqual([{name: 'Pharma', median: 1, advancing: 2 / 3, members: 3}]);
+    expect(groupsOf(rows[0], 'theme', taxonomy)).toContain('Pharma');
+  });
+
+  it('ranks money pockets by value-weighted move and drops repeats of a pocket already listed', () => {
+    const traded = (symbol: string, sector: string, move: number, value: number) => ({...stock(symbol, sector, {changePct: move}), rupeeVolumeCrore: value});
+    const rows = [traded('A', 'Gold', 30, 100), traded('B', 'Gold', 20, 60), traded('C', 'Gold', -2, 10), traded('D', 'Gold', 1, 10),
+      traded('E', 'Steel', -5, 40), traded('F', 'Steel', -4, 40), traded('G', 'Steel', 1, 40), traded('H', 'Steel', 0, 40)].map(pulseRow);
+    const pockets = themeFlows(rows, 'd1');
+    expect(pockets.map(pocket => [pocket.name, pocket.level])).toEqual([['Gold industry', 'industry'], ['Steel industry', 'industry']]);
+    expect(pockets[0].flow).toBeCloseTo((30 * 100 + 20 * 60 - 2 * 10 + 10) / 180);
+    expect(pockets[0].leaders[0]).toEqual({symbol: 'A', move: 30});
+    expect(themeFlows(rows, 'd1', undefined, -1)[0].name).toBe('Steel industry');
   });
 });

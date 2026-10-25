@@ -1,51 +1,20 @@
 [
   {
-    "id": "scan-top-gainers-1w",
-    "name": "Top 1W Gainers",
-    "category": "Top Gainers",
-    "horizon": "Swing",
-    "description": "The 50 biggest percentage gainers over a week, among stocks trading at least ₹5 Cr a day.",
-    "aka": [
-      "top gainers",
-      "1W gainers",
-      "best performers",
-      "biggest movers"
-    ],
-    "rules": [
-      "Ranked by close-to-close return over 5 sessions; top 50 kept",
-      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr"
-    ],
-    "expression": {
-      "type": "group",
-      "op": "AND",
-      "children": [
-        {
-          "type": "condition",
-          "kind": "TOP_GAINERS",
-          "params": {
-            "overDays": 5,
-            "top": 50,
-            "minTurnoverCr": 5
-          }
-        }
-      ]
-    }
-  },
-  {
     "id": "scan-top-gainers-1m",
     "name": "Top 1M Gainers",
     "category": "Top Gainers",
     "horizon": "Swing",
-    "description": "The 50 biggest percentage gainers over a month, among stocks trading at least ₹5 Cr a day.",
+    "description": "Up 25% or more over a month, among stocks trading at least ₹5 Cr a day.",
     "aka": [
       "top gainers",
       "1M gainers",
       "best performers",
-      "biggest movers"
+      "biggest movers",
+      "1M performance"
     ],
     "rules": [
-      "Ranked by close-to-close return over 21 sessions; top 50 kept",
-      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr"
+      "1M performance at least 25%",
+      "20-session average turnover ≥ ₹5 Cr"
     ],
     "expression": {
       "type": "group",
@@ -53,11 +22,20 @@
       "children": [
         {
           "type": "condition",
-          "kind": "TOP_GAINERS",
+          "kind": "TV_PERFORMANCE",
           "params": {
-            "overDays": 21,
-            "top": 50,
-            "minTurnoverCr": 5
+            "metric": "market.performance_1m_pct",
+            "comparison": "ABOVE",
+            "value": 25
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 5
           }
         }
       ]
@@ -68,16 +46,17 @@
     "name": "Top 3M Gainers",
     "category": "Top Gainers",
     "horizon": "Positional",
-    "description": "The 50 biggest percentage gainers over three months, among stocks trading at least ₹5 Cr a day.",
+    "description": "Up 40% or more over three months, among stocks trading at least ₹5 Cr a day.",
     "aka": [
       "top gainers",
       "3M gainers",
       "best performers",
-      "biggest movers"
+      "biggest movers",
+      "3M performance"
     ],
     "rules": [
-      "Ranked by close-to-close return over 63 sessions; top 50 kept",
-      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr"
+      "3M performance at least 40%",
+      "20-session average turnover ≥ ₹5 Cr"
     ],
     "expression": {
       "type": "group",
@@ -85,11 +64,20 @@
       "children": [
         {
           "type": "condition",
-          "kind": "TOP_GAINERS",
+          "kind": "TV_PERFORMANCE",
           "params": {
-            "overDays": 63,
-            "top": 50,
-            "minTurnoverCr": 5
+            "metric": "market.performance_3m_pct",
+            "comparison": "ABOVE",
+            "value": 40
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 5
           }
         }
       ]
@@ -100,16 +88,17 @@
     "name": "Top 6M Gainers",
     "category": "Top Gainers",
     "horizon": "Positional",
-    "description": "The 50 biggest percentage gainers over six months, among stocks trading at least ₹5 Cr a day.",
+    "description": "Up 60% or more over six months, among stocks trading at least ₹5 Cr a day.",
     "aka": [
       "top gainers",
       "6M gainers",
       "best performers",
-      "biggest movers"
+      "biggest movers",
+      "6M performance"
     ],
     "rules": [
-      "Ranked by close-to-close return over 126 sessions; top 50 kept",
-      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr"
+      "6M performance at least 60%",
+      "20-session average turnover ≥ ₹5 Cr"
     ],
     "expression": {
       "type": "group",
@@ -117,11 +106,20 @@
       "children": [
         {
           "type": "condition",
-          "kind": "TOP_GAINERS",
+          "kind": "TV_PERFORMANCE",
           "params": {
-            "overDays": 126,
-            "top": 50,
-            "minTurnoverCr": 5
+            "metric": "market.performance_6m_pct",
+            "comparison": "ABOVE",
+            "value": 60
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 5
           }
         }
       ]
@@ -132,16 +130,17 @@
     "name": "Top 1Y Gainers",
     "category": "Top Gainers",
     "horizon": "Positional",
-    "description": "The 50 biggest percentage gainers over a year, among stocks trading at least ₹5 Cr a day.",
+    "description": "Up 100% or more over a year, among stocks trading at least ₹5 Cr a day.",
     "aka": [
       "top gainers",
       "1Y gainers",
       "best performers",
-      "biggest movers"
+      "biggest movers",
+      "1Y performance"
     ],
     "rules": [
-      "Ranked by close-to-close return over 252 sessions; top 50 kept",
-      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr"
+      "1Y performance at least 100%",
+      "20-session average turnover ≥ ₹5 Cr"
     ],
     "expression": {
       "type": "group",
@@ -149,11 +148,20 @@
       "children": [
         {
           "type": "condition",
-          "kind": "TOP_GAINERS",
+          "kind": "TV_PERFORMANCE",
           "params": {
-            "overDays": 252,
-            "top": 50,
-            "minTurnoverCr": 5
+            "metric": "market.performance_1y_pct",
+            "comparison": "ABOVE",
+            "value": 100
+          }
+        },
+        {
+          "type": "condition",
+          "kind": "AVG_TURNOVER",
+          "params": {
+            "comparison": "ABOVE",
+            "lookbackDays": 20,
+            "valueCr": 5
           }
         }
       ]

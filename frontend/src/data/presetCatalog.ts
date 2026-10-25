@@ -29,10 +29,19 @@ export const SCAN_LIBRARY: LibraryScan[] = [
 ];
 
 /** Shown first in the library when nothing is searched. */
-export const POPULAR_SCANS = ['scan-top-gainers-1m', 'scan-top-gainers-3m', 'scan-top-gainers-6m', 'scan-near-52w-high',
-  'scan-near-high-breakout', 'lib-stage-two', 'lib-vcp', 'lib-pocket-pivot'];
+export const POPULAR_SCANS = ['scan-top-gainers-1m', 'scan-top-gainers-3m', 'scan-top-gainers-6m', 'scan-top-gainers-1y', 'scan-near-52w-high',
+  'scan-near-high-breakout', 'lib-stage-two', 'lib-vcp'];
 
 export const RECIPES: ReadonlyMap<string, RecipeGroup> = new Map(SCAN_LIBRARY.flatMap(scan => scan.recipe ? [[scan.id, scan.recipe]] : []));
+
+/** Published daily metrics a recipe reads (the extended-metric `metric` ids), so the library knows what a snapshot lacks. */
+export function recipeMetrics(id: string): string[] {
+  const walk = (node: RecipeGroup | RecipeCondition): string[] => node.type === 'group' ? node.children.flatMap(walk)
+    : node.kind.startsWith('TV_') && typeof node.params.metric === 'string' ? [node.params.metric] : [];
+  const recipe = RECIPES.get(id);
+  return recipe ? walk(recipe) : [];
+}
+export const recipeUsesExtended = (id: string) => recipeMetrics(id).length > 0;
 
 export const PRESET_CATALOG: ConditionDef[] = SCAN_LIBRARY.map(p => ({
   id: p.id, label: p.name, category: categories[p.category] ?? 'trend',

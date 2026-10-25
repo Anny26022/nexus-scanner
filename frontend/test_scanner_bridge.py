@@ -216,7 +216,7 @@ class BridgeTests(unittest.TestCase):
 
     def test_all_native_condition_defaults_execute(self):
         catalog=json.loads((Path(__file__).parent/"src/data/nativeConditions.json").read_text())
-        self.assertEqual(len(catalog),55)
+        self.assertEqual(len(catalog),54)
         for item in catalog:
             with self.subTest(condition=item["id"]):
                 params={p["id"]:p["defaultValue"] for p in item["parameters"]}
@@ -229,7 +229,7 @@ class BridgeTests(unittest.TestCase):
         self.assertEqual([child["kind"] for child in node["children"]],["PCT_FROM_52W_HIGH","AVG_TURNOVER"])
         diagnostics=set()
         self.assertIsNone(bridge.evaluate(bridge.translate("scan-top-gainers-1m",{}),self.stock(),None,{},"2026-09-30",diagnostics,[]))
-        self.assertIn(("TOP_GAINERS","cross_sectional_rank_unavailable"),diagnostics)
+        self.assertIn(("market.performance_1m_pct","published_metric_not_in_history"),diagnostics)
 
     def test_unknown_filters_raise_and_and_or_preserve_unknown(self):
         with self.assertRaises(ValueError): bridge.translate("invented",{})

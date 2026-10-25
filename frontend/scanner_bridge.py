@@ -52,14 +52,14 @@ RECIPES = {recipe["id"]: recipe["expression"] for recipe in json.loads((Path(__f
 def recipe_node(node):
     if node["type"] == "group":
         return group(node["op"], *(recipe_node(child) for child in node["children"]))
+    if node["kind"].startswith("TV_"):
+        return {"type": "published_metric", "metric": node["params"]["metric"]}
     return translate(node["kind"], node["params"])
 
 
 def translate(identifier, p):
     if identifier in RECIPES:
         return recipe_node(RECIPES[identifier])
-    if identifier == "TOP_GAINERS":
-        return {"type": "top_gainers", "params": dict(p)}
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
         return {"type": "preset", "expression": preset["expression"], "eligibility": p}
@@ -210,9 +210,9 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
     if node["type"] == "not":
         value = evaluate(node["child"],s,frame,context,as_of,diagnostics,delivery)
         return None if value is None else not value
-    if node["type"] == "top_gainers":
-        # A rank across the whole universe; one stock's history cannot answer it.
-        diagnostics.add(("TOP_GAINERS", "cross_sectional_rank_unavailable"))
+    if node["type"] == "published_metric":
+        # TradingView values are published per release, not kept in price history.
+        diagnostics.add((node["metric"], "published_metric_not_in_history"))
         return None
     if node["type"] == "preset":
         baseline = preset_baseline(s, node.get('eligibility')) if s.get("as_of_date") == as_of else None

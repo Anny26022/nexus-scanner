@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {loadPublishedSnapshot} from './fixtures/publishedSnapshot';
-import { screenSnapshot, type Snapshot } from '../api/snapshotScreen';
+import { screenSnapshot, type Snapshot, type SnapshotStock } from '../api/snapshotScreen';
 import { supportsSnapshotCondition } from '../api/snapshotScreen';
 import type { ScreenerRunRequest } from '../types/screener';
 
@@ -11,16 +11,17 @@ const request: ScreenerRunRequest = {asOfDate:snapshot.asOfDate,universe:'mainbo
 
 afterEach(() => vi.unstubAllGlobals());
 describe('published snapshots', () => {
-  it('ranks top gainers within the universe above the turnover floor, and runs library recipes', () => {
-    const make = (symbol: string, return21: number, turnover20: number) => ({...snapshot.stocks[0], symbol, name:symbol, historyAligned:true,
-      asOfDate:snapshot.asOfDate, metadataAsOfDate:snapshot.asOfDate, metrics:{...snapshot.stocks[0].metrics, return21, turnover20}});
-    const data = {...snapshot, stocks:[make('A',40,10), make('B',90,0.5), make('C',25,10), make('D',60,10)]};
-    const run = (tree: ScreenerRunRequest['expressionTree']) => screenSnapshot(data, {...request, expressionTree:tree})!.matchedSymbols.sort();
-    expect(run(condition('TOP_GAINERS',{overDays:'21',top:2,minTurnoverCr:5}))).toEqual(['A','D']);
-    expect(run(condition('TOP_GAINERS',{overDays:'21',top:2,minTurnoverCr:0}))).toEqual(['B','D']);
-    expect(supportsSnapshotCondition({instanceId:'x',conditionId:'TOP_GAINERS',parameters:{overDays:'10',top:2,minTurnoverCr:0}})).toBe(false);
+  it('runs gainer scans on published TradingView performance and leaves other filters on price history', () => {
+    const make = (symbol: string, perf1m: number | null, turnover20: number) => ({...snapshot.stocks[0], symbol, name:symbol, historyAligned:true,
+      asOfDate:snapshot.asOfDate, metadataAsOfDate:snapshot.asOfDate, metrics:{...snapshot.stocks[0].metrics, turnover20},
+      extended:{asOfDate:snapshot.asOfDate, fetchedAt:'', updateMode:'', values:(perf1m == null ? {} : {'market.performance_1m_pct':perf1m}) as Record<string, number>}}) as SnapshotStock;
+    const data = {...snapshot, extendedMetricsVersion:1, stocks:[make('A',40,10), make('B',90,0.5), make('C',10,10), make('D',null,10)]};
+    const run = (id: string) => screenSnapshot(data, {...request, expressionTree:condition(id)})!.matchedSymbols;
+    expect(run('scan-top-gainers-1m')).toEqual(['A']);
     expect(supportsSnapshotCondition({instanceId:'x',conditionId:'scan-top-gainers-6m',parameters:{}})).toBe(true);
     expect(supportsSnapshotCondition({instanceId:'x',conditionId:'scan-near-high-breakout',parameters:{}})).toBe(true);
+    expect(() => screenSnapshot({...data, extendedMetricsVersion:undefined}, {...request, expressionTree:condition('scan-top-gainers-1m')}))
+      .toThrow('newer dataset');
   });
 
   it('searches symbols and company names across all matches before pagination', () => {

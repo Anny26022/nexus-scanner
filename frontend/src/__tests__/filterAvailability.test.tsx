@@ -9,11 +9,11 @@ import { isAvailableCondition, isAvailableFilter } from '../utils/filterAvailabi
 afterEach(cleanup);
 
 it('keeps published filters and presets available but disables backend-only defaults', () => {
-  expect(NEXUS_CONDITION_CATALOG.filter(def => !def.id.startsWith('ETF_')).filter(isAvailableFilter)).toHaveLength(76);
+  expect(NEXUS_CONDITION_CATALOG.filter(def => !def.id.startsWith('ETF_')).filter(isAvailableFilter)).toHaveLength(75);
   for (const conditionId of ['EARNINGS_GROWTH','fund_earnings_growth','rs_1month','rs_3month']) {
     expect(isAvailableFilter(NEXUS_CONDITION_CATALOG.find(def=>def.id===conditionId)!)).toBe(false);
   }
-  expect(PRESET_CATALOG).toHaveLength(52);
+  expect(PRESET_CATALOG).toHaveLength(51);
   expect(PRESET_CATALOG.every(isAvailableFilter)).toBe(true);
   expect(isAvailableCondition({instanceId:'ma', conditionId:'MA_STACK', parameters:{periods:'50,173,200',maType:'EMA',priceAbove:false}})).toBe(false);
   expect(hasUnavailableConditions({unknown:{instanceId:'unknown',conditionId:'UNKNOWN',parameters:{}}})).toBe(true);
@@ -113,15 +113,19 @@ it('offers only supported ADR/ATR/gap windows and a clearly named overall RS hor
 
 it('describes each scan, searches the library and shows today\'s matches', () => {
   render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={vi.fn()}
-    choices={{SECTOR:[],INDUSTRY:[],SERIES:[],PRICE_BAND:[],INDEX_MEMBERSHIP:[],SCAN_COUNTS:{'lib-persistent-momentum':312,'lib-vcp':0}}} />);
+    choices={{SECTOR:[],INDUSTRY:[],SERIES:[],PRICE_BAND:[],INDEX_MEMBERSHIP:[],SCAN_COUNTS:{'lib-persistent-momentum':312,'lib-vcp':0},
+      TRADINGVIEW_METRIC:['market.performance_1m_pct','market.performance_3m_pct']}} />);
   fireEvent.click(screen.getByRole('button', {name:'Scan Library'}));
   const card = screen.getByRole('checkbox', {name:'Persistent Momentum'});
   expect(card).toHaveAttribute('title', expect.stringContaining('Above the 10 EMA for 20 days'));
   expect(within(card).getByText('312 today')).toBeInTheDocument();
   expect(within(screen.getAllByRole('checkbox', {name:'VCP Contraction'})[0]).getByText('None today')).toBeInTheDocument();
+  // This snapshot carries no TradingView 6M value yet, so that scan waits for the next refresh.
+  expect(screen.getAllByRole('checkbox', {name:'Top 6M Gainers'})[0]).toBeDisabled();
+  expect(screen.getAllByText('After the next data refresh').length).toBeGreaterThan(0);
   fireEvent.change(screen.getByRole('textbox', {name:'Search scans'}), {target:{value:'gainers'}});
   expect(screen.getAllByRole('checkbox').map(item => item.getAttribute('aria-label'))).toEqual(
-    ['Top 1W Gainers','Top 1M Gainers','Top 3M Gainers','Top 6M Gainers','Top 1Y Gainers']);
+    ['Top 1M Gainers','Top 3M Gainers','Top 6M Gainers','Top 1Y Gainers']);
 });
 
 it('saves a filter and a whole screen to My scans and brings them back', () => {

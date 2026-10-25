@@ -12,9 +12,11 @@ const matches = (scan: LibraryScan, query: string) =>
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 /** The scan library: curated scans by category, the user's own saved scans, and today's match counts. */
-export function ScanLibrary({selected, counts, saved, onToggle, onUseSaved, onDeleteSaved}: {
+export function ScanLibrary({selected, counts, pending, saved, onToggle, onUseSaved, onDeleteSaved}: {
   selected: Record<string, ActiveCondition>;
   counts?: Record<string, number>;
+  /** Scans whose published data has not reached this snapshot yet. */
+  pending?: ReadonlySet<string>;
   saved: SavedScan[];
   onToggle: (scan: LibraryScan) => void;
   onUseSaved: (scan: SavedScan) => void;
@@ -68,9 +70,9 @@ export function ScanLibrary({selected, counts, saved, onToggle, onUseSaved, onDe
     {sections.map(([title, scans]) => scans.length > 0 && <section key={title} className="scan-section" aria-label={title}>
       <h3>{title}</h3>
       <div className="scan-grid">{scans.map(scan => {
-        const on = chosen.has(scan.id), count = counts?.[scan.id];
+        const on = chosen.has(scan.id), count = counts?.[scan.id], waiting = !on && pending?.has(scan.id);
         return <button key={`${title}:${scan.id}`} type="button" role="checkbox" aria-checked={on} aria-label={scan.name} className="scan-card"
-          data-selected={on} title={scan.rules.join('\n')} onClick={() => onToggle(scan)}>
+          data-selected={on} disabled={waiting} title={scan.rules.join('\n')} onClick={() => onToggle(scan)}>
           <span className="scan-card-head">
             <span className="scan-card-name">{scan.name}</span>
             <span className="scan-card-check" aria-hidden="true">{on && <Check size={12} strokeWidth={2.6} />}</span>
@@ -78,7 +80,8 @@ export function ScanLibrary({selected, counts, saved, onToggle, onUseSaved, onDe
           <span className="scan-card-text">{scan.description}</span>
           <span className="scan-card-meta">
             <span>{scan.horizon}</span>
-            {count != null && <span className={count ? 'scan-count' : 'scan-count is-quiet'}>{count ? `${count.toLocaleString('en-IN')} today` : 'None today'}</span>}
+            {waiting ? <span className="scan-count is-quiet">After the next data refresh</span>
+              : count != null && <span className={count ? 'scan-count' : 'scan-count is-quiet'}>{count ? `${count.toLocaleString('en-IN')} today` : 'None today'}</span>}
           </span>
         </button>;
       })}</div>

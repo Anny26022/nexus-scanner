@@ -1,6 +1,6 @@
 import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 import {etfGroup, isEtfCondition} from '../data/etfFields';
-import { PRESET_CATALOG, RECIPES, type RecipeGroup } from '../data/presetCatalog';
+import { PRESET_CATALOG, RECIPES, recipeUsesExtended, type RecipeGroup } from '../data/presetCatalog';
 import nativeConditions from '../data/nativeConditions.json';
 import { PRESET_ELIGIBILITY, presetEligibilityTargets, hasCustomPresetEligibility } from '../data/presetEligibility';
 import { snapshotFundamentals } from '../data/snapshotFundamentals';
@@ -36,9 +36,6 @@ export interface Snapshot {
   stocks: SnapshotStock[];
 }
 type Predicate = (s: SnapshotStock) => Truth;
-/** Cross-sectional inputs a single stock cannot answer alone. Absent when only checking support. */
-interface Context { gainerRanks: (period: number, minTurnoverCr: number) => ReadonlyMap<string, number> }
-export const TOP_GAINER_PERIODS = [5, 21, 63, 126, 252];
 const nativeDefaults = new Map(nativeConditions.map(def => [def.id,
   Object.fromEntries(def.parameters.map(parameter => [parameter.id, parameter.defaultValue]))]));
 const combine = (values: Truth[], all: boolean): Truth => all
@@ -70,7 +67,7 @@ const extraFundamentalFields = Object.fromEntries(snapshotFundamentals.map(metri
 export const SNAPSHOT_MA_PERIODS = [9,10,20,21,50,150,200];
 const maPeriods = SNAPSHOT_MA_PERIODS;
 
-function leaf(c: ActiveCondition, session: string, context?: Context): Predicate | null {
+function leaf(c: ActiveCondition, session: string): Predicate | null {
   const p = c.parameters;
   if (isEtfCondition(c.conditionId)) {
     const group = etfGroup(c.conditionId);
@@ -173,15 +170,6 @@ function leaf(c: ActiveCondition, session: string, context?: Context): Predicate
       // Match the Python scanner: "Below 5%" means a decline of at least 5%.
       const target = p.comparison === 'BELOW' ? -Math.abs(p.pct) : p.pct;
       fn = s => compare(period === 1 ? s.changePct : s.metrics[`return${period}`], p.comparison, target); break;
-    }
-    case 'TOP_GAINERS': {
-      const period = Number(p.overDays), top = Number(p.top), floor = Number(p.minTurnoverCr ?? 0);
-      if (!TOP_GAINER_PERIODS.includes(period) || !Number.isInteger(top) || top < 1 || !Number.isFinite(floor) || floor < 0) return null;
-      fn = s => {
-        if (!context || number(s.metrics[`return${period}`]) == null) return null;
-        const rank = context.gainerRanks(period, floor).get(s.symbol);
-        return rank != null && rank <= top;
-      }; break;
     }
     case 'GAP_UP': case 'GAP_DOWN':
       if (Number(p.withinDays) !== 1) return null;
@@ -322,7 +310,7 @@ function leaf(c: ActiveCondition, session: string, context?: Context): Predicate
     default: {
       const recipe = RECIPES.get(c.conditionId);
       if (recipe) {
-        const predicate = compileRecipe(recipe, session, context);
+        const predicate = compileRecipe(recipe, session);
         if (!predicate) return null;
         return c.isNegated ? s => { const v = predicate(s); return v == null ? null : !v; } : predicate;
       }
@@ -348,21 +336,21 @@ function leaf(c: ActiveCondition, session: string, context?: Context): Predicate
   return c.isNegated ? s => { const v = checked(s); return v == null ? null : !v; } : checked;
 }
 
-/** A library recipe: native filters at their defaults, overridden by the recipe's settings. */
-function compileRecipe(node: RecipeGroup | RecipeGroup['children'][number], session: string, context?: Context): Predicate | null {
+/** A library recipe: native filters at their defaults (published-metric filters as written), overridden by the recipe. */
+function compileRecipe(node: RecipeGroup | RecipeGroup['children'][number], session: string): Predicate | null {
   if (node.type === 'condition') {
-    const defaults = nativeDefaults.get(node.kind);
-    return defaults ? leaf({instanceId: node.kind, conditionId: node.kind, parameters: {...defaults, ...node.params}}, session, context) : null;
+    const defaults = isExtendedCondition(node.kind) ? {} : nativeDefaults.get(node.kind);
+    return defaults ? leaf({instanceId: node.kind, conditionId: node.kind, parameters: {...defaults, ...node.params}}, session) : null;
   }
-  const children = node.children.map(child => compileRecipe(child, session, context));
+  const children = node.children.map(child => compileRecipe(child, session));
   if (children.some(fn => fn == null)) return null;
   return s => combine(children.map(fn => fn!(s)), node.op === 'AND');
 }
 
 type Coverage = ScreenerRunResponse['perConditionCoverage'];
-function compile(node: ExpressionNode, session: string, coverage: Coverage, context?: Context): Predicate | null {
+function compile(node: ExpressionNode, session: string, coverage: Coverage): Predicate | null {
   if (node.type === 'condition') {
-    const predicate = leaf(node.condition, session, context);
+    const predicate = leaf(node.condition, session);
     if (!predicate) return null;
     const item = coverage[node.condition.instanceId] = {conditionId:node.condition.conditionId, evaluated:0, matched:0, coveragePct:0};
     return stock => {
@@ -372,7 +360,7 @@ function compile(node: ExpressionNode, session: string, coverage: Coverage, cont
       return value;
     };
   }
-  const children = node.children.map(n => compile(n, session, coverage, context));
+  const children = node.children.map(n => compile(n, session, coverage));
   if (children.some(fn => fn == null)) return null;
   if (!children.length) return () => true;
   return s => combine(children.map(fn => fn!(s)), node.operator === 'all');
@@ -393,24 +381,6 @@ export function supportsSnapshotCondition(condition: ActiveCondition): boolean {
   return leaf(condition, '') !== null;
 }
 
-/** Ranks by return within the screened universe, among current stocks that clear the turnover floor. */
-function gainerContext(universe: SnapshotStock[], session: string): Context {
-  const ranks = new Map<string, Map<string, number>>();
-  return {gainerRanks(period, floor) {
-    const key = `${period}:${floor}`;
-    let ranked = ranks.get(key);
-    if (!ranked) {
-      const field = `return${period}`;
-      const eligible = universe.filter(s => s.historyAligned && s.asOfDate === session && number(s.metrics[field]) != null
-        && (floor <= 0 || (number(s.metrics.turnover20) ?? -1) >= floor));
-      eligible.sort((a, b) => b.metrics[field]! - a.metrics[field]! || a.symbol.localeCompare(b.symbol));
-      ranked = new Map(eligible.map((stock, i) => [stock.symbol, i + 1]));
-      ranks.set(key, ranked);
-    }
-    return ranked;
-  }};
-}
-
 interface Matches { rows: SnapshotStock[]; universeCount: number; coverage:Coverage; diagnostics:ScreenerRunResponse['unavailableDiagnostics']; warnings:string[] }
 const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
@@ -423,7 +393,7 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
   if (wrongCatalog(request.expressionTree)) throw new Error('Select filters for the current universe.');
   if (request.textQuery?.trim()) return null;
   const usesExtended = (node:ExpressionNode):boolean => node.type === 'group'
-    ? node.children.some(usesExtended) : isExtendedCondition(node.condition.conditionId);
+    ? node.children.some(usesExtended) : isExtendedCondition(node.condition.conditionId) || recipeUsesExtended(node.condition.conditionId);
   const usesFnoBan = (node:ExpressionNode):boolean => node.type === 'group'
     ? node.children.some(usesFnoBan) : node.condition.conditionId === 'FNO_BAN';
   if (usesFnoBan(request.expressionTree) && !data.stocks.some(s => s.fnoBan != null)) {
@@ -442,6 +412,9 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
   if (!cache) { cache = new Map(); matchCache.set(data,cache); }
   let matches = cache.get(key);
   if (!matches) {
+    const coverage: Coverage = {};
+    const predicate = compile(request.expressionTree, data.asOfDate, coverage);
+    if (!predicate) return null;
     const labels: Record<string, string[]> = {
       nifty50:['NIFTY 50','NIFTY50'], nifty500:['NIFTY 500','NIFTY500'],
       midsmall400:['NIFTY MIDSMALLCAP 400','NIFTY MIDSMALL 400','MIDSMALL400'],
@@ -451,9 +424,6 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
       : request.universe === 'mainboard' || request.universe === 'etf' || s.indexMemberships.some(label => labels[request.universe]?.includes(label.toUpperCase())));
     const announcementSymbols = request.announcementSymbols ? new Set(request.announcementSymbols) : null;
     const candidates = universe.filter(s => !announcementSymbols || announcementSymbols.has(s.symbol));
-    const coverage: Coverage = {};
-    const predicate = compile(request.expressionTree, data.asOfDate, coverage, gainerContext(universe, data.asOfDate));
-    if (!predicate) return null;
     const rows = candidates.filter(s => predicate(s) === true && number(s.close) != null);
     const diagnostics: ScreenerRunResponse['unavailableDiagnostics'] = [];
     for (const item of Object.values(coverage)) {
@@ -495,9 +465,9 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
 /** Today's mainboard matches for every library scan, so the library can show which ones are live. */
 export function scanCounts(data: Snapshot): Record<string, number> {
   const current = data.stocks.filter(s => number(s.close) != null);
-  const context = gainerContext(current, data.asOfDate);
   return Object.fromEntries(PRESET_CATALOG.flatMap(scan => {
-    const predicate = leaf({instanceId: scan.id, conditionId: scan.id, parameters: {}}, data.asOfDate, context);
+    if (recipeUsesExtended(scan.id) && data.extendedMetricsVersion !== 1) return [];
+    const predicate = leaf({instanceId: scan.id, conditionId: scan.id, parameters: {}}, data.asOfDate);
     return predicate ? [[scan.id, current.reduce((total, s) => total + Number(predicate(s) === true), 0)]] : [];
   }));
 }

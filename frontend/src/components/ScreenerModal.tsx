@@ -7,7 +7,7 @@ import { X, SlidersHorizontal, Library, ChevronDown, Info, Bookmark } from 'luci
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG, REDUNDANT_CATALOG_CONDITIONS } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
-import { PRESET_CATALOG, RECIPES, type LibraryScan } from '../data/presetCatalog';
+import { PRESET_CATALOG, RECIPES, recipeMetrics, type LibraryScan } from '../data/presetCatalog';
 import { ScanLibrary } from './ScanLibrary';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { SAVED_SCANS_KEY, parseSavedScans, scanInstances, upsertSavedScan, type SavedScan } from '../utils/savedScans';
@@ -409,6 +409,9 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const savedScans = parseSavedScans(storedScans);
   const [saving, setSaving] = useState<{conditions: ActiveCondition[]; name: string} | null>(null);
   const [notice, setNotice] = useState('');
+  // Library scans built on published daily metrics wait until the snapshot carries them.
+  const pendingScans = useMemo(() => !choices ? undefined : new Set([...RECIPES.keys()].filter(id =>
+    recipeMetrics(id).some(metric => !choices.TRADINGVIEW_METRIC?.includes(metric)))), [choices]);
   const customCatalog = useMemo(() => (etf ? etfConditionCatalog : FILTER_CONDITION_CATALOG).map(def => {
     if (isEtfCondition(def.id)) {
       const options = def.parameters[0].options?.filter(option => choices?.ETF_FIELDS?.includes(option.value)) ?? [];
@@ -592,7 +595,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
             <FilterRow key={key} ruleKey={key} def={PRESET_CATALOG.find(def => def.id === condition.conditionId)!} active={condition}
               showParameters={false} toggle={toggle} updateParam={updateParam} />)}</div>
         </details>}
-        <ScanLibrary selected={localMap} counts={choices?.SCAN_COUNTS} saved={savedScans} onToggle={toggleScan} onUseSaved={loadSaved}
+        <ScanLibrary selected={localMap} counts={choices?.SCAN_COUNTS} pending={pendingScans} saved={savedScans} onToggle={toggleScan} onUseSaved={loadSaved}
           onDeleteSaved={scan => setStoredScans(savedScans.filter(item => item.id !== scan.id))} />
       </>}
       {activeTab === 'custom' && <div className="filter-rule-list">

@@ -220,7 +220,9 @@ function Detail({record, history, reactionOf, onOpenChart, lead = 'results'}: {
         {reactions.length > 0 && <section className="ep-sheet-block ep-around">
           <h3>Around the result</h3>
           {move && <p className="ep-story">{story(move)}</p>}
-          {move && <Path value={move} height={64} className="ep-path-lg" />}
+          {move && <><Path value={move} height={64} className="ep-path-lg" />
+            <div className="ep-path-axis" aria-hidden="true" style={{'--before': `${(move.at / Math.max(1, move.path.length - 1)) * 100}%`} as CSSProperties}>
+              <span>{RUN_UP} sessions before</span>{move.sessions > 0 && <span>Result → {move.sessions} {move.sessions === 1 ? 'session' : 'sessions'} after</span>}</div></>}
           <div className="ep-reactions">{reactions.map(([label, value]) => <span key={label}><small>{label}</small><b className={tone(value)}>{pct(value, 1)}</b></span>)}</div>
         </section>}
 
@@ -549,7 +551,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
               </div>
             : <div className="ep-cols">
               <span>Company</span>{sortButton('quality', 'Grade')}{sortButton('revenue_yoy', 'Sales', 'ep-num')}{sortButton('pat_yoy', 'Profit', 'ep-num')}
-              {sortButton('eps_yoy', 'EPS', 'ep-num ep-wide')}{sortButton('since', 'Since result', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
+              {sortButton('eps_yoy', 'EPS', 'ep-num ep-wide')}{sortButton('since', 'Since', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
             </div>}
           </EarningsResults>}
       </main>

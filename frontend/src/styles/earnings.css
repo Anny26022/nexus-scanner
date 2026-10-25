@@ -124,7 +124,7 @@
 .ep-sheet-big { margin: 4px 0 0; color: var(--muted); font-size: 15px; font-weight: 500; }
 .ep-sheet-big b { margin-right: 4px; font-size: 40px; font-weight: 700; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; }
 .ep-sheet-when { margin: 0; color: var(--muted); font-size: 12px; }
-.ep-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 20px; padding: 20px 0; border-block: 1px solid var(--line); }
+.ep-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; }
 .ep-card { display: flex; flex-direction: column; gap: 4px; }
 .ep-card > small, .ep-reactions small, .ep-guidance small, .ep-delta small { color: var(--muted); font-size: 11px; font-weight: 550; }
 .ep-card strong { font-size: 18px; font-weight: 680; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
@@ -198,8 +198,7 @@
 .ep-path-after.is-down { stroke: var(--negative); }
 .ep-path-base { stroke: color-mix(in srgb, var(--text) 10%, transparent); stroke-dasharray: 2 3; }
 .ep-path-mark { stroke: color-mix(in srgb, var(--text) 22%, transparent); }
-.ep-path-lg { display: block; width: 100%; height: 88px; margin: 4px 0 16px; padding: 10px 12px; border-radius: 12px;
-  background: linear-gradient(90deg, var(--field) 0, var(--field) var(--before, 40%), transparent var(--before, 40%)); box-sizing: border-box; }
+.ep-path-lg { display: block; width: 100%; height: 84px; margin: 6px 0 0; }
 .ep-path-lg polyline { stroke-width: 2; }
 .ep-story { margin: 0 0 10px; color: var(--text); font-size: 15px; font-weight: 560; letter-spacing: -0.01em; line-height: 1.4; text-wrap: pretty; }
 .ep-past { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -263,15 +262,25 @@
 
 /* The selected result: a quiet highlight in the list, its detail beside it or under it. */
 .ep-row[aria-current] { background: var(--surface-hover); box-shadow: inset 2px 0 0 var(--text); }
-.ep-panel { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; padding: 22px 24px 0; border-radius: 16px; background: var(--surface);
-  box-shadow: var(--shadow-card); scrollbar-width: thin; }
-.ep-detail { display: flex; flex-direction: column; gap: 26px; min-width: 0; }
+.ep-panel { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; padding: 6px 2px 0 32px; border-left: 1px solid var(--line);
+  scrollbar-width: none; overscroll-behavior: contain; }
+.ep-panel::-webkit-scrollbar { display: none; }
+.ep-panel .ep-sheet-foot { margin: auto 0 0; padding: 14px 0 16px; background: linear-gradient(transparent, var(--page) 14px); }
+.ep-path-axis { display: grid; grid-template-columns: var(--before, 40%) 1fr; margin: 6px 0 18px; color: var(--muted); font-size: 10.5px; font-weight: 520; }
+.ep-path-axis span + span { padding-left: 6px; border-left: 1px solid color-mix(in srgb, var(--text) 22%, transparent); }
+.ep-detail { display: flex; flex-direction: column; gap: 30px; min-width: 0; }
 .ep-detail .ep-sheet-title { margin: 0; }
 .ep-detail .ep-sheet-sub { margin-top: -20px; }
-.ep-inline { padding: 18px 12px 8px; border-bottom: 1px solid var(--line); background: var(--surface-subtle); animation: ep-fade .18s ease-out; }
+.ep-inline { padding: 14px 12px 6px; border-bottom: 1px solid var(--line); animation: ep-fade .18s ease-out; }
 .ep-inline .ep-sheet-head, .ep-inline .ep-sheet-sub { display: none; }
 .ep-inline .ep-sheet-foot { position: static; margin: 0; padding: 4px 0 12px; background: none; }
 .ep-detail[data-lead="reactions"] > :is(.ep-sheet-head, .ep-sheet-sub) { order: -3; }
 .ep-detail[data-lead="reactions"] > .ep-around { order: -2; }
 .ep-detail[data-lead="reactions"] > .ep-earlier { order: -1; }
+@media (max-width: 600px) {
+  .ep-bar { gap: 4px 6px; }
+  .ep-views { flex-basis: 100%; margin: 0 0 6px; }
+  .ep-row small.is-muted { white-space: normal; line-height: 1.2; text-align: right; }
+  .ep-panel { display: none; }
+}
 }

@@ -63,6 +63,7 @@ export function story(value: Reaction): string {
     : value.since - value.day1 >= RUN ? `then extended to ${signed(value.since)}`
     : value.since - value.day1 <= -RUN ? `then gave back to ${signed(value.since)}` : `${signed(value.since)} since`;
   const parts = [into, day, after].filter(Boolean) as string[];
+  if (!value.sessions) parts.push('first reaction next session');
   if (!parts.length) return 'No trading since the result yet';
   const text = parts.join(', ');
   return text[0].toUpperCase() + text.slice(1);

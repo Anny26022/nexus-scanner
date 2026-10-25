@@ -15,24 +15,12 @@ import gzip
 import hashlib
 import json
 import math
-from pathlib import Path
 
 SCHEMA_VERSION = 1
 # Each calendar keeps enough periods for its longest range plus the 14-period lookback and a long trail.
 PERIODS = {'D': 300, 'W': 290, 'M': 144}
 SCALE = 10_000
-LEVELS = ('sector', 'industry', 'subIndustry', 'theme', 'block', 'macro', 'narrative')
-# Hand-curated cross-industry narratives, shared with the page (src/data/narratives.json).
-NARRATIVES_PATH = Path(__file__).parent / 'src' / 'data' / 'narratives.json'
-
-
-def load_narratives(path=NARRATIVES_PATH):
-    """{symbol: [narrative names]} from the curated narratives file."""
-    out = {}
-    for narrative in json.loads(Path(path).read_text())['narratives']:
-        for symbol in narrative['members']:
-            out.setdefault(symbol, []).append(narrative['name'])
-    return {symbol: sorted(names) for symbol, names in out.items()}
+LEVELS = ('sector', 'industry', 'subIndustry', 'theme', 'block', 'macro')
 # A composite needs a few members to mean anything; illiquid microcaps would dominate equal weights.
 MIN_MEMBERS = 3
 MIN_GROUP_MARKET_CAP_CR = 300.0
@@ -134,7 +122,7 @@ def composite(members, length):
 IGNORED_LABELS = ('unclassified', 'others', 'other', 'n/a')
 
 
-def labels_of(row, taxonomy, narratives=None):
+def labels_of(row, taxonomy):
     """The stock's label at each level today; None where it is unclassified."""
     raw = dict(sector=row.get('sector'), industry=row.get('industry'),
                **{key: (taxonomy.get(row['symbol']) or {}).get(key) for key in ('subIndustry', 'theme', 'block', 'macro')})
@@ -145,19 +133,11 @@ def labels_of(row, taxonomy, narratives=None):
     if labels[3]:
         themes.add(labels[3])
     labels[3] = sorted(themes) or None
-    labels[6] = list((narratives or {}).get(row['symbol']) or []) or None
     return labels
 
 
 def record_memberships(ledger, session, labels, eligibility=None):
     """Append today's labels for every stock whose labels changed. The ledger only grows, by date."""
-    if isinstance(ledger, dict) and ledger.get('version') == 1 and list(ledger.get('levels', [])) == list(LEVELS[:-1]):
-        # Narratives arrived after the ledger began. They are curated as standing stories, so today's
-        # memberships apply to the stored past too rather than starting every narrative composite today.
-        for symbol, history in ledger.get('records', {}).items():
-            for entry in history:
-                entry[1] = list(entry[1]) + [(labels.get(symbol) or [None] * len(LEVELS))[-1]]
-        ledger['levels'] = list(LEVELS)
     if not isinstance(ledger, dict) or ledger.get('version') != 1 or list(ledger.get('levels', [])) != list(LEVELS):
         ledger = {'version': 1, 'levels': list(LEVELS), 'records': {}}
     records = ledger['records']
@@ -218,7 +198,7 @@ def group_eligible(row):
     return cap is not None and cap >= MIN_GROUP_MARKET_CAP_CR and turnover is not None and turnover >= MIN_GROUP_TURNOVER30_CR
 
 
-def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_date=None, narratives=None):
+def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_date=None):
     """Rotation history objects for one release.
 
     rows: published stock rows; closes: a symbol loader or {symbol: [(date, close), ...]} ascending; benchmarks: {'N50': [...],
@@ -240,8 +220,7 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_dat
         return {frame: encode(aligned(points, dates)) for frame, dates in frames.items()}
 
     rows_by_symbol = {row['symbol']: row for row in rows}
-    narratives = load_narratives() if narratives is None else narratives
-    today = {symbol: labels_of(row, taxonomy, narratives) for symbol, row in rows_by_symbol.items()}
+    today = {symbol: labels_of(row, taxonomy) for symbol, row in rows_by_symbol.items()}
     ledger = record_memberships(ledger, session, today,
                                 {symbol: group_eligible(row) for symbol, row in rows_by_symbol.items()})
     stocks, shards = [], {name: {frame: {} for frame in frames} for name in ('core', 'rest', 'groups')}

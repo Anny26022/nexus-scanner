@@ -1,6 +1,6 @@
 import { useId, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
 import { DataUnavailableError } from '../api/dataErrors';
 import { marketRegime } from '../utils/marketOverview';
@@ -138,92 +138,87 @@ function Pulse({rows, sessions}: {rows: PulseRow[]; sessions: BreadthSession[]})
   </Panel>;
 }
 
-type Side = 'highs' | 'lows';
 const GROUP_LIMIT = 10;
 
-/** New highs and new lows, and where they cluster: by sector, industry or theme. */
+interface Butterfly { name: string; highs: string[]; lows: string[] }
+
+/** New highs and new lows side by side for each group: lows grow left, highs grow right. */
 function Extremes({rows, taxonomy, onOpenChart, onScreenSector}: {
   rows: PulseRow[];
   taxonomy?: Parameters<typeof breakdown>[2];
   onOpenChart: (symbol: string) => void;
   onScreenSector?: (sector: string) => void;
 }) {
-  const [side, setSide] = useState<Side>('highs');
-  const sideName = useId();
   const [grouping, setGrouping] = useState<Grouping>('sector');
   const [open, setOpen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   const sets = useMemo(() => ({highs: rows.filter(row => row.newHigh), lows: rows.filter(row => row.newLow)}), [rows]);
-  const leaders = useMemo(() => ({highs: breakdown(sets.highs, 'sector').slice(0, 3), lows: breakdown(sets.lows, 'sector').slice(0, 3)}), [sets]);
-  const groups = useMemo(() => breakdown(sets[side], grouping, taxonomy), [sets, side, grouping, taxonomy]);
+  const groups = useMemo<Butterfly[]>(() => {
+    const merged = new Map<string, Butterfly>();
+    const entry = (name: string) => merged.get(name) ?? merged.set(name, {name, highs: [], lows: []}).get(name)!;
+    for (const group of breakdown(sets.highs, grouping, taxonomy)) entry(group.name).highs = group.symbols;
+    for (const group of breakdown(sets.lows, grouping, taxonomy)) entry(group.name).lows = group.symbols;
+    return [...merged.values()].sort((a, b) => (b.highs.length + b.lows.length) - (a.highs.length + a.lows.length)
+      || b.highs.length - a.highs.length || a.name.localeCompare(b.name));
+  }, [sets, grouping, taxonomy]);
   const names = useMemo(() => new Map(rows.map(row => [row.symbol, row.name])), [rows]);
-  const peak = groups[0]?.count ?? 1;
-  const choose = (next: Side) => { setSide(next); setOpen(null); setAll(false); };
+  // One square-root scale for both sides: a single new high stays visible beside dozens of lows without looking equal.
+  const peak = Math.sqrt(Math.max(1, ...groups.flatMap(group => [group.highs.length, group.lows.length])));
+  const width = (value: number) => `${value ? Math.max(2, (Math.sqrt(value) / peak) * 100) : 0}%`;
+  const highs = sets.highs.length, lows = sets.lows.length, total = highs + lows;
   const visible = all ? groups : groups.slice(0, GROUP_LIMIT);
+  const chips = (symbols: string[], tone: 'up' | 'down') => <div className="flex flex-wrap gap-1" data-tone={tone}>
+    {symbols.map(symbol => <button key={symbol} type="button" onClick={() => onOpenChart(symbol)} title={`${names.get(symbol) ?? symbol}: open in Charts`}
+      className="mkt-chip">{symbol}</button>)}
+  </div>;
 
-  return <Panel title="New Highs & Lows" aside={<span className="text-[12px] text-muted">52-week closes</span>}>
-    <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="New highs or new lows">
-      {(['highs', 'lows'] as const).map(key => {
-        const active = side === key;
-        return <label key={key} data-tone={key === 'highs' ? 'up' : 'down'}
-          className={`flex min-w-0 cursor-pointer flex-col gap-3 rounded-(--radius-lg) p-3.5 text-left transition ${active ? 'bg-surface ring-[1.5px] ring-(--tone) shadow-(--shadow-card)' : 'bg-surface-subtle hover:bg-surface-hover'}`}>
-          <span className="flex items-center justify-between gap-2">
-            <span className="text-[11.5px] font-bold uppercase tracking-[0.06em]" style={{color: 'var(--tone)'}}>New {key}</span>
-            <input type="radio" name={sideName} value={key} checked={active} onChange={() => choose(key)}
-              className="m-0 size-4 shrink-0 cursor-pointer" style={{accentColor: 'var(--tone)'}} />
-          </span>
-          <span className="text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-text">{count(sets[key].length)}</span>
-          <span className="flex flex-col gap-1">
-            {leaders[key].length ? leaders[key].map(group => <span key={group.name} className="flex items-baseline justify-between gap-2 text-[12px]">
-              <span className="truncate text-secondary">{group.name}</span>
-              <span className="shrink-0 font-semibold tabular-nums" style={{color: 'var(--tone)'}}>{share(group.share)}</span>
-            </span>) : <span className="text-[12px] text-muted">None this session</span>}
-          </span>
-        </label>;
-      })}
-    </div>
-
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[13px] font-semibold text-text">New {side} by <span className="font-normal text-muted">· {groups.length} groups</span></span>
-        <Segmented label="Group by" value={grouping} options={GROUPINGS} onChange={value => { setGrouping(value); setOpen(null); setAll(false); }} />
+  return <Panel title="New Highs & Lows" aside={<Segmented label="Group by" value={grouping} options={GROUPINGS}
+    onChange={value => { setGrouping(value); setOpen(null); setAll(false); }} />}>
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-baseline justify-between gap-3 text-[13px]">
+        <span data-tone="down"><b className="text-[22px] font-semibold tabular-nums tracking-[-0.02em]" style={{color: 'var(--tone)'}}>{count(lows)}</b>
+          <span className="ml-1.5 text-muted">new lows</span></span>
+        <span className="text-[12px] text-muted max-sm:hidden">52-week closes</span>
+        <span data-tone="up" className="text-right"><span className="mr-1.5 text-muted">new highs</span>
+          <b className="text-[22px] font-semibold tabular-nums tracking-[-0.02em]" style={{color: 'var(--tone)'}}>{count(highs)}</b></span>
       </div>
-      {groups.length ? <ul className="m-0 flex list-none flex-col p-0" data-tone={side === 'highs' ? 'up' : 'down'}>
-        {visible.map(group => {
-          const expanded = open === group.name;
-          return <li key={group.name} className="border-t border-line first:border-t-0">
-            <button type="button" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : group.name)}
-              className="flex w-full flex-col gap-1.5 py-2.5 text-left">
-              <span className="flex items-baseline justify-between gap-3">
-                <span className="min-w-0 truncate text-[13.5px] font-semibold text-text">{group.name}</span>
-                <span className="flex shrink-0 items-baseline gap-2 tabular-nums">
-                  <span className="text-[12px] text-muted">{group.count}</span>
-                  <span className="w-10 text-right text-[13.5px] font-semibold" style={{color: 'var(--tone)'}}>{share(group.share)}</span>
-                  <ChevronDown size={14} className={`self-center text-muted transition ${expanded ? 'rotate-180' : ''}`} aria-hidden="true" />
-                </span>
-              </span>
-              <span className="h-1 overflow-hidden rounded-full bg-field"><span className="block h-full rounded-full" style={{width: `${(group.count / peak) * 100}%`, background: 'var(--tone)'}} /></span>
-              {grouping === 'sector' && <span className="text-[11.5px] text-muted">{group.children} {group.children === 1 ? 'industry' : 'industries'}</span>}
-            </button>
-            {expanded && <div className="flex flex-col gap-2.5 pb-3.5">
-              <div className="flex flex-wrap gap-1.5">
-                {group.symbols.map(symbol => <button key={symbol} type="button" onClick={() => onOpenChart(symbol)} title={`${names.get(symbol) ?? symbol}: open in Charts`}
-                  className="h-7 rounded-full bg-field px-2.5 text-[12px] font-semibold text-text transition hover:bg-surface-hover">
-                  {symbol}
-                </button>)}
-              </div>
-              {grouping === 'sector' && onScreenSector && group.name !== 'Unclassified' && <button type="button" onClick={() => onScreenSector(group.name)}
-                className="inline-flex items-center gap-1.5 self-start text-[12px] font-medium text-muted hover:text-text">
-                <SlidersHorizontal size={12} aria-hidden="true" />Screen all {group.name} stocks
-              </button>}
-            </div>}
-          </li>;
-        })}
-      </ul> : <p className="m-0 py-6 text-center text-[12.5px] text-muted">No new {side} this session.</p>}
-      {groups.length > GROUP_LIMIT && <button type="button" onClick={() => setAll(!all)} className="self-center text-[12px] font-medium text-muted hover:text-text">
-        {all ? 'Top groups only' : `All ${groups.length} groups`}
-      </button>}
+      <div className="flex h-1.5 gap-0.5" role="img" aria-label={`${lows} new lows, ${highs} new highs`}>
+        {lows > 0 && <span className="rounded-full" data-tone="down" style={{flex: lows, background: 'var(--tone)'}} />}
+        {highs > 0 && <span className="min-w-1.5 rounded-full" data-tone="up" style={{flex: highs, background: 'var(--tone)'}} />}
+        {!total && <span className="flex-1 rounded-full bg-field" />}
+      </div>
     </div>
+
+    {groups.length ? <ul className="m-0 flex list-none flex-col p-0" aria-label={`New highs and lows by ${grouping}`}>
+      {visible.map(group => {
+        const expanded = open === group.name;
+        return <li key={group.name} className="mkt-fly-item">
+          <button type="button" aria-expanded={expanded} onClick={() => setOpen(expanded ? null : group.name)} className="mkt-fly"
+            title={`${group.name}: ${group.lows.length} new lows, ${group.highs.length} new highs`}>
+            <span className="mkt-fly-side" data-tone="down">
+              <span className="mkt-fly-count">{group.lows.length || ''}</span>
+              <span className="mkt-fly-track"><span style={{width: width(group.lows.length)}} /></span>
+            </span>
+            <span className="mkt-fly-name">{group.name}</span>
+            <span className="mkt-fly-side" data-tone="up">
+              <span className="mkt-fly-track"><span style={{width: width(group.highs.length)}} /></span>
+              <span className="mkt-fly-count">{group.highs.length || ''}</span>
+            </span>
+          </button>
+          {expanded && <div className="mkt-fly-detail">
+            {group.lows.length > 0 ? chips(group.lows, 'down') : <span className="text-[12px] text-muted">No new lows</span>}
+            {group.highs.length > 0 ? chips(group.highs, 'up') : <span className="text-[12px] text-muted">No new highs</span>}
+            {grouping === 'sector' && onScreenSector && group.name !== 'Unclassified' && <button type="button" onClick={() => onScreenSector(group.name)}
+              className="col-span-full inline-flex items-center gap-1.5 justify-self-center text-[12px] font-medium text-muted hover:text-text">
+              <SlidersHorizontal size={12} aria-hidden="true" />Screen all {group.name} stocks
+            </button>}
+          </div>}
+        </li>;
+      })}
+    </ul> : <p className="m-0 py-6 text-center text-[12.5px] text-muted">No new highs or lows this session.</p>}
+    {groups.length > GROUP_LIMIT && <button type="button" onClick={() => setAll(!all)} className="-mt-2 self-center text-[12px] font-medium text-muted hover:text-text">
+      {all ? 'Top groups only' : `All ${groups.length} groups`}
+    </button>}
   </Panel>;
 }
 

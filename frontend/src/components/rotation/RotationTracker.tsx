@@ -171,10 +171,11 @@ export function RotationTracker({ rows, half, sort, onSort, onOpen, onShow }: Pr
 
                 <Button
                   variant="ghost"
+                  size="icon"
                   onClick={() => onOpen(row.item)}
                   aria-label={row.item.kind === 'group' ? `Open ${row.item.label} members` : `Open ${row.item.label} chart`}
                   title={row.item.kind === 'group' ? 'Open member stocks' : 'Open in Charts'}
-                  className="!h-7 !w-7 !p-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100 rounded-full text-muted hover:text-text hover:bg-surface-subtle"
+                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100 rounded-full text-muted hover:text-text hover:bg-surface-subtle"
                 >
                   {row.item.kind === 'group' ? <ChevronRight size={14} /> : <CandlestickChart size={13} />}
                 </Button>

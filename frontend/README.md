@@ -519,10 +519,12 @@ Derive React state where possible. Use TanStack Query for request lifecycle and 
 
 - Tailwind utilities come first. Feature stylesheets in `src/styles/` load into `@layer components`, so a utility on an element always overrides them.
 - Use semantic colour utilities (`text-muted`, `bg-surface`, `border-line`, `text-accent`), not palette names like `text-slate-500`. The palette aliases in `theme.css` exist only for older markup.
-- Use `<Button variant>` from `src/components/Button.tsx` instead of `<button className="button ...">`. Shared primitives live in `src/styles/components.css`.
+- Use `<Button variant>` from `src/components/Button.tsx` instead of `<button className="button ...">`. Use `size="compact"` for 28px text buttons and `size="icon"` for 28px square buttons; defaults remain 32px. Shared primitives live in `src/styles/components.css`.
 - Write feature CSS only for what utilities can't express (chart grids, canvas overlays, third-party DOM), and never select on Tailwind class names such as `span.block`.
 - Stacking for UI that escapes its panel uses the `--z-*` registry in `theme.css`; use `z-(--z-dialog)` in markup. Small literals (1-30) are only for stacking within one panel.
 - When you touch a feature, move its CSS block to utilities where practical and delete the rules it no longer needs.
+- Load standalone feature CSS with its lazy component, inside `@layer components`. Keep styles shared with eager screens global; Charts also styles Screener quick charts. Earnings styles include its portal root `.ep-sheet`.
+- Check the CSS and gzip sizes printed by `npm run build` when changing styling. Compare initial CSS separately from lazy chunks; a deferred stylesheet is not deleted CSS.
 
 ## Testing and troubleshooting
 

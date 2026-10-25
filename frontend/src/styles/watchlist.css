@@ -795,10 +795,10 @@
 
 .watchlist-symbol-logo img,
 .watchlist-symbol-logo span {
-  width: 18px !important;
-  height: 18px !important;
-  border-radius: 50% !important;
-  font-size: 9px !important;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 9px;
 }
 
 .watchlist-symbol-name {

@@ -547,37 +547,51 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         delete next[key];
         return next;
       })} />
-      <div className={activeTab === 'presets' ? 'grid grid-cols-1 gap-x-8 xl:grid-cols-2' : 'filter-rule-list'} data-preset-list={activeTab === 'presets'}>
-        {filtered.map((def, index) => {
-          const instances = Object.entries(localMap).filter(([, condition]) => condition.conditionId === def.id);
-          const repeatable = activeTab === 'custom' && (def.category === 'fundamentals' && def.parameters.length > 0
-            || isEtfCondition(def.id) || isExtendedCondition(def.id) || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id));
-          
-          const prevDef = index > 0 ? filtered[index - 1] : null;
-          const showSectionDivider = activeTab === 'custom' && category === 'all' && (!prevDef || prevDef.category !== def.category);
-          const categoryTitle = showSectionDivider ? (categoryTabs.find(t => t.id === def.category)?.label ?? def.category) : null;
+      <div className={activeTab === 'presets' ? 'grid grid-cols-1 md:grid-cols-2 gap-2.5' : 'filter-rule-list'} data-preset-list={activeTab === 'presets'}>
+        {activeTab === 'presets' ? (
+          filtered.map(def => (
+            <FilterRow
+              key={def.id}
+              ruleKey={def.id}
+              def={def}
+              active={localMap[def.id]}
+              showParameters={false}
+              toggle={toggle}
+              updateParam={updateParam}
+            />
+          ))
+        ) : (
+          filtered.map((def, index) => {
+            const instances = Object.entries(localMap).filter(([, condition]) => condition.conditionId === def.id);
+            const repeatable = def.category === 'fundamentals' && def.parameters.length > 0
+              || isEtfCondition(def.id) || isExtendedCondition(def.id) || ['mom_return', 'PRICE_CHANGE_PCT', 'FUNDAMENTAL_METRIC'].includes(def.id);
+            
+            const prevDef = index > 0 ? filtered[index - 1] : null;
+            const showSectionDivider = category === 'all' && (!prevDef || prevDef.category !== def.category);
+            const categoryTitle = showSectionDivider ? (categoryTabs.find(t => t.id === def.category)?.label ?? def.category) : null;
 
-          return (
-            <React.Fragment key={def.id}>
-              {showSectionDivider && (
-                <div className="filter-section-header" role="presentation">
-                  <span className="filter-section-title">{categoryTitle}</span>
-                  <div className="filter-section-divider" />
+            return (
+              <React.Fragment key={def.id}>
+                {showSectionDivider && (
+                  <div className="filter-section-header" role="presentation">
+                    <span className="filter-section-title">{categoryTitle}</span>
+                    <div className="filter-section-divider" />
+                  </div>
+                )}
+                <div className="filter-family">
+                  {(instances.length ? instances : [[def.id, undefined] as const]).map(([key, condition]) =>
+                    <FilterRow key={key} ruleKey={key} def={isEtfCondition(def.id) ? {...def, parameters:def.parameters.map(parameter => {
+                      if (parameter.id !== 'values') return parameter;
+                      const field = condition?.parameters.metric ?? def.parameters[0].defaultValue;
+                      return {...parameter, options:(choices?.ETF_VALUES?.[field] ?? []).map(value => ({value, label:choices?.ETF_LABELS?.[field]?.[value] ?? (value === 'true' ? 'Yes' : value === 'false' ? 'No' : value)}))};
+                    })} : def} active={condition} showParameters={true} toggle={toggle} updateParam={updateParam} />)}
+                  {repeatable && instances.length > 0 && availableFilterParameters(def) && <button type="button" className="add-filter-rule"
+                    aria-label={`Add ${def.label} rule`} onClick={() => addRule(def)}>+ Add rule</button>}
                 </div>
-              )}
-              <div className="filter-family">
-                {(instances.length ? instances : [[def.id, undefined] as const]).map(([key, condition]) =>
-                  <FilterRow key={key} ruleKey={key} def={isEtfCondition(def.id) ? {...def, parameters:def.parameters.map(parameter => {
-                    if (parameter.id !== 'values') return parameter;
-                    const field = condition?.parameters.metric ?? def.parameters[0].defaultValue;
-                    return {...parameter, options:(choices?.ETF_VALUES?.[field] ?? []).map(value => ({value, label:choices?.ETF_LABELS?.[field]?.[value] ?? (value === 'true' ? 'Yes' : value === 'false' ? 'No' : value)}))};
-                  })} : def} active={condition} showParameters={activeTab === 'custom'} toggle={toggle} updateParam={updateParam} />)}
-                {repeatable && instances.length > 0 && availableFilterParameters(def) && <button type="button" className="add-filter-rule"
-                  aria-label={`Add ${def.label} rule`} onClick={() => addRule(def)}>+ Add rule</button>}
-              </div>
-            </React.Fragment>
-          );
-        })}
+              </React.Fragment>
+            );
+          })
+        )}
       </div>
       {!filtered.length && <div className="data-state"><h2>No matching {activeTab === 'custom' ? 'filters' : 'scans'}</h2><p>Try a different category or search.</p></div>}
     </div>

@@ -1,9 +1,11 @@
 import { copyFormats, type CopyGroup } from '../utils/copyResults';
+import {classificationLabels, type ClassificationRecord} from '../data/classification';
 import { getIpoJson } from './gzipJson';
 import { DataUnavailableError } from './dataErrors';
 
 /** Quarterly results history: a small index in the app, quarter files in object storage. */
 const EARNINGS_INDEX_URL = '/data/results/index.json';
+const HEATMAP_INDEX_URL = '/data/heatmap/index.json';
 
 export const QUALITY_ORDER = ['Excellent', 'Great', 'Good', 'Ok', 'Weak'] as const;
 export type Quality = typeof QUALITY_ORDER[number];
@@ -12,6 +14,16 @@ interface FileRef { sha256: string; url: string; count: number }
 export interface EarningsIndex {
   version: 1;
   quarters: Record<string, {checkedAt: string; published: FileRef; upcoming: FileRef}>;
+}
+
+export interface HeatmapMarketRef extends FileRef {
+  checkedAt: string;
+  activeQuarter: string;
+}
+
+export interface HeatmapIndex {
+  version: 1;
+  markets: Record<string, HeatmapMarketRef>;
 }
 
 /** One company's filing as published by the provider; every field may be missing. */
@@ -67,6 +79,27 @@ export async function getEarningsIndex(): Promise<EarningsIndex> {
     throw new DataUnavailableError('Earnings history has not been published yet.', 'not_published');
   }
   return index;
+}
+
+export async function getHeatmapIndex(): Promise<HeatmapIndex> {
+  const response = await fetch(HEATMAP_INDEX_URL, {cache: 'no-cache'});
+  if (!response.ok) throw new DataUnavailableError('Earnings heatmap has not been published yet.', 'not_published');
+  const index = await response.json().catch(() => null) as HeatmapIndex | null;
+  if (!index || index.version !== 1 || typeof index.markets !== 'object') {
+    throw new DataUnavailableError('Earnings heatmap has not been published yet.', 'not_published');
+  }
+  return index;
+}
+
+/** One market's active heatmap records from object storage. */
+export async function getHeatmapFile(ref: FileRef): Promise<EarningsRecord[]> {
+  if (!/^https:\/\/[^/]+\/objects\/[a-f0-9]{64}\.json\.gz$/.test(ref.url)) throw new Error('Invalid heatmap file reference');
+  const payload = await getIpoJson<{schemaVersion: number; market: string; activeQuarter: string; records: EarningsRecord[]}>(
+    ref.url,
+    'Earnings heatmap data'
+  );
+  if (payload.schemaVersion !== 1 || !Array.isArray(payload.records)) throw new Error('Unexpected heatmap file');
+  return payload.records.map(cleanRecord);
 }
 
 /** One calendar quarter's published or upcoming records. Files are content-addressed, so they never change. */
@@ -222,7 +255,7 @@ export function companyHistory(files: readonly EarningsRecord[][], symbol: strin
 }
 
 /** Where a company sits in Nexus's own classification, joined by symbol (from the chart directory and theme file). */
-export interface Classification {
+export interface Classification extends ClassificationRecord {
   sector?: string | null; industry?: string | null; subIndustry?: string | null;
   theme?: string | null; block?: string | null; macro?: string | null;
 }
@@ -230,7 +263,7 @@ export type GroupBy = Exclude<CopyGroup, 'symbols'>;
 /** The screener's own names for each level. */
 export const GROUP_LABEL = Object.fromEntries(copyFormats.map(({value, label}) => [value, label])) as Record<GroupBy, string>;
 /** Levels that come from the theme file rather than the chart directory. */
-export const THEME_LEVELS: ReadonlySet<string> = new Set<GroupBy>(['subIndustry', 'theme', 'block', 'macro']);
+export const THEME_LEVELS: ReadonlySet<string> = new Set<GroupBy>(['subIndustry', 'theme', 'block', 'macro', 'cohort', 'aggregate']);
 export const UNCLASSIFIED = 'Unclassified';
 
 export interface EarningsGroup {
@@ -253,8 +286,12 @@ export function groupRecords(records: readonly EarningsRecord[], by: GroupBy,
   const groups = new Map<string, EarningsRecord[]>();
   for (const record of records) {
     const known = classify(record.symbol);
-    const label = (by === 'sector' ? known?.sector ?? record.sector : by === 'industry' ? known?.industry ?? record.industry : known?.[by])?.trim() || UNCLASSIFIED;
-    groups.set(label, [...(groups.get(label) ?? []), record]);
+    const labels = classificationLabels(known ?? {}, known, by);
+    for (const label of labels.length ? labels : [UNCLASSIFIED]) {
+      const rows = groups.get(label) ?? [];
+      if (!rows.some(row => row.symbol === record.symbol)) rows.push(record);
+      groups.set(label, rows);
+    }
   }
   return [...groups].map(([label, rows]) => {
     const quality = summarize(rows).quality;

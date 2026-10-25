@@ -68,7 +68,7 @@
 
 .ap-header-sub {
   font-size: 12.5px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   font-weight: 400;
   letter-spacing: -0.01em;
 }
@@ -95,7 +95,7 @@
   padding: 1px;
   display: inline-flex;
   align-items: center;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   border-radius: 3px;
 }
 
@@ -115,7 +115,7 @@
   gap: 5px;
   font-size: 11.5px;
   font-weight: 450;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   background: transparent;
   border: none;
   padding: 3px 8px;
@@ -153,7 +153,7 @@
   border-radius: 6px;
   border: none;
   background: transparent;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   cursor: pointer;
   transition: color 0.15s ease;
 }
@@ -194,7 +194,7 @@
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   pointer-events: none;
 }
 
@@ -219,7 +219,7 @@
 }
 
 .ap-search-input::placeholder {
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   font-weight: 400;
 }
 
@@ -230,7 +230,7 @@
   transform: translateY(-50%);
   background: transparent;
   border: none;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -267,7 +267,7 @@
   background: transparent;
   font-size: 11.5px;
   font-weight: 500;
-  color: var(--text-muted, #6b7280);
+  color: var(--muted);
   cursor: pointer;
   transition: all 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
   font-family: inherit;
@@ -330,7 +330,7 @@
   font-size: 12.5px;
   font-weight: 500;
   letter-spacing: 0;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   flex-shrink: 0;
 }
 
@@ -353,7 +353,7 @@
   border-radius: 5px;
   background: transparent;
   border: 1px solid transparent;
-  color: var(--text-muted, #6b7280);
+  color: var(--muted);
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.12s ease;
@@ -384,7 +384,7 @@
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   font-size: 13px;
   gap: 10px;
   text-align: center;
@@ -486,12 +486,12 @@
 
 .ap-symbol-logo img,
 .ap-symbol-logo span {
-  width: 17px !important;
-  height: 17px !important;
-  border-radius: 3px !important;
-  border: 1px solid rgba(0, 0, 0, 0.06) !important;
-  background: #ffffff !important;
-  box-shadow: none !important;
+  width: 17px;
+  height: 17px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #ffffff;
+  box-shadow: none;
 }
 
 .ap-symbol-text {
@@ -505,7 +505,7 @@
 }
 
 .ap-company-name {
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   font-weight: 400;
   font-size: 11.5px;
   max-width: 180px;
@@ -516,7 +516,7 @@
 
 .ap-subtle-tag {
   font-size: 10px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   padding: 0 4px;
   font-weight: 400;
   opacity: 0.8;
@@ -529,7 +529,7 @@
 .ap-entry-time {
   margin-left: auto;
   font-size: 11px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -548,7 +548,7 @@
 .ap-entry-body {
   font-size: 12.5px;
   line-height: 1.45;
-  color: var(--text-muted, #6b7280);
+  color: var(--muted);
   margin: 1px 0 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -581,7 +581,7 @@
   align-items: center;
   gap: 10px;
   font-size: 11px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
 }
 
 .ap-tray-details code {
@@ -644,7 +644,7 @@
   border-radius: 4px;
   background: transparent;
   border: none;
-  color: var(--text-muted, #9ca3af);
+  color: var(--muted);
   cursor: pointer;
   transition: color 0.12s ease;
 }
@@ -663,7 +663,7 @@
 .ap-load-more-btn {
   background: transparent;
   border: 1px solid var(--line, rgba(0, 0, 0, 0.08));
-  color: var(--text-muted, #6b7280);
+  color: var(--muted);
   font-size: 11.5px;
   font-weight: 450;
   padding: 5px 14px;
@@ -686,6 +686,6 @@
 @media (prefers-color-scheme: dark) {
   .ap-symbol-logo img,
   .ap-symbol-logo span {
-    border-color: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.1);
   }
 }

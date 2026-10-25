@@ -134,7 +134,7 @@
   .research-view { gap: 0; }
   .screen-controls {
     flex-shrink: 0;
-    padding: 8px 12px;
+    padding: 12px 14px;
     border: 0;
     border-bottom: 1px solid var(--line);
     border-radius: 0;
@@ -145,7 +145,7 @@
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
     align-items: center;
-    gap: 6px 8px;
+    gap: 12px 8px;
   }
   /* Query and universe share one row: the query takes the room, the universe is a compact pill. */
   .query-control {
@@ -191,13 +191,13 @@
     display: flex;
     align-items: center;
     margin: 0;
-    gap: 5px;
+    gap: 2px;
   }
   .screen-buttons .button {
-    min-height: 36px;
-    height: 36px;
-    padding-inline: 11px;
-    font-size: 13px;
+    min-height: 32px;
+    height: 32px;
+    padding-inline: 12px;
+    font-size: 12.5px;
     gap: 5px;
   }
   .screen-buttons .button > svg { width: 13px; height: 13px; }
@@ -206,11 +206,15 @@
     font-size: 11px;
     color: var(--muted);
   }
+  /* Text actions on the left; the icon actions and Run gather on the right. */
+  .screen-buttons .toolbar-icon-button:not(.backtest-trigger) { margin-left: auto; }
+  .screen-buttons .backtest-trigger { margin-left: 0; }
+  .screen-buttons .button-primary { order: 1; margin-left: 6px; }
   .active-filters {
     flex-wrap: nowrap;
     overflow-x: auto;
-    margin-top: 6px;
-    gap: 5px;
+    margin-top: 12px;
+    gap: 6px;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 2px;

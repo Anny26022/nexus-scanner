@@ -48,7 +48,7 @@ const sessionOf = (record: EarningsRecord): Session | null => {
   if (weekday === 0 || weekday === 6 || record.timing === 'Holiday') return 'closed';
   return record.timing === 'Before' ? 'before' : record.timing === 'During' ? 'during' : record.timing === 'After' ? 'after' : null;
 };
-const LEVELS: GroupBy[] = ['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'];
+const LEVELS: GroupBy[] = ['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro', 'narrative'];
 
 type SortKey = 'filing_day' | 'quality' | 'revenue_yoy' | 'pat_yoy' | 'eps_yoy' | 'run_up' | 'day1' | 'drift' | 'since';
 const resultKey = (record: EarningsRecord) => `${record.symbol}|${record.filing_day}`;

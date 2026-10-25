@@ -19,6 +19,7 @@ import { extendedMetrics } from '../data/extendedMetrics';
 import { QuickChartsView } from './QuickChartsView';
 import {etfGroups, etfFieldLabel} from '../data/etfFields';
 import { Button } from './Button';
+import { narrativesOf } from '../data/narratives';
 
 interface ResultsTableProps {
   etf?: boolean;
@@ -315,7 +316,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
                     ? overview.dismiss() : overview.open(row, event.currentTarget, true)}>
                     <SymbolWithLogo symbol={row.symbol} name={row.name} badge={row.isFno && <span className="fno-label">F&amp;O</span>} /></button>}
                   {!etf && <div className="company-tools"><button type="button" className="icon-button filing-button" aria-label={`View ${row.symbol} announcements`} title="View announcements" onClick={() => setFilingSymbol(row.symbol)} disabled={busy}><FileText size={14} strokeWidth={1.8} /></button></div>}</div>
-                  : column.id === 'sector' ? <><div className={row.sector === 'Unclassified' ? 'cell-muted truncate' : 'cell-label truncate'} title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></>
+                  : column.id === 'sector' ? <><div className={row.sector === 'Unclassified' ? 'cell-muted truncate' : 'cell-label truncate'} title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div><NarrativeChip symbol={row.symbol} /></>
                   : column.id === 'deliveryPct' && row.deliveryPct == null ? <span className="cell-muted">Unavailable</span>
                   : column.id === 'changePct' && row.changePct != null ? <span className={row.changePct >= 0 ? 'positive' : 'negative'}>{row.changePct >= 0 ? '+' : ''}{displayValue(column.getValue(row), column.format)}</span>
                   : column.id === 'rvol' && row.rvol != null ? <span className={row.rvol >= 2 ? 'volume-badge' : ''}>{displayValue(column.getValue(row), column.format)}</span>
@@ -332,4 +333,12 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
         onClose={overview.close} onMouseEnter={overview.cancelClose} onMouseLeave={overview.scheduleClose} />}
     {filingSymbol && data && <AnnouncementsPanel key={`${filingSymbol}:${data.immutableRevision}`} symbol={filingSymbol} revision={data.immutableRevision} onClose={() => setFilingSymbol(null)} />}
   </section>;
+}
+
+/** The stock's lead narrative (core memberships first), with the rest in the tooltip. */
+function NarrativeChip({symbol}: {symbol: string}) {
+  const tags = narrativesOf(symbol);
+  if (!tags.length) return null;
+  return <div className="narrative-chip truncate" title={tags.map(tag => `${tag.name} (${tag.role})`).join('\n')}>
+    {tags[0].name}{tags.length > 1 && <span className="narrative-more"> +{tags.length - 1}</span>}</div>;
 }

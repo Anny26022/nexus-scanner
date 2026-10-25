@@ -123,6 +123,22 @@ class RotationHistoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             rh.record_memberships(ledger, '2026-10-01', {'A': ['X', None, None, None, None, None]})
 
+    def test_ledger_without_narratives_keeps_its_history_and_backfills_today(self):
+        old = {'version': 1, 'levels': list(rh.LEVELS[:-1]),
+               'records': {'A': [['2026-10-01', ['Banks', None, None, None, None, None]]]}}
+        ledger = rh.record_memberships(old, '2026-10-02', {'A': ['Banks', None, None, None, None, None, ['Grid']]})
+        self.assertEqual(ledger['levels'], list(rh.LEVELS))
+        self.assertEqual(ledger['records']['A'], [['2026-10-01', ['Banks', None, None, None, None, None, ['Grid']]]])
+
+    def test_narratives_form_groups_and_load_from_the_shared_file(self):
+        self.assertIn('India Data-Centre Buildout', rh.load_narratives()['ANANTRAJ'])
+        days = sessions(rh.PERIODS['D'] + 40)
+        rise = [(day, 100 * 1.001 ** i) for i, day in enumerate(days)]
+        rows = [{'symbol': f'S{i}', 'sector': 'Banks', 'marketCapCrore': 5000, 'metrics': {'turnover30': 20}} for i in range(4)]
+        index, _, _ = rh.build(days[-1], rows, {row['symbol']: rise for row in rows}, {'N50': rise}, {},
+                               narratives={f'S{i}': ['Grid'] for i in range(4)})
+        self.assertEqual(next(group for group in index['groups'] if group['id'] == 'narrative:Grid')['m'], ['S0', 'S1', 'S2', 'S3'])
+
     def test_build_shards_stocks_and_groups_and_writes_hashed_objects(self):
         days = sessions(rh.PERIODS['D'] + 40)
         rise = [(day, 100 * 1.001 ** i) for i, day in enumerate(days)]
@@ -140,7 +156,7 @@ class RotationHistoryTests(unittest.TestCase):
         self.assertIn('S0', shards['core']['W'])
         self.assertIn('theme:Lending', shards['groups']['M'])
         self.assertEqual(set(index['benchmarks']), {'N50', 'N500', 'EW'})
-        self.assertEqual(ledger['records']['S0'], [[days[-1], ['Banks', 'Private Banks', None, ['Lending'], 'Finance', None]]])
+        self.assertEqual(ledger['records']['S0'], [[days[-1], ['Banks', 'Private Banks', None, ['Lending'], 'Finance', None, None]]])
         index, _, _ = rh.build(days[-1], rows, closes, {'N50': rise, 'N500': rise, 'MS400': []}, taxonomy)
         self.assertNotIn('MS400', index['benchmarks'])
         with tempfile.TemporaryDirectory() as folder:

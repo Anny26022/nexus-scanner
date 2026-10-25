@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import date
+from functools import lru_cache
 import json
 from pathlib import Path
 import sys
@@ -45,7 +46,17 @@ def band(kind, field, low, high, **params):
                  leaf(kind, comparison="less_or_equal", **{field: high}, **params))
 
 
+@lru_cache(maxsize=1)
+def narrative_members():
+    """{narrative name: member symbols} from the curated file the page also reads."""
+    data = json.loads((Path(__file__).parent / "src" / "data" / "narratives.json").read_text())
+    return {n["name"]: frozenset(n["members"]) for n in data["narratives"]}
+
+
 def translate(identifier, p):
+    if identifier == "NARRATIVE":
+        values = p.get("values") or []
+        return {"type": "narrative", "values": [v.strip() for v in values.split(",") if v.strip()] if isinstance(values, str) else list(values)}
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
         return {"type": "preset", "expression": preset["expression"], "eligibility": p}
@@ -196,6 +207,9 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
     if node["type"] == "not":
         value = evaluate(node["child"],s,frame,context,as_of,diagnostics,delivery)
         return None if value is None else not value
+    if node["type"] == "narrative":
+        # Curated standing stories: membership is not dated, so it applies on any screen date.
+        return not node["values"] or any(s.get("symbol") in narrative_members().get(name, ()) for name in node["values"])
     if node["type"] == "preset":
         baseline = preset_baseline(s, node.get('eligibility')) if s.get("as_of_date") == as_of else None
         if baseline is False:

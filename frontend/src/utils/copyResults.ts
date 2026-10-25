@@ -1,14 +1,15 @@
-export type CopyGroup = 'symbols' | 'sector' | 'industry' | 'theme' | 'subIndustry' | 'block' | 'macro' | 'cohort' | 'aggregate';
+export type CopyGroup = 'symbols' | 'sector' | 'industry' | 'theme' | 'subIndustry' | 'block' | 'macro' | 'cohort' | 'aggregate' | 'narrative';
 export interface CopyRow { symbol:string; sector?:string; industry?:string }
 export type { ThemeClassification } from '../data/classification';
 import type { ThemeClassification } from '../data/classification';
 import { classificationLabels } from '../data/classification';
+import { narrativesOf } from '../data/narratives';
 export const copyFormats: Array<{value:CopyGroup; label:string}> = [
   {value:'symbols',label:'Symbols'}, {value:'sector',label:'Sector'},
   {value:'industry',label:'Industry'}, {value:'theme',label:'Theme'},
   {value:'subIndustry',label:'Sub-industry'}, {value:'block',label:'Thematic block'},
   {value:'macro',label:'Macro pillar'}, {value:'cohort',label:'Listing cohort'},
-  {value:'aggregate',label:'Theme aggregate'},
+  {value:'aggregate',label:'Theme aggregate'}, {value:'narrative',label:'Narrative'},
 ];
 export function formatCopyResults(rows:CopyRow[], group:CopyGroup, taxonomy?:ThemeClassification):string {
   const unique = [...new Map(rows.map(row => [row.symbol,row])).values()];
@@ -18,6 +19,7 @@ export function formatCopyResults(rows:CopyRow[], group:CopyGroup, taxonomy?:The
     const record = taxonomy?.records[row.symbol];
     const labels = group === 'sector' || group === 'industry'
       ? (row[group]?.trim() ? [row[group]!.trim()] : [])
+      : group === 'narrative' ? narrativesOf(row.symbol).map(tag => tag.name)
       : classificationLabels(row, record, group);
     for (const label of labels.length ? labels : ['Unclassified']) {
       const syms = groups.get(label) ?? [];

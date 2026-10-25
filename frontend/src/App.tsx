@@ -152,6 +152,7 @@ const ScreenerAppContent: React.FC = () => {
             <MarketTab
               datasetRevision={activeRevision}
               sessionDate={selectedAsOfDate}
+              onOpenChart={openSymbol}
               onScreenSector={sector => loadScreen({
                 universe: 'mainboard', matchMode: 'all', query: '', sort: {field: 'marketCap', direction: 'desc'},
                 conditions: {sector: {instanceId: 'sector', conditionId: 'SECTOR', parameters: {values: [sector]}}},

@@ -37,7 +37,9 @@ export interface Snapshot {
 }
 type Predicate = (s: SnapshotStock) => Truth;
 /** Cross-sectional answers one stock cannot give alone; absent when only checking support. */
-interface Context { leaders: (metric: string, topPct: number, minTurnoverCr: number) => ReadonlySet<string> }
+interface Context { leaders: (metric: string, topPct: number, eligible: Predicate, key: string) => ReadonlySet<string> }
+/** Library eligibility floors as one test; skipped floors (null) always pass. */
+interface Eligibility { test: Predicate; key: string }
 const nativeDefaults = new Map(nativeConditions.map(def => [def.id,
   Object.fromEntries(def.parameters.map(parameter => [parameter.id, parameter.defaultValue]))]));
 const combine = (values: Truth[], all: boolean): Truth => all
@@ -312,23 +314,24 @@ function leaf(c: ActiveCondition, session: string, context?: Context): Predicate
     default: {
       const recipe = RECIPES.get(c.conditionId);
       if (recipe) {
-        const predicate = compileRecipe(recipe, session, context);
+        // Library recipes share the pipeline scans' eligibility floors, editable the same way.
+        const targets = presetEligibilityTargets(p);
+        if (!targets) return null;
+        const eligibility = eligibilityOf(targets, session);
+        const predicate = compileRecipe(recipe, session, context, eligibility);
         if (!predicate) return null;
-        return c.isNegated ? s => { const v = predicate(s); return v == null ? null : !v; } : predicate;
+        const matched: Predicate = s => combine([eligibility.test(s), predicate(s)], true);
+        return c.isNegated ? s => { const v = matched(s); return v == null ? null : !v; } : matched;
       }
     }
       if (!presetIds.has(c.conditionId)) return null;
       const targets = presetEligibilityTargets(p);
       if (!targets) return null;
+      const eligibility = eligibilityOf(targets, session);
       fn = s => {
         if (!hasCustomPresetEligibility(p)) return s.presetMatches[c.conditionId] ?? null;
-        const eligibility = PRESET_ELIGIBILITY.map((rule, i): Truth => {
-          if (targets[i] === null) return true;
-          const value = rule.field === 'turnover50' ? s.metrics.turnover50 : s[rule.field as keyof SnapshotStock];
-          return s.asOfDate !== session || s.metadataAsOfDate !== session ? null : compare(value, 'GREATER', targets[i]!);
-        });
         const ruleMatch = s.historyAligned && s.asOfDate === session ? s.presetRuleMatches?.[c.conditionId] ?? null : null;
-        return combine([...eligibility, ruleMatch], true);
+        return combine([eligibility.test(s), ruleMatch], true);
       };
       return c.isNegated ? s => { const v = fn(s); return v == null ? null : !v; } : fn;
   }
@@ -338,21 +341,29 @@ function leaf(c: ActiveCondition, session: string, context?: Context): Predicate
   return c.isNegated ? s => { const v = checked(s); return v == null ? null : !v; } : checked;
 }
 
+function eligibilityOf(targets: (number | null)[], session: string): Eligibility {
+  return {key: JSON.stringify(targets), test: s => combine(PRESET_ELIGIBILITY.map((rule, i): Truth => {
+    if (targets[i] === null) return true;
+    const value = rule.field === 'turnover50' ? s.metrics.turnover50 : s[rule.field as keyof SnapshotStock];
+    return s.asOfDate !== session || s.metadataAsOfDate !== session ? null : compare(value, 'GREATER', targets[i]!);
+  }), true)};
+}
+
 /** A library recipe: native filters at their defaults (published-metric filters as written), overridden by the recipe. */
-function compileRecipe(node: RecipeGroup | RecipeGroup['children'][number], session: string, context?: Context): Predicate | null {
+function compileRecipe(node: RecipeGroup | RecipeGroup['children'][number], session: string, context: Context | undefined, eligibility: Eligibility): Predicate | null {
   if (node.type === 'condition' && node.kind === RANK_KIND) {
-    const metric = String(node.params.metric), topPct = Number(node.params.topPct), floor = Number(node.params.minTurnoverCr ?? 0);
-    if (!extendedMetrics.some(item => item.id === metric) || !(topPct > 0 && topPct <= 100) || !(floor >= 0)) return null;
+    const metric = String(node.params.metric), topPct = Number(node.params.topPct);
+    if (!extendedMetrics.some(item => item.id === metric) || !(topPct > 0 && topPct <= 100)) return null;
     return s => {
       if (!context || s.extended?.asOfDate !== session || number(s.extended.values[metric]) == null) return null;
-      return context.leaders(metric, topPct, floor).has(s.symbol);
+      return context.leaders(metric, topPct, eligibility.test, eligibility.key).has(s.symbol);
     };
   }
   if (node.type === 'condition') {
     const defaults = isExtendedCondition(node.kind) ? {} : nativeDefaults.get(node.kind);
     return defaults ? leaf({instanceId: node.kind, conditionId: node.kind, parameters: {...defaults, ...node.params}}, session, context) : null;
   }
-  const children = node.children.map(child => compileRecipe(child, session, context));
+  const children = node.children.map(child => compileRecipe(child, session, context, eligibility));
   if (children.some(fn => fn == null)) return null;
   return s => combine(children.map(fn => fn!(s)), node.op === 'AND');
 }
@@ -391,15 +402,14 @@ export function supportsSnapshotCondition(condition: ActiveCondition): boolean {
   return leaf(condition, '') !== null;
 }
 
-/** The top slice of a universe by a published metric, among current stocks that clear the turnover floor. */
+/** The top slice of a universe by a published metric, among current stocks that pass the scan's eligibility. */
 function rankContext(universe: SnapshotStock[], session: string): Context {
   const cache = new Map<string, Set<string>>();
-  return {leaders(metric, topPct, floor) {
-    const key = `${metric}:${topPct}:${floor}`;
+  return {leaders(metric, topPct, passes, eligibilityKey) {
+    const key = `${metric}:${topPct}:${eligibilityKey}`;
     let kept = cache.get(key);
     if (!kept) {
-      const eligible = universe.filter(s => s.extended?.asOfDate === session && number(s.extended.values[metric]) != null
-        && (floor <= 0 || (number(s.metrics.turnover20) ?? -1) >= floor));
+      const eligible = universe.filter(s => s.extended?.asOfDate === session && number(s.extended.values[metric]) != null && passes(s) === true);
       eligible.sort((a, b) => b.extended!.values[metric]! - a.extended!.values[metric]! || a.symbol.localeCompare(b.symbol));
       kept = new Set(eligible.slice(0, Math.ceil(eligible.length * topPct / 100)).map(s => s.symbol));
       cache.set(key, kept);
@@ -430,7 +440,7 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
     throw new Error('These filters need a newer dataset. Try after the next daily data refresh.');
   }
   const customPreset = (node: ExpressionNode): boolean => node.type === 'group'
-    ? node.children.some(customPreset) : presetIds.has(node.condition.conditionId) && hasCustomPresetEligibility(node.condition.parameters);
+    ? node.children.some(customPreset) : presetIds.has(node.condition.conditionId) && !RECIPES.has(node.condition.conditionId) && hasCustomPresetEligibility(node.condition.parameters);
   if (data.presetRuleMatchesVersion !== 1 && customPreset(request.expressionTree)) {
     throw new Error('Preset eligibility edits need a newer dataset. Restore the default thresholds or try after the next data refresh.');
   }

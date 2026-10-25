@@ -576,6 +576,11 @@
   .scan-library-search { max-width: none; }
   .scan-library-tabs .filter-category-btn { min-height: 34px; }
   .scan-grid { grid-template-columns: minmax(0, 1fr); }
+  .scan-elig-row { flex-wrap: wrap; gap: 6px 8px; }
+  .scan-elig .scan-elig-chip { height: 30px; font-size: 12px; }
+  .scan-elig .scan-elig-chip input[type="number"] { min-height: 0; height: 24px; font-size: 13px; width: 52px; }
+  .scan-elig-name { flex: 1 1 auto; }
+  .scan-elig-rules { order: 3; flex-basis: 100%; }
   .scan-save-form { flex-wrap: wrap; }
   .scan-save-form input { flex-basis: 100%; max-width: none; height: 38px; }
   .dialog-footer .button svg { display: none; }

@@ -9,9 +9,10 @@ import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG, REDUNDANT_CATALOG_CO
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
 import { PRESET_CATALOG, RECIPES, recipeMetrics, type LibraryScan } from '../data/presetCatalog';
 import { ScanLibrary } from './ScanLibrary';
+import { ScanEligibility } from './ScanEligibility';
 import { useLocalStorageState } from '../hooks/useLocalStorageState';
 import { SAVED_SCANS_KEY, parseSavedScans, scanInstances, upsertSavedScan, type SavedScan } from '../utils/savedScans';
-import { PRESET_ELIGIBILITY, presetEligibilitySummary } from '../data/presetEligibility';
+import { presetEligibilitySummary } from '../data/presetEligibility';
 import { availableFilterParameters, isAvailableCondition } from '../utils/filterAvailability';
 import { comparisonLabel, filterLogicHint, parameterPresentation, RANGE_FILTERS } from '../utils/filterPresentation';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
@@ -35,8 +36,8 @@ interface ScreenerModalProps {
   retryChoices?: () => void;
 }
 
-/** Scans matched by the daily pipeline carry editable eligibility; browser recipes do not. */
-const isPipelineScan = (id: string) => id.startsWith('lib-') && !RECIPES.has(id);
+/** Every library scan carries the same editable eligibility floors. */
+const LIBRARY_IDS = new Set(PRESET_CATALOG.map(def => def.id));
 
 const CATEGORY_TABS: Array<{ id: ConditionCategory | 'all'; label: string }> = [
   { id: 'all', label: 'All' },
@@ -337,48 +338,6 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
         <FilterRule def={def} parameters={parameters} updateParam={updateRule} />
       )}
       {editable && showParameters && def.id === 'MA_STACK' && logicHint && <p className="filter-logic-hint">{logicHint}</p>}
-      {checked && !showParameters && <div className="preset-eligibility-card">
-        <div className="preset-eligibility-header">
-          <span className="preset-eligibility-title">Eligibility Criteria</span>
-          <span className="preset-eligibility-badge">ALL REQUIRED (AND)</span>
-        </div>
-        <div className="preset-eligibility-list">
-          {PRESET_ELIGIBILITY.map(rule => {
-            const value = parameters[rule.id] === undefined ? rule.defaultValue : parameters[rule.id];
-            const isEnabled = value !== null;
-            return (
-              <div key={rule.id} className={`preset-eligibility-row ${isEnabled ? 'is-active' : 'is-disabled'}`}>
-                <label className="preset-eligibility-toggle">
-                  <input
-                    type="checkbox"
-                    aria-label={`Use ${rule.label}`}
-                    checked={isEnabled}
-                    onChange={event => updateRule(def.id, rule.id, event.target.checked ? rule.defaultValue : null)}
-                    className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all"
-                  />
-                  <span className="preset-eligibility-name">{rule.label}</span>
-                </label>
-                <div className="preset-eligibility-inputs">
-                  <span className="preset-eligibility-op" aria-hidden="true">&gt;</span>
-                  <div className="preset-eligibility-input-wrap">
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      aria-label={`${rule.label} minimum`}
-                      disabled={!isEnabled}
-                      value={value ?? ''}
-                      onChange={event => updateRule(def.id, rule.id, numericInputValue(event.target.value))}
-                      className="preset-eligibility-input"
-                    />
-                    <span className="preset-eligibility-unit">{rule.unit}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>}
       {descriptionOpen && <p className={showParameters ? 'filter-logic-hint' : 'preset-description'}>{description}</p>}
     </div>
   );
@@ -589,12 +548,9 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         return next;
       })} />
       {activeTab === 'presets' && <>
-        {Object.entries(localMap).some(([, condition]) => isPipelineScan(condition.conditionId)) && <details className="scan-eligibility" open>
-          <summary>Eligibility for selected scans</summary>
-          <div className="filter-rule-list">{Object.entries(localMap).filter(([, condition]) => isPipelineScan(condition.conditionId)).map(([key, condition]) =>
-            <FilterRow key={key} ruleKey={key} def={PRESET_CATALOG.find(def => def.id === condition.conditionId)!} active={condition}
-              showParameters={false} toggle={toggle} updateParam={updateParam} />)}</div>
-        </details>}
+        <ScanEligibility scans={Object.entries(localMap).filter(([, condition]) => LIBRARY_IDS.has(condition.conditionId))}
+          nameOf={id => PRESET_CATALOG.find(def => def.id === id)?.label ?? id} onChange={updateParam}
+          onRemove={key => setLocalMap(current => Object.fromEntries(Object.entries(current).filter(([item]) => item !== key)))} />
         <ScanLibrary selected={localMap} counts={choices?.SCAN_COUNTS} pending={pendingScans} saved={savedScans} onToggle={toggleScan} onUseSaved={loadSaved}
           onDeleteSaved={scan => setStoredScans(savedScans.filter(item => item.id !== scan.id))} />
       </>}

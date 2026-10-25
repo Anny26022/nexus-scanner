@@ -226,7 +226,8 @@ class BridgeTests(unittest.TestCase):
 
     def test_library_recipes_translate_to_native_filters(self):
         node=bridge.translate("scan-near-52w-high",{})
-        self.assertEqual([child["kind"] for child in node["children"]],["PCT_FROM_52W_HIGH","AVG_TURNOVER"])
+        self.assertEqual(node["type"],"preset")
+        self.assertEqual([child["kind"] for child in node["expression"]["children"]],["PCT_FROM_52W_HIGH"])
         diagnostics=set()
         self.assertIsNone(bridge.evaluate(bridge.translate("scan-top-gainers-1m",{}),self.stock(),None,{},"2026-09-30",diagnostics,[]))
         self.assertIn(("market.performance_1m_pct","published_metric_not_in_history"),diagnostics)

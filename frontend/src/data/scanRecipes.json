@@ -4,7 +4,7 @@
     "name": "Top 1M Gainers",
     "category": "Top Gainers",
     "horizon": "Swing",
-    "description": "Up 25% or more over a month, among stocks trading at least ₹5 Cr a day.",
+    "description": "Up 25% or more over a month.",
     "aka": [
       "top gainers",
       "1M gainers",
@@ -13,8 +13,7 @@
       "1M performance"
     ],
     "rules": [
-      "1M performance at least 25%",
-      "20-session average turnover ≥ ₹5 Cr"
+      "1M performance at least 25%"
     ],
     "expression": {
       "type": "group",
@@ -28,15 +27,6 @@
             "comparison": "ABOVE",
             "value": 25
           }
-        },
-        {
-          "type": "condition",
-          "kind": "AVG_TURNOVER",
-          "params": {
-            "comparison": "ABOVE",
-            "lookbackDays": 20,
-            "valueCr": 5
-          }
         }
       ]
     }
@@ -46,7 +36,7 @@
     "name": "Top 3M Gainers",
     "category": "Top Gainers",
     "horizon": "Positional",
-    "description": "Up 40% or more over three months, among stocks trading at least ₹5 Cr a day.",
+    "description": "Up 40% or more over three months.",
     "aka": [
       "top gainers",
       "3M gainers",
@@ -55,8 +45,7 @@
       "3M performance"
     ],
     "rules": [
-      "3M performance at least 40%",
-      "20-session average turnover ≥ ₹5 Cr"
+      "3M performance at least 40%"
     ],
     "expression": {
       "type": "group",
@@ -70,15 +59,6 @@
             "comparison": "ABOVE",
             "value": 40
           }
-        },
-        {
-          "type": "condition",
-          "kind": "AVG_TURNOVER",
-          "params": {
-            "comparison": "ABOVE",
-            "lookbackDays": 20,
-            "valueCr": 5
-          }
         }
       ]
     }
@@ -88,7 +68,7 @@
     "name": "Top 6M Gainers",
     "category": "Top Gainers",
     "horizon": "Positional",
-    "description": "Up 60% or more over six months, among stocks trading at least ₹5 Cr a day.",
+    "description": "Up 60% or more over six months.",
     "aka": [
       "top gainers",
       "6M gainers",
@@ -97,8 +77,7 @@
       "6M performance"
     ],
     "rules": [
-      "6M performance at least 60%",
-      "20-session average turnover ≥ ₹5 Cr"
+      "6M performance at least 60%"
     ],
     "expression": {
       "type": "group",
@@ -112,15 +91,6 @@
             "comparison": "ABOVE",
             "value": 60
           }
-        },
-        {
-          "type": "condition",
-          "kind": "AVG_TURNOVER",
-          "params": {
-            "comparison": "ABOVE",
-            "lookbackDays": 20,
-            "valueCr": 5
-          }
         }
       ]
     }
@@ -130,7 +100,7 @@
     "name": "Top 1Y Gainers",
     "category": "Top Gainers",
     "horizon": "Positional",
-    "description": "Up 100% or more over a year, among stocks trading at least ₹5 Cr a day.",
+    "description": "Up 100% or more over a year.",
     "aka": [
       "top gainers",
       "1Y gainers",
@@ -139,8 +109,7 @@
       "1Y performance"
     ],
     "rules": [
-      "1Y performance at least 100%",
-      "20-session average turnover ≥ ₹5 Cr"
+      "1Y performance at least 100%"
     ],
     "expression": {
       "type": "group",
@@ -154,15 +123,6 @@
             "comparison": "ABOVE",
             "value": 100
           }
-        },
-        {
-          "type": "condition",
-          "kind": "AVG_TURNOVER",
-          "params": {
-            "comparison": "ABOVE",
-            "lookbackDays": 20,
-            "valueCr": 5
-          }
         }
       ]
     }
@@ -172,7 +132,7 @@
     "name": "1M Leaders",
     "category": "Top Gainers",
     "horizon": "Swing",
-    "description": "The top 5% of the universe by 1-month performance, ranked highest first, among stocks trading at least ₹5 Cr a day.",
+    "description": "The top 5% of the universe by 1-month performance, ranked highest first.",
     "aka": [
       "leaders",
       "top performers",
@@ -181,8 +141,7 @@
       "best 1M"
     ],
     "rules": [
-      "Ranked by 1M performance within the screened universe; top 5% kept",
-      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr",
+      "Ranked by 1M performance within the screened universe, among stocks that pass the eligibility; top 5% kept",
       "Results sorted by that performance, highest first"
     ],
     "expression": {
@@ -194,8 +153,7 @@
           "kind": "PERFORMANCE_RANK",
           "params": {
             "metric": "market.performance_1m_pct",
-            "topPct": 5,
-            "minTurnoverCr": 5
+            "topPct": 5
           }
         }
       ]
@@ -206,7 +164,7 @@
     "name": "3M Leaders",
     "category": "Top Gainers",
     "horizon": "Positional",
-    "description": "The top 5% of the universe by 3-month performance, ranked highest first, among stocks trading at least ₹5 Cr a day.",
+    "description": "The top 5% of the universe by 3-month performance, ranked highest first.",
     "aka": [
       "leaders",
       "top performers",
@@ -215,8 +173,7 @@
       "best 3M"
     ],
     "rules": [
-      "Ranked by 3M performance within the screened universe; top 5% kept",
-      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr",
+      "Ranked by 3M performance within the screened universe, among stocks that pass the eligibility; top 5% kept",
       "Results sorted by that performance, highest first"
     ],
     "expression": {
@@ -228,8 +185,7 @@
           "kind": "PERFORMANCE_RANK",
           "params": {
             "metric": "market.performance_3m_pct",
-            "topPct": 5,
-            "minTurnoverCr": 5
+            "topPct": 5
           }
         }
       ]
@@ -240,7 +196,7 @@
     "name": "6M Leaders",
     "category": "Top Gainers",
     "horizon": "Positional",
-    "description": "The top 5% of the universe by 6-month performance, ranked highest first, among stocks trading at least ₹5 Cr a day.",
+    "description": "The top 5% of the universe by 6-month performance, ranked highest first.",
     "aka": [
       "leaders",
       "top performers",
@@ -249,8 +205,7 @@
       "best 6M"
     ],
     "rules": [
-      "Ranked by 6M performance within the screened universe; top 5% kept",
-      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr",
+      "Ranked by 6M performance within the screened universe, among stocks that pass the eligibility; top 5% kept",
       "Results sorted by that performance, highest first"
     ],
     "expression": {
@@ -262,8 +217,7 @@
           "kind": "PERFORMANCE_RANK",
           "params": {
             "metric": "market.performance_6m_pct",
-            "topPct": 5,
-            "minTurnoverCr": 5
+            "topPct": 5
           }
         }
       ]
@@ -274,15 +228,14 @@
     "name": "Near 52-Week High",
     "category": "Breakouts",
     "horizon": "Positional",
-    "description": "Trading within 5% of the 52-week high, with real liquidity.",
+    "description": "Trading within 5% of the 52-week high.",
     "aka": [
       "near high",
       "52 week high",
       "close to high"
     ],
     "rules": [
-      "Within 5% of the 52-week high",
-      "20-session average turnover ≥ ₹5 Cr"
+      "Within 5% of the 52-week high"
     ],
     "expression": {
       "type": "group",
@@ -294,15 +247,6 @@
           "params": {
             "comparison": "BELOW",
             "pct": 5
-          }
-        },
-        {
-          "type": "condition",
-          "kind": "AVG_TURNOVER",
-          "params": {
-            "comparison": "ABOVE",
-            "lookbackDays": 20,
-            "valueCr": 5
           }
         }
       ]
@@ -322,8 +266,7 @@
     "rules": [
       "Within 5% of the 52-week high",
       "Up at least 3% today",
-      "Volume at least 1.5× the 20-day average",
-      "20-session average turnover ≥ ₹5 Cr"
+      "Volume at least 1.5× the 20-day average"
     ],
     "expression": {
       "type": "group",
@@ -353,15 +296,6 @@
             "avgDays": 20,
             "multiple": 1.5,
             "withinDays": 1
-          }
-        },
-        {
-          "type": "condition",
-          "kind": "AVG_TURNOVER",
-          "params": {
-            "comparison": "ABOVE",
-            "lookbackDays": 20,
-            "valueCr": 5
           }
         }
       ]

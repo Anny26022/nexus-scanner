@@ -6,9 +6,28 @@ import {
 import {etfGroup, etfFieldLabel, isEtfCondition} from '../data/etfFields';
 import {comparisonLabel} from './filterPresentation';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
-import { PRESET_CATALOG } from '../data/presetCatalog';
+import { PRESET_CATALOG, RECIPES } from '../data/presetCatalog';
+import type { ConditionDef } from '../types/screener';
 import { presetEligibilitySummary } from '../data/presetEligibility';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
+
+const UNITS: Record<string, string> = {d: 'days', p: 'periods', pp: 'pts', x: '×'};
+
+/** Any filter without its own wording: its label, then each setting as the filter dialog shows it. */
+function describeSettings(def: ConditionDef, p: Record<string, unknown>): string {
+  const parts = def.parameters.flatMap(spec => {
+    const raw = p[spec.id];
+    if (raw == null || raw === '' || (Array.isArray(raw) && !raw.length)) return [];
+    const show = (value: unknown) => spec.options?.find(option => String(option.value) === String(value))?.label ?? String(value);
+    const value = Array.isArray(raw) ? raw.map(show).join(', ') : typeof raw === 'boolean' ? (raw ? 'yes' : 'no') : show(raw);
+    const word = spec.unit ? UNITS[spec.unit] ?? spec.unit : '';
+    // Labels often carry the unit already ("Min gap %", "Avg days"); say it once, after the value.
+    const label = spec.label.replace(/\s*\((?:x|cr|%)\)|\s*%/gi, '').toLowerCase();
+    const unit = !word || spec.options ? '' : word === '%' ? '%' : label.endsWith(word.toLowerCase()) ? '' : ` ${word}`;
+    return [`${label} ${value}${unit}`];
+  });
+  return parts.length ? `${def.label}: ${parts.join(', ')}` : def.label;
+}
 
 /**
  * Compiles a condition into a clear human-readable explanation string.
@@ -137,10 +156,12 @@ export function explainCondition(condition: ActiveCondition): {
       explanation = `20-Day Average Daily Range (ADR %) is AT LEAST ${p.minAdrPct}%`;
       break;
     default:
-      if (condition.conditionId.startsWith('preset_') || condition.conditionId.startsWith('lib-')) {
-        explanation = `Pre-built Scan: ${def.label} (${def.description}). Eligibility: ${presetEligibilitySummary(p)}.`;
+      if (RECIPES.has(condition.conditionId)) {
+        explanation = `${def.label}: ${def.description}`;
+      } else if (condition.conditionId.startsWith('preset_') || condition.conditionId.startsWith('lib-')) {
+        explanation = `${def.label}: ${def.description}. Eligibility: ${presetEligibilitySummary(p)}.`;
       } else {
-        explanation = `${def.label} evaluated with parameters: ${JSON.stringify(p)}`;
+        explanation = describeSettings(def, p);
       }
   }
 

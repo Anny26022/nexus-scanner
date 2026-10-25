@@ -12,16 +12,20 @@ const request: ScreenerRunRequest = {asOfDate:snapshot.asOfDate,universe:'mainbo
 afterEach(() => vi.unstubAllGlobals());
 describe('published snapshots', () => {
   it('runs gainer scans on published TradingView performance and leaves other filters on price history', () => {
-    const make = (symbol: string, perf1m: number | null, turnover20: number) => ({...snapshot.stocks[0], symbol, name:symbol, historyAligned:true,
-      asOfDate:snapshot.asOfDate, metadataAsOfDate:snapshot.asOfDate, metrics:{...snapshot.stocks[0].metrics, turnover20},
+    const make = (symbol: string, perf1m: number | null, turnover50: number) => ({...snapshot.stocks[0], symbol, name:symbol, historyAligned:true,
+      asOfDate:snapshot.asOfDate, metadataAsOfDate:snapshot.asOfDate, marketCapCrore:5000, close:500, metrics:{...snapshot.stocks[0].metrics, turnover50},
       extended:{asOfDate:snapshot.asOfDate, fetchedAt:'', updateMode:'', values:(perf1m == null ? {} : {'market.performance_1m_pct':perf1m}) as Record<string, number>}}) as SnapshotStock;
     const data = {...snapshot, extendedMetricsVersion:1, stocks:[make('A',40,10), make('B',90,0.5), make('C',10,10), make('D',null,10)]};
     const run = (id: string) => screenSnapshot(data, {...request, expressionTree:condition(id)})!.matchedSymbols;
     expect(run('scan-top-gainers-1m')).toEqual(['A']);
-    // Leaders rank the liquid stocks with a value (A, C) and keep the top 5%, rounded up to at least one.
+    // Leaders rank the eligible stocks with a value (A, C) and keep the top 5%, rounded up to at least one.
     expect(run('scan-leaders-1m')).toEqual(['A']);
+    // Dropping the turnover floor brings B back into both the threshold and the ranking.
+    const loose = (id: string) => screenSnapshot(data, {...request, expressionTree:condition(id, {minTurnoverCr:null})})!.matchedSymbols;
+    expect(loose('scan-top-gainers-1m')).toEqual(['A','B']);
+    expect(loose('scan-leaders-1m')).toEqual(['B']);
     const sorted = screenSnapshot(data, {...request, expressionTree:{type:'group', operator:'all', children:[]},
-      sort:{field:'tv.market.performance_1m_pct', direction:'desc'}})!.matchedSymbols;
+      sort:{field:'tv.market.performance_1m_pct', direction:'desc'}})!.matchedSymbols!;
     expect(sorted.slice(0, 3)).toEqual(['B','A','C']);
     expect(supportsSnapshotCondition({instanceId:'x',conditionId:'scan-top-gainers-6m',parameters:{}})).toBe(true);
     expect(supportsSnapshotCondition({instanceId:'x',conditionId:'scan-near-high-breakout',parameters:{}})).toBe(true);

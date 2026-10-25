@@ -59,7 +59,8 @@ def recipe_node(node):
 
 def translate(identifier, p):
     if identifier in RECIPES:
-        return recipe_node(RECIPES[identifier])
+        # Same eligibility floors as the pipeline's library scans.
+        return {"type": "preset", "expression": recipe_node(RECIPES[identifier]), "eligibility": p}
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
         return {"type": "preset", "expression": preset["expression"], "eligibility": p}

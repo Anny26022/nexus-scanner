@@ -10,6 +10,7 @@ import {
   type Grouping, type Period, type PulseRow, type ThemeFlow, POCKET_LEVEL,
 } from '../utils/marketPulse';
 import type { BreadthSession, IndexCard } from '../types/market';
+import type { IPORow } from '../types/screener';
 import { Button } from './Button';
 import '../styles/market.css';
 
@@ -225,12 +226,55 @@ function Extremes({rows, taxonomy, onOpenChart, onScreenSector}: {
 const crore = (value: number) => `₹${value >= 1000 ? `${(value / 1000).toFixed(1)}k` : Math.round(value).toLocaleString('en-IN')} Cr`;
 
 /** Where money moved: themes ranked by their value-weighted move, each naming the stocks that drove it. */
-function Themes({rows, taxonomy}: {rows: PulseRow[]; taxonomy?: Parameters<typeof themeFlows>[2]}) {
+/** Listings from the last ~3 months that came through an IPO (an issue price), not old companies newly traded on NSE. */
+const FRESH_DAYS = 92;
+interface Fresh { symbol: string; name: string; sinceIssue: number; move: number | null; traded: number; listed: string }
+
+function freshListings(ipos: IPORow[] | undefined, rows: PulseRow[], period: Period): Fresh[] {
+  const pulse = new Map(rows.map(row => [row.symbol, row]));
+  return (ipos ?? []).flatMap(ipo => {
+    const issue = ipo.ipoResearch?.issuePrice, age = ipo.listingAgeCalendarDays;
+    if (!issue || issue <= 0 || age == null || age < 0 || age > FRESH_DAYS || !(ipo.currentPrice > 0)) return [];
+    const row = pulse.get(ipo.symbol);
+    return [{symbol: ipo.symbol, name: ipo.name, sinceIssue: (ipo.currentPrice / issue - 1) * 100,
+      move: row?.returns[period] ?? null, traded: row?.traded[period] ?? ipo.turnoverCrore, listed: ipo.listingDate}];
+  });
+}
+
+/** Fresh listings stay apart from the pockets: each moves on its own story, so they are shown one by one. */
+function FreshStrip({fresh, side, period}: {fresh: Fresh[]; side: 'lead' | 'lag'; period: Period}) {
+  if (!fresh.length) return null;
+  const direction = side === 'lead' ? 1 : -1;
+  const score = (item: Fresh) => (item.move ?? item.sinceIssue) * Math.max(item.traded, 0);
+  const shown = [...fresh].sort((a, b) => direction * (score(b) - score(a))).slice(0, 8);
+  const above = fresh.filter(item => item.sinceIssue > 0).length;
+  const label = PERIODS.find(([key]) => key === period)?.[1];
+  return <div className="mkt-fresh">
+    <div className="flex flex-wrap items-baseline justify-between gap-2 px-2.5">
+      <span className="text-[13px] font-semibold text-text">Fresh listings <span className="font-normal text-muted">· last 3 months</span></span>
+      <span className="text-[11.5px] tabular-nums text-muted">{fresh.length} IPOs · {above} above issue price</span>
+    </div>
+    <ul className="mkt-fresh-list">
+      {shown.map(item => {
+        const tone = (item.move ?? item.sinceIssue) >= 0 ? 'up' : 'down';
+        return <li key={item.symbol} data-tone={tone} title={`${item.name}: listed ${item.listed}; ${signed(item.sinceIssue, 1)} vs issue price`}>
+          <span className="truncate text-[13px] font-semibold text-text">{item.symbol}</span>
+          {item.move == null ? <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted">New</span>
+            : <span className="text-[13px] font-semibold tabular-nums" style={{color: 'var(--tone)'}}>{signed(item.move, 1)}</span>}
+          <span className="truncate text-[11px] tabular-nums text-muted">{signed(item.sinceIssue, 0)} vs issue · {crore(item.traded)}/d</span>
+          <span className="text-right text-[11px] text-muted">{item.move == null ? `since ${formatDate(item.listed, false)}` : label}</span>
+        </li>;
+      })}
+    </ul>
+  </div>;
+}
+
+function Themes({rows, taxonomy, ipos}: {rows: PulseRow[]; taxonomy?: Parameters<typeof themeFlows>[2]; ipos?: IPORow[]}) {
   const [period, setPeriod] = useState<Period>('m1');
   const [side, setSide] = useState<'lead' | 'lag'>('lead');
   const flows = useMemo(() => themeFlows(rows, period, taxonomy, side === 'lead' ? 1 : -1), [rows, period, taxonomy, side]);
   const shown = flows.filter(flow => !flow.cohort).slice(0, 16);
-  const cohorts = flows.filter(flow => flow.cohort);
+  const fresh = useMemo(() => freshListings(ipos, rows, period), [ipos, rows, period]);
   const peak = Math.max(1e-9, ...shown.map(flow => Math.abs(flow.flow)));
   const row = (flow: ThemeFlow, rank: number | null) => {
     const tone = flow.flow >= 0 ? 'up' : 'down';
@@ -263,7 +307,7 @@ function Themes({rows, taxonomy}: {rows: PulseRow[]; taxonomy?: Parameters<typeo
     <p className="m-0 -mt-1 text-[12px] text-muted">{side === 'lead' ? 'Where money moved in' : 'Where money moved out'}: themes, industries and niches ranked by their move weighted by value traded, with the stocks that drove it.</p>
     {taxonomy ? <div className="mkt-card px-2 py-1.5">
       <ol className="mkt-ranks">{shown.map((flow, index) => row(flow, index + 1))}</ol>
-      {cohorts.length > 0 && <ul className="mkt-ranks mkt-ranks-cohort">{cohorts.map(flow => row(flow, null))}</ul>}
+      <FreshStrip fresh={fresh} side={side} period={period} />
     </div> : <p className="m-0 text-[12.5px] text-muted">Themes are unavailable in this release.</p>}
   </Panel>;
 }
@@ -349,6 +393,8 @@ export default function MarketTab({datasetRevision, sessionDate, onOpenChart, on
     enabled: Boolean(sessionDate),
     staleTime: Infinity,
   });
+  // The IPO page's catalogue (shared cache) identifies real new listings by their issue price.
+  const ipos = useQuery({queryKey: ['ipos', datasetRevision], queryFn: () => screenerApi.getIpoCatalogue(), staleTime: Infinity, retry: false});
   // Themes are optional: without them the page still shows sectors and industries.
   const taxonomy = useQuery({
     queryKey: ['themeClassification', datasetRevision],
@@ -387,7 +433,7 @@ export default function MarketTab({datasetRevision, sessionDate, onOpenChart, on
 
     {indices.length > 0 && <IndexCards indices={indices} />}
     {rows ? <Pulse rows={rows} sessions={breadth} /> : <PulseState pending={pulse.isPending} error={pulse.error} />}
-    {rows && <Themes rows={rows} taxonomy={taxonomy.data} />}
+    {rows && <Themes rows={rows} taxonomy={taxonomy.data} ipos={ipos.data?.records} />}
     {rows && <Extremes rows={rows} taxonomy={taxonomy.data} onOpenChart={onOpenChart} onScreenSector={onScreenSector} />}
   </div></div>;
 }

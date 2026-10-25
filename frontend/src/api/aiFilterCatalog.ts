@@ -44,7 +44,7 @@ export function createAiFilterCatalog(choices?: FilterChoices): AiFilterDefiniti
         p = {...p,options:p.options?.filter(option=>choices.TRADINGVIEW_METRIC?.includes(option.value))};
         p.defaultValue = p.options?.[0]?.value;
       }
-      if (['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(def.id) && choices) {
+      if (['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP','NARRATIVE'].includes(def.id) && choices) {
         const raw = choices[def.id as keyof FilterChoices];
         const values = Array.isArray(raw) ? raw : [];
         p = {...p,type:def.id === 'INDEX_MEMBERSHIP' ? 'select' : 'multiselect',

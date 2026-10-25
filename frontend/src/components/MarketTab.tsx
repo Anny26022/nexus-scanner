@@ -6,7 +6,7 @@ import { DataUnavailableError } from '../api/dataErrors';
 import { marketRegime } from '../utils/marketOverview';
 import {
   AVERAGES, GROUPINGS, PERIODS, STAGES, STAGE_HINT, STAGE_LABEL,
-  breakdown, participation, stageCounts, themeFlows,
+  breakdown, narrativeFlows, participation, stageCounts, themeFlows,
   type Grouping, type Period, type PulseRow, type ThemeFlow, POCKET_LEVEL,
 } from '../utils/marketPulse';
 import type { BreadthSession, IndexCard } from '../types/market';
@@ -275,7 +275,8 @@ function Themes({rows, taxonomy, ipos}: {rows: PulseRow[]; taxonomy?: Parameters
   const flows = useMemo(() => themeFlows(rows, period, taxonomy, side === 'lead' ? 1 : -1), [rows, period, taxonomy, side]);
   const shown = flows.filter(flow => !flow.cohort).slice(0, 16);
   const fresh = useMemo(() => freshListings(ipos, rows, period), [ipos, rows, period]);
-  const peak = Math.max(1e-9, ...shown.map(flow => Math.abs(flow.flow)));
+  const narratives = useMemo(() => narrativeFlows(rows, period, side === 'lead' ? 1 : -1), [rows, period, side]);
+  const peak = Math.max(1e-9, ...[...shown, ...narratives].map(flow => Math.abs(flow.flow)));
   const row = (flow: ThemeFlow, rank: number | null) => {
     const tone = flow.flow >= 0 ? 'up' : 'down';
     return <li key={flow.name} data-tone={tone} className="mkt-rank"
@@ -305,7 +306,15 @@ function Themes({rows, taxonomy, ipos}: {rows: PulseRow[]; taxonomy?: Parameters
     </button>
   </div>}>
     <p className="m-0 -mt-1 text-[12px] text-muted">{side === 'lead' ? 'Where money moved in' : 'Where money moved out'}: themes, industries and niches ranked by their move weighted by value traded, with the stocks that drove it.</p>
+    {narratives.length > 0 && <div className="mkt-card px-2 py-1.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 px-2.5 pt-1.5 pb-1">
+        <span className="text-[13px] font-semibold text-text">Narratives <span className="font-normal text-muted">· hand-curated cross-industry stories</span></span>
+        <span className="text-[11.5px] text-muted">{narratives.length} tracked</span>
+      </div>
+      <ol className="mkt-ranks mkt-ranks-all">{narratives.map((flow, index) => row(flow, index + 1))}</ol>
+    </div>}
     {taxonomy ? <div className="mkt-card px-2 py-1.5">
+      <div className="px-2.5 pt-1.5 pb-1 text-[13px] font-semibold text-text">Pockets <span className="font-normal text-muted">· themes, industries and niches</span></div>
       <ol className="mkt-ranks">{shown.map((flow, index) => row(flow, index + 1))}</ol>
       <FreshStrip fresh={fresh} side={side} period={period} />
     </div> : <p className="m-0 text-[12.5px] text-muted">Themes are unavailable in this release.</p>}

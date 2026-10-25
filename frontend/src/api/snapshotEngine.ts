@@ -5,6 +5,7 @@ import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
 import {etfGroups} from '../data/etfFields';
 import {extendedMetrics} from '../data/extendedMetrics';
+import {NARRATIVE_NAMES} from '../data/narratives';
 import {pulseRow, type PulseRow} from '../utils/marketPulse';
 
 export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
@@ -181,6 +182,7 @@ export function createSnapshotEngine(loader = readSnapshot) {
         }
         return [id, [...values.values()].sort((a,b) => a.localeCompare(b))];
       })) as Record<keyof typeof fields, string[]>;
+      if (data.assetType !== 'etf') result.NARRATIVE = [...NARRATIVE_NAMES].sort((a, b) => a.localeCompare(b));
       if (data.assetType === 'etf') {
         result.ETF_FIELDS = [];
         result.ETF_VALUES = {};

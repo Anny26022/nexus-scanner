@@ -255,7 +255,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
             const def = NEXUS_CONDITION_CATALOG.find(c => c.id === cond.conditionId) || PRESET_CATALOG.find(c => c.id === cond.conditionId);
             const label = ['FUNDAMENTAL_METRIC', 'mom_return', 'PRICE_CHANGE_PCT'].includes(cond.conditionId)
               ? explainCondition(cond).explanation
-              : ['SECTOR', 'INDUSTRY'].includes(cond.conditionId) && Array.isArray(cond.parameters.values) && cond.parameters.values.length
+              : ['SECTOR', 'INDUSTRY', 'NARRATIVE'].includes(cond.conditionId) && Array.isArray(cond.parameters.values) && cond.parameters.values.length
                 ? `${def?.label ?? cond.conditionId}: ${cond.parameters.values.join(', ')}`
                 : def?.label ?? cond.conditionId;
             return <span key={key} className="filter-chip">{label}<button aria-label={`Remove ${label}`} onClick={() => handleRemove(key)}><X size={13} /></button></span>;

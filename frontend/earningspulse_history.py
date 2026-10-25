@@ -17,7 +17,13 @@ from chart_publication import R2Store, write_json
 
 SOURCE = 'https://earningspulse.ai/earnings'
 START = '2024-Q3'
+# Primary India index consumed by the frontend
 OUTPUT = Path(__file__).parent / 'public/data/results/index.json'
+# Output indices indexed by market to ensure 100% backward compatibility for IN
+INDEX_BY_MARKET = {
+    'IN': OUTPUT,
+    'US': Path(__file__).parent / 'public/data/results/us_index.json',
+}
 # Provider-side links the app never reads; they would only identify where the data came from.
 PRIVATE_FIELDS = frozenset({'summary_uri'})
 REPORT = Path(__file__).parent / 'earningspulse-refresh-report.json'
@@ -42,7 +48,7 @@ def quarters_until(today):
     return labels
 
 
-def parse_quarter(text, label):
+def parse_quarter(text, label, market='IN'):
     """Read JSON values from Flight without executing scripts or assuming line IDs."""
     def value(key):
         marker = json.dumps(key) + ':'
@@ -57,37 +63,46 @@ def parse_quarter(text, label):
     if not isinstance(rows, list):
         raise ValueError('Invalid earnings collection')
     unique = {}
-    required = {'symbol', 'quality', 'quarter_label', 'filing_day', 'market', 'isUpcoming', 'attachment_url'}
+    required = {'symbol', 'filing_day', 'market', 'isUpcoming'}
     for row in rows:
         if not isinstance(row, dict) or not required.issubset(row) or not isinstance(row.get('symbol'), str) or not row['symbol'].strip():
             raise ValueError('Invalid earnings identity or schema')
         day = date.fromisoformat(row['filing_day'])
-        if not start <= day <= end or row.get('market') != 'IN' or type(row.get('isUpcoming')) is not bool:
+        if not start <= day <= end or row.get('market') != market or type(row.get('isUpcoming')) is not bool:
             raise ValueError('Invalid earnings date, market or publication status')
-        if not row['isUpcoming'] and (not isinstance(row.get('quarter_label'), str) or not row['quarter_label'].strip()):
-            raise ValueError('Missing fiscal quarter on a published event')
-        if not row['isUpcoming'] and not {'revenue', 'net_income', 'eps'}.issubset(row):
-            raise ValueError('Missing financial fields on a published event')
+        if market == 'IN':
+            if not row['isUpcoming'] and (not isinstance(row.get('quarter_label'), str) or not row['quarter_label'].strip()):
+                raise ValueError('Missing fiscal quarter on a published event')
+            if not row['isUpcoming'] and not {'revenue', 'net_income', 'eps'}.issubset(row):
+                raise ValueError('Missing financial fields on a published event')
         key = (row['symbol'], row.get('quarter_label') or '', row['filing_day'])
         if key in unique and unique[key] != row:
-            raise ValueError('Conflicting duplicate earnings event')
-        unique[key] = row
+            if market == 'US':
+                # In US market, multiple filings occur on the same day (e.g. PR vs 10-Q); retain newest by event_ts
+                current_ts = unique[key].get('event_ts') or 0
+                row_ts = row.get('event_ts') or 0
+                if row_ts > current_ts:
+                    unique[key] = row
+            else:
+                raise ValueError('Conflicting duplicate earnings event')
+        else:
+            unique[key] = row
     rows = [unique[key] for key in sorted(unique)]
     # Reject NaN and Infinity before writing any objects.
     json.dumps(rows, allow_nan=False)
     return rows
 
 
-def fetch_quarter(session, label, today):
+def fetch_quarter(session, label, today, market='IN'):
     start, _ = quarter_bounds(label)
     anchor = start.replace(month=start.month + 1, day=15)
     monday = today - timedelta(days=today.weekday())
-    params = dict(range='quarter', liquidity='all', market='IN', week=(anchor - monday).days // 7)
+    params = dict(range='quarter', liquidity='all', market=market, week=(anchor - monday).days // 7)
     for attempt in range(2):
         try:
             response = session.get(SOURCE, params=params, headers={'RSC': '1'}, timeout=(10, 60))
             response.raise_for_status()
-            return parse_quarter(response.text, label)
+            return parse_quarter(response.text, label, market=market)
         except (requests.RequestException, ValueError, KeyError, TypeError):
             if attempt:
                 raise
@@ -148,20 +163,30 @@ def refresh(output, store, fetch, *, today, checked_at, recheck_oldest=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--recheck-oldest', action='store_true', help='Also refresh the least recently checked older quarter')
+    parser.add_argument('--markets', nargs='+', default=['IN', 'US'], help='Markets to refresh (default: IN US)')
     args = parser.parse_args()
     now = datetime.now(ZoneInfo('Asia/Kolkata'))
-    try:
-        with requests.Session() as session:
-            report = refresh(OUTPUT, R2Store(), lambda label: fetch_quarter(session, label, now.date()),
-                             today=now.date(), checked_at=now.isoformat(), recheck_oldest=args.recheck_oldest)
-    except Exception as error:
-        # Workflow treats this source as optional; retain the previous public index.
-        report = {'checkedAt': now.isoformat(), 'errors': {'publication': str(error)}}
-    write_json(REPORT, report)
-    if report['errors']:
+    combined_report = {'checkedAt': now.isoformat(), 'markets': {}, 'errors': {}}
+
+    store = R2Store()
+    with requests.Session() as session:
+        for market in args.markets:
+            output_file = INDEX_BY_MARKET.get(market, Path(__file__).parent / f'public/data/results/{market.lower()}_index.json')
+            try:
+                report = refresh(output_file, store,
+                                 lambda label, m=market: fetch_quarter(session, label, now.date(), market=m),
+                                 today=now.date(), checked_at=now.isoformat(), recheck_oldest=args.recheck_oldest)
+                combined_report['markets'][market] = report
+                if report.get('errors'):
+                    combined_report['errors'][market] = report['errors']
+            except Exception as error:
+                combined_report['errors'][market] = str(error)
+
+    write_json(REPORT, combined_report)
+    if combined_report['errors']:
         print('::warning::Earnings Pulse refresh incomplete; see earningspulse-refresh-report.json', flush=True)
-    print(json.dumps(report), flush=True)
-    return int(bool(report['errors']))
+    print(json.dumps(combined_report), flush=True)
+    return int(bool(combined_report['errors']))
 
 
 if __name__ == '__main__':

@@ -372,7 +372,7 @@
           "exchange": "NSE"
         },
         {
-          "isin": "INE133A01011",
+          "isin": "INE133A01029",
           "symbol": "JSWDULUX",
           "name": "JSW Dulux",
           "exchange": "NSE"
@@ -937,8 +937,8 @@
         },
         {
           "isin": "INE726G01019",
-          "symbol": "ICICIPRULI",
-          "name": "ICICI Prudential Life Insurance",
+          "symbol": "ICICILIFE",
+          "name": "ICICI Life Insurance",
           "exchange": "NSE"
         },
         {

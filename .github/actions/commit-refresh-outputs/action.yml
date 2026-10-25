@@ -33,6 +33,12 @@ runs:
         if [ -f frontend/public/data/results/index.json ]; then
           git add frontend/public/data/results/index.json
         fi
+        if [ -f frontend/public/data/results/us_index.json ]; then
+          git add frontend/public/data/results/us_index.json
+        fi
+        if [ -f frontend/public/data/heatmap/index.json ]; then
+          git add frontend/public/data/heatmap/index.json
+        fi
         if [ "$WEEKLY_REFRESH" = "true" ]; then
           git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
           git add frontend/public/data/company/current.json frontend/public/data/company/revisions

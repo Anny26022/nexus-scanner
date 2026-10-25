@@ -69,6 +69,8 @@ export interface EarningsRecord {
   target_raises_7d?: number | null;
   attachment_url?: string | null;
   cmp?: number | null;
+  /** Filing time in IST: minutes after midnight, and whether the provider estimated it. */
+  dropTime?: {minutes?: number | null; isEstimate?: boolean | null} | null;
 }
 
 export async function getEarningsIndex(): Promise<EarningsIndex> {

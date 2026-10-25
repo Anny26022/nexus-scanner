@@ -2,7 +2,7 @@
 /* Earnings page: one quiet surface, typography-led, theme tokens only (light and dark follow theme.css). */
 /* Grade tokens sit on both roots: the detail sheet renders in a portal outside .ep. */
 .ep, .ep-sheet { --g-excellent: #089981; --g-great: #4cb79f; --g-good: #5b8def; --g-ok: #a3a6af; --g-weak: #e5484d; }
-.ep { --ep-cols: minmax(0, 2.4fr) 92px repeat(2, 76px) 76px 72px 148px 64px; display: flex; flex-direction: column; gap: 44px; flex: 1; min-height: 0; overflow-y: auto; width: 100%; padding-bottom: 40px; padding-inline: clamp(16px, 3vw, 40px); }
+.ep { --ep-cols: minmax(0, 2.4fr) 92px repeat(2, 76px) 76px 72px 148px 80px; display: flex; flex-direction: column; gap: 44px; flex: 1; min-height: 0; overflow-y: auto; width: 100%; padding-bottom: 40px; padding-inline: clamp(16px, 3vw, 40px); }
 .ep > * { flex-shrink: 0; width: 100%; }
 :where(.ep, .ep-sheet) .is-up { color: var(--positive); } :where(.ep, .ep-sheet) .is-down { color: var(--negative); } :where(.ep, .ep-sheet) .is-muted { color: var(--muted); }
 :where(.ep, .ep-sheet) [data-grade="excellent"] { --g: var(--g-excellent); } :where(.ep, .ep-sheet) [data-grade="great"] { --g: var(--g-great); } :where(.ep, .ep-sheet) [data-grade="good"] { --g: var(--g-good); }
@@ -85,6 +85,8 @@
 .ep-sort:hover, .ep-sort[aria-pressed="true"] { color: var(--text); }
 .ep-growth { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-variant-numeric: tabular-nums; }
 .ep-growth b { font-weight: 560; }
+.ep-growth small, .ep-filed small { color: var(--muted); font-size: 10.5px; font-weight: 500; white-space: nowrap; }
+.ep-filed { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--secondary); font-size: 12px; }
 .ep-growth i { width: 48px; height: 3px; overflow: hidden; border-radius: 2px; background: var(--field); }
 .ep-growth s { display: block; height: 100%; margin-left: auto; border-radius: 2px; background: color-mix(in srgb, var(--positive) 70%, transparent); }
 .ep-growth s[data-down] { background: color-mix(in srgb, var(--negative) 70%, transparent); }

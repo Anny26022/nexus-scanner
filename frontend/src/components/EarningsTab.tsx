@@ -31,6 +31,13 @@ const tone = (value: number | null | undefined, digits = 1) => {
   const rounded = value == null ? null : Number(value.toFixed(digits)) || 0;
   return rounded == null ? 'is-muted' : rounded > 0 ? 'is-up' : rounded < 0 ? 'is-down' : '';
 };
+/** "4:11 pm" from the provider's IST minutes; an estimated time reads "~4:11 pm". */
+const filedAt = (record: EarningsRecord) => {
+  const minutes = record.dropTime?.minutes;
+  if (typeof minutes !== 'number' || !Number.isFinite(minutes) || minutes < 0 || minutes >= 1440) return null;
+  const hour = Math.floor(minutes / 60), text = `${hour % 12 || 12}:${String(minutes % 60).padStart(2, '0')} ${hour < 12 ? 'am' : 'pm'}`;
+  return record.dropTime?.isEstimate ? `~${text}` : text;
+};
 const rupees = (value: number | null | undefined) => value == null ? '—' : `₹${crore.format(value / 1e7)} Cr`;
 const VERDICT: Record<string, string> = {STRONG_BEAT: 'Strong beat', BEAT: 'Beat', 'IN-LINE': 'In line', MISS: 'Miss', STRONG_MISS: 'Strong miss'};
 const TIMING: Record<string, string> = {After: 'After market', During: 'During market', Before: 'Before market', Holiday: 'Market holiday'};
@@ -60,9 +67,10 @@ function Direction({dir}: {dir?: string | null}) {
 }
 
 /** A growth figure over a bar scaled to ±100%, so a column reads at a glance. */
-function Growth({value, wide = false}: {value?: number | null; wide?: boolean}) {
+function Growth({value, amount, wide = false}: {value?: number | null; amount?: number | null; wide?: boolean}) {
   return <span className={`ep-growth${wide ? ' ep-wide' : ''}`}>
     <b className={tone(value)}>{pct(value)}</b>
+    {amount != null && <small>{rupees(amount)}</small>}
     <i aria-hidden="true"><s data-down={(value ?? 0) < 0 || undefined} style={{width: `${Math.min(100, Math.abs(value ?? 0))}%`}} /></i>
   </span>;
 }
@@ -91,8 +99,8 @@ function Row({record, move, onOpen}: {record: EarningsRecord; move: Reaction | n
       <em>{record.company_name}</em>
     </span>
     <span><Grade quality={record.quality} /></span>
-    <Growth value={record.revenue_yoy} />
-    <Growth value={record.pat_yoy} />
+    <Growth value={record.revenue_yoy} amount={record.revenue} />
+    <Growth value={record.pat_yoy} amount={record.net_income} />
     <Growth value={record.eps_yoy} wide />
     <span className={`ep-num ep-wide ${tone(move?.runUp)}`}>{pct(move?.runUp, 1)}</span>
     <span className="ep-move" title={move ? story(move) : undefined}>
@@ -100,7 +108,7 @@ function Row({record, move, onOpen}: {record: EarningsRecord; move: Reaction | n
       {move && !move.sessions ? <span className="ep-num"><small>Next session</small></span>
         : <span className="ep-num"><b className={tone(since)}>{pct(since, 1)}</b>{move?.day1 != null && <small>D1 <i className={tone(move.day1)}>{pct(move.day1, 1)}</i></small>}</span>}
     </span>
-    <span className="ep-num ep-wide is-muted">{day(record.filing_day)}</span>
+    <span className="ep-num ep-wide ep-filed">{day(record.filing_day, {weekday: 'short', day: 'numeric', month: 'short'})}{filedAt(record) && <small>{filedAt(record)}</small>}</span>
   </button>;
 }
 

@@ -466,7 +466,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     if (!saving?.name.trim()) return;
     const replacing = savedScans.some(scan => scan.name.toLowerCase() === saving.name.trim().toLowerCase());
     setStoredScans(upsertSavedScan(savedScans, saving.name, saving.conditions, localMode));
-    setNotice(replacing ? `Updated “${saving.name.trim()}” in My scans` : `Saved “${saving.name.trim()}” to My scans`);
+    setNotice(replacing ? `Updated “${saving.name.trim()}”` : `Saved “${saving.name.trim()}”`);
     setSaving(null);
   };
 
@@ -597,7 +597,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       <span className="cell-muted text-xs">{saving.conditions.length === 1 ? '1 filter' : `${saving.conditions.length} filters · ${localMode === 'all' ? 'AND' : 'OR'}`}</span>
       <div className="flex gap-2"><Button variant="secondary" onClick={() => setSaving(null)}>Cancel</Button><Button variant="primary" type="submit" disabled={!saving.name.trim()}>Save</Button></div>
     </form>
-    : <div className="dialog-footer"><span className="cell-muted text-xs" role="status">{notice || `${Object.keys(localMap).length} selected`}</span>
+    : <div className="dialog-footer"><span className="cell-muted text-xs footer-status" role="status" title={notice || undefined}>{notice || `${Object.keys(localMap).length} selected`}</span>
       <div className="flex gap-2">
         {!etf && <Button variant="secondary" disabled={!Object.keys(localMap).length || Boolean(validationError)}
           onClick={() => setSaving({conditions: Object.values(localMap), name: ''})}><Bookmark size={14} strokeWidth={1.8} />Save as scan</Button>}

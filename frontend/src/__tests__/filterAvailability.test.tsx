@@ -136,7 +136,7 @@ it('saves a filter and a whole screen to My scans and brings them back', () => {
   fireEvent.click(screen.getByRole('button', {name:'Save Relative Volume (RVOL) filter'}));
   fireEvent.change(screen.getByRole('textbox', {name:'Scan name'}), {target:{value:'Big volume'}});
   fireEvent.click(screen.getByRole('button', {name:'Save'}));
-  expect(screen.getByRole('status')).toHaveTextContent('Saved “Big volume” to My scans');
+  expect(screen.getByRole('status')).toHaveTextContent('Saved “Big volume”');
   fireEvent.click(screen.getByRole('button', {name:'Scan Library'}));
   fireEvent.click(screen.getAllByRole('checkbox', {name:'Near 52-Week High'})[0]);
   fireEvent.click(screen.getByRole('button', {name:'Save as scan'}));

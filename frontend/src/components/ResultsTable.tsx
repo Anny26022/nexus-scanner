@@ -194,7 +194,7 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
     return selectedColumnIds.includes(column.id) || Boolean(pinnedColumns?.includes(column.id));
   });
   const usingCustomColumns = selectedColumnIds.length !== defaults.length || defaults.some(id => !selectedColumnIds.includes(id));
-  const layout = tableLayout(activeColumns, 'screener', phone, usingCustomColumns);
+  const layout = tableLayout(activeColumns, 'screener', phone, usingCustomColumns, pinnedColumns);
   const visibleColumns = layout.columns;
   const customizableColumns = tableColumns.filter(column => column.id !== 'company'
     && (!column.id.startsWith('tv.') || hasExtended)

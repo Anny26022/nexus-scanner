@@ -571,7 +571,7 @@
   .filter-row input[type="checkbox"] { width: 18px; height: 18px; }
   .filter-row .preset-info-button { width: 36px; height: 36px; margin-top: 0; }
   .filter-row:has(> .filter-save-button) { grid-template-columns: minmax(0, 1fr) 36px 36px; }
-  .filter-row > .filter-save-button { grid-column: 3; margin-left: 0; }
+  .filter-row:not([data-preset="true"]) > .filter-save-button { grid-column: 3; margin-left: 0; }
   .scan-library-bar { margin: -10px -14px 4px; padding: 10px 14px 8px; top: -10px; }
   .scan-library-search { max-width: none; }
   .scan-library-tabs .filter-category-btn { min-height: 34px; }

@@ -25,6 +25,11 @@ def document(path):
     return yaml.safe_load((ROOT / path).read_text())
 
 
+def refresh_job(name):
+    key = 'refresh-data' if name == 'daily_refresh.yml' else 'refresh-adjusted-history'
+    return document('.github/workflows/' + name)['jobs'][key]
+
+
 def normalized(steps):
     result = copy.deepcopy(steps)
     for step in result:
@@ -35,10 +40,46 @@ def normalized(steps):
 
 
 class RefreshWorkflowTests(unittest.TestCase):
+    def test_tijori_only_is_an_exclusive_manual_job_with_an_exact_output_allowlist(self):
+        import tempfile
+        workflow = document('.github/workflows/weekly_eod2_refresh.yml')
+        self.assertEqual(workflow['jobs']['refresh-adjusted-history']['if'], '${{ !inputs.tijori_only }}')
+        job = workflow['jobs']['refresh-tijori-only']
+        self.assertEqual(job['if'], "${{ github.event_name == 'workflow_dispatch' && inputs.tijori_only }}")
+        self.assertNotIn('continue-on-error', job)
+        names = [step['name'] for step in job['steps']]
+        self.assertLess(names.index('Verify refresh before publishing'), names.index('Commit only Tijori and company overview outputs'))
+        self.assertNotIn('Build and publish validated data', names)
+        self.assertNotIn('Fetch refresh inputs', names)
+        commit = next(step for step in job['steps'] if step['name'] == 'Commit only Tijori and company overview outputs')
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            binary = root / 'bin'; binary.mkdir()
+            fake = binary / 'git'
+            fake.write_text("""#!/usr/bin/env python3
+import json, os, sys
+with open(os.environ['GIT_CALL_LOG'], 'a') as output:
+    output.write(json.dumps(sys.argv[1:]) + '\\n')
+sys.exit(1 if sys.argv[1:] == ['diff', '--cached', '--quiet'] else 0)
+""")
+            fake.chmod(0o755)
+            pointer = root / 'frontend/public/data/company/current.json'
+            pointer.parent.mkdir(parents=True)
+            dataset = '/data/company/revisions/' + 'c' * 64 + '/overviews.json.gz'
+            pointer.write_text(json.dumps({'datasetUrl':dataset}))
+            log = root / 'calls.jsonl'
+            env = dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH'], GIT_CALL_LOG=str(log))
+            subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', commit['run']], cwd=root, env=env, check=True)
+            calls = [json.loads(line) for line in log.read_text().splitlines()]
+            staged = {path for call in calls if call[0] == 'add' for path in call[1:]}
+            self.assertEqual(staged, {'reference/tijori/tijori-overviews.json.gz', 'reference/tijori/summary.json',
+                                     'frontend/public/data/company/current.json', 'frontend/public' + dataset})
+            self.assertEqual(calls[-1], ['push', 'origin', 'HEAD:main'])
+
     def test_backup_policy_preserves_manual_runs_and_weekly_archives(self):
         for name, expected in [('daily_refresh.yml', "${{ github.event_name == 'schedule' && '0' || '1' }}"),
                                ('weekly_eod2_refresh.yml', '1')]:
-            job, = document('.github/workflows/' + name)['jobs'].values()
+            job = refresh_job(name)
             build, = [step for step in job['steps'] if step['name'] == 'Build and publish validated data']
             self.assertEqual(build['env']['EDL_FILING_BACKUPS'], expected)
 
@@ -48,12 +89,19 @@ class RefreshWorkflowTests(unittest.TestCase):
                 workflow = document('.github/workflows/' + name)
                 cron = '30 10 * * 1-5' if name == 'daily_refresh.yml' else '30 3 * * 0'
                 # PyYAML YAML 1.1 treats the unquoted GitHub "on" key as True.
-                self.assertEqual(workflow.get('on', workflow.get(True)), {
-                    'schedule': [{'cron': cron}], 'workflow_dispatch': None,
-                })
+                triggers = workflow.get('on', workflow.get(True))
+                self.assertEqual(triggers['schedule'], [{'cron': cron}])
+                self.assertEqual(set(triggers), {'schedule', 'workflow_dispatch'})
+                if name == 'daily_refresh.yml':
+                    self.assertIsNone(triggers['workflow_dispatch'])
+                else:
+                    options = triggers['workflow_dispatch']['inputs']
+                    self.assertEqual(set(options), {'tijori_only'})
+                    self.assertEqual(options['tijori_only']['type'], 'boolean')
+                    self.assertIs(options['tijori_only']['default'], False)
                 self.assertEqual(workflow['concurrency'], {'group': 'daily-data-refresh', 'cancel-in-progress': False})
                 self.assertEqual(workflow['permissions'], {'contents': 'write'})
-                job, = workflow['jobs'].values()
+                job = refresh_job(name)
                 expanded = []
                 for caller in job['steps']:
                     action_path = caller.get('uses', '')
@@ -104,7 +152,7 @@ class RefreshWorkflowTests(unittest.TestCase):
                 self.assertEqual(actual, expected, json.dumps(normalized(expanded), indent=2))
 
     def test_dhan_refresh_is_bounded_and_preserves_the_main_refresh_on_failure(self):
-        job, = document('.github/workflows/weekly_eod2_refresh.yml')['jobs'].values()
+        job = refresh_job('weekly_eod2_refresh.yml')
         step, = [s for s in job['steps'] if s.get('id') == 'dhan_group_sync']
         self.assertTrue(step['continue-on-error'])
         self.assertEqual(step['timeout-minutes'], 10)
@@ -125,7 +173,7 @@ class RefreshWorkflowTests(unittest.TestCase):
         '''
         import tempfile
         for name in BASELINES:
-            job, = document('.github/workflows/' + name)['jobs'].values()
+            job = refresh_job(name)
             steps = {step['name']: step for step in job['steps']}
             restore = steps['Restore EOD2 data checkout']
             update = steps['Update EOD2 adjusted-history data']
@@ -198,7 +246,7 @@ class RefreshWorkflowTests(unittest.TestCase):
     def test_pipeline_state_is_pulled_before_fetch_and_pushed_after_a_successful_build(self):
         for name in ('daily_refresh.yml', 'weekly_eod2_refresh.yml'):
             with self.subTest(workflow=name):
-                job, = document('.github/workflows/' + name)['jobs'].values()
+                job = refresh_job(name)
                 names = [step['name'] for step in job['steps']]
                 pull, push = names.index('Pull pipeline state from R2'), names.index('Push pipeline state to R2')
                 self.assertLess(names.index('Install R2 uploader'), pull)

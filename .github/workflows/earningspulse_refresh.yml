@@ -1,0 +1,97 @@
+name: Earnings Pulse Dedicated Refresh
+
+on:
+  workflow_dispatch:
+    inputs:
+      recheck_oldest:
+        description: 'Recheck oldest historical quarter'
+        type: boolean
+        default: true
+      markets:
+        description: 'Markets to refresh (space-separated: IN US)'
+        type: string
+        default: 'IN US'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-data-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh_earningspulse:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install requests
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq rclone
+
+      - name: Refresh Earnings Pulse History
+        continue-on-error: true
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: |
+          FLAGS=""
+          if [ "${{ inputs.recheck_oldest }}" = "true" ]; then
+            FLAGS="--recheck-oldest"
+          fi
+          python frontend/earningspulse_history.py $FLAGS --markets ${{ inputs.markets }}
+
+      - name: Refresh Earnings Pulse Heatmap
+        continue-on-error: true
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/earningspulse_heatmap.py --markets ${{ inputs.markets }}
+
+      - name: Commit and Push Verified Indexes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git fetch origin main
+          git reset --mixed origin/main
+          if [ -f frontend/public/data/results/index.json ]; then
+            git add frontend/public/data/results/index.json
+          fi
+          if [ -f frontend/public/data/results/us_index.json ]; then
+            git add frontend/public/data/results/us_index.json
+          fi
+          if [ -f frontend/public/data/heatmap/index.json ]; then
+            git add frontend/public/data/heatmap/index.json
+          fi
+          if ! git diff --cached --quiet; then
+            git commit -m "data: refresh earnings pulse history and heatmap [skip ci]"
+            git push origin HEAD:main
+          else
+            echo "No index changes to commit."
+          fi
+
+      - name: Upload Refresh Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: earningspulse-reports
+          if-no-files-found: ignore
+          path: |
+            frontend/earningspulse-refresh-report.json
+            frontend/heatmap-refresh-report.json

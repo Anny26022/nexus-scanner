@@ -243,5 +243,19 @@
     "category": "momentum",
     "label": "Performance (3m, %)",
     "divisor": 1
+  },
+  {
+    "key": "performance_6m_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (6m, %)",
+    "divisor": 1
+  },
+  {
+    "key": "performance_1y_pct",
+    "section": "market",
+    "category": "momentum",
+    "label": "Performance (1y, %)",
+    "divisor": 1
   }
 ]

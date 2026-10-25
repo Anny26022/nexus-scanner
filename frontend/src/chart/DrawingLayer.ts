@@ -21,7 +21,7 @@ export class DrawingLayer {
     const draft=this.placement;if(!draft) return list;
     const points=[...draft.points];if(toolSpec(draft.kind).points!==-1) points.push(draft.hover);
     while(points.length<Math.max(2,toolSpec(draft.kind).points)) points.push(draft.hover);
-    return [...list,{id:'draft',version:2 as const,kind:draft.kind,a:points[0],b:points[1]??points[0],points,text:this.book.getSnapshot().text,color:'accent',width:1.5}];
+    return [...list,{id:'draft',version:2 as const,kind:draft.kind,a:points[0],b:points[1]??points[0],points,text:this.book.getSnapshot().text,...this.book.styleFor(draft.kind)}];
   }
   private anchor(point:Pixel,p:DrawingProjection) {
     const anchor=p.toAnchor(point);if(!this.book.getSnapshot().magnet||!p.bars?.length) return anchor;

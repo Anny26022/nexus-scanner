@@ -1,3 +1,5 @@
+import { readStored } from './storage/store';
+import { SCREEN_STORAGE_KEYS } from './utils/screenStorageKeys';
 import { preloadManifest, manifestSnapshotSource } from './api/manifest';
 import { startSnapshotWorker, runSnapshotTask } from './api/snapshotClient';
 
@@ -5,8 +7,8 @@ import { startSnapshotWorker, runSnapshotTask } from './api/snapshotClient';
 if (import.meta.env.VITE_USE_MOCK !== 'true') {
   let screener = true;
   let etf = false;
-  try { screener = [null, 'screener', 'news'].includes(JSON.parse(localStorage.getItem('nexus-scanner.ui.active-tab.v1') ?? 'null')); } catch {}
-  try { etf = JSON.parse(localStorage.getItem('nexus-scanner.screener.universe.v1') ?? 'null') === 'etf'; } catch {}
+  screener = [null, 'screener', 'news'].includes(readStored<unknown>(SCREEN_STORAGE_KEYS.activeTab, null) as string | null);
+  etf = readStored<unknown>(SCREEN_STORAGE_KEYS.universe, null) === 'etf';
   if (screener) startSnapshotWorker();
   void preloadManifest().then(manifest => screener
     ? runSnapshotTask({type:'warm', source:manifestSnapshotSource(manifest, undefined, undefined, etf)}) : undefined).catch(() => {

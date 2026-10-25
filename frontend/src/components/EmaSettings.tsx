@@ -2,15 +2,18 @@ import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { defaultEmaLines, validEmaLine, type EmaLine } from '../chart/model';
 import { ColorPalette } from './ColorPalette';
+import { readStored, writeStored } from '../storage/store';
 
 export const EMA_PREFS_KEY='nexus.chart.ema.v1';
 export function loadEmaLines():EmaLine[] {
-  try {
-    const value:unknown=JSON.parse(localStorage.getItem(EMA_PREFS_KEY)??'null');
-    if (Array.isArray(value) && value.length<=5 && value.every(validEmaLine)
-      && new Set(value.map(line=>line.id)).size===value.length) return value;
-  } catch { /* Preference storage is optional; chart data is not. */ }
+  const value=readStored<unknown>(EMA_PREFS_KEY,null);
+  if (Array.isArray(value) && value.length<=5 && value.every(validEmaLine)
+    && new Set(value.map(line=>line.id)).size===value.length) return value;
   return defaultEmaLines();
+}
+/** New charts start from the EMA lines last applied on any chart. */
+export function saveEmaLines(lines:readonly EmaLine[]):void {
+  writeStored(EMA_PREFS_KEY,lines);
 }
 
 export function EmaSettings({lines,onApply}:{lines:readonly EmaLine[];onApply:(lines:EmaLine[])=>void}) {

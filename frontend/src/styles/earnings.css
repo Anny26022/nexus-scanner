@@ -198,7 +198,7 @@
 .ep-path-after.is-down { stroke: var(--negative); }
 .ep-path-base { stroke: color-mix(in srgb, var(--text) 10%, transparent); stroke-dasharray: 2 3; }
 .ep-path-mark { stroke: color-mix(in srgb, var(--text) 22%, transparent); }
-.ep-path-lg { display: block; width: 100%; height: 84px; margin: 6px 0 0; }
+.ep-path-lg { display: block; width: 100%; height: 64px; margin: 4px 0 0; }
 .ep-path-lg polyline { stroke-width: 2; }
 .ep-story { margin: 0 0 10px; color: var(--text); font-size: 15px; font-weight: 560; letter-spacing: -0.01em; line-height: 1.4; text-wrap: pretty; }
 .ep-past { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr)); font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -262,12 +262,11 @@
 
 /* The selected result: a quiet highlight in the list, its detail beside it or under it. */
 .ep-row[aria-current] { background: var(--surface-hover); box-shadow: inset 2px 0 0 var(--text); }
-.ep-panel { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; padding: 6px 2px 0 32px; border-left: 1px solid var(--line);
+.ep-panel { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; padding: 4px 2px 0 28px; border-left: 1px solid var(--line); overflow-x: hidden;
   scrollbar-width: none; overscroll-behavior: contain; }
 .ep-panel::-webkit-scrollbar { display: none; }
 .ep-panel .ep-sheet-foot { margin: auto 0 0; padding: 14px 0 16px; background: linear-gradient(transparent, var(--page) 14px); }
-.ep-path-axis { display: grid; grid-template-columns: var(--before, 40%) 1fr; margin: 6px 0 18px; color: var(--muted); font-size: 10.5px; font-weight: 520; }
-.ep-path-axis span + span { padding-left: 6px; border-left: 1px solid color-mix(in srgb, var(--text) 22%, transparent); }
+.ep-path-axis { display: flex; justify-content: space-between; gap: 12px; margin: 4px 0 14px; color: var(--muted); font-size: 10.5px; font-weight: 520; white-space: nowrap; }
 .ep-detail { display: flex; flex-direction: column; gap: 30px; min-width: 0; }
 .ep-detail .ep-sheet-title { margin: 0; }
 .ep-detail .ep-sheet-sub { margin-top: -20px; }
@@ -283,4 +282,15 @@
   .ep-row small.is-muted { white-space: normal; line-height: 1.2; text-align: right; }
   .ep-panel { display: none; }
 }
+/* The panel is read at a glance: tighter rhythm, a smaller headline number, everything inside its column. */
+.ep-panel .ep-detail { gap: 20px; }
+.ep-panel .ep-detail > * { min-width: 0; }
+.ep-panel .ep-sheet-sub { margin-top: -14px; }
+.ep-panel .ep-sheet-big b { font-size: 30px; }
+.ep-panel .ep-sheet-hero { gap: 4px; }
+.ep-panel .ep-cards { gap: 14px 20px; }
+.ep-panel .ep-card strong { font-size: 16px; }
+.ep-panel .ep-story { margin-bottom: 4px; font-size: 14px; }
+.ep-panel .ep-reactions b { font-size: 15px; }
+.ep-panel .ep-quarter-plot { height: 52px; }
 }

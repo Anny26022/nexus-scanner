@@ -221,8 +221,8 @@ function Detail({record, history, reactionOf, onOpenChart, lead = 'results'}: {
           <h3>Around the result</h3>
           {move && <p className="ep-story">{story(move)}</p>}
           {move && <><Path value={move} height={64} className="ep-path-lg" />
-            <div className="ep-path-axis" aria-hidden="true" style={{'--before': `${(move.at / Math.max(1, move.path.length - 1)) * 100}%`} as CSSProperties}>
-              <span>{RUN_UP} sessions before</span>{move.sessions > 0 && <span>Result → {move.sessions} {move.sessions === 1 ? 'session' : 'sessions'} after</span>}</div></>}
+            <div className="ep-path-axis" aria-hidden="true"><span>{RUN_UP} sessions before</span>
+              <span>{move.sessions ? `${move.sessions} ${move.sessions === 1 ? 'session' : 'sessions'} after` : 'Result'}</span></div></>}
           <div className="ep-reactions">{reactions.map(([label, value]) => <span key={label}><small>{label}</small><b className={tone(value)}>{pct(value, 1)}</b></span>)}</div>
         </section>}
 

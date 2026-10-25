@@ -169,7 +169,7 @@ function Extremes({rows, taxonomy, onOpenChart, onScreenSector}: {
   const visible = all ? groups : groups.slice(0, GROUP_LIMIT);
   const chips = (symbols: string[], tone: 'up' | 'down') => <div className="flex flex-wrap gap-1" data-tone={tone}>
     {symbols.map(symbol => <button key={symbol} type="button" onClick={() => onOpenChart(symbol)} title={`${names.get(symbol) ?? symbol}: open in Charts`}
-      className="mkt-chip">{symbol}</button>)}
+      className="mkt-sym">{symbol}</button>)}
   </div>;
 
   return <Panel title="New Highs & Lows" aside={<Segmented label="Group by" value={grouping} options={GROUPINGS}
@@ -232,21 +232,25 @@ function Themes({rows, taxonomy}: {rows: PulseRow[]; taxonomy?: Parameters<typeo
   const shown = flows.filter(flow => !flow.cohort).slice(0, 16);
   const cohorts = flows.filter(flow => flow.cohort);
   const peak = Math.max(1e-9, ...shown.map(flow => Math.abs(flow.flow)));
-  const tile = (flow: ThemeFlow) => {
-    const tone = flow.flow >= 0 ? 'up' : 'down', strength = Math.min(1, Math.abs(flow.flow) / peak);
-    return <li key={flow.name} data-tone={tone} className="mkt-theme flex min-w-0 flex-col gap-1.5 px-4 py-3 max-sm:px-3"
-      style={{'--strength': `${10 + strength * 45}%`} as CSSProperties}
-      title={`${flow.name}: value-weighted move of ${flow.members} stocks trading ${crore(flow.traded)} a day`}>
-      <span className="flex items-start justify-between gap-3">
-        <span className="min-w-0 line-clamp-2 text-[14px] font-semibold leading-[1.25] text-text max-sm:text-[13px]">
-          {flow.name}
+  const row = (flow: ThemeFlow, rank: number | null) => {
+    const tone = flow.flow >= 0 ? 'up' : 'down';
+    return <li key={flow.name} data-tone={tone} className="mkt-rank"
+      style={{'--bar': `${Math.min(1, Math.abs(flow.flow) / peak) * 100}%`} as CSSProperties}
+      title={`${flow.name}: value-weighted move of ${flow.members} stocks trading ${crore(flow.traded)} a day; ${flow.movers} ${side === 'lead' ? 'up' : 'down'} ${period === 'd1' ? '2' : '5'}%+`}>
+      <span className="mkt-rank-no">{rank ?? '·'}</span>
+      <span className="min-w-0">
+        <span className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-[13.5px] font-semibold text-text">{flow.name}</span>
+          <span className="shrink-0 text-[10.5px] font-medium text-muted">{flow.cohort ? 'Cohort' : POCKET_LEVEL[flow.level]}</span>
         </span>
-        <span className="shrink-0 text-[14px] font-semibold tabular-nums max-sm:text-[13px]" style={{color: 'var(--tone)'}}>{signed(flow.flow, 1)}</span>
+        <span className="block truncate text-[11.5px] tabular-nums text-muted">
+          {flow.leaders.map(leader => `${leader.symbol} ${leader.move > 0 ? '+' : ''}${leader.move.toFixed(0)}%`).join('  ·  ')}
+        </span>
       </span>
-      <span className="truncate text-[11.5px] tabular-nums text-muted">
-        {flow.leaders.map(leader => `${leader.symbol} ${leader.move > 0 ? '+' : ''}${leader.move.toFixed(0)}%`).join(' · ')}
+      <span className="text-right">
+        <span className="block text-[14px] font-semibold tabular-nums" style={{color: 'var(--tone)'}}>{signed(flow.flow, 1)}</span>
+        <span className="block text-[11px] tabular-nums text-muted">{crore(flow.traded)}/d</span>
       </span>
-      <span className="text-[11px] tabular-nums text-muted"><b className="font-semibold text-secondary">{flow.cohort ? 'Cohort' : POCKET_LEVEL[flow.level]}</b> · {crore(flow.traded)}/day · {flow.movers} of {flow.members} {side === 'lead' ? 'up' : 'down'} {period === 'd1' ? '2' : '5'}%+</span>
     </li>;
   };
   return <Panel title="Theme Tracker" bare aside={<div className="flex items-center gap-2">
@@ -257,10 +261,10 @@ function Themes({rows, taxonomy}: {rows: PulseRow[]; taxonomy?: Parameters<typeo
     </button>
   </div>}>
     <p className="m-0 -mt-1 text-[12px] text-muted">{side === 'lead' ? 'Where money moved in' : 'Where money moved out'}: themes, industries and niches ranked by their move weighted by value traded, with the stocks that drove it.</p>
-    {taxonomy ? <ul className="m-0 grid list-none grid-cols-4 gap-2.5 p-0 max-xl:grid-cols-3 max-lg:grid-cols-2">
-      {shown.map(tile)}
-      {cohorts.map(tile)}
-    </ul> : <p className="m-0 text-[12.5px] text-muted">Themes are unavailable in this release.</p>}
+    {taxonomy ? <div className="mkt-card px-2 py-1.5">
+      <ol className="mkt-ranks">{shown.map((flow, index) => row(flow, index + 1))}</ol>
+      {cohorts.length > 0 && <ul className="mkt-ranks mkt-ranks-cohort">{cohorts.map(flow => row(flow, null))}</ul>}
+    </div> : <p className="m-0 text-[12.5px] text-muted">Themes are unavailable in this release.</p>}
   </Panel>;
 }
 

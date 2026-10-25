@@ -135,7 +135,7 @@ const clip = (value: number) => Math.max(-90, Math.min(300, value));
 function labelsAt(row: PulseRow, level: PocketLevel, taxonomy?: ThemeClassification): string[] {
   if (level === 'theme') return groupsOf(row, 'theme', taxonomy).filter(name => name !== 'Unclassified');
   const label = level === 'industry' ? row.industry : taxonomy?.records[row.symbol]?.subIndustry;
-  return label && label !== 'Unclassified' && !/^(miscellaneous|others?|trading|diversified)$/i.test(label) ? [label] : [];
+  return label && label !== 'Unclassified' && !/\b(miscellaneous|others?|diversified)\b|^trading$/i.test(label) ? [label] : [];
 }
 
 /**

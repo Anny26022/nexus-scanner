@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RUN_UP, patternsOf, reaction, reactionIndex, story, type Reaction } from '../utils/earningsReaction';
+import { RUN_UP, bucketOf, drift, reaction, reactionIndex, story, type Reaction } from '../utils/earningsReaction';
 
 const dates = Array.from({length: 40}, (_, i) => new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10));
 
@@ -30,11 +30,13 @@ describe('earnings reaction', () => {
     expect(story(value)).toBe('Quiet into results, sold off 10.0% on the day, then gave back to -20.0%');
   });
 
-  it('names reaction patterns, and a reaction can show several', () => {
-    const move = (runUp: number, day1: number, since: number, sessions = 10): Reaction => ({runUp, day1, since, after: null, sessions, path: [], at: 0});
-    expect(patternsOf(move(8, -4, -12))).toEqual(['soldOff', 'soldNews', 'faded']);
-    expect(patternsOf(move(0, 5, 12))).toEqual(['rallied', 'keptGoing']);
-    expect(patternsOf(move(0, 1, 2))).toEqual([]);
-    expect(patternsOf(move(0, 5, 12, 0))).toEqual(['awaiting']);
+  it('buckets the first day three ways and measures what came after it', () => {
+    const move = (day1: number, since: number, sessions = 10): Reaction => ({runUp: 0, day1, since, after: null, sessions, path: [], at: 0});
+    expect(bucketOf(move(4, 1))).toBe('rallied');
+    expect(bucketOf(move(-3, -9))).toBe('soldOff');
+    expect(bucketOf(move(1, 2))).toBe('held');
+    expect(bucketOf(move(4, 1, 0))).toBe('awaiting');
+    expect(drift(move(4, 1))).toBe(-3);
+    expect(drift(move(4, 1, 1))).toBeNull();
   });
 });

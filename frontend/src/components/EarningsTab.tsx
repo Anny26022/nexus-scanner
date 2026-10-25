@@ -1,7 +1,6 @@
-import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import * as RadixDialog from '@radix-ui/react-dialog';
-import { ArrowDown, ArrowUp, CandlestickChart, ChevronDown, Clock, ExternalLink, FileText, Minus, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, CandlestickChart, ChevronDown, ExternalLink, FileText, Minus, Search, X } from 'lucide-react';
 import {
   GROUP_LABEL, QUALITY_ORDER, THEME_LEVELS, companyHistory, getEarningsFile, getEarningsIndex, groupRecords, median, periodLabel,
   qualityRank, seasonRecords, seasons, summarize, upcomingByDate, upcomingQuarters,
@@ -9,7 +8,7 @@ import {
 } from '../api/earnings';
 import { DataUnavailableError } from '../api/dataErrors';
 import { decode } from '../api/rotation';
-import { PATTERNS, RUN_UP, patternsOf, reaction, story, type Pattern, type Reaction } from '../utils/earningsReaction';
+import { BUCKETS, RUN_UP, bucketOf, drift, reaction, story, type Bucket, type Reaction } from '../utils/earningsReaction';
 import { screenerApi } from '../api/screenerApi';
 import { useMountEffect } from '../hooks/useMountEffect';
 import { useTableWindow } from '../hooks/useTableWindow';
@@ -53,7 +52,13 @@ type Lens = 'grade' | GroupBy;
 const LENSES: [Lens, string][] = [['grade', 'Grade'], ...(['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const)
   .map(level => [level, GROUP_LABEL[level]] as [Lens, string])];
 
-type SortKey = 'filing_day' | 'quality' | 'revenue_yoy' | 'pat_yoy' | 'eps_yoy' | 'run_up' | 'day1' | 'since';
+type SortKey = 'filing_day' | 'quality' | 'revenue_yoy' | 'pat_yoy' | 'eps_yoy' | 'run_up' | 'day1' | 'drift' | 'since';
+const resultKey = (record: EarningsRecord) => `${record.symbol}|${record.filing_day}`;
+
+/** Wide screens keep the detail beside the list; narrower ones open it under its row. */
+const SPLIT = '(min-width: 1180px)';
+const subscribeSplit = (change: () => void) => { const query = matchMedia(SPLIT); query.addEventListener('change', change); return () => query.removeEventListener('change', change); };
+const useSplit = () => useSyncExternalStore(subscribeSplit, () => matchMedia(SPLIT).matches, () => false);
 type View = 'results' | 'reactions';
 type ReactionOf = (record: EarningsRecord) => Reaction | null;
 
@@ -95,8 +100,10 @@ function Path({value, height = 22, className = ''}: {value: Reaction; height?: n
 const Filed = ({record}: {record: EarningsRecord}) => <span className="ep-num ep-wide ep-filed">
   {day(record.filing_day, {weekday: 'short', day: 'numeric', month: 'short'})}{filedAt(record) && <small>{filedAt(record)}</small>}</span>;
 
-function Row({record, move, onOpen}: {record: EarningsRecord; move: Reaction | null; onOpen: () => void}) {
-  return <button type="button" className="ep-row" onClick={onOpen}>
+interface RowProps { record: EarningsRecord; move: Reaction | null; active: boolean; onOpen: () => void }
+
+function Row({record, move, active, onOpen}: RowProps) {
+  return <button type="button" className="ep-row" aria-current={active || undefined} onClick={onOpen}>
     <span className="ep-company">
       <SymbolWithLogo symbol={record.symbol} />
       <em>{record.company_name}</em>
@@ -111,9 +118,9 @@ function Row({record, move, onOpen}: {record: EarningsRecord; move: Reaction | n
 }
 
 /** The price story: the company with its one-line reading, the path, and the three moves that make it. */
-function ReactionRow({record, move, onOpen}: {record: EarningsRecord; move: Reaction | null; onOpen: () => void}) {
-  const waiting = move != null && !move.sessions;
-  return <button type="button" className="ep-row ep-rrow" onClick={onOpen}>
+function ReactionRow({record, move, active, onOpen}: RowProps) {
+  const waiting = move != null && !move.sessions, after = move ? drift(move) : null;
+  return <button type="button" className="ep-row ep-rrow" aria-current={active || undefined} onClick={onOpen}>
     <span className="ep-rstory">
       <span className="ep-company"><SymbolWithLogo symbol={record.symbol} /><Grade quality={record.quality} /></span>
       <span className="ep-rline">{move ? story(move) : 'Not in the price history'}</span>
@@ -121,13 +128,16 @@ function ReactionRow({record, move, onOpen}: {record: EarningsRecord; move: Reac
     <span className="ep-rpath">{move && <Path value={move} height={30} />}</span>
     <span className={`ep-num ep-wide ${tone(move?.runUp)}`}>{pct(move?.runUp, 1)}</span>
     <span className={`ep-num ${tone(move?.day1)}`}>{waiting ? '' : pct(move?.day1, 1)}</span>
+    <span className={`ep-num ep-wide ${tone(after)}`}>{after == null ? '' : `${after > 0 ? '+' : ''}${after.toFixed(1)} pts`}</span>
     <span className={`ep-num ep-rsince ${tone(move?.since)}`}>{waiting ? <small className="is-muted">Next session</small> : pct(move?.since, 1)}</span>
-    <Filed record={record} />
   </button>;
 }
 
 /** Scroll updates stay here, leaving season aggregation and filters untouched. */
-export function EarningsResults({records, children, onOpen, reactionOf = () => null, view = 'results'}: {records: EarningsRecord[]; children?: ReactNode; onOpen: (record: EarningsRecord) => void; reactionOf?: ReactionOf; view?: View}) {
+export function EarningsResults({records, children, onOpen, reactionOf = () => null, view = 'results', activeKey = null, expanded = null}: {
+  records: EarningsRecord[]; children?: ReactNode; onOpen: (record: EarningsRecord) => void; reactionOf?: ReactionOf; view?: View;
+  activeKey?: string | null; expanded?: ReactNode;
+}) {
   const Item = view === 'reactions' ? ReactionRow : Row;
   const window = useTableWindow(records, null, 7, {rowHeight: 56, headerHeight: 30, narrow: true});
   const list = useRef<HTMLElement>(null);
@@ -150,9 +160,16 @@ export function EarningsResults({records, children, onOpen, reactionOf = () => n
   });
   return <section ref={list} className="ep-list" aria-label="Results">
       {children}
-      <div aria-hidden="true" style={{height: window.top, flexShrink: 0}} />
-      {window.rows.map(record => <Item key={record.symbol} record={record} move={reactionOf(record)} onOpen={() => onOpen(record)} />)}
-      <div aria-hidden="true" style={{height: window.bottom, flexShrink: 0}} />
+      {/* An open row changes the row pitch, so the whole list renders while one is open. */}
+      {!expanded && <div aria-hidden="true" style={{height: window.top, flexShrink: 0}} />}
+      {(expanded ? records : window.rows).map(record => {
+        const active = resultKey(record) === activeKey;
+        return <div key={resultKey(record)} className="ep-item">
+          <Item record={record} move={reactionOf(record)} active={active} onOpen={() => onOpen(record)} />
+          {active && expanded}
+        </div>;
+      })}
+      {!expanded && <div aria-hidden="true" style={{height: window.bottom, flexShrink: 0}} />}
   </section>;
 }
 
@@ -160,8 +177,8 @@ function Delta({label, value}: {label: string; value?: number | null}) {
   return <span className="ep-delta"><small>{label}</small><b className={tone(value)}>{pct(value, 1)}</b></span>;
 }
 
-function Sheet({record, history, reactionOf, onClose, onOpenChart}: {
-  record: EarningsRecord; history: EarningsRecord[] | null; reactionOf: ReactionOf; onClose: () => void; onOpenChart: () => void;
+function Detail({record, history, reactionOf, onOpenChart, lead = 'results'}: {
+  record: EarningsRecord; history: EarningsRecord[] | null; reactionOf: ReactionOf; onOpenChart: () => void; lead?: View;
 }) {
   const move = reactionOf(record);
   const past = (history ?? []).filter(row => row.filing_day < record.filing_day).slice(0, 4)
@@ -172,13 +189,9 @@ function Sheet({record, history, reactionOf, onClose, onOpenChart}: {
     [`Since · ${move.sessions} ${move.sessions === 1 ? 'day' : 'days'}`, move.since]] as const).filter(([, value]) => value != null) : [];
   const guidance = ([['Growth', record.concall_guide_growth_txt, record.concall_guide_growth_dir], ['Margin', record.concall_guide_margin_txt, record.concall_guide_margin_dir],
     ['Capex', record.concall_guide_capex_txt, null]] as const).filter(([, text]) => text);
-  return <RadixDialog.Root open onOpenChange={open => { if (!open) onClose(); }}>
-    <RadixDialog.Portal>
-      <RadixDialog.Overlay className="ep-sheet-overlay" />
-      <RadixDialog.Content className="ep-sheet" aria-describedby={undefined}>
+  return <article className="ep-detail" data-lead={lead} aria-label={`${record.symbol} result`}>
         <header className="ep-sheet-head">
-          <RadixDialog.Title asChild><div className="ep-sheet-title"><SymbolWithLogo symbol={record.symbol} size="md" /></div></RadixDialog.Title>
-          <RadixDialog.Close className="ep-close" aria-label="Close"><X size={15} /></RadixDialog.Close>
+          <h2 className="ep-sheet-title"><SymbolWithLogo symbol={record.symbol} size="md" /></h2>
         </header>
         <p className="ep-sheet-sub">{[record.company_name, record.industry].filter(Boolean).join(' · ')}</p>
 
@@ -204,14 +217,14 @@ function Sheet({record, history, reactionOf, onClose, onOpenChart}: {
           </div>
         </section>
 
-        {reactions.length > 0 && <section className="ep-sheet-block">
+        {reactions.length > 0 && <section className="ep-sheet-block ep-around">
           <h3>Around the result</h3>
           {move && <p className="ep-story">{story(move)}</p>}
           {move && <Path value={move} height={64} className="ep-path-lg" />}
           <div className="ep-reactions">{reactions.map(([label, value]) => <span key={label}><small>{label}</small><b className={tone(value)}>{pct(value, 1)}</b></span>)}</div>
         </section>}
 
-        {past.length > 0 && <section className="ep-sheet-block">
+        {past.length > 0 && <section className="ep-sheet-block ep-earlier">
           <h3>How it took earlier results</h3>
           <div className="ep-past" role="table" aria-label="Earlier reactions">
             <div role="row" className="ep-past-head"><span role="columnheader">Quarter</span><span role="columnheader">{RUN_UP}d before</span>
@@ -249,9 +262,7 @@ function Sheet({record, history, reactionOf, onClose, onOpenChart}: {
             <FileText size={14} aria-hidden="true" /> Filing <ExternalLink size={11} aria-hidden="true" /></a>}
           <Button variant="primary" className="ep-button" onClick={onOpenChart}><CandlestickChart size={14} aria-hidden="true" /> Open chart</Button>
         </footer>
-      </RadixDialog.Content>
-    </RadixDialog.Portal>
-  </RadixDialog.Root>;
+  </article>;
 }
 
 const TIERS = [['Mega & large', ['Mega', 'Large']], ['Mid caps', ['Mid']], ['Small caps', ['Small']], ['Micro caps', ['Micro']]] as const;
@@ -286,6 +297,25 @@ function Timeline({days, todayDate, active, onPick}: {days: Day[]; todayDate: st
   </div>;
 }
 
+/** The season's first-day split as one bar; each part filters the list. */
+function ReactionMix({counts, active, onPick}: {counts: Map<Bucket, number>; active: Bucket | null; onPick: (bucket: Bucket | null) => void}) {
+  const total = BUCKETS.reduce((sum, [key]) => sum + (counts.get(key) ?? 0), 0);
+  if (!total) return null;
+  const waiting = counts.get('awaiting') ?? 0;
+  return <div className="ep-mix" data-active={active ?? undefined}>
+    <div className="ep-mix-bar" role="presentation">
+      {BUCKETS.map(([key]) => (counts.get(key) ?? 0) > 0 && <button key={key} type="button" tabIndex={-1} aria-hidden="true" data-bucket={key}
+        data-on={active === key || undefined} style={{flexGrow: counts.get(key)}} onClick={() => onPick(active === key ? null : key)} />)}
+    </div>
+    <div className="ep-mix-key" role="group" aria-label="First-day reaction">
+      {BUCKETS.map(([key, label]) => <button key={key} type="button" data-bucket={key} aria-pressed={active === key} disabled={!counts.get(key)}
+        onClick={() => onPick(active === key ? null : key)}><i aria-hidden="true" />{label} <b>{counts.get(key) ?? 0}</b></button>)}
+      {waiting > 0 && <button type="button" data-bucket="awaiting" aria-pressed={active === 'awaiting'} onClick={() => onPick(active === 'awaiting' ? null : 'awaiting')}>
+        {waiting} awaiting</button>}
+    </div>
+  </div>;
+}
+
 export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevision?: string; onOpenChart: (symbol: string) => void}) {
   const index = useQuery({queryKey: ['earnings-index'], queryFn: getEarningsIndex, staleTime: 5 * 60_000, retry: false});
   const allSeasons = useMemo(() => index.data ? seasons(index.data) : [], [index.data]);
@@ -297,9 +327,11 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
   const [lens, setLens] = useState<Lens>('grade');
   const [focus, setFocus] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>('filing_day');
-  const [selected, setSelected] = useState<EarningsRecord | null>(null);
+  const [pick, setPick] = useState<string | null>(null);
   const [view, setView] = useState<View>('results');
-  const [pattern, setPattern] = useState<Pattern | null>(null);
+  const [bucket, setBucket] = useState<Bucket | null>(null);
+  const [searching, setSearching] = useState(false);
+  const split = useSplit();
   const [activeDay, setActiveDay] = useState<string | null>(null);
   const todayDate = today();
 
@@ -352,7 +384,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
   const calendarFiles = useQueries({queries: (index.data ? upcomingQuarters(index.data, todayDate) : [])
     .map(quarter => fileQuery(index.data!.quarters[quarter].upcoming, isLatest))});
   // A company's history needs every season; fetched only once a company is opened.
-  const historyFiles = useQueries({queries: Object.values(index.data?.quarters ?? {}).map(entry => fileQuery(entry.published, selected !== null))});
+  const historyFiles = useQueries({queries: Object.values(index.data?.quarters ?? {}).map(entry => fileQuery(entry.published, split || pick !== null))});
 
   const seasonLoading = seasonFiles.some(file => file.isPending);
   const seasonError = seasonFiles.find(file => file.isError)?.error;
@@ -387,25 +419,39 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
     });
   const focused = facets.find(facet => facet.label === focus) ?? null;
   const inFacet = focused ? focused.records : base;
-  const patternCounts = new Map<Pattern, number>();
-  if (view === 'reactions') for (const record of inFacet) {
-    const move = reactionOf(record);
-    for (const found of move ? patternsOf(move) : []) patternCounts.set(found, (patternCounts.get(found) ?? 0) + 1);
-  }
-  const visible = view === 'reactions' && pattern ? inFacet.filter(record => {
-    const move = reactionOf(record);
-    return move != null && patternsOf(move).includes(pattern);
-  }) : inFacet;
+  const bucketOfRecord = (record: EarningsRecord) => { const move = reactionOf(record); return move ? bucketOf(move) : null; };
+  const buckets = new Map<Bucket, number>();
+  if (view === 'reactions') for (const record of inFacet) { const found = bucketOfRecord(record); if (found) buckets.set(found, (buckets.get(found) ?? 0) + 1); }
+  const visible = view === 'reactions' && bucket ? inFacet.filter(record => bucketOfRecord(record) === bucket) : inFacet;
   const key = (record: EarningsRecord) => sort === 'quality' ? -qualityRank(record.quality)
-    : sort === 'run_up' ? reactionOf(record)?.runUp : sort === 'day1' ? reactionOf(record)?.day1 : sort === 'since' ? reactionOf(record)?.since : record[sort];
+    : sort === 'run_up' ? reactionOf(record)?.runUp : sort === 'day1' ? reactionOf(record)?.day1 : sort === 'drift' ? (move => move && drift(move))(reactionOf(record)) : sort === 'since' ? reactionOf(record)?.since : record[sort];
   const sorted = [...visible].sort((a, b) => {
     const left = key(a), right = key(b);
     if (left == null || right == null) return left == null ? (right == null ? 0 : 1) : -1;
     return typeof left === 'string' ? (right as string).localeCompare(left) : (right as number) - (left as number);
   });
   const summary = summarize(visible);
-  const peakFacet = Math.max(1, ...facets.map(facet => facet.records.length));
-  const history = selected && !historyFiles.some(file => file.isPending) ? companyHistory(historyFiles.map(file => file.data ?? []), selected.symbol) : null;
+  // Split view always shows a result (the top one until another is picked); otherwise only an opened row does.
+  const active = sorted.find(record => resultKey(record) === pick) ?? (split ? sorted[0] : undefined);
+  const history = active && !historyFiles.some(file => file.isPending) ? companyHistory(historyFiles.map(file => file.data ?? []), active.symbol) : null;
+  const detail = active && <Detail record={active} history={history} reactionOf={reactionOf} onOpenChart={() => onOpenChart(active.symbol)} lead={view} />;
+  const open = (record: EarningsRecord) => setPick(!split && pick === resultKey(record) ? null : resultKey(record));
+  const steps = useRef({sorted, active, split});
+  steps.current = {sorted, active, split};
+  useMountEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      const {sorted: rows, active: current, split: beside} = steps.current;
+      if (!beside || !current || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return;
+      if ((event.target as HTMLElement).closest('input, select, textarea')) return;
+      const next = rows[rows.indexOf(current) + (event.key === 'ArrowDown' ? 1 : -1)];
+      if (!next) return;
+      event.preventDefault();
+      setPick(resultKey(next));
+      document.querySelector(`.ep-row[aria-current]`)?.parentElement?.[event.key === 'ArrowDown' ? 'nextElementSibling' : 'previousElementSibling']?.scrollIntoView({block: 'nearest'});
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  });
 
   const sortButton = (value: SortKey, label: string, className = '') => <button type="button" className={`ep-sort ${className}`} aria-pressed={sort === value}
     onClick={() => { setSort(value); }}>{label}{sort === value && <ArrowDown size={10} aria-hidden="true" />}</button>;
@@ -455,45 +501,36 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
       </div>
     </header>
 
-    <div className="ep-desk">
-      <aside className="ep-lens" aria-label="Break down">
-        <label className="ep-lens-pick"><span>Break down by</span>
-          <span className="ep-lens-select">
-            <select value={lens} onChange={event => { setLens(event.target.value as Lens); setFocus(null); }}>
-              {LENSES.map(([value, label]) => <option key={value} value={value}>{value === 'grade' && scheduleMode ? 'Size' : label}</option>)}
-            </select><ChevronDown size={12} aria-hidden="true" /></span>
-        </label>
-        {classifying ? <p className="ep-lens-state" role="status">Loading classification…</p>
-          : <ul className="ep-facets">
-            {facets.map(facet => <li key={facet.label}>
-              <button type="button" aria-pressed={focus === facet.label} data-grade={facet.grade?.toLowerCase()}
-                onClick={() => { setFocus(focus === facet.label ? null : facet.label); }}>
-                <span className="ep-facet-name">{facet.grade && <i aria-hidden="true" />}{facet.label}</span>
-                <span className="ep-facet-count">{facet.records.length}</span>
-                {facet.medianPatYoy != null && <span className={`ep-facet-growth ${tone(facet.medianPatYoy)}`}>{pct(facet.medianPatYoy)}</span>}
-                <span className="ep-facet-bar" aria-hidden="true"><s style={{width: `${facet.records.length / peakFacet * 100}%`}} /></span>
-              </button></li>)}
-          </ul>}
-      </aside>
-
+    <div className="ep-desk" data-split={split || undefined}>
       <main className="ep-main">
         <div className="ep-bar">
           {!scheduleMode && <div className="ep-views" role="tablist" aria-label="View">
             {([['results', 'Results'], ['reactions', 'Reactions']] as const).map(([value, label]) => <button key={value} type="button" role="tab"
-              aria-selected={view === value} onClick={() => { setView(value); setPattern(null); setSort(value === 'reactions' ? 'since' : 'filing_day'); }}>{label}</button>)}
+              aria-selected={view === value} onClick={() => { setView(value); setBucket(null); setSort(value === 'reactions' ? 'since' : 'filing_day'); }}>{label}</button>)}
           </div>}
-          <label className="ep-search"><Search size={13} aria-hidden="true" />
-            <input type="search" placeholder="Find a company" aria-label="Search company" value={query} onChange={event => { setQuery(event.target.value); }} />
-          </label>
-          <label className="ep-when" data-active={session ? true : undefined}><Clock size={13} aria-hidden="true" />
-            <span className="sr-only">Filing time</span>
+          <label className="ep-quiet"><span className="sr-only">Break down by</span>
+            <select value={lens} onChange={event => { setLens(event.target.value as Lens); setFocus(null); }}>
+              {LENSES.map(([value, label]) => <option key={value} value={value}>{value === 'grade' && scheduleMode ? 'Size' : label}</option>)}
+            </select><ChevronDown size={11} aria-hidden="true" /></label>
+          <label className="ep-quiet" data-active={focus ? true : undefined}><span className="sr-only">Group</span>
+            <select value={focus ?? ''} disabled={classifying} onChange={event => { setFocus(event.target.value || null); }}>
+              <option value="">{classifying ? 'Loading…' : `All ${lens === 'grade' ? (scheduleMode ? 'sizes' : 'grades') : GROUP_LABEL[lens as GroupBy].toLowerCase() + 's'}`}</option>
+              {facets.map(facet => <option key={facet.label} value={facet.label}>{facet.label} · {facet.records.length}</option>)}
+            </select><ChevronDown size={11} aria-hidden="true" /></label>
+          <span className="ep-spacer" />
+          <label className="ep-quiet" data-active={session ? true : undefined}><span className="sr-only">Filing time</span>
             <select value={session ?? ''} onChange={event => { setSession((event.target.value || null) as Session | null); }}>
               <option value="">Any time</option>{SESSIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select><ChevronDown size={12} aria-hidden="true" /></label>
-          {focused && <button type="button" className="ep-pill" onClick={() => setFocus(null)}>{focused.label} <X size={11} aria-label="Clear" /></button>}
-          <span className="ep-spacer" />
-          <span className="ep-count">{sorted.length.toLocaleString('en-IN')} {scheduleMode ? 'scheduled' : 'results'}</span>
+            </select><ChevronDown size={11} aria-hidden="true" /></label>
+          <span className="ep-count">{sorted.length.toLocaleString('en-IN')}</span>
+          <label className="ep-search" data-open={searching || query ? true : undefined}>
+            <button type="button" aria-label="Find a company" onClick={() => setSearching(true)}><Search size={14} aria-hidden="true" /></button>
+            <input type="search" placeholder="Find a company" aria-label="Search company" value={query} onBlur={() => setSearching(false)}
+              ref={input => { if (searching) input?.focus(); }} onChange={event => { setQuery(event.target.value); }} />
+          </label>
         </div>
+
+        {view === 'reactions' && !scheduleMode && !seasonLoading && <ReactionMix counts={buckets} active={bucket} onPick={setBucket} />}
 
         {seasonError ? <div className="ep-state" role="alert"><h2>Results could not be loaded</h2><p>{String(seasonError)}</p></div>
           : seasonLoading || classifying ? <p className="ep-state" role="status">Loading…</p>
@@ -504,27 +541,19 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
               <em>{record.company_name}</em>
               <span>{[record.cap_type && `${record.cap_type} cap`, record.industry ?? record.sector, record.timing && (TIMING[record.timing] ?? record.timing)].filter(Boolean).join(' · ')}</span>
             </button></li>)}</ul>
-          : <EarningsResults key={JSON.stringify([season.periodEnd, activeDay, lens, focus, sort, query, session, view, pattern])} records={sorted} onOpen={setSelected}
-            reactionOf={reactionOf} view={view}>
-            {view === 'reactions' ? <>
-              <div className="ep-patterns" role="group" aria-label="Reaction pattern">
-                <button type="button" aria-pressed={pattern === null} onClick={() => setPattern(null)}>All <span>{inFacet.length}</span></button>
-                {PATTERNS.map(([value, label, hint]) => <button key={value} type="button" aria-pressed={pattern === value} title={hint} data-pattern={value}
-                  disabled={!patternCounts.get(value)} onClick={() => setPattern(pattern === value ? null : value)}>{label} <span>{patternCounts.get(value) ?? 0}</span></button>)}
-              </div>
-              <div className="ep-cols ep-rcols">
+          : <EarningsResults key={JSON.stringify([season.periodEnd, activeDay, lens, focus, sort, query, session, view, bucket])} records={sorted} onOpen={open}
+            reactionOf={reactionOf} view={view} activeKey={active ? resultKey(active) : null} expanded={!split && active ? <div className="ep-inline">{detail}</div> : null}>
+            {view === 'reactions' ? <div className="ep-cols ep-rcols">
                 <span>Company</span><span className="ep-rpath-head">{RUN_UP} days before · after</span>
-                {sortButton('run_up', 'Before', 'ep-num ep-wide')}{sortButton('day1', 'Day 1', 'ep-num')}{sortButton('since', 'Since', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
+                {sortButton('run_up', 'Before', 'ep-num ep-wide')}{sortButton('day1', 'Day 1', 'ep-num')}{sortButton('drift', 'After D1', 'ep-num ep-wide')}{sortButton('since', 'Since', 'ep-num')}
               </div>
-            </> : <div className="ep-cols">
+            : <div className="ep-cols">
               <span>Company</span>{sortButton('quality', 'Grade')}{sortButton('revenue_yoy', 'Sales', 'ep-num')}{sortButton('pat_yoy', 'Profit', 'ep-num')}
               {sortButton('eps_yoy', 'EPS', 'ep-num ep-wide')}{sortButton('since', 'Since result', 'ep-num')}{sortButton('filing_day', 'Filed', 'ep-num ep-wide')}
             </div>}
           </EarningsResults>}
       </main>
+      {split && !scheduleMode && <aside className="ep-panel" aria-label="Selected result">{detail}</aside>}
     </div>
-
-    {selected && <Sheet record={selected} history={history} reactionOf={reactionOf} onClose={() => setSelected(null)}
-      onOpenChart={() => { const symbol = selected.symbol; setSelected(null); onOpenChart(symbol); }} />}
   </div>;
 }

@@ -50,32 +50,9 @@
   color: var(--surface); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
 
 /* Desk: a lens on the left breaks the season down; the list on the right follows it. */
-.ep-desk { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 36px; align-items: start; }
-.ep-lens { display: flex; flex-direction: column; gap: 18px; }
+.ep-desk { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; align-items: start; }
+.ep-desk[data-split] { grid-template-columns: minmax(0, 1fr) 400px; }
 /* Desktop: the lens stays in view beside the results and scrolls on its own; its bar shows only while you use it. */
-@media (min-width: 861px) {
-  .ep-lens { position: sticky; top: 12px; max-height: calc(100vh - 140px); min-height: 0; }
-  .ep-facets { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: transparent transparent;
-    mask-image: linear-gradient(#000 calc(100% - 28px), transparent); }
-  .ep-facets:hover { scrollbar-color: color-mix(in srgb, var(--text) 22%, transparent) transparent; }
-}
-.ep-lens-pick { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 10px; color: var(--muted); font-size: 12px; font-weight: 550; min-height: 32px; }
-.ep-lens-select { position: relative; display: inline-flex; align-items: center; }
-.ep-lens-select select { height: 32px; padding: 0 26px 0 12px; border: 0; border-radius: 999px; background: var(--field); color: var(--text);
-  font: inherit; font-size: 12.5px; font-weight: 620; appearance: none; field-sizing: content; cursor: pointer; }
-.ep-lens-select svg { position: absolute; right: 10px; color: var(--muted); pointer-events: none; }
-.ep-facets { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.ep-facets li > button { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto 48px; align-items: center; gap: 10px; width: 100%; padding: 11px 10px 13px;
-  border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
-.ep-facets li > button:hover { background: var(--surface-hover); }
-.ep-facets [aria-pressed="true"] { background: var(--field); }
-.ep-facet-name { display: flex; align-items: center; gap: 7px; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
-.ep-facet-name i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--g); }
-.ep-facet-count { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
-.ep-facet-growth { font-size: 11.5px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
-.ep-facet-bar { position: absolute; right: 10px; bottom: 5px; left: 10px; height: 2px; }
-.ep-facet-bar s { display: block; height: 100%; border-radius: 2px; background: color-mix(in srgb, var(--g, var(--text)) 18%, transparent); }
-.ep-lens-state { margin: 0; padding: 0 10px; color: var(--muted); font-size: 11.5px; }
 .ep-main { display: flex; flex-direction: column; min-width: 0; container-type: inline-size; }
 .ep-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .ep-pill { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--text); color: var(--surface);
@@ -103,10 +80,6 @@
 .ep-bar { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0;
   background: color-mix(in srgb, var(--page) 88%, transparent); backdrop-filter: saturate(160%) blur(12px); }
 .ep-spacer { flex: 1; }
-.ep-search { display: inline-flex; align-items: center; gap: 6px; width: 180px; height: 32px; padding: 0 10px; border-radius: 8px; background: var(--field); color: var(--muted); }
-.ep-search:focus-within { box-shadow: var(--ring); }
-.ep-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; outline: none; }
-.ep-search input:focus-visible { box-shadow: none; }
 
 .ep-list { display: flex; flex-direction: column; }
 .ep-cols, .ep-row { display: grid; grid-template-columns: var(--ep-cols); align-items: center; gap: 12px; padding: 0 12px; }
@@ -191,14 +164,6 @@
   .ep-list .ep-wide { display: none; }
   .ep-company em { display: none; }
 }
-@media (max-width: 860px) {
-  .ep-desk { grid-template-columns: minmax(0, 1fr); gap: 28px; }
-  .ep-lens { position: static; }
-  .ep-facets { flex-direction: row; max-height: none; overflow-x: auto; gap: 6px; scrollbar-width: none; }
-  .ep-facets li > button { display: inline-flex; gap: 6px; width: auto; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
-  .ep-facet-name { overflow: visible; }
-.ep-facet-growth, .ep-facet-bar { display: none; }
-}
 @media (max-width: 600px) {
   .ep { gap: 34px; }
   .ep .ep-list { --ep-cols: minmax(0, 1fr) 58px 58px 62px; --er-cols: minmax(0, 1fr) 52px 54px 60px; }
@@ -217,7 +182,6 @@
   .ep-tl-key { gap: 8px 12px; font-size: 10.5px; }
   .ep-tl-key i { width: 7px; height: 7px; }
   .ep-bar { gap: 10px; padding: 0 0 12px; }
-  .ep-search { flex: 1; width: auto; }
   .ep-spacer, .ep-count { display: none; }
   .ep-tiles { grid-template-columns: minmax(0, 1fr); }
   .ep-sheet { padding: 16px 18px 0; gap: 22px; }
@@ -247,20 +211,6 @@
 .ep-past .ep-past-head > * { padding-top: 0; border-top: 0; color: var(--muted); font-size: 11px; font-weight: 550; }
 
 /* Results | Reactions: two readings of the same list. */
-.ep-views { display: inline-flex; padding: 2px; border-radius: 999px; background: var(--field); }
-.ep-views button { height: 28px; padding: 0 13px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
-.ep-views button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-control); }
-.ep-patterns { display: flex; gap: 6px; padding: 2px 0 12px; overflow-x: auto; scrollbar-width: none; }
-.ep-patterns button { display: inline-flex; flex: none; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px;
-  background: var(--surface); color: var(--secondary); font: inherit; font-size: 12px; font-weight: 560; cursor: pointer; transition: background .12s, border-color .12s; }
-.ep-patterns button span { color: var(--muted); font-variant-numeric: tabular-nums; }
-.ep-patterns button:hover:not(:disabled) { border-color: var(--line-strong); }
-.ep-patterns button:disabled { opacity: .4; cursor: default; }
-.ep-patterns button[aria-pressed="true"] { border-color: var(--text); background: var(--text); color: var(--surface); }
-.ep-patterns button[aria-pressed="true"] span { color: inherit; opacity: .7; }
-.ep-patterns button[data-pattern]::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--pattern, var(--muted)); }
-.ep-patterns [data-pattern="rallied"], .ep-patterns [data-pattern="keptGoing"] { --pattern: var(--positive); }
-.ep-patterns [data-pattern="soldOff"], .ep-patterns [data-pattern="faded"], .ep-patterns [data-pattern="soldNews"] { --pattern: var(--negative); }
 .ep-rcols, .ep-rrow { grid-template-columns: var(--er-cols); }
 .ep-rrow { min-height: 64px; contain-intrinsic-size: auto 64px; }
 .ep-rstory { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -275,4 +225,53 @@
   .ep-rline { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .ep-rcols > :first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* The bar: text tabs, quiet dropdowns and a search that opens from its icon. */
+.ep-views { display: inline-flex; gap: 18px; margin-right: 10px; }
+.ep-views button { height: 32px; padding: 0; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); font: inherit; font-size: 14px; font-weight: 620; cursor: pointer; }
+.ep-views button:hover { color: var(--text); }
+.ep-views button[aria-selected="true"] { border-color: var(--text); color: var(--text); }
+.ep-quiet { position: relative; display: inline-flex; align-items: center; color: var(--muted); }
+.ep-quiet select { height: 30px; padding: 0 18px 0 8px; border: 0; border-radius: 8px; background: none; color: var(--secondary); font: inherit; font-size: 12.5px; font-weight: 560;
+  appearance: none; field-sizing: content; cursor: pointer; }
+.ep-quiet select:hover { background: var(--field); color: var(--text); }
+.ep-quiet[data-active] select { color: var(--text); font-weight: 650; }
+.ep-quiet svg { position: absolute; right: 5px; pointer-events: none; }
+.ep-search { display: inline-flex; align-items: center; height: 30px; border-radius: 8px; color: var(--muted); }
+.ep-search button { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
+.ep-search button:hover { color: var(--text); background: var(--field); }
+.ep-search input { width: 0; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; outline: none; transition: width .18s; }
+.ep-search[data-open] { background: var(--field); }
+.ep-search[data-open] input { width: 160px; padding-right: 10px; }
+.ep-search input:focus-visible { box-shadow: none; }
+
+/* First-day mix: one bar, three parts; the key below doubles as the filter. */
+.ep-mix { display: flex; flex-direction: column; gap: 9px; margin: 2px 0 18px; }
+.ep-mix-bar { display: flex; gap: 2px; height: 6px; }
+.ep-mix-bar button { flex: 1 1 0; min-width: 4px; padding: 0; border: 0; border-radius: 3px; background: var(--b); cursor: pointer; transition: opacity .15s; }
+.ep-mix[data-active] .ep-mix-bar button:not([data-on]) { opacity: .22; }
+.ep-mix-key { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.ep-mix-key button { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 520; cursor: pointer; }
+.ep-mix-key button:hover:not(:disabled), .ep-mix-key button[aria-pressed="true"] { color: var(--text); }
+.ep-mix-key button:disabled { opacity: .4; cursor: default; }
+.ep-mix-key b { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.ep-mix-key i { width: 7px; height: 7px; border-radius: 2px; background: var(--b); }
+.ep-mix-key [data-bucket="awaiting"] { margin-left: auto; font-size: 12px; }
+[data-bucket="rallied"] { --b: var(--positive); }
+[data-bucket="held"] { --b: color-mix(in srgb, var(--text) 22%, transparent); }
+[data-bucket="soldOff"] { --b: var(--negative); }
+
+/* The selected result: a quiet highlight in the list, its detail beside it or under it. */
+.ep-row[aria-current] { background: var(--surface-hover); box-shadow: inset 2px 0 0 var(--text); }
+.ep-panel { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; padding: 22px 24px 0; border-radius: 16px; background: var(--surface);
+  box-shadow: var(--shadow-card); scrollbar-width: thin; }
+.ep-detail { display: flex; flex-direction: column; gap: 26px; min-width: 0; }
+.ep-detail .ep-sheet-title { margin: 0; }
+.ep-detail .ep-sheet-sub { margin-top: -20px; }
+.ep-inline { padding: 18px 12px 8px; border-bottom: 1px solid var(--line); background: var(--surface-subtle); animation: ep-fade .18s ease-out; }
+.ep-inline .ep-sheet-head, .ep-inline .ep-sheet-sub { display: none; }
+.ep-inline .ep-sheet-foot { position: static; margin: 0; padding: 4px 0 12px; background: none; }
+.ep-detail[data-lead="reactions"] > :is(.ep-sheet-head, .ep-sheet-sub) { order: -3; }
+.ep-detail[data-lead="reactions"] > .ep-around { order: -2; }
+.ep-detail[data-lead="reactions"] > .ep-earlier { order: -1; }
 }

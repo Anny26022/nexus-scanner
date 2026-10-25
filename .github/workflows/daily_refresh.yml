@@ -141,6 +141,16 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: python frontend/earningspulse_history.py
 
+      - name: Fetch and publish Earnings Pulse Heatmap
+        continue-on-error: true
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/earningspulse_heatmap.py
+
       # Only after a successful build; a failed push stops the run before anything is committed.
       - name: Push pipeline state to R2
         env:

@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "0f6d8278a624a63226a1df7bc43935a04fd4ffea29f29445555477736316ebbd",
-    "weekly_eod2_refresh.yml": "83a13cb5bba166cb3039b43a8bc5c7edeb753bd94e4b0ba711716ad84a04babe",
+    "daily_refresh.yml": "6075fa584f518ba3c63c4a4e38d27cc6bf3dfd10281c74bf8d0bb22c88639518",
+    "weekly_eod2_refresh.yml": "8e2bd060597adf3887e1ba7e08bb2b094ccab0a4279b1ff610fc0b4c22ff1f90",
 }
 
 
@@ -172,8 +172,8 @@ class RefreshWorkflowTests(unittest.TestCase):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
         fake_git = "git() { printf '%s\\0' \"$@\"; printf '\\n'; };\n"
-        # The Earnings Pulse index is staged only once it exists in the checkout.
-        optional = int((ROOT / 'frontend/public/data/results/index.json').is_file())
+        # The Earnings Pulse and Heatmap indexes are staged only once they exist in the checkout.
+        optional = int((ROOT / 'frontend/public/data/results/index.json').is_file()) + int((ROOT / 'frontend/public/data/heatmap/index.json').is_file())
         for weekly, additions in [('false', 3 + optional), ('true', 6 + optional)]:
             with self.subTest(weekly=weekly):
                 message = 'literal $(false) commit message'

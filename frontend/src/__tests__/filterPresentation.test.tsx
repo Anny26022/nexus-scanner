@@ -23,9 +23,8 @@ it('offers Persistent Momentum only as the complete preset', () => {
   render(<ScreenerModal isOpen onClose={vi.fn()} activeConditionsMap={{}} matchMode="all" onApply={apply} />);
   expect(screen.queryByRole('checkbox', {name:'Persistent Momentum:'})).not.toBeInTheDocument();
   expect(FILTER_CONDITION_CATALOG.some(def => ['PERSISTENT_MOMENTUM','trend_persistent_momentum'].includes(def.id))).toBe(false);
-  fireEvent.click(screen.getByRole('button', {name:'Pre-built Scans'}));
-  const row = screen.getByRole('checkbox', {name:'Persistent Momentum'}).closest('.filter-row') as HTMLElement;
-  fireEvent.click(within(row).getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', {name:'Scan Library'}));
+  fireEvent.click(screen.getByRole('checkbox', {name:'Persistent Momentum'}));
   fireEvent.click(screen.getByRole('button', {name:'OR (Any)'}));
   fireEvent.click(screen.getByRole('button', {name:'Apply'}));
   expect(apply.mock.calls[0][1]).toBe('any');
@@ -42,7 +41,7 @@ it('shows, edits, removes and restores preset eligibility without changing its i
   const apply = vi.fn();
   const props = {isOpen:true,onClose:vi.fn(),activeConditionsMap:{},matchMode:'all' as const,onApply:apply};
   const {unmount} = render(<ScreenerModal {...props} />);
-  fireEvent.click(screen.getByRole('button', {name:'Pre-built Scans'}));
+  fireEvent.click(screen.getByRole('button', {name:'Scan Library'}));
   fireEvent.click(screen.getByRole('checkbox', {name:'Easy Money'}));
   expect(screen.getByRole('spinbutton', {name:'Market cap minimum'})).toHaveValue(1000);
   expect(screen.getByRole('spinbutton', {name:'Close price minimum'})).toHaveValue(10);
@@ -58,7 +57,7 @@ it('shows, edits, removes and restores preset eligibility without changing its i
   expect(saved['lib-easy-money'].parameters).toEqual({minMarketCapCr:500,minPrice:null,minTurnoverCr:5});
   unmount();
   render(<ScreenerModal {...props} activeConditionsMap={saved} />);
-  fireEvent.click(screen.getByRole('button', {name:'Pre-built Scans'}));
+  fireEvent.click(screen.getByRole('button', {name:'Scan Library'}));
   expect(screen.getByRole('spinbutton', {name:'Market cap minimum'})).toHaveValue(500);
   expect(screen.getByRole('checkbox', {name:'Use Close price'})).not.toBeChecked();
   fireEvent.click(screen.getByRole('checkbox', {name:'Use Close price'}));

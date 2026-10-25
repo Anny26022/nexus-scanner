@@ -1,7 +1,7 @@
 import { getIpoJson } from './gzipJson';
 import type { FinancialHistory } from '../chart/fundamentals';
 import { unpackSnapshot } from './packedSnapshot';
-import { screenSnapshot, type Snapshot } from './snapshotScreen';
+import { scanCounts, screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
 import {etfGroups} from '../data/etfFields';
 import {extendedMetrics} from '../data/extendedMetrics';
@@ -188,7 +188,7 @@ export function createSnapshotEngine(loader = readSnapshot) {
           if (values.length) result.ETF_FIELDS.push(field);
           if (group.type !== 'number') result.ETF_VALUES[field] = [...new Set(values.map(String))].sort();
         }
-      }
+      } else result.SCAN_COUNTS = scanCounts(data);
       if (data.extendedMetricsVersion === 1) {
         result.TRADINGVIEW_METRIC = extendedMetrics.filter(metric => data.stocks.some(stock =>
           stock.extended?.asOfDate === data.asOfDate && typeof stock.extended.values[metric.id] === 'number'

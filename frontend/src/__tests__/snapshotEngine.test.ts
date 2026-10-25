@@ -26,7 +26,7 @@ it('derives sorted choices from the same cached revision, without duplicates or 
  const choices=await run({type:'filterChoices',source});
  expect(loader).toHaveBeenCalledTimes(1);
  expect(choices).toEqual({type:'filterChoices', result:{SECTOR:['Technology'],INDUSTRY:['Software'],
-   SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:['Nifty 50','NIFTY 500']}});
+   SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:['Nifty 50','NIFTY 500'],SCAN_COUNTS:expect.any(Object)}});
  const changed=await run({type:'filterChoices',source:{...source,revision:'b'.repeat(64)}});
  expect(changed.type).toBe('filterChoices');
  expect(loader).toHaveBeenCalledTimes(2);
@@ -40,7 +40,7 @@ it('preserves historical classifications instead of rewriting a loaded revision'
  const run=createSnapshotEngine(async()=>data);
  const result=await run({type:'filterChoices',source});
  expect(result).toEqual({type:'filterChoices',result:{
-   SECTOR:['Consumer Goods','Healthcare'],INDUSTRY:['Test'],SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:[],
+   SECTOR:['Consumer Goods','Healthcare'],INDUSTRY:['Test'],SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:[],SCAN_COUNTS:expect.any(Object),
  }});
  expect(data.stocks[0].sector).toBe('Healthcare');
 });

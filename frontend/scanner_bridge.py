@@ -45,7 +45,22 @@ def band(kind, field, low, high, **params):
                  leaf(kind, comparison="less_or_equal", **{field: high}, **params))
 
 
+# Library scans the page builds from native filters (src/data/scanRecipes.json).
+RECIPES = {recipe["id"]: recipe["expression"] for recipe in json.loads((Path(__file__).parent / "src" / "data" / "scanRecipes.json").read_text())}
+
+
+def recipe_node(node):
+    if node["type"] == "group":
+        return group(node["op"], *(recipe_node(child) for child in node["children"]))
+    if node["kind"].startswith("TV_") or node["kind"] == "PERFORMANCE_RANK":
+        return {"type": "published_metric", "metric": node["params"]["metric"]}
+    return translate(node["kind"], node["params"])
+
+
 def translate(identifier, p):
+    if identifier in RECIPES:
+        # Same eligibility floors as the pipeline's library scans.
+        return {"type": "preset", "expression": recipe_node(RECIPES[identifier]), "eligibility": p}
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
         return {"type": "preset", "expression": preset["expression"], "eligibility": p}
@@ -196,6 +211,10 @@ def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
     if node["type"] == "not":
         value = evaluate(node["child"],s,frame,context,as_of,diagnostics,delivery)
         return None if value is None else not value
+    if node["type"] == "published_metric":
+        # TradingView values are published per release, not kept in price history.
+        diagnostics.add((node["metric"], "published_metric_not_in_history"))
+        return None
     if node["type"] == "preset":
         baseline = preset_baseline(s, node.get('eligibility')) if s.get("as_of_date") == as_of else None
         if baseline is False:

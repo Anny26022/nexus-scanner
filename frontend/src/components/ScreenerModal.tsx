@@ -3,12 +3,16 @@ import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Dialog } from './Dialog';
 import { hasUnavailableConditions, UnavailableConditions, UNAVAILABLE_CONDITIONS_MESSAGE } from './UnavailableConditions';
-import { X, SlidersHorizontal, Library, ChevronDown, Info } from 'lucide-react';
+import { X, SlidersHorizontal, Library, ChevronDown, Info, Bookmark } from 'lucide-react';
 import { ConditionCategory, ActiveCondition, MatchMode, ConditionDef, ParameterSpec } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG, FILTER_CONDITION_CATALOG, REDUNDANT_CATALOG_CONDITIONS } from '../data/conditionCatalog';
 import { breadthMetricDefault } from '../data/breadthMetricDefaults';
-import { PRESET_CATALOG } from '../data/presetCatalog';
-import { PRESET_ELIGIBILITY, presetEligibilitySummary } from '../data/presetEligibility';
+import { PRESET_CATALOG, RECIPES, recipeMetrics, type LibraryScan } from '../data/presetCatalog';
+import { ScanLibrary } from './ScanLibrary';
+import { ScanEligibility } from './ScanEligibility';
+import { useLocalStorageState } from '../hooks/useLocalStorageState';
+import { SAVED_SCANS_KEY, parseSavedScans, scanInstances, upsertSavedScan, type SavedScan } from '../utils/savedScans';
+import { presetEligibilitySummary } from '../data/presetEligibility';
 import { availableFilterParameters, isAvailableCondition } from '../utils/filterAvailability';
 import { comparisonLabel, filterLogicHint, parameterPresentation, RANGE_FILTERS } from '../utils/filterPresentation';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
@@ -31,6 +35,9 @@ interface ScreenerModalProps {
   choicesError?: boolean;
   retryChoices?: () => void;
 }
+
+/** Every library scan carries the same editable eligibility floors. */
+const LIBRARY_IDS = new Set(PRESET_CATALOG.map(def => def.id));
 
 const CATEGORY_TABS: Array<{ id: ConditionCategory | 'all'; label: string }> = [
   { id: 'all', label: 'All' },
@@ -141,6 +148,7 @@ interface FilterRowProps {
   showParameters: boolean;
   toggle: (def: ConditionDef, ruleKey: string) => void;
   updateParam: (condId: string, paramId: string, value: any) => void;
+  onSave?: (condition: ActiveCondition, label: string) => void;
 }
 
 interface FilterParameterProps {
@@ -288,7 +296,7 @@ const FilterRule = memo(function FilterRule({def, parameters, updateParam}: {
 });
 
 // Unchanged rows retain the same definition, condition and callback references.
-const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters, toggle, updateParam }: FilterRowProps) {
+const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters, toggle, updateParam, onSave }: FilterRowProps) {
   const updateRule = useCallback((_defId: string, paramId: string, value: unknown) =>
     updateParam(ruleKey, paramId, value), [ruleKey, updateParam]);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
@@ -321,53 +329,15 @@ const FilterRow = memo(function FilterRow({ def, ruleKey, active, showParameters
         aria-expanded={descriptionOpen} onClick={() => setDescriptionOpen(open => !open)}>
         <Info size={15} strokeWidth={1.8} />
       </button>
+      {onSave && active && available && <button type="button" className="preset-info-button filter-save-button" title="Save this filter to My scans"
+        aria-label={`Save ${def.label} filter`} onClick={() => onSave(active, def.label)}>
+        <Bookmark size={14} strokeWidth={1.8} />
+      </button>}
 
       {editable && showParameters && def.parameters && def.parameters.length > 0 && (
         <FilterRule def={def} parameters={parameters} updateParam={updateRule} />
       )}
       {editable && showParameters && def.id === 'MA_STACK' && logicHint && <p className="filter-logic-hint">{logicHint}</p>}
-      {checked && !showParameters && <div className="preset-eligibility-card">
-        <div className="preset-eligibility-header">
-          <span className="preset-eligibility-title">Eligibility Criteria</span>
-          <span className="preset-eligibility-badge">ALL REQUIRED (AND)</span>
-        </div>
-        <div className="preset-eligibility-list">
-          {PRESET_ELIGIBILITY.map(rule => {
-            const value = parameters[rule.id] === undefined ? rule.defaultValue : parameters[rule.id];
-            const isEnabled = value !== null;
-            return (
-              <div key={rule.id} className={`preset-eligibility-row ${isEnabled ? 'is-active' : 'is-disabled'}`}>
-                <label className="preset-eligibility-toggle">
-                  <input
-                    type="checkbox"
-                    aria-label={`Use ${rule.label}`}
-                    checked={isEnabled}
-                    onChange={event => updateRule(def.id, rule.id, event.target.checked ? rule.defaultValue : null)}
-                    className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 transition-all"
-                  />
-                  <span className="preset-eligibility-name">{rule.label}</span>
-                </label>
-                <div className="preset-eligibility-inputs">
-                  <span className="preset-eligibility-op" aria-hidden="true">&gt;</span>
-                  <div className="preset-eligibility-input-wrap">
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      aria-label={`${rule.label} minimum`}
-                      disabled={!isEnabled}
-                      value={value ?? ''}
-                      onChange={event => updateRule(def.id, rule.id, numericInputValue(event.target.value))}
-                      className="preset-eligibility-input"
-                    />
-                    <span className="preset-eligibility-unit">{rule.unit}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>}
       {descriptionOpen && <p className={showParameters ? 'filter-logic-hint' : 'preset-description'}>{description}</p>}
     </div>
   );
@@ -394,6 +364,13 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
   const [localMode, setLocalMode] = useState<MatchMode>(matchMode);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'custom' | 'presets'>('custom');
+  const [storedScans, setStoredScans] = useLocalStorageState<unknown>(SAVED_SCANS_KEY, []);
+  const savedScans = parseSavedScans(storedScans);
+  const [saving, setSaving] = useState<{conditions: ActiveCondition[]; name: string} | null>(null);
+  const [notice, setNotice] = useState('');
+  // Library scans built on published daily metrics wait until the snapshot carries them.
+  const pendingScans = useMemo(() => !choices ? undefined : new Set([...RECIPES.keys()].filter(id =>
+    recipeMetrics(id).some(metric => !choices.TRADINGVIEW_METRIC?.includes(metric)))), [choices]);
   const customCatalog = useMemo(() => (etf ? etfConditionCatalog : FILTER_CONDITION_CATALOG).map(def => {
     if (isEtfCondition(def.id)) {
       const options = def.parameters[0].options?.filter(option => choices?.ETF_FIELDS?.includes(option.value)) ?? [];
@@ -470,6 +447,29 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     setLocalMap(current => ({...current, [instanceId]: {instanceId, conditionId:def.id, parameters}}));
   }, []);
 
+  const toggleScan = useCallback((scan: LibraryScan) => setLocalMap(current => {
+    if (Object.values(current).some(condition => condition.conditionId === scan.id)) {
+      return Object.fromEntries(Object.entries(current).filter(([, condition]) => condition.conditionId !== scan.id));
+    }
+    const def = PRESET_CATALOG.find(item => item.id === scan.id);
+    const parameters = def && availableFilterParameters(def);
+    return parameters ? {...current, [scan.id]: {instanceId: crypto.randomUUID(), conditionId: scan.id, parameters}} : current;
+  }), []);
+  const loadSaved = (scan: SavedScan) => {
+    if (scan.conditions.length === 1) setLocalMap(current => ({...current, ...scanInstances(scan)}));
+    else { setLocalMap(scanInstances(scan)); setLocalMode(scan.matchMode); }
+    setNotice(scan.conditions.length === 1 ? `Added “${scan.name}”` : `Loaded “${scan.name}”`);
+  };
+  const saveFilter = useCallback((condition: ActiveCondition, label: string) => setSaving({conditions: [condition], name: label}), []);
+  const commitSave = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!saving?.name.trim()) return;
+    const replacing = savedScans.some(scan => scan.name.toLowerCase() === saving.name.trim().toLowerCase());
+    setStoredScans(upsertSavedScan(savedScans, saving.name, saving.conditions, localMode));
+    setNotice(replacing ? `Updated “${saving.name.trim()}”` : `Saved “${saving.name.trim()}”`);
+    setSaving(null);
+  };
+
   if (!isOpen) return null;
 
   const catalogToUse = activeTab === 'custom' ? customCatalog : PRESET_CATALOG;
@@ -495,10 +495,10 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     <div className="dialog-header"><div><h2>Refine your screen</h2><p>Select conditions and adjust their parameters.</p></div><button type="button" className="icon-button" aria-label="Close filters" onClick={onClose}><X size={20} /></button></div>
     <div className="filter-modal-tabs" role="group" aria-label="Filter source">
       <button aria-pressed={activeTab === 'custom'} onClick={() => {setActiveTab('custom'); setSearch('');}}><SlidersHorizontal className="inline mr-2" size={14} />Custom Filters</button>
-      {!etf && <button aria-pressed={activeTab === 'presets'} onClick={() => {setActiveTab('presets'); setSearch('');}}><Library className="inline mr-2" size={14} />Pre-built Scans</button>}
+      {!etf && <button aria-pressed={activeTab === 'presets'} onClick={() => {setActiveTab('presets'); setSearch('');}}><Library className="inline mr-2" size={14} />Scan Library</button>}
       <div className="match-mode" role="group" aria-label="Match mode"><span>Selected filters</span><button title="Every selected filter must match" aria-pressed={localMode === 'all'} onClick={() => setLocalMode('all')}>AND (All)</button><button title="At least one selected filter must match" aria-pressed={localMode === 'any'} onClick={() => setLocalMode('any')}>OR (Any)</button></div>
     </div>
-    <div className="filter-modal-options">
+    {activeTab === 'custom' && <div className="filter-modal-options">
       <div className="relative flex items-center min-w-0">
         <label className="query-input w-full">
           <input aria-label="Search filters" placeholder="Search filters" value={search} onChange={event => setSearch(event.target.value)} />
@@ -538,7 +538,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
           })}
         </div>
       )}
-    </div>
+    </div>}
     <div className="filter-modal-content">
       {choicesLoading && <p role="status" className="cell-muted">Loading filter choices…</p>}
       {choicesError && <p role="alert">Filter choices could not load. <button type="button" onClick={retryChoices}>Retry</button></p>}
@@ -547,20 +547,15 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
         delete next[key];
         return next;
       })} />
-      <div className={activeTab === 'presets' ? 'grid grid-cols-1 md:grid-cols-2 gap-2.5' : 'filter-rule-list'} data-preset-list={activeTab === 'presets'}>
-        {activeTab === 'presets' ? (
-          filtered.map(def => (
-            <FilterRow
-              key={def.id}
-              ruleKey={def.id}
-              def={def}
-              active={localMap[def.id]}
-              showParameters={false}
-              toggle={toggle}
-              updateParam={updateParam}
-            />
-          ))
-        ) : (
+      {activeTab === 'presets' && <>
+        <ScanEligibility scans={Object.entries(localMap).filter(([, condition]) => LIBRARY_IDS.has(condition.conditionId))}
+          nameOf={id => PRESET_CATALOG.find(def => def.id === id)?.label ?? id} onChange={updateParam}
+          onRemove={key => setLocalMap(current => Object.fromEntries(Object.entries(current).filter(([item]) => item !== key)))} />
+        <ScanLibrary selected={localMap} counts={choices?.SCAN_COUNTS} pending={pendingScans} saved={savedScans} onToggle={toggleScan} onUseSaved={loadSaved}
+          onDeleteSaved={scan => setStoredScans(savedScans.filter(item => item.id !== scan.id))} />
+      </>}
+      {activeTab === 'custom' && <div className="filter-rule-list">
+        {(
           filtered.map((def, index) => {
             const instances = Object.entries(localMap).filter(([, condition]) => condition.conditionId === def.id);
             const repeatable = def.category === 'fundamentals' && def.parameters.length > 0
@@ -584,7 +579,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
                       if (parameter.id !== 'values') return parameter;
                       const field = condition?.parameters.metric ?? def.parameters[0].defaultValue;
                       return {...parameter, options:(choices?.ETF_VALUES?.[field] ?? []).map(value => ({value, label:choices?.ETF_LABELS?.[field]?.[value] ?? (value === 'true' ? 'Yes' : value === 'false' ? 'No' : value)}))};
-                    })} : def} active={condition} showParameters={true} toggle={toggle} updateParam={updateParam} />)}
+                    })} : def} active={condition} showParameters={true} toggle={toggle} updateParam={updateParam} onSave={etf ? undefined : saveFilter} />)}
                   {repeatable && instances.length > 0 && availableFilterParameters(def) && <button type="button" className="add-filter-rule"
                     aria-label={`Add ${def.label} rule`} onClick={() => addRule(def)}>+ Add rule</button>}
                 </div>
@@ -592,12 +587,21 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
             );
           })
         )}
-      </div>
-      {!filtered.length && <div className="data-state"><h2>No matching {activeTab === 'custom' ? 'filters' : 'scans'}</h2><p>Try a different category or search.</p></div>}
+      </div>}
+      {activeTab === 'custom' && !filtered.length && <div className="data-state"><h2>No matching filters</h2><p>Try a different category or search.</p></div>}
     </div>
     {validationError && !hasUnavailableConditions(localMap) && <p role="alert" className="px-6 py-2 text-sm text-red-600">{validationError}</p>}
-    <div className="dialog-footer"><span className="cell-muted text-xs">{Object.keys(localMap).length} selected</span>
-      <div className="flex gap-2"><Button variant="secondary" onClick={handleReset}>Reset</Button><Button variant="primary" onClick={handleApply} disabled={Boolean(validationError)}>Apply</Button></div>
-    </div>
+    {saving ? <form className="dialog-footer scan-save-form" onSubmit={commitSave}>
+      <input autoFocus aria-label="Scan name" maxLength={60} placeholder="Name this scan" value={saving.name}
+        onChange={event => setSaving({...saving, name: event.target.value})} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); setSaving(null); } }} />
+      <span className="cell-muted text-xs">{saving.conditions.length === 1 ? '1 filter' : `${saving.conditions.length} filters · ${localMode === 'all' ? 'AND' : 'OR'}`}</span>
+      <div className="flex gap-2"><Button variant="secondary" onClick={() => setSaving(null)}>Cancel</Button><Button variant="primary" type="submit" disabled={!saving.name.trim()}>Save</Button></div>
+    </form>
+    : <div className="dialog-footer"><span className="cell-muted text-xs footer-status" role="status" title={notice || undefined}>{notice || `${Object.keys(localMap).length} selected`}</span>
+      <div className="flex gap-2">
+        {!etf && <Button variant="secondary" disabled={!Object.keys(localMap).length || Boolean(validationError)}
+          onClick={() => setSaving({conditions: Object.values(localMap), name: ''})}><Bookmark size={14} strokeWidth={1.8} />Save as scan</Button>}
+        <Button variant="secondary" onClick={handleReset}>Reset</Button><Button variant="primary" onClick={handleApply} disabled={Boolean(validationError)}>Apply</Button></div>
+    </div>}
   </Dialog>;
 };

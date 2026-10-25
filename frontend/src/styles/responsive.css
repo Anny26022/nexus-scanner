@@ -570,6 +570,20 @@
   .filter-row:not([data-preset="true"]) > label > span, .filter-row[data-preset="true"] > label > span { font-size: 13px; }
   .filter-row input[type="checkbox"] { width: 18px; height: 18px; }
   .filter-row .preset-info-button { width: 36px; height: 36px; margin-top: 0; }
+  .filter-row:has(> .filter-save-button) { grid-template-columns: minmax(0, 1fr) 36px 36px; }
+  .filter-row:not([data-preset="true"]) > .filter-save-button { grid-column: 3; margin-left: 0; }
+  .scan-library-bar { margin: -10px -14px 4px; padding: 10px 14px 8px; top: -10px; }
+  .scan-library-search { max-width: none; }
+  .scan-library-tabs .filter-category-btn { min-height: 34px; }
+  .scan-grid { grid-template-columns: minmax(0, 1fr); }
+  .scan-elig-row { flex-wrap: wrap; gap: 6px 8px; }
+  .scan-elig .scan-elig-chip { height: 30px; font-size: 12px; }
+  .scan-elig .scan-elig-chip input[type="number"] { min-height: 0; height: 24px; font-size: 13px; width: 52px; }
+  .scan-elig-name { flex: 1 1 auto; }
+  .scan-elig-rules { order: 3; flex-basis: 100%; }
+  .scan-save-form { flex-wrap: wrap; }
+  .scan-save-form input { flex-basis: 100%; max-width: none; height: 38px; }
+  .dialog-footer .button svg { display: none; }
   .preset-info-button::after { display: none; }
   .filter-parameters button, .ma-rule-picker button, .add-filter-rule { min-height: 36px; font-size: 13px; }
   .filter-row select { max-width: min(240px, calc(100vw - 48px)); }

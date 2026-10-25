@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 
-vi.mock('../api/screenerApi', () => ({screenerApi: {getIpoCatalogue: vi.fn()}}));
+vi.mock('../api/screenerApi', () => ({screenerApi: {getIpoCatalogue: vi.fn(), runScreen: vi.fn(), getFilterChoices: vi.fn()}}));
 import { screenerApi } from '../api/screenerApi';
 import { NewListingsTab } from '../components/NewListingsTab';
 
@@ -149,4 +149,23 @@ it.each(['tap', 'Tab', 'ArrowDown'])('opens IPO details on phone %s and remains 
     cleanup();
     vi.unstubAllGlobals();
   }
+});
+
+it('keeps running the saved filters after a refresh instead of falling back to every listing', async () => {
+  localStorage.setItem('nexus-scanner.ipo.conditions.v1', JSON.stringify({'lib-vcp': {instanceId: 'lib-vcp', conditionId: 'lib-vcp', parameters: {}}}));
+  localStorage.setItem('nexus-scanner.ipo.show-results.v1', 'true');
+  vi.mocked(screenerApi.getIpoCatalogue).mockResolvedValue({records: [{
+    symbol: 'TEST', name: 'Test IPO', listingDate: '2026-10-01', currentPrice: 100,
+    turnoverCrore: 1, marketCapCrore: 200, sector: 'Industrials', industry: 'Equipment',
+  }]});
+  vi.mocked(screenerApi.runScreen).mockReturnValue(new Promise(() => {}));
+  const client = new QueryClient({defaultOptions: {queries: {retry: false}}});
+  render(<QueryClientProvider client={client}><NewListingsTab datasetRevision={'c'.repeat(64)} selectedAsOfDate="2026-10-09" /></QueryClientProvider>);
+  await waitFor(() => expect(screenerApi.runScreen).toHaveBeenCalled());
+  const request = vi.mocked(screenerApi.runScreen).mock.calls[0][0];
+  expect(request.customSymbols).toEqual(['TEST']);
+  expect(JSON.stringify(request.expressionTree)).toContain('lib-vcp');
+  // With no filters left, the saved choice cannot show an empty results view.
+  fireEvent.click(screen.getByRole('button', {name: 'Reset'}));
+  expect(await screen.findByRole('button', {name: 'IPO details for Test IPO'})).toBeInTheDocument();
 });

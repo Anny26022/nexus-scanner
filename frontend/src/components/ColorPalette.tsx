@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useStoredState } from '../storage/useStoredState';
 import * as Popover from '@radix-ui/react-popover';
 import { Plus } from 'lucide-react';
 
@@ -26,22 +26,18 @@ export function joinColor(base: string, opacity: number): string {
   return clamped >= 100 ? base : `${base}${Math.round(clamped / 100 * 255).toString(16).padStart(2, '0')}`;
 }
 
-function readCustom(): string[] {
-  try {
-    const stored = JSON.parse(localStorage.getItem(CUSTOM_KEY) ?? '[]');
-    return Array.isArray(stored) ? stored.filter((item): item is string => typeof item === 'string' && /^#[0-9a-f]{6}$/i.test(item)).slice(0, 10) : [];
-  } catch { return []; }
-}
+const cleanCustom = (stored: unknown): string[] => Array.isArray(stored)
+  ? stored.filter((item): item is string => typeof item === 'string' && /^#[0-9a-f]{6}$/i.test(item)).slice(0, 10) : [];
 
 /** Colour well that opens the palette; `value` and `onChange` use #rrggbb or #rrggbbaa. */
 export function ColorPalette({value, onChange, ariaLabel, disabled = false}: {value: string; onChange: (value: string) => void; ariaLabel: string; disabled?: boolean}) {
   const {base, opacity} = splitColor(value);
-  const [custom, setCustom] = useState(readCustom);
+  // Shared by every open palette, so a colour added in one shows in the others straight away.
+  const [stored, setStored] = useStoredState<unknown>(CUSTOM_KEY, []);
+  const custom = cleanCustom(stored);
   const pick = (next: string) => onChange(joinColor(next, opacity));
   const addCustom = (next: string) => {
-    const list = [next, ...custom.filter(item => item !== next)].slice(0, 10);
-    setCustom(list);
-    try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list)); } catch { /* per-viewer convenience only */ }
+    setStored([next, ...custom.filter(item => item !== next)].slice(0, 10));
     pick(next);
   };
   const swatch = (color: string) => <button key={color} type="button" role="option" aria-selected={color === base}

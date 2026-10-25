@@ -1,3 +1,5 @@
+import { removeStored, writeStored } from '../storage/store';
+import { SCREEN_STORAGE_KEYS } from './screenStorageKeys';
 import type { ActiveCondition, MatchMode, UniverseType } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import {etfGroups} from '../data/etfFields';
@@ -27,16 +29,7 @@ const MAX_CONDITIONS = 40;
 const MAX_QUERY_LENGTH = 500;
 const MAX_NAME_LENGTH = 60;
 
-// The Screener persists its working state in these keys; a loaded screen replaces them.
-export const SCREEN_STORAGE_KEYS = {
-  universe: 'nexus-scanner.screener.universe.v1',
-  matchMode: 'nexus-scanner.screener.match-mode.v1',
-  conditions: 'nexus-scanner.screener.conditions.v1',
-  query: 'nexus-scanner.screener.query.v1',
-  sort: 'nexus-scanner.screener.sort.v1',
-  pagination: 'nexus-scanner.screener.pagination.v1',
-  activeTab: 'nexus-scanner.ui.active-tab.v1',
-} as const;
+export { SCREEN_STORAGE_KEYS };
 
 const SHAREABLE_UNIVERSES: readonly UniverseType[] = ['etf', 'mainboard', 'nifty50', 'nifty500', 'midsmall400'];
 const KNOWN_CONDITIONS = new Set([...NEXUS_CONDITION_CATALOG, ...PRESET_CATALOG].map(def => def.id));
@@ -127,26 +120,23 @@ export function screenShareUrl(screen: ScreenDefinition, location: Pick<Location
 }
 
 /** Makes a screen the Screener's working state; the Screener reads these keys when it mounts. */
-export function writeScreenToStorage(screen: ScreenDefinition, storage: Storage = window.localStorage): boolean {
-  try {
-    storage.setItem(SCREEN_STORAGE_KEYS.universe, JSON.stringify(screen.universe));
-    storage.setItem(SCREEN_STORAGE_KEYS.matchMode, JSON.stringify(screen.matchMode));
-    storage.setItem(SCREEN_STORAGE_KEYS.conditions, JSON.stringify(screen.conditions));
-    storage.setItem(SCREEN_STORAGE_KEYS.query, JSON.stringify(screen.query));
-    storage.setItem(SCREEN_STORAGE_KEYS.sort, JSON.stringify(screen.sort));
-    storage.removeItem(SCREEN_STORAGE_KEYS.pagination);
-    storage.setItem(SCREEN_STORAGE_KEYS.activeTab, JSON.stringify('screener'));
-    return true;
-  } catch {
-    return false;
-  }
+export function writeScreenToStorage(screen: ScreenDefinition): boolean {
+  const written = [
+    writeStored(SCREEN_STORAGE_KEYS.universe, screen.universe),
+    writeStored(SCREEN_STORAGE_KEYS.matchMode, screen.matchMode),
+    writeStored(SCREEN_STORAGE_KEYS.conditions, screen.conditions),
+    writeStored(SCREEN_STORAGE_KEYS.query, screen.query),
+    writeStored(SCREEN_STORAGE_KEYS.sort, screen.sort),
+    writeStored(SCREEN_STORAGE_KEYS.activeTab, 'screener'),
+  ];
+  removeStored(SCREEN_STORAGE_KEYS.pagination);
+  return written.every(Boolean);
 }
 
 /** Applies a shared `?screen=` link before the app renders, then removes it from the address bar. */
 export function applySharedScreenFromUrl(
   location: Pick<Location, 'search' | 'pathname' | 'hash'> = window.location,
   history: Pick<History, 'replaceState' | 'state'> = window.history,
-  storage: Storage = window.localStorage,
 ): boolean {
   const params = new URLSearchParams(location.search);
   if (!params.has(SCREEN_URL_PARAM)) return false;
@@ -154,5 +144,5 @@ export function applySharedScreenFromUrl(
   params.delete(SCREEN_URL_PARAM);
   const query = params.toString();
   history.replaceState(history.state, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
-  return screen ? writeScreenToStorage(screen, storage) : false;
+  return screen ? writeScreenToStorage(screen) : false;
 }

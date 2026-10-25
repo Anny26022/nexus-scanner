@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { Bookmark, CandlestickChart, CornerDownLeft, Gauge, Moon, Rocket, ScanSearch, Search, Sun, CalendarCheck, Orbit } from 'lucide-react';
 import { rankSymbols, useSymbolDirectory } from '../hooks/useSymbolDirectory';
+import { readStored } from '../storage/store';
 import { parseSavedScreens, SAVED_SCREENS_KEY, type ScreenDefinition } from '../utils/savedScreens';
 import { describeScreen } from './SavedScreensMenu';
 import type { AppTab } from './Navbar';
@@ -37,7 +38,7 @@ const PAGES: {tab: AppTab; label: string; keywords: string; Icon: typeof ScanSea
 const MAX_SYMBOLS = 8;
 
 function readSavedScreens() {
-  try { return parseSavedScreens(JSON.parse(localStorage.getItem(SAVED_SCREENS_KEY) ?? '[]')); } catch { return []; }
+  return parseSavedScreens(readStored<unknown>(SAVED_SCREENS_KEY, []));
 }
 
 /** ⌘K / Ctrl+K launcher for pages, saved screens, symbols and appearance. Mounted only while open. */

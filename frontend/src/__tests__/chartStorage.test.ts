@@ -23,7 +23,8 @@ it('persists completed drawing edits, undo, redo and deletion but not selection'
   book.update(drawing.id,{a:{...drawing.a,price:20}});
   book.undo();expect(readChartStorage('drawings.PERSIST_TEST.v2')).toEqual({version:2,drawings:[drawing]});
   book.redo();expect((readChartStorage('drawings.PERSIST_TEST.v2') as {drawings:typeof drawing[]}).drawings[0].a.price).toBe(20);
-  book.select(drawing.id);book.deleteSelected();expect(readChartStorage('drawings.PERSIST_TEST.v2')).toEqual({version:2,drawings:[]});
+  // Deleting the last drawing removes the symbol's key rather than storing an empty book.
+  book.select(drawing.id);book.deleteSelected();expect(readChartStorage('drawings.PERSIST_TEST.v2')).toBeNull();
 });
 it('loads a validated symbol-owned drawing document without persisting replay books',()=>{
   const source=new DrawingBook();source.add('text',{time:Date.parse('2026-01-01'),price:10});

@@ -77,8 +77,16 @@ def parse_quarter(text, label, market='IN'):
                 raise ValueError('Missing financial fields on a published event')
         key = (row['symbol'], row.get('quarter_label') or '', row['filing_day'])
         if key in unique and unique[key] != row:
-            raise ValueError('Conflicting duplicate earnings event')
-        unique[key] = row
+            if market == 'US':
+                # In US market, multiple filings occur on the same day (e.g. PR vs 10-Q); retain newest by event_ts
+                current_ts = unique[key].get('event_ts') or 0
+                row_ts = row.get('event_ts') or 0
+                if row_ts > current_ts:
+                    unique[key] = row
+            else:
+                raise ValueError('Conflicting duplicate earnings event')
+        else:
+            unique[key] = row
     rows = [unique[key] for key in sorted(unique)]
     # Reject NaN and Infinity before writing any objects.
     json.dumps(rows, allow_nan=False)

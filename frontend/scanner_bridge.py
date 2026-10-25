@@ -52,7 +52,7 @@ RECIPES = {recipe["id"]: recipe["expression"] for recipe in json.loads((Path(__f
 def recipe_node(node):
     if node["type"] == "group":
         return group(node["op"], *(recipe_node(child) for child in node["children"]))
-    if node["kind"].startswith("TV_"):
+    if node["kind"].startswith("TV_") or node["kind"] == "PERFORMANCE_RANK":
         return {"type": "published_metric", "metric": node["params"]["metric"]}
     return translate(node["kind"], node["params"])
 

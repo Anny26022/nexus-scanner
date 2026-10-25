@@ -29,19 +29,29 @@ export const SCAN_LIBRARY: LibraryScan[] = [
 ];
 
 /** Shown first in the library when nothing is searched. */
-export const POPULAR_SCANS = ['scan-top-gainers-1m', 'scan-top-gainers-3m', 'scan-top-gainers-6m', 'scan-top-gainers-1y', 'scan-near-52w-high',
-  'scan-near-high-breakout', 'lib-stage-two', 'lib-vcp'];
+export const POPULAR_SCANS = ['scan-top-gainers-1m', 'scan-top-gainers-3m', 'scan-top-gainers-6m', 'scan-leaders-1m', 'scan-leaders-3m',
+  'scan-leaders-6m', 'scan-near-52w-high', 'scan-near-high-breakout'];
+
+/** Recipe-only condition: a cross-sectional rank on a published daily metric. Not offered as a filter. */
+export const RANK_KIND = 'PERFORMANCE_RANK';
 
 export const RECIPES: ReadonlyMap<string, RecipeGroup> = new Map(SCAN_LIBRARY.flatMap(scan => scan.recipe ? [[scan.id, scan.recipe]] : []));
 
 /** Published daily metrics a recipe reads (the extended-metric `metric` ids), so the library knows what a snapshot lacks. */
 export function recipeMetrics(id: string): string[] {
   const walk = (node: RecipeGroup | RecipeCondition): string[] => node.type === 'group' ? node.children.flatMap(walk)
-    : node.kind.startsWith('TV_') && typeof node.params.metric === 'string' ? [node.params.metric] : [];
+    : (node.kind.startsWith('TV_') || node.kind === RANK_KIND) && typeof node.params.metric === 'string' ? [node.params.metric] : [];
   const recipe = RECIPES.get(id);
   return recipe ? walk(recipe) : [];
 }
 export const recipeUsesExtended = (id: string) => recipeMetrics(id).length > 0;
+/** Ranked scans order their results by the metric they rank on. */
+export function rankedMetric(id: string): string | null {
+  const walk = (node: RecipeGroup | RecipeCondition): string | null => node.type === 'group'
+    ? node.children.map(walk).find(Boolean) ?? null : node.kind === RANK_KIND ? String(node.params.metric) : null;
+  const recipe = RECIPES.get(id);
+  return recipe ? walk(recipe) : null;
+}
 
 export const PRESET_CATALOG: ConditionDef[] = SCAN_LIBRARY.map(p => ({
   id: p.id, label: p.name, category: categories[p.category] ?? 'trend',

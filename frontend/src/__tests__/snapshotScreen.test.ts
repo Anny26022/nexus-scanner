@@ -18,6 +18,11 @@ describe('published snapshots', () => {
     const data = {...snapshot, extendedMetricsVersion:1, stocks:[make('A',40,10), make('B',90,0.5), make('C',10,10), make('D',null,10)]};
     const run = (id: string) => screenSnapshot(data, {...request, expressionTree:condition(id)})!.matchedSymbols;
     expect(run('scan-top-gainers-1m')).toEqual(['A']);
+    // Leaders rank the liquid stocks with a value (A, C) and keep the top 5%, rounded up to at least one.
+    expect(run('scan-leaders-1m')).toEqual(['A']);
+    const sorted = screenSnapshot(data, {...request, expressionTree:{type:'group', operator:'all', children:[]},
+      sort:{field:'tv.market.performance_1m_pct', direction:'desc'}})!.matchedSymbols;
+    expect(sorted.slice(0, 3)).toEqual(['B','A','C']);
     expect(supportsSnapshotCondition({instanceId:'x',conditionId:'scan-top-gainers-6m',parameters:{}})).toBe(true);
     expect(supportsSnapshotCondition({instanceId:'x',conditionId:'scan-near-high-breakout',parameters:{}})).toBe(true);
     expect(() => screenSnapshot({...data, extendedMetricsVersion:undefined}, {...request, expressionTree:condition('scan-top-gainers-1m')}))

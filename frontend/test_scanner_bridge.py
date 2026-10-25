@@ -230,6 +230,7 @@ class BridgeTests(unittest.TestCase):
         diagnostics=set()
         self.assertIsNone(bridge.evaluate(bridge.translate("scan-top-gainers-1m",{}),self.stock(),None,{},"2026-09-30",diagnostics,[]))
         self.assertIn(("market.performance_1m_pct","published_metric_not_in_history"),diagnostics)
+        self.assertIsNone(bridge.evaluate(bridge.translate("scan-leaders-3m",{}),self.stock(),None,{},"2026-09-30",diagnostics,[]))
 
     def test_unknown_filters_raise_and_and_or_preserve_unknown(self):
         with self.assertRaises(ValueError): bridge.translate("invented",{})

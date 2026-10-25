@@ -13,7 +13,7 @@ it('keeps published filters and presets available but disables backend-only defa
   for (const conditionId of ['EARNINGS_GROWTH','fund_earnings_growth','rs_1month','rs_3month']) {
     expect(isAvailableFilter(NEXUS_CONDITION_CATALOG.find(def=>def.id===conditionId)!)).toBe(false);
   }
-  expect(PRESET_CATALOG).toHaveLength(51);
+  expect(PRESET_CATALOG).toHaveLength(54);
   expect(PRESET_CATALOG.every(isAvailableFilter)).toBe(true);
   expect(isAvailableCondition({instanceId:'ma', conditionId:'MA_STACK', parameters:{periods:'50,173,200',maType:'EMA',priceAbove:false}})).toBe(false);
   expect(hasUnavailableConditions({unknown:{instanceId:'unknown',conditionId:'UNKNOWN',parameters:{}}})).toBe(true);
@@ -125,7 +125,7 @@ it('describes each scan, searches the library and shows today\'s matches', () =>
   expect(screen.getAllByText('After the next data refresh').length).toBeGreaterThan(0);
   fireEvent.change(screen.getByRole('textbox', {name:'Search scans'}), {target:{value:'gainers'}});
   expect(screen.getAllByRole('checkbox').map(item => item.getAttribute('aria-label'))).toEqual(
-    ['Top 1M Gainers','Top 3M Gainers','Top 6M Gainers','Top 1Y Gainers']);
+    ['Top 1M Gainers','Top 3M Gainers','Top 6M Gainers','Top 1Y Gainers','1M Leaders','3M Leaders','6M Leaders']);
 });
 
 it('saves a filter and a whole screen to My scans and brings them back', () => {

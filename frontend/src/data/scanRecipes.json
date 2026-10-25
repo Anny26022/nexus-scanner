@@ -168,6 +168,108 @@
     }
   },
   {
+    "id": "scan-leaders-1m",
+    "name": "1M Leaders",
+    "category": "Top Gainers",
+    "horizon": "Swing",
+    "description": "The top 5% of the universe by 1-month performance, ranked highest first, among stocks trading at least ₹5 Cr a day.",
+    "aka": [
+      "leaders",
+      "top performers",
+      "ranked gainers",
+      "1M leaders",
+      "best 1M"
+    ],
+    "rules": [
+      "Ranked by 1M performance within the screened universe; top 5% kept",
+      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr",
+      "Results sorted by that performance, highest first"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "PERFORMANCE_RANK",
+          "params": {
+            "metric": "market.performance_1m_pct",
+            "topPct": 5,
+            "minTurnoverCr": 5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-leaders-3m",
+    "name": "3M Leaders",
+    "category": "Top Gainers",
+    "horizon": "Positional",
+    "description": "The top 5% of the universe by 3-month performance, ranked highest first, among stocks trading at least ₹5 Cr a day.",
+    "aka": [
+      "leaders",
+      "top performers",
+      "ranked gainers",
+      "3M leaders",
+      "best 3M"
+    ],
+    "rules": [
+      "Ranked by 3M performance within the screened universe; top 5% kept",
+      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr",
+      "Results sorted by that performance, highest first"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "PERFORMANCE_RANK",
+          "params": {
+            "metric": "market.performance_3m_pct",
+            "topPct": 5,
+            "minTurnoverCr": 5
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-leaders-6m",
+    "name": "6M Leaders",
+    "category": "Top Gainers",
+    "horizon": "Positional",
+    "description": "The top 5% of the universe by 6-month performance, ranked highest first, among stocks trading at least ₹5 Cr a day.",
+    "aka": [
+      "leaders",
+      "top performers",
+      "ranked gainers",
+      "6M leaders",
+      "best 6M"
+    ],
+    "rules": [
+      "Ranked by 6M performance within the screened universe; top 5% kept",
+      "Ranked only among stocks with 20-session average turnover ≥ ₹5 Cr",
+      "Results sorted by that performance, highest first"
+    ],
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "PERFORMANCE_RANK",
+          "params": {
+            "metric": "market.performance_6m_pct",
+            "topPct": 5,
+            "minTurnoverCr": 5
+          }
+        }
+      ]
+    }
+  },
+  {
     "id": "scan-near-52w-high",
     "name": "Near 52-Week High",
     "category": "Breakouts",

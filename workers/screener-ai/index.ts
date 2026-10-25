@@ -91,7 +91,6 @@ export default {
               response_format: input.response_format,
               temperature: input.temperature,
               max_tokens: input.max_tokens,
-              ...(groqModel.startsWith('qwen/') ? {reasoning_effort: 'none'} : {}),
             }),
             signal,
           });

@@ -12,6 +12,7 @@ import {
   type ScanSession,
 } from '../api/scanHistoryEngine';
 import { Button } from './Button';
+import { ScanHistoryChart } from './ScanHistoryChart';
 
 interface ScanHistoryPanelProps {
   expressionTree: ExpressionNode;
@@ -42,12 +43,13 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   const [progress, setProgress] = useState<ScanHistoryProgress | null>(null);
   const [lastRunFingerprint, setLastRunFingerprint] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [sessionSymbols, setSessionSymbols] = useState<Record<string, string[]>>({});
   const [loadingSymbols, setLoadingSymbols] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState('');
   const [visibleSymbolCount, setVisibleSymbolCount] = useState(INITIAL_SYMBOLS);
   const [copied, setCopied] = useState(false);
+  const [detail, setDetail] = useState<'stocks' | 'sectors'>('stocks');
+  const [showAllSectors, setShowAllSectors] = useState(false);
   const scanController = useRef<AbortController | null>(null);
   const symbolsController = useRef<AbortController | null>(null);
 
@@ -71,7 +73,6 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
   const canRun = compatibility.compatible && targetSessions.length > 0;
   const summary = useMemo(() => computeScanHistorySummary(points, targetSessions.length), [points, targetSessions.length]);
   const selectedPoint = points.find(point => point.date === selectedDate) ?? points.at(-1) ?? null;
-  const displayPoint = points.find(point => point.date === hoveredDate) ?? selectedPoint;
   const currentSymbols = selectedPoint ? (sessionSymbols[selectedPoint.date] ?? []) : [];
   const filteredSymbols = symbolFilter.trim()
     ? currentSymbols.filter(symbol => symbol.toUpperCase().includes(symbolFilter.trim().toUpperCase()))
@@ -86,6 +87,7 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     symbolsController.current = null;
     setLoadingSymbols(false);
     setSelectedDate(point.date);
+    setShowAllSectors(false);
     setSymbolFilter('');
     setCopied(false);
     setVisibleSymbolCount(INITIAL_SYMBOLS);
@@ -114,7 +116,6 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     setLoadingSymbols(false);
     setPoints([]);
     setSelectedDate(null);
-    setHoveredDate(null);
     setCopied(false);
     setStatus('running');
     setProgress({ current: 0, total: targetSessions.length, pct: 0 });
@@ -154,7 +155,6 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
     setPoints([]);
     setProgress(null);
     setSelectedDate(null);
-    setHoveredDate(null);
     setLastRunFingerprint(null);
   };
   const close = () => { cancelRequests(); onClose?.(); };
@@ -167,19 +167,24 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
       setCopied(false);
     }
   };
-  const chartWidth = Math.max(640, points.length * 11);
-  const chartHeight = 144;
-  const maxCount = Math.max(1, ...points.map(point => point.count));
   const isStale = lastRunFingerprint !== null && lastRunFingerprint !== fingerprint;
+  const successful = points.filter(point => point.status === 'success');
+  const latest = successful.at(-1);
+  const selectedIndex = selectedPoint ? points.indexOf(selectedPoint) : -1;
+  const previous = points.slice(0, Math.max(0, selectedIndex)).reverse().find(point => point.status === 'success');
+  const change = selectedPoint?.status === 'success' && previous ? selectedPoint.count - previous.count : null;
+  const topSectors = showAllSectors ? sectorCounts : sectorCounts.slice(0, 10);
+  const sectorMax = sectorCounts[0]?.[1] ?? 1;
+  const n = (value: number) => value.toLocaleString('en-IN');
 
   return (
     <section aria-label="Backtest history" className="scan-history">
-      <header className="scan-history-header">
-        <div className="scan-history-title">
+      <header className="history-head">
+        <div className="history-title">
           <h2>Scan history</h2>
-          <span>{targetSessions.length} sessions</span>
+          <p>How many stocks this screen matched in each of the last {targetSessions.length} sessions.</p>
         </div>
-        <div className="scan-history-controls">
+        <div className="history-controls">
           <div className="scan-history-segment" aria-label="History range">
             {([30, 60, 120, 'all'] as const).map(option => (
               <button key={option} type="button" disabled={status === 'running'}
@@ -189,28 +194,22 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
             ))}
           </div>
           {status === 'running' ? (
-            <Button variant="secondary" onClick={stop}>
-              <Square size={14} /> Stop
-            </Button>
+            <Button variant="secondary" onClick={stop}><Square size={13} /> Stop</Button>
           ) : status !== 'idle' ? (
             <Button variant="primary" disabled={!canRun} onClick={() => void startScan()}>
-              <Play size={14} /> {points.length ? 'Run again' : 'Run scan'}
+              <Play size={13} /> {points.length ? 'Run again' : 'Run scan'}
             </Button>
           ) : null}
           {onClose && (
             <button type="button" className="scan-history-icon-button" aria-label="Close scan history" onClick={close}>
-              <X size={17} />
+              <X size={16} />
             </button>
           )}
         </div>
       </header>
 
-      {!compatibility.compatible && (
-        <p className="scan-history-notice" role="alert"><AlertTriangle size={16} />{compatibility.reason}</p>
-      )}
-      {isStale && status !== 'running' && (
-        <p className="scan-history-notice">Filters have changed. Run the scan again to refresh these results.</p>
-      )}
+      {!compatibility.compatible && <p className="scan-history-notice" role="alert"><AlertTriangle size={15} />{compatibility.reason}</p>}
+      {isStale && status !== 'running' && <p className="scan-history-notice">Filters changed since this run. Run again to refresh.</p>}
       {status === 'running' && progress && (
         <div className="scan-history-progress" role="status" aria-live="polite">
           <span>Scanning {progress.current} of {progress.total} sessions</span>
@@ -223,100 +222,80 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
         <>
           {summary.failedSessions > 0 && (
             <p className="scan-history-notice" role="status">
-              {summary.failedSessions} {summary.failedSessions === 1 ? 'session' : 'sessions'} unavailable. Results use {summary.evaluatedSessions} evaluated {summary.evaluatedSessions === 1 ? 'session' : 'sessions'}.
+              {summary.failedSessions} {summary.failedSessions === 1 ? 'session' : 'sessions'} unavailable, shown as gaps. Figures use the other {summary.evaluatedSessions}.
             </p>
           )}
-          <div className="scan-history-summary">
-            <div><span>Average matches</span><strong>{summary.averageMatches.toLocaleString('en-IN')}</strong></div>
-            <div><span>Peak</span><strong>{summary.peakCount.toLocaleString('en-IN')}</strong></div>
-            <div><span>Evaluated with matches</span><strong>{summary.frequencyPct}%</strong></div>
-          </div>
+          <dl className="history-stats">
+            {latest && <div><dt>Latest</dt><dd>{n(latest.count)}</dd></div>}
+            <div><dt>Average</dt><dd>{n(Math.round(summary.averageMatches))}</dd></div>
+            <div><dt>Range</dt><dd>{n(summary.lowestCount)}<span>–</span>{n(summary.peakCount)}</dd></div>
+            <div><dt>Sessions with matches</dt><dd>{summary.frequencyPct}%</dd></div>
+          </dl>
 
-          <div className="scan-history-chart-heading">
-            <div>
-              <h3>Matches over time</h3>
-              <p>Select a bar to inspect that session.</p>
-            </div>
-            {displayPoint && <p><strong>{formatDate(displayPoint.date)}</strong><span>{displayPoint.count.toLocaleString('en-IN')} matches</span></p>}
-          </div>
-          <div className="scan-history-chart-scroll">
-            <div style={{ minWidth: chartWidth }}>
-              <svg className="scan-history-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none"
-                role="group" aria-label="Historical matches by trading session">
-                {[0.25, 0.5, 0.75].map(step => (
-                  <line key={step} x1="0" x2={chartWidth} y1={chartHeight * step} y2={chartHeight * step} className="scan-history-gridline" />
-                ))}
-                {points.map((point, index) => {
-                  const slot = chartWidth / points.length;
-                  const height = point.status === 'success' ? Math.max(2, point.count / maxCount * (chartHeight - 16)) : 5;
-                  const selected = selectedPoint?.date === point.date;
-                  return (
-                    <g key={point.date} role="button" tabIndex={0}
-                      aria-label={`${formatDate(point.date)}: ${point.count} matches`}
-                      onClick={() => void selectPoint(point)}
-                      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); void selectPoint(point); } }}
-                      onMouseEnter={() => setHoveredDate(point.date)}
-                      onMouseLeave={() => setHoveredDate(null)}>
-                      <rect x={index * slot} y={0} width={slot} height={chartHeight} fill="transparent" />
-                      <rect x={index * slot + Math.max(1, slot * .15)} y={chartHeight - height}
-                        width={Math.max(3, slot * .7)} height={height} rx={2}
-                        className={point.status !== 'success' ? 'scan-history-bar scan-history-bar-error' : selected ? 'scan-history-bar scan-history-bar-selected' : 'scan-history-bar'} />
-                    </g>
-                  );
-                })}
-              </svg>
-              <div className="scan-history-dates">
-                {[0, .25, .5, .75, 1].map(position => (
-                  <span key={position}>{formatDate(points[Math.round((points.length - 1) * position)].date)}</span>
-                ))}
-              </div>
-            </div>
-          </div>
+          <ScanHistoryChart points={points} selected={selectedPoint?.date ?? null} onSelect={point => void selectPoint(point)} />
+          <p className="history-hint">Select a point to see that session’s stocks below · ← → to step</p>
 
           {selectedPoint && (
-            <div className="scan-history-results">
-              <div className="scan-history-results-header">
+            <div className="history-session">
+              <div className="history-session-head">
                 <div>
-                  <h3>{formatDate(selectedPoint.date)} <span>{selectedPoint.count.toLocaleString('en-IN')} matches</span></h3>
-                  <p>{selectedPoint.status === 'success' ? 'Stocks matching your filters on this date' : selectedPoint.error ?? 'Session unavailable'}</p>
+                  <h3>{formatDate(selectedPoint.date)}</h3>
+                  <p>{selectedPoint.status === 'success'
+                    ? <><strong>{n(selectedPoint.count)}</strong> matches{change != null && change !== 0 &&
+                      <span className={change > 0 ? 'positive' : 'negative'}> {change > 0 ? '+' : '−'}{n(Math.abs(change))} vs previous session</span>}</>
+                    : selectedPoint.error ?? 'Session unavailable'}</p>
                 </div>
-                <div className="scan-history-result-actions">
+                <div className="history-session-actions">
+                  <Button variant="secondary" onClick={() => void copySymbols()} disabled={!currentSymbols.length}>
+                    {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copied' : 'Copy'}
+                  </Button>
+                  <Button variant="primary" onClick={() => onSelectSession(selectedPoint.date)} disabled={selectedPoint.status !== 'success'}>
+                    Open in screener <ChevronRight size={14} />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="history-tabs">
+                <div className="scan-history-segment" role="group" aria-label="Session detail">
+                  <button type="button" aria-pressed={detail === 'stocks'} onClick={() => setDetail('stocks')}>Stocks</button>
+                  <button type="button" aria-pressed={detail === 'sectors'} disabled={!sectorCounts.length} onClick={() => setDetail('sectors')}>
+                    Sectors{sectorCounts.length ? ` · ${sectorCounts.length}` : ''}
+                  </button>
+                </div>
+                {detail === 'stocks' && (
                   <label className="scan-history-search">
-                    <Search size={15} aria-hidden="true" />
+                    <Search size={14} aria-hidden="true" />
                     <span className="sr-only">Filter symbols</span>
                     <input value={symbolFilter} onChange={event => { setSymbolFilter(event.target.value); setVisibleSymbolCount(INITIAL_SYMBOLS); }}
                       placeholder="Filter symbols" disabled={!currentSymbols.length} />
                   </label>
-                  <Button variant="secondary" onClick={() => void copySymbols()} disabled={!currentSymbols.length}>
-                    {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy all'}
-                  </Button>
-                  <Button variant="primary" onClick={() => onSelectSession(selectedPoint.date)}
-                    disabled={selectedPoint.status !== 'success'}>
-                    Open session <ChevronRight size={15} />
-                  </Button>
-                </div>
+                )}
               </div>
 
-              {sectorCounts.length > 0 && (
-                <details className="scan-history-sectors">
-                  <summary>Sector breakdown <span>{sectorCounts.length} sectors</span></summary>
-                  <div>{sectorCounts.map(([sector, count]) => (
-                    <span key={sector}>{sector}<strong>{count.toLocaleString('en-IN')}</strong></span>
-                  ))}</div>
-                </details>
-              )}
-
-              {loadingSymbols ? (
-                <p className="scan-history-empty">Loading symbols for this session...</p>
+              {detail === 'sectors' && sectorCounts.length > 0 ? (
+                <>
+                  <ul className="history-sectors">{topSectors.map(([sector, count]) => (
+                    <li key={sector}>
+                      <span className="history-sector-name" title={sector}>{sector}</span>
+                      <span className="history-sector-bar"><span style={{ width: `${count / sectorMax * 100}%` }} /></span>
+                      <span className="history-sector-count">{n(count)}</span>
+                    </li>
+                  ))}</ul>
+                  {sectorCounts.length > topSectors.length && (
+                    <button type="button" className="history-more" onClick={() => setShowAllSectors(true)}>Show all {sectorCounts.length} sectors</button>
+                  )}
+                </>
+              ) : loadingSymbols ? (
+                <p className="scan-history-empty">Loading stocks for this session…</p>
               ) : visibleSymbols.length ? (
                 <>
                   <div className="scan-history-symbols" aria-label="Matching symbols">
                     {visibleSymbols.map(symbol => <span key={symbol}>{symbol}</span>)}
                   </div>
                   <div className="scan-history-results-footer">
-                    <span>Showing {visibleSymbols.length.toLocaleString('en-IN')} of {filteredSymbols.length.toLocaleString('en-IN')} symbols</span>
+                    <span>Showing {n(visibleSymbols.length)} of {n(filteredSymbols.length)} symbols</span>
                     {visibleSymbols.length < filteredSymbols.length && (
-                      <button type="button" onClick={() => setVisibleSymbolCount(count => count + INITIAL_SYMBOLS)}>Show more</button>
+                      <button type="button" className="history-more" onClick={() => setVisibleSymbolCount(count => count + INITIAL_SYMBOLS)}>Show more</button>
                     )}
                   </div>
                 </>
@@ -331,15 +310,14 @@ export const ScanHistoryPanel: React.FC<ScanHistoryPanelProps> = ({
           )}
         </>
       ) : status === 'idle' ? (
-        <div className="scan-history-intro">
-          <h3>See how this screen performed over time</h3>
-          <p>Run your current filters across {targetSessions.length} archived trading sessions.</p>
+        <div className="history-intro">
+          <p>Runs your current filters on each archived session and charts how many stocks matched.</p>
           <Button variant="primary" disabled={!canRun} onClick={() => void startScan()}>
-            <Play size={14} /> Start frequency scan
+            <Play size={13} /> Start frequency scan
           </Button>
         </div>
       ) : status === 'stopped' ? (
-        <p className="scan-history-empty">Scan stopped. Run it again to refresh the timeline.</p>
+        <p className="scan-history-empty">Scan stopped. Run it again to refresh the chart.</p>
       ) : null}
     </section>
   );

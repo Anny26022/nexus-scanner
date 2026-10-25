@@ -206,7 +206,10 @@ async def main():
         snapshot = json.loads(snapshot_path.read_text())
     else:
         manifest = json.loads((args.public_root / 'data/current.json').read_text())
-        dataset = json.loads((args.public_root / manifest['datasetUrl'].lstrip('/')).read_text())
+        # Gzip stays local when publication offloads the plain JSON to R2.
+        dataset_path = args.public_root / manifest.get('datasetGzipUrl', manifest['datasetUrl']).lstrip('/')
+        payload = dataset_path.read_bytes()
+        dataset = json.loads(gzip.decompress(payload) if dataset_path.suffix == '.gz' else payload)
         stocks = [{'symbol': s['symbol'], 'name': s['name']} for s in dataset['stocks']]
         assert len(stocks) == len({s['symbol'] for s in stocks}) == manifest['totalStocks']
         snapshot = {'manifest': manifest, 'stocks': stocks}

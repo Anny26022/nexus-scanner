@@ -19,10 +19,29 @@
 .mkt [data-stage="3"] { --tone: var(--mkt-stage-3); }
 .mkt [data-stage="4"] { --tone: var(--mkt-stage-4); }
 
-/* Index ribbon: one surface, hairline dividers, swipeable on phones. */
-.mkt-ribbon { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(132px, 1fr); overflow-x: auto; scrollbar-width: none; scroll-snap-type: x mandatory; }
-.mkt-ribbon::-webkit-scrollbar { display: none; }
-.mkt-ribbon > * { scroll-snap-align: start; }
-.mkt-ribbon > * + * { border-left: 1px solid var(--line); }
-@media (max-width: 767px) { .mkt-ribbon { grid-auto-columns: minmax(158px, 1fr); } }
+/* One centred column of titled sections; cards are quiet, bordered surfaces. */
+.mkt-column { display: flex; flex-direction: column; gap: 28px; width: 100%; max-width: 1080px; margin-inline: auto; }
+.mkt-card { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+.mkt-indexes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+/* Breadth: two pages side by side on wide screens, a swipeable pair with dots on phones. */
+.mkt-pages { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mkt-page { display: flex; flex-direction: column; gap: 24px; min-width: 0; padding: 22px 24px; }
+.mkt-page + .mkt-page { border-left: 1px solid var(--line); }
+.mkt-dots { display: none; justify-content: center; gap: 6px; }
+.mkt-dots span { width: 7px; height: 7px; border: 1px solid var(--muted); border-radius: 50%; }
+.mkt-dots span[data-on] { background: var(--muted); }
+.mkt-theme { border: 1px solid color-mix(in srgb, var(--tone) var(--strength, 20%), var(--line)); border-radius: 16px;
+  background: color-mix(in srgb, var(--tone) 5%, var(--surface)); }
+.mkt-icon { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); cursor: pointer; }
+.mkt-icon:hover, .mkt-icon[aria-pressed="true"] { background: var(--field); color: var(--text); }
+@media (max-width: 767px) {
+  .mkt-column { gap: 24px; }
+  .mkt-indexes { display: grid; grid-auto-flow: column; grid-auto-columns: 46%; grid-template-columns: none; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .mkt-indexes::-webkit-scrollbar, .mkt-pages::-webkit-scrollbar { display: none; }
+  .mkt-indexes > * { scroll-snap-align: start; }
+  .mkt-pages { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .mkt-page { padding: 18px; scroll-snap-align: start; }
+  .mkt-page + .mkt-page { border-left: 0; }
+  .mkt-dots { display: flex; }
+}
 }

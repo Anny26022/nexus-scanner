@@ -90,6 +90,33 @@ def atomic_json(path, value):
     temporary.replace(path)
 
 
+def load_universe_dataset(public_root, manifest):
+    """Read this release's local snapshot even when its plain JSON URL was offloaded."""
+    public_root = public_root.resolve()
+    candidates = [manifest.get('datasetUrl'), manifest.get('datasetGzipUrl')]
+    revision = manifest.get('revision', '')
+    if re.fullmatch(r'[a-f0-9]{64}', revision):
+        candidates.extend(f'/data/revisions/{revision}/stocks.json{suffix}' for suffix in ('.gz', ''))
+    for value in candidates:
+        if not value:
+            continue
+        url = urlparse(value)
+        if url.scheme or url.netloc:
+            continue  # Never interpret an HTTPS URL as a filesystem path.
+        path = (public_root / url.path.lstrip('/')).resolve()
+        if not path.is_relative_to(public_root):
+            raise ValueError('Snapshot path escapes the public directory')
+        if not path.is_file():
+            continue
+        content = path.read_bytes()
+        dataset = json.loads(gzip.decompress(content) if path.suffix == '.gz' else content)
+        if (dataset.get('revision', revision) != revision or
+                dataset.get('asOfDate', manifest.get('sessionDate')) != manifest.get('sessionDate')):
+            raise ValueError('Tijori universe snapshot does not match the selected release')
+        return dataset
+    raise FileNotFoundError('No local JSON/gzip stock snapshot for the active release; restore its published artifact first')
+
+
 def publish(public_root, rows, metadata):
     reports = {
         # The public file carries the report only; where it was collected from stays in the private cache.
@@ -206,7 +233,7 @@ async def main():
         snapshot = json.loads(snapshot_path.read_text())
     else:
         manifest = json.loads((args.public_root / 'data/current.json').read_text())
-        dataset = json.loads((args.public_root / manifest['datasetUrl'].lstrip('/')).read_text())
+        dataset = load_universe_dataset(args.public_root, manifest)
         stocks = [{'symbol': s['symbol'], 'name': s['name']} for s in dataset['stocks']]
         assert len(stocks) == len({s['symbol'] for s in stocks}) == manifest['totalStocks']
         snapshot = {'manifest': manifest, 'stocks': stocks}
@@ -334,6 +361,7 @@ async def main():
         pending = [s for s in stocks if (args.refresh and records.get(s['symbol'], {}).get('status') in ('available', 'no_overview')) or records.get(s['symbol'], {}).get('refreshError') or records.get(s['symbol'], {}).get('status') not in terminal]
         print(f'Universe {manifest["sessionDate"]}: {len(stocks)} symbols; {len(pending)} to collect; rate {args.rate}/s', flush=True)
         started = time.monotonic()
+        refresh_started_at = now()
         slots = asyncio.Semaphore(args.concurrency)
         async def bounded_collect(stock):
             async with slots:
@@ -351,6 +379,7 @@ async def main():
         rows = [records.get(s['symbol'], {**s, 'status': 'not_fetched'}) for s in stocks]
         counts = dict(Counter(r['status'] for r in rows))
         metadata = {'source': 'Tijori Finance public company pages', 'exportedAt': now(),
+                    'refreshStartedAt': refresh_started_at,
                     'universeSessionDate': manifest['sessionDate'], 'universeRevision': manifest['revision'],
                     'totalSymbols': len(stocks), 'counts': counts,
                     'attemptedSymbols': sum(r['status'] != 'not_fetched' for r in rows),

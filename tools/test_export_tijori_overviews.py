@@ -60,7 +60,7 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fetcher.requests, 2)
         self.assertGreaterEqual(elapsed, 2)
 
-    async def run_refresh(self, status, compressed=False, new_stock=False, candidate=False, recovered=False, last_modified=False, sitemap_status=200, cached_sitemap=False, new_unmapped=False, bad_sitemap=False):
+    async def run_refresh(self, status, compressed=False, new_stock=False, candidate=False, recovered=False, last_modified=False, sitemap_status=200, cached_sitemap=False, new_unmapped=False, bad_sitemap=False, offloaded=False):
         with TemporaryDirectory() as folder:
             root = Path(folder)
             url = exporter.BASE + '/company/test/'
@@ -84,8 +84,13 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
             stocks = [{'symbol': 'TEST', 'name': 'Test'}]
             if new_stock:
                 stocks.append({'symbol': 'NEW', 'name': 'Other'})
-            (public / 'current.json').write_text(json.dumps({'sessionDate': '2026-10-07', 'revision': 'new', 'datasetUrl': '/data/stocks.json', 'totalStocks': len(stocks)}))
-            (public / 'stocks.json').write_text(json.dumps({'stocks': stocks}))
+            manifest = {'sessionDate': '2026-10-07', 'revision': 'new', 'datasetUrl': '/data/stocks.json', 'totalStocks': len(stocks)}
+            if offloaded:
+                manifest.update(datasetUrl='https://data.example/releases/new/stocks.json', datasetGzipUrl='/data/stocks.json.gz')
+                (public / 'stocks.json.gz').write_bytes(gzip.compress(json.dumps({'stocks': stocks, 'revision':'new', 'asOfDate':'2026-10-07'}).encode()))
+            else:
+                (public / 'stocks.json').write_text(json.dumps({'stocks': stocks}))
+            (public / 'current.json').write_text(json.dumps(manifest))
             calls = []
             async def handler(request):
                 calls.append(request)
@@ -157,6 +162,40 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data['metadata']['universeRevision'], 'new')
         self.assertEqual({r['symbol'] for r in data['records']}, {'TEST', 'NEW'})
         self.assertTrue(all(r['status'] == 'available' for r in data['records']))
+
+    async def test_refresh_uses_local_gzip_when_plain_dataset_is_offloaded(self):
+        data, _ = await self.run_refresh(304, compressed=True, new_stock=True, offloaded=True)
+        self.assertEqual({r['symbol'] for r in data['records']}, {'TEST', 'NEW'})
+        self.assertEqual(data['metadata']['universeRevision'], 'new')
+        self.assertTrue(data['metadata']['refreshStartedAt'])
+
+    async def test_loader_checks_release_binding_and_does_not_use_another_revision(self):
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            path = root / 'stocks.json.gz'
+            manifest = {'revision':'expected', 'sessionDate':'2026-10-23',
+                        'datasetUrl':'https://data.example/stocks.json', 'datasetGzipUrl':'/stocks.json.gz'}
+            for revision, session in [('wrong', '2026-10-23'), ('expected', '2026-10-22')]:
+                path.write_bytes(gzip.compress(json.dumps({'revision':revision, 'asOfDate':session, 'stocks':[]}).encode()))
+                with self.assertRaisesRegex(ValueError, 'does not match'):
+                    exporter.load_universe_dataset(root, manifest)
+
+    async def test_loader_finds_same_revision_archive_when_both_urls_are_remote(self):
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            revision = 'a' * 64
+            path = root / 'data/revisions' / revision / 'stocks.json.gz'
+            path.parent.mkdir(parents=True)
+            dataset = {'revision':revision, 'asOfDate':'2026-10-23', 'stocks':[{'symbol':'TEST', 'name':'Test'}]}
+            path.write_bytes(gzip.compress(json.dumps(dataset).encode()))
+            manifest = {'revision':revision, 'sessionDate':'2026-10-23',
+                        'datasetUrl':'https://data.example/stocks.json', 'datasetGzipUrl':'https://data.example/stocks.json.gz'}
+            self.assertEqual(exporter.load_universe_dataset(root, manifest), dataset)
+
+    async def test_loader_reports_missing_artifacts_without_opening_an_https_path(self):
+        with TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(FileNotFoundError, 'No local JSON/gzip stock snapshot'):
+                exporter.load_universe_dataset(Path(folder), {'datasetUrl':'https://data.example/stocks.json'})
 
     async def test_visible_html_snapshot_and_watch_are_extracted(self):
         html = """<p class="symbol">AMAGI</p>

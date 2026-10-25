@@ -1420,7 +1420,7 @@
     "id": "SECTOR",
     "label": "Sector",
     "category": "fundamentals",
-    "description": "NSE sector classification.",
+    "description": "Published primary business sector.",
     "parameters": [
       {
         "id": "values",
@@ -1434,7 +1434,7 @@
     "id": "INDUSTRY",
     "label": "Industry",
     "category": "fundamentals",
-    "description": "NSE industry classification, finer than sector.",
+    "description": "Published primary business industry. Industry labels can span sectors.",
     "parameters": [
       {
         "id": "values",

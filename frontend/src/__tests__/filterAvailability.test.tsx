@@ -9,7 +9,7 @@ import { isAvailableCondition, isAvailableFilter } from '../utils/filterAvailabi
 afterEach(cleanup);
 
 it('keeps published filters and presets available but disables backend-only defaults', () => {
-  expect(NEXUS_CONDITION_CATALOG.filter(def => !def.id.startsWith('ETF_')).filter(isAvailableFilter)).toHaveLength(75);
+  expect(NEXUS_CONDITION_CATALOG.filter(def => !def.id.startsWith('ETF_')).filter(isAvailableFilter)).toHaveLength(81);
   for (const conditionId of ['EARNINGS_GROWTH','fund_earnings_growth','rs_1month','rs_3month']) {
     expect(isAvailableFilter(NEXUS_CONDITION_CATALOG.find(def=>def.id===conditionId)!)).toBe(false);
   }

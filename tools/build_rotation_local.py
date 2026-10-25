@@ -44,7 +44,10 @@ def main():
     revision, session = current['revision'], current['sessionDate']
     generation = PUBLIC / 'revisions' / revision
     rows = json.loads(gzip.decompress((generation / 'stocks.json.gz').read_bytes()))['stocks']
-    taxonomy = json.loads(gzip.decompress((generation / 'theme-classification.json.gz').read_bytes()))['records']
+    classification = json.loads(gzip.decompress((generation / 'theme-classification.json.gz').read_bytes()))
+    if classification['version'] != current['themeClassificationVersion']:
+        sys.exit('Classification release mismatch; rebuild the complete release first.')
+    taxonomy = classification['records']
     started = time.perf_counter()
     def stock_closes(symbol):
         return closes(PIPELINE / 'ohlcv_data' / f'{symbol}.csv', session)
@@ -66,7 +69,8 @@ def main():
         sys.exit('No Nifty 50 history in indices_ohlcv_data; run the pipeline once to fill the caches.')
     ledger_path = OUTPUT / 'ledger.json.gz'
     ledger = json.loads(gzip.decompress(ledger_path.read_bytes())) if ledger_path.exists() else None
-    index, shards, ledger = rotation_history.build(session, rows, stock_closes, benchmarks, taxonomy, ledger, price_date=price_date)
+    index, shards, ledger = rotation_history.build(session, rows, stock_closes, benchmarks, taxonomy, ledger,
+        price_date=price_date, classification_version=classification['version'])
     for stale in OUTPUT.glob('*.json.gz') if OUTPUT.exists() else []:
         if stale != ledger_path:
             stale.unlink()

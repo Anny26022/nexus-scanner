@@ -232,7 +232,7 @@ The filter catalog is a typed contract. A condition has a name, documented input
 | RS Rating | Cross-sectional 1–99 percentile across the published eligible universe. |
 | Index Membership | Published current index membership. |
 | Market Breadth | Published breadth metrics for the supported universe and session. |
-| Sector / Industry | Current published NSE classifications. |
+| Sector / Industry | Published primary business classifications. Industry labels may span sectors. See the [classification contract](docs/classification.md) for themes, overlapping exposures, cohorts and aggregates. |
 | Listing Age | Trading sessions since listing. |
 
 ### Fundamental and earnings filters

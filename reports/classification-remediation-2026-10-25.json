@@ -1,0 +1,3429 @@
+{
+  "reviewedOn": "2026-10-25",
+  "baseCommit": "dfd2644bafb9b13d16615ec0d6a731d46f57ab74",
+  "release": {
+    "revision": "0746dc5b15bc24dc756798449f10779cdf3629b513083349e72d099cf85bc09d",
+    "sessionDate": "2026-10-23",
+    "classificationVersion": "6302020eaaf2c641248d45ec23513d47836359f605f962d4b7089a9ae0e1dca2",
+    "schemaVersion": 2
+  },
+  "sourceInventory": {
+    "trackerRows": 3410,
+    "trackerThemes": 313,
+    "trackerBlocks": 28,
+    "pinnedCompanyClassifications": 2859,
+    "manualFallbacks": 91,
+    "reviewedBusinessOverrides": 11,
+    "issuerThemeAssignments": 43
+  },
+  "decisionCounts": {
+    "nodes": 316,
+    "kinds": {
+      "business": 214,
+      "alias": 64,
+      "aggregate": 32,
+      "cohort": 2,
+      "exposure": 4
+    },
+    "overlapCandidates": 39,
+    "acceptedOverlapCandidates": 9,
+    "macroParentCorrections": {
+      "PROFESSIONAL SERVICES": {
+        "macro": "VII. BUSINESS & PROFESSIONAL SERVICES",
+        "reason": "Education, staffing, stationery and business services are not financial-sector businesses."
+      },
+      "POWER INFRA & ELECTRICALS": {
+        "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+        "reason": "General electrical capital goods belong to industrial infrastructure; data-centre participation remains a separate curated exposure."
+      }
+    },
+    "mirrorCorrections": {
+      "Auto Ancillaries - Diversified": [
+        "Auto Components"
+      ],
+      "Realty - National": [
+        "Real Estate Developers"
+      ],
+      "Realty - Regional": [
+        "Real Estate Developers"
+      ],
+      "Realty - Construction & Contracting": [
+        "Real Estate Ecosystem"
+      ],
+      "Pharma - API": [
+        "Pharma - API & CRAMS"
+      ],
+      "Pharma (Biotech & CRAMS)": [
+        "Pharma - API & CRAMS"
+      ],
+      "Consumer Electronics - EMS": [
+        "EMS - Electronics"
+      ],
+      "Finance - Capital Markets - RTA": [
+        "Market Infrastructure"
+      ],
+      "IT - Software": [
+        "IT Services (Consulting)",
+        "Enterprise IT Services",
+        "IT Products",
+        "Enterprise Platforms",
+        "ER&D / Product Software",
+        "Digital Identity & GovTech",
+        "Analytics & Data Services",
+        "Vertical & Geospatial SaaS",
+        "Communications Platforms"
+      ],
+      "Electrical Equipment": [
+        "Heavy Electrical Equip",
+        "Smart Metering & Inst.",
+        "Transformers & Switchgears",
+        "Grid Equipment & HVDC",
+        "Industrial Electrical Systems",
+        "Rotating Power Equipment",
+        "Transformer Ancillaries",
+        "Cables & Electricals"
+      ],
+      "Power - Generation/Distribution": [
+        "Integrated Utilities",
+        "Power Generation",
+        "Power Transmission",
+        "Power Grid & Distribution",
+        "Solar & Renewables"
+      ],
+      "Logistics & Supply Chain": [
+        "Logistics",
+        "Logistics Infra (Ports/Air)",
+        "Surface Transport",
+        "Logistics Tech"
+      ],
+      "Entertainment & Media": [
+        "Media & Entertainment",
+        "Electronic Media & News",
+        "Film Production & Exhibition",
+        "Digital Entertainment",
+        "Broadcast & Cable Networks",
+        "Media Production & Services",
+        "Print & Publication"
+      ]
+    },
+    "additionalAggregates": [
+      {
+        "name": "Auto Components",
+        "block": "AUTOMOTIVE COMPONENTS",
+        "targets": [
+          "Chassis & Metal Parts",
+          "Electronics & Systems",
+          "Interior & Plastics",
+          "Drivetrain & Axles",
+          "Suspension & Safety",
+          "Wiring & Cables",
+          "Engines & Cooling/Seal",
+          "Tyres & Wheels",
+          "Batteries & EV"
+        ]
+      },
+      {
+        "name": "Real Estate Developers",
+        "block": "Real Estate Segments",
+        "targets": [
+          "Residential Projects",
+          "Commercial & Diversified"
+        ]
+      },
+      {
+        "name": "Real Estate Ecosystem",
+        "block": "Real Estate Segments",
+        "targets": [
+          "Real Estate Developers",
+          "Real Estate Services & Platforms"
+        ]
+      }
+    ],
+    "datedSecurityAliases": {
+      "ICICILIFE": {
+        "sourceSymbol": "ICICIPRULI",
+        "effectiveFrom": "2026-10-23",
+        "sourceUrl": "https://nsearchives.nseindia.com/content/circulars/CML76967.pdf"
+      }
+    },
+    "overlapDecisions": {
+      "AARTIDRUGS": {
+        "Pharma - Small Cap": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "AFFLE": {
+        "Advertising & Agencies": {
+          "include": true,
+          "reason": "Advertising platform participation is explicitly curated and supported by its source sub-industry."
+        }
+      },
+      "ATLANTAELE": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "AZAD": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "BCG": {
+        "Advertising & Agencies": {
+          "include": true,
+          "reason": "The curated advertising exposure is distinct from its broad BPM primary."
+        }
+      },
+      "BHEL": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "DATAMATICS": {
+        "IT Services (Consulting)": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "ELECON": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "ENRIN": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "GNA": {
+        "Drivetrain & Axles": {
+          "include": true,
+          "reason": "Axle and drivetrain products justify the explicitly curated drivetrain exposure."
+        }
+      },
+      "GRANULES": {
+        "Pharma - Small Cap": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "GVPIL": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "HAPPSTMNDS": {
+        "IT Services (Consulting)": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "HARSHA": {
+        "Precision Components & Tools": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "INOXWIND": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "JASH": {
+        "Process Engineering Equipment": {
+          "include": true,
+          "reason": "Water-control equipment also participates in process engineering."
+        }
+      },
+      "KENNAMET": {
+        "Precision Components & Tools": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "LUMAXIND": {
+        "Suspension & Safety": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "NEULANDLAB": {
+        "Pharma - API & CRAMS": {
+          "include": true,
+          "reason": "API and custom manufacturing participation is documented by the exact source sub-industry."
+        }
+      },
+      "PSPPROJECT": {
+        "Civic & Urban Infra": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "PTCIL": {
+        "Precision Components & Tools": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "RAYMOND": {
+        "Premium & Branded Apparel": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "ROLEXRINGS": {
+        "Precision Components & Tools": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "RSYSTEMS": {
+        "IT Services (Consulting)": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "SHANTIGEAR": {
+        "Precision Components & Tools": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "SKIPPER": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "SOLARA": {
+        "Pharma - API & CRAMS": {
+          "include": true,
+          "reason": "API manufacturing participation is documented by the exact source sub-industry."
+        }
+      },
+      "STERTOOLS": {
+        "EPC / Buildout": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "TARIL": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "TDPOWERSYS": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "THERMAX": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "TRANSRAILL": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "VARROC": {
+        "Interior & Plastics": {
+          "include": true,
+          "reason": "Multiple auto-component product families support the explicit interior/components exposure."
+        }
+      },
+      "VIMTALABS": {
+        "Pharma - API & CRAMS": {
+          "include": false,
+          "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+        }
+      },
+      "WPIL": {
+        "Process Engineering Equipment": {
+          "include": true,
+          "reason": "Pumps and project/process equipment support both business exposures."
+        }
+      },
+      "CIGNITITEC": {
+        "IT Services (Consulting)": {
+          "include": false,
+          "reason": "Retain the explicit source primary for this non-active security; the competing legacy symbol list alone does not prove additional business exposure."
+        }
+      },
+      "544150": {
+        "Heavy Electrical Equip": {
+          "include": false,
+          "reason": "Retain the explicit source primary for this non-active security; the competing legacy symbol list alone does not prove additional business exposure."
+        }
+      },
+      "TATATECH": {
+        "Emerging EMS": {
+          "include": false,
+          "reason": "Engineering and digital services for manufacturers do not establish electronics contract manufacturing; remove the imported EMS overlay while retaining ER&D / Product Software.",
+          "sourceUrl": "https://ttlwebassets.tatatechnologies.com/app/uploads/2026/06/Annual-Report-FY-2025-26-I-Page-wise-view.pdf",
+          "reviewedOn": "2026-10-25"
+        }
+      },
+      "KAYNES": {
+        "Emerging EMS": {
+          "include": true,
+          "reason": "Include the integrated EMS manufacturer in the curated expansion overlay: its February 2026 disclosure documents core EMS plus PCB and semiconductor OSAT integration. This is a reviewed business overlay, not a size or listing-age cohort.",
+          "sourceUrl": "https://nsearchives.nseindia.com/corporate/KAYNESTECH_05022026200811_SEintimationIRPresentationSigned.pdf",
+          "reviewedOn": "2026-10-25"
+        }
+      }
+    }
+  },
+  "coverage": {
+    "total": 2612,
+    "mapped": 2612,
+    "unmapped": [],
+    "cohortMembers": 232,
+    "businessMultiMembershipStocks": 48,
+    "secondaryBusinessEdges": 50,
+    "broadPrimaryMappings": 29,
+    "missingSubIndustry": 1168,
+    "primarySectors": 104,
+    "primaryIndustries": 487,
+    "macroPillars": 7
+  },
+  "unchangedMarketData": {
+    "verifiedStocks": 2612,
+    "changedFieldsPerStock": {
+      "AZADIND": [
+        "industry",
+        "sector"
+      ],
+      "BONFIG": [
+        "industry",
+        "sector"
+      ],
+      "FUSIONCX": [
+        "industry",
+        "sector"
+      ],
+      "HDFIRE": [
+        "industry",
+        "sector"
+      ],
+      "RAYMOND": [
+        "industry",
+        "sector"
+      ],
+      "SHAHINVEST": [
+        "sector"
+      ],
+      "SMT": [
+        "industry",
+        "sector"
+      ],
+      "TONBO": [
+        "industry",
+        "sector"
+      ],
+      "VIMTALABS": [
+        "industry"
+      ],
+      "ZETWERK": [
+        "industry",
+        "sector"
+      ]
+    },
+    "assertion": "Every per-stock field other than sector and industry equals the original frozen release; no prices or financial metrics changed."
+  },
+  "rotationPreview": {
+    "classificationBindingMatches": true,
+    "sessionDate": "2026-10-23",
+    "pricesThrough": "2026-10-09",
+    "stockCount": 2596,
+    "groupCount": 658,
+    "productionHistory": "Rebuilt by normal daily publication; the correction release does not bind old incompatible composites."
+  },
+  "nodeDecisions": {
+    "Public Sector Bank": {
+      "id": "theme:public-sector-bank",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Banks - PSU": {
+      "id": "theme:banks-psu",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Public Sector Bank"
+      ]
+    },
+    "Exchanges & Platforms": {
+      "id": "theme:exchanges-platforms",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Private Sector Bank": {
+      "id": "theme:private-sector-bank",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Banks - Private": {
+      "id": "theme:banks-private",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Private Sector Bank"
+      ]
+    },
+    "Life Insurance": {
+      "id": "theme:life-insurance",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Asset Management": {
+      "id": "theme:asset-management",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Finance - AMC": {
+      "id": "theme:finance-amc",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Asset Management"
+      ]
+    },
+    "Microfinance": {
+      "id": "theme:microfinance",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Finance & Investments - Microfinance": {
+      "id": "theme:finance-investments-microfinance",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Microfinance"
+      ]
+    },
+    "General Insurance": {
+      "id": "theme:general-insurance",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Finance - Insurance": {
+      "id": "theme:finance-insurance",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Life Insurance",
+        "General Insurance"
+      ]
+    },
+    "PSU Infra Finance": {
+      "id": "theme:psu-infra-finance",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Finance - PSU Lending": {
+      "id": "theme:finance-psu-lending",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "PSU Infra Finance"
+      ]
+    },
+    "NBFC": {
+      "id": "theme:nbfc",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Conglomerate Backed NBFC": {
+      "id": "theme:conglomerate-backed-nbfc",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "NBFC"
+      ]
+    },
+    "Ratings & Analytics": {
+      "id": "theme:ratings-analytics",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Investment & Holding": {
+      "id": "theme:investment-holding",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Finance - Holding Company": {
+      "id": "theme:finance-holding-company",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Investment & Holding"
+      ]
+    },
+    "Housing Finance": {
+      "id": "theme:housing-finance",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Finance - Housing": {
+      "id": "theme:finance-housing",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Housing Finance"
+      ]
+    },
+    "Personal & Gold Loans": {
+      "id": "theme:personal-gold-loans",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Finance & Investments - Gold Loan": {
+      "id": "theme:finance-investments-gold-loan",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Personal & Gold Loans"
+      ]
+    },
+    "Small Finance Bank": {
+      "id": "theme:small-finance-bank",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Banks - Small Finance": {
+      "id": "theme:banks-small-finance",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Small Finance Bank"
+      ]
+    },
+    "Brokerage & Wealth": {
+      "id": "theme:brokerage-wealth",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Finance - Capital Markets - Brokers": {
+      "id": "theme:finance-capital-markets-brokers",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Brokerage & Wealth"
+      ]
+    },
+    "Finance - Capital Markets - Wealth Management": {
+      "id": "theme:finance-capital-markets-wealth-management",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Brokerage & Wealth"
+      ]
+    },
+    "Finance - Investment Bankers": {
+      "id": "theme:finance-investment-bankers",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Brokerage & Wealth"
+      ]
+    },
+    "Capital Market Intern.": {
+      "id": "theme:capital-market-intern",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Depositories & Clearing": {
+      "id": "theme:depositories-clearing",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Market Infrastructure": {
+      "id": "theme:market-infrastructure",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Finance - Capital Markets - RTA": {
+      "id": "theme:finance-capital-markets-rta",
+      "kind": "alias",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": [
+        "Market Infrastructure"
+      ]
+    },
+    "Fintech": {
+      "id": "theme:fintech",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Financial Institutions": {
+      "id": "theme:financial-institutions",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Financial Distributors": {
+      "id": "theme:financial-distributors",
+      "kind": "business",
+      "enabled": true,
+      "block": "BANKING & FINANCIAL SERVICES",
+      "macro": "I. FINANCIAL BACKBONE",
+      "targets": []
+    },
+    "Commercial Vehicles": {
+      "id": "theme:commercial-vehicles",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE (STOCKS)",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "2/3 Wheelers": {
+      "id": "theme:2-3-wheelers",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE (STOCKS)",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Auto - 2 & 3 Wheelers": {
+      "id": "theme:auto-2-3-wheelers",
+      "kind": "alias",
+      "enabled": true,
+      "block": "AUTOMOTIVE (STOCKS)",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "2/3 Wheelers"
+      ]
+    },
+    "Tractors & Agri": {
+      "id": "theme:tractors-agri",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE (STOCKS)",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Auto - Tractors": {
+      "id": "theme:auto-tractors",
+      "kind": "alias",
+      "enabled": true,
+      "block": "AUTOMOTIVE (STOCKS)",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Tractors & Agri"
+      ]
+    },
+    "Auto Dealers & Retail": {
+      "id": "theme:auto-dealers-retail",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE (STOCKS)",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Passenger Cars": {
+      "id": "theme:passenger-cars",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE (STOCKS)",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Electronics & Systems": {
+      "id": "theme:electronics-systems",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Drivetrain & Axles": {
+      "id": "theme:drivetrain-axles",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Chassis & Metal Parts": {
+      "id": "theme:chassis-metal-parts",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Auto Ancillaries - Diversified": {
+      "id": "theme:auto-ancillaries-diversified",
+      "kind": "alias",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Auto Components"
+      ]
+    },
+    "Suspension & Safety": {
+      "id": "theme:suspension-safety",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Interior & Plastics": {
+      "id": "theme:interior-plastics",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Engines & Cooling/Seal": {
+      "id": "theme:engines-cooling-seal",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Wiring & Cables": {
+      "id": "theme:wiring-cables",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Tyres & Wheels": {
+      "id": "theme:tyres-wheels",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Tyres & Rubber": {
+      "id": "theme:tyres-rubber",
+      "kind": "alias",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Tyres & Wheels"
+      ]
+    },
+    "Tyres & Tubes": {
+      "id": "theme:tyres-tubes",
+      "kind": "alias",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Tyres & Wheels"
+      ]
+    },
+    "Batteries & EV": {
+      "id": "theme:batteries-ev",
+      "kind": "business",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Bearings & Precision": {
+      "id": "theme:bearings-precision",
+      "kind": "business",
+      "enabled": true,
+      "block": "INDUSTRIAL COMPONENTRY",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Bearings": {
+      "id": "theme:bearings",
+      "kind": "alias",
+      "enabled": true,
+      "block": "INDUSTRIAL COMPONENTRY",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Bearings & Precision"
+      ]
+    },
+    "Castings & Forgings": {
+      "id": "theme:castings-forgings",
+      "kind": "business",
+      "enabled": true,
+      "block": "INDUSTRIAL COMPONENTRY",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Castings, Forgings & Fasteners": {
+      "id": "theme:castings-forgings-fasteners",
+      "kind": "business",
+      "enabled": true,
+      "block": "INDUSTRIAL COMPONENTRY",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Castings, Forgings & Fastners": {
+      "id": "theme:castings-forgings-fastners",
+      "kind": "alias",
+      "enabled": true,
+      "block": "INDUSTRIAL COMPONENTRY",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Castings, Forgings & Fasteners"
+      ]
+    },
+    "Industrial Products": {
+      "id": "theme:industrial-products",
+      "kind": "business",
+      "enabled": true,
+      "block": "INDUSTRIAL COMPONENTRY",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Machine Tools & Industrial Automation": {
+      "id": "theme:machine-tools-industrial-automation",
+      "kind": "business",
+      "enabled": true,
+      "block": "INDUSTRIAL COMPONENTRY",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Precision Components & Tools": {
+      "id": "theme:precision-components-tools",
+      "kind": "business",
+      "enabled": true,
+      "block": "INDUSTRIAL COMPONENTRY",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Industrial Rubber": {
+      "id": "theme:industrial-rubber",
+      "kind": "business",
+      "enabled": true,
+      "block": "INDUSTRIAL COMPONENTRY",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "IT Services (Consulting)": {
+      "id": "theme:it-services-consulting",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Enterprise IT Services": {
+      "id": "theme:enterprise-it-services",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Systems Integration & IT Infra": {
+      "id": "theme:systems-integration-it-infra",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Geospatial & GovTech Services": {
+      "id": "theme:geospatial-govtech-services",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "IT Enabled Services (BPM)": {
+      "id": "theme:it-enabled-services-bpm",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "IT Enabled Services": {
+      "id": "theme:it-enabled-services",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": [
+        "IT Enabled Services (BPM)",
+        "Digital Services & BPO",
+        "Analytics & Data Services"
+      ]
+    },
+    "Analytics & Data Services": {
+      "id": "theme:analytics-data-services",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "ER&D / Product Software": {
+      "id": "theme:er-d-product-software",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "IT - ER&D": {
+      "id": "theme:it-er-d",
+      "kind": "alias",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": [
+        "ER&D / Product Software"
+      ]
+    },
+    "Digital Identity & GovTech": {
+      "id": "theme:digital-identity-govtech",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Enterprise Platforms": {
+      "id": "theme:enterprise-platforms",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "IT Products": {
+      "id": "theme:it-products",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "IT Product Companies": {
+      "id": "theme:it-product-companies",
+      "kind": "alias",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": [
+        "IT Products"
+      ]
+    },
+    "Communications Platforms": {
+      "id": "theme:communications-platforms",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Telecom Operators": {
+      "id": "theme:telecom-operators",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Telecom Equipment": {
+      "id": "theme:telecom-equipment",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Telecom & Network Infra": {
+      "id": "theme:telecom-network-infra",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Telecom Services": {
+      "id": "theme:telecom-services",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": [
+        "Telecom Operators",
+        "Telecom & Network Infra"
+      ]
+    },
+    "FoodTech & Q-Commerce": {
+      "id": "theme:foodtech-q-commerce",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Consumer E-Retail": {
+      "id": "theme:consumer-e-retail",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Logistics Tech": {
+      "id": "theme:logistics-tech",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Recruitment & Classifieds": {
+      "id": "theme:recruitment-classifieds",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "B2B Marketplaces": {
+      "id": "theme:b2b-marketplaces",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "AI Infra & GPU Cloud": {
+      "id": "theme:ai-infra-gpu-cloud",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Vertical & Geospatial SaaS": {
+      "id": "theme:vertical-geospatial-saas",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "IT - Software": {
+      "id": "theme:it-software",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": [
+        "IT Services (Consulting)",
+        "Enterprise IT Services",
+        "IT Products",
+        "Enterprise Platforms",
+        "ER&D / Product Software",
+        "Digital Identity & GovTech",
+        "Analytics & Data Services",
+        "Vertical & Geospatial SaaS",
+        "Communications Platforms"
+      ]
+    },
+    "E-Learning / EdTech": {
+      "id": "theme:e-learning-edtech",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Education & E-Learning": {
+      "id": "theme:education-e-learning",
+      "kind": "alias",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": [
+        "E-Learning / EdTech"
+      ]
+    },
+    "Internet & E-Commerce": {
+      "id": "theme:internet-e-commerce",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": [
+        "FoodTech & Q-Commerce",
+        "Consumer E-Retail"
+      ]
+    },
+    "Telecom & Connectivity": {
+      "id": "theme:telecom-connectivity",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": [
+        "Telecom Operators",
+        "Telecom & Network Infra"
+      ]
+    },
+    "Digital Services & BPO": {
+      "id": "theme:digital-services-bpo",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Web Content & Connectivity": {
+      "id": "theme:web-content-connectivity",
+      "kind": "business",
+      "enabled": true,
+      "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Speciality Chemicals": {
+      "id": "theme:speciality-chemicals",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Industrial Biotech & Enzymes": {
+      "id": "theme:industrial-biotech-enzymes",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Fluorochemicals": {
+      "id": "theme:fluorochemicals",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Inorganic Specialty Chemicals": {
+      "id": "theme:inorganic-specialty-chemicals",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Chemical Intermediates & Organics": {
+      "id": "theme:chemical-intermediates-organics",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Life Sciences Ingredients & CRAMS": {
+      "id": "theme:life-sciences-ingredients-crams",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Performance Polymers & Additives": {
+      "id": "theme:performance-polymers-additives",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Alkali Chemicals": {
+      "id": "theme:alkali-chemicals",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Commodity Chemicals": {
+      "id": "theme:commodity-chemicals",
+      "kind": "alias",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Alkali Chemicals"
+      ]
+    },
+    "Dyes & Pigments": {
+      "id": "theme:dyes-pigments",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Polymers": {
+      "id": "theme:polymers",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Agro Chemicals": {
+      "id": "theme:agro-chemicals",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Agrochemicals": {
+      "id": "theme:agrochemicals",
+      "kind": "alias",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Agro Chemicals"
+      ]
+    },
+    "Pesticides/Agrochemicals": {
+      "id": "theme:pesticides-agrochemicals",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Agro Chemicals",
+        "Crop Protection"
+      ]
+    },
+    "Plastics & Polymers": {
+      "id": "theme:plastics-polymers",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Polymers",
+        "Plastic Pipes"
+      ]
+    },
+    "Carbon Black": {
+      "id": "theme:carbon-black",
+      "kind": "business",
+      "enabled": true,
+      "block": "CHEMICALS & POLYMERS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Heavy Electrical Equip": {
+      "id": "theme:heavy-electrical-equip",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENGINEERING & MANUFACTURING",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Capital Goods - Engineering Heavy": {
+      "id": "theme:capital-goods-engineering-heavy",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "ENGINEERING & MANUFACTURING",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Heavy Electrical Equip",
+        "Industrial Products"
+      ]
+    },
+    "Refractories": {
+      "id": "theme:refractories",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENGINEERING & MANUFACTURING",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Welding & Cryogenics": {
+      "id": "theme:welding-cryogenics",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENGINEERING & MANUFACTURING",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Industrial Pumps & Compressors": {
+      "id": "theme:industrial-pumps-compressors",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENGINEERING & MANUFACTURING",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Process Engineering Equipment": {
+      "id": "theme:process-engineering-equipment",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENGINEERING & MANUFACTURING",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Industrial Systems & Controls": {
+      "id": "theme:industrial-systems-controls",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENGINEERING & MANUFACTURING",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Material Handling & Storage": {
+      "id": "theme:material-handling-storage",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENGINEERING & MANUFACTURING",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Construction & Earthmoving": {
+      "id": "theme:construction-earthmoving",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENGINEERING & MANUFACTURING",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Cables & Electricals": {
+      "id": "theme:cables-electricals",
+      "kind": "business",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Cables - Power": {
+      "id": "theme:cables-power",
+      "kind": "alias",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Cables & Electricals"
+      ]
+    },
+    "Smart Metering & Inst.": {
+      "id": "theme:smart-metering-inst",
+      "kind": "business",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Transformers & Switchgears": {
+      "id": "theme:transformers-switchgears",
+      "kind": "business",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Grid Equipment & HVDC": {
+      "id": "theme:grid-equipment-hvdc",
+      "kind": "business",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Industrial Electrical Systems": {
+      "id": "theme:industrial-electrical-systems",
+      "kind": "business",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Rotating Power Equipment": {
+      "id": "theme:rotating-power-equipment",
+      "kind": "business",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Transformer Ancillaries": {
+      "id": "theme:transformer-ancillaries",
+      "kind": "business",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Electrical Equipment": {
+      "id": "theme:electrical-equipment",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Heavy Electrical Equip",
+        "Smart Metering & Inst.",
+        "Transformers & Switchgears",
+        "Grid Equipment & HVDC",
+        "Industrial Electrical Systems",
+        "Rotating Power Equipment",
+        "Transformer Ancillaries",
+        "Cables & Electricals"
+      ]
+    },
+    "Capital Goods - Electric General": {
+      "id": "theme:capital-goods-electric-general",
+      "kind": "alias",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Electrical Equipment"
+      ]
+    },
+    "Capital Goods - Transformers": {
+      "id": "theme:capital-goods-transformers",
+      "kind": "alias",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Transformers & Switchgears"
+      ]
+    },
+    "Electric Equipment - General": {
+      "id": "theme:electric-equipment-general",
+      "kind": "alias",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Electrical Equipment"
+      ]
+    },
+    "Electrical Equipments/HVDC": {
+      "id": "theme:electrical-equipments-hvdc",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Electrical Equipment",
+        "Heavy Electrical Equip"
+      ]
+    },
+    "EPC - Power & Grid": {
+      "id": "theme:epc-power-grid",
+      "kind": "business",
+      "enabled": true,
+      "block": "POWER INFRA & ELECTRICALS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Aerospace & Defense OEM": {
+      "id": "theme:aerospace-defense-oem",
+      "kind": "business",
+      "enabled": true,
+      "block": "DEFENSE & AEROSPACE SYSTEMS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Aerospace & Defence - Equipments": {
+      "id": "theme:aerospace-defence-equipments",
+      "kind": "alias",
+      "enabled": true,
+      "block": "DEFENSE & AEROSPACE SYSTEMS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Aerospace & Defense OEM"
+      ]
+    },
+    "Railways": {
+      "id": "theme:railways",
+      "kind": "business",
+      "enabled": true,
+      "block": "DEFENSE & AEROSPACE SYSTEMS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Ship Building & Marine": {
+      "id": "theme:ship-building-marine",
+      "kind": "business",
+      "enabled": true,
+      "block": "DEFENSE & AEROSPACE SYSTEMS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Ammunition & Explosives": {
+      "id": "theme:ammunition-explosives",
+      "kind": "business",
+      "enabled": true,
+      "block": "DEFENSE & AEROSPACE SYSTEMS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "EMS - Electronics": {
+      "id": "theme:ems-electronics",
+      "kind": "business",
+      "enabled": true,
+      "block": "DEFENSE & AEROSPACE SYSTEMS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Diversified Metals (VEDL)": {
+      "id": "theme:diversified-metals-vedl",
+      "kind": "business",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Aluminium & Base Metals": {
+      "id": "theme:aluminium-base-metals",
+      "kind": "business",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Copper & Specialty Metallurgy": {
+      "id": "theme:copper-specialty-metallurgy",
+      "kind": "business",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Iron & Steel Core": {
+      "id": "theme:iron-steel-core",
+      "kind": "business",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Steel": {
+      "id": "theme:steel",
+      "kind": "alias",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Iron & Steel Core"
+      ]
+    },
+    "Iron & Steel Products": {
+      "id": "theme:iron-steel-products",
+      "kind": "business",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Steel Products": {
+      "id": "theme:steel-products",
+      "kind": "alias",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Iron & Steel Products"
+      ]
+    },
+    "Coal & Mining": {
+      "id": "theme:coal-mining",
+      "kind": "business",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Iron Ore & Mineral Mining": {
+      "id": "theme:iron-ore-mineral-mining",
+      "kind": "business",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Sponge & Ferro Alloys": {
+      "id": "theme:sponge-ferro-alloys",
+      "kind": "business",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Industrial Minerals": {
+      "id": "theme:industrial-minerals",
+      "kind": "business",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Mining/Minerals": {
+      "id": "theme:mining-minerals",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "METALS & MINING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Industrial Minerals",
+        "Coal & Mining",
+        "Iron Ore & Mineral Mining",
+        "Sponge & Ferro Alloys"
+      ]
+    },
+    "Upstream": {
+      "id": "theme:upstream",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Oil & Gas - Upstream": {
+      "id": "theme:oil-gas-upstream",
+      "kind": "alias",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Upstream"
+      ]
+    },
+    "Integrated Utilities": {
+      "id": "theme:integrated-utilities",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Power Transmission": {
+      "id": "theme:power-transmission",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Power Generation": {
+      "id": "theme:power-generation",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Power - Generation/Distribution": {
+      "id": "theme:power-generation-distribution",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Integrated Utilities",
+        "Power Generation",
+        "Power Transmission",
+        "Power Grid & Distribution",
+        "Solar & Renewables"
+      ]
+    },
+    "Gas Utilities": {
+      "id": "theme:gas-utilities",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Gas Distribution": {
+      "id": "theme:gas-distribution",
+      "kind": "alias",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Gas Utilities"
+      ]
+    },
+    "Oil Refiners": {
+      "id": "theme:oil-refiners",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Refineries": {
+      "id": "theme:refineries",
+      "kind": "alias",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Oil Refiners"
+      ]
+    },
+    "Energy Conglomerate": {
+      "id": "theme:energy-conglomerate",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Oil & Gas - Integrated": {
+      "id": "theme:oil-gas-integrated",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Energy Conglomerate",
+        "Oil Refiners"
+      ]
+    },
+    "Solar & Renewables": {
+      "id": "theme:solar-renewables",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Solar EPC": {
+      "id": "theme:solar-epc",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Solar & Renewables",
+        "EPC / Buildout"
+      ]
+    },
+    "Solar & Green Energy": {
+      "id": "theme:solar-green-energy",
+      "kind": "alias",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Solar & Renewables"
+      ]
+    },
+    "Smart Energy Storage": {
+      "id": "theme:smart-energy-storage",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Oil Equip & Offshore": {
+      "id": "theme:oil-equip-offshore",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Oil Drilling & Exploration": {
+      "id": "theme:oil-drilling-exploration",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Upstream",
+        "Oil Equip & Offshore"
+      ]
+    },
+    "Lubricants & Specialty Oils": {
+      "id": "theme:lubricants-specialty-oils",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Thermal & Gas Power": {
+      "id": "theme:thermal-gas-power",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": [
+        "Integrated Utilities",
+        "Power Generation",
+        "Gas Utilities"
+      ]
+    },
+    "Power Trading": {
+      "id": "theme:power-trading",
+      "kind": "business",
+      "enabled": true,
+      "block": "ENERGY, OIL & GAS",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Innerwear Manufacturers": {
+      "id": "theme:innerwear-manufacturers",
+      "kind": "business",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Jewellery": {
+      "id": "theme:jewellery",
+      "kind": "business",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Gems & Jewellery": {
+      "id": "theme:gems-jewellery",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Jewellery"
+      ]
+    },
+    "Apparel Brands & Retail": {
+      "id": "theme:apparel-brands-retail",
+      "kind": "business",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Textiles - Readymade Apparel": {
+      "id": "theme:textiles-readymade-apparel",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Apparel Brands & Retail"
+      ]
+    },
+    "Readymade Garments/ Apparells": {
+      "id": "theme:readymade-garments-apparells",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Apparel Brands & Retail"
+      ]
+    },
+    "Premium & Branded Apparel": {
+      "id": "theme:premium-branded-apparel",
+      "kind": "business",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Home Textiles & Furnish": {
+      "id": "theme:home-textiles-furnish",
+      "kind": "business",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Spinning & Yarn Processing": {
+      "id": "theme:spinning-yarn-processing",
+      "kind": "business",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Textiles - Spinning": {
+      "id": "theme:textiles-spinning",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Spinning & Yarn Processing"
+      ]
+    },
+    "Footwear & Leather": {
+      "id": "theme:footwear-leather",
+      "kind": "business",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Apparel Retail Chains": {
+      "id": "theme:apparel-retail-chains",
+      "kind": "business",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Hypermarkets & Dept. Stores": {
+      "id": "theme:hypermarkets-dept-stores",
+      "kind": "business",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Fashion & Lifestyle": {
+      "id": "theme:fashion-lifestyle",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Premium & Branded Apparel",
+        "Apparel Retail Chains",
+        "Footwear & Leather"
+      ]
+    },
+    "Heath & Pharma Retail": {
+      "id": "theme:heath-pharma-retail",
+      "kind": "business",
+      "enabled": true,
+      "block": "Lifestyle & Retail",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Consumer Electronics": {
+      "id": "theme:consumer-electronics",
+      "kind": "business",
+      "enabled": true,
+      "block": "Consumer Durables",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Consumer Electronics - EMS": {
+      "id": "theme:consumer-electronics-ems",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Consumer Durables",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "EMS - Electronics"
+      ]
+    },
+    "Household White Goods": {
+      "id": "theme:household-white-goods",
+      "kind": "business",
+      "enabled": true,
+      "block": "Consumer Durables",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Domestic Appliances": {
+      "id": "theme:domestic-appliances",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Consumer Durables",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Household White Goods"
+      ]
+    },
+    "HVAC & Cooling": {
+      "id": "theme:hvac-cooling",
+      "kind": "business",
+      "enabled": true,
+      "block": "Consumer Durables",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Furniture & Decor": {
+      "id": "theme:furniture-decor",
+      "kind": "business",
+      "enabled": true,
+      "block": "Consumer Durables",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Cons. Plastic Products": {
+      "id": "theme:cons-plastic-products",
+      "kind": "business",
+      "enabled": true,
+      "block": "Consumer Durables",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Houseware & Glass": {
+      "id": "theme:houseware-glass",
+      "kind": "business",
+      "enabled": true,
+      "block": "Consumer Durables",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Consumer Durables": {
+      "id": "theme:consumer-durables",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Consumer Durables",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Consumer Electronics",
+        "Household White Goods",
+        "HVAC & Cooling",
+        "Furniture & Decor",
+        "Cons. Plastic Products",
+        "Houseware & Glass"
+      ]
+    },
+    "Media & Entertainment": {
+      "id": "theme:media-entertainment",
+      "kind": "business",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Broadcast & Cable Networks": {
+      "id": "theme:broadcast-cable-networks",
+      "kind": "business",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Advertising & Agencies": {
+      "id": "theme:advertising-agencies",
+      "kind": "business",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Amusement Parks": {
+      "id": "theme:amusement-parks",
+      "kind": "business",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Electronic Media & News": {
+      "id": "theme:electronic-media-news",
+      "kind": "business",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Print & Publication": {
+      "id": "theme:print-publication",
+      "kind": "business",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Film Production & Exhibition": {
+      "id": "theme:film-production-exhibition",
+      "kind": "business",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Media Production & Services": {
+      "id": "theme:media-production-services",
+      "kind": "business",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Events & Weddings": {
+      "id": "theme:events-weddings",
+      "kind": "business",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Digital Entertainment": {
+      "id": "theme:digital-entertainment",
+      "kind": "business",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Entertainment & Media": {
+      "id": "theme:entertainment-media",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Media & Leisure",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Media & Entertainment",
+        "Electronic Media & News",
+        "Film Production & Exhibition",
+        "Digital Entertainment",
+        "Broadcast & Cable Networks",
+        "Media Production & Services",
+        "Print & Publication"
+      ]
+    },
+    "Education & EdTech": {
+      "id": "theme:education-edtech",
+      "kind": "business",
+      "enabled": true,
+      "block": "PROFESSIONAL SERVICES",
+      "macro": "VII. BUSINESS & PROFESSIONAL SERVICES",
+      "targets": []
+    },
+    "Stationery & Paper": {
+      "id": "theme:stationery-paper",
+      "kind": "business",
+      "enabled": true,
+      "block": "PROFESSIONAL SERVICES",
+      "macro": "VII. BUSINESS & PROFESSIONAL SERVICES",
+      "targets": []
+    },
+    "HR, Staffing & Training": {
+      "id": "theme:hr-staffing-training",
+      "kind": "business",
+      "enabled": true,
+      "block": "PROFESSIONAL SERVICES",
+      "macro": "VII. BUSINESS & PROFESSIONAL SERVICES",
+      "targets": []
+    },
+    "BPO & Specialized Services": {
+      "id": "theme:bpo-specialized-services",
+      "kind": "business",
+      "enabled": true,
+      "block": "PROFESSIONAL SERVICES",
+      "macro": "VII. BUSINESS & PROFESSIONAL SERVICES",
+      "targets": []
+    },
+    "Household & Personal Care": {
+      "id": "theme:household-personal-care",
+      "kind": "business",
+      "enabled": true,
+      "block": "FMCG CLUSTERS",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "FMCG - Personal Care": {
+      "id": "theme:fmcg-personal-care",
+      "kind": "alias",
+      "enabled": true,
+      "block": "FMCG CLUSTERS",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Household & Personal Care"
+      ]
+    },
+    "Personal Care & Home": {
+      "id": "theme:personal-care-home",
+      "kind": "alias",
+      "enabled": true,
+      "block": "FMCG CLUSTERS",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Household & Personal Care"
+      ]
+    },
+    "Packaged Diversified FMCG": {
+      "id": "theme:packaged-diversified-fmcg",
+      "kind": "business",
+      "enabled": true,
+      "block": "FMCG CLUSTERS",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Packaging and Containers": {
+      "id": "theme:packaging-and-containers",
+      "kind": "business",
+      "enabled": true,
+      "block": "FMCG CLUSTERS",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Packaging Films": {
+      "id": "theme:packaging-films",
+      "kind": "business",
+      "enabled": true,
+      "block": "FMCG CLUSTERS",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Packaging": {
+      "id": "theme:packaging",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "FMCG CLUSTERS",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Packaging and Containers",
+        "Packaging Films"
+      ]
+    },
+    "Paper & Packaging": {
+      "id": "theme:paper-packaging",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "FMCG CLUSTERS",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Stationery & Paper",
+        "Packaging and Containers",
+        "Packaging Films"
+      ]
+    },
+    "Cigarettes & Tobacco": {
+      "id": "theme:cigarettes-tobacco",
+      "kind": "business",
+      "enabled": true,
+      "block": "FMCG CLUSTERS",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Tobacco & Related": {
+      "id": "theme:tobacco-related",
+      "kind": "alias",
+      "enabled": true,
+      "block": "FMCG CLUSTERS",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Cigarettes & Tobacco"
+      ]
+    },
+    "Tea & Coffee": {
+      "id": "theme:tea-coffee",
+      "kind": "business",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Sugar": {
+      "id": "theme:sugar",
+      "kind": "business",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Dairy & Milk Products": {
+      "id": "theme:dairy-milk-products",
+      "kind": "business",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Edible Oil": {
+      "id": "theme:edible-oil",
+      "kind": "business",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Packaged Meat": {
+      "id": "theme:packaged-meat",
+      "kind": "business",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Packaged & Processed Foods": {
+      "id": "theme:packaged-processed-foods",
+      "kind": "business",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Packaged Foods": {
+      "id": "theme:packaged-foods",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Packaged & Processed Foods"
+      ]
+    },
+    "Edible Oil & Agri Processing": {
+      "id": "theme:edible-oil-agri-processing",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Edible Oil",
+        "Rice & Grain Processing"
+      ]
+    },
+    "Plantation & Sugar": {
+      "id": "theme:plantation-sugar",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Tea & Coffee",
+        "Sugar"
+      ]
+    },
+    "Non-Alcoholic Beverages": {
+      "id": "theme:non-alcoholic-beverages",
+      "kind": "business",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Alcoholic Beverages": {
+      "id": "theme:alcoholic-beverages",
+      "kind": "business",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Breweries & Distilleries": {
+      "id": "theme:breweries-distilleries",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Food & Beverages",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Alcoholic Beverages"
+      ]
+    },
+    "Premium Hotels & Resorts": {
+      "id": "theme:premium-hotels-resorts",
+      "kind": "business",
+      "enabled": true,
+      "block": "TRAVEL & HOSPITALITY",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Hotels & Resorts": {
+      "id": "theme:hotels-resorts",
+      "kind": "alias",
+      "enabled": true,
+      "block": "TRAVEL & HOSPITALITY",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Premium Hotels & Resorts"
+      ]
+    },
+    "Hotels": {
+      "id": "theme:hotels",
+      "kind": "alias",
+      "enabled": true,
+      "block": "TRAVEL & HOSPITALITY",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Premium Hotels & Resorts"
+      ]
+    },
+    "Tour & Travel Services": {
+      "id": "theme:tour-travel-services",
+      "kind": "business",
+      "enabled": true,
+      "block": "TRAVEL & HOSPITALITY",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Aviation & Airlines": {
+      "id": "theme:aviation-airlines",
+      "kind": "business",
+      "enabled": true,
+      "block": "TRAVEL & HOSPITALITY",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Airlines & Aviation": {
+      "id": "theme:airlines-aviation",
+      "kind": "alias",
+      "enabled": true,
+      "block": "TRAVEL & HOSPITALITY",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Aviation & Airlines"
+      ]
+    },
+    "Quick Service Rest. (QSR)": {
+      "id": "theme:quick-service-rest-qsr",
+      "kind": "business",
+      "enabled": true,
+      "block": "TRAVEL & HOSPITALITY",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Quick Service Restaurant - QSR": {
+      "id": "theme:quick-service-restaurant-qsr",
+      "kind": "alias",
+      "enabled": true,
+      "block": "TRAVEL & HOSPITALITY",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Quick Service Rest. (QSR)"
+      ]
+    },
+    "Leisure & Amusement": {
+      "id": "theme:leisure-amusement",
+      "kind": "business",
+      "enabled": true,
+      "block": "TRAVEL & HOSPITALITY",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Seafood & Meat": {
+      "id": "theme:seafood-meat",
+      "kind": "business",
+      "enabled": true,
+      "block": "Agri Business",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Rice & Grain Processing": {
+      "id": "theme:rice-grain-processing",
+      "kind": "business",
+      "enabled": true,
+      "block": "Agri Business",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Fertilizers": {
+      "id": "theme:fertilizers",
+      "kind": "business",
+      "enabled": true,
+      "block": "Agri Business",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Fertilisers": {
+      "id": "theme:fertilisers",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Agri Business",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Fertilizers"
+      ]
+    },
+    "Crop Protection": {
+      "id": "theme:crop-protection",
+      "kind": "business",
+      "enabled": true,
+      "block": "Agri Business",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Animal Feed & Seeds": {
+      "id": "theme:animal-feed-seeds",
+      "kind": "business",
+      "enabled": true,
+      "block": "Agri Business",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Hospitals": {
+      "id": "theme:hospitals",
+      "kind": "business",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Hospitals & Diagnostics": {
+      "id": "theme:hospitals-diagnostics",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Hospitals",
+        "Diagnostic & Lab Services"
+      ]
+    },
+    "Pharma": {
+      "id": "theme:pharma",
+      "kind": "business",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Pharma - Formulators": {
+      "id": "theme:pharma-formulators",
+      "kind": "business",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Pharma - API & CRAMS": {
+      "id": "theme:pharma-api-crams",
+      "kind": "business",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Pharma - API": {
+      "id": "theme:pharma-api",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Pharma - API & CRAMS"
+      ]
+    },
+    "Pharma (Biotech & CRAMS)": {
+      "id": "theme:pharma-biotech-crams",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Pharma - API & CRAMS"
+      ]
+    },
+    "Pharma - MNC bulk Drugs": {
+      "id": "theme:pharma-mnc-bulk-drugs",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Pharma"
+      ]
+    },
+    "Pharma - Small Cap": {
+      "id": "theme:pharma-small-cap",
+      "kind": "cohort",
+      "enabled": false,
+      "block": null,
+      "macro": null,
+      "targets": []
+    },
+    "Diagnostic & Lab Services": {
+      "id": "theme:diagnostic-lab-services",
+      "kind": "business",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Diagnostics": {
+      "id": "theme:diagnostics",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": [
+        "Diagnostic & Lab Services"
+      ]
+    },
+    "Specialized Equipment & Retail": {
+      "id": "theme:specialized-equipment-retail",
+      "kind": "business",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Cement": {
+      "id": "theme:cement",
+      "kind": "business",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Tiles": {
+      "id": "theme:tiles",
+      "kind": "business",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Wood & Plywood": {
+      "id": "theme:wood-plywood",
+      "kind": "business",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Paint Manufacturers": {
+      "id": "theme:paint-manufacturers",
+      "kind": "business",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Building Products & Hardware": {
+      "id": "theme:building-products-hardware",
+      "kind": "business",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Pre-Engineered Buildings": {
+      "id": "theme:pre-engineered-buildings",
+      "kind": "business",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Plastic Pipes": {
+      "id": "theme:plastic-pipes",
+      "kind": "business",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Metal Pipes": {
+      "id": "theme:metal-pipes",
+      "kind": "business",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Steel Tubes & Pipes": {
+      "id": "theme:steel-tubes-pipes",
+      "kind": "business",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Steel - Tubes/Pipes": {
+      "id": "theme:steel-tubes-pipes-2",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Steel Tubes & Pipes"
+      ]
+    },
+    "Building Materials": {
+      "id": "theme:building-materials",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Const. & Materials",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Tiles",
+        "Wood & Plywood",
+        "Paint Manufacturers",
+        "Plastic Pipes",
+        "Metal Pipes"
+      ]
+    },
+    "Residential Projects": {
+      "id": "theme:residential-projects",
+      "kind": "business",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Realty - National": {
+      "id": "theme:realty-national",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Real Estate Developers"
+      ]
+    },
+    "Realty - Regional": {
+      "id": "theme:realty-regional",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Real Estate Developers"
+      ]
+    },
+    "Realty - Construction & Contracting": {
+      "id": "theme:realty-construction-contracting",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Real Estate Ecosystem"
+      ]
+    },
+    "Real Estate Services & Platforms": {
+      "id": "theme:real-estate-services-platforms",
+      "kind": "business",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Property Allied Services": {
+      "id": "theme:property-allied-services",
+      "kind": "business",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Commercial & Diversified": {
+      "id": "theme:commercial-diversified",
+      "kind": "business",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Infrastructure Investment Trusts": {
+      "id": "theme:infrastructure-investment-trusts",
+      "kind": "business",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Infra/Real Estate Investment Trust": {
+      "id": "theme:infra-real-estate-investment-trust",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Infrastructure Investment Trusts",
+        "REITs"
+      ]
+    },
+    "REITs": {
+      "id": "theme:reits",
+      "kind": "business",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Shipping": {
+      "id": "theme:shipping",
+      "kind": "business",
+      "enabled": true,
+      "block": "Logistics & Trans",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Logistics Infra (Ports/Air)": {
+      "id": "theme:logistics-infra-ports-air",
+      "kind": "business",
+      "enabled": true,
+      "block": "Logistics & Trans",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Logistics": {
+      "id": "theme:logistics",
+      "kind": "business",
+      "enabled": true,
+      "block": "Logistics & Trans",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Logistics & Supply Chain": {
+      "id": "theme:logistics-supply-chain",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Logistics & Trans",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Logistics",
+        "Logistics Infra (Ports/Air)",
+        "Surface Transport",
+        "Logistics Tech"
+      ]
+    },
+    "Logistics - Warehousing/Supply Chain": {
+      "id": "theme:logistics-warehousing-supply-chain",
+      "kind": "alias",
+      "enabled": true,
+      "block": "Logistics & Trans",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Logistics & Supply Chain"
+      ]
+    },
+    "Road Assets (Tolls/HAM)": {
+      "id": "theme:road-assets-tolls-ham",
+      "kind": "business",
+      "enabled": true,
+      "block": "Logistics & Trans",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Surface Transport": {
+      "id": "theme:surface-transport",
+      "kind": "business",
+      "enabled": true,
+      "block": "Logistics & Trans",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Waste Management": {
+      "id": "theme:waste-management",
+      "kind": "business",
+      "enabled": true,
+      "block": "Env & Sustainability",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Water & Effluent Mgmt": {
+      "id": "theme:water-effluent-mgmt",
+      "kind": "business",
+      "enabled": true,
+      "block": "Env & Sustainability",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Data Centres": {
+      "id": "theme:data-centres",
+      "kind": "business",
+      "enabled": true,
+      "block": "DATA CENTER ECOSYSTEM",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "Power Grid & Distribution": {
+      "id": "theme:power-grid-distribution",
+      "kind": "business",
+      "enabled": true,
+      "block": "DATA CENTER ECOSYSTEM",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "EPC / Buildout": {
+      "id": "theme:epc-buildout",
+      "kind": "business",
+      "enabled": true,
+      "block": "DATA CENTER ECOSYSTEM",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "India Data-Centre Buildout": {
+      "id": "theme:india-data-centre-buildout",
+      "kind": "exposure",
+      "enabled": true,
+      "block": "DATA CENTER ECOSYSTEM",
+      "macro": "III. DIGITAL ECONOMY & TECH",
+      "targets": []
+    },
+    "IPO / Young Bases": {
+      "id": "theme:ipo-young-bases",
+      "kind": "cohort",
+      "enabled": true,
+      "block": null,
+      "macro": null,
+      "targets": []
+    },
+    "Precision Engineering & Complex Manufacturing": {
+      "id": "theme:precision-engineering-complex-manufacturing",
+      "kind": "exposure",
+      "enabled": true,
+      "block": "INDUSTRIAL COMPONENTRY",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Pharma CDMO & Complex Manufacturing": {
+      "id": "theme:pharma-cdmo-complex-manufacturing",
+      "kind": "exposure",
+      "enabled": true,
+      "block": "Healthcare Segments",
+      "macro": "IV. CONSUMPTION & LIFESTYLE",
+      "targets": []
+    },
+    "Emerging EMS": {
+      "id": "theme:emerging-ems",
+      "kind": "exposure",
+      "enabled": true,
+      "block": "ENGINEERING & MANUFACTURING",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": []
+    },
+    "Roads & Highways": {
+      "id": "theme:roads-highways",
+      "kind": "business",
+      "enabled": true,
+      "block": "HEAVY CIVIL INFRASTRUCTURE",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Civic & Urban Infra": {
+      "id": "theme:civic-urban-infra",
+      "kind": "business",
+      "enabled": true,
+      "block": "HEAVY CIVIL INFRASTRUCTURE",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Water & Hydro Infra": {
+      "id": "theme:water-hydro-infra",
+      "kind": "business",
+      "enabled": true,
+      "block": "HEAVY CIVIL INFRASTRUCTURE",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Broad EPC & Civil": {
+      "id": "theme:broad-epc-civil",
+      "kind": "business",
+      "enabled": true,
+      "block": "HEAVY CIVIL INFRASTRUCTURE",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Civil Construction EPC": {
+      "id": "theme:civil-construction-epc",
+      "kind": "business",
+      "enabled": true,
+      "block": "HEAVY CIVIL INFRASTRUCTURE",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Building Construction EPC": {
+      "id": "theme:building-construction-epc",
+      "kind": "business",
+      "enabled": true,
+      "block": "HEAVY CIVIL INFRASTRUCTURE",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Industrial EPC & Turnkey": {
+      "id": "theme:industrial-epc-turnkey",
+      "kind": "business",
+      "enabled": true,
+      "block": "HEAVY CIVIL INFRASTRUCTURE",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": []
+    },
+    "Infra - Construction & Contracting": {
+      "id": "theme:infra-construction-contracting",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "HEAVY CIVIL INFRASTRUCTURE",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Broad EPC & Civil",
+        "Roads & Highways",
+        "Civic & Urban Infra",
+        "Water & Hydro Infra"
+      ]
+    },
+    "Construction - Civil/Turnkey": {
+      "id": "theme:construction-civil-turnkey",
+      "kind": "alias",
+      "enabled": true,
+      "block": "HEAVY CIVIL INFRASTRUCTURE",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Broad EPC & Civil"
+      ]
+    },
+    "Construction & Contracting": {
+      "id": "theme:construction-contracting",
+      "kind": "alias",
+      "enabled": true,
+      "block": "HEAVY CIVIL INFRASTRUCTURE",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Broad EPC & Civil"
+      ]
+    },
+    "Diversified Conglomerates": {
+      "id": "theme:diversified-conglomerates",
+      "kind": "business",
+      "enabled": true,
+      "block": "DIVERSIFIED & TRADING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Commodity Trading": {
+      "id": "theme:commodity-trading",
+      "kind": "business",
+      "enabled": true,
+      "block": "DIVERSIFIED & TRADING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "General Trading & Dist.": {
+      "id": "theme:general-trading-dist",
+      "kind": "business",
+      "enabled": true,
+      "block": "DIVERSIFIED & TRADING",
+      "macro": "VI. COMMODITIES & RESOURCES",
+      "targets": []
+    },
+    "Auto Components": {
+      "id": "theme:auto-components",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "AUTOMOTIVE COMPONENTS",
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "targets": [
+        "Chassis & Metal Parts",
+        "Electronics & Systems",
+        "Interior & Plastics",
+        "Drivetrain & Axles",
+        "Suspension & Safety",
+        "Wiring & Cables",
+        "Engines & Cooling/Seal",
+        "Tyres & Wheels",
+        "Batteries & EV"
+      ]
+    },
+    "Real Estate Developers": {
+      "id": "theme:real-estate-developers",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Residential Projects",
+        "Commercial & Diversified"
+      ]
+    },
+    "Real Estate Ecosystem": {
+      "id": "theme:real-estate-ecosystem",
+      "kind": "aggregate",
+      "enabled": true,
+      "block": "Real Estate Segments",
+      "macro": "V. NATION BUILDING (INFRA/RE)",
+      "targets": [
+        "Real Estate Developers",
+        "Real Estate Services & Platforms"
+      ]
+    }
+  },
+  "reviewedIssuerBusinessSources": {
+    "RAYMOND": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Precision Engineering and Aerospace Components",
+      "sourceUrl": "https://api.raymond.in/uploads/investor/1747065722517Financial%20Results%20with%20Press%20Release%20Q4%20FY25%20%E2%80%93%20May%2012%2C%202025.pdf",
+      "reviewedOn": "2026-10-25"
+    },
+    "KENNAMET": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Cutting Tools and Machine Tools",
+      "sourceUrl": "https://www.in.investors.kennametal.com/",
+      "reviewedOn": "2026-10-25"
+    },
+    "VIMTALABS": {
+      "sector": "Healthcare",
+      "industry": "Contract Research and Testing",
+      "sourceUrl": "https://vimta.com/wp-content/uploads/Annual-Report-2024-25.pdf",
+      "reviewedOn": "2026-10-25"
+    },
+    "LUMAXIND": {
+      "sector": "Auto Ancillaries",
+      "industry": "Auto Lighting",
+      "sourceUrl": "https://www.lumaxworld.in/lumaxindustries/overview.html",
+      "reviewedOn": "2026-10-25"
+    },
+    "AZADIND": {
+      "sector": "Automobile",
+      "industry": "Electric Buses",
+      "sourceUrl": "https://azadindiamobility.com/about-us/",
+      "reviewedOn": "2026-10-25"
+    },
+    "BONFIG": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Industrial Gearboxes and Drives",
+      "sourceUrl": "https://www.bonfiglioli.in/en",
+      "reviewedOn": "2026-10-25"
+    },
+    "FUSIONCX": {
+      "sector": "IT Software",
+      "industry": "IT Enabled Services and BPO",
+      "sourceUrl": "https://www.fusioncx.com/about/",
+      "reviewedOn": "2026-10-25"
+    },
+    "HDFIRE": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Fire Protection Equipment",
+      "sourceUrl": "https://www.hdfire.com/about-us/",
+      "reviewedOn": "2026-10-25"
+    },
+    "SMT": {
+      "sector": "Healthcare",
+      "industry": "Medical Equipment",
+      "sourceUrl": "https://www.smtpl.com/sites/default/files/2024-12/About%20SMT.pdf",
+      "reviewedOn": "2026-10-25"
+    },
+    "TONBO": {
+      "sector": "Aerospace and Defence",
+      "industry": "Aerospace and Defence Equipment",
+      "sourceUrl": "https://tonboimaging.com/defense/",
+      "reviewedOn": "2026-10-25"
+    },
+    "ZETWERK": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Diversified Manufacturing Services",
+      "sourceUrl": "https://www.zetwerk.com/",
+      "reviewedOn": "2026-10-25"
+    }
+  },
+  "checks": {
+    "frontendPythonTests": 160,
+    "frontendPythonSkipped": 2,
+    "pipelinePythonTests": 530,
+    "pipelinePythonSkipped": 1,
+    "typescript": "passed",
+    "workerTypeScript": "passed",
+    "productionBuild": "passed",
+    "frontendVitestTests": 1755,
+    "frontendVitestFiles": 88,
+    "browser": {
+      "emergingEmsAny": {
+        "matches": 4,
+        "kaynesIncluded": true,
+        "tataTechnologiesExcluded": true
+      },
+      "emergingEmsAndIndustrialSystemsAll": {
+        "matches": 1,
+        "symbols": [
+          "CYIENTDLM"
+        ]
+      },
+      "rotation": {
+        "allEightDimensionsVisible": true,
+        "priceCutoffNotice": "Prices through 2026-10-09"
+      }
+    },
+    "classificationRebuildIdempotent": true
+  },
+  "sourceHashes": {
+    "frontend/theme_tracker_source.json": "89959bf501f069e052f8db45070f536f418ef943388bdac898bddc2f82ef7e46",
+    "DO NOT DELETE EDL PIPELINE/stockscans_classification.json": "553a5c5fb0c972b32483fa6c0bb8912406edb9efc6c3355a0bdce2892f9196b1",
+    "DO NOT DELETE EDL PIPELINE/taxonomy_overrides.json": "55827eca2f72ac824bc5476d9e71f721180165b67066a55159592f90170124e0",
+    "frontend/theme_tracker_web_overrides.json": "825bd54c65c5e666eadfbb794864401b3796e74a90c6a01f876f5d65b0bb7cc2",
+    "frontend/classification_policy.json": "caf680696882705d5af63eeea2663e47e9784ee5ab95d4d7169b2537809d14be",
+    "frontend/classification_contract.py": "40be859a7e0deb6d70a49bc7a88d5ac4837c33c3a79e978dd3b7311b28380a3a",
+    "frontend/theme_classification.py": "5a87aa7fbecf72520be875ac9452d8455c6cd5b675e7c7476c38aca8b54b5056"
+  },
+  "prValidation": {
+    "baseCommit": "8b2d66bd94e4b4e752a3d1f834b2b9cb5ce09ff7",
+    "activeReleasePreserved": "24a2de3c97fd90382b76c8f0bf7ebe814e8b34d18fb28258abfea3af7ee088b2",
+    "temporaryCorrectionRelease": "bbce64705a1eac1598d8039b27c7911cac240ae5c595d6bd112661d07e5edf09",
+    "classificationVersion": "6302020eaaf2c641248d45ec23513d47836359f605f962d4b7089a9ae0e1dca2",
+    "coverage": {
+      "total": 2612,
+      "mapped": 2612,
+      "unmapped": [],
+      "cohortMembers": 232
+    },
+    "multiMembershipStocks": 48,
+    "broadPrimaryMappings": 29,
+    "missingSubIndustry": 1168,
+    "verifiedUnchangedMarketDataStocks": 2612,
+    "changedPrimaryCompanyFields": {
+      "AZADIND": [
+        "industry",
+        "sector"
+      ],
+      "BONFIG": [
+        "industry",
+        "sector"
+      ],
+      "FUSIONCX": [
+        "industry",
+        "sector"
+      ],
+      "HDFIRE": [
+        "industry",
+        "sector"
+      ],
+      "RAYMOND": [
+        "industry",
+        "sector"
+      ],
+      "SHAHINVEST": [
+        "sector"
+      ],
+      "SMT": [
+        "industry",
+        "sector"
+      ],
+      "TONBO": [
+        "industry",
+        "sector"
+      ],
+      "VIMTALABS": [
+        "industry"
+      ],
+      "ZETWERK": [
+        "industry",
+        "sector"
+      ]
+    },
+    "idempotent": true,
+    "temporaryArtifactsRemoved": true,
+    "checks": {
+      "frontendVitestFiles": 88,
+      "frontendVitestTests": 1755,
+      "frontendPythonTests": 160,
+      "frontendPythonSkipped": 2,
+      "pipelinePythonTests": 530,
+      "pipelinePythonSkipped": 1,
+      "frontendProductionBuild": "passed",
+      "workerTypeScript": "passed after wrangler type generation",
+      "diffCheck": "passed"
+    }
+  }
+}

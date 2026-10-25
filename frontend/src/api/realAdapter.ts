@@ -1,4 +1,5 @@
 import { getIpoJson } from './gzipJson';
+import {validateClassification, type ThemeClassification} from '../data/classification';
 import type { ScreenerRunRequest, ScreenerRunResponse, IPORow, ExplainRequest, ExplainResponse,
   StockRow, SymbolComparisonRequest, SymbolComparisonResponse, RevisionCurrentResponse } from '../types/screener';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
@@ -112,8 +113,7 @@ async function releaseFor(revision?: string): Promise<Manifest> {
     if (release.revision !== selected) throw new Error('Release revision mismatch');
     return release;
   } catch (err) {
-    console.warn(`Release manifest for revision ${selected} not found, falling back to latest release:`, err);
-    return latest;
+    throw new DataUnavailableError('The selected release was not published or is unavailable. Choose another session or retry.', 'not_published');
   }
 }
 async function dataIndex(release: Manifest): Promise<DataIndex> {
@@ -229,12 +229,14 @@ class RealDataAdapter {
 
   async getThemeClassification(revision?: string) {
     const release = await releaseFor(revision);
+    if (revision && release.revision !== revision) throw new Error('Classifications are unavailable for the selected release.');
     if (!release.themeClassificationUrl || !release.themeClassificationVersion) throw new Error('Theme classifications are unavailable in this release.');
     const data = await cached(releaseCache, release.themeClassificationUrl,
-      () => getIpoJson<import('../utils/copyResults').ThemeClassification>(release.themeClassificationUrl!, 'Theme classification'), 6);
-    if (data.schemaVersion !== 1 || data.version !== release.themeClassificationVersion || data.asOfDate !== release.sessionDate || !data.records) {
+      () => getIpoJson<ThemeClassification>(release.themeClassificationUrl!, 'Theme classification'), 6);
+    if (![1, 2].includes(data.schemaVersion) || data.version !== release.themeClassificationVersion || data.asOfDate !== release.sessionDate || !data.records) {
       throw new Error('Theme classification release mismatch');
     }
+    validateClassification(data, release.totalStocks);
     return data;
   }
   /** The Rotation page's price-history index, or null when the release did not publish one. */
@@ -245,6 +247,8 @@ class RealDataAdapter {
     const url = source.template.replace('{hash}', source.index);
     const index = await cached(objectCache, url, () => getChartJson<RotationIndex>(url, 'Rotation history'), 128);
     if (index.schemaVersion !== 1 || index.asOfDate !== release.sessionDate) throw new Error('Rotation history release mismatch');
+    if (release.classificationSchemaVersion === 2 && index.classificationVersion !== release.themeClassificationVersion)
+      throw new Error('Rotation classifications do not match the selected release.');
     return index;
   }
   async getRotationShard(revision: string | undefined, name: RotationShardName): Promise<RotationShard> {

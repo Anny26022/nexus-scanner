@@ -10,6 +10,7 @@ export interface Manifest {
   datasetPackedGzipUrl?: string;
   themeClassificationUrl?: string;
   themeClassificationVersion?: string;
+  classificationSchemaVersion?: number;
   marketOverviewUrl?: string;
   benchmarkUrl?: string;
   chartDirectoryUrl?: string;
@@ -119,6 +120,8 @@ export function manifestSnapshotSource(manifest: Manifest, revision = manifest.r
   return {revision, url:revision === manifest.revision
     ? (gzip ? manifest.datasetPackedGzipUrl ?? manifest.datasetGzipUrl : undefined) ?? manifest.datasetUrl
     : gzip ? `/data/revisions/${revision}/stocks.json.gz` : plain,
-  sessionDate:revision === manifest.revision ? manifest.sessionDate : undefined};
+  sessionDate:revision === manifest.revision ? manifest.sessionDate : undefined,
+  ...(revision === manifest.revision && manifest.classificationSchemaVersion === 2
+    ? {classificationUrl:manifest.themeClassificationUrl, classificationVersion:manifest.themeClassificationVersion} : {})};
 }
 

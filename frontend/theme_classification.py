@@ -3,8 +3,12 @@ import hashlib
 import json
 from pathlib import Path
 
+from classification_contract import (catalog_of, canonical_name, listing_age, project_levels,
+                                     validate_classification)
+
 SOURCE_PATH = Path(__file__).with_name('theme_tracker_source.json')
 WEB_OVERRIDES_PATH = Path(__file__).with_name('theme_tracker_web_overrides.json')
+POLICY_PATH = Path(__file__).with_name('classification_policy.json')
 
 # Exact scanner labels provide a transparent, medium-confidence bridge only for
 # symbols absent from the pinned Theme Tracker source and issuer overrides.
@@ -48,9 +52,9 @@ SCANNER_INDUSTRY_THEMES = {
     ('Food Products', 'Dairy Products'): 'Dairy & Milk Products',
     ('Food Products', 'Packaged Foods'): 'Packaged & Processed Foods',
     ('Food Products', 'Seafood'): 'Seafood & Meat',
-    ('Forest Materials', 'Forest Products'): 'Paper & Packaging',
+    ('Forest Materials', 'Forest Products'): 'Wood & Plywood',
     ('Forest Materials', 'Paper & Paper Products'): 'Stationery & Paper',
-    ('Healthcare', 'Biotechnology'): 'Pharma (Biotech & CRAMS)',
+    ('Healthcare', 'Biotechnology'): 'Pharma',
     ('Healthcare', 'Healthcare Technology'): 'Specialized Equipment & Retail',
     ('Healthcare', 'Medical Equipment'): 'Specialized Equipment & Retail',
     ('Healthcare', 'Pharmaceuticals'): 'Pharma',
@@ -89,7 +93,7 @@ SCANNER_INDUSTRY_THEMES = {
 def consolidated_classification(stocks, taxonomy):
     """Export primary taxonomy and thematic detail without conflating industries."""
     return {
-        'schemaVersion': 1, 'asOfDate': taxonomy['asOfDate'],
+        'schemaVersion': taxonomy['schemaVersion'], 'asOfDate': taxonomy['asOfDate'],
         'themeVersion': taxonomy['version'], 'totalStocks': len(stocks),
         'records': {stock['symbol']: {
             'name': stock.get('name'), 'sector': stock.get('sector'),
@@ -106,97 +110,129 @@ def consolidated_classification(stocks, taxonomy):
 def classify(stocks, as_of, source_path=SOURCE_PATH):
     raw = source_path.read_bytes()
     source = json.loads(raw)
-    overrides_path = WEB_OVERRIDES_PATH
-    overrides_raw = overrides_path.read_bytes()
+    overrides_raw = WEB_OVERRIDES_PATH.read_bytes()
     overrides = json.loads(overrides_raw)['assignments']
+    policy_raw = POLICY_PATH.read_bytes()
+    policy = json.loads(policy_raw)
+    nodes = catalog_of(source, policy)
     source_symbols = [row[0] for row in source['rows']]
+    if any(len(row) != len(source['fields']) for row in source['rows']):
+        raise ValueError('Invalid Theme Tracker row shape')
     if len(source_symbols) != len(set(source_symbols)):
         raise ValueError('Theme Tracker source contains duplicate symbols')
     source_rows = {row[0]: dict(zip(source['fields'], row)) for row in source['rows']}
-    themes = {theme['name']: dict(theme, block=block['title'])
-              for block in source['blocks'] for theme in block['themes']}
-    if len(themes) != sum(len(block['themes']) for block in source['blocks']):
-        raise ValueError('Theme Tracker source contains duplicate theme names')
-    unknown_override_themes = sorted({item['theme'] for item in overrides.values()} - set(themes))
-    if unknown_override_themes:
-        raise ValueError(f'Unknown override themes: {", ".join(unknown_override_themes)}')
-    unknown_bridge_themes = sorted(set(SCANNER_INDUSTRY_THEMES.values()) - set(themes))
-    if unknown_bridge_themes:
-        raise ValueError(f'Unknown bridge themes: {", ".join(unknown_bridge_themes)}')
-    stock_symbols = [stock['symbol'] for stock in stocks]
-    if len(stock_symbols) != len(set(stock_symbols)):
+    themes = {theme['name']: theme for block in source['blocks'] for theme in block['themes']}
+    referenced = {row.get('theme') for row in source_rows.values() if row.get('theme')}
+    referenced |= {name for row in source_rows.values() for name in row.get('curatedThemes') or []}
+    referenced |= {item['theme'] for item in overrides.values()} | set(SCANNER_INDUSTRY_THEMES.values())
+    referenced |= {item['theme'] for item in policy['primaryOverrides'].values()}
+    referenced |= {name for item in policy['primaryOverrides'].values() for name in item.get('memberships', [])}
+    referenced |= {name for decisions in policy['overlapDecisions'].values() for name in decisions}
+    if referenced - set(nodes):
+        raise ValueError(f'Unknown classification themes: {sorted(referenced - set(nodes))}')
+    if any(nodes[item['theme']]['kind'] not in ('business', 'aggregate') for item in policy['primaryOverrides'].values()):
+        raise ValueError('A primary classification must identify a business, not an exposure or cohort')
+    if len({stock['symbol'] for stock in stocks}) != len(stocks):
         raise ValueError('Scanner snapshot contains duplicate symbols')
-    macros = {block: macro['title'] for macro in source['macros'] for block in macro['blocks']}
     records, unmapped = {}, []
     for stock in sorted(stocks, key=lambda row: row['symbol']):
         symbol = stock['symbol']
-        # Scanner symbols are security-master identities; never fuzzy-match names.
         row = source_rows.get(symbol, {})
+        identity = policy.get('securityAliases', {}).get(symbol)
+        if not row and identity and as_of >= identity['effectiveFrom']:
+            row = source_rows.get(identity['sourceSymbol'], {})
+        reviewed = policy['primaryOverrides'].get(symbol)
+        web_override = overrides.get(symbol)
         memberships = {}
+        primary = None
 
         def assign(name, basis):
-            theme = themes.get(name)
-            if not theme or name in memberships:
-                return
-            if memberships and not theme.get('allowMultipleMembership'):
-                return
-            memberships[name] = basis
+            name = canonical_name(name, nodes)
+            if name and nodes[name]['kind'] not in ('cohort', 'alias'):
+                memberships.setdefault(name, basis)
+            return name
 
-        assign(row.get('theme'), row.get('provenance') or 'production-public-asset')
+        # Primary selection is independent of supplemental edges and JSON ordering.
+        if reviewed:
+            primary = assign(reviewed['theme'], 'reviewed-business')
+        elif row.get('theme') and nodes[row['theme']]['kind'] in ('business', 'aggregate', 'alias'):
+            primary = assign(row['theme'], row.get('provenance') or 'production-public-asset')
+        if primary is None:
+            explicit = sorted(name for name, theme in themes.items()
+                              if not theme.get('mirrorOf') and nodes[name]['kind'] == 'business'
+                              and symbol in theme.get('symbols', []))
+            industry = sorted(name for name, theme in themes.items()
+                              if not theme.get('mirrorOf') and nodes[name]['kind'] == 'business'
+                              and row.get('industry') in theme.get('industries', []))
+            if explicit:
+                primary = assign(explicit[0], 'curated-rule')
+            elif industry:
+                primary = assign(industry[0], 'derived-rule')
+            elif web_override:
+                primary = assign(web_override['theme'], 'web-research')
+            else:
+                primary = assign(SCANNER_INDUSTRY_THEMES.get((
+                    stock.get('providerSector', stock.get('sector')),
+                    stock.get('providerIndustry', stock.get('industry')))), 'scanner-industry-bridge')
+
         for name in row.get('curatedThemes') or []:
             assign(name, 'curated-rule')
-        # Preserve Tracker priority: canonical, curated, explicit symbols, industries.
-        for name, theme in themes.items():
-            if not theme.get('mirrorOf') and symbol in theme.get('symbols', []):
-                assign(name, 'curated-rule')
-        for name, theme in themes.items():
-            if not theme.get('mirrorOf') and row.get('industry') in theme.get('industries', []):
-                assign(name, 'derived-rule')
-        web_override = overrides.get(symbol)
-        if not memberships and web_override:
-            assign(web_override['theme'], 'web-research')
-        if not memberships:
-            bridge_theme = SCANNER_INDUSTRY_THEMES.get((stock.get('providerSector', stock.get('sector')),
-                                                      stock.get('providerIndustry', stock.get('industry'))))
-            if bridge_theme:
-                assign(bridge_theme, 'scanner-industry-bridge')
-        # An age cohort supplements the business theme; it must not prevent its lookup.
-        history_sessions = (stock.get('metrics') or {}).get('historySessions')
-        if history_sessions is not None and 1 <= history_sessions <= 100:
-            assign('IPO / Young Bases', 'curated-rule')
-        # Mirror groups are aliases/aggregations, not extra business exposures.
-        def matches(name, visiting):
-            if name in memberships:
-                return True
-            if name in visiting:
-                return False
-            mirror = themes.get(name, {}).get('mirrorOf', [])
-            return any(matches(parent, visiting | {name}) for parent in ([mirror] if isinstance(mirror, str) else mirror))
-
-        aliases = [name for name, theme in themes.items() if theme.get('mirrorOf') and matches(name, set())]
-        primary = next(iter(memberships), None)
+        for name in (reviewed or {}).get('memberships', []):
+            assign(name, 'reviewed-business')
+        for name, decision in policy['overlapDecisions'].get(symbol, {}).items():
+            if decision['include']:
+                assign(name, 'reviewed-overlap')
+            else:
+                # A review can retire an imported secondary edge, but never erase the primary.
+                rejected = canonical_name(name, nodes)
+                if rejected != primary:
+                    memberships.pop(rejected, None)
+        # Only reviewed cross-business edges supplement the explicit primary.
+        # Broad or obsolete symbol lists remain audit candidates, never implicit exposures.
+        cohorts = {}
+        sessions = (stock.get('metrics') or {}).get('historySessions')
+        age = listing_age(stock.get('listingDate'), as_of)
+        rule = policy['cohorts']['IPO / Young Bases']
+        if (isinstance(sessions, (int, float)) and not isinstance(sessions, bool)
+                and 1 <= sessions <= rule['maxHistorySessions']
+                and age is not None and age <= rule['maxListingDays']):
+            cohorts['IPO / Young Bases'] = 'listing-age-and-history'
         if primary is None:
             unmapped.append(symbol)
-        overlay = ({
-            'niche': web_override['niche'],
-            'confidence': web_override['confidence'],
-            'sourceUrl': web_override['sourceUrl'],
-        } if web_override and web_override.get('niche') else None)
-        records[symbol] = {
+        def matches(name):
+            node = nodes[name]
+            return name in memberships or any(matches(parent) for parent in node['targets'])
+        aliases = sorted(name for name, node in nodes.items() if node['kind'] == 'alias' and matches(name))
+        basis = memberships.get(primary)
+        evidence = reviewed if basis == 'reviewed-business' else web_override if basis == 'web-research' else None
+        record = {
             'theme': primary,
-            'block': themes[primary]['block'] if primary else None,
-            'macro': macros.get(themes[primary]['block']) if primary else None,
-            'industry': row.get('industry'),
-            'subIndustry': row.get('sub_industry'),
-            'memberships': memberships,
-            'aliases': aliases,
-            'mappingConfidence': (web_override.get('confidence') if primary and memberships.get(primary) == 'web-research' and web_override
-                                  else 'medium' if primary and memberships.get(primary) == 'scanner-industry-bridge'
-                                  else 'source' if primary else None),
-            'mappingEvidenceUrl': web_override.get('sourceUrl') if primary and memberships.get(primary) == 'web-research' and web_override else None,
-            'issuerOverlay': overlay,
+            'block': nodes[primary]['block'] if primary else None,
+            'macro': nodes[primary]['macro'] if primary else None,
+            # Retained for old clients; sourceIndustry names its actual authority.
+            'industry': row.get('industry'), 'sourceIndustry': row.get('industry'),
+            'sourceSymbol': row.get('symbol'),
+            'subIndustry': (reviewed or {}).get('subIndustry', row.get('sub_industry')),
+            'sourceSubIndustry': row.get('sub_industry'),
+            'memberships': memberships, 'cohorts': cohorts, 'aliases': aliases,
+            'mappingSpecificity': 'broad' if primary and nodes[primary]['kind'] == 'aggregate' else 'specific' if primary else None,
+            'mappingConfidence': (evidence.get('confidence', 'high') if evidence else
+                                  'medium' if basis == 'scanner-industry-bridge' else 'source' if primary else None),
+            'mappingEvidenceUrl': evidence.get('sourceUrl') if evidence else None,
+            'issuerOverlay': ({'niche': web_override['niche'], 'confidence': web_override['confidence'],
+                              'sourceUrl': web_override['sourceUrl']} if web_override and web_override.get('niche') else None),
         }
-    version = hashlib.sha256(raw + overrides_raw + Path(__file__).read_bytes()).hexdigest()
-    return {'schemaVersion': 1, 'version': version, 'asOfDate': as_of,
-            'source': source['source'], 'records': records,
-            'coverage': {'total': len(records), 'mapped': len(records) - len(unmapped), 'unmapped': unmapped}}
+        record['levels'] = project_levels(record, nodes)
+        record['availability'] = {level: bool(primary) for level in ('theme', 'block', 'macro', 'aggregate')}
+        record['availability']['subIndustry'] = bool(record['subIndustry'])
+        record['availability']['cohort'] = age is not None and (age > rule['maxListingDays'] or
+            isinstance(sessions, (int, float)) and not isinstance(sessions, bool) and sessions >= 1)
+        records[symbol] = record
+    version = hashlib.sha256(raw + overrides_raw + policy_raw + Path(__file__).read_bytes()
+                             + Path(__file__).with_name('classification_contract.py').read_bytes()).hexdigest()
+    result = {'schemaVersion': 2, 'version': version, 'asOfDate': as_of,
+              'source': source['source'], 'nodes': nodes, 'records': records,
+              'coverage': {'total': len(records), 'mapped': len(records) - len(unmapped),
+                           'unmapped': unmapped, 'cohortMembers': sum(bool(r['cohorts']) for r in records.values())}}
+    validate_classification(stocks, result)
+    return result

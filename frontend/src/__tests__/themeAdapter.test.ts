@@ -1,6 +1,6 @@
 import {it,expect,vi,afterEach} from 'vitest';
 const revision='a'.repeat(64),version='b'.repeat(64);
-const manifest={schemaVersion:5,revision,sessionDate:'2026-10-09',totalStocks:1,
+const manifest={schemaVersion:5,revision,sessionDate:'2026-10-09',totalStocks:0,
   datasetUrl:'/stocks.json',iposUrl:'/ipos.json',themeClassificationUrl:'/themes.json.gz',themeClassificationVersion:version};
 afterEach(()=>{vi.unstubAllGlobals();vi.resetModules();});
 it('loads and shares the same release taxonomy once',async()=>{
@@ -17,4 +17,11 @@ it('rejects a taxonomy with a different version',async()=>{
     new Response(JSON.stringify({schemaVersion:1,version:'c'.repeat(64),asOfDate:manifest.sessionDate,records:{}}),{headers:{'Content-Encoding':'gzip'}})));
   const {realAdapter}=await import('../api/realAdapter');
   await expect(realAdapter.getThemeClassification(revision)).rejects.toThrow('release mismatch');
+});
+it('never substitutes the latest taxonomy for a missing historical release', async()=>{
+  const fetch=vi.fn(async(url:string)=>url==='/data/current.json' ? new Response(JSON.stringify(manifest)) : new Response('missing',{status:404}));
+  vi.stubGlobal('fetch',fetch);
+  const {realAdapter}=await import('../api/realAdapter');
+  await expect(realAdapter.getThemeClassification('d'.repeat(64))).rejects.toThrow('selected release');
+  expect(fetch.mock.calls.some(([url])=>url===manifest.themeClassificationUrl)).toBe(false);
 });

@@ -1,4 +1,5 @@
 import { copyFormats, type CopyGroup } from '../utils/copyResults';
+import {classificationLabels, type ClassificationRecord} from '../data/classification';
 import { getIpoJson } from './gzipJson';
 import { DataUnavailableError } from './dataErrors';
 
@@ -222,7 +223,7 @@ export function companyHistory(files: readonly EarningsRecord[][], symbol: strin
 }
 
 /** Where a company sits in Nexus's own classification, joined by symbol (from the chart directory and theme file). */
-export interface Classification {
+export interface Classification extends ClassificationRecord {
   sector?: string | null; industry?: string | null; subIndustry?: string | null;
   theme?: string | null; block?: string | null; macro?: string | null;
 }
@@ -230,7 +231,7 @@ export type GroupBy = Exclude<CopyGroup, 'symbols'>;
 /** The screener's own names for each level. */
 export const GROUP_LABEL = Object.fromEntries(copyFormats.map(({value, label}) => [value, label])) as Record<GroupBy, string>;
 /** Levels that come from the theme file rather than the chart directory. */
-export const THEME_LEVELS: ReadonlySet<string> = new Set<GroupBy>(['subIndustry', 'theme', 'block', 'macro']);
+export const THEME_LEVELS: ReadonlySet<string> = new Set<GroupBy>(['subIndustry', 'theme', 'block', 'macro', 'cohort', 'aggregate']);
 export const UNCLASSIFIED = 'Unclassified';
 
 export interface EarningsGroup {
@@ -253,8 +254,12 @@ export function groupRecords(records: readonly EarningsRecord[], by: GroupBy,
   const groups = new Map<string, EarningsRecord[]>();
   for (const record of records) {
     const known = classify(record.symbol);
-    const label = (by === 'sector' ? known?.sector ?? record.sector : by === 'industry' ? known?.industry ?? record.industry : known?.[by])?.trim() || UNCLASSIFIED;
-    groups.set(label, [...(groups.get(label) ?? []), record]);
+    const labels = classificationLabels(known ?? {}, known, by);
+    for (const label of labels.length ? labels : [UNCLASSIFIED]) {
+      const rows = groups.get(label) ?? [];
+      if (!rows.some(row => row.symbol === record.symbol)) rows.push(record);
+      groups.set(label, rows);
+    }
   }
   return [...groups].map(([label, rows]) => {
     const quality = summarize(rows).quality;

@@ -24,9 +24,9 @@ describe('earnings', () => {
     expect(summary.reported).toBe(3);
   });
 
-  it('falls back to the provider sector and puts Unclassified last', () => {
+  it('does not silently substitute provider classifications for absent canonical mappings', () => {
     const groups = groupRecords([rec('A', {sector: 'Banks'}), rec('B'), rec('C', {sector: 'Banks'})], 'sector', () => undefined);
-    expect(groups.map(group => [group.label, group.records.length])).toEqual([['Banks', 2], [UNCLASSIFIED, 1]]);
+    expect(groups.map(group => [group.label, group.records.length])).toEqual([[UNCLASSIFIED, 3]]);
   });
 
   it('groups by theme-file levels', () => {

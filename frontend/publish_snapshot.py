@@ -26,7 +26,8 @@ from edl_pipeline.scanner.calculation_cache import calculation_cache
 from screen_trend_conditions import _delivery_records
 from snapshot_technicals import technical_metrics, CONFIG_PATH
 from theme_classification import (classify, consolidated_classification, SOURCE_PATH as THEME_SOURCE_PATH,
-                                  WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
+                                  WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH, POLICY_PATH)
+from classification_contract import validate_classification, review_primary_classifications, project_company_classifications
 from pipeline_utils import resource_path
 from public_payload import public, public_ipos
 from market_overview import benchmark_series, index_closes, market_overview
@@ -68,7 +69,8 @@ def rotation_history_object(root, cache, rows, taxonomy, source_bytes, session, 
     # Dated group memberships: carried between runs in private pipeline state (tools/pipeline_state.py).
     ledger_path = root / rotation_history.LEDGER_NAME
     ledger = json.loads(gzip.decompress(ledger_path.read_bytes())) if ledger_path.exists() else None
-    index, shards, ledger = rotation_history.build(session, rows, closes, benchmarks, taxonomy.get('records', {}), ledger)
+    index, shards, ledger = rotation_history.build(session, rows, closes, benchmarks, taxonomy.get('records', {}), ledger,
+                                                   classification_version=taxonomy['version'])
     digest = rotation_history.write_objects(objects, index, shards)
     temporary = ledger_path.with_name(ledger_path.name + '.tmp')
     temporary.write_bytes(gzip.compress(json.dumps(ledger, separators=(',', ':'), sort_keys=True).encode(), mtime=0))
@@ -327,8 +329,11 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     started = elapsed('stock metrics and presets', started)
     cache.save_frames(root)
     started = elapsed('history packing', started)
-    published_rows = public(rows)
+    business_policy = json.loads(resource_path('taxonomy_overrides.json').read_text())
+    published_rows = public(review_primary_classifications(rows, business_policy))
     taxonomy = public(classify(published_rows, session))
+    consolidated = consolidated_classification(published_rows, taxonomy)
+    validate_classification(published_rows, taxonomy, consolidated)
     rotation_hash = None
     if include_charts:
         try:
@@ -339,6 +344,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         started = elapsed('rotation history', started)
     code_files=[*sorted((root/'src/edl_pipeline/scanner').glob('*.py')),Path(__file__),Path(bridge.__file__),Path(__file__).with_name("packed_snapshot.py"),Path(__file__).with_name('snapshot_technicals.py'),CONFIG_PATH,Path(__file__).with_name('theme_classification.py'),THEME_SOURCE_PATH,THEME_WEB_OVERRIDES_PATH,Path(__file__).parent/'src/data/presetEligibility.json']
     code_files.append(resource_path('taxonomy_overrides.json'))
+    code_files.extend([POLICY_PATH, Path(__file__).with_name('classification_contract.py'), Path(__file__).with_name('market_overview.py')])
     code_files.append(resource_path('stockscans_classification.json'))
     code_files.extend([Path(__file__).with_name('etf_snapshot.py'), resource_path('etf_fields.json'), resource_path('etf_enum_labels.json')])
     code_files.extend([TRADINGVIEW_FIELDS_PATH, Path(__file__).with_name('public_payload.py'), Path(__file__).with_name('rotation_history.py')])
@@ -374,6 +380,8 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     generation=output/'revisions'/revision
     backend=root/'.scanner_cache/revisions'/revision
     generation.mkdir(parents=True,exist_ok=True); backend.mkdir(parents=True,exist_ok=True)
+    write_json(backend/'theme-classification.json', taxonomy)
+    write_json(backend/'universe-classification.json', consolidated)
     # Freeze backend inputs before exposing the revision. History is numeric NPZ.
     for name, data in {**source_bytes,**delivery_bytes}.items():
         if name == 'etf_snapshot.json.gz':
@@ -396,9 +404,10 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     payload={'revision':revision,'asOfDate':session,'totalStocks':len(rows),'stocks':rows,'technicalMetricsVersion':1,'referenceCounts':{'rvol15Sma50':default_count}}
     payload['extendedMetricsVersion'] = 1
     payload['presetRuleMatchesVersion'] = 1
+    payload['classificationVersion'] = taxonomy['version']
     taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
     (generation/'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
-    write_json(generation/'universe-classification.json', consolidated_classification(rows, taxonomy))
+    write_json(generation/'universe-classification.json', consolidated)
     stock_bytes=write_json(generation/'stocks.json',payload)
     if etf_bytes is not None:
         (generation/'etfs.json.gz').write_bytes(gzip.compress(etf_bytes, mtime=0))
@@ -435,6 +444,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     with gzip.open(root/'ipo_screener.json.gz','rt') as handle:
         ipos=json.load(handle)
     ipo_payload=public_ipos(ipos if isinstance(ipos,dict) else {'records':ipos})
+    ipo_payload['records'] = project_company_classifications(ipo_payload['records'], rows)
     ipo_bytes=json.dumps(ipo_payload,separators=(',', ':'),allow_nan=False).encode()
     (generation/'ipos.json.gz').write_bytes(gzip.compress(ipo_bytes,compresslevel=9,mtime=0))
     calendar_bytes=source_bytes.get('earnings_calendar.json.gz')
@@ -450,7 +460,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         temporary=benchmark_path.with_name(benchmark_path.name+'.tmp')
         temporary.write_bytes(gzip.compress(json.dumps(benchmark, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
         temporary.replace(benchmark_path)
-    market=market_overview(source_bytes, session)
+    market=market_overview(source_bytes, session, rows)
     if market is not None:
         market_path=generation/'market-overview.json.gz'
         temporary=market_path.with_name(market_path.name+'.tmp')
@@ -463,6 +473,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         manifest['benchmarkUrl']=f'/data/revisions/{revision}/benchmark.json.gz'
     if market is not None:
         manifest['marketOverviewUrl']=f'/data/revisions/{revision}/market-overview.json.gz'
+        manifest['marketClassificationVersion'] = taxonomy['version']
     # Dated band history: fold today's bands into the persistent ledger (rebuilt once with price_band_history.py).
     band_ledger = price_band_history.apply_session(price_band_history.load_ledger(output/price_band_history.LEDGER_NAME), session, rows)
     band_bytes = price_band_history.write_ledger(output/price_band_history.LEDGER_NAME, band_ledger)
@@ -477,6 +488,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     manifest['financialHistoryUrl'] = f'/data/revisions/{revision}/financial-history.json.gz'
     manifest['themeClassificationUrl'] = f'/data/revisions/{revision}/theme-classification.json.gz'
     manifest['themeClassificationVersion'] = taxonomy['version']
+    manifest['classificationSchemaVersion'] = 2
     manifest['universeClassificationUrl'] = f'/data/revisions/{revision}/universe-classification.json'
     started = elapsed('serialization and compression', started)
     if etf_bytes is not None:

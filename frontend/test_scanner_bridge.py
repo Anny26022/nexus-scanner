@@ -11,6 +11,22 @@ from edl_pipeline.scanner.presets import list_presets
 
 
 class BridgeTests(unittest.TestCase):
+    def test_frozen_company_and_theme_projections_override_raw_provider_labels_together(self):
+        stock = {**self.stock(), 'symbol':'TEST', 'sector':'Old sector', 'industry':'Old industry'}
+        context = {'stocks':{'TEST':stock}, 'financial_history_as_of':'2026-09-30', 'rs_ratings':{}, 'fno_ban_symbols':{}}
+        request = {'asOfDate':'2026-09-30', 'universe':'mainboard', 'pageSize':10,
+                   'expressionTree':{'type':'group','operator':'all','children':[{'type':'condition','condition':{
+                       'instanceId':'sector','conditionId':'SECTOR','parameters':{'values':['Reviewed sector']}}}]}}
+        with tempfile.TemporaryDirectory() as folder, patch.object(bridge, '_load_context', return_value=context):
+            root = Path(folder)
+            (root/'theme-classification.json').write_text(json.dumps({'version':'v','asOfDate':'2026-09-30','records':{'TEST':{}}}))
+            (root/'universe-classification.json').write_text(json.dumps({'themeVersion':'v','asOfDate':'2026-09-30',
+                'records':{'TEST':{'sector':'Reviewed sector','basicIndustry':'Reviewed industry'}}}))
+            result = bridge.run(request, root)
+            self.assertEqual(result['matchCount'], 1)
+            self.assertEqual(result['rows'][0]['industry'], 'Reviewed industry')
+        self.assertEqual(stock['sector'], 'Old sector')
+
     def test_ownership_fields_keep_missing_and_non_finite_values_unavailable(self):
         row = bridge.stock_row({"symbol": "TEST", "promoter_holding_percent": float('nan'),
                                 "fii_percent_change_qoq": float('inf')}, {})

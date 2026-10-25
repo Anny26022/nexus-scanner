@@ -46,6 +46,15 @@ def band(kind, field, low, high, **params):
 
 
 def translate(identifier, p):
+    classification_levels = {'THEME': 'theme', 'THEMATIC_BLOCK': 'block', 'MACRO_PILLAR': 'macro',
+                             'SUB_INDUSTRY': 'subIndustry', 'LISTING_COHORT': 'cohort', 'THEME_AGGREGATE': 'aggregate'}
+    if identifier in classification_levels:
+        values = p.get('values', [])
+        values = values.split(',') if isinstance(values, str) else values
+        if not isinstance(values, list) or p.get('match', 'ANY') not in ('ANY', 'ALL'):
+            raise ValueError('Invalid classification membership condition')
+        return {'type': 'classification', 'level': classification_levels[identifier],
+                'values': [str(v).strip().upper() for v in values if str(v).strip()], 'match': p.get('match', 'ANY')}
     if identifier.startswith("lib-") or identifier in LEGACY_PRESETS:
         preset = get_preset(LEGACY_PRESETS.get(identifier, identifier))
         return {"type": "preset", "expression": preset["expression"], "eligibility": p}
@@ -189,6 +198,29 @@ def combine(values, op):
 
 
 def evaluate(node, s, frame, context, as_of, diagnostics, delivery):
+    if node['type'] == 'classification':
+        from classification_contract import group_labels
+        record = (context.get('classifications') or {}).get(s['symbol'])
+        if record is None or s.get('as_of_date') != as_of or not node['values']:
+            diagnostics.add(('classification', 'dated_classification_unavailable'))
+            return None
+        definitions = context.get('classification_nodes')
+        if definitions and node['level'] in ('theme', 'cohort', 'aggregate'):
+            for value in node['values']:
+                definition = definitions.get(value)
+                if (not definition or definition.get('enabled') is False or definition['kind'] == 'alias'
+                        or node['level'] == 'theme' and definition['kind'] == 'cohort'
+                        or node['level'] == 'cohort' and definition['kind'] != 'cohort'
+                        or node['level'] == 'aggregate' and definition['kind'] != 'aggregate'):
+                    diagnostics.add(('classification', 'classification_group_unavailable'))
+                    return None
+        labels = {value.upper() for value in group_labels({}, record, node['level'])}
+        matches = [value in labels for value in node['values']]
+        matched = all(matches) if node['match'] == 'ALL' else any(matches)
+        if not matched and record.get('availability', {}).get(node['level']) is False:
+            diagnostics.add(('classification', 'dated_classification_unavailable'))
+            return None
+        return matched
     if node["type"] == "group":
         if not node["children"]:
             return True
@@ -361,6 +393,20 @@ def run(request, root=ROOT, cache=None):
         context = cache.contexts[as_of]
     else:
         context = _load_context(root, as_of)
+    taxonomy_path = root / 'theme-classification.json'
+    if taxonomy_path.exists():
+        taxonomy = json.loads(taxonomy_path.read_text())
+        if taxonomy.get('asOfDate') == as_of:
+            context = {**context, 'classifications': taxonomy['records'],
+                       'classification_nodes': {name.upper():node for name, node in taxonomy.get('nodes', {}).items()}}
+            company_path = root / 'universe-classification.json'
+            if company_path.exists():
+                companies = json.loads(company_path.read_text())
+                if companies.get('themeVersion') != taxonomy['version'] or companies.get('asOfDate') != as_of:
+                    raise ValueError('Frozen classification projections disagree')
+                context = {**context, 'stocks': {symbol:{**stock, 'sector':companies['records'][symbol]['sector'],
+                    'industry':companies['records'][symbol]['basicIndustry']} if symbol in companies['records'] else stock
+                    for symbol, stock in context['stocks'].items()}}
     if context.get("financial_history_as_of") and as_of > context["financial_history_as_of"]:
         raise ValueError("Requested date is after the latest published NSE session.")
     if as_of != context.get("financial_history_as_of") and not (root/"ohlcv_data").is_dir():

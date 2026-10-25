@@ -18,8 +18,8 @@ Each series is one close per period on three calendars: the last 300 sessions, 2
 Values are delta-coded natural logs at 0.01% resolution.
 
 - **Stocks** are the published scanner rows' closes.
-- **Groups** cover every classification level the screener uses: sector, industry, sub-industry, theme,
-  thematic block and macro pillar. Each is an equal-weight chain index using dated membership and liquidity
+- **Groups** cover all eight classification dimensions: sector, industry, sub-industry, theme,
+  thematic block, macro pillar, listing cohort and theme aggregate. Each is an equal-weight chain index using dated membership and liquidity
   eligibility. Members need ₹300 Cr market cap and ₹1 Cr 30-day turnover. Each day needs three members with
   returns; under-covered periods are gaps. The index resumes at its retained level without bridging the
   uncovered return, and indicator warm-up restarts.
@@ -28,15 +28,20 @@ Values are delta-coded natural logs at 0.01% resolution.
   built like the groups. Comparing equal-weight groups with a cap-weighted index would make every group look strong
   whenever small and mid caps outperform.
 
-Group membership and eligibility are point in time going forward. Each run records every stock's six labels and eligibility in
+Group membership and eligibility are point in time going forward. Each run records every stock's eight membership sets and eligibility in
 `rotation_membership_ledger.json.gz`, storing only changes. The ledger is carried between runs in private
 pipeline state (`tools/pipeline_state.py`), and a stock counts toward a group only on the days it belonged.
 Removed or newly illiquid stocks remain historical constituents. Before observations began, the earliest
 recorded labels and eligibility apply; older history is a reconstruction. Existing ledgers without eligibility
 bootstrap it from the first run after this change. Drill-down member lists describe the current universe.
-The theme label stores the union of primary and curated memberships, so a stock contributes once to each
-theme. Scalar labels in older ledgers remain readable. Curated membership changes, including entry to or
-exit from the young cohort, are dated from observation onward; earlier membership is a reconstruction.
+The theme set stores all approved direct business/exposure memberships regardless of their provenance,
+so a stock contributes once to each theme. Block and macro membership are distinct parent unions; two
+themes reaching the same parent do not double-weight the stock. Aggregates expand defined category unions
+without creating extra business exposure parents. Listing cohorts are a separate dimension and never
+replace a company's business theme. See [the classification contract](classification.md).
+Scalar labels and six/seven-level ledgers remain readable and retain their observations during migration.
+Membership changes, including entry to or exit from the young cohort, are dated from observation onward;
+earlier membership is a reconstruction.
 Prices are never carried past a stock's last observation. Publication requires the Nifty calendar to reach
 the requested session, so a stale benchmark cannot be presented as current Rotation data.
 
@@ -50,6 +55,8 @@ and still publishes the scanner. Retries retain the already-published release's 
 recovery becomes visible in a subsequent revision. Rotation copy/check operations each have a two-minute
 timeout, independent of the bulk uploader's longer limit.
 The private ledger stays staged until release publication succeeds, so a failed publication cannot advance it.
+Schema v2 releases require the Rotation index to name the same classification version as the release;
+composites built with another taxonomy are rejected.
 
 Theme classification has only existed since October 2026, so no earlier dated memberships exist to backfill.
 
@@ -88,4 +95,5 @@ The replay stops at the stock session with at least 90% coverage, and the CLI re
 release; a newer index snapshot never fabricates newer stock candles. It needs only the standard library;
 runtime depends on history size. The output goes to
 `frontend/public/data/rotation/`, which is ignored by Git, and the dev server picks it up through `local.json`.
-Re-run it after the caches change.
+Re-run it after the caches or classifications change. The preview records its classification version and
+actual price cutoff; the page displays a notice when prices predate the release session.

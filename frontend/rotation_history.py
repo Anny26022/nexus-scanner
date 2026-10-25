@@ -20,7 +20,9 @@ SCHEMA_VERSION = 1
 # Each calendar keeps enough periods for its longest range plus the 14-period lookback and a long trail.
 PERIODS = {'D': 300, 'W': 290, 'M': 144}
 SCALE = 10_000
-LEVELS = ('sector', 'industry', 'subIndustry', 'theme', 'block', 'macro')
+from classification_contract import group_labels
+
+LEVELS = ('sector', 'industry', 'subIndustry', 'theme', 'block', 'macro', 'cohort', 'aggregate')
 # A composite needs a few members to mean anything; illiquid microcaps would dominate equal weights.
 MIN_MEMBERS = 3
 MIN_GROUP_MARKET_CAP_CR = 300.0
@@ -119,30 +121,39 @@ def composite(members, length):
     return chain(total, count)
 
 
-IGNORED_LABELS = ('unclassified', 'others', 'other', 'n/a')
-
-
 def labels_of(row, taxonomy):
-    """The stock's label at each level today; None where it is unclassified."""
-    raw = dict(sector=row.get('sector'), industry=row.get('industry'),
-               **{key: (taxonomy.get(row['symbol']) or {}).get(key) for key in ('subIndustry', 'theme', 'block', 'macro')})
-    cleaned = [(raw.get(level) or '').strip() for level in LEVELS]
-    labels = [label if label and label.lower() not in IGNORED_LABELS else None for label in cleaned]
-    themes = {name for name, basis in ((taxonomy.get(row['symbol']) or {}).get('memberships') or {}).items()
-              if basis == 'curated-rule' and name and name.lower() not in IGNORED_LABELS}
-    if labels[3]:
-        themes.add(labels[3])
-    labels[3] = sorted(themes) or None
+    """Resolve the same projected memberships used by filtering, Earnings and copy."""
+    record = taxonomy.get(row['symbol']) or {}
+    labels = []
+    for level in LEVELS:
+        values = group_labels(row, record, level)
+        labels.append((values[0] if len(values) == 1 else values or None) if level in ('sector', 'industry', 'subIndustry')
+                      else values or None)
     return labels
 
 
 def record_memberships(ledger, session, labels, eligibility=None):
     """Append today's labels for every stock whose labels changed. The ledger only grows, by date."""
+    if (isinstance(ledger, dict) and ledger.get('version') == 1
+            and ledger.get('levels') in (list(LEVELS[:6]), list(LEVELS[:7]))):
+        # Preserve all historical observations when adding the cohort dimension.
+        for history in ledger['records'].values():
+            for observation in history:
+                observation[1].extend([None] * (len(LEVELS) - len(observation[1])))
+                previous = observation[1][3]
+                previous = previous if isinstance(previous, list) else [previous]
+                if 'IPO / Young Bases' in previous:
+                    observation[1][3] = [name for name in previous if name and name != 'IPO / Young Bases'] or None
+                    observation[1][6] = ['IPO / Young Bases']
+                    if observation[1][4] == 'EMERGING THEMES':
+                        observation[1][4] = None
+        ledger['levels'] = list(LEVELS)
     if not isinstance(ledger, dict) or ledger.get('version') != 1 or list(ledger.get('levels', [])) != list(LEVELS):
         ledger = {'version': 1, 'levels': list(LEVELS), 'records': {}}
     records = ledger['records']
     for symbol in sorted(set(records) | set(labels)):
-        current = labels.get(symbol, [None] * len(LEVELS))
+        current = list(labels.get(symbol, [None] * len(LEVELS)))
+        current.extend([None] * (len(LEVELS) - len(current)))
         history = records.setdefault(symbol, [])
         if history and history[-1][0] > session:
             raise ValueError('Membership ledger is ahead of this session')
@@ -198,7 +209,7 @@ def group_eligible(row):
     return cap is not None and cap >= MIN_GROUP_MARKET_CAP_CR and turnover is not None and turnover >= MIN_GROUP_TURNOVER30_CR
 
 
-def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_date=None):
+def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_date=None, classification_version=None):
     """Rotation history objects for one release.
 
     rows: published stock rows; closes: a symbol loader or {symbol: [(date, close), ...]} ascending; benchmarks: {'N50': [...],
@@ -289,6 +300,7 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_dat
 
     index = {
         'schemaVersion': SCHEMA_VERSION, 'asOfDate': session, 'scale': SCALE,
+        'priceAsOfDate': price_date,
         'frames': frames,
         # An index the refresh could not supply this time is left out rather than published empty.
         'benchmarks': {code: {'name': BENCHMARKS[code], 'series': series(points)} for code, points in benchmarks.items()
@@ -296,6 +308,8 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_dat
         'universes': {code: name for code, name in UNIVERSES.items()},
         'stocks': stocks, 'groups': groups,
     }
+    if classification_version:
+        index['classificationVersion'] = classification_version
     return index, shards, ledger
 
 

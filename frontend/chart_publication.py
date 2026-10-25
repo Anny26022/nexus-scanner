@@ -393,6 +393,8 @@ class R2Store:
 
 def complete_release(chart_root, output, manifest, store=None):
     """Failed uploads/archival leave the previous browser pointer intact."""
+    from classification_contract import validate_classification_release
+    validate_classification_release(output, manifest)
     if store is None and not charts_enabled():
         print('WARNING: R2 configuration missing (' + ', '.join(missing_r2_settings()) + '); publishing scanner data without charts.', flush=True)
         manifest = dict(manifest, schemaVersion=4)

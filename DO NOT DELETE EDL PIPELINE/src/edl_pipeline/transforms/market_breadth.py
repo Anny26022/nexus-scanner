@@ -72,7 +72,8 @@ def generate_analytics(stocks):
         if name and name != "N/A":
             industries.append({
                 "name": name,
-                "sector": group["Sector"].iloc[0],
+                "sector": group["Sector"].iloc[0] if group["Sector"].nunique() == 1 else None,
+                "sectors": sorted(group["Sector"].dropna().unique().tolist()),
                 **group_metrics(group),
             })
 

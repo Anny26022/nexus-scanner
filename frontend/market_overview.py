@@ -3,7 +3,9 @@ import csv
 import gzip
 import json
 import math
+from collections import defaultdict
 from pathlib import Path
+from classification_contract import clean_label
 
 MARKET_OVERVIEW_VERSION = 1
 BREADTH_SESSIONS = 60
@@ -72,7 +74,31 @@ def _indices(payload, session):
     return cards
 
 
-def market_overview(source_bytes, session):
+def stock_sectors(stocks):
+    """Use the release's primary company labels for every sector summary."""
+    groups = defaultdict(list)
+    for stock in stocks:
+        label = clean_label(stock.get('sector'))
+        if label:
+            groups[label].append(stock)
+    sectors = []
+    for label, rows in groups.items():
+        count = len(rows)
+        row = {'name':label, 'stock_count':count}
+        for period in (20, 50, 200):
+            above = 0
+            for stock in rows:
+                close = _number(stock.get('close'))
+                average = _number(stock.get(f'sma{period}', (stock.get('metrics') or {}).get(f'sma{period}')))
+                above += close is not None and average is not None and close > average
+            row[f'above_sma{period}_percent'] = round(above / count * 100, 1)
+        near = sum(abs(value) <= 5 for stock in rows if (value := _number(stock.get('dist52wHighPct'))) is not None)
+        row['near_52w_high_5_percent'] = round(near / count * 100, 1)
+        sectors.append(row)
+    return _sectors({'sectors':sectors})
+
+
+def market_overview(source_bytes, session, stocks=None):
     """Return the overview payload, or None when the pipeline produced no breadth data."""
     breadth = _breadth(_load(source_bytes, 'market_breadth_v2.json.gz'), session)
     if not breadth:
@@ -81,7 +107,7 @@ def market_overview(source_bytes, session):
         'schemaVersion': MARKET_OVERVIEW_VERSION,
         'asOfDate': session,
         'breadth': breadth,
-        'sectors': _sectors(_load(source_bytes, 'sector_analytics.json.gz')),
+        'sectors': stock_sectors(stocks) if stocks is not None else _sectors(_load(source_bytes, 'sector_analytics.json.gz')),
         'indices': _indices(_load(source_bytes, 'all_indices_history_v2.json.gz'), session),
     }
 

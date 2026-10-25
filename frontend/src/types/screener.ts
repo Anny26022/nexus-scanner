@@ -1,3 +1,4 @@
+import type {ClassificationRecord} from '../data/classification';
 export type UniverseType = 'etf' | 'mainboard' | 'nifty50' | 'nifty500' | 'midsmall400' | 'custom';
 
 export type MatchMode = 'all' | 'any';
@@ -89,6 +90,7 @@ export interface StockRow {
   listingDate: string;
   sector: string; // "Unclassified" if missing
   industry: string; // "Unclassified" if missing
+  classification?: ClassificationRecord;
   nicheTags?: string[];
   nicheEvidence?: {tags:string[]; reviewedOn:string; exposure:'direct'|'joint_venture'|'mixed'};
   providerSector?: string | null;

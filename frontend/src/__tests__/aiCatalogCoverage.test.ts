@@ -9,6 +9,8 @@ import {availableFilterParameters} from '../utils/filterAvailability';
 import {extendedMetrics} from '../data/extendedMetrics';
 
 const choices={SECTOR:['BANKS','INFORMATION TECHNOLOGY'],INDUSTRY:['PRIVATE BANKS','SOFTWARE'],SERIES:['EQ','BE'],
+  THEME:['NBFC'],THEMATIC_BLOCK:['BANKING & FINANCIAL SERVICES'],MACRO_PILLAR:['I. FINANCIAL BACKBONE'],
+  SUB_INDUSTRY:['PRIVATE BANKS'],LISTING_COHORT:['IPO / Young Bases'],THEME_AGGREGATE:['Finance - Insurance'],
   PRICE_BAND:['2','5','10','20','NO BAND'],INDEX_MEMBERSHIP:['NIFTY 50','NIFTY 500'],TRADINGVIEW_METRIC:extendedMetrics.map(m=>m.id)};
 const catalog=createAiFilterCatalog(choices);
 const compile=(id:string,parameters:Record<string,unknown>,negated=false)=>validateAiScreenResult({name:'Audit',summary:'Audit',matchMode:'all',

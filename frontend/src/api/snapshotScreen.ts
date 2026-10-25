@@ -6,6 +6,7 @@ import { snapshotFundamentals } from '../data/snapshotFundamentals';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
 import { isExtendedCondition, extendedFilterGroups, extendedMetrics } from '../data/extendedMetrics';
+import {classificationLabels, CLASSIFICATION_FILTERS, isClassificationFilter, type ClassificationNode} from '../data/classification';
 
 const presetIds = new Set(PRESET_CATALOG.map(preset => preset.id));
 
@@ -28,6 +29,8 @@ export interface Snapshot {
   extendedMetricsVersion?: number;
   presetRuleMatchesVersion?: number;
   technicalMetricsVersion?: number;
+  classificationVersion?: string;
+  classificationNodes?: Record<string, ClassificationNode>;
   referenceCounts?: Record<string, number>;
   revision: string;
   asOfDate: string;
@@ -66,6 +69,19 @@ const maPeriods = SNAPSHOT_MA_PERIODS;
 
 function leaf(c: ActiveCondition, session: string): Predicate | null {
   const p = c.parameters;
+  if (isClassificationFilter(c.conditionId)) {
+    const level = CLASSIFICATION_FILTERS[c.conditionId];
+    const wanted = list(p.values);
+    if (!['ANY', 'ALL'].includes(p.match ?? 'ANY')) return null;
+    return s => {
+      if (s.metadataAsOfDate !== session || !s.classification?.levels || !wanted.length) return null;
+      const labels = new Set(classificationLabels(s, s.classification, level).map(value => value.toUpperCase()));
+      const matches = wanted.map(value => labels.has(value));
+      const complete = s.classification.availability?.[level] !== false;
+      const result = (p.match === 'ALL' ? matches.every(Boolean) : matches.some(Boolean)) ? true : complete ? false : null;
+      return result === null ? null : c.isNegated ? !result : result;
+    };
+  }
   if (isEtfCondition(c.conditionId)) {
     const group = etfGroup(c.conditionId);
     if (!group || !group.fields.includes(p.metric)) return null;
@@ -364,6 +380,23 @@ interface Matches { rows: SnapshotStock[]; universeCount: number; coverage:Cover
 const matchCache = new WeakMap<Snapshot,Map<string,Matches>>();
 
 export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allRows = false): ScreenerRunResponse | null {
+  if (data.classificationNodes) {
+    const nodes = new Map(Object.entries(data.classificationNodes).map(([name, node]) => [name.toUpperCase(), node]));
+    const validateGroups = (node: ExpressionNode): void => {
+      if (node.type === 'group') return node.children.forEach(validateGroups);
+      const id = node.condition.conditionId;
+      if (!isClassificationFilter(id) || !['theme','cohort','aggregate'].includes(CLASSIFICATION_FILTERS[id])) return;
+      for (const name of list(node.condition.parameters.values)) {
+        const definition = nodes.get(name), level = CLASSIFICATION_FILTERS[id];
+        if (!definition || definition.enabled === false || definition.kind === 'alias'
+            || level === 'theme' && definition.kind === 'cohort'
+            || level === 'cohort' && definition.kind !== 'cohort'
+            || level === 'aggregate' && definition.kind !== 'aggregate')
+          throw new Error('The selected classification group is unavailable in this release. Choose a published group.');
+      }
+    };
+    validateGroups(request.expressionTree);
+  }
   const etf = request.universe === 'etf';
   if (etf !== (data.assetType === 'etf')) throw new Error('Snapshot universe mismatch');
   if (etf && request.textQuery?.trim()) throw new Error('Use the ETF filters to build this screen.');
@@ -408,7 +441,8 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
     for (const item of Object.values(coverage)) {
       item.coveragePct = candidates.length ? item.evaluated / candidates.length * 100 : 0;
       if (item.evaluated < candidates.length) diagnostics.push({conditionId:item.conditionId,
-        reason:'Snapshot value or aligned history unavailable', affectedCount:candidates.length - item.evaluated});
+        reason:isClassificationFilter(item.conditionId) ? 'Classification mapping unavailable for this release or group'
+          : 'Snapshot value or aligned history unavailable', affectedCount:candidates.length - item.evaluated});
     }
     const field = (request.sort?.field ?? 'symbol') as keyof SnapshotStock;
     rows.sort((a,b) => {

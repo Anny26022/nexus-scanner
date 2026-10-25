@@ -5,7 +5,7 @@ export type Frame = 'D' | 'W' | 'M';
 /** A published index (codes match the stock universes) or EW, the equal-weight market built like the groups. */
 export type BenchmarkCode = 'N50' | 'N100' | 'N500' | 'MID150' | 'SML250' | 'MS400' | 'TOTAL' | 'EW';
 export type RotationShardName = 'core' | 'rest' | 'groups';
-export const LEVELS = ['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const;
+export const LEVELS = ['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro', 'cohort', 'aggregate'] as const;
 export type Level = typeof LEVELS[number];
 /** Delta-coded natural logs: [offset into the calendar, first value, deltas…], scaled by `scale`. */
 type Coded = [number, ...(number | null)[]];
@@ -13,6 +13,8 @@ type Coded = [number, ...(number | null)[]];
 export interface RotationIndex {
   schemaVersion: 1;
   asOfDate: string;
+  priceAsOfDate?: string;
+  classificationVersion?: string;
   scale: number;
   frames: Record<Frame, string[]>;
   /** EW (equal-weight market) is present when groups were built; older objects may lack it. */
@@ -31,7 +33,7 @@ export interface RotationShard {
 
 export const FRAME_LABEL: Record<Frame, string> = {D: 'Daily', W: 'Weekly', M: 'Monthly'};
 export const LEVEL_LABEL: Record<Level, string> = {sector: 'Sectors', industry: 'Industries', subIndustry: 'Sub-industries',
-  theme: 'Themes', block: 'Thematic blocks', macro: 'Macro pillars'};
+  theme: 'Themes', block: 'Thematic blocks', macro: 'Macro pillars', cohort: 'Listing cohorts', aggregate: 'Theme aggregates'};
 /** Replay windows per calendar, in periods. `null` means as far back as the history allows. */
 export const RANGES: Record<Frame, [string, number | null][]> = {
   D: [['1M', 21], ['3M', 63], ['6M', 126], ['1Y', 250]],

@@ -5,116 +5,535 @@
     "IT - Software": "IT Software",
     "E Commerce and App based Aggregator": "E-Commerce/App based Aggregator",
     "Diamond, Gems and Jewellery": "Diamond Gems and Jewellery",
-    "Infrastructure Developers & Operators": "Infrastructure Developers and Operators"
+    "Infrastructure Developers & Operators": "Infrastructure Developers and Operators",
+    "Capital Goods - Electrical Equipment": "Capital Goods Electrical Equipment",
+    "Capital Goods-Non Electrical Equipment": "Capital Goods Non Electrical Equipment",
+    "Glass & Glass Products": "Glass and Glass Products",
+    "Stock/ Commodity Brokers": "Stock and Commodity Brokers"
   },
   "overrides": {
-    "AASTHA": { "sector": "Textiles", "industry": "Textiles Others", "nicheTags": [] },
-    "ACEVECTOR": { "sector": "E-Commerce/App based Aggregator", "industry": "E-Services", "nicheTags": [] },
-    "ADROITIND": { "sector": "Auto Ancillaries", "industry": "Auto Ancillaries - Others", "nicheTags": [] },
-    "AGL": { "sector": "Logistics", "industry": "Miscellaneous", "nicheTags": [] },
-    "ALPINETEX": { "sector": "Textiles", "industry": "Textiles Others", "nicheTags": [] },
-    "ANNU": { "sector": "Infrastructure Developers and Operators", "industry": "Construction Civil and Turnkey", "nicheTags": [] },
-    "AONESTEELS": { "sector": "Steel", "industry": "Steel - Medium / Small", "nicheTags": [] },
-    "ARCIL": { "sector": "Finance", "industry": "Finance Investment and Others", "nicheTags": [] },
-    "ARDEE": { "sector": "Non Ferrous Metals", "industry": "Metal Others", "nicheTags": [] },
-    "ARMEE": { "sector": "IT - Software", "industry": "Computers - Software - Medium / Small", "nicheTags": [] },
-    "AUGMONT": { "sector": "Bullion & Precious Metals", "industry": "Bullion Platform, Refining & Precious Metals", "nicheTags": ["Jewellery & Watches"] },
-    "BUILDPRO": { "sector": "Retail", "industry": "Building Materials Distribution & Retail", "nicheTags": ["Building Materials", "Home Improvement"] },
-    "BURNPUR": { "sector": "Cement", "industry": "Cement", "nicheTags": [] },
-    "CAPILLARY": { "sector": "IT Software", "industry": "IT Services", "nicheTags": [] },
-    "CMLL": { "sector": "Mining and Mineral Products", "industry": "Mining and Minerals", "nicheTags": [] },
-    "CMPDI": { "sector": "Metals & Mining", "industry": "Mining Consulting & Engineering", "nicheTags": ["Coal", "Mineral Exploration"] },
-    "CMRGREEN": { "sector": "Metals & Mining", "industry": "Metal Recycling & Non-Ferrous Alloys", "nicheTags": ["Aluminium", "Zinc", "Recycling"] },
-    "CORDELIA": { "sector": "E Commerce and App based Aggregator", "industry": "Travel Agencies", "nicheTags": [] },
-    "CSM": { "sector": "IT Software", "industry": "IT Services", "nicheTags": [] },
-    "DCMSIL": { "sector": "Textiles", "industry": "Textiles Rayon", "nicheTags": [] },
-    "DEEPA": { "sector": "Diamond Gems and Jewellery", "industry": "Diamond Gems and Jewellery", "nicheTags": [] },
-    "DHOOTTRANS": { "sector": "Capital Goods Electrical Equipment", "industry": "Electric Equipment General", "nicheTags": [] },
-    "DSFCL": { "sector": "Chemicals", "industry": "Chemicals Organic", "nicheTags": [] },
-    "DSKULKARNI": { "sector": "Realty", "industry": "Construction Housing", "nicheTags": [] },
-    "EASTSILK": { "sector": "Textiles", "industry": "Textiles Silk", "nicheTags": [] },
-    "ELEVATE": { "sector": "Realty", "industry": "Education Infrastructure & Student Housing", "nicheTags": ["Student Accommodation", "Education"] },
-    "ESDS": { "sector": "IT Software", "industry": "IT Services", "nicheTags": [] },
-    "GAJA": { "sector": "Finance", "industry": "Finance Investment and Others", "nicheTags": [] },
-    "GERMAN": { "sector": "Steel", "industry": "Steel - Medium / Small", "nicheTags": [] },
-    "GLASSWALL": { "sector": "Construction", "industry": "Construction Civil and Turnkey", "nicheTags": [] },
-    "GRADIENTE": { "sector": "Media", "industry": "Digital Entertainment & Content", "nicheTags": ["OTT", "Film & Series Production", "Music"] },
-    "GSPLTRANS": { "sector": "Gas Distribution", "industry": "Gas Distribution", "nicheTags": [] },
-    "HEROMOTORS": { "sector": "Auto Ancillaries", "industry": "Auto Ancillaries - Others", "nicheTags": [] },
-    "HEXAGON": { "sector": "FMCG", "industry": "Food Processing Others", "nicheTags": [] },
-    "HORIZONIND": { "sector": "Realty", "industry": "Industrial & Logistics Parks", "nicheTags": ["Warehousing", "Logistics Infrastructure"] },
-    "HTEL": { "sector": "Capital Goods Non Electrical Equipment", "industry": "Hydraulics", "nicheTags": [] },
-    "INDOMIM": { "sector": "Capital Goods Non Electrical Equipment", "industry": "Engineering Light General", "nicheTags": [] },
-    "JNPR": { "sector": "Power Generation and Distribution", "industry": "Power Generation and Distribution", "nicheTags": [] },
-    "JSIPL": { "sector": "Steel", "industry": "Steel - Tubes / Pipes", "nicheTags": [] },
-    "KANOHAR": { "sector": "Capital Goods Electrical Equipment", "industry": "Capital Goods Transformers", "nicheTags": [] },
-    "KARAMTARA": { "sector": "Capital Goods Electrical Equipment", "industry": "Transmission Line Towers and Equipment", "nicheTags": [] },
-    "KNACK": { "sector": "Packaging", "industry": "Packaging FMCG and Consumers", "nicheTags": [] },
-    "KSR": { "sector": "Leather", "industry": "Leather and Synthetic Footwear", "nicheTags": [] },
-    "KUSUMGAR": { "sector": "Textiles", "industry": "Textiles Manmade PFY and PSF", "nicheTags": [] },
-    "LALITHAA": { "sector": "Diamond Gems and Jewellery", "industry": "Diamond Gems and Jewellery", "nicheTags": [] },
-    "LASERPOWER": { "sector": "Cables", "industry": "Cables Power", "nicheTags": [] },
-    "LCCPROJECT": { "sector": "Infrastructure Developers and Operators", "industry": "Construction Civil and Turnkey", "nicheTags": [] },
-    "LCL": { "sector": "Engineering", "industry": "Textile Machinery", "nicheTags": [] },
-    "LEAPIND": { "sector": "Logistics & Cargo", "industry": "Supply Chain Asset Pooling", "nicheTags": ["Pallet Pooling", "Returnable Packaging"] },
-    "LUMINO": { "sector": "Infrastructure Developers and Operators", "industry": "Engineering Turnkey Services", "nicheTags": [] },
-    "MANIKA": { "sector": "Plastic Products", "industry": "Plastics Others", "nicheTags": [] },
-    "MANIPALHOS": { "sector": "Healthcare", "industry": "Hospitals", "nicheTags": [] },
-    "MBECL": { "sector": "Infrastructure Developers and Operators", "industry": "Engineering Turnkey Services", "nicheTags": [] },
-    "MILKYMIST": { "sector": "FMCG", "industry": "FMCG Dairy Products", "nicheTags": [] },
-    "MOLBIO": { "sector": "Healthcare", "industry": "Medical Equipment", "nicheTags": [] },
-    "MOMSBELIEF": { "sector": "Healthcare Services", "industry": "Pediatric Developmental Care", "nicheTags": ["Autism Care", "Child Healthcare"] },
-    "MONEYVIEW": { "sector": "E-Commerce/App based Aggregator", "industry": "Computers - Software - Medium / Small", "nicheTags": [] },
-    "MPIMANIPAL": { "sector": "IT Software", "industry": "IT Services", "nicheTags": [] },
-    "MVELECTRO": { "sector": "Consumer Durables", "industry": "Electronics Power Devices and Equipment", "nicheTags": [] },
-    "NITYAS": { "sector": "Diamond, Gems and Jewellery", "industry": "Diamond Cutting / Jewellery - Medium / Small", "nicheTags": [] },
-    "ORIENTCABL": { "sector": "Cables", "industry": "Cables - Telephone", "nicheTags": [] },
-    "PERNIASPOP": { "sector": "Retail", "industry": "Luxury Fashion E-commerce", "nicheTags": ["Fashion", "Lifestyle"] },
-    "PRANAV": { "sector": "Construction", "industry": "Construction Housing", "nicheTags": [] },
-    "PRASOLCHEM": { "sector": "Chemicals", "industry": "Specialty Chemicals", "nicheTags": [] },
-    "PRIORITY": { "sector": "Diamond Gems and Jewellery", "industry": "Diamond Gems and Jewellery", "nicheTags": [] },
-    "RAMBHAJO": { "sector": "Diamond Gems and Jewellery", "industry": "Diamond Gems and Jewellery", "nicheTags": [] },
-    "RENTOMOJO": { "sector": "Retail", "industry": "Consumer Rental & Subscription Platform", "nicheTags": ["Furniture Rental", "Appliances"] },
-    "RUNWALENTR": { "sector": "Realty", "industry": "Construction - Housing - Medium / Small", "nicheTags": [] },
-    "SBIFUNDS": { "sector": "Finance", "industry": "Finance AMC", "nicheTags": [] },
-    "SHAHINVEST": { "sector": "Stock/ Commodity Brokers", "industry": "Securities/Commodities Trading Services", "nicheTags": [] },
-    "SHANKESH": { "sector": "Diamond Gems and Jewellery", "industry": "Diamond Gems and Jewellery", "nicheTags": [] },
-    "SKFINDUS": { "sector": "Bearings", "industry": "Bearings", "nicheTags": [] },
-    "SKYWAYS": { "sector": "Logistics", "industry": "Miscellaneous", "nicheTags": [] },
-    "SONA": { "sector": "Textiles", "industry": "Textiles - Spinning - Synthetic / Blended", "nicheTags": [] },
-    "SRIT": { "sector": "IT - Software", "industry": "Computers - Software - Medium / Small", "nicheTags": [] },
-    "SSRETAIL": { "sector": "Retail", "industry": "Trading - Medium / Small", "nicheTags": [] },
-    "STEAMHOUSE": { "sector": "Utilities", "industry": "Industrial Steam & Gas Distribution", "nicheTags": ["Industrial Utilities", "Nitrogen"] },
-    "SUNSHINE": { "sector": "Entertainment", "industry": "Entertainment Electronic Media", "nicheTags": [] },
-    "SWASTIKAIN": { "sector": "Power Infrastructure", "industry": "Engineering - Turnkey Services", "nicheTags": [] },
-    "SYMBIOTEC": { "sector": "Pharmaceuticals", "industry": "Pharma API", "nicheTags": [] },
-    "TECHNOCRAF": { "sector": "Infrastructure Developers and Operators", "industry": "Construction Civil and Turnkey", "nicheTags": [] },
-    "TEMPSENS": { "sector": "Engineering", "industry": "Engineering Light General", "nicheTags": [] },
-    "TENNIND": { "sector": "Auto Ancillaries", "industry": "Auto Others", "nicheTags": [] },
-    "TRIVENIPT": { "sector": "Engineering", "industry": "Engineering - Heavy - General - Medium / Small", "nicheTags": [] },
-    "TURTLEMINT": { "sector": "Insurance", "industry": "Insurance Distribution", "nicheTags": [] },
-    "UTLSOLAR": { "sector": "Capital Goods Electrical Equipment", "industry": "Electric Equipment General", "nicheTags": [] },
-    "VARMORA": { "sector": "Ceramic Products", "industry": "Ceramics - Tiles", "nicheTags": [] },
-    "VEEGALAND": { "sector": "Realty", "industry": "Realty Regional", "nicheTags": [] },
-    "VNL": { "sector": "Infrastructure Developers & Operators", "industry": "Construction - Civil / Turnkey - Large", "nicheTags": [] },
-    "WAAREEINDO": { "sector": "Capital Goods Electrical Equipment", "industry": "Electric Equipment General", "nicheTags": [] },
-    "XTRANET": { "sector": "IT Software", "industry": "IT Services", "nicheTags": [] }
+    "AASTHA": {
+      "sector": "Textiles",
+      "industry": "Textiles Others",
+      "nicheTags": []
+    },
+    "ACEVECTOR": {
+      "sector": "E-Commerce/App based Aggregator",
+      "industry": "E-Services",
+      "nicheTags": []
+    },
+    "ADROITIND": {
+      "sector": "Auto Ancillaries",
+      "industry": "Auto Ancillaries - Others",
+      "nicheTags": []
+    },
+    "AGL": {
+      "sector": "Logistics",
+      "industry": "Miscellaneous",
+      "nicheTags": []
+    },
+    "ALPINETEX": {
+      "sector": "Textiles",
+      "industry": "Textiles Others",
+      "nicheTags": []
+    },
+    "ANNU": {
+      "sector": "Infrastructure Developers and Operators",
+      "industry": "Construction Civil and Turnkey",
+      "nicheTags": []
+    },
+    "AONESTEELS": {
+      "sector": "Steel",
+      "industry": "Steel - Medium / Small",
+      "nicheTags": []
+    },
+    "ARCIL": {
+      "sector": "Finance",
+      "industry": "Finance Investment and Others",
+      "nicheTags": []
+    },
+    "ARDEE": {
+      "sector": "Non Ferrous Metals",
+      "industry": "Metal Others",
+      "nicheTags": []
+    },
+    "ARMEE": {
+      "sector": "IT - Software",
+      "industry": "Computers - Software - Medium / Small",
+      "nicheTags": []
+    },
+    "AUGMONT": {
+      "sector": "Bullion & Precious Metals",
+      "industry": "Bullion Platform, Refining & Precious Metals",
+      "nicheTags": [
+        "Jewellery & Watches"
+      ]
+    },
+    "BUILDPRO": {
+      "sector": "Retail",
+      "industry": "Building Materials Distribution & Retail",
+      "nicheTags": [
+        "Building Materials",
+        "Home Improvement"
+      ]
+    },
+    "BURNPUR": {
+      "sector": "Cement",
+      "industry": "Cement",
+      "nicheTags": []
+    },
+    "CAPILLARY": {
+      "sector": "IT Software",
+      "industry": "IT Services",
+      "nicheTags": []
+    },
+    "CMLL": {
+      "sector": "Mining and Mineral Products",
+      "industry": "Mining and Minerals",
+      "nicheTags": []
+    },
+    "CMPDI": {
+      "sector": "Metals & Mining",
+      "industry": "Mining Consulting & Engineering",
+      "nicheTags": [
+        "Coal",
+        "Mineral Exploration"
+      ]
+    },
+    "CMRGREEN": {
+      "sector": "Metals & Mining",
+      "industry": "Metal Recycling & Non-Ferrous Alloys",
+      "nicheTags": [
+        "Aluminium",
+        "Zinc",
+        "Recycling"
+      ]
+    },
+    "CORDELIA": {
+      "sector": "E Commerce and App based Aggregator",
+      "industry": "Travel Agencies",
+      "nicheTags": []
+    },
+    "CSM": {
+      "sector": "IT Software",
+      "industry": "IT Services",
+      "nicheTags": []
+    },
+    "DCMSIL": {
+      "sector": "Textiles",
+      "industry": "Textiles Rayon",
+      "nicheTags": []
+    },
+    "DEEPA": {
+      "sector": "Diamond Gems and Jewellery",
+      "industry": "Diamond Gems and Jewellery",
+      "nicheTags": []
+    },
+    "DHOOTTRANS": {
+      "sector": "Capital Goods Electrical Equipment",
+      "industry": "Electric Equipment General",
+      "nicheTags": []
+    },
+    "DSFCL": {
+      "sector": "Chemicals",
+      "industry": "Chemicals Organic",
+      "nicheTags": []
+    },
+    "DSKULKARNI": {
+      "sector": "Realty",
+      "industry": "Construction Housing",
+      "nicheTags": []
+    },
+    "EASTSILK": {
+      "sector": "Textiles",
+      "industry": "Textiles Silk",
+      "nicheTags": []
+    },
+    "ELEVATE": {
+      "sector": "Realty",
+      "industry": "Education Infrastructure & Student Housing",
+      "nicheTags": [
+        "Student Accommodation",
+        "Education"
+      ]
+    },
+    "ESDS": {
+      "sector": "IT Software",
+      "industry": "IT Services",
+      "nicheTags": []
+    },
+    "GAJA": {
+      "sector": "Finance",
+      "industry": "Finance Investment and Others",
+      "nicheTags": []
+    },
+    "GERMAN": {
+      "sector": "Steel",
+      "industry": "Steel - Medium / Small",
+      "nicheTags": []
+    },
+    "GLASSWALL": {
+      "sector": "Construction",
+      "industry": "Construction Civil and Turnkey",
+      "nicheTags": []
+    },
+    "GRADIENTE": {
+      "sector": "Media",
+      "industry": "Digital Entertainment & Content",
+      "nicheTags": [
+        "OTT",
+        "Film & Series Production",
+        "Music"
+      ]
+    },
+    "GSPLTRANS": {
+      "sector": "Gas Distribution",
+      "industry": "Gas Distribution",
+      "nicheTags": []
+    },
+    "HEROMOTORS": {
+      "sector": "Auto Ancillaries",
+      "industry": "Auto Ancillaries - Others",
+      "nicheTags": []
+    },
+    "HEXAGON": {
+      "sector": "FMCG",
+      "industry": "Food Processing Others",
+      "nicheTags": []
+    },
+    "HORIZONIND": {
+      "sector": "Realty",
+      "industry": "Industrial & Logistics Parks",
+      "nicheTags": [
+        "Warehousing",
+        "Logistics Infrastructure"
+      ]
+    },
+    "HTEL": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Hydraulics",
+      "nicheTags": []
+    },
+    "INDOMIM": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Engineering Light General",
+      "nicheTags": []
+    },
+    "JNPR": {
+      "sector": "Power Generation and Distribution",
+      "industry": "Power Generation and Distribution",
+      "nicheTags": []
+    },
+    "JSIPL": {
+      "sector": "Steel",
+      "industry": "Steel - Tubes / Pipes",
+      "nicheTags": []
+    },
+    "KANOHAR": {
+      "sector": "Capital Goods Electrical Equipment",
+      "industry": "Capital Goods Transformers",
+      "nicheTags": []
+    },
+    "KARAMTARA": {
+      "sector": "Capital Goods Electrical Equipment",
+      "industry": "Transmission Line Towers and Equipment",
+      "nicheTags": []
+    },
+    "KNACK": {
+      "sector": "Packaging",
+      "industry": "Packaging FMCG and Consumers",
+      "nicheTags": []
+    },
+    "KSR": {
+      "sector": "Leather",
+      "industry": "Leather and Synthetic Footwear",
+      "nicheTags": []
+    },
+    "KUSUMGAR": {
+      "sector": "Textiles",
+      "industry": "Textiles Manmade PFY and PSF",
+      "nicheTags": []
+    },
+    "LALITHAA": {
+      "sector": "Diamond Gems and Jewellery",
+      "industry": "Diamond Gems and Jewellery",
+      "nicheTags": []
+    },
+    "LASERPOWER": {
+      "sector": "Cables",
+      "industry": "Cables Power",
+      "nicheTags": []
+    },
+    "LCCPROJECT": {
+      "sector": "Infrastructure Developers and Operators",
+      "industry": "Construction Civil and Turnkey",
+      "nicheTags": []
+    },
+    "LCL": {
+      "sector": "Engineering",
+      "industry": "Textile Machinery",
+      "nicheTags": []
+    },
+    "LEAPIND": {
+      "sector": "Logistics & Cargo",
+      "industry": "Supply Chain Asset Pooling",
+      "nicheTags": [
+        "Pallet Pooling",
+        "Returnable Packaging"
+      ]
+    },
+    "LUMINO": {
+      "sector": "Infrastructure Developers and Operators",
+      "industry": "Engineering Turnkey Services",
+      "nicheTags": []
+    },
+    "MANIKA": {
+      "sector": "Plastic Products",
+      "industry": "Plastics Others",
+      "nicheTags": []
+    },
+    "MANIPALHOS": {
+      "sector": "Healthcare",
+      "industry": "Hospitals",
+      "nicheTags": []
+    },
+    "MBECL": {
+      "sector": "Infrastructure Developers and Operators",
+      "industry": "Engineering Turnkey Services",
+      "nicheTags": []
+    },
+    "MILKYMIST": {
+      "sector": "FMCG",
+      "industry": "FMCG Dairy Products",
+      "nicheTags": []
+    },
+    "MOLBIO": {
+      "sector": "Healthcare",
+      "industry": "Medical Equipment",
+      "nicheTags": []
+    },
+    "MOMSBELIEF": {
+      "sector": "Healthcare Services",
+      "industry": "Pediatric Developmental Care",
+      "nicheTags": [
+        "Autism Care",
+        "Child Healthcare"
+      ]
+    },
+    "MONEYVIEW": {
+      "sector": "E-Commerce/App based Aggregator",
+      "industry": "Computers - Software - Medium / Small",
+      "nicheTags": []
+    },
+    "MPIMANIPAL": {
+      "sector": "IT Software",
+      "industry": "IT Services",
+      "nicheTags": []
+    },
+    "MVELECTRO": {
+      "sector": "Consumer Durables",
+      "industry": "Electronics Power Devices and Equipment",
+      "nicheTags": []
+    },
+    "NITYAS": {
+      "sector": "Diamond, Gems and Jewellery",
+      "industry": "Diamond Cutting / Jewellery - Medium / Small",
+      "nicheTags": []
+    },
+    "ORIENTCABL": {
+      "sector": "Cables",
+      "industry": "Cables - Telephone",
+      "nicheTags": []
+    },
+    "PERNIASPOP": {
+      "sector": "Retail",
+      "industry": "Luxury Fashion E-commerce",
+      "nicheTags": [
+        "Fashion",
+        "Lifestyle"
+      ]
+    },
+    "PRANAV": {
+      "sector": "Construction",
+      "industry": "Construction Housing",
+      "nicheTags": []
+    },
+    "PRASOLCHEM": {
+      "sector": "Chemicals",
+      "industry": "Specialty Chemicals",
+      "nicheTags": []
+    },
+    "PRIORITY": {
+      "sector": "Diamond Gems and Jewellery",
+      "industry": "Diamond Gems and Jewellery",
+      "nicheTags": []
+    },
+    "RAMBHAJO": {
+      "sector": "Diamond Gems and Jewellery",
+      "industry": "Diamond Gems and Jewellery",
+      "nicheTags": []
+    },
+    "RENTOMOJO": {
+      "sector": "Retail",
+      "industry": "Consumer Rental & Subscription Platform",
+      "nicheTags": [
+        "Furniture Rental",
+        "Appliances"
+      ]
+    },
+    "RUNWALENTR": {
+      "sector": "Realty",
+      "industry": "Construction - Housing - Medium / Small",
+      "nicheTags": []
+    },
+    "SBIFUNDS": {
+      "sector": "Finance",
+      "industry": "Finance AMC",
+      "nicheTags": []
+    },
+    "SHAHINVEST": {
+      "sector": "Stock/ Commodity Brokers",
+      "industry": "Securities/Commodities Trading Services",
+      "nicheTags": []
+    },
+    "SHANKESH": {
+      "sector": "Diamond Gems and Jewellery",
+      "industry": "Diamond Gems and Jewellery",
+      "nicheTags": []
+    },
+    "SKFINDUS": {
+      "sector": "Bearings",
+      "industry": "Bearings",
+      "nicheTags": []
+    },
+    "SKYWAYS": {
+      "sector": "Logistics",
+      "industry": "Miscellaneous",
+      "nicheTags": []
+    },
+    "SONA": {
+      "sector": "Textiles",
+      "industry": "Textiles - Spinning - Synthetic / Blended",
+      "nicheTags": []
+    },
+    "SRIT": {
+      "sector": "IT - Software",
+      "industry": "Computers - Software - Medium / Small",
+      "nicheTags": []
+    },
+    "SSRETAIL": {
+      "sector": "Retail",
+      "industry": "Trading - Medium / Small",
+      "nicheTags": []
+    },
+    "STEAMHOUSE": {
+      "sector": "Utilities",
+      "industry": "Industrial Steam & Gas Distribution",
+      "nicheTags": [
+        "Industrial Utilities",
+        "Nitrogen"
+      ]
+    },
+    "SUNSHINE": {
+      "sector": "Entertainment",
+      "industry": "Entertainment Electronic Media",
+      "nicheTags": []
+    },
+    "SWASTIKAIN": {
+      "sector": "Power Infrastructure",
+      "industry": "Engineering - Turnkey Services",
+      "nicheTags": []
+    },
+    "SYMBIOTEC": {
+      "sector": "Pharmaceuticals",
+      "industry": "Pharma API",
+      "nicheTags": []
+    },
+    "TECHNOCRAF": {
+      "sector": "Infrastructure Developers and Operators",
+      "industry": "Construction Civil and Turnkey",
+      "nicheTags": []
+    },
+    "TEMPSENS": {
+      "sector": "Engineering",
+      "industry": "Engineering Light General",
+      "nicheTags": []
+    },
+    "TENNIND": {
+      "sector": "Auto Ancillaries",
+      "industry": "Auto Others",
+      "nicheTags": []
+    },
+    "TRIVENIPT": {
+      "sector": "Engineering",
+      "industry": "Engineering - Heavy - General - Medium / Small",
+      "nicheTags": []
+    },
+    "TURTLEMINT": {
+      "sector": "Insurance",
+      "industry": "Insurance Distribution",
+      "nicheTags": []
+    },
+    "UTLSOLAR": {
+      "sector": "Capital Goods Electrical Equipment",
+      "industry": "Electric Equipment General",
+      "nicheTags": []
+    },
+    "VARMORA": {
+      "sector": "Ceramic Products",
+      "industry": "Ceramics - Tiles",
+      "nicheTags": []
+    },
+    "VEEGALAND": {
+      "sector": "Realty",
+      "industry": "Realty Regional",
+      "nicheTags": []
+    },
+    "VNL": {
+      "sector": "Infrastructure Developers & Operators",
+      "industry": "Construction - Civil / Turnkey - Large",
+      "nicheTags": []
+    },
+    "WAAREEINDO": {
+      "sector": "Capital Goods Electrical Equipment",
+      "industry": "Electric Equipment General",
+      "nicheTags": []
+    },
+    "XTRANET": {
+      "sector": "IT Software",
+      "industry": "IT Services",
+      "nicheTags": []
+    }
   },
   "nicheAssignments": {
     "AUGMONT": {
-      "tags": ["Bullion Trading", "Precious Metals Refining", "Digital Gold Platform"],
+      "tags": [
+        "Bullion Trading",
+        "Precious Metals Refining",
+        "Digital Gold Platform"
+      ],
       "exposure": "direct",
       "reviewedOn": "2026-10-15",
-      "sourceUrls": ["https://www.augmont.com/investors/augmont"]
+      "sourceUrls": [
+        "https://www.augmont.com/investors/augmont"
+      ]
     },
     "RAJESHEXPO": {
-      "tags": ["Bullion Trading", "Precious Metals Refining"],
+      "tags": [
+        "Bullion Trading",
+        "Precious Metals Refining"
+      ],
       "exposure": "direct",
       "reviewedOn": "2026-10-15",
-      "sourceUrls": ["https://rajeshindia-production.s3.amazonaws.com/uploads/annual_report/file/86/REL_Annaul_Report_2026.pdf"]
+      "sourceUrls": [
+        "https://rajeshindia-production.s3.amazonaws.com/uploads/annual_report/file/86/REL_Annaul_Report_2026.pdf"
+      ]
     },
     "AUSOMENT": {
-      "tags": ["Bullion Trading", "Precious Metals Refining (JV)"],
+      "tags": [
+        "Bullion Trading",
+        "Precious Metals Refining (JV)"
+      ],
       "exposure": "mixed",
       "reviewedOn": "2026-10-15",
       "sourceUrls": [
@@ -123,16 +542,24 @@
       ]
     },
     "ABANSENT": {
-      "tags": ["Bullion Trading"],
+      "tags": [
+        "Bullion Trading"
+      ],
       "exposure": "direct",
       "reviewedOn": "2026-10-15",
-      "sourceUrls": ["https://abansenterprises.com/assets/Files/AEL%20Annual%20Report%202024-25.pdf"]
+      "sourceUrls": [
+        "https://abansenterprises.com/assets/Files/AEL%20Annual%20Report%202024-25.pdf"
+      ]
     },
     "MMTC": {
-      "tags": ["Precious Metals Refining (JV)"],
+      "tags": [
+        "Precious Metals Refining (JV)"
+      ],
       "exposure": "joint_venture",
       "reviewedOn": "2026-10-15",
-      "sourceUrls": ["https://www.commerce.gov.in/ministryofcommerce/sites/default/files/2026-04/Annual_0.pdf"]
+      "sourceUrls": [
+        "https://www.commerce.gov.in/ministryofcommerce/sites/default/files/2026-04/Annual_0.pdf"
+      ]
     }
   },
   "reviewQueue": {
@@ -144,6 +571,74 @@
     "NEUEON": {
       "status": "needs_review",
       "reason": "Current company presentation describes a venture studio while recent exchange material identifies manufacturing; do not infer a primary classification until the operating segment is confirmed."
+    }
+  },
+  "reviewedOverrides": {
+    "RAYMOND": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Precision Engineering and Aerospace Components",
+      "sourceUrl": "https://api.raymond.in/uploads/investor/1747065722517Financial%20Results%20with%20Press%20Release%20Q4%20FY25%20%E2%80%93%20May%2012%2C%202025.pdf",
+      "reviewedOn": "2026-10-25"
+    },
+    "KENNAMET": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Cutting Tools and Machine Tools",
+      "sourceUrl": "https://www.in.investors.kennametal.com/",
+      "reviewedOn": "2026-10-25"
+    },
+    "VIMTALABS": {
+      "sector": "Healthcare",
+      "industry": "Contract Research and Testing",
+      "sourceUrl": "https://vimta.com/wp-content/uploads/Annual-Report-2024-25.pdf",
+      "reviewedOn": "2026-10-25"
+    },
+    "LUMAXIND": {
+      "sector": "Auto Ancillaries",
+      "industry": "Auto Lighting",
+      "sourceUrl": "https://www.lumaxworld.in/lumaxindustries/overview.html",
+      "reviewedOn": "2026-10-25"
+    },
+    "AZADIND": {
+      "sector": "Automobile",
+      "industry": "Electric Buses",
+      "sourceUrl": "https://azadindiamobility.com/about-us/",
+      "reviewedOn": "2026-10-25"
+    },
+    "BONFIG": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Industrial Gearboxes and Drives",
+      "sourceUrl": "https://www.bonfiglioli.in/en",
+      "reviewedOn": "2026-10-25"
+    },
+    "FUSIONCX": {
+      "sector": "IT Software",
+      "industry": "IT Enabled Services and BPO",
+      "sourceUrl": "https://www.fusioncx.com/about/",
+      "reviewedOn": "2026-10-25"
+    },
+    "HDFIRE": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Fire Protection Equipment",
+      "sourceUrl": "https://www.hdfire.com/about-us/",
+      "reviewedOn": "2026-10-25"
+    },
+    "SMT": {
+      "sector": "Healthcare",
+      "industry": "Medical Equipment",
+      "sourceUrl": "https://www.smtpl.com/sites/default/files/2024-12/About%20SMT.pdf",
+      "reviewedOn": "2026-10-25"
+    },
+    "TONBO": {
+      "sector": "Aerospace and Defence",
+      "industry": "Aerospace and Defence Equipment",
+      "sourceUrl": "https://tonboimaging.com/defense/",
+      "reviewedOn": "2026-10-25"
+    },
+    "ZETWERK": {
+      "sector": "Capital Goods Non Electrical Equipment",
+      "industry": "Diversified Manufacturing Services",
+      "sourceUrl": "https://www.zetwerk.com/",
+      "reviewedOn": "2026-10-25"
     }
   }
 }

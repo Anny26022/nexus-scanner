@@ -5,8 +5,12 @@ import { screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
 import {etfGroups} from '../data/etfFields';
 import {extendedMetrics} from '../data/extendedMetrics';
+import {CLASSIFICATION_FILTERS, classificationLabels, isClassificationFilter, validateClassification, type ThemeClassification} from '../data/classification';
 
-export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
+export interface SnapshotSource {
+  revision: string; url: string; sessionDate?: string;
+  classificationUrl?: string; classificationVersion?: string;
+}
 import type {FilterChoices} from '../types/filterChoices';
 export type {FilterChoices} from '../types/filterChoices';
 export type SnapshotTask =
@@ -47,6 +51,8 @@ async function readSnapshot(source: SnapshotSource, signal?: AbortSignal): Promi
 export function createSnapshotEngine(loader = readSnapshot) {
   const snapshots = new Map<string, Snapshot>();
   const financialHistories = new Map<string, Promise<Record<string, FinancialHistory>>>();
+  const classifications = new Map<string, Promise<ThemeClassification>>();
+  const classifiedSnapshots = new WeakMap<Snapshot, {url:string; data:Snapshot}>();
 
   interface Subscriber {
     signal?: AbortSignal;
@@ -163,9 +169,37 @@ export function createSnapshotEngine(loader = readSnapshot) {
       }
       return {type:'financialHistory', result:(await history)[task.symbol] ?? null};
     }
-    const data = await load(task.source, signal);
+    let data = await load(task.source, signal);
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     if (task.type === 'warm') return {type:'warm'};
+    const classificationRequired = (node: ScreenerRunRequest['expressionTree']): boolean =>
+      node.type === 'condition' ? isClassificationFilter(node.condition.conditionId) : node.children.some(classificationRequired);
+    if (task.source.classificationUrl && (task.type === 'filterChoices'
+        || task.type === 'screen' && classificationRequired(task.request.expressionTree))) {
+      const url = task.source.classificationUrl;
+      const joined = classifiedSnapshots.get(data);
+      if (joined && joined.data.classificationVersion !== task.source.classificationVersion) throw new Error('Classification release mismatch');
+      if (joined?.url === url) data = joined.data;
+      else {
+        let pending = classifications.get(url);
+        if (!pending) {
+          pending = getIpoJson<ThemeClassification>(url, 'Classifications');
+          classifications.set(url, pending);
+          if (classifications.size > 3) classifications.delete(classifications.keys().next().value!);
+          pending.catch(() => { if (classifications.get(url) === pending) classifications.delete(url); });
+        }
+        const taxonomy = await pending;
+        if (taxonomy.version !== task.source.classificationVersion || taxonomy.asOfDate !== data.asOfDate
+            || taxonomy.schemaVersion !== 2 || data.classificationVersion !== taxonomy.version) throw new Error('Classification release mismatch');
+        validateClassification(taxonomy, data.totalStocks);
+        if (data.stocks.some(stock => !Object.hasOwn(taxonomy.records, stock.symbol))) throw new Error('Classification security universe mismatch');
+        const classified = {...data, classificationNodes:taxonomy.nodes,
+          stocks:data.stocks.map(stock => ({...stock, classification:taxonomy.records[stock.symbol]}))};
+        classifiedSnapshots.set(data, {url, data:classified});
+        data = classified;
+      }
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    }
     if (task.type === 'filterChoices') {
       const fields = {SECTOR:'sector', INDUSTRY:'industry', SERIES:'series', PRICE_BAND:'circuitLimit', INDEX_MEMBERSHIP:'indexMemberships'} as const;
       const result: FilterChoices = Object.fromEntries(Object.entries(fields).map(([id, field]) => {
@@ -178,6 +212,11 @@ export function createSnapshotEngine(loader = readSnapshot) {
         }
         return [id, [...values.values()].sort((a,b) => a.localeCompare(b))];
       })) as Record<keyof typeof fields, string[]>;
+      for (const [id, level] of Object.entries(CLASSIFICATION_FILTERS)) {
+        if (!data.stocks.some(stock => stock.classification)) continue;
+        result[id as keyof typeof CLASSIFICATION_FILTERS] = [...new Set(data.stocks.flatMap(stock =>
+          classificationLabels(stock, stock.classification, level)))].sort((a, b) => a.localeCompare(b));
+      }
       if (data.assetType === 'etf') {
         result.ETF_FIELDS = [];
         result.ETF_VALUES = {};

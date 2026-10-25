@@ -13,6 +13,7 @@ import { useMountEffect } from '../hooks/useMountEffect';
 import { useTableWindow } from '../hooks/useTableWindow';
 import { Button } from './Button';
 import { SymbolWithLogo } from './SymbolWithLogo';
+import {joinCompanyClassification} from '../data/classification';
 
 const crore = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
 const day = (date: string, options: Intl.DateTimeFormatOptions = {day: 'numeric', month: 'short'}) =>
@@ -40,7 +41,7 @@ const sessionOf = (record: EarningsRecord): Session | null => {
   return record.timing === 'Before' ? 'before' : record.timing === 'During' ? 'during' : record.timing === 'After' ? 'after' : null;
 };
 type Lens = 'grade' | GroupBy;
-const LENSES: [Lens, string][] = [['grade', 'Grade'], ...(['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const)
+const LENSES: [Lens, string][] = [['grade', 'Grade'], ...(['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro', 'cohort', 'aggregate'] as const)
   .map(level => [level, GROUP_LABEL[level]] as [Lens, string])];
 
 type SortKey = 'filing_day' | 'quality' | 'revenue_yoy' | 'pat_yoy' | 'eps_yoy' | 'post_earnings_pct';
@@ -241,7 +242,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
   const classification = useMemo(() => {
     const map = new Map<string, Classification>();
     for (const row of directory.data ?? []) map.set(row.symbol, {sector: row.sector, industry: row.industry});
-    for (const [symbol, record] of Object.entries(themes.data?.records ?? {})) map.set(symbol, {...map.get(symbol), theme: record.theme, subIndustry: record.subIndustry, block: record.block, macro: record.macro});
+    for (const [symbol, record] of Object.entries(themes.data?.records ?? {})) map.set(symbol, joinCompanyClassification(map.get(symbol), record));
     return map;
   }, [directory.data, themes.data]);
 
@@ -278,8 +279,9 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
     .reduce((sum, [, rows]) => sum + rows.filter(matches).length, 0);
 
   const classify = (symbol: string) => classification.get(symbol);
+  const classificationError = lens !== 'grade' ? directory.error ?? (THEME_LEVELS.has(lens) ? themes.error : null) : null;
   const classifying = lens !== 'grade' && (directory.isPending || (THEME_LEVELS.has(lens) && themes.isPending));
-  const facets: Facet[] = classifying ? [] : lens !== 'grade' ? groupRecords(base, lens, classify)
+  const facets: Facet[] = classifying || classificationError ? [] : lens !== 'grade' ? groupRecords(base, lens, classify)
     : scheduleMode ? TIERS.map(([label]) => ({label, records: base.filter(row => tierOf(row) === label), medianPatYoy: null})).filter(facet => facet.records.length)
     : QUALITY_ORDER.map(grade => {
       const rows = base.filter(row => row.quality === grade);
@@ -350,7 +352,11 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
               {LENSES.map(([value, label]) => <option key={value} value={value}>{value === 'grade' && scheduleMode ? 'Size' : label}</option>)}
             </select><ChevronDown size={12} aria-hidden="true" /></span>
         </label>
-        {classifying ? <p className="ep-lens-state" role="status">Loading classification…</p>
+        {['theme', 'block', 'macro', 'aggregate'].includes(lens) && <p className="ep-lens-state">Groups can overlap. Each company counts once per group.</p>}
+        {classificationError ? <p className="ep-lens-state" role="alert">Classifications could not load. <button type="button" onClick={() => {
+          void directory.refetch();
+          if (THEME_LEVELS.has(lens)) void themes.refetch();
+        }}>Retry</button></p> : classifying ? <p className="ep-lens-state" role="status">Loading classification…</p>
           : <ul className="ep-facets">
             {facets.map(facet => <li key={facet.label}>
               <button type="button" aria-pressed={focus === facet.label} data-grade={facet.grade?.toLowerCase()}

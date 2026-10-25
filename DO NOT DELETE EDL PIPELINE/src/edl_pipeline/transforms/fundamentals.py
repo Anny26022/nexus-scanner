@@ -37,6 +37,11 @@ def load_taxonomy_overrides():
             "industry": entry.get("industry") or prior.get("industry"),
             "niche_tags": prior.get("niche_tags", []),
         }
+    # Explicit current-business reviews supersede an older pinned extract.
+    for symbol, entry in manual.get("reviewedOverrides", {}).items():
+        prior = overrides.get(symbol, {})
+        overrides[symbol] = {"sector": aliases.get(entry["sector"], entry["sector"]),
+                             "industry": entry["industry"], "niche_tags": prior.get("niche_tags", [])}
     return overrides, aliases, manual["nicheAssignments"]
 
 def get_float(value_str):

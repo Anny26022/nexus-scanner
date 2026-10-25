@@ -486,6 +486,8 @@ export default function RotationTab({
         {/* Title & View Switcher */}
         <div className="flex items-center gap-3">
           <h1 className="text-base font-bold tracking-tight text-text">Rotation</h1>
+          {index.data?.priceAsOfDate && index.data.priceAsOfDate !== index.data.asOfDate &&
+            <span className="text-xs text-muted">Prices through {index.data.priceAsOfDate}</span>}
 
           <div className="inline-flex rounded-lg border border-line bg-field p-0.5" role="tablist" aria-label="View">
             <button

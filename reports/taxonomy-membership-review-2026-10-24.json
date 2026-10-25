@@ -1,0 +1,3429 @@
+{
+  "reviewedAtUtc": "2026-10-24T16:59:58.983012+00:00",
+  "commit": "502104c7bd243d9d6d90a16b30c7144ecd65c573",
+  "scope": "Local checkout and current code recomputed against checked-in snapshot; production deployment not verified",
+  "releaseRevision": "97d357ce2b2079015853849c162eb21144b400e342ba8ddac9616d8d528e589a",
+  "sessionDate": "2026-10-23",
+  "totalStocks": 2612,
+  "versions": {
+    "currentManifest": "7ef33bbeee16e23184e5aa7fc67c6c12336fccd34c2f83ab7c4a5ba5330385e4",
+    "releaseManifest": "7ef33bbeee16e23184e5aa7fc67c6c12336fccd34c2f83ab7c4a5ba5330385e4",
+    "storedThemeAsset": "598e78dbc5c25206a25faa34f963da489eb078862792e7bf9874bec8cd611147",
+    "consolidatedAsset": "7ef33bbeee16e23184e5aa7fc67c6c12336fccd34c2f83ab7c4a5ba5330385e4",
+    "currentClassifier": "c01390185dd33246ffebdf9269ca1e663d5b39825a3ab6bb4af346ea3fd6f916"
+  },
+  "source": {
+    "fields": [
+      "symbol",
+      "sector",
+      "industry",
+      "theme",
+      "sub_industry",
+      "provenance",
+      "curatedThemes"
+    ],
+    "blocks": 28,
+    "themeNodes": 313,
+    "mirrorNodes": 93,
+    "multiMembershipNodes": [
+      "India Data-Centre Buildout",
+      "IPO / Young Bases",
+      "Precision Engineering & Complex Manufacturing",
+      "Pharma CDMO & Complex Manufacturing",
+      "Emerging EMS"
+    ],
+    "macros": 6,
+    "sourceRows": 3410,
+    "metadata": {
+      "url": "https://www.nexusjournal.co.in/deep_niche_thematic_segregation.json",
+      "commit": "b5fa77c715c12e4a0d557cd63001c46a8c64b928",
+      "deployment": "new-nexys-ultimate-kxr0wy92c.vercel.app",
+      "asOf": "2026-08-04T13:19:20.505538Z",
+      "sha256": "530eea383f5af6bc885030f98d8318e9d8a6d4d4bf03fb8af7a2993ebee599ea",
+      "bytes": 1196715,
+      "etag": "W/\"97600c6cb49bdb7ae6ddb228d2283136\"",
+      "lastModified": "Wed, 14 Oct 2026 09:07:34 GMT"
+    }
+  },
+  "currentCode": {
+    "coverage": {
+      "total": 2612,
+      "mapped": 2611,
+      "unmapped": [
+        "ICICILIFE"
+      ]
+    },
+    "businessMapped": 2604,
+    "multiMembershipStockCount": 264,
+    "secondaryMembershipCount": 266,
+    "membershipCountDistribution": {
+      "1": 2347,
+      "2": 262,
+      "0": 1,
+      "3": 2
+    },
+    "secondaryThemeMembers": {
+      "Pharma CDMO & Complex Manufacturing": [
+        "AARTIPHARM",
+        "GLAND",
+        "SENORES",
+        "SHILPAMED"
+      ],
+      "IPO / Young Bases": [
+        "AASTHA",
+        "ACEVECTOR",
+        "ACGL",
+        "ADDIND",
+        "ADROITIND",
+        "ADVIKCA",
+        "AGL",
+        "AGOL",
+        "ALFREDHE",
+        "ALPINETEX",
+        "ALUFLUOR",
+        "AMAL",
+        "AMARJOTHI",
+        "ANNU",
+        "ANSALBU",
+        "AONESTEELS",
+        "APOORVA",
+        "ARCIL",
+        "ARCL",
+        "ARDEE",
+        "ARMEE",
+        "ARYAMAN",
+        "ASIANTNE",
+        "ASSAMENT",
+        "AUGMONT",
+        "AUSTENG",
+        "AVANCE",
+        "AXTEL",
+        "BELDING",
+        "BENARAS",
+        "BLEL",
+        "BLUECLOUDS",
+        "BPLPHARMA",
+        "BRAHMINFRA",
+        "BRIGHTBR",
+        "CFEL",
+        "CGVAK",
+        "CHEMCRUX",
+        "CMLL",
+        "CMRGREEN",
+        "COMPEAU",
+        "CORDELIA",
+        "CPL",
+        "CRAVATEX",
+        "CRSL",
+        "CSM",
+        "DEEP",
+        "DEEPA",
+        "DHABRIYA",
+        "DHATRE",
+        "DHOOTTRANS",
+        "DSKULKARNI",
+        "EASTWEST",
+        "EBIX",
+        "ECORECO",
+        "EKI",
+        "ELEVATE",
+        "EMPIND",
+        "ENKEIWHEL",
+        "ESDS",
+        "FREDUN",
+        "GAJA",
+        "GERMAN",
+        "GKB",
+        "GLASSWALL",
+        "GSPLTRANS",
+        "GYFTR",
+        "HAMPTON",
+        "HAZOOR",
+        "HBPOR",
+        "HEROMOTORS",
+        "HEXAGON",
+        "HINDADH",
+        "HINDALUMI",
+        "HORIZONIND",
+        "HRYNSHP",
+        "HTEL",
+        "IIRM",
+        "INDOKEM",
+        "INDOMIM",
+        "IPRINGLTD",
+        "ISTLTD",
+        "ITL",
+        "JENBURPH",
+        "JNPR",
+        "JSIPL",
+        "JYOTIRES",
+        "KAMANWALA",
+        "KANOHAR",
+        "KARAMTARA",
+        "KDGREEN",
+        "KJMCFIN",
+        "KMCSHIL",
+        "KNACK",
+        "KSE",
+        "KUSUMGAR",
+        "LADDERUP",
+        "LAKSHMIMIL",
+        "LALITHAA",
+        "LASERPOWER",
+        "LCCPROJECT",
+        "LCL",
+        "LEAPIND",
+        "LEENEE",
+        "LKPSEC",
+        "LOTUSCHO",
+        "LUMINO",
+        "MAKERSL",
+        "MANIKA",
+        "MANIPALHOS",
+        "MEDICAPQ",
+        "MERCURYEV",
+        "MIIL",
+        "MILKYMIST",
+        "MINALIND",
+        "MKEXIM",
+        "MLKFOOD",
+        "MOHITE",
+        "MOLBIO",
+        "MOMSBELIEF",
+        "MONEYVIEW",
+        "MPDL",
+        "MPIMANIPAL",
+        "MSL",
+        "MVELECTRO",
+        "MYSORPETRO",
+        "NEAGI",
+        "NICCOPAR",
+        "NITYAS",
+        "NTCIND",
+        "ODYCORP",
+        "ONEGLOBAL",
+        "ONIXSOLAR",
+        "OPTIFIN",
+        "ORIENTCABL",
+        "ORIRAIL",
+        "PANCHMAHQ",
+        "PANORAMA",
+        "PARNAXLAB",
+        "PBMPOLY",
+        "PERMAGN",
+        "PERNIASPOP",
+        "PHOENXINTL",
+        "POEL",
+        "POLYSPIN",
+        "PRANAV",
+        "PRASOLCHEM",
+        "PRIORITY",
+        "PRISMX",
+        "RAMBHAJO",
+        "RENTOMOJO",
+        "RIR",
+        "RRECL",
+        "RTSPOWR",
+        "RUNWALENTR",
+        "SAICAPI",
+        "SAMBANDAM",
+        "SAYAJIIND",
+        "SBIFUNDS",
+        "SEKURITIND",
+        "SGLRES",
+        "SGRL",
+        "SHAHINVEST",
+        "SHANKESH",
+        "SHILGRAVQ",
+        "SHIPROCKET",
+        "SHIVAAGRO",
+        "SHIVACEM",
+        "SHRADDHA",
+        "SHRJAGP",
+        "SHUKRAPHAR",
+        "SIEL",
+        "SIMPLXREA",
+        "SKYWAYS",
+        "SONA",
+        "SONAL",
+        "SRIKPRIND",
+        "SRIT",
+        "SSRETAIL",
+        "STEAMHOUSE",
+        "STLSTRINF",
+        "SUMEDHA",
+        "SUNLOC",
+        "SUNRAKSHAK",
+        "SUNSHIEL",
+        "SUNSHINE",
+        "SUPTANERY",
+        "SVGLOBAL",
+        "SWARNSAR",
+        "SWASTIKAIN",
+        "SWISSMLTRY",
+        "SYMBIOTEC",
+        "TANAA",
+        "TECHNOCRAF",
+        "TEMPSENS",
+        "TERAI",
+        "TGVSL",
+        "TOYAMSL",
+        "TRANSCOR",
+        "TRITONV",
+        "TRIVENIPT",
+        "TURTLEMINT",
+        "TUTIALKA",
+        "UDAYJEW",
+        "UPHOT",
+        "VADILENT",
+        "VAML",
+        "VARMORA",
+        "VEDAVAAG",
+        "VEDPOWER",
+        "VEEGALAND",
+        "VGCL",
+        "VIJSOLX",
+        "VIRAT",
+        "VIRTUALG",
+        "VISL",
+        "VIVOBIOT",
+        "VNL",
+        "VOEPL",
+        "VOGL",
+        "VOITHPAPR",
+        "VTMLTD",
+        "WARDINMOBI",
+        "WHBRADY",
+        "XTRANET",
+        "YOGI"
+      ],
+      "Precision Engineering & Complex Manufacturing": [
+        "AEQUS",
+        "AZAD",
+        "BALUFORGE",
+        "DYNAMATECH",
+        "GALAPREC",
+        "HAPPYFORGE",
+        "INDOMIM",
+        "JYOTICNC",
+        "KDDL",
+        "MACPOWER",
+        "MTARTECH",
+        "OMNI",
+        "PTCIL",
+        "RATNAVEER",
+        "SANSERA",
+        "SONACOMS",
+        "UNIMECH"
+      ],
+      "India Data-Centre Buildout": [
+        "AEROFLEX",
+        "ANANTRAJ",
+        "BBOX",
+        "CEMPRO",
+        "E2E",
+        "FINCABLES",
+        "HFCL",
+        "KRN",
+        "MTARTECH",
+        "NETWEB",
+        "RRKABEL",
+        "SETL",
+        "STLTECH",
+        "TDPOWERSYS",
+        "TECHNOE"
+      ],
+      "Emerging EMS": [
+        "AVALON",
+        "CYIENTDLM",
+        "SYRMA",
+        "TATATECH"
+      ]
+    },
+    "primaryOnlyCohortMembers": [
+      "AZADIND",
+      "BONFIG",
+      "FUSIONCX",
+      "HDFIRE",
+      "SMT",
+      "TONBO",
+      "ZETWERK"
+    ],
+    "primaryThemeCounts": {
+      "Industrial Minerals": 11,
+      "Capital Market Intern.": 11,
+      "Brokerage & Wealth": 31,
+      "Diagnostic & Lab Services": 10,
+      "Enterprise IT Services": 34,
+      "Diversified Conglomerates": 11,
+      "Commercial & Diversified": 44,
+      "Industrial EPC & Turnkey": 11,
+      "HR, Staffing & Training": 10,
+      "Housing Finance": 20,
+      "Oil Equip & Offshore": 12,
+      "Pharma": 87,
+      "Home Textiles & Furnish": 96,
+      "Industrial Products": 16,
+      "Industrial Electrical Systems": 20,
+      "Chemical Intermediates & Organics": 42,
+      "BPO & Specialized Services": 20,
+      "Spinning & Yarn Processing": 17,
+      "Commodity Trading": 13,
+      "Transformers & Switchgears": 11,
+      "Investment & Holding": 54,
+      "Alcoholic Beverages": 18,
+      "Apparel Brands & Retail": 17,
+      "Civil Construction EPC": 31,
+      "IT Products": 10,
+      "Stationery & Paper": 28,
+      "Asset Management": 13,
+      "Cement": 30,
+      "Logistics": 41,
+      "Construction & Earthmoving": 3,
+      "Internet & E-Commerce": 1,
+      "Chassis & Metal Parts": 67,
+      "Inorganic Specialty Chemicals": 6,
+      "Power Generation": 23,
+      "IT Enabled Services": 5,
+      "Life Sciences Ingredients & CRAMS": 7,
+      "Power Grid & Distribution": 3,
+      "Energy Conglomerate": 2,
+      "Solar & Renewables": 23,
+      "Logistics Infra (Ports/Air)": 6,
+      "Integrated Utilities": 7,
+      "Readymade Garments/ Apparells": 3,
+      "Packaged & Processed Foods": 25,
+      "Wood & Plywood": 10,
+      "Welding & Cryogenics": 6,
+      "Drivetrain & Axles": 5,
+      "Systems Integration & IT Infra": 21,
+      "Cables & Electricals": 14,
+      "Agro Chemicals": 24,
+      "Premium Hotels & Resorts": 32,
+      "Industrial Biotech & Enzymes": 2,
+      "NBFC": 58,
+      "Gas Utilities": 12,
+      "Aerospace & Defense OEM": 25,
+      "Smart Metering & Inst.": 13,
+      "Iron & Steel Products": 22,
+      "Polymers": 12,
+      "Rice & Grain Processing": 24,
+      "EPC / Buildout": 8,
+      "IT Enabled Services (BPM)": 8,
+      "Hospitals": 25,
+      "Speciality Chemicals": 7,
+      "Packaging and Containers": 33,
+      "Residential Projects": 43,
+      "Jewellery": 41,
+      "Fertilizers": 20,
+      "Fintech": 17,
+      "Furniture & Decor": 9,
+      "Civic & Urban Infra": 3,
+      "Hotels & Resorts": 5,
+      "Pharma - Formulators": 36,
+      "Animal Feed & Seeds": 8,
+      "Building Construction EPC": 11,
+      "Footwear & Leather": 16,
+      "Dyes & Pigments": 13,
+      "Telecom & Network Infra": 18,
+      "PSU Infra Finance": 12,
+      "Castings, Forgings & Fasteners": 15,
+      "Digital Services & BPO": 6,
+      "Houseware & Glass": 8,
+      "Commodity Chemicals": 5,
+      "Media Production & Services": 5,
+      "HVAC & Cooling": 2,
+      "Household & Personal Care": 18,
+      "Alkali Chemicals": 23,
+      "Financial Distributors": 4,
+      "Data Centres": 6,
+      "Tea & Coffee": 17,
+      "Iron & Steel Core": 44,
+      "Coal & Mining": 5,
+      "Upstream": 7,
+      "Process Engineering Equipment": 23,
+      "Industrial Rubber": 8,
+      "Seafood & Meat": 4,
+      "Steel Tubes & Pipes": 14,
+      "Plastic Pipes": 17,
+      "Tyres & Wheels": 13,
+      "Financial Institutions": 11,
+      "Education & EdTech": 15,
+      "Electronic Media & News": 11,
+      "Leisure & Amusement": 2,
+      "Aluminium & Base Metals": 12,
+      "Smart Energy Storage": 1,
+      "EPC - Power & Grid": 8,
+      "Solar EPC": 1,
+      "Tiles": 23,
+      "Premium & Branded Apparel": 12,
+      "Roads & Highways": 13,
+      "Commercial Vehicles": 4,
+      "Paint Manufacturers": 9,
+      "General Trading & Dist.": 24,
+      "2/3 Wheelers": 9,
+      "Transformer Ancillaries": 4,
+      "Small Finance Bank": 9,
+      "Real Estate Services & Platforms": 4,
+      "Sugar": 26,
+      "EMS - Electronics": 6,
+      "Apparel Retail Chains": 11,
+      "Cons. Plastic Products": 8,
+      "Property Allied Services": 6,
+      "Waste Management": 6,
+      "Edible Oil": 13,
+      "Private Sector Bank": 20,
+      "IPO / Young Bases": 7,
+      "Household White Goods": 21,
+      "Public Sector Bank": 12,
+      "Railways": 14,
+      "Building Products & Hardware": 5,
+      "Performance Polymers & Additives": 7,
+      "Road Assets (Tolls/HAM)": 5,
+      "Copper & Specialty Metallurgy": 16,
+      "Telecom Operators": 6,
+      "Rotating Power Equipment": 6,
+      "Specialized Equipment & Retail": 8,
+      "Auto Ancillaries - Diversified": 10,
+      "Tour & Travel Services": 8,
+      "Diversified Metals (VEDL)": 4,
+      "Electronics & Systems": 4,
+      "Oil Refiners": 5,
+      "Consumer Electronics": 14,
+      "Plastics & Polymers": 5,
+      "Packaged Diversified FMCG": 8,
+      "Exchanges & Platforms": 3,
+      "Digital Entertainment": 2,
+      "Market Infrastructure": 2,
+      "Life Insurance": 5,
+      "Enterprise Platforms": 23,
+      "Bearings & Precision": 9,
+      "Ratings & Analytics": 2,
+      "Consumer E-Retail": 9,
+      "Lubricants & Specialty Oils": 7,
+      "Depositories & Clearing": 1,
+      "Geospatial & GovTech Services": 5,
+      "IT Services (Consulting)": 3,
+      "Film Production & Exhibition": 7,
+      "Ship Building & Marine": 7,
+      "Quick Service Rest. (QSR)": 8,
+      "Auto Dealers & Retail": 5,
+      "Packaging Films": 3,
+      "Microfinance": 5,
+      "Media & Entertainment": 9,
+      "Recruitment & Classifieds": 4,
+      "Industrial Pumps & Compressors": 15,
+      "ER&D / Product Software": 9,
+      "Industrial Systems & Controls": 9,
+      "Dairy & Milk Products": 11,
+      "Print & Publication": 9,
+      "Logistics Tech": 2,
+      "Amusement Parks": 3,
+      "Broadcast & Cable Networks": 10,
+      "Refractories": 8,
+      "Water & Effluent Mgmt": 7,
+      "Advertising & Agencies": 5,
+      "Wiring & Cables": 3,
+      "Telecom Equipment": 5,
+      "Hypermarkets & Dept. Stores": 14,
+      "Innerwear Manufacturers": 4,
+      "Analytics & Data Services": 3,
+      "Surface Transport": 1,
+      "Education & E-Learning": 2,
+      "Cigarettes & Tobacco": 6,
+      "Digital Identity & GovTech": 4,
+      "Suspension & Safety": 2,
+      "Grid Equipment & HVDC": 3,
+      "Heath & Pharma Retail": 2,
+      "Pre-Engineered Buildings": 4,
+      "Tractors & Agri": 3,
+      "Shipping": 6,
+      "FoodTech & Q-Commerce": 2,
+      "Batteries & EV": 1,
+      "Pharma - API & CRAMS": 5,
+      "Fluorochemicals": 2,
+      "Passenger Cars": 6,
+      "Vertical & Geospatial SaaS": 3,
+      "General Insurance": 6,
+      "Aviation & Airlines": 3,
+      "Ammunition & Explosives": 3,
+      "E-Learning / EdTech": 5,
+      "Web Content & Connectivity": 2,
+      "Packaging": 4,
+      "Water & Hydro Infra": 7,
+      "Crop Protection": 4,
+      "Packaged Meat": 3,
+      "Machine Tools & Industrial Automation": 8,
+      "Carbon Black": 4,
+      "Sponge & Ferro Alloys": 7,
+      "B2B Marketplaces": 1,
+      "Paper & Packaging": 1,
+      "Metal Pipes": 2,
+      "Precision Components & Tools": 2,
+      "Castings & Forgings": 1,
+      "Engines & Cooling/Seal": 2,
+      "Broad EPC & Civil": 1,
+      "Interior & Plastics": 2,
+      "Personal & Gold Loans": 2,
+      "Hospitals & Diagnostics": 1,
+      "Communications Platforms": 4,
+      "Iron Ore & Mineral Mining": 1,
+      "Electrical Equipment": 2,
+      "Power Trading": 1,
+      "Events & Weddings": 2,
+      "Non-Alcoholic Beverages": 1,
+      "Pharma (Biotech & CRAMS)": 1
+    },
+    "mirrorAsPrimary": {
+      "ACEVECTOR": "Internet & E-Commerce",
+      "ACSTECH": "IT Enabled Services",
+      "ADDIND": "Readymade Garments/ Apparells",
+      "AHLWEST": "Hotels & Resorts",
+      "ALUFLUOR": "Commodity Chemicals",
+      "ARCL": "Commodity Chemicals",
+      "ARMEE": "Solar EPC",
+      "BIMETAL": "Auto Ancillaries - Diversified",
+      "BRIGHTBR": "Plastics & Polymers",
+      "CRSL": "IT Enabled Services",
+      "DEEP": "Plastics & Polymers",
+      "DHABRIYA": "Plastics & Polymers",
+      "EBIX": "Auto Ancillaries - Diversified",
+      "ELEVATE": "Education & E-Learning",
+      "ENKEIWHEL": "Auto Ancillaries - Diversified",
+      "GRAVISSHO": "Hotels & Resorts",
+      "HALDYNGL": "Packaging",
+      "HINDADH": "Plastics & Polymers",
+      "IPRINGLTD": "Auto Ancillaries - Diversified",
+      "ISTLTD": "Auto Ancillaries - Diversified",
+      "IWP": "Paper & Packaging",
+      "KANCHI": "Commodity Chemicals",
+      "LEENEE": "IT Enabled Services",
+      "MANIKA": "Packaging",
+      "MENNPIS": "Auto Ancillaries - Diversified",
+      "MOHITE": "Readymade Garments/ Apparells",
+      "MOMSBELIEF": "Hospitals & Diagnostics",
+      "PERMAGN": "Electrical Equipment",
+      "POLYSPIN": "Packaging",
+      "PRADPME": "Auto Ancillaries - Diversified",
+      "PRAVEG": "Hotels & Resorts",
+      "RTSPOWR": "Electrical Equipment",
+      "SAYAJIHOTL": "Hotels & Resorts",
+      "SGLRES": "IT Enabled Services",
+      "SHRJAGP": "Packaging",
+      "SRIKPRIND": "Plastics & Polymers",
+      "TRANSPEK": "Commodity Chemicals",
+      "TRITONV": "Auto Ancillaries - Diversified",
+      "TUTIALKA": "Commodity Chemicals",
+      "UPHOT": "Hotels & Resorts",
+      "VEDAVAAG": "IT Enabled Services",
+      "VELJAN": "Auto Ancillaries - Diversified",
+      "VIRAT": "Readymade Garments/ Apparells",
+      "VIRTUALG": "Education & E-Learning",
+      "VIVOBIOT": "Pharma (Biotech & CRAMS)",
+      "ZFSTEERING": "Auto Ancillaries - Diversified"
+    },
+    "subIndustryMissing": 1176,
+    "taxonomyIndustryMissing": 245,
+    "macroMissing": 8,
+    "sectorOrIndustryUnclassified": [
+      "AZADIND",
+      "BONFIG",
+      "FUSIONCX",
+      "HDFIRE",
+      "SMT",
+      "TONBO",
+      "ZETWERK"
+    ],
+    "nicheTaggedStocks": [
+      "ABANSENT",
+      "AUGMONT",
+      "AUSOMENT",
+      "BUILDPRO",
+      "CMPDI",
+      "CMRGREEN",
+      "ELEVATE",
+      "GRADIENTE",
+      "HORIZONIND",
+      "LEAPIND",
+      "MMTC",
+      "MOMSBELIEF",
+      "PERNIASPOP",
+      "RAJESHEXPO",
+      "RENTOMOJO",
+      "STEAMHOUSE"
+    ],
+    "ignoredByRotationBecauseOfBasis": []
+  },
+  "storedSnapshot": {
+    "coverage": {
+      "total": 2612,
+      "mapped": 2611,
+      "unmapped": [
+        "ICICILIFE"
+      ]
+    },
+    "multiMembershipStockCount": 103,
+    "primaryCohortCount": 168,
+    "recordDifferencesFromConsolidated": 238,
+    "recordDifferencesFromCurrentCode": 161,
+    "primaryThemeDifferencesFromConsolidated": 168,
+    "membershipSetDifferencesFromConsolidated": 238
+  },
+  "industriesInMultipleSectors": {
+    "Mining and Minerals": {
+      "Mining and Mineral Products": [
+        "20MICRONS",
+        "ASHAPURMIN",
+        "BHARATCOAL",
+        "CMLL",
+        "COALINDIA",
+        "GMDCLTD",
+        "KIOCL",
+        "MOIL",
+        "ORISSAMINE",
+        "SOUTHWEST"
+      ],
+      "Ferro Alloys": [
+        "IMFA"
+      ],
+      "Non Ferrous Metals": [
+        "VEDL"
+      ]
+    },
+    "Finance Capital Markets Wealth Management": {
+      "Stock and Commodity Brokers": [
+        "360ONE",
+        "MOTILALOFS",
+        "NUVAMA"
+      ],
+      "Finance": [
+        "ANANDRATHI"
+      ]
+    },
+    "IT Services": {
+      "IT Software": [
+        "3IINFOLTD",
+        "63MOONS",
+        "AAATECH",
+        "ADROITINFO",
+        "ADSL",
+        "ALANKIT",
+        "AURIONPRO",
+        "BLSE",
+        "BSOFT",
+        "CALSOFT",
+        "CAPILLARY",
+        "COFORGE",
+        "CSM",
+        "CTE",
+        "CURAA",
+        "CYBERTECH",
+        "DATAMATICS",
+        "DEVIT",
+        "DIGISPICE",
+        "DRCSYSTEMS",
+        "DSSL",
+        "EQUIPPP",
+        "ESDS",
+        "EXCELSOFT",
+        "EXPLEOSOL",
+        "FCSSOFT",
+        "GATECH",
+        "GOLDTECH",
+        "GSS",
+        "HCLTECH",
+        "HEXT",
+        "INFOBEAN",
+        "INFY",
+        "INNOVANA",
+        "INSPIRISYS",
+        "INTENTECH",
+        "IZMO",
+        "KELLTONTEC",
+        "KSOLVES",
+        "LTM",
+        "MASTEK",
+        "MINDTECK",
+        "MPHASIS",
+        "MPIMANIPAL",
+        "NINSYS",
+        "ORIENTTECH",
+        "QUICKHEAL",
+        "RSSOFTWARE",
+        "RSYSTEMS",
+        "SAKSOFT",
+        "SASKEN",
+        "SECMARK",
+        "SECURKLOUD",
+        "SIGMA",
+        "SILVERTUC",
+        "SOFTTECH",
+        "SONATSOFTW",
+        "SUBEXLTD",
+        "TANLA",
+        "TCS",
+        "TECHM",
+        "TERASOFT",
+        "TRACXN",
+        "TREJHARA",
+        "TRIGYN",
+        "UNIECOM",
+        "VERTOZ",
+        "VIRINCHI",
+        "VLEGOV",
+        "WIPRO",
+        "XCHANGING",
+        "XELPMOC",
+        "XTGLOBAL",
+        "XTRANET",
+        "ZENSARTECH"
+      ],
+      "E-Commerce/App based Aggregator": [
+        "CCAVENUE"
+      ]
+    },
+    "Diversified": {
+      "Diversified": [
+        "3MINDIA",
+        "ANDREWYU",
+        "ASPINWALL",
+        "BALMLAWRIE",
+        "BLUSPRING",
+        "IBULLSLTD",
+        "ICDSLTD",
+        "NAVA",
+        "PRAENG"
+      ],
+      "Alcoholic Beverages": [
+        "BCLIND"
+      ],
+      "Textiles": [
+        "GRASIM",
+        "SWANCORP"
+      ],
+      "Realty": [
+        "TEXINFRA"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "TIINDIA"
+      ]
+    },
+    "Finance Investment and Others": {
+      "Finance": [
+        "3PLAND",
+        "ARCIL",
+        "DELPHIFX",
+        "GAJA",
+        "GANGESSECU",
+        "MASKINVEST",
+        "NDLVENTURE",
+        "ONELIFECAP",
+        "PALASHSECU",
+        "WELINV",
+        "WILLAMAGOR"
+      ],
+      "E-Commerce/App based Aggregator": [
+        "KISSHT"
+      ]
+    },
+    "Finance Capital Markets Brokers": {
+      "Stock and Commodity Brokers": [
+        "5PAISA",
+        "ANGELONE",
+        "ARIHANTCAP",
+        "ARSSBL",
+        "EMKAY",
+        "GEOJITFSL",
+        "GROWW",
+        "IIFLCAPS",
+        "INDOTHAI",
+        "MONARCH",
+        "SMCGLOBAL"
+      ],
+      "Finance": [
+        "CHOICEIN",
+        "SHAREINDIA"
+      ]
+    },
+    "Engineering Turnkey Services": {
+      "Infrastructure Developers and Operators": [
+        "A2ZINFRA",
+        "ATLANTAA",
+        "BAJEL",
+        "DUCON",
+        "EIEL",
+        "HECPROJECT",
+        "IL&FSTRANS",
+        "LUMINO",
+        "MBECL",
+        "SEMAC",
+        "SUPREMEINF"
+      ],
+      "Telecom Equipment and Infra Services": [
+        "PACEDIGITK"
+      ]
+    },
+    "Oil Exploration and Allied Services": {
+      "Oil Drill and Allied": [
+        "AAKASH"
+      ],
+      "Crude Oil and Natural Gas": [
+        "ABAN",
+        "PRABHA",
+        "VOGL"
+      ]
+    },
+    "Trading": {
+      "Trading": [
+        "AAREYDRUGS",
+        "ABMINTLLTD",
+        "ADANIENT",
+        "AKG",
+        "ANIKINDS",
+        "ANMOL",
+        "ARIS",
+        "AUGMONT",
+        "BALKRISHNA",
+        "BMWVENTLTD",
+        "BUILDPRO",
+        "DVL",
+        "ESSENTIA",
+        "FABTECH",
+        "GOYALALUM",
+        "HARDWYN",
+        "JKIPL",
+        "KHAITANLTD",
+        "KRIDHANINF",
+        "LANDSMILL",
+        "MAHESHWARI",
+        "MANAKSIA",
+        "MGEL",
+        "MMTC",
+        "NEUEON",
+        "NRL",
+        "ORIENTALTL",
+        "OSWALAGRO",
+        "PALREDTEC",
+        "PERNIASPOP",
+        "RACE",
+        "SAKUMA",
+        "SHRENIK",
+        "SICAGEN",
+        "SIGIND",
+        "SPCENET",
+        "STCINDIA",
+        "TAINWALCHM",
+        "TPHQ",
+        "UMAEXPORTS",
+        "UNIENTER",
+        "VIKASLIFE"
+      ],
+      "Retail": [
+        "ARCHIES",
+        "OSIAHYPER",
+        "PATELRMART",
+        "PRAXIS",
+        "TEMBO"
+      ],
+      "Steel": [
+        "ASHOKAMET",
+        "SHIVAUM"
+      ],
+      "Diamond Gems and Jewellery": [
+        "AUSOMENT"
+      ],
+      "Textiles": [
+        "BANG",
+        "INDTERRAIN",
+        "LAL",
+        "LEMERITE",
+        "MITTAL",
+        "SIL",
+        "SPLIL",
+        "SSDL",
+        "VCL"
+      ],
+      "Pharmaceuticals": [
+        "BIOFILCHEM"
+      ],
+      "IT Hardware": [
+        "DCI",
+        "IVALUE",
+        "RPTECH"
+      ],
+      "E-Commerce/App based Aggregator": [
+        "DIGIDRIVE",
+        "NURECA"
+      ],
+      "Plywood Boards and Laminates": [
+        "EUROPRATIK"
+      ],
+      "IT Software": [
+        "GVPTECH"
+      ],
+      "Finance": [
+        "HEXATRADEX"
+      ],
+      "Plastic Products": [
+        "PEARLPOLY"
+      ],
+      "Capital Goods Electrical Equipment": [
+        "PROSTARM",
+        "SURANAT&P"
+      ],
+      "Sugar": [
+        "PRUDMOULI"
+      ],
+      "Power Generation and Distribution": [
+        "PTC"
+      ],
+      "Healthcare": [
+        "QMSMEDI"
+      ]
+    },
+    "Engineering Light General": {
+      "Capital Goods Non Electrical Equipment": [
+        "AARON",
+        "ATAM",
+        "INDOMIM"
+      ],
+      "Engineering": [
+        "OMNI",
+        "TEMPSENS"
+      ]
+    },
+    "Specialty Chemicals": {
+      "Chemicals": [
+        "AARTIIND",
+        "AARTISURF",
+        "AETHER",
+        "ALKYLAMINE",
+        "AMAL",
+        "AMNPLST",
+        "ANURAS",
+        "ARVEE",
+        "BALAMINES",
+        "BLACKROSE",
+        "CHEMBOND",
+        "CHEMBONDCH",
+        "CHEMCON",
+        "CHEMCRUX",
+        "CLEAN",
+        "DAICHI",
+        "DDEVPLSTIK",
+        "DIAMINESQ",
+        "DICIND",
+        "DMCC",
+        "ELANTAS",
+        "EPIGRAL",
+        "FCL",
+        "GALAXYSURF",
+        "GEMAROMA",
+        "GRAUWEIL",
+        "HINDCON",
+        "HPAL",
+        "ISHANCH",
+        "JUBLCPL",
+        "JYOTIRES",
+        "KRONOX",
+        "NEOGEN",
+        "NITTAGELA",
+        "PAUSHAKLTD",
+        "PIDILITIND",
+        "PLATIND",
+        "PRASOLCHEM",
+        "PRIVISCL",
+        "ROSSARI",
+        "SEYAIND",
+        "SUDEEPPHRM",
+        "SUNSHIEL",
+        "TATVA",
+        "TIRUMALCHM",
+        "VINATIORGA",
+        "VISHNU",
+        "VITAL",
+        "YASHO"
+      ],
+      "Petrochemicals": [
+        "PANAMAPET"
+      ]
+    },
+    "Miscellaneous": {
+      "Miscellaneous": [
+        "AARVI",
+        "ALPHAGEO",
+        "BANKA",
+        "CMPDI",
+        "CMRGREEN",
+        "CROWN",
+        "DELTACORP",
+        "DHRUV",
+        "FMNL",
+        "GMRAIRPORT",
+        "HORIZONIND",
+        "INNOVISION",
+        "INOXGREEN",
+        "LEAPIND",
+        "MITCON",
+        "MODIRUBBER",
+        "MOMSBELIEF",
+        "PROZONER",
+        "RAMANEWS",
+        "RENTOMOJO",
+        "REPL",
+        "RUCHINFRA",
+        "STEAMHOUSE",
+        "SUPERSPIN",
+        "TRUALT"
+      ],
+      "Logistics": [
+        "ACCURACY",
+        "AEGISVOPAK",
+        "AGL",
+        "GLOTTIS",
+        "OMFREIGHT",
+        "PATINTLOG",
+        "SKYWAYS",
+        "SVLL",
+        "TOTAL"
+      ],
+      "Steel": [
+        "AEROENTER"
+      ],
+      "Entertainment": [
+        "AQYLON",
+        "TOUCHWOOD"
+      ],
+      "Education": [
+        "CPEDU",
+        "GLOBAL",
+        "KEEPLEARN",
+        "SCILAL",
+        "TREEHOUSE"
+      ],
+      "Co Working": [
+        "DEVX",
+        "INDIQUBE"
+      ],
+      "Realty": [
+        "EMBDL",
+        "MOTOGENFIN",
+        "UNITECH"
+      ],
+      "Dry Cells": [
+        "EVEREADY"
+      ],
+      "Finance": [
+        "GKWLIMITED",
+        "JINDALPHOT",
+        "RTNINDIA"
+      ],
+      "Alcoholic Beverages": [
+        "GULPOLY"
+      ],
+      "Plantation and Plantation Products": [
+        "INTLCONV"
+      ],
+      "Plastic Products": [
+        "JAICORPLTD"
+      ],
+      "Healthcare": [
+        "KAYA",
+        "TAKE"
+      ],
+      "FMCG": [
+        "KSCL",
+        "NARMADA",
+        "OSWALSEEDS"
+      ],
+      "Consumer Durables": [
+        "PARIN",
+        "PRITI",
+        "STANLEY"
+      ],
+      "Media Print and Television and Radio": [
+        "RKSWAMY"
+      ],
+      "IT Software": [
+        "SAGILITY"
+      ]
+    },
+    "Textiles Readymade Apparel": {
+      "Retail": [
+        "ABFRL",
+        "ABLBL",
+        "KALAMANDIR",
+        "MUFTI",
+        "STYLEBAAZA",
+        "TRENT",
+        "V2RETAIL",
+        "VMART",
+        "VMM"
+      ],
+      "Trading": [
+        "ARVINDFASN"
+      ],
+      "Textiles": [
+        "CANTABIL",
+        "GOCOLORS",
+        "LUXIND",
+        "MONTECARLO",
+        "RAYMONDLSL",
+        "SBC"
+      ],
+      "Readymade Garments and Apparel": [
+        "CELEBRITY",
+        "GOKEX",
+        "IRISDOREME",
+        "KITEX",
+        "KKCL",
+        "MANYAVAR",
+        "PGIL",
+        "SPAL",
+        "THOMASCOTT",
+        "ZODIACLOTH"
+      ]
+    },
+    "Construction Civil and Turnkey": {
+      "Infrastructure Developers and Operators": [
+        "ABINFRA",
+        "AFCONS",
+        "AKASH",
+        "ANNU",
+        "ATALREAL",
+        "BRNL",
+        "CEIGALL",
+        "DBEIL",
+        "DENTA",
+        "GAYAHWS",
+        "GAYAPROJ",
+        "GLOBECIVIL",
+        "IL&FSENGG",
+        "LCCPROJECT",
+        "MADHUCON",
+        "NIRAJ",
+        "NOIDATOLL",
+        "RKEC",
+        "SADBHAV",
+        "SADBHIN",
+        "SOMATEX",
+        "SRM",
+        "TARMAT",
+        "TECHNOCRAF",
+        "TICL",
+        "UNIVASTU",
+        "USK"
+      ],
+      "Construction": [
+        "BLKASHYAP",
+        "GLASSWALL",
+        "HILINFRA"
+      ]
+    },
+    "Cement": {
+      "Cement": [
+        "ACC",
+        "ACL",
+        "AMBUJACEM",
+        "APCL",
+        "BIRLACORPN",
+        "BURNPUR",
+        "BVCL",
+        "DALBHARAT",
+        "DECCANCE",
+        "HEIDELBERG",
+        "INDIACEM",
+        "JKCEMENT",
+        "JKLAKSHMI",
+        "JSWCEMENT",
+        "KAKATCEM",
+        "KCP",
+        "MANGLMCEM",
+        "NCLIND",
+        "NUVOCO",
+        "ORIENTCEM",
+        "PRSMJOHNSN",
+        "RAMCOCEM",
+        "SAGCEM",
+        "SAURASHCEM",
+        "SHREDIGCEM",
+        "SHREECEM",
+        "STARCEMENT",
+        "ULTRACEMCO"
+      ],
+      "Cement Products": [
+        "BIGBLOC"
+      ],
+      "Miscellaneous": [
+        "RAIN"
+      ],
+      "Construction": [
+        "SHIVACEM"
+      ]
+    },
+    "Capital Goods EPC and Cranes": {
+      "Capital Goods Non Electrical Equipment": [
+        "ACE",
+        "AJAXENGG",
+        "TIL"
+      ],
+      "Miscellaneous": [
+        "SANGHVIMOV"
+      ],
+      "Diversified": [
+        "TARACHAND"
+      ]
+    },
+    "Chemicals Inorganic": {
+      "Chemicals": [
+        "ACI",
+        "AGASTYAEN",
+        "ALKALI",
+        "DEEPAKNTR",
+        "INDOBORAX",
+        "JGCHEM",
+        "SRHHYPOLTD"
+      ],
+      "Miscellaneous": [
+        "GANESHBE"
+      ]
+    },
+    "IT Enabled Services": {
+      "Information Technology": [
+        "ACSTECH",
+        "CRSL",
+        "LEENEE",
+        "PROTEAN",
+        "SGLRES",
+        "VEDAVAAG"
+      ],
+      "IT Software": [
+        "ALLDIGI",
+        "AURUM",
+        "ECLERX",
+        "FSL",
+        "HAPPSTMNDS",
+        "HGS",
+        "IRIS",
+        "LATENTVIEW",
+        "ONEPOINT",
+        "ROUTE",
+        "RPSGVENT"
+      ]
+    },
+    "Power Transmission and Equipment": {
+      "Power Generation and Distribution": [
+        "ADANIENSOL",
+        "POWERGRID"
+      ],
+      "Infrastructure Developers and Operators": [
+        "KEC"
+      ]
+    },
+    "Pesticides and Agrochemicals": {
+      "Agro Chemicals": [
+        "ADVANCE",
+        "ASTEC",
+        "BAYERCROP",
+        "BESTAGRO",
+        "BHAGCHEM",
+        "BHARATRAS",
+        "DHANUKA",
+        "DHARMAJ",
+        "EXCELINDUS",
+        "GSPCROP",
+        "HERANBA",
+        "IGCL",
+        "INSECTICID",
+        "IPL",
+        "MOL",
+        "NACLIND",
+        "PIIND",
+        "PUNJABCHEM",
+        "RALLIS",
+        "SHARDACROP",
+        "SHIVALIK",
+        "SIKKO",
+        "SUMICHEM",
+        "UPL"
+      ],
+      "Chemicals": [
+        "JUBLINGREA"
+      ]
+    },
+    "Seeds and Tissue Culture and Bio Technology": {
+      "Pharmaceuticals": [
+        "ADVENZYMES"
+      ],
+      "FMCG": [
+        "BSHSL",
+        "INDOUS"
+      ]
+    },
+    "Logistics": {
+      "Trading": [
+        "AEGISLOG"
+      ],
+      "Marine Port and Services": [
+        "ATL"
+      ],
+      "Logistics": [
+        "BLACKBUCK",
+        "BLUEDART",
+        "CONCOR",
+        "GATEWAY",
+        "RIIL",
+        "RITCO",
+        "SHADOWFAX",
+        "SICALLOG",
+        "SINDHUTRAD",
+        "TCI",
+        "TREL",
+        "WCIL"
+      ],
+      "Miscellaneous": [
+        "JITFINFRA"
+      ],
+      "E-Commerce/App based Aggregator": [
+        "SHIPROCKET"
+      ]
+    },
+    "Stainless Steel": {
+      "Steel": [
+        "AEROFLEX",
+        "JSL",
+        "RATNAVEER"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "RATNAMANI"
+      ]
+    },
+    "Advertisement": {
+      "IT Software": [
+        "AFFLE"
+      ],
+      "Miscellaneous": [
+        "SIGNPOST"
+      ]
+    },
+    "Finance and Investments Others": {
+      "Finance": [
+        "AFSL",
+        "AIIL",
+        "AVONMORE",
+        "BFINVEST",
+        "CONSOFINVT",
+        "CREST",
+        "CSLFINANCE",
+        "DHUNINV",
+        "IITL",
+        "MUFIN",
+        "NAHARCAP",
+        "NBIFIN",
+        "NSIL",
+        "PFS",
+        "PNBGILTS",
+        "PRIMESECU",
+        "SILINV",
+        "STEL",
+        "THEINVEST",
+        "VLSFINANCE"
+      ],
+      "Stock and Commodity Brokers": [
+        "ALMONDZ",
+        "DOLATALGO"
+      ],
+      "Realty": [
+        "OSWALGREEN"
+      ],
+      "Miscellaneous": [
+        "PTL"
+      ]
+    },
+    "Realty Construction and Contracting": {
+      "Realty": [
+        "AGIIL",
+        "AJMERA",
+        "ARIHANT",
+        "ARVSMART",
+        "ASHIANA",
+        "DBREALTY",
+        "ELDEHSG",
+        "GANESHHOU",
+        "HEMIPROP",
+        "HUBTOWN",
+        "KOLTEPATIL",
+        "OMAXE",
+        "PENINLAND",
+        "PURVA",
+        "PVP",
+        "RUSTOMJEE",
+        "SBGLP",
+        "SHRIRAMPPS",
+        "SIGNATURE",
+        "SUMIT",
+        "SUNTECK",
+        "SURAJEST"
+      ],
+      "Infrastructure Developers and Operators": [
+        "CAPACITE"
+      ],
+      "Finance": [
+        "GEECEE"
+      ],
+      "Air Transport Service": [
+        "RAYMOND"
+      ]
+    },
+    "Services Others": {
+      "Miscellaneous": [
+        "AGSTRA",
+        "CMSINFO",
+        "DREAMFOLKS",
+        "ECOSMOBLTY",
+        "KAPSTON",
+        "RADIANTCMS",
+        "TEAMLEASE"
+      ],
+      "IT Software": [
+        "BLS",
+        "EMUDHRA"
+      ],
+      "Healthcare": [
+        "INDGN"
+      ],
+      "Textiles": [
+        "PDSL"
+      ]
+    },
+    "EPC": {
+      "Realty": [
+        "AHLUCONT"
+      ],
+      "Infrastructure Developers and Operators": [
+        "DBL",
+        "JKIL",
+        "TRANSRAILL",
+        "VIVIANA"
+      ]
+    },
+    "Capital Goods Mining Equipment": {
+      "Castings Forgings and Fasteners": [
+        "AIAENG"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "ELECON",
+        "TEGA"
+      ]
+    },
+    "Pharma Formulations": {
+      "Pharmaceuticals": [
+        "AJANTPHARM",
+        "AKUMS",
+        "ALBERTDAVD",
+        "ALKEM",
+        "ALPA",
+        "AMRUTANJAN",
+        "APLLTD",
+        "AUROPHARMA",
+        "BAFNAPH",
+        "BAJAJHCARE",
+        "BETA",
+        "BIOCON",
+        "BLISSGVS",
+        "BROOKS",
+        "CAPLIPOINT",
+        "CIPLA",
+        "CORONA",
+        "DRREDDY",
+        "EMCURE",
+        "ERIS",
+        "FDC",
+        "GLAND",
+        "GLENMARK",
+        "GRANULES",
+        "GUFICBIO",
+        "INDOCO",
+        "INDSWFTLAB",
+        "IPCALAB",
+        "JAGSNPHARM",
+        "JUBLPHARMA",
+        "KILITCH",
+        "LINCOLN",
+        "LUPIN",
+        "LYKALABS",
+        "MANKIND",
+        "MARKSANS",
+        "MEDICAMEQ",
+        "MEDICO",
+        "NATCOPHARM",
+        "RPGLIFE",
+        "RUBICON",
+        "SAIPARENT",
+        "SENORES",
+        "STAR",
+        "SUNPHARMA",
+        "THEMISMED",
+        "TORNTPHARM",
+        "WOCKPHARMA",
+        "ZIMLAB",
+        "ZYDUSLIFE"
+      ],
+      "Healthcare": [
+        "SUVEN"
+      ]
+    },
+    "Finance Holding Company": {
+      "Realty": [
+        "ALEMBICLTD"
+      ],
+      "Finance": [
+        "BAJAJFINSV",
+        "BAJAJHLDNG",
+        "CHOLAHLDNG",
+        "GFLLIMITED",
+        "JPOLYINVST",
+        "JSWHL",
+        "KICL",
+        "KIRLOSIND",
+        "MAHSCOOTER",
+        "MAXIND",
+        "MFSL",
+        "PILANIINVS",
+        "RANEHOLDIN",
+        "SUMMITSEC",
+        "TATAINVEST",
+        "TSFINV",
+        "TVSHLTD",
+        "VHL"
+      ],
+      "Chemicals": [
+        "GODREJIND"
+      ]
+    },
+    "Castings Forgings and Fasteners": {
+      "Castings Forgings and Fasteners": [
+        "ALICON",
+        "BALUFORGE",
+        "BHARATFORG",
+        "CIEINDIA",
+        "GALAPREC",
+        "HAPPYFORGE",
+        "MMFL",
+        "NELCAST",
+        "RKFORGE",
+        "SGIL",
+        "STEELCAS",
+        "STERTOOLS",
+        "SUNCLAY",
+        "TIRUPATIFL"
+      ],
+      "Auto Ancillaries": [
+        "SONACOMS"
+      ],
+      "Engineering": [
+        "UNIPARTS"
+      ]
+    },
+    "EMS": {
+      "Consumer Durables": [
+        "AMBER",
+        "AVALON",
+        "DIXON",
+        "EPACK",
+        "KAYNES",
+        "PGEL"
+      ],
+      "Aerospace and Defence": [
+        "CENTUM",
+        "CYIENTDLM"
+      ],
+      "Electronics": [
+        "OPTIEMUS",
+        "SYRMA"
+      ]
+    },
+    "Chemicals Organic": {
+      "Chemicals": [
+        "AMBICAAGAR",
+        "BASF",
+        "DSFCL",
+        "FAIRCHEMOR",
+        "FINEORG",
+        "FOSECOIND",
+        "INDOAMIN",
+        "IVP",
+        "JOCIL",
+        "LXCHEM",
+        "MANORG",
+        "OAL",
+        "OCCLLTD",
+        "VALIANTORG",
+        "VINYLINDIA"
+      ],
+      "Pharmaceuticals": [
+        "SIGACHI"
+      ]
+    },
+    "Textiles Spinning": {
+      "Textiles": [
+        "AMBIKCO",
+        "BANSWRAS",
+        "INDORAMA",
+        "NITINSPIN",
+        "PASHUPATI",
+        "RSWM",
+        "SANATHAN",
+        "SANGAMIND",
+        "SPORTKING",
+        "SUTLEJTEX",
+        "SWARAJ",
+        "VARDMNPOLY",
+        "VTL"
+      ],
+      "Diversified": [
+        "ASHIMASYN"
+      ],
+      "Readymade Garments and Apparel": [
+        "KPRMILL"
+      ]
+    },
+    "Construction Housing": {
+      "Realty": [
+        "AMJLAND",
+        "ANSALAPI",
+        "ARTNIRMAN",
+        "COUNCODOS",
+        "DSKULKARNI",
+        "HDIL",
+        "KALPATARU",
+        "LANCORHOL",
+        "LPDC"
+      ],
+      "Construction": [
+        "PANSARI",
+        "PRANAV"
+      ]
+    },
+    "Data Centre": {
+      "Realty": [
+        "ANANTRAJ"
+      ],
+      "IT Software": [
+        "BBOX",
+        "E2E"
+      ],
+      "IT Hardware": [
+        "NETWEB"
+      ],
+      "Infrastructure Developers and Operators": [
+        "TECHNOE"
+      ]
+    },
+    "Sugar": {
+      "Chemicals": [
+        "ANDHRSUGAR"
+      ],
+      "Sugar": [
+        "AVADHSUGAR",
+        "BAJAJHIND",
+        "BALRAMCHIN",
+        "BANARISUG",
+        "DALMIASUG",
+        "DBOL",
+        "DCMSRIND",
+        "DHAMPURSUG",
+        "DWARKESH",
+        "EIDPARRY",
+        "GODAVARIB",
+        "KCPSUGIND",
+        "MAGADSUGAR",
+        "RENUKA",
+        "TRIVENI",
+        "UGARSUGAR",
+        "UTTAMSUGAR",
+        "ZUARIIND"
+      ],
+      "FMCG": [
+        "DAVANGERE"
+      ],
+      "Diversified": [
+        "DCMSHRIRAM"
+      ],
+      "Consumer Goods": [
+        "PICCADIL"
+      ]
+    },
+    "Oil Drilling and Exploration": {
+      "Crude Oil and Natural Gas": [
+        "ANTELOPUS",
+        "ASIANENE",
+        "DEEPINDS",
+        "HINDOILEXP",
+        "OIL",
+        "ONGC"
+      ],
+      "Oil Drill and Allied": [
+        "DOLPHIN",
+        "JINDRILL"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "UNIDT"
+      ]
+    },
+    "Capital Goods Engineering Heavy": {
+      "Capital Goods Non Electrical Equipment": [
+        "ANUP",
+        "EIMCOELECO",
+        "KABRAEXTRU",
+        "PRAJIND",
+        "WALCHANNAG",
+        "WINDMACHIN"
+      ],
+      "Capital Goods Electrical Equipment": [
+        "BHEL",
+        "INOXWIND",
+        "SUZLON"
+      ],
+      "Infrastructure Developers and Operators": [
+        "JNKINDIA"
+      ]
+    },
+    "Cables Power": {
+      "Capital Goods Electrical Equipment": [
+        "APARINDS"
+      ],
+      "Cables": [
+        "CORDSCABLE",
+        "DIACABS",
+        "DYCL",
+        "KEI",
+        "LASERPOWER",
+        "PLAZACABLE",
+        "POLYCAB",
+        "RRKABEL",
+        "UNIVCABLES"
+      ]
+    },
+    "Rubber Processing and Rubber Products": {
+      "Chemicals": [
+        "APCOTEXIND"
+      ],
+      "Plantation and Plantation Products": [
+        "ELGIRUBCO",
+        "GRPLTD",
+        "HARRMALAYA",
+        "PIXTRANS"
+      ],
+      "Diversified": [
+        "VIKASECO"
+      ]
+    },
+    "Steel Tubes and Pipes": {
+      "Capital Goods Non Electrical Equipment": [
+        "APLAPOLLO",
+        "SURYAROSNI"
+      ],
+      "Steel": [
+        "DEEDEV",
+        "GANDHITUBE",
+        "GOODLUCK",
+        "HARIOMPIPE",
+        "HITECH",
+        "JTLIND",
+        "MAHSEAMLES",
+        "MANINDS",
+        "OILCOUNTUB",
+        "RAMASTEEL",
+        "SAMBHV",
+        "SCODATUBES",
+        "SURAJLTD",
+        "VENUSPIPES",
+        "VSTL",
+        "ZENITHSTL"
+      ]
+    },
+    "Hospitals": {
+      "Healthcare": [
+        "APOLLOHOSP",
+        "ARTEMISMED",
+        "ASTERDM",
+        "FORTIS",
+        "GPTHEALTH",
+        "HCG",
+        "INDRAMEDCO",
+        "JLHL",
+        "KIMS",
+        "KOVAI",
+        "MANIPALHOS",
+        "MAXHEALTH",
+        "MEDANTA",
+        "NH",
+        "RAINBOW",
+        "SHALBY",
+        "YATHARTH"
+      ],
+      "Healthcare Services": [
+        "DRAGARWQ",
+        "KMCSHIL"
+      ]
+    },
+    "Tyres and Tubes": {
+      "Tyres": [
+        "APOLLOTYRE",
+        "BALKRISIND",
+        "CEATLTD",
+        "GOODYEAR",
+        "JKTYRE",
+        "MRF",
+        "TOLINS",
+        "TVSSRICHAK"
+      ],
+      "Miscellaneous": [
+        "KESORAMIND"
+      ]
+    },
+    "Computer Education": {
+      "Computer Education": [
+        "APTECHT",
+        "NIITLTD",
+        "NIITMTS",
+        "ZEELEARN"
+      ],
+      "Education": [
+        "CLEDUCATE",
+        "VERANDA"
+      ],
+      "Finance": [
+        "CPCAP"
+      ]
+    },
+    "Aluminium": {
+      "Metals & Mining": [
+        "ARFIN",
+        "HINDALUMI"
+      ],
+      "Non Ferrous Metals": [
+        "HINDALCO",
+        "NATIONALUM",
+        "VAML"
+      ]
+    },
+    "Computers - Software - Medium / Small": {
+      "IT Software": [
+        "ARMEE",
+        "SRIT"
+      ],
+      "E-Commerce/App based Aggregator": [
+        "MONEYVIEW"
+      ]
+    },
+    "Plastics Plastic and Plastic Products": {
+      "Plastic Products": [
+        "ARROWGREEN",
+        "KINGFA",
+        "NILKAMAL",
+        "RESPONIND",
+        "SHAILY"
+      ],
+      "Leather": [
+        "MAYURUNIQ"
+      ],
+      "Chemicals": [
+        "PLASTIBLEN"
+      ]
+    },
+    "Textiles": {
+      "Textiles": [
+        "ARVIND"
+      ],
+      "Leather": [
+        "BIL"
+      ]
+    },
+    "Construction and Contracting": {
+      "Infrastructure Developers and Operators": [
+        "ASHOKA",
+        "GARUDA",
+        "NCC",
+        "VASCONEQ"
+      ],
+      "Construction": [
+        "BLAL",
+        "CCCL",
+        "MANINFRA",
+        "NILAINFRA",
+        "PARSVNATH",
+        "PSPPROJECT"
+      ],
+      "Realty": [
+        "MAHLIFE"
+      ]
+    },
+    "Ceramics Tiles and Sanitaryware": {
+      "Ceramic Products": [
+        "ASIANTILES",
+        "CERA",
+        "KAJARIACER",
+        "NITCO",
+        "SOMANYCERA"
+      ],
+      "Retail": [
+        "HINDWAREAP"
+      ]
+    },
+    "IT Networking Equipment": {
+      "IT Software": [
+        "ASMS"
+      ],
+      "IT Hardware": [
+        "DLINKINDIA",
+        "HCL-INSYS"
+      ]
+    },
+    "Auto Two and Three Wheelers": {
+      "Automobile": [
+        "ATHERENERG",
+        "ATULAUTO",
+        "BAJAJ-AUTO",
+        "EICHERMOT",
+        "HEROMOTOCO",
+        "OLAELEC",
+        "TVSMOTOR"
+      ],
+      "Auto Ancillaries": [
+        "MUNJALSHOW"
+      ]
+    },
+    "Recycling": {
+      "Miscellaneous": [
+        "AWHCL"
+      ],
+      "Power Generation and Distribution": [
+        "BHAGYANGR"
+      ],
+      "Textiles": [
+        "GANECOS"
+      ],
+      "Non Ferrous Metals": [
+        "GRAVITA",
+        "JAINREC",
+        "POCL"
+      ]
+    },
+    "Edible Oils Agro Processing": {
+      "FMCG": [
+        "AWL",
+        "KRITINUT"
+      ],
+      "Edible Oil": [
+        "GOKUL",
+        "GOKULAGRO",
+        "KNAGRI"
+      ],
+      "Chemicals": [
+        "JAYAGROGN"
+      ]
+    },
+    "Entertainment Content Providers": {
+      "Entertainment": [
+        "BAGFILMS",
+        "BTML",
+        "CRESTO",
+        "MUKTAARTS",
+        "PNC",
+        "SHEMAROO",
+        "TIPSFILMS"
+      ],
+      "Media Print and Television and Radio": [
+        "DNAMEDIA"
+      ]
+    },
+    "Packaging and Containers": {
+      "Packaging": [
+        "BALAJEE",
+        "PYRAMID"
+      ],
+      "Trading": [
+        "ORICONENT"
+      ]
+    },
+    "Entertainment and Media": {
+      "Entertainment": [
+        "BALAJITELE",
+        "DEN",
+        "DISHTV",
+        "ENIL",
+        "GTPL",
+        "PVRINOX",
+        "SUNTV",
+        "ZEEL"
+      ],
+      "Telecom Service": [
+        "HATHWAY"
+      ],
+      "Media Print and Television and Radio": [
+        "HMVL",
+        "HTMEDIA",
+        "NDTV",
+        "NETWORK18",
+        "TVTODAY",
+        "ZEEMEDIA"
+      ],
+      "E-Commerce/App based Aggregator": [
+        "NAZARA"
+      ],
+      "Realty": [
+        "NILASPACES",
+        "PFOCUS"
+      ]
+    },
+    "Pharma Distribution": {
+      "Pharmaceuticals": [
+        "BALAXI",
+        "ENTERO",
+        "HEALTHX",
+        "VAISHALI",
+        "ZOTA"
+      ],
+      "Retail": [
+        "MEDPLUS"
+      ]
+    },
+    "Steel Wires": {
+      "Steel": [
+        "BANSALWIRE",
+        "BHARATWIRE",
+        "DPWIRES",
+        "GEEKAYWIRE",
+        "KRITIKA",
+        "RAJRATAN",
+        "USHAMART"
+      ],
+      "Non Ferrous Metals": [
+        "BEDMUTHA"
+      ]
+    },
+    "Footwear": {
+      "Leather": [
+        "BATAINDIA",
+        "CAMPUS",
+        "KHADIM",
+        "LIBERTSHOE",
+        "METROBRAND",
+        "MIRZAINT",
+        "RELAXO",
+        "SREEL"
+      ],
+      "Retail": [
+        "REDTAPE"
+      ]
+    },
+    "Travel Bags": {
+      "Retail": [
+        "BCONCEPTS"
+      ],
+      "Plastic Products": [
+        "SAFARI",
+        "VIPIND"
+      ]
+    },
+    "Petrochemicals Polymers": {
+      "Petrochemicals": [
+        "BEPL",
+        "KOTHARIPET",
+        "MANALIPETC",
+        "SPLPETRO",
+        "STYRENIX"
+      ],
+      "Chemicals": [
+        "CHEMPLASTS",
+        "NOCIL"
+      ]
+    },
+    "Textiles Hosiery and Knitwear": {
+      "Textiles": [
+        "BHANDARI",
+        "FILATFASH",
+        "NAHARSPING",
+        "RUPA",
+        "TTL",
+        "VIPCLOTHNG"
+      ],
+      "Readymade Garments and Apparel": [
+        "DOLLAR",
+        "PAGEIND"
+      ]
+    },
+    "Telecom Services": {
+      "Telecom Service": [
+        "BHARTIARTL",
+        "BHARTIHEXA",
+        "GTL",
+        "IDEA",
+        "MTNL",
+        "ONMOBILE",
+        "RCOM",
+        "STLNETWORK",
+        "TATACOMM",
+        "TTML"
+      ],
+      "Telecom Equipment and Infra Services": [
+        "GTLINFRA",
+        "INDUSTOWER",
+        "NELCO",
+        "SUYOG"
+      ],
+      "Telecom": [
+        "UNIINFO"
+      ]
+    },
+    "Cables Telecom": {
+      "Cables": [
+        "BIRLACABLE",
+        "FINCABLES",
+        "PARACABLES",
+        "STLTECH"
+      ],
+      "Infrastructure Developers and Operators": [
+        "VINDHYATEL"
+      ]
+    },
+    "Finance Capital Markets": {
+      "Stock and Commodity Brokers": [
+        "BIRLAMONEY",
+        "PRUDENT",
+        "WEALTH"
+      ],
+      "Financial Services": [
+        "CDSL"
+      ],
+      "Finance": [
+        "CENTRUM"
+      ]
+    },
+    "Cement Products": {
+      "Cement Products": [
+        "BIRLANU",
+        "RAMCOIND",
+        "SAHYADRI",
+        "VISAKAIND"
+      ],
+      "Infrastructure Developers and Operators": [
+        "GPTINFRA",
+        "INDIANHUME"
+      ]
+    },
+    "Opalware": {
+      "Glass and Glass Products": [
+        "BOROLTD",
+        "LAOPALA"
+      ],
+      "Consumer Durables": [
+        "CELLO"
+      ]
+    },
+    "Finance Insurance": {
+      "Insurance": [
+        "CANHLIFE",
+        "GODIGIT",
+        "HDFCLIFE",
+        "LICI",
+        "NIVABUPA",
+        "SBILIFE"
+      ],
+      "Finance": [
+        "RELIGARE"
+      ]
+    },
+    "Lubricants": {
+      "Chemicals": [
+        "CASTROLIND",
+        "GULFOILLUB",
+        "GULFPETRO",
+        "VEEDOL"
+      ],
+      "Diversified": [
+        "GOCLCORP"
+      ]
+    },
+    "Infra Construction and Contracting": {
+      "Infrastructure Developers and Operators": [
+        "CEMPRO",
+        "HCC",
+        "HGINFRA",
+        "IRB",
+        "KNRCON",
+        "LIKHITHA",
+        "LT",
+        "MBLINFRA",
+        "MOLDTECH",
+        "PATELENG",
+        "PNCINFRA",
+        "RAMKY",
+        "RPPINFRA",
+        "RVNL",
+        "SIMPLEXINF",
+        "SPMLINFRA",
+        "VPRPL"
+      ],
+      "Miscellaneous": [
+        "NBCC"
+      ]
+    },
+    "Fertilisers": {
+      "Fertilizers": [
+        "CHAMBLFERT",
+        "COROMANDEL",
+        "FACT",
+        "GSFC",
+        "KHAICHEM",
+        "KRISHANA",
+        "MADRASFERT",
+        "MBAPL",
+        "NFL",
+        "NOVAAGRI",
+        "PARADEEP",
+        "RCF",
+        "SPIC",
+        "ZUARI"
+      ],
+      "Chemicals": [
+        "DEEPAKFERT",
+        "GNFC"
+      ]
+    },
+    "Entertainment Electronic Media": {
+      "Entertainment": [
+        "CINELINE",
+        "DGCONTENT",
+        "NEXTMEDIA",
+        "RADIOCITY",
+        "RAJTV",
+        "SITINET",
+        "SUNSHINE"
+      ],
+      "Media Print and Television and Radio": [
+        "CYBERMEDIA",
+        "SAMBHAAV",
+        "UFO"
+      ]
+    },
+    "Construction Factories and Offices and Commercial": {
+      "Realty": [
+        "CINEVISTA",
+        "DHARAN",
+        "EMAMIREAL",
+        "GOLDENTOBC",
+        "LOTUSDEV",
+        "RVHL",
+        "SHRADHA",
+        "VIPULLTD"
+      ],
+      "Construction": [
+        "GENCON"
+      ]
+    },
+    "Shipbuilding and Repairs": {
+      "Aerospace and Defence": [
+        "COCHINSHIP",
+        "GRSE",
+        "MAZDOCK"
+      ],
+      "Ship Building": [
+        "SWANDEF"
+      ]
+    },
+    "IT Education": {
+      "Computer Education": [
+        "COMPUSOFT",
+        "GTECJAINX"
+      ],
+      "Education": [
+        "LCCINFOTEC"
+      ]
+    },
+    "Computer Hardware": {
+      "IT Hardware": [
+        "CONTROLPR",
+        "PANACHE",
+        "TVSELECT"
+      ],
+      "Trading": [
+        "REDINGTON"
+      ]
+    },
+    "Packaging BOPP": {
+      "Packaging": [
+        "COSMOFIRST",
+        "NAHARPOLY",
+        "POLYPLEX",
+        "UFLEX"
+      ],
+      "Textiles": [
+        "JINDALPOLY"
+      ]
+    },
+    "Metal Copper and Copper Alloy Products": {
+      "Non Ferrous Metals": [
+        "CUBEXTUB",
+        "MCL",
+        "SAGARDEEP"
+      ],
+      "Mining and Mineral Products": [
+        "RAJMET"
+      ]
+    },
+    "Printing Publishing and Stationery": {
+      "Diversified": [
+        "DJML"
+      ],
+      "Printing and Stationery": [
+        "REPRO",
+        "SCHAND"
+      ]
+    },
+    "Shipping": {
+      "Miscellaneous": [
+        "DREDGECORP",
+        "SEAMECLTD"
+      ],
+      "Shipping": [
+        "ESSARSHPNG",
+        "GESHIP",
+        "SCI",
+        "TRANSWORLD"
+      ]
+    },
+    "E Commerce Platform Travel": {
+      "E-Commerce/App based Aggregator": [
+        "EASEMYTRIP",
+        "IXIGO",
+        "YATRA"
+      ],
+      "Miscellaneous": [
+        "THOMASCOOK"
+      ]
+    },
+    "New age Platform E Retail": {
+      "Trading": [
+        "EBGNG",
+        "HONASA"
+      ],
+      "Retail": [
+        "FIRSTCRY"
+      ],
+      "FMCG": [
+        "LENSKART"
+      ],
+      "Logistics": [
+        "MEESHO"
+      ],
+      "E-Commerce/App based Aggregator": [
+        "NYKAA"
+      ]
+    },
+    "Cylinder": {
+      "Packaging": [
+        "EKC"
+      ],
+      "Plastic Products": [
+        "TIMETECHNO"
+      ]
+    },
+    "DI Pipes and Saw Pipes": {
+      "Castings Forgings and Fasteners": [
+        "ELECTCAST"
+      ],
+      "Steel": [
+        "JAIBALAJI"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "JINDALSAW",
+        "WELCORP"
+      ]
+    },
+    "Electrical Equipment and HVDC": {
+      "Power Generation and Distribution": [
+        "ENRIN"
+      ],
+      "Capital Goods Electrical Equipment": [
+        "GVT&D",
+        "POWERINDIA",
+        "QPOWER"
+      ],
+      "Non Ferrous Metals": [
+        "KSHINTL"
+      ],
+      "Engineering": [
+        "SKIPPER"
+      ]
+    },
+    "Pre Engineering Buildings": {
+      "Steel": [
+        "EPACKPEB",
+        "INTERARCH",
+        "PENIND"
+      ],
+      "Cement Products": [
+        "EVERESTIND"
+      ],
+      "Construction": [
+        "MBEL"
+      ]
+    },
+    "Auto Tractors": {
+      "Automobile": [
+        "ESCORTS",
+        "VSTTILLERS"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "INDOFARM"
+      ]
+    },
+    "Watches": {
+      "Retail": [
+        "ETHOSLTD"
+      ],
+      "Consumer Durables": [
+        "KDDL"
+      ]
+    },
+    "Capital Goods Electric General": {
+      "Capital Goods Electrical Equipment": [
+        "EXICOM",
+        "FOCUS",
+        "HONDAPOWER",
+        "HPL",
+        "IGARASHI",
+        "KECL",
+        "MODISONLTD",
+        "PIGL",
+        "RELTD",
+        "RISHABH",
+        "SALZERELEC",
+        "SERVOTECH",
+        "SIEMENS",
+        "SPECTRUM",
+        "SWELECTES",
+        "VGUARD"
+      ],
+      "Consumer Durables": [
+        "IKIO"
+      ]
+    },
+    "Engines": {
+      "Auto Ancillaries": [
+        "FMGOETZE"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "GREAVESCOT",
+        "SWARAJENG"
+      ]
+    },
+    "Auto Bus and LCVs": {
+      "Automobile": [
+        "FORCEMOT",
+        "OLECTRA",
+        "SMLMAH"
+      ],
+      "Auto Ancillaries": [
+        "JBMA"
+      ]
+    },
+    "Solar Pumps": {
+      "Infrastructure Developers and Operators": [
+        "GKENERGY"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "OSWALPUMPS",
+        "SHAKTIPUMP"
+      ]
+    },
+    "Transport Airlines": {
+      "Air Transport Service": [
+        "GLOBALVECT"
+      ],
+      "Logistics": [
+        "JETFREIGHT"
+      ]
+    },
+    "Cigarettes and Tobacco Products": {
+      "Tobacco Products": [
+        "GODFRYPHLP",
+        "VSTIND"
+      ],
+      "FMCG": [
+        "ITC"
+      ],
+      "Trading": [
+        "KOTHARIPRO"
+      ]
+    },
+    "Lab Grown Diamonds": {
+      "Diamond Gems and Jewellery": [
+        "GOLDIAM",
+        "RGL"
+      ],
+      "Miscellaneous": [
+        "IGIL"
+      ]
+    },
+    "Mining and Minerals Iron Ore": {
+      "Steel": [
+        "GPIL",
+        "JAYNECOIND",
+        "SARDAEN"
+      ],
+      "Mining and Mineral Products": [
+        "LLOYDSME",
+        "NMDC",
+        "SANDUMA"
+      ]
+    },
+    "Engineering Heavy General": {
+      "Capital Goods Non Electrical Equipment": [
+        "GUJAPOLLO",
+        "MANUGRAPH"
+      ],
+      "Aerospace and Defence": [
+        "UNIMECH"
+      ]
+    },
+    "Bearings": {
+      "Capital Goods Non Electrical Equipment": [
+        "HARSHA"
+      ],
+      "Bearings": [
+        "MENONBE",
+        "NIBL",
+        "NRBBEARING",
+        "SCHAEFFLER",
+        "SKFINDIA",
+        "SKFINDUS",
+        "TIMKEN"
+      ],
+      "Auto Ancillaries": [
+        "ROLEXRINGS"
+      ]
+    },
+    "Railways Kavach and Springs": {
+      "Auto Ancillaries": [
+        "HBLENGINE"
+      ],
+      "Electronics": [
+        "KERNEX"
+      ],
+      "Cables": [
+        "QUADFUTURE"
+      ]
+    },
+    "Telecommunications Equipment": {
+      "Telecom Equipment and Infra Services": [
+        "HFCL",
+        "TEJASNET",
+        "UMIYA-MRO"
+      ],
+      "Aerospace and Defence": [
+        "KAVDEFENCE"
+      ]
+    },
+    "Refrigeration": {
+      "Engineering": [
+        "ICEMAKE"
+      ],
+      "Trading": [
+        "REFEX"
+      ]
+    },
+    "Water Treatment": {
+      "Infrastructure Developers and Operators": [
+        "IONEXCHANG",
+        "WABAG",
+        "WELENT"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "JASH"
+      ]
+    },
+    "Railways": {
+      "Railways": [
+        "IRCTC",
+        "RAILTEL"
+      ],
+      "Finance": [
+        "IRFC"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "JWL",
+        "TEXRAIL",
+        "TITAGARH"
+      ],
+      "Miscellaneous": [
+        "RITES"
+      ]
+    },
+    "CNC Machines": {
+      "Capital Goods Non Electrical Equipment": [
+        "JYOTICNC",
+        "LOKESHMACH"
+      ],
+      "Capital Goods Electrical Equipment": [
+        "MACPOWER"
+      ]
+    },
+    "Capital Goods Electrical Equipment": {
+      "Capital Goods Electrical Equipment": [
+        "JYOTISTRUC"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "LLOYDSENGG"
+      ]
+    },
+    "Transmission Line Towers and Equipment": {
+      "Capital Goods Electrical Equipment": [
+        "KARAMTARA"
+      ],
+      "Infrastructure Developers and Operators": [
+        "OMPOWER",
+        "VIKRAN"
+      ]
+    },
+    "Shipping Proxy": {
+      "Aerospace and Defence": [
+        "KRISHNADEF"
+      ],
+      "Capital Goods Electrical Equipment": [
+        "MARINE"
+      ]
+    },
+    "Engineering General": {
+      "Engineering": [
+        "KRN",
+        "RVTH"
+      ],
+      "Capital Goods Non Electrical Equipment": [
+        "MAMATA"
+      ]
+    },
+    "Facility Management": {
+      "Miscellaneous": [
+        "KRYSTAL",
+        "SIS",
+        "UDS"
+      ],
+      "Diversified": [
+        "QUESS"
+      ]
+    },
+    "Leather Products Others": {
+      "Textiles": [
+        "MALLCOM"
+      ],
+      "Leather": [
+        "SUPERHOUSE",
+        "ZENITHEXPO"
+      ]
+    },
+    "Capital Goods Engineering General": {
+      "Capital Goods Non Electrical Equipment": [
+        "MAZDA",
+        "PITTIENG"
+      ],
+      "Capital Goods Electrical Equipment": [
+        "THERMAX"
+      ]
+    },
+    "Insurance Proxy": {
+      "Miscellaneous": [
+        "MEDIASSIST"
+      ],
+      "E-Commerce/App based Aggregator": [
+        "POLICYBZR"
+      ]
+    },
+    "Electronics Power Devices and Equipment": {
+      "Consumer Durables": [
+        "MVELECTRO"
+      ],
+      "Electronics": [
+        "SEDEMAC"
+      ]
+    },
+    "Pharma Others": {
+      "Pharmaceuticals": [
+        "PANACEABIO",
+        "SPARC",
+        "SYNCOMF",
+        "UNICHEMLAB"
+      ],
+      "Diversified": [
+        "TTKHLTCARE"
+      ]
+    },
+    "Capital Goods Solar": {
+      "Trading": [
+        "PREMIERENE"
+      ],
+      "Capital Goods Electrical Equipment": [
+        "SOLEX",
+        "VIKRAMSOLR",
+        "WAAREEENER",
+        "WEBELSOLAR"
+      ]
+    },
+    "Rubber Products": {
+      "Plantation and Plantation Products": [
+        "RUBFILA",
+        "SAMPANN",
+        "SOMICONVEY"
+      ],
+      "Industrial Products": [
+        "TINNARUBR"
+      ]
+    },
+    "Mattress": {
+      "Consumer Durables": [
+        "SFL"
+      ],
+      "Textiles": [
+        "WAKEFIT"
+      ]
+    },
+    "Solar EPC": {
+      "Power Infrastructure": [
+        "SOLARWORLD"
+      ],
+      "Infrastructure Developers and Operators": [
+        "SWSOLAR"
+      ]
+    },
+    "General Electric Equipment": {
+      "Automobile": [
+        "URJA"
+      ],
+      "Infrastructure Developers and Operators": [
+        "WSI"
+      ]
+    }
+  },
+  "suppressedExplicitMembershipCandidates": [
+    {
+      "symbol": "AARTIDRUGS",
+      "primary": "Pharma",
+      "rejectedExplicitTheme": "Pharma - Small Cap",
+      "primaryBlock": "Healthcare Segments",
+      "rejectedBlock": "Healthcare Segments"
+    },
+    {
+      "symbol": "AFFLE",
+      "primary": "IT Enabled Services (BPM)",
+      "rejectedExplicitTheme": "Advertising & Agencies",
+      "primaryBlock": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "rejectedBlock": "Media & Leisure"
+    },
+    {
+      "symbol": "ATLANTAELE",
+      "primary": "Transformer Ancillaries",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "POWER INFRA & ELECTRICALS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "AZAD",
+      "primary": "Aerospace & Defense OEM",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "DEFENSE & AEROSPACE SYSTEMS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "BCG",
+      "primary": "IT Enabled Services (BPM)",
+      "rejectedExplicitTheme": "Advertising & Agencies",
+      "primaryBlock": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "rejectedBlock": "Media & Leisure"
+    },
+    {
+      "symbol": "BHEL",
+      "primary": "Rotating Power Equipment",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "POWER INFRA & ELECTRICALS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "DATAMATICS",
+      "primary": "Enterprise IT Services",
+      "rejectedExplicitTheme": "IT Services (Consulting)",
+      "primaryBlock": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "rejectedBlock": "INFORMATION TECHNOLOGY & TECHNOLOGY"
+    },
+    {
+      "symbol": "ELECON",
+      "primary": "Process Engineering Equipment",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "ENGINEERING & MANUFACTURING",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "ENRIN",
+      "primary": "Grid Equipment & HVDC",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "POWER INFRA & ELECTRICALS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "GNA",
+      "primary": "Chassis & Metal Parts",
+      "rejectedExplicitTheme": "Drivetrain & Axles",
+      "primaryBlock": "AUTOMOTIVE COMPONENTS",
+      "rejectedBlock": "AUTOMOTIVE COMPONENTS"
+    },
+    {
+      "symbol": "GRANULES",
+      "primary": "Pharma",
+      "rejectedExplicitTheme": "Pharma - Small Cap",
+      "primaryBlock": "Healthcare Segments",
+      "rejectedBlock": "Healthcare Segments"
+    },
+    {
+      "symbol": "GVPIL",
+      "primary": "Grid Equipment & HVDC",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "POWER INFRA & ELECTRICALS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "HAPPSTMNDS",
+      "primary": "Enterprise IT Services",
+      "rejectedExplicitTheme": "IT Services (Consulting)",
+      "primaryBlock": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "rejectedBlock": "INFORMATION TECHNOLOGY & TECHNOLOGY"
+    },
+    {
+      "symbol": "HARSHA",
+      "primary": "Bearings & Precision",
+      "rejectedExplicitTheme": "Precision Components & Tools",
+      "primaryBlock": "INDUSTRIAL COMPONENTRY",
+      "rejectedBlock": "INDUSTRIAL COMPONENTRY"
+    },
+    {
+      "symbol": "INOXWIND",
+      "primary": "Rotating Power Equipment",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "POWER INFRA & ELECTRICALS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "JASH",
+      "primary": "Water & Effluent Mgmt",
+      "rejectedExplicitTheme": "Process Engineering Equipment",
+      "primaryBlock": "Env & Sustainability",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "KENNAMET",
+      "primary": "Castings, Forgings & Fasteners",
+      "rejectedExplicitTheme": "Precision Components & Tools",
+      "primaryBlock": "INDUSTRIAL COMPONENTRY",
+      "rejectedBlock": "INDUSTRIAL COMPONENTRY"
+    },
+    {
+      "symbol": "LUMAXIND",
+      "primary": "Chassis & Metal Parts",
+      "rejectedExplicitTheme": "Suspension & Safety",
+      "primaryBlock": "AUTOMOTIVE COMPONENTS",
+      "rejectedBlock": "AUTOMOTIVE COMPONENTS"
+    },
+    {
+      "symbol": "NEULANDLAB",
+      "primary": "Pharma",
+      "rejectedExplicitTheme": "Pharma - API & CRAMS",
+      "primaryBlock": "Healthcare Segments",
+      "rejectedBlock": "Healthcare Segments"
+    },
+    {
+      "symbol": "PSPPROJECT",
+      "primary": "Building Construction EPC",
+      "rejectedExplicitTheme": "Civic & Urban Infra",
+      "primaryBlock": "HEAVY CIVIL INFRASTRUCTURE",
+      "rejectedBlock": "HEAVY CIVIL INFRASTRUCTURE"
+    },
+    {
+      "symbol": "PTCIL",
+      "primary": "Castings, Forgings & Fasteners",
+      "rejectedExplicitTheme": "Precision Components & Tools",
+      "primaryBlock": "INDUSTRIAL COMPONENTRY",
+      "rejectedBlock": "INDUSTRIAL COMPONENTRY"
+    },
+    {
+      "symbol": "RAYMOND",
+      "primary": "Home Textiles & Furnish",
+      "rejectedExplicitTheme": "Premium & Branded Apparel",
+      "primaryBlock": "Lifestyle & Retail",
+      "rejectedBlock": "Lifestyle & Retail"
+    },
+    {
+      "symbol": "ROLEXRINGS",
+      "primary": "Bearings & Precision",
+      "rejectedExplicitTheme": "Precision Components & Tools",
+      "primaryBlock": "INDUSTRIAL COMPONENTRY",
+      "rejectedBlock": "INDUSTRIAL COMPONENTRY"
+    },
+    {
+      "symbol": "RSYSTEMS",
+      "primary": "Enterprise IT Services",
+      "rejectedExplicitTheme": "IT Services (Consulting)",
+      "primaryBlock": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+      "rejectedBlock": "INFORMATION TECHNOLOGY & TECHNOLOGY"
+    },
+    {
+      "symbol": "SHANTIGEAR",
+      "primary": "Drivetrain & Axles",
+      "rejectedExplicitTheme": "Precision Components & Tools",
+      "primaryBlock": "AUTOMOTIVE COMPONENTS",
+      "rejectedBlock": "INDUSTRIAL COMPONENTRY"
+    },
+    {
+      "symbol": "SKIPPER",
+      "primary": "Grid Equipment & HVDC",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "POWER INFRA & ELECTRICALS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "SOLARA",
+      "primary": "Pharma",
+      "rejectedExplicitTheme": "Pharma - API & CRAMS",
+      "primaryBlock": "Healthcare Segments",
+      "rejectedBlock": "Healthcare Segments"
+    },
+    {
+      "symbol": "STERTOOLS",
+      "primary": "Industrial Systems & Controls",
+      "rejectedExplicitTheme": "EPC / Buildout",
+      "primaryBlock": "ENGINEERING & MANUFACTURING",
+      "rejectedBlock": "DATA CENTER ECOSYSTEM"
+    },
+    {
+      "symbol": "TARIL",
+      "primary": "Transformer Ancillaries",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "POWER INFRA & ELECTRICALS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "TDPOWERSYS",
+      "primary": "Rotating Power Equipment",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "POWER INFRA & ELECTRICALS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "THERMAX",
+      "primary": "Rotating Power Equipment",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "POWER INFRA & ELECTRICALS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "TRANSRAILL",
+      "primary": "EPC - Power & Grid",
+      "rejectedExplicitTheme": "Heavy Electrical Equip",
+      "primaryBlock": "POWER INFRA & ELECTRICALS",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    },
+    {
+      "symbol": "VARROC",
+      "primary": "Chassis & Metal Parts",
+      "rejectedExplicitTheme": "Interior & Plastics",
+      "primaryBlock": "AUTOMOTIVE COMPONENTS",
+      "rejectedBlock": "AUTOMOTIVE COMPONENTS"
+    },
+    {
+      "symbol": "VIMTALABS",
+      "primary": "Diagnostic & Lab Services",
+      "rejectedExplicitTheme": "Pharma - API & CRAMS",
+      "primaryBlock": "Healthcare Segments",
+      "rejectedBlock": "Healthcare Segments"
+    },
+    {
+      "symbol": "WPIL",
+      "primary": "Industrial Pumps & Compressors",
+      "rejectedExplicitTheme": "Process Engineering Equipment",
+      "primaryBlock": "ENGINEERING & MANUFACTURING",
+      "rejectedBlock": "ENGINEERING & MANUFACTURING"
+    }
+  ],
+  "examples": {
+    "CYIENTDLM": {
+      "stock": {
+        "sector": "Aerospace and Defence",
+        "industry": "EMS",
+        "providerSector": "Capital Goods",
+        "providerIndustry": "Industrial Products",
+        "isin": null,
+        "listingDate": "10-JUL-2023",
+        "nicheTags": []
+      },
+      "historySessions": 811,
+      "currentCode": {
+        "theme": "Industrial Systems & Controls",
+        "block": "ENGINEERING & MANUFACTURING",
+        "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+        "industry": "Industrial Products Companies",
+        "subIndustry": "Electronics - Equipment/Components",
+        "memberships": {
+          "Industrial Systems & Controls": "reference_partial",
+          "Emerging EMS": "curated-rule"
+        },
+        "aliases": [],
+        "mappingConfidence": "source",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      },
+      "storedSnapshot": {
+        "theme": "Industrial Systems & Controls",
+        "block": "ENGINEERING & MANUFACTURING",
+        "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+        "industry": "Industrial Products Companies",
+        "subIndustry": "Electronics - Equipment/Components",
+        "memberships": {
+          "Industrial Systems & Controls": "reference_partial",
+          "Emerging EMS": "curated-rule"
+        },
+        "aliases": [],
+        "mappingConfidence": "source",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      }
+    },
+    "ANANTRAJ": {
+      "stock": {
+        "sector": "Realty",
+        "industry": "Data Centre",
+        "providerSector": "Realty",
+        "providerIndustry": "Residential Commercial Projects",
+        "isin": null,
+        "listingDate": "27-SEP-2006",
+        "nicheTags": []
+      },
+      "historySessions": 4950,
+      "currentCode": {
+        "theme": "Data Centres",
+        "block": "DATA CENTER ECOSYSTEM",
+        "macro": "III. DIGITAL ECONOMY & TECH",
+        "industry": "Residential, Commercial Projects Companies",
+        "subIndustry": "Data Centre",
+        "memberships": {
+          "Data Centres": "reference_partial",
+          "India Data-Centre Buildout": "curated-rule"
+        },
+        "aliases": [],
+        "mappingConfidence": "source",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      },
+      "storedSnapshot": {
+        "theme": "Data Centres",
+        "block": "DATA CENTER ECOSYSTEM",
+        "macro": "III. DIGITAL ECONOMY & TECH",
+        "industry": "Residential, Commercial Projects Companies",
+        "subIndustry": "Data Centre",
+        "memberships": {
+          "Data Centres": "reference_partial",
+          "India Data-Centre Buildout": "curated-rule"
+        },
+        "aliases": [],
+        "mappingConfidence": "source",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      }
+    },
+    "AASTHA": {
+      "stock": {
+        "sector": "Textiles",
+        "industry": "Textiles Others",
+        "providerSector": null,
+        "providerIndustry": null,
+        "isin": null,
+        "listingDate": "06-JUL-2026",
+        "nicheTags": []
+      },
+      "historySessions": 77,
+      "currentCode": {
+        "theme": "Spinning & Yarn Processing",
+        "block": "Lifestyle & Retail",
+        "macro": "IV. CONSUMPTION & LIFESTYLE",
+        "industry": null,
+        "subIndustry": null,
+        "memberships": {
+          "Spinning & Yarn Processing": "web-research",
+          "IPO / Young Bases": "curated-rule"
+        },
+        "aliases": [
+          "Textiles - Spinning"
+        ],
+        "mappingConfidence": "high",
+        "mappingEvidenceUrl": "https://www.aasthaspintex.com/ipo",
+        "issuerOverlay": null
+      },
+      "storedSnapshot": {
+        "theme": "IPO / Young Bases",
+        "block": "EMERGING THEMES",
+        "macro": null,
+        "industry": null,
+        "subIndustry": null,
+        "memberships": {
+          "IPO / Young Bases": "curated-rule"
+        },
+        "aliases": [],
+        "mappingConfidence": "source",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      }
+    },
+    "ACSTECH": {
+      "stock": {
+        "sector": "Information Technology",
+        "industry": "IT Enabled Services",
+        "providerSector": "Information Technology",
+        "providerIndustry": "IT Enabled Services",
+        "isin": null,
+        "listingDate": "20-APR-2026",
+        "nicheTags": []
+      },
+      "historySessions": 129,
+      "currentCode": {
+        "theme": "IT Enabled Services",
+        "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+        "macro": "III. DIGITAL ECONOMY & TECH",
+        "industry": null,
+        "subIndustry": null,
+        "memberships": {
+          "IT Enabled Services": "scanner-industry-bridge"
+        },
+        "aliases": [
+          "IT Enabled Services"
+        ],
+        "mappingConfidence": "medium",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      },
+      "storedSnapshot": {
+        "theme": "IT Enabled Services",
+        "block": "INFORMATION TECHNOLOGY & TECHNOLOGY",
+        "macro": "III. DIGITAL ECONOMY & TECH",
+        "industry": null,
+        "subIndustry": null,
+        "memberships": {
+          "IT Enabled Services": "scanner-industry-bridge"
+        },
+        "aliases": [
+          "IT Enabled Services"
+        ],
+        "mappingConfidence": "medium",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      }
+    },
+    "ADDIND": {
+      "stock": {
+        "sector": "Textiles",
+        "industry": "Textiles & Apparels",
+        "providerSector": "Textiles",
+        "providerIndustry": "Textiles & Apparels",
+        "isin": null,
+        "listingDate": "17-AUG-2026",
+        "nicheTags": []
+      },
+      "historySessions": 46,
+      "currentCode": {
+        "theme": "Readymade Garments/ Apparells",
+        "block": "Lifestyle & Retail",
+        "macro": "IV. CONSUMPTION & LIFESTYLE",
+        "industry": null,
+        "subIndustry": null,
+        "memberships": {
+          "Readymade Garments/ Apparells": "scanner-industry-bridge",
+          "IPO / Young Bases": "curated-rule"
+        },
+        "aliases": [
+          "Readymade Garments/ Apparells"
+        ],
+        "mappingConfidence": "medium",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      },
+      "storedSnapshot": {
+        "theme": "IPO / Young Bases",
+        "block": "EMERGING THEMES",
+        "macro": null,
+        "industry": null,
+        "subIndustry": null,
+        "memberships": {
+          "IPO / Young Bases": "curated-rule"
+        },
+        "aliases": [],
+        "mappingConfidence": "source",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      }
+    },
+    "SBIN": {
+      "stock": {
+        "sector": "Banks",
+        "industry": "PSU Banks",
+        "providerSector": "Banks",
+        "providerIndustry": "Public Sector Bank",
+        "isin": null,
+        "listingDate": "01-MAR-1995",
+        "nicheTags": []
+      },
+      "historySessions": 7825,
+      "currentCode": {
+        "theme": "Public Sector Bank",
+        "block": "BANKING & FINANCIAL SERVICES",
+        "macro": "I. FINANCIAL BACKBONE",
+        "industry": "Public Sector Bank Companies",
+        "subIndustry": "Banks - PSU",
+        "memberships": {
+          "Public Sector Bank": "reference_full"
+        },
+        "aliases": [
+          "Banks - PSU"
+        ],
+        "mappingConfidence": "source",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      },
+      "storedSnapshot": {
+        "theme": "Public Sector Bank",
+        "block": "BANKING & FINANCIAL SERVICES",
+        "macro": "I. FINANCIAL BACKBONE",
+        "industry": "Public Sector Bank Companies",
+        "subIndustry": "Banks - PSU",
+        "memberships": {
+          "Public Sector Bank": "reference_full"
+        },
+        "aliases": [
+          "Banks - PSU"
+        ],
+        "mappingConfidence": "source",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      }
+    },
+    "DSKULKARNI": {
+      "stock": {
+        "sector": "Realty",
+        "industry": "Construction Housing",
+        "providerSector": null,
+        "providerIndustry": null,
+        "isin": null,
+        "listingDate": "08-FEB-1995",
+        "nicheTags": []
+      },
+      "historySessions": 50,
+      "currentCode": {
+        "theme": "Residential Projects",
+        "block": "Real Estate Segments",
+        "macro": "V. NATION BUILDING (INFRA/RE)",
+        "industry": "Residential, Commercial Projects Companies",
+        "subIndustry": null,
+        "memberships": {
+          "Residential Projects": "reviewed_legacy_listing",
+          "IPO / Young Bases": "curated-rule"
+        },
+        "aliases": [
+          "Realty - National",
+          "Realty - Regional",
+          "Realty - Construction & Contracting"
+        ],
+        "mappingConfidence": "source",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      },
+      "storedSnapshot": {
+        "theme": "Residential Projects",
+        "block": "Real Estate Segments",
+        "macro": "V. NATION BUILDING (INFRA/RE)",
+        "industry": "Residential, Commercial Projects Companies",
+        "subIndustry": null,
+        "memberships": {
+          "Residential Projects": "reviewed_legacy_listing",
+          "IPO / Young Bases": "curated-rule"
+        },
+        "aliases": [
+          "Realty - National",
+          "Realty - Regional",
+          "Realty - Construction & Contracting"
+        ],
+        "mappingConfidence": "source",
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      }
+    },
+    "ICICILIFE": {
+      "stock": {
+        "sector": "Insurance",
+        "industry": "Life Insurance",
+        "providerSector": "Insurance",
+        "providerIndustry": "Life Insurance",
+        "isin": null,
+        "listingDate": "29-SEP-2016",
+        "nicheTags": []
+      },
+      "historySessions": 2484,
+      "currentCode": {
+        "theme": null,
+        "block": null,
+        "macro": null,
+        "industry": null,
+        "subIndustry": null,
+        "memberships": {},
+        "aliases": [],
+        "mappingConfidence": null,
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      },
+      "storedSnapshot": {
+        "theme": null,
+        "block": null,
+        "macro": null,
+        "industry": null,
+        "subIndustry": null,
+        "memberships": {},
+        "aliases": [],
+        "mappingConfidence": null,
+        "mappingEvidenceUrl": null,
+        "issuerOverlay": null
+      }
+    }
+  },
+  "fileHashes": {
+    "frontend/theme_classification.py": "b75725bd3dd712dbcd44d88fc340dd850d88c5cbd8506ccefe675b91cc280ac1",
+    "frontend/theme_tracker_source.json": "89959bf501f069e052f8db45070f536f418ef943388bdac898bddc2f82ef7e46",
+    "frontend/theme_tracker_web_overrides.json": "825bd54c65c5e666eadfbb794864401b3796e74a90c6a01f876f5d65b0bb7cc2",
+    "frontend/rotation_history.py": "f588767c7f2f124cd8857cbac877f7ef64bd4b43da1aa28b433f45dbf31cf09b",
+    "frontend/src/utils/copyResults.ts": "58ba82a26ad081115c9f00d12e7b401085bbfa38a9415a488686ab05b4551a94",
+    "frontend/src/api/earnings.ts": "298105bbee9f2e804032cf431b0acc95471392ccf9ea7d6cf44b8b3d557fb90c",
+    "frontend/src/components/EarningsTab.tsx": "6db2fe86b7de661a11ba3f01954c90098f6c36b759cf6543ce06c04b7a03e8c6",
+    "frontend/src/api/realAdapter.ts": "1574c4bea105e0b5d84c4bb435fb57bbe591faee622b13607363bfada702193b",
+    "frontend/public/data/current.json": "8fd58e40b06f8fe800e069baeffa57b704623eb0dde13eb7a31481a741bcf28f",
+    "frontend/public/data/revisions/97d357ce2b2079015853849c162eb21144b400e342ba8ddac9616d8d528e589a/theme-classification.json.gz": "ba6724d477e0e0640200801f77b09e6dd64a10fead064fd87b9fa4aa5f44f5dc",
+    "frontend/public/data/revisions/97d357ce2b2079015853849c162eb21144b400e342ba8ddac9616d8d528e589a/universe-classification.json": "41a97b00b7730d963a52a2f41efb1a5bf29c43f5239f6c8289575830d2bcb3ad"
+  },
+  "verification": {
+    "pythonExistingTests": 24,
+    "vitestExistingTests": 26,
+    "vitestDiagnosticProbes": 4
+  },
+  "postReviewInputChanges": [
+    {
+      "file": "frontend/src/components/EarningsTab.tsx",
+      "originalSha256": "6db2fe86b7de661a11ba3f01954c90098f6c36b759cf6543ce06c04b7a03e8c6",
+      "finalSha256": "cf8a3020f2a22741506fab9baa05a99d41d96c30a00ff329af4a8aeebb63585f",
+      "observedDiff": "Concurrent addition of earnings.css import; reviewed classification logic unchanged."
+    }
+  ]
+}

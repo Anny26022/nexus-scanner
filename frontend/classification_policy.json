@@ -1,0 +1,1408 @@
+{
+  "schemaVersion": 1,
+  "reviewedOn": "2026-10-25",
+  "nodes": {
+    "Public Sector Bank": {
+      "id": "theme:public-sector-bank"
+    },
+    "Banks - PSU": {
+      "id": "theme:banks-psu"
+    },
+    "Exchanges & Platforms": {
+      "id": "theme:exchanges-platforms"
+    },
+    "Private Sector Bank": {
+      "id": "theme:private-sector-bank"
+    },
+    "Banks - Private": {
+      "id": "theme:banks-private"
+    },
+    "Life Insurance": {
+      "id": "theme:life-insurance"
+    },
+    "Asset Management": {
+      "id": "theme:asset-management"
+    },
+    "Finance - AMC": {
+      "id": "theme:finance-amc"
+    },
+    "Microfinance": {
+      "id": "theme:microfinance"
+    },
+    "Finance & Investments - Microfinance": {
+      "id": "theme:finance-investments-microfinance"
+    },
+    "General Insurance": {
+      "id": "theme:general-insurance"
+    },
+    "Finance - Insurance": {
+      "id": "theme:finance-insurance"
+    },
+    "PSU Infra Finance": {
+      "id": "theme:psu-infra-finance"
+    },
+    "Finance - PSU Lending": {
+      "id": "theme:finance-psu-lending"
+    },
+    "NBFC": {
+      "id": "theme:nbfc"
+    },
+    "Conglomerate Backed NBFC": {
+      "id": "theme:conglomerate-backed-nbfc"
+    },
+    "Ratings & Analytics": {
+      "id": "theme:ratings-analytics"
+    },
+    "Investment & Holding": {
+      "id": "theme:investment-holding"
+    },
+    "Finance - Holding Company": {
+      "id": "theme:finance-holding-company"
+    },
+    "Housing Finance": {
+      "id": "theme:housing-finance"
+    },
+    "Finance - Housing": {
+      "id": "theme:finance-housing"
+    },
+    "Personal & Gold Loans": {
+      "id": "theme:personal-gold-loans"
+    },
+    "Finance & Investments - Gold Loan": {
+      "id": "theme:finance-investments-gold-loan"
+    },
+    "Small Finance Bank": {
+      "id": "theme:small-finance-bank"
+    },
+    "Banks - Small Finance": {
+      "id": "theme:banks-small-finance"
+    },
+    "Brokerage & Wealth": {
+      "id": "theme:brokerage-wealth"
+    },
+    "Finance - Capital Markets - Brokers": {
+      "id": "theme:finance-capital-markets-brokers"
+    },
+    "Finance - Capital Markets - Wealth Management": {
+      "id": "theme:finance-capital-markets-wealth-management"
+    },
+    "Finance - Investment Bankers": {
+      "id": "theme:finance-investment-bankers"
+    },
+    "Capital Market Intern.": {
+      "id": "theme:capital-market-intern"
+    },
+    "Depositories & Clearing": {
+      "id": "theme:depositories-clearing"
+    },
+    "Market Infrastructure": {
+      "id": "theme:market-infrastructure"
+    },
+    "Finance - Capital Markets - RTA": {
+      "id": "theme:finance-capital-markets-rta"
+    },
+    "Fintech": {
+      "id": "theme:fintech"
+    },
+    "Financial Institutions": {
+      "id": "theme:financial-institutions"
+    },
+    "Financial Distributors": {
+      "id": "theme:financial-distributors"
+    },
+    "Commercial Vehicles": {
+      "id": "theme:commercial-vehicles"
+    },
+    "2/3 Wheelers": {
+      "id": "theme:2-3-wheelers"
+    },
+    "Auto - 2 & 3 Wheelers": {
+      "id": "theme:auto-2-3-wheelers"
+    },
+    "Tractors & Agri": {
+      "id": "theme:tractors-agri"
+    },
+    "Auto - Tractors": {
+      "id": "theme:auto-tractors"
+    },
+    "Auto Dealers & Retail": {
+      "id": "theme:auto-dealers-retail"
+    },
+    "Passenger Cars": {
+      "id": "theme:passenger-cars"
+    },
+    "Electronics & Systems": {
+      "id": "theme:electronics-systems"
+    },
+    "Drivetrain & Axles": {
+      "id": "theme:drivetrain-axles"
+    },
+    "Chassis & Metal Parts": {
+      "id": "theme:chassis-metal-parts"
+    },
+    "Auto Ancillaries - Diversified": {
+      "id": "theme:auto-ancillaries-diversified"
+    },
+    "Suspension & Safety": {
+      "id": "theme:suspension-safety"
+    },
+    "Interior & Plastics": {
+      "id": "theme:interior-plastics"
+    },
+    "Engines & Cooling/Seal": {
+      "id": "theme:engines-cooling-seal"
+    },
+    "Wiring & Cables": {
+      "id": "theme:wiring-cables"
+    },
+    "Tyres & Wheels": {
+      "id": "theme:tyres-wheels"
+    },
+    "Tyres & Rubber": {
+      "id": "theme:tyres-rubber"
+    },
+    "Tyres & Tubes": {
+      "id": "theme:tyres-tubes"
+    },
+    "Batteries & EV": {
+      "id": "theme:batteries-ev"
+    },
+    "Bearings & Precision": {
+      "id": "theme:bearings-precision"
+    },
+    "Bearings": {
+      "id": "theme:bearings"
+    },
+    "Castings & Forgings": {
+      "id": "theme:castings-forgings"
+    },
+    "Castings, Forgings & Fasteners": {
+      "id": "theme:castings-forgings-fasteners"
+    },
+    "Castings, Forgings & Fastners": {
+      "id": "theme:castings-forgings-fastners"
+    },
+    "Industrial Products": {
+      "id": "theme:industrial-products"
+    },
+    "Machine Tools & Industrial Automation": {
+      "id": "theme:machine-tools-industrial-automation"
+    },
+    "Precision Components & Tools": {
+      "id": "theme:precision-components-tools"
+    },
+    "Industrial Rubber": {
+      "id": "theme:industrial-rubber"
+    },
+    "IT Services (Consulting)": {
+      "id": "theme:it-services-consulting"
+    },
+    "Enterprise IT Services": {
+      "id": "theme:enterprise-it-services"
+    },
+    "Systems Integration & IT Infra": {
+      "id": "theme:systems-integration-it-infra"
+    },
+    "Geospatial & GovTech Services": {
+      "id": "theme:geospatial-govtech-services"
+    },
+    "IT Enabled Services (BPM)": {
+      "id": "theme:it-enabled-services-bpm"
+    },
+    "IT Enabled Services": {
+      "id": "theme:it-enabled-services"
+    },
+    "Analytics & Data Services": {
+      "id": "theme:analytics-data-services"
+    },
+    "ER&D / Product Software": {
+      "id": "theme:er-d-product-software"
+    },
+    "IT - ER&D": {
+      "id": "theme:it-er-d"
+    },
+    "Digital Identity & GovTech": {
+      "id": "theme:digital-identity-govtech"
+    },
+    "Enterprise Platforms": {
+      "id": "theme:enterprise-platforms"
+    },
+    "IT Products": {
+      "id": "theme:it-products"
+    },
+    "IT Product Companies": {
+      "id": "theme:it-product-companies"
+    },
+    "Communications Platforms": {
+      "id": "theme:communications-platforms"
+    },
+    "Telecom Operators": {
+      "id": "theme:telecom-operators"
+    },
+    "Telecom Equipment": {
+      "id": "theme:telecom-equipment"
+    },
+    "Telecom & Network Infra": {
+      "id": "theme:telecom-network-infra"
+    },
+    "Telecom Services": {
+      "id": "theme:telecom-services"
+    },
+    "FoodTech & Q-Commerce": {
+      "id": "theme:foodtech-q-commerce"
+    },
+    "Consumer E-Retail": {
+      "id": "theme:consumer-e-retail"
+    },
+    "Logistics Tech": {
+      "id": "theme:logistics-tech"
+    },
+    "Recruitment & Classifieds": {
+      "id": "theme:recruitment-classifieds"
+    },
+    "B2B Marketplaces": {
+      "id": "theme:b2b-marketplaces"
+    },
+    "AI Infra & GPU Cloud": {
+      "id": "theme:ai-infra-gpu-cloud"
+    },
+    "Vertical & Geospatial SaaS": {
+      "id": "theme:vertical-geospatial-saas"
+    },
+    "IT - Software": {
+      "id": "theme:it-software"
+    },
+    "E-Learning / EdTech": {
+      "id": "theme:e-learning-edtech"
+    },
+    "Education & E-Learning": {
+      "id": "theme:education-e-learning"
+    },
+    "Internet & E-Commerce": {
+      "id": "theme:internet-e-commerce"
+    },
+    "Telecom & Connectivity": {
+      "id": "theme:telecom-connectivity"
+    },
+    "Digital Services & BPO": {
+      "id": "theme:digital-services-bpo"
+    },
+    "Web Content & Connectivity": {
+      "id": "theme:web-content-connectivity"
+    },
+    "Speciality Chemicals": {
+      "id": "theme:speciality-chemicals"
+    },
+    "Industrial Biotech & Enzymes": {
+      "id": "theme:industrial-biotech-enzymes"
+    },
+    "Fluorochemicals": {
+      "id": "theme:fluorochemicals"
+    },
+    "Inorganic Specialty Chemicals": {
+      "id": "theme:inorganic-specialty-chemicals"
+    },
+    "Chemical Intermediates & Organics": {
+      "id": "theme:chemical-intermediates-organics"
+    },
+    "Life Sciences Ingredients & CRAMS": {
+      "id": "theme:life-sciences-ingredients-crams"
+    },
+    "Performance Polymers & Additives": {
+      "id": "theme:performance-polymers-additives"
+    },
+    "Alkali Chemicals": {
+      "id": "theme:alkali-chemicals"
+    },
+    "Commodity Chemicals": {
+      "id": "theme:commodity-chemicals"
+    },
+    "Dyes & Pigments": {
+      "id": "theme:dyes-pigments"
+    },
+    "Polymers": {
+      "id": "theme:polymers"
+    },
+    "Agro Chemicals": {
+      "id": "theme:agro-chemicals"
+    },
+    "Agrochemicals": {
+      "id": "theme:agrochemicals"
+    },
+    "Pesticides/Agrochemicals": {
+      "id": "theme:pesticides-agrochemicals"
+    },
+    "Plastics & Polymers": {
+      "id": "theme:plastics-polymers"
+    },
+    "Carbon Black": {
+      "id": "theme:carbon-black"
+    },
+    "Heavy Electrical Equip": {
+      "id": "theme:heavy-electrical-equip"
+    },
+    "Capital Goods - Engineering Heavy": {
+      "id": "theme:capital-goods-engineering-heavy"
+    },
+    "Refractories": {
+      "id": "theme:refractories"
+    },
+    "Welding & Cryogenics": {
+      "id": "theme:welding-cryogenics"
+    },
+    "Industrial Pumps & Compressors": {
+      "id": "theme:industrial-pumps-compressors"
+    },
+    "Process Engineering Equipment": {
+      "id": "theme:process-engineering-equipment"
+    },
+    "Industrial Systems & Controls": {
+      "id": "theme:industrial-systems-controls"
+    },
+    "Material Handling & Storage": {
+      "id": "theme:material-handling-storage"
+    },
+    "Construction & Earthmoving": {
+      "id": "theme:construction-earthmoving"
+    },
+    "Cables & Electricals": {
+      "id": "theme:cables-electricals"
+    },
+    "Cables - Power": {
+      "id": "theme:cables-power"
+    },
+    "Smart Metering & Inst.": {
+      "id": "theme:smart-metering-inst"
+    },
+    "Transformers & Switchgears": {
+      "id": "theme:transformers-switchgears"
+    },
+    "Grid Equipment & HVDC": {
+      "id": "theme:grid-equipment-hvdc"
+    },
+    "Industrial Electrical Systems": {
+      "id": "theme:industrial-electrical-systems"
+    },
+    "Rotating Power Equipment": {
+      "id": "theme:rotating-power-equipment"
+    },
+    "Transformer Ancillaries": {
+      "id": "theme:transformer-ancillaries"
+    },
+    "Electrical Equipment": {
+      "id": "theme:electrical-equipment"
+    },
+    "Capital Goods - Electric General": {
+      "id": "theme:capital-goods-electric-general"
+    },
+    "Capital Goods - Transformers": {
+      "id": "theme:capital-goods-transformers"
+    },
+    "Electric Equipment - General": {
+      "id": "theme:electric-equipment-general"
+    },
+    "Electrical Equipments/HVDC": {
+      "id": "theme:electrical-equipments-hvdc"
+    },
+    "EPC - Power & Grid": {
+      "id": "theme:epc-power-grid"
+    },
+    "Aerospace & Defense OEM": {
+      "id": "theme:aerospace-defense-oem"
+    },
+    "Aerospace & Defence - Equipments": {
+      "id": "theme:aerospace-defence-equipments"
+    },
+    "Railways": {
+      "id": "theme:railways"
+    },
+    "Ship Building & Marine": {
+      "id": "theme:ship-building-marine"
+    },
+    "Ammunition & Explosives": {
+      "id": "theme:ammunition-explosives"
+    },
+    "EMS - Electronics": {
+      "id": "theme:ems-electronics"
+    },
+    "Diversified Metals (VEDL)": {
+      "id": "theme:diversified-metals-vedl"
+    },
+    "Aluminium & Base Metals": {
+      "id": "theme:aluminium-base-metals"
+    },
+    "Copper & Specialty Metallurgy": {
+      "id": "theme:copper-specialty-metallurgy"
+    },
+    "Iron & Steel Core": {
+      "id": "theme:iron-steel-core"
+    },
+    "Steel": {
+      "id": "theme:steel"
+    },
+    "Iron & Steel Products": {
+      "id": "theme:iron-steel-products"
+    },
+    "Steel Products": {
+      "id": "theme:steel-products"
+    },
+    "Coal & Mining": {
+      "id": "theme:coal-mining"
+    },
+    "Iron Ore & Mineral Mining": {
+      "id": "theme:iron-ore-mineral-mining"
+    },
+    "Sponge & Ferro Alloys": {
+      "id": "theme:sponge-ferro-alloys"
+    },
+    "Industrial Minerals": {
+      "id": "theme:industrial-minerals"
+    },
+    "Mining/Minerals": {
+      "id": "theme:mining-minerals"
+    },
+    "Upstream": {
+      "id": "theme:upstream"
+    },
+    "Oil & Gas - Upstream": {
+      "id": "theme:oil-gas-upstream"
+    },
+    "Integrated Utilities": {
+      "id": "theme:integrated-utilities"
+    },
+    "Power Transmission": {
+      "id": "theme:power-transmission"
+    },
+    "Power Generation": {
+      "id": "theme:power-generation"
+    },
+    "Power - Generation/Distribution": {
+      "id": "theme:power-generation-distribution"
+    },
+    "Gas Utilities": {
+      "id": "theme:gas-utilities"
+    },
+    "Gas Distribution": {
+      "id": "theme:gas-distribution"
+    },
+    "Oil Refiners": {
+      "id": "theme:oil-refiners"
+    },
+    "Refineries": {
+      "id": "theme:refineries"
+    },
+    "Energy Conglomerate": {
+      "id": "theme:energy-conglomerate"
+    },
+    "Oil & Gas - Integrated": {
+      "id": "theme:oil-gas-integrated"
+    },
+    "Solar & Renewables": {
+      "id": "theme:solar-renewables"
+    },
+    "Solar EPC": {
+      "id": "theme:solar-epc"
+    },
+    "Solar & Green Energy": {
+      "id": "theme:solar-green-energy"
+    },
+    "Smart Energy Storage": {
+      "id": "theme:smart-energy-storage"
+    },
+    "Oil Equip & Offshore": {
+      "id": "theme:oil-equip-offshore"
+    },
+    "Oil Drilling & Exploration": {
+      "id": "theme:oil-drilling-exploration"
+    },
+    "Lubricants & Specialty Oils": {
+      "id": "theme:lubricants-specialty-oils"
+    },
+    "Thermal & Gas Power": {
+      "id": "theme:thermal-gas-power"
+    },
+    "Power Trading": {
+      "id": "theme:power-trading"
+    },
+    "Innerwear Manufacturers": {
+      "id": "theme:innerwear-manufacturers"
+    },
+    "Jewellery": {
+      "id": "theme:jewellery"
+    },
+    "Gems & Jewellery": {
+      "id": "theme:gems-jewellery"
+    },
+    "Apparel Brands & Retail": {
+      "id": "theme:apparel-brands-retail"
+    },
+    "Textiles - Readymade Apparel": {
+      "id": "theme:textiles-readymade-apparel"
+    },
+    "Readymade Garments/ Apparells": {
+      "id": "theme:readymade-garments-apparells"
+    },
+    "Premium & Branded Apparel": {
+      "id": "theme:premium-branded-apparel"
+    },
+    "Home Textiles & Furnish": {
+      "id": "theme:home-textiles-furnish"
+    },
+    "Spinning & Yarn Processing": {
+      "id": "theme:spinning-yarn-processing"
+    },
+    "Textiles - Spinning": {
+      "id": "theme:textiles-spinning"
+    },
+    "Footwear & Leather": {
+      "id": "theme:footwear-leather"
+    },
+    "Apparel Retail Chains": {
+      "id": "theme:apparel-retail-chains"
+    },
+    "Hypermarkets & Dept. Stores": {
+      "id": "theme:hypermarkets-dept-stores"
+    },
+    "Fashion & Lifestyle": {
+      "id": "theme:fashion-lifestyle"
+    },
+    "Heath & Pharma Retail": {
+      "id": "theme:heath-pharma-retail"
+    },
+    "Consumer Electronics": {
+      "id": "theme:consumer-electronics"
+    },
+    "Consumer Electronics - EMS": {
+      "id": "theme:consumer-electronics-ems"
+    },
+    "Household White Goods": {
+      "id": "theme:household-white-goods"
+    },
+    "Domestic Appliances": {
+      "id": "theme:domestic-appliances"
+    },
+    "HVAC & Cooling": {
+      "id": "theme:hvac-cooling"
+    },
+    "Furniture & Decor": {
+      "id": "theme:furniture-decor"
+    },
+    "Cons. Plastic Products": {
+      "id": "theme:cons-plastic-products"
+    },
+    "Houseware & Glass": {
+      "id": "theme:houseware-glass"
+    },
+    "Consumer Durables": {
+      "id": "theme:consumer-durables"
+    },
+    "Media & Entertainment": {
+      "id": "theme:media-entertainment"
+    },
+    "Broadcast & Cable Networks": {
+      "id": "theme:broadcast-cable-networks"
+    },
+    "Advertising & Agencies": {
+      "id": "theme:advertising-agencies"
+    },
+    "Amusement Parks": {
+      "id": "theme:amusement-parks"
+    },
+    "Electronic Media & News": {
+      "id": "theme:electronic-media-news"
+    },
+    "Print & Publication": {
+      "id": "theme:print-publication"
+    },
+    "Film Production & Exhibition": {
+      "id": "theme:film-production-exhibition"
+    },
+    "Media Production & Services": {
+      "id": "theme:media-production-services"
+    },
+    "Events & Weddings": {
+      "id": "theme:events-weddings"
+    },
+    "Digital Entertainment": {
+      "id": "theme:digital-entertainment"
+    },
+    "Entertainment & Media": {
+      "id": "theme:entertainment-media"
+    },
+    "Education & EdTech": {
+      "id": "theme:education-edtech"
+    },
+    "Stationery & Paper": {
+      "id": "theme:stationery-paper"
+    },
+    "HR, Staffing & Training": {
+      "id": "theme:hr-staffing-training"
+    },
+    "BPO & Specialized Services": {
+      "id": "theme:bpo-specialized-services"
+    },
+    "Household & Personal Care": {
+      "id": "theme:household-personal-care"
+    },
+    "FMCG - Personal Care": {
+      "id": "theme:fmcg-personal-care"
+    },
+    "Personal Care & Home": {
+      "id": "theme:personal-care-home"
+    },
+    "Packaged Diversified FMCG": {
+      "id": "theme:packaged-diversified-fmcg"
+    },
+    "Packaging and Containers": {
+      "id": "theme:packaging-and-containers"
+    },
+    "Packaging Films": {
+      "id": "theme:packaging-films"
+    },
+    "Packaging": {
+      "id": "theme:packaging"
+    },
+    "Paper & Packaging": {
+      "id": "theme:paper-packaging"
+    },
+    "Cigarettes & Tobacco": {
+      "id": "theme:cigarettes-tobacco"
+    },
+    "Tobacco & Related": {
+      "id": "theme:tobacco-related"
+    },
+    "Tea & Coffee": {
+      "id": "theme:tea-coffee"
+    },
+    "Sugar": {
+      "id": "theme:sugar"
+    },
+    "Dairy & Milk Products": {
+      "id": "theme:dairy-milk-products"
+    },
+    "Edible Oil": {
+      "id": "theme:edible-oil"
+    },
+    "Packaged Meat": {
+      "id": "theme:packaged-meat"
+    },
+    "Packaged & Processed Foods": {
+      "id": "theme:packaged-processed-foods"
+    },
+    "Packaged Foods": {
+      "id": "theme:packaged-foods"
+    },
+    "Edible Oil & Agri Processing": {
+      "id": "theme:edible-oil-agri-processing"
+    },
+    "Plantation & Sugar": {
+      "id": "theme:plantation-sugar"
+    },
+    "Non-Alcoholic Beverages": {
+      "id": "theme:non-alcoholic-beverages"
+    },
+    "Alcoholic Beverages": {
+      "id": "theme:alcoholic-beverages"
+    },
+    "Breweries & Distilleries": {
+      "id": "theme:breweries-distilleries"
+    },
+    "Premium Hotels & Resorts": {
+      "id": "theme:premium-hotels-resorts"
+    },
+    "Hotels & Resorts": {
+      "id": "theme:hotels-resorts"
+    },
+    "Hotels": {
+      "id": "theme:hotels"
+    },
+    "Tour & Travel Services": {
+      "id": "theme:tour-travel-services"
+    },
+    "Aviation & Airlines": {
+      "id": "theme:aviation-airlines"
+    },
+    "Airlines & Aviation": {
+      "id": "theme:airlines-aviation"
+    },
+    "Quick Service Rest. (QSR)": {
+      "id": "theme:quick-service-rest-qsr"
+    },
+    "Quick Service Restaurant - QSR": {
+      "id": "theme:quick-service-restaurant-qsr"
+    },
+    "Leisure & Amusement": {
+      "id": "theme:leisure-amusement"
+    },
+    "Seafood & Meat": {
+      "id": "theme:seafood-meat"
+    },
+    "Rice & Grain Processing": {
+      "id": "theme:rice-grain-processing"
+    },
+    "Fertilizers": {
+      "id": "theme:fertilizers"
+    },
+    "Fertilisers": {
+      "id": "theme:fertilisers"
+    },
+    "Crop Protection": {
+      "id": "theme:crop-protection"
+    },
+    "Animal Feed & Seeds": {
+      "id": "theme:animal-feed-seeds"
+    },
+    "Hospitals": {
+      "id": "theme:hospitals"
+    },
+    "Hospitals & Diagnostics": {
+      "id": "theme:hospitals-diagnostics"
+    },
+    "Pharma": {
+      "id": "theme:pharma"
+    },
+    "Pharma - Formulators": {
+      "id": "theme:pharma-formulators"
+    },
+    "Pharma - API & CRAMS": {
+      "id": "theme:pharma-api-crams"
+    },
+    "Pharma - API": {
+      "id": "theme:pharma-api"
+    },
+    "Pharma (Biotech & CRAMS)": {
+      "id": "theme:pharma-biotech-crams"
+    },
+    "Pharma - MNC bulk Drugs": {
+      "id": "theme:pharma-mnc-bulk-drugs"
+    },
+    "Pharma - Small Cap": {
+      "id": "theme:pharma-small-cap"
+    },
+    "Diagnostic & Lab Services": {
+      "id": "theme:diagnostic-lab-services"
+    },
+    "Diagnostics": {
+      "id": "theme:diagnostics"
+    },
+    "Specialized Equipment & Retail": {
+      "id": "theme:specialized-equipment-retail"
+    },
+    "Cement": {
+      "id": "theme:cement"
+    },
+    "Tiles": {
+      "id": "theme:tiles"
+    },
+    "Wood & Plywood": {
+      "id": "theme:wood-plywood"
+    },
+    "Paint Manufacturers": {
+      "id": "theme:paint-manufacturers"
+    },
+    "Building Products & Hardware": {
+      "id": "theme:building-products-hardware"
+    },
+    "Pre-Engineered Buildings": {
+      "id": "theme:pre-engineered-buildings"
+    },
+    "Plastic Pipes": {
+      "id": "theme:plastic-pipes"
+    },
+    "Metal Pipes": {
+      "id": "theme:metal-pipes"
+    },
+    "Steel Tubes & Pipes": {
+      "id": "theme:steel-tubes-pipes"
+    },
+    "Steel - Tubes/Pipes": {
+      "id": "theme:steel-tubes-pipes-2"
+    },
+    "Building Materials": {
+      "id": "theme:building-materials"
+    },
+    "Residential Projects": {
+      "id": "theme:residential-projects"
+    },
+    "Realty - National": {
+      "id": "theme:realty-national"
+    },
+    "Realty - Regional": {
+      "id": "theme:realty-regional"
+    },
+    "Realty - Construction & Contracting": {
+      "id": "theme:realty-construction-contracting"
+    },
+    "Real Estate Services & Platforms": {
+      "id": "theme:real-estate-services-platforms"
+    },
+    "Property Allied Services": {
+      "id": "theme:property-allied-services"
+    },
+    "Commercial & Diversified": {
+      "id": "theme:commercial-diversified"
+    },
+    "Infrastructure Investment Trusts": {
+      "id": "theme:infrastructure-investment-trusts"
+    },
+    "Infra/Real Estate Investment Trust": {
+      "id": "theme:infra-real-estate-investment-trust"
+    },
+    "REITs": {
+      "id": "theme:reits"
+    },
+    "Shipping": {
+      "id": "theme:shipping"
+    },
+    "Logistics Infra (Ports/Air)": {
+      "id": "theme:logistics-infra-ports-air"
+    },
+    "Logistics": {
+      "id": "theme:logistics"
+    },
+    "Logistics & Supply Chain": {
+      "id": "theme:logistics-supply-chain"
+    },
+    "Logistics - Warehousing/Supply Chain": {
+      "id": "theme:logistics-warehousing-supply-chain"
+    },
+    "Road Assets (Tolls/HAM)": {
+      "id": "theme:road-assets-tolls-ham"
+    },
+    "Surface Transport": {
+      "id": "theme:surface-transport"
+    },
+    "Waste Management": {
+      "id": "theme:waste-management"
+    },
+    "Water & Effluent Mgmt": {
+      "id": "theme:water-effluent-mgmt"
+    },
+    "Data Centres": {
+      "id": "theme:data-centres"
+    },
+    "Power Grid & Distribution": {
+      "id": "theme:power-grid-distribution"
+    },
+    "EPC / Buildout": {
+      "id": "theme:epc-buildout"
+    },
+    "India Data-Centre Buildout": {
+      "id": "theme:india-data-centre-buildout"
+    },
+    "IPO / Young Bases": {
+      "id": "theme:ipo-young-bases"
+    },
+    "Precision Engineering & Complex Manufacturing": {
+      "id": "theme:precision-engineering-complex-manufacturing"
+    },
+    "Pharma CDMO & Complex Manufacturing": {
+      "id": "theme:pharma-cdmo-complex-manufacturing"
+    },
+    "Emerging EMS": {
+      "id": "theme:emerging-ems"
+    },
+    "Roads & Highways": {
+      "id": "theme:roads-highways"
+    },
+    "Civic & Urban Infra": {
+      "id": "theme:civic-urban-infra"
+    },
+    "Water & Hydro Infra": {
+      "id": "theme:water-hydro-infra"
+    },
+    "Broad EPC & Civil": {
+      "id": "theme:broad-epc-civil"
+    },
+    "Civil Construction EPC": {
+      "id": "theme:civil-construction-epc"
+    },
+    "Building Construction EPC": {
+      "id": "theme:building-construction-epc"
+    },
+    "Industrial EPC & Turnkey": {
+      "id": "theme:industrial-epc-turnkey"
+    },
+    "Infra - Construction & Contracting": {
+      "id": "theme:infra-construction-contracting"
+    },
+    "Construction - Civil/Turnkey": {
+      "id": "theme:construction-civil-turnkey"
+    },
+    "Construction & Contracting": {
+      "id": "theme:construction-contracting"
+    },
+    "Diversified Conglomerates": {
+      "id": "theme:diversified-conglomerates"
+    },
+    "Commodity Trading": {
+      "id": "theme:commodity-trading"
+    },
+    "General Trading & Dist.": {
+      "id": "theme:general-trading-dist"
+    },
+    "Auto Components": {
+      "id": "theme:auto-components"
+    },
+    "Real Estate Developers": {
+      "id": "theme:real-estate-developers"
+    },
+    "Real Estate Ecosystem": {
+      "id": "theme:real-estate-ecosystem"
+    }
+  },
+  "themeParents": {
+    "India Data-Centre Buildout": "DATA CENTER ECOSYSTEM",
+    "Precision Engineering & Complex Manufacturing": "INDUSTRIAL COMPONENTRY",
+    "Pharma CDMO & Complex Manufacturing": "Healthcare Segments",
+    "Emerging EMS": "ENGINEERING & MANUFACTURING"
+  },
+  "cohorts": {
+    "IPO / Young Bases": {
+      "maxHistorySessions": 100,
+      "maxListingDays": 300
+    },
+    "Pharma - Small Cap": {
+      "enabled": false,
+      "reason": "Retired static size label. No dated market-cap rule is defined; it cannot establish a business exposure."
+    }
+  },
+  "primaryOverrides": {
+    "RAYMOND": {
+      "theme": "Precision Components & Tools",
+      "memberships": [
+        "Aerospace & Defense OEM",
+        "Precision Engineering & Complex Manufacturing"
+      ],
+      "reason": "Lifestyle and real-estate demergers leave precision engineering and aerospace businesses.",
+      "sourceUrl": "https://api.raymond.in/uploads/investor/1747065722517Financial%20Results%20with%20Press%20Release%20Q4%20FY25%20%E2%80%93%20May%2012%2C%202025.pdf",
+      "subIndustry": "Precision Engineering & Aerospace"
+    },
+    "LUMAXIND": {
+      "theme": "Electronics & Systems",
+      "reason": "Automotive lighting; suspension is not the documented product business.",
+      "sourceUrl": "https://www.lumaxworld.in/lumaxindustries/overview.html",
+      "subIndustry": "Automotive Lighting"
+    },
+    "KENNAMET": {
+      "theme": "Precision Components & Tools",
+      "reason": "Hard-metal tooling and machining systems, rather than a foundry classification.",
+      "sourceUrl": "https://www.in.investors.kennametal.com/",
+      "subIndustry": "Precision Tooling & Machining Systems"
+    },
+    "VIMTALABS": {
+      "theme": "Pharma - API & CRAMS",
+      "reason": "Contract research/testing; diagnostic and pathological services were sold in August 2024.",
+      "sourceUrl": "https://vimta.com/wp-content/uploads/Annual-Report-2024-25.pdf",
+      "subIndustry": "Contract Research & Testing"
+    },
+    "AZADIND": {
+      "theme": "Commercial Vehicles",
+      "subIndustry": "Electric Bus Manufacturing",
+      "confidence": "high",
+      "reason": "Issuer business verified from its official company source; retain broad scope where segment-specific exposure is not established.",
+      "sourceUrl": "https://azadindiamobility.com/about-us/"
+    },
+    "BONFIG": {
+      "theme": "Industrial Products",
+      "subIndustry": "Industrial Power Transmission",
+      "confidence": "high",
+      "reason": "Issuer business verified from its official company source; retain broad scope where segment-specific exposure is not established.",
+      "sourceUrl": "https://www.bonfiglioli.in/en"
+    },
+    "FUSIONCX": {
+      "theme": "Digital Services & BPO",
+      "subIndustry": "Customer Experience Services",
+      "confidence": "high",
+      "reason": "Issuer business verified from its official company source; retain broad scope where segment-specific exposure is not established.",
+      "sourceUrl": "https://www.fusioncx.com/about/"
+    },
+    "HDFIRE": {
+      "theme": "Industrial Products",
+      "subIndustry": "Fire Protection Systems",
+      "confidence": "high",
+      "reason": "Issuer business verified from its official company source; retain broad scope where segment-specific exposure is not established.",
+      "sourceUrl": "https://www.hdfire.com/about-us/"
+    },
+    "SMT": {
+      "theme": "Specialized Equipment & Retail",
+      "subIndustry": "Cardiovascular Medical Devices",
+      "confidence": "high",
+      "reason": "Issuer business verified from its official company source; retain broad scope where segment-specific exposure is not established.",
+      "sourceUrl": "https://www.smtpl.com/sites/default/files/2024-12/About%20SMT.pdf"
+    },
+    "TONBO": {
+      "theme": "Aerospace & Defense OEM",
+      "subIndustry": "Defence Electro-Optics and Imaging",
+      "confidence": "high",
+      "reason": "Issuer business verified from its official company source; retain broad scope where segment-specific exposure is not established.",
+      "sourceUrl": "https://tonboimaging.com/defense/"
+    },
+    "ZETWERK": {
+      "theme": "Industrial Products",
+      "subIndustry": "Industrial Manufacturing Platform",
+      "confidence": "high",
+      "reason": "Issuer business verified from its official company source; retain broad scope where segment-specific exposure is not established.",
+      "sourceUrl": "https://www.zetwerk.com/"
+    }
+  },
+  "overlapDecisions": {
+    "AARTIDRUGS": {
+      "Pharma - Small Cap": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "AFFLE": {
+      "Advertising & Agencies": {
+        "include": true,
+        "reason": "Advertising platform participation is explicitly curated and supported by its source sub-industry."
+      }
+    },
+    "ATLANTAELE": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "AZAD": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "BCG": {
+      "Advertising & Agencies": {
+        "include": true,
+        "reason": "The curated advertising exposure is distinct from its broad BPM primary."
+      }
+    },
+    "BHEL": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "DATAMATICS": {
+      "IT Services (Consulting)": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "ELECON": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "ENRIN": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "GNA": {
+      "Drivetrain & Axles": {
+        "include": true,
+        "reason": "Axle and drivetrain products justify the explicitly curated drivetrain exposure."
+      }
+    },
+    "GRANULES": {
+      "Pharma - Small Cap": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "GVPIL": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "HAPPSTMNDS": {
+      "IT Services (Consulting)": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "HARSHA": {
+      "Precision Components & Tools": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "INOXWIND": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "JASH": {
+      "Process Engineering Equipment": {
+        "include": true,
+        "reason": "Water-control equipment also participates in process engineering."
+      }
+    },
+    "KENNAMET": {
+      "Precision Components & Tools": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "LUMAXIND": {
+      "Suspension & Safety": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "NEULANDLAB": {
+      "Pharma - API & CRAMS": {
+        "include": true,
+        "reason": "API and custom manufacturing participation is documented by the exact source sub-industry."
+      }
+    },
+    "PSPPROJECT": {
+      "Civic & Urban Infra": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "PTCIL": {
+      "Precision Components & Tools": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "RAYMOND": {
+      "Premium & Branded Apparel": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "ROLEXRINGS": {
+      "Precision Components & Tools": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "RSYSTEMS": {
+      "IT Services (Consulting)": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "SHANTIGEAR": {
+      "Precision Components & Tools": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "SKIPPER": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "SOLARA": {
+      "Pharma - API & CRAMS": {
+        "include": true,
+        "reason": "API manufacturing participation is documented by the exact source sub-industry."
+      }
+    },
+    "STERTOOLS": {
+      "EPC / Buildout": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "TARIL": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "TDPOWERSYS": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "THERMAX": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "TRANSRAILL": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "VARROC": {
+      "Interior & Plastics": {
+        "include": true,
+        "reason": "Multiple auto-component product families support the explicit interior/components exposure."
+      }
+    },
+    "VIMTALABS": {
+      "Pharma - API & CRAMS": {
+        "include": false,
+        "reason": "Keep the existing specific business classification; the older broad/style symbol list does not establish an additional current exposure."
+      }
+    },
+    "WPIL": {
+      "Process Engineering Equipment": {
+        "include": true,
+        "reason": "Pumps and project/process equipment support both business exposures."
+      }
+    },
+    "CIGNITITEC": {
+      "IT Services (Consulting)": {
+        "include": false,
+        "reason": "Retain the explicit source primary for this non-active security; the competing legacy symbol list alone does not prove additional business exposure."
+      }
+    },
+    "544150": {
+      "Heavy Electrical Equip": {
+        "include": false,
+        "reason": "Retain the explicit source primary for this non-active security; the competing legacy symbol list alone does not prove additional business exposure."
+      }
+    },
+    "TATATECH": {
+      "Emerging EMS": {
+        "include": false,
+        "reason": "Engineering and digital services for manufacturers do not establish electronics contract manufacturing; remove the imported EMS overlay while retaining ER&D / Product Software.",
+        "sourceUrl": "https://ttlwebassets.tatatechnologies.com/app/uploads/2026/06/Annual-Report-FY-2025-26-I-Page-wise-view.pdf",
+        "reviewedOn": "2026-10-25"
+      }
+    },
+    "KAYNES": {
+      "Emerging EMS": {
+        "include": true,
+        "reason": "Include the integrated EMS manufacturer in the curated expansion overlay: its February 2026 disclosure documents core EMS plus PCB and semiconductor OSAT integration. This is a reviewed business overlay, not a size or listing-age cohort.",
+        "sourceUrl": "https://nsearchives.nseindia.com/corporate/KAYNESTECH_05022026200811_SEintimationIRPresentationSigned.pdf",
+        "reviewedOn": "2026-10-25"
+      }
+    }
+  },
+  "securityAliases": {
+    "ICICILIFE": {
+      "sourceSymbol": "ICICIPRULI",
+      "effectiveFrom": "2026-10-23",
+      "sourceUrl": "https://nsearchives.nseindia.com/content/circulars/CML76967.pdf"
+    }
+  },
+  "macroParents": {
+    "PROFESSIONAL SERVICES": {
+      "macro": "VII. BUSINESS & PROFESSIONAL SERVICES",
+      "reason": "Education, staffing, stationery and business services are not financial-sector businesses."
+    },
+    "POWER INFRA & ELECTRICALS": {
+      "macro": "II. INDUSTRIAL & DEFENSE ALPHA",
+      "reason": "General electrical capital goods belong to industrial infrastructure; data-centre participation remains a separate curated exposure."
+    }
+  },
+  "additionalThemes": [
+    {
+      "name": "Auto Components",
+      "block": "AUTOMOTIVE COMPONENTS",
+      "targets": [
+        "Chassis & Metal Parts",
+        "Electronics & Systems",
+        "Interior & Plastics",
+        "Drivetrain & Axles",
+        "Suspension & Safety",
+        "Wiring & Cables",
+        "Engines & Cooling/Seal",
+        "Tyres & Wheels",
+        "Batteries & EV"
+      ]
+    },
+    {
+      "name": "Real Estate Developers",
+      "block": "Real Estate Segments",
+      "targets": [
+        "Residential Projects",
+        "Commercial & Diversified"
+      ]
+    },
+    {
+      "name": "Real Estate Ecosystem",
+      "block": "Real Estate Segments",
+      "targets": [
+        "Real Estate Developers",
+        "Real Estate Services & Platforms"
+      ]
+    }
+  ],
+  "mirrorOverrides": {
+    "Auto Ancillaries - Diversified": [
+      "Auto Components"
+    ],
+    "Realty - National": [
+      "Real Estate Developers"
+    ],
+    "Realty - Regional": [
+      "Real Estate Developers"
+    ],
+    "Realty - Construction & Contracting": [
+      "Real Estate Ecosystem"
+    ],
+    "Pharma - API": [
+      "Pharma - API & CRAMS"
+    ],
+    "Pharma (Biotech & CRAMS)": [
+      "Pharma - API & CRAMS"
+    ],
+    "Consumer Electronics - EMS": [
+      "EMS - Electronics"
+    ],
+    "Finance - Capital Markets - RTA": [
+      "Market Infrastructure"
+    ],
+    "IT - Software": [
+      "IT Services (Consulting)",
+      "Enterprise IT Services",
+      "IT Products",
+      "Enterprise Platforms",
+      "ER&D / Product Software",
+      "Digital Identity & GovTech",
+      "Analytics & Data Services",
+      "Vertical & Geospatial SaaS",
+      "Communications Platforms"
+    ],
+    "Electrical Equipment": [
+      "Heavy Electrical Equip",
+      "Smart Metering & Inst.",
+      "Transformers & Switchgears",
+      "Grid Equipment & HVDC",
+      "Industrial Electrical Systems",
+      "Rotating Power Equipment",
+      "Transformer Ancillaries",
+      "Cables & Electricals"
+    ],
+    "Power - Generation/Distribution": [
+      "Integrated Utilities",
+      "Power Generation",
+      "Power Transmission",
+      "Power Grid & Distribution",
+      "Solar & Renewables"
+    ],
+    "Logistics & Supply Chain": [
+      "Logistics",
+      "Logistics Infra (Ports/Air)",
+      "Surface Transport",
+      "Logistics Tech"
+    ],
+    "Entertainment & Media": [
+      "Media & Entertainment",
+      "Electronic Media & News",
+      "Film Production & Exhibition",
+      "Digital Entertainment",
+      "Broadcast & Cable Networks",
+      "Media Production & Services",
+      "Print & Publication"
+    ]
+  }
+}

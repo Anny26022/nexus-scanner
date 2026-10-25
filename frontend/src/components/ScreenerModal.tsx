@@ -1,3 +1,4 @@
+import {isClassificationFilter} from '../data/classification';
 import { conditionValidationError, isIntegerParameter, numericInputValue } from '../utils/conditionValidation';
 import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -407,7 +408,7 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
     })};
     const raw = choices?.[def.id as keyof FilterChoices];
     const values = def.id === 'MA_STACK' ? SNAPSHOT_MA_PERIODS.map(String) : Array.isArray(raw) ? raw : [];
-    if (def.id !== 'MA_STACK' && !['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(def.id)) return def;
+    if (def.id !== 'MA_STACK' && !isClassificationFilter(def.id) && !['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(def.id)) return def;
     return {...def, parameters:def.parameters.map(parameter => parameter.type === 'string'
       ? {...parameter, options:(values ?? []).map(value => ({value, label:def.id === 'PRICE_BAND' && /^\d+$/.test(value) ? `${value}%` : value}))} : parameter)};
   }), [choices, etf]);

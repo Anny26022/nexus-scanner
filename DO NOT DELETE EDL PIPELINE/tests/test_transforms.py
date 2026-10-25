@@ -48,6 +48,26 @@ from edl_pipeline.transforms.fundamentals import load_taxonomy_overrides
 
 
 class TransformTests(unittest.TestCase):
+    def test_current_business_reviews_supersede_the_pinned_extract(self):
+        overrides, aliases, niches = load_taxonomy_overrides()
+        for symbol, sector, industry in (
+            ('RAYMOND', 'Capital Goods Non Electrical Equipment', 'Precision Engineering and Aerospace Components'),
+            ('VIMTALABS', 'Healthcare', 'Contract Research and Testing'),
+            ('TONBO', 'Aerospace and Defence', 'Aerospace and Defence Equipment'),
+        ):
+            with self.subTest(symbol=symbol):
+                row = canonicalize_stock(analyze_stock({'Symbol':symbol, 'CV':{'SECTOR':'Original', 'INDUSTRY_NAME':'Original'}},
+                    {}, {}, {}, None, overrides, aliases, niches))
+                self.assertEqual((row['sector'], row['industry']), (sector, industry))
+                self.assertEqual(row['provider_sector'], 'Original')
+
+    def test_shared_industry_does_not_acquire_the_first_stocks_sector(self):
+        analytics = generate_analytics([{'Symbol':str(i), 'Sector':sector, 'Basic Industry':'Data Centre',
+            'close':100, 'sma20':90, 'sma50':90, 'sma200':90, '% from 52W High':1}
+            for i, sector in enumerate(['Realty','IT Software'])])
+        self.assertIsNone(analytics['industries'][0]['sector'])
+        self.assertEqual(analytics['industries'][0]['sectors'], ['IT Software','Realty'])
+
     def test_taxonomy_resources_work_with_staged_data_and_preserve_provider_labels(self):
         with tempfile.TemporaryDirectory() as folder, mock.patch('pipeline_utils.BASE_PATH', Path(folder)):
             manual, aliases, niches = load_taxonomy_overrides()

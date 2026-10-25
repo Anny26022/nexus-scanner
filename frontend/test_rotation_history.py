@@ -140,7 +140,7 @@ class RotationHistoryTests(unittest.TestCase):
         self.assertIn('S0', shards['core']['W'])
         self.assertIn('theme:Lending', shards['groups']['M'])
         self.assertEqual(set(index['benchmarks']), {'N50', 'N500', 'EW'})
-        self.assertEqual(ledger['records']['S0'], [[days[-1], ['Banks', 'Private Banks', None, ['Lending'], 'Finance', None]]])
+        self.assertEqual(ledger['records']['S0'], [[days[-1], ['Banks', 'Private Banks', None, ['Lending'], ['Finance'], None, None, None]]])
         index, _, _ = rh.build(days[-1], rows, closes, {'N50': rise, 'N500': rise, 'MS400': []}, taxonomy)
         self.assertNotIn('MS400', index['benchmarks'])
         with tempfile.TemporaryDirectory() as folder:
@@ -178,7 +178,7 @@ class RotationHistoryTests(unittest.TestCase):
         benchmark = {'N50': [(day, 100.) for day in days]}
         _, plain, _ = rh.build(days[-2], rows, prices, benchmark, primary)
         _, curated, ledger = rh.build(days[-2], rows, prices, benchmark, duplicate)
-        key = 'theme:IPO / Young Bases'
+        key = 'cohort:IPO / Young Bases'
         self.assertEqual(plain['groups'], curated['groups'])
         # A ages out; the other stocks retain the cohort as a secondary membership.
         changed = {s: {'theme': 'Other', 'memberships': {} if s == 'A' else {'IPO / Young Bases': 'curated-rule'}} for s in 'ABCD'}

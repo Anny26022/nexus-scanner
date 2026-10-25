@@ -102,7 +102,8 @@ it('caps fallback charts before aggregation and excludes future events', async (
       headers:new Headers({'Content-Encoding':'gzip'})});
   vi.stubGlobal('fetch', fetcher);
   const {screenerApi} = await import('../api/screenerApi');
-  const clipped = await screenerApi.getChart('TEST', 'f'.repeat(64), '2026-09-29');
+  await expect(screenerApi.getChart('TEST', 'f'.repeat(64), '2026-09-29')).rejects.toThrow('selected release');
+  const clipped = await screenerApi.getChart('TEST', manifest.revision, '2026-09-29');
   expect(clipped.candles).toEqual(candles.slice(0, 2));
   for (const interval of ['W', 'M'] as const)
     expect(aggregate(clipped.candles, interval)).toEqual([{...candles[0], volume:200}]);

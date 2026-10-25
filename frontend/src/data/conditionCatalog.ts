@@ -5,6 +5,7 @@ import technicalConfigurations from './snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from './movingAverageRules';
 import { etfConditionCatalog } from './etfFields';
 import { extendedConditionCatalog } from './extendedMetrics';
+import {CLASSIFICATION_FILTERS} from './classification';
 
 export const RETIRED_TECHNICAL_LABELS: Record<string, string> = {
   INDICATOR_COMPARE: 'Indicator Compare / Crossover',
@@ -83,6 +84,17 @@ export const ADVANCED_TECHNICAL_CONDITIONS: ConditionDef[] = [
 ];
 
 export const NEXUS_CONDITION_CATALOG: ConditionDef[] = ([
+  ...Object.entries(CLASSIFICATION_FILTERS).map(([id, level]): ConditionDef => ({
+    id, label: ({theme:'Theme', block:'Thematic block', macro:'Macro pillar', subIndustry:'Sub-industry', cohort:'Listing cohort', aggregate:'Theme aggregate'})[level],
+    category:'fundamentals', description: level === 'cohort'
+      ? 'Listing cohorts are separate from business themes. Young bases require a listing within 300 days and no more than 100 observed sessions.'
+      : level === 'aggregate' ? 'Umbrella groups combine related themes. They do not add business exposures or change macro allocation.'
+        : level === 'subIndustry' ? 'Published sub-industry label. Missing sub-industries remain unclassified.'
+          : 'Matches primary and supported secondary business memberships. Choose any or all selected groups.',
+    parameters:[{id:'values', label:'Groups', type:'string', defaultValue:''},
+      {id:'match', label:'Match selected groups', type:'select', defaultValue:'ANY',
+        options:[{value:'ANY', label:'Any selected group'}, {value:'ALL', label:'Every selected group'}]}],
+  })),
   {
     id:'PRICE_VS_MAS', label:'Price vs moving averages', category:'trend',
     description:'Latest close must satisfy every selected comparison (AND). These are current-price comparisons, not persistence or moving-average stack rules. Equality does not count as above or below.',

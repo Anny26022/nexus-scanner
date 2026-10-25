@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, SlidersHorizontal } from 'lucide-react';
 import { screenerApi } from '../api/screenerApi';
@@ -11,6 +11,7 @@ import {
 } from '../utils/marketPulse';
 import type { BreadthSession, IndexCard } from '../types/market';
 import { Button } from './Button';
+import '../styles/market.css';
 
 const formatDate = (date: string, withYear = true) => new Date(`${date}T00:00:00`)
   .toLocaleDateString('en-IN', {day: 'numeric', month: 'short', ...(withYear ? {year: 'numeric'} : {})});
@@ -30,11 +31,14 @@ function Panel({title, aside, children, className = ''}: {title: string; aside?:
 }
 
 function Segmented<T extends string>({label, value, options, onChange}: {label: string; value: T; options: [T, string][]; onChange: (value: T) => void}) {
+  const name = useId();
   return <div className="inline-flex rounded-(--radius-md) bg-field p-0.5" role="radiogroup" aria-label={label}>
-    {options.map(([key, text]) => <button key={key} type="button" role="radio" aria-checked={value === key} onClick={() => onChange(key)}
-      className={`h-7 rounded-[7px] px-2.5 text-[12px] font-semibold transition ${value === key ? 'bg-surface text-text shadow-(--shadow-control)' : 'text-muted hover:text-text'}`}>
+    {options.map(([key, text]) => <label key={key}
+      className={`relative flex h-7 cursor-pointer items-center rounded-[7px] px-2.5 text-[12px] font-semibold transition ${value === key ? 'bg-surface text-text shadow-(--shadow-control)' : 'text-muted hover:text-text'}`}>
+      <input type="radio" name={name} value={key} checked={value === key} onChange={() => onChange(key)}
+        className="absolute inset-0 m-0 h-full w-full cursor-pointer appearance-none rounded-[inherit] bg-transparent" />
       {text}
-    </button>)}
+    </label>)}
   </div>;
 }
 
@@ -138,6 +142,7 @@ function Extremes({rows, taxonomy, onOpenChart, onScreenSector}: {
   onScreenSector?: (sector: string) => void;
 }) {
   const [side, setSide] = useState<Side>('highs');
+  const sideName = useId();
   const [grouping, setGrouping] = useState<Grouping>('sector');
   const [open, setOpen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
@@ -149,17 +154,16 @@ function Extremes({rows, taxonomy, onOpenChart, onScreenSector}: {
   const choose = (next: Side) => { setSide(next); setOpen(null); setAll(false); };
   const visible = all ? groups : groups.slice(0, GROUP_LIMIT);
 
-  return <Panel title="Highs & lows" aside={<span className="text-[12px] text-muted">52-week closes</span>}>
+  return <Panel title="Highs & lows" aside={<span className="text-[12px] text-muted">52-week highs/lows</span>}>
     <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="New highs or new lows">
       {(['highs', 'lows'] as const).map(key => {
         const active = side === key;
-        return <button key={key} type="button" role="radio" aria-checked={active} onClick={() => choose(key)} data-tone={key === 'highs' ? 'up' : 'down'}
-          className={`flex min-w-0 flex-col gap-3 rounded-(--radius-lg) p-3.5 text-left transition ${active ? 'bg-surface ring-[1.5px] ring-(--tone) shadow-(--shadow-card)' : 'bg-surface-subtle hover:bg-surface-hover'}`}>
+        return <label key={key} data-tone={key === 'highs' ? 'up' : 'down'}
+          className={`flex min-w-0 cursor-pointer flex-col gap-3 rounded-(--radius-lg) p-3.5 text-left transition ${active ? 'bg-surface ring-[1.5px] ring-(--tone) shadow-(--shadow-card)' : 'bg-surface-subtle hover:bg-surface-hover'}`}>
           <span className="flex items-center justify-between gap-2">
             <span className="text-[11.5px] font-bold uppercase tracking-[0.06em]" style={{color: 'var(--tone)'}}>New {key}</span>
-            <span className={`grid size-4 place-items-center rounded-full border-[1.5px] ${active ? 'border-(--tone)' : 'border-line-strong'}`} aria-hidden="true">
-              {active && <span className="size-2 rounded-full" style={{background: 'var(--tone)'}} />}
-            </span>
+            <input type="radio" name={sideName} value={key} checked={active} onChange={() => choose(key)}
+              className="m-0 size-4 shrink-0 cursor-pointer" style={{accentColor: 'var(--tone)'}} />
           </span>
           <span className="text-[28px] font-semibold leading-none tabular-nums tracking-[-0.03em] text-text">{count(sets[key].length)}</span>
           <span className="flex flex-col gap-1">
@@ -168,7 +172,7 @@ function Extremes({rows, taxonomy, onOpenChart, onScreenSector}: {
               <span className="shrink-0 font-semibold tabular-nums" style={{color: 'var(--tone)'}}>{share(group.share)}</span>
             </span>) : <span className="text-[12px] text-muted">None this session</span>}
           </span>
-        </button>;
+        </label>;
       })}
     </div>
 
@@ -235,11 +239,11 @@ function Themes({rows, taxonomy}: {rows: PulseRow[]; taxonomy?: Parameters<typeo
           style={{background: `color-mix(in srgb, var(--tone) ${4 + strength * 12}%, var(--surface))`}}>
           <span className="truncate text-[12.5px] font-medium text-secondary">{move.name}</span>
           <span className="flex items-baseline justify-between gap-2">
-            <span className="text-[17px] font-semibold tabular-nums tracking-[-0.02em]" style={{color: 'var(--tone)'}}>{signed(move.median)}</span>
-            <span className="whitespace-nowrap text-[11px] tabular-nums text-muted">{share(move.advancing)} up</span>
+            <span className="text-[17px] font-semibold tabular-nums tracking-[-0.02em] text-text">{signed(move.median)}</span>
+            <span className="whitespace-nowrap text-[11px] tabular-nums text-secondary">{share(move.advancing)} up</span>
           </span>
           <span className="h-1 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--text)_8%,transparent)]" aria-hidden="true">
-            <span className="block h-full rounded-full bg-(--mkt-up)" style={{width: `${move.advancing * 100}%`}} />
+            <span className="block h-full rounded-full bg-positive" style={{width: `${move.advancing * 100}%`}} />
           </span>
         </li>;
       })}

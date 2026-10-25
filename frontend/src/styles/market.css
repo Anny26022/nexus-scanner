@@ -1,26 +1,23 @@
-/* Market page colours. They match the Rotation page: improving blue, leading green, weakening amber, lagging red. */
+@layer components {
+/* Decorative stage colours match Rotation; text uses shared semantic colours. */
 .mkt {
-  --mkt-up: #0b9b74;
-  --mkt-down: #e11d48;
   --mkt-stage-1: #3b82f6;
   --mkt-stage-2: #0b9b74;
   --mkt-stage-3: #d97706;
   --mkt-stage-4: #e11d48;
 }
 [data-theme="dark"] .mkt {
-  --mkt-up: #10b981;
-  --mkt-down: #f43f5e;
   --mkt-stage-1: #60a5fa;
   --mkt-stage-2: #10b981;
   --mkt-stage-3: #f59e0b;
   --mkt-stage-4: #f43f5e;
 }
-[data-tone="up"] { --tone: var(--mkt-up); }
-[data-tone="down"] { --tone: var(--mkt-down); }
-[data-stage="1"] { --tone: var(--mkt-stage-1); }
-[data-stage="2"] { --tone: var(--mkt-stage-2); }
-[data-stage="3"] { --tone: var(--mkt-stage-3); }
-[data-stage="4"] { --tone: var(--mkt-stage-4); }
+.mkt [data-tone="up"] { --tone: var(--positive); }
+.mkt [data-tone="down"] { --tone: var(--negative); }
+.mkt [data-stage="1"] { --tone: var(--mkt-stage-1); }
+.mkt [data-stage="2"] { --tone: var(--mkt-stage-2); }
+.mkt [data-stage="3"] { --tone: var(--mkt-stage-3); }
+.mkt [data-stage="4"] { --tone: var(--mkt-stage-4); }
 
 /* Index ribbon: one surface, hairline dividers, swipeable on phones. */
 .mkt-ribbon { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(132px, 1fr); overflow-x: auto; scrollbar-width: none; scroll-snap-type: x mandatory; }
@@ -28,3 +25,4 @@
 .mkt-ribbon > * { scroll-snap-align: start; }
 .mkt-ribbon > * + * { border-left: 1px solid var(--line); }
 @media (max-width: 767px) { .mkt-ribbon { grid-auto-columns: minmax(158px, 1fr); } }
+}

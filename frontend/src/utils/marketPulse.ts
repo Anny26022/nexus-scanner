@@ -102,7 +102,9 @@ export function themeMoves(rows: PulseRow[], period: Period, taxonomy?: ThemeCla
     if (value == null) continue;
     for (const name of groupsOf(row, 'theme', taxonomy)) {
       if (name === 'Unclassified') continue;
-      themes.set(name, [...(themes.get(name) ?? []), value]);
+      const values = themes.get(name) ?? [];
+      values.push(value);
+      themes.set(name, values);
     }
   }
   return [...themes].filter(([, values]) => values.length >= minimum)

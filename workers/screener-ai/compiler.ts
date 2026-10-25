@@ -3,7 +3,7 @@ import type {AiFilterDefinition} from '../../frontend/src/api/aiFilterCatalog';
 import {compactCatalog} from './compactCatalog';
 import {materializeCompilerResult} from './compilerResult';
 
-export const GROQ_MODEL = 'qwen/qwen3.8-27b';
+export const GROQ_MODEL = 'llama-3.3-70b-versatile';
 export const PRIMARY_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 export const FALLBACK_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 export type CompileModel = typeof GROQ_MODEL | typeof PRIMARY_MODEL | typeof FALLBACK_MODEL | string;

@@ -48,9 +48,7 @@ const sessionOf = (record: EarningsRecord): Session | null => {
   if (weekday === 0 || weekday === 6 || record.timing === 'Holiday') return 'closed';
   return record.timing === 'Before' ? 'before' : record.timing === 'During' ? 'during' : record.timing === 'After' ? 'after' : null;
 };
-type Lens = 'grade' | GroupBy;
-const LENSES: [Lens, string][] = [['grade', 'Grade'], ...(['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const)
-  .map(level => [level, GROUP_LABEL[level]] as [Lens, string])];
+const LEVELS: GroupBy[] = ['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'];
 
 type SortKey = 'filing_day' | 'quality' | 'revenue_yoy' | 'pat_yoy' | 'eps_yoy' | 'run_up' | 'day1' | 'drift' | 'since';
 const resultKey = (record: EarningsRecord) => `${record.symbol}|${record.filing_day}`;
@@ -267,8 +265,6 @@ function Detail({record, history, reactionOf, onOpenChart, lead = 'results'}: {
   </article>;
 }
 
-const TIERS = [['Mega & large', ['Mega', 'Large']], ['Mid caps', ['Mid']], ['Small caps', ['Small']], ['Micro caps', ['Micro']]] as const;
-const tierOf = (record: EarningsRecord) => TIERS.find(([, caps]) => (caps as readonly string[]).includes(record.cap_type ?? ''))?.[0] ?? 'Other';
 
 interface Facet { label: string; records: EarningsRecord[]; medianPatYoy: number | null; grade?: string }
 interface Day { date: string; reported: EarningsRecord[]; upcoming: EarningsRecord[] }
@@ -326,7 +322,9 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
   const isLatest = season === allSeasons[0];
   const [query, setQuery] = useState('');
   const [session, setSession] = useState<Session | null>(null);
-  const [lens, setLens] = useState<Lens>('grade');
+  // Grade filters by result quality; the level and group pick where in the classification to look.
+  const [grade, setGrade] = useState<string | null>(null);
+  const [lens, setLens] = useState<GroupBy>('sector');
   const [focus, setFocus] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey>('filing_day');
   const [pick, setPick] = useState<string | null>(null);
@@ -339,7 +337,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
 
   // Nexus's own classification, the same labels as the screener's grouped results.
   const directory = useQuery({queryKey: ['chart-rows', datasetRevision], queryFn: () => screenerApi.getChartRows(datasetRevision),
-    staleTime: Infinity, retry: false, enabled: lens !== 'grade'});
+    staleTime: Infinity, retry: false});
   const themes = useQuery({queryKey: ['theme-classification', datasetRevision], queryFn: () => screenerApi.getThemeClassification(datasetRevision),
     staleTime: Infinity, retry: false, enabled: THEME_LEVELS.has(lens)});
   const classification = useMemo(() => {
@@ -412,15 +410,12 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
     .reduce((sum, [, rows]) => sum + rows.filter(matches).length, 0);
 
   const classify = (symbol: string) => classification.get(symbol);
-  const classifying = lens !== 'grade' && (directory.isPending || (THEME_LEVELS.has(lens) && themes.isPending));
-  const facets: Facet[] = classifying ? [] : lens !== 'grade' ? groupRecords(base, lens, classify)
-    : scheduleMode ? TIERS.map(([label]) => ({label, records: base.filter(row => tierOf(row) === label), medianPatYoy: null})).filter(facet => facet.records.length)
-    : QUALITY_ORDER.map(grade => {
-      const rows = base.filter(row => row.quality === grade);
-      return {label: grade, grade, records: rows, medianPatYoy: summarize(rows).medianPatYoy};
-    });
+  const classifying = directory.isPending || (THEME_LEVELS.has(lens) && themes.isPending);
+  const grades = QUALITY_ORDER.map(label => [label, base.filter(row => row.quality === label).length] as const).filter(([, count]) => count);
+  const graded = grade && !scheduleMode ? base.filter(row => row.quality === grade) : base;
+  const facets: Facet[] = classifying ? [] : groupRecords(graded, lens, classify);
   const focused = facets.find(facet => facet.label === focus) ?? null;
-  const inFacet = focused ? focused.records : base;
+  const inFacet = focused ? focused.records : graded;
   const bucketOfRecord = (record: EarningsRecord) => { const move = reactionOf(record); return move ? bucketOf(move) : null; };
   const buckets = new Map<Bucket, number>();
   if (view === 'reactions') for (const record of inFacet) { const found = bucketOfRecord(record); if (found) buckets.set(found, (buckets.get(found) ?? 0) + 1); }
@@ -471,7 +466,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
   const medianSince = median(visible.map(row => reactionOf(row)?.since));
   const beats = (summary.verdicts.STRONG_BEAT ?? 0) + (summary.verdicts.BEAT ?? 0);
   const misses = (summary.verdicts.MISS ?? 0) + (summary.verdicts.STRONG_MISS ?? 0);
-  const scope = [picked && day(picked.date, {weekday: 'long', day: 'numeric', month: 'short'}), focused?.label].filter(Boolean).join(' · ');
+  const scope = [picked && day(picked.date, {weekday: 'long', day: 'numeric', month: 'short'}), grade && !scheduleMode && `${grade} results`, focused?.label].filter(Boolean).join(' · ');
 
   return <div className="ep">
     <header className="ep-hero">
@@ -510,13 +505,18 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
             {([['results', 'Results'], ['reactions', 'Reactions']] as const).map(([value, label]) => <button key={value} type="button" role="tab"
               aria-selected={view === value} onClick={() => { setView(value); setBucket(null); setSort(value === 'reactions' ? 'since' : 'filing_day'); }}>{label}</button>)}
           </div>}
-          <label className="ep-quiet"><span className="sr-only">Break down by</span>
-            <select value={lens} onChange={event => { setLens(event.target.value as Lens); setFocus(null); }}>
-              {LENSES.map(([value, label]) => <option key={value} value={value}>{value === 'grade' && scheduleMode ? 'Size' : label}</option>)}
+          {!scheduleMode && <label className="ep-quiet" data-active={grade ? true : undefined}><span className="sr-only">Grade</span>
+            <select value={grade ?? ''} onChange={event => { setGrade(event.target.value || null); setFocus(null); }}>
+              <option value="">All grades</option>
+              {grades.map(([label, count]) => <option key={label} value={label}>{label} · {count}</option>)}
+            </select><ChevronDown size={11} aria-hidden="true" /></label>}
+          <label className="ep-quiet"><span className="sr-only">Classification level</span>
+            <select value={lens} onChange={event => { setLens(event.target.value as GroupBy); setFocus(null); }}>
+              {LEVELS.map(level => <option key={level} value={level}>{GROUP_LABEL[level]}</option>)}
             </select><ChevronDown size={11} aria-hidden="true" /></label>
-          <label className="ep-quiet" data-active={focus ? true : undefined}><span className="sr-only">Group</span>
+          <label className="ep-quiet" data-active={focus ? true : undefined}><span className="sr-only">{GROUP_LABEL[lens]}</span>
             <select value={focus ?? ''} disabled={classifying} onChange={event => { setFocus(event.target.value || null); }}>
-              <option value="">{classifying ? 'Loading…' : `All ${lens === 'grade' ? (scheduleMode ? 'sizes' : 'grades') : GROUP_LABEL[lens as GroupBy].toLowerCase() + 's'}`}</option>
+              <option value="">{classifying ? 'Loading…' : `All ${GROUP_LABEL[lens].toLowerCase().replace(/y$/, 'ie')}s`}</option>
               {facets.map(facet => <option key={facet.label} value={facet.label}>{facet.label} · {facet.records.length}</option>)}
             </select><ChevronDown size={11} aria-hidden="true" /></label>
           <span className="ep-spacer" />
@@ -543,7 +543,7 @@ export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevi
               <em>{record.company_name}</em>
               <span>{[record.cap_type && `${record.cap_type} cap`, record.industry ?? record.sector, record.timing && (TIMING[record.timing] ?? record.timing)].filter(Boolean).join(' · ')}</span>
             </button></li>)}</ul>
-          : <EarningsResults key={JSON.stringify([season.periodEnd, activeDay, lens, focus, sort, query, session, view, bucket])} records={sorted} onOpen={open}
+          : <EarningsResults key={JSON.stringify([season.periodEnd, activeDay, grade, lens, focus, sort, query, session, view, bucket])} records={sorted} onOpen={open}
             reactionOf={reactionOf} view={view} activeKey={active ? resultKey(active) : null} expanded={!split && active ? <div className="ep-inline">{detail}</div> : null}>
             {view === 'reactions' ? <div className="ep-cols ep-rcols">
                 <span>Company</span><span className="ep-rpath-head">{RUN_UP} days before · after</span>

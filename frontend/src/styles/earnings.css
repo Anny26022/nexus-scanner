@@ -278,7 +278,11 @@
 .ep-detail[data-lead="reactions"] > .ep-earlier { order: -1; }
 @media (max-width: 600px) {
   .ep-bar { gap: 4px 6px; }
-  .ep-views { flex-basis: 100%; margin: 0 0 6px; }
+  .ep-views { flex: 1 1 calc(100% - 44px); margin: 0 0 6px; }
+  .ep-search { order: -1; margin-bottom: 6px; }
+  .ep-views { order: -2; }
+  .ep-search[data-open] { flex: 1 1 100%; order: -1; }
+  .ep-search[data-open] input { width: 100%; }
   .ep-row small.is-muted { white-space: normal; line-height: 1.2; text-align: right; }
   .ep-panel { display: none; }
 }

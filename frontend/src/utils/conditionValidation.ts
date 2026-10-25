@@ -23,7 +23,7 @@ export function conditionValidationError(map: Record<string, ActiveCondition>): 
     if (!def) continue;
     if (isEtfCondition(condition.conditionId) && etfGroup(condition.conditionId)?.type !== 'number'
         && !condition.parameters.values?.length) return `${def.label}: select at least one value.`;
-    if (['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(condition.conditionId)) {
+    if (['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP','NARRATIVE'].includes(condition.conditionId)) {
       const value = condition.parameters[condition.conditionId === 'INDEX_MEMBERSHIP' ? 'indexName' : 'values'];
       if (!(Array.isArray(value) ? value : String(value ?? '').split(',')).some(item => String(item).trim())) {
         return `${def.label}: select at least one value.`;

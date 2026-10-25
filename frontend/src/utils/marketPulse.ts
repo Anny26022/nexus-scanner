@@ -1,5 +1,6 @@
 /** Per-stock market pulse: trend stages, new highs and lows, and group returns, from one published snapshot. */
 import type { ThemeClassification } from './copyResults';
+import { NARRATIVES, NARRATIVE_NAMES, narrativesOf } from '../data/narratives';
 
 export type Stage = 1 | 2 | 3 | 4;
 export const STAGES: Stage[] = [1, 2, 3, 4];
@@ -79,11 +80,12 @@ export function pulseRow(stock: PulseSource): PulseRow {
   };
 }
 
-export type Grouping = 'sector' | 'industry' | 'theme';
-export const GROUPINGS: [Grouping, string][] = [['sector', 'Sector'], ['industry', 'Industry'], ['theme', 'Theme']];
+export type Grouping = 'sector' | 'industry' | 'theme' | 'narrative';
+export const GROUPINGS: [Grouping, string][] = [['sector', 'Sector'], ['industry', 'Industry'], ['theme', 'Theme'], ['narrative', 'Narrative']];
 
 /** The groups a stock belongs to; a stock can sit in its primary theme and curated themes at once. */
 export function groupsOf(row: PulseRow, grouping: Grouping, taxonomy?: ThemeClassification): string[] {
+  if (grouping === 'narrative') return narrativesOf(row.symbol).map(tag => tag.name);
   if (grouping !== 'theme') return [row[grouping]];
   const record = taxonomy?.records[row.symbol] as (ThemeClassification['records'][string] & {memberships?: Record<string, string>}) | undefined;
   const themes = new Set([record?.theme, ...Object.keys(record?.memberships ?? {})].filter((name): name is string => Boolean(name?.trim())));
@@ -107,8 +109,8 @@ export function breakdown(rows: PulseRow[], grouping: Grouping, taxonomy?: Theme
   })).sort((a, b) => b.count - a.count || (a.name === 'Unclassified' ? 1 : b.name === 'Unclassified' ? -1 : a.name.localeCompare(b.name)));
 }
 
-export type PocketLevel = 'theme' | 'industry' | 'subIndustry';
-export const POCKET_LEVEL: Record<PocketLevel, string> = {theme: 'Theme', industry: 'Industry', subIndustry: 'Niche'};
+export type PocketLevel = 'theme' | 'industry' | 'subIndustry' | 'narrative';
+export const POCKET_LEVEL: Record<PocketLevel, string> = {theme: 'Theme', industry: 'Industry', subIndustry: 'Niche', narrative: 'Narrative'};
 
 export interface ThemeFlow {
   name: string;
@@ -133,7 +135,8 @@ const MAX_OVERLAP = 0.6;
 const clip = (value: number) => Math.max(-90, Math.min(300, value));
 
 function labelsAt(row: PulseRow, level: PocketLevel, taxonomy?: ThemeClassification): string[] {
-  if (level === 'theme') return groupsOf(row, 'theme', taxonomy).filter(name => name !== 'Unclassified');
+  // Narratives have their own strip; a taxonomy theme of the same name is not ranked again as a pocket.
+  if (level === 'theme') return groupsOf(row, 'theme', taxonomy).filter(name => name !== 'Unclassified' && !NARRATIVE_NAMES.includes(name));
   const label = level === 'industry' ? row.industry : taxonomy?.records[row.symbol]?.subIndustry;
   return label && label !== 'Unclassified' && !/\b(miscellaneous|others?|diversified)\b|^trading$/i.test(label) ? [label] : [];
 }
@@ -175,6 +178,25 @@ export function themeFlows(rows: PulseRow[], period: Period, taxonomy?: ThemeCla
       movers: pocket.members.filter(member => direction > 0 ? member.move >= threshold : member.move <= -threshold).length, leaders, cohort: pocket.cohort});
   }
   return result;
+}
+
+/** Every narrative's value-weighted move: always listed, never filtered or merged away. */
+export function narrativeFlows(rows: PulseRow[], period: Period, direction: 1 | -1 = 1): ThemeFlow[] {
+  const bySymbol = new Map(rows.map(row => [row.symbol, row]));
+  const threshold = period === 'd1' ? 2 : 5;
+  return NARRATIVES.flatMap(narrative => {
+    const members = Object.keys(narrative.members).flatMap(symbol => {
+      const row = bySymbol.get(symbol), move = row?.returns[period], traded = row?.traded[period];
+      return move == null || traded == null || traded <= 0 ? [] : [{symbol, move, weight: clip(move), traded}];
+    });
+    const traded = members.reduce((sum, member) => sum + member.traded, 0);
+    if (!members.length || traded <= 0) return [];
+    const flow = members.reduce((sum, member) => sum + member.weight * member.traded, 0) / traded;
+    const leaders = [...members].sort((a, b) => direction * (b.weight * b.traded - a.weight * a.traded)).slice(0, 3)
+      .map(({symbol, move}) => ({symbol, move}));
+    return [{name: narrative.name, level: 'narrative' as const, flow, traded, members: members.length,
+      movers: members.filter(member => direction > 0 ? member.move >= threshold : member.move <= -threshold).length, leaders, cohort: false}];
+  }).sort((a, b) => direction * (b.flow - a.flow) || a.name.localeCompare(b.name));
 }
 
 export function stageCounts(rows: PulseRow[]): Record<Stage, number> {

@@ -1,0 +1,1505 @@
+{
+ "version": 1,
+ "reviewedOn": "2026-10-26",
+ "note": "Hand-curated cross-industry narratives. core: the narrative is the main business; exposure: a stated, material share of revenue or orders. Evidence is the company description or classification label that supports membership.",
+ "narratives": [
+  {
+   "id": "data-centre-buildout",
+   "name": "India Data-Centre Buildout",
+   "thesis": "Everything a data centre needs: power, cooling, cables, racks and construction.",
+   "members": {
+    "AEROFLEX": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "ANANTRAJ": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "BBOX": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "CEMPRO": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "E2E": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "FINCABLES": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "HFCL": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "KRN": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "MTARTECH": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "NETWEB": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "RRKABEL": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "SETL": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "STLTECH": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "TDPOWERSYS": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "TECHNOE": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    }
+   }
+  },
+  {
+   "id": "precision-engineering",
+   "name": "Precision Engineering & Complex Manufacturing",
+   "thesis": "High-precision components and complex assemblies for aerospace, defence, energy and global OEMs.",
+   "members": {
+    "AEQUS": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "AZAD": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "BALUFORGE": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "DYNAMATECH": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "GALAPREC": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "HAPPYFORGE": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "INDOMIM": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "JYOTICNC": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "KDDL": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "MACPOWER": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "MTARTECH": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "OMNI": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "PTCIL": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "RATNAVEER": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "SANSERA": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "SONACOMS": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "UNIMECH": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    }
+   }
+  },
+  {
+   "id": "pharma-cdmo",
+   "name": "Pharma CDMO & Complex Manufacturing",
+   "thesis": "Contract development and manufacturing for global pharma innovators.",
+   "members": {
+    "AARTIPHARM": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "GLAND": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "SENORES": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "SHILPAMED": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    }
+   }
+  },
+  {
+   "id": "emerging-ems",
+   "name": "Emerging EMS",
+   "thesis": "Electronics manufacturing services scaling with India’s electronics supply chain.",
+   "members": {
+    "AVALON": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "CYIENTDLM": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "SYRMA": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    },
+    "TATATECH": {
+     "role": "core",
+     "source": "curated",
+     "evidence": "Curated member of the Nexus theme taxonomy."
+    }
+   }
+  },
+  {
+   "id": "defence-electronics",
+   "name": "Defence Electronics & Systems",
+   "thesis": "Indigenous defence electronics, weapons and platforms riding the domestic procurement and export push.",
+   "members": {
+    "BEL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "BEL makes defence electronics systems including radars, communications, electronic warfare and weapon systems for the Indian armed forces."
+    },
+    "HAL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Almost all revenue comes from Indian government defence accounts. The order book is fully backstopped, so the delivery schedule, not market demand, sets earnings."
+    },
+    "BDL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Bharat Dynamics makes guided missiles and underwater weapons for India's armed forces: the Akash and MRSAM surface-to-air missile systems, the Astra air-to-air missile, licensed anti-tank guided missi"
+    },
+    "DATAPATTNS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Data Patterns builds defence and aerospace electronics for DRDO, MoD and DPSUs such as BEL, HAL and ECIL, plus export OEM programmes. Radars contribute ~40–52% of FY26 revenue and electronic warfare ~"
+    },
+    "APOLLO": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Apollo Micro Systems makes electronic subsystems for missiles, mines, torpedoes and fuzes — complete underwater mine systems, air-defence missile subsystems and precision-guidance seekers."
+    },
+    "ASTRAMICRO": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Astra Microwave makes radar, electronic warfare and satellite communication systems and subsystems for defence and space. Defence is about 72% of sales."
+    },
+    "PARAS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Paras Defence makes defence engineering products and optics and optronic systems for defence and space customers."
+    },
+    "ZENTEC": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Its simulators train crews and its systems defend against drones. It sells mainly to the Indian defence ministry, with naval, air-force and overseas expansion pitched."
+    },
+    "AVANTEL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Avantel develops, installs and commissions defence communication systems for voice and data, including satellite ground-segment systems."
+    },
+    "DCXINDIA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "DCX Systems makes electronic sub-systems for defence and aerospace: system integration (about 95% of the order book), cable and wire harness assemblies, and kitting."
+    },
+    "IDEAFORGE": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Its drones map, survey and carry out surveillance for defence and civil customers. Most sales are still in India."
+    },
+    "SIGMAADV": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Sigma Advanced Systems makes aero-engine fabrications, missile guidance packages, UAVs, avionics and naval systems for aerospace and defence."
+    },
+    "AXISCADES": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Axiscades makes defence systems, aerospace precision parts, and electronics for aerospace, defence and semiconductor customers. Its retained base centres on defence systems, its electronics platform, "
+    },
+    "MIDHANI": {
+     "role": "core",
+     "source": "label",
+     "evidence": "MIDHANI is a Miniratna defence public-sector unit. It makes special steels, superalloys and titanium alloys — plates, forged rings, tubes, fasteners and armour — via a Hyderabad melt-forge-roll chain "
+    },
+    "COCHINSHIP": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Cochin Shipyard builds defence and commercial vessels, including cargo ships, ferries and tugs, and repairs ships. Shipbuilding was about 67% of FY26 operating revenue. Repair was about 33%."
+    },
+    "GRSE": {
+     "role": "core",
+     "source": "description",
+     "evidence": "It once built only defence warships. Non-defence and commercial ships are now about 22.5% of its total order book."
+    },
+    "KRISHNADEF": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Krishna Defence and Allied Industries makes bulb bars — indigenised steel sections for naval ship hulls — weld consumables, ballast bricks and armour profiles for T-90 tanks, and dairy equipment. Defe"
+    },
+    "NIBE": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Nibe fabricates and machines defence components and sells traded goods and defence services. Its aircraft hiring and chartering business, Aeronautics, adds a second segment."
+    },
+    "SIKA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Sika Interplant Systems makes aerospace and defence engineering products. Its largest lines are servo products and aircraft parts, followed by handling and aerospace systems."
+    },
+    "ROSSTECH": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Rossell Techsys builds electrical wire harnesses and interconnect systems for aerospace, defence, semiconductor and space customers, with panels, test equipment and MRO alongside."
+    },
+    "CENTUM": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Centum Electronics designs and makes high-end electronic modules, systems and subsystems for aerospace, defence and industrial electronics."
+    },
+    "DYNAMATECH": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Dynamatic Technologies makes aerospace and defence structures, hydraulics and metallurgy products. Aerospace is 48% of FY26 revenue, Hydraulics 30% and Metallurgy 22%."
+    },
+    "SWANDEF": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Swan Defence and Heavy Industries builds commercial and defence ships, repairs ships and fabricates heavy offshore structures at its integrated shipbuilding yard at Pipavav."
+    },
+    "BEML": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "BEML is a Defence Ministry enterprise that makes defence trucks and armoured vehicles, mining dumpers and excavators, and metro cars and rail coaches. It also sells spares and services."
+    },
+    "SOLARINDS": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Solar Industries makes bulk and packaged explosives for mining and infrastructure blasting, initiating systems that start blasts, and defence products including propellants, ammunition and rockets."
+    },
+    "PREMEXPLN": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "It sells on order to the defence ministry, public-sector units and space agencies for missile, aircraft and space programmes."
+    },
+    "HBLENGINE": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "HBL Engineering, formerly HBL Power Systems, makes industrial batteries, defence batteries and railway electronics led by Kavach, its train collision avoidance system."
+    },
+    "CYIENTDLM": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Cyient DLM is a design-led electronics manufacturer for aerospace, industrial, medical technology and defence customers. It exports about 92% of output, mainly to North America and Europe."
+    },
+    "BHARATFORG": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "It sells to auto, industrial, Indian defence and aerospace buyers in India and abroad. Exports were about half of standalone revenue."
+    },
+    "JYOTICNC": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "The FY26 end-market mix is ~39% aerospace-defence, 26% auto and components, 23% general engineering and the rest electronics and die-mould. Customers include HAL, Tata Advanced, Airbus, Boeing, GE, Safran and Rolls Royce."
+    },
+    "PTCIL": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Its castings become flight-critical engine parts such as fan hub frames and intermediate casings. Buyers span aerospace, defence and industrial markets, historically led by exports at about 82% of sales."
+    },
+    "AZAD": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "The aerospace and defence mix has risen from 12% of revenue in FY24 to about 17% in FY26, its first ₹100Cr year."
+    },
+    "UNIMECH": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Theme: Aerospace & Defense OEM"
+    },
+    "JAYKAY": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Jaykay Enterprises runs defence and aerospace, digital manufacturing and digital services. Its IT services business, JK Technosoft, brings ~86% of operating revenue. Its defence composites unit, Allen"
+    },
+    "WALCHANNAG": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "It supplies space-launcher hardware to the Indian space agency ISRO, including segments for its Gaganyaan human-spaceflight programme. Defence, missiles, nuclear and aerospace were 31% of FY26 revenue."
+    },
+    "SYRMA": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "It built a medical-device arm through the 2023 Johari Digital Healthcare acquisition, then added defence electronics (Elcome) and a rail JV in 2025."
+    },
+    "MTARTECH": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Industry: Aerospace and Defence Equipment"
+    },
+    "AEQUS": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Industry: Aerospace and Defence Equipment"
+    }
+   }
+  },
+  {
+   "id": "railways",
+   "name": "Railways: Kavach & Rolling Stock",
+   "thesis": "Rail capex: Kavach train protection, wagons, coaches and trainsets, traction and rail EPC.",
+   "members": {
+    "MVELECTRO": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Its newer traction system of converter, auxiliary unit and control unit drives locomotives. Indian Railways gave 76.7% of FY26 revenue. It has no long-term customer contracts."
+    },
+    "RITES": {
+     "role": "core",
+     "source": "label",
+     "evidence": "It consults, executes turnkey rail and building projects, exports rolling stock and leases locomotives. FY26 mix: consultancy ~51%, turnkey ~25% (cost-plus), exports ~13%, leasing ~7%."
+    },
+    "IRCON": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Railways at 70% of the order book drives profit. New growth comes from the train-safety system Kavach. Bidding and delays swing results."
+    },
+    "RVNL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "RVNL builds rail tracks, bridges and electrification, civil buildings, roads, solar plants and rural broadband networks. It also supplies sleeper trainsets under Vande Bharat with long-term maintenanc"
+    },
+    "JWL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Jupiter Wagons makes freight wagons for Indian Railways and private companies, and wheelsets, brakes, containers and last-mile electric trucks. It also sells grid battery storage containers."
+    },
+    "TEXRAIL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Texmaco Rail makes railway freight cars and wagons (~80% of revenue), steel foundry castings, infra-electrical work (Bright Power, ~14%) and rail EPC (Kalindee, ~6%) for Indian Railways, private buyer"
+    },
+    "TITAGARH": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Titagarh Rail Systems makes freight wagons, metro and passenger coaches, sleeper trainsets, forged wheels and ships. Freight is about 82% of FY26 revenue."
+    },
+    "KERNEX": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Kernex Microsystems makes railway safety systems, mainly Kavach automatic train protection with loco and station units, plus level-crossing controls and controller submodules."
+    },
+    "HIRECT": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Its equipment goes into locomotives and commuter and metro trainsets. It sells mainly to Indian Railways and its coach factory, with early US prototype customers."
+    },
+    "ORIRAIL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Oriental Rail Infrastructure makes freight wagons and coach seats, berths and interiors. It also makes artificial leather."
+    },
+    "HBLENGINE": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "HBL Engineering, formerly HBL Power Systems, makes industrial batteries, defence batteries and railway electronics led by Kavach, its train collision avoidance system."
+    },
+    "QUADFUTURE": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Quadrant Future Tek makes specialty cables. It is developing a train collision avoidance product KAVACH and a railway signalling system."
+    },
+    "GPTINFRA": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Theme: Railways"
+    },
+    "FRONTSP": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Theme: Railways"
+    },
+    "IRFC": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Industry: Railways"
+    },
+    "BEML": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Theme: Railways"
+    },
+    "SIEMENS": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Siemens sells electrification and grid equipment for data centres through Smart Infrastructure, factory automation through Digital Industries, and rail and rolling stock through Mobility."
+    }
+   }
+  },
+  {
+   "id": "power-td",
+   "name": "Power T&D & Transformers",
+   "thesis": "Grid build-out: transformers, switchgear, transmission towers and lines, conductors and power cables, smart meters.",
+   "members": {
+    "TARIL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Transformers & Rectifiers makes power, distribution, furnace, specialty and rectifier transformers and shunt reactors. Its range spans 5 kV to 1,200 kV and 0.5 to 500 MVA."
+    },
+    "POWERINDIA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Hitachi Energy India makes transformers, its largest business, plus high-voltage products, grid-integration systems and grid services."
+    },
+    "GVT&D": {
+     "role": "core",
+     "source": "label",
+     "evidence": "GE Vernova T&D India makes transmission and distribution equipment including transformers, switchgear, breakers, disconnectors, bushings, high-voltage direct-current systems and grid automation."
+    },
+    "ENRIN": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Siemens Energy India makes transmission and generation equipment including gas-insulated switchgear for substations, grid-stabilisation equipment, transformers, steam-turbine generators and waste-heat recovery projects."
+    },
+    "ADANIENSOL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Adani Energy Solutions runs power transmission and regulated Mumbai distribution, with smart metering and commercial-industrial power supply as newer legs."
+    },
+    "POWERGRID": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Power Transmission and Equipment"
+    },
+    "CGPOWER": {
+     "role": "core",
+     "source": "label",
+     "evidence": "CG Power makes transformers and switchgear for power grids, and motors and rail propulsion systems for industry, plus semiconductors through its assembly-and-test venture, CG Semi."
+    },
+    "KEC": {
+     "role": "core",
+     "source": "label",
+     "evidence": "KEC International builds power transmission lines and towers and supplies hardware and poles. It also does civil works, rail and metro projects, solar and wind plants, oil and gas pipelines and power "
+    },
+    "KARAMTARA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Transmission Line Towers and Equipment"
+    },
+    "TRANSRAIL": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Transrail Lighting is a turnkey EPC company in power transmission and distribution with in-house tower and conductor manufacturing."
+    },
+    "MARSONS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Marsons makes power and distribution transformers spanning medium-power, extra-high-voltage 132/220kV, inverter-duty and wind-turbine-generator transformers. Transformer manufacturing was ~98% of FY26"
+    },
+    "QPOWER": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Quality Power makes high-voltage electrical equipment including power reactors, instrument transformers and power-quality products."
+    },
+    "VIKRAN": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Transmission Line Towers and Equipment"
+    },
+    "ATLANTAELE": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Atlanta Electricals makes power transformers, mainly auto transformers for grid interconnection and inverter-duty transformers for solar step-up."
+    },
+    "KANOHAR": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Capital Goods Transformers"
+    },
+    "SKIPPER": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Skipper makes transmission towers and monopoles and builds 765 kV lines and substations. Power engineering is about four-fifths of revenue. Polymer pipes and infrastructure make up the rest."
+    },
+    "VOLTAMP": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Voltamp Transformers makes power and distribution transformers, expanding into dry-type transformers. It is domestic-led with growing exports."
+    },
+    "INDOTECH": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Indo Tech Transformers makes distribution, power and large power transformers up to 315 MVA 400 kV class. They include step-up and special transformers for renewables."
+    },
+    "BBL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Bharat Bijlee makes transformers, substations and maintenance products for power systems and motors, drives, automation and magnet machines for industry."
+    },
+    "SHILCTECH": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Shilchar Technologies makes power, distribution and renewable transformers for generation, grid and solar, wind and hydro projects. It is targeting the higher 220 kV class."
+    },
+    "MEIL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Mangal Electrical Industries makes transformer components, energy-efficient transformers with amorphous-metal cores, and EPC substations with circuit-breaker lines from plants in Rajasthan."
+    },
+    "JYOTISTRUC": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Jyoti Structures builds turnkey power transmission lines and makes the towers they use. Its sales are almost all from India."
+    },
+    "BAJEL": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Bajel Projects builds high-voltage transmission lines and substations as an EPC contractor. It also runs a manufacturing plant at Ranjangaon near Pune."
+    },
+    "OMPOWER": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Om Power Transmission builds turnkey power transmission projects. Transmission lines are about half of revenue. Substations, underground cabling and maintenance make up the rest."
+    },
+    "VIVIANA": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Viviana Power Tech builds power transmission and distribution projects, including high-voltage lines, substations, distribution networks and underground cable systems."
+    },
+    "TECHNOE": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Techno Electric builds 765kV air and gas-insulated substations on EPC contracts. It also owns smart-meter concessions, hyperscale and edge data centres and transmission concessions."
+    },
+    "GENUSPOWER": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Theme: Smart Metering & Inst."
+    },
+    "LUMINO": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Lumino makes aluminium conductors including high-temperature low-sag conductors, power cables and electrical wires. It also executes power transmission, substation, solar and water projects."
+    },
+    "APARINDS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Apar Industries makes power conductors, speciality cables and transformer & speciality oils, and is India's largest conductor maker by FY26 sales. Conductors bring ~52% of gross segment revenue, cable"
+    },
+    "DIACABS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Diamond Power Infrastructure, under its DICABS brand, makes power cables from low to extra-high voltage and aluminium conductors — FY26 revenue split cables 59%, conductors 37% — for utilities, renewa"
+    },
+    "LASERPOWER": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Laser Power & Infra makes power-transmission cables and conductors and executes transmission EPC projects. Cables and conductors are ~72% of FY26 revenue of ₹2,326Cr; EPC is ~27%."
+    },
+    "UNIVCABLES": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Universal Cables makes power cables across Medium, High and Extra-High voltage bands, plus wires, conductors, capacitors and power-quality equipment. It also executes related turnkey EPC projects. Rev"
+    },
+    "SCHNEIDER": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Profit comes from Power & Grid equipment, with services at 15% of revenue. Data-centre and newer grid work now exceeds one-fifth of backlog."
+    },
+    "KEI": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "KEI Industries makes wires and cables, about 97% of revenue, including power cables, high-voltage EHV cables and fire-retardant house wires."
+    },
+    "DYCL": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Industry: Cables Power"
+    },
+    "KSHINTL": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "KSH International makes specialised magnet winding wires, about 75% of its ~₹3,107Cr FY26 revenue, including continuously-transposed conductor and 765kV/HVDC windings for large power transformers."
+    },
+    "VIDYAWIRES": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Vidya Wires makes insulated winding wire with ~₹1,840Cr FY26 revenue. Its range covers winding products as super-enameled wires and strips, conductors as paper-covered strips and conductivity products as bare wires."
+    },
+    "RAMRAT": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Its winding wires go into motors, transformers and appliances sold to equipment makers."
+    },
+    "MODISONLTD": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Modison makes electrical contacts for switchgear from low to extra-high voltage. Its products include silver contacts, copper-tungsten contacts, precious-metal compounds and silver products for consumers."
+    },
+    "ADVAIT": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Its emergency structures restore failed transmission lines for transmission utilities. Solar and storage work is for developers and utilities."
+    },
+    "KPIL": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Kalpataru Projects builds power transmission lines, factory and building projects, oil and gas pipelines, water systems, and metro and rail work, including grid work in Sweden."
+    },
+    "ABB": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Theme: Transformers & Switchgears"
+    },
+    "SIEMENS": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Siemens sells electrification and grid equipment for data centres through Smart Infrastructure, factory automation through Digital Industries, and rail and rolling stock through Mobility."
+    },
+    "POLYCAB": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Industry: Cables Power"
+    },
+    "RRKABEL": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Industry: Cables Power"
+    },
+    "PARACABLES": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Profit comes from power cables, about 57% of revenue and growing fast domestically. Exports are about 29% of revenue and make profit volatile."
+    },
+    "HPL": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "HPL Electric & Power makes smart electricity meters and low-voltage electricals such as wires and cables, switchgear and lighting."
+    },
+    "RISHABH": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Rishabh Instruments makes meters, test instruments, automation software, current transformers and solar inverters, plus aluminium cast components through its Polish casting business."
+    }
+   }
+  },
+  {
+   "id": "solar-manufacturing",
+   "name": "Renewables & Solar Manufacturing",
+   "thesis": "Solar cells, modules, glass, wind turbines, solar pumps and EPC, plus the developers buying them.",
+   "members": {
+    "WAAREEENER": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Waaree Energies makes solar modules and cells and builds solar power plants through its project execution arm."
+    },
+    "PREMIERENE": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Premier Energies makes solar cells and modules. Cell capacity is 10.6 GW, up from 3.6 GW. Module capacity nearly doubled to about 11.1 GW."
+    },
+    "EMMVEE": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Emmvee is a pure-play integrated solar maker selling solar panels and the solar cells inside them. Panels are ~99% of external revenue."
+    },
+    "VIKRAMSOLR": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Vikram Solar makes solar modules, about 85% of revenue, with project work and maintenance services making up the rest. Almost all revenue is domestic after US exports collapsed."
+    },
+    "WEBELSOLAR": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Websol Energy System makes solar cells and modules at its plant at Falta in West Bengal. Cell capacity is 1.2GW and module capacity is 550MW. They ran at 92% and 81% use in Q1FY27."
+    },
+    "WAAREEINDO": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Indosolar makes solar PV modules at its 1.3 GW plant in Noida. It produced 1,051 MW in FY26. It is 74.93% owned by its listed parent that makes solar modules and cells, Waaree Energies."
+    },
+    "SAATVIKGL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Theme: Solar & Renewables"
+    },
+    "BORORENEW": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Borosil Renewables makes low-iron textured solar glass at ~1,000 TPD (~6.5 GW) of capacity, fully utilised. Its variants include the antimony-free NoSbEra, the high-efficiency Shakti/Clear, and the anti-glare Selene/Deflect."
+    },
+    "SUZLON": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Suzlon makes wind turbines. It maintains them. It also runs a foundry and forging unit."
+    },
+    "INOXWIND": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Inox Wind makes wind turbines and delivers wind farms end to end: turbine manufacturing, EPC through Inox Renewable Solutions, and O&M through listed subsidiary Inox Green."
+    },
+    "UTLSOLAR": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Fujiyama Power Systems makes rooftop solar systems — solar panels ~43% of revenue, inverters and power-conditioning units ~29%, batteries ~21% — across 500+ products under its ~28-year UTL Solar brand"
+    },
+    "SHAKTIPUMP": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Shakti Pumps makes solar and other water pumps. Solar pumps for government schemes are about 85–90% of revenue."
+    },
+    "OSWALPUMPS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Oswal Pumps is a vertically integrated pump and solar manufacturer. It makes submersible, centrifugal and solar water pumps, motors, controllers, solar modules and mounting structures."
+    },
+    "GKENERGY": {
+     "role": "core",
+     "source": "label",
+     "evidence": "GK Energy builds solar water-pump systems for farmers, about 99% of FY25 revenue, and is expanding into grid-connected rooftop solar and domestic-content solar cells from negligible bases."
+    },
+    "SWSOLAR": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Solar EPC"
+    },
+    "SOLARWORLD": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Solarworld builds utility-scale solar plants through asset-light tenders and makes solar modules for its own projects and outside buyers."
+    },
+    "WAAREERTL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Theme: Solar & Renewables"
+    },
+    "SOLEX": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Capital Goods Solar"
+    },
+    "ADANIGREEN": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Theme: Solar & Renewables"
+    },
+    "JSWENERGY": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Theme: Solar & Renewables"
+    },
+    "ACMESOLAR": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Acme Solar is a renewable power producer with ~3,100 MW at ~26% utilisation in FY26. It also operates battery storage."
+    },
+    "TATAPOWER": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Tata Power is a vertically integrated power company. It generates thermal and hydro power, builds renewables, distributes and transmits power, and makes solar cells and modules."
+    },
+    "KPIGREEN": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Theme: Solar & Renewables"
+    },
+    "KARAMTARA": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Its structures hold up solar panels and carry power lines. It sells to builders, equipment makers and power producers in India and abroad, mainly the US."
+    },
+    "IREDA": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "IREDA is an RBI-registered infrastructure finance company, 71.76% owned by the Government of India. It finances solar, wind, hydro, transmission, manufacturing, ethanol and newer segments such as battery storage and green hydrogen."
+    }
+   }
+  },
+  {
+   "id": "ev-batteries",
+   "name": "EV & Batteries",
+   "thesis": "Electric two- and three-wheelers, buses, batteries and cells, chargers and battery storage.",
+   "members": {
+    "OLAELEC": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Ola Electric makes electric two-wheelers in India, mainly the S1 electric scooter family and Roadster X/X+ electric motorcycles. It sells through company-owned experience centres, dealers and online. All FY26 revenue came from India."
+    },
+    "ATHERENERG": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Earnings come from Rizta, the 450 and the Konarc mass scooter. Non-vehicle streams — AtherStack Pro software at 94% attach, charging, accessories — bring 14% of revenue."
+    },
+    "EXIDEIND": {
+     "role": "core",
+     "source": "label",
+     "evidence": "It built a wholly-owned lithium-ion cell business, EESL, with a gigafactory near Bengaluru; the mix is shifting toward lithium as that plant ramps."
+    },
+    "ARE&M": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Amara Raja Energy & Mobility makes lead-acid batteries under its Amaron brand for vehicles, industrial UPS, telecom and home energy, plus a smaller lithium-ion pack and charger business."
+    },
+    "SERVOTECH": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Servotech Renewable Power System makes direct-current fast EV chargers (~83% of revenue) and rooftop solar systems (~11%), selling mainly to oil marketing companies and Railways/state agencies."
+    },
+    "EXICOM": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Exicom makes telecom power systems and electric vehicle chargers, including fast direct current chargers and alternating current chargers."
+    },
+    "JBMA": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "JBM Auto makes auto components and sheet metal (~57% of FY26 revenue), tooling and dies (~6%), and electric buses (~38%) through its 85% subsidiary JBM Electric Vehicles."
+    },
+    "SONACOMS": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Sona BLW makes driveline and motor parts for vehicles, including torque-transfer gears, differential assemblies, EV drive motors, hybrid and conventional starters and radar sensors for driver assistance."
+    },
+    "GREAVESCOT": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Greaves Cotton makes engines and gensets for energy, mobility and industrial uses, plus its electric two-wheeler brand, Ampere, electric three-wheelers and EV financing."
+    },
+    "DHOOTTRANS": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Harness is the base business. Electronics is the growth vector, led by battery packs, switches and sensors. Copper passes through with a three-month lag."
+    },
+    "NEOGEN": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Profit still comes from base organic and inorganic chemicals. Growth depends on organolithium at peak output and the battery-chemicals ramp."
+    },
+    "PACEDIGITK": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Pace Digitek builds battery storage systems for grid and industrial use and executes telecom network projects."
+    },
+    "PROSTARM": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Prostarm makes and integrates power-electronics equipment: in-house UPS (uninterruptible power supply) and battery energy-storage systems (BESS), system-integration projects, third-party products and value-added services."
+    },
+    "DIVGIITTS": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Divgi Torqtransfer makes transfer cases for four-wheel-drive vehicles, EV transmissions and export components."
+    },
+    "M&M": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "M&M makes SUVs, tractors, last-mile electric three-wheelers and trucks and buses, plus IT services, vehicle finance, homes and holidays. Auto holds ~59% of revenue, Farm holds ~21% and Services holds ~22%."
+    },
+    "TMPV": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "JLR sells the Range Rover family (including Sport and Electric variants), the Defender SUV brand, and the next-generation Jaguar Type 01. Tata PV sells Punch/Punch.ev, Tiago/Tiago.ev and the Sierra.ev electric SUV."
+    }
+   }
+  },
+  {
+   "id": "semiconductors",
+   "name": "Semiconductors & OSAT",
+   "thesis": "Chip design services, power semiconductors, assembly and testing (OSAT) and the first fabs.",
+   "members": {
+    "MOSCHIP": {
+     "role": "core",
+     "source": "description",
+     "evidence": "MosChip provides silicon design and product engineering services to chip makers and Tier-1/2 suppliers across automotive, industrial, consumer, telecom, data centres and healthcare."
+    },
+    "RIR": {
+     "role": "core",
+     "source": "description",
+     "evidence": "RIR Power Electronics makes silicon power semiconductor devices and power rectifier assemblies at an integrated Halol, Gujarat plant covering diffusion to packaging."
+    },
+    "CGPOWER": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "CG Power makes transformers and switchgear for power grids, and motors and rail propulsion systems for industry, plus semiconductors through its assembly-and-test venture, CG Semi."
+    },
+    "KAYNES": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Earnings still come from core electronics manufacturing. Growth vectors are chip packaging, circuit-board manufacturing and the rail safety program Kavach."
+    },
+    "CYIENT": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Cyient runs three businesses. Its core engineering services business, DET, is about 72% of revenue. Its listed manufacturing arm, DLM, and its custom-chip arm hold the rest."
+    },
+    "FLUOROCHEM": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "High-value fluoropolymer grades (PFA, FEP) serve semiconductor applications. The battery unit makes LiPF6 electrolyte salt, LFP cathode material, PVDF binder and graphite anode material. Exports were ₹3,017Cr against ₹1,979Cr domestic."
+    },
+    "TIINDIA": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "It is building EV, chip assembly, medical and contract-manufacturing platforms. It is consolidating existing bets. FY27 capex is about ₹600–700Cr beyond its power unit."
+    },
+    "PARAS": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "It is pursuing a proposed semiconductor assembly and testing facility in Madhya Pradesh. The ₹6,200Cr plan is large against ₹476.6Cr FY26 revenue."
+    },
+    "ACI": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "It is shifting toward bromine derivatives, SOP and semiconductor adjacencies. Its Odisha semiconductor fab SiCSem carries $249m capex, which is large against ~₹1,089Cr revenue."
+    },
+    "IZMO": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "IZMO sells recurring automotive software and semiconductor packaging. Software includes its retail platform, izmocars, imagery business, izmostudio, and data platform, FrogData."
+    }
+   }
+  },
+  {
+   "id": "capital-markets",
+   "name": "Capital Markets Plays",
+   "thesis": "Exchanges, depositories, registrars, brokers, AMCs and wealth managers that earn from market activity.",
+   "members": {
+    "BSE": {
+     "role": "core",
+     "source": "label",
+     "evidence": "BSE operates a stock exchange for equity options trading, cash equities, mutual-fund distribution and market data."
+    },
+    "MCX": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Exchanges"
+    },
+    "IEX": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Exchanges"
+    },
+    "CDSL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "CDSL is India's leading securities depository, holding about 80% market share and 18.59 crore demat accounts as of Jun 2026."
+    },
+    "CAMS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "CAMS provides registrar and back-office infrastructure for more than 30 mutual fund houses. It also provides payments, KYC, insurance and data infrastructure beyond mutual funds."
+    },
+    "KFINTECH": {
+     "role": "core",
+     "source": "label",
+     "evidence": "KFin Technologies is India's largest registrar and transfer agent by folios. It earns domestic mutual fund registry fees, corporate issuer services, pensions, alternatives and international fund admin"
+    },
+    "GROWW": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Finance Capital Markets Brokers"
+    },
+    "ANGELONE": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Angel One is a broker earning from trade execution, interest on client funding and deposits, and distribution, wealth and asset management."
+    },
+    "SMCGLOBAL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "SMC Global Securities is a diversified broking-led financial firm. It offers broking and trading, mutual fund distribution, insurance broking and secured retail financing."
+    },
+    "HDFCAMC": {
+     "role": "core",
+     "source": "label",
+     "evidence": "HDFC AMC manages mutual funds, led by active equity funds, with ~₹9,210bn in closing assets. It holds ~11.1% market share."
+    },
+    "ICICIAMC": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Finance AMC"
+    },
+    "NAM-INDIA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Nippon Life India Asset Management runs its mutual fund platform, Nippon India Mutual Fund, including exchange-traded and passive funds."
+    },
+    "SBIFUNDS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Finance AMC"
+    },
+    "ABSLAMC": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Aditya Birla Sun Life AMC manages mutual fund assets of ₹4.28L Cr as quarterly average, which generates about 93% of gross revenue. Equity funds are 46.5% of the mix."
+    },
+    "UTIAMC": {
+     "role": "core",
+     "source": "label",
+     "evidence": "UTI AMC manages assets for its domestic mutual fund, UTI Mutual Fund, plus offshore, pension, alternatives and distribution through subsidiaries."
+    },
+    "CRAMC": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Finance AMC"
+    },
+    "ANANDRATHI": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Anand Rathi Wealth runs distribution-led wealth management for private clients through relationship managers. FY26 revenue was ~Rs1,198Cr, almost all fee income."
+    },
+    "NUVAMA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Nuvama is an independent wealth and asset manager. It runs wealth advice, asset services including clearing, capital markets and asset management."
+    },
+    "360ONE": {
+     "role": "core",
+     "source": "label",
+     "evidence": "360 ONE is a wealth and asset manager for 9,000+ families, corporates and institutions, running Wealth Management, Asset Management, B&K institutional broking and the ET Money digital investing platfo"
+    },
+    "MOTILALOFS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Motilal Oswal is an integrated financial services group across asset and private wealth management, broking and lending, investment banking and affordable home loans, plus treasury investments."
+    },
+    "CHOICEIN": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Choice International runs stock broking and distribution, government advisory and MSME lending. It earned about Rs1,145Cr income in FY26."
+    },
+    "SHAREINDIA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Share India is a tech-driven broker and proprietary trader. Broking and trading are over 90% of revenue. It also offers margin funding, NBFC loans, merchant banking, portfolio management and insurance"
+    },
+    "IIFLCAPS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "IIFL Capital provides retail broking, institutional equities with investment banking, and financial-product distribution."
+    },
+    "ARSSBL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Its H1FY27 revenue mix is 55% broking, 29% non-broking — margin funding for share purchases plus MF/PMS/AIF distribution — and 16% other, mainly fixed-deposit interest."
+    },
+    "5PAISA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "5paisa Capital is an online discount broker serving quality-filtered retail F&O traders; it earns brokerage, allied broking fees and margin-trading funded interest."
+    },
+    "ARIHANTCAP": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Arihant Capital is a SEBI-registered broker and Category I merchant banker with an RBI-registered lending arm. Broking and related services were ~98% of FY26 revenue."
+    },
+    "MASTERTR": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Master Trust is a broking-led financial group. Broking and allied activities are ~94-95% of FY26 revenue of ~₹576Cr."
+    },
+    "INDOTHAI": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Indo Thai Securities is an India-only stockbroker. It offers broking with depository and fund distribution services."
+    },
+    "MONARCH": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Monarch Networth Capital is a financial services group with about Rs 373Cr of FY26 consolidated income: retail and institutional broking, investment banking advisory, alternative investment funds (AIF"
+    },
+    "DAMCAPITAL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "DAM Capital is a fee-based investment bank and institutional stockbroker. Investment banking is about two-thirds of revenue. Broking and research is about one-third."
+    },
+    "GCSL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Gretex Corporate Services provides merchant banking for SME IPOs and broking and market making through its broking subsidiary, Gretex Share Broking."
+    },
+    "PRUDENT": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Prudent distributes mutual funds, insurance policies and other financial products. It offers broking services. It does not manufacture products."
+    },
+    "JMFINANCIL": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "JM Financial is a financial services group in wealth management and distribution, distressed credit and alternatives, investment banking and capital markets, and affordable home loans."
+    },
+    "EDELWEISS": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Edelweiss Financial Services is a diversified financial holding. It runs an alternative asset manager, a mutual fund, an asset reconstruction arm, an MSME lender, and general and life insurers."
+    },
+    "ALGOQUANT": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Algoquant Fintech trades on its own account in equities, derivatives and commodities and offers equity, currency and commodity broking."
+    }
+   }
+  },
+  {
+   "id": "quick-commerce",
+   "name": "Quick Commerce & Digital Consumption",
+   "thesis": "Quick commerce, food delivery and online marketplaces, and the logistics behind them.",
+   "members": {
+    "ETERNAL": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Eternal runs food delivery through its Zomato platform, quick commerce through Blinkit, going-out through its District app, and restaurant supplies through Hyperpure."
+    },
+    "SWIGGY": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Swiggy runs food delivery, its quick-commerce app Instamart and its out-of-home dining platform Dineout."
+    },
+    "MEESHO": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Meesho runs an India-only value e-commerce marketplace selling garments, home and kitchen, beauty and kids products."
+    },
+    "FIRSTCRY": {
+     "role": "core",
+     "source": "description",
+     "evidence": "Firstcry is an omni-channel baby and childcare retailer. It sells through its online marketplace, 1,000+ stores and owned brands, on ~₹6,800Cr FY25 revenue."
+    },
+    "RTNINDIA": {
+     "role": "core",
+     "source": "description",
+     "evidence": "RattanIndia Enterprises is an e-commerce group. Its online retail seller, Cocoblu Retail, brings about 98% of revenue. It also sells EV motorcycles, drones and private-label brands."
+    },
+    "SHADOWFAX": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Shadowfax is an India-focused logistics company. Express parcel is ~70% of revenue. Hyperlocal quick-commerce delivery is ~20%."
+    },
+    "DELHIVERY": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "It serves online retailers with delivery, industrial makers with warehousing, and quick-commerce firms with mother warehouses and dark-store supply."
+    }
+   }
+  },
+  {
+   "id": "jewellery-gold",
+   "name": "Jewellery & Gold Cycle",
+   "thesis": "Jewellery makers and retailers, bullion, and gold-loan lenders that move with gold prices and wedding demand.",
+   "members": {
+    "PCJEWELLER": {
+     "role": "core",
+     "source": "label",
+     "evidence": "PC Jeweller makes gold, diamond, silver and precious-stone jewellery and articles. It sells only in India through 48 owned and 4 franchised stores with ~Rs 3,353Cr FY26 revenue."
+    },
+    "KALYANKJIL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Kalyan Jewellers sells plain gold jewellery and higher-margin studded jewellery with diamonds and gemstones, plus lightweight lifestyle jewellery through its wholly owned omnichannel subsidiary Cander"
+    },
+    "TITAN": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Titan sells jewellery, watches, eyewear and engineering products, led by jewellery. Its flagship jewellery brand is Tanishq, with everyday jewellery brand Mia, high-end jewellery brand Zoya and omnich"
+    },
+    "SHANTIGOLD": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Diamond Gems and Jewellery"
+    },
+    "SHRINGARMS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Diamond Gems and Jewellery"
+    },
+    "LALITHAA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Lalithaa Jewellery is a South India jewellery retailer. It sells necklaces, bangles, rings, earrings and chains in gold, silver and studded designs."
+    },
+    "SKYGOLD": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Sky Gold and Diamonds is a business-to-business maker of lightweight gold jewellery at a single large site in Navi Mumbai, selling mainly to large jewellery retailers."
+    },
+    "DEEPA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Deepa Jewellers is a B2B supplier of hallmarked gold jewellery. Its main products are traditional waist belts and precision-cut bangles."
+    },
+    "SENCO": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Senco Gold is a jewellery retailer selling gold, diamond and silver jewellery, including lightweight, men's and lab-grown ranges."
+    },
+    "AUGMONT": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Augmont Enterprises refines gold and silver, manufactures jewellery, and runs Augmont SPOT, an electronic business-to-business bullion trading platform that brought 86.8% of FY26 revenue of ₹94,186Cr."
+    },
+    "PNGSREVA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "PNGS Reva sells natural diamond jewellery set in 18K gold, with a small platinum range. Rings, mangalsutra with pendants and earrings are its main pieces."
+    },
+    "BLUESTONE": {
+     "role": "core",
+     "source": "label",
+     "evidence": "BlueStone is a jewellery and lifestyle retailer listed on BSE and NSE."
+    },
+    "MOTISONS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Motisons Jewellers is a Jaipur-based retail jeweller selling gold and diamond jewellery (~91% of revenue), plus silver articles and gold bullion, from four showrooms in Jaipur."
+    },
+    "DPABHUSHAN": {
+     "role": "core",
+     "source": "label",
+     "evidence": "D.P. Abhushan sells gold, silver and diamond jewellery under its 86-year-old D.P. Jewellers brand. Its 13 stores drove about Rs.4,070Cr of FY26 revenue, with gold at about 91%."
+    },
+    "SHANKESH": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Shankesh Jewellers is a pure business-to-business maker of handcrafted 22K and 18K gold jewellery — bangles, wedding necklaces, chokers, rings and earrings in Antique, Temple, Calcutta and Gheru style"
+    },
+    "PNGJL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "PNG Jewellers is a retail jeweller selling gold, silver and diamond jewellery. Gold is about 85% of sales. Retail is about 77% of revenue, with bullion and coins making up the rest."
+    },
+    "PRIORITY": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Priority Jewels is a B2B design-led maker of lightweight affordable diamond-studded gold and platinum jewellery for everyday wear."
+    },
+    "THANGAMAYL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Thangamayil Jewellery is a Tamil Nadu jewellery retailer with ~₹8,499Cr FY26 revenue. It sells mainly gold jewellery."
+    },
+    "RAMBHAJO": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Advit Jewels makes handcrafted bridal jewellery in Jaipur under its Rambhajo retail brand. Its core is Kundan/Polki/Jadau studded sets with an uncut-diamond look."
+    },
+    "TBZ": {
+     "role": "core",
+     "source": "label",
+     "evidence": "TBZ is a listed Indian jewellery retailer selling under the brand TBZ – The Original. It sells gold, diamond, silver, platinum and precious-stone ornaments through showrooms across 13 states, mostly c"
+    },
+    "MVGJL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Vaibhav Jewellers runs 21 showrooms selling gold, silver, diamond and studded jewellery in Andhra Pradesh and Telangana. Gold ornaments, including exchanged gold, were about 90% of FY24 sales, and man"
+    },
+    "UDAYJEW": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Uday Jewellery is a Hyderabad-based jewellery maker and retailer. It sells 22K gold jewellery and studded jewellery with coloured gemstones, plus polki and diamond luxury pieces."
+    },
+    "RBZJEWEL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "RBZ Jewellers makes antique bridal gold jewellery, including the Polki occasion line and the Shringar traditional collection, sold under its Harit Zaveri retail brand."
+    },
+    "MUTHOOTFIN": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Muthoot Finance lends against household gold to retail borrowers, and gold loans are its largest earnings engine. Subsidiaries add a second gold-loan NBFC, microfinance, affordable housing finance, in"
+    },
+    "MANAPPURAM": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Manappuram Finance is a gold-loan-led lender. Gold loans are about 82% of its ₹69,635Cr total loan book, with microfinance, vehicle, small-business and housing making up the rest."
+    },
+    "IIFL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "IIFL Finance is a listed lender focused on loans against household gold jewellery, home loans, secured small-business loans and joint-liability microfinance loans."
+    },
+    "CGCL": {
+     "role": "core",
+     "source": "label",
+     "evidence": "The mix has shifted sharply since FY24. Gold loans rose from 22.3% of assets to 47.8%, and MSME halved from 32.1% to 16.9%."
+    },
+    "FEDFINA": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Fedbank Financial Services is a Federal Bank-promoted retail lender focused on gold loans and loans against property for small businesses."
+    },
+    "GOLDIAM": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Theme: Jewellery"
+    },
+    "RGL": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Renaissance Global makes studded precious-metal jewellery for export. It sells private-label jewellery, character jewellery under Disney licences and its own direct fine jewellery brands."
+    },
+    "VAIBHAVGBL": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Vaibhav Global sells gemstone jewellery, including lab-grown diamonds, and lifestyle and wellness accessories on TV and digital."
+    },
+    "CSBBANK": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Profit comes mainly from gold loans at ~54% of advances, with wholesale and corporate loans next. Margins move with funding costs and loan mix."
+    },
+    "TMB": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Tamilnad Mercantile Bank lends to retail, agriculture and MSME customers, with gold loans — secured against gold jewellery — at 47–48% of advances."
+    },
+    "DHANBANK": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "It lent much less against gold until FY25. Gold loans rose from 31% to 43% of advances in FY26 as corporate share shrank."
+    },
+    "MCX": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "MCX runs a commodity derivatives exchange for bullion, base metals and energy futures and options. It also offers index and electricity contracts. It earns transaction and clearing fees on traded volumes."
+    },
+    "IGIL": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "International Gemological Institute certifies loose diamonds, finished jewellery and coloured stones. It earns almost all revenue from certification fees."
+    },
+    "MANCREDIT": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Mangal Credit and Fincorp is an Indian NBFC lending mainly in gold loans, loans against property and small-business loans."
+    }
+   }
+  },
+  {
+   "id": "ai-infra",
+   "name": "AI Infra & GPU Cloud",
+   "thesis": "GPU cloud, AI servers and data-centre capacity and integration.",
+   "members": {
+    "NETWEB": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Industry: Data Centre"
+    },
+    "E2E": {
+     "role": "core",
+     "source": "label",
+     "evidence": "E2E Networks sells cloud computing under its E2E Cloud brand. Its main product is GPU-powered infrastructure for AI training and inference, alongside traditional CPU cloud."
+    },
+    "ESDS": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Theme: Data Centres"
+    },
+    "BBOX": {
+     "role": "core",
+     "source": "label",
+     "evidence": "Black Box is a global digital integrator with about ₹6,322 Cr FY26 revenue. Integration is about 84% of revenue in data centers, connectivity, networks, workplace and security. Hardware products add a"
+    },
+    "ANANTRAJ": {
+     "role": "exposure",
+     "source": "label",
+     "evidence": "Industry: Data Centre"
+    },
+    "ORIENTTECH": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "Orient Technologies is an IT services company with ~₹870Cr of FY26 consolidated revenue, almost all of it domestic. It sells IT infrastructure, cloud, cybersecurity, data centre solutions, end-user computing and managed services."
+    },
+    "STLNETWORK": {
+     "role": "exposure",
+     "source": "description",
+     "evidence": "STL Networks builds and manages telecom and data-centre networks. Its offerings are Data Centres, System Integration and Connectivity Services in India and the UK."
+    }
+   }
+  }
+ ]
+}

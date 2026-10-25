@@ -1,3 +1,4 @@
+import { narrativesOf } from '../data/narratives';
 import { copyFormats, type CopyGroup } from '../utils/copyResults';
 import {classificationLabels, type ClassificationRecord} from '../data/classification';
 import { getIpoJson } from './gzipJson';
@@ -288,7 +289,7 @@ export function groupRecords(records: readonly EarningsRecord[], by: GroupBy,
   const groups = new Map<string, EarningsRecord[]>();
   for (const record of records) {
     const known = classify(record.symbol);
-    const labels = classificationLabels(known ?? {}, known, by);
+    const labels = by === 'narrative' ? narrativesOf(record.symbol).map(tag => tag.name) : classificationLabels(known ?? {}, known, by);
     for (const label of labels.length ? labels : [UNCLASSIFIED]) {
       const rows = groups.get(label) ?? [];
       if (!rows.some(row => row.symbol === record.symbol)) rows.push(record);

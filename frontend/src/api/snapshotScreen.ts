@@ -6,6 +6,7 @@ import { snapshotFundamentals } from '../data/snapshotFundamentals';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
 import { isExtendedCondition, extendedFilterGroups, extendedMetrics } from '../data/extendedMetrics';
+import { narrativesOf } from '../data/narratives';
 
 const presetIds = new Set(PRESET_CATALOG.map(preset => preset.id));
 
@@ -139,6 +140,11 @@ function leaf(c: ActiveCondition, session: string): Predicate | null {
       const field = c.conditionId === 'SECTOR' ? 'sector' : c.conditionId === 'INDUSTRY' ? 'industry' : 'series';
       const wanted = list(p.values);
       fn = s => !s[field] ? null : wanted.includes(s[field].trim().toUpperCase()); break;
+    }
+    case 'NARRATIVE': {
+      // Curated membership: a stock outside every selected narrative is a known non-member, not missing data.
+      const wanted = list(p.values);
+      fn = s => wanted.length ? narrativesOf(s.symbol).some(tag => wanted.includes(tag.name.toUpperCase())) : null; break;
     }
     case 'INDEX_MEMBERSHIP':
       metadata = true; fn = s => Array.isArray(s.indexMemberships) && s.indexMemberships.length > 0

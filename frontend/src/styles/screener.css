@@ -162,6 +162,8 @@
 .cell-label { color: var(--secondary); font-size: 12px; font-weight: 500; }
 .cell-strong { color: var(--text); font-weight: 600; }
 .cell-secondary { color: var(--muted); font-size: 10px; margin-top: 3px; }
+.narrative-chip { display: inline-block; max-width: 100%; margin-top: 4px; padding: 1px 6px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--secondary); font-size: 10px; line-height: 15px; }
+.narrative-more { color: var(--muted); }
 .cell-muted { color: var(--muted); }
 .positive { color: var(--positive); }
 .negative { color: var(--negative); }

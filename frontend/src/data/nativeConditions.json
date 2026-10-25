@@ -1431,6 +1431,20 @@
     ]
   },
   {
+    "id": "NARRATIVE",
+    "label": "Narrative",
+    "category": "fundamentals",
+    "description": "Hand-curated cross-industry narratives such as Defence Electronics, Railways, Power T&D, Solar Manufacturing, EV & Batteries and Capital Markets. Matches core members and stocks with a stated, material exposure.",
+    "parameters": [
+      {
+        "id": "values",
+        "label": "Narratives",
+        "type": "string",
+        "defaultValue": ""
+      }
+    ]
+  },
+  {
     "id": "INDUSTRY",
     "label": "Industry",
     "category": "fundamentals",

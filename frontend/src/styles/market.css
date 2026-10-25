@@ -71,6 +71,7 @@
 }
 /* Theme Tracker: a ranked leaderboard; a faint bar behind each row shows the size of the move. */
 .mkt-ranks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: column; grid-template-rows: repeat(8, auto); column-gap: 28px; margin: 0; padding: 0; list-style: none; }
+.mkt-ranks-all { grid-template-rows: none; grid-auto-flow: row; }
 .mkt-rank { position: relative; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 10px;
   border-radius: 10px; isolation: isolate; }
 .mkt-rank::before { content: ''; position: absolute; inset: 4px auto 4px 0; z-index: -1; width: var(--bar); border-radius: 8px;

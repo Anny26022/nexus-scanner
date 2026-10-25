@@ -1,3 +1,4 @@
+import { NARRATIVE_NAMES } from '../data/narratives';
 import { afterEach, expect, it, vi } from 'vitest';
 import { gzipSync } from 'node:zlib';
 import { createSnapshotEngine } from '../api/snapshotEngine';
@@ -26,7 +27,7 @@ it('derives sorted choices from the same cached revision, without duplicates or 
  const choices=await run({type:'filterChoices',source});
  expect(loader).toHaveBeenCalledTimes(1);
  expect(choices).toEqual({type:'filterChoices', result:{SECTOR:['Technology'],INDUSTRY:['Software'],
-   SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:['Nifty 50','NIFTY 500']}});
+   SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:['Nifty 50','NIFTY 500'],NARRATIVE:[...NARRATIVE_NAMES].sort((a,b)=>a.localeCompare(b))}});
  const changed=await run({type:'filterChoices',source:{...source,revision:'b'.repeat(64)}});
  expect(changed.type).toBe('filterChoices');
  expect(loader).toHaveBeenCalledTimes(2);
@@ -40,7 +41,7 @@ it('preserves historical classifications instead of rewriting a loaded revision'
  const run=createSnapshotEngine(async()=>data);
  const result=await run({type:'filterChoices',source});
  expect(result).toEqual({type:'filterChoices',result:{
-   SECTOR:['Consumer Goods','Healthcare'],INDUSTRY:['Test'],SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:[],
+   SECTOR:['Consumer Goods','Healthcare'],INDUSTRY:['Test'],SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:[],NARRATIVE:[...NARRATIVE_NAMES].sort((a,b)=>a.localeCompare(b)),
  }});
  expect(data.stocks[0].sector).toBe('Healthcare');
 });

@@ -210,6 +210,33 @@
   .screen-buttons .toolbar-icon-button:not(.backtest-trigger) { margin-left: auto; }
   .screen-buttons .backtest-trigger { margin-left: 0; }
   .screen-buttons .button-primary { order: 1; margin-left: 6px; }
+  /* IPO catalog has no search input in controls: keep listing period on the left in alignment with Filters and Run */
+  .ipo-screen-toolbar,
+  .screen-toolbar:not(:has(.query-control)) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .ipo-screen-toolbar .universe-control,
+  .screen-toolbar:not(:has(.query-control)) .universe-control {
+    grid-column: auto;
+    grid-row: auto;
+    margin: 0;
+    width: auto;
+  }
+  .ipo-screen-toolbar .field-label,
+  .screen-toolbar:not(:has(.query-control)) .field-label {
+    display: none;
+  }
+  .ipo-screen-toolbar .screen-buttons,
+  .screen-toolbar:not(:has(.query-control)) .screen-buttons {
+    grid-column: auto;
+    grid-row: auto;
+    width: auto;
+    margin-left: auto;
+  }
   .active-filters {
     flex-wrap: nowrap;
     overflow-x: auto;

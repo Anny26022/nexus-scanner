@@ -1,0 +1,6 @@
+/* Stylesheet for @anny26022/nexus-scanner/charts: the scanner's design tokens and the chart frame, nothing else. */
+@import "./styles/tokens.css";
+
+.nexus-chart { position: relative; width: 100%; height: 100%; min-height: 160px; background: var(--surface); color: var(--text); }
+.nexus-chart-canvas { position: absolute; inset: 0; }
+.nexus-chart-canvas:focus-visible { outline: none; box-shadow: var(--ring); }

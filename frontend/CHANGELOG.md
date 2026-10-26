@@ -11,3 +11,5 @@ Publishing: bump `version` in `frontend/package.json`, add an entry here, merge,
 - `dataOrigin` / `apiOrigin` for cross-origin data and the AI endpoint.
 - Controlled `tab`, `SCANNER_TABS`, `shareBaseUrl` and `sharedScreen` (`SCREEN_URL_PARAM`) for host routing and
   share links.
+- `@anny26022/nexus-scanner/charts`: `PriceChart` (the scanner's chart engine, now also for intraday bars) and
+  `CompareChart` (several series on one percentage scale), with a tokens-only `charts.css`.

@@ -2,7 +2,7 @@ import {
   AreaSeries, BaselineSeries, BarSeries, CandlestickSeries, ColorType, CrosshairMode, HistogramSeries, LineSeries,
   LineStyle, LineType, PriceScaleMode, createChart, createSeriesMarkers, createTextWatermark,
   type IChartApi, type IPrimitivePaneView, type ISeriesApi, type ISeriesPrimitive, type ITextWatermarkPluginApi,
-  type IPriceLine, type ISeriesMarkersPluginApi, type SeriesMarker, type LineWidth, type Logical, type MouseEventParams, type SeriesAttachedParameter, type Time,
+  type IPriceLine, type ISeriesMarkersPluginApi, type SeriesMarker, type LineWidth, type Logical, type MouseEventParams, type SeriesAttachedParameter, type Time, type UTCTimestamp,
 } from 'lightweight-charts';
 import { validEmaLine, type Candle, type EmaLine } from './model';
 import { DrawingBook, hitDrawing, indexTime, timeIndex, type DrawingProjection, type Pixel } from './drawings';
@@ -15,7 +15,7 @@ export type { ChartStudies } from './studies';
 import { type StudyConfigs } from './studyConfigs';
 export type { StudyConfigs } from './studyConfigs';
 import { EVENT_BADGES, eventBadgeKey, type ChartEvent, type EventBadgeStyles } from './events';
-import { currentTheme, forTheme } from './themeColors';
+import { forTheme } from './themeColors';
 import { drawMarkerShape, markerStyle, type MarkerShape, type MarkerStyle } from './markerShapes';
 import { computeSimpleVolume, type SimpleVolumeResult } from './simpleVolume';
 import { SIMPLE_VOLUME_COLORS } from './studyConfigs';
@@ -107,7 +107,19 @@ export type ChartAppearance = {
 const WEEKDAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 /** Crosshair time label as TradingView writes it: "Fri 09 Aug '24". */
+/**
+ * A bar's chart time. Trading days (`YYYY-MM-DD`) stay business days, as the scanner has always plotted them;
+ * a date with a time (`2026-10-26T09:15:00Z`, intraday bars from a host) becomes UTC seconds.
+ */
+export function chartTime(date:string):Time {
+  return date.length===10?date:Math.floor(Date.parse(date)/1000) as UTCTimestamp;
+}
+const intradayLabel = (date:string) => new Date(date).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 export function crosshairDate(date:string) {
+  if(date.length>10) {
+    const at=new Date(date);
+    if(!Number.isNaN(at.getTime())) return `${WEEKDAYS[at.getDay()]} ${String(at.getDate()).padStart(2,'0')} ${MONTHS[at.getMonth()]} '${String(at.getFullYear()).slice(2)} ${intradayLabel(date)}`;
+  }
   const parsed=new Date(`${date}T00:00:00Z`);
   if(Number.isNaN(parsed.getTime())) return date;
   return `${WEEKDAYS[parsed.getUTCDay()]} ${String(parsed.getUTCDate()).padStart(2,'0')} ${MONTHS[parsed.getUTCMonth()]} '${String(parsed.getUTCFullYear()).slice(2)}`;
@@ -145,6 +157,8 @@ export class ChartEngine {
   private theme:MutationObserver;
   private unsubscribe:()=>void;
   private times:number[];
+  // Intraday chart times (seconds) back to the caller's date strings.
+  private dateByTime=new Map<number,string>();
   private byDate:Map<string,Candle>;
   private style:ChartStyle='candles';
   private replayPicker:{pick:(index:number)=>void;cancel:()=>void}|null=null;
@@ -204,6 +218,7 @@ export class ChartEngine {
       handleScroll:SCROLL_WITHOUT_WHEEL,
       handleScale:SCALE_WITH_WHEEL,
     });
+    this.indexIntraday(candles);
     this.price=this.createPriceSeries();
     this.volumeSeries=this.chart.addSeries(HistogramSeries,{priceFormat:{type:'volume'},priceScaleId:'volume',lastValueVisible:false,priceLineVisible:false});
     this.volumeSeries.priceScale().applyOptions({scaleMargins:{top:.8,bottom:0},visible:false});
@@ -238,7 +253,7 @@ export class ChartEngine {
     this.chart.subscribeClick(this.click);
     this.chart.timeScale().subscribeVisibleLogicalRangeChange(this.onVisibleRange);
     this.theme=new MutationObserver(()=>this.readTheme());
-    this.theme.observe(themeElement(),{attributes:true,attributeFilter:['data-theme']});
+    this.theme.observe(this.themeRoot(),{attributes:true,attributeFilter:['data-theme']});
     this.readTheme();
     this.unsubscribe=this.watchBook();
     const options={signal:this.events.signal,capture:true};
@@ -334,6 +349,10 @@ export class ChartEngine {
     const anchor=selected.a,point=p.toPixel(anchor);
     return [{coordinate:()=>axis==='price'?point.y:point.x,text:()=>axis==='price'?anchor.price.toLocaleString('en-IN',{maximumFractionDigits:2}):new Date(anchor.time).toISOString().slice(0,10),textColor:()=> '#ffffff',backColor:()=>this.accent,visible:()=>true,tickVisible:()=>true}];
   }
+  /** The element that sets light or dark for this chart: its nearest themed ancestor (the page root by default). */
+  private themeRoot():HTMLElement {return this.host.closest<HTMLElement>('[data-theme]')??themeElement();}
+  /** Re-reads colours after the host's theme or tokens changed without a data-theme change on an observed root. */
+  refreshTheme() {this.readTheme();if(this.savedAppearance) this.setAppearance(this.savedAppearance);}
   private readTheme() {
     const style=getComputedStyle(this.host);
     const token=(name:string,fallback:string)=>style.getPropertyValue(`--${name}`).trim()||fallback;
@@ -399,10 +418,10 @@ export class ChartEngine {
     const average=this.simpleVolume!.average;
     if(appended&&existing) {
       const index=this.candles.length-1,bar=this.candles[index],value=average[index];
-      this.volumeAverage.update(value==null?{time:bar.date}:{time:bar.date,value});
+      this.volumeAverage.update(value==null?{time:chartTime(bar.date)}:{time:chartTime(bar.date),value});
       return;
     }
-    this.volumeAverage.setData(this.candles.map((bar,index)=>average[index]===null||average[index]===undefined?{time:bar.date}:{time:bar.date,value:average[index]!}));
+    this.volumeAverage.setData(this.candles.map((bar,index)=>average[index]===null||average[index]===undefined?{time:chartTime(bar.date)}:{time:chartTime(bar.date),value:average[index]!}));
   }
   private refreshVolumeMarkers() {
     const result=this.simpleVolume,cfg=this.studyConfigs.volume;
@@ -411,19 +430,19 @@ export class ChartEngine {
     if(result&&cfg?.showLabels!==false) for(const label of result.labels) {
       const bar=this.candles[label.index];
       const low=label.text.startsWith('L');
-      markers.push({id:`vol:${label.text}`,time:bar.date,position:'aboveBar',shape:'circle',size:0,text:low?label.text.slice(2):label.text,
+      markers.push({id:`vol:${label.text}`,time:chartTime(bar.date),position:'aboveBar',shape:'circle',size:0,text:low?label.text.slice(2):label.text,
         color:low?cfg?.dryColor??SIMPLE_VOLUME_COLORS.dry:cfg?.recordColor??SIMPLE_VOLUME_COLORS.record});
     }
     this.volumeMarkers.setMarkers(markers);
   }
   private volumeData(bar:Candle,index=this.candles.indexOf(bar)) {
-    if(bar.volume===null) return {time:bar.date};
+    if(bar.volume===null) return {time:chartTime(bar.date)};
     const simple=this.simpleVolumeColor(index);
-    if(simple) return {time:bar.date,value:bar.volume,color:simple};
+    if(simple) return {time:chartTime(bar.date),value:bar.volume,color:simple};
     const color=bar.close>=bar.open
       ? (this.studyConfigs.volume?.upColor ? withAlpha(this.studyConfigs.volume.upColor,.5) : CHART_PALETTE.volumeUp)
       : (this.studyConfigs.volume?.downColor ? withAlpha(this.studyConfigs.volume.downColor,.5) : CHART_PALETTE.volumeDown);
-    return {time:bar.date,value:bar.volume,color};
+    return {time:chartTime(bar.date),value:bar.volume,color};
   }
   private setData() {
     this.setPriceData();
@@ -435,8 +454,8 @@ export class ChartEngine {
     return ['candles','hollowCandles','volumeCandles','bars','highLow'].includes(this.style);
   }
   private priceData(bar:Candle,index=this.candles.indexOf(bar)) {
-    if(!this.isBarType()) return {time:bar.date,value:this.style==='hlcArea'?(bar.high+bar.low+bar.close)/3:bar.close};
-    const ohlc={time:bar.date,open:bar.open,high:bar.high,low:bar.low,close:bar.close};
+    if(!this.isBarType()) return {time:chartTime(bar.date),value:this.style==='hlcArea'?(bar.high+bar.low+bar.close)/3:bar.close};
+    const ohlc={time:chartTime(bar.date),open:bar.open,high:bar.high,low:bar.low,close:bar.close};
     const a=this.currentAppearance;
     const previous=index>0?this.candles[index-1]:undefined;
     if(!a?.colorByPreviousClose||!previous) return ohlc;
@@ -781,7 +800,7 @@ export class ChartEngine {
   private setEmaData(series:ISeriesApi<'Line'>,line:EmaLine) {
     const values=this.studyLines(studyKey.ema(line.period))?.value;
     this.requestMissingStudies();
-    series.setData(values?this.candles.map((bar,index)=>values[index]===null?{time:bar.date}:{time:bar.date,value:values[index]!}):[]);
+    series.setData(values?this.candles.map((bar,index)=>values[index]===null?{time:chartTime(bar.date)}:{time:chartTime(bar.date),value:values[index]!}):[]);
   }
   /**
    * Shares a chart's indicator results with its legend. The store holds the full history and computes in a
@@ -860,7 +879,7 @@ export class ChartEngine {
   private savedAppearance?:ChartAppearance;
   setAppearance(saved:ChartAppearance) {
     this.savedAppearance=saved;
-    const appearance=forTheme(saved,currentTheme());
+    const appearance=forTheme(saved,this.themeRoot().dataset.theme==='dark'?'dark':'light');
     this.currentAppearance=appearance;
     this.scaleMode=appearance.scaleMode;
     this.applyAppearanceColors(appearance);
@@ -985,6 +1004,7 @@ export class ChartEngine {
     const shortened=candles.length<previous.length&&candles.every((bar,index)=>bar===previous[index]);
     const range=this.chart.timeScale().getVisibleLogicalRange();
     this.candles=candles;this.times=candles.map(bar=>Date.parse(bar.date));this.byDate=new Map(candles.map(bar=>[bar.date,bar]));
+    this.indexIntraday(candles);
     this.drawingBars=candles.map((bar,index)=>({...bar,time:this.times[index]}));
     if(appended) {
       const bar=candles.at(-1)!;
@@ -994,7 +1014,7 @@ export class ChartEngine {
       this.volumeSeries.update(this.volumeData(bar,candles.length-1));
       for(const {series,line} of this.averages.values()) {
         const value=this.studyLines(studyKey.ema(line.period))?.value[candles.length-1];
-        series.update(value===null || value===undefined?{time:bar.date}:{time:bar.date,value});
+        series.update(value===null || value===undefined?{time:chartTime(bar.date)}:{time:chartTime(bar.date),value});
       }
     } else if(shortened) {
       const count=previous.length-candles.length;
@@ -1230,7 +1250,7 @@ export class ChartEngine {
     return plots;
   }
   private studyData(plot:StudyPlot) {
-    return this.candles.map((bar,i)=>plot.values[i]===null||plot.values[i]===undefined?{time:bar.date}:{time:bar.date,value:plot.values[i]!,...(plot.histogram?{color:plot.values[i]!>=0?CHART_PALETTE.volumeUp:CHART_PALETTE.volumeDown}:{})});
+    return this.candles.map((bar,i)=>plot.values[i]===null||plot.values[i]===undefined?{time:chartTime(bar.date)}:{time:chartTime(bar.date),value:plot.values[i]!,...(plot.histogram?{color:plot.values[i]!>=0?CHART_PALETTE.volumeUp:CHART_PALETTE.volumeDown}:{})});
   }
   /** New candles: a replay step appends one point per line; anything else redraws from the store. */
   private updateStudies(appended=false) {
@@ -1243,7 +1263,7 @@ export class ChartEngine {
       if(!entry) continue;
       entry.values=plot.values;
       const value=plot.values[index];
-      entry.series.update(value===null||value===undefined?{time:bar.date}:{time:bar.date,value,...(plot.histogram?{color:value>=0?CHART_PALETTE.volumeUp:CHART_PALETTE.volumeDown}:{})});
+      entry.series.update(value===null||value===undefined?{time:chartTime(bar.date)}:{time:chartTime(bar.date),value,...(plot.histogram?{color:value>=0?CHART_PALETTE.volumeUp:CHART_PALETTE.volumeDown}:{})});
       entry.candles=this.candles;
     }
     this.studyPlotList=plots;
@@ -1421,7 +1441,7 @@ export class ChartEngine {
   private updateComparison() {
     // Exact date intersection prevents comparison-only sessions from shifting the replay indices.
     const dates=new Set(this.candles.map(bar=>bar.date));
-    this.comparison?.setData(this.comparisonData.filter(bar=>dates.has(bar.date)).map(bar=>({time:bar.date,value:bar.close})));
+    this.comparison?.setData(this.comparisonData.filter(bar=>dates.has(bar.date)).map(bar=>({time:chartTime(bar.date),value:bar.close})));
   }
   private projection():DrawingProjection|null {
     if(!this.times.length) return null;
@@ -1486,7 +1506,13 @@ export class ChartEngine {
     const bar=date?this.byDate.get(date):this.candles.at(-1);if(bar) this.inspect(bar);
     this.syncEventHover(event);
   };
-  private dateString(time:Time) {return typeof time==='string'?time:typeof time==='number'?new Date(time*1000).toISOString().slice(0,10):`${time.year}-${String(time.month).padStart(2,'0')}-${String(time.day).padStart(2,'0')}`;}
+  private indexIntraday(candles:readonly Candle[]) {
+    this.dateByTime=new Map(candles.filter(bar=>bar.date.length>10).map(bar=>[chartTime(bar.date) as number,bar.date]));
+    const intraday=this.dateByTime.size>0;
+    this.chart?.applyOptions({timeScale:{timeVisible:intraday,secondsVisible:false,
+      tickMarkFormatter:intraday?(time:Time)=>typeof time==='number'&&this.dateByTime.has(time)?intradayLabel(this.dateByTime.get(time)!):undefined:undefined}});
+  }
+  private dateString(time:Time) {return typeof time==='string'?time:typeof time==='number'?this.dateByTime.get(time)??new Date(time*1000).toISOString().slice(0,10):`${time.year}-${String(time.month).padStart(2,'0')}-${String(time.day).padStart(2,'0')}`;}
   private click=(event:MouseEventParams<Time>)=>{
     if(this.replayPicker&&event.logical!==undefined&&event.point&&event.point.y<=this.chart.paneSize(0).height) this.pickReplay(Math.max(0,Math.min(this.candles.length-1,Math.round(event.logical))));
     else {

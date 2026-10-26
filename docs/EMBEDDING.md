@@ -100,6 +100,33 @@ in Nexus Journal.
 Origins and the namespace are read when the component mounts (re-key it to change them). Only one
 `ScannerApp` may be mounted at a time.
 
+## Charts only: `@anny26022/nexus-scanner/charts`
+
+The scanner's chart engine, without the rest of the app, for hosts that only need charts (Nexus Journal's Theme
+Tracker). It is a separate build: about 42 kB gzipped of JavaScript plus a 1 kB stylesheet of design tokens, with
+`react` and `lightweight-charts` as its only imports. It does not need React Query or the scanner's data layer.
+
+```tsx
+import { PriceChart, CompareChart, type Candle } from '@anny26022/nexus-scanner/charts';
+import '@anny26022/nexus-scanner/charts.css';
+
+<div style={{height: 320}}>
+  <PriceChart candles={candles} theme="dark" movingAverages={[{period: 20}, {period: 50}]} visibleBars={120} />
+</div>
+<div style={{height: 320}}>
+  <CompareChart series={[{id: 'defence', label: 'Defence', points: [{date: '2026-10-01', value: 100}, …]}]} />
+</div>
+```
+
+| Component | Props |
+| --- | --- |
+| `PriceChart` | `candles` (oldest first; `date` is a trading day `2026-10-26` or an ISO timestamp `2026-10-26T09:15:00Z` for intraday bars), `chartStyle` (`candles`, `bars`, `line`, `area`, …), `movingAverages` (`{period, color?}[]`), `showVolume` (default true), `visibleBars`, `onHover(bar)` |
+| `CompareChart` | `series` (`{id, label, points: {date, value}[], color?}[]`, each rebased to 0% on the latest common start date), `onHover({date, values})` |
+| Both | `theme` (`light` / `dark`), `tokens` (design-token overrides, e.g. `{'--surface': 'hsl(var(--card))'}`), `className`, `style`, `aria-label` |
+
+Each chart fills its container, so the host sets the height. `rebaseSeries` and `COMPARE_PALETTE` are exported for
+legends drawn outside the chart.
+
 ## Styles
 
 `style.css` is precompiled: it contains every utility the scanner uses, its own Tailwind preflight, element

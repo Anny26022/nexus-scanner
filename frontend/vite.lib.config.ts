@@ -35,16 +35,23 @@ function scopedCss(): Plugin {
   };
 }
 
-export default defineConfig({
+// `vite build --mode charts` builds the charts-only entry (@anny26022/nexus-scanner/charts) into dist-lib/charts/,
+// after the app build, so the app package and its single stylesheet stay exactly as they are.
+export default defineConfig(({mode}) => ({
   plugins: [react(), tailwindcss(), inlineWorkers(), scopedCss()],
   publicDir: false,
   worker: {format: 'es'},
   build: {
-    outDir: 'dist-lib',
-    emptyOutDir: true,
+    outDir: mode === 'charts' ? 'dist-lib/charts' : 'dist-lib',
+    emptyOutDir: mode !== 'charts',
     sourcemap: false,
     cssCodeSplit: false,
-    lib: {
+    lib: mode === 'charts' ? {
+      entry: path.resolve(import.meta.dirname, 'src/charts.tsx'),
+      formats: ['es'],
+      fileName: () => 'charts.js',
+      cssFileName: 'charts',
+    } : {
       entry: path.resolve(import.meta.dirname, 'src/embed.tsx'),
       formats: ['es'],
       fileName: () => 'index.js',
@@ -59,4 +66,4 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
-});
+}));

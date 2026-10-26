@@ -7,5 +7,9 @@
     "rootDir": "src",
     "outDir": "dist-lib/types"
   },
-  "include": ["src/embed.tsx", "src/vite-env.d.ts"]
+  "include": [
+    "src/embed.tsx",
+    "src/charts.tsx",
+    "src/vite-env.d.ts"
+  ]
 }

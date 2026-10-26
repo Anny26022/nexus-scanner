@@ -95,7 +95,7 @@ export async function compileWithFallback(query:string,catalog:AiFilterDefinitio
     try {
       const signal = options.signal ? AbortSignal.any([options.signal,AbortSignal.timeout(index===0?30000:45000)]) : AbortSignal.timeout(index===0?30000:45000);
       const requestMessages = model === FALLBACK_MODEL ? [{...messages[0],content:messages[0].content+'\n/no_think'},messages[1]] : messages;
-      const parsed = parseOutput(await run(model,{messages:requestMessages,response_format:{type:'json_object'},temperature:0,max_tokens:450},signal));
+      const parsed = parseOutput(await run(model,{messages:requestMessages,response_format:{type:'json_object'},temperature:0,max_tokens:1200},signal));
       inputTokens+=parsed.inputTokens;outputTokens+=parsed.outputTokens;cachedTokens+=parsed.cachedTokens;
       if (!object(parsed.raw) || !Array.isArray(parsed.raw.clauses)) throw new Error('invalid_result');
       const result = materializeCompilerResult(parsed.raw,catalog);

@@ -38,3 +38,16 @@ it('answers preflight with the methods and headers the app sends', () => {
   expect(headers['Access-Control-Allow-Methods']).toContain('POST');
   expect(headers['Access-Control-Allow-Headers']).toBe('Content-Type');
 });
+
+it('matches a suffix entry for branch previews, and nothing broader', () => {
+  const previews = parseAllowedOrigins('https://*-team-projects.vercel.app, https://*, https://*.app, *, http://*-x.example.com');
+  expect([...previews]).toEqual(['https://*-team-projects.vercel.app']);
+  const allowed = (origin: string) => checkOrigin(request(origin), previews).allowed;
+  expect(allowed('https://new-nexys-ulti-git-1bd98f-team-projects.vercel.app')).toBe(true);
+  expect(allowed('https://-team-projects.vercel.app')).toBe(false);
+  expect(allowed('https://evil.vercel.app')).toBe(false);
+  expect(allowed('https://x-team-projects.vercel.app.evil.example')).toBe(false);
+  expect(allowed('http://x-team-projects.vercel.app')).toBe(false);
+  expect(allowed('https://x-team-projects.vercel.app:8443')).toBe(false);
+  expect(allowed('null')).toBe(false);
+});

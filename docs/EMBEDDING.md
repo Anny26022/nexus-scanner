@@ -127,6 +127,19 @@ and `Vary: Origin` on every response (errors included) and a `204` preflight. Un
 the body is read or the per-IP rate limiter is touched. Production lists `https://www.nexusjournal.co.in` and
 `https://nexusjournal.co.in`; `wrangler.dev.jsonc` lists local Vite dev origins.
 
+## Staging on branch previews (nothing reaches production)
+
+Merging to `main` deploys `nexus-scanner` through Workers Builds, so the PR stays unmerged until the embed is
+complete. Each pushed branch gets a preview at `https://<branch>-nexus-scanner.aniketmahato26.workers.dev`.
+The `previews` block in `wrangler.jsonc` gives previews the AI binding, their own rate-limit namespace and an
+allowlist with local dev origins and `https://*-aniketmahatobcom23-thceduins-projects.vercel.app` (Nexus
+Journal's Vercel branch previews). A `*` entry matches only https hosts ending in the text after it; production
+keeps exact origins.
+
+During development the journal points `dataOrigin`/`apiOrigin` at the scanner preview URL and installs the
+package from an `npm pack` tarball committed to its branch (`"@anny26022/nexus-scanner": "file:vendor/…tgz"`),
+so nothing is published either.
+
 ## Deploy order
 
 1. Deploy `nexus-scanner` (`npm run deploy` at the repository root) so `/data/*` gets CORS headers and the AI

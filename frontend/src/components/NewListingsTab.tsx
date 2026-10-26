@@ -220,8 +220,8 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   };
 
   return <div className="research-view">
-    <section className="screen-controls" aria-label="IPO criteria">
-      <div className="screen-toolbar">
+    <section className="screen-controls ipo-screen-controls" aria-label="IPO criteria">
+      <div className="screen-toolbar ipo-screen-toolbar">
         <label className="universe-control"><span className="field-label">Listing period</span><span className="select-wrap"><select aria-label="Listing period" value={periodFilter} onChange={e => {updatePeriod(e.target.value as typeof periodFilter); setScreenPage(1);}}>
           <option value="30d">30 Days</option><option value="90d">90 Days</option><option value="6m">6 Months</option><option value="1y">1 Year</option><option value="all">All Time</option>
         </select><ChevronDown size={14} /></span></label>

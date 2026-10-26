@@ -7,8 +7,6 @@ export const copyFormats: Array<{value:CopyGroup; label:string}> = [
   {value:'symbols',label:'Symbols'}, {value:'sector',label:'Sector'},
   {value:'industry',label:'Industry'}, {value:'theme',label:'Theme'},
   {value:'subIndustry',label:'Sub-industry'}, {value:'block',label:'Thematic block'},
-  {value:'macro',label:'Macro pillar'}, {value:'cohort',label:'Listing cohort'},
-  {value:'aggregate',label:'Theme aggregate'},
 ];
 export function formatCopyResults(rows:CopyRow[], group:CopyGroup, taxonomy?:ThemeClassification):string {
   const unique = [...new Map(rows.map(row => [row.symbol,row])).values()];

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import type { Interval } from '../chart/model';
+import { portalContainer } from '../embedding';
 
 /** "1D", "D", "1W", "w", "1M"… → an interval; anything else is null. */
 export function parseInterval(text: string): Interval | null {
@@ -18,7 +19,7 @@ export function IntervalPrompt({initial, onInterval, onSymbol, onClose}: {
   const [draft, setDraft] = useState(initial);
   const interval = parseInterval(draft);
   return <RadixDialog.Root open onOpenChange={open => { if (!open) onClose(); }}>
-    <RadixDialog.Portal>
+    <RadixDialog.Portal container={portalContainer()}>
       <RadixDialog.Content className="interval-prompt" aria-label="Change interval"
         onOpenAutoFocus={event => { event.preventDefault(); (event.currentTarget as HTMLElement).querySelector('input')?.focus(); }}>
         <RadixDialog.Title className="interval-prompt-title">Change interval</RadixDialog.Title>

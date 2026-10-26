@@ -51,6 +51,7 @@ venv/
 # Frontend dependencies and build output
 frontend/node_modules/
 frontend/dist/
+frontend/dist-lib/
 
 # macOS / Python
 .DS_Store

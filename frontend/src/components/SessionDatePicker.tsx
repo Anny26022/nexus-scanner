@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { CalendarDays, ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { portalContainer } from '../embedding';
 
 export interface SessionMeta {
   date: string;
@@ -150,7 +151,7 @@ export const SessionDatePicker: React.FC<SessionDatePickerProps> = ({
           </button>
         )}
 
-        <Popover.Portal>
+        <Popover.Portal container={portalContainer()}>
           <Popover.Content
             align="start"
             sideOffset={4}

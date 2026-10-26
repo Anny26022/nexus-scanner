@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import * as Popover from '@radix-ui/react-popover';
 import { Check, ChevronDown, Eraser, FolderPlus, Heading, Pencil, Trash2 } from 'lucide-react';
 import { FLAG_COLORS, flaggedSymbols, type FlagColor, type WatchlistFlags, type WatchlistStore } from '../chart/watchlists';
+import { portalContainer } from '../embedding';
 
 type Editing = null | 'new' | 'rename' | 'section';
 
@@ -45,7 +46,7 @@ export function WatchlistMenu({store, flags, view, title, count, onSwitch, onVie
         <ChevronDown size={13} aria-hidden="true" />
       </button>
     </Popover.Trigger>
-    <Popover.Portal>
+    <Popover.Portal container={portalContainer()}>
       <Popover.Content align="start" sideOffset={6} collisionPadding={12} className="watchlist-menu" aria-label="Watchlists">
         {editing ? <form className="watchlist-menu-form" onSubmit={submit}>
           <label className="watchlist-menu-label" htmlFor="watchlist-menu-input">

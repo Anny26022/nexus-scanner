@@ -1,6 +1,7 @@
 import * as Popover from '@radix-ui/react-popover';
 import { SlidersHorizontal } from 'lucide-react';
 import { Button } from '../Button';
+import { portalContainer } from '../../embedding';
 
 /** The screener's liquidity terms: market cap, average 30-session turnover and price band. */
 export interface LiquidityFilters {
@@ -84,7 +85,7 @@ export function RotationFilters({
           )}
         </button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={portalContainer()}>
         <Popover.Content
           align="end"
           sideOffset={8}

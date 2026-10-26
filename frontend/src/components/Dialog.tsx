@@ -1,5 +1,6 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { useRef, type ReactNode } from 'react';
+import { portalContainer } from '../embedding';
 
 /** Accessible modal powered by Radix UI: focus trapping, background inertness, Escape, and portal rendering. */
 export function Dialog({
@@ -16,7 +17,7 @@ export function Dialog({
   const contentRef = useRef<HTMLDivElement>(null);
   return (
     <RadixDialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <RadixDialog.Portal>
+      <RadixDialog.Portal container={portalContainer()}>
         <RadixDialog.Overlay onPointerDown={event => { event.stopPropagation(); onClose(); }} className="dialog-backdrop fixed inset-0 z-(--z-dialog) bg-[rgb(15_23_31_/_48%)] backdrop-blur-xs animate-in fade-in duration-150" />
         <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center pointer-events-none">
           <RadixDialog.Content

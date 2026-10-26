@@ -19,6 +19,7 @@ import { currentTheme, forTheme } from './themeColors';
 import { drawMarkerShape, markerStyle, type MarkerShape, type MarkerStyle } from './markerShapes';
 import { computeSimpleVolume, type SimpleVolumeResult } from './simpleVolume';
 import { SIMPLE_VOLUME_COLORS } from './studyConfigs';
+import { themeElement } from '../embedding';
 
 // Match the reference screener's native candle and bar palette.
 export const CHART_PALETTE = {up:'#089981',down:'#ef5350',volumeUp:'rgba(8,153,129,0.5)',volumeDown:'rgba(239,83,80,0.5)'};
@@ -237,7 +238,7 @@ export class ChartEngine {
     this.chart.subscribeClick(this.click);
     this.chart.timeScale().subscribeVisibleLogicalRangeChange(this.onVisibleRange);
     this.theme=new MutationObserver(()=>this.readTheme());
-    this.theme.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+    this.theme.observe(themeElement(),{attributes:true,attributeFilter:['data-theme']});
     this.readTheme();
     this.unsubscribe=this.watchBook();
     const options={signal:this.events.signal,capture:true};

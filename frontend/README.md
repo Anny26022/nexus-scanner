@@ -103,6 +103,8 @@ Run development and preview separately. Open [http://localhost:8080/](http://loc
 
 The local preview configuration also installs the Python scanner bridge. This is a Vite process feature; copying `dist/` to a static host does not deploy a Python service.
 
+`npm run build:lib` builds the embeddable `ScannerApp` package (`@anny26022/nexus-scanner`) into `dist-lib/`. See [docs/EMBEDDING.md](../docs/EMBEDDING.md) for how a host app installs and mounts it.
+
 ## User workflows
 
 ### Mainboard screening

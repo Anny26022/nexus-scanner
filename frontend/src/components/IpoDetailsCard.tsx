@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ExternalLink, X } from 'lucide-react';
 import { IPORow } from '../types/screener';
 import { SymbolWithLogo } from './SymbolWithLogo';
+import { portalContainer } from '../embedding';
 
 interface IpoDetailsCardProps {
   row: IPORow;
@@ -220,5 +221,5 @@ export const IpoDetailsCard: React.FC<IpoDetailsCardProps> = ({row, id, left, to
       </section> : null}
       </div>}
     </div>
-  </section>, document.body);
+  </section>, portalContainer() ?? document.body);
 };

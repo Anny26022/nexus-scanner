@@ -1,6 +1,7 @@
 import * as RadixDialog from '@radix-ui/react-dialog';
 import type { ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { portalContainer } from '../embedding';
 
 /** A chart modal powered by Radix UI: accessible focus containment, Escape, backdrop dismissal, and focus return. */
 export function ChartDialog({
@@ -16,7 +17,7 @@ export function ChartDialog({
 }) {
   return (
     <RadixDialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <RadixDialog.Portal>
+      <RadixDialog.Portal container={portalContainer()}>
         <RadixDialog.Overlay onPointerDown={event => { event.stopPropagation(); onClose(); }} className="chart-modal-backdrop animate-in fade-in duration-150" />
         <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center p-[10px] sm:p-[18px] pointer-events-none">
           <RadixDialog.Content

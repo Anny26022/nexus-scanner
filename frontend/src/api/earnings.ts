@@ -2,6 +2,7 @@ import { copyFormats, type CopyGroup } from '../utils/copyResults';
 import {classificationLabels, type ClassificationRecord} from '../data/classification';
 import { getIpoJson } from './gzipJson';
 import { DataUnavailableError } from './dataErrors';
+import { dataUrl } from './origins';
 
 /** Quarterly results history: a small index in the app, quarter files in object storage. */
 const EARNINGS_INDEX_URL = '/data/results/index.json';
@@ -74,7 +75,7 @@ export interface EarningsRecord {
 }
 
 export async function getEarningsIndex(): Promise<EarningsIndex> {
-  const response = await fetch(EARNINGS_INDEX_URL, {cache: 'no-cache'});
+  const response = await fetch(dataUrl(EARNINGS_INDEX_URL), {cache: 'no-cache'});
   if (!response.ok) throw new DataUnavailableError('Earnings history has not been published yet.', 'not_published');
   const index = await response.json().catch(() => null) as EarningsIndex | null;
   if (!index || index.version !== 1 || typeof index.quarters !== 'object') {
@@ -84,7 +85,7 @@ export async function getEarningsIndex(): Promise<EarningsIndex> {
 }
 
 export async function getHeatmapIndex(): Promise<HeatmapIndex> {
-  const response = await fetch(HEATMAP_INDEX_URL, {cache: 'no-cache'});
+  const response = await fetch(dataUrl(HEATMAP_INDEX_URL), {cache: 'no-cache'});
   if (!response.ok) throw new DataUnavailableError('Earnings heatmap has not been published yet.', 'not_published');
   const index = await response.json().catch(() => null) as HeatmapIndex | null;
   if (!index || index.version !== 1 || typeof index.markets !== 'object') {

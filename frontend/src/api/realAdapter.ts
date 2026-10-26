@@ -7,7 +7,8 @@ import { runSnapshotTask } from './snapshotClient';
 import type { SnapshotSource } from './snapshotEngine';
 import { filterAnnouncements, type Announcement, type AnnouncementCatalog, type AnnouncementIndex, type FilingTopic } from './announcements';
 import { DataUnavailableError } from './dataErrors';
-import { getManifest, refreshManifest, validateManifest, validDate, manifestSnapshotSource, type Manifest } from './manifest';
+import { getManifest, refreshManifest, validateManifest, validDate, manifestSnapshotSource, resolveManifestUrls, type Manifest } from './manifest';
+import { dataUrl } from './origins';
 import { parseMarketOverview } from '../utils/marketOverview';
 import type { RotationIndex, RotationShard, RotationShardName } from './rotation';
 export { refreshManifest } from './manifest';
@@ -107,8 +108,8 @@ async function releaseFor(revision?: string): Promise<Manifest> {
   if (!/^[a-f0-9]{64}$/.test(selected)) throw new Error('Invalid dataset revision');
   if (selected === latest.revision) return latest;
   try {
-    const release = validateManifest(await cached(
-      releaseCache, selected, () => getJson<unknown>(`/data/revisions/${selected}/release.json`), 3));
+    const release = resolveManifestUrls(validateManifest(await cached(
+      releaseCache, selected, () => getJson<unknown>(dataUrl(`/data/revisions/${selected}/release.json`)), 3)));
     if (release.revision !== selected) throw new Error('Release revision mismatch');
     return release;
   } catch (err) {
@@ -215,7 +216,7 @@ class RealDataAdapter {
     if (release.revision !== revision) return null;
     type Ledger = {version: number; from: string; through: string; bands: Record<string, Array<[string, string]>>};
     // Releases published before the ledger existed fall back to the committed ledger file.
-    const url = release.priceBandHistoryUrl ?? '/data/price-band-history.json';
+    const url = release.priceBandHistoryUrl ?? dataUrl('/data/price-band-history.json');
     const ledger = await cached(releaseCache, url, async () => {
       if (release.priceBandHistoryUrl) return getIpoJson<Ledger>(url, 'Price-band history');
       const response = await fetch(url);
@@ -583,7 +584,7 @@ class RealDataAdapter {
 
   async getAvailableSessions(): Promise<Array<{ date: string; label: string; isHistorical: boolean; revision: string }>> {
     try {
-      const resp = await fetch('/data/sessions.json');
+      const resp = await fetch(dataUrl('/data/sessions.json'));
       if (resp.ok) {
         const data = await resp.json();
         if (Array.isArray(data.sessions) && data.sessions.length > 0) {

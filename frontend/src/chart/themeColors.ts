@@ -1,4 +1,5 @@
 import type { ChartAppearance } from './ChartEngine';
+import { themeElement } from '../embedding';
 
 /** Canvas and series colours that only make sense against one theme's background. */
 export const THEME_COLOR_KEYS = [
@@ -10,7 +11,7 @@ export type ChartTheme = 'light' | 'dark';
 export type ThemeColors = Partial<Pick<ChartAppearance, ThemeColorKey>>;
 
 export const currentTheme = (): ChartTheme =>
-  typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  typeof document !== 'undefined' && themeElement().dataset.theme === 'dark' ? 'dark' : 'light';
 
 const pick = (appearance: Partial<ChartAppearance>): ThemeColors =>
   Object.fromEntries(THEME_COLOR_KEYS.filter(key => appearance[key] !== undefined).map(key => [key, appearance[key]]));

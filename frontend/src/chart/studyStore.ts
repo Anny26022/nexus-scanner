@@ -1,6 +1,7 @@
 import type { Candle } from './model';
 import { computeStudy, usesBenchmark, type StudyLines } from './studyCompute';
 import type { StudyWorkerRequest, StudyWorkerResponse } from './study.worker';
+import { createStudyWorker } from './studyWorkerFactory';
 
 // Kept in step with study.worker.ts; importing the worker module itself would run it on this thread.
 const STALE = 'stale candles';
@@ -21,7 +22,7 @@ const pending = new Map<number, Pending>();
 function studyWorker(): Worker | null {
   if (worker !== undefined) return worker;
   try {
-    worker = typeof Worker === 'undefined' ? null : new Worker(new URL('./study.worker.ts', import.meta.url), {type: 'module'});
+    worker = typeof Worker === 'undefined' ? null : createStudyWorker();
     worker?.addEventListener('message', (event: MessageEvent<StudyWorkerResponse>) => {
       pending.get(event.data.id)?.resolve(event.data);
       pending.delete(event.data.id);

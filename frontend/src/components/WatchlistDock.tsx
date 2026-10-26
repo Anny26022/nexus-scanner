@@ -25,6 +25,7 @@ import {
 import { WatchlistMenu } from './WatchlistMenu';
 import { useMountEffect } from '../hooks/useMountEffect';
 import { SymbolWithLogo } from './SymbolWithLogo';
+import { portalContainer, themeElement } from '../embedding';
 
 const isSection = (item: string) => item.startsWith('###');
 const sectionTitle = (item: string) => item.slice(3);
@@ -172,11 +173,12 @@ export const WatchlistDock = memo(function WatchlistDock({
     return typeof saved === 'number' && Number.isFinite(saved) ? clampWidth(saved) : DEFAULT_WIDTH;
   });
   // The expanded chart workspace also leaves room for the dock, so the width lives on the root too.
-  const applyWidth = (next: number) => { setWidth(next); document.documentElement.style.setProperty('--watchlist-width', `${next}px`); };
+  const applyWidth = (next: number) => { setWidth(next); themeElement().style.setProperty('--watchlist-width', `${next}px`); };
   const saveWidth = (next: number) => { applyWidth(next); writeChartStorage(WIDTH_KEY, next); };
   useMountEffect(() => {
-    document.documentElement.style.setProperty('--watchlist-width', `${width}px`);
-    return () => document.documentElement.style.removeProperty('--watchlist-width');
+    const root = themeElement();
+    root.style.setProperty('--watchlist-width', `${width}px`);
+    return () => root.style.removeProperty('--watchlist-width');
   });
   // Dragging the left edge resizes the dock, like TradingView's right panel.
   const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -191,10 +193,10 @@ export const WatchlistDock = memo(function WatchlistDock({
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', end);
       handle.removeEventListener('pointercancel', end);
-      document.body.classList.remove('is-resizing-dock');
+      themeElement().classList.remove('is-resizing-dock');
       saveWidth(latest);
     };
-    document.body.classList.add('is-resizing-dock');
+    themeElement().classList.add('is-resizing-dock');
     handle.addEventListener('pointermove', move);
     handle.addEventListener('pointerup', end);
     handle.addEventListener('pointercancel', end);
@@ -942,7 +944,7 @@ function FlagPicker({symbol, flag, onFlag}: {symbol: string; flag?: FlagColor; o
         <Flag size={11} fill={flag ? 'currentColor' : 'none'} />
       </button>
     </Popover.Trigger>
-    <Popover.Portal>
+    <Popover.Portal container={portalContainer()}>
       <Popover.Content side="right" align="center" sideOffset={6} collisionPadding={12} className="watchlist-menu is-compact" onClick={event => event.stopPropagation()}>
         <FlagSwatches flag={flag} onFlag={color => { onFlag(color); setOpen(false); }} />
       </Popover.Content>
@@ -963,7 +965,7 @@ function WatchlistRowMenu({symbol, x, y, flag, inList, otherLists, onClose, onFl
   const act = (fn: () => void) => () => { fn(); onClose(); };
   return <Popover.Root open onOpenChange={next => { if (!next) onClose(); }}>
     <Popover.Anchor asChild><span style={{position: 'fixed', left: x, top: y, width: 0, height: 0}} /></Popover.Anchor>
-    <Popover.Portal>
+    <Popover.Portal container={portalContainer()}>
       <Popover.Content align="start" side="bottom" sideOffset={2} collisionPadding={12} className="watchlist-menu" aria-label={`${symbol} actions`}>
         <div className="watchlist-menu-label">{symbol}</div>
         <FlagSwatches flag={flag} onFlag={color => { onFlag(color); onClose(); }} />

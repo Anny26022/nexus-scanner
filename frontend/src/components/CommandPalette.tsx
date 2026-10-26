@@ -6,6 +6,7 @@ import { readStored } from '../storage/store';
 import { parseSavedScreens, SAVED_SCREENS_KEY, type ScreenDefinition } from '../utils/savedScreens';
 import { describeScreen } from './SavedScreensMenu';
 import type { AppTab } from './Navbar';
+import { portalContainer } from '../embedding';
 
 interface PaletteItem {
   id: string;
@@ -22,7 +23,8 @@ interface CommandPaletteProps {
   onNavigate: (tab: AppTab) => void;
   onLoadScreen: (screen: ScreenDefinition) => void;
   onOpenSymbol: (symbol: string) => void;
-  onThemeChange: (theme: 'light' | 'dark') => void;
+  /** Omitted when embedded: the host owns the appearance. */
+  onThemeChange?: (theme: 'light' | 'dark') => void;
   datasetRevision?: string;
   sessionDate?: string;
 }
@@ -64,10 +66,10 @@ export function CommandPalette({onClose, onNavigate, onLoadScreen, onOpenSymbol,
       id: `symbol:${row.symbol}`, group: 'Symbols', label: row.symbol, hint: row.name, icon: <CandlestickChart size={15} />,
       run: () => onOpenSymbol(row.symbol),
     }));
-    const appearance: PaletteItem[] = [
+    const appearance: PaletteItem[] = onThemeChange ? [
       {id: 'theme:light', group: 'Appearance', label: 'Light appearance', keywords: 'theme mode', icon: <Sun size={15} />, run: () => onThemeChange('light')},
       {id: 'theme:dark', group: 'Appearance', label: 'Dark appearance', keywords: 'theme mode night', icon: <Moon size={15} />, run: () => onThemeChange('dark')},
-    ].filter(item => matches(`${item.label} ${item.keywords}`)) as PaletteItem[];
+    ].filter(item => matches(`${item.label} ${item.keywords}`)) as PaletteItem[] : [];
     return [...pages, ...screens, ...symbolItems, ...appearance];
   }, [query, savedScreens, symbols.data, onNavigate, onLoadScreen, onOpenSymbol, onThemeChange]);
 
@@ -80,7 +82,7 @@ export function CommandPalette({onClose, onNavigate, onLoadScreen, onOpenSymbol,
 
   return (
     <RadixDialog.Root open onOpenChange={open => !open && onClose()}>
-      <RadixDialog.Portal>
+      <RadixDialog.Portal container={portalContainer()}>
         <RadixDialog.Overlay className="fixed inset-0 z-(--z-dialog) bg-black/25 backdrop-blur-[6px] animate-in fade-in duration-150" />
         <RadixDialog.Content
           aria-label="Command palette"

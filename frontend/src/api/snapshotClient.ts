@@ -1,4 +1,5 @@
 import type { SnapshotResult, SnapshotTask } from './snapshotEngine';
+import { createSnapshotWorker } from './snapshotWorkerFactory';
 
 let worker: Worker | undefined;
 let sequence = 0;
@@ -75,7 +76,7 @@ export function startSnapshotWorker() {
   if (typeof Worker === 'undefined' || workerUnavailable) return;
   if (!worker) {
     try {
-      worker = new Worker(new URL('./snapshot.worker.ts', import.meta.url), { type: 'module' });
+      worker = createSnapshotWorker();
     } catch {
       workerUnavailable = true;
       return;

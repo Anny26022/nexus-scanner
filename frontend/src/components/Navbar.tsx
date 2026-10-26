@@ -15,7 +15,7 @@ interface NavbarProps {
 
 const SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K';
 
-const NAV_ITEMS = [
+export const NAV_ITEMS = [
   { id: 'screener', label: 'Screener', Icon: ScanSearch },
   { id: 'ipo', label: 'IPO Catalogue', Icon: Rocket },
   { id: 'charts', label: 'Charts', Icon: CandlestickChart },
@@ -58,5 +58,31 @@ export function Navbar({ activeTab, onTabChange, onHideSidebar, onOpenSearch, th
           <button type="button" key={id} aria-label={label} title={label} aria-pressed={choice === id} onClick={() => setChoice(id)}><Icon size={16} /></button>)}
       </div>
     </div>
+  </header>;
+}
+
+interface EmbeddedNavProps {
+  activeTab: AppTab;
+  onTabChange: (tab: AppTab) => void;
+  onOpenSearch: () => void;
+  sessionControl?: ReactNode;
+}
+
+/** Embedded in a host app: the host owns the page chrome and theme, so the tabs become a sub-navigation bar. */
+export function EmbeddedNav({ activeTab, onTabChange, onOpenSearch, sessionControl }: EmbeddedNavProps) {
+  return <header className="embed-subnav">
+    <nav className="embed-subnav-tabs" aria-label="Scanner navigation">
+      {NAV_ITEMS.map(({id, label, Icon}) => (
+        <button key={id} type="button" aria-current={activeTab === id ? 'page' : undefined} onClick={() => onTabChange(id)}>
+          <Icon size={15} aria-hidden="true" />
+          <span>{label}</span>
+        </button>
+      ))}
+    </nav>
+    {sessionControl && <div className="embed-subnav-session">{sessionControl}</div>}
+    <button type="button" className="embed-subnav-search" onClick={onOpenSearch} aria-label="Search pages, screens and symbols" aria-keyshortcuts="Meta+K Control+K">
+      <Search size={14} aria-hidden="true" />
+      <kbd>{SHORTCUT}</kbd>
+    </button>
   </header>;
 }

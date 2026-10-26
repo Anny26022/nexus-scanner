@@ -4,6 +4,7 @@ import { Clock, CornerDownLeft, Search } from 'lucide-react';
 import { WATCHLIST_KEY, readChartStorage, validSymbol, writeChartStorage } from '../chart/storage';
 import { rankSymbols, useSymbolDirectory, type SymbolEntry } from '../hooks/useSymbolDirectory';
 import { SymbolWithLogo } from './SymbolWithLogo';
+import { portalContainer } from '../embedding';
 
 const RECENTS_KEY = 'recent-symbols.v1';
 const MAX_RECENTS = 8;
@@ -87,7 +88,7 @@ export function ChartSymbolSearch({symbol, datasetRevision, sessionDate, onSelec
         <Search size={13} className="chart-symbol-trigger-icon" aria-hidden="true" />
       </button>
     </RadixDialog.Trigger>
-    <RadixDialog.Portal>
+    <RadixDialog.Portal container={portalContainer()}>
       <RadixDialog.Overlay className="symbol-palette-backdrop animate-in fade-in duration-150" />
       <RadixDialog.Content className="symbol-palette animate-in fade-in zoom-in-95 duration-150" aria-label="Symbol search"
         onOpenAutoFocus={event => { event.preventDefault(); (event.currentTarget as HTMLElement).querySelector('input')?.focus(); }}>

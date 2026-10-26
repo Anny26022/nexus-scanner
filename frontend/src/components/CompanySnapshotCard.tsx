@@ -9,6 +9,7 @@ import { SymbolWithLogo } from './SymbolWithLogo';
 import { SentimentBadge } from './SentimentBadge';
 import type { companyPopoverPosition } from '../utils/companyPopoverPosition';
 import { Button } from './Button';
+import { portalContainer } from '../embedding';
 
 type Tab = 'snapshot' | 'news' | 'watch' | 'events';
 interface Props extends ReturnType<typeof companyPopoverPosition> {
@@ -147,5 +148,5 @@ export function CompanySnapshotCard({row, id, left, top, placement, onClose, onM
     {report && <footer className="snapshot-footer">
       {report.as_of && <span>As of {date(report.as_of)}</span>}
     </footer>}
-  </section>, document.body);
+  </section>, portalContainer() ?? document.body);
 }

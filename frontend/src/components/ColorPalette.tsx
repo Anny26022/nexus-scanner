@@ -1,6 +1,7 @@
 import { useStoredState } from '../storage/useStoredState';
 import * as Popover from '@radix-ui/react-popover';
 import { Plus } from 'lucide-react';
+import { portalContainer } from '../embedding';
 
 /** TradingView's swatch grid: greys, then the main hues, then six tint rows light → dark. */
 const GREYS = ['#ffffff', '#d1d4dc', '#b2b5be', '#9598a1', '#787b86', '#5d606b', '#434651', '#2a2e39', '#131722', '#000000'];
@@ -49,7 +50,7 @@ export function ColorPalette({value, onChange, ariaLabel, disabled = false}: {va
         <span style={{backgroundColor: value}} />
       </button>
     </Popover.Trigger>
-    <Popover.Portal>
+    <Popover.Portal container={portalContainer()}>
       <Popover.Content className="cp-panel" side="bottom" align="start" sideOffset={6} collisionPadding={12} aria-label={`${ariaLabel} palette`}>
         <div className="cp-grid" role="listbox" aria-label="Colours">{GREYS.map(swatch)}{MAIN.map(swatch)}</div>
         <div className="cp-grid cp-tints" role="listbox" aria-label="Tints">{TINTS.flat().map(swatch)}</div>

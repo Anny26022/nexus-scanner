@@ -1,6 +1,7 @@
 import {MAX_PROMPT_LENGTH, validateAiScreenResult} from './aiScreenerContract';
 import {createAiFilterCatalog} from './aiFilterCatalog';
 import type {FilterChoices} from '../types/filterChoices';
+import {apiUrl} from './origins';
 export type {AiScreenResult, ClauseCompilation} from './aiScreenerContract';
 
 export interface SamplePrompt {
@@ -47,7 +48,7 @@ export async function compileNaturalLanguageQuery(input: string, signal?: AbortS
   const text = input.trim();
   if (!text || text.length > MAX_PROMPT_LENGTH) throw new Error(`Use 1–${MAX_PROMPT_LENGTH} characters to describe your screen.`);
   
-  const response = await fetch('/api/screener/ai-compile', {
+  const response = await fetch(apiUrl('/api/screener/ai-compile'), {
     method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({text,...(context?.datasetRevision ? {datasetRevision:context.datasetRevision} : {})}),
     signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(90000)]) : AbortSignal.timeout(90000),
   });

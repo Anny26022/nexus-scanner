@@ -126,7 +126,10 @@ export default defineConfig({
   }, localAiWorker()],
   // Never ship source maps: they would publish the original source, comments included.
   build: {sourcemap: false},
-  server: {proxy: {'/api/screener/ai-compile': aiProxy}},
+  // Vite serves `.gz` data already decoded with Content-Encoding: gzip. A local embedding host (another
+  // localhost port) can only tell that from the exposed header; Cloudflare serves raw gzip with _headers.
+  server: {proxy: {'/api/screener/ai-compile': aiProxy},
+    cors: {origin: /^https?:\/\/(?:(?:[^:]+\.)?localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/, exposedHeaders: ['Content-Encoding']}},
   preview: {proxy: {'/api/screener/ai-compile': aiProxy}},
   resolve: {
     alias: {

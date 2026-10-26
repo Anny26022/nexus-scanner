@@ -13,6 +13,7 @@ import { ColorPalette } from './ColorPalette';
 import { MarkerStyleRow } from './MarkerStyleRow';
 import { EVENT_BADGES } from '../chart/events';
 import { CHART_STYLE_OPTIONS } from './ChartStylePicker';
+import { themeElement } from '../embedding';
 
 const DEFAULT_UP = '#089981';
 const DEFAULT_DOWN = '#ef5350';
@@ -72,10 +73,10 @@ const TIMEZONES: readonly { label: string; value: string }[] = [
 /** The current theme's colour for a token, so swatches start from what the chart actually shows. */
 function themeColor(name: string, fallback: string) {
   if (typeof document === 'undefined') return fallback;
-  const value = getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim();
+  const value = getComputedStyle(themeElement()).getPropertyValue(`--${name}`).trim();
   return /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
 }
-const isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark';
+const isDarkTheme = () => typeof document !== 'undefined' && themeElement().dataset.theme === 'dark';
 
 function ColorPicker(props: {value: string; onChange: (val: string) => void; ariaLabel: string; disabled?: boolean}) {
   return <ColorPalette {...props} />;

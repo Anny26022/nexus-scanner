@@ -7,6 +7,7 @@ import {
   type SavedScreen, type ScreenDefinition,
 } from '../utils/savedScreens';
 import { Button } from './Button';
+import { portalContainer } from '../embedding';
 
 const UNIVERSE_LABELS: Record<string, string> = {mainboard: 'Mainboard', nifty50: 'Nifty 50', nifty500: 'Nifty 500', midsmall400: 'MidSmall 400'};
 
@@ -58,7 +59,7 @@ export function SavedScreensMenu({current, onLoad}: {current: ScreenDefinition; 
           <Bookmark size={14} aria-hidden="true" />
         </Button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={portalContainer()}>
         <Popover.Content align="end" sideOffset={8} collisionPadding={12}
           className="z-(--z-menu) w-[320px] rounded-(--radius-lg) bg-surface p-2 text-[13px] text-text shadow-(--shadow-pop) outline-none animate-in fade-in zoom-in-95 duration-150">
           <form onSubmit={save} className="flex gap-1.5 p-1">

@@ -15,11 +15,24 @@ const parsed = new Map<string, {raw: string; value: unknown}>();
 // Values the browser refused to store (private mode, quota): kept for this page so the app keeps working.
 const unsaved = new Map<string, unknown>();
 
+// An embedding host gives the app a namespace so its keys sit apart from the host's own; empty standalone.
+let namespace = '';
+const physical = (key: string) => namespace ? `${namespace}:${key}` : key;
+/** Prefixes every stored key with `ns:` from now on. Call before the app first reads storage. */
+export function setStorageNamespace(ns: string | undefined): void {
+  const next = (ns ?? '').trim();
+  if (next === namespace) return;
+  namespace = next;
+  parsed.clear();
+  unsaved.clear();
+  notify(null);
+}
+
 const storage = (): Storage | null => {
   try { return typeof window === 'undefined' ? null : window.localStorage; } catch { return null; }
 };
 const rawOf = (key: string): string | null => {
-  try { return storage()?.getItem(key) ?? null; } catch { return null; }
+  try { return storage()?.getItem(physical(key)) ?? null; } catch { return null; }
 };
 const notify = (key: string | null) => {
   for (const listener of key === null ? [...keyListeners.values()].flatMap(set => [...set]) : keyListeners.get(key) ?? []) listener();
@@ -61,7 +74,7 @@ export function writeStored(key: string, value: unknown): boolean {
   try {
     if (!target) throw new Error('Storage unavailable');
     const raw = JSON.stringify(value);
-    if (target.getItem(key) !== raw) target.setItem(key, raw);
+    if (target.getItem(physical(key)) !== raw) target.setItem(physical(key), raw);
     unsaved.delete(key);
     setWarning('');
     notify(key);
@@ -75,7 +88,7 @@ export function writeStored(key: string, value: unknown): boolean {
 }
 
 export function removeStored(key: string): void {
-  try { storage()?.removeItem(key); } catch { /* nothing stored to remove */ }
+  try { storage()?.removeItem(physical(key)); } catch { /* nothing stored to remove */ }
   parsed.delete(key);
   unsaved.delete(key);
   notify(key);
@@ -92,7 +105,10 @@ export function subscribeStored(key: string, listener: Listener): () => void {
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', event => {
     if (event.storageArea && event.storageArea !== storage()) return;
-    if (event.key === null) parsed.clear(); else parsed.delete(event.key);
-    notify(event.key);
+    if (event.key === null) { parsed.clear(); notify(null); return; }
+    if (namespace && !event.key.startsWith(`${namespace}:`)) return;
+    const key = namespace ? event.key.slice(namespace.length + 1) : event.key;
+    parsed.delete(key);
+    notify(key);
   });
 }

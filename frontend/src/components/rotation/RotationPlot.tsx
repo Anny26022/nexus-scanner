@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import type { Track } from '../../api/rotation';
 import { useMountEffect } from '../../hooks/useMountEffect';
 import { QUADRANTS, quadrantOf, type Quadrant, type RotationPoint } from '../../utils/rrg';
+import { themeElement } from '../../embedding';
 
 interface Props {
   tracks: Track[];
@@ -85,7 +86,7 @@ export function RotationPlot(props: Props) {
     resize.observe(container);
     // Colours come from theme tokens, so a theme switch needs a redraw.
     const theme = new MutationObserver(() => { motion.current.dirty = true; });
-    theme.observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+    theme.observe(themeElement(), {attributes: true, attributeFilter: ['data-theme']});
 
     const draw = (now: number) => {
       frame = requestAnimationFrame(draw);

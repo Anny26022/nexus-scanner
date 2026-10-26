@@ -3,6 +3,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { ChevronDown } from 'lucide-react';
 import { MARKER_SHAPES, drawMarkerShape, type MarkerShape, type MarkerStyle } from '../chart/markerShapes';
 import { ColorPalette } from './ColorPalette';
+import { portalContainer } from '../embedding';
 
 /** A tiny canvas preview of a shape, drawn with the same code as the chart. */
 function ShapeIcon({shape, color = 'currentColor'}: {shape: MarkerShape; color?: string}) {
@@ -24,7 +25,7 @@ export function ShapePicker({value, onChange, ariaLabel}: {value: MarkerShape; o
         <ShapeIcon shape={value} /><ChevronDown size={12} aria-hidden="true" />
       </button>
     </Popover.Trigger>
-    <Popover.Portal>
+    <Popover.Portal container={portalContainer()}>
       <Popover.Content className="ms-menu" side="bottom" align="start" sideOffset={4} collisionPadding={12} role="listbox" aria-label={`${ariaLabel} options`}>
         {MARKER_SHAPES.map(([id, label]) => <button key={id} type="button" role="option" aria-selected={id === value} className="ms-option"
           onClick={() => { onChange(id); setOpen(false); }}>

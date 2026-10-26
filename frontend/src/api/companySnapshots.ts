@@ -1,3 +1,5 @@
+import { dataUrl } from './origins';
+
 export interface CompanySnapshot {
   name: string;
   as_of: string | null;
@@ -7,14 +9,14 @@ export interface CompanySnapshot {
 }
 
 export async function getCompanySnapshots(): Promise<Record<string, CompanySnapshot>> {
-  const manifestResponse = await fetch('/data/company/current.json', {cache: 'no-cache'});
+  const manifestResponse = await fetch(dataUrl('/data/company/current.json'), {cache: 'no-cache'});
   if (!manifestResponse.ok) throw new Error('Company snapshots could not be loaded.');
   const manifest = await manifestResponse.json();
   if (manifest.schemaVersion !== 1 || !/^[a-f0-9]{64}$/.test(manifest.revision) ||
     manifest.datasetUrl !== `/data/company/revisions/${manifest.revision}/overviews.json.gz`) {
     throw new Error('Company snapshot reference is invalid.');
   }
-  const response = await fetch(manifest.datasetUrl);
+  const response = await fetch(dataUrl(manifest.datasetUrl));
   if (!response.ok) throw new Error('Company snapshots could not be loaded.');
   const bytes = new Uint8Array(await response.arrayBuffer());
   // Hosts may serve raw gzip or let the browser decode Content-Encoding: gzip.

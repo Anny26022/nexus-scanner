@@ -22,6 +22,7 @@ import type { FilterChoices } from '../api/snapshotEngine';
 import { SNAPSHOT_MA_PERIODS } from '../api/snapshotScreen';
 import {etfConditionCatalog, etfCategoryTabs, etfGroup, etfFieldLabel, isEtfCondition} from '../data/etfFields';
 import { Button } from './Button';
+import { portalContainer } from '../embedding';
 
 interface ScreenerModalProps {
   isOpen: boolean;
@@ -135,7 +136,7 @@ const MultiSelectDropdown = ({ options, value, onChange, label, single = false, 
              })}
              {search && !options.some(option => option.label.toLowerCase().includes(search.trim().toLowerCase())) && <p className="px-2 py-1">No matches</p>}
           </div>
-        </>, trigger.current?.closest('[role="dialog"]') ?? document.body)
+        </>, trigger.current?.closest('[role="dialog"]') ?? portalContainer() ?? document.body)
       )}
     </div>
   );

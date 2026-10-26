@@ -263,17 +263,7 @@ export interface Classification extends ClassificationRecord {
 }
 export type GroupBy = Exclude<CopyGroup, 'symbols'>;
 /** The screener's own names for each level. */
-export const GROUP_LABEL: Record<GroupBy, string> = {
-  sector: 'Sector',
-  industry: 'Industry',
-  subIndustry: 'Sub-industry',
-  theme: 'Theme',
-  block: 'Thematic block',
-  macro: 'Macro pillar',
-  cohort: 'Listing cohort',
-  aggregate: 'Theme aggregate',
-  ...Object.fromEntries(copyFormats.map(({value, label}) => [value, label])),
-};
+export const GROUP_LABEL = Object.fromEntries(copyFormats.map(({value, label}) => [value, label])) as Record<GroupBy, string>;
 /** Levels that come from the theme file rather than the chart directory. */
 export const THEME_LEVELS: ReadonlySet<string> = new Set<GroupBy>(['subIndustry', 'theme', 'block', 'macro', 'cohort', 'aggregate']);
 export const UNCLASSIFIED = 'Unclassified';

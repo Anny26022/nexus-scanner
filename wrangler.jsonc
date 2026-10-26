@@ -14,10 +14,11 @@
     "simple": { "limit": 10, "period": 60 }
   }],
   "observability": { "enabled": true, "head_sampling_rate": 1 },
-  // API requests reach the Worker; all other paths keep static SPA handling.
+  // API requests, pages and agent files reach the Worker; assets and data keep static handling.
   "assets": {
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"],
+    // Pages and agent files go through the Worker for head signals, markdown and discovery; keep in step with SECTIONS.
+    "run_worker_first": ["/api/*", "/", "/screener", "/market", "/earnings", "/rotation", "/ipo", "/charts", "/*.md", "/llms.txt", "/llms-full.txt", "/ai.txt", "/robots.txt", "/sitemap.xml"],
     "directory": "./frontend/dist",
     "not_found_handling": "single-page-application"
   },

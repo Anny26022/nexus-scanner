@@ -4,6 +4,8 @@ import {createAiFilterCatalog} from '../../frontend/src/api/aiFilterCatalog';
 import type {FilterChoices} from '../../frontend/src/types/filterChoices';
 import {GROQ_MODEL, PRIMARY_MODEL, FALLBACK_MODEL, compileWithFallback, compilerPrompt, type CompileModel, type InferenceInput} from './compiler';
 import {compilationCacheKey, readCompilation, storeCompilation} from './compilationCache';
+import {handleAgentRequest} from './md/route';
+import {htmlPage} from './md/page';
 
 type WorkerEnv = Omit<Env, 'GROQ_API_KEY'> & {
   GROQ_API_KEY?: string;
@@ -35,6 +37,9 @@ async function readBody(request: Request | Response, maxBytes = 12000): Promise<
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
+    // Pages, their markdown versions and the agent discovery files (llms.txt, ai.txt, robots.txt, sitemap).
+    const agent = await handleAgentRequest(request, env.ASSETS);
+    if (agent) return agent instanceof Response ? agent : htmlPage(request, env.ASSETS, agent.page);
     if (url.pathname !== '/api/screener/ai-compile') {
       return url.pathname.startsWith('/api/') ? json({error:'API route not found'},404) : env.ASSETS.fetch(request);
     }

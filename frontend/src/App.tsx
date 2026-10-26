@@ -11,6 +11,7 @@ import { Button } from './components/Button';
 import { CommandPalette } from './components/CommandPalette';
 import { useTheme } from './hooks/useTheme';
 import { useMountEffect } from './hooks/useMountEffect';
+import { sectionForPath, sectionForTab, sectionTitle } from './data/sections';
 import { loadGrid, openSymbolInCharts } from './chart/storage';
 import { chartQuery } from './chart/chartQuery';
 import { writeScreenToStorage, type ScreenDefinition } from './utils/savedScreens';
@@ -32,7 +33,14 @@ const EarningsTab = React.lazy(() => import('./components/EarningsTab'));
 const RotationTab = React.lazy(() => import('./components/RotationTab'));
 
 const ScreenerAppContent: React.FC = () => {
-  const [storedTab, setActiveTab] = useLocalStorageState<AppTab | 'news'>('nexus-scanner.ui.active-tab.v1', 'screener');
+  const [storedTab, setStoredTab] = useLocalStorageState<AppTab | 'news'>(SCREEN_STORAGE_KEYS.activeTab, 'screener');
+  // Each section has its own URL; changing tab updates the address bar so sections can be linked and shared.
+  const setActiveTab = (tab: AppTab) => {
+    setStoredTab(tab);
+    const section = sectionForTab(tab), {path} = section;
+    document.title = sectionTitle(section);
+    if (window.location.pathname !== path) window.history.pushState(window.history.state, '', `${path}${window.location.search}${window.location.hash}`);
+  };
   // Live News is temporarily hidden; restore saved News sessions to the screener.
   const activeTab = storedTab === 'news' ? 'screener' : storedTab;
   const [screenerMounted, setScreenerMounted] = React.useState(activeTab === 'screener');
@@ -44,6 +52,14 @@ const ScreenerAppContent: React.FC = () => {
   // Bumped when a saved screen is loaded from outside the Screener so it re-reads its stored state.
   const [screenerKey, setScreenerKey] = React.useState(0);
 
+  useMountEffect(() => {
+    const onPopState = () => {
+      const section = sectionForPath(window.location.pathname);
+      if (section) { setStoredTab(section.tab); document.title = sectionTitle(section); }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  });
   useMountEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'k') {

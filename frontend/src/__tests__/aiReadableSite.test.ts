@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SECTIONS, sectionForPath } from '../data/sections';
-import { prefersMarkdown } from '../../../workers/screener-ai/md/http';
+import { negotiate } from '../../../workers/screener-ai/md/http';
 import { MARKDOWN_ROUTES, notFoundMarkdown, routeFor, type Release } from '../../../workers/screener-ai/md/registry';
 import { aiTxt, llmsFullTxt, llmsTxt, robotsTxt, sitemapXml } from '../../../workers/screener-ai/md/discovery';
 import { handleAgentRequest } from '../../../workers/screener-ai/md/route';
@@ -17,14 +17,21 @@ describe('AI-readable site', () => {
     for (const section of SECTIONS) expect(sectionForPath(`${section.path}/`)).toBe(section);
   });
 
-  it('serves markdown only when it is preferred over HTML', () => {
-    expect(prefersMarkdown(null)).toBe(false);
-    expect(prefersMarkdown('*/*')).toBe(false);
-    expect(prefersMarkdown('text/html,application/xhtml+xml,*/*;q=0.8')).toBe(false);
-    expect(prefersMarkdown('text/markdown')).toBe(true);
-    expect(prefersMarkdown('text/markdown, */*')).toBe(true);
-    expect(prefersMarkdown('text/markdown;q=0.5, text/html')).toBe(false);
-    expect(prefersMarkdown('text/markdown, text/html;q=0.9')).toBe(true);
+  it('negotiates like the Dualmark AEO spec: q-values, wildcards, AI agents and 406', () => {
+    const browser = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8';
+    expect(negotiate(null, null)).toBe('html');
+    expect(negotiate('*/*', 'curl/8.7')).toBe('html');
+    expect(negotiate(browser, 'Mozilla/5.0')).toBe('html');
+    expect(negotiate('text/markdown', null)).toBe('markdown');
+    expect(negotiate('text/markdown, */*', null)).toBe('markdown');
+    expect(negotiate('text/markdown;q=0.5, text/html;q=0.5', null)).toBe('html');
+    expect(negotiate('text/markdown;q=0.5, text/html', null)).toBe('html');
+    expect(negotiate('text/markdown, text/html;q=0.9', null)).toBe('markdown');
+    expect(negotiate('*/*', 'Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)')).toBe('markdown');
+    expect(negotiate(null, 'ClaudeBot/1.0')).toBe('markdown');
+    expect(negotiate('text/html', 'GPTBot/1.2')).toBe('html');
+    expect(negotiate('image/png', null)).toBeNull();
+    expect(negotiate('text/html;q=0, text/markdown;q=0', 'GPTBot')).toBeNull();
   });
 
   it('renders pages from the release with absolute links and no invented figures', () => {
@@ -65,15 +72,18 @@ describe('AI-readable site', () => {
     const get = (path: string, accept?: string) => handleAgentRequest(new Request(`https://nexus.example${path}`, {headers: accept ? {Accept: accept} : {}}), assets);
     const md = (await get('/screener.md')) as Response;
     expect(md.headers.get('Content-Type')).toBe('text/markdown; charset=utf-8');
+    expect(md.headers.get('Vary')).toBe('Accept, User-Agent');
+    expect(md.headers.get('X-AEO-Version')).toBe('1.0');
     expect(md.headers.get('X-Robots-Tag')).toBe('noindex, follow');
     expect(md.headers.get('Content-Location')).toBe(`${SITE.url}/screener`);
     expect(Number(md.headers.get('X-Markdown-Tokens'))).toBeGreaterThan(0);
     expect(await md.text()).toContain('| 2026-10-23 | 2,612 |');
-    expect(((await get('/screener', 'text/markdown')) as Response).headers.get('Vary')).toBe('Accept');
+    expect(((await get('/screener', 'text/markdown')) as Response).headers.get('Content-Type')).toBe('text/markdown; charset=utf-8');
+    expect(((await get('/screener', 'image/png')) as Response).status).toBe(406);
     expect(await get('/screener', 'text/html,*/*;q=0.8')).toEqual({page: routeFor('/screener')});
     expect(((await get('/api/md/rotation')) as Response).status).toBe(200);
     const missing = (await get('/does-not-exist.md')) as Response;
-    expect([missing.status, missing.headers.get('Content-Type')]).toEqual([404, 'text/markdown; charset=utf-8']);
+    expect([missing.status, missing.headers.get('Content-Type'), missing.headers.get('Vary')]).toEqual([404, 'text/markdown; charset=utf-8', 'Accept, User-Agent']);
     expect(await get('/assets/app.js')).toBeNull();
     expect(await get('/api/screener/ai-compile')).toBeNull();
     const head = (await handleAgentRequest(new Request('https://nexus.example/llms.txt', {method: 'HEAD'}), assets)) as Response;

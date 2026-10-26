@@ -1,4 +1,4 @@
-import { DESCRIBED_BY } from './http';
+import { DESCRIBED_BY, PAGE_VARY } from './http';
 import type { MarkdownRoute } from './registry';
 import { SITE, absolute, markdownPath } from './site';
 
@@ -28,8 +28,9 @@ export async function htmlPage(request: Request, assets: Assets, route: Markdown
     .on('head', {element: element => { element.append(head, {html: true}); }})
     .transform(page);
   const headers = new Headers(rewritten.headers);
+  headers.append('Link', `<${absolute(markdownPath(route.path))}>; rel="alternate"; type="text/markdown"`);
   headers.append('Link', DESCRIBED_BY);
-  headers.append('Vary', 'Accept');
+  headers.append('Vary', PAGE_VARY);
   return new Response(request.method === 'HEAD' ? null : rewritten.body, {status: page.status, headers});
 }
 

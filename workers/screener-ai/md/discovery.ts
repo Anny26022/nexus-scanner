@@ -27,6 +27,11 @@ export function llmsTxt(): string {
       `- [Markdown catalog](${absolute('/api/md/_catalog')}): JSON list of every markdown page`,
       `- [Sitemap](${absolute('/sitemap.xml')})`,
       `- [AI usage policy](${absolute('/ai.txt')})`].join('\n'),
+    '## What we do not do',
+    ['- Not a broker: no trading, orders, accounts or portfolio services.',
+      '- No investment advice, tips or recommendations; scans and figures are research data.',
+      '- No intraday or real-time quotes; every figure is end-of-day for a dated session.',
+      '- Not affiliated with or endorsed by NSE, BSE or any index provider.'].join('\n'),
     '## Optional',
     `- [Source code and licence](${SITE.repository}): the app and data pipeline`,
   ].join('\n\n') + '\n';

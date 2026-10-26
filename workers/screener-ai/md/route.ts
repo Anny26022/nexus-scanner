@@ -1,5 +1,5 @@
 import { aiTxt, catalogJson, llmsFullTxt, llmsTxt, robotsTxt, sitemapXml } from './discovery';
-import { markdownResponse, preflight, prefersMarkdown, textResponse } from './http';
+import { markdownResponse, negotiate, notAcceptable, preflight, textResponse } from './http';
 import { loadRelease, notFoundMarkdown, routeFor, type MarkdownRoute, type Release } from './registry';
 import { absolute } from './site';
 
@@ -13,22 +13,22 @@ const latestRelease = (assets: Assets, origin: string) => {
 };
 
 const DISCOVERY: Record<string, (request: Request, release: () => Promise<Release | null>) => Promise<Response>> = {
-  '/llms.txt': async request => textResponse(request, llmsTxt()),
-  '/llms-full.txt': async (request, release) => textResponse(request, llmsFullTxt(await release())),
+  '/llms.txt': async request => textResponse(request, llmsTxt(), 86400, 'text/plain', true),
+  '/llms-full.txt': async (request, release) => textResponse(request, llmsFullTxt(await release()), 86400, 'text/plain', true),
   '/ai.txt': async request => textResponse(request, aiTxt()),
   '/robots.txt': async request => textResponse(request, robotsTxt()),
   '/sitemap.xml': async (request, release) => textResponse(request, sitemapXml(await release()), 86400, 'application/xml'),
   '/api/md/_catalog': async request => textResponse(request, catalogJson(), 3600, 'application/json'),
 };
 
-async function markdown(request: Request, route: MarkdownRoute | null, path: string, release: () => Promise<Release | null>, negotiated = false) {
+async function markdown(request: Request, route: MarkdownRoute | null, path: string, release: () => Promise<Release | null>) {
   if (!route) return markdownResponse(request, notFoundMarkdown(path), {status: 404});
   const latest = await release();
-  return markdownResponse(request, route.render(latest), {canonical: absolute(route.path), lastModified: latest?.sessionDate, negotiated});
+  return markdownResponse(request, route.render(latest), {canonical: absolute(route.path), lastModified: latest?.sessionDate});
 }
 
 /**
- * Agent-facing routes: markdown (`/x.md`, `Accept: text/markdown`, `/api/md/x`) and the discovery files. A known page
+ * Agent-facing routes: markdown (`/x.md`, `Accept: text/markdown`, a known AI agent, `/api/md/x`) and the discovery files. A known page
  * asked for as HTML comes back as `{page}` for `htmlPage`; anything else is null and keeps its normal handling.
  */
 export async function handleAgentRequest(request: Request, assets: Assets): Promise<Response | {page: MarkdownRoute} | null> {
@@ -47,5 +47,6 @@ export async function handleAgentRequest(request: Request, assets: Assets): Prom
   // Content negotiation only on known pages; every other path keeps its normal handling.
   const route = routeFor(path);
   if (!route || path.endsWith('.md')) return null;
-  return prefersMarkdown(request.headers.get('Accept')) ? markdown(request, route, path, release, true) : {page: route};
+  const format = negotiate(request.headers.get('Accept'), request.headers.get('User-Agent'));
+  return format === 'markdown' ? markdown(request, route, path, release) : format === 'html' ? {page: route} : notAcceptable(request);
 }

@@ -24,11 +24,12 @@
     "not_found_handling": "single-page-application"
   },
   // Branch previews (Workers Builds) inherit none of the settings above, so they are repeated here. Previews are
-  // the staging target for embedding: local dev hosts and Nexus Journal's Vercel branch previews may call the AI
+  // the staging target for embedding: local dev hosts, Nexus Journal's Vercel branch previews and its Cloudflare Pages
+  // preview of the embed branch may call the AI
   // endpoint. Production keeps the exact-origin list above. A separate rate-limit namespace keeps preview
   // traffic out of production's counters.
   "previews": {
-    "vars": { "ALLOWED_ORIGINS": "https://*-aniketmahatobcom23-thceduins-projects.vercel.app,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://localhost:3000,http://localhost:4173" },
+    "vars": { "ALLOWED_ORIGINS": "https://*-aniketmahatobcom23-thceduins-projects.vercel.app,https://claude-scanner-embed.new-nexys-ultimate.pages.dev,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://localhost:3000,http://localhost:4173" },
     "ai": { "binding": "AI" },
     "ratelimits": [{
       "name": "AI_RATE_LIMITER",

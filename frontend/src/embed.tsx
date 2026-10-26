@@ -3,11 +3,16 @@ import type { QueryClient } from '@tanstack/react-query';
 import { ScannerShell, createScannerQueryClient, type ScannerShellOptions } from './App';
 import { configureOrigins } from './api/origins';
 import { setStorageNamespace } from './storage/store';
-import { EMBED_ROOT_CLASS, setEmbedRoots } from './embedding';
+import { EMBED_ROOT_CLASS, setEmbedRoots, setShareBaseUrl } from './embedding';
+import { decodeScreen, writeScreenToStorage } from './utils/savedScreens';
+import { NAV_ITEMS, type AppTab } from './components/Navbar';
 import './index.css';
 
 export type { AppTab } from './components/Navbar';
+/** Every tab id, in navigation order, for validating a host route such as `/scanner/:tab`. */
+export const SCANNER_TABS: readonly AppTab[] = NAV_ITEMS.map(item => item.id);
 export type { ScannerShellOptions } from './App';
+export { SCREEN_URL_PARAM } from './utils/savedScreens';
 
 export interface ScannerAppProps {
   /**
@@ -30,6 +35,12 @@ export interface ScannerAppProps {
   queryClient?: QueryClient;
   className?: string;
   style?: React.CSSProperties;
+  /** Controlled tab (e.g. from `/scanner/:tab`); report switches through `onNavigateExternal`. */
+  tab?: ScannerShellOptions['tab'];
+  /** Absolute URL of the host page that opens shared links; "Copy share link" builds `<shareBaseUrl>?screen=…`. */
+  shareBaseUrl?: string;
+  /** The `screen` query value of a shared link (`SCREEN_URL_PARAM`), applied once at mount. The host removes it from its URL. */
+  sharedScreen?: string | null;
 }
 
 /**
@@ -38,12 +49,15 @@ export interface ScannerAppProps {
  */
 export function ScannerApp({
   dataOrigin, apiOrigin, theme = 'light', onOpenSymbol, onNavigateExternal,
-  storageNamespace = 'nexus-scanner-embed', queryClient, className, style,
+  storageNamespace = 'nexus-scanner-embed', queryClient, className, style, tab, shareBaseUrl, sharedScreen,
 }: ScannerAppProps) {
   // Module-level configuration must be in place before any child reads storage or fetches data.
   const [client] = React.useState(() => {
     configureOrigins({dataOrigin: dataOrigin ?? '', apiOrigin: apiOrigin ?? dataOrigin ?? ''});
     setStorageNamespace(storageNamespace);
+    setShareBaseUrl(shareBaseUrl);
+    const screen = decodeScreen(sharedScreen);
+    if (screen) writeScreenToStorage(screen);
     return queryClient ?? createScannerQueryClient();
   });
   const root = React.useRef<HTMLDivElement>(null);
@@ -65,9 +79,10 @@ export function ScannerApp({
   callbacks.current = {onOpenSymbol, onNavigateExternal};
   const embed = React.useMemo<ScannerShellOptions>(() => ({
     theme,
+    tab,
     onOpenSymbol: symbol => callbacks.current.onOpenSymbol?.(symbol),
     onNavigateExternal: path => callbacks.current.onNavigateExternal?.(path),
-  }), [theme]);
+  }), [theme, tab]);
 
   return <div ref={root} className={`${EMBED_ROOT_CLASS}${className ? ` ${className}` : ''}`} data-theme={theme} style={style}>
     {ready && <ScannerShell client={client} embed={embed} />}

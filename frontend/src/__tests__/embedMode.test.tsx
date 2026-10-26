@@ -3,7 +3,9 @@ import {afterEach, expect, it, vi} from 'vitest';
 import {configureOrigins, dataUrl, apiUrl} from '../api/origins';
 import {manifestSnapshotSource, resolveManifestUrls, type Manifest} from '../api/manifest';
 import {readStored, setStorageNamespace, writeStored} from '../storage/store';
-import {ScannerApp} from '../embed';
+import {ScannerApp, SCANNER_TABS} from '../embed';
+import {encodeScreen, screenShareUrl, type ScreenDefinition} from '../utils/savedScreens';
+import {setShareBaseUrl} from '../embedding';
 
 vi.mock('../api/screenerApi', () => ({screenerApi: {
   getCurrentRevision: vi.fn(async () => ({latestSessionDate: '2026-10-21', immutableRevision: 'a'.repeat(64)})),
@@ -25,6 +27,7 @@ afterEach(() => {
   localStorage.clear();
   vi.unstubAllGlobals();
   delete document.documentElement.dataset.theme;
+  setShareBaseUrl(undefined);
 });
 
 it('keeps same-origin URLs by default and resolves them against a configured data origin', () => {
@@ -90,4 +93,26 @@ it('lets the host take over a tab switch', async () => {
   fireEvent.click(screen.getByRole('button', {name: 'Charts'}));
   expect(onNavigateExternal).toHaveBeenCalledWith('/charts');
   expect(screen.getByRole('button', {name: 'Screener'})).toHaveAttribute('aria-current', 'page');
+});
+
+it('follows a host-controlled tab and reports switches instead of keeping its own', async () => {
+  const onNavigateExternal = vi.fn();
+  const {rerender} = render(<ScannerApp embedded tab="market" onNavigateExternal={onNavigateExternal}/>);
+  expect(await screen.findByText('Open TCS')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', {name: 'Screener'}));
+  expect(onNavigateExternal).toHaveBeenCalledWith('/screener');
+  // Still Market until the host passes the new tab back.
+  expect(screen.getByRole('button', {name: 'Market'})).toHaveAttribute('aria-current', 'page');
+  rerender(<ScannerApp embedded tab="screener" onNavigateExternal={onNavigateExternal}/>);
+  expect(await screen.findByText('Screener workspace')).toBeInTheDocument();
+  expect(SCANNER_TABS).toEqual(['screener', 'ipo', 'charts', 'earnings', 'rotation', 'market']);
+});
+
+it('builds share links on the host page and applies a shared screen at mount', async () => {
+  const shared: ScreenDefinition = {universe: 'mainboard', matchMode: 'any', conditions: {}, query: 'TCS', sort: {field: 'marketCap', direction: 'desc'}};
+  render(<ScannerApp embedded storageNamespace="journal" shareBaseUrl="https://www.nexusjournal.co.in/scanner?x=1" sharedScreen={encodeScreen(shared)}/>);
+  await screen.findByText('Screener workspace');
+  expect(localStorage.getItem('journal:nexus-scanner.screener.query.v1')).toBe('"TCS"');
+  expect(localStorage.getItem('journal:nexus-scanner.screener.match-mode.v1')).toBe('"any"');
+  expect(screenShareUrl(shared)).toBe(`https://www.nexusjournal.co.in/scanner?screen=${encodeScreen(shared)}`);
 });

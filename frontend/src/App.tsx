@@ -35,6 +35,11 @@ export interface ScannerShellOptions {
   onOpenSymbol?: (symbol: string) => boolean | void;
   /** Called with `/<tab>` before each tab switch; return true when the host navigated instead. */
   onNavigateExternal?: (path: string) => boolean | void;
+  /**
+   * Controlled tab, e.g. from the host's URL. The scanner then reports every switch through `onNavigateExternal`
+   * and shows whatever tab the host passes back. Unset, the scanner keeps its own (stored) tab.
+   */
+  tab?: AppTab;
 }
 
 const ChartsTab = React.lazy(() => import('./components/ChartsTab'));
@@ -45,11 +50,17 @@ const RotationTab = React.lazy(() => import('./components/RotationTab'));
 const ScreenerAppContent: React.FC<{embed?: ScannerShellOptions}> = ({embed}) => {
   const [storedTab, setActiveTab] = useLocalStorageState<AppTab | 'news'>('nexus-scanner.ui.active-tab.v1', 'screener');
   // Live News is temporarily hidden; restore saved News sessions to the screener.
-  const activeTab = storedTab === 'news' ? 'screener' : storedTab;
+  const activeTab = embed?.tab ?? (storedTab === 'news' ? 'screener' : storedTab);
   const [screenerMounted, setScreenerMounted] = React.useState(activeTab === 'screener');
   if (activeTab === 'screener' && !screenerMounted) setScreenerMounted(true);
   const [sidebarHidden, setSidebarHidden] = useLocalStorageState('nexus-scanner.ui.sidebar-hidden.v1', false);
   const [chartSnapshot, setChartSnapshot] = React.useState<{revision?: string; sessionDate: string}>();
+  // A host-controlled tab can leave Charts without going through navigate(); drop the snapshot hand-off then.
+  const [previousTab, setPreviousTab] = React.useState(activeTab);
+  if (previousTab !== activeTab) {
+    setPreviousTab(activeTab);
+    if (previousTab === 'charts') setChartSnapshot(undefined);
+  }
   const {choice: theme, setChoice: setTheme} = useTheme(embed?.theme);
   const frame = React.useRef<HTMLDivElement>(null);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
@@ -69,11 +80,12 @@ const ScreenerAppContent: React.FC<{embed?: ScannerShellOptions}> = ({embed}) =>
     return () => target?.removeEventListener('keydown', onKeyDown as EventListener);
   });
 
-  const navigate = (tab: AppTab) => {
-    if (embed?.onNavigateExternal?.(`/${tab}`) === true) return;
-    setChartSnapshot(undefined);
+  const show = (tab: AppTab) => {
+    if (embed?.onNavigateExternal?.(`/${tab}`) === true) return false;
     setActiveTab(tab);
+    return true;
   };
+  const navigate = (tab: AppTab) => { if (show(tab)) setChartSnapshot(undefined); };
   const loadScreen = (screen: ScreenDefinition) => {
     writeScreenToStorage(screen);
     setScreenerKey(key => key + 1);
@@ -163,7 +175,7 @@ const ScreenerAppContent: React.FC<{embed?: ScannerShellOptions}> = ({embed}) =>
             onRefreshRevision={async () => (await refreshRevision()).data?.immutableRevision}
             availableSessions={availableSessions}
             onSelectSession={setCustomSessionDate}
-            onOpenFullChart={(_symbol, revision, sessionDate) => { setChartSnapshot({revision, sessionDate: sessionDate ?? selectedAsOfDate}); setActiveTab('charts'); }}
+            onOpenFullChart={(_symbol, revision, sessionDate) => { if (show('charts')) setChartSnapshot({revision, sessionDate: sessionDate ?? selectedAsOfDate}); }}
           />
         </div>}
         {activeTab === 'charts' ? (

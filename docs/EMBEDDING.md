@@ -46,11 +46,10 @@ npm install @anny26022/nexus-scanner
 
 Peer dependencies: `react@^19`, `react-dom@^19`, `@tanstack/react-query@^5`.
 
-To publish a new version from `frontend/` (bump `version` first; `prepublishOnly` runs `npm run build:lib`):
-
-```bash
-npm publish
-```
+To publish a version: bump `version` in `frontend/package.json`, add an entry to `frontend/CHANGELOG.md`,
+merge, then push the tag `scanner-v<version>`. `.github/workflows/publish-scanner-package.yml` checks that the
+tag matches the version, runs the tests, builds `dist-lib/`, runs `npm run check:lib` and publishes. Nothing
+publishes without that tag. CI builds and checks the package on every frontend PR.
 
 ## Using it
 
@@ -88,6 +87,9 @@ export function ScannerPage() {
 | `onNavigateExternal(path)` | Called with `/<tab>` (`/screener`, `/charts`, ...) before each tab switch. Return `true` to cancel the internal switch. The scanner never touches `window.history` when embedded. |
 | `storageNamespace` | Prefix for every localStorage key (default `nexus-scanner-embed`). |
 | `queryClient` | Optional. By default the scanner creates its own client, so it never shares a cache with the host. |
+| `tab` | Controlled tab, e.g. from a `/scanner/:tab` route (validate with `SCANNER_TABS`). The scanner reports each switch through `onNavigateExternal` and shows the tab the host passes back. |
+| `shareBaseUrl` | Absolute URL of the host's scanner page. "Copy share link" then builds `<shareBaseUrl>?screen=…`. |
+| `sharedScreen` | The `screen` query value of an opened share link (`SCREEN_URL_PARAM`), applied once at mount. It makes the Screener the working tab; the host routes to it and removes the parameter from its URL. |
 
 Embedded mode hides the scanner's sidebar, brand and theme toggle and shows its tabs as a sub-navigation bar.
 The mount element must have a definite height; the scanner fills it and scrolls internally.
@@ -147,8 +149,7 @@ so nothing is published either.
 2. Verify from the host origin: `fetch('https://nexus-scanner.aniketmahato26.workers.dev/data/current.json')`.
 3. Publish the package and install it in the host.
 
-## Known limits (Phase 0)
+## Known limits
 
-- "Copy share link" builds the URL from the host page's location; the host does not yet apply `?screen=`.
 - The chart workspace's expanded mode and phone layout use the whole viewport.
 - The historical-evaluation fallback (`VITE_API_BASE_URL`) is not affected by `apiOrigin`.

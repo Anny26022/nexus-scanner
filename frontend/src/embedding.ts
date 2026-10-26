@@ -8,11 +8,18 @@ export const EMBED_ROOT_CLASS = 'nexus-scanner-root';
 
 let themeRoot: HTMLElement | null = null;
 let portalRoot: HTMLElement | null = null;
+let shareBase: string | null = null;
 
 export function setEmbedRoots(roots: {theme: HTMLElement; portal: HTMLElement} | null) {
   themeRoot = roots?.theme ?? null;
   portalRoot = roots?.portal ?? null;
 }
+
+/** The page that opens shared `?screen=` links: the host's scanner route when embedded. */
+export function setShareBaseUrl(url: string | undefined) {
+  shareBase = url ? url.replace(/[?#].*$/, '') : null;
+}
+export const shareBaseUrl = (): string | null => shareBase;
 
 /** The element whose `data-theme` and CSS tokens the app reads. */
 export const themeElement = (): HTMLElement => themeRoot ?? document.documentElement;

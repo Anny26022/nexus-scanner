@@ -5,6 +5,7 @@ on:
     paths:
       - 'frontend/**'
       - 'workers/r2-delivery/**'
+      - 'workers/screener-ai/cors.ts'
       - 'DO NOT DELETE EDL PIPELINE/requirements.txt'
       - '.nvmrc'
       - '.github/workflows/frontend-ci.yml'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'frontend/**'
       - 'workers/r2-delivery/**'
+      - 'workers/screener-ai/cors.ts'
       - 'DO NOT DELETE EDL PIPELINE/requirements.txt'
       - '.nvmrc'
       - '.github/workflows/frontend-ci.yml'
@@ -53,6 +55,8 @@ jobs:
         run: node --test ../workers/r2-delivery/test.mjs
       - name: Build frontend
         run: npm run build
+      - name: Build and check the embeddable package
+        run: npm run build:lib && npm run check:lib
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

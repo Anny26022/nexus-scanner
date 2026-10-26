@@ -1,0 +1,13 @@
+# @anny26022/nexus-scanner
+
+The embeddable scanner (`ScannerApp`). Versions follow semver: a host pins one version and upgrades on purpose.
+Publishing: bump `version` in `frontend/package.json`, add an entry here, merge, then push the tag
+`scanner-v<version>` (see `.github/workflows/publish-scanner-package.yml`).
+
+## 0.1.0 — unreleased
+
+- `ScannerApp` embedded mode: tab sub-navigation, host theme, `onOpenSymbol`, `onNavigateExternal`, namespaced
+  storage, its own QueryClient, scoped CSS and portals, inline workers.
+- `dataOrigin` / `apiOrigin` for cross-origin data and the AI endpoint.
+- Controlled `tab`, `SCANNER_TABS`, `shareBaseUrl` and `sharedScreen` (`SCREEN_URL_PARAM`) for host routing and
+  share links.

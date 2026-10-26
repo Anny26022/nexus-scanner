@@ -4,6 +4,7 @@ import type { ActiveCondition, MatchMode, UniverseType } from '../types/screener
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import {etfGroups} from '../data/etfFields';
 import { PRESET_CATALOG } from '../data/presetCatalog';
+import { shareBaseUrl } from '../embedding';
 
 /** Everything that defines a screen; results, pages and sessions are derived. */
 export interface ScreenDefinition {
@@ -116,7 +117,7 @@ export function decodeScreen(param: string | null | undefined): ScreenDefinition
 }
 
 export function screenShareUrl(screen: ScreenDefinition, location: Pick<Location, 'origin' | 'pathname'> = window.location): string {
-  return `${location.origin}${location.pathname}?${SCREEN_URL_PARAM}=${encodeScreen(screen)}`;
+  return `${shareBaseUrl() ?? `${location.origin}${location.pathname}`}?${SCREEN_URL_PARAM}=${encodeScreen(screen)}`;
 }
 
 /** Makes a screen the Screener's working state; the Screener reads these keys when it mounts. */

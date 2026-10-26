@@ -32,7 +32,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build:lib": "node build_ai_filter_choices.mjs && tsc && vite build -c vite.lib.config.ts && tsc -p tsconfig.lib.json",
-    "prepublishOnly": "npm run build:lib"
+    "prepublishOnly": "npm run build:lib && npm run check:lib",
+    "check:lib": "node lib/checkPackage.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.3.1",

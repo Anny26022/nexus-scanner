@@ -16,8 +16,8 @@ export { SCREEN_URL_PARAM } from './utils/savedScreens';
 
 export interface ScannerAppProps {
   /**
-   * The component always renders embedded mode: no scanner sidebar or theme toggle, its tabs as a sub-navigation.
-   * The standalone site is `main.tsx`, not this component.
+   * The component always renders embedded mode: the scanner's own sidebar and tabs, with the host owning theme,
+   * storage namespace and data origins. The standalone site is `main.tsx`, not this component.
    */
   embedded?: true;
   /** Origin serving `/data/current.json` and relative release files, e.g. https://nexus-scanner.aniketmahato26.workers.dev. */
@@ -41,6 +41,14 @@ export interface ScannerAppProps {
   shareBaseUrl?: string;
   /** The `screen` query value of a shared link (`SCREEN_URL_PARAM`), applied once at mount. The host removes it from its URL. */
   sharedScreen?: string | null;
+  /** Rendered at the foot of the scanner sidebar in place of its appearance toggle (e.g. the host's view switcher). */
+  sidebarFooter?: React.ReactNode;
+  /**
+   * Overrides for the scanner's design tokens, so it takes the host's palette and fonts, e.g.
+   * `{'--page': 'hsl(var(--background))', '--accent': 'hsl(var(--primary))', '--font-sans': 'var(--app-font-family)'}`.
+   * Applied to the scanner root and its popup container; values may reference the host's own CSS variables.
+   */
+  tokens?: Record<`--${string}`, string>;
 }
 
 /**
@@ -50,6 +58,7 @@ export interface ScannerAppProps {
 export function ScannerApp({
   dataOrigin, apiOrigin, theme = 'light', onOpenSymbol, onNavigateExternal,
   storageNamespace = 'nexus-scanner-embed', queryClient, className, style, tab, shareBaseUrl, sharedScreen,
+  sidebarFooter, tokens,
 }: ScannerAppProps) {
   // Module-level configuration must be in place before any child reads storage or fetches data.
   const [client] = React.useState(() => {
@@ -73,6 +82,12 @@ export function ScannerApp({
     return () => { setEmbedRoots(null); portal.remove(); };
   }, [portal]);
   React.useLayoutEffect(() => { if (portal) portal.dataset.theme = theme; }, [portal, theme]);
+  // Dialogs and popovers render outside the root, so the host's token overrides are copied onto their container.
+  React.useLayoutEffect(() => {
+    if (!portal || !tokens) return;
+    for (const [name, value] of Object.entries(tokens)) portal.style.setProperty(name, value);
+    return () => { for (const name of Object.keys(tokens)) portal.style.removeProperty(name); };
+  }, [portal, tokens]);
 
   // Latest callbacks without re-rendering the whole app when the host passes new closures.
   const callbacks = React.useRef({onOpenSymbol, onNavigateExternal});
@@ -80,11 +95,13 @@ export function ScannerApp({
   const embed = React.useMemo<ScannerShellOptions>(() => ({
     theme,
     tab,
+    sidebarFooter,
     onOpenSymbol: symbol => callbacks.current.onOpenSymbol?.(symbol),
     onNavigateExternal: path => callbacks.current.onNavigateExternal?.(path),
-  }), [theme, tab]);
+  }), [theme, tab, sidebarFooter]);
 
-  return <div ref={root} className={`${EMBED_ROOT_CLASS}${className ? ` ${className}` : ''}`} data-theme={theme} style={style}>
+  return <div ref={root} className={`${EMBED_ROOT_CLASS}${className ? ` ${className}` : ''}`} data-theme={theme}
+    style={tokens ? {...tokens, ...style} as React.CSSProperties : style}>
     {ready && <ScannerShell client={client} embed={embed} />}
   </div>;
 }

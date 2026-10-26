@@ -82,7 +82,9 @@ export function ScannerPage() {
 | --- | --- |
 | `dataOrigin` | Origin serving `/data/...`. Default: the host page's origin. |
 | `apiOrigin` | Origin of the AI Worker. Default: `dataOrigin`. |
-| `theme` | `'light'` or `'dark'`, owned by the host. The scanner's theme toggle is hidden. |
+| `theme` | `'light'` or `'dark'`, owned by the host. |
+| `tokens` | Overrides for the scanner's design tokens (`--page`, `--surface`, `--text`, `--accent`, `--line`, `--font-sans`, …), so it takes the host's palette and fonts. Values may reference the host's own CSS variables, e.g. `hsl(var(--background))`. Applied to the root and the popup container. |
+| `sidebarFooter` | Rendered at the foot of the scanner sidebar in place of its appearance toggle, e.g. the host's view and theme switcher. |
 | `onOpenSymbol(symbol)` | Called when the user opens a symbol (Market, Earnings, Rotation, command palette). Return `true` if the host handled it; otherwise the scanner opens its own Charts tab. |
 | `onNavigateExternal(path)` | Called with `/<tab>` (`/screener`, `/charts`, ...) before each tab switch. Return `true` to cancel the internal switch. The scanner never touches `window.history` when embedded. |
 | `storageNamespace` | Prefix for every localStorage key (default `nexus-scanner-embed`). |
@@ -91,8 +93,9 @@ export function ScannerPage() {
 | `shareBaseUrl` | Absolute URL of the host's scanner page. "Copy share link" then builds `<shareBaseUrl>?screen=…`. |
 | `sharedScreen` | The `screen` query value of an opened share link (`SCREEN_URL_PARAM`), applied once at mount. It makes the Screener the working tab; the host routes to it and removes the parameter from its URL. |
 
-Embedded mode hides the scanner's sidebar, brand and theme toggle and shows its tabs as a sub-navigation bar.
-The mount element must have a definite height; the scanner fills it and scrolls internally.
+Embedded mode renders the scanner exactly as the standalone site lays it out: its own sidebar (a top bar on
+phones) and a full-height workspace. Mount it on a page that hides the host's own chrome, as Theme Tracker does
+in Nexus Journal.
 
 Origins and the namespace are read when the component mounts (re-key it to change them). Only one
 `ScannerApp` may be mounted at a time.

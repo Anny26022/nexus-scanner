@@ -41,6 +41,8 @@
   .brand { font-size: 15px; gap: 7px; letter-spacing: -.3px; font-weight: 700; }
   .brand-mark { width: 20px; height: 20px; }
   .brand-subtitle { display: inline; font-size: 15px; font-weight: 400; color: var(--muted); margin-left: 2px; }
+  /* A host's switcher is wider than the appearance toggle; give it the subtitle's room on phones. */
+  .app-sidebar--host-footer .brand-subtitle { display: none; }
   .sidebar-footer {
     grid-column: 2;
     grid-row: 1;

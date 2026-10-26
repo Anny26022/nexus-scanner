@@ -65,18 +65,22 @@ it('namespaces stored keys without changing the standalone keys', () => {
   expect(localStorage.getItem('nexus-scanner.ui.theme.v1')).toBe('"dark"');
 });
 
-it('renders a sub-navigation inside a scoped root and leaves the host document alone', async () => {
+it('renders its own sidebar inside a scoped root, with the host footer and palette, and leaves the host document alone', async () => {
   const onOpenSymbol = vi.fn(() => true);
-  const {container} = render(<ScannerApp embedded dataOrigin={origin} theme="dark" storageNamespace="journal" onOpenSymbol={onOpenSymbol}/>);
+  const {container} = render(<ScannerApp embedded dataOrigin={origin} theme="dark" storageNamespace="journal" onOpenSymbol={onOpenSymbol}
+    sidebarFooter={<button type="button">Host switcher</button>} tokens={{'--accent': 'hsl(var(--primary))'}}/>);
   const root = container.firstElementChild as HTMLElement;
+  const portal = document.body.querySelector(':scope > .nexus-scanner-portal') as HTMLElement;
   expect(root).toHaveClass('nexus-scanner-root');
   expect(root.dataset.theme).toBe('dark');
   expect(document.documentElement.dataset.theme).toBeUndefined();
-  expect(document.body.querySelector(':scope > .nexus-scanner-portal')).toHaveAttribute('data-theme', 'dark');
+  expect(portal).toHaveAttribute('data-theme', 'dark');
+  expect(root.style.getPropertyValue('--accent')).toBe('hsl(var(--primary))');
+  expect(portal.style.getPropertyValue('--accent')).toBe('hsl(var(--primary))');
   expect(await screen.findByText('Screener workspace')).toBeInTheDocument();
-  expect(screen.getByRole('navigation', {name: 'Scanner navigation'})).toBeInTheDocument();
+  expect(screen.getByRole('navigation', {name: 'Main navigation'})).toBeInTheDocument();
+  expect(screen.getByRole('button', {name: 'Host switcher'})).toBeInTheDocument();
   expect(screen.queryByRole('group', {name: 'Appearance'})).toBeNull();
-  expect(screen.queryByRole('button', {name: 'Hide sidebar'})).toBeNull();
 
   fireEvent.click(screen.getByRole('button', {name: 'Market'}));
   expect(localStorage.getItem('journal:nexus-scanner.ui.active-tab.v1')).toBe('"market"');

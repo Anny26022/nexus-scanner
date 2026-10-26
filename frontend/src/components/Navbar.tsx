@@ -11,6 +11,8 @@ interface NavbarProps {
   theme: 'light' | 'dark';
   onThemeChange: (theme: 'light' | 'dark') => void;
   sessionControl?: ReactNode;
+  /** Replaces the appearance toggle, e.g. with an embedding host's own view and theme switcher. */
+  footer?: ReactNode;
 }
 
 const SHORTCUT = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K';
@@ -24,8 +26,8 @@ export const NAV_ITEMS = [
   { id: 'market', label: 'Market', Icon: Gauge },
 ] as const;
 
-export function Navbar({ activeTab, onTabChange, onHideSidebar, onOpenSearch, theme: choice, onThemeChange: setChoice, sessionControl }: NavbarProps) {
-  return <header className="app-sidebar">
+export function Navbar({ activeTab, onTabChange, onHideSidebar, onOpenSearch, theme: choice, onThemeChange: setChoice, sessionControl, footer }: NavbarProps) {
+  return <header className={`app-sidebar${footer ? ' app-sidebar--host-footer' : ''}`}>
     <div className="sidebar-brand-row"><div className="brand"><svg className="brand-mark" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <circle cx="12" cy="12" r="11" stroke="currentColor" strokeWidth="0.5" fill="none" />
       <path d="M12 4L16 12L12 20L8 12L12 4Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
@@ -53,36 +55,11 @@ export function Navbar({ activeTab, onTabChange, onHideSidebar, onOpenSearch, th
       {sessionControl}
     </div>}
     <div className="sidebar-footer">
-      <div className="theme-control" role="group" aria-label="Appearance">
+      {footer ?? <div className="theme-control" role="group" aria-label="Appearance">
         {([{id: 'light', label: 'Light appearance', Icon: Sun}, {id: 'dark', label: 'Dark appearance', Icon: Moon}] as const).map(({id, label, Icon}) =>
           <button type="button" key={id} aria-label={label} title={label} aria-pressed={choice === id} onClick={() => setChoice(id)}><Icon size={16} /></button>)}
-      </div>
+      </div>}
     </div>
   </header>;
 }
 
-interface EmbeddedNavProps {
-  activeTab: AppTab;
-  onTabChange: (tab: AppTab) => void;
-  onOpenSearch: () => void;
-  sessionControl?: ReactNode;
-}
-
-/** Embedded in a host app: the host owns the page chrome and theme, so the tabs become a sub-navigation bar. */
-export function EmbeddedNav({ activeTab, onTabChange, onOpenSearch, sessionControl }: EmbeddedNavProps) {
-  return <header className="embed-subnav">
-    <nav className="embed-subnav-tabs" aria-label="Scanner navigation">
-      {NAV_ITEMS.map(({id, label, Icon}) => (
-        <button key={id} type="button" aria-current={activeTab === id ? 'page' : undefined} onClick={() => onTabChange(id)}>
-          <Icon size={15} aria-hidden="true" />
-          <span>{label}</span>
-        </button>
-      ))}
-    </nav>
-    {sessionControl && <div className="embed-subnav-session">{sessionControl}</div>}
-    <button type="button" className="embed-subnav-search" onClick={onOpenSearch} aria-label="Search pages, screens and symbols" aria-keyshortcuts="Meta+K Control+K">
-      <Search size={14} aria-hidden="true" />
-      <kbd>{SHORTCUT}</kbd>
-    </button>
-  </header>;
-}

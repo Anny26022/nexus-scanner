@@ -1,7 +1,7 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { screenerApi } from './api/screenerApi';
-import { EmbeddedNav, Navbar, type AppTab } from './components/Navbar';
+import { Navbar, type AppTab } from './components/Navbar';
 import { ExploreTab } from './components/ExploreTab';
 import { NewListingsTab } from './components/NewListingsTab';
 import { SessionDatePicker } from './components/SessionDatePicker';
@@ -40,6 +40,8 @@ export interface ScannerShellOptions {
    * and shows whatever tab the host passes back. Unset, the scanner keeps its own (stored) tab.
    */
   tab?: AppTab;
+  /** Shown at the foot of the sidebar in place of the scanner's own appearance toggle. */
+  sidebarFooter?: React.ReactNode;
 }
 
 const ChartsTab = React.lazy(() => import('./components/ChartsTab'));
@@ -147,25 +149,24 @@ const ScreenerAppContent: React.FC<{embed?: ScannerShellOptions}> = ({embed}) =>
     availableSessions={availableSessions}
     onChange={setCustomSessionDate}
   /> : undefined;
-  const sidebarCollapsed = sidebarHidden && !embed;
 
   return (
-    <div ref={frame} className={`app-frame${embed ? ' app-frame--embedded' : ''}${sidebarCollapsed ? ' app-frame--sidebar-hidden' : ''}`}>
+    <div ref={frame} className={`app-frame${sidebarHidden ? ' app-frame--sidebar-hidden' : ''}`}>
       <a href="#workspace" className="skip-link">Skip to results workspace</a>
-      {embed ? <EmbeddedNav activeTab={activeTab} onTabChange={navigate} onOpenSearch={() => setPaletteOpen(true)} sessionControl={sessionControl}/>
-        /* Phones always get the top bar with the tabs; "hidden" only collapses the desktop sidebar. */
-        : <Navbar
-          activeTab={activeTab}
-          onTabChange={navigate}
-          onHideSidebar={() => setSidebarHidden(true)}
-          onOpenSearch={() => setPaletteOpen(true)}
-          theme={theme}
-          onThemeChange={setTheme}
-          sessionControl={sessionControl}
-        />}
+      {/* Phones always get the top bar with the tabs; "hidden" only collapses the desktop sidebar. */}
+      <Navbar
+        activeTab={activeTab}
+        onTabChange={navigate}
+        onHideSidebar={() => setSidebarHidden(true)}
+        onOpenSearch={() => setPaletteOpen(true)}
+        theme={theme}
+        onThemeChange={setTheme}
+        sessionControl={sessionControl}
+        footer={embed?.sidebarFooter}
+      />
 
-      <main id="workspace" className={`workspace${activeTab === 'charts' ? ' workspace--charts' : ''}${sidebarCollapsed ? ' workspace--sidebar-hidden' : ''}`} tabIndex={-1}>
-        {sidebarCollapsed && <button type="button" className="workspace-sidebar-reopen" aria-label="Show sidebar" title="Show sidebar" onClick={() => setSidebarHidden(false)}><PanelLeftOpen size={17}/></button>}
+      <main id="workspace" className={`workspace${activeTab === 'charts' ? ' workspace--charts' : ''}${sidebarHidden ? ' workspace--sidebar-hidden' : ''}`} tabIndex={-1}>
+        {sidebarHidden && <button type="button" className="workspace-sidebar-reopen" aria-label="Show sidebar" title="Show sidebar" onClick={() => setSidebarHidden(false)}><PanelLeftOpen size={17}/></button>}
         {revisionFailed && <p role="alert" className="notice">The latest data release could not be loaded. <Button variant="ghost" onClick={() => void refreshRevision()}>Retry</Button></p>}
         {screenerMounted && <div style={{display: activeTab === 'screener' ? 'contents' : 'none'}}>
           <ExploreTab

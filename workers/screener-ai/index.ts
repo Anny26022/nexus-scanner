@@ -4,10 +4,13 @@ import {createAiFilterCatalog} from '../../frontend/src/api/aiFilterCatalog';
 import type {FilterChoices} from '../../frontend/src/types/filterChoices';
 import {GROQ_MODEL, PRIMARY_MODEL, FALLBACK_MODEL, compileWithFallback, compilerPrompt, type CompileModel, type InferenceInput} from './compiler';
 import {compilationCacheKey, readCompilation, storeCompilation} from './compilationCache';
+import {checkOrigin, corsHeaders, parseAllowedOrigins, withCors} from './cors';
 
 type WorkerEnv = Omit<Env, 'GROQ_API_KEY'> & {
   GROQ_API_KEY?: string;
   GROQ_MODEL?: string;
+  /** Comma-separated browser origins, besides this Worker's own, that may call the AI endpoint. */
+  ALLOWED_ORIGINS?: string;
 };
 
 const isObject = (v:unknown): v is Record<string,unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -38,9 +41,17 @@ export default {
     if (url.pathname !== '/api/screener/ai-compile') {
       return url.pathname.startsWith('/api/') ? json({error:'API route not found'},404) : env.ASSETS.fetch(request);
     }
+    const decision = checkOrigin(request, parseAllowedOrigins(env.ALLOWED_ORIGINS));
+    if (!decision.allowed) return json({error:'Cross-origin requests are not allowed.'},403);
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {status:204, headers:decision.corsOrigin ? corsHeaders(decision.corsOrigin) : {}});
+    }
+    return withCors(await compile(request, env, ctx, url), decision);
+  },
+} satisfies ExportedHandler<WorkerEnv>;
+
+async function compile(request: Request, env: WorkerEnv, ctx: ExecutionContext, url: URL): Promise<Response> {
     if (request.method !== 'POST') return json({error:'Use POST to build a screen.'},405);
-    const origin = request.headers.get('Origin');
-    if (origin && origin !== url.origin) return json({error:'Cross-origin requests are not allowed.'},403);
     if (!request.headers.get('Content-Type')?.includes('application/json')) return json({error:'Send a JSON request.'},415);
     let body: unknown;
     try { body = await readBody(request); } catch { return json({error:'Invalid or oversized JSON request.'},400); }
@@ -124,5 +135,4 @@ export default {
       }
       return json({error:'The AI could not build a valid screen. Please rephrase your request and try again.',requestId},502);
     }
-  },
-} satisfies ExportedHandler<WorkerEnv>;
+}

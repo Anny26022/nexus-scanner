@@ -1,3 +1,7 @@
+# Published data is public and read-only. Embedding hosts (Nexus Journal) read it directly from Cloudflare.
+/data/*
+  Access-Control-Allow-Origin: *
+  Access-Control-Expose-Headers: Content-Encoding, Content-Length, ETag
 /data/current.json
   Cache-Control: no-cache
 /data/results/index.json

@@ -56,6 +56,58 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
         self.assertIn("return5yPct", tech)
         self.assertIsNotNone(tech["return5yPct"])
 
+    def test_registered_session_dates_are_read_from_the_manifest(self):
+        import json, tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            manifest = Path(folder) / "sessions.json"
+            self.assertEqual(gen.registered_session_dates(None), set())
+            self.assertEqual(gen.registered_session_dates(manifest), set())
+            manifest.write_text(json.dumps({"version": 1, "sessions": [
+                {"date": "2021-10-14", "revision": "a" * 64}, {"date": "2026-10-23", "revision": "b" * 64}]}))
+            self.assertEqual(gen.registered_session_dates(manifest), {"2021-10-14", "2026-10-23"})
+            manifest.write_text("{not json")
+            with self.assertRaises(ValueError):
+                gen.registered_session_dates(manifest)
+
+    def run_main(self, folder, start, end, *extra):
+        """Runs main() on a one-symbol pipeline whose history has 2021-10-14 and 2021-10-15."""
+        import contextlib, gzip, io, json
+        from unittest.mock import patch
+        pipeline = folder / "pipeline"
+        (pipeline / ".scanner_cache").mkdir(parents=True, exist_ok=True)
+        with gzip.open(pipeline / "all_stocks_fundamental_analysis.json.gz", "wt") as f:
+            f.write("[]")
+        np.savez(pipeline / ".scanner_cache" / "history.npz", symbols=np.array(["A"]), offsets=np.array([0, 2]),
+                 dates=np.array(["2021-10-14", "2021-10-15"], dtype="datetime64[D]"), values=np.ones((2, 5)), revision=np.array("r1"))
+        (pipeline / "scanner_revision.json").write_text(json.dumps({"historyRevision": "r1"}))
+        argv = ["generate_historical_snapshots.py", "--pipeline-dir", str(pipeline), "--start-date", start, "--end-date", end,
+                "--output-dir", str(folder / "out"), "--update-sessions-manifest", str(folder / "sessions.json"), *extra]
+        out = io.StringIO()
+        with patch.object(sys, "argv", argv), contextlib.redirect_stdout(out):
+            gen.main()
+        return out.getvalue()
+
+    def test_main_skips_sessions_already_in_the_manifest(self):
+        import json, tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            manifest = folder / "sessions.json"
+            manifest.write_text(json.dumps({"version": 1, "sessions": [
+                {"date": "2021-10-14", "revision": "a" * 64, "label": "2021-10-14", "isHistorical": True}]}))
+            before = manifest.read_bytes()
+
+            # Every requested date is archived: a clean no-op that generates nothing and leaves the manifest alone.
+            log = self.run_main(folder, "2021-10-14", "2021-10-14")
+            self.assertIn("Skipping 1 already archived sessions", log)
+            self.assertEqual(list((folder / "out").iterdir()), [])
+            self.assertEqual(manifest.read_bytes(), before)
+
+            # A mixed range plans only the new date.
+            log = self.run_main(folder, "2021-10-14", "2021-10-15", "--dry-run")
+            self.assertIn("Skipping 1 already archived sessions: [datetime.date(2021, 10, 14)]", log)
+            self.assertIn("Found 2 trading sessions", log)
+            self.assertEqual(manifest.read_bytes(), before)
+
     def test_check_consecutive_quarters(self):
         # 4 consecutive quarters spaced ~90 days apart
         q_valid = [

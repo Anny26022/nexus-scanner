@@ -23,3 +23,17 @@ def pack_snapshot(payload):
         'stocksTable': pack_records(rows),
         'nestedTables': nested,
     }
+
+
+def snapshot_stocks(data):
+    """Top-level stock rows of a plain or packed archive. Nested tables are not reattached."""
+    if data.get('stockEncoding') is None:
+        stocks = data.get('stocks') or []
+        return list(stocks.values()) if isinstance(stocks, dict) else stocks
+    if data['stockEncoding'] != 'columnar-v1':
+        raise ValueError(f"Unknown snapshot encoding {data['stockEncoding']!r}")
+    table = data['stocksTable']
+    rows = []
+    for row, missing in zip(table['values'], map(set, table['missing'])):
+        rows.append({key: value for i, (key, value) in enumerate(zip(table['keys'], row)) if i not in missing})
+    return rows

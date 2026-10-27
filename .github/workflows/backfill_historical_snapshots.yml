@@ -112,7 +112,9 @@ jobs:
 
           snapshots = glob.glob("outputs/historical_snapshots/*.json.gz")
           if not snapshots:
-              sys.exit("Error: No snapshots found in outputs/historical_snapshots/*.json.gz; nothing to upload.")
+              # Every date in the range is already archived (or none traded): nothing to upload or commit.
+              print("No new snapshots to upload; all requested sessions are already archived.")
+              sys.exit(0)
 
           print(f"Uploading and verifying {len(snapshots)} snapshots to R2 bucket '{bucket_name}'...")
           for filepath in snapshots:
@@ -124,7 +126,7 @@ jobs:
                       f,
                       bucket_name,
                       key,
-                      ExtraArgs={'ContentType': 'application/json', 'ContentEncoding': 'gzip'}
+                      ExtraArgs={'ContentType': 'application/gzip'}
                   )
               # Verify R2 persistence with head_object readback
               head = s3.head_object(Bucket=bucket_name, Key=key)

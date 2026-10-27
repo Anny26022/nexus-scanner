@@ -380,6 +380,13 @@ def compute_ohlcv_fingerprint(pipeline_dir: Path) -> str:
     return hashlib.sha256(json.dumps(entries).encode()).hexdigest()
 
 
+def registered_session_dates(manifest_file: Optional[Path]) -> set:
+    if manifest_file is None or not manifest_file.exists():
+        return set()
+    with open(manifest_file, "r", encoding="utf-8") as f:
+        return {item["date"] for item in json.load(f).get("sessions", []) if item.get("date")}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate 5-year historical snapshots.")
     parser.add_argument("--pipeline-dir", type=Path, default=Path("DO NOT DELETE EDL PIPELINE"))
@@ -542,6 +549,12 @@ def main():
     # 6. Trading Sessions in Range
     unique_dates = sorted(set(d.date() for d in dates if args.start_date <= d.date() <= args.end_date))
     print(f"Found {len(unique_dates)} trading sessions in target window: {unique_dates}")
+    # An archived date is immutable: its URL is cached forever under its revision, and the daily
+    # publisher never replaces one either (frontend/session_history.py).
+    registered = registered_session_dates(args.update_sessions_manifest)
+    if skipped := [d for d in unique_dates if d.isoformat() in registered]:
+        print(f"Skipping {len(skipped)} already archived sessions: {skipped}")
+        unique_dates = [d for d in unique_dates if d.isoformat() not in registered]
 
     if args.dry_run:
         print("[DRY RUN] Plan verified successfully. Exiting without file generation.")

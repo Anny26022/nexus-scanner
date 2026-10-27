@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import unittest
+import unittest.mock
 
 import yaml
 
@@ -217,6 +218,25 @@ class RefreshWorkflowTests(unittest.TestCase):
         # Same object metadata as the daily archive (frontend/session_history.py).
         self.assertIn("ExtraArgs={'ContentType': 'application/gzip'}", upload)
         self.assertNotIn('ContentEncoding', upload)
+
+    def test_backfill_upload_is_a_successful_no_op_when_every_date_is_archived(self):
+        import sys, tempfile, types
+        job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
+        run = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
+        script = run.split("<< 'EOF'\n", 1)[1].rsplit('\nEOF', 1)[0]
+        env = {'R2_ACCOUNT_ID': 'a', 'R2_ACCESS_KEY_ID': 'b', 'R2_SECRET_ACCESS_KEY': 'c'}
+        with tempfile.TemporaryDirectory() as folder:
+            previous = Path.cwd()
+            os.chdir(folder)
+            try:
+                with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: None)}), \
+                        unittest.mock.patch.dict(os.environ, env), self.assertRaises(SystemExit) as exit:
+                    exec(compile(script, 'upload', 'exec'), {'__name__': '__main__'})
+            finally:
+                os.chdir(previous)
+            self.assertEqual(exit.exception.code, 0)
+            # No sentinel, so 'Commit Updated Sessions Manifest' is skipped.
+            self.assertFalse((Path(folder)/'.upload_verified').exists())
 
 
 if __name__ == '__main__':

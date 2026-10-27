@@ -26,6 +26,8 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from packed_snapshot import snapshot_stocks
+
 LEDGER_NAME = "price-band-history.json"
 VERSION = 1
 _NUMERIC = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*%?\s*$")
@@ -107,9 +109,7 @@ def _snapshot_rows(base_url: str, session: str, revision: str, attempts: int = 5
                 print(f"  skipped {session}: {error}", flush=True)
                 return None
             time.sleep(2 ** attempt)
-    stocks = data.get("stocks") or []
-    stocks = stocks.values() if isinstance(stocks, dict) else stocks
-    return [{"symbol": stock.get("symbol"), "circuitLimit": stock.get("circuitLimit")} for stock in stocks]
+    return [{"symbol": stock.get("symbol"), "circuitLimit": stock.get("circuitLimit")} for stock in snapshot_stocks(data)]
 
 
 def rebuild(output: Path, base_url: str, workers: int = 8) -> dict:

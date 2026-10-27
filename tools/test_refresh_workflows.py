@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import unittest
+import unittest.mock
 
 import yaml
 
@@ -213,6 +214,67 @@ class RefreshWorkflowTests(unittest.TestCase):
         names = [step['name'] for step in job['steps']]
         self.assertLess(names.index('Pull pipeline state from R2'), names.index('Generate Historical Snapshots'))
         self.assertNotIn('Push pipeline state to R2', names)
+
+    def run_backfill_upload(self, folder, stored, force=False):
+        """Runs the workflow's embedded upload script against an in-memory bucket."""
+        import sys, types
+        job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
+        run = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
+        script = run.split("<< 'EOF'\n", 1)[1].rsplit('\nEOF', 1)[0]
+
+        class ClientError(Exception):
+            def __init__(self, code):
+                self.response = {'Error': {'Code': code}}
+
+        class Client:
+            def head_object(self, Bucket, Key):
+                if Key not in stored:
+                    raise ClientError('404')
+                return {'ContentLength': len(stored[Key][0])}
+
+            def upload_fileobj(self, handle, Bucket, Key, ExtraArgs):
+                stored[Key] = (handle.read(), ExtraArgs)
+
+        boto3 = types.SimpleNamespace(client=lambda *a, **k: Client())
+        exceptions = types.SimpleNamespace(ClientError=ClientError)
+        env = {'R2_ACCOUNT_ID': 'a', 'R2_ACCESS_KEY_ID': 'b', 'R2_SECRET_ACCESS_KEY': 'c', 'FORCE': 'true' if force else 'false'}
+        previous = Path.cwd()
+        os.chdir(folder)
+        try:
+            with unittest.mock.patch.dict(sys.modules, {'boto3': boto3, 'botocore': types.SimpleNamespace(exceptions=exceptions),
+                                                        'botocore.exceptions': exceptions}), \
+                    unittest.mock.patch.dict(os.environ, env):
+                exec(compile(script, 'upload', 'exec'), {'__name__': '__main__'})
+        finally:
+            os.chdir(previous)
+
+    def test_backfill_upload_matches_daily_archive_and_never_overwrites(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder)/'outputs/historical_snapshots'
+            output.mkdir(parents=True)
+            (output/'2021-10-14.json.gz').write_bytes(b'new')
+            stored = {}
+            self.run_backfill_upload(folder, stored)
+            self.assertEqual(stored['snapshots/2021-10-14.json.gz'], (b'new', {'ContentType': 'application/gzip'}))
+            self.assertTrue((Path(folder)/'.upload_verified').exists())
+
+            (Path(folder)/'.upload_verified').unlink()
+            (output/'2021-10-14.json.gz').write_bytes(b'replacement')
+            with self.assertRaisesRegex(SystemExit, 'refusing to overwrite'):
+                self.run_backfill_upload(folder, stored)
+            self.assertEqual(stored['snapshots/2021-10-14.json.gz'][0], b'new')
+            self.assertFalse((Path(folder)/'.upload_verified').exists())
+
+            self.run_backfill_upload(folder, stored, force=True)
+            self.assertEqual(stored['snapshots/2021-10-14.json.gz'][0], b'replacement')
+
+    def test_backfill_passes_force_only_when_requested(self):
+        job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
+        inputs = document('.github/workflows/backfill_historical_snapshots.yml')[True]['workflow_dispatch']['inputs']
+        self.assertEqual((inputs['force']['type'], inputs['force']['default']), ('boolean', False))
+        generate = next(step for step in job['steps'] if step['name'] == 'Generate Historical Snapshots')['run']
+        self.assertIn("github.event.inputs.force == 'true' && '--force' || ''", generate)
 
 
 if __name__ == '__main__':

@@ -118,6 +118,23 @@ it('fetches and decodes advertised gzip snapshots',async()=>{
  const result=await createSnapshotEngine()({type:'screen',source:{...source,url:'/stocks.json.gz'},request});
  expect(result.type==='screen'&&result.result?.matchCount).toBe(snapshot.totalStocks);
 });
+it('loads a packed session archive from its versioned URL',async()=>{
+ const {stocks,...metadata}=snapshot, keys=Object.keys(stocks[0]);
+ const packed={...metadata,stockEncoding:'columnar-v1',nestedTables:{},
+  stocksTable:{keys,values:stocks.map(stock=>keys.map(key=>stock[key as keyof typeof stock])),missing:stocks.map(()=>[])}};
+ vi.stubGlobal('DecompressionStream',(await import('node:stream/web')).DecompressionStream);
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(gzipSync(JSON.stringify(packed)))));
+ const url=`https://data.example.com/snapshots/${snapshot.asOfDate}.json.gz?v=${snapshot.revision.slice(0,16)}`;
+ const result=await createSnapshotEngine()({type:'screen',source:{...source,url,sessionDate:snapshot.asOfDate},request});
+ expect(result.type==='screen'&&result.result?.matchCount).toBe(snapshot.totalStocks);
+});
+it('accepts a gzip snapshot the browser already decoded from its exposed Content-Encoding',async()=>{
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot),{headers:{'Content-Encoding':'gzip'}})));
+ const result=await createSnapshotEngine()({type:'screen',source:{...source,url:'/snapshots/2026-10-01.json.gz?v=aaaaaaaaaaaaaaaa'},request});
+ expect(result.type==='screen'&&result.result?.matchCount).toBe(snapshot.totalStocks);
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot))));
+ await expect(createSnapshotEngine()({type:'screen',source:{...source,url:'/snapshots/2026-10-01.json.gz'},request})).rejects.toThrow('Invalid compressed');
+});
 it('rejects snapshot session mismatches',async()=>{
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot))));
  await expect(createSnapshotEngine()({type:'screen',source:{...source,sessionDate:'2020-01-01'},request})).rejects.toThrow('revision/session mismatch');

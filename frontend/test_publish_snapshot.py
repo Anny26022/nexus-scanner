@@ -66,6 +66,19 @@ class SnapshotPublicationTests(unittest.TestCase):
             for session, revision in [('2026-10-19', 'a'*64), ('2026-10-21', 'b'*64)]:
                 self.assertEqual(gzip.decompress((output/f'snapshots/{session}.json.gz').read_bytes()), revision.encode())
 
+    def test_archive_prefers_the_packed_snapshot_and_falls_back_to_the_plain_one(self):
+        with tempfile.TemporaryDirectory() as folder, patch.dict('os.environ', {'EDL_CHART_STORAGE': 'local'}):
+            output = Path(folder)
+            for session, revision, names in [('2026-10-21', 'a'*64, ('stocks.json.gz', 'stocks.packed.json.gz')),
+                                             ('2026-10-22', 'b'*64, ('stocks.json.gz',))]:
+                generation = output/'revisions'/revision
+                generation.mkdir(parents=True)
+                for name in names:
+                    (generation/name).write_bytes(name.encode())
+                archive_daily_snapshot(output, {'sessionDate': session, 'revision': revision})
+            self.assertEqual((output/'snapshots/2026-10-21.json.gz').read_bytes(), b'stocks.packed.json.gz')
+            self.assertEqual((output/'snapshots/2026-10-22.json.gz').read_bytes(), b'stocks.json.gz')
+
     def test_unverified_or_conflicting_archive_is_never_registered(self):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder); source = output/'revisions'/('a'*64)/'stocks.json.gz'
@@ -113,8 +126,9 @@ class SnapshotPublicationTests(unittest.TestCase):
             sessions=json.loads((output/'sessions.json').read_text())['sessions']
             self.assertEqual(sessions[0]['date'], manifest['sessionDate'])
             self.assertEqual(sessions[0]['revision'], manifest['revision'])
-            self.assertEqual((output/'snapshots'/f"{manifest['sessionDate']}.json.gz").read_bytes(),
-                             (path/'stocks.json.gz').read_bytes())
+            archived=(output/'snapshots'/f"{manifest['sessionDate']}.json.gz").read_bytes()
+            self.assertEqual(archived, (path/'stocks.packed.json.gz').read_bytes())
+            self.assertEqual(decode_packed_snapshot(json.loads(gzip.decompress(archived))), payload)
             self.assertEqual(payload['extendedMetricsVersion'],1)
             self.assertNotIn('source', payload['stocks'][0]['extended'])
             self.assertNotIn(b'tradingview', (path/'stocks.json').read_bytes().lower())

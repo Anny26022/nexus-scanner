@@ -62,3 +62,34 @@ test('only immutable paths receive a long cache lifetime', async () => {
   const response = await worker.fetch(new Request('https://data.example.com/private/file'), env);
   assert.equal(response.headers.get('Cache-Control'), 'no-store');
 });
+
+test('snapshots that name their revision are immutable; unversioned or malformed ones revalidate', async () => {
+  const versioned = await worker.fetch(new Request('https://data.example.com/snapshots/2026-10-23.json.gz?v=0123456789abcdef'), env);
+  assert.equal(versioned.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+  for (const query of ['', '?v=', '?v=0123456789ABCDEF', '?v=0123456789abcde', '?v=0123456789abcdef0', '?w=0123456789abcdef']) {
+    const response = await worker.fetch(new Request(`https://data.example.com/snapshots/2026-10-23.json.gz${query}`), env);
+    assert.equal(response.headers.get('Cache-Control'), 'no-cache', query);
+  }
+  const daily = await worker.fetch(new Request('https://data.example.com/daily/abc.json.gz?v=0123456789abcdef'), env);
+  assert.equal(daily.headers.get('Cache-Control'), 'no-cache');
+});
+
+test('objects stored with a Content-Encoding are sent as stored, not compressed again', async () => {
+  const inits = [];
+  const NativeResponse = globalThis.Response;
+  globalThis.Response = class extends NativeResponse {
+    constructor(body, init) { super(body, init); inits.push(init); }
+  };
+  const encoded = { ...object, httpMetadata: { contentEncoding: 'gzip' },
+    writeHttpMetadata(headers) { headers.set('Content-Type', 'application/json'); headers.set('Content-Encoding', 'gzip'); } };
+  const store = { DATA: { async get() { return encoded; }, async head() { return encoded; } } };
+  try {
+    const gzipped = await worker.fetch(new Request('https://data.example.com/snapshots/2021-10-14.json.gz'), store);
+    assert.equal(inits.at(-1).encodeBody, 'manual');
+    assert.equal(gzipped.headers.get('Access-Control-Expose-Headers'), 'Content-Encoding');
+    await worker.fetch(new Request('https://data.example.com/snapshots/2026-10-23.json.gz'), env);
+    assert.equal(inits.at(-1).encodeBody, 'automatic');
+  } finally {
+    globalThis.Response = NativeResponse;
+  }
+});

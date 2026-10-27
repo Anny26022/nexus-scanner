@@ -56,6 +56,19 @@ class TestHistoricalSnapshotGenerator(unittest.TestCase):
         self.assertIn("return5yPct", tech)
         self.assertIsNotNone(tech["return5yPct"])
 
+    def test_registered_session_dates_are_read_from_the_manifest(self):
+        import json, tempfile
+        with tempfile.TemporaryDirectory() as folder:
+            manifest = Path(folder) / "sessions.json"
+            self.assertEqual(gen.registered_session_dates(None), set())
+            self.assertEqual(gen.registered_session_dates(manifest), set())
+            manifest.write_text(json.dumps({"version": 1, "sessions": [
+                {"date": "2021-10-14", "revision": "a" * 64}, {"date": "2026-10-23", "revision": "b" * 64}]}))
+            self.assertEqual(gen.registered_session_dates(manifest), {"2021-10-14", "2026-10-23"})
+            manifest.write_text("{not json")
+            with self.assertRaises(ValueError):
+                gen.registered_session_dates(manifest)
+
     def test_check_consecutive_quarters(self):
         # 4 consecutive quarters spaced ~90 days apart
         q_valid = [

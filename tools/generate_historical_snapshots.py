@@ -380,6 +380,13 @@ def compute_ohlcv_fingerprint(pipeline_dir: Path) -> str:
     return hashlib.sha256(json.dumps(entries).encode()).hexdigest()
 
 
+def registered_session_dates(manifest_file: Optional[Path]) -> set:
+    if manifest_file is None or not manifest_file.exists():
+        return set()
+    with open(manifest_file, "r", encoding="utf-8") as f:
+        return {item["date"] for item in json.load(f).get("sessions", []) if item.get("date")}
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate 5-year historical snapshots.")
     parser.add_argument("--pipeline-dir", type=Path, default=Path("DO NOT DELETE EDL PIPELINE"))
@@ -388,6 +395,7 @@ def main():
     parser.add_argument("--end-date", type=date.fromisoformat, default=date(2021, 10, 15))
     parser.add_argument("--update-sessions-manifest", type=Path, default=None, help="Path to frontend/public/data/sessions.json to register sessions")
     parser.add_argument("--dry-run", action="store_true", help="Print execution plan without writing files")
+    parser.add_argument("--force", action="store_true", help="Regenerate and replace dates already registered in the sessions manifest")
 
     args = parser.parse_args()
 
@@ -542,6 +550,13 @@ def main():
     # 6. Trading Sessions in Range
     unique_dates = sorted(set(d.date() for d in dates if args.start_date <= d.date() <= args.end_date))
     print(f"Found {len(unique_dates)} trading sessions in target window: {unique_dates}")
+    # An archived date is immutable: its URL is cached forever under its revision, and the daily
+    # publisher never replaces one either (frontend/session_history.py).
+    registered = registered_session_dates(args.update_sessions_manifest)
+    already = [d for d in unique_dates if d.isoformat() in registered]
+    if already and not args.force:
+        print(f"Skipping {len(already)} already archived sessions (pass --force to replace): {already}")
+        unique_dates = [d for d in unique_dates if d.isoformat() not in registered]
 
     if args.dry_run:
         print("[DRY RUN] Plan verified successfully. Exiting without file generation.")
@@ -1014,6 +1029,8 @@ def main():
         # Add newly generated sessions with their exact revision hashes
         for s_date, s_hash in generated_sessions:
             s_str = s_date.strftime("%Y-%m-%d")
+            if s_str in existing and not args.force:
+                raise SystemExit(f"Refusing to replace archived session {s_str} without --force")
             existing[s_str] = {
                 "date": s_str,
                 "revision": s_hash,

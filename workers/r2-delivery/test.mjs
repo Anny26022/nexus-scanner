@@ -73,23 +73,3 @@ test('snapshots that name their revision are immutable; unversioned or malformed
   const daily = await worker.fetch(new Request('https://data.example.com/daily/abc.json.gz?v=0123456789abcdef'), env);
   assert.equal(daily.headers.get('Cache-Control'), 'no-cache');
 });
-
-test('objects stored with a Content-Encoding are sent as stored, not compressed again', async () => {
-  const inits = [];
-  const NativeResponse = globalThis.Response;
-  globalThis.Response = class extends NativeResponse {
-    constructor(body, init) { super(body, init); inits.push(init); }
-  };
-  const encoded = { ...object, httpMetadata: { contentEncoding: 'gzip' },
-    writeHttpMetadata(headers) { headers.set('Content-Type', 'application/json'); headers.set('Content-Encoding', 'gzip'); } };
-  const store = { DATA: { async get() { return encoded; }, async head() { return encoded; } } };
-  try {
-    const gzipped = await worker.fetch(new Request('https://data.example.com/snapshots/2021-10-14.json.gz'), store);
-    assert.equal(inits.at(-1).encodeBody, 'manual');
-    assert.equal(gzipped.headers.get('Access-Control-Expose-Headers'), 'Content-Encoding');
-    await worker.fetch(new Request('https://data.example.com/snapshots/2026-10-23.json.gz'), env);
-    assert.equal(inits.at(-1).encodeBody, 'automatic');
-  } finally {
-    globalThis.Response = NativeResponse;
-  }
-});

@@ -16,11 +16,6 @@ on:
         type: boolean
         required: true
         default: true
-      force:
-        description: 'Replace dates already in sessions.json or R2 (breaks cached copies; normally off)'
-        type: boolean
-        required: false
-        default: false
 
 permissions:
   contents: write
@@ -80,15 +75,13 @@ jobs:
         env:
           START_DATE: ${{ github.event.inputs.start_date }}
           END_DATE: ${{ github.event.inputs.end_date }}
-          FORCE: ${{ github.event.inputs.force }}
         run: |
           python tools/generate_historical_snapshots.py \
             --pipeline-dir "DO NOT DELETE EDL PIPELINE" \
             --start-date "$START_DATE" \
             --end-date "$END_DATE" \
             --output-dir "outputs/historical_snapshots" \
-            --update-sessions-manifest "frontend/public/data/sessions.json" \
-            ${{ github.event.inputs.force == 'true' && '--force' || '' }}
+            --update-sessions-manifest "frontend/public/data/sessions.json"
 
       - name: Upload to Cloudflare R2
         if: ${{ github.event.inputs.upload_r2 == 'true' }}
@@ -97,11 +90,9 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: nexus-screener-chart-data
-          FORCE: ${{ github.event.inputs.force }}
         run: |
           python - << 'EOF'
           import os, glob, sys, boto3
-          from botocore.exceptions import ClientError
           account_id = os.environ.get('R2_ACCOUNT_ID')
           access_key = os.environ.get('R2_ACCESS_KEY_ID')
           secret_key = os.environ.get('R2_SECRET_ACCESS_KEY')
@@ -119,24 +110,9 @@ jobs:
               region_name='auto'
           )
 
-          force = os.environ.get('FORCE') == 'true'
           snapshots = glob.glob("outputs/historical_snapshots/*.json.gz")
           if not snapshots:
               sys.exit("Error: No snapshots found in outputs/historical_snapshots/*.json.gz; nothing to upload.")
-
-          # Archived dates are immutable (frontend/session_history.py uses rclone --immutable). Dates already
-          # in sessions.json were not regenerated, so an existing key here is an unregistered conflict.
-          def exists(key):
-              try:
-                  s3.head_object(Bucket=bucket_name, Key=key)
-                  return True
-              except ClientError as e:
-                  if e.response.get('Error', {}).get('Code') in ('404', 'NoSuchKey', 'NotFound'):
-                      return False
-                  raise
-          conflicts = [f"snapshots/{os.path.basename(p)}" for p in snapshots if exists(f"snapshots/{os.path.basename(p)}")]
-          if conflicts and not force:
-              sys.exit(f"Error: refusing to overwrite archived snapshots without the force input: {conflicts}")
 
           print(f"Uploading and verifying {len(snapshots)} snapshots to R2 bucket '{bucket_name}'...")
           for filepath in snapshots:
@@ -148,7 +124,6 @@ jobs:
                       f,
                       bucket_name,
                       key,
-                      # Same metadata as the daily archive: the browser gunzips it, so no Content-Encoding.
                       ExtraArgs={'ContentType': 'application/gzip'}
                   )
               # Verify R2 persistence with head_object readback

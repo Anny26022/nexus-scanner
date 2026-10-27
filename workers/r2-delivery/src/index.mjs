@@ -29,11 +29,7 @@ export default {
     headers.set('Cache-Control', versioned || /^(objects|releases|daily\/rotation)\//.test(key)
       ? 'public, max-age=31536000, immutable' : 'no-cache');
     headers.set('Access-Control-Allow-Origin', '*');
-    // Lets cross-origin readers tell a body the browser already decoded from one they must gunzip.
-    headers.set('Access-Control-Expose-Headers', 'Content-Encoding');
     headers.set('X-Content-Type-Options', 'nosniff');
-    // An object stored with Content-Encoding is already encoded: send its bytes as they are, not compressed again.
-    const encodeBody = object.httpMetadata?.contentEncoding ? 'manual' : 'automatic';
-    return new Response(request.method === 'HEAD' ? null : object.body, { headers, encodeBody });
+    return new Response(request.method === 'HEAD' ? null : object.body, { headers });
   },
 };

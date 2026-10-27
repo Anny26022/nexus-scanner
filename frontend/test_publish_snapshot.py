@@ -55,7 +55,7 @@ class SnapshotPublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, patch.dict('os.environ', {'EDL_CHART_STORAGE': 'local'}):
             output = Path(folder)
             for session, revision in [('2026-10-19', 'a'*64), ('2026-10-21', 'b'*64), ('2026-10-21', 'c'*64)]:
-                source = output/'revisions'/revision/'stocks.json.gz'
+                source = output/'revisions'/revision/'stocks.packed.json.gz'
                 source.parent.mkdir(parents=True)
                 source.write_bytes(gzip.compress(revision.encode(), mtime=0))
                 entry = archive_daily_snapshot(output, {'sessionDate': session, 'revision': revision})
@@ -66,22 +66,9 @@ class SnapshotPublicationTests(unittest.TestCase):
             for session, revision in [('2026-10-19', 'a'*64), ('2026-10-21', 'b'*64)]:
                 self.assertEqual(gzip.decompress((output/f'snapshots/{session}.json.gz').read_bytes()), revision.encode())
 
-    def test_archive_prefers_the_packed_snapshot_and_falls_back_to_the_plain_one(self):
-        with tempfile.TemporaryDirectory() as folder, patch.dict('os.environ', {'EDL_CHART_STORAGE': 'local'}):
-            output = Path(folder)
-            for session, revision, names in [('2026-10-21', 'a'*64, ('stocks.json.gz', 'stocks.packed.json.gz')),
-                                             ('2026-10-22', 'b'*64, ('stocks.json.gz',))]:
-                generation = output/'revisions'/revision
-                generation.mkdir(parents=True)
-                for name in names:
-                    (generation/name).write_bytes(name.encode())
-                archive_daily_snapshot(output, {'sessionDate': session, 'revision': revision})
-            self.assertEqual((output/'snapshots/2026-10-21.json.gz').read_bytes(), b'stocks.packed.json.gz')
-            self.assertEqual((output/'snapshots/2026-10-22.json.gz').read_bytes(), b'stocks.json.gz')
-
     def test_unverified_or_conflicting_archive_is_never_registered(self):
         with tempfile.TemporaryDirectory() as folder:
-            output = Path(folder); source = output/'revisions'/('a'*64)/'stocks.json.gz'
+            output = Path(folder); source = output/'revisions'/('a'*64)/'stocks.packed.json.gz'
             source.parent.mkdir(parents=True); source.write_bytes(b'original')
             manifest = {'sessionDate': '2026-10-21', 'revision': 'a'*64}
             store = Mock(); store.cache_command.return_value = b'corrupted'

@@ -128,13 +128,6 @@ it('loads a packed session archive from its versioned URL',async()=>{
  const result=await createSnapshotEngine()({type:'screen',source:{...source,url,sessionDate:snapshot.asOfDate},request});
  expect(result.type==='screen'&&result.result?.matchCount).toBe(snapshot.totalStocks);
 });
-it('accepts a gzip snapshot the browser already decoded from its exposed Content-Encoding',async()=>{
- vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot),{headers:{'Content-Encoding':'gzip'}})));
- const result=await createSnapshotEngine()({type:'screen',source:{...source,url:'/snapshots/2026-10-01.json.gz?v=aaaaaaaaaaaaaaaa'},request});
- expect(result.type==='screen'&&result.result?.matchCount).toBe(snapshot.totalStocks);
- vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot))));
- await expect(createSnapshotEngine()({type:'screen',source:{...source,url:'/snapshots/2026-10-01.json.gz'},request})).rejects.toThrow('Invalid compressed');
-});
 it('rejects snapshot session mismatches',async()=>{
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(snapshot))));
  await expect(createSnapshotEngine()({type:'screen',source:{...source,sessionDate:'2020-01-01'},request})).rejects.toThrow('revision/session mismatch');

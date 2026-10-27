@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { Sun, Moon, ArrowUpRight, PanelLeftClose, ScanSearch, Rocket, CandlestickChart, Gauge, Search, CalendarCheck, Orbit } from 'lucide-react';
 
-export type AppTab = 'screener' | 'market' | 'earnings' | 'rotation' | 'ipo' | 'charts';
+import type { AppTab } from '../data/sections';
+export type { AppTab };
 
 interface NavbarProps {
   activeTab: AppTab;

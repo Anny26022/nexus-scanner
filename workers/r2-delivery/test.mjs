@@ -73,3 +73,13 @@ test('snapshots that name their revision are immutable; unversioned or malformed
   const daily = await worker.fetch(new Request('https://data.example.com/daily/abc.json.gz?v=0123456789abcdef'), env);
   assert.equal(daily.headers.get('Cache-Control'), 'no-cache');
 });
+
+test('objects stored with gzip Content-Encoding are served as the gzip file they are', async () => {
+  const legacy = { ...object, httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
+    writeHttpMetadata(headers) { headers.set('Content-Type', 'application/json'); headers.set('Content-Encoding', 'gzip'); } };
+  const store = { DATA: { async get() { return legacy; }, async head() { return legacy; } } };
+  const response = await worker.fetch(new Request('https://data.example.com/snapshots/2025-08-07.json.gz?v=2cd4e13d58e3477d'), store);
+  assert.equal(response.headers.get('Content-Encoding'), null);
+  assert.equal(response.headers.get('Content-Type'), 'application/gzip');
+  assert.equal(await response.text(), 'published bytes');
+});

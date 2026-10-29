@@ -1,4 +1,10 @@
-"""Optional earnings history: verified R2 objects, with a small Git-owned index."""
+"""Optional earnings history: verified R2 objects, with a small index.
+
+The provider shows anonymous visitors only the current week (Monday to Sunday); older weeks and quarter views need
+a sign-in. Each run reads that week and merges it into the stored calendar quarters: events on the week's days are
+replaced, the rest of each quarter is kept as published before. The daily refresh runs Monday to Friday and the
+weekly one on Sunday, so each week is read after its weekday and Saturday results are out.
+"""
 import argparse
 from datetime import date, datetime, timedelta
 import gzip
@@ -16,7 +22,6 @@ import requests
 from chart_publication import R2Store, write_json
 
 SOURCE = 'https://earningspulse.ai/earnings'
-START = '2024-Q3'
 # Primary India index consumed by the frontend
 OUTPUT = Path(__file__).parent / 'public/data/results/index.json'
 # Output indices indexed by market to ensure 100% backward compatibility for IN
@@ -38,27 +43,31 @@ def quarter_bounds(label):
     return start, end
 
 
-def quarters_until(today):
-    start, _ = quarter_bounds(START)
-    labels = []
-    while start <= today:
-        label = f'{start.year}-Q{(start.month - 1) // 3 + 1}'
-        labels.append(label)
-        start = quarter_bounds(label)[1] + timedelta(days=1)
-    return labels
+def quarter_label(day):
+    return f'{day.year}-Q{(day.month - 1) // 3 + 1}'
 
 
-def parse_quarter(text, label, market='IN'):
-    """Read JSON values from Flight without executing scripts or assuming line IDs."""
+def event_key(row):
+    return (row['symbol'], row.get('quarter_label') or '', row['filing_day'])
+
+
+def parse_week(text, today, market='IN'):
+    """The provider's current week as (first day, last day, events), read from Flight without executing scripts."""
     def value(key):
         marker = json.dumps(key) + ':'
         return json.JSONDecoder().raw_decode(text[text.index(marker) + len(marker):])[0]
-    start, end = quarter_bounds(label)
     if value('fetchError') is not False:
         raise ValueError('Provider reported a fetch failure')
     dates = value('allDates')
-    if not isinstance(dates, list) or not dates or (dates[0], dates[-1]) != (start.isoformat(), end.isoformat()):
-        raise ValueError('Provider returned a different quarter')
+    try:
+        days = [date.fromisoformat(day) for day in dates]
+    except (TypeError, ValueError):
+        raise ValueError('Provider returned an invalid week') from None
+    start, end = days[0] if days else None, days[-1] if days else None
+    # Monday to Sunday around today (the provider's day may be a few hours off ours).
+    if (len(days) != 7 or start.weekday() != 0 or days != [start + timedelta(days=offset) for offset in range(7)]
+            or not start - timedelta(days=1) <= today <= end + timedelta(days=1)):
+        raise ValueError('Provider returned a different week')
     rows = value('results')
     if not isinstance(rows, list):
         raise ValueError('Invalid earnings collection')
@@ -75,7 +84,7 @@ def parse_quarter(text, label, market='IN'):
                 raise ValueError('Missing fiscal quarter on a published event')
             if not row['isUpcoming'] and not {'revenue', 'net_income', 'eps'}.issubset(row):
                 raise ValueError('Missing financial fields on a published event')
-        key = (row['symbol'], row.get('quarter_label') or '', row['filing_day'])
+        key = event_key(row)
         if key in unique and unique[key] != row:
             if market == 'US':
                 # In US market, multiple filings occur on the same day (e.g. PR vs 10-Q); retain newest by event_ts
@@ -90,60 +99,85 @@ def parse_quarter(text, label, market='IN'):
     rows = [unique[key] for key in sorted(unique)]
     # Reject NaN and Infinity before writing any objects.
     json.dumps(rows, allow_nan=False)
-    return rows
+    return start, end, rows
 
 
-def fetch_quarter(session, label, today, market='IN'):
-    start, _ = quarter_bounds(label)
-    anchor = start.replace(month=start.month + 1, day=15)
-    monday = today - timedelta(days=today.weekday())
-    params = dict(range='quarter', liquidity='all', market=market, week=(anchor - monday).days // 7)
+def fetch_week(session, today, market='IN'):
+    params = dict(liquidity='all', market=market)
     for attempt in range(2):
         try:
             response = session.get(SOURCE, params=params, headers={'RSC': '1'}, timeout=(10, 60))
             response.raise_for_status()
-            return parse_quarter(response.text, label, market=market)
+            return parse_week(response.text, today, market=market)
         except (requests.RequestException, ValueError, KeyError, TypeError):
             if attempt:
                 raise
             time.sleep(1)
 
 
-def refresh(output, store, fetch, *, today, checked_at, recheck_oldest=False):
+def load_records(session, item):
+    """The events of a published object, checked against its digest."""
+    response = session.get(item['url'], timeout=(10, 60))
+    response.raise_for_status()
+    if hashlib.sha256(response.content).hexdigest() != item['sha256']:
+        raise ValueError('Stored earnings object does not match its digest')
+    return json.loads(gzip.decompress(response.content))['records']
+
+
+def refresh(output, store, fetch, load, *, checked_at):
+    """Merge the provider's current week (fetch) into the stored quarters (load reads a published object)."""
     previous = json.loads(output.read_text()) if output.exists() else {'version': 1, 'quarters': {}}
     if previous.get('version') != 1 or not isinstance(previous.get('quarters'), dict):
         raise ValueError('Invalid earnings history index; refusing to discard it')
-    # An index that still names its source predates neutral publication: rewrite every quarter once.
-    legacy = 'source' in previous
     entries = dict(previous['quarters'])
-    labels = quarters_until(today)
-    selected = set(labels) if legacy else set(labels[-2:]) | (set(labels) - entries.keys())
-    older = [label for label in labels[:-2] if label in entries]
-    if recheck_oldest and older:
-        selected.add(min(older, key=lambda label: entries[label]['checkedAt']))
     report = {'checkedAt': checked_at, 'quarters': {}, 'errors': {}}
+    try:
+        start, end, rows = fetch()
+    except (requests.RequestException, ValueError, KeyError, TypeError) as error:
+        report['errors']['current-week'] = str(error)
+        print(f'WARNING: Earnings Pulse current week: {error}', flush=True)
+        return report
+    rows = [{key: value for key, value in row.items() if key not in PRIVATE_FIELDS} for row in rows]
+    if not rows:
+        # Nothing to merge (a quiet week, or a provider hiccup): what is stored for these days stays.
+        return report
     with tempfile.TemporaryDirectory(prefix='earningspulse-') as folder:
         objects = Path(folder)
 
         def pack(rows, label, status):
-            records = [{key: value for key, value in row.items() if key not in PRIVATE_FIELDS} for row in rows]
-            payload = dict(schemaVersion=1, calendarQuarter=label, status=status, records=records)
+            payload = dict(schemaVersion=1, calendarQuarter=label, status=status, records=rows)
             raw = json.dumps(payload, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()
             compressed = gzip.compress(raw, mtime=0)
             digest = hashlib.sha256(compressed).hexdigest()
             (objects / f'{digest}.json.gz').write_bytes(compressed)
             return {'sha256': digest, 'url': f'{store.base_url}/objects/{digest}.json.gz', 'count': len(rows)}
 
-        for label in sorted(selected):
+        for label in sorted({quarter_label(start), quarter_label(end)}):
             try:
-                rows = fetch(label)
-                published = [row for row in rows if not row['isUpcoming']]
+                fresh = [row for row in rows if quarter_label(date.fromisoformat(row['filing_day'])) == label]
+                symbols = {row['symbol'] for row in fresh}
                 old_entry = entries.get(label, {})
+                merged = {}
+                for status in ('published', 'upcoming'):
+                    kept, replaced = [], 0
+                    if status in old_entry:
+                        for row in load(old_entry[status]):
+                            day = date.fromisoformat(row['filing_day'])
+                            # This week's days come from the provider; an older announcement for a company that
+                            # reports this week is superseded.
+                            if start <= day <= end or (status == 'upcoming' and row['symbol'] in symbols):
+                                replaced += start <= day <= end
+                                continue
+                            kept.append(row)
+                    current = [row for row in fresh if row['isUpcoming'] == (status == 'upcoming')]
+                    if status == 'published' and len(current) < replaced / 2:
+                        raise ValueError("Fewer than half of this week's published events returned; retaining prior data")
+                    merged[status] = sorted(kept + current, key=event_key)
                 old_count = old_entry.get('published', {}).get('count', 0)
-                if old_count and len(published) < old_count / 2:
+                if old_count and len(merged['published']) < old_count / 2:
                     raise ValueError('Published record count dropped by more than half; retaining prior data')
-                entry = {'checkedAt': checked_at, 'published': pack(published, label, 'published'),
-                         'upcoming': pack([row for row in rows if row['isUpcoming']], label, 'upcoming')}
+                entry = {'checkedAt': checked_at, 'published': pack(merged['published'], label, 'published'),
+                         'upcoming': pack(merged['upcoming'], label, 'upcoming')}
                 unchanged = all(old_entry.get(key) == entry[key] for key in ('published', 'upcoming'))
                 report['quarters'][label] = 'unchanged' if unchanged else 'updated'
                 entries[label] = entry
@@ -162,7 +196,6 @@ def refresh(output, store, fetch, *, today, checked_at, recheck_oldest=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--recheck-oldest', action='store_true', help='Also refresh the least recently checked older quarter')
     parser.add_argument('--markets', nargs='+', default=['IN', 'US'], help='Markets to refresh (default: IN US)')
     args = parser.parse_args()
     now = datetime.now(ZoneInfo('Asia/Kolkata'))
@@ -174,8 +207,8 @@ def main():
             output_file = INDEX_BY_MARKET.get(market, Path(__file__).parent / f'public/data/results/{market.lower()}_index.json')
             try:
                 report = refresh(output_file, store,
-                                 lambda label, m=market: fetch_quarter(session, label, now.date(), market=m),
-                                 today=now.date(), checked_at=now.isoformat(), recheck_oldest=args.recheck_oldest)
+                                 lambda m=market: fetch_week(session, now.date(), market=m),
+                                 lambda item: load_records(session, item), checked_at=now.isoformat())
                 combined_report['markets'][market] = report
                 if report.get('errors'):
                     combined_report['errors'][market] = report['errors']

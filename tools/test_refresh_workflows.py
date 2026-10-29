@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
     "daily_refresh.yml": "73ca7a0c66c72c91ec47ddb0a6478fc8f17ddf84c75cbd4c4b93695235a473e2",
-    "weekly_eod2_refresh.yml": "a6170d7f6571c9a482023989c533a84b31d4dcfa4e46ee3e3eb1edfff3e5f6bb",
+    "weekly_eod2_refresh.yml": "26ba5a878f6bd5bf69706706828f8887b50728048f99f55922238e5bcc61631e",
 }
 
 

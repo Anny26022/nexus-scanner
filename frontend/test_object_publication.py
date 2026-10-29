@@ -284,8 +284,8 @@ class ObjectPublicationTests(unittest.TestCase):
                     self.assertIn('--checksum', args)
                     self.assertIn('content-type=application/gzip', args)
                     self.assertIn('cache-control=public,max-age=31536000,immutable', args)
-                    self.assertEqual(args[args.index('--transfers') + 1], '32')
-                self.assertEqual(args[args.index('--checkers') + 1], '32')
+                    self.assertEqual(args[args.index('--transfers') + 1], '64')
+                self.assertEqual(args[args.index('--checkers') + 1], '64')
                 calls.append(args[0])
             store.run = run
             with patch('chart_publication.subprocess.run', side_effect=AssertionError('full listing')):
@@ -338,11 +338,15 @@ class ObjectPublicationTests(unittest.TestCase):
             store = R2Store.__new__(R2Store); store.env = {}; store.bucket = 'test'
             checkpoints = []
             checked = []
+            copies = []
             def run(*args):
                 batch = Path(args[args.index('--files-from') + 1]).read_text().splitlines()
                 self.assertLessEqual(len(batch), 2)
-                if args[0] == 'copy' and len(checked) == 1:
-                    raise subprocess.CalledProcessError(1, args)
+                if args[0] == 'copy':
+                    copies.append(batch)
+                    # The second upload fails while the first batch's check may still be running.
+                    if len(copies) == 2:
+                        raise subprocess.CalledProcessError(1, args)
                 if args[0] == 'check':
                     checked.append(batch)
             store.run = run
@@ -359,6 +363,27 @@ class ObjectPublicationTests(unittest.TestCase):
             self.assertEqual(len(checked), 3)
             self.assertTrue(set(checked[0]).isdisjoint(set(checked[1] + checked[2])))
             self.assertEqual(set().union(*map(set, checked)), {path.name for path in root.glob('*.json.gz')})
+
+    def test_r2_failed_check_is_never_counted_as_verified_even_while_the_next_batch_uploads(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for index in range(5):
+                put_object(root, {'index': index})
+            store = R2Store.__new__(R2Store); store.env = {}; store.bucket = 'test'
+            checkpoints = []
+            checks = []
+            def run(*args):
+                if args[0] == 'check':
+                    checks.append(Path(args[args.index('--files-from') + 1]).read_text().splitlines())
+                    if len(checks) == 2:
+                        raise subprocess.CalledProcessError(1, args)
+            store.run = run
+            with patch('chart_publication.R2_VERIFY_BATCH_SIZE', 2), \
+                    patch.object(store, 'write_inventory', side_effect=lambda names: checkpoints.append(set(names))):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    store.upload_objects(root)
+            # Only the first batch passed its check, so only it was ever recorded as verified.
+            self.assertEqual(checkpoints, [set(checks[0])])
 
     def test_r2_object_command_failures_preserve_pointer_until_successful_retry(self):
         for failure in ('copy', 'check', 'copyto'):

@@ -58,6 +58,20 @@ class PipelineStateTests(unittest.TestCase):
         self.assertEqual(store.objects[f'pipeline-state/previous/{self.first}'], b'old')
         self.assertNotIn(f'pipeline-state/{self.second}', store.objects)  # not produced: R2 copy kept
 
+    def test_push_and_pull_handle_every_file(self):
+        for name in pipeline_state.FILES:
+            (self.directory / name).write_bytes(name.encode())
+        store = FakeStore({f'pipeline-state/{name}': b'old' for name in pipeline_state.FILES})
+        pipeline_state.push(store, self.directory)
+        for name in pipeline_state.FILES:
+            self.assertEqual(store.objects[f'pipeline-state/{name}'], name.encode())
+            self.assertEqual(store.objects[f'pipeline-state/previous/{name}'], b'old')
+        for name in pipeline_state.FILES:
+            (self.directory / name).write_bytes(b'stale')
+        pipeline_state.pull(store, self.directory)
+        for name in pipeline_state.FILES:
+            self.assertEqual((self.directory / name).read_bytes(), name.encode())
+
     def test_a_failed_read_back_stops_the_run(self):
         (self.directory / self.first).write_bytes(b'new')
         with self.assertRaisesRegex(RuntimeError, 'read-back mismatch'):

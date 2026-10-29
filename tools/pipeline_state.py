@@ -14,11 +14,14 @@ snapshots/.
 """
 import argparse
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PIPELINE = ROOT / 'DO NOT DELETE EDL PIPELINE'
 PREFIX = 'pipeline-state'
+# The files are independent; one at a time, their R2 round trips took about two and a half minutes.
+WORKERS = 8
 sys.path.insert(0, str(ROOT / 'frontend'))
 
 # Read by the next run (ledgers, archives, inputs to the build and publish phases). Kept in step with the
@@ -50,28 +53,40 @@ def stored_names(store):
     return set(listing.decode().split())
 
 
+def each_file(task):
+    """Run task for every file, several at once; the first failure is raised once all have finished."""
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        list(pool.map(task, FILES))
+
+
 def pull(store, directory=PIPELINE):
     present = stored_names(store)
-    for name in FILES:
+
+    def pull_one(name):
         if name in present:
             store.run('copyto', store.remote(f'{PREFIX}/{name}'), str(directory / name))
         else:
             print(f'{name}: not in R2 yet; using the committed copy', flush=True)
 
+    each_file(pull_one)
+
 
 def push(store, directory=PIPELINE):
     present = stored_names(store)
-    for name in FILES:
+
+    def push_one(name):
         local = directory / name
         if not local.exists():
             print(f'{name}: not produced by this run; R2 copy kept', flush=True)
-            continue
+            return
         key = f'{PREFIX}/{name}'
         if name in present:
             store.run('copyto', store.remote(key), store.remote(f'{PREFIX}/previous/{name}'))
         store.run('copyto', str(local), store.remote(key))
         if store.cache_command('cat', store.remote(key)) != local.read_bytes():
             raise RuntimeError(f'Pipeline state read-back mismatch: {key}')
+
+    each_file(push_one)
 
 
 def main(argv=None):

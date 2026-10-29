@@ -345,19 +345,14 @@ class R2Store:
         # exceeded the five-minute timeout before the daily upload even began.
         # --files-from with --no-traverse addresses only unverified paths.
         # Immutable copy rejects conflicts; download check verifies their bytes.
+        # Small objects are latency-bound, so 64 run at once. Each batch's check
+        # runs while the next batch uploads; a batch counts as verified, and is
+        # checkpointed, only once its own check has passed, in batch order.
         checkpointing = len(pending) > R2_VERIFY_BATCH_SIZE
-        for start in range(0, len(pending), R2_VERIFY_BATCH_SIZE):
-            batch = pending[start:start + R2_VERIFY_BATCH_SIZE]
-            print(f'R2 verifying objects {start + 1}-{start + len(batch)} of {len(pending)}', flush=True)
-            with tempfile.TemporaryDirectory() as folder:
-                names = Path(folder) / 'objects.txt'
-                names.write_text('\n'.join(batch) + '\n')
-                self.run('copy', str(source), remote, '--files-from', str(names), '--no-traverse',
-                         '--transfers', '32', '--checkers', '32',
-                         '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
-                         '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
-                self.run('check', str(source), remote, '--files-from', str(names), '--no-traverse',
-                         '--one-way', '--download', '--checkers', '32')
+
+        def settle(check, batch):
+            nonlocal checkpointing
+            check.result()
             verified.update(batch)
             if checkpointing:
                 try:
@@ -365,6 +360,28 @@ class R2Store:
                 except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
                     print(f'WARNING: R2 verification checkpoint not saved: {error}', flush=True)
                     checkpointing = False
+
+        with tempfile.TemporaryDirectory() as folder, ThreadPoolExecutor(max_workers=1) as checker:
+            checking = None
+            for start in range(0, len(pending), R2_VERIFY_BATCH_SIZE):
+                batch = pending[start:start + R2_VERIFY_BATCH_SIZE]
+                print(f'R2 verifying objects {start + 1}-{start + len(batch)} of {len(pending)}', flush=True)
+                names = Path(folder) / f'objects-{start}.txt'
+                names.write_text('\n'.join(batch) + '\n')
+                try:
+                    self.run('copy', str(source), remote, '--files-from', str(names), '--no-traverse',
+                             '--transfers', '64', '--checkers', '64',
+                             '--immutable', '--checksum', '--metadata', '--metadata-set', 'content-type=application/gzip',
+                             '--metadata-set', 'cache-control=public,max-age=31536000,immutable')
+                finally:
+                    # A failed upload still keeps the previous batch's checkpoint for the retry.
+                    if checking:
+                        settle(*checking)
+                        checking = None
+                checking = (checker.submit(self.run, 'check', str(source), remote, '--files-from', str(names),
+                                           '--no-traverse', '--one-way', '--download', '--checkers', '64'), batch)
+            if checking:
+                settle(*checking)
         return files
 
     def archive(self, previous, month):

@@ -5,9 +5,9 @@ import type {FilterChoices} from '../../frontend/src/types/filterChoices';
 import {GROQ_MODEL, PRIMARY_MODEL, FALLBACK_MODEL, compileWithFallback, compilerPrompt, type CompileModel, type InferenceInput} from './compiler';
 import {compilationCacheKey, readCompilation, storeCompilation} from './compilationCache';
 import {checkOrigin, corsHeaders, parseAllowedOrigins, withCors} from './cors';
-import {pointerKey, serveSiteData} from './siteData';
+import {pointerKey} from './siteData';
 import {pageRedirect} from './uiRedirect';
-import {authMode, denial, logAuth, verifyScannerToken} from '../auth/scannerToken.mjs';
+import {gateAskAi, serveGatedData, type Limiter} from './scannerGate';
 
 type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA' | 'AUTH_MODE' | 'SCANNER_TOKEN_PUBLIC_KEYS' | 'DATA_RATE_LIMITER'> & {
   /** Published data (wrangler.jsonc). Local development (wrangler.dev.jsonc) has none and reads frontend/public. */
@@ -23,15 +23,7 @@ type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA' | 'AUTH_MODE' | 'SCANNER_TOKE
   /** JSON {kid: base64url Ed25519 public key}, matching nexus-journal-api's signing key. */
   SCANNER_TOKEN_PUBLIC_KEYS?: string;
   /** Per-account limit on /data requests (token sub). */
-  DATA_RATE_LIMITER?: RateLimit;
-};
-
-const DATA_PREFLIGHT = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-  'Access-Control-Allow-Headers': 'Authorization',
-  // Browsers cap this (Chrome at 2 hours); each data URL is preflighted at most that often.
-  'Access-Control-Max-Age': '86400',
+  DATA_RATE_LIMITER?: Limiter;
 };
 
 const isObject = (v:unknown): v is Record<string,unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -59,7 +51,7 @@ async function readBody(request: Request | Response, maxBytes = 12000): Promise<
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname.startsWith('/data/') && env.DATA) return serveData(request, env, env.DATA);
+    if (url.pathname.startsWith('/data/') && env.DATA) return serveGatedData(request, env, env.DATA);
     if (url.pathname !== '/api/screener/ai-compile') {
       if (url.pathname.startsWith('/api/')) return json({error:'API route not found'},404);
       return pageRedirect(url.pathname, env.UI_REDIRECT, url.search) ?? env.ASSETS.fetch(request);
@@ -69,36 +61,11 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, {status:204, headers:decision.corsOrigin ? corsHeaders(decision.corsOrigin) : {}});
     }
-    // Ask AI spends model credits, so it is limited per account once a valid token is present (per address before).
-    let rateKey = request.headers.get('CF-Connecting-IP') || 'local';
-    const mode = authMode(env);
-    if (mode !== 'off') {
-      const result = await verifyScannerToken(request, env, 'ai');
-      logAuth(result, mode, 'ai');
-      const denied = denial(result, mode, decision.corsOrigin ? corsHeaders(decision.corsOrigin) : {});
-      if (denied) return denied;
-      if (result.status === 'valid') rateKey = `sub:${result.payload.sub}`;
-    }
-    return withCors(await compile(request, env, ctx, url, rateKey), decision);
+    const gate = await gateAskAi(request, env, decision.corsOrigin ? corsHeaders(decision.corsOrigin) : {});
+    if ('denied' in gate) return gate.denied;
+    return withCors(await compile(request, env, ctx, url, gate.rateKey), decision);
   },
 } satisfies ExportedHandler<WorkerEnv>;
-
-/** Published /data files, behind the Scanner token once AUTH_MODE is enforce. */
-async function serveData(request: Request, env: WorkerEnv, bucket: R2Bucket): Promise<Response> {
-  if (request.method === 'OPTIONS') return new Response(null, {status:204, headers:DATA_PREFLIGHT});
-  const mode = authMode(env);
-  if (mode !== 'off') {
-    const result = await verifyScannerToken(request, env, 'data');
-    logAuth(result, mode, 'data');
-    const denied = denial(result, mode, {'Access-Control-Allow-Origin': '*'});
-    if (denied) return denied;
-    if (result.status === 'valid' && env.DATA_RATE_LIMITER && !(await env.DATA_RATE_LIMITER.limit({key:result.payload.sub})).success) {
-      return Response.json({error:'Too many requests. Please slow down.'}, {status:429,
-        headers:{'Cache-Control':'no-store', 'Access-Control-Allow-Origin':'*', 'Retry-After':'60'}});
-    }
-  }
-  return serveSiteData(request, bucket);
-}
 
 async function compile(request: Request, env: WorkerEnv, ctx: ExecutionContext, url: URL, rateKey: string): Promise<Response> {
     if (request.method !== 'POST') return json({error:'Use POST to build a screen.'},405);

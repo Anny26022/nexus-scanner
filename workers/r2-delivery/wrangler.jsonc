@@ -13,6 +13,8 @@
   // Scanner tokens (workers/auth/scannerToken.mjs): "report" checks and logs, "enforce" refuses requests without a
   // valid token. SCANNER_TOKEN_PUBLIC_KEYS is {kid: base64url Ed25519 public key}, matching nexus-journal-api's key.
   "vars": { "AUTH_MODE": "report", "SCANNER_TOKEN_PUBLIC_KEYS": "{}" },
+  // Report mode logs each request's token status (scanner_auth); these logs are how the switch to enforce is judged.
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
   // Per account (token sub); namespaces 1001-1002 belong to the screener Worker.
   "ratelimits": [
     { "name": "DELIVERY_RATE_LIMITER", "namespace_id": "1004", "simple": { "limit": 600, "period": 60 } },

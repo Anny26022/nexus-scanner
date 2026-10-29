@@ -3,7 +3,7 @@ export declare const SCANNER_TOKEN_COOKIE: 'nexus_scanner';
 export type AuthMode = 'off' | 'report' | 'enforce';
 export interface ScannerTokenPayload {
   v: 1; kid: string; sub: string; aud: 'nexus-scanner'; scope: Array<'data' | 'ai'>;
-  src: 'launch' | 'bundle' | 'addon' | 'comp'; iat: number; exp: number;
+  src: 'launch' | 'combo'; iat: number; exp: number;
 }
 export type ScannerTokenResult =
   | { status: 'valid'; payload: ScannerTokenPayload }

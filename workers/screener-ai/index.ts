@@ -5,8 +5,11 @@ import type {FilterChoices} from '../../frontend/src/types/filterChoices';
 import {GROQ_MODEL, PRIMARY_MODEL, FALLBACK_MODEL, compileWithFallback, compilerPrompt, type CompileModel, type InferenceInput} from './compiler';
 import {compilationCacheKey, readCompilation, storeCompilation} from './compilationCache';
 import {checkOrigin, corsHeaders, parseAllowedOrigins, withCors} from './cors';
+import {pointerKey, serveSiteData} from './siteData';
 
-type WorkerEnv = Omit<Env, 'GROQ_API_KEY'> & {
+type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA'> & {
+  /** Published data (wrangler.jsonc). Local development (wrangler.dev.jsonc) has none and reads frontend/public. */
+  DATA?: R2Bucket;
   GROQ_API_KEY?: string;
   GROQ_MODEL?: string;
   /** Comma-separated browser origins, besides this Worker's own, that may call the AI endpoint. */
@@ -38,6 +41,7 @@ async function readBody(request: Request | Response, maxBytes = 12000): Promise<
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/data/') && env.DATA) return serveSiteData(request, env.DATA);
     if (url.pathname !== '/api/screener/ai-compile') {
       return url.pathname.startsWith('/api/') ? json({error:'API route not found'},404) : env.ASSETS.fetch(request);
     }
@@ -63,10 +67,13 @@ async function compile(request: Request, env: WorkerEnv, ctx: ExecutionContext, 
     if (!success) return json({error:'Too many requests. Please wait a minute before building another screen.'},429);
     const requestId = crypto.randomUUID();
     try {
-      const asset = await env.ASSETS.fetch(new Request(new URL('/data/ai-filter-choices.json',url)));
-      const data = await readBody(asset,300000);
+      // The pipeline publishes the catalogue with each release, just before current.json, so it matches the
+      // dataset browsers load. Locally it is frontend/public/data/ai-filter-choices.json.
+      const stored = env.DATA ? await env.DATA.get(pointerKey('ai-filter-choices.json')) : null;
+      const data = stored ? await readBody(new Response(stored.body),300000)
+        : env.DATA ? null : await readBody(await env.ASSETS.fetch(new Request(new URL('/data/ai-filter-choices.json',url))),300000);
       if (!isObject(data) || typeof data.revision !== 'string' || !/^[a-f0-9]{64}$/.test(data.revision) || !isObject(data.choices)) {
-        return json({error:'The published filter catalogue is unavailable. Please rebuild the app.'},503);
+        return json({error:'The published filter catalogue is unavailable. Please try again shortly.'},503);
       }
       if (isObject(body) && body.datasetRevision !== undefined && body.datasetRevision !== data.revision) {
         return json({error:'The dataset changed. Refresh the screener before building filters.'},409);

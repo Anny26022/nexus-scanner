@@ -71,14 +71,12 @@ DO NOT DELETE EDL PIPELINE/.scanner_cache/
 .wrangler/
 node_modules/
 worker-configuration.d.ts
-frontend/public/data/ai-filter-choices.json
 .dev.vars*
 !.dev.vars.example
 
 # Chart payloads are published through R2, never through Git.
 DO NOT DELETE EDL PIPELINE/chart_artifacts/
 frontend/public/data/charts/
-frontend/public/data/revisions/*/charts/
 
 # Shared immutable browser objects are delivered through R2.
 frontend/public/data/objects/
@@ -89,13 +87,24 @@ frontend/public/data/snapshots/
 reference/tijori/*
 !reference/tijori/tijori-overviews.json.gz
 !reference/tijori/summary.json
-# Exclude interrupted atomic publication writes.
-frontend/public/data/company/**/*.tmp
 
 # Optional source diagnostics are uploaded as Actions artifacts.
 frontend/earningspulse-refresh-report.json
-# Plain stock lists (~25 MiB, at the static-asset file limit) are served from R2; releases keep the gzip copies.
-frontend/public/data/revisions/*/stocks.json
 
 # Private pipeline notes, kept outside version control
 private-notes/
+
+# Published site data is served from R2 (frontend/site_data.py, workers/screener-ai/siteData.ts), never through
+# Git. Local publications (EDL_CHART_STORAGE=local) still write it here for the dev server.
+frontend/public/data/current.json
+frontend/public/data/sessions.json
+frontend/public/data/price-band-history.json
+frontend/public/data/ai-filter-choices.json
+frontend/public/data/revisions/
+frontend/public/data/results/
+frontend/public/data/heatmap/
+frontend/public/data/company/
+# Unreferenced local exports (export_data.py, older releases).
+frontend/public/data/stocks.json
+frontend/public/data/ipos.json
+frontend/public/data/universe-classification.json

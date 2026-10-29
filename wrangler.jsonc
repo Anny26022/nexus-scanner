@@ -16,10 +16,12 @@
   // Browser origins, besides this Worker's own, allowed to call the AI endpoint (Nexus Journal embeds the scanner).
   "vars": { "ALLOWED_ORIGINS": "https://www.nexusjournal.co.in,https://nexusjournal.co.in" },
   "observability": { "enabled": true, "head_sampling_rate": 1 },
-  // API requests reach the Worker; all other paths keep static SPA handling.
+  // Published data (/data/*) is read from R2 (workers/screener-ai/siteData.ts), so a refresh needs no rebuild.
+  "r2_buckets": [{ "binding": "DATA", "bucket_name": "nexus-screener-chart-data" }],
+  // API and data requests reach the Worker; all other paths keep static SPA handling.
   "assets": {
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"],
+    "run_worker_first": ["/api/*", "/data/*"],
     "directory": "./frontend/dist",
     "not_found_handling": "single-page-application"
   },
@@ -31,6 +33,8 @@
   "previews": {
     "vars": { "ALLOWED_ORIGINS": "https://*-aniketmahatobcom23-thceduins-projects.vercel.app,https://claude-scanner-embed.new-nexys-ultimate.pages.dev,http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://localhost:3000,http://localhost:4173" },
     "ai": { "binding": "AI" },
+    // Previews serve the production data read-only, as they did from the build's static files.
+    "r2_buckets": [{ "binding": "DATA", "bucket_name": "nexus-screener-chart-data" }],
     "ratelimits": [{
       "name": "AI_RATE_LIMITER",
       "namespace_id": "1002",

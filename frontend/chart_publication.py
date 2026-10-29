@@ -1,6 +1,6 @@
 """Bind a scanner release to validated chart objects before exposing current.json.
 
-R2 has no second mutable pointer. Git's current.json is the release authority.
+The release authority is current.json, which site_data.py publishes to R2 (site/data/current.json) last.
 Modern objects/ and releases/ prefixes persist; legacy daily/ expires at 90 days.
 """
 import gzip

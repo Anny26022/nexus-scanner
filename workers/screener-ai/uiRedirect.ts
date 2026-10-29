@@ -12,9 +12,13 @@ const SERVED_PREFIXES = ['/data/', '/api/'];
 
 export const isServedPath = (pathname: string) => SERVED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 
-/** A temporary redirect for a page request, or null when the request should be handled here. */
-export function pageRedirect(pathname: string, target: string | undefined): Response | null {
+/**
+ * A temporary redirect for a page request, or null when the request should be handled here. The query string
+ * travels along: shared screens are `?screen=…` links (frontend/src/utils/savedScreens.ts), and the journal's
+ * scanner page applies that parameter.
+ */
+export function pageRedirect(pathname: string, target: string | undefined, search = ''): Response | null {
   if (!target || isServedPath(pathname)) return null;
   // Temporary: the UI may come back here, and browsers must not cache the move.
-  return new Response(null, {status: 302, headers: {Location: target, 'Cache-Control': 'no-store'}});
+  return new Response(null, {status: 302, headers: {Location: target + search, 'Cache-Control': 'no-store'}});
 }

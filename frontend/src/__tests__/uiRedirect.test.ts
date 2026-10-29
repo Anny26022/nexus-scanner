@@ -12,6 +12,11 @@ it('sends a browser opening the Worker pages to the journal, without caching the
   }
 });
 
+it('carries the query string, so shared screen links still open the screen in the journal', () => {
+  expect(pageRedirect('/', journal, '?screen=eyJhIjoxfQ')?.headers.get('Location')).toBe(`${journal}?screen=eyJhIjoxfQ`);
+  expect(pageRedirect('/', journal, '')?.headers.get('Location')).toBe(journal);
+});
+
 it('leaves the data and API the journal fetches from this address untouched', () => {
   for (const path of ['/data/current.json', '/data/revisions/abc/stocks.json.gz', '/api/screener/ai-compile', '/api/other']) {
     expect(isServedPath(path), path).toBe(true);

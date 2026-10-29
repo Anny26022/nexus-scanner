@@ -47,7 +47,7 @@ export default {
     if (url.pathname.startsWith('/data/') && env.DATA) return serveSiteData(request, env.DATA);
     if (url.pathname !== '/api/screener/ai-compile') {
       if (url.pathname.startsWith('/api/')) return json({error:'API route not found'},404);
-      return pageRedirect(url.pathname, env.UI_REDIRECT) ?? env.ASSETS.fetch(request);
+      return pageRedirect(url.pathname, env.UI_REDIRECT, url.search) ?? env.ASSETS.fetch(request);
     }
     const decision = checkOrigin(request, parseAllowedOrigins(env.ALLOWED_ORIGINS));
     if (!decision.allowed) return json({error:'Cross-origin requests are not allowed.'},403);

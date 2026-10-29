@@ -39,9 +39,12 @@
   // traffic out of production's counters.
   "previews": {
     "vars": {
+      // preview.nexusjournal.co.in is the journal's fixed preview; it takes effect once the journal points its
+      // previews at a current Worker preview (scannerOrigin.ts still names an older, frozen one).
       "ALLOWED_ORIGINS": "https://preview.nexusjournal.co.in,https://*-aniketmahatobcom23-thceduins-projects.vercel.app,https://claude-scanner-embed.new-nexys-ultimate.pages.dev,http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://localhost:3000,http://localhost:4173",
-      // Preview addresses serve production data too, so their pages are sent to the journal's fixed preview.
-      "UI_REDIRECT": "https://preview.nexusjournal.co.in/scanner"
+      // Preview addresses serve production data too, so their pages go to the live journal; the journal's own
+      // preview does not always carry the scanner page.
+      "UI_REDIRECT": "https://www.nexusjournal.co.in/scanner"
     },
     "ai": { "binding": "AI" },
     // Previews serve the production data read-only, as they did from the build's static files.

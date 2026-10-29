@@ -57,6 +57,10 @@ jobs:
         working-directory: .
         run: python -m unittest discover -s tools -p test_pipeline_state.py -v
 
+      - name: Test stale data check
+        working-directory: .
+        run: python -m unittest discover -s tools -p test_stale_data_check.py -v
+
       - name: Test refresh workflow contracts
         working-directory: .
         run: |

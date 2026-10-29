@@ -57,6 +57,10 @@ jobs:
         working-directory: .
         run: python -m unittest discover -s tools -p test_pipeline_state.py -v
 
+      - name: Test journal R2 publication
+        working-directory: .
+        run: python -m unittest discover -s tools -p test_publish_site_data.py -v
+
       - name: Test refresh workflow contracts
         working-directory: .
         run: |

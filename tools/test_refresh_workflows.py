@@ -16,9 +16,10 @@ ROOT = Path(__file__).resolve().parents[1]
 # Full ordered steps, including backup policy, EOD2 caching and daily session registration.
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
+# Updated for the "Publish data to R2 for Nexus Journal" step after the commit (the only change).
 BASELINES = {
-    "daily_refresh.yml": "1b4cb15b9daccca3f572d1e5048ad39f69da167e003ea26c5e3766ddf9768a91",
-    "weekly_eod2_refresh.yml": "d727ca44362c6bc814816c9c0d0467b3f629d1aadd10348ca128b92201fcddb0",
+    "daily_refresh.yml": "3e40dddde3ae3745769559a46d3ee003e785389e1d1426b6519203e8a54f672c",
+    "weekly_eod2_refresh.yml": "57150ac0090bb27c155bec2f58e73fe6047339b992ef7c4b09ce25b6bc642f70",
 }
 
 
@@ -103,6 +104,21 @@ class RefreshWorkflowTests(unittest.TestCase):
                         expanded.append(step)
                 actual = hashlib.sha256(json.dumps(normalized(expanded), sort_keys=True).encode()).hexdigest()
                 self.assertEqual(actual, expected, json.dumps(normalized(expanded), indent=2))
+
+    def test_journal_r2_publication_runs_right_after_the_commit(self):
+        # After the commit, so a failed upload never holds back this site's data; with the same R2 settings as the
+        # chart upload, so it publishes to the bucket the journal reads.
+        for name in BASELINES:
+            with self.subTest(workflow=name):
+                job, = document('.github/workflows/' + name)['jobs'].values()
+                names = [step['name'] for step in job['steps']]
+                publish = job['steps'][names.index('Commit and Push Results') + 1]
+                self.assertEqual(publish['name'], 'Publish data to R2 for Nexus Journal')
+                self.assertEqual(publish['run'], 'python tools/publish_site_data.py')
+                self.assertNotIn('if', publish)
+                self.assertNotIn('continue-on-error', publish)
+                build, = [step for step in job['steps'] if step['name'] == 'Build and publish validated data']
+                self.assertEqual(publish['env'], {key: value for key, value in build['env'].items() if key.startswith('R2_')})
 
     def test_dhan_refresh_is_bounded_and_preserves_the_main_refresh_on_failure(self):
         job, = document('.github/workflows/weekly_eod2_refresh.yml')['jobs'].values()

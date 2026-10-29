@@ -225,7 +225,8 @@ class RefreshWorkflowTests(unittest.TestCase):
     def test_revision_watch_copy_follows_the_release_without_failing_the_refresh(self):
         for name in ('daily_refresh.yml', 'weekly_eod2_refresh.yml', 'publish_revision_watch.yml'):
             with self.subTest(workflow=name):
-                job, = document('.github/workflows/' + name)['jobs'].values()
+                workflow = document('.github/workflows/' + name)
+                job, = workflow['jobs'].values()
                 names = [step['name'] for step in job['steps']]
                 step = job['steps'][names.index('Publish revision watch copy')]
                 self.assertEqual(step['uses'], './.github/actions/publish-revision-watch')
@@ -235,6 +236,8 @@ class RefreshWorkflowTests(unittest.TestCase):
                 })
                 self.assertNotIn('if', step)
                 if name == 'publish_revision_watch.yml':
+                    # The manual run is the first deploy and the re-sync after a failed copy. YAML 1.1 reads `on` as True.
+                    self.assertEqual(workflow.get('on', workflow.get(True)), {'workflow_dispatch': None})
                     self.assertNotIn('continue-on-error', step)
                     continue
                 # Right after the step that makes the release live, and never fails a published refresh.

@@ -6,6 +6,7 @@ import {GROQ_MODEL, PRIMARY_MODEL, FALLBACK_MODEL, compileWithFallback, compiler
 import {compilationCacheKey, readCompilation, storeCompilation} from './compilationCache';
 import {checkOrigin, corsHeaders, parseAllowedOrigins, withCors} from './cors';
 import {pointerKey, serveSiteData} from './siteData';
+import {pageRedirect} from './uiRedirect';
 
 type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA'> & {
   /** Published data (wrangler.jsonc). Local development (wrangler.dev.jsonc) has none and reads frontend/public. */
@@ -14,6 +15,8 @@ type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA'> & {
   GROQ_MODEL?: string;
   /** Comma-separated browser origins, besides this Worker's own, that may call the AI endpoint. */
   ALLOWED_ORIGINS?: string;
+  /** Where a browser opening this Worker's own pages is sent (see uiRedirect.ts); unset in local development. */
+  UI_REDIRECT?: string;
 };
 
 const isObject = (v:unknown): v is Record<string,unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -43,7 +46,8 @@ export default {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/data/') && env.DATA) return serveSiteData(request, env.DATA);
     if (url.pathname !== '/api/screener/ai-compile') {
-      return url.pathname.startsWith('/api/') ? json({error:'API route not found'},404) : env.ASSETS.fetch(request);
+      if (url.pathname.startsWith('/api/')) return json({error:'API route not found'},404);
+      return pageRedirect(url.pathname, env.UI_REDIRECT, url.search) ?? env.ASSETS.fetch(request);
     }
     const decision = checkOrigin(request, parseAllowedOrigins(env.ALLOWED_ORIGINS));
     if (!decision.allowed) return json({error:'Cross-origin requests are not allowed.'},403);

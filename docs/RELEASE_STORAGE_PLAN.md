@@ -7,7 +7,7 @@ change. No published revision, URL, schema, formula or missing-data policy chang
 
 Read-only Cloudflare inspection identified `nexus-scanner` as asset-only
 (`has_assets=true`, `has_modules=false`), with no custom Worker domain configured.
-The deployed site is https://nexus-scanner.aniketmahato26.workers.dev/.
+The Worker is deployed at https://nexus-scanner.aniketmahato26.workers.dev/, serving `/data/*` and `/api/*`; its pages redirect to https://www.nexusjournal.co.in/scanner, where the screener is used (`UI_REDIRECT` in `wrangler.jsonc`).
 Its served entry asset, `/assets/index-CVC4Ix5y.js`, explicitly uses `/api` as the
 scanner fallback base; no external API base was compiled into that expression.
 

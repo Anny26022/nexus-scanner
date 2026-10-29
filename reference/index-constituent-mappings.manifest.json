@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-10-29T13:03:47.355131+00:00",
+  "generated_at": "2026-10-29T17:08:35.695563+00:00",
   "requested_indices": 140,
-  "available": 132,
-  "unavailable": 8,
+  "available": 128,
+  "unavailable": 12,
   "file": "reference/index-constituent-mappings.json.gz",
   "runtime_integration": false,
   "changed": true

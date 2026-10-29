@@ -1,5 +1,6 @@
 import type {AiFilterDefinition} from '../../frontend/src/api/aiFilterCatalog';
 import {isIntegerParameter} from '../../frontend/src/utils/conditionValidation';
+import {isClassificationFilter} from '../../frontend/src/data/classification';
 
 export interface CompactParameter {
   t: string;
@@ -23,7 +24,7 @@ export function compactCatalog(catalog: AiFilterDefinition[], query?: string) {
   const q = query?.toLowerCase() ?? '';
   const parameterSets = catalog.map(def => Object.fromEntries(def.parameters.map(p => {
     let options = p.options;
-    if (query && options && options.length > 8 && ['INDUSTRY', 'SECTOR', 'INDEX_MEMBERSHIP'].includes(def.id)) {
+    if (query && options && options.length > 8 && (isClassificationFilter(def.id) || ['INDUSTRY', 'SECTOR', 'INDEX_MEMBERSHIP'].includes(def.id))) {
       const matched = q ? options.filter(o => q.includes(String(o.value).toLowerCase())) : [];
       const fallback = options.slice(0, 6);
       options = Array.from(new Set([...matched, ...fallback]));

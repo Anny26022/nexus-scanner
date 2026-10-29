@@ -17,6 +17,7 @@ from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from chart_publication import chart_preflight, charts_enabled, complete_release
 from session_history import archive_daily_snapshot, offload_plain_snapshot, register_session
+from site_data import publish_site
 from revision_retention import retain_revisions
 from etf_snapshot import build_etf_snapshot, prune_etf_snapshots
 import price_band_history
@@ -495,6 +496,8 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
         except OSError as error:
             print(f'WARNING: rotation ledger was not saved: {error}', flush=True)
     register_session(output / 'sessions.json', session_record)
+    # The site reads /data from R2: revision files, the AI catalogue, sessions, and current.json last.
+    publish_site(output, manifest)
     # Only once the new release is live: keep it and the one tabs may still be on.
     if previous_revision != manifest['revision']:
         removed = retain_revisions(output, manifest['revision'], previous_revision)

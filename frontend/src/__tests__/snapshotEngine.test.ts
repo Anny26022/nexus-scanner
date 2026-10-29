@@ -26,7 +26,7 @@ it('derives sorted choices from the same cached revision, without duplicates or 
  const choices=await run({type:'filterChoices',source});
  expect(loader).toHaveBeenCalledTimes(1);
  expect(choices).toEqual({type:'filterChoices', result:{SECTOR:['Technology'],INDUSTRY:['Software'],
-   SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:['Nifty 50','NIFTY 500']}});
+   SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:['Nifty 50','NIFTY 500'],SCAN_COUNTS:expect.any(Object)}});
  const changed=await run({type:'filterChoices',source:{...source,revision:'b'.repeat(64)}});
  expect(changed.type).toBe('filterChoices');
  expect(loader).toHaveBeenCalledTimes(2);
@@ -40,7 +40,7 @@ it('preserves historical classifications instead of rewriting a loaded revision'
  const run=createSnapshotEngine(async()=>data);
  const result=await run({type:'filterChoices',source});
  expect(result).toEqual({type:'filterChoices',result:{
-   SECTOR:['Consumer Goods','Healthcare'],INDUSTRY:['Test'],SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:[],
+   SECTOR:['Consumer Goods','Healthcare'],INDUSTRY:['Test'],SERIES:['EQ'],PRICE_BAND:['20'],INDEX_MEMBERSHIP:[],SCAN_COUNTS:expect.any(Object),
  }});
  expect(data.stocks[0].sector).toBe('Healthcare');
 });
@@ -116,6 +116,16 @@ it('fetches and decodes advertised gzip snapshots',async()=>{
  vi.stubGlobal('DecompressionStream',(await import('node:stream/web')).DecompressionStream);
  vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(compressed)));
  const result=await createSnapshotEngine()({type:'screen',source:{...source,url:'/stocks.json.gz'},request});
+ expect(result.type==='screen'&&result.result?.matchCount).toBe(snapshot.totalStocks);
+});
+it('loads a packed session archive from its versioned URL',async()=>{
+ const {stocks,...metadata}=snapshot, keys=Object.keys(stocks[0]);
+ const packed={...metadata,stockEncoding:'columnar-v1',nestedTables:{},
+  stocksTable:{keys,values:stocks.map(stock=>keys.map(key=>stock[key as keyof typeof stock])),missing:stocks.map(()=>[])}};
+ vi.stubGlobal('DecompressionStream',(await import('node:stream/web')).DecompressionStream);
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(gzipSync(JSON.stringify(packed)))));
+ const url=`https://data.example.com/snapshots/${snapshot.asOfDate}.json.gz?v=${snapshot.revision.slice(0,16)}`;
+ const result=await createSnapshotEngine()({type:'screen',source:{...source,url,sessionDate:snapshot.asOfDate},request});
  expect(result.type==='screen'&&result.result?.matchCount).toBe(snapshot.totalStocks);
 });
 it('rejects snapshot session mismatches',async()=>{

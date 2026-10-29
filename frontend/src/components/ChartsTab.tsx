@@ -8,7 +8,7 @@ import { aggregate, type Candle, type EmaLine, type Interval } from '../chart/mo
 import { DrawingBook } from '../chart/drawings';
 import { DrawingToolbar } from './DrawingToolbar';
 import { DrawingContextToolbar } from './DrawingContextToolbar';
-import { EMA_PREFS_KEY, loadEmaLines } from './EmaSettings';
+import { loadEmaLines, saveEmaLines } from './EmaSettings';
 import { ChartLegend, updateCandleValues, type ChartMetrics } from './ChartLegend';
 import { ChartDialog } from './ChartDialog';
 import { ChartContextMenu } from './ChartContextMenu';
@@ -542,7 +542,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
         onApplyEmaLines={lines => {
           updateEmaLines(lines);
           setIndicatorsOpen(false);
-          try { localStorage.setItem(EMA_PREFS_KEY, JSON.stringify(lines)); } catch { /* ignore */ }
+          saveEmaLines(lines);
         }}
         onApplyAppearance={applyAppearance}
         fundamentals={studyConfigs.fundamentals}
@@ -579,7 +579,7 @@ function ChartScene({candles, daily, symbol, book, firstDate, lastDate,metrics,s
         onApplyConfigs={applyStudyConfigs}
         onApplyEmaLines={lines => {
           updateEmaLines(lines);
-          try { localStorage.setItem(EMA_PREFS_KEY, JSON.stringify(lines)); } catch { /* ignore */ }
+          saveEmaLines(lines);
         }}
         onApplyAppearance={applyAppearance}
         onClose={() => setActiveIndicatorSetting(null)}

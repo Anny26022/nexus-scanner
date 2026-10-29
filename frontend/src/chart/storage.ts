@@ -5,40 +5,28 @@ import {
   type WorkspaceSlot,
   type WorkspacePane,
 } from 'openalgo-charts/workspace';
-import { DrawingBook, anchors, validDrawing } from './drawings';
+import { DrawingBook, anchors, validDrawing, validDrawingStyle, type DrawingStyleMemory } from './drawings';
 import { validEmaLine, type EmaLine, type Interval } from './model';
 import { defaultStudies, type ChartStudies } from './studies';
 import type { ChartAppearance, ChartStyle } from './ChartEngine';
 import { chartLayout, CHART_LAYOUTS, MAX_CHARTS, type SyncOptions } from './layouts';
 
-const prefix = 'nexus.chart.';
-let warning = '';
-const listeners = new Set<()=>void>();
-export const chartStorage = {
-  subscribe: (listener: () => void) => {
-    listeners.add(listener);
-    return () => { listeners.delete(listener); };
-  },
-  getSnapshot: () => warning,
-};
+import { readStored, removeStored, storageHealth, writeStored } from '../storage/store';
+
+/** Chart preferences share the app's one storage module, under their own prefix. */
+export const CHART_PREFIX = 'nexus.chart.';
+export const chartStorage = storageHealth;
 
 export function readChartStorage(key: string): unknown {
-  try { return JSON.parse(localStorage.getItem(prefix + key) ?? 'null'); } catch { return null; }
+  return readStored<unknown>(CHART_PREFIX + key, null);
 }
 
 export function writeChartStorage(key: string, value: unknown): boolean {
-  try {
-    localStorage.setItem(prefix + key, JSON.stringify(value));
-    if (warning) {
-      warning = '';
-      for (const listener of listeners) listener();
-    }
-    return true;
-  } catch {
-    warning = 'Browser storage is unavailable or full. Chart changes are not being saved.';
-    for (const listener of listeners) listener();
-    return false;
-  }
+  return writeStored(CHART_PREFIX + key, value);
+}
+
+export function removeChartStorage(key: string): void {
+  removeStored(CHART_PREFIX + key);
 }
 
 export const validSymbol = (symbol: unknown): symbol is string =>
@@ -320,6 +308,18 @@ export function importWorkspaceDocumentJson(jsonString: string): SavedLayout | n
 }
 
 const books = new Map<string, DrawingBook>();
+const STYLE_KEY = 'drawing-styles.v1';
+/** The colour, width and dash last chosen for each drawing tool, applied to the next drawing of that kind. */
+export const drawingStyles: DrawingStyleMemory = {
+  get: kind => {
+    const saved = (readChartStorage(STYLE_KEY) as Record<string, unknown> | null)?.[kind];
+    return validDrawingStyle(saved) ? saved : undefined;
+  },
+  set: (kind, style) => {
+    const all = readChartStorage(STYLE_KEY);
+    writeChartStorage(STYLE_KEY, {...(all && typeof all === 'object' ? all : {}), [kind]: style});
+  },
+};
 export function savedDrawingBook(symbol: string): DrawingBook {
   let book = books.get(symbol);
   if (!book) {
@@ -330,7 +330,9 @@ export function savedDrawingBook(symbol: string): DrawingBook {
     const drawings = Array.isArray(raw) && raw.length <= 500 && raw.every(validDrawing) && new Set(raw.map(d => d.id)).size === raw.length
       ? raw.map(d => ({ ...d, version: 2 as const, points: [...anchors(d)] }))
       : [];
-    book = new DrawingBook(drawings, d => writeChartStorage(`drawings.${symbol}.v2`, { version: 2, drawings: d }));
+    // A symbol with no drawings keeps no key, so storage does not fill with empty books.
+    book = new DrawingBook(drawings, d => d.length ? writeChartStorage(`drawings.${symbol}.v2`, { version: 2, drawings: d })
+      : removeChartStorage(`drawings.${symbol}.v2`), drawingStyles);
     books.set(symbol, book);
   }
   return book;

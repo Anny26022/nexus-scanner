@@ -10,7 +10,7 @@ import {
 import { screenerApi } from '../api/screenerApi';
 import { NEXUS_CONDITION_CATALOG } from '../data/conditionCatalog';
 import { isAvailableCondition } from '../utils/filterAvailability';
-import { PRESET_CATALOG } from '../data/presetCatalog';
+import { PRESET_CATALOG, rankedMetric, recipeMetrics } from '../data/presetCatalog';
 import { explainCondition, explainExpressionTree } from '../utils/nqlParser';
 import { ResultsTable } from './ResultsTable';
 import { ScreenerModal } from './ScreenerModal';
@@ -127,7 +127,14 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
 
   useNextScreenPage('screenRun', runRequest, data, !hasUnavailable && !isFetching && !isError);
 
+  // Library scans built on published performance show that performance as a column.
+  const scanColumns = useMemo(() => [...new Set(Object.values(activeConditionsMap)
+    .flatMap(condition => recipeMetrics(condition.conditionId)).map(metric => `tv.${metric}`))], [activeConditionsMap]);
   const handleApply = (newMap: Record<string, ActiveCondition>, newMatchMode: MatchMode) => {
+    // A newly added ranked scan reads as a leaderboard: order by the metric it ranks on.
+    const before = new Set(Object.values(activeConditionsMap).map(condition => condition.conditionId));
+    const ranked = Object.values(newMap).map(condition => !before.has(condition.conditionId) && rankedMetric(condition.conditionId)).find(Boolean);
+    if (ranked) setSort({field: `tv.${ranked}`, direction: 'desc'});
     setAiDraft(null);
     setActiveConditionsMap(newMap);
     setMatchMode(newMatchMode);
@@ -268,7 +275,7 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
       loadExportRows={()=>screenerApi.getExportRows({...runRequest,datasetRevision:data?.immutableRevision ?? datasetRevision})}
       page={page} pageSize={pageSize}
       symbolSearch={symbolSearch} onSymbolSearchChange={value => {setSymbolSearch(value); setPage(1);}}
-      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={setPageSize} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} onOpenFullChart={onOpenFullChart}
+      onRetry={() => void refetch()} onPageChange={setPage} onPageSizeChange={setPageSize} onSortChange={(field, direction) => {setSort({field, direction}); setPage(1);}} currentSort={sort} pinnedColumns={scanColumns} onOpenFullChart={onOpenFullChart}
       resultView={resultView} onResultViewChange={setResultView} />}
     {showBacktest && isScanHistoryOpen && (
       <div id="backtest-history" className="backtest-section">

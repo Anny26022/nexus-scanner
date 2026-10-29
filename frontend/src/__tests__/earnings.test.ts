@@ -24,8 +24,9 @@ describe('earnings', () => {
     expect(summary.reported).toBe(3);
   });
 
-  it('falls back to the provider sector and puts Unclassified last', () => {
-    const groups = groupRecords([rec('A', {sector: 'Banks'}), rec('B'), rec('C', {sector: 'Banks'})], 'sector', () => undefined);
+  it('groups by Nexus classification, never the feed label, and puts Unclassified last', () => {
+    const groups = groupRecords([rec('A', {sector: 'Feed Sector'}), rec('B', {sector: 'Feed Sector'}), rec('C')], 'sector',
+      symbol => symbol === 'B' ? undefined : {sector: 'Banks'});
     expect(groups.map(group => [group.label, group.records.length])).toEqual([['Banks', 2], [UNCLASSIFIED, 1]]);
   });
 

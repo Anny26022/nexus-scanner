@@ -60,7 +60,7 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fetcher.requests, 2)
         self.assertGreaterEqual(elapsed, 2)
 
-    async def run_refresh(self, status, compressed=False, new_stock=False, candidate=False, recovered=False, last_modified=False, sitemap_status=200, cached_sitemap=False, new_unmapped=False, bad_sitemap=False):
+    async def run_refresh(self, status, compressed=False, new_stock=False, candidate=False, recovered=False, last_modified=False, sitemap_status=200, cached_sitemap=False, new_unmapped=False, bad_sitemap=False, offloaded=False):
         with TemporaryDirectory() as folder:
             root = Path(folder)
             url = exporter.BASE + '/company/test/'
@@ -86,6 +86,12 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
                 stocks.append({'symbol': 'NEW', 'name': 'Other'})
             (public / 'current.json').write_text(json.dumps({'sessionDate': '2026-10-07', 'revision': 'new', 'datasetUrl': '/data/stocks.json', 'totalStocks': len(stocks)}))
             (public / 'stocks.json').write_text(json.dumps({'stocks': stocks}))
+            if offloaded:
+                manifest = json.loads((public / 'current.json').read_text())
+                manifest.update(datasetUrl='https://data.example/releases/new/stocks.json', datasetGzipUrl='/data/stocks.json.gz')
+                (public / 'current.json').write_text(json.dumps(manifest))
+                (public / 'stocks.json.gz').write_bytes(gzip.compress((public / 'stocks.json').read_bytes()))
+                (public / 'stocks.json').unlink()
             calls = []
             async def handler(request):
                 calls.append(request)
@@ -157,6 +163,13 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data['metadata']['universeRevision'], 'new')
         self.assertEqual({r['symbol'] for r in data['records']}, {'TEST', 'NEW'})
         self.assertTrue(all(r['status'] == 'available' for r in data['records']))
+
+    async def test_refresh_reads_retained_gzip_when_plain_snapshot_is_offloaded(self):
+        data, calls = await self.run_refresh(304, compressed=True, new_stock=True, offloaded=True)
+        self.assertEqual(data['metadata']['universeRevision'], 'new')
+        self.assertEqual({r['symbol'] for r in data['records']}, {'TEST', 'NEW'})
+        self.assertTrue(all(r['status'] == 'available' for r in data['records']))
+        self.assertTrue(all(request.url.host == 'www.tijorifinance.com' for request in calls))
 
     async def test_visible_html_snapshot_and_watch_are_extracted(self):
         html = """<p class="symbol">AMAGI</p>

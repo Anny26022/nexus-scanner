@@ -33,5 +33,7 @@
   "market.average_volume90": "average_volume_90d_calc",
   "technicals.ema9": "EMA9",
   "market.performance_1m_pct": "Perf.1M",
-  "market.performance_3m_pct": "Perf.3M"
+  "market.performance_3m_pct": "Perf.3M",
+  "market.performance_6m_pct": "Perf.6M",
+  "market.performance_1y_pct": "Perf.Y"
 }

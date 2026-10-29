@@ -130,12 +130,11 @@
   .screen-buttons .backtest-trigger { margin-left: auto; padding-inline: 8px; }
   .workspace-description { display: none; }
   .workspace-breadcrumb { display: none; }
-  .session-label { display: none; }
   .workspace h1 { font-size: 16px; }
   .research-view { gap: 0; }
   .screen-controls {
     flex-shrink: 0;
-    padding: 8px 12px;
+    padding: 12px 14px;
     border: 0;
     border-bottom: 1px solid var(--line);
     border-radius: 0;
@@ -146,10 +145,11 @@
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto;
     align-items: center;
-    gap: 6px 8px;
+    gap: 12px 8px;
   }
+  /* Query and universe share one row: the query takes the room, the universe is a compact pill. */
   .query-control {
-    grid-column: 1 / -1;
+    grid-column: 1;
     grid-row: 1;
     width: 100%;
     min-width: 0;
@@ -157,45 +157,47 @@
   }
   .screen-controls .query-control .field-label { display: none; }
   .screen-controls .query-input {
-    height: 38px;
-    padding: 0 12px;
+    height: 34px;
+    padding: 0 10px;
     border-radius: var(--radius-md);
     background: var(--field);
-    gap: 8px;
+    gap: 6px;
   }
-  .screen-controls .query-input input { font-size: 13px; }
+  .screen-controls .query-input input { font-size: 12.5px; }
   .screen-controls .query-input > svg { width: 14px; height: 14px; color: var(--muted); }
   .universe-control {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
     min-width: 0;
   }
   .field-label { font-size: 10px; }
   .universe-label-row { display: none; }
   .select-wrap select {
-    height: 36px;
-    padding: 0 28px 0 12px;
-    font-size: 13px;
-    border-radius: var(--radius-md);
+    height: 34px;
+    min-height: 34px;
+    padding: 0 24px 0 10px;
+    font-size: 12px;
+    border-radius: 999px;
     background: var(--field);
-    font-weight: 500;
+    font-weight: 600;
   }
-  .select-wrap > svg { top: 11px; right: 10px; }
+  .select-wrap > svg { top: 10px; right: 8px; width: 13px; height: 13px; }
+  .universe-control > .select-wrap { width: 112px; }
   .screen-buttons {
     grid-column: 1 / -1;
-    grid-row: 3;
+    grid-row: 2;
     width: 100%;
     display: flex;
     align-items: center;
     margin: 0;
-    gap: 5px;
+    gap: 2px;
   }
   .screen-buttons .button {
-    min-height: 36px;
-    height: 36px;
-    padding-inline: 11px;
-    font-size: 13px;
+    min-height: 32px;
+    height: 32px;
+    padding-inline: 12px;
+    font-size: 12.5px;
     gap: 5px;
   }
   .screen-buttons .button > svg { width: 13px; height: 13px; }
@@ -204,11 +206,15 @@
     font-size: 11px;
     color: var(--muted);
   }
+  /* Text actions on the left; the icon actions and Run gather on the right. */
+  .screen-buttons .toolbar-icon-button:not(.backtest-trigger) { margin-left: auto; }
+  .screen-buttons .backtest-trigger { margin-left: 0; }
+  .screen-buttons .button-primary { order: 1; margin-left: 6px; }
   .active-filters {
     flex-wrap: nowrap;
     overflow-x: auto;
-    margin-top: 6px;
-    gap: 5px;
+    margin-top: 12px;
+    gap: 6px;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 2px;
@@ -571,6 +577,20 @@
   .filter-row:not([data-preset="true"]) > label > span, .filter-row[data-preset="true"] > label > span { font-size: 13px; }
   .filter-row input[type="checkbox"] { width: 18px; height: 18px; }
   .filter-row .preset-info-button { width: 36px; height: 36px; margin-top: 0; }
+  .filter-row:has(> .filter-save-button) { grid-template-columns: minmax(0, 1fr) 36px 36px; }
+  .filter-row:not([data-preset="true"]) > .filter-save-button { grid-column: 3; margin-left: 0; }
+  .scan-library-bar { margin: -10px -14px 4px; padding: 10px 14px 8px; top: -10px; }
+  .scan-library-search { max-width: none; }
+  .scan-library-tabs .filter-category-btn { min-height: 34px; }
+  .scan-grid { grid-template-columns: minmax(0, 1fr); }
+  .scan-elig-row { flex-wrap: wrap; gap: 6px 8px; }
+  .scan-elig .scan-elig-chip { height: 30px; font-size: 12px; }
+  .scan-elig .scan-elig-chip input[type="number"] { min-height: 0; height: 24px; font-size: 13px; width: 52px; }
+  .scan-elig-name { flex: 1 1 auto; }
+  .scan-elig-rules { order: 3; flex-basis: 100%; }
+  .scan-save-form { flex-wrap: wrap; }
+  .scan-save-form input { flex-basis: 100%; max-width: none; height: 38px; }
+  .dialog-footer .button svg { display: none; }
   .preset-info-button::after { display: none; }
   .filter-parameters button, .ma-rule-picker button, .add-filter-rule { min-height: 36px; font-size: 13px; }
   .filter-row select { max-width: min(240px, calc(100vw - 48px)); }
@@ -616,7 +636,13 @@
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   button:not(:disabled):active { transform: none; }
 }
-@media (prefers-reduced-transparency: reduce) { .dialog::backdrop { background: rgb(15 23 31 / 85%); } }
+@media (prefers-reduced-transparency: reduce) {
+  .dialog-backdrop, .chart-modal-backdrop, .app-sidebar, .rot-tip {
+    background: var(--surface) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
 @media (prefers-contrast: more) {
   :root { --muted: var(--secondary); --line: var(--line-strong); }
   .button-secondary, input, select { border-color: var(--secondary); }

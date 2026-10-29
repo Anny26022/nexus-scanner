@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import unittest
+import unittest.mock
 
 import yaml
 
@@ -16,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "0f6d8278a624a63226a1df7bc43935a04fd4ffea29f29445555477736316ebbd",
-    "weekly_eod2_refresh.yml": "83a13cb5bba166cb3039b43a8bc5c7edeb753bd94e4b0ba711716ad84a04babe",
+    "daily_refresh.yml": "73ca7a0c66c72c91ec47ddb0a6478fc8f17ddf84c75cbd4c4b93695235a473e2",
+    "weekly_eod2_refresh.yml": "26ba5a878f6bd5bf69706706828f8887b50728048f99f55922238e5bcc61631e",
 }
 
 
@@ -172,9 +173,7 @@ class RefreshWorkflowTests(unittest.TestCase):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
         fake_git = "git() { printf '%s\\0' \"$@\"; printf '\\n'; };\n"
-        # The Earnings Pulse index is staged only once it exists in the checkout.
-        optional = int((ROOT / 'frontend/public/data/results/index.json').is_file())
-        for weekly, additions in [('false', 3 + optional), ('true', 6 + optional)]:
+        for weekly, additions in [('false', 2), ('true', 4)]:
             with self.subTest(weekly=weekly):
                 message = 'literal $(false) commit message'
                 env = dict(os.environ, WEEKLY_REFRESH=weekly, REFRESH_COMMIT_MESSAGE=message)
@@ -183,13 +182,42 @@ class RefreshWorkflowTests(unittest.TestCase):
                 calls = [line.rstrip('\0').split('\0') for line in result.stdout.splitlines()]
                 self.assertEqual(sum(call[0] == 'add' for call in calls), additions)
                 self.assertEqual(['add', 'reference/dhan/group-stocks.json'] in calls, weekly == 'true')
-                self.assertTrue(any(call[0] == 'add' and 'frontend/public/data/price-band-history.json' in call for call in calls))
                 self.assertIn(['reset', '--mixed', 'origin/main'], calls)
                 self.assertIn(['commit', '-m', message], calls)
                 self.assertEqual(calls[-1], ['push'])
                 # Carried-over pipeline files go to R2 (tools/pipeline_state.py), never into Git history.
                 staged = {path for call in calls if call[0] == 'add' for path in call[1:]}
                 self.assertFalse(any(path.startswith('DO NOT DELETE EDL PIPELINE/') for path in staged))
+                # Published site data goes to R2 (frontend/site_data.py) and is served without a rebuild.
+                self.assertTrue(staged and all(path.startswith('reference/') for path in staged))
+
+    def test_site_data_is_pulled_before_the_build_and_its_indexes_published_before_the_commit(self):
+        for name in ('daily_refresh.yml', 'weekly_eod2_refresh.yml'):
+            with self.subTest(workflow=name):
+                job, = document('.github/workflows/' + name)['jobs'].values()
+                names = [step['name'] for step in job['steps']]
+                pull, push = names.index('Pull published site data from R2'), names.index('Publish site indexes to R2')
+                self.assertLess(names.index('Install R2 uploader'), pull)
+                self.assertLess(pull, names.index('Build and publish validated data'))
+                self.assertEqual(job['steps'][pull]['run'], 'python frontend/site_data.py pull')
+                later = ['Fetch and publish Earnings Pulse Heatmap', 'Refresh optional Earnings Pulse history']
+                if name == 'weekly_eod2_refresh.yml':
+                    later.append('Refresh Tijori company overviews')
+                for step in later:
+                    self.assertLess(names.index(step), push)
+                self.assertLess(push, names.index('Commit and Push Results'))
+                self.assertEqual(job['steps'][push]['run'], 'python frontend/site_data.py push-indexes')
+                self.assertNotIn('continue-on-error', job['steps'][push])
+                # The release itself goes live inside the build step, which publishes to R2.
+                build = job['steps'][names.index('Build and publish validated data')]
+                self.assertEqual(build['env']['EDL_CHART_STORAGE'], 'r2')
+        job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
+        names = [step['name'] for step in job['steps']]
+        self.assertLess(names.index('Pull published site data from R2'), names.index('Generate Historical Snapshots'))
+        publish = job['steps'][names.index('Publish Updated Sessions Manifest')]
+        self.assertEqual(publish['run'], 'python frontend/site_data.py push-sessions')
+        self.assertEqual(publish['if'], "${{ hashFiles('.upload_verified') != '' }}")
+        self.assertFalse(any('git add' in step.get('run', '') for step in job['steps']))
 
     def test_pipeline_state_is_pulled_before_fetch_and_pushed_after_a_successful_build(self):
         for name in ('daily_refresh.yml', 'weekly_eod2_refresh.yml'):
@@ -209,6 +237,29 @@ class RefreshWorkflowTests(unittest.TestCase):
         names = [step['name'] for step in job['steps']]
         self.assertLess(names.index('Pull pipeline state from R2'), names.index('Generate Historical Snapshots'))
         self.assertNotIn('Push pipeline state to R2', names)
+        upload = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
+        # Same object metadata as the daily archive (frontend/session_history.py).
+        self.assertIn("ExtraArgs={'ContentType': 'application/gzip'}", upload)
+        self.assertNotIn('ContentEncoding', upload)
+
+    def test_backfill_upload_is_a_successful_no_op_when_every_date_is_archived(self):
+        import sys, tempfile, types
+        job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
+        run = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
+        script = run.split("<< 'EOF'\n", 1)[1].rsplit('\nEOF', 1)[0]
+        env = {'R2_ACCOUNT_ID': 'a', 'R2_ACCESS_KEY_ID': 'b', 'R2_SECRET_ACCESS_KEY': 'c'}
+        with tempfile.TemporaryDirectory() as folder:
+            previous = Path.cwd()
+            os.chdir(folder)
+            try:
+                with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: None)}), \
+                        unittest.mock.patch.dict(os.environ, env), self.assertRaises(SystemExit) as exit:
+                    exec(compile(script, 'upload', 'exec'), {'__name__': '__main__'})
+            finally:
+                os.chdir(previous)
+            self.assertEqual(exit.exception.code, 0)
+            # No sentinel, so 'Commit Updated Sessions Manifest' is skipped.
+            self.assertFalse((Path(folder)/'.upload_verified').exists())
 
 
 if __name__ == '__main__':

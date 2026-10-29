@@ -14,11 +14,13 @@ const policies = {
   },
 };
 
-export function tableLayout<T extends {id:string; width?:string}>(columns:T[], kind:keyof typeof policies, phone:boolean, custom:boolean) {
+/** `lead` columns follow the first two phone columns, so what a screen sorts by stays on screen. */
+export function tableLayout<T extends {id:string; width?:string}>(columns:T[], kind:keyof typeof policies, phone:boolean, custom:boolean, lead:readonly string[] = []) {
   const policy = policies[kind];
+  const phoneOrder = [...policy.phoneOrder.slice(0, 2), ...lead, ...policy.phoneOrder.slice(2)];
   const priority = (id:string) => {
-    const index = policy.phoneOrder.indexOf(id);
-    return index < 0 ? policy.phoneOrder.length : index;
+    const index = phoneOrder.indexOf(id);
+    return index < 0 ? phoneOrder.length : index;
   };
   const ordered = phone ? [...columns].sort((a,b) => priority(a.id) - priority(b.id)) : columns;
   const widths:Record<string,number> = phone ? policy.phoneWidths : policy.desktopWidths;

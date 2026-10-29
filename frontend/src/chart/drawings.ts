@@ -20,6 +20,16 @@ export interface Drawing {
   levels?: number[];
 }
 export const FIB_LEVELS = [0, .236, .382, .5, .618, .786, 1];
+/** How a drawing looks; remembered per tool so the next one matches what the user last chose. */
+export type DrawingStyle = Pick<Drawing, 'color' | 'width'> & { dash?: LineDash };
+export interface DrawingStyleMemory { get(kind: DrawingKind): DrawingStyle | undefined; set(kind: DrawingKind, style: DrawingStyle): void }
+export const DEFAULT_DRAWING_STYLE: DrawingStyle = {color: 'accent', width: 1.5};
+export const validDrawingStyle = (value: unknown): value is DrawingStyle => {
+  const s = value as DrawingStyle | null;
+  return !!s && typeof s === 'object' && Number.isFinite(s.width) && s.width >= 1 && s.width <= 4
+    && typeof s.color === 'string' && (s.color === 'accent' || /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(s.color))
+    && (s.dash === undefined || ['solid', 'dashed', 'dotted'].includes(s.dash));
+};
 export const singleAnchor = (kind: DrawingKind) => toolSpec(kind).points===1;
 export const anchors=(d:Drawing):readonly Anchor[]=>d.points??(singleAnchor(d.kind)?[d.a]:[d.a,d.b]);
 const copy = (d: Drawing): Drawing => ({...d, a:{...d.a}, b:{...d.b},...(d.points?{points:d.points.map(a=>({...a}))}:{}),...(d.levels?{levels:[...d.levels]}:{})});
@@ -59,7 +69,7 @@ export class DrawingBook {
   private future: Drawing[][] = [];
   private listeners = new Set<() => void>();
   private state: DrawingSnapshot = {drawings:[],selectedId:null,tool:'select',text:'Note',canUndo:false,canRedo:false,stayDrawing:false,magnet:false,magnetMode:'weak',cursorMode:'cross',hideAll:false};
-  constructor(initial:readonly Drawing[]=[],private onCommit?:(drawings:readonly Drawing[])=>void) {
+  constructor(initial:readonly Drawing[]=[],private onCommit?:(drawings:readonly Drawing[])=>void,private styles?:DrawingStyleMemory) {
     this.state={...this.state,drawings:initial.map(copy)};
   }
   getSnapshot = () => this.state;
@@ -69,6 +79,8 @@ export class DrawingBook {
     if(update.drawings) this.onCommit?.(this.state.drawings);
     for (const listener of this.listeners) listener();
   }
+  /** The style a new drawing of this kind starts with: the last one chosen for the tool, else the default. */
+  styleFor(kind: DrawingKind): DrawingStyle { return this.styles?.get(kind) ?? DEFAULT_DRAWING_STYLE; }
   setTool(tool: DrawingTool) { this.publish({tool,selectedId:null}); }
   setText(text: string) { this.publish({text:text.slice(0,120)}); }
   options(change:Partial<Pick<DrawingSnapshot,'stayDrawing'|'magnet'|'magnetMode'|'cursorMode'|'hideAll'>>) {this.publish(change);}
@@ -84,7 +96,7 @@ export class DrawingBook {
   addPoints(kind:DrawingKind,points:readonly Anchor[]) {
     if(this.state.drawings.length>=500) return;
     if(!points.length) return;
-    const drawing: Drawing = {id:crypto.randomUUID(),version:2,kind,a:{...points[0]},b:{...(points[1]??points[0])},points:points.map(a=>({...a})),text:this.state.text.trim() || 'Note',color:'accent',width:1.5};
+    const drawing: Drawing = {id:crypto.randomUUID(),version:2,kind,a:{...points[0]},b:{...(points[1]??points[0])},points:points.map(a=>({...a})),text:this.state.text.trim() || 'Note',...this.styleFor(kind)};
     if(!validDrawing(drawing)) return;
     this.commit([...this.state.drawings,drawing],drawing.id,this.state.stayDrawing?kind:'select');
   }
@@ -98,7 +110,11 @@ export class DrawingBook {
     if(next.points) {next.a=next.points[0];next.b=next.points[1]??next.a;}
     next.text = next.text.slice(0,120);
     if(!validDrawing(next)) return;
-    if (JSON.stringify(next) !== JSON.stringify(old)) this.commit(this.state.drawings.map(d => d.id === id ? next : d));
+    if (JSON.stringify(next) === JSON.stringify(old)) return;
+    this.commit(this.state.drawings.map(d => d.id === id ? next : d));
+    if ('color' in change || 'width' in change || 'dash' in change) {
+      this.styles?.set(next.kind, {color: next.color, width: next.width, ...(next.dash ? {dash: next.dash} : {})});
+    }
   }
   delete(id: string) {
     const target = this.state.drawings.find(d => d.id === id);

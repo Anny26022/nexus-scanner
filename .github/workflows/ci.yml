@@ -61,6 +61,10 @@ jobs:
         working-directory: .
         run: python -m unittest discover -s tools -p test_scrub_published_history.py -v
 
+      - name: Test Earnings Pulse history
+        working-directory: frontend
+        run: python -m unittest test_earningspulse_history -v
+
       - name: Test refresh workflow contracts
         working-directory: .
         run: |

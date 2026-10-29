@@ -71,6 +71,16 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: python tools/pipeline_state.py pull
 
+      # The backfill extends the live sessions list, which lives in R2 (frontend/site_data.py).
+      - name: Pull published site data from R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/site_data.py pull
+
       - name: Generate Historical Snapshots
         env:
           START_DATE: ${{ github.event.inputs.start_date }}
@@ -112,7 +122,9 @@ jobs:
 
           snapshots = glob.glob("outputs/historical_snapshots/*.json.gz")
           if not snapshots:
-              sys.exit("Error: No snapshots found in outputs/historical_snapshots/*.json.gz; nothing to upload.")
+              # Every date in the range is already archived (or none traded): nothing to upload or commit.
+              print("No new snapshots to upload; all requested sessions are already archived.")
+              sys.exit(0)
 
           print(f"Uploading and verifying {len(snapshots)} snapshots to R2 bucket '{bucket_name}'...")
           for filepath in snapshots:
@@ -124,7 +136,7 @@ jobs:
                       f,
                       bucket_name,
                       key,
-                      ExtraArgs={'ContentType': 'application/json', 'ContentEncoding': 'gzip'}
+                      ExtraArgs={'ContentType': 'application/gzip'}
                   )
               # Verify R2 persistence with head_object readback
               head = s3.head_object(Bucket=bucket_name, Key=key)
@@ -138,13 +150,16 @@ jobs:
           print("R2 snapshot upload and readback complete and verified.")
           EOF
 
-      - name: Commit Updated Sessions Manifest
+      # Only once every snapshot it lists was uploaded and verified; the site reads it without a rebuild.
+      - name: Publish Updated Sessions Manifest
         if: ${{ hashFiles('.upload_verified') != '' }}
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add frontend/public/data/sessions.json
-          git diff --staged --quiet || (git commit -m "chore(data): register backfilled sessions [${{ github.event.inputs.start_date }} to ${{ github.event.inputs.end_date }}]" && git pull --rebase origin main && git push origin HEAD)
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/site_data.py push-sessions
 
       - name: Upload Artifacts Archive
         uses: actions/upload-artifact@v4

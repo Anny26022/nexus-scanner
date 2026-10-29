@@ -30,6 +30,10 @@ LODR_URL = "https://ow-static-scanx.dhan.co/staticscanx/lodr"
 # first backfill deliberately below the old 20-way all-symbol fan-out.
 MAX_THREADS = max(1, int(os.getenv("EDL_FILINGS_MAX_THREADS", "8")))
 PAGE_SIZE = 100
+# A checkpoint rewrites the whole history (about 200 MB compressed), so it is
+# paced by time, well inside the runner's 30-minute script timeout, rather than
+# taken every 100 symbols: one new listing used to cost 27 full rewrites.
+CHECKPOINT_SECONDS = max(30, int(os.getenv("EDL_FILINGS_CHECKPOINT_SECONDS", "300")))
 
 
 def fetch_page(url, isin, headers, page=1):
@@ -174,6 +178,11 @@ def _save_history(history):
     }, ensure_ascii=False)
 
 
+def checkpoint_due(pending, last_saved, now):
+    """Save a running backfill only once enough time has passed to be worth a full rewrite."""
+    return pending and now - last_saved >= CHECKPOINT_SECONDS
+
+
 def has_pending_backfill(existing, canonical_symbols):
     """Checkpoint batches only while a historical LODR sweep is incomplete."""
     return any(
@@ -202,7 +211,7 @@ def main():
     history = dict(existing)
     checkpoint_batches = has_pending_backfill(existing, canonical_symbols)
     results = []
-    started = time.time()
+    started = last_checkpoint = time.time()
     print(f"Catching up recent filings for {len(stock_list)} mainboard symbols; threads: {MAX_THREADS}.")
     with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
         futures = {
@@ -214,12 +223,12 @@ def main():
             results.append(result)
             if result.get("history"):
                 history[result["symbol"]] = result["history"]
-            if checkpoint_batches and (count % 100 == 0 or count == len(futures)):
-                # A first historical sweep can outlast the enclosing stage's
-                # timeout. Once complete, a daily refresh writes once at the
-                # end instead of repeatedly rewriting the full cache.
+            # A long historical sweep can outlast the enclosing stage's timeout,
+            # so it is checkpointed periodically; the final save below always runs.
+            if checkpoint_due(checkpoint_batches, last_checkpoint, time.time()):
                 _save_history(history)
-                print(f"[{count}/{len(futures)}] elapsed {time.time() - started:.1f}s")
+                last_checkpoint = time.time()
+                print(f"[{count}/{len(futures)}] checkpoint; elapsed {last_checkpoint - started:.1f}s", flush=True)
 
     for result in results:
         if result.get("current"):

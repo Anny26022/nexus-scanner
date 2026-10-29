@@ -124,9 +124,11 @@ export const NewListingsTab: React.FC<{ datasetRevision?: string; selectedAsOfDa
   const [columnSearch, setColumnSearch] = useState('');
   const [columnGroup, setColumnGroup] = useState<IpoColumnGroup>('Listing');
   const [savedIpoColumnIds, setSavedIpoColumnIds] = useLocalStorageState<string[]>('nexus-scanner.ipo.columns.v1', IPO_DEFAULT_COLUMNS);
-  const [showScreenResults, setShowScreenResults] = useState(false);
   const [matchMode, setMatchMode] = useLocalStorageState<MatchMode>('nexus-scanner.ipo.match-mode.v1', 'all');
   const [conditions, setConditions] = useLocalStorageState<Record<string, ActiveCondition>>('nexus-scanner.ipo.conditions.v1', {});
+  // Saved with the filters, so a refresh or tab switch returns to the same filtered view rather than the full list.
+  const [resultsView, setShowScreenResults] = useLocalStorageState('nexus-scanner.ipo.show-results.v1', false);
+  const showScreenResults = resultsView === true && Object.keys(conditions).length > 0;
   const hasUnavailable = hasUnavailableConditions(conditions);
   const {page: screenPage, pageSize: screenPageSize, setPage: setScreenPage, setPageSize: setScreenPageSize} =
     useSavedPagination('nexus-scanner.ipo.screen-pagination.v1', datasetRevision, 15);

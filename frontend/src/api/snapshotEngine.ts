@@ -1,10 +1,11 @@
 import { getIpoJson } from './gzipJson';
 import type { FinancialHistory } from '../chart/fundamentals';
 import { unpackSnapshot } from './packedSnapshot';
-import { screenSnapshot, type Snapshot } from './snapshotScreen';
+import { scanCounts, screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
 import {etfGroups} from '../data/etfFields';
 import {extendedMetrics} from '../data/extendedMetrics';
+import {pulseRow, type PulseRow} from '../utils/marketPulse';
 
 export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
 import type {FilterChoices} from '../types/filterChoices';
@@ -14,13 +15,15 @@ export type SnapshotTask =
   | { type:'warm'; source:SnapshotSource }
   | { type:'filterChoices'; source:SnapshotSource }
   | { type:'screen'; source:SnapshotSource; request:ScreenerRunRequest; allRows?:boolean }
-  | { type:'compare'; source:SnapshotSource; symbols:string[] };
+  | { type:'compare'; source:SnapshotSource; symbols:string[] }
+  | { type:'marketPulse'; source:SnapshotSource };
 export type SnapshotResult =
   | { type:'financialHistory'; result:FinancialHistory | null }
   | { type:'warm' }
   | { type:'filterChoices'; result:FilterChoices }
   | { type:'screen'; result:ScreenerRunResponse | null; revision:string; sessionDate:string }
-  | { type:'compare'; result:SymbolComparisonResponse };
+  | { type:'compare'; result:SymbolComparisonResponse }
+  | { type:'marketPulse'; result:PulseRow[]; revision:string; sessionDate:string };
 
 async function readSnapshot(source: SnapshotSource, signal?: AbortSignal): Promise<Snapshot> {
   const response = await fetch(source.url, {cache:'force-cache', signal});
@@ -188,7 +191,7 @@ export function createSnapshotEngine(loader = readSnapshot) {
           if (values.length) result.ETF_FIELDS.push(field);
           if (group.type !== 'number') result.ETF_VALUES[field] = [...new Set(values.map(String))].sort();
         }
-      }
+      } else result.SCAN_COUNTS = scanCounts(data);
       if (data.extendedMetricsVersion === 1) {
         result.TRADINGVIEW_METRIC = extendedMetrics.filter(metric => data.stocks.some(stock =>
           stock.extended?.asOfDate === data.asOfDate && typeof stock.extended.values[metric.id] === 'number'
@@ -196,6 +199,9 @@ export function createSnapshotEngine(loader = readSnapshot) {
       }
       return {type:'filterChoices', result};
     }
+    // Only stocks priced in this session; the page summarises them, so it receives compact rows.
+    if (task.type === 'marketPulse') return {type:'marketPulse', revision:data.revision, sessionDate:data.asOfDate,
+      result:data.stocks.filter(stock => stock.asOfDate === data.asOfDate && Number.isFinite(stock.close)).map(pulseRow)};
     if (task.type === 'screen') return {type:'screen',result:screenSnapshot(data,task.request,task.allRows),revision:data.revision,sessionDate:data.asOfDate};
     const bySymbol = new Map(data.stocks.map(stock => [stock.symbol,stock]));
     const validSymbols: SymbolComparisonResponse['validSymbols'] = [], invalidSymbols:string[] = [];

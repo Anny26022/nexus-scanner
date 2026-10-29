@@ -54,3 +54,21 @@ it('limits the symbol list while keeping search across all matches', async () =>
   fireEvent.change(screen.getByRole('textbox', { name: 'Filter symbols' }), { target: { value: 'SYM119' } });
   expect(screen.getByText('SYM119')).toBeInTheDocument();
 });
+
+it('charts the sessions, steps through them with the arrow keys and shows sectors on demand', async () => {
+  const points = [
+    { date: '2024-07-01', count: 10, status: 'success' as const, sectorCounts: { Banks: 6, IT: 4 } },
+    { date: '2024-07-02', count: 14, status: 'success' as const, sectorCounts: { Banks: 9, IT: 5 } },
+  ];
+  vi.mocked(executeScanHistory).mockResolvedValueOnce({ points, summary: computeScanHistorySummary(points, 2) });
+  vi.mocked(loadSessionSymbols).mockResolvedValue(['AAA']);
+  render(<ScanHistoryPanel {...props} availableSessions={[{ date: '2024-07-01', revision: 'a'.repeat(64) }, { date: '2024-07-02', revision: 'b'.repeat(64) }]} currentSessionDate="2024-07-02" />);
+  fireEvent.click(screen.getByRole('button', { name: /start frequency scan/i }));
+  const chart = await screen.findByRole('slider', { name: 'Matches by session' });
+  expect(chart).toHaveAttribute('aria-valuetext', '2 Jul 2024: 14 matches');
+  expect(screen.getByText('+4 vs previous session', { exact: false })).toBeInTheDocument();
+  fireEvent.keyDown(chart, { key: 'ArrowLeft' });
+  expect(chart).toHaveAttribute('aria-valuetext', '1 Jul 2024: 10 matches');
+  fireEvent.click(screen.getByRole('button', { name: 'Sectors · 2' }));
+  expect(screen.getByText('Banks')).toBeInTheDocument();
+});

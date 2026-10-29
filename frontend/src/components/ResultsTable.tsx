@@ -22,6 +22,8 @@ import { Button } from './Button';
 
 interface ResultsTableProps {
   etf?: boolean;
+  /** Columns the current screen depends on, shown whatever the saved column choice. */
+  pinnedColumns?: readonly string[];
   loadExportRows?:()=>Promise<ScreenerRunResponse['rows']>;
   symbolSearch?: string;
   onSymbolSearchChange?: (value: string) => void;
@@ -127,6 +129,7 @@ const columns: ResultColumn[] = [
   valueColumn('surveillanceAvailable', 'Surveillance data available', 'Other', 'boolean'),
   ...extendedMetrics.map((metric):ResultColumn => ({id:`tv.${metric.id}`, label:metric.label,
     group:metric.category === 'fundamentals' ? 'Fundamental' : 'Technical',
+    format:metric.label.includes('%') ? 'percent' : 'number', sortField:`tv.${metric.id}`,
     getValue:row => row.extended?.values[metric.id]})),
 ];
 const etfColumns: ResultColumn[] = [columns[0], ...columns.filter(column => ['close','changePct','volume','rupeeVolumeCrore'].includes(column.id)),
@@ -161,7 +164,7 @@ const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
 
 export function ResultsTable({ data, isLoading, isError, isFetching = false, error, onRetry,
   onPageChange, onPageSizeChange, page, pageSize, onSortChange, currentSort, symbolSearch = '', onSymbolSearchChange, loadExportRows, onOpenFullChart,
-  resultView: propResultView, onResultViewChange, etf = false }: ResultsTableProps) {
+  resultView: propResultView, onResultViewChange, etf = false, pinnedColumns }: ResultsTableProps) {
   const [filingSymbol, setFilingSymbol] = useState<string | null>(null);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [internalResultView, setInternalResultView] = useLocalStorageState<'table' | 'charts'>('nexus-scanner.screener.result-view.v1', 'table');
@@ -188,10 +191,10 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
     if (column.id === 'company') return true;
     if (column.id.startsWith('tv.') && !hasExtended) return false;
     if (column.id === 'fnoBan' && !hasFnoBan) return false;
-    return selectedColumnIds.includes(column.id);
+    return selectedColumnIds.includes(column.id) || Boolean(pinnedColumns?.includes(column.id));
   });
   const usingCustomColumns = selectedColumnIds.length !== defaults.length || defaults.some(id => !selectedColumnIds.includes(id));
-  const layout = tableLayout(activeColumns, 'screener', phone, usingCustomColumns);
+  const layout = tableLayout(activeColumns, 'screener', phone, usingCustomColumns, pinnedColumns);
   const visibleColumns = layout.columns;
   const customizableColumns = tableColumns.filter(column => column.id !== 'company'
     && (!column.id.startsWith('tv.') || hasExtended)

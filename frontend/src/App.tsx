@@ -14,6 +14,8 @@ import { useMountEffect } from './hooks/useMountEffect';
 import { loadGrid, openSymbolInCharts } from './chart/storage';
 import { chartQuery } from './chart/chartQuery';
 import { writeScreenToStorage, type ScreenDefinition } from './utils/savedScreens';
+import { SCREEN_STORAGE_KEYS } from './utils/screenStorageKeys';
+import { useStoredState } from './storage/useStoredState';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -56,7 +58,6 @@ const ScreenerAppContent: React.FC = () => {
   const navigate = (tab: AppTab) => { setChartSnapshot(undefined); setActiveTab(tab); };
   const loadScreen = (screen: ScreenDefinition) => {
     writeScreenToStorage(screen);
-    setEtfUniverse(screen.universe === 'etf');
     setScreenerKey(key => key + 1);
     navigate('screener');
   };
@@ -78,9 +79,9 @@ const ScreenerAppContent: React.FC = () => {
     staleTime: 60_000,
   });
 
-  const [etfUniverse, setEtfUniverse] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem('nexus-scanner.screener.universe.v1') ?? 'null') === 'etf'; } catch { return false; }
-  });
+  // The Screener owns the universe; reading the same stored key keeps this in step with no hand-off.
+  const [universe] = useStoredState<unknown>(SCREEN_STORAGE_KEYS.universe, 'mainboard');
+  const etfUniverse = universe === 'etf';
   const [customSessionDate, setCustomSessionDate] = React.useState<string | null>(null);
 
   const latestDate = revisionData?.latestSessionDate || '';
@@ -134,7 +135,6 @@ const ScreenerAppContent: React.FC = () => {
         {screenerMounted && <div style={{display: activeTab === 'screener' ? 'contents' : 'none'}}>
           <ExploreTab
             key={screenerKey}
-            onUniverseChange={universe => setEtfUniverse(universe === 'etf')}
             selectedAsOfDate={selectedAsOfDate}
             datasetRevision={activeRevision}
             onRefreshRevision={async () => (await refreshRevision()).data?.immutableRevision}
@@ -152,6 +152,7 @@ const ScreenerAppContent: React.FC = () => {
             <MarketTab
               datasetRevision={activeRevision}
               sessionDate={selectedAsOfDate}
+              onOpenChart={openSymbol}
               onScreenSector={sector => loadScreen({
                 universe: 'mainboard', matchMode: 'all', query: '', sort: {field: 'marketCap', direction: 'desc'},
                 conditions: {sector: {instanceId: 'sector', conditionId: 'SECTOR', parameters: {values: [sector]}}},

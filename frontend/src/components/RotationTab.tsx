@@ -120,7 +120,7 @@ function Select({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-full pl-2.5 pr-6 bg-transparent text-text font-medium text-xs border-0 outline-none cursor-pointer appearance-none"
+        className="h-full w-full min-w-0 truncate pl-2.5 pr-6 bg-transparent text-text font-medium text-xs border-0 outline-none cursor-pointer appearance-none"
       >
         {children}
       </select>
@@ -475,7 +475,10 @@ export default function RotationTab({
   ) : null;
 
   return (
-    <div className="rot flex h-full flex-col gap-2 min-h-0 w-full" data-view={view}>
+    <div
+      className="rot flex h-full flex-col gap-2 min-h-0 w-full max-md:gap-3 max-md:overflow-y-auto max-md:px-3.5 max-md:pt-3 max-md:pb-[max(16px,env(safe-area-inset-bottom))]"
+      data-view={view}
+    >
       {/* =========================================================================
           Clean, Light Header
           ========================================================================= */}
@@ -519,9 +522,10 @@ export default function RotationTab({
         {/* Lightweight Controls */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Scope: Universe + Benchmark */}
-          <div className="flex items-center gap-1.5" aria-label="Scope controls">
+          <div className="flex items-center gap-1.5 max-md:w-full" aria-label="Scope controls">
             <Select
               label="Universe"
+              className="max-md:min-w-0 max-md:flex-1"
               value={universe.kind === 'members' && back ? universeKey(back) : universeKey(universe)}
               onChange={(key) => chooseUniverse(parseUniverse(key))}
             >
@@ -543,6 +547,7 @@ export default function RotationTab({
 
             <Select
               label="Benchmark"
+              className="max-md:min-w-0 max-md:flex-1"
               value={typeof benchmark === 'string' ? benchmark : 'GROUP'}
               onChange={(value) => setBenchmark(value as BenchmarkCode | 'GROUP')}
             >
@@ -555,7 +560,7 @@ export default function RotationTab({
             </Select>
           </div>
 
-          <div className="h-3.5 w-px bg-line shrink-0" aria-hidden="true" />
+          <div className="h-3.5 w-px bg-line shrink-0 max-md:hidden" aria-hidden="true" />
 
           {/* Display Parameters */}
           <div className="flex items-center gap-1.5" aria-label="Display settings">
@@ -634,10 +639,11 @@ export default function RotationTab({
       {/* =========================================================================
           Main Workspace: Light Rail + Open Stage
           ========================================================================= */}
-      <div className={`grid gap-3.5 flex-1 min-h-0 ${view === 'chart' ? 'grid-cols-[285px_minmax(0,1fr)]' : 'grid-cols-1'}`}>
+      {/* Phones stack the stage above the list and scroll the page as one surface. */}
+      <div className={`grid grid-cols-1 gap-3.5 md:flex-1 md:min-h-0 ${view === 'chart' ? 'md:grid-cols-[285px_minmax(0,1fr)]' : ''}`}>
         {/* Left Rail: Quiet Directory */}
         {view === 'chart' && (
-          <aside className="flex w-[285px] shrink-0 flex-col gap-2.5 min-h-0" aria-label="Items">
+          <aside className="flex shrink-0 flex-col gap-2.5 max-md:order-2 md:w-[285px] md:min-h-0" aria-label="Items">
             {/* Header info */}
             <div className="flex items-center justify-between px-1">
               <div className="flex min-w-0 flex-col">
@@ -648,10 +654,11 @@ export default function RotationTab({
               </div>
               <Button
                 variant="ghost"
+                size="icon"
                 onClick={copySymbols}
                 aria-label="Copy symbols"
                 title={isGroups ? (focusId ? 'Copy this group’s stocks' : 'Copy stocks in these groups') : 'Copy symbols'}
-                className="!h-7 !w-7 !p-0 rounded-full text-muted hover:text-text hover:bg-surface-hover"
+                className="rounded-full text-muted hover:text-text hover:bg-surface-hover"
               >
                 {copied ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
               </Button>
@@ -696,9 +703,9 @@ export default function RotationTab({
         )}
 
         {/* Center Stage Card: Header summary bar + Canvas Plot + Minimal Replay Dock */}
-        <main className="flex flex-1 min-w-0 min-h-0 flex-col rounded-xl border border-line/60 bg-surface shadow-sm overflow-hidden">
+        <main className="flex min-w-0 flex-col rounded-xl border border-line/60 bg-surface shadow-sm overflow-hidden md:flex-1 md:min-h-0">
           {/* Subtle Stage Top Bar: Date + 4 Quadrant Counts */}
-          <div className="flex items-center justify-between border-b border-line/50 px-3.5 py-1.5 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-line/50 px-3.5 py-1.5 text-xs">
             <div className="flex items-center gap-2">
               {group ? (
                 <div className="inline-flex items-center gap-1.5 text-xs text-text">
@@ -721,12 +728,12 @@ export default function RotationTab({
                   </button>
                 </div>
               ) : (
-                <span className="font-semibold tabular-nums text-text text-xs">{dateLabel(cursor)}</span>
+                <span className="whitespace-nowrap font-semibold tabular-nums text-text text-xs">{dateLabel(cursor)}</span>
               )}
             </div>
 
             {/* Quiet Quadrant Counts */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 max-md:w-full max-md:flex-nowrap max-md:justify-between max-md:gap-x-1">
               {CHIP_ORDER.map((q) => {
                 const active = quadrant === q;
                 return (
@@ -735,7 +742,7 @@ export default function RotationTab({
                     type="button"
                     data-quadrant={q}
                     onClick={() => setQuadrant(active ? null : q)}
-                    className={`inline-flex items-center gap-1.5 text-[11.5px] cursor-pointer transition ${
+                    className={`inline-flex items-center gap-1.5 text-[11.5px] cursor-pointer transition max-md:gap-1 max-md:text-[11px] ${
                       active ? 'font-bold text-text' : 'font-medium text-muted hover:text-text'
                     }`}
                   >
@@ -751,11 +758,11 @@ export default function RotationTab({
           {/* Relative-strength shifts over the trail, in one quiet line */}
           {ready && view === 'chart' && (gaining.length > 0 || losing.length > 0) && (
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-line/50 px-3.5 py-1.5 text-[11.5px]">
-              {([['Gaining strength', gaining, 'text-(--rrg-leading)'], ['Losing strength', losing, 'text-(--rrg-lagging)']] as const).map(
-                ([title, list, tone]) =>
+              {([['Gaining strength', gaining], ['Losing strength', losing]] as const).map(
+                ([title, list]) =>
                   list.length > 0 && (
                     <div key={title} className="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none]">
-                      <span className={`shrink-0 font-semibold ${tone}`} title="Change in RS-Ratio over the trail; not a measure of capital flows">
+                      <span className="shrink-0 font-semibold text-secondary" title="Change in RS-Ratio over the trail; not a measure of capital flows">
                         {title} · {tail}
                         {unit}
                       </span>
@@ -781,7 +788,11 @@ export default function RotationTab({
           )}
 
           {/* Plot Stage or Tracker View */}
-          <div className="relative flex-1 min-h-0 w-full overflow-hidden flex flex-col">
+          <div
+            className={`relative flex flex-1 min-h-0 w-full flex-col overflow-hidden ${
+              view === 'chart' ? 'max-md:h-[min(100vw,440px)] max-md:flex-none' : 'max-md:flex-none max-md:overflow-visible'
+            }`}
+          >
             {view === 'chart' ? (
               state ?? (
                 <RotationPlot

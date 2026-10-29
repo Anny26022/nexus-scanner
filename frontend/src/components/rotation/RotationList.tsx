@@ -39,7 +39,7 @@ export function Heading({ angle }: { angle: number | null }) {
 /** The rail beside the chart: where each item is and which way it is heading. */
 export function RotationList({ rows, total, focusId, hoverId, onFocus, onOpen }: Props) {
   return (
-    <div className="rot-scroll flex flex-1 flex-col gap-1.5 overflow-y-auto px-1 py-1" role="list">
+    <div className="rot-scroll flex flex-col gap-1.5 px-1 py-1 md:flex-1 md:overflow-y-auto" role="list">
       {rows.map(({ item, point, quadrant, angle }) => {
         const isFocused = focusId === item.id;
         const isHovered = hoverId === item.id;
@@ -77,7 +77,7 @@ export function RotationList({ rows, total, focusId, hoverId, onFocus, onOpen }:
                   name={item.detail}
                   showText
                   size="sm"
-                  className="min-w-0 flex-1 gap-2 [&_.symbol-logo-mark]:!w-[22px] [&_.symbol-logo-mark]:!h-[22px] [&_.symbol-logo-mark]:!rounded-md [&_.symbol-logo-mark]:!p-0.5 [&_.symbol-logo-symbol]:!text-xs [&_.symbol-logo-symbol]:!font-semibold [&_.symbol-logo-name]:!text-[11px] [&_.symbol-logo-name]:!text-muted"
+                  className="min-w-0 flex-1 gap-2 [&_.symbol-logo-mark]:w-[22px] [&_.symbol-logo-mark]:h-[22px] [&_.symbol-logo-mark]:rounded-md [&_.symbol-logo-mark]:p-0.5 [&_.symbol-logo-symbol]:text-xs [&_.symbol-logo-symbol]:font-semibold [&_.symbol-logo-name]:text-[11px] [&_.symbol-logo-name]:text-muted"
                 />
               ) : (
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
@@ -102,13 +102,14 @@ export function RotationList({ rows, total, focusId, hoverId, onFocus, onOpen }:
             {/* Action Icon: View in Chart or Drill Down */}
             <Button
               variant="ghost"
+              size="icon"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpen(item);
               }}
               aria-label={item.kind === 'group' ? `Open ${item.label} members` : `Open ${item.label} chart`}
               title={item.kind === 'group' ? 'Explore member stocks' : 'Open in Charts'}
-              className="!h-6 !w-6 !p-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded-full hover:bg-surface text-muted hover:text-text shrink-0"
+              className="opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity rounded-full hover:bg-surface text-muted hover:text-text shrink-0"
             >
               {item.kind === 'group' ? <ChevronRight size={14} /> : <CandlestickChart size={13} />}
             </Button>

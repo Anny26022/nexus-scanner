@@ -267,6 +267,13 @@ class RealDataAdapter {
     return new Map(data.records.filter((row): row is [string, number] => Array.isArray(row) && typeof row[0] === 'string'
       && /^\d{4}-\d{2}-\d{2}$/.test(row[0]) && row[0] <= release.sessionDate && typeof row[1] === 'number' && Number.isFinite(row[1]) && row[1] > 0));
   }
+  /** Compact per-stock rows for the Market page, from the release's scanner snapshot. */
+  async getMarketPulse(revision?: string) {
+    const source = await snapshotSource(revision);
+    const result = await runSnapshotTask({type:'marketPulse', source});
+    if (result.type !== 'marketPulse' || result.revision !== source.revision) throw new Error('Market pulse release mismatch');
+    return {rows: result.result, sessionDate: result.sessionDate};
+  }
   async getMarketOverview(revision?: string) {
     const release = await releaseFor(revision);
     if (!release.marketOverviewUrl) throw new DataUnavailableError('Market overview is published with the next data refresh.', 'not_published');

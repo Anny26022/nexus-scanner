@@ -6,7 +6,6 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import type { ServerResponse } from 'node:http';
 import type { Connect, Plugin, ProxyOptions } from 'vite';
-import {buildAiFilterChoices} from './build_ai_filter_choices.mjs';
 import {localAiWorker} from './dev/aiWorker';
 
 const aiProxy: ProxyOptions = {
@@ -114,16 +113,27 @@ function scannerBridge(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss(), scannerBridge(), {
+/**
+ * The local AI Worker reads public/data/ai-filter-choices.json. The pipeline writes it with each release
+ * (site_data.py); rebuild it whenever local data changes, so a dev server on any local release works.
+ */
+function localAiFilterChoices(): Plugin {
+  const rebuild = () => new Promise<void>(resolve => {
+    const child = spawn('python3', [path.resolve(import.meta.dirname, 'site_data.py'), 'ai-choices'], {stdio: 'inherit'});
+    child.on('error', error => { console.warn('AI filter choices not rebuilt:', error.message); resolve(); });
+    child.on('exit', code => { if (code) console.warn('AI filter choices not rebuilt; is public/data/current.json present?'); resolve(); });
+  });
+  return {
     name: 'ai-filter-choices',
     async configureServer(server) {
-      await buildAiFilterChoices();
-      server.watcher.on('change', file => {
-        if (file.endsWith('/public/data/current.json')) void buildAiFilterChoices().catch(console.error);
-      });
+      await rebuild();
+      server.watcher.on('change', file => { if (file.endsWith('/public/data/current.json')) void rebuild(); });
     },
-  }, localAiWorker()],
+  };
+}
+
+export default defineConfig({
+  plugins: [react(), tailwindcss(), scannerBridge(), localAiFilterChoices(), localAiWorker()],
   // Never ship source maps: they would publish the original source, comments included.
   build: {sourcemap: false},
   server: {proxy: {'/api/screener/ai-compile': aiProxy}},

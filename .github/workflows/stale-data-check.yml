@@ -1,0 +1,48 @@
+name: Stale data check
+
+on:
+  schedule:
+    # 19:45, 21:15 and 23:15 IST, Mon-Fri: after the 19:30 IST publish cutoff.
+    - cron: '15 14 * * 1-5'
+    - cron: '45 15 * * 1-5'
+    - cron: '45 17 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the verdict without opening, commenting on or closing issues
+        type: boolean
+        default: true
+      expected_session:
+        description: Override the expected session (YYYY-MM-DD); blank uses the NSE calendar
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: stale-data-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Compare the live dataset with the last NSE session
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          EDL_EXPECTED_SESSION: ${{ inputs.expected_session }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" != "true" ]; then
+            args+=(--apply)
+          fi
+          python3 tools/stale_data_check.py --repo "$REPOSITORY" "${args[@]}"

@@ -36,7 +36,8 @@ it('echoes the allowed origin on responses, including errors, and varies on Orig
 it('answers preflight with the methods and headers the app sends', () => {
   const headers = corsHeaders(journal);
   expect(headers['Access-Control-Allow-Methods']).toContain('POST');
-  expect(headers['Access-Control-Allow-Headers']).toBe('Content-Type');
+  // The Scanner token travels in Authorization (workers/auth/scannerToken.mjs).
+  expect(headers['Access-Control-Allow-Headers']).toBe('Content-Type, Authorization');
 });
 
 it('matches a suffix entry for branch previews, and nothing broader', () => {

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import worker from './src/index.mjs';
+import { gateway, serveObject } from './src/delivery.mjs';
+
+const worker = { fetch: serveObject };
 
 const calls = [];
 const object = {
@@ -82,4 +84,86 @@ test('objects stored with gzip Content-Encoding are served as the gzip file they
   assert.equal(response.headers.get('Content-Encoding'), null);
   assert.equal(response.headers.get('Content-Type'), 'application/gzip');
   assert.equal(await response.text(), 'published bytes');
+});
+
+// Scanner token gate. Test-only key and tokens shared with nexus-journal-api's signer; never deploy this key.
+const PUBLIC_KEYS = JSON.stringify({ 'test-1': '6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw' });
+const TOKENS = {
+  valid: 'eyJ2IjoxLCJraWQiOiJ0ZXN0LTEiLCJzdWIiOiJjMGZmZWUwMGMwZmZlZTAwYzBmZmVlMDBjMGZmZWUwMCIsImF1ZCI6Im5leHVzLXNjYW5uZXIiLCJzY29wZSI6WyJkYXRhIiwiYWkiXSwic3JjIjoibGF1bmNoIiwiaWF0IjoxNzY3MjI1NjAwLCJleHAiOjQxMDI0NDQ4MDB9.D0lyBf0BvLu2H5eYKLEK8VR6s5Gcq3OqIc4oKrqxmghGyIijh8p_Dmo05Dm3V9Dy4JxjzKT2PSrh1gbkBlriAw',
+  expired: 'eyJ2IjoxLCJraWQiOiJ0ZXN0LTEiLCJzdWIiOiJjMGZmZWUwMGMwZmZlZTAwYzBmZmVlMDBjMGZmZWUwMCIsImF1ZCI6Im5leHVzLXNjYW5uZXIiLCJzY29wZSI6WyJkYXRhIiwiYWkiXSwic3JjIjoibGF1bmNoIiwiaWF0IjoxNzY3MjI1NjAwLCJleHAiOjE3NjcyMjY1MDB9.h2Jr0eqmskCV5qlLqKa01FX9ftHzmBgKm_bxCARj0uUa1pEWTKjxY2SjB8SlWTH0RLwMuoAV5xlcvdzq6S8PBA',
+  wrongAudience: 'eyJ2IjoxLCJraWQiOiJ0ZXN0LTEiLCJzdWIiOiJjMGZmZWUwMGMwZmZlZTAwYzBmZmVlMDBjMGZmZWUwMCIsImF1ZCI6Im90aGVyIiwic2NvcGUiOlsiZGF0YSIsImFpIl0sInNyYyI6ImxhdW5jaCIsImlhdCI6MTc2NzIyNTYwMCwiZXhwIjo0MTAyNDQ0ODAwfQ.-B0kFUnfL1nykRSzrqP35z1kghOAEPHtaUBHR1nxOXUaOx-K-1pJwrfpqoXVeewKCNA1WwxnANVXEc7rt4cnCg',
+  dataOnly: 'eyJ2IjoxLCJraWQiOiJ0ZXN0LTEiLCJzdWIiOiJjMGZmZWUwMGMwZmZlZTAwYzBmZmVlMDBjMGZmZWUwMCIsImF1ZCI6Im5leHVzLXNjYW5uZXIiLCJzY29wZSI6WyJkYXRhIl0sInNyYyI6ImxhdW5jaCIsImlhdCI6MTc2NzIyNTYwMCwiZXhwIjo0MTAyNDQ0ODAwfQ.FQbh0z3Dq63wyr4WqWV-HiwOM_sHLvn65QOMUQmpJM_1FIVViF1J1nLKQu1gqKNpANYa0pxQoRJhuxGpktlTCg',
+};
+const tamper = (token) => token.slice(0, -4) + (token.endsWith('AAAA') ? 'BBBB' : 'AAAA');
+
+function gate(path, { mode, token, method = 'GET', limits = {} } = {}) {
+  const forwarded = [];
+  const limiterCalls = [];
+  const limiter = (name) => ({ async limit({ key }) { limiterCalls.push([name, key]); return { success: limits[name] !== false }; } });
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const gateEnv = { ...env, AUTH_MODE: mode, SCANNER_TOKEN_PUBLIC_KEYS: PUBLIC_KEYS,
+    DELIVERY_RATE_LIMITER: limiter('delivery'), SNAPSHOT_RATE_LIMITER: limiter('snapshot') };
+  const result = gateway(new Request(`https://data.example.com/${path}`, { method, headers }), gateEnv, async (request) => {
+    forwarded.push(request);
+    return new Response('cached bytes', { headers: { 'Access-Control-Allow-Origin': '*' } });
+  });
+  return { result, forwarded, limiterCalls };
+}
+
+test('answers CORS preflights for the Authorization header without forwarding', async () => {
+  const { result, forwarded } = gate('objects/abc.json.gz', { mode: 'enforce', method: 'OPTIONS' });
+  const response = await result;
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('Access-Control-Allow-Headers'), 'Authorization');
+  assert.equal(response.headers.get('Access-Control-Max-Age'), '86400');
+  assert.equal(forwarded.length, 0);
+});
+
+test('off and report modes serve everyone, report checks the token', async () => {
+  for (const mode of ['off', 'report', undefined]) {
+    for (const token of [undefined, TOKENS.expired, 'garbage']) {
+      const { result, forwarded } = gate('releases/abc/index.json', { mode, token });
+      assert.equal((await result).status, 200, `${mode} ${token}`);
+      assert.equal(forwarded.length, 1);
+    }
+  }
+});
+
+test('enforce refuses missing, expired, tampered and foreign tokens with a readable 401', async () => {
+  for (const [token, reason] of [[undefined, 'missing'], [TOKENS.expired, 'expired'], [tamper(TOKENS.valid), 'signature'],
+    [TOKENS.wrongAudience, 'audience'], ['not-a-token', 'malformed']]) {
+    const { result, forwarded } = gate('objects/abc.json.gz', { mode: 'enforce', token });
+    const response = await result;
+    assert.equal(response.status, 401, reason);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), '*');
+    assert.equal((await response.json()).reason, reason);
+    assert.equal(forwarded.length, 0);
+  }
+});
+
+test('enforce forwards a valid data token without the Authorization header', async () => {
+  for (const token of [TOKENS.valid, TOKENS.dataOnly]) {
+    const { result, forwarded } = gate('objects/abc.json.gz', { mode: 'enforce', token });
+    assert.equal(await (await result).text(), 'cached bytes');
+    assert.equal(forwarded[0].headers.get('Authorization'), null);
+    assert.equal(forwarded[0].url, 'https://data.example.com/objects/abc.json.gz');
+  }
+});
+
+test('limits each account, with a separate limit for session history', async () => {
+  const objects = gate('objects/abc.json.gz', { mode: 'enforce', token: TOKENS.valid });
+  await objects.result;
+  const snapshots = gate('snapshots/2026-10-23.json.gz', { mode: 'enforce', token: TOKENS.valid, limits: { snapshot: false } });
+  const response = await snapshots.result;
+  assert.deepEqual(objects.limiterCalls, [['delivery', 'c0ffee00c0ffee00c0ffee00c0ffee00']]);
+  assert.deepEqual(snapshots.limiterCalls, [['snapshot', 'c0ffee00c0ffee00c0ffee00c0ffee00']]);
+  assert.equal(response.status, 429);
+  assert.equal(snapshots.forwarded.length, 0);
+});
+
+test('an unconfigured key set fails closed in enforce mode', async () => {
+  const response = await gateway(new Request('https://data.example.com/objects/abc.json.gz', { headers: { Authorization: `Bearer ${TOKENS.valid}` } }),
+    { ...env, AUTH_MODE: 'enforce', SCANNER_TOKEN_PUBLIC_KEYS: '{}' }, async () => new Response('cached bytes'));
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).reason, 'unknown_key');
 });

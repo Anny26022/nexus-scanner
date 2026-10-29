@@ -4,6 +4,20 @@
   "compatibility_date": "2026-10-07",
   "workers_dev": true,
   "cache": { "enabled": true, "cross_version_cache": true },
+  // Workers Cache answers before a cached entrypoint runs, so the default entrypoint (the gateway that checks
+  // Scanner tokens) is uncached and reads through the cached CachedDelivery entrypoint (src/index.mjs).
+  "exports": {
+    "default": { "type": "worker", "cache": { "enabled": false } },
+    "CachedDelivery": { "type": "worker", "cache": { "enabled": true } }
+  },
+  // Scanner tokens (workers/auth/scannerToken.mjs): "report" checks and logs, "enforce" refuses requests without a
+  // valid token. SCANNER_TOKEN_PUBLIC_KEYS is {kid: base64url Ed25519 public key}, matching nexus-journal-api's key.
+  "vars": { "AUTH_MODE": "report", "SCANNER_TOKEN_PUBLIC_KEYS": "{}" },
+  // Per account (token sub); namespaces 1001-1002 belong to the screener Worker.
+  "ratelimits": [
+    { "name": "DELIVERY_RATE_LIMITER", "namespace_id": "1004", "simple": { "limit": 600, "period": 60 } },
+    { "name": "SNAPSHOT_RATE_LIMITER", "namespace_id": "1005", "simple": { "limit": 60, "period": 60 } }
+  ],
   "r2_buckets": [
     {
       "binding": "DATA",

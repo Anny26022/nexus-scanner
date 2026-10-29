@@ -2,10 +2,10 @@ name: Stale data check
 
 on:
   schedule:
-    # 19:45, 21:15 and 23:15 IST, Mon-Fri: after the 19:30 IST publish cutoff.
-    - cron: '15 14 * * 1-5'
-    - cron: '45 15 * * 1-5'
-    - cron: '45 17 * * 1-5'
+    # 08:30 IST, Tue-Sat: checks the previous trading day's session before the market opens. GitHub starts the
+    # 16:00 IST refresh hours late (it has finished between 20:50 and 23:35 IST), so an evening check would raise
+    # an alarm on most normal days.
+    - cron: '0 3 * * 2-6'
   workflow_dispatch:
     inputs:
       dry_run:

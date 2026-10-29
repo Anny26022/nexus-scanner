@@ -519,3 +519,27 @@ class FilingHistoryTests(unittest.TestCase):
             {"ABC": {"lodr_backfill_complete": False}}, {"ABC"}
         ))
         self.assertTrue(fetch_company_filings.has_pending_backfill({}, {"ABC"}))
+
+    def test_pending_backfill_checkpoints_by_time_not_every_hundred_symbols(self):
+        interval = fetch_company_filings.CHECKPOINT_SECONDS
+        self.assertFalse(fetch_company_filings.checkpoint_due(False, 0, interval * 10))
+        self.assertFalse(fetch_company_filings.checkpoint_due(True, 100, 100 + interval - 1))
+        self.assertTrue(fetch_company_filings.checkpoint_due(True, 100, 100 + interval))
+
+    def test_one_new_listing_writes_the_history_once_not_per_hundred_symbols(self):
+        stock_list = [{"Symbol": f"S{index}", "ISIN": f"INE{index:09d}"} for index in range(250)]
+        existing = {f"S{index}": {"lodr_backfill_complete": True} for index in range(1, 250)}
+        def fetch(item, previous=None):
+            return {"symbol": item["Symbol"], "status": "success", "refresh_complete": True, "current": [],
+                    "history": {**(previous or {}), "lodr_backfill_complete": True}}
+        with tempfile.TemporaryDirectory() as directory, \
+                mock.patch.object(fetch_company_filings, "load_json", return_value=stock_list), \
+                mock.patch.object(fetch_company_filings, "_load_history", return_value=existing), \
+                mock.patch.object(fetch_company_filings, "fetch_filings", side_effect=fetch), \
+                mock.patch.object(fetch_company_filings, "OUTPUT_DIR", str(Path(directory) / "out")), \
+                mock.patch.object(fetch_company_filings, "HISTORY_DIR", str(Path(directory) / "hist")), \
+                mock.patch.object(fetch_company_filings, "_save_history") as save:
+            self.assertTrue(fetch_company_filings.main())
+        # Previously: one rewrite per 100 symbols plus the final one. Now only the final save.
+        self.assertEqual(save.call_count, 1)
+        self.assertEqual(len(save.call_args.args[0]), 250)

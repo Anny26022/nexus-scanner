@@ -1,5 +1,5 @@
 name: Commit refresh outputs
-description: Stage only the existing published artifact allowlist and preserve the caller commit message.
+description: Stage only the pipeline's reference files and preserve the caller commit message.
 inputs:
   weekly:
     description: Include weekly Tijori and Dhan group artifacts.
@@ -29,21 +29,13 @@ runs:
         # every committed version stayed in Git history (~41 MiB per refresh).
         git add reference/index-constituent-mappings.json.gz
         git add reference/index-constituent-mappings.manifest.json
-        git add frontend/public/data/current.json frontend/public/data/revisions frontend/public/data/sessions.json frontend/public/data/price-band-history.json
-        if [ -f frontend/public/data/results/index.json ]; then
-          git add frontend/public/data/results/index.json
-        fi
-        if [ -f frontend/public/data/results/us_index.json ]; then
-          git add frontend/public/data/results/us_index.json
-        fi
-        if [ -f frontend/public/data/heatmap/index.json ]; then
-          git add frontend/public/data/heatmap/index.json
-        fi
+        # Published site data goes to R2 (frontend/site_data.py) and is served without a rebuild, so it is
+        # not committed. The reference files stay in Git: the next run reads them (the Dhan sync refuses to
+        # clear known members, the Tijori export resumes from its cache) and their history records changes.
         if [ "$WEEKLY_REFRESH" = "true" ]; then
           git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
-          git add frontend/public/data/company/current.json frontend/public/data/company/revisions
           git add reference/dhan/group-stocks.json
         fi
-        # Published frontend data needs a Cloudflare build; do not suppress it with [skip ci].
+        # Nothing staged here is served by the site. Workers Builds' watch paths should exclude reference/*.
         git commit -m "$REFRESH_COMMIT_MESSAGE" || echo "No changes to commit"
         git push

@@ -352,6 +352,10 @@ Not every possible custom calculation is precomputed. Preset membership and sele
 
 ### Runtime files
 
+In production these are served from R2 by the `nexus-scanner` Worker at the same `/data/...` URLs, so a refresh
+needs no commit or rebuild; the local paths below are what development and the pipeline write. See
+[docs/site-data-r2.md](docs/site-data-r2.md).
+
 | File or path | Runtime use |
 | --- | --- |
 | `frontend/public/data/current.json` | Small active-release pointer. Revalidate frequently. |

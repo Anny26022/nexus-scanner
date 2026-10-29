@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "1b4cb15b9daccca3f572d1e5048ad39f69da167e003ea26c5e3766ddf9768a91",
-    "weekly_eod2_refresh.yml": "d727ca44362c6bc814816c9c0d0467b3f629d1aadd10348ca128b92201fcddb0",
+    "daily_refresh.yml": "73ca7a0c66c72c91ec47ddb0a6478fc8f17ddf84c75cbd4c4b93695235a473e2",
+    "weekly_eod2_refresh.yml": "a6170d7f6571c9a482023989c533a84b31d4dcfa4e46ee3e3eb1edfff3e5f6bb",
 }
 
 
@@ -173,13 +173,7 @@ class RefreshWorkflowTests(unittest.TestCase):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
         fake_git = "git() { printf '%s\\0' \"$@\"; printf '\\n'; };\n"
-        # The Earnings Pulse and Heatmap indexes are staged only once they exist in the checkout.
-        optional = (
-            int((ROOT / 'frontend/public/data/results/index.json').is_file())
-            + int((ROOT / 'frontend/public/data/results/us_index.json').is_file())
-            + int((ROOT / 'frontend/public/data/heatmap/index.json').is_file())
-        )
-        for weekly, additions in [('false', 3 + optional), ('true', 6 + optional)]:
+        for weekly, additions in [('false', 2), ('true', 4)]:
             with self.subTest(weekly=weekly):
                 message = 'literal $(false) commit message'
                 env = dict(os.environ, WEEKLY_REFRESH=weekly, REFRESH_COMMIT_MESSAGE=message)
@@ -188,13 +182,42 @@ class RefreshWorkflowTests(unittest.TestCase):
                 calls = [line.rstrip('\0').split('\0') for line in result.stdout.splitlines()]
                 self.assertEqual(sum(call[0] == 'add' for call in calls), additions)
                 self.assertEqual(['add', 'reference/dhan/group-stocks.json'] in calls, weekly == 'true')
-                self.assertTrue(any(call[0] == 'add' and 'frontend/public/data/price-band-history.json' in call for call in calls))
                 self.assertIn(['reset', '--mixed', 'origin/main'], calls)
                 self.assertIn(['commit', '-m', message], calls)
                 self.assertEqual(calls[-1], ['push'])
                 # Carried-over pipeline files go to R2 (tools/pipeline_state.py), never into Git history.
                 staged = {path for call in calls if call[0] == 'add' for path in call[1:]}
                 self.assertFalse(any(path.startswith('DO NOT DELETE EDL PIPELINE/') for path in staged))
+                # Published site data goes to R2 (frontend/site_data.py) and is served without a rebuild.
+                self.assertTrue(staged and all(path.startswith('reference/') for path in staged))
+
+    def test_site_data_is_pulled_before_the_build_and_its_indexes_published_before_the_commit(self):
+        for name in ('daily_refresh.yml', 'weekly_eod2_refresh.yml'):
+            with self.subTest(workflow=name):
+                job, = document('.github/workflows/' + name)['jobs'].values()
+                names = [step['name'] for step in job['steps']]
+                pull, push = names.index('Pull published site data from R2'), names.index('Publish site indexes to R2')
+                self.assertLess(names.index('Install R2 uploader'), pull)
+                self.assertLess(pull, names.index('Build and publish validated data'))
+                self.assertEqual(job['steps'][pull]['run'], 'python frontend/site_data.py pull')
+                later = ['Fetch and publish Earnings Pulse Heatmap', 'Refresh optional Earnings Pulse history']
+                if name == 'weekly_eod2_refresh.yml':
+                    later.append('Refresh Tijori company overviews')
+                for step in later:
+                    self.assertLess(names.index(step), push)
+                self.assertLess(push, names.index('Commit and Push Results'))
+                self.assertEqual(job['steps'][push]['run'], 'python frontend/site_data.py push-indexes')
+                self.assertNotIn('continue-on-error', job['steps'][push])
+                # The release itself goes live inside the build step, which publishes to R2.
+                build = job['steps'][names.index('Build and publish validated data')]
+                self.assertEqual(build['env']['EDL_CHART_STORAGE'], 'r2')
+        job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
+        names = [step['name'] for step in job['steps']]
+        self.assertLess(names.index('Pull published site data from R2'), names.index('Generate Historical Snapshots'))
+        publish = job['steps'][names.index('Publish Updated Sessions Manifest')]
+        self.assertEqual(publish['run'], 'python frontend/site_data.py push-sessions')
+        self.assertEqual(publish['if'], "${{ hashFiles('.upload_verified') != '' }}")
+        self.assertFalse(any('git add' in step.get('run', '') for step in job['steps']))
 
     def test_pipeline_state_is_pulled_before_fetch_and_pushed_after_a_successful_build(self):
         for name in ('daily_refresh.yml', 'weekly_eod2_refresh.yml'):

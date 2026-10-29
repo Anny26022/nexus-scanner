@@ -92,6 +92,17 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: python tools/pipeline_state.py pull
 
+      # Published site data lives in R2 (frontend/site_data.py): the publisher extends the live sessions list
+      # and price-band ledger, and refuses to publish an older session over current.json.
+      - name: Pull published site data from R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/site_data.py pull
+
       - name: Fetch refresh inputs
         id: fetch
         env:
@@ -150,6 +161,16 @@ jobs:
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
           R2_BUCKET: nexus-screener-chart-data
         run: python frontend/earningspulse_heatmap.py
+
+      # The indexes these steps wrote go live without a commit; unchanged ones are left alone.
+      - name: Publish site indexes to R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/site_data.py push-indexes
 
       # Only after a successful build; a failed push stops the run before anything is committed.
       - name: Push pipeline state to R2

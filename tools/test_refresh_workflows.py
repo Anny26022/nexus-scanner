@@ -61,6 +61,9 @@ class RefreshWorkflowTests(unittest.TestCase):
                     if not action_path.startswith('./.github/actions/'):
                         expanded.append(caller)
                         continue
+                    if action_path.endswith('publish-revision-watch'):
+                        # Added after these baselines, and checked on its own below.
+                        continue
                     action = document(action_path + '/action.yml')
                     self.assertEqual(action['runs']['using'], 'composite')
                     for source in action['runs']['steps']:
@@ -218,6 +221,28 @@ class RefreshWorkflowTests(unittest.TestCase):
         self.assertEqual(publish['run'], 'python frontend/site_data.py push-sessions')
         self.assertEqual(publish['if'], "${{ hashFiles('.upload_verified') != '' }}")
         self.assertFalse(any('git add' in step.get('run', '') for step in job['steps']))
+
+    def test_revision_watch_copy_follows_the_release_without_failing_the_refresh(self):
+        for name in ('daily_refresh.yml', 'weekly_eod2_refresh.yml', 'publish_revision_watch.yml'):
+            with self.subTest(workflow=name):
+                job, = document('.github/workflows/' + name)['jobs'].values()
+                names = [step['name'] for step in job['steps']]
+                step = job['steps'][names.index('Publish revision watch copy')]
+                self.assertEqual(step['uses'], './.github/actions/publish-revision-watch')
+                self.assertEqual(step['with'], {
+                    'cloudflare-api-token': '${{ secrets.CLOUDFLARE_API_TOKEN }}',
+                    'cloudflare-account-id': '${{ vars.CLOUDFLARE_ACCOUNT_ID }}',
+                })
+                self.assertNotIn('if', step)
+                if name == 'publish_revision_watch.yml':
+                    self.assertNotIn('continue-on-error', step)
+                    continue
+                # Right after the step that makes the release live, and never fails a published refresh.
+                self.assertEqual(names.index('Publish revision watch copy'), names.index('Build and publish validated data') + 1)
+                self.assertTrue(step['continue-on-error'])
+        action = document('.github/actions/publish-revision-watch/action.yml')
+        self.assertEqual(action['runs']['using'], 'composite')
+        self.assertEqual(action['runs']['steps'][-1]['run'], 'python tools/publish_revision_watch.py')
 
     def test_pipeline_state_is_pulled_before_fetch_and_pushed_after_a_successful_build(self):
         for name in ('daily_refresh.yml', 'weekly_eod2_refresh.yml'):

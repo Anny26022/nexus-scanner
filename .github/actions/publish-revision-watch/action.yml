@@ -1,0 +1,26 @@
+name: Publish revision watch copy
+description: Redeploy the free static copy of current.json (workers/revision-watch) after a release goes live.
+inputs:
+  cloudflare-api-token:
+    description: Token allowed to edit Workers scripts. Without it the step warns and does nothing.
+    required: false
+    default: ''
+  cloudflare-account-id:
+    description: Cloudflare account that owns the Worker.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      if: inputs.cloudflare-api-token != ''
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: .nvmrc
+
+    - name: Publish revision watch copy
+      shell: bash
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+      run: python tools/publish_revision_watch.py

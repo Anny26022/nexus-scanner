@@ -58,6 +58,21 @@ describe('/data behind the Scanner token', () => {
   });
 });
 
+describe('the token as the nexus_scanner cookie (the Journal reaches these Workers through its own domain)', () => {
+  it('is accepted for data and Ask AI, among the Journal\'s other cookies', async () => {
+    const {data, ai} = setup('enforce');
+    const cookie = {Cookie: `nexus_gsession=abc; nexus_scanner=${VALID}`};
+    expect((await data(cookie)).status).toBe(200);
+    expect(await ai(cookie)).toEqual({rateKey: `sub:${SUB}`});
+  });
+
+  it('keeps gated data out of shared caches while checking, not while off', async () => {
+    expect((await setup('enforce').data({Cookie: `nexus_scanner=${VALID}`})).headers.get('Cache-Control')).toBe('private, no-cache');
+    expect((await setup('report').data()).headers.get('Cache-Control')).toBe('private, no-cache');
+    expect((await setup('off').data()).headers.get('Cache-Control')).toBe('no-cache');
+  });
+});
+
 describe('Ask AI behind the Scanner token', () => {
   it('allows the Authorization header in its CORS preflight', () => {
     expect(corsHeaders('https://www.nexusjournal.co.in')['Access-Control-Allow-Headers']).toBe('Content-Type, Authorization');

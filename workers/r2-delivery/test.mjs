@@ -96,16 +96,16 @@ const TOKENS = {
 };
 const tamper = (token) => token.slice(0, -4) + (token.endsWith('AAAA') ? 'BBBB' : 'AAAA');
 
-function gate(path, { mode, token, method = 'GET', limits = {} } = {}) {
+function gate(path, { mode, token, cookie, method = 'GET', limits = {} } = {}) {
   const forwarded = [];
   const limiterCalls = [];
   const limiter = (name) => ({ async limit({ key }) { limiterCalls.push([name, key]); return { success: limits[name] !== false }; } });
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(cookie ? { Cookie: cookie } : {}) };
   const gateEnv = { ...env, AUTH_MODE: mode, SCANNER_TOKEN_PUBLIC_KEYS: PUBLIC_KEYS,
     DELIVERY_RATE_LIMITER: limiter('delivery'), SNAPSHOT_RATE_LIMITER: limiter('snapshot') };
   const result = gateway(new Request(`https://data.example.com/${path}`, { method, headers }), gateEnv, async (request) => {
     forwarded.push(request);
-    return new Response('cached bytes', { headers: { 'Access-Control-Allow-Origin': '*' } });
+    return new Response('cached bytes', { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=31536000, immutable' } });
   });
   return { result, forwarded, limiterCalls };
 }
@@ -166,4 +166,29 @@ test('an unconfigured key set fails closed in enforce mode', async () => {
     { ...env, AUTH_MODE: 'enforce', SCANNER_TOKEN_PUBLIC_KEYS: '{}' }, async () => new Response('cached bytes'));
   assert.equal(response.status, 401);
   assert.equal((await response.json()).reason, 'unknown_key');
+});
+
+test('reads the token from the nexus_scanner cookie (the Journal\'s same-site rewrite) and never forwards it', async () => {
+  const cookie = `nexus_gsession=abc; nexus_scanner=${TOKENS.valid}; theme=dark`;
+  const { result, forwarded } = gate('objects/abc.json.gz', { mode: 'enforce', cookie });
+  assert.equal((await result).status, 200);
+  assert.equal(forwarded[0].headers.get('Cookie'), null);
+  const expired = gate('objects/abc.json.gz', { mode: 'enforce', cookie: `nexus_scanner=${TOKENS.expired}` });
+  assert.equal((await (await expired.result).json()).reason, 'expired');
+  const other = gate('objects/abc.json.gz', { mode: 'enforce', cookie: 'nexus_gsession=abc' });
+  assert.equal((await (await other.result).json()).reason, 'missing');
+});
+
+test('the Authorization header wins over the cookie', async () => {
+  const { result } = gate('objects/abc.json.gz', { mode: 'enforce', token: TOKENS.expired, cookie: `nexus_scanner=${TOKENS.valid}` });
+  assert.equal((await (await result).json()).reason, 'expired');
+});
+
+test('gated responses are private to shared caches (Vercel\'s CDN), unchanged while off', async () => {
+  for (const mode of ['report', 'enforce']) {
+    const { result } = gate('objects/abc.json.gz', { mode, token: TOKENS.valid });
+    assert.equal((await result).headers.get('Cache-Control'), 'private, max-age=31536000, immutable', mode);
+  }
+  const { result } = gate('objects/abc.json.gz', { mode: 'off' });
+  assert.equal((await result).headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
 });

@@ -1,4 +1,4 @@
-import { authMode, denial, logAuth, verifyScannerToken } from '../../auth/scannerToken.mjs';
+import { authMode, denial, keepPrivate, logAuth, verifyScannerToken } from '../../auth/scannerToken.mjs';
 
 const PREFLIGHT = {
   'Access-Control-Allow-Origin': '*',
@@ -71,9 +71,11 @@ export async function gateway(request, env, forward) {
       }
     }
   }
-  // The token must not reach the cached entrypoint: Authorization makes the cache bypass, and it must never become
-  // part of a cache key. Every account receives the same published bytes.
+  // The token must not reach the cached entrypoint: Authorization or a cookie makes the cache bypass, and neither may
+  // become part of a cache key. Every account receives the same published bytes.
   const forwarded = new Request(request);
   forwarded.headers.delete('Authorization');
-  return forward(forwarded);
+  forwarded.headers.delete('Cookie');
+  const response = await forward(forwarded);
+  return mode === 'off' ? response : keepPrivate(response);
 }

@@ -2,7 +2,7 @@
  * The Scanner token gate for this Worker's /data files and Ask AI (see ../auth/scannerToken.mjs). Kept apart from
  * index.ts, and typed structurally like siteData.ts, so frontend tests can import it without Worker type globals.
  */
-import {authMode, denial, logAuth, verifyScannerToken, type ScannerTokenEnv} from '../auth/scannerToken.mjs';
+import {authMode, denial, keepPrivate, logAuth, verifyScannerToken, type ScannerTokenEnv} from '../auth/scannerToken.mjs';
 import {serveSiteData, type SiteBucket} from './siteData';
 
 /** The part of a Rate Limiting binding used here. */
@@ -37,7 +37,8 @@ export async function serveGatedData(request: Request, env: GateEnv, bucket: Sit
         headers:{'Cache-Control':'no-store', 'Access-Control-Allow-Origin':'*', 'Retry-After':'60'}});
     }
   }
-  return serveSiteData(request, bucket);
+  const response = await serveSiteData(request, bucket);
+  return mode === 'off' ? response : keepPrivate(response);
 }
 
 /**

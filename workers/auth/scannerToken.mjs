@@ -5,12 +5,17 @@
  *   token = base64url(JSON payload) + "." + base64url(Ed25519 signature over the first segment's ASCII bytes)
  *   payload = {v: 1, kid, sub, aud: "nexus-scanner", scope: ["data", "ai"], src, iat, exp}
  *
+ * The Journal reaches these Workers through its own domain (Vercel rewrites /scanner-api and /scanner-r2 here), so the
+ * browser sends the token as the HttpOnly `nexus_scanner` cookie the token endpoint sets. Other clients may send it as
+ * `Authorization: Bearer <token>`, which wins when both are present.
+ *
  * SCANNER_TOKEN_PUBLIC_KEYS is JSON {kid: base64url raw 32-byte public key}, so keys rotate by adding a kid.
  * AUTH_MODE: "off" (default) ignores tokens; "report" checks and logs them but serves everyone; "enforce" refuses
- * requests without a valid token. Rolling out is report first, enforce once the Journal sends tokens everywhere.
+ * requests without a valid token. Rolling out is report first, enforce once the Journal sends them everywhere.
  */
 
 export const SCANNER_TOKEN_AUDIENCE = 'nexus-scanner';
+export const SCANNER_TOKEN_COOKIE = 'nexus_scanner';
 const CLOCK_SKEW_SECONDS = 60;
 const keys = new Map();
 
@@ -46,10 +51,21 @@ const invalid = (reason) => ({ status: 'invalid', reason });
  * Checks the request's bearer token for `scope` ('data' or 'ai').
  * @returns {Promise<{status: 'valid', payload: object} | {status: 'missing'} | {status: 'invalid', reason: string}>}
  */
-export async function verifyScannerToken(request, env, scope, nowSeconds = Date.now() / 1000) {
+/** The token sent with the request: the Authorization header, else the cookie. Null when there is neither. */
+function presentedToken(request) {
   const header = request.headers.get('Authorization');
-  if (!header) return { status: 'missing' };
-  const match = /^Bearer ([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(header.trim());
+  if (header) return header.trim().replace(/^Bearer /, '');
+  for (const part of (request.headers.get('Cookie') ?? '').split(';')) {
+    const at = part.indexOf('=');
+    if (at > 0 && part.slice(0, at).trim() === SCANNER_TOKEN_COOKIE) return part.slice(at + 1).trim();
+  }
+  return null;
+}
+
+export async function verifyScannerToken(request, env, scope, nowSeconds = Date.now() / 1000) {
+  const token = presentedToken(request);
+  if (!token) return { status: 'missing' };
+  const match = /^([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/.exec(token);
   if (!match) return invalid('malformed');
   let payload;
   try { payload = JSON.parse(new TextDecoder().decode(fromBase64url(match[1]))); } catch { return invalid('malformed'); }
@@ -98,4 +114,19 @@ export function logAuth(result, mode, route) {
     ...(result.status === 'invalid' ? { reason: result.reason } : {}),
     ...(result.status === 'valid' ? { src: result.payload.src } : {}),
   }));
+}
+
+/**
+ * A gated response must not be stored by a shared cache in front of this Worker (Vercel's CDN on the rewrite), or it
+ * would be served to callers who were never checked. Browsers still keep it as before.
+ */
+export function keepPrivate(response) {
+  const cacheControl = response.headers.get('Cache-Control') ?? '';
+  if (/\b(private|no-store)\b/.test(cacheControl)) return response;
+  const rest = cacheControl.split(',').map(part => part.trim()).filter(part => part && !/^(public|s-maxage=\d+)$/i.test(part));
+  const result = new Response(response.body, response);
+  result.headers.set('Cache-Control', ['private', ...rest].join(', '));
+  result.headers.delete('CDN-Cache-Control');
+  result.headers.delete('Vercel-CDN-Cache-Control');
+  return result;
 }

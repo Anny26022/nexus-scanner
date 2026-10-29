@@ -4,18 +4,18 @@
   "compatibility_date": "2026-10-07",
   "workers_dev": true,
   "cache": { "enabled": true, "cross_version_cache": true },
-  // Workers Cache answers before a cached entrypoint runs, so the default entrypoint (the gateway that checks
-  // Scanner tokens) is uncached and reads through the cached CachedDelivery entrypoint (src/index.mjs).
+  // Workers Cache answers before a cached entrypoint runs, so the default entrypoint (the gateway that checks the
+  // Journal's secret) is uncached and reads through the cached CachedDelivery entrypoint (src/index.mjs).
   "exports": {
     "default": { "type": "worker", "cache": { "enabled": false } },
     "CachedDelivery": { "type": "worker", "cache": { "enabled": true } }
   },
-  // Scanner tokens (workers/auth/scannerToken.mjs): "report" checks and logs, "enforce" refuses requests without a
-  // valid token. SCANNER_TOKEN_PUBLIC_KEYS is {kid: base64url Ed25519 public key}, matching nexus-journal-api's key.
-  "vars": { "AUTH_MODE": "report", "SCANNER_TOKEN_PUBLIC_KEYS": "{}" },
-  // Report mode logs each request's token status (scanner_auth); these logs are how the switch to enforce is judged.
+  // The Journal gateway (workers/auth/scannerGateway.mjs): "report" checks and logs, "enforce" serves only requests
+  // nexus-journal-api forwards with SCANNER_GATEWAY_SECRET (a Worker secret, not set here).
+  "vars": { "AUTH_MODE": "report" },
+  // Report mode logs each request's gateway status (scanner_auth); these logs are how the switch to enforce is judged.
   "observability": { "enabled": true, "head_sampling_rate": 1 },
-  // Per account (token sub); namespaces 1001-1002 belong to the screener Worker.
+  // Per account (the Journal's account id); namespaces 1001-1002 belong to the screener Worker.
   "ratelimits": [
     { "name": "DELIVERY_RATE_LIMITER", "namespace_id": "1004", "simple": { "limit": 600, "period": 60 } },
     { "name": "SNAPSHOT_RATE_LIMITER", "namespace_id": "1005", "simple": { "limit": 60, "period": 60 } }

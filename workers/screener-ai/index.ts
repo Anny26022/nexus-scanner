@@ -9,7 +9,7 @@ import {pointerKey} from './siteData';
 import {pageRedirect} from './uiRedirect';
 import {gateAskAi, serveGatedData, type Limiter} from './scannerGate';
 
-type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA' | 'AUTH_MODE' | 'SCANNER_TOKEN_PUBLIC_KEYS' | 'DATA_RATE_LIMITER'> & {
+type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA' | 'AUTH_MODE' | 'SCANNER_GATEWAY_SECRET' | 'DATA_RATE_LIMITER'> & {
   /** Published data (wrangler.jsonc). Local development (wrangler.dev.jsonc) has none and reads frontend/public. */
   DATA?: R2Bucket;
   GROQ_API_KEY?: string;
@@ -18,11 +18,11 @@ type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA' | 'AUTH_MODE' | 'SCANNER_TOKE
   ALLOWED_ORIGINS?: string;
   /** Where a browser opening this Worker's own pages is sent (see uiRedirect.ts); unset in local development. */
   UI_REDIRECT?: string;
-  /** Scanner tokens (../auth/scannerToken.mjs): off, report (check and log) or enforce (refuse without one). */
+  /** The Journal gateway (../auth/scannerGateway.mjs): off, report (check and log) or enforce (refuse without it). */
   AUTH_MODE?: string;
-  /** JSON {kid: base64url Ed25519 public key}, matching nexus-journal-api's signing key. */
-  SCANNER_TOKEN_PUBLIC_KEYS?: string;
-  /** Per-account limit on /data requests (token sub). */
+  /** The secret nexus-journal-api forwards requests with (a Worker secret, shared with it). */
+  SCANNER_GATEWAY_SECRET?: string;
+  /** Per-account limit on /data requests (the Journal's account id). */
   DATA_RATE_LIMITER?: Limiter;
 };
 

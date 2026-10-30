@@ -240,8 +240,8 @@ export const ExploreTab: React.FC<ExploreTabProps> = ({
           {(filterCount > 0 || activeQuery || symbolSearch) && <Button variant="ghost" onClick={handleReset}><RotateCcw size={14} />Reset</Button>}
           {!etf && <Button
             variant="ghost"
-            disabled
-            title="Ask AI is turned off for now"
+            onClick={() => setIsAiModalOpen(true)}
+            title="Describe stocks in English or Hinglish"
           >
             <Sparkles size={13} />
             <span>Ask AI</span>

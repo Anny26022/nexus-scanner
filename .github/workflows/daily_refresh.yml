@@ -134,6 +134,15 @@ jobs:
           cd "DO NOT DELETE EDL PIPELINE"
           python run_full_pipeline.py --phase build --stage "${{ runner.temp }}/edl-refresh-${{ github.run_id }}-${{ github.run_attempt }}"
 
+      # The release is live once the build step has published current.json. A missed copy only delays open tabs
+      # (they re-read the manifest at least every 30 minutes), so it never fails the refresh.
+      - name: Publish revision watch copy
+        continue-on-error: true
+        uses: ./.github/actions/publish-revision-watch
+        with:
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Save history after build
         if: always() && steps.fetch.outcome == 'success'
         continue-on-error: true

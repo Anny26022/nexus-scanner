@@ -108,3 +108,6 @@ frontend/public/data/company/
 frontend/public/data/stocks.json
 frontend/public/data/ipos.json
 frontend/public/data/universe-classification.json
+
+# Written by tools/publish_revision_watch.py just before each deploy; the live release is the source.
+workers/revision-watch/public/current.json

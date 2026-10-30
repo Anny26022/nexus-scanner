@@ -25,6 +25,7 @@ class ObjectStore:
         self.references = {}
         self.inventory = set()
         self.uploaded = []
+        self.backups = {}
         self.fail = False
     def load_inventory(self, previous):
         return set(self.inventory)
@@ -44,6 +45,8 @@ class ObjectStore:
             else:
                 assert self.objects[path.name] == data
         return [path.name for path in paths]
+    def upload_backups(self, source):
+        self.backups.update({path.name: path.read_bytes() for path in source.glob('*.json.gz')})
     def write_release(self, value, key):
         if key in self.references:
             assert self.references[key] == value
@@ -121,15 +124,20 @@ class ObjectPublicationTests(unittest.TestCase):
                 complete_release(self.build(root, '2026-10-06'), output,
                                  {'revision': 'a'*64, 'sessionDate': '2026-10-06'}, store)
             daily = store.references['releases/' + 'a'*64 + '/index.json']
-            self.assertEqual(daily['archives'], {})
-            self.assertNotIn('archivesAsOf', daily)
+            self.assertNotIn('archives', daily)
+            self.assertNotIn('backups/releases/' + 'a'*64 + '.json', store.references)
             with patch.dict('os.environ', {'EDL_FILING_BACKUPS': ' YES '}):
                 complete_release(self.build(root, '2026-10-07'), output,
                                  {'revision': 'b'*64, 'sessionDate': '2026-10-07'}, store)
             weekly = store.references['releases/' + 'b'*64 + '/index.json']
             lookup = json.loads(gzip.decompress(store.objects[weekly['filingLookupObject'] + '.json.gz']))
-            self.assertEqual(weekly['archivesAsOf'], lookup['publishedAt'])
-            self.assertIn('classified', weekly['archives'])
+            backups = store.references['backups/releases/' + 'b'*64 + '.json']
+            self.assertEqual(backups['asOf'], lookup['publishedAt'])
+            self.assertIn('classified', backups)
+            # Backups never reach the public index or the served objects prefix.
+            self.assertNotIn('archives', weekly)
+            self.assertIn(backups['classified'] + '.json.gz', store.backups)
+            self.assertNotIn(backups['classified'] + '.json.gz', store.objects)
 
     def test_missing_chunk_prevents_publication_and_preserves_pointer(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -163,7 +171,7 @@ class ObjectPublicationTests(unittest.TestCase):
             store = ObjectStore()
             first = complete_release(self.build(root, '2026-10-06'), output, {'revision': 'a'*64, 'sessionDate': '2026-10-06'}, store)
             index = store.references['releases/' + 'a'*64 + '/index.json']
-            self.assertEqual(set(index['archives']), {'raw', 'classified'})
+            self.assertEqual(set(store.references['backups/releases/' + 'a'*64 + '.json']) - {'asOf'}, {'raw', 'classified'})
             chart_hash = index['chartObjects']['TEST']
             # The lookup lives in its own object so the index the chart path waits on stays small.
             self.assertNotIn('filingLookup', index)

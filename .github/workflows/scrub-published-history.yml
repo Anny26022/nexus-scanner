@@ -1,0 +1,46 @@
+name: Scrub published history
+
+# One-off: rewrite data published before neutral publication (tools/scrub_published_history.py).
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Rewrite files and move backups (leave off to preview)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never run alongside a refresh that is publishing the same prefixes.
+  group: daily-data-refresh
+  queue: max
+  cancel-in-progress: false
+
+jobs:
+  scrub:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install R2 uploader
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+      - name: Test the scrub job
+        run: python -m unittest discover -s tools -p test_scrub_published_history.py -v
+      - name: Scrub
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python tools/scrub_published_history.py ${{ inputs.apply && '--apply' || '' }} | tee scrub-log.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scrub-log
+          path: scrub-log.txt

@@ -1,17 +1,16 @@
 {
   "source": "Tijori Finance public company pages",
-  "exportedAt": "2026-10-25T22:07:43.349517+00:00",
-  "refreshStartedAt": "2026-10-25T21:58:02.359401+00:00",
-  "universeSessionDate": "2026-10-23",
-  "universeRevision": "24a2de3c97fd90382b76c8f0bf7ebe814e8b34d18fb28258abfea3af7ee088b2",
-  "totalSymbols": 2612,
+  "exportedAt": "2026-11-01T11:13:55.079842+00:00",
+  "universeSessionDate": "2026-10-30",
+  "universeRevision": "aadb5c1e052be348cc1feae95e4171d5af96581ba2d2e2b95312d2cc33dc30a6",
+  "totalSymbols": 2619,
   "counts": {
-    "available": 2431,
-    "no_overview": 177,
-    "unmapped": 4
+    "available": 2437,
+    "no_overview": 179,
+    "unmapped": 3
   },
-  "attemptedSymbols": 2612,
-  "withBothSections": 2406,
+  "attemptedSymbols": 2619,
+  "withBothSections": 2414,
   "refreshErrors": 0,
   "discoveryError": null,
   "complete": false,

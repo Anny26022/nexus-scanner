@@ -258,6 +258,12 @@
           "exchange": "NSE"
         },
         {
+          "isin": "INE0BJO01010",
+          "symbol": "JPL",
+          "name": "Jio Platforms",
+          "exchange": "NSE"
+        },
+        {
           "isin": "INE525B01016",
           "symbol": "HATHWAYB",
           "name": "Hathway Bhawani Cabletel & Datacom",

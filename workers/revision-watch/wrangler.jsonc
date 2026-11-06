@@ -1,0 +1,11 @@
+{
+  // A static copy of the published /data/current.json, redeployed by tools/publish_revision_watch.py after each
+  // release goes live. It has no script, so every request is a static-asset hit, which Workers does not bill. Nexus
+  // Journal's embedded scanner checks it every minute and reads the billed /data/current.json (a Worker request plus
+  // an R2 read) only when the revision changes. It is a change signal, not the source of truth: clients still take
+  // the manifest from the data origin and re-read it at least every 30 minutes.
+  "name": "nexus-scanner-revision",
+  "compatibility_date": "2026-10-07",
+  "workers_dev": true,
+  "assets": { "directory": "./public", "not_found_handling": "none" }
+}

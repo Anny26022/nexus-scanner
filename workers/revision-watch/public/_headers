@@ -1,0 +1,6 @@
+# no-cache: browsers revalidate on every check, so an unchanged copy is an empty 304 (still free).
+/current.json
+  Cache-Control: no-cache
+  Access-Control-Allow-Origin: *
+  Access-Control-Expose-Headers: ETag
+  X-Content-Type-Options: nosniff

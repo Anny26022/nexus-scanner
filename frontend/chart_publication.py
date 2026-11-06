@@ -384,6 +384,12 @@ class R2Store:
                 settle(*checking)
         return files
 
+    def upload_backups(self, source):
+        remote = self.remote('backups')
+        self.run('copy', str(source), remote, '--include', '*.json.gz', '--immutable', '--checksum',
+                 '--metadata', '--metadata-set', 'content-type=application/gzip')
+        self.run('check', str(source), remote, '--include', '*.json.gz', '--one-way', '--download', '--checkers', '4')
+
     def archive(self, previous, month):
         source = previous['chartObjectPrefix']
         target = f'monthly/{month}/{previous["chartRevision"]}/charts'
@@ -496,14 +502,21 @@ def complete_object_release(chart_root, output, manifest, store=None):
     started = time.perf_counter()
     archives = prepare_archives(chart_root) if env_bool('EDL_FILING_BACKUPS', True) else {}
     print(f'Archive preparation elapsed: {time.perf_counter() - started:.2f}s', flush=True)
-    index = dict(index, archives=archives)
+    # Complete filing backups hold raw upstream responses. They go to a prefix the data Worker never
+    # serves, and the public index does not reference them.
+    backups = chart_root / 'backups'
     if archives:
-        index['archivesAsOf'] = (filing_lookup(chart_root, index) or {}).get('publishedAt', manifest['sessionDate'])
+        backups.mkdir(exist_ok=True)
+        for digest in archives.values():
+            (chart_root / 'objects' / f'{digest}.json.gz').replace(backups / f'{digest}.json.gz')
+        archives = dict(archives, asOf=(filing_lookup(chart_root, index) or {}).get('publishedAt', manifest['sessionDate']))
     if store:
         base = store.base_url
         started = time.perf_counter()
         verified = store.load_inventory(previous)
         files = store.upload_objects(chart_root / 'objects', verified)
+        if archives:
+            store.upload_backups(backups)
         rotation = chart_root / 'rotation'
         if existing is None and manifest.get('rotationHistoryObject'):
             try:
@@ -521,6 +534,8 @@ def complete_object_release(chart_root, output, manifest, store=None):
         manifest['objectUrlTemplate'] = f'{base}/objects/{{hash}}.json.gz'
         # Write references only after every object was uploaded and verified.
         store.write_release(index, f"releases/{manifest['revision']}/index.json")
+        if archives:
+            store.write_release(archives, f"backups/releases/{manifest['revision']}.json")
         store.write_release(manifest, f"releases/{manifest['revision']}/release.json")
         try:
             store.write_inventory(files)

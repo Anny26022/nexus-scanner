@@ -1,10 +1,18 @@
 """Adapt the ETF bulk response to the existing packed scanner snapshot."""
-from datetime import datetime
+from datetime import date, datetime, timedelta
 import math
 from zoneinfo import ZoneInfo
 
 import scanner_bridge  # noqa: F401  puts the pipeline checkout on sys.path, as for publish_snapshot
+from ohlcv_utils import is_nse_session_day
 from pipeline_utils import load_json, resource_path
+
+
+def next_session(session):
+    day = date.fromisoformat(session) + timedelta(days=1)
+    while not is_nse_session_day(day):
+        day += timedelta(days=1)
+    return day.isoformat()
 
 
 def build_etf_snapshot(source, session, revision):
@@ -15,9 +23,17 @@ def build_etf_snapshot(source, session, revision):
     def number(record, key):
         value = record.get(key)
         return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
+    fetched = datetime.fromisoformat(source['fetchedAt'].replace('Z', '+00:00')).timestamp()
+    upcoming = next_session(session)
     for record in source['records']:
         stamp = number(record, 'time')
         quote_date = datetime.fromtimestamp(stamp, ZoneInfo('Asia/Kolkata')).date().isoformat() if stamp else None
+        # TradingView can stamp a closed session's quote with the next session's opening time before that session
+        # starts (75 ETFs after the 2026-11-08 Muhurat session read 2026-11-09 09:15, with Muhurat's prices and
+        # volumes). A quote time still in the future when fetched cannot be that session's trading, so it is the
+        # stock session's. Any other quote dated after the session is still refused.
+        if quote_date == upcoming and stamp > fetched:
+            quote_date = session
         if quote_date and quote_date > session:
             raise ValueError('ETF quote is newer than the stock session')
         values = {field: record.get(field) for field in fields}

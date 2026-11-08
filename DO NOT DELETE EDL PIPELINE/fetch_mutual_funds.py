@@ -5,8 +5,9 @@ Two requests a day:
     category ranges, ratings, AUM, costs and SIP rules.
   * AMFI `NAVAll.txt`: the regulator's NAV for every plan, matched to Dhan by ISIN.
 
-The published NAV is AMFI's when AMFI has the fund and its NAV is as new as Dhan's; returns stay as Dhan computed
-them, as of `returnsAsOf`. Where both sources quote the same date, their NAVs must agree, or the snapshot is refused
+The published NAV is AMFI's when AMFI has the fund and its NAV is as new as Dhan's. Dhan's returns are usually as of
+its NAV date but for some funds a day behind (checked against its NAV chart), so `returnsAsOf` is left empty here;
+the publisher replaces them with returns computed from the NAV history as of the latest NAV. Where both sources quote the same date, their NAVs must agree, or the snapshot is refused
 and the previous one stays live.
 
     python fetch_mutual_funds.py   # writes mutual_fund_snapshot.json
@@ -113,8 +114,9 @@ def fund_record(row):
         'navDate': iso_date(row.get('dmfm_latest_nav_date')),
         'navSource': 'Dhan',
         'previousNav': number(row.get('dmfm_prev_nav_value')),
-        'returnsAsOf': iso_date(row.get('dmfm_latest_nav_date')),
-        'returns': {period: number(row.get(f'dmfm_scheme_{key}_return')) for period, key in RETURN_PERIODS.items()},
+        'returnsAsOf': None,  # Dhan's figures are as of its NAV date or a day before; it does not say which
+        'returnsSource': 'Dhan',
+        'returns': dict({period: number(row.get(f'dmfm_scheme_{key}_return')) for period, key in RETURN_PERIODS.items()}, **{'10y': None}),
         'absoluteReturns': {'3y': number(row.get('dmfm_3_year_absolute_return')), '5y': number(row.get('dmfm_5_year_absolute_return'))},
         'categoryReturns': {period: {stat: number(row.get(f'dmfm_category_ret_{key}_{stat}')) for stat in ('avg', 'min', 'max')}
                             for period, key in CATEGORY_PERIODS.items()},

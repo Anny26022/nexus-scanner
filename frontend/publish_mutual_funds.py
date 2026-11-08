@@ -12,6 +12,7 @@ written under frontend/public/data/mf/ for local development.
 import gzip
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -28,11 +29,11 @@ MIN_SHARE_OF_LIVE = 0.9
 
 
 def pack(snapshot):
-    """The file's bytes, and a revision from its data alone: a re-fetch of the same NAVs is not a new release."""
-    data = gzip.compress(json.dumps(snapshot, separators=(',', ':'), allow_nan=False).encode(), mtime=0)
+    """The release file and its revision. The fetch time stays in the pointer, so the same data always has the same
+    bytes: a re-fetch publishes nothing, and a retried upload rewrites an identical immutable object."""
     content = {key: value for key, value in snapshot.items() if key != 'fetchedAt'}
-    revision = hashlib.sha256(json.dumps(content, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
-    return data, revision
+    data = gzip.compress(json.dumps(content, sort_keys=True, separators=(',', ':'), allow_nan=False).encode(), mtime=0)
+    return data, hashlib.sha256(data).hexdigest()
 
 
 def pointer_for(snapshot, revision):
@@ -81,17 +82,29 @@ def publish_mutual_funds(store, fetch=fetch_snapshot):
     return pointer
 
 
+def replace_file(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + '.tmp')
+    temporary.write_bytes(data)
+    temporary.replace(path)
+
+
 def write_local(snapshot, output=OUTPUT):
+    """Local development: the same checks and order as R2, into frontend/public/data/mf/."""
+    pointer_path = output / POINTER
+    check_against_live(snapshot, json.loads(pointer_path.read_text()) if pointer_path.is_file() else None)
     data, revision = pack(snapshot)
-    release = output / 'mf' / 'revisions' / revision
-    release.mkdir(parents=True, exist_ok=True)
-    (release / 'funds.json.gz').write_bytes(data)
-    (output / POINTER).write_text(json.dumps(pointer_for(snapshot, revision), separators=(',', ':'), allow_nan=False))
-    print(f'R2 settings missing; wrote {output / POINTER} locally only', flush=True)
+    replace_file(output / 'mf' / 'revisions' / revision / 'funds.json.gz', data)
+    replace_file(pointer_path, json.dumps(pointer_for(snapshot, revision), separators=(',', ':'), allow_nan=False).encode())
+    print(f'R2 settings missing; wrote {pointer_path} locally only', flush=True)
 
 
 def main():
-    if missing_r2_settings():
+    missing = missing_r2_settings()
+    if missing and os.environ.get('GITHUB_ACTIONS') == 'true':
+        print('::error::R2 settings missing (' + ', '.join(missing) + '); the mutual fund snapshot was not published.', flush=True)
+        return 1
+    if missing:
         write_local(fetch_snapshot())
         return 0
     publish_mutual_funds(R2Store())

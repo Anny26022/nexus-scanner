@@ -32,6 +32,8 @@ NAV_TOLERANCE = 0.0001
 MIN_NAV_AGREEMENT = 0.95
 # Below this many same-date pairs the agreement share says little (AMFI and Dhan update at different hours).
 MIN_NAV_COMPARISONS = 100
+# AMFI lists nearly every fund Dhan does (97.6% when this was written); far fewer means a truncated download.
+MIN_AMFI_COVERAGE = 0.9
 ISIN = re.compile(r'INF[A-Z0-9]{9}')
 
 RETURN_PERIODS = {'1w': '1_week', '1m': '1_month', '3m': '3_month', '6m': '6_month', '1y': '1_year', '3y': '3_year', '5y': '5_year'}
@@ -58,7 +60,10 @@ def flag(value):
 
 def iso_date(value):
     value = text(value)
-    return value[:10] if value and re.fullmatch(r'\d{4}-\d{2}-\d{2}', value[:10]) else None
+    try:
+        return datetime.strptime(value[:10], '%Y-%m-%d').date().isoformat() if value else None
+    except ValueError:
+        return None
 
 
 def rating(value):
@@ -164,7 +169,7 @@ def build_snapshot(dhan_rows, amfi_navs, fetched_at):
         if not isinstance(row, dict) or not ISIN.fullmatch(str(row.get('dmfm_isin_code', ''))):
             continue
         record = fund_record(row)
-        if not record['name'] or record['nav'] is None or not record['navDate']:
+        if not record['name'] or not record['nav'] or record['nav'] <= 0 or not record['navDate']:
             continue
         held = funds.get(record['isin'])
         # Dhan lists a few ISINs twice; the larger fund is the live listing.
@@ -173,6 +178,10 @@ def build_snapshot(dhan_rows, amfi_navs, fetched_at):
     if len(funds) < MIN_FUNDS:
         raise ValueError(f'Dhan fund screener returned {len(funds)} usable funds; expected at least {MIN_FUNDS}')
 
+    covered = sum(isin in amfi_navs for isin in funds)
+    if amfi_navs and covered < MIN_AMFI_COVERAGE * len(funds):
+        print(f'AMFI NAV file covers only {covered} of {len(funds)} funds; treating it as unavailable', flush=True)
+        amfi_navs = {}
     compared = agreed = from_amfi = 0
     for record in funds.values():
         official = amfi_navs.get(record['isin'])

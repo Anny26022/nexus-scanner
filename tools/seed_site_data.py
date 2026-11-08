@@ -31,10 +31,11 @@ def plan(output):
     if current['revision'] not in {path.name for path in revisions}:
         raise RuntimeError('current.json names a revision that is not in the checkout')
     folders = [(path, f'releases/{path.name}') for path in revisions]
-    company = output / 'company' / 'revisions'
-    if company.is_dir():
-        folders += [(path, f'releases/company/{path.name}') for path in sorted(company.iterdir())
-                    if path.is_dir() and site_data.REVISION.fullmatch(path.name)]
+    for name in ('company', 'mf'):
+        published = output / name / 'revisions'
+        if published.is_dir():
+            folders += [(path, f'releases/{name}/{path.name}') for path in sorted(published.iterdir())
+                        if path.is_dir() and site_data.REVISION.fullmatch(path.name)]
     # Like a release: the catalogue, then the other pointers, current.json last.
     pointers = [site_data.AI_FILTER_CHOICES] + [name for name in site_data.POINTERS
                                                 if name not in (site_data.AI_FILTER_CHOICES, 'current.json')

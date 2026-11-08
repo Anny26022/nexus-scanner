@@ -215,15 +215,20 @@ class SiteDataTests(unittest.TestCase):
         company.mkdir(parents=True)
         (company / 'overviews.json.gz').write_bytes(b'gz')
         (self.output / 'company/current.json').write_text(json.dumps({'revision': COMPANY}))
+        funds = self.output / 'mf/revisions' / ('f' * 64)
+        funds.mkdir(parents=True)
+        (funds / 'funds.json.gz').write_bytes(b'gz')
+        (self.output / 'mf/current.json').write_text(json.dumps({'revision': 'f' * 64}))
         store = FakeStore()
         seed_site_data.seed(store, self.output)
         copied = [target for command, target in store.calls if command == 'check']
-        self.assertEqual(copied, [f'r2:releases/{REVISION}', f'r2:releases/{"b" * 64}', f'r2:releases/company/{COMPANY}'])
+        self.assertEqual(copied, [f'r2:releases/{REVISION}', f'r2:releases/{"b" * 64}', f'r2:releases/company/{COMPANY}',
+                                  f'r2:releases/mf/{"f" * 64}'])
         order = store.pointer_order()
         self.assertEqual(order[0], 'ai-filter-choices.json')
         self.assertEqual(order[-1], 'current.json')
         self.assertEqual(set(order), {'ai-filter-choices.json', 'sessions.json', 'price-band-history.json',
-                                      'company/current.json', 'current.json'})
+                                      'company/current.json', 'mf/current.json', 'current.json'})
         self.assertEqual(manifest['revision'], json.loads(store.objects['site/data/ai-filter-choices.json'])['revision'])
 
 

@@ -9,9 +9,10 @@ LIVE_KEY = f'site/data/{POINTER}'
 
 class FakeR2:
     """The rclone calls the publisher makes, on a dict of keys."""
-    def __init__(self, objects=None):
+    def __init__(self, objects=None, corrupt=None):
         self.objects = dict(objects or {})
         self.uploads = []
+        self.corrupt = corrupt  # a key prefix whose stored bytes read back damaged
 
     def remote(self, key):
         return f'charts:bucket/{key}'
@@ -22,7 +23,7 @@ class FakeR2:
             prefix = key
             return '\n'.join(name[len(prefix):] for name in self.objects if name.startswith(prefix)).encode()
         if action == 'cat':
-            return self.objects[key]
+            return self.objects[key] + (b'!' if self.corrupt and key.startswith(self.corrupt) else b'')
         if action == 'copyto':
             target = args[1].split('/', 1)[1]
             with open(args[0], 'rb') as handle:
@@ -45,7 +46,9 @@ class PublishMutualFundsTests(unittest.TestCase):
         self.assertEqual(store.uploads, [f"releases/mf/{pointer['revision']}/funds.json.gz", LIVE_KEY])
         self.assertEqual(pointer['fundsUrl'], f"/data/mf/revisions/{pointer['revision']}/funds.json.gz")
         self.assertEqual(json.loads(store.objects[LIVE_KEY]), pointer)
-        self.assertEqual(json.loads(gzip.decompress(store.objects[store.uploads[0]])), snapshot())
+        expected = {key: value for key, value in snapshot().items() if key != 'fetchedAt'}
+        self.assertEqual(json.loads(gzip.decompress(store.objects[store.uploads[0]])), expected)
+        self.assertEqual(pointer['fetchedAt'], snapshot()['fetchedAt'])
         self.assertEqual((pointer['navDate'], pointer['fundCount']), ('2026-11-06', 3))
 
     def test_the_same_data_fetched_again_uploads_nothing(self):
@@ -54,6 +57,14 @@ class PublishMutualFundsTests(unittest.TestCase):
         store.uploads.clear()
         publish_mutual_funds(store, fetch=lambda: dict(snapshot(), fetchedAt='2026-11-07T02:00:00+00:00'))
         self.assertEqual(store.uploads, [])
+
+    def test_a_damaged_upload_never_reaches_the_pointer(self):
+        for damaged in ('releases/mf/', 'site/data/mf/'):
+            store = FakeR2(corrupt=damaged)
+            with self.subTest(damaged), self.assertRaisesRegex(RuntimeError, 'read-back mismatch'):
+                publish_mutual_funds(store, fetch=snapshot)
+            if damaged == 'releases/mf/':
+                self.assertNotIn(LIVE_KEY, store.uploads)
 
     def test_keeps_the_live_snapshot_for_older_or_much_smaller_data(self):
         store = FakeR2({LIVE_KEY: json.dumps({'revision': 'a' * 64, 'navDate': '2026-11-06', 'fundCount': 1844}).encode()})

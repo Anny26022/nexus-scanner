@@ -68,6 +68,19 @@ class MutualFundTests(unittest.TestCase):
         self.assertEqual(snapshot['navDate'], '2026-11-07')
         self.assertEqual(snapshot['navCheck'], {'amfiMatched': 3, 'sameDateCompared': 1, 'sameDateAgreed': 1, 'navFromAmfi': 2})
 
+    def test_drops_funds_without_a_positive_nav_or_a_real_date(self):
+        rows = [row(isin(0)), row(isin(1), nav='0'), row(isin(2), nav='-3'), row(isin(3), day='2026-02-31'), row(isin(4))]
+        with patch.object(mf, 'MIN_FUNDS', 2):
+            self.assertEqual([fund['isin'] for fund in mf.build_snapshot(rows, {}, 'now')['funds']], [isin(0), isin(4)])
+
+    def test_a_truncated_amfi_file_is_treated_as_unavailable(self):
+        rows = [row(isin(index)) for index in range(10)]
+        partial = {isin(0): {'code': '1', 'nav': 99.0, 'navDate': '2026-11-07'}}
+        with patch.object(mf, 'MIN_FUNDS', 10):
+            snapshot = mf.build_snapshot(rows, partial, 'now')
+        self.assertEqual(snapshot['navCheck']['amfiMatched'], 0)
+        self.assertTrue(all(fund['navSource'] == 'Dhan' for fund in snapshot['funds']))
+
     def test_refuses_a_partial_universe_or_navs_that_disagree_with_amfi(self):
         rows = [row(isin(index)) for index in range(4)]
         with patch.object(mf, 'MIN_FUNDS', 5), self.assertRaisesRegex(ValueError, 'usable funds'):

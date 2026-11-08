@@ -1,12 +1,41 @@
 import csv
+import json
 from datetime import datetime, time
+from functools import lru_cache
 from math import isfinite
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from pipeline_utils import resource_path
+
 
 OHLCV_FIELDS = ["Date", "Open", "High", "Low", "Close", "Volume"]
 NSE_TIMEZONE = ZoneInfo("Asia/Kolkata")
+TRADING_CALENDAR_FILE = "nse_trading_calendar.json"
+
+
+@lru_cache(maxsize=1)
+def nse_trading_calendar():
+    """NSE weekday closures and weekend special sessions, by ISO date.
+
+    The file is a copy of the journal's holiday list. A weekend session missing
+    from it is dropped and the ledger gap check fails the run (as on
+    2026-11-08), so add each new NSE circular's date there.
+    """
+    with open(resource_path(TRADING_CALENDAR_FILE), encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return frozenset(payload["holidays"]), frozenset(payload["special_sessions"])
+
+
+def is_nse_session_day(day):
+    """Whether ``day`` (a date or datetime) can carry an NSE daily bar.
+
+    Weekdays that are not NSE holidays, plus weekend special sessions such as
+    Muhurat trading or a Union Budget day.
+    """
+    holidays, special_sessions = nse_trading_calendar()
+    key = day.strftime("%Y-%m-%d")
+    return key in special_sessions or (day.weekday() < 5 and key not in holidays)
 
 
 def nse_now(now=None):
@@ -24,10 +53,15 @@ def is_nse_cash_session(now=None):
 
     The snapshot payload has no trade-date field.  Outside normal cash-market
     hours it can still contain the prior close, so labelling it with the local
-    calendar date would create a false weekend/holiday candle.
+    calendar date would create a false weekend/holiday candle. Special
+    sessions keep their own hours (Muhurat is about an hour in the
+    afternoon), so they are deliberately not treated as live here; their bar
+    comes from the official bhavcopy after the close.
     """
     instant = nse_now(now)
-    return instant.weekday() < 5 and time(9, 15) <= instant.time() < time(15, 30)
+    holidays, _ = nse_trading_calendar()
+    return (instant.weekday() < 5 and instant.strftime("%Y-%m-%d") not in holidays
+            and time(9, 15) <= instant.time() < time(15, 30))
 
 
 def symbol_csv_path(directory, symbol):
@@ -93,11 +127,14 @@ def parse_history_date(value):
 
 
 def discard_weekend_rows(rows):
-    """Remove impossible NSE daily bars left by an older live-snapshot run."""
+    """Remove impossible NSE daily bars left by an older live-snapshot run.
+
+    Weekend special sessions from ``nse_trading_calendar.json`` are kept.
+    """
     valid = []
     for row in rows:
         try:
-            if parse_history_date(row["Date"]).weekday() < 5:
+            if is_nse_session_day(parse_history_date(row["Date"])):
                 valid.append(row)
         except (KeyError, TypeError, ValueError):
             valid.append(row)
@@ -140,7 +177,7 @@ def evidenced_history_gaps(rows, expected_sessions):
         if first is not None and day >= first and day not in expected:
             continue
         try:
-            if parse_history_date(row['Date']).weekday() >= 5:
+            if not is_nse_session_day(parse_history_date(row['Date'])):
                 continue
         except (KeyError, TypeError, ValueError):
             pass

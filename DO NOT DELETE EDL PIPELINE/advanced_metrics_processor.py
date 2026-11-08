@@ -5,6 +5,7 @@ import sys
 import math
 from concurrent.futures import ThreadPoolExecutor
 
+from ohlcv_utils import is_nse_session_day
 from pipeline_utils import BASE_DIR, apply_sma_fields, load_json, save_json
 
 # --- Configuration ---
@@ -56,10 +57,8 @@ def merge_historical_metrics(stock, metrics):
 def drop_copied_live_snapshot(df):
     """Drop a non-trading-day snapshot copied verbatim from the prior session."""
     columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-    latest_is_weekend = (
-        'Date' in df.columns
-        and pd.to_datetime(df['Date'].iloc[-1], errors='coerce').weekday() >= 5
-    )
+    latest = pd.to_datetime(df['Date'].iloc[-1], errors='coerce') if 'Date' in df.columns and len(df) else pd.NaT
+    latest_is_weekend = not pd.isna(latest) and not is_nse_session_day(latest)
     if latest_is_weekend and len(df) > 1 and df[columns].iloc[-1].equals(df[columns].iloc[-2]):
         return df.iloc[:-1].copy()
     return df

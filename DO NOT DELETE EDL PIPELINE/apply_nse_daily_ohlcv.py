@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import date
 import requests
 
-from ohlcv_utils import discard_invalid_ohlcv_rows, discard_weekend_rows, evidenced_history_gaps, has_valid_ohlcv, merge_rows_by_date, nse_calendar_date, parse_history_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
+from ohlcv_utils import discard_invalid_ohlcv_rows, discard_weekend_rows, evidenced_history_gaps, has_valid_ohlcv, is_nse_session_day, merge_rows_by_date, nse_calendar_date, parse_history_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
 from nse_delivery import fetch_ohlcv_file_for_date
 from pipeline_utils import BASE_DIR, load_json, save_json
 
@@ -49,7 +49,7 @@ def repair_official_history(expected, output_dir, fetcher=fetch_ohlcv_file_for_d
         """Whether full cleaning would retain any row, without materializing it."""
         for row in rows:
             try:
-                if parse_history_date(row['Date']).weekday() >= 5:
+                if not is_nse_session_day(parse_history_date(row['Date'])):
                     continue
             except (KeyError, TypeError, ValueError):
                 pass

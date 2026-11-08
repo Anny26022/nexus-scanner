@@ -9,7 +9,7 @@ until ScanX provides both of those fields on a later refresh.
 import csv
 from datetime import date, datetime, timedelta
 
-from ohlcv_utils import nse_calendar_date
+from ohlcv_utils import is_nse_session_day, nse_calendar_date
 from pipeline_utils import load_json, resolve_path, save_json
 
 
@@ -38,7 +38,7 @@ def parse_listing_date(value):
 
 
 def previous_weekday(day):
-    while day.weekday() >= 5:
+    while not is_nse_session_day(day):
         day -= timedelta(days=1)
     return day
 
@@ -50,7 +50,7 @@ def weekday_sessions_after(listing_date, as_of_date):
     sessions = 0
     current = listing_date + timedelta(days=1)
     while current <= as_of_date:
-        sessions += current.weekday() < 5
+        sessions += is_nse_session_day(current)
         current += timedelta(days=1)
     return sessions
 

@@ -12,7 +12,7 @@ from datetime import datetime, date, time as day_time, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from ohlcv_utils import discard_weekend_rows, merge_rows_by_date, nse_calendar_date, nse_now, NSE_TIMEZONE, read_ohlcv_csv, rows_from_tick_data, write_ohlcv_csv
+from ohlcv_utils import discard_weekend_rows, is_nse_session_day, merge_rows_by_date, nse_calendar_date, nse_now, NSE_TIMEZONE, read_ohlcv_csv, rows_from_tick_data, write_ohlcv_csv
 from pipeline_utils import ensure_dir, get_headers, load_json, resolve_path
 
 # --- Configuration ---
@@ -84,9 +84,9 @@ def snapshot_matches_session(fetched_at, session, now=None):
     except (TypeError, ValueError):
         return False
     next_day = day + timedelta(days=1)
-    while next_day.weekday() >= 5:
+    while not is_nse_session_day(next_day):
         next_day += timedelta(days=1)
-    return (day.weekday() < 5 and datetime.combine(day, day_time(9, 15), NSE_TIMEZONE) <= captured
+    return (is_nse_session_day(day) and datetime.combine(day, day_time(9, 15), NSE_TIMEZONE) <= captured
             < datetime.combine(next_day, day_time(9, 15), NSE_TIMEZONE) and captured <= nse_now(now))
 
 def main():

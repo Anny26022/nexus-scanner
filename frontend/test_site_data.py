@@ -222,13 +222,12 @@ class SiteDataTests(unittest.TestCase):
         store = FakeStore()
         seed_site_data.seed(store, self.output)
         copied = [target for command, target in store.calls if command == 'check']
-        self.assertEqual(copied, [f'r2:releases/{REVISION}', f'r2:releases/{"b" * 64}', f'r2:releases/company/{COMPANY}',
-                                  f'r2:releases/mf/{"f" * 64}'])
+        self.assertEqual(copied, [f'r2:releases/{REVISION}', f'r2:releases/{"b" * 64}', f'r2:releases/company/{COMPANY}'])
         order = store.pointer_order()
         self.assertEqual(order[0], 'ai-filter-choices.json')
         self.assertEqual(order[-1], 'current.json')
         self.assertEqual(set(order), {'ai-filter-choices.json', 'sessions.json', 'price-band-history.json',
-                                      'company/current.json', 'mf/current.json', 'current.json'})
+                                      'company/current.json', 'current.json'})
         self.assertEqual(manifest['revision'], json.loads(store.objects['site/data/ai-filter-choices.json'])['revision'])
 
 

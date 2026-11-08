@@ -1,7 +1,11 @@
 import gzip
 import json
+from pathlib import Path
+import tempfile
 import unittest
+from unittest.mock import Mock, patch
 
+import publish_mutual_funds as publisher
 from publish_mutual_funds import POINTER, publish_mutual_funds
 
 LIVE_KEY = f'site/data/{POINTER}'
@@ -73,6 +77,25 @@ class PublishMutualFundsTests(unittest.TestCase):
                 publish_mutual_funds(store, fetch=stale)
         self.assertEqual(store.uploads, [])
         self.assertEqual(json.loads(store.objects[LIVE_KEY])['revision'], 'a' * 64)
+
+
+class EntryPointTests(unittest.TestCase):
+    def test_a_ci_run_without_r2_settings_fails_before_fetching(self):
+        fetch = Mock()
+        with patch.dict('os.environ', {'GITHUB_ACTIONS': 'true'}, clear=True), patch.object(publisher, 'fetch_snapshot', fetch):
+            self.assertEqual(publisher.main(), 1)
+        fetch.assert_not_called()
+
+    def test_local_runs_write_the_release_then_the_pointer_and_keep_newer_data(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder)
+            publisher.write_local(snapshot('2026-11-06'), output)
+            pointer = json.loads((output / POINTER).read_text())
+            self.assertTrue((output / 'mf/revisions' / pointer['revision'] / 'funds.json.gz').is_file())
+            with self.assertRaisesRegex(ValueError, 'older'):
+                publisher.write_local(snapshot('2026-11-05'), output)
+            self.assertEqual(json.loads((output / POINTER).read_text()), pointer)
+            self.assertEqual(sorted(path.name for path in output.rglob('*.tmp')), [])
 
 
 if __name__ == '__main__':

@@ -24,7 +24,7 @@ import site_data  # noqa: E402
 
 
 # Published only by its own job, with its checks (frontend/publish_mutual_funds.py); a local copy may be stale.
-NOT_SEEDED = ('mf/current.json',)
+NOT_SEEDED = ('mf/current.json', 'mf/holdings.json')
 
 
 def plan(output):

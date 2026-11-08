@@ -49,6 +49,11 @@ it('maps /data paths onto the release layout Nexus Journal reads', () => {
   expect(siteDataKey('/data/mf/current.json')).toEqual({key: 'site/data/mf/current.json', immutable: false});
   expect(siteDataKey(`/data/mf/revisions/${revision}/funds.json.gz`))
     .toEqual({key: `releases/mf/${revision}/funds.json.gz`, immutable: true});
+  expect(siteDataKey(`/data/mf/revisions/${revision}/nav/INF879O01027.json.gz`))
+    .toEqual({key: `releases/mf/${revision}/nav/INF879O01027.json.gz`, immutable: true});
+  expect(siteDataKey('/data/mf/holdings.json')).toEqual({key: 'site/data/mf/holdings.json', immutable: false});
+  expect(siteDataKey(`/data/mf/holdings/revisions/${revision}/holders/INE040A01034.json.gz`))
+    .toEqual({key: `releases/mf-holdings/${revision}/holders/INE040A01034.json.gz`, immutable: true});
 });
 
 it('publishes nothing outside the allowlist', () => {
@@ -56,7 +61,7 @@ it('publishes nothing outside the allowlist', () => {
     '/data/stocks.json', '/data/rotation/local.json', '/data/snapshots/2026-10-01.json.gz', '/data/objects/x.json.gz',
     '/data/revisions/abc/stocks.json', `/data/revisions/${revision}/a/b/c.json`, `/data/revisions/${revision}/../x.json`,
     `/data/revisions/${revision}/%2e%2e/current.json`, `/data/revisions/${revision}/charts.txt`,
-    '/data/company/revisions/x/overviews.json.gz', '/data/mf/revisions/x/funds.json.gz', '/data/mf/other.json', '/data/%E0%A4%A', '/data/', '/datax/current.json',
+    '/data/company/revisions/x/overviews.json.gz', '/data/mf/revisions/x/funds.json.gz', '/data/mf/other.json', `/data/mf/revisions/${revision}/a/b/c.json`, '/data/mf/holdings/revisions/x/summary.json.gz', '/data/%E0%A4%A', '/data/', '/datax/current.json',
   ]) expect(siteDataKey(path), path).toBeNull();
 });
 

@@ -13,12 +13,12 @@ from fetch_etf_snapshot import COLUMNS, normalize
 
 
 class EtfSnapshotTests(unittest.TestCase):
-    def source(self, day='2026-10-23'):
+    def source(self, day='2026-10-23', fetched_at='2026-10-23T16:00:00Z'):
         values = dict(symbol='NIFTYBEES', time=datetime.fromisoformat(day).replace(tzinfo=timezone.utc).timestamp(),
                       close=250, exchange='NSE', type='fund', subtype='etf', currency='INR',
                       description='Nifty ETF', asset_class='c05f85d35d1cd0be6ebb2af4be16e06a', expense_ratio=None)
         response = {'totalCount':1, 'data':[{'s':'NSE:NIFTYBEES', 'd':[values.get(field) for field in COLUMNS]}]}
-        return normalize(response, '2026-10-23T16:00:00Z')
+        return normalize(response, fetched_at)
 
     def test_bulk_alignment_identity_and_missing_data(self):
         source = self.source()
@@ -29,9 +29,20 @@ class EtfSnapshotTests(unittest.TestCase):
         self.assertEqual(decode_packed_snapshot(pack_snapshot(snapshot)), snapshot)
 
     def test_rejects_old_or_future_quotes_instead_of_relabelling(self):
-        for day in ('2026-10-22', '2026-10-24'):
-            with self.assertRaises(ValueError):
-                build_etf_snapshot(self.source(day), '2026-10-23', 'a'*64)
+        # Quotes already traded when fetched: an older day, the next session, and a later one.
+        for day, fetched in (('2026-10-22', '2026-10-23T16:00:00Z'), ('2026-10-26T04:00:00', '2026-10-26T12:00:00Z'),
+                             ('2026-10-27T04:00:00', '2026-10-23T16:00:00Z')):
+            with self.subTest(day=day), self.assertRaises(ValueError):
+                build_etf_snapshot(self.source(day, fetched), '2026-10-23', 'a'*64)
+
+    def test_quote_stamped_with_the_next_open_before_it_happens_is_the_sessions(self):
+        # After the Sunday 2026-11-08 Muhurat session TradingView labelled some ETFs 2026-11-09 09:15 IST (03:45 UTC)
+        # hours before that open; their prices were Muhurat's.
+        snapshot = build_etf_snapshot(self.source('2026-11-09T03:45:00', '2026-11-08T20:00:00Z'), '2026-11-08', 'a'*64)
+        self.assertEqual(snapshot['stocks'][0]['asOfDate'], '2026-11-08')
+        # Fetched after that open, the same stamp is a newer session's quote.
+        with self.assertRaises(ValueError):
+            build_etf_snapshot(self.source('2026-11-09T03:45:00', '2026-11-09T05:00:00Z'), '2026-11-08', 'a'*64)
 
     def test_rejects_partial_duplicate_and_foreign_listings(self):
         for response in (None, [], {'totalCount':1, 'data':[None]},

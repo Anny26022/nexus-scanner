@@ -77,6 +77,24 @@ class HistoryGapTests(unittest.TestCase):
                                        expected_sessions={'2026-10-06', '2026-10-07'})
                 self.assertEqual([row['Date'] for row in read_ohlcv_csv(destination)], ['2026-10-06'])
 
+    def test_sunday_muhurat_session_is_kept_and_satisfies_the_ledger(self):
+        # 2026-11-08 was a Sunday Muhurat session with an official bhavcopy.
+        details = dict(Exch='NSE', Seg='E', Inst='EQUITY', Sid=1)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            destination = root / 'TEST.csv'
+            write_ohlcv_csv(destination, history() + [candle('2026-11-06'), candle('2026-11-07'), candle('2026-11-08')])
+            with patch('fetch_all_ohlcv.resolve_path', return_value=root), \
+                    patch('fetch_all_ohlcv.is_nse_cash_session', return_value=False), \
+                    patch('fetch_all_ohlcv.time.time', return_value=datetime(2026, 11, 9, 1, tzinfo=NSE_TIMEZONE).timestamp()), \
+                    patch('fetch_all_ohlcv.fetch_history_chunk', return_value=[]):
+                fetch_single_stock('TEST', details, official_nse_session='2026-11-08',
+                                   expected_sessions={'2026-11-06', '2026-11-08'})
+            # The Saturday leftover goes; the Sunday session stays.
+            dates = [row['Date'] for row in read_ohlcv_csv(destination)]
+            self.assertIn('2026-11-08', dates)
+            self.assertNotIn('2026-11-07', dates)
+
     def test_fast_date_parser_preserves_legacy_dates_and_invalid_inputs(self):
         for value in ['2026-10-07', '2026-1-7', '2024-02-29', '2023-02-29', '20261007', '', None, 42]:
             with self.subTest(value=value):

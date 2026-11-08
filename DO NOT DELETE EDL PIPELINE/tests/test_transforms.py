@@ -554,6 +554,20 @@ class TransformTests(unittest.TestCase):
         ]
         self.assertEqual([row["Date"] for row in discard_weekend_rows(rows)], ["2026-09-25"])
 
+    def test_ohlcv_repair_keeps_circular_weekend_sessions(self):
+        rows = [{"Date": day, "Close": 100} for day in ("2026-11-06", "2026-11-07", "2026-11-08", "2025-02-01")]
+        self.assertEqual([row["Date"] for row in discard_weekend_rows(rows)], ["2026-11-06", "2026-11-08", "2025-02-01"])
+        kolkata = ZoneInfo("Asia/Kolkata")
+        # Muhurat keeps its own hours, so the live-snapshot clock stays off.
+        self.assertFalse(is_nse_cash_session(datetime(2026, 11, 8, 10, 0, tzinfo=kolkata)))
+
+    def test_ohlcv_repair_drops_nse_holiday_bars_and_skips_holiday_snapshots(self):
+        rows = [{"Date": day, "Close": 100} for day in ("2026-11-09", "2026-11-10", "2026-11-11")]
+        self.assertEqual([row["Date"] for row in discard_weekend_rows(rows)], ["2026-11-09", "2026-11-11"])
+        kolkata = ZoneInfo("Asia/Kolkata")
+        self.assertFalse(is_nse_cash_session(datetime(2026, 11, 10, 10, 0, tzinfo=kolkata)))
+        self.assertTrue(is_nse_cash_session(datetime(2026, 11, 11, 10, 0, tzinfo=kolkata)))
+
     def test_ohlcv_repair_discards_malformed_provider_bars(self):
         rows = [
             {"Date": "2026-09-25", "Open": 100, "High": 105, "Low": 99, "Close": 103, "Volume": 10},

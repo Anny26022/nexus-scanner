@@ -13,7 +13,7 @@ class BuildPy(build_py):
         target.mkdir(parents=True, exist_ok=True)
         for name in ("breadth_methodology.json", "filing_source_labels.json",
                      "taxonomy_overrides.json", "stockscans_classification.json", "tradingview_fields.json", "tradingview_wire.json",
-                     "etf_fields.json", "etf_enum_labels.json"):
+                     "etf_fields.json", "etf_enum_labels.json", "nse_trading_calendar.json"):
             self.copy_file(str(Path(__file__).resolve().parent / name), str(target / name))
 
 

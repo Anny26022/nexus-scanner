@@ -14,7 +14,7 @@ from pathlib import Path
 import requests
 
 from nse_delivery import HISTORICAL_FILE_URL, NSE_HEADERS, normalize_ohlcv_row
-from ohlcv_utils import discard_invalid_ohlcv_rows, discard_weekend_rows, merge_rows_by_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
+from ohlcv_utils import discard_invalid_ohlcv_rows, discard_weekend_rows, is_nse_session_day, merge_rows_by_date, read_ohlcv_csv, symbol_csv_path, write_ohlcv_csv
 from pipeline_utils import BASE_PATH, load_json, save_json
 
 
@@ -45,7 +45,7 @@ def refresh_sessions(root, stocks, start, end):
     refreshed = []
     current = start
     while current <= end:
-        if current.weekday() < 5:
+        if is_nse_session_day(current):
             url = HISTORICAL_FILE_URL.format(date=current.strftime("%d%m%Y"))
             response = session.get(url, timeout=30)
             if response.status_code != 404:

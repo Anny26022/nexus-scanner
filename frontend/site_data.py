@@ -6,6 +6,7 @@ share the immutable files:
 
     /data/revisions/<rev>/<file>          -> releases/<rev>/<file>          immutable
     /data/company/revisions/<rev>/<file>  -> releases/company/<rev>/<file>  immutable
+    /data/mf/revisions/<rev>/<file>       -> releases/mf/<rev>/<file>       immutable
     /data/<pointer>                       -> site/data/<pointer>            revalidated
 
 `releases/<rev>/` already holds the chart index, release.json and the plain stock list of each release. Pointers
@@ -37,7 +38,8 @@ POINTER_PREFIX = 'site/data'
 AI_FILTER_CHOICES = 'ai-filter-choices.json'
 # Kept in step with POINTERS in workers/screener-ai/siteData.ts; anything else is not served.
 POINTERS = ('current.json', 'sessions.json', 'price-band-history.json', AI_FILTER_CHOICES,
-            'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json')
+            'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json',
+            'mf/current.json')
 # Written after the scanner release, by the Earnings Pulse and Tijori steps.
 INDEXES = ('results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json')
 REVISION = re.compile(r'[a-f0-9]{64}')

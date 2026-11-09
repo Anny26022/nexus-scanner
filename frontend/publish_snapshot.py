@@ -38,15 +38,20 @@ TRADINGVIEW_FIELDS_PATH = resource_path('tradingview_fields.json')
 TRADINGVIEW_FIELDS = json.loads(TRADINGVIEW_FIELDS_PATH.read_text())
 
 
-def tradingview_row(stock, session):
+TRADINGVIEW_INDIA = ('https://scanner.tradingview.com/india/scan', 'INR')
+
+
+def tradingview_row(stock, session, market=TRADINGVIEW_INDIA):
+    """The published TradingView values; `market` is the scan and currency the release accepts (India's by default)."""
+    url, accepted = market
     source = stock.get('tradingview_snapshot')
-    if not isinstance(source, dict) or source.get('as_of_date') != session or source.get('source') != 'https://scanner.tradingview.com/india/scan':
+    if not isinstance(source, dict) or source.get('as_of_date') != session or source.get('source') != url:
         return None
     values = {}
     for field in TRADINGVIEW_FIELDS:
         currency = source.get('financial_currency' if field['section'] == 'financials' else 'currency')
         section = source.get(field['section']) or {}
-        values[f"{field['section']}.{field['key']}"] = finite_number(section.get(field['key'])) if currency == 'INR' else None
+        values[f"{field['section']}.{field['key']}"] = finite_number(section.get(field['key'])) if currency == accepted else None
     return {'asOfDate':source['as_of_date'],
             'fetchedAt':source.get('fetched_at'), 'updateMode':source.get('update_mode'),
             'exchange':source.get('exchange'), 'isPrimary':source.get('is_primary'),
@@ -157,7 +162,7 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         for period in (20,30,50,100):
             metrics[f'turnover{period}']=float(turnover.tail(period).mean()/context.get('amount_unit',1e7)) if len(frame)>=period else None
     row['metrics']=metrics
-    tradingview = tradingview_row(stock, session)
+    tradingview = tradingview_row(stock, session, context.get('tradingview', TRADINGVIEW_INDIA))
     if tradingview is not None:
         row['extended'] = tradingview
         # Intelligent fallback: If primary Nexus exchange data is missing/clipped, backfill from verified TV snapshot.

@@ -30,7 +30,7 @@ from ohlcv_utils import symbol_csv_path
 from pipeline_utils import resource_path
 
 from .. import UNITED_STATES
-from . import calendar, dhan, fields, history
+from . import calendar, dhan, fields, history, tradingview
 from .universe import SCREENABLE, security_type
 
 # Benchmark ETFs stand in for indices; SPY is the market benchmark for RS and breadth.
@@ -108,8 +108,8 @@ def stock_record(record: dict, metrics: dict, session: str) -> dict:
         'schema_version': '3.0', 'industry': None, 'listing_board': 'MAINBOARD', 'is_sme': False, 'listing_series': None,
         'default_screener_eligible': True, 'index_memberships': [], 'event_markers': [], 'recent_announcements': [],
         'news_feed': [], 'as_of_date': session if aligned else metrics.get('as_of_date'),
-        # Dhan's history starts in 2021, so a high over it is not an all-time high for older listings.
-        'all_time_high': None, 'percent_from_ath': None,
+        # Only TradingView's (markets/us/tradingview.py): Dhan's history starts in 2021, so its high is not all-time.
+        'all_time_high': record.get('all_time_high'), 'percent_from_ath': record.get('percent_from_ath'),
         # India's names for the trailing returns the snapshot carries.
         'return_1m': record.get('perf_1m'), 'return_1y': record.get('perf_12m'),
         'return_3y': record.get('perf_3y'), 'return_5y': record.get('perf_5y'),
@@ -157,6 +157,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     benchmarks = [record for record in map(fields.canonical_row, etf_rows) if record and record['symbol'] in BENCHMARKS]
 
     report = {'session': session, 'screenable': len(records), 'listed': len(stock_rows)}
+    report['tradingview'] = tradingview.enrich(records, session)
     report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers)
     report['benchmarks'] = update_histories(benchmarks, root / 'indices_ohlcv_data', session, interval=interval, workers=1)
 

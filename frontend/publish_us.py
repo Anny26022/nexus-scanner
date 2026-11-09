@@ -26,6 +26,7 @@ from site_data import enabled, upload_pointer, upload_revision
 from chart_publication import R2Store, missing_r2_settings
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.markets import UNITED_STATES
+from edl_pipeline.markets.us.tradingview import API_URL as TRADINGVIEW_US
 
 POINTER = 'us/current.json'
 # The engine's market-benchmark key (snapshot technicals' relative strength and RS new highs).
@@ -46,6 +47,7 @@ def us_context(root):
         raise RuntimeError(f'The US root has no {UNITED_STATES.benchmark} history.')
     context['benchmarks'][MARKET_BENCHMARK_KEY] = benchmark
     context['amount_unit'] = UNITED_STATES.provider_amount_unit
+    context['tradingview'] = (TRADINGVIEW_US, UNITED_STATES.currency)
     return context, session
 
 

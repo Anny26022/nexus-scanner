@@ -70,6 +70,7 @@ EDL_US_BASE_DIR=<root> python frontend/publish_us.py
 | Breadth, index history | India's `generate_market_breadth` and `generate_all_index_history`, with US floors ($1 price, $100M market cap). |
 | Stock metrics | India's `process_symbol_csv` on the NYSE calendar, plus RSI(14) and dollar turnover. |
 | RS ratings | `build_rs_ratings.main(root, 'SPY.csv', ...)`. |
+| TradingView | `markets/us/tradingview.py`: one request to TradingView's US scanner (types `stock` and `dr` on NYSE, Nasdaq, AMEX and Cboe; secondary share classes and ADRs are not "primary" there), matched by ISIN. It supplies India's published TradingView metrics in dollars, the all-time high (never below the stored history's), the last and next earnings dates, free float, dividend yield and ex-dates. A failed request publishes the release without them. |
 | Financials, IPOs | Empty files for now (Phase 2). |
 
 **Amounts.** Records carry `market_cap` and `dollar_volume` in dollars. The engine reads amounts from India-named
@@ -81,5 +82,5 @@ $300M market cap, a $5 close, $2M a day of turnover.
 beside India's under `releases/<rev>/`; its pointer is `site/data/us/current.json` (`/data/us/current.json`).
 India's `current.json`, sessions, price bands and AI catalogue are never written.
 
-**Not in Phase 1:** all-time highs (history starts in 2021), statements and earnings-dependent filters, dividends,
+**Not yet:** statements and earnings-growth filters (Dhan's stock pages), index membership (ETF holdings),
 ownership, F&O, delivery and Indian surveillance flags. The app hides these for the US market.

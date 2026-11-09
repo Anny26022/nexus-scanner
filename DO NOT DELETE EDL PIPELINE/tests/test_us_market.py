@@ -14,7 +14,7 @@ import requests  # noqa: E402
 from edl_pipeline.markets import MARKETS, market  # noqa: E402
 import tempfile  # noqa: E402
 
-from edl_pipeline.markets.us import build, calendar, dhan, fields, history  # noqa: E402
+from edl_pipeline.markets.us import build, calendar, dhan, fields, history, tradingview  # noqa: E402
 from edl_pipeline.markets.us.universe import history_exchanges, security_type  # noqa: E402
 
 
@@ -227,6 +227,56 @@ class BuildTests(unittest.TestCase):
         self.assertEqual((stock['return_1y'], stock['return_5y'], stock['as_of_date']), (29.3, 120.0, '2026-11-09'))
         self.assertIsNone(stock['percent_from_ath'])
         self.assertNotIn('turnover50', stock)
+
+
+class TradingViewTests(unittest.TestCase):
+    STAMP = 1794234600  # 2026-11-09 09:30 in New York
+
+    def row(self, ticker, isin, primary=True, exchange='NYSE', **values):
+        defaults = {'isin': isin, 'time': self.STAMP, 'close': 100.0, 'update_mode': 'delayed', 'currency': 'USD',
+                    'fundamental_currency_code': 'USD', 'exchange': exchange, 'is_primary': primary, 'type': 'stock'}
+        return {'s': ticker, 'd': [{**defaults, **values}.get(column) for column in tradingview.COLUMNS]}
+
+    def response(self, *rows):
+        return {'totalCount': len(rows), 'data': list(rows)}
+
+    def test_rows_match_by_isin_with_amounts_in_millions_of_dollars(self):
+        found = tradingview.snapshots(self.response(
+            self.row('NYSE:BRK.B', 'US0846707026', primary=False, **{'AvgValue.Traded_10d': 2_500_000_000, 'Perf.1M': 4.2}),
+            self.row('OTC:XYZ', 'US0000000001', exchange='OTC')), '2026-11-10T00:30:00+00:00')
+        self.assertEqual(set(found), {'US0846707026'})
+        snapshot = found['US0846707026']['tradingview_snapshot']
+        self.assertEqual((snapshot['source'], snapshot['as_of_date'], snapshot['listing_symbol']), (tradingview.API_URL, '2026-11-09', 'NYSE:BRK.B'))
+        self.assertEqual(snapshot['market']['turnover10_crore'], 2500.0)
+        self.assertEqual(snapshot['market']['performance_1m_pct'], 4.2)
+        with self.assertRaises(ValueError):
+            tradingview.snapshots({'totalCount': 2, 'data': []}, '')
+
+    def test_amounts_in_another_currency_are_left_out(self):
+        found = tradingview.snapshots(self.response(self.row('NASDAQ:ASML', 'USN070592100', fundamental_currency_code='EUR',
+                                                             **{'total_debt_fy': 9e9, 'price_earnings_ttm': 30.0})), '')
+        financials = found['USN070592100']['tradingview_snapshot']['financials']
+        self.assertIsNone(financials['total_debt_fy_crore'])
+        self.assertIsNone(financials['pe_ttm'])
+
+    def test_canonical_fields_use_the_session_and_never_a_high_below_the_history(self):
+        found = tradingview.snapshots(self.response(self.row('NYSE:KO', 'US1912161007', **{
+            'High.All': 90.0, 'earnings_release_date': 1793098500, 'earnings_release_next_date': 1802779200,
+            'float_shares_percent_current': 99.3, 'dividends_yield_current': 2.2, 'ex_dividend_date_recent': 1789430400})), '')
+        values = tradingview.canonical(found['US1912161007'], {'close': 95.0, 'high_52w': 97.0}, '2026-11-09')
+        self.assertEqual(values['all_time_high'], 97.0)
+        self.assertAlmostEqual(values['percent_from_ath'], (95 / 97 - 1) * 100)
+        self.assertEqual((values['latest_earnings_date'], values['next_earnings_date']), ('2026-10-27', '2027-02-16'))
+        self.assertEqual((values['free_float_percent'], values['dividend_yield_percent']), (99.3, 2.2))
+        # A stale TradingView row (another session) gives no all-time high.
+        self.assertIsNone(tradingview.canonical(found['US1912161007'], {'close': 95.0}, '2026-11-10')['percent_from_ath'])
+
+    def test_a_failed_request_publishes_without_these_values(self):
+        records = [{'isin': 'US1912161007'}]
+        def fail():
+            raise OSError('timed out')
+        report = tradingview.enrich(records, '2026-11-09', fetch_response=fail)
+        self.assertEqual((report['matched'], records), (0, [{'isin': 'US1912161007'}]))
 
 
 if __name__ == '__main__':

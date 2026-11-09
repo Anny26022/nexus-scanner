@@ -81,7 +81,8 @@ class BuildTests(unittest.TestCase):
     def test_universe_keeps_valid_isins_and_the_larger_duplicate(self):
         row = lambda isin, aum: {'dmfm_isin_code': isin, 'dmfm_custom_scheme_name': f'F {aum}', 'dmfm_latest_nav_value': '10',
                                  'dmfm_latest_nav_date': '2026-11-06', 'dmfm_scheme_aum': str(aum)}
-        funds = w.universe([row('INF000000001', 500), row('INF000000001', 5), row('../../etc', 9), row('INF000000002', 1)])
+        stopped = dict(row('INF000000003', 50), dmfm_latest_nav_date='2026-09-01')
+        funds = w.universe([row('INF000000001', 500), row('INF000000001', 5), row('../../etc', 9), row('INF000000002', 1), stopped])
         self.assertEqual([(item['isin'], item['aumCrore']) for item in funds], [('INF000000001', 500.0), ('INF000000002', 1.0)])
 
     def test_aum_history_is_monthly_and_oldest_first(self):

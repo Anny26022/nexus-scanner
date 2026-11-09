@@ -14,10 +14,12 @@ and the previous one stays live.
     python fetch_mutual_funds.py   # writes mutual_fund_snapshot.json
 """
 import ast
-from datetime import datetime, timezone
+from collections import Counter
+from datetime import date, datetime, timedelta, timezone
 import math
 import re
 import sys
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -38,6 +40,16 @@ MIN_NAV_COMPARISONS = 100
 MIN_AMFI_COVERAGE = 0.9
 ISIN = re.compile(r'INF[A-Z0-9]{9}')
 
+# Dhan spells a few sub-categories two ways; one name each (AMFI's current names otherwise, which Dhan already uses).
+SUB_CATEGORY = {'ELSS': 'ELSS - Tax Saver Fund', 'Equity Savings': 'Equity Savings Fund',
+                'Banking and PSU Fund': 'Banking and PSU Debt Fund', 'Multi Asset Allocation': 'Multi Asset Allocation Fund',
+                'Other Scheme - Index Fund': 'Index Fund', 'Dynamic Bond': 'Dynamic Term Fund',
+                'Medium Duration Fund': 'Medium Term Fund', 'Sectoral / Thematic': 'Thematic Fund'}
+# The tabs fund sites list by (Dhan's "Other" holds index funds and funds of funds); any other category is its own group.
+GROUP = {'ELSS - Tax Saver Fund': 'ELSS', 'Index Fund': 'Index Funds', 'FoFs Domestic': 'Fund of Funds', 'FoFs Overseas': 'Fund of Funds'}
+# A fund whose NAV is this much older than the snapshot's has closed, merged or matured (Dhan keeps listing some).
+MAX_NAV_AGE_DAYS = 10
+IST = ZoneInfo('Asia/Kolkata')
 RETURN_PERIODS = {'1w': '1_week', '1m': '1_month', '3m': '3_month', '6m': '6_month', '1y': '1_year', '3y': '3_year', '5y': '5_year'}
 CATEGORY_PERIODS = {'1d': '1_day', '1w': '1_week', '1m': '1_month', '3m': '3_month', '6m': '6_month', '1y': '1_year',
                     '3y': '3_year', '6y': '6_year'}
@@ -103,7 +115,7 @@ def fund_record(row):
         'fundHouseCode': text(row.get('dmfm_cmots_company_code')),
         'amc': text(row.get('dmfm_amc_name')),
         'category': text(row.get('dmfm_category_name')),
-        'subCategory': text(row.get('dmfm_subcategory_name')),
+        'subCategory': SUB_CATEGORY.get(text(row.get('dmfm_subcategory_name')), text(row.get('dmfm_subcategory_name'))),
         'plan': text(row.get('dmfm_scheme_plan')),
         'option': text(row.get('dmfm_fund_plan')),
         'schemeType': text(row.get('dmfm_scheme_type')),
@@ -140,7 +152,20 @@ def fund_record(row):
         'swpAllowed': flag(row.get('dmfm_swp_flag')),
         'stpAllowed': flag(row.get('dmfm_stp_flag')),
     }
+    record['group'] = GROUP.get(record['subCategory'], record['category'])
     return record
+
+
+def current_funds(records, today=None):
+    """Funds with a current NAV. A NAV dated after today is a fund not launched yet (Dhan lists NFOs with a
+    placeholder NAV); one more than MAX_NAV_AGE_DAYS before the newest is a closed, merged or matured scheme."""
+    today = (today or datetime.now(IST).date()).isoformat()
+    launched = [record for record in records if record['navDate'] <= today]
+    newest = max((record['navDate'] for record in launched), default=None)
+    if not newest:
+        return launched
+    cutoff = (date.fromisoformat(newest) - timedelta(days=MAX_NAV_AGE_DAYS)).isoformat()
+    return [record for record in launched if record['navDate'] >= cutoff]
 
 
 def parse_amfi(content):
@@ -160,7 +185,7 @@ def parse_amfi(content):
             continue
         for isin in parts[1:3]:
             if ISIN.fullmatch(isin):
-                navs[isin] = {'code': parts[0], 'nav': nav, 'navDate': nav_date}
+                navs[isin] = {'code': parts[0], 'nav': nav, 'navDate': nav_date, 'option': parts[5] if len(parts) == 8 else ''}
     return navs
 
 
@@ -200,7 +225,19 @@ def build_snapshot(dhan_rows, amfi_navs, fetched_at):
     if compared >= MIN_NAV_COMPARISONS and agreed / compared < MIN_NAV_AGREEMENT:
         raise ValueError(f'Dhan and AMFI NAVs agree for only {agreed} of {compared} funds on the same date')
 
-    ordered = sorted(funds.values(), key=lambda record: (-(record['aumCrore'] or 0), record['name']))
+    current = current_funds(funds.values())
+    # An old ISIN Dhan keeps beside the live one shares its scheme code and NAV (Shriram Overnight): keep AMFI's.
+    by_code = {}
+    for record in sorted(current, key=lambda record: ('amfiSchemeCode' not in record, -(record['aumCrore'] or 0))):
+        by_code.setdefault(record['dhanSchemeCode'] or record['isin'], record)
+    current = list(by_code.values())
+    # Two funds Dhan names alike are different plans (e.g. Kotak Gilt's "Provident Fund and Trust" option): name it.
+    names = Counter(record['name'] for record in current)
+    for record in current:
+        option = (amfi_navs.get(record['isin']) or {}).get('option') or ''
+        if names[record['name']] > 1 and option and not re.fullmatch(r'growth( option)?', option, re.I):
+            record['name'] = f"{record['name']} ({option})"
+    ordered = sorted(current, key=lambda record: (-(record['aumCrore'] or 0), record['name']))
     nav_dates = sorted({record['navDate'] for record in ordered})
     return {
         'schemaVersion': SCHEMA_VERSION,
@@ -210,6 +247,7 @@ def build_snapshot(dhan_rows, amfi_navs, fetched_at):
         'navCheck': {'amfiMatched': sum('amfiSchemeCode' in record for record in ordered), 'sameDateCompared': compared,
                      'sameDateAgreed': agreed, 'navFromAmfi': from_amfi},
         'fundCount': len(ordered),
+        'droppedNotCurrent': len(funds) - len(current),
         'funds': ordered,
     }
 

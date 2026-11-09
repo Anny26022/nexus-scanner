@@ -1,6 +1,7 @@
 """Adapt the ETF bulk response to the existing packed scanner snapshot."""
 from datetime import date, datetime, timedelta
 import math
+import re
 from zoneinfo import ZoneInfo
 
 import scanner_bridge  # noqa: F401  puts the pipeline checkout on sys.path, as for publish_snapshot
@@ -13,6 +14,25 @@ def next_session(session):
     while not is_nse_session_day(day):
         day += timedelta(days=1)
     return day.isoformat()
+
+
+# Index names of foreign markets. TradingView files Hang Seng ETFs under "Asia-Pacific" with Indian ones and leaves the
+# revenue country blank for Indian ETFs, so "Global" comes from the tracked index's name.
+GLOBAL_INDEX = re.compile(r'NASDAQ|S&P 500|NYSE|FANG|HANG SENG|MSCI|DOW JONES|NIKKEI|FTSE|EURO STOXX', re.I)
+
+
+def etf_group(label, record):
+    """The tab an ETF lists under: Gold, Silver, Commodities, Debt, Global or Index."""
+    asset_class, focus = label('asset_class'), label('focus')
+    if asset_class == 'Commodities':
+        return focus if focus in ('Gold', 'Silver') else 'Commodities'
+    if asset_class == 'Fixed income':
+        return 'Debt'
+    # The tracked index says which market (a fund name may carry its house's "India", as in Nippon India).
+    tracked = str(record.get('index_tracked') or record.get('description') or '')
+    if GLOBAL_INDEX.search(tracked) and not re.search(r'\bINDIA\b', tracked, re.I):  # MSCI/FTSE India are Indian
+        return 'Global'
+    return 'Index'
 
 
 def build_etf_snapshot(source, session, revision):
@@ -43,6 +63,7 @@ def build_etf_snapshot(source, session, revision):
                 observed_labels.setdefault(field, {})[value] = dictionary[value]
         row = dict(symbol=record['symbol'], name=record.get('description') or record['symbol'],
                    listingDate=record.get('inception_date') or '', sector='', industry='', series='ETF',
+                   etfGroup=etf_group(lambda field: labels.get(field, {}).get(str(record.get(field))), record),
                    close=number(record, 'close'), open=number(record, 'open'), high=number(record, 'high'),
                    low=number(record, 'low'), changePct=number(record, 'change'), volume=number(record, 'volume'),
                    rvol=None, marketCapCrore=None, rupeeVolumeCrore=None, isFno=False,

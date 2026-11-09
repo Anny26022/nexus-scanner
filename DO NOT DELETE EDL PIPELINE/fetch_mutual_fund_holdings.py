@@ -21,7 +21,7 @@ import time
 
 import requests
 
-from fetch_mutual_funds import ISIN, fetch_dhan, fund_record, iso_date, number, text
+from fetch_mutual_funds import ISIN, current_funds, fetch_dhan, fund_record, iso_date, number, text
 from mutual_fund_history import Pacer, Throttled
 from pipeline_utils import get_headers, http_session
 
@@ -247,9 +247,9 @@ def universe(rows):
             continue
         fund = fund_record(row)
         held = funds.get(fund['isin'])
-        if fund['name'] and fund['nav'] and (held is None or (fund['aumCrore'] or 0) > (held['aumCrore'] or 0)):
+        if fund['name'] and fund['nav'] and fund['navDate'] and (held is None or (fund['aumCrore'] or 0) > (held['aumCrore'] or 0)):
             funds[fund['isin']] = fund
-    return list(funds.values())
+    return current_funds(funds.values())
 
 
 def fetch_week(funds=None, previous_aums=None, aum_fetched_at=None):

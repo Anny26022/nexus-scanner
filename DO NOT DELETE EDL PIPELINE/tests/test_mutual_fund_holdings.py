@@ -78,15 +78,14 @@ class BuildTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'No funds'):
             w.build_files([], {}, {}, {}, [{'FUND_NAME': 'A'}], {'open': [], 'closed': []}, 'now')
 
-    def test_universe_keeps_valid_isins_and_the_larger_duplicate(self):
-        row = lambda isin, aum: {'dmfm_isin_code': isin, 'dmfm_custom_scheme_name': f'F {aum}', 'dmfm_latest_nav_value': '10',
-                                 'dmfm_latest_nav_date': '2026-11-06', 'dmfm_scheme_aum': str(aum)}
-        stopped = dict(row('INF000000003', 50), dmfm_latest_nav_date='2026-09-01')
-        funds = w.universe([row('INF000000001', 500), row('INF000000001', 5), row('../../etc', 9), row('INF000000002', 1), stopped])
-        self.assertEqual([(item['isin'], item['aumCrore']) for item in funds], [('INF000000001', 500.0), ('INF000000002', 1.0)])
-        # An old ISIN sharing a live fund's scheme code: the one AMFI knows stays, as in the daily snapshot.
-        old, live = dict(row('INF000000004', 75), dmfm_cmots_scheme_code='43103'), dict(row('INF000000005', 75), dmfm_cmots_scheme_code='43103')
-        self.assertEqual([item['isin'] for item in w.universe([old, live], known={'INF000000005'})], ['INF000000005'])
+    def test_the_weekly_funds_are_the_daily_snapshots(self):
+        daily = [fund('INF000000001', code='1')]
+        with patch.object(w, 'fetch_snapshot', return_value={'funds': daily}) as snapshot, patch.object(w, 'fetch_holdings', return_value=[]), \
+                patch.object(w, 'fetch_aum_history', return_value=[]), patch.object(w, 'fetch_asset_mix', side_effect=lambda isins: [{'isin': i} for i in isins]), \
+                patch.object(w, 'fetch_fund_houses', return_value=[{'FUND_NAME': 'A'}]), patch.object(w, 'fetch_nfos', return_value=[]):
+            _, report = w.fetch_week()
+        snapshot.assert_called_once_with()
+        self.assertEqual(report['fundCount'], 1)
 
     def test_aum_history_is_monthly_and_oldest_first(self):
         rows = [{'invdate': 'September 2026', 'totnav': '145070.0'}, {'invdate': 'June 2022', 'totnav': '22324.0'}, {'invdate': 'bad', 'totnav': '1'}]

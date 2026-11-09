@@ -21,7 +21,7 @@ import time
 
 import requests
 
-from fetch_mutual_funds import ISIN, current_funds, fetch_amfi, fetch_dhan, fund_record, iso_date, number, one_per_scheme, text
+from fetch_mutual_funds import fetch_snapshot, iso_date, number, text
 from mutual_fund_history import Pacer, Throttled
 from pipeline_utils import get_headers, http_session
 
@@ -239,34 +239,17 @@ def build_files(funds, holdings, assets, aums, fund_houses, nfos, fetched_at):
     return files, report
 
 
-def universe(rows, known=frozenset()):
-    """The daily snapshot's funds: valid ISINs, the larger fund of a duplicated ISIN, current NAVs, and one fund per
-    scheme code, preferring the ISINs AMFI knows (`known`), so holdings use the daily snapshot's ISINs."""
-    funds = {}
-    for row in rows if isinstance(rows, list) else []:
-        if not isinstance(row, dict) or not ISIN.fullmatch(str(row.get('dmfm_isin_code', ''))):
-            continue
-        fund = fund_record(row)
-        held = funds.get(fund['isin'])
-        if fund['name'] and fund['nav'] and fund['navDate'] and (held is None or (fund['aumCrore'] or 0) > (held['aumCrore'] or 0)):
-            funds[fund['isin']] = fund
-    return one_per_scheme(current_funds(funds.values()), known)
-
-
 def fetch_week(funds=None, previous_aums=None, aum_fetched_at=None):
-    """Everything for the weekly files: the screener's universe, then the per-fund and market-wide requests.
+    """Everything for the weekly files: the daily snapshot's funds, then the per-fund and market-wide requests.
 
     `previous_aums` ({ISIN: history}, from last week's summary) is month-end data: when given, only funds missing
     from it are asked for AUM history, which skips ~1,800 requests on most weeks.
     """
     fetched_at = datetime.now(timezone.utc).isoformat()
     if funds is None:
-        try:
-            known = set(fetch_amfi())  # one request; picks the live ISIN where Dhan keeps an old one beside it
-        except (requests.RequestException, UnicodeError) as error:
-            print(f'AMFI NAV file unavailable ({error}); duplicate ISINs keep the larger fund', flush=True)
-            known = set()
-        funds = universe(fetch_dhan(), known)
+        # The daily snapshot's own selection (Dhan's list checked against AMFI), so both jobs list the same funds by
+        # the same ISINs.
+        funds = fetch_snapshot()['funds']
     budget, started = PauseBudget(), time.monotonic()
     holdings = paced_map(fetch_holdings, [fund['isin'] for fund in funds], budget=budget)
     holdings = {isin: rows for isin, rows in holdings.items() if isinstance(rows, list)}

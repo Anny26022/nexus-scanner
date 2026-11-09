@@ -35,11 +35,11 @@ def isin(index):
 class MutualFundTests(unittest.TestCase):
     def test_amfi_file_maps_both_isin_columns_and_skips_missing_navs(self):
         navs = mf.parse_amfi(AMFI)
-        self.assertEqual(navs['INF879O01027'], {'code': '122639', 'nav': 93.9483, 'navDate': '2026-11-06'})
+        self.assertEqual(navs['INF879O01027'], {'code': '122639', 'nav': 93.9483, 'navDate': '2026-11-06', 'option': 'Growth'})
         self.assertEqual(navs['INF879O01043']['code'], '122640')
         self.assertNotIn('INF879O01050', navs)
         # The older six-column layout without plan and option.
-        self.assertEqual(navs['INF179K01UT0'], {'code': '118955', 'nav': 2335.942, 'navDate': '2026-11-07'})
+        self.assertEqual(navs['INF179K01UT0'], {'code': '118955', 'nav': 2335.942, 'navDate': '2026-11-07', 'option': ''})
 
     def test_fund_record_parses_ratings_ranges_and_lists(self):
         record = mf.fund_record(row(isin(1), highlow="{'date_low': '2026-03-30', '52weekslow': 85.26, 'date_high': '2025-12-05', '52weekshigh': 95.37}"))
@@ -62,11 +62,42 @@ class MutualFundTests(unittest.TestCase):
         funds = {fund['isin']: fund for fund in snapshot['funds']}
         self.assertEqual(sorted(funds), [isin(0), isin(1), isin(2)])
         self.assertEqual(funds[isin(0)]['aumCrore'], 1000)
-        self.assertEqual((funds[isin(1)]['nav'], funds[isin(1)]['navDate'], funds[isin(1)]['navSource'], funds[isin(1)]['returnsAsOf']),
-                         (95.0, '2026-11-07', 'AMFI', '2026-11-06'))
+        self.assertEqual((funds[isin(1)]['nav'], funds[isin(1)]['navDate'], funds[isin(1)]['navSource'],
+                          funds[isin(1)]['returnsSource'], funds[isin(1)]['returnsAsOf']), (95.0, '2026-11-07', 'AMFI', 'Dhan', None))
         self.assertEqual((funds[isin(2)]['nav'], funds[isin(2)]['navSource']), (93.9483, 'Dhan'))
         self.assertEqual(snapshot['navDate'], '2026-11-07')
         self.assertEqual(snapshot['navCheck'], {'amfiMatched': 3, 'sameDateCompared': 1, 'sameDateAgreed': 1, 'navFromAmfi': 2})
+
+    def test_one_sub_category_name_and_a_group_per_fund(self):
+        cases = [('Equity', 'ELSS', 'ELSS - Tax Saver Fund', 'ELSS'), ('Hybrid', 'Equity Savings', 'Equity Savings Fund', 'Hybrid'),
+                 ('Other', 'Other Scheme - Index Fund', 'Index Fund', 'Index Funds'), ('Other', 'FoFs Overseas', 'FoFs Overseas', 'Fund of Funds'),
+                 ('Equity', 'Large Cap Fund', 'Large Cap Fund', 'Equity')]
+        for category, raw, sub_category, group in cases:
+            record = mf.fund_record(row(isin(1), dmfm_category_name=category, dmfm_subcategory_name=raw))
+            self.assertEqual((record['subCategory'], record['group']), (sub_category, group))
+
+    def test_drops_funds_whose_nav_stopped_and_names_same_name_plans(self):
+        rows = [row(isin(0), day='2026-11-06'), row(isin(1), day='2026-10-20'),    # stopped 17 days earlier: closed
+                row(isin(2), dmfm_custom_scheme_name='Kotak Gilt'), row(isin(3), dmfm_custom_scheme_name='Kotak Gilt')]
+        amfi = {isin(2): {'code': '2', 'nav': 93.9483, 'navDate': '2026-11-06', 'option': 'Growth'},
+                isin(3): {'code': '3', 'nav': 93.9483, 'navDate': '2026-11-06', 'option': 'Investment Provident Fund and Trust-Growth'}}
+        with patch.object(mf, 'MIN_FUNDS', 3), patch.object(mf, 'MIN_NAV_COMPARISONS', 1), patch.object(mf, 'MIN_AMFI_COVERAGE', 0):
+            snapshot = mf.build_snapshot(rows, amfi, 'now')
+        names = {fund['isin']: fund['name'] for fund in snapshot['funds']}
+        self.assertNotIn(isin(1), names)
+        self.assertEqual(snapshot['droppedNotCurrent'], 1)
+        self.assertEqual((names[isin(2)], names[isin(3)]), ('Kotak Gilt', 'Kotak Gilt (Investment Provident Fund and Trust-Growth)'))
+
+    def test_a_future_nav_is_an_unlaunched_fund_and_an_old_isin_gives_way_to_amfis(self):
+        from datetime import date
+        records = [{'navDate': '2026-11-05'}, {'navDate': '2026-11-06'}, {'navDate': '2026-11-16'}]
+        self.assertEqual(mf.current_funds(records, today=date(2026, 11, 9)), records[:2])
+        rows = [row(isin(0), dmfm_cmots_scheme_code='43103'), row(isin(1), dmfm_cmots_scheme_code='43103'), row(isin(2), dmfm_cmots_scheme_code='9')]
+        amfi = {isin(1): {'code': '1', 'nav': 93.9483, 'navDate': '2026-11-06', 'option': 'Growth'}}
+        with patch.object(mf, 'MIN_FUNDS', 2), patch.object(mf, 'MIN_AMFI_COVERAGE', 0):
+            snapshot = mf.build_snapshot(rows, amfi, 'now')
+        self.assertEqual(sorted(fund['isin'] for fund in snapshot['funds']), [isin(1), isin(2)])
+        self.assertEqual((snapshot['droppedNotCurrent'], snapshot['droppedDuplicateIsin']), (0, 1))
 
     def test_drops_funds_without_a_positive_nav_or_a_real_date(self):
         rows = [row(isin(0)), row(isin(1), nav='0'), row(isin(2), nav='-3'), row(isin(3), day='2026-02-31'), row(isin(4))]

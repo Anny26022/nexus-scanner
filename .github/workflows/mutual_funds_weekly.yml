@@ -1,0 +1,53 @@
+name: Mutual Fund Holdings
+
+# Weekly mutual fund portfolios: holdings, asset mix, AUM history, fund houses and NFOs from Dhan, plus the
+# stock-to-funds index, published as /data/mf/holdings.json. ~1,900 requests at 5/s (~7 minutes); AUM history
+# (month-end data) is refetched once it is 28 days old, which adds ~1,800 requests (~6 minutes) about once a month.
+on:
+  schedule:
+    # Sunday 10:30 IST, after the weekly adjusted OHLCV refresh (09:00). Portfolios change monthly.
+    - cron: '0 5 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# The same queue as the daily mutual fund snapshot; each publishes its own pointer and release area.
+concurrency:
+  group: mutual-funds
+  cancel-in-progress: false
+
+jobs:
+  refresh-mutual-fund-holdings:
+    runs-on: ubuntu-latest
+    # Paced requests take ~7-13 minutes; rate-limit pauses (5 minutes each, at most 3 a run) can add 15.
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
+
+      - name: Install R2 uploader
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
+      - name: Publish mutual fund holdings
+        env:
+          PYTHONUNBUFFERED: '1'
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/publish_mf_holdings.py

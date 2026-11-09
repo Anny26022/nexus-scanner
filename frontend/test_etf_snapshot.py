@@ -28,6 +28,22 @@ class EtfSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot['etfLabels']['asset_class'][source['records'][0]['asset_class']], 'Equity')
         self.assertEqual(decode_packed_snapshot(pack_snapshot(snapshot)), snapshot)
 
+    def test_etf_group_from_asset_class_focus_and_tracked_index(self):
+        from etf_snapshot import etf_group
+        label = lambda values: (lambda field: values.get(field))
+        cases = [({'asset_class': 'Commodities', 'focus': 'Gold'}, {}, 'Gold'),
+                 ({'asset_class': 'Commodities', 'focus': 'Broad market'}, {}, 'Commodities'),
+                 ({'asset_class': 'Fixed income'}, {}, 'Debt'),
+                 ({'asset_class': 'Equity'}, {'index_tracked': 'NASDAQ-100 Index - INR'}, 'Global'),
+                 ({'asset_class': 'Equity'}, {'index_tracked': 'Hang Seng Index', 'description': 'Nippon India ETF Hang Seng BeES'}, 'Global'),
+                 ({'asset_class': 'Equity'}, {'index_tracked': 'MSCI India Index'}, 'Index'),
+                 ({'asset_class': 'Equity'}, {'description': 'Nippon India ETF Hang Seng BeES'}, 'Global'),   # no tracked index
+                 ({'asset_class': 'Equity'}, {'description': 'Mirae Asset MSCI India ETF'}, 'Index'),
+                 ({'asset_class': 'Equity'}, {'description': 'Nippon India ETF Nifty 50 BeES'}, 'Index')]
+        for values, record, expected in cases:
+            with self.subTest(expected=expected, record=record):
+                self.assertEqual(etf_group(label(values), record), expected)
+
     def test_rejects_old_or_future_quotes_instead_of_relabelling(self):
         # Quotes already traded when fetched: an older day, the next session, and a later one.
         for day, fetched in (('2026-10-22', '2026-10-23T16:00:00Z'), ('2026-10-26T04:00:00', '2026-10-26T12:00:00Z'),

@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'DO NOT DELETE EDL 
 from fetch_mutual_fund_holdings import fetch_week  # noqa: E402
 
 from chart_publication import R2Store, missing_r2_settings  # noqa: E402
-from mf_release import prune_releases, publish_release, read_pointer, write_release  # noqa: E402
+from mf_release import prune_releases, publish_pointer, publish_release, read_pointer, write_release  # noqa: E402
 
 POINTER = 'mf/holdings.json'
 NAMESPACE = 'mf-holdings'
@@ -59,7 +59,8 @@ def previous_aums(store, live, now=None):
     if not fetched or now - datetime.fromisoformat(fetched.replace('Z', '+00:00')) >= timedelta(days=AUM_REFRESH_DAYS):
         return None
     summary = json.loads(gzip.decompress(store.cache_command('cat', store.remote(f"releases/{NAMESPACE}/{live['revision']}/summary.json.gz"))))
-    return {fund['isin']: fund['aumHistory'] for fund in summary['funds'] if fund.get('aumHistory')}
+    # An empty history is an answer too (Dhan has no month-ends for the fund yet): reused, not asked again.
+    return {fund['isin']: fund['aumHistory'] for fund in summary['funds'] if isinstance(fund.get('aumHistory'), list)}
 
 
 def publish_holdings(store, fetch=fetch_week):
@@ -70,8 +71,14 @@ def publish_holdings(store, fetch=fetch_week):
     with tempfile.TemporaryDirectory() as folder:
         revision = write_release(folder, files)
         if live and live.get('revision') == revision:
-            print(f'Mutual fund holdings unchanged ({revision[:12]}); nothing published', flush=True)
-            return live
+            if live.get('aumFetchedAt') == report.get('aumFetchedAt'):
+                print(f'Mutual fund holdings unchanged ({revision[:12]}); nothing published', flush=True)
+                return live
+            # Same files after an AUM refresh: record the refresh, or every later week would refetch AUM.
+            pointer = pointer_for(report, revision)
+            publish_pointer(store, POINTER, pointer)
+            print(f'Mutual fund holdings unchanged ({revision[:12]}); AUM refresh time updated', flush=True)
+            return pointer
         pointer = pointer_for(report, revision)
         publish_release(store, folder, NAMESPACE, revision, POINTER, pointer)
     prune_releases(store, NAMESPACE, keep={revision, (live or {}).get('revision')})

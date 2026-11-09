@@ -44,6 +44,11 @@ def read_pointer(store, name):
 def publish_release(store, folder, namespace, revision, pointer_name, pointer):
     """Upload the release (read back by rclone check), then replace the pointer; the pointer goes last."""
     upload_revision(store, Path(folder), f'releases/{namespace}/{revision}')
+    publish_pointer(store, pointer_name, pointer)
+
+
+def publish_pointer(store, pointer_name, pointer):
+    """Replace a pointer (read back) to a release already in R2."""
     with tempfile.TemporaryDirectory() as staging:
         path = Path(staging) / pointer_name
         path.parent.mkdir(parents=True, exist_ok=True)

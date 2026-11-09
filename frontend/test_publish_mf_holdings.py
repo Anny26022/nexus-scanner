@@ -52,23 +52,42 @@ class PublishHoldingsTests(unittest.TestCase):
 
 
 class AumReuseTests(unittest.TestCase):
-    def test_last_weeks_aum_is_passed_on_until_it_is_a_month_old(self):
-        store, seen = FakeR2(), []
-        summary = {'funds': [{'isin': 'INF000000001', 'aumHistory': [['2026-09', 5.0]]}, {'isin': 'INF000000002', 'aumHistory': None}]}
+    def setUp(self):
+        self.store, self.seen, self.fetched = FakeR2(), [], datetime.now(timezone.utc).isoformat()
+        self.summary = {'funds': [{'isin': 'INF000000001', 'aumHistory': [['2026-09', 5.0]]},
+                                  {'isin': 'INF000000002', 'aumHistory': []}, {'isin': 'INF000000003', 'aumHistory': None}]}
 
+    def fetch(self, newest='2026-06-11', refreshed=None):
         def fetch(**kwargs):
-            seen.append(kwargs)
-            files, report = week(newest=f'2026-06-{10 + len(seen)}')
-            files['summary.json.gz'] = summary
-            return files, dict(report, aumFetchedAt=kwargs['aum_fetched_at'] or '2026-11-01T05:00:00+00:00')
-        first = publish_holdings(store, fetch=fetch)
-        self.assertEqual(seen[0], {'previous_aums': None, 'aum_fetched_at': None})
-        live = json.loads(store.objects['site/data/mf/holdings.json'])
-        fresh = datetime(2026, 11, 8, tzinfo=timezone.utc)
-        self.assertEqual(previous_aums(store, live, now=fresh), {'INF000000001': [['2026-09', 5.0]]})
-        self.assertIsNone(previous_aums(store, live, now=datetime(2026, 11, 1, 5, tzinfo=timezone.utc) + timedelta(days=AUM_REFRESH_DAYS)))
-        self.assertIsNone(previous_aums(store, None))
-        self.assertEqual(first['aumFetchedAt'], '2026-11-01T05:00:00+00:00')
+            self.seen.append(kwargs)
+            files, report = week(newest=newest)
+            files['summary.json.gz'] = self.summary
+            return files, dict(report, aumFetchedAt=kwargs['aum_fetched_at'] or refreshed or self.fetched)
+        return fetch
+
+    def test_the_next_week_gets_last_weeks_aum_until_it_is_a_month_old(self):
+        publish_holdings(self.store, fetch=self.fetch())
+        second = publish_holdings(self.store, fetch=self.fetch('2026-06-12'))
+        # Empty histories are answers too; a missing one (None) is asked again.
+        self.assertEqual(self.seen, [{'previous_aums': None, 'aum_fetched_at': None},
+                                     {'previous_aums': {'INF000000001': [['2026-09', 5.0]], 'INF000000002': []}, 'aum_fetched_at': self.fetched}])
+        self.assertEqual(second['aumFetchedAt'], self.fetched)
+        fetched = datetime.fromisoformat(self.fetched)
+        self.assertIsNone(previous_aums(self.store, second, now=fetched + timedelta(days=AUM_REFRESH_DAYS)))
+        self.assertIsNone(previous_aums(self.store, None))
+
+    def test_an_aum_refresh_with_the_same_files_still_records_its_time(self):
+        first = publish_holdings(self.store, fetch=self.fetch())
+        stale = dict(first, aumFetchedAt='2026-01-01T00:00:00+00:00')  # a month-old refresh time, files unchanged
+        self.store.objects['site/data/mf/holdings.json'] = json.dumps(stale).encode()
+        self.store.uploads.clear()
+        when = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        refreshed = publish_holdings(self.store, fetch=self.fetch(refreshed=when))
+        self.assertEqual(self.store.uploads, ['site/data/mf/holdings.json'])  # the pointer only; the release is unchanged
+        self.assertEqual((refreshed['revision'], refreshed['aumFetchedAt']), (first['revision'], when))
+        self.store.uploads.clear()
+        publish_holdings(self.store, fetch=self.fetch())
+        self.assertEqual(self.store.uploads, [])
 
 
 class ReleaseFileTests(unittest.TestCase):

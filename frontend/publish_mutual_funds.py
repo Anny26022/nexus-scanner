@@ -70,6 +70,12 @@ def with_history(snapshot, history, update=update_history):
     return snapshot
 
 
+def history_changed(report):
+    """Whether this run added or refilled any NAVs (the only ways update_history changes the history). Checked from
+    its counts: gzipping the ~10 MB history twice to compare took ~7.5 s a run."""
+    return bool(report['appended'] or report['refetched'])
+
+
 def release_files(snapshot, history):
     # The fetch time and this run's history counts go in the pointer: the same data must give the same files.
     files = {'funds.json.gz': {key: value for key, value in snapshot.items() if key not in ('fetchedAt', 'history')}}
@@ -91,8 +97,8 @@ def publish_mutual_funds(store, fetch=fetch_snapshot, update=update_history):
     live = read_pointer(store, POINTER)
     snapshot = fetch()
     check_against_live(snapshot, live)
-    history = read_state(store, HISTORY) or {'funds': {}}
-    before = gzip_json(history)
+    stored = read_state(store, HISTORY)
+    history = stored or {'funds': {}}
     with_history(snapshot, history, update)
     with tempfile.TemporaryDirectory() as folder:
         revision = write_release(folder, release_files(snapshot, history))
@@ -104,7 +110,7 @@ def publish_mutual_funds(store, fetch=fetch_snapshot, update=update_history):
             publish_release(store, folder, NAMESPACE, revision, POINTER, pointer)
             print(f"Mutual funds live: {snapshot['fundCount']} funds, NAV date {snapshot['navDate']}, revision {revision[:12]}", flush=True)
     # After the pointer: a failed save only means tomorrow refills the same days from Dhan's chart.
-    if gzip_json(history) != before:
+    if stored is None or history_changed(snapshot['history']):
         write_state(store, HISTORY, history)
     prune_releases(store, NAMESPACE, keep={revision, (live or {}).get('revision')})
     return pointer

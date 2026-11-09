@@ -13,6 +13,8 @@ class PublishUsTests(unittest.TestCase):
         self.assertIn(publish_us.POINTER, site_data.POINTERS)
         manifest = publish_us.manifest_for('a' * 64, '2026-11-09', 3)
         self.assertEqual((manifest['market'], manifest['currency'], manifest['amountUnit']), ('us', 'USD', 1_000_000))
+        self.assertNotIn('marketOverviewUrl', manifest)
+        self.assertTrue(publish_us.manifest_for('a' * 64, '2026-11-09', 3, market_overview=True)['marketOverviewUrl'].endswith('/market-overview.json.gz'))
         for key in ('datasetUrl', 'datasetPackedGzipUrl', 'iposUrl'):
             self.assertTrue(manifest[key].startswith('/data/revisions/' + 'a' * 64 + '/'), key)
 
@@ -42,6 +44,24 @@ class PublishUsTests(unittest.TestCase):
         unknown = {'metrics': {'LISTING_AGE_DAYS': None}, 'historyAligned': True}
         publish_us.listing_age(unknown, {}, '2026-11-09')
         self.assertIsNone(unknown['metrics']['LISTING_AGE_DAYS'])
+
+    def test_us_rotation_uses_its_benchmarks_universes_and_floors(self):
+        import rotation_history as rh
+        from test_rotation_history import sessions
+        days = sessions(340)
+        flat = [(day, 100.) for day in days]
+        rows = [{'symbol': f'S{i}', 'sector': 'Technology', 'industry': 'Software', 'marketCapCrore': 500,
+                 'metrics': {'turnover30': 5}, 'indexMemberships': ['S&P 500', 'RUSSELL 1000']} for i in range(4)]
+        rows.append({'symbol': 'TINY', 'sector': 'Technology', 'industry': 'Software', 'marketCapCrore': 50,
+                     'metrics': {'turnover30': 0.5}, 'indexMemberships': []})
+        index, shards, _ = rh.build(days[-1], rows, {row['symbol']: flat for row in rows},
+                                    {'SPX': flat, 'NDX': flat}, {}, market=publish_us.US_ROTATION)
+        self.assertEqual(set(index['benchmarks']), {'SPX', 'NDX', 'EW'})
+        self.assertEqual(index['universes']['SPX'], 'S&P 500')
+        self.assertEqual({group['l'] for group in index['groups']}, {'sector', 'industry'})
+        # A $50M company trading $0.5M a day is below the US floors for a group composite.
+        self.assertEqual(next(group for group in index['groups'] if group['id'] == 'sector:Technology')['m'], ['S0', 'S1', 'S2', 'S3'])
+        self.assertEqual(next(stock for stock in index['stocks'] if stock['s'] == 'S0')['h'], 'core')
 
 
 if __name__ == '__main__':

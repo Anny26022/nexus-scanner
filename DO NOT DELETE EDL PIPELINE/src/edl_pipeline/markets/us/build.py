@@ -26,6 +26,7 @@ from edl_pipeline.breadth.config import load_methodology
 from edl_pipeline.breadth.indices import generate_all_index_history
 from edl_pipeline.breadth.pipeline import generate_market_breadth
 from edl_pipeline.scanner.indicators import indicator_series
+from edl_pipeline.transforms.market_breadth import generate_analytics
 from ohlcv_utils import symbol_csv_path
 from pipeline_utils import resource_path
 
@@ -185,6 +186,12 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     stocks = [stock_record(record, stock_metrics(symbol_csv_path(root / 'ohlcv_data', record['symbol'])), session)
               for record in records if symbol_csv_path(root / 'ohlcv_data', record['symbol']).exists()]
     _write_json(root / 'all_stocks_fundamental_analysis.json', stocks, compress=True)
+    # Sector and industry breadth (the Market page), by India's own function; it reads India's display columns.
+    analytics = generate_analytics([{**stock, 'Sector': stock.get('sector'), 'Basic Industry': stock.get('industry'),
+                                     '% from 52W High': stock.get('distance_from_52w_high_percent')}
+                                    for stock in stocks if stock['as_of_date'] == session])
+    _write_json(root / 'sector_analytics.json', analytics, compress=True)
+    report['sectors'] = len(analytics['sectors'])
     report['stocks'] = len(stocks)
     report['aligned'] = sum(stock['as_of_date'] == session for stock in stocks)
     report['rs_ratings'] = build_rs_ratings.main(root, f'{BENCHMARK}.csv', BENCHMARKS[BENCHMARK])

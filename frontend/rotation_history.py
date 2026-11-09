@@ -15,6 +15,7 @@ import gzip
 import hashlib
 import json
 import math
+from typing import NamedTuple
 
 SCHEMA_VERSION = 1
 # Each calendar keeps enough periods for its longest range plus the 14-period lookback and a long trail.
@@ -39,6 +40,21 @@ BENCHMARK_INDICES = {'N50': 'NIFTY', 'N100': 'NIFTY 100', 'N500': 'NIFTY 500', '
 UNIVERSES = {'N50': 'Nifty 50', 'N100': 'NIFTY 100', 'N500': 'NIFTY 500', 'MID150': 'NIFTY Midcap 150',
              'SML250': 'NIFTY Smallcap 250', 'MS400': 'Nifty MidSmallCap 400'}
 CORE_UNIVERSE = 'N500'
+
+
+class RotationMarket(NamedTuple):
+    """One market's rotation setting: its benchmarks (code -> name, plus the equal-weight market 'EW'), the code every
+    calendar is aligned to, the index memberships offered as stock universes, the universe in the core shard, and the
+    liquidity floors a stock needs to count in a group composite (in the market's amount unit)."""
+    benchmarks: dict
+    primary: str
+    universes: dict
+    core: str
+    min_market_cap: float
+    min_turnover30: float
+
+
+INDIA = RotationMarket(BENCHMARKS, 'N50', UNIVERSES, CORE_UNIVERSE, MIN_GROUP_MARKET_CAP_CR, MIN_GROUP_TURNOVER30_CR)
 # Private, carried between runs: each stock's classification labels by date.
 LEDGER_NAME = 'rotation_membership_ledger.json.gz'
 
@@ -193,12 +209,13 @@ def number(value):
     return value if math.isfinite(value) else None
 
 
-def group_eligible(row):
+def group_eligible(row, market=None):
+    market = market or INDIA
     cap, turnover = number(row.get('marketCapCrore')), number((row.get('metrics') or {}).get('turnover30'))
-    return cap is not None and cap >= MIN_GROUP_MARKET_CAP_CR and turnover is not None and turnover >= MIN_GROUP_TURNOVER30_CR
+    return cap is not None and cap >= market.min_market_cap and turnover is not None and turnover >= market.min_turnover30
 
 
-def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_date=None):
+def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_date=None, market=INDIA):
     """Rotation history objects for one release.
 
     rows: published stock rows; closes: a symbol loader or {symbol: [(date, close), ...]} ascending; benchmarks: {'N50': [...],
@@ -207,7 +224,7 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_dat
     Returns (index, shards, ledger): shards maps a shard name to its payload; ledger includes today.
     """
     price_date = price_date or session
-    daily = [day for day, _ in benchmarks['N50'] if day <= price_date]
+    daily = [day for day, _ in benchmarks[market.primary] if day <= price_date]
     if len(daily) < PERIODS['D'] + 20:
         raise ValueError('Rotation history needs a longer benchmark history')
     if daily[-1] != price_date:
@@ -222,7 +239,7 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_dat
     rows_by_symbol = {row['symbol']: row for row in rows}
     today = {symbol: labels_of(row, taxonomy) for symbol, row in rows_by_symbol.items()}
     ledger = record_memberships(ledger, session, today,
-                                {symbol: group_eligible(row) for symbol, row in rows_by_symbol.items()})
+                                {symbol: group_eligible(row, market) for symbol, row in rows_by_symbol.items()})
     stocks, shards = [], {name: {frame: {} for frame in frames} for name in ('core', 'rest', 'groups')}
     members, sums = {}, {}
     length = len(composite_days)
@@ -253,8 +270,8 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_dat
         if row is None:
             continue
         memberships = set(row.get('indexMemberships') or [])
-        universes = [code for code, name in UNIVERSES.items() if name in memberships]
-        shard = 'core' if CORE_UNIVERSE in universes else 'rest'
+        universes = [code for code, name in market.universes.items() if name in memberships]
+        shard = 'core' if market.core in universes else 'rest'
         encoded = series(points)
         if encoded['D'] is None:
             continue
@@ -291,9 +308,9 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_dat
         'schemaVersion': SCHEMA_VERSION, 'asOfDate': session, 'scale': SCALE,
         'frames': frames,
         # An index the refresh could not supply this time is left out rather than published empty.
-        'benchmarks': {code: {'name': BENCHMARKS[code], 'series': series(points)} for code, points in benchmarks.items()
+        'benchmarks': {code: {'name': market.benchmarks[code], 'series': series(points)} for code, points in benchmarks.items()
                        if len(points) >= 2},
-        'universes': {code: name for code, name in UNIVERSES.items()},
+        'universes': dict(market.universes),
         'stocks': stocks, 'groups': groups,
     }
     return index, shards, ledger

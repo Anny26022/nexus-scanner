@@ -77,6 +77,8 @@ EDL_US_BASE_DIR=<root> python frontend/publish_us.py
 | Quarterly history | India's `quarterly_financial_history.json` rows (revenue, sales, net profit, PBT, EPS, OPM, EBITDA, consolidated) from each trusted Dhan income statement's 10 quarters; this drives earnings growth (GARP, revenue acceleration, earnings momentum). The latest quarter's filing date is TradingView's last earnings date; earlier quarters' are estimated as quarter end + 45 days (`filing_date_basis`). |
 | Index membership | TradingView's per-symbol index list: S&P 500, Nasdaq-100, Dow 30, Russell 1000 and 2000. It matches the issuers' holdings (SPY 503 of 503, DIA 30 of 30); iShares and Invesco refuse automated downloads of theirs. |
 | Listing date | TradingView's IPO date (the first traded day where it has none). Listing age is counted in NYSE sessions from it (`calendar.sessions_after`), since the stored history starts in 2021. |
+| Sector breadth | India's `generate_analytics` on the US records (sector and industry: stock count, % above SMA 20/50/200, % near the 52-week high) as `sector_analytics.json`; the publisher's market overview adds the breadth and the benchmark ETFs as index cards (the Market page). |
+| Rotation | India's rotation history with a US setting (`publish_us.US_ROTATION`): the benchmark ETFs (S&P 500, Nasdaq-100, Dow, Russell 2000) and the equal-weight market, the US index memberships as stock universes, US floors for a group member ($300M cap, $2M a day), and sector and industry groups (no theme classification). Its membership ledger is carried between runs. |
 | Financials, IPOs | Empty files for now (Phase 2). |
 
 **Amounts.** Records carry `market_cap` and `dollar_volume` in dollars. The engine reads amounts from India-named

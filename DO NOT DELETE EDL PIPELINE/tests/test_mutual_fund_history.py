@@ -84,6 +84,13 @@ class UpdateTests(unittest.TestCase):
         h.update_history(history, [fund(1.0, '2026-01-11')], fetch=Mock(return_value=daily('2026-01-01', '2026-01-10')), workers=1, interval=0)
         self.assertEqual(h.decode(history['funds']['INF000000001'])[1].tolist(), [1.0])
 
+    def test_a_stored_history_with_a_rebase_heals_to_the_points_after_it(self):
+        days, navs = daily('2026-01-01', '2026-01-10', lambda index: 10.0 if index < 5 else 1000.0)
+        history = {'funds': {'INF000000001': h.encode('7', days, navs)}}
+        report = h.update_history(history, [fund(1001.0, '2026-01-11')], fetch=Mock(), workers=1, interval=0)
+        self.assertEqual((report['rebased'], report['appended']), (1, 1))
+        self.assertEqual(h.decode(history['funds']['INF000000001'])[1].tolist(), [1000.0] * 5 + [1001.0])
+
     def test_a_fund_without_a_chart_is_not_a_failure(self):
         report = h.update_history({}, [fund(10.0, '2026-01-10'), dict(fund(10.0, '2026-01-10', isin='INF000000002'), dhanSchemeCode=None)],
                                   fetch=Mock(return_value=([], [])), workers=1, interval=0)

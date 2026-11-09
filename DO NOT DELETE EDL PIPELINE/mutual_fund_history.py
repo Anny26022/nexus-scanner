@@ -143,6 +143,13 @@ def update_history(history, funds, fetch=fetch_chart, workers=CHART_WORKERS, int
     """
     stored = history.setdefault('funds', {})
     history['schemaVersion'] = SCHEMA_VERSION
+    # A history stored before re-based charts were cut keeps its jump: cut it here, so returns and metrics heal.
+    healed = 0
+    for isin, entry in stored.items():
+        days, navs, cut = after_last_jump(*decode(entry))
+        if cut:
+            stored[isin] = encode(entry.get('code'), days, navs)
+            healed += 1
     appended, refetch, rejected = 0, [], []
     for fund in funds:
         isin, code, nav = fund['isin'], fund.get('dhanSchemeCode'), fund.get('nav')
@@ -213,7 +220,7 @@ def update_history(history, funds, fetch=fetch_chart, workers=CHART_WORKERS, int
     if throttled.is_set():
         print(f'Dhan rate-limited the NAV chart; {deferred} fund(s) wait for the next run', flush=True)
     return {'appended': appended, 'refetched': refetched, 'refetchFailed': len(failed), 'refetchDeferred': deferred,
-            'noChart': no_chart, 'noSchemeCode': no_code, 'throttled': throttled.is_set(), 'rebased': rebased,
+            'noChart': no_chart, 'noSchemeCode': no_code, 'throttled': throttled.is_set(), 'rebased': rebased + healed,
             'rejectedMoves': len(rejected), 'stored': len(stored)}
 
 

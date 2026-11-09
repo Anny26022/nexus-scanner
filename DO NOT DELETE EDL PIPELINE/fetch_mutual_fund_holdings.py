@@ -21,7 +21,7 @@ import time
 
 import requests
 
-from fetch_mutual_funds import fetch_dhan, fund_record, iso_date, number, text
+from fetch_mutual_funds import ISIN, fetch_dhan, fund_record, iso_date, number, text
 from mutual_fund_history import Pacer, Throttled
 from pipeline_utils import get_headers, http_session
 
@@ -29,7 +29,7 @@ BASE = 'https://mf-openweb-search.dhan.co/'
 WORKERS = 3
 INTERVAL = 0.35
 THROTTLE_PAUSE = 300  # seconds to wait after a 403/429 before resuming
-MAX_PAUSES = 3
+MAX_PAUSES = 3  # for the whole run, across every request stage, so the job stays inside its timeout
 ASSET_BATCH = 50
 # A week where fewer funds than this answered is a Dhan problem; the previous week stays live.
 MIN_COVERAGE = 0.9
@@ -53,35 +53,46 @@ def post(endpoint, body):
             continue
         response.raise_for_status()
         payload = response.json()
-        return payload.get('data') if isinstance(payload, dict) else None
-    return None
+        # A fund with no portfolio answers "success" with an empty list; anything else is an error, not empty data.
+        if not isinstance(payload, dict) or payload.get('status') != 'success' or not isinstance(payload.get('data'), list):
+            raise ValueError(f"Dhan {endpoint} answered {str(payload)[:160]}")
+        return payload['data']
+    raise ValueError(f'Dhan {endpoint} did not answer')
 
 
 def fetch_holdings(isin):
     return post('SectorAllocation', {'entity_id': 'Openweb', 'source': 'W', 'iv': '', 'aes_key': '', 'ip': '',
-                                     'data': {'client_id': '', 'scheme_isin': isin}}) or []
+                                     'data': {'client_id': '', 'scheme_isin': isin}})
 
 
 def fetch_aum_history(code):
-    return post('getAumDetails', {'entity_id': 'dhanMF', 'source': 'W', 'data': {'schemeCode': str(code)}}) or []
+    return post('getAumDetails', {'entity_id': 'dhanMF', 'source': 'W', 'data': {'schemeCode': str(code)}})
 
 
 def fetch_asset_mix(isins):
-    return post('getAssetData', {'entity_id': 'OpenWeb', 'source': 'W', 'iv': '', 'data': {'scheme_isin': list(isins)}}) or []
+    return post('getAssetData', {'entity_id': 'OpenWeb', 'source': 'W', 'iv': '', 'data': {'scheme_isin': list(isins)}})
 
 
 def fetch_fund_houses():
     return post('getAmcData', {'entity_id': 'Openweb', 'source': 'W', 'aes_key': '', 'ip': '',
-                               'data': {'client_id': '', 'sCode': '', 'period': ''}}) or []
+                               'data': {'client_id': '', 'sCode': '', 'period': ''}})
 
 
 def fetch_nfos(endpoint):
-    return post(endpoint, {'entity_id': 'dhanMF', 'source': 'W', 'data': {'schemeCode': ''}}) or []
+    return post(endpoint, {'entity_id': 'dhanMF', 'source': 'W', 'data': {'schemeCode': ''}})
 
 
-def paced_map(function, items, workers=WORKERS, interval=INTERVAL, pause=THROTTLE_PAUSE, max_pauses=MAX_PAUSES):
-    """{item: result} for each item; failures map to an exception. A 403/429 pauses everyone, then resumes."""
-    pacer, results, pauses = Pacer(interval), {}, 0
+class PauseBudget:
+    """Rate-limit pauses left for the run."""
+    def __init__(self, pauses=MAX_PAUSES):
+        self.left = pauses
+
+
+def paced_map(function, items, workers=WORKERS, interval=INTERVAL, pause=THROTTLE_PAUSE, budget=None):
+    """{item: result} for each item; failures map to an exception. A 403/429 pauses everyone, then resumes, while the
+    run's pause budget lasts."""
+    budget = budget or PauseBudget()
+    pacer, results = Pacer(interval), {}
     pending = list(items)
     while pending:
         throttled = []
@@ -102,12 +113,12 @@ def paced_map(function, items, workers=WORKERS, interval=INTERVAL, pause=THROTTL
                     results[item] = result
         if not throttled:
             break
-        if pauses >= max_pauses:
+        if budget.left <= 0:
             for item in throttled:
                 results[item] = Throttled('gave up after repeated rate limits')
             break
-        pauses += 1
-        print(f'Dhan rate-limited {len(throttled)} request(s); pausing {pause}s ({pauses}/{max_pauses})', flush=True)
+        budget.left -= 1
+        print(f'Dhan rate-limited {len(throttled)} request(s); pausing {pause}s ({budget.left} pause(s) left)', flush=True)
         time.sleep(pause)
         pending = throttled
     return results
@@ -161,9 +172,17 @@ def nfo_record(row):
 
 def build_files(funds, holdings, assets, aums, fund_houses, nfos, fetched_at):
     """The week's published files, keyed by path, and a summary for the pointer."""
+    if not funds:
+        raise ValueError('No funds to fetch portfolios for')
     answered = [fund for fund in funds if isinstance(holdings.get(fund['isin']), list)]
     if len(answered) < MIN_COVERAGE * len(funds):
         raise ValueError(f'Holdings answered for {len(answered)} of {len(funds)} funds')
+    for label, found in (('AUM history', aums), ('Asset mix', assets)):
+        covered = sum(fund['isin'] in found for fund in funds)
+        if covered < MIN_COVERAGE * len(funds):
+            raise ValueError(f'{label} answered for {covered} of {len(funds)} funds')
+    if not fund_houses:
+        raise ValueError('Dhan returned no fund houses')
     files, summaries, holders = {}, [], defaultdict(list)
     for fund in funds:
         rows = holdings.get(fund['isin'])
@@ -205,26 +224,40 @@ def build_files(funds, holdings, assets, aums, fund_houses, nfos, fetched_at):
     return files, report
 
 
+def universe(rows):
+    """The screener's funds with a valid ISIN; for a duplicated ISIN the larger fund, as the daily snapshot keeps."""
+    funds = {}
+    for row in rows if isinstance(rows, list) else []:
+        if not isinstance(row, dict) or not ISIN.fullmatch(str(row.get('dmfm_isin_code', ''))):
+            continue
+        fund = fund_record(row)
+        held = funds.get(fund['isin'])
+        if fund['name'] and fund['nav'] and (held is None or (fund['aumCrore'] or 0) > (held['aumCrore'] or 0)):
+            funds[fund['isin']] = fund
+    return list(funds.values())
+
+
 def fetch_week(funds=None):
     """Everything for the weekly files: the screener's universe, then the per-fund and market-wide requests."""
     fetched_at = datetime.now(timezone.utc).isoformat()
     if funds is None:
-        funds = [fund_record(row) for row in fetch_dhan() if isinstance(row, dict)]
-        funds = [fund for fund in {fund['isin']: fund for fund in funds if fund['isin'] and fund['name'] and fund['nav']}.values()]
-    started = time.monotonic()
-    holdings = paced_map(fetch_holdings, [fund['isin'] for fund in funds])
+        funds = universe(fetch_dhan())
+    budget, started = PauseBudget(), time.monotonic()
+    holdings = paced_map(fetch_holdings, [fund['isin'] for fund in funds], budget=budget)
     holdings = {isin: rows for isin, rows in holdings.items() if isinstance(rows, list)}
     codes = {fund['dhanSchemeCode']: fund['isin'] for fund in funds if fund.get('dhanSchemeCode')}
-    aums = {codes[code]: aum_history(rows) for code, rows in paced_map(fetch_aum_history, list(codes)).items() if isinstance(rows, list)}
+    aums = {codes[code]: aum_history(rows) for code, rows in paced_map(fetch_aum_history, list(codes), budget=budget).items() if isinstance(rows, list)}
     batches = [tuple(fund['isin'] for fund in funds[index:index + ASSET_BATCH]) for index in range(0, len(funds), ASSET_BATCH)]
     assets = {}
-    for rows in paced_map(fetch_asset_mix, batches).values():
+    for rows in paced_map(fetch_asset_mix, batches, budget=budget).values():
         for row in rows if isinstance(rows, list) else []:
             if row.get('isin'):
                 assets[row['isin']] = asset_mix_record(row)
     market = paced_map(lambda name: {'houses': fetch_fund_houses, 'open': lambda: fetch_nfos('NFODetails'),
-                                     'closed': lambda: fetch_nfos('getClosedNFODetails')}[name](), ['houses', 'open', 'closed'])
-    market = {name: value if isinstance(value, list) else [] for name, value in market.items()}
+                                     'closed': lambda: fetch_nfos('getClosedNFODetails')}[name](), ['houses', 'open', 'closed'], budget=budget)
+    failed = [name for name, value in market.items() if not isinstance(value, list)]
+    if failed:
+        raise ValueError(f"Dhan's {', '.join(failed)} request failed: {market[failed[0]]}")
     print(f'Holdings for {len(holdings)}/{len(funds)} funds, AUM history {len(aums)}, asset mix {len(assets)}, '
           f"{len(market['houses'])} fund houses, {len(market['open'])} open NFOs in {time.monotonic() - started:.0f}s", flush=True)
     return build_files(funds, holdings, assets, aums, market['houses'], {'open': market['open'], 'closed': market['closed']}, fetched_at)

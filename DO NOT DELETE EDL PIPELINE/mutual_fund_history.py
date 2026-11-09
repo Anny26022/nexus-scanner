@@ -171,6 +171,8 @@ def update_history(history, funds, fetch=fetch_chart, workers=CHART_WORKERS, int
         if throttled.is_set():
             return fund, None, Throttled('deferred')
         pacer.wait()
+        if throttled.is_set():  # another worker was refused while this one waited its turn
+            return fund, None, Throttled('deferred')
         try:
             return fund, fetch(fund['dhanSchemeCode']), None
         except Throttled as error:
@@ -181,15 +183,19 @@ def update_history(history, funds, fetch=fetch_chart, workers=CHART_WORKERS, int
 
     # Largest funds first: when the run is capped or throttled, they get their history soonest.
     queue = sorted((fund for fund in refetch if fund.get('dhanSchemeCode')), key=lambda fund: -(fund.get('aumCrore') or 0))
+    no_code = len(refetch) - len(queue)
     deferred = max(0, len(queue) - limit)
-    refetched, rebased, failed = 0, 0, []
+    refetched, rebased, no_chart, failed = 0, 0, 0, []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for fund, series, error in pool.map(refill, queue[:limit]):
             if isinstance(error, Throttled):
                 deferred += 1
                 continue
-            if error is not None or not series or not series[0]:
+            if error is not None:
                 failed.append(fund['isin'])
+                continue
+            if not series or not series[0]:
+                no_chart += 1  # Dhan has no chart for it yet (a new fund): not a failure, retried next run
                 continue
             days, navs = list(series[0]), list(series[1])
             # The snapshot's NAV (AMFI's) is the newest word for its day.
@@ -207,7 +213,8 @@ def update_history(history, funds, fetch=fetch_chart, workers=CHART_WORKERS, int
     if throttled.is_set():
         print(f'Dhan rate-limited the NAV chart; {deferred} fund(s) wait for the next run', flush=True)
     return {'appended': appended, 'refetched': refetched, 'refetchFailed': len(failed), 'refetchDeferred': deferred,
-            'throttled': throttled.is_set(), 'rebased': rebased, 'rejectedMoves': len(rejected), 'stored': len(stored)}
+            'noChart': no_chart, 'noSchemeCode': no_code, 'throttled': throttled.is_set(), 'rebased': rebased,
+            'rejectedMoves': len(rejected), 'stored': len(stored)}
 
 
 # --- metrics ---------------------------------------------------------------------------------------------------

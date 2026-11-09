@@ -20,7 +20,7 @@ concurrency:
 jobs:
   refresh-mutual-funds:
     runs-on: ubuntu-latest
-    # The first run backfills every fund's NAV history from Dhan (a few minutes); later runs take about two.
+    # The first two runs backfill NAV history from Dhan (about 6 minutes each, 1,000 funds a run); later runs ~2.
     timeout-minutes: 30
 
     steps:

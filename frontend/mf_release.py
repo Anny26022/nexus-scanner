@@ -24,6 +24,9 @@ def write_release(folder, files):
     """Write {relative path: payload} as gzipped JSON under `folder`; the revision is a digest of every file."""
     digest = hashlib.sha256()
     for name in sorted(files):
+        parts = Path(name).parts
+        if Path(name).is_absolute() or not parts or any(part in ('', '.', '..') for part in parts):
+            raise ValueError(f'Unsafe release file name: {name!r}')
         data = gzip_json(files[name])
         path = Path(folder) / name
         path.parent.mkdir(parents=True, exist_ok=True)

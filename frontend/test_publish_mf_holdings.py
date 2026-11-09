@@ -1,8 +1,10 @@
 import gzip
 import json
+import tempfile
 import unittest
 
 from test_publish_mutual_funds import FakeR2
+from mf_release import write_release
 from publish_mf_holdings import POINTER, publish_holdings
 
 LIVE_KEY = f'site/data/{POINTER}'
@@ -46,6 +48,13 @@ class PublishHoldingsTests(unittest.TestCase):
             with self.subTest(message), self.assertRaisesRegex(ValueError, message):
                 publish_holdings(store, fetch=stale)
         self.assertEqual(json.loads(store.objects[LIVE_KEY])['revision'], live['revision'])
+
+
+class ReleaseFileTests(unittest.TestCase):
+    def test_file_names_cannot_leave_the_release_folder(self):
+        for name in ('../escape.json.gz', '/etc/x.json.gz', 'holders/../../x.json.gz', ''):
+            with self.subTest(name), tempfile.TemporaryDirectory() as folder, self.assertRaisesRegex(ValueError, 'Unsafe'):
+                write_release(folder, {name: {}})
 
 
 if __name__ == '__main__':

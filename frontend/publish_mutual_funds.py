@@ -50,6 +50,7 @@ def check_against_live(snapshot, live):
 def with_history(snapshot, history, update=update_history):
     """Add the snapshot's NAVs to `history` and attach each fund's metrics and computed returns."""
     report = update(history, snapshot['funds'])
+    # Request errors only: funds Dhan has no chart for yet (noChart) publish without metrics and are retried daily.
     attempted = report['refetched'] + report['refetchFailed']
     if attempted >= 20 and report['refetchFailed'] > MAX_REFETCH_FAILURES * attempted:
         raise ValueError(f"Dhan's NAV chart failed for {report['refetchFailed']} of {attempted} funds")

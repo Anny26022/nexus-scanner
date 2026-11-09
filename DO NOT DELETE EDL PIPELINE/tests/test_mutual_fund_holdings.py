@@ -25,10 +25,11 @@ HDFC, RELIANCE, TBILL = 'INE040A01034', 'INE002A01018', 'IN002025X123'
 
 
 class BuildTests(unittest.TestCase):
-    def build(self, holdings, funds=None):
+    def build(self, holdings, funds=None, assets=None, aums=None, houses=None):
         funds = funds or [fund('INF000000001', 'Alpha'), fund('INF000000002', 'Beta')]
-        return w.build_files(funds, holdings, {'INF000000001': {'equity': 90.0}}, {'INF000000001': [['2026-09', 100.0]]},
-                             [{'FUND_CODE': '1', 'FUND_NAME': 'A MF', 'TOTAL_AUM': '5', 'AMC_STATUS': 'A'}],
+        assets = assets if assets is not None else {item['isin']: {'equity': 90.0} for item in funds}
+        aums = aums if aums is not None else {item['isin']: [['2026-09', 100.0]] for item in funds}
+        return w.build_files(funds, holdings, assets, aums, houses if houses is not None else [{'FUND_CODE': '1', 'FUND_NAME': 'A MF', 'TOTAL_AUM': '5', 'AMC_STATUS': 'A'}],
                              {'open': [{'SCHEME_NAME': 'New', 'START_DATE': '2026-11-01 00:00:00'}], 'closed': []}, 'now')
 
     def test_holdings_summary_and_the_stock_to_funds_index(self):
@@ -60,6 +61,21 @@ class BuildTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Holdings answered for 8 of 10'):
             self.build({f'INF00000000{index}': [] for index in range(8)}, funds)
 
+    def test_refuses_missing_sources_and_an_empty_universe(self):
+        full = {'INF000000001': [], 'INF000000002': []}
+        for kwargs, message in (({'aums': {}}, 'AUM history answered for 0 of 2'), ({'assets': {}}, 'Asset mix answered for 0 of 2'),
+                                ({'houses': []}, 'no fund houses')):
+            with self.subTest(message), self.assertRaisesRegex(ValueError, message):
+                self.build(full, **kwargs)
+        with self.assertRaisesRegex(ValueError, 'No funds'):
+            w.build_files([], {}, {}, {}, [{'FUND_NAME': 'A'}], {'open': [], 'closed': []}, 'now')
+
+    def test_universe_keeps_valid_isins_and_the_larger_duplicate(self):
+        row = lambda isin, aum: {'dmfm_isin_code': isin, 'dmfm_custom_scheme_name': f'F {aum}', 'dmfm_latest_nav_value': '10',
+                                 'dmfm_latest_nav_date': '2026-11-06', 'dmfm_scheme_aum': str(aum)}
+        funds = w.universe([row('INF000000001', 500), row('INF000000001', 5), row('../../etc', 9), row('INF000000002', 1)])
+        self.assertEqual([(item['isin'], item['aumCrore']) for item in funds], [('INF000000001', 500.0), ('INF000000002', 1.0)])
+
     def test_aum_history_is_monthly_and_oldest_first(self):
         rows = [{'invdate': 'September 2026', 'totnav': '145070.0'}, {'invdate': 'June 2022', 'totnav': '22324.0'}, {'invdate': 'bad', 'totnav': '1'}]
         self.assertEqual(w.aum_history(rows), [('2022-06', 22324.0), ('2026-09', 145070.0)])
@@ -77,14 +93,23 @@ class PacingTests(unittest.TestCase):
         with patch.object(w.time, 'sleep') as sleep:
             results = w.paced_map(call, ['a', 'b', 'c'], workers=1, interval=0, pause=300)
         self.assertEqual(results, {'a': 'A', 'b': 'B', 'c': 'C'})
-        sleep.assert_called_with(300)
+        self.assertEqual(calls, ['a', 'b', 'c', 'b'])
+        sleep.assert_called_once_with(300)
 
     def test_gives_up_after_repeated_rate_limits(self):
+        calls = []
+
         def call(item):
+            calls.append(item)
             raise Throttled('403')
-        with patch.object(w.time, 'sleep'):
-            results = w.paced_map(call, ['a'], workers=1, interval=0, pause=0, max_pauses=2)
-        self.assertIsInstance(results['a'], Throttled)
+        budget = w.PauseBudget(2)
+        with patch.object(w.time, 'sleep') as sleep:
+            results = w.paced_map(call, ['a'], workers=1, interval=0, pause=0, budget=budget)
+            self.assertIsInstance(results['a'], Throttled)
+            self.assertEqual((len(calls), sleep.call_count, budget.left), (3, 2, 0))
+            # The budget is shared: a later stage of the same run does not pause again.
+            w.paced_map(call, ['b'], workers=1, interval=0, pause=0, budget=budget)
+            self.assertEqual(sleep.call_count, 2)
 
 
 if __name__ == '__main__':

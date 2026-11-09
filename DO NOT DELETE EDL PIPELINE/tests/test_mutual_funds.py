@@ -62,8 +62,8 @@ class MutualFundTests(unittest.TestCase):
         funds = {fund['isin']: fund for fund in snapshot['funds']}
         self.assertEqual(sorted(funds), [isin(0), isin(1), isin(2)])
         self.assertEqual(funds[isin(0)]['aumCrore'], 1000)
-        self.assertEqual((funds[isin(1)]['nav'], funds[isin(1)]['navDate'], funds[isin(1)]['navSource'], funds[isin(1)]['returnsSource']),
-                         (95.0, '2026-11-07', 'AMFI', 'Dhan'))
+        self.assertEqual((funds[isin(1)]['nav'], funds[isin(1)]['navDate'], funds[isin(1)]['navSource'],
+                          funds[isin(1)]['returnsSource'], funds[isin(1)]['returnsAsOf']), (95.0, '2026-11-07', 'AMFI', 'Dhan', None))
         self.assertEqual((funds[isin(2)]['nav'], funds[isin(2)]['navSource']), (93.9483, 'Dhan'))
         self.assertEqual(snapshot['navDate'], '2026-11-07')
         self.assertEqual(snapshot['navCheck'], {'amfiMatched': 3, 'sameDateCompared': 1, 'sameDateAgreed': 1, 'navFromAmfi': 2})

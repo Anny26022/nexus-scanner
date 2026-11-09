@@ -6,8 +6,9 @@ Two requests a day:
   * AMFI `NAVAll.txt`: the regulator's NAV for every plan, matched to Dhan by ISIN.
 
 The published NAV is AMFI's when AMFI has the fund and its NAV is as new as Dhan's. Dhan's returns are usually as of
-its NAV date but for some funds a day behind (checked against its NAV chart), so `returnsAsOf` is left empty here;
-the publisher replaces them with returns computed from the NAV history as of the latest NAV. Where both sources quote the same date, their NAVs must agree, or the snapshot is refused
+its NAV date but for some funds a day behind (checked against its NAV chart), so `returnsAsOf` is left empty here.
+The publisher replaces them, for every fund with usable NAV history, with returns computed as of the latest NAV;
+funds without history (none yet, or no chart from Dhan) keep Dhan's undated returns. Where both sources quote the same date, their NAVs must agree, or the snapshot is refused
 and the previous one stays live.
 
     python fetch_mutual_funds.py   # writes mutual_fund_snapshot.json

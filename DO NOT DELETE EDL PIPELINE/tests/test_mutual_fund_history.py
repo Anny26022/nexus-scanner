@@ -84,6 +84,11 @@ class UpdateTests(unittest.TestCase):
         h.update_history(history, [fund(1.0, '2026-01-11')], fetch=Mock(return_value=daily('2026-01-01', '2026-01-10')), workers=1, interval=0)
         self.assertEqual(h.decode(history['funds']['INF000000001'])[1].tolist(), [1.0])
 
+    def test_a_fund_without_a_chart_is_not_a_failure(self):
+        report = h.update_history({}, [fund(10.0, '2026-01-10'), dict(fund(10.0, '2026-01-10', isin='INF000000002'), dhanSchemeCode=None)],
+                                  fetch=Mock(return_value=([], [])), workers=1, interval=0)
+        self.assertEqual((report['noChart'], report['noSchemeCode'], report['refetchFailed']), (1, 1, 0))
+
     def test_refills_are_capped_per_run(self):
         funds = [fund(10.0, '2026-01-10', isin=f'INF00000000{index}', code=str(index)) for index in range(5)]
         report = h.update_history({}, funds, fetch=Mock(return_value=daily('2026-01-01', '2026-01-10')), workers=1, interval=0, limit=2)

@@ -7,13 +7,13 @@ For every Direct-Growth fund in Dhan's screener:
   * asset mix (`getAssetData`, 50 funds per request): equity, bond, cash and other shares.
 Plus the fund-house list (`getAmcData`) and open and recently closed NFOs (`NFODetails`, `getClosedNFODetails`).
 
-About 3,700 requests, paced like the NAV chart (mutual_fund_history.py). A 403/429 pauses for a few minutes and
-resumes, so a throttled run finishes late instead of publishing a partial week.
+About 1,900 requests most weeks (3,700 when AUM history is a month old), at 5 a second: ~7 minutes, ~13 with AUM.
+A 403/429 pauses for a few minutes and resumes, so a throttled run finishes late instead of publishing a partial week.
 
 `build_files` turns the answers into the published files, including the reverse index: for each Indian equity, the
 funds that hold it.
 """
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import re
@@ -27,7 +27,8 @@ from pipeline_utils import get_headers, http_session
 
 BASE = 'https://mf-openweb-search.dhan.co/'
 WORKERS = 3
-INTERVAL = 0.35
+# 5 requests a second: 1,835 at this pace drew no rate limit (2026-11-09); ~30 a second did.
+INTERVAL = 0.2
 THROTTLE_PAUSE = 300  # seconds to wait after a 403/429 before resuming
 MAX_PAUSES = 3  # for the whole run, across every request stage, so the job stays inside its timeout
 ASSET_BATCH = 50
@@ -53,8 +54,9 @@ def post(endpoint, body):
             continue
         response.raise_for_status()
         payload = response.json()
-        # A fund with no portfolio answers "success" with an empty list; anything else is an error, not empty data.
-        if not isinstance(payload, dict) or payload.get('status') != 'success' or not isinstance(payload.get('data'), list):
+        # Answers carry status "success", or "" (getAumDetails); a refused request says "error". A fund with no
+        # portfolio answers with an empty list, but anything else is an error, not empty data.
+        if not isinstance(payload, dict) or payload.get('status') not in ('success', '') or not isinstance(payload.get('data'), list):
             raise ValueError(f"Dhan {endpoint} answered {str(payload)[:160]}")
         return payload['data']
     raise ValueError(f'Dhan {endpoint} did not answer')
@@ -183,10 +185,23 @@ def build_files(funds, holdings, assets, aums, fund_houses, nfos, fetched_at):
             raise ValueError(f'{label} answered for {covered} of {len(funds)} funds')
     if not fund_houses:
         raise ValueError('Dhan returned no fund houses')
+    # Dhan repeats some positions as a row with no weight and no shares (4.8% of rows): not a holding.
+    records = {isin: [item for item in map(holding_record, rows) if item['weight'] or item['shares']]
+               for isin, rows in holdings.items() if isinstance(rows, list)}
+    # Some funds leave an equity's sector blank ("NA" -> None) that others give: use the sector most funds report.
+    sector_votes = defaultdict(Counter)
+    for items in records.values():
+        for item in items:
+            if item['isin'] and item['sector']:
+                sector_votes[item['isin']][item['sector']] += 1
     files, summaries, holders = {}, [], defaultdict(list)
     for fund in funds:
-        rows = holdings.get(fund['isin'])
-        positions = sorted((holding_record(row) for row in rows), key=lambda item: -(item['weight'] or 0)) if isinstance(rows, list) else None
+        positions = records.get(fund['isin'])
+        if positions is not None:
+            for item in positions:
+                if not item['sector'] and sector_votes.get(item['isin']):
+                    item['sector'] = sector_votes[item['isin']].most_common(1)[0][0]
+            positions.sort(key=lambda item: -(item['weight'] or 0))
         dates = sorted({item['portfolioDate'] for item in positions or [] if item['portfolioDate']})
         summary = {'isin': fund['isin'], 'name': fund['name'], 'category': fund['category'], 'subCategory': fund['subCategory'],
                    'portfolioDate': dates[-1] if dates else None, 'holdingCount': len(positions) if positions is not None else None,
@@ -237,16 +252,21 @@ def universe(rows):
     return list(funds.values())
 
 
-def fetch_week(funds=None):
-    """Everything for the weekly files: the screener's universe, then the per-fund and market-wide requests."""
+def fetch_week(funds=None, previous_aums=None, aum_fetched_at=None):
+    """Everything for the weekly files: the screener's universe, then the per-fund and market-wide requests.
+
+    `previous_aums` ({ISIN: history}, from last week's summary) is month-end data: when given, only funds missing
+    from it are asked for AUM history, which skips ~1,800 requests on most weeks.
+    """
     fetched_at = datetime.now(timezone.utc).isoformat()
     if funds is None:
         funds = universe(fetch_dhan())
     budget, started = PauseBudget(), time.monotonic()
     holdings = paced_map(fetch_holdings, [fund['isin'] for fund in funds], budget=budget)
     holdings = {isin: rows for isin, rows in holdings.items() if isinstance(rows, list)}
-    codes = {fund['dhanSchemeCode']: fund['isin'] for fund in funds if fund.get('dhanSchemeCode')}
-    aums = {codes[code]: aum_history(rows) for code, rows in paced_map(fetch_aum_history, list(codes), budget=budget).items() if isinstance(rows, list)}
+    reused = {fund['isin']: previous_aums[fund['isin']] for fund in funds if fund['isin'] in (previous_aums or {})}
+    codes = {fund['dhanSchemeCode']: fund['isin'] for fund in funds if fund.get('dhanSchemeCode') and fund['isin'] not in reused}
+    aums = dict(reused, **{codes[code]: aum_history(rows) for code, rows in paced_map(fetch_aum_history, list(codes), budget=budget).items() if isinstance(rows, list)})
     batches = [tuple(fund['isin'] for fund in funds[index:index + ASSET_BATCH]) for index in range(0, len(funds), ASSET_BATCH)]
     assets = {}
     for rows in paced_map(fetch_asset_mix, batches, budget=budget).values():
@@ -258,6 +278,8 @@ def fetch_week(funds=None):
     failed = [name for name, value in market.items() if not isinstance(value, list)]
     if failed:
         raise ValueError(f"Dhan's {', '.join(failed)} request failed: {market[failed[0]]}")
-    print(f'Holdings for {len(holdings)}/{len(funds)} funds, AUM history {len(aums)}, asset mix {len(assets)}, '
+    print(f'Holdings for {len(holdings)}/{len(funds)} funds, AUM history {len(aums)} ({len(reused)} reused), asset mix {len(assets)}, '
           f"{len(market['houses'])} fund houses, {len(market['open'])} open NFOs in {time.monotonic() - started:.0f}s", flush=True)
-    return build_files(funds, holdings, assets, aums, market['houses'], {'open': market['open'], 'closed': market['closed']}, fetched_at)
+    files, report = build_files(funds, holdings, assets, aums, market['houses'], {'open': market['open'], 'closed': market['closed']}, fetched_at)
+    report['aumFetchedAt'] = aum_fetched_at if reused else fetched_at
+    return files, report

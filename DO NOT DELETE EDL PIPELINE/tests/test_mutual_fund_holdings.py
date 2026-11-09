@@ -2,6 +2,7 @@
 from pathlib import Path
 import sys
 import unittest
+import unittest.mock
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -51,6 +52,13 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(files['fund-houses.json.gz']['fundHouses'][0]['name'], 'A MF')
         self.assertEqual(files['nfos.json.gz']['open'][0]['opens'], '2026-11-01')
 
+    def test_drops_ghost_rows_and_fills_blank_sectors_from_other_funds(self):
+        files, _ = self.build({'INF000000001': [holding('HDFC Bank', HDFC, 8), holding('HDFC Bank', HDFC, 0, shares=0)],
+                               'INF000000002': [holding('HDFC Bank', HDFC, 3, sector='NA')]})
+        self.assertEqual(len(files['holdings/INF000000001.json.gz']['holdings']), 1)
+        self.assertEqual(files['holdings/INF000000002.json.gz']['holdings'][0]['sector'], 'Financial Services')
+        self.assertEqual(files['holders/' + HDFC + '.json.gz']['fundCount'], 2)
+
     def test_a_fund_with_an_empty_portfolio_counts_as_answered(self):
         files, report = self.build({'INF000000001': [], 'INF000000002': [holding('HDFC Bank', HDFC, 3)]})
         self.assertEqual(report['withHoldings'], 2)
@@ -79,6 +87,38 @@ class BuildTests(unittest.TestCase):
     def test_aum_history_is_monthly_and_oldest_first(self):
         rows = [{'invdate': 'September 2026', 'totnav': '145070.0'}, {'invdate': 'June 2022', 'totnav': '22324.0'}, {'invdate': 'bad', 'totnav': '1'}]
         self.assertEqual(w.aum_history(rows), [('2022-06', 22324.0), ('2026-09', 145070.0)])
+
+
+class FetchWeekTests(unittest.TestCase):
+    def test_reused_aum_history_skips_those_funds_requests(self):
+        funds = [fund('INF000000001', code='1'), fund('INF000000002', code='2')]
+        asked = []
+        with patch.object(w, 'fetch_holdings', return_value=[]), patch.object(w, 'fetch_asset_mix', side_effect=lambda isins: [{'isin': i} for i in isins]), \
+                patch.object(w, 'fetch_aum_history', side_effect=lambda code: asked.append(code) or [{'invdate': 'October 2026', 'totnav': '7'}]), \
+                patch.object(w, 'fetch_fund_houses', return_value=[{'FUND_NAME': 'A'}]), patch.object(w, 'fetch_nfos', return_value=[]):
+            files, report = w.fetch_week(funds, previous_aums={'INF000000001': [['2026-09', 5.0]]}, aum_fetched_at='2026-11-01T05:00:00+00:00')
+            summary = {row['isin']: row['aumHistory'] for row in files['summary.json.gz']['funds']}
+            self.assertEqual((asked, summary, report['aumFetchedAt']),
+                             (['2'], {'INF000000001': [['2026-09', 5.0]], 'INF000000002': [('2026-10', 7.0)]}, '2026-11-01T05:00:00+00:00'))
+            asked.clear()
+            _, report = w.fetch_week(funds)
+            self.assertEqual((sorted(asked), report['aumFetchedAt'] == report['fetchedAt']), (['1', '2'], True))
+
+
+class AnswerTests(unittest.TestCase):
+    def answer(self, payload):
+        response = unittest.mock.Mock(status_code=200, json=lambda: payload)
+        response.raise_for_status = lambda: None
+        session = unittest.mock.Mock(post=lambda *a, **k: response)
+        with patch.object(w, 'http_session', return_value=session):
+            return w.post('getAumDetails', {})
+
+    def test_accepts_success_or_a_blank_status_and_refuses_errors(self):
+        self.assertEqual(self.answer({'status': '', 'data': [{'invdate': 'September 2026'}]}), [{'invdate': 'September 2026'}])  # getAumDetails
+        self.assertEqual(self.answer({'status': 'success', 'error_code': 'DH-2001', 'data': []}), [])
+        for bad in ({'status': 'error', 'error_code': 'DH-0020', 'message': 'Invalid Request', 'data': []}, {'status': 'success'}, []):
+            with self.subTest(bad), self.assertRaises(ValueError):
+                self.answer(bad)
 
 
 class PacingTests(unittest.TestCase):

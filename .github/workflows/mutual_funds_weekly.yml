@@ -1,7 +1,8 @@
 name: Mutual Fund Holdings
 
 # Weekly mutual fund portfolios: holdings, asset mix, AUM history, fund houses and NFOs from Dhan, plus the
-# stock-to-funds index, published as /data/mf/holdings.json. About 3,700 paced requests (~20 minutes).
+# stock-to-funds index, published as /data/mf/holdings.json. ~1,900 requests at 5/s (~7 minutes); AUM history
+# (month-end data) is refetched once it is 28 days old, which adds ~1,800 requests (~6 minutes) about once a month.
 on:
   schedule:
     # Sunday 10:30 IST, after the weekly adjusted OHLCV refresh (09:00). Portfolios change monthly.
@@ -19,7 +20,7 @@ concurrency:
 jobs:
   refresh-mutual-fund-holdings:
     runs-on: ubuntu-latest
-    # Paced requests take ~20 minutes; rate-limit pauses (5 minutes each, at most 3) can add more.
+    # Paced requests take ~7-13 minutes; rate-limit pauses (5 minutes each, at most 3 a run) can add 15.
     timeout-minutes: 60
 
     steps:

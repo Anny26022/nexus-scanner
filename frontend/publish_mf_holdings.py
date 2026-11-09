@@ -13,6 +13,9 @@ Served as /data/mf/holdings.json and /data/mf/holdings/revisions/<rev>/... (work
     holders/<stock ISIN>.json.gz   the funds holding an Indian equity
     fund-houses.json.gz, nfos.json.gz
 """
+from datetime import datetime, timedelta, timezone
+import gzip
+import json
 import os
 from pathlib import Path
 import sys
@@ -28,6 +31,8 @@ POINTER = 'mf/holdings.json'
 NAMESPACE = 'mf-holdings'
 SCHEMA_VERSION = 1
 MIN_SHARE_OF_LIVE = 0.9
+# AUM history is month-end data; last week's is reused until it is this old.
+AUM_REFRESH_DAYS = 28
 
 
 def check_against_live(report, live):
@@ -47,9 +52,20 @@ def pointer_for(report, revision):
                 fundHousesUrl=f'{base}/fund-houses.json.gz', nfosUrl=f'{base}/nfos.json.gz')
 
 
+def previous_aums(store, live, now=None):
+    """Last week's AUM histories ({ISIN: history}) while they are under AUM_REFRESH_DAYS old, else None."""
+    fetched = (live or {}).get('aumFetchedAt')
+    now = now or datetime.now(timezone.utc)
+    if not fetched or now - datetime.fromisoformat(fetched.replace('Z', '+00:00')) >= timedelta(days=AUM_REFRESH_DAYS):
+        return None
+    summary = json.loads(gzip.decompress(store.cache_command('cat', store.remote(f"releases/{NAMESPACE}/{live['revision']}/summary.json.gz"))))
+    return {fund['isin']: fund['aumHistory'] for fund in summary['funds'] if fund.get('aumHistory')}
+
+
 def publish_holdings(store, fetch=fetch_week):
     live = read_pointer(store, POINTER)
-    files, report = fetch()
+    aums = previous_aums(store, live)
+    files, report = fetch(previous_aums=aums, aum_fetched_at=(live or {}).get('aumFetchedAt') if aums else None)
     check_against_live(report, live)
     with tempfile.TemporaryDirectory() as folder:
         revision = write_release(folder, files)

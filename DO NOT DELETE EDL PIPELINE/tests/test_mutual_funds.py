@@ -95,8 +95,9 @@ class MutualFundTests(unittest.TestCase):
         rows = [row(isin(0), dmfm_cmots_scheme_code='43103'), row(isin(1), dmfm_cmots_scheme_code='43103'), row(isin(2), dmfm_cmots_scheme_code='9')]
         amfi = {isin(1): {'code': '1', 'nav': 93.9483, 'navDate': '2026-11-06', 'option': 'Growth'}}
         with patch.object(mf, 'MIN_FUNDS', 2), patch.object(mf, 'MIN_AMFI_COVERAGE', 0):
-            kept = [fund['isin'] for fund in mf.build_snapshot(rows, amfi, 'now')['funds']]
-        self.assertEqual(sorted(kept), [isin(1), isin(2)])
+            snapshot = mf.build_snapshot(rows, amfi, 'now')
+        self.assertEqual(sorted(fund['isin'] for fund in snapshot['funds']), [isin(1), isin(2)])
+        self.assertEqual((snapshot['droppedNotCurrent'], snapshot['droppedDuplicateIsin']), (0, 1))
 
     def test_drops_funds_without_a_positive_nav_or_a_real_date(self):
         rows = [row(isin(0)), row(isin(1), nav='0'), row(isin(2), nav='-3'), row(isin(3), day='2026-02-31'), row(isin(4))]

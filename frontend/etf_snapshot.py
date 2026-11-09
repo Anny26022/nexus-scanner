@@ -19,6 +19,7 @@ def next_session(session):
 # Index names of foreign markets. TradingView files Hang Seng ETFs under "Asia-Pacific" with Indian ones and leaves the
 # revenue country blank for Indian ETFs, so "Global" comes from the tracked index's name.
 GLOBAL_INDEX = re.compile(r'NASDAQ|S&P 500|NYSE|FANG|HANG SENG|MSCI|DOW JONES|NIKKEI|FTSE|EURO STOXX', re.I)
+INDIAN_INDEX = re.compile(r'\b(MSCI|FTSE|S&P)\s+INDIA\b', re.I)
 
 
 def etf_group(label, record):
@@ -28,9 +29,10 @@ def etf_group(label, record):
         return focus if focus in ('Gold', 'Silver') else 'Commodities'
     if asset_class == 'Fixed income':
         return 'Debt'
-    # The tracked index says which market (a fund name may carry its house's "India", as in Nippon India).
+    # "India" right after the provider (MSCI India, FTSE India) is an Indian index; elsewhere it may be the fund
+    # house's name (Nippon India), which says nothing about the market.
     tracked = str(record.get('index_tracked') or record.get('description') or '')
-    if GLOBAL_INDEX.search(tracked) and not re.search(r'\bINDIA\b', tracked, re.I):  # MSCI/FTSE India are Indian
+    if GLOBAL_INDEX.search(tracked) and not INDIAN_INDEX.search(tracked):
         return 'Global'
     return 'Index'
 

@@ -168,6 +168,15 @@ def current_funds(records, today=None):
     return [record for record in launched if record['navDate'] >= cutoff]
 
 
+def one_per_scheme(records, known):
+    """One fund per Dhan scheme code. An old ISIN Dhan keeps beside the live one shares its code and NAV (Shriram
+    Overnight); the ISIN AMFI knows (`known`) wins, then the larger fund."""
+    by_code = {}
+    for record in sorted(records, key=lambda record: (record['isin'] not in known, -(record['aumCrore'] or 0))):
+        by_code.setdefault(record['dhanSchemeCode'] or record['isin'], record)
+    return list(by_code.values())
+
+
 def parse_amfi(content):
     """AMFI's NAVAll.txt: `code;ISIN growth/payout;ISIN reinvestment;name;[plan;option;]NAV;date` under category and
     fund-house headings. Returns {ISIN: {code, nav, navDate}}; both ISIN columns map to the plan."""
@@ -226,11 +235,9 @@ def build_snapshot(dhan_rows, amfi_navs, fetched_at):
         raise ValueError(f'Dhan and AMFI NAVs agree for only {agreed} of {compared} funds on the same date')
 
     current = current_funds(funds.values())
-    # An old ISIN Dhan keeps beside the live one shares its scheme code and NAV (Shriram Overnight): keep AMFI's.
-    by_code = {}
-    for record in sorted(current, key=lambda record: ('amfiSchemeCode' not in record, -(record['aumCrore'] or 0))):
-        by_code.setdefault(record['dhanSchemeCode'] or record['isin'], record)
-    current = list(by_code.values())
+    not_current = len(funds) - len(current)
+    current = one_per_scheme(current, amfi_navs)
+    duplicates = len(funds) - not_current - len(current)
     # Two funds Dhan names alike are different plans (e.g. Kotak Gilt's "Provident Fund and Trust" option): name it.
     names = Counter(record['name'] for record in current)
     for record in current:
@@ -247,7 +254,8 @@ def build_snapshot(dhan_rows, amfi_navs, fetched_at):
         'navCheck': {'amfiMatched': sum('amfiSchemeCode' in record for record in ordered), 'sameDateCompared': compared,
                      'sameDateAgreed': agreed, 'navFromAmfi': from_amfi},
         'fundCount': len(ordered),
-        'droppedNotCurrent': len(funds) - len(current),
+        'droppedNotCurrent': not_current,
+        'droppedDuplicateIsin': duplicates,
         'funds': ordered,
     }
 

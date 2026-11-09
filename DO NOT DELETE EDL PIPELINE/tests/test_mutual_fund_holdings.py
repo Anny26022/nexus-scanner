@@ -84,6 +84,9 @@ class BuildTests(unittest.TestCase):
         stopped = dict(row('INF000000003', 50), dmfm_latest_nav_date='2026-09-01')
         funds = w.universe([row('INF000000001', 500), row('INF000000001', 5), row('../../etc', 9), row('INF000000002', 1), stopped])
         self.assertEqual([(item['isin'], item['aumCrore']) for item in funds], [('INF000000001', 500.0), ('INF000000002', 1.0)])
+        # An old ISIN sharing a live fund's scheme code: the one AMFI knows stays, as in the daily snapshot.
+        old, live = dict(row('INF000000004', 75), dmfm_cmots_scheme_code='43103'), dict(row('INF000000005', 75), dmfm_cmots_scheme_code='43103')
+        self.assertEqual([item['isin'] for item in w.universe([old, live], known={'INF000000005'})], ['INF000000005'])
 
     def test_aum_history_is_monthly_and_oldest_first(self):
         rows = [{'invdate': 'September 2026', 'totnav': '145070.0'}, {'invdate': 'June 2022', 'totnav': '22324.0'}, {'invdate': 'bad', 'totnav': '1'}]

@@ -37,6 +37,8 @@ class EtfSnapshotTests(unittest.TestCase):
                  ({'asset_class': 'Equity'}, {'index_tracked': 'NASDAQ-100 Index - INR'}, 'Global'),
                  ({'asset_class': 'Equity'}, {'index_tracked': 'Hang Seng Index', 'description': 'Nippon India ETF Hang Seng BeES'}, 'Global'),
                  ({'asset_class': 'Equity'}, {'index_tracked': 'MSCI India Index'}, 'Index'),
+                 ({'asset_class': 'Equity'}, {'description': 'Nippon India ETF Hang Seng BeES'}, 'Global'),   # no tracked index
+                 ({'asset_class': 'Equity'}, {'description': 'Mirae Asset MSCI India ETF'}, 'Index'),
                  ({'asset_class': 'Equity'}, {'description': 'Nippon India ETF Nifty 50 BeES'}, 'Index')]
         for values, record, expected in cases:
             with self.subTest(expected=expected, record=record):

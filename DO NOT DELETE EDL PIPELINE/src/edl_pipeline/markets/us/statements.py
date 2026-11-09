@@ -1,17 +1,14 @@
-"""US statement lines TradingView does not carry, from Dhan's stock pages, when a page can be trusted.
-
-TradingView's daily request (tradingview.py) supplies the statements first: trailing revenue, profit, margin and EPS,
-the latest balance sheet, cash flow and five-year growth, current and in dollars. A Dhan stock page fills only what
-is left: total income and expense, profit before tax, tax, interest coverage and PEG.
-
-Dhan pages are not trusted blindly. They do not say their currency (a foreign company's figures are in its home
-currency, read as dollars: TSMC's assets come out as $10 trillion) and some are years out of date (Costco's balance
-sheet is from 2009). A page is used only when its latest quarterly revenue agrees with TradingView's.
+"""US company statements from Dhan's stock pages, the source India's statements come from, checked part by part.
 
 A page carries 10 quarters of income statement (`incomeStat_sq`), 10 balance sheets (`bs_s`), 10 years of cash flow
 (`cF_sy`) and of revenue and profit (`rNp_s`), and a few ratios (`CV`), newest first, joined by "|"; `YEAR` names each
 period's end month (yyyymm). Dhan writes 0 for lines a company does not report. Not taken: its TTM block (all zeros),
 capex, dividend yield and book value (zeros), CWIP (repeats fixed assets), analyst ratings and similar stocks.
+
+Dhan comes first, as for India. But Dhan does not say a page's currency (a foreign company's figures are in its home
+currency, read as dollars: TSMC's assets come out as $10 trillion) and keeps some parts years out of date (Costco's
+balance sheet is from 2009), so each part of a page is checked against TradingView's latest quarter
+(`trusted_blocks`). TradingView's values (tradingview.py) stay where a page is missing, untrusted, or has a gap.
 
 Pages are cached under `<root>/stock_pages/` and fetched again when a week old or when the company has reported since
 (TradingView's last earnings date is after the fetch). Fetches are paced and stop at a time budget; the rest wait for
@@ -165,100 +162,126 @@ def _ratio(numerator, denominator, percent=False):
     return numerator / denominator * (100 if percent else 1)
 
 
-def statement_fields(page: dict) -> dict:
-    """India's statement fields from one page (amounts in millions of dollars under India's names)."""
+# Dhan's latest quarter must match TradingView's to within this, or the page is stale or in another currency.
+AGREEMENT = 0.10
+# A fiscal year's cash flow and revenue count as current when the year ended within this of the latest quarter.
+CURRENT_YEAR_MONTHS = 12
+
+
+def _latest(rows: list[dict]) -> dict:
+    # Dhan writes 0 for lines a company does not report (a bank has no current assets or operating profit).
+    return {key: (value or None) if key != 'period' else value for key, value in (rows[0] if rows else {}).items()}
+
+
+def statement_blocks(page: dict) -> dict:
+    """India's statement fields from one page, by the part of the page they come from (amounts in millions of
+    dollars under India's names), with each part's latest period."""
     quarters = series(page.get('incomeStat_sq'))
-    balances = series(page.get('bs_s'))
-    cash_flows = series(page.get('cF_sy'))
     years = series(page.get('rNp_s'))
-    ratios = page.get('CV') or {}
+    cash = _latest(series(page.get('cF_sy')))
+    balance = _latest(series(page.get('bs_s')))
     latest = quarters[0] if quarters else {}
     trailing, earlier = consecutive(quarters, 4), consecutive(quarters, 8)
     prior = earlier[4:] if earlier else None
     revenue, net_profit = _total(trailing, 'REVENUE'), _total(trailing, 'NET_PROFIT')
     operating, interest = _total(trailing, 'OPERATING_PROFIT'), _total(trailing, 'INTEREST')
     before_tax = _total(trailing, 'PROFIT_BEFORE_TAX')
-    # Dhan writes 0 for lines a company does not report (a bank has no current assets or operating profit).
-    balance = {key: value or None for key, value in (balances[0] if balances else {}).items()}
-    equity, assets = balance.get('TOTAL_EQUITY'), balance.get('TOTAL_ASSETS')
-    current_assets, current_liabilities = balance.get('CURRENT_ASSETS'), balance.get('CURRENT_LIABILITIES')
-    cash = cash_flows[0] if cash_flows else {}
+    sales, prior_sales = _total(trailing, 'SALES') or revenue, _total(prior, 'SALES') or _total(prior, 'REVENUE')
+    assets, current_assets = balance.get('TOTAL_ASSETS'), balance.get('CURRENT_ASSETS')
+    current_liabilities, non_current_liabilities = balance.get('CURRENT_LIABILITIES'), balance.get('NON_CURRENT_LIABILITIES')
     revenue_now = years[0].get('REVENUE') if years else None
     revenue_five = years[5].get('REVENUE') if len(years) > 5 else None
-    fields = {
-        # The latest quarter, as India's quarterly statement fields.
-        'total_revenue_in_lakhs': latest.get('REVENUE'),
-        'total_income_in_lakhs': (latest['REVENUE'] + (latest.get('OTHER_INCOME') or 0)) if latest.get('REVENUE') is not None else None,
-        'total_expense_in_lakhs': latest.get('EXPENSES'),
-        'profit_before_tax_in_lakhs': latest.get('PROFIT_BEFORE_TAX'),
-        'total_tax_expenses_in_lakhs': latest.get('TAX_PAYMENT_ABSOLUTE'),
-        'net_profit_in_lakhs': latest.get('NET_PROFIT'),
-        # The last four quarters, and the four before them.
-        'ttm_revenue_crore': revenue, 'ttm_sales_crore': _total(trailing, 'SALES') or revenue,
-        'ttm_net_profit_crore': net_profit,
-        'ttm_revenue_growth_percent': _growth(revenue, _total(prior, 'REVENUE')),
-        'ttm_sales_growth_percent': _growth(_total(trailing, 'SALES') or revenue, _total(prior, 'SALES') or _total(prior, 'REVENUE')),
-        'ttm_net_profit_growth_percent': _growth(net_profit, _total(prior, 'NET_PROFIT')),
-        'operating_margin_ttm_percent': _ratio(operating, revenue, percent=True) if operating else None,
-        # India's formulas (transforms/fundamentals.py), over the last four quarters.
-        'interest_coverage': (before_tax + interest) / interest
-        if before_tax is not None and interest and interest > 0 and operating else None,
-        # "Last year" and "two years back" are the last four quarters and the four before (fiscal years differ).
-        'eps_last_year': _total(trailing, 'EPS'), 'eps_2_years_back': _total(prior, 'EPS'),
-        # The latest balance sheet.
-        'total_assets_in_lakhs': assets, 'total_equity_in_lakhs': equity,
-        'current_assets_in_lakhs': current_assets, 'current_liabilities_in_lakhs': current_liabilities,
-        'non_current_liabilities_in_lakhs': balance.get('NON_CURRENT_LIABILITIES'),
-        'non_current_assets_in_lakhs': assets - current_assets
-        if assets is not None and current_assets is not None and assets >= current_assets else None,
-        'total_liabilities_in_lakhs': current_liabilities + balance['NON_CURRENT_LIABILITIES']
-        if current_liabilities is not None and balance.get('NON_CURRENT_LIABILITIES') is not None else None,
-        'current_ratio': _ratio(current_assets, current_liabilities),
-        'roa_percent': _ratio(net_profit, assets, percent=True),
-        # The latest fiscal year's cash flow.
-        'operating_cash_flow_in_lakhs': cash.get('OPERATING_ACTIVITIES'),
-        'investing_cash_flow_in_lakhs': cash.get('INVESTING_ACTIVITIES'),
-        'financing_cash_flow_crore': cash.get('FINANCING_ACTIVITIES'),
-        'net_cash_flow_in_lakhs': cash.get('NET_CASH_FLOW'),
-        'sales_growth_5_years_percent': (revenue_now / revenue_five) ** (1 / 5) * 100 - 100
-        if revenue_now and revenue_five and revenue_now > 0 and revenue_five > 0 else None,
-        'peg_ratio': _number(ratios.get('PEG')) or None,
+    return {
+        'income': {'period': latest.get('period'), 'fields': {
+            # The latest quarter, as India's quarterly statement fields.
+            'total_revenue_in_lakhs': latest.get('REVENUE'),
+            'total_income_in_lakhs': latest['REVENUE'] + (latest.get('OTHER_INCOME') or 0) if latest.get('REVENUE') is not None else None,
+            'total_expense_in_lakhs': latest.get('EXPENSES'),
+            'profit_before_tax_in_lakhs': latest.get('PROFIT_BEFORE_TAX'),
+            'total_tax_expenses_in_lakhs': latest.get('TAX_PAYMENT_ABSOLUTE'),
+            'net_profit_in_lakhs': latest.get('NET_PROFIT'),
+            # The last four consecutive quarters, and the four before them; nothing when a quarter is missing.
+            'ttm_revenue_crore': revenue, 'ttm_sales_crore': sales, 'ttm_net_profit_crore': net_profit,
+            'ttm_revenue_growth_percent': _growth(revenue, _total(prior, 'REVENUE')),
+            'ttm_sales_growth_percent': _growth(sales, prior_sales),
+            'ttm_net_profit_growth_percent': _growth(net_profit, _total(prior, 'NET_PROFIT')),
+            'operating_margin_ttm_percent': _ratio(operating, revenue, percent=True) if operating else None,
+            # India's formula (transforms/fundamentals.py), over the last four quarters.
+            'interest_coverage': (before_tax + interest) / interest
+            if before_tax is not None and interest and interest > 0 and operating else None,
+            # "Last year" and "two years back": the last four quarters and the four before (fiscal years differ).
+            'eps_last_year': _total(trailing, 'EPS'), 'eps_2_years_back': _total(prior, 'EPS'),
+        }},
+        'balance': {'period': balance.get('period'), 'fields': {
+            'total_assets_in_lakhs': assets, 'total_equity_in_lakhs': balance.get('TOTAL_EQUITY'),
+            'current_assets_in_lakhs': current_assets, 'current_liabilities_in_lakhs': current_liabilities,
+            'non_current_liabilities_in_lakhs': non_current_liabilities,
+            'non_current_assets_in_lakhs': assets - current_assets
+            if assets is not None and current_assets is not None and assets >= current_assets else None,
+            'total_liabilities_in_lakhs': current_liabilities + non_current_liabilities
+            if current_liabilities is not None and non_current_liabilities is not None else None,
+            'current_ratio': _ratio(current_assets, current_liabilities),
+            'roa_percent': _ratio(net_profit, assets, percent=True),
+        }},
+        'cash_flow': {'period': cash.get('period'), 'fields': {
+            'operating_cash_flow_in_lakhs': cash.get('OPERATING_ACTIVITIES'),
+            'investing_cash_flow_in_lakhs': cash.get('INVESTING_ACTIVITIES'),
+            'financing_cash_flow_crore': cash.get('FINANCING_ACTIVITIES'),
+            'net_cash_flow_in_lakhs': cash.get('NET_CASH_FLOW'),
+        }},
+        'annual': {'period': years[0]['period'] if years else None, 'fields': {
+            'sales_growth_5_years_percent': (revenue_now / revenue_five) ** (1 / 5) * 100 - 100
+            if revenue_now and revenue_five and revenue_now > 0 and revenue_five > 0 else None,
+        }},
+        'ratios': {'period': None, 'fields': {'peg_ratio': _number((page.get('CV') or {}).get('PEG')) or None}},
     }
-    return fields
 
 
-# Dhan's latest quarter must match TradingView's to within this, or the page is stale or in another currency.
-AGREEMENT = 0.10
+def trusted_blocks(blocks: dict, record: dict) -> set[str]:
+    """The parts of a page that are this company's current dollars.
 
-
-def trusted(page: dict, record: dict) -> bool:
-    """Whether a page's figures are this company's current dollars. Dhan does not say its currency and keeps some
-    pages years out of date (Costco's balance sheet is from 2009; TSMC's amounts are Taiwan dollars), and ADRs carry
-    US ISINs, so the only safe test is agreement: Dhan's latest quarterly revenue within 10% of TradingView's.
+    Dhan does not say its currency and keeps some pages years out of date (Costco's balance sheet is from 2009;
+    TSMC's amounts are Taiwan dollars), and ADRs carry US ISINs. So the income statement counts only when its latest
+    quarterly revenue is within 10% of TradingView's; the balance sheet only when it is for that same quarter; the
+    cash flow and yearly revenue only when their fiscal year ended within 12 months of it; the ratios with the income.
     """
-    quarters = series(page.get('incomeStat_sq'))
-    revenue, reference = (quarters[0].get('REVENUE') if quarters else None), record.get('total_revenue_in_lakhs')
-    return bool(revenue and reference) and abs(revenue / reference - 1) <= AGREEMENT
+    income = blocks['income']
+    revenue, reference = income['fields']['total_revenue_in_lakhs'], record.get('total_revenue_in_lakhs')
+    if not (income['period'] and revenue and reference and abs(revenue / reference - 1) <= AGREEMENT):
+        return set()
+    quarter = _months(income['period'])
+    trusted = {'income', 'ratios'}
+    if blocks['balance']['period'] == income['period']:
+        trusted.add('balance')
+    for name in ('cash_flow', 'annual'):
+        period = blocks[name]['period']
+        if period and 0 <= quarter - _months(period) < CURRENT_YEAR_MONTHS:
+            trusted.add(name)
+    return trusted
 
 
 def enrich(records: list[dict], root: Path) -> dict:
-    """Fill what TradingView left empty from each record's cached page, when the page can be trusted."""
-    read = refused = 0
+    """Dhan's statement values, from each trusted part of a record's page, replace TradingView's (Dhan first, as for
+    India); TradingView's stay where the page is missing, untrusted or empty."""
+    counts = {'with_statements': 0, 'refused': 0, **{name: 0 for name in ('balance', 'cash_flow', 'annual')}}
     oldest = None
     for record in records:
         page = read_page(root, record['symbol'])
         if not page:
             continue
-        if not trusted(page, record):
-            refused += 1
+        blocks = statement_blocks(page)
+        trusted = trusted_blocks(blocks, record)
+        if not trusted:
+            counts['refused'] += 1
             continue
-        # TradingView's daily values come first (tradingview.py); the page fills what they leave empty.
-        record.update({key: value for key, value in statement_fields(page).items() if value is not None and record.get(key) is None})
+        for name in trusted:
+            record.update({key: value for key, value in blocks[name]['fields'].items() if value is not None})
+            counts[name] = counts.get(name, 0) + 1
         record['financial_metadata'] = {
-            'source': 'TradingView US scanner, then the Dhan US stock page', 'amount_unit': 'USD_MILLION',
-            'fetched_at': page['fetched_at'],
-            'quarter': (series(page.get('incomeStat_sq')) or [{}])[0].get('period'),
-            'balance_sheet_year': (series(page.get('bs_s')) or [{}])[0].get('period'),
+            'source': 'Dhan US stock page, TradingView US scanner where Dhan is missing or out of date',
+            'amount_unit': 'USD_MILLION', 'fetched_at': page['fetched_at'],
+            'quarter': blocks['income']['period'],
+            'balance_sheet_year': blocks['balance']['period'] if 'balance' in trusted else None,
             'ttm_formula': 'sum of the last four consecutive quarters',
             'interest_coverage_formula': '(trailing profit before tax + interest) / interest',
             'non_current_assets_formula': 'total assets - current assets',
@@ -266,6 +289,5 @@ def enrich(records: list[dict], root: Path) -> dict:
         }
         fetched = page['fetched_at'][:10]
         oldest = fetched if oldest is None or fetched < oldest else oldest
-        read += 1
-    return {'with_statements': read, 'refused': refused, 'oldest_page': oldest}
-
+        counts['with_statements'] += 1
+    return {**{key: value for key, value in counts.items() if key not in ('income', 'ratios')}, 'oldest_page': oldest}

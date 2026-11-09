@@ -1,7 +1,7 @@
 """Dhan's US screener fields mapped onto the scanner's canonical stock record.
 
-Unit-free values keep India's canonical names (close, perf_12m, high_52w, pe_ratio, roe_percent, ...), so filters that
-read them work for both markets unchanged. Amounts never reuse India's unit-named fields (market_cap_crore,
+Values keep India's canonical names (close, perf_12m, high_52w, pe_ratio, roe_percent, ...), so filters that read them
+work for both markets unchanged. Only fields the release reads are requested. Amounts never reuse India's unit-named fields (market_cap_crore,
 rupee_volume): they are full amounts in the record's `currency`, named without a unit.
 
 Dhan's US market cap is in millions of US dollars (Apple: 4,976,937). Volume and share counts are plain numbers.
@@ -15,38 +15,32 @@ from zoneinfo import ZoneInfo
 
 from .. import UNITED_STATES
 
-# Requested from the global screener; all are filled for US stocks (ETFs leave the fundamentals empty).
+# Requested from the global screener: what the release reads, nothing more. Exch, Inst and Seg label the breadth
+# universe; the rest map through DIRECT. Mcap and LastTradeTime are read in canonical_row.
 SNAPSHOT_FIELDS = [
     'Sym', 'DispSym', 'Seosym', 'Isin', 'Sid', 'Exch', 'Cust_Exch', 'Inst', 'OgInst', 'Seg', 'LastTradeTime',
-    'Ltp', 'BcClose', 'Open', 'High', 'Low', 'Volume', 'Pchange', 'PPerchange',
-    'PricePerchng1week', 'PricePerchng2week', 'PricePerchng1mon', 'PricePerchng3mon', 'PricePerchng6mon',
-    'PricePerchng1year', 'PricePerchng3year', 'PricePerchng5year',
-    'High1Wk', 'High1Yr', 'Low1Yr', 'High3Yr', 'High5yr', 'RtAwayFrom1MonthHigh', 'RtAwayFrom5YearHigh',
-    'Mcap', 'TotalShares', 'Sector', 'Pe', 'Ind_Pe', 'ReturnOnEquity', 'ROCE', 'NetProfitMargin',
-    'Year1RevenueGrowth', 'YearlyEarningPerShare', 'Year1CAGREPSGrowth', 'YoYLastQtrlyProfitGrowth',
-    # Multi-year averages and the industry the US screener fills too (India's SCREEN_METRICS tags).
-    'SubSector', 'Year3ROE', 'Year5AvgOperatingProfit', 'Year5MedianSalesGrowth', 'Year3CAGREPSGrowth',
-    'Year3CAGRRevenueGrowth',
+    'Ltp', 'BcClose', 'Open', 'High', 'Low', 'Volume', 'PPerchange',
+    'PricePerchng1week', 'PricePerchng1mon', 'PricePerchng3mon', 'PricePerchng6mon',
+    'PricePerchng1year', 'PricePerchng3year', 'PricePerchng5year', 'High1Yr', 'Low1Yr',
+    'Mcap', 'Sector', 'SubSector', 'Pe', 'Ind_Pe', 'ReturnOnEquity', 'ROCE', 'YearlyEarningPerShare', 'Year1CAGREPSGrowth',
+    # India's SCREEN_METRICS tags the US screener fills; percentages only (its amounts, such as FixedAssets and CWIP,
+    # are in each company's home currency for foreign listings and do not say so).
+    'Year3ROE', 'Year5AvgOperatingProfit', 'Year5MedianSalesGrowth', 'Year3CAGREPSGrowth', 'Year3CAGRRevenueGrowth',
 ]
 
-# Screener field -> canonical field, for values that carry over as they are.
+# Screener field -> India's canonical field.
 DIRECT = {
-    'Sym': 'symbol', 'DispSym': 'name', 'Isin': 'isin', 'Sid': 'security_id', 'Cust_Exch': 'exchange', 'Sector': 'sector',
+    'Sym': 'symbol', 'DispSym': 'name', 'Isin': 'isin', 'Sid': 'security_id', 'Cust_Exch': 'exchange', 'Seosym': 'slug',
+    'Sector': 'sector', 'SubSector': 'industry',
     'Ltp': 'close', 'BcClose': 'previous_close', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Volume': 'volume',
-    'PPerchange': 'change_percent',
-    'PricePerchng1week': 'perf_1w', 'PricePerchng2week': 'perf_2w', 'PricePerchng1mon': 'perf_1m', 'PricePerchng3mon': 'perf_3m',
-    'PricePerchng6mon': 'perf_6m', 'PricePerchng1year': 'perf_12m', 'PricePerchng3year': 'perf_3y', 'PricePerchng5year': 'perf_5y',
-    'High1Wk': 'high_1w', 'High1Yr': 'high_52w', 'Low1Yr': 'low_52w', 'High3Yr': 'high_3y', 'High5yr': 'high_5y',
-    'RtAwayFrom1MonthHigh': 'percent_from_1m_high', 'RtAwayFrom5YearHigh': 'percent_from_5y_high',
-    'TotalShares': 'shares_outstanding', 'Pe': 'pe_ratio', 'Ind_Pe': 'industry_pe_ratio', 'ReturnOnEquity': 'roe_percent',
-    'ROCE': 'roce_percent', 'NetProfitMargin': 'net_margin_percent', 'Year1RevenueGrowth': 'revenue_growth_1y_percent',
+    'PPerchange': 'change_percent', 'High1Yr': 'high_52w', 'Low1Yr': 'low_52w',
+    'PricePerchng1week': 'perf_1w', 'PricePerchng1mon': 'perf_1m', 'PricePerchng3mon': 'perf_3m', 'PricePerchng6mon': 'perf_6m',
+    'PricePerchng1year': 'perf_12m', 'PricePerchng3year': 'return_3y', 'PricePerchng5year': 'return_5y',
+    'Pe': 'pe_ratio', 'Ind_Pe': 'industry_pe_ratio', 'ReturnOnEquity': 'roe_percent', 'ROCE': 'roce_percent',
     'YearlyEarningPerShare': 'eps_ttm', 'Year1CAGREPSGrowth': 'eps_growth_1y_percent',
-    'YoYLastQtrlyProfitGrowth': 'quarterly_profit_growth_yoy_percent',
-    'SubSector': 'industry', 'Year3ROE': 'average_roe_3y_percent', 'Year5AvgOperatingProfit': 'average_opm_5y_percent',
+    'Year3ROE': 'average_roe_3y_percent', 'Year5AvgOperatingProfit': 'average_opm_5y_percent',
     'Year5MedianSalesGrowth': 'median_sales_growth_5y_percent', 'Year3CAGREPSGrowth': 'eps_cagr_3y_percent',
     'Year3CAGRRevenueGrowth': 'revenue_cagr_3y_percent',
-    # Percentages only: the screener's amounts (FixedAssets, CWIP) are in each company's home currency for foreign
-    # listings (TSMC's are Taiwan dollars) and do not say so.
 }
 KIND_BY_INSTRUMENT = {'ES': 'stock', 'ETF': 'etf'}
 # Dhan stamps its own times in Indian time, whatever the market.
@@ -83,9 +77,6 @@ def canonical_row(row: dict) -> dict | None:
     market_cap = _number(row.get('Mcap'))
     record['market_cap'] = market_cap * UNITED_STATES.provider_amount_unit if market_cap is not None else None
     record['dollar_volume'] = record['close'] * record['volume'] if record['volume'] is not None else None
-    if record['high_52w'] and record['low_52w']:
-        record['distance_from_52w_high_percent'] = (record['close'] / record['high_52w'] - 1) * 100
-        record['distance_from_52w_low_percent'] = (record['close'] / record['low_52w'] - 1) * 100
-    record['slug'] = row.get('Seosym')
+    # Read while building (the snapshot's session); not published.
     record['provider_last_trade_ist'] = _last_trade(row.get('LastTradeTime'))
     return record

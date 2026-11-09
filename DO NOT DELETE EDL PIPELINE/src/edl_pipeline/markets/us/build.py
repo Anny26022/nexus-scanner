@@ -39,8 +39,12 @@ BENCHMARK = UNITED_STATES.benchmark
 # India's breadth methodology with US floors, in Dhan's US amount unit (millions of dollars).
 BREADTH_FLOORS = {'version': 'mbi-xp-v2.2-us', 'minimum_price': 1.0, 'minimum_market_cap_crore': 100.0}
 AMOUNT_UNIT = UNITED_STATES.provider_amount_unit
-# The processor's India-unit amounts; this market's amounts come from engine_amounts instead.
-INDIA_AMOUNTS = frozenset({'rupee_volume', 'avg_rupee_volume_20'})
+# The processor's metrics the engine reads (its amounts are India's; this market's come from engine_amounts).
+METRIC_KEYS = ('as_of_date', 'gap_percent', 'relative_volume_20', 'atr14', 'atr_percent_14', 'adr_percent_20',
+               'distance_from_52w_high_percent', 'distance_from_52w_low_percent', 'breakout_above_20d_high',
+               'breakout_above_50d_high', 'breakout_above_52w_high', 'is_inside_day', 'sma20', 'sma50', 'sma200')
+# Read while building, not by the release.
+BUILD_ONLY = frozenset({'slug', 'provider_last_trade_ist'})
 
 
 class SnapshotNotReady(RuntimeError):
@@ -87,9 +91,7 @@ def stock_metrics(path: Path) -> dict:
     if not metrics:
         return {}
     frame = pd.read_csv(path)
-    # The canonical scanner metrics are the processor's snake_case keys; its titled keys are India's display columns.
-    result = {key: value for key, value in metrics.items()
-              if key.isidentifier() and key == key.lower() and key not in INDIA_AMOUNTS}
+    result = {key: metrics.get(key) for key in METRIC_KEYS}
     rsi = indicator_series(frame, 'RSI', 14).iloc[-1] if len(frame) > 14 else None
     result['rsi14'] = round(float(rsi), 2) if rsi is not None and pd.notna(rsi) else None
     traded = frame['Close'] * frame['Volume']
@@ -102,17 +104,16 @@ def stock_record(record: dict, metrics: dict, session: str) -> dict:
     """The canonical record the shared engine and publisher read."""
     aligned = metrics.get('as_of_date') == session
     return {
-        # History-based values win over the snapshot's own (the 52-week distances), when the history has them.
-        **record, **{key: value for key, value in metrics.items() if not key.startswith('turnover') and value is not None},
+        **{key: value for key, value in record.items() if key not in BUILD_ONLY},
+        **{key: value for key, value in metrics.items() if not key.startswith('turnover')},
         **engine_amounts(record, metrics),
         'schema_version': '3.0', 'industry': record.get('industry'), 'listing_board': 'MAINBOARD', 'is_sme': False, 'listing_series': None,
         'default_screener_eligible': True, 'index_memberships': [], 'event_markers': [], 'recent_announcements': [],
         'news_feed': [], 'as_of_date': session if aligned else metrics.get('as_of_date'),
         # Only TradingView's (markets/us/tradingview.py): Dhan's history starts in 2021, so its high is not all-time.
         'all_time_high': record.get('all_time_high'), 'percent_from_ath': record.get('percent_from_ath'),
-        # India's names for the trailing returns the snapshot carries.
+        # The engine reads both of India's names for these two returns.
         'return_1m': record.get('perf_1m'), 'return_1y': record.get('perf_12m'),
-        'return_3y': record.get('perf_3y'), 'return_5y': record.get('perf_5y'),
     }
 
 
@@ -153,8 +154,6 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     rows = [row for row in stock_rows if security_type(row.get('Sym') or '', row.get('DispSym')) in SCREENABLE]
     rows = rows[:limit] if limit else rows
     records = [record for record in map(fields.canonical_row, rows) if record]
-    for record in records:
-        record['security_type'] = security_type(record['symbol'], record['name'])
     benchmarks = [record for record in map(fields.canonical_row, etf_rows) if record and record['symbol'] in BENCHMARKS]
 
     report = {'session': session, 'screenable': len(records), 'listed': len(stock_rows)}

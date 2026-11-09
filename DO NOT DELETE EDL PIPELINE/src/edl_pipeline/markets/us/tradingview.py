@@ -1,8 +1,9 @@
 """US values from TradingView's scanner: one request for the whole market, as India's fetch_advanced_indicators.
 
-It carries what Dhan's US snapshot and its 2021-onward history cannot: all-time highs, the last and next earnings
-dates, free float, dividend yield and ex-dates, and India's published TradingView metrics (`tradingview_fields.json`,
-shared so the catalogue, publisher and both markets read one list).
+It carries what Dhan cannot: all-time highs (Dhan's history starts in 2021), the last earnings date, free float,
+dividend yield, dividend per share and ex-date, VWAP, debt and free cash flow, and India's published TradingView metrics
+(`tradingview_fields.json`, shared so the catalogue, publisher and both markets read one list). Its statement values
+are the fallback for stocks whose Dhan page is missing or cannot be trusted (statements.py).
 
 Rows are matched by ISIN. Secondary share classes (BRK.B) and ADRs (ASML) are not TradingView's "primary" listing and
 ADRs are type `dr`, so both types are requested on the four exchanges Dhan lists; OTC is left out. Amount fields
@@ -22,13 +23,14 @@ from .calendar import EASTERN
 
 API_URL = 'https://scanner.tradingview.com/america/scan'
 EXCHANGES = ('NYSE', 'NASDAQ', 'AMEX', 'CBOE')
-# Columns US screening reads beyond the shared metric list.
-EXTRA = {'earnings_release_date': 'last_earnings', 'earnings_release_next_date': 'next_earnings',
+# Columns US screening reads beyond the shared metric list. The statement columns are a fallback: Dhan's stock page
+# comes first when it can be trusted (statements.py), as Dhan does for India.
+EXTRA = {'earnings_release_date': 'last_earnings',
          'float_shares_percent_current': 'free_float_percent', 'dividends_yield_current': 'dividend_yield_percent',
-         'ex_dividend_date_recent': 'last_ex_dividend', 'ex_dividend_date_upcoming': 'next_ex_dividend',
+         'ex_dividend_date_recent': 'last_ex_dividend',
          'free_cash_flow_ttm': 'free_cash_flow', 'dps_common_stock_prim_issue_fy': 'dividend_per_share',
          'price_book_fq': 'pb_ratio', 'VWAP': 'vwap', 'total_debt_fq': 'total_debt', 'total_equity_fq': 'total_equity',
-         # Trailing twelve months, kept current daily (Dhan's quarters have gaps; statements.py fills the rest).
+         # Trailing twelve months, where Dhan's quarters have a gap.
          'total_revenue_ttm': 'ttm_revenue', 'net_income_ttm': 'ttm_net_profit', 'operating_margin_ttm': 'operating_margin',
          'earnings_per_share_diluted_ttm': 'eps_ttm', 'earnings_per_share_diluted_yoy_growth_ttm': 'eps_growth',
          'total_revenue_yoy_growth_ttm': 'revenue_growth', 'net_income_yoy_growth_ttm': 'net_profit_growth',
@@ -141,8 +143,8 @@ def canonical(found: dict, record: dict, session: str) -> dict:
     current = snapshot['as_of_date'] == session
     market = snapshot['market']
     close = record.get('close')
-    # TradingView's all-time high, never below what the stored history has seen.
-    highs = [value for value in (market.get('all_time_high'), record.get('high_52w'), record.get('high_5y')) if _number(value)]
+    # TradingView's all-time high, never below the 52-week high.
+    highs = [value for value in (market.get('all_time_high'), record.get('high_52w')) if _number(value)]
     high = max(highs) if highs else None
     last_earnings = _eastern_date(found['last_earnings'])
     return {
@@ -150,11 +152,9 @@ def canonical(found: dict, record: dict, session: str) -> dict:
         'all_time_high': high if current else None,
         'percent_from_ath': (close / high - 1) * 100 if current and high and close else None,
         'latest_earnings_date': last_earnings if last_earnings and last_earnings <= session else None,
-        'next_earnings_date': _eastern_date(found['next_earnings']),
         'free_float_percent': _number(found['free_float_percent']),
         'dividend_yield_percent': _number(found['dividend_yield_percent']),
         'dividend_ex_date': _eastern_date(found['last_ex_dividend']),
-        'next_dividend_ex_date': _eastern_date(found['next_ex_dividend']),
         'dividend_per_share_latest': _number(found['dividend_per_share']),
         'pb_ratio': _number(found['pb_ratio']),
         'vwap': _number(found['vwap']) if current else None,

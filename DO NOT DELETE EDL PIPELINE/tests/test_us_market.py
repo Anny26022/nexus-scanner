@@ -132,9 +132,15 @@ class FieldTests(unittest.TestCase):
         self.assertAlmostEqual(record['market_cap'], 4_976_937_410_000)  # Dhan sends millions of dollars
         self.assertEqual(record['dollar_volume'], 342_500)
         self.assertEqual((record['perf_12m'], record['pe_ratio'], record['roe_percent']), (29.3, 36.7, 169.7))
-        self.assertAlmostEqual(record['distance_from_52w_high_percent'], (342.5 / 350 - 1) * 100)
+        # The 52-week distances come from the history, as for India, not from the snapshot.
+        self.assertNotIn('distance_from_52w_high_percent', record)
         self.assertEqual(record['provider_last_trade_ist'], '2026-11-07T02:29:55+05:30')
         self.assertNotIn('market_cap_crore', record)
+
+    def test_only_fields_the_release_reads_are_requested(self):
+        self.assertEqual(set(fields.DIRECT) - set(fields.SNAPSHOT_FIELDS), set())
+        for unread in ('High1Wk', 'High3Yr', 'PricePerchng2week', 'NetProfitMargin', 'TotalShares', 'FixedAssets', 'CWIP'):
+            self.assertNotIn(unread, fields.SNAPSHOT_FIELDS)
 
     def test_rows_without_an_id_or_price_are_dropped(self):
         self.assertIsNone(fields.canonical_row({**self.ROW, 'Ltp': 0}))
@@ -218,15 +224,16 @@ class BuildTests(unittest.TestCase):
         self.assertEqual((amounts['daily_rupee_turnover_20_cr'], amounts['daily_rupee_turnover_50_cr']), (1.5, 2.5))
         self.assertIsNone(amounts['daily_rupee_turnover_100_cr'])
 
-    def test_records_prefer_history_metrics_and_carry_india_return_names(self):
-        record = {**fields.canonical_row(FieldTests.ROW), 'perf_5y': 120.0}
+    def test_records_carry_history_metrics_and_india_return_names_only(self):
+        record = {**fields.canonical_row({**FieldTests.ROW, 'PricePerchng5year': 120.0}), 'slug': 'AAPL-apple-inc'}
         stock = build.stock_record(record, {'as_of_date': '2026-11-09', 'distance_from_52w_high_percent': -3.0,
                                             'distance_from_52w_low_percent': None, 'turnover50': 2.0}, '2026-11-09')
-        self.assertEqual(stock['distance_from_52w_high_percent'], -3.0)  # history wins
-        self.assertAlmostEqual(stock['distance_from_52w_low_percent'], (342.5 / 250 - 1) * 100)  # snapshot fills in
+        self.assertEqual(stock['distance_from_52w_high_percent'], -3.0)
+        self.assertIsNone(stock['distance_from_52w_low_percent'])  # a short history has none, as for India
         self.assertEqual((stock['return_1y'], stock['return_5y'], stock['as_of_date']), (29.3, 120.0, '2026-11-09'))
         self.assertIsNone(stock['percent_from_ath'])
-        self.assertNotIn('turnover50', stock)
+        for build_only in ('turnover50', 'slug', 'provider_last_trade_ist'):
+            self.assertNotIn(build_only, stock)
 
 
 class TradingViewTests(unittest.TestCase):
@@ -261,12 +268,13 @@ class TradingViewTests(unittest.TestCase):
 
     def test_canonical_fields_use_the_session_and_never_a_high_below_the_history(self):
         found = tradingview.snapshots(self.response(self.row('NYSE:KO', 'US1912161007', **{
-            'High.All': 90.0, 'earnings_release_date': 1793098500, 'earnings_release_next_date': 1802779200,
+            'High.All': 90.0, 'earnings_release_date': 1793098500,
             'float_shares_percent_current': 99.3, 'dividends_yield_current': 2.2, 'ex_dividend_date_recent': 1789430400})), '')
         values = tradingview.canonical(found['US1912161007'], {'close': 95.0, 'high_52w': 97.0}, '2026-11-09')
         self.assertEqual(values['all_time_high'], 97.0)
         self.assertAlmostEqual(values['percent_from_ath'], (95 / 97 - 1) * 100)
-        self.assertEqual((values['latest_earnings_date'], values['next_earnings_date']), ('2026-10-27', '2027-02-16'))
+        self.assertEqual(values['latest_earnings_date'], '2026-10-27')
+        self.assertNotIn('next_earnings_date', values)
         self.assertEqual((values['free_float_percent'], values['dividend_yield_percent']), (99.3, 2.2))
         # A stale TradingView row (another session) gives no all-time high.
         self.assertIsNone(tradingview.canonical(found['US1912161007'], {'close': 95.0}, '2026-11-10')['percent_from_ath'])
@@ -313,8 +321,11 @@ class StatementTests(unittest.TestCase):
         'CV': {'PEG': '1.5'},
     }
 
+    def fields(self, page):
+        return {key: value for block in statements.statement_blocks(page).values() for key, value in block['fields'].items()}
+
     def test_statements_read_the_latest_quarter_trailing_year_and_balance_sheet(self):
-        values = statements.statement_fields(self.PAGE)
+        values = self.fields(self.PAGE)
         self.assertEqual((values['total_revenue_in_lakhs'], values['total_income_in_lakhs']), (110, 115))
         self.assertEqual((values['ttm_revenue_crore'], values['ttm_net_profit_crore']), (440, 88))
         self.assertAlmostEqual(values['ttm_revenue_growth_percent'], 10.0)
@@ -330,27 +341,37 @@ class StatementTests(unittest.TestCase):
         bank = {**self.PAGE, 'incomeStat_sq': gap,
                 'bs_s': {'YEAR': joined(202609), 'TOTAL_ASSETS': joined(5000), 'CURRENT_ASSETS': joined(0),
                          'CURRENT_LIABILITIES': joined(0), 'NON_CURRENT_LIABILITIES': joined(0), 'TOTAL_EQUITY': joined(400)}}
-        values = statements.statement_fields(bank)
+        values = self.fields(bank)
         self.assertIsNone(values['ttm_revenue_crore'])
         self.assertIsNone(values['interest_coverage'])
         self.assertIsNone(values['current_ratio'])
         self.assertIsNone(values['total_liabilities_in_lakhs'])
 
-    def test_a_page_is_used_only_when_it_agrees_with_tradingview(self):
-        self.assertTrue(statements.trusted(self.PAGE, {'total_revenue_in_lakhs': 105}))
-        # Stale (Costco's 2009 balance sheet) or another currency (TSMC in Taiwan dollars) disagree.
-        self.assertFalse(statements.trusted(self.PAGE, {'total_revenue_in_lakhs': 3500}))
+    def test_each_part_of_a_page_is_used_only_when_current_and_in_dollars(self):
+        blocks = statements.statement_blocks(self.PAGE)
+        self.assertEqual(statements.trusted_blocks(blocks, {'total_revenue_in_lakhs': 105}),
+                         {'income', 'balance', 'cash_flow', 'annual', 'ratios'})
+        # Stale (Costco's 2009 balance sheet) or another currency (TSMC in Taiwan dollars): nothing is used.
+        self.assertEqual(statements.trusted_blocks(blocks, {'total_revenue_in_lakhs': 3500}), set())
         # ADRs carry US ISINs, so without TradingView's figure there is nothing to check against.
-        self.assertFalse(statements.trusted(self.PAGE, {'isin': 'US8740391003'}))
+        self.assertEqual(statements.trusted_blocks(blocks, {'isin': 'US8740391003'}), set())
+        # A balance sheet a quarter behind the income statement (Apple's, on Dhan) is left to TradingView.
+        behind = statements.statement_blocks({**self.PAGE, 'bs_s': {**self.PAGE['bs_s'], 'YEAR': joined(202606, 202603)}})
+        self.assertNotIn('balance', statements.trusted_blocks(behind, {'total_revenue_in_lakhs': 110}))
 
-    def test_tradingview_values_come_first_and_pages_fill_the_rest(self):
+    def test_dhan_comes_first_and_tradingview_fills_the_rest(self):
         root = Path(tempfile.mkdtemp())
         self.addCleanup(lambda: __import__('shutil').rmtree(root))
+        gap = {**self.PAGE['incomeStat_sq'], 'YEAR': joined(202609, 202606, 202512, 202509, 202506, 202503, 202412, 202409, 202406, 202403)}
         statements.write_page(root, 'ACME', {'fetched_at': '2026-11-09T00:30:00+00:00', 'slug': 'ACME-acme', **self.PAGE})
-        record = {'symbol': 'ACME', 'total_revenue_in_lakhs': 108, 'ttm_revenue_crore': 450}
-        report = statements.enrich([record], root)
-        self.assertEqual((report['with_statements'], record['ttm_revenue_crore'], record['profit_before_tax_in_lakhs']), (1, 450, 28))
-        self.assertEqual(record['financial_metadata']['amount_unit'], 'USD_MILLION')
+        statements.write_page(root, 'GAP', {'fetched_at': '2026-11-09T00:30:00+00:00', 'slug': 'GAP-gap', **self.PAGE, 'incomeStat_sq': gap})
+        acme = {'symbol': 'ACME', 'total_revenue_in_lakhs': 108, 'ttm_revenue_crore': 450, 'dividend_yield_percent': 1.2}
+        gapped = {'symbol': 'GAP', 'total_revenue_in_lakhs': 108, 'ttm_revenue_crore': 450}
+        report = statements.enrich([acme, gapped], root)
+        self.assertEqual((acme['ttm_revenue_crore'], acme['profit_before_tax_in_lakhs'], acme['dividend_yield_percent']), (440, 28, 1.2))
+        self.assertEqual((gapped['ttm_revenue_crore'], gapped['profit_before_tax_in_lakhs']), (450, 28))  # a missing quarter
+        self.assertEqual((report['with_statements'], report['balance']), (2, 2))
+        self.assertEqual(acme['financial_metadata']['amount_unit'], 'USD_MILLION')
 
     def test_pages_are_fetched_again_weekly_and_after_earnings(self):
         now = utc(2026, 11, 10, 0, 30)

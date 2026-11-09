@@ -1,9 +1,11 @@
 # US market
 
-Phase 0 checks that Dhan can feed a US screener with the same filters as India, and lays the seams for it:
-`edl_pipeline.markets` (one spec per market), `markets.us.calendar` (NYSE), `markets.us.dhan` (sources) and
-`markets.us.fields` (mapping onto the canonical record). Nothing is published yet. `tools/us_market_spike.py`
-re-runs the live checks below (read-only, paced).
+The US scanner release is built from Dhan, as India's is: its screener (prices, returns, valuation and India's
+multi-year averages), its daily history (every technical), and its stock pages (statements). TradingView's US scanner
+fills what Dhan does not carry (all-time highs, earnings dates, free float, dividends, debt, free cash flow, VWAP) and
+stands in for a Dhan statement that is missing or cannot be trusted. Seams: `edl_pipeline.markets` (one spec per
+market), `markets.us.calendar` (NYSE), `markets.us.dhan` (sources), `markets.us.fields` (screener to canonical
+record), `markets.us.history`, `markets.us.tradingview`, `markets.us.statements` and `markets.us.build`.
 
 ## What Dhan serves
 
@@ -70,8 +72,8 @@ EDL_US_BASE_DIR=<root> python frontend/publish_us.py
 | Breadth, index history | India's `generate_market_breadth` and `generate_all_index_history`, with US floors ($1 price, $100M market cap). |
 | Stock metrics | India's `process_symbol_csv` on the NYSE calendar, plus RSI(14) and dollar turnover. |
 | RS ratings | `build_rs_ratings.main(root, 'SPY.csv', ...)`. |
-| TradingView | `markets/us/tradingview.py`: one request to TradingView's US scanner (types `stock` and `dr` on NYSE, Nasdaq, AMEX and Cboe; secondary share classes and ADRs are not "primary" there), matched by ISIN. It supplies India's published TradingView metrics in dollars, the all-time high (never below the stored history's), the last and next earnings dates, free float, dividend yield and ex-dates. A failed request publishes the release without them. |
-| Statements | TradingView first (same request): trailing revenue, profit, margin and EPS, the latest balance sheet, cash flow, debt, free cash flow, P/B and five-year growth, in dollars. The screener adds industry and India's multi-year averages (percentages only; its amounts are in each company's home currency). `markets/us/statements.py` fills the rest (profit before tax, tax, total income and expense, interest coverage, PEG) from Dhan's stock pages, cached and refreshed weekly or after earnings, and only when a page's latest quarter agrees with TradingView's: Dhan's pages carry stale periods and home-currency amounts without saying so. |
+| TradingView | `markets/us/tradingview.py`: one request to TradingView's US scanner (types `stock` and `dr` on NYSE, Nasdaq, AMEX and Cboe; secondary share classes and ADRs are not "primary" there), matched by ISIN. It supplies what Dhan does not: India's published TradingView metrics in dollars, the all-time high (never below the 52-week high), the last earnings date, free float, dividend yield, dividend per share and ex-date, VWAP, debt, debt/equity and free cash flow, and P/B. Its statement columns are the fallback below. A failed request publishes the release without them. |
+| Statements | Dhan first (`markets/us/statements.py`): each stock's page, cached and refreshed weekly or after earnings. Dhan states foreign companies in their home currency without saying so (TSMC's assets read as $10 trillion) and keeps some parts years stale (Costco's balance sheet is from 2009), so each part is checked against TradingView's latest quarter: the income statement when its latest quarterly revenue agrees within 10%, the balance sheet when it is for that quarter, the cash flow and yearly revenue when their year ended within 12 months of it. TradingView's values stand where a part fails or has a gap (a missing quarter). The screener adds India's multi-year averages (percentages only; its amounts are home-currency too). |
 | Financials, IPOs | Empty files for now (Phase 2). |
 
 **Amounts.** Records carry `market_cap` and `dollar_volume` in dollars. The engine reads amounts from India-named

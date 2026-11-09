@@ -1,4 +1,4 @@
-# US market: Phase 0 findings
+# US market
 
 Phase 0 checks that Dhan can feed a US screener with the same filters as India, and lays the seams for it:
 `edl_pipeline.markets` (one spec per market), `markets.us.calendar` (NYSE), `markets.us.dhan` (sources) and
@@ -50,11 +50,36 @@ and must not be stored as a closed bar, as India's `is_nse_cash_session` already
 | Light (a constant or wording) | `scanner/patterns` (weekly fold is generic), `scanner/trend` (one delivery condition), `breadth/universe` (default `Exch`), `build_rs_ratings` (benchmark file name) |
 | Heavy (units, calendar or NSE lists) | `scanner/context`, `scanner/query`, `scanner/financials` (₹ crore and lakh fields), `transforms/fundamentals` (NSE equity list), `ohlcv_utils` (NSE calendar), `screen_trend_conditions` (NIFTY keys) |
 
-## Phase 1 shape
+## Phase 1: the daily release
 
-- Daily (Tue–Sat 00:30 UTC): one screener call → canonical records → append the session's bar to each stock's
-  history (cheap, like the mutual fund job); weekly full history refetch to stay consistent with split adjustment.
-- Feed US OHLCV through the reusable modules with the market's calendar and benchmark (SPY) passed in.
-- Amounts stay currency-neutral (`market_cap`, `dollar_volume`, with `currency`); the frontend formats by market and
-  each condition declares the markets it supports.
-- Publish under `/data/us/` mirroring India's layout; India keeps `/data/`.
+```
+python -m edl_pipeline.markets.us <root>      # build the US root (PYTHONPATH=src:. from this folder)
+EDL_US_BASE_DIR=<root> python frontend/publish_us.py
+```
+
+`.github/workflows/us_daily_refresh.yml` runs both at 00:30 UTC Tuesday to Saturday.
+
+**The US root** (`markets/us/build.py`) holds the files India's root holds, so India's stages run on it unchanged:
+
+| Stage | How |
+| --- | --- |
+| Universe | One screener call. `markets/us/universe.py` keeps common stock and partnership units; preferred, notes, rights, warrants and SPAC units are classified and left out. |
+| Snapshot check | Refused while New York is trading, and when the latest trade is not from the last closed session (exit 75, so the job retries later rather than storing a live bar). |
+| Price history | `markets/us/history.py`: a stock without a file is seeded from Dhan's history; afterwards the snapshot's bar is appended. A gap, or a previous close more than 0.5% off the stored close (a split), refetches the stock in full. Only `ohlcv_data/` and `indices_ohlcv_data/` persist between runs (Actions cache); losing them costs one re-seed of about 30 minutes. |
+| Benchmarks | SPY, QQQ, IWM and DIA histories stand in for indices; SPY is the market benchmark. |
+| Breadth, index history | India's `generate_market_breadth` and `generate_all_index_history`, with US floors ($1 price, $100M market cap). |
+| Stock metrics | India's `process_symbol_csv` on the NYSE calendar, plus RSI(14) and dollar turnover. |
+| RS ratings | `build_rs_ratings.main(root, 'SPY.csv', ...)`. |
+| Financials, IPOs | Empty files for now (Phase 2). |
+
+**Amounts.** Records carry `market_cap` and `dollar_volume` in dollars. The engine reads amounts from India-named
+fields (`market_cap_crore`, `daily_rupee_turnover_*_cr`); the builder fills those in millions of dollars and the
+release declares `currency: USD` and `amountUnit: 1000000`, so the app labels them `$M`. Preset floors are US ones:
+$300M market cap, a $5 close, $2M a day of turnover.
+
+**The release** (`frontend/publish_us.py`) is India's row engine, packed format and revision upload. Its files sit
+beside India's under `releases/<rev>/`; its pointer is `site/data/us/current.json` (`/data/us/current.json`).
+India's `current.json`, sessions, price bands and AI catalogue are never written.
+
+**Not in Phase 1:** all-time highs (history starts in 2021), statements and earnings-dependent filters, dividends,
+ownership, F&O, delivery and Indian surveillance flags. The app hides these for the US market.

@@ -76,8 +76,8 @@ def canonical_row(row: dict) -> dict | None:
     record['market_cap'] = market_cap * UNITED_STATES.provider_amount_unit if market_cap is not None else None
     record['dollar_volume'] = record['close'] * record['volume'] if record['volume'] is not None else None
     if record['high_52w'] and record['low_52w']:
-        record['percent_from_52w_high'] = (record['close'] / record['high_52w'] - 1) * 100
-        record['percent_from_52w_low'] = (record['close'] / record['low_52w'] - 1) * 100
+        record['distance_from_52w_high_percent'] = (record['close'] / record['high_52w'] - 1) * 100
+        record['distance_from_52w_low_percent'] = (record['close'] / record['low_52w'] - 1) * 100
     record['slug'] = row.get('Seosym')
     record['provider_last_trade_ist'] = _last_trade(row.get('LastTradeTime'))
     return record

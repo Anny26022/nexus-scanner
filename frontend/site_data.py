@@ -37,7 +37,8 @@ POINTER_PREFIX = 'site/data'
 AI_FILTER_CHOICES = 'ai-filter-choices.json'
 # Kept in step with POINTERS in workers/screener-ai/siteData.ts; anything else is not served.
 POINTERS = ('current.json', 'sessions.json', 'price-band-history.json', AI_FILTER_CHOICES,
-            'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json')
+            'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json',
+            'us/current.json')
 # Written after the scanner release, by the Earnings Pulse and Tijori steps.
 INDEXES = ('results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json')
 REVISION = re.compile(r'[a-f0-9]{64}')

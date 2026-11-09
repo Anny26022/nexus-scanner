@@ -152,9 +152,10 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         for period in (5,21,63,126,252):
             metrics[f'return{period}']=float((last['Close']/frame['Close'].iloc[-1-period]-1)*100) if len(frame)>period else None
         metrics['gapPct']=float((last['Open']/frame['Close'].iloc[-2]-1)*100) if len(frame)>1 else None
+        # India publishes ₹ crore; another market sets its own unit in the context (the US: millions of dollars).
         turnover = frame['Close'] * frame['Volume'] if len(frame) >= 20 else None
         for period in (20,30,50,100):
-            metrics[f'turnover{period}']=float(turnover.tail(period).mean()/1e7) if len(frame)>=period else None
+            metrics[f'turnover{period}']=float(turnover.tail(period).mean()/context.get('amount_unit',1e7)) if len(frame)>=period else None
     row['metrics']=metrics
     tradingview = tradingview_row(stock, session)
     if tradingview is not None:

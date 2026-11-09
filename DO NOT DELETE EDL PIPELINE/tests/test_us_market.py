@@ -12,8 +12,10 @@ for path in (ROOT / "src", ROOT):
 import requests  # noqa: E402
 
 from edl_pipeline.markets import MARKETS, market  # noqa: E402
-from edl_pipeline.markets.us import calendar, dhan, fields  # noqa: E402
+import tempfile  # noqa: E402
 
+from edl_pipeline.markets.us import build, calendar, dhan, fields, history  # noqa: E402
+from edl_pipeline.markets.us.universe import history_exchanges, security_type  # noqa: E402
 
 
 def utc(*parts):
@@ -130,13 +132,101 @@ class FieldTests(unittest.TestCase):
         self.assertAlmostEqual(record['market_cap'], 4_976_937_410_000)  # Dhan sends millions of dollars
         self.assertEqual(record['dollar_volume'], 342_500)
         self.assertEqual((record['perf_12m'], record['pe_ratio'], record['roe_percent']), (29.3, 36.7, 169.7))
-        self.assertAlmostEqual(record['percent_from_52w_high'], (342.5 / 350 - 1) * 100)
+        self.assertAlmostEqual(record['distance_from_52w_high_percent'], (342.5 / 350 - 1) * 100)
         self.assertEqual(record['provider_last_trade_ist'], '2026-11-07T02:29:55+05:30')
         self.assertNotIn('market_cap_crore', record)
 
     def test_rows_without_an_id_or_price_are_dropped(self):
         self.assertIsNone(fields.canonical_row({**self.ROW, 'Ltp': 0}))
         self.assertIsNone(fields.canonical_row({**self.ROW, 'Sid': None}))
+
+
+class UniverseTests(unittest.TestCase):
+    def test_share_classes_are_read_from_the_name(self):
+        self.assertEqual(security_type('AAPL', 'Apple'), 'common')
+        self.assertEqual(security_type('GOOGP', 'Alphabet (Google) - Preferred Stock - Series A'), 'preferred')
+        self.assertEqual(security_type('CCXIU', 'Churchill Capital XI - Units'), 'spac_unit')
+        self.assertEqual(security_type('KKR', 'KKR - Units'), 'partnership_unit')
+        self.assertEqual(security_type('ABCW', 'Acme - Warrants'), 'warrant')
+        self.assertEqual(security_type('ABCR', 'Acme - Rights'), 'right')
+        self.assertEqual(security_type('ABCN', 'Acme - Notes due 2030'), 'note')
+
+    def test_unlabelled_listings_try_both_main_exchanges(self):
+        self.assertEqual(history_exchanges('NASDAQ'), ('NASDAQ',))
+        self.assertEqual(history_exchanges('NA'), ('NYSE', 'NASDAQ'))
+        self.assertEqual(history_exchanges(None), ('NYSE', 'NASDAQ'))
+
+
+def bar(day, close, volume=100):
+    return {'date': day, 'open': close, 'high': close, 'low': close, 'close': close, 'volume': volume}
+
+
+class HistoryTests(unittest.TestCase):
+    # Friday 2026-11-06 is the previous session of Monday 2026-11-09.
+    RECORD = {'symbol': 'ACME', 'security_id': 1, 'exchange': 'NYSE', 'open': 10.5, 'high': 11.0, 'low': 10.0,
+              'close': 10.8, 'volume': 500, 'previous_close': 10.0}
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(self.root))
+
+    def stored(self):
+        return history.read_bars(self.root / 'ACME.csv')
+
+    def test_a_joined_series_gets_the_snapshot_bar(self):
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 9.5), bar('2026-11-06', 10.0)])
+        fetch = mock.Mock()
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'appended')
+        fetch.assert_not_called()
+        self.assertEqual(self.stored()[-1], {'date': '2026-11-09', 'open': 10.5, 'high': 11.0, 'low': 10.0, 'close': 10.8, 'volume': 500.0})
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'current')
+
+    def test_a_readjusted_series_is_fetched_again(self):
+        # A 2:1 split: the stored close is twice the snapshot's previous close.
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-06', 20.0)])
+        fetch = mock.Mock(return_value=[bar('2026-11-05', 9.5), bar('2026-11-06', 10.0)])
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'refetched')
+        self.assertEqual([b['close'] for b in self.stored()], [9.5, 10.0, 10.8])
+
+    def test_a_gap_is_fetched_again_and_a_stock_without_history_is_missing(self):
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-04', 10.0)])
+        fetch = mock.Mock(return_value=[bar('2026-11-06', 10.0), bar('2026-11-09', 10.8)])
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'refetched')
+        self.assertEqual(self.stored()[-1]['date'], '2026-11-09')
+        self.assertEqual(history.update({**self.RECORD, 'symbol': 'NONE'}, self.root, '2026-11-09', fetch=lambda *a: []), 'missing')
+
+    def test_bars_on_closed_days_are_dropped(self):
+        bars = history.session_bars([bar('2026-10-25', 1), bar('2026-10-23', 1), bar('2026-10-23', 2), bar('2026-11-26', 1)])
+        self.assertEqual(bars, [bar('2026-10-23', 2)])  # a Sunday and Thanksgiving go; the later duplicate wins
+
+
+class BuildTests(unittest.TestCase):
+    def test_in_session_and_stale_snapshots_are_refused(self):
+        live = [{**FieldTests.ROW, 'LastTradeTime': '09/11/2026 20:30:00'}]
+        with self.assertRaises(build.SnapshotNotReady):
+            build.snapshot_session(live, utc(2026, 11, 9, 15, 0))  # 10:00 AM in New York
+        stale = [{**FieldTests.ROW, 'LastTradeTime': '07/11/2026 02:29:55'}]  # Friday's close
+        with self.assertRaises(build.SnapshotNotReady):
+            build.snapshot_session(stale, utc(2026, 11, 10, 0, 30))  # Monday has closed
+        closed = [{**FieldTests.ROW, 'LastTradeTime': '10/11/2026 02:29:59'}]
+        self.assertEqual(build.snapshot_session(closed, utc(2026, 11, 10, 0, 30)), '2026-11-09')
+
+    def test_engine_amounts_are_millions_of_dollars(self):
+        record = {'market_cap': 4_976_937_410_000, 'dollar_volume': 342_500}
+        amounts = build.engine_amounts(record, {'turnover20': 1.5, 'turnover50': 2.5, 'turnover100': None})
+        self.assertAlmostEqual(amounts['market_cap_crore'], 4_976_937.41)
+        self.assertEqual((amounts['daily_rupee_turnover_20_cr'], amounts['daily_rupee_turnover_50_cr']), (1.5, 2.5))
+        self.assertIsNone(amounts['daily_rupee_turnover_100_cr'])
+
+    def test_records_prefer_history_metrics_and_carry_india_return_names(self):
+        record = {**fields.canonical_row(FieldTests.ROW), 'perf_5y': 120.0}
+        stock = build.stock_record(record, {'as_of_date': '2026-11-09', 'distance_from_52w_high_percent': -3.0,
+                                            'distance_from_52w_low_percent': None, 'turnover50': 2.0}, '2026-11-09')
+        self.assertEqual(stock['distance_from_52w_high_percent'], -3.0)  # history wins
+        self.assertAlmostEqual(stock['distance_from_52w_low_percent'], (342.5 / 250 - 1) * 100)  # snapshot fills in
+        self.assertEqual((stock['return_1y'], stock['return_5y'], stock['as_of_date']), (29.3, 120.0, '2026-11-09'))
+        self.assertIsNone(stock['percent_from_ath'])
+        self.assertNotIn('turnover50', stock)
 
 
 if __name__ == '__main__':

@@ -114,15 +114,16 @@ def rank_first_ratings(scores):
     return ranked
 
 
-def main():
-    root = Path(BASE_DIR)
-    front_weighted_benchmark_path = root / "indices_ohlcv_data" / FRONT_WEIGHTED_BENCHMARK_FILENAME
+def main(root=None, benchmark_filename=FRONT_WEIGHTED_BENCHMARK_FILENAME, benchmark_name="NIFTY 500"):
+    """Rank the root's breadth-eligible stocks against its benchmark (India: NIFTY 500; the US passes SPY)."""
+    root = Path(root or BASE_DIR)
+    front_weighted_benchmark_path = root / "indices_ohlcv_data" / benchmark_filename
     if not front_weighted_benchmark_path.exists():
-        print(f"Error: {FRONT_WEIGHTED_BENCHMARK_FILENAME} benchmark history is missing.")
+        print(f"Error: {benchmark_filename} benchmark history is missing.")
         return False
     front_weighted_benchmark = close_history(front_weighted_benchmark_path)
     if front_weighted_benchmark.empty:
-        print(f"Error: {FRONT_WEIGHTED_BENCHMARK_FILENAME} contains no valid closes.")
+        print(f"Error: {benchmark_filename} contains no valid closes.")
         return False
     as_of_date = front_weighted_benchmark["Date"].iloc[-1].date()
     eligible, universe_generated_at = liquid_universe(root)
@@ -142,7 +143,7 @@ def main():
         for symbol in ranked["front_weighted"]
     }
     if not ratings:
-        print("Error: no breadth-eligible symbols have 260 aligned NIFTY 500 sessions.")
+        print(f"Error: no breadth-eligible symbols have 260 aligned {benchmark_name} sessions.")
         return False
 
     as_of = as_of_date.isoformat()
@@ -154,8 +155,8 @@ def main():
         "liquid_universe_count": len(ratings),
         "methodology": {
             "version": "nexus_rank_first_v3",
-            "benchmark": "NIFTY 500",
-            "benchmark_file": FRONT_WEIGHTED_BENCHMARK_FILENAME,
+            "benchmark": benchmark_name,
+            "benchmark_file": benchmark_filename,
             "windows": FRONT_WEIGHTED_HORIZONS,
             "weights": FRONT_WEIGHTED_WEIGHTS,
             "minimum_aligned_sessions": MINIMUM_ALIGNED_SESSIONS,
@@ -171,7 +172,7 @@ def main():
         "ratings": ratings,
     }, ensure_ascii=False)
     print(
-        f"Saved front-weighted Nifty 500 RS ratings for {len(ratings)} symbols as of {as_of}."
+        f"Saved front-weighted {benchmark_name} RS ratings for {len(ratings)} symbols as of {as_of}."
     )
     return True
 

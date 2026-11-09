@@ -58,6 +58,12 @@ class CalendarTests(unittest.TestCase):
         # The day after Thanksgiving closes at 1 PM: by 2 PM Eastern it is closed.
         self.assertEqual(calendar.last_closed_session(utc(2026, 11, 27, 19, 0)), date(2026, 11, 27))
 
+    def test_sessions_after_a_listing_count_nyse_sessions(self):
+        self.assertEqual(calendar.sessions_after(date(2026, 11, 6), date(2026, 11, 9)), 1)
+        self.assertEqual(calendar.sessions_after(date(2026, 11, 20), date(2026, 11, 30)), 5)  # Thanksgiving
+        self.assertEqual(calendar.sessions_after(date(2026, 11, 9), date(2026, 11, 9)), 0)
+        self.assertEqual(calendar.sessions_after(date(2025, 1, 1), date(2025, 12, 31)), 250)  # 261 weekdays, 11 closures
+
     def test_cash_session_hours(self):
         self.assertTrue(calendar.is_us_cash_session(utc(2026, 11, 9, 15, 0)))   # 10:00 AM EST
         self.assertFalse(calendar.is_us_cash_session(utc(2026, 11, 9, 14, 0)))  # 9:00 AM EST, before the open
@@ -292,6 +298,18 @@ class TradingViewTests(unittest.TestCase):
         self.assertEqual(values['net_cash_flow_in_lakhs'], 1_000)
         self.assertAlmostEqual(values['eps_2_years_back'], 8.0)
 
+    def test_listing_date_and_index_memberships(self):
+        found = tradingview.snapshots(self.response(self.row('NASDAQ:ARM', 'US0420682058', **{
+            'ipo_offer_date': 1694649600, 'first_bar_time': 1694698200,
+            'indexes': [{'name': 'NASDAQ 100', 'proname': 'NASDAQ:NDX'}, {'name': 'NASDAQ Composite', 'proname': 'NASDAQ:IXIC'},
+                        {'name': 'Russell 1000', 'proname': 'TVC:RUI'}]})), '')
+        values = tradingview.canonical(found['US0420682058'], {'close': 150.0}, '2026-11-09')
+        self.assertEqual(values['listing_date'], '2023-09-14')
+        self.assertEqual(values['index_memberships'], ['NASDAQ 100', 'RUSSELL 1000'])
+        # Without an IPO date, the first traded day.
+        found = tradingview.snapshots(self.response(self.row('NYSE:OLD', 'US0000000002', first_bar_time=946909800)), '')
+        self.assertEqual(tradingview.canonical(found['US0000000002'], {'close': 1.0}, '2026-11-09')['listing_date'], '2000-01-03')
+
     def test_a_failed_request_publishes_without_these_values(self):
         records = [{'isin': 'US1912161007'}]
         def fail():
@@ -372,6 +390,26 @@ class StatementTests(unittest.TestCase):
         self.assertEqual((gapped['ttm_revenue_crore'], gapped['profit_before_tax_in_lakhs']), (450, 28))  # a missing quarter
         self.assertEqual((report['with_statements'], report['balance']), (2, 2))
         self.assertEqual(acme['financial_metadata']['amount_unit'], 'USD_MILLION')
+
+    def test_quarterly_history_in_indias_rows_with_filing_dates(self):
+        rows = statements.quarterly_history(self.PAGE, {'symbol': 'ACME', 'isin': 'US1', 'latest_earnings_date': '2026-10-30'})
+        self.assertEqual(len(rows), 10)
+        latest, earliest = rows[-1], rows[0]
+        self.assertEqual((latest['quarter_end'], latest['filing_date'], latest['filing_date_basis']), ('2026-09-30', '2026-10-30', 'reported'))
+        self.assertEqual((earliest['quarter_end'], earliest['filing_date'], earliest['filing_date_basis']), ('2024-06-30', '2024-08-14', 'estimated'))
+        self.assertEqual((latest['report_type'], latest['revenue'], latest['net_profit'], latest['eps']), ('CONSOLIDATED', 110, 22, 1.1))
+        # A stale earnings date (before the quarter ended) is not this quarter's filing.
+        stale = statements.quarterly_history(self.PAGE, {'symbol': 'ACME', 'latest_earnings_date': '2026-07-30'})
+        self.assertEqual(stale[-1]['filing_date_basis'], 'estimated')
+
+    def test_trusted_pages_feed_the_quarterly_history(self):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(root))
+        statements.write_page(root, 'ACME', {'fetched_at': '2026-11-09T00:30:00+00:00', 'slug': 'ACME-acme', **self.PAGE})
+        statements.write_page(root, 'TSM', {'fetched_at': '2026-11-09T00:30:00+00:00', 'slug': 'TSM-tsm', **self.PAGE})
+        history = []
+        statements.enrich([{'symbol': 'ACME', 'total_revenue_in_lakhs': 108}, {'symbol': 'TSM', 'total_revenue_in_lakhs': 3500}], root, history)
+        self.assertEqual({row['symbol'] for row in history}, {'ACME'})
 
     def test_pages_are_fetched_again_weekly_and_after_earnings(self):
         now = utc(2026, 11, 10, 0, 30)

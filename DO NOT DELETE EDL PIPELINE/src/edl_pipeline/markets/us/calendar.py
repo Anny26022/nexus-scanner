@@ -99,6 +99,25 @@ def previous_session_day(day: date) -> date:
     return day
 
 
+@lru_cache(maxsize=None)
+def _holidays_between(first_year: int, last_year: int) -> tuple:
+    import numpy
+    return tuple(numpy.datetime64(day) for year in range(first_year, last_year + 1) for day in nyse_holidays(year))
+
+
+def sessions_after(start: date, end: date) -> int:
+    """NYSE sessions after `start` up to and including `end` (the count a history from `start` would hold).
+
+    Holidays follow Rule 7.2 for every year; one-off closures before 2021 (such as 2001's and 2012's) are not listed,
+    so a pre-2021 count may be a few sessions high.
+    """
+    import numpy
+    if end <= start:
+        return 0
+    holidays = list(_holidays_between(start.year, end.year))
+    return int(numpy.busday_count(start + timedelta(days=1), end + timedelta(days=1), holidays=holidays))
+
+
 def us_now(now: datetime | None = None) -> datetime:
     """`now` (aware, or naive meaning Eastern) in Eastern time."""
     instant = now or datetime.now(EASTERN)

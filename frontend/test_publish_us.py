@@ -31,6 +31,18 @@ class PublishUsTests(unittest.TestCase):
         rupees = {'tradingview_snapshot': {**snapshot, 'currency': 'INR'}}
         self.assertIsNone(tradingview_row(rupees, '2026-11-09', us)['values']['market.performance_1m_pct'])
 
+    def test_listing_age_counts_nyse_sessions_when_the_history_is_shorter(self):
+        row = {'metrics': {'LISTING_AGE_DAYS': None}, 'historyAligned': True}
+        publish_us.listing_age(row, {'listing_date': '1980-12-12'}, '2026-11-09')
+        self.assertGreater(row['metrics']['LISTING_AGE_DAYS'], 11_000)
+        # The engine's own count (a listing inside the stored history) stands.
+        recent = {'metrics': {'LISTING_AGE_DAYS': 791}, 'historyAligned': True}
+        publish_us.listing_age(recent, {'listing_date': '2023-09-14'}, '2026-11-09')
+        self.assertEqual(recent['metrics']['LISTING_AGE_DAYS'], 791)
+        unknown = {'metrics': {'LISTING_AGE_DAYS': None}, 'historyAligned': True}
+        publish_us.listing_age(unknown, {}, '2026-11-09')
+        self.assertIsNone(unknown['metrics']['LISTING_AGE_DAYS'])
+
 
 if __name__ == '__main__':
     unittest.main()

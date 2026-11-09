@@ -74,6 +74,9 @@ EDL_US_BASE_DIR=<root> python frontend/publish_us.py
 | RS ratings | `build_rs_ratings.main(root, 'SPY.csv', ...)`. |
 | TradingView | `markets/us/tradingview.py`: one request to TradingView's US scanner (types `stock` and `dr` on NYSE, Nasdaq, AMEX and Cboe; secondary share classes and ADRs are not "primary" there), matched by ISIN. It supplies what Dhan does not: India's published TradingView metrics in dollars, the all-time high (never below the 52-week high), the last earnings date, free float, dividend yield, dividend per share and ex-date, VWAP, debt, debt/equity and free cash flow, and P/B. Its statement columns are the fallback below. A failed request publishes the release without them. |
 | Statements | Dhan first (`markets/us/statements.py`): each stock's page, cached and refreshed weekly or after earnings. Dhan states foreign companies in their home currency without saying so (TSMC's assets read as $10 trillion) and keeps some parts years stale (Costco's balance sheet is from 2009), so each part is checked against TradingView's latest quarter: the income statement when its latest quarterly revenue agrees within 10%, the balance sheet when it is for that quarter, the cash flow and yearly revenue when their year ended within 12 months of it. TradingView's values stand where a part fails or has a gap (a missing quarter). The screener adds India's multi-year averages (percentages only; its amounts are home-currency too). |
+| Quarterly history | India's `quarterly_financial_history.json` rows (revenue, sales, net profit, PBT, EPS, OPM, EBITDA, consolidated) from each trusted Dhan income statement's 10 quarters; this drives earnings growth (GARP, revenue acceleration, earnings momentum). The latest quarter's filing date is TradingView's last earnings date; earlier quarters' are estimated as quarter end + 45 days (`filing_date_basis`). |
+| Index membership | TradingView's per-symbol index list: S&P 500, Nasdaq-100, Dow 30, Russell 1000 and 2000. It matches the issuers' holdings (SPY 503 of 503, DIA 30 of 30); iShares and Invesco refuse automated downloads of theirs. |
+| Listing date | TradingView's IPO date (the first traded day where it has none). Listing age is counted in NYSE sessions from it (`calendar.sessions_after`), since the stored history starts in 2021. |
 | Financials, IPOs | Empty files for now (Phase 2). |
 
 **Amounts.** Records carry `market_cap` and `dollar_volume` in dollars. The engine reads amounts from India-named
@@ -85,5 +88,4 @@ $300M market cap, a $5 close, $2M a day of turnover.
 beside India's under `releases/<rev>/`; its pointer is `site/data/us/current.json` (`/data/us/current.json`).
 India's `current.json`, sessions, price bands and AI catalogue are never written.
 
-**Not yet:** index membership (ETF holdings), listing dates,
-ownership, F&O, delivery and Indian surveillance flags. The app hides these for the US market.
+**Not yet:** ownership, F&O, delivery and Indian surveillance flags. The app hides these for the US market.

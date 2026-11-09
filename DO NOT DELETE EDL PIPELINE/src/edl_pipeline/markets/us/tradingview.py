@@ -1,6 +1,7 @@
 """US values from TradingView's scanner: one request for the whole market, as India's fetch_advanced_indicators.
 
-It carries what Dhan cannot: all-time highs (Dhan's history starts in 2021), the last earnings date, free float,
+It carries what Dhan cannot: all-time highs (Dhan's history starts in 2021), the last earnings date, listing date,
+index memberships (S&P 500, Nasdaq-100, Dow 30, Russell 1000 and 2000), free float,
 dividend yield, dividend per share and ex-date, VWAP, debt and free cash flow, and India's published TradingView metrics
 (`tradingview_fields.json`, shared so the catalogue, publisher and both markets read one list). Its statement values
 are the fallback for stocks whose Dhan page is missing or cannot be trusted (statements.py).
@@ -25,7 +26,8 @@ API_URL = 'https://scanner.tradingview.com/america/scan'
 EXCHANGES = ('NYSE', 'NASDAQ', 'AMEX', 'CBOE')
 # Columns US screening reads beyond the shared metric list. The statement columns are a fallback: Dhan's stock page
 # comes first when it can be trusted (statements.py), as Dhan does for India.
-EXTRA = {'earnings_release_date': 'last_earnings',
+EXTRA = {'earnings_release_date': 'last_earnings', 'ipo_offer_date': 'ipo_date', 'first_bar_time': 'first_trade',
+         'indexes': 'indexes',
          'float_shares_percent_current': 'free_float_percent', 'dividends_yield_current': 'dividend_yield_percent',
          'ex_dividend_date_recent': 'last_ex_dividend',
          'free_cash_flow_ttm': 'free_cash_flow', 'dps_common_stock_prim_issue_fy': 'dividend_per_share',
@@ -41,6 +43,10 @@ EXTRA = {'earnings_release_date': 'last_earnings',
          'total_current_liabilities_fq': 'current_liabilities', 'total_liabilities_fq': 'total_liabilities',
          'cash_f_operating_activities_fy': 'operating_cash_flow', 'cash_f_investing_activities_fy': 'investing_cash_flow',
          'cash_f_financing_activities_fy': 'financing_cash_flow', 'total_revenue_cagr_5y': 'revenue_cagr_5y'}
+# Index memberships, by TradingView's name -> the label the release publishes. TradingView's lists match the issuers'
+# holdings (SPY: 503 of 503; DIA: 30 of 30, checked 2026-11-10); it does not carry the S&P 400 or 600.
+INDEXES = {'S&P 500': 'S&P 500', 'NASDAQ 100': 'NASDAQ 100', 'Dow Jones Industrial Average': 'DOW JONES 30',
+           'Russell 1000': 'RUSSELL 1000', 'Russell 2000': 'RUSSELL 2000'}
 # EXTRA columns that are amounts: stated in millions of dollars, and only when the company reports in dollars.
 EXTRA_AMOUNTS = frozenset({'free_cash_flow', 'total_debt', 'total_equity', 'ttm_revenue', 'ttm_net_profit',
                            'quarter_revenue', 'quarter_net_profit', 'total_assets', 'current_assets', 'current_liabilities',
@@ -137,6 +143,16 @@ def _prior(value, growth_percent):
     return value / (1 + growth_percent / 100) if value is not None and growth_percent is not None and growth_percent > -100 else None
 
 
+def _utc_date(stamp) -> str | None:
+    stamp = _number(stamp)
+    return datetime.fromtimestamp(stamp, timezone.utc).date().isoformat() if stamp else None
+
+
+def memberships(indexes) -> list[str]:
+    names = {item.get('name') for item in indexes or [] if isinstance(item, dict)}
+    return [label for name, label in INDEXES.items() if name in names]
+
+
 def canonical(found: dict, record: dict, session: str) -> dict:
     """The engine's fields TradingView supplies for one record (India's names)."""
     snapshot = found['tradingview_snapshot']
@@ -152,6 +168,9 @@ def canonical(found: dict, record: dict, session: str) -> dict:
         'all_time_high': high if current else None,
         'percent_from_ath': (close / high - 1) * 100 if current and high and close else None,
         'latest_earnings_date': last_earnings if last_earnings and last_earnings <= session else None,
+        # The listing (IPO) date; the first traded day where TradingView has none.
+        'listing_date': _utc_date(found['ipo_date']) or _utc_date(found['first_trade']),
+        'index_memberships': memberships(found['indexes']),
         'free_float_percent': _number(found['free_float_percent']),
         'dividend_yield_percent': _number(found['dividend_yield_percent']),
         'dividend_ex_date': _eastern_date(found['last_ex_dividend']),

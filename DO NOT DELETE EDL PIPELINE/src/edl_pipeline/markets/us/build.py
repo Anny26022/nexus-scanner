@@ -108,7 +108,8 @@ def stock_record(record: dict, metrics: dict, session: str) -> dict:
         **{key: value for key, value in metrics.items() if not key.startswith('turnover')},
         **engine_amounts(record, metrics),
         'schema_version': '3.0', 'industry': record.get('industry'), 'listing_board': 'MAINBOARD', 'is_sme': False, 'listing_series': None,
-        'default_screener_eligible': True, 'index_memberships': [], 'event_markers': [], 'recent_announcements': [],
+        'default_screener_eligible': True, 'index_memberships': record.get('index_memberships') or [],
+        'event_markers': [], 'recent_announcements': [],
         'news_feed': [], 'as_of_date': session if aligned else metrics.get('as_of_date'),
         # Only TradingView's (markets/us/tradingview.py): Dhan's history starts in 2021, so its high is not all-time.
         'all_time_high': record.get('all_time_high'), 'percent_from_ath': record.get('percent_from_ath'),
@@ -160,7 +161,8 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     report['tradingview'] = tradingview.enrich(records, session)
     # After TradingView: a company that has reported since its page was read is read again.
     report['stock_pages'] = statements.refresh_pages(records, root, now, interval=interval, budget_seconds=page_budget)
-    report['statements'] = statements.enrich(records, root)
+    quarterly = []
+    report['statements'] = statements.enrich(records, root, quarterly)
     report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers)
     report['benchmarks'] = update_histories(benchmarks, root / 'indices_ohlcv_data', session, interval=interval, workers=1)
 
@@ -186,8 +188,9 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     report['stocks'] = len(stocks)
     report['aligned'] = sum(stock['as_of_date'] == session for stock in stocks)
     report['rs_ratings'] = build_rs_ratings.main(root, f'{BENCHMARK}.csv', BENCHMARKS[BENCHMARK])
-    # Statements live on the records (statements.py); India's quarterly history and IPO files stay empty for the US.
-    _write_json(root / 'quarterly_financial_history.json', {'records': []}, compress=True)
+    # India's quarterly history file, from the trusted Dhan pages; the IPO file stays empty for the US.
+    _write_json(root / 'quarterly_financial_history.json', {'records': quarterly}, compress=True)
+    report['quarterly_rows'] = len(quarterly)
     _write_json(root / 'ipo_screener.json', {'records': []}, compress=True)
     return report
 

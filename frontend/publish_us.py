@@ -12,6 +12,7 @@ The release files are content-addressed and live beside India's (`releases/<rev>
 `site/data/us/current.json`, served at /data/us/current.json. India's current.json is never written here.
 """
 import gzip
+from datetime import date
 import hashlib
 import json
 import os
@@ -27,6 +28,7 @@ from chart_publication import R2Store, missing_r2_settings
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.markets import UNITED_STATES
 from edl_pipeline.markets.us.tradingview import API_URL as TRADINGVIEW_US
+from edl_pipeline.markets.us.calendar import sessions_after
 
 POINTER = 'us/current.json'
 # The engine's market-benchmark key (snapshot technicals' relative strength and RS new highs).
@@ -51,6 +53,14 @@ def us_context(root):
     return context, session
 
 
+def listing_age(row, stock, session):
+    """Listing age in NYSE sessions. The engine counts the stored history, which here starts in 2021, and so leaves
+    an older listing without one; the NYSE calendar counts every session since the listing."""
+    listed = stock.get('listing_date')
+    if row['metrics'].get('LISTING_AGE_DAYS') is None and listed and row.get('historyAligned'):
+        row['metrics']['LISTING_AGE_DAYS'] = sessions_after(date.fromisoformat(listed[:10]), date.fromisoformat(session))
+
+
 def manifest_for(revision, session, total):
     base = f'/data/revisions/{revision}'
     return {'revision': revision, 'sessionDate': session, 'publishedAt': f'{session}T00:00:00Z', 'schemaVersion': 4,
@@ -73,8 +83,10 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     try:
         for row, default_match in prepared:
             # The row engine states traded value in ₹ crore; restate it in millions of dollars.
-            dollar_volume = context['stocks'][row['symbol']].get('dollar_volume')
+            stock = context['stocks'][row['symbol']]
+            dollar_volume = stock.get('dollar_volume')
             row['rupeeVolumeCrore'] = dollar_volume / UNITED_STATES.provider_amount_unit if dollar_volume is not None else None
+            listing_age(row, stock, session)
             rows.append(row); default_count += default_match
     finally:
         prepared.close()

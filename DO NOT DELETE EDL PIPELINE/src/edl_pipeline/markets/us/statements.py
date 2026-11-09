@@ -22,7 +22,7 @@ import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from ohlcv_utils import symbol_csv_path
@@ -260,9 +260,42 @@ def trusted_blocks(blocks: dict, record: dict) -> set[str]:
     return trusted
 
 
-def enrich(records: list[dict], root: Path) -> dict:
+# Dhan's page has no filing dates. The latest quarter's is TradingView's last earnings date; an earlier quarter's is
+# estimated as its end plus this (US companies file within 40-45 days of a quarter end).
+ESTIMATED_FILING_DAYS = 45
+
+
+def _quarter_end(period: str) -> date:
+    year, month = int(period[:4]), int(period[4:])
+    return date(year + month // 12, month % 12 + 1, 1) - timedelta(days=1)
+
+
+def quarterly_history(page: dict, record: dict) -> list[dict]:
+    """India's quarterly statement rows (quarterly_financial_history.json) from a page's quarters, oldest first."""
+    rows = []
+    quarters = series(page.get('incomeStat_sq'))
+    reported = record.get('latest_earnings_date')
+    for index, quarter in enumerate(quarters):
+        end = _quarter_end(quarter['period'])
+        latest_report = index == 0 and reported and date.fromisoformat(reported) > end
+        filing = date.fromisoformat(reported) if latest_report else end + timedelta(days=ESTIMATED_FILING_DAYS)
+        rows.append({
+            'symbol': record['symbol'], 'isin': record.get('isin'), 'quarter_end': end.isoformat(),
+            'filing_date': filing.isoformat(), 'filing_date_basis': 'reported' if latest_report else 'estimated',
+            # US filers report consolidated statements.
+            'report_type': 'CONSOLIDATED',
+            'revenue': quarter.get('REVENUE'), 'sales': quarter.get('SALES') or quarter.get('REVENUE'),
+            'net_profit': quarter.get('NET_PROFIT'), 'profit_before_tax': quarter.get('PROFIT_BEFORE_TAX'),
+            'eps': quarter.get('EPS'), 'opm': quarter.get('OPM'), 'ebitda': quarter.get('EBITDA'),
+            'numeric_source': 'Dhan US stock page (millions of dollars)',
+        })
+    return sorted(rows, key=lambda row: row['quarter_end'])
+
+
+def enrich(records: list[dict], root: Path, history: list[dict] | None = None) -> dict:
     """Dhan's statement values, from each trusted part of a record's page, replace TradingView's (Dhan first, as for
-    India); TradingView's stay where the page is missing, untrusted or empty."""
+    India); TradingView's stay where the page is missing, untrusted or empty. With `history`, each trusted income
+    statement's quarters are appended to it as India's quarterly rows."""
     counts = {'with_statements': 0, 'refused': 0, **{name: 0 for name in ('balance', 'cash_flow', 'annual')}}
     oldest = None
     for record in records:
@@ -277,6 +310,8 @@ def enrich(records: list[dict], root: Path) -> dict:
         for name in trusted:
             record.update({key: value for key, value in blocks[name]['fields'].items() if value is not None})
             counts[name] = counts.get(name, 0) + 1
+        if history is not None:
+            history.extend(quarterly_history(page, record))
         record['financial_metadata'] = {
             'source': 'Dhan US stock page, TradingView US scanner where Dhan is missing or out of date',
             'amount_unit': 'USD_MILLION', 'fetched_at': page['fetched_at'],

@@ -42,9 +42,22 @@ def write_bars(path: Path, bars: list[dict]):
     temporary.replace(path)
 
 
+def clean(bar: dict) -> dict | None:
+    """A bar whose prices agree with each other; None for one without real prices.
+
+    Dhan's US history has bars priced 0 before a listing (dropped, as India drops invalid bars) and bars whose open
+    or close lies just outside the day's high-low range (0.05% of bars, a median 0.07% outside). Those prints are
+    trades, so the day's range is widened to include them rather than leave a hole in the history.
+    """
+    prices = [bar['open'], bar['high'], bar['low'], bar['close']]
+    if any(price is None or price != price or price <= 0 for price in prices):
+        return None
+    return {**bar, 'high': max(prices), 'low': min(prices)}
+
+
 def session_bars(bars: list[dict]) -> list[dict]:
-    """Bars on NYSE session days only, one a day, oldest first."""
-    by_day = {bar['date']: bar for bar in bars if is_nyse_session_day(date.fromisoformat(bar['date']))}
+    """Clean bars on NYSE session days only, one a day, oldest first."""
+    by_day = {bar['date']: bar for bar in filter(None, map(clean, bars)) if is_nyse_session_day(date.fromisoformat(bar['date']))}
     return [by_day[day] for day in sorted(by_day)]
 
 
@@ -86,8 +99,11 @@ def needs_refetch(bars: list[dict], record: dict, session: str) -> bool:
 def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
     """Bring one stock's file up to `session`; returns 'current', 'appended', 'refetched' or 'missing'."""
     path = symbol_csv_path(root, record['symbol'])
-    bars = read_bars(path)
+    stored = read_bars(path)
+    bars = session_bars(stored)
     if bars and bars[-1]['date'] >= session:
+        if bars != stored:
+            write_bars(path, bars)  # a file kept from before the bars were cleaned
         return 'current'
     status = 'appended'
     if needs_refetch(bars, record, session):
@@ -95,7 +111,7 @@ def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
         if not bars:
             return 'missing'
     # History can lag the snapshot by the latest session; the snapshot supplies it when it joins the series.
-    bar = snapshot_bar(record, session)
+    bar = clean(snapshot_bar(record, session) or {'open': None, 'high': None, 'low': None, 'close': None})
     if bars[-1]['date'] < session and bars[-1]['date'] == previous_session_day(date.fromisoformat(session)).isoformat() and bar:
         bars = [*bars, bar]
     elif status == 'appended':

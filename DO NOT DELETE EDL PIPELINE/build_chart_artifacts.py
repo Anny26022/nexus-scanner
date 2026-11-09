@@ -183,8 +183,9 @@ def _market_news(root, as_of):
 
 
 def _chart_object(task):
-    root, objects, symbol, as_of, actions, earnings, news = task
-    candles = _load_candles(root / "ohlcv_data" / f"{symbol}.csv", as_of)
+    root, objects, symbol, as_of, actions, earnings, news, *csv = task
+    # A symbol whose history lives elsewhere (another market's benchmark ETFs) names its own file.
+    candles = _load_candles(csv[0] if csv else root / "ohlcv_data" / f"{symbol}.csv", as_of)
     # Two stable pieces avoid one object per day/year and retain corrected history.
     chunks = [[row for row in candles if (row['date'][:4] == as_of[:4]) == current]
               for current in (False, True)]
@@ -267,8 +268,10 @@ def _chart_worker_counts(cpus, symbols):
     return candles, announcements
 
 
-def main() -> int:
-    root = Path(BASE_DIR)
+def main(root=None, extra_histories=None) -> int:
+    """Build the chart objects for `root` (India's by default). `extra_histories` maps further symbols to their
+    price files: another market's benchmark ETFs, which are not in its stock artifact."""
+    root = Path(root or BASE_DIR)
     stocks = _artifact(root, "all_stocks_fundamental_analysis.json", [])
     if not isinstance(stocks, list) or not stocks:
         print("Cannot build chart artifacts without the canonical stock artifact.")
@@ -297,6 +300,9 @@ def main() -> int:
         if not symbol:
             continue
         tasks.append((root, objects, symbol, as_of, actions[symbol], earnings[symbol], news[symbol]))
+    for symbol, path in (extra_histories or {}).items():
+        symbols.add(symbol)
+        tasks.append((root, objects, symbol, as_of, [], [], [], Path(path)))
     # Share the available CPU budget between bounded candle/announcement pools.
     # Small builds keep announcements in-process. Parent assembly stays ordered
     # and publication waits for both branches, including iterator failures.

@@ -207,6 +207,15 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(self.stored()[-1]['date'], '2026-11-09')
         self.assertEqual(history.update({**self.RECORD, 'symbol': 'NONE'}, self.root, '2026-11-09', fetch=lambda *a: []), 'missing')
 
+    def test_bars_are_cleaned_and_stored_files_rewritten(self):
+        # An open below the low (CSCO, 2026-09-09) widens the range; a bar priced 0 before a listing is dropped.
+        self.assertEqual(history.clean({'date': '2026-09-09', 'open': 108.786, 'high': 110.43, 'low': 108.98, 'close': 109.437, 'volume': 1}),
+                         {'date': '2026-09-09', 'open': 108.786, 'high': 110.43, 'low': 108.786, 'close': 109.437, 'volume': 1})
+        self.assertIsNone(history.clean({'date': '2026-07-07', 'open': 0, 'high': 0, 'low': 0, 'close': 0, 'volume': 0}))
+        history.write_bars(self.root / 'ACME.csv', [{**bar('2026-11-06', 10.0), 'low': 10.5}, bar('2026-11-09', 10.8)])
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=mock.Mock()), 'current')
+        self.assertEqual(self.stored()[0]['low'], 10.0)
+
     def test_bars_on_closed_days_are_dropped(self):
         bars = history.session_bars([bar('2026-10-25', 1), bar('2026-10-23', 1), bar('2026-10-23', 2), bar('2026-11-26', 1)])
         self.assertEqual(bars, [bar('2026-10-23', 2)])  # a Sunday and Thanksgiving go; the later duplicate wins

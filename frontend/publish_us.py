@@ -17,6 +17,7 @@ from datetime import date
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 
 import scanner_bridge as bridge
@@ -26,8 +27,9 @@ from publish_snapshot import OUTPUT, stock_rows, write_json
 from public_payload import public
 from market_overview import index_closes, market_overview
 import rotation_history
+import build_chart_artifacts
 from site_data import enabled, upload_pointer, upload_revision
-from chart_publication import ROTATION_PREFIX, R2Store, missing_r2_settings
+from chart_publication import ROTATION_PREFIX, R2Store, chart_revision, missing_r2_settings
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.markets import UNITED_STATES
 from edl_pipeline.markets.us.tradingview import API_URL as TRADINGVIEW_US
@@ -40,12 +42,26 @@ KEY_INDICES = ('SPY', 'QQQ', 'DIA', 'IWM')
 # stock universes (the Russell 1000 is the core shard most views load), and US floors for a group composite member:
 # $300M market cap and $2M a day of 30-session turnover.
 ROTATION_BENCHMARKS = {'SPX': 'SPY', 'NDX': 'QQQ', 'DJI': 'DIA', 'RUT': 'IWM'}
+# The Charts page: every stock's chart, and the benchmark ETFs' (the watchlist's Indexes), as India's content-addressed
+# objects in the shared objects/ prefix; the US keeps its own record of verified objects.
+CHART_INDEXES = ('SPY', 'QQQ', 'DIA', 'IWM')
+US_INVENTORY = 'verified-objects/us-current.txt'
+CHART_DIRECTORY_FIELDS = ('symbol', 'name', 'close', 'changePct', 'marketCapCrore', 'sector', 'industry')
 US_ROTATION = rotation_history.RotationMarket(
     benchmarks={'SPX': 'S&P 500 (SPY)', 'NDX': 'Nasdaq-100 (QQQ)', 'DJI': 'Dow 30 (DIA)', 'RUT': 'Russell 2000 (IWM)',
                 'EW': 'Equal-weight market'},
     primary='SPX',
     universes={'SPX': 'S&P 500', 'NDX': 'NASDAQ 100', 'DJI': 'DOW JONES 30', 'R1K': 'RUSSELL 1000', 'RUT': 'RUSSELL 2000'},
     core='R1K', min_market_cap=300.0, min_turnover30=2.0)
+
+
+def chart_objects(root, session):
+    """Build the US chart objects with India's builder; returns the chart folder and its validated revision."""
+    histories = {symbol: root / 'indices_ohlcv_data' / f'{symbol}.csv' for symbol in CHART_INDEXES}
+    if build_chart_artifacts.main(root, histories) != 0:
+        raise RuntimeError('US chart objects were not built')
+    chart_root = root / 'chart_artifacts'
+    return chart_root, chart_revision(chart_root, session)
 
 
 def rotation_objects(root, cache, rows, source_bytes, session, objects):
@@ -97,7 +113,8 @@ def listing_age(row, stock, session):
 
 def manifest_for(revision, session, total, *, market_overview=False):
     base = f'/data/revisions/{revision}'
-    return {**({'marketOverviewUrl': f'{base}/market-overview.json.gz'} if market_overview else {}),'revision': revision, 'sessionDate': session, 'publishedAt': f'{session}T00:00:00Z', 'schemaVersion': 4,
+    return {'revision': revision, 'sessionDate': session, 'publishedAt': f'{session}T00:00:00Z', 'schemaVersion': 4,
+            **({'marketOverviewUrl': f'{base}/market-overview.json.gz'} if market_overview else {}),
             'market': UNITED_STATES.id, 'currency': UNITED_STATES.currency, 'amountUnit': UNITED_STATES.provider_amount_unit,
             'totalStocks': total, 'datasetUrl': f'{base}/stocks.json', 'datasetGzipUrl': f'{base}/stocks.json.gz',
             'datasetPackedGzipUrl': f'{base}/stocks.packed.json.gz', 'iposUrl': f'{base}/ipos.json.gz'}
@@ -155,6 +172,28 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         (generation / 'market-overview.json.gz').write_bytes(gzip.compress(
             json.dumps(overview, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
     manifest = manifest_for(revision, session, len(rows), market_overview=overview is not None)
+    # The Charts page's symbol search and list (India's chart directory, the same fields).
+    directory = {'revision': revision, 'asOfDate': session,
+                 'stocks': [{key: row[key] for key in CHART_DIRECTORY_FIELDS if key in row} for row in rows]}
+    (generation / 'chart-directory.json.gz').write_bytes(gzip.compress(
+        json.dumps(directory, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
+    manifest['chartDirectoryUrl'] = f'/data/revisions/{revision}/chart-directory.json.gz'
+    try:
+        chart_root, chart_release = chart_objects(root, session)
+    except (RuntimeError, ValueError, KeyError, OSError) as error:
+        print(f'WARNING: US charts unavailable for {session}: {error}', flush=True)
+        chart_root = chart_release = None
+    if chart_release:
+        chart_index = json.loads((chart_root / 'index.json').read_text())
+        write_json(generation / 'data-index.json', chart_index)
+        # Served next to the pointer when published locally; R2 replaces these with the bucket's addresses below.
+        manifest.update(schemaVersion=7, chartRevision=chart_release,
+                        dataIndexUrl=f'/data/revisions/{revision}/data-index.json', objectUrlTemplate='/data/objects/{hash}.json.gz')
+        local_objects = output / 'objects'
+        local_objects.mkdir(parents=True, exist_ok=True)
+        for file in (chart_root / 'objects').glob('*.json.gz'):
+            if not (local_objects / file.name).exists():
+                shutil.copyfile(file, local_objects / file.name)
     rotation = output / 'rotation'
     try:
         manifest['rotationHistoryObject'] = rotation_objects(root, cache, rows, source_bytes, session, rotation)
@@ -165,7 +204,18 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         manifest['rotationUrlTemplate'] = '/data/rotation/{hash}.json.gz'
     write_json(output / POINTER, manifest)
     if enabled():
-        store = R2Store()
+        store = R2Store(inventory=US_INVENTORY)
+        if chart_release:
+            # Objects first (each verified), then the index that names them, as India's releases do.
+            files = store.upload_objects(chart_root / 'objects', store.load_inventory(None))
+            manifest['dataIndexUrl'] = f'{store.base_url}/releases/{revision}/index.json'
+            manifest['objectUrlTemplate'] = f'{store.base_url}/objects/{{hash}}.json.gz'
+            store.write_release(chart_index, f'releases/{revision}/index.json')
+            try:
+                store.write_inventory(files)
+            except (OSError, RuntimeError) as error:
+                print(f'WARNING: US object verification record not saved: {error}', flush=True)
+            write_json(output / POINTER, manifest)
         upload_revision(store, generation, f'releases/{revision}')
         if manifest.get('rotationHistoryObject'):
             store.upload_rotation(rotation)

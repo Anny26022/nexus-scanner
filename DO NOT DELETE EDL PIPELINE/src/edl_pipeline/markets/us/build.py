@@ -30,7 +30,7 @@ from ohlcv_utils import symbol_csv_path
 from pipeline_utils import resource_path
 
 from .. import UNITED_STATES
-from . import calendar, dhan, fields, history, tradingview
+from . import calendar, dhan, fields, history, statements, tradingview
 from .universe import SCREENABLE, security_type
 
 # Benchmark ETFs stand in for indices; SPY is the market benchmark for RS and breadth.
@@ -105,7 +105,7 @@ def stock_record(record: dict, metrics: dict, session: str) -> dict:
         # History-based values win over the snapshot's own (the 52-week distances), when the history has them.
         **record, **{key: value for key, value in metrics.items() if not key.startswith('turnover') and value is not None},
         **engine_amounts(record, metrics),
-        'schema_version': '3.0', 'industry': None, 'listing_board': 'MAINBOARD', 'is_sme': False, 'listing_series': None,
+        'schema_version': '3.0', 'industry': record.get('industry'), 'listing_board': 'MAINBOARD', 'is_sme': False, 'listing_series': None,
         'default_screener_eligible': True, 'index_memberships': [], 'event_markers': [], 'recent_announcements': [],
         'news_feed': [], 'as_of_date': session if aligned else metrics.get('as_of_date'),
         # Only TradingView's (markets/us/tradingview.py): Dhan's history starts in 2021, so its high is not all-time.
@@ -144,7 +144,8 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
     return {**counts, 'throttled': stopped.is_set()}
 
 
-def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, workers: int = 3, limit: int | None = None) -> dict:
+def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, workers: int = 3, limit: int | None = None,
+          page_budget: float = 1200) -> dict:
     """Write the US root for the last closed session; returns a run report."""
     now = now or datetime.now(timezone.utc)
     stock_rows, etf_rows = dhan.fetch_universe('stock'), dhan.fetch_universe('etf')
@@ -158,6 +159,9 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
 
     report = {'session': session, 'screenable': len(records), 'listed': len(stock_rows)}
     report['tradingview'] = tradingview.enrich(records, session)
+    # After TradingView: a company that has reported since its page was read is read again.
+    report['stock_pages'] = statements.refresh_pages(records, root, now, interval=interval, budget_seconds=page_budget)
+    report['statements'] = statements.enrich(records, root)
     report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers)
     report['benchmarks'] = update_histories(benchmarks, root / 'indices_ohlcv_data', session, interval=interval, workers=1)
 
@@ -183,14 +187,14 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     report['stocks'] = len(stocks)
     report['aligned'] = sum(stock['as_of_date'] == session for stock in stocks)
     report['rs_ratings'] = build_rs_ratings.main(root, f'{BENCHMARK}.csv', BENCHMARKS[BENCHMARK])
-    # Phase 2 fills statements and earnings; the publisher still reads these files.
+    # Statements live on the records (statements.py); India's quarterly history and IPO files stay empty for the US.
     _write_json(root / 'quarterly_financial_history.json', {'records': []}, compress=True)
     _write_json(root / 'ipo_screener.json', {'records': []}, compress=True)
     return report
 
 
 def reset(root: Path):
-    """Remove a root's generated files but keep its price history (the expensive part)."""
+    """Remove a root's generated files but keep its price history and stock pages (the expensive parts)."""
     for path in root.iterdir() if root.exists() else []:
-        if path.name not in {'ohlcv_data', 'indices_ohlcv_data'}:
+        if path.name not in {'ohlcv_data', 'indices_ohlcv_data', 'stock_pages'}:
             shutil.rmtree(path) if path.is_dir() else path.unlink()

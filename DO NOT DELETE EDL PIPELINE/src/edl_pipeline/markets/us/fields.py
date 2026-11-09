@@ -24,6 +24,9 @@ SNAPSHOT_FIELDS = [
     'High1Wk', 'High1Yr', 'Low1Yr', 'High3Yr', 'High5yr', 'RtAwayFrom1MonthHigh', 'RtAwayFrom5YearHigh',
     'Mcap', 'TotalShares', 'Sector', 'Pe', 'Ind_Pe', 'ReturnOnEquity', 'ROCE', 'NetProfitMargin',
     'Year1RevenueGrowth', 'YearlyEarningPerShare', 'Year1CAGREPSGrowth', 'YoYLastQtrlyProfitGrowth',
+    # Multi-year averages and the industry the US screener fills too (India's SCREEN_METRICS tags).
+    'SubSector', 'Year3ROE', 'Year5AvgOperatingProfit', 'Year5MedianSalesGrowth', 'Year3CAGREPSGrowth',
+    'Year3CAGRRevenueGrowth',
 ]
 
 # Screener field -> canonical field, for values that carry over as they are.
@@ -39,6 +42,11 @@ DIRECT = {
     'ROCE': 'roce_percent', 'NetProfitMargin': 'net_margin_percent', 'Year1RevenueGrowth': 'revenue_growth_1y_percent',
     'YearlyEarningPerShare': 'eps_ttm', 'Year1CAGREPSGrowth': 'eps_growth_1y_percent',
     'YoYLastQtrlyProfitGrowth': 'quarterly_profit_growth_yoy_percent',
+    'SubSector': 'industry', 'Year3ROE': 'average_roe_3y_percent', 'Year5AvgOperatingProfit': 'average_opm_5y_percent',
+    'Year5MedianSalesGrowth': 'median_sales_growth_5y_percent', 'Year3CAGREPSGrowth': 'eps_cagr_3y_percent',
+    'Year3CAGRRevenueGrowth': 'revenue_cagr_3y_percent',
+    # Percentages only: the screener's amounts (FixedAssets, CWIP) are in each company's home currency for foreign
+    # listings (TSMC's are Taiwan dollars) and do not say so.
 }
 KIND_BY_INSTRUMENT = {'ES': 'stock', 'ETF': 'etf'}
 # Dhan stamps its own times in Indian time, whatever the market.

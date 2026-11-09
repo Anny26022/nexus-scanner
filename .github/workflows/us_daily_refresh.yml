@@ -19,7 +19,8 @@ concurrency:
 jobs:
   refresh-us:
     runs-on: ubuntu-latest
-    # A cold cache seeds every history (about 6,000 paced requests); a warm run is a few minutes.
+    # A cold cache seeds every history (about 6,000 paced requests) and spends up to 20 minutes on stock pages
+    # (the rest follow over the next runs); a warm run is a few minutes.
     timeout-minutes: 90
     env:
       US_ROOT: ${{ runner.temp }}/us-root
@@ -46,13 +47,14 @@ jobs:
           PYTHONPATH=src:. python -m unittest tests.test_us_market -v
           python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
 
-      # Price history is the only state carried between runs; losing it costs one slow re-seed, not data.
+      # Price history and stock pages are the state carried between runs; losing them costs a slow re-seed, not data.
       - name: Restore US price history
         uses: actions/cache/restore@v4
         with:
           path: |
             ${{ env.US_ROOT }}/ohlcv_data
             ${{ env.US_ROOT }}/indices_ohlcv_data
+            ${{ env.US_ROOT }}/stock_pages
           key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: us-history-v1-
 
@@ -79,6 +81,7 @@ jobs:
           path: |
             ${{ env.US_ROOT }}/ohlcv_data
             ${{ env.US_ROOT }}/indices_ohlcv_data
+            ${{ env.US_ROOT }}/stock_pages
           key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Install R2 uploader

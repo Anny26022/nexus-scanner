@@ -25,7 +25,24 @@ EXCHANGES = ('NYSE', 'NASDAQ', 'AMEX', 'CBOE')
 # Columns US screening reads beyond the shared metric list.
 EXTRA = {'earnings_release_date': 'last_earnings', 'earnings_release_next_date': 'next_earnings',
          'float_shares_percent_current': 'free_float_percent', 'dividends_yield_current': 'dividend_yield_percent',
-         'ex_dividend_date_recent': 'last_ex_dividend', 'ex_dividend_date_upcoming': 'next_ex_dividend'}
+         'ex_dividend_date_recent': 'last_ex_dividend', 'ex_dividend_date_upcoming': 'next_ex_dividend',
+         'free_cash_flow_ttm': 'free_cash_flow', 'dps_common_stock_prim_issue_fy': 'dividend_per_share',
+         'price_book_fq': 'pb_ratio', 'VWAP': 'vwap', 'total_debt_fq': 'total_debt', 'total_equity_fq': 'total_equity',
+         # Trailing twelve months, kept current daily (Dhan's quarters have gaps; statements.py fills the rest).
+         'total_revenue_ttm': 'ttm_revenue', 'net_income_ttm': 'ttm_net_profit', 'operating_margin_ttm': 'operating_margin',
+         'earnings_per_share_diluted_ttm': 'eps_ttm', 'earnings_per_share_diluted_yoy_growth_ttm': 'eps_growth',
+         'total_revenue_yoy_growth_ttm': 'revenue_growth', 'net_income_yoy_growth_ttm': 'net_profit_growth',
+         'return_on_assets_fq': 'roa', 'current_ratio_fq': 'current_ratio',
+         # The latest quarter and balance sheet, the latest fiscal year's cash flow, and five-year revenue growth.
+         'total_revenue_fq': 'quarter_revenue', 'net_income_fq': 'quarter_net_profit',
+         'total_assets_fq': 'total_assets', 'total_current_assets_fq': 'current_assets',
+         'total_current_liabilities_fq': 'current_liabilities', 'total_liabilities_fq': 'total_liabilities',
+         'cash_f_operating_activities_fy': 'operating_cash_flow', 'cash_f_investing_activities_fy': 'investing_cash_flow',
+         'cash_f_financing_activities_fy': 'financing_cash_flow', 'total_revenue_cagr_5y': 'revenue_cagr_5y'}
+# EXTRA columns that are amounts: stated in millions of dollars, and only when the company reports in dollars.
+EXTRA_AMOUNTS = frozenset({'free_cash_flow', 'total_debt', 'total_equity', 'ttm_revenue', 'ttm_net_profit',
+                           'quarter_revenue', 'quarter_net_profit', 'total_assets', 'current_assets', 'current_liabilities',
+                           'total_liabilities', 'operating_cash_flow', 'investing_cash_flow', 'financing_cash_flow'})
 COLUMNS = ['isin', 'time', 'close', 'update_mode', 'currency', 'fundamental_currency_code', 'exchange', 'is_primary', 'type',
            *[field['wire'] for field in FIELD_DEFINITIONS], *EXTRA]
 LIMIT = 12_000
@@ -94,11 +111,28 @@ def snapshots(response: dict, fetched_at: str) -> dict[str, dict]:
             'exchange': values['exchange'], 'is_primary': values['is_primary'], 'primary_exchange': values['exchange'],
             'listing_symbol': values['listing_symbol'],
         }
-        extra = {name: values[column] for column, name in EXTRA.items()}
+        dollars = values['fundamental_currency_code'] == UNITED_STATES.currency
+        extra = {name: (_number(values[column]) / UNITED_STATES.provider_amount_unit
+                        if dollars and _number(values[column]) is not None else None) if name in EXTRA_AMOUNTS
+                 else values[column] for column, name in EXTRA.items()}
         result[isin] = {'tradingview_snapshot': snapshot, **extra}
     if not result:
         raise ValueError('TradingView returned no US listings')
     return result
+
+
+def _difference(total, part):
+    return total - part if total is not None and part is not None and total >= part else None
+
+
+def _sum(*values):
+    return None if any(value is None for value in values) else sum(values)
+
+
+def _prior(value, growth_percent):
+    """The value a year earlier, from today's value and its growth; None when the growth cannot say."""
+    value, growth_percent = _number(value), _number(growth_percent)
+    return value / (1 + growth_percent / 100) if value is not None and growth_percent is not None and growth_percent > -100 else None
 
 
 def canonical(found: dict, record: dict, session: str) -> dict:
@@ -121,6 +155,34 @@ def canonical(found: dict, record: dict, session: str) -> dict:
         'dividend_yield_percent': _number(found['dividend_yield_percent']),
         'dividend_ex_date': _eastern_date(found['last_ex_dividend']),
         'next_dividend_ex_date': _eastern_date(found['next_ex_dividend']),
+        'dividend_per_share_latest': _number(found['dividend_per_share']),
+        'pb_ratio': _number(found['pb_ratio']),
+        'vwap': _number(found['vwap']) if current else None,
+        'vwap_as_of_date': session if current and _number(found['vwap']) else None,
+        # Amounts in millions of dollars under India's names; debt over equity only for positive equity.
+        'free_cash_flow_crore': found['free_cash_flow'],
+        'borrowings_crore': found['total_debt'],
+        'debt_to_equity': found['total_debt'] / found['total_equity']
+        if found['total_debt'] is not None and found['total_equity'] and found['total_equity'] > 0 else None,
+        'ttm_revenue_crore': found['ttm_revenue'], 'ttm_sales_crore': found['ttm_revenue'],
+        'ttm_net_profit_crore': found['ttm_net_profit'],
+        'ttm_revenue_growth_percent': _number(found['revenue_growth']), 'ttm_sales_growth_percent': _number(found['revenue_growth']),
+        'ttm_net_profit_growth_percent': _number(found['net_profit_growth']),
+        'operating_margin_ttm_percent': _number(found['operating_margin']),
+        'roa_percent': _number(found['roa']), 'current_ratio': _number(found['current_ratio']),
+        # India's statement fields (its names say lakh or crore; the US release states millions of dollars).
+        'total_revenue_in_lakhs': found['quarter_revenue'], 'net_profit_in_lakhs': found['quarter_net_profit'],
+        'total_assets_in_lakhs': found['total_assets'], 'total_equity_in_lakhs': found['total_equity'],
+        'current_assets_in_lakhs': found['current_assets'], 'current_liabilities_in_lakhs': found['current_liabilities'],
+        'total_liabilities_in_lakhs': found['total_liabilities'],
+        'non_current_assets_in_lakhs': _difference(found['total_assets'], found['current_assets']),
+        'non_current_liabilities_in_lakhs': _difference(found['total_liabilities'], found['current_liabilities']),
+        'operating_cash_flow_in_lakhs': found['operating_cash_flow'], 'investing_cash_flow_in_lakhs': found['investing_cash_flow'],
+        'financing_cash_flow_crore': found['financing_cash_flow'],
+        'net_cash_flow_in_lakhs': _sum(found['operating_cash_flow'], found['investing_cash_flow'], found['financing_cash_flow']),
+        'sales_growth_5_years_percent': _number(found['revenue_cagr_5y']),
+        # "Last year" is the trailing twelve months; the year before follows from its growth (fiscal years differ).
+        'eps_last_year': _number(found['eps_ttm']), 'eps_2_years_back': _prior(found['eps_ttm'], found['eps_growth']),
     }
 
 

@@ -14,7 +14,7 @@ import requests  # noqa: E402
 from edl_pipeline.markets import MARKETS, market  # noqa: E402
 import tempfile  # noqa: E402
 
-from edl_pipeline.markets.us import build, calendar, dhan, fields, history, tradingview  # noqa: E402
+from edl_pipeline.markets.us import build, calendar, dhan, fields, history, statements, tradingview  # noqa: E402
 from edl_pipeline.markets.us.universe import history_exchanges, security_type  # noqa: E402
 
 
@@ -271,12 +271,112 @@ class TradingViewTests(unittest.TestCase):
         # A stale TradingView row (another session) gives no all-time high.
         self.assertIsNone(tradingview.canonical(found['US1912161007'], {'close': 95.0}, '2026-11-10')['percent_from_ath'])
 
+    def test_statements_debt_and_eps_history_in_millions_of_dollars(self):
+        found = tradingview.snapshots(self.response(self.row('NASDAQ:AAPL', 'US0378331005', **{
+            'total_debt_fq': 85_764e6, 'total_equity_fq': 112_093e6, 'total_assets_fq': 404_548e6, 'total_current_assets_fq': 173_857e6,
+            'total_liabilities_fq': 292_455e6, 'total_current_liabilities_fq': 169_915e6, 'cash_f_operating_activities_fy': 145e9,
+            'cash_f_investing_activities_fy': -17e9, 'cash_f_financing_activities_fy': -127e9,
+            'earnings_per_share_diluted_ttm': 8.8, 'earnings_per_share_diluted_yoy_growth_ttm': 10.0})), '')
+        values = tradingview.canonical(found['US0378331005'], {'close': 350.0}, '2026-11-09')
+        self.assertAlmostEqual(values['debt_to_equity'], 85_764 / 112_093)
+        self.assertEqual((values['borrowings_crore'], values['total_assets_in_lakhs']), (85_764, 404_548))
+        self.assertEqual((values['non_current_assets_in_lakhs'], values['non_current_liabilities_in_lakhs']), (230_691, 122_540))
+        self.assertEqual(values['net_cash_flow_in_lakhs'], 1_000)
+        self.assertAlmostEqual(values['eps_2_years_back'], 8.0)
+
     def test_a_failed_request_publishes_without_these_values(self):
         records = [{'isin': 'US1912161007'}]
         def fail():
             raise OSError('timed out')
         report = tradingview.enrich(records, '2026-11-09', fetch_response=fail)
         self.assertEqual((report['matched'], records), (0, [{'isin': 'US1912161007'}]))
+
+
+def joined(*values):
+    return '|'.join('' if value is None else str(value) for value in values)
+
+
+class StatementTests(unittest.TestCase):
+    # Ten quarters of a company with a September fiscal year, newest first, in millions of dollars.
+    PERIODS = joined(202609, 202606, 202603, 202512, 202509, 202506, 202503, 202412, 202409, 202406)
+    PAGE = {
+        'incomeStat_sq': {'YEAR': PERIODS, 'REVENUE': joined(*[110] * 4, *[100] * 6), 'SALES': joined(*[110] * 4, *[100] * 6),
+                          'EXPENSES': joined(*[80] * 10), 'OTHER_INCOME': joined(*[5] * 10), 'OPERATING_PROFIT': joined(*[30] * 10),
+                          'INTEREST': joined(*[2] * 10), 'PROFIT_BEFORE_TAX': joined(*[28] * 10),
+                          'TAX_PAYMENT_ABSOLUTE': joined(*[6] * 10), 'NET_PROFIT': joined(*[22] * 4, *[20] * 6),
+                          'EPS': joined(*[1.1] * 4, *[1.0] * 6)},
+        'bs_s': {'YEAR': joined(202609, 202606), 'TOTAL_ASSETS': joined(500, 480), 'CURRENT_ASSETS': joined(200, 190),
+                 'CURRENT_LIABILITIES': joined(100, 95), 'NON_CURRENT_LIABILITIES': joined(150, 150), 'TOTAL_EQUITY': joined(250, 235)},
+        'cF_sy': {'YEAR': joined(202609), 'OPERATING_ACTIVITIES': joined(120), 'INVESTING_ACTIVITIES': joined(-40),
+                  'FINANCING_ACTIVITIES': joined(-60), 'NET_CASH_FLOW': joined(20)},
+        'rNp_s': {'YEAR': joined(*(year * 100 + 9 for year in range(2026, 2020, -1))), 'REVENUE': joined(440, 400, 380, 350, 320, 300)},
+        'CV': {'PEG': '1.5'},
+    }
+
+    def test_statements_read_the_latest_quarter_trailing_year_and_balance_sheet(self):
+        values = statements.statement_fields(self.PAGE)
+        self.assertEqual((values['total_revenue_in_lakhs'], values['total_income_in_lakhs']), (110, 115))
+        self.assertEqual((values['ttm_revenue_crore'], values['ttm_net_profit_crore']), (440, 88))
+        self.assertAlmostEqual(values['ttm_revenue_growth_percent'], 10.0)
+        self.assertAlmostEqual(values['eps_last_year'], 4.4)
+        self.assertEqual(values['eps_2_years_back'], 4.0)
+        self.assertEqual(values['interest_coverage'], (112 + 8) / 8)
+        self.assertEqual((values['total_liabilities_in_lakhs'], values['non_current_assets_in_lakhs'], values['current_ratio']), (250, 300, 2.0))
+        self.assertAlmostEqual(values['sales_growth_5_years_percent'], ((440 / 300) ** 0.2 - 1) * 100)
+        self.assertEqual(values['peg_ratio'], 1.5)
+
+    def test_a_missing_quarter_gives_no_trailing_figures_and_zeros_mean_not_reported(self):
+        gap = {**self.PAGE['incomeStat_sq'], 'YEAR': joined(202609, 202606, 202512, 202509, 202506, 202503, 202412, 202409, 202406, 202403)}
+        bank = {**self.PAGE, 'incomeStat_sq': gap,
+                'bs_s': {'YEAR': joined(202609), 'TOTAL_ASSETS': joined(5000), 'CURRENT_ASSETS': joined(0),
+                         'CURRENT_LIABILITIES': joined(0), 'NON_CURRENT_LIABILITIES': joined(0), 'TOTAL_EQUITY': joined(400)}}
+        values = statements.statement_fields(bank)
+        self.assertIsNone(values['ttm_revenue_crore'])
+        self.assertIsNone(values['interest_coverage'])
+        self.assertIsNone(values['current_ratio'])
+        self.assertIsNone(values['total_liabilities_in_lakhs'])
+
+    def test_a_page_is_used_only_when_it_agrees_with_tradingview(self):
+        self.assertTrue(statements.trusted(self.PAGE, {'total_revenue_in_lakhs': 105}))
+        # Stale (Costco's 2009 balance sheet) or another currency (TSMC in Taiwan dollars) disagree.
+        self.assertFalse(statements.trusted(self.PAGE, {'total_revenue_in_lakhs': 3500}))
+        # ADRs carry US ISINs, so without TradingView's figure there is nothing to check against.
+        self.assertFalse(statements.trusted(self.PAGE, {'isin': 'US8740391003'}))
+
+    def test_tradingview_values_come_first_and_pages_fill_the_rest(self):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(root))
+        statements.write_page(root, 'ACME', {'fetched_at': '2026-11-09T00:30:00+00:00', 'slug': 'ACME-acme', **self.PAGE})
+        record = {'symbol': 'ACME', 'total_revenue_in_lakhs': 108, 'ttm_revenue_crore': 450}
+        report = statements.enrich([record], root)
+        self.assertEqual((report['with_statements'], record['ttm_revenue_crore'], record['profit_before_tax_in_lakhs']), (1, 450, 28))
+        self.assertEqual(record['financial_metadata']['amount_unit'], 'USD_MILLION')
+
+    def test_pages_are_fetched_again_weekly_and_after_earnings(self):
+        now = utc(2026, 11, 10, 0, 30)
+        page = {'fetched_at': '2026-11-05T00:30:00+00:00'}
+        self.assertTrue(statements.stale(None, {}, now))
+        self.assertFalse(statements.stale(page, {'latest_earnings_date': '2026-10-29'}, now))
+        self.assertTrue(statements.stale(page, {'latest_earnings_date': '2026-11-06'}, now))
+        self.assertTrue(statements.stale({'fetched_at': '2026-11-02T00:30:00+00:00'}, {}, now))
+
+    def test_fetching_stops_at_the_first_rate_limit_and_keeps_what_it_has(self):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(root))
+        calls = []
+
+        class Pages:
+            def fetch(self, slug):
+                calls.append(slug)
+                if slug == 'B-b':
+                    raise dhan.Throttled('403')
+                return {'fundamentalsData': {'incomeStat_sq': {'YEAR': '202609', 'REVENUE': '1'}}}
+
+        records = [{'symbol': symbol, 'slug': f'{symbol}-{symbol.lower()}'} for symbol in ('A', 'B', 'C')]
+        counts = statements.refresh_pages(records, root, utc(2026, 11, 10), pages=Pages(), interval=0, workers=1)
+        self.assertEqual((counts['fetched'], counts['throttled']), (1, True))
+        self.assertIsNotNone(statements.read_page(root, 'A'))
+        self.assertIsNone(statements.read_page(root, 'C'))
 
 
 if __name__ == '__main__':

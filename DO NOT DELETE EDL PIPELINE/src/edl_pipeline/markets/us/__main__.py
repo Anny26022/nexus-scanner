@@ -17,9 +17,11 @@ def main(argv=None):
     parser.add_argument('--limit', type=int, help='only the first N stocks by market cap (local checks)')
     parser.add_argument('--workers', type=int, default=3)
     parser.add_argument('--interval', type=float, default=0.25, help='seconds between history requests')
+    parser.add_argument('--page-budget', type=float, default=1200,
+                        help='seconds to spend fetching stock pages; the rest wait for the next run')
     args = parser.parse_args(argv)
     try:
-        report = build(args.root, interval=args.interval, workers=args.workers, limit=args.limit)
+        report = build(args.root, interval=args.interval, workers=args.workers, limit=args.limit, page_budget=args.page_budget)
     except SnapshotNotReady as error:
         print(f'::warning::{error}', flush=True)
         return 75

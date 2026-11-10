@@ -15,7 +15,7 @@ from pathlib import Path
 from ohlcv_utils import OHLCV_FIELDS, symbol_csv_path
 
 from . import dhan
-from .calendar import is_nyse_session_day, previous_session_day
+from .calendar import EASTERN, is_nyse_session_day, previous_session_day
 from .universe import history_exchanges
 
 # A stored close may differ from the provider's previous close by rounding; beyond this the series was re-adjusted.
@@ -73,7 +73,11 @@ def fetch_full(symbol: str, security_id: int, listing_exchange: str | None, now:
 
 
 def snapshot_bar(record: dict, session: str) -> dict | None:
-    """The session's bar from a canonical snapshot record, when every price is present."""
+    """The session's bar from a canonical snapshot record, when every price is present and the row last traded in that
+    session (a halted or untraded stock's row still holds an earlier day's prices)."""
+    traded = record.get('provider_last_trade_ist')
+    if traded and datetime.fromisoformat(traded).astimezone(EASTERN).date().isoformat() != session:
+        return None
     values = [record.get(key) for key in ('open', 'high', 'low', 'close')]
     if any(value is None or value <= 0 for value in values):
         return None
@@ -112,7 +116,9 @@ def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
             return 'missing'
     # History can lag the snapshot by the latest session; the snapshot supplies it when it joins the series.
     bar = clean(snapshot_bar(record, session) or {'open': None, 'high': None, 'low': None, 'close': None})
-    if bars[-1]['date'] < session and bars[-1]['date'] == previous_session_day(date.fromisoformat(session)).isoformat() and bar:
+    # It joins only when a refetched series also agrees with the snapshot's previous close: on a split day Dhan's
+    # history may not be re-adjusted yet, and a bar appended to it would bake the gap in.
+    if bars[-1]['date'] < session and not needs_refetch(bars, record, session) and bar:
         bars = [*bars, bar]
     elif status == 'appended':
         return 'missing'

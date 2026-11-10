@@ -125,9 +125,12 @@ def fetch_history(symbol: str, security_id: int, listing_exchange: str, start: d
 class StockPages:
     """Each stock's page data, re-reading dhan.co's build id once when a deploy has replaced it."""
 
-    def __init__(self, get: Callable[[str], str] = get_text, fetch_json: Callable[[str], dict] | None = None):
-        self._get = get
-        self._fetch_json = fetch_json or (lambda url: _checked(requests.get(url, headers=_headers(), timeout=30)).json())
+    def __init__(self, get: Callable[[str], str] = get_text, fetch_json: Callable[[str], dict] | None = None,
+                 pace: Callable[[], None] = lambda: None):
+        # `pace` runs before every request (a page can take three: the data, a fresh build id, the data again).
+        self._get = lambda url: (pace(), get(url))[1]
+        fetch_json = fetch_json or (lambda url: _checked(requests.get(url, headers=_headers(), timeout=30)).json())
+        self._fetch_json = lambda url: (pace(), fetch_json(url))[1]
         self._build = None
 
     def build_id(self, refresh: bool = False) -> str:

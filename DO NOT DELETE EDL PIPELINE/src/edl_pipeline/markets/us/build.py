@@ -126,9 +126,9 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
     def fetch(symbol, security_id, exchange):
         if stopped.is_set():
             return []
-        pacer.wait()
         try:
-            return history.fetch_full(symbol, security_id, exchange)
+            # Paced per request: an unknown listing exchange tries NYSE, then NASDAQ.
+            return history.fetch_full(symbol, security_id, exchange, post=lambda url, payload: (pacer.wait(), dhan.post(url, payload))[1])
         except dhan.Throttled:
             stopped.set()
             return []

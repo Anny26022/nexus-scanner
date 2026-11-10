@@ -74,19 +74,6 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           exit "$status"
 
-      # Saved even after a failed build: every history fetched so far is kept for the next run.
-      - name: Save US price history
-        if: always() && steps.build.outcome != 'skipped'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ env.US_ROOT }}/ohlcv_data
-            ${{ env.US_ROOT }}/indices_ohlcv_data
-            ${{ env.US_ROOT }}/stock_pages
-            ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
-          key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
-
       - name: Install R2 uploader
         if: steps.build.outputs.ready == 'true'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
@@ -103,3 +90,17 @@ jobs:
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
           R2_BUCKET: nexus-screener-chart-data
         run: python frontend/publish_us.py
+
+      # Saved last, so it holds the rotation ledger the publish step writes; saved even after a failed build or
+      # publish, so every history fetched so far is kept for the next run.
+      - name: Save US price history
+        if: always() && steps.build.outcome != 'skipped'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.US_ROOT }}/ohlcv_data
+            ${{ env.US_ROOT }}/indices_ohlcv_data
+            ${{ env.US_ROOT }}/stock_pages
+            ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
+          key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}

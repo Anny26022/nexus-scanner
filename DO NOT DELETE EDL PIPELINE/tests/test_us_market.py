@@ -200,6 +200,21 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'refetched')
         self.assertEqual([b['close'] for b in self.stored()], [9.5, 10.0, 10.8])
 
+    def test_a_refetch_dhan_has_not_readjusted_yet_gets_no_snapshot_bar(self):
+        # Split day: Dhan's history still ends on the unadjusted close, so today's bar would bake a 50% gap in.
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-06', 20.0)])
+        fetch = mock.Mock(return_value=[bar('2026-11-05', 19.0), bar('2026-11-06', 20.0)])
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'refetched')
+        self.assertEqual([b['close'] for b in self.stored()], [19.0, 20.0])
+
+    def test_a_row_that_did_not_trade_in_the_session_adds_no_bar(self):
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-06', 10.0)])
+        halted = {**self.RECORD, 'provider_last_trade_ist': '2026-11-07T02:29:00+05:30'}  # Friday's close in New York
+        self.assertEqual(history.update(halted, self.root, '2026-11-09', fetch=mock.Mock()), 'missing')
+        self.assertEqual(self.stored()[-1]['date'], '2026-11-06')
+        traded = {**self.RECORD, 'provider_last_trade_ist': '2026-11-10T02:29:00+05:30'}  # Monday's close
+        self.assertEqual(history.update(traded, self.root, '2026-11-09', fetch=mock.Mock()), 'appended')
+
     def test_a_gap_is_fetched_again_and_a_stock_without_history_is_missing(self):
         history.write_bars(self.root / 'ACME.csv', [bar('2026-11-04', 10.0)])
         fetch = mock.Mock(return_value=[bar('2026-11-06', 10.0), bar('2026-11-09', 10.8)])
@@ -385,6 +400,10 @@ class StatementTests(unittest.TestCase):
         # A balance sheet a quarter behind the income statement (Apple's, on Dhan) is left to TradingView.
         behind = statements.statement_blocks({**self.PAGE, 'bs_s': {**self.PAGE['bs_s'], 'YEAR': joined(202606, 202603)}})
         self.assertNotIn('balance', statements.trusted_blocks(behind, {'total_revenue_in_lakhs': 110}))
+        # Revenue that agrees but for an older quarter than TradingView's last report is refused.
+        self.assertEqual(statements.trusted_blocks(blocks, {'total_revenue_in_lakhs': 105, 'latest_earnings_date': '2026-10-29'}),
+                         {'income', 'balance', 'cash_flow', 'annual', 'ratios'})
+        self.assertEqual(statements.trusted_blocks(blocks, {'total_revenue_in_lakhs': 105, 'latest_earnings_date': '2027-01-28'}), set())
 
     def test_dhan_comes_first_and_tradingview_fills_the_rest(self):
         root = Path(tempfile.mkdtemp())
@@ -427,6 +446,15 @@ class StatementTests(unittest.TestCase):
         self.assertFalse(statements.stale(page, {'latest_earnings_date': '2026-10-29'}, now))
         self.assertTrue(statements.stale(page, {'latest_earnings_date': '2026-11-06'}, now))
         self.assertTrue(statements.stale({'fetched_at': '2026-11-02T00:30:00+00:00'}, {}, now))
+        # Fetched after the report but still a quarter behind it: asked for again in the month after the report.
+        behind = {'fetched_at': '2027-02-01T00:30:00+00:00', 'incomeStat_sq': {'YEAR': '202609', 'REVENUE': '1'}}
+        self.assertTrue(statements.stale(behind, {'latest_earnings_date': '2027-01-28'}, utc(2027, 2, 2)))
+        # After that month it waits for the weekly refresh (a page dhan.co never updates must not use every run).
+        self.assertFalse(statements.stale({**behind, 'fetched_at': '2027-03-01T00:30:00+00:00'},
+                                          {'latest_earnings_date': '2027-01-28'}, utc(2027, 3, 2)))
+        # A page dhan.co does not have is asked for weekly, not every run.
+        gone = {'fetched_at': '2026-11-09T00:30:00+00:00', 'missing': True}
+        self.assertFalse(statements.stale(gone, {'latest_earnings_date': '2026-11-09'}, now))
 
     def test_fetching_stops_at_the_first_rate_limit_and_keeps_what_it_has(self):
         root = Path(tempfile.mkdtemp())
@@ -445,6 +473,26 @@ class StatementTests(unittest.TestCase):
         self.assertEqual((counts['fetched'], counts['throttled']), (1, True))
         self.assertIsNotNone(statements.read_page(root, 'A'))
         self.assertIsNone(statements.read_page(root, 'C'))
+
+    def test_a_missing_page_is_remembered_and_every_request_is_paced(self):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(root))
+        paced = []
+        response = mock.Mock(status_code=404)
+        def fetch_json(url):
+            raise __import__('requests').HTTPError('404', response=response)
+        stock_pages = dhan.StockPages(get=lambda url: '"buildId":"b1"', fetch_json=fetch_json, pace=lambda: paced.append(1))
+        with self.assertRaises(Exception):
+            stock_pages.fetch('A-a')
+        self.assertEqual(len(paced), 4)  # the build id, the data, a fresh build id, the data again
+
+        class Pages:
+            def fetch(self, slug):
+                return {}
+        counts = statements.refresh_pages([{'symbol': 'A', 'slug': 'A-a'}], root, utc(2026, 11, 10), pages=Pages(), interval=0, workers=1)
+        self.assertEqual(counts['missing'], 1)
+        self.assertTrue(statements.read_page(root, 'A')['missing'])
+        self.assertEqual(statements.enrich([{'symbol': 'A'}], root)['with_statements'], 0)
 
 
 if __name__ == '__main__':

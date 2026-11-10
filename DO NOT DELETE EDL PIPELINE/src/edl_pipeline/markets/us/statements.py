@@ -60,29 +60,51 @@ def write_page(root: Path, symbol: str, page: dict):
 
 
 def stale(page: dict | None, record: dict, now: datetime) -> bool:
-    """Whether to fetch again: never fetched, a week old, or the company has reported since."""
+    """Whether to fetch again: never fetched, a week old, the company has reported since, or (in the month after a
+    report) the page still shows a quarter older than the one reported. A page dhan.co does not have is asked for weekly."""
     if not page:
         return True
     fetched = datetime.fromisoformat(page['fetched_at'])
+    if now - fetched >= REFRESH_AFTER:
+        return True
     reported = record.get('latest_earnings_date')
-    return now - fetched >= REFRESH_AFTER or bool(reported and reported > fetched.date().isoformat())
+    if page.get('missing') or not reported:
+        return False
+    if reported > fetched.date().isoformat():
+        return True
+    latest = series(page.get('incomeStat_sq'))
+    return (now.date() - date.fromisoformat(reported)).days <= CATCH_UP_DAYS and bool(latest) and not reports(latest[0]['period'], reported)
+
+
+# A quarter's results are filed within this many days of its end (10-Qs within 40-45, 10-Ks within 60-90).
+REPORT_WINDOW_DAYS = 100
+# How long after a report a page that still shows the previous quarter is fetched again each run.
+CATCH_UP_DAYS = 30
+
+
+def reports(period: str, reported: str) -> bool:
+    """Whether the quarter ending in `period` (yyyymm) is the one a report on `reported` (yyyy-mm-dd) filed."""
+    return 0 < (date.fromisoformat(reported) - _quarter_end(period)).days <= REPORT_WINDOW_DAYS
 
 
 def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, *, pages: dhan.StockPages | None = None,
                   interval: float = 0.25, workers: int = 4, budget_seconds: float = 1200) -> dict:
     """Fetch the stale pages, oldest need first, until the time budget; returns counts."""
     now = now or datetime.now(timezone.utc)
-    pages = pages or dhan.StockPages()
+    deadline, pacer, stopped = time.monotonic() + budget_seconds, dhan.Pacer(interval), threading.Event()
+    # Our own pages client paces every request it makes; one passed in (tests) is paced once per stock.
+    own = pages is None
+    pages = pages or dhan.StockPages(pace=pacer.wait)
     due = [record for record in records if record.get('slug') and stale(read_page(root, record['symbol']), record, now)]
     # Never-fetched pages first, then the ones whose company has reported.
     due.sort(key=lambda record: read_page(root, record['symbol']) is not None)
-    deadline, pacer, stopped = time.monotonic() + budget_seconds, dhan.Pacer(interval), threading.Event()
     counts, lock = {'due': len(due), 'fetched': 0, 'missing': 0, 'failed': 0}, threading.Lock()
 
     def one(record):
         if stopped.is_set() or time.monotonic() > deadline:
             return
-        pacer.wait()
+        if not own:
+            pacer.wait()
         try:
             props = pages.fetch(record['slug'])
         except dhan.Throttled:
@@ -96,6 +118,9 @@ def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, 
             if data:
                 write_page(root, record['symbol'], {'fetched_at': now.isoformat(), 'slug': record['slug'],
                                                     **{key: data.get(key) for key in KEPT}})
+        if outcome == 'missing':
+            # Remembered, so the next runs spend their budget on pages that exist; asked for again after a week.
+            write_page(root, record['symbol'], {'fetched_at': now.isoformat(), 'slug': record['slug'], 'missing': True})
         with lock:
             counts[outcome] += 1
 
@@ -249,6 +274,10 @@ def trusted_blocks(blocks: dict, record: dict) -> set[str]:
     revenue, reference = income['fields']['total_revenue_in_lakhs'], record.get('total_revenue_in_lakhs')
     if not (income['period'] and revenue and reference and abs(revenue / reference - 1) <= AGREEMENT):
         return set()
+    # Steady revenue can agree across quarters, so the quarter must also be the one TradingView's last report filed.
+    reported = record.get('latest_earnings_date')
+    if reported and not reports(income['period'], reported):
+        return set()
     quarter = _months(income['period'])
     trusted = {'income', 'ratios'}
     if blocks['balance']['period'] == income['period']:
@@ -300,7 +329,7 @@ def enrich(records: list[dict], root: Path, history: list[dict] | None = None) -
     oldest = None
     for record in records:
         page = read_page(root, record['symbol'])
-        if not page:
+        if not page or page.get('missing'):
             continue
         blocks = statement_blocks(page)
         trusted = trusted_blocks(blocks, record)

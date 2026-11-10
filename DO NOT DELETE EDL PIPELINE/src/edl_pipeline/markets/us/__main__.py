@@ -26,11 +26,17 @@ def main(argv=None):
         print(f'::warning::{error}', flush=True)
         return 75
     print(json.dumps(report, indent=2), flush=True)
-    history = report['history']
-    # A rate limit or missing benchmark leaves a partial market: publish nothing rather than a thin release.
-    if history.get('throttled') or report['benchmarks'].get('throttled') or not report['rs_ratings']:
-        print('::error::The US history is incomplete (rate limited or no RS ratings); nothing to publish.', flush=True)
+    history, benchmarks = report['history'], report['benchmarks']
+    # A rate limit or missing benchmark leaves a partial market: publish nothing rather than a thin release. The
+    # benchmarks (SPY and the other index ETFs) carry RS, breadth and rotation, so any one of them failing stops it too.
+    lagging_benchmarks = sum(benchmarks.get(status, 0) for status in ('failed', 'missing'))
+    if history.get('throttled') or benchmarks.get('throttled') or lagging_benchmarks or not report['rs_ratings']:
+        print('::error::The US history is incomplete (rate limited, a benchmark behind or no RS ratings); nothing to publish.',
+              flush=True)
         return 1
+    if history.get('failed'):
+        # One stock's failure keeps its earlier bars (its as_of_date lags); the count is shown on the run.
+        print(f"::warning::{history['failed']} US stock histories could not be refreshed and stay at an earlier session.", flush=True)
     return 0
 
 

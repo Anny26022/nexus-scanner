@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 import scanner_bridge as bridge
@@ -213,13 +214,19 @@ def publish_us(root, output=OUTPUT, *, workers=0):
             store.write_release(chart_index, f'releases/{revision}/index.json')
             try:
                 store.write_inventory(files)
-            except (OSError, RuntimeError) as error:
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
                 print(f'WARNING: US object verification record not saved: {error}', flush=True)
             write_json(output / POINTER, manifest)
         upload_revision(store, generation, f'releases/{revision}')
         if manifest.get('rotationHistoryObject'):
-            store.upload_rotation(rotation)
-            manifest['rotationUrlTemplate'] = f'{store.base_url}/{ROTATION_PREFIX}/{{hash}}.json.gz'
+            # As India's: a rotation upload failure drops the Rotation page, not the whole release.
+            try:
+                store.upload_rotation(rotation)
+                manifest['rotationUrlTemplate'] = f'{store.base_url}/{ROTATION_PREFIX}/{{hash}}.json.gz'
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
+                print(f'WARNING: US rotation upload unavailable; publishing without rotation: {error}', flush=True)
+                manifest.pop('rotationHistoryObject', None)
+                manifest.pop('rotationUrlTemplate', None)
             write_json(output / POINTER, manifest)
         upload_pointer(store, output, POINTER)
     elif os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':

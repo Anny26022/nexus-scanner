@@ -34,6 +34,11 @@ class CacheRetentionTests(unittest.TestCase):
                    cache(8, 'node-cache-Linux-lockfile')]
         self.assertEqual(selected(caches), {1, 2, 3})
 
+    def test_us_history_keeps_two_snapshots(self):
+        caches = [cache(i, f'us-history-v1-{i}-1', days=6-i) for i in range(1, 5)]
+        caches.append(cache(5, 'us-history-v1-5-1', days=0))
+        self.assertEqual(selected(caches), {1, 2, 3})
+
     def test_enrichment_keeps_two_builds_and_latest_newer_fetch(self):
         caches = [cache(1, 'scanner-enrichment-v1-Linux-1-1-build', days=7),
                   cache(2, 'scanner-enrichment-v1-Linux-2-1-build', days=6),

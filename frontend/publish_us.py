@@ -30,7 +30,7 @@ from market_overview import index_closes, market_overview
 import rotation_history
 import build_chart_artifacts
 from site_data import enabled, upload_pointer, upload_revision
-from chart_publication import ROTATION_PREFIX, R2Store, chart_revision, missing_r2_settings
+from chart_publication import ROTATION_PREFIX, R2Store, chart_revision, charts_enabled, file_digest, missing_r2_settings
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.markets import UNITED_STATES
 from edl_pipeline.markets.us.tradingview import API_URL as TRADINGVIEW_US
@@ -47,7 +47,8 @@ ROTATION_BENCHMARKS = {'SPX': 'SPY', 'NDX': 'QQQ', 'DJI': 'DIA', 'RUT': 'IWM'}
 # objects in the shared objects/ prefix; the US keeps its own record of verified objects.
 CHART_INDEXES = ('SPY', 'QQQ', 'DIA', 'IWM')
 US_INVENTORY = 'verified-objects/us-current.txt'
-CHART_DIRECTORY_FIELDS = ('symbol', 'name', 'close', 'changePct', 'marketCapCrore', 'sector', 'industry')
+# India's chart directory fields that US stocks carry (F&O, surveillance, series and circuit bands are India's).
+CHART_DIRECTORY_FIELDS = ('symbol', 'name', 'close', 'changePct', 'marketCapCrore', 'freeFloatPct', 'sector', 'industry', 'listingDate')
 US_ROTATION = rotation_history.RotationMarket(
     benchmarks={'SPX': 'S&P 500 (SPY)', 'NDX': 'Nasdaq-100 (QQQ)', 'DJI': 'Dow 30 (DIA)', 'RUT': 'Russell 2000 (IWM)',
                 'EW': 'Equal-weight market'},
@@ -58,7 +59,9 @@ US_ROTATION = rotation_history.RotationMarket(
 
 def chart_objects(root, session):
     """Build the US chart objects with India's builder; returns the chart folder and its validated revision."""
-    histories = {symbol: root / 'indices_ohlcv_data' / f'{symbol}.csv' for symbol in CHART_INDEXES}
+    # A benchmark without history is left out rather than published as an empty chart.
+    histories = {symbol: path for symbol in CHART_INDEXES
+                 if (path := root / 'indices_ohlcv_data' / f'{symbol}.csv').is_file() and path.stat().st_size > 0}
     if build_chart_artifacts.main(root, histories) != 0:
         raise RuntimeError('US chart objects were not built')
     chart_root = root / 'chart_artifacts'
@@ -67,7 +70,8 @@ def chart_objects(root, session):
 
 def rotation_objects(root, cache, rows, source_bytes, session, objects):
     """The Rotation page's price history for the US release, as India's: content-addressed objects in `objects`;
-    returns the index hash. Groups are sectors and industries (the US has no theme classification)."""
+    returns the index hash. Groups are sectors and industries (the US has no theme classification). The advanced
+    membership ledger is staged next to the carried one and replaces it once the release is published."""
     def closes(symbol):
         frame = cache.frame(root, symbol, session)
         if frame is None or frame.empty:
@@ -80,7 +84,8 @@ def rotation_objects(root, cache, rows, source_bytes, session, objects):
     ledger = json.loads(gzip.decompress(ledger_path.read_bytes())) if ledger_path.exists() else None
     index, shards, ledger = rotation_history.build(session, rows, closes, benchmarks, {}, ledger, market=US_ROTATION)
     digest = rotation_history.write_objects(objects, index, shards)
-    ledger_path.write_bytes(gzip.compress(json.dumps(ledger, separators=(',', ':'), sort_keys=True).encode(), mtime=0))
+    ledger_path.with_name(ledger_path.name + '.tmp').write_bytes(
+        gzip.compress(json.dumps(ledger, separators=(',', ':'), sort_keys=True).encode(), mtime=0))
     return digest
 # The engine's market-benchmark key (snapshot technicals' relative strength and RS new highs).
 MARKET_BENCHMARK_KEY = 'NIFTY_50'
@@ -122,6 +127,7 @@ def manifest_for(revision, session, total, *, market_overview=False):
 
 
 def publish_us(root, output=OUTPUT, *, workers=0):
+    charts_enabled()  # refuses an EDL_CHART_STORAGE other than local or r2, as India's publish does
     root, output = Path(root), Path(output)
     cache = ScannerCache(); cache.refresh(root)
     context, session = us_context(root)
@@ -146,6 +152,19 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     # The rotation ledger is carried state, not an input of the release (as for India).
     source_bytes = {path.name: path.read_bytes() for path in sorted(root.glob('*.json.gz'))
                     if path.name != rotation_history.LEDGER_NAME}
+    published = public(rows)
+    # Charts and rotation are built before the revision, which covers them as India's does: an immutable revision
+    # always names the same chart objects and rotation history.
+    try:
+        chart_root, chart_release = chart_objects(root, session)
+    except (RuntimeError, ValueError, KeyError, OSError) as error:
+        print(f'WARNING: US charts unavailable for {session}: {error}', flush=True)
+        chart_root = chart_release = None
+    rotation, rotation_hash = output / 'rotation', None
+    try:
+        rotation_hash = rotation_objects(root, cache, published, source_bytes, session, rotation)
+    except (ValueError, KeyError, TypeError, OSError) as error:
+        print(f'WARNING: US rotation history unavailable for {session}: {error}', flush=True)
     digest = hashlib.sha256(b'market:us')
     for name, data in source_bytes.items():
         digest.update(name.encode()); digest.update(data)
@@ -153,9 +172,11 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     for name in CODE_FILES:
         digest.update(name.encode()); digest.update((here / name).read_bytes())
     digest.update(json.dumps(rows, sort_keys=True, separators=(',', ':')).encode())
+    digest.update((rotation_hash or 'no-rotation').encode())
+    digest.update((chart_release or 'no-charts').encode())
     revision = digest.hexdigest()
 
-    rows = public(rows)
+    rows = published
     payload = {'revision': revision, 'asOfDate': session, 'market': UNITED_STATES.id, 'currency': UNITED_STATES.currency,
                'amountUnit': UNITED_STATES.provider_amount_unit, 'totalStocks': len(rows), 'stocks': rows,
                'technicalMetricsVersion': 1, 'extendedMetricsVersion': 1, 'presetRuleMatchesVersion': 1,
@@ -179,11 +200,6 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     (generation / 'chart-directory.json.gz').write_bytes(gzip.compress(
         json.dumps(directory, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
     manifest['chartDirectoryUrl'] = f'/data/revisions/{revision}/chart-directory.json.gz'
-    try:
-        chart_root, chart_release = chart_objects(root, session)
-    except (RuntimeError, ValueError, KeyError, OSError) as error:
-        print(f'WARNING: US charts unavailable for {session}: {error}', flush=True)
-        chart_root = chart_release = None
     if chart_release:
         chart_index = json.loads((chart_root / 'index.json').read_text())
         write_json(generation / 'data-index.json', chart_index)
@@ -193,16 +209,20 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         local_objects = output / 'objects'
         local_objects.mkdir(parents=True, exist_ok=True)
         for file in (chart_root / 'objects').glob('*.json.gz'):
-            if not (local_objects / file.name).exists():
-                shutil.copyfile(file, local_objects / file.name)
-    rotation = output / 'rotation'
-    try:
-        manifest['rotationHistoryObject'] = rotation_objects(root, cache, rows, source_bytes, session, rotation)
-    except (ValueError, KeyError, TypeError, OSError) as error:
-        print(f'WARNING: US rotation history unavailable for {session}: {error}', flush=True)
-    if manifest.get('rotationHistoryObject'):
+            # As India's: an existing object must hold its own hash; a new one is copied whole, then renamed.
+            target = local_objects / file.name
+            if target.exists():
+                if file_digest(target) != file.stem.removesuffix('.json'):
+                    raise RuntimeError(f'Local immutable object content mismatch: {target}')
+            else:
+                temporary = target.with_name(target.name + '.tmp')
+                shutil.copyfile(file, temporary)
+                temporary.replace(target)
+    if rotation_hash:
+        manifest['rotationHistoryObject'] = rotation_hash
         # Served next to the pointer when published locally; R2 replaces it with the bucket's address below.
         manifest['rotationUrlTemplate'] = '/data/rotation/{hash}.json.gz'
+    write_json(generation / 'release.json', manifest)
     write_json(output / POINTER, manifest)
     if enabled():
         store = R2Store(inventory=US_INVENTORY)
@@ -216,8 +236,6 @@ def publish_us(root, output=OUTPUT, *, workers=0):
                 store.write_inventory(files)
             except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError) as error:
                 print(f'WARNING: US object verification record not saved: {error}', flush=True)
-            write_json(output / POINTER, manifest)
-        upload_revision(store, generation, f'releases/{revision}')
         if manifest.get('rotationHistoryObject'):
             # As India's: a rotation upload failure drops the Rotation page, not the whole release.
             try:
@@ -227,10 +245,21 @@ def publish_us(root, output=OUTPUT, *, workers=0):
                 print(f'WARNING: US rotation upload unavailable; publishing without rotation: {error}', flush=True)
                 manifest.pop('rotationHistoryObject', None)
                 manifest.pop('rotationUrlTemplate', None)
-            write_json(output / POINTER, manifest)
+        # The final manifest as the revision's release.json (the app reads it for an earlier revision), then the
+        # revision's files, and the pointer last.
+        write_json(generation / 'release.json', manifest)
+        write_json(output / POINTER, manifest)
+        upload_revision(store, generation, f'releases/{revision}')
         upload_pointer(store, output, POINTER)
     elif os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':
         raise RuntimeError('R2 configuration missing (' + ', '.join(missing_r2_settings()) + '); the US release is local only.')
+    if rotation_hash:
+        # The advanced membership ledger is carried to the next run only once its release is published (as India's).
+        ledger_path = root / rotation_history.LEDGER_NAME
+        try:
+            ledger_path.with_name(ledger_path.name + '.tmp').replace(ledger_path)
+        except OSError as error:
+            print(f'WARNING: US rotation ledger was not saved: {error}', flush=True)
     print(f'Published US scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets', flush=True)
     return manifest
 

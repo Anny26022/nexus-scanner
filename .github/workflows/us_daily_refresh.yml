@@ -22,10 +22,12 @@ jobs:
     # A cold cache seeds every history (about 6,000 paced requests) and spends up to 20 minutes on stock pages
     # (the rest follow over the next runs); a warm run is a few minutes.
     timeout-minutes: 90
-    env:
-      US_ROOT: ${{ runner.temp }}/us-root
 
     steps:
+      # The runner context is not available to a job's env, so the root under the runner's temp folder is set here.
+      - name: Locate the US root
+        run: echo "US_ROOT=${{ runner.temp }}/us-root" >> "$GITHUB_ENV"
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 

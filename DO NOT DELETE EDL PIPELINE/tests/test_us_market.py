@@ -151,6 +151,14 @@ class FieldTests(unittest.TestCase):
     def test_rows_without_an_id_or_price_are_dropped(self):
         self.assertIsNone(fields.canonical_row({**self.ROW, 'Ltp': 0}))
         self.assertIsNone(fields.canonical_row({**self.ROW, 'Sid': None}))
+        # One malformed row is dropped, not raised: a blank id, or a price that is not a number.
+        self.assertIsNone(fields.canonical_row({**self.ROW, 'Sid': ''}))
+        self.assertIsNone(fields.canonical_row({**self.ROW, 'Ltp': 'n/a'}))
+
+    def test_numbers_sent_as_strings_are_read_as_numbers(self):
+        record = fields.canonical_row({**self.ROW, 'Sid': '10000025', 'Ltp': '342.5', 'Volume': '1000'})
+        self.assertEqual((record['security_id'], record['close'], record['dollar_volume']), (10000025, 342.5, 342_500))
+        self.assertEqual(record['symbol'], 'AAPL')
 
 
 class UniverseTests(unittest.TestCase):
@@ -217,9 +225,9 @@ class HistoryTests(unittest.TestCase):
 
     def test_a_gap_is_fetched_again_and_a_stock_without_history_is_missing(self):
         history.write_bars(self.root / 'ACME.csv', [bar('2026-11-04', 10.0)])
-        fetch = mock.Mock(return_value=[bar('2026-11-06', 10.0), bar('2026-11-09', 10.8)])
+        fetch = mock.Mock(return_value=[bar('2026-11-04', 10.0), bar('2026-11-05', 9.9), bar('2026-11-06', 10.0), bar('2026-11-09', 10.8)])
         self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'refetched')
-        self.assertEqual(self.stored()[-1]['date'], '2026-11-09')
+        self.assertEqual([b['date'] for b in self.stored()], ['2026-11-04', '2026-11-05', '2026-11-06', '2026-11-09'])
         self.assertEqual(history.update({**self.RECORD, 'symbol': 'NONE'}, self.root, '2026-11-09', fetch=lambda *a: []), 'missing')
 
     def test_bars_are_cleaned_and_stored_files_rewritten(self):
@@ -230,6 +238,11 @@ class HistoryTests(unittest.TestCase):
         history.write_bars(self.root / 'ACME.csv', [{**bar('2026-11-06', 10.0), 'low': 10.5}, bar('2026-11-09', 10.8)])
         self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=mock.Mock()), 'current')
         self.assertEqual(self.stored()[0]['low'], 10.0)
+
+    def test_a_stock_left_behind_still_has_its_file_cleaned(self):
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 10.0), {**bar('2026-11-06', 0.0), 'open': 0, 'high': 0, 'low': 0}])
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=lambda *a: []), 'missing')
+        self.assertEqual([b['date'] for b in self.stored()], ['2026-11-05'])
 
     def test_bars_on_closed_days_are_dropped(self):
         bars = history.session_bars([bar('2026-10-25', 1), bar('2026-10-23', 1), bar('2026-10-23', 2), bar('2026-11-26', 1)])
@@ -246,6 +259,32 @@ class BuildTests(unittest.TestCase):
             build.snapshot_session(stale, utc(2026, 11, 10, 0, 30))  # Monday has closed
         closed = [{**FieldTests.ROW, 'LastTradeTime': '10/11/2026 02:29:59'}]
         self.assertEqual(build.snapshot_session(closed, utc(2026, 11, 10, 0, 30)), '2026-11-09')
+        # Monday's prices, but the newest trade is from 14:00 in New York: intraday, not the close.
+        midday = [{**FieldTests.ROW, 'LastTradeTime': '10/11/2026 00:30:00'}]
+        with self.assertRaises(build.SnapshotNotReady):
+            build.snapshot_session(midday, utc(2026, 11, 10, 0, 30))
+        # The day after Thanksgiving closes at 13:00, so a 12:59:30 trade is its close.
+        early = [{**FieldTests.ROW, 'LastTradeTime': '27/11/2026 23:29:30'}]
+        self.assertEqual(build.snapshot_session(early, utc(2026, 11, 28, 0, 30)), '2026-11-27')
+
+    def test_a_thin_release_or_a_bad_page_budget_is_refused(self):
+        from edl_pipeline.markets.us import __main__ as entry
+        report = {'session': '2026-11-09', 'history': {}, 'benchmarks': {}, 'rs_ratings': 6000, 'stocks': 6000, 'aligned': 3000}
+        with mock.patch.object(entry, 'build', return_value=report):
+            self.assertEqual(entry.main(['root']), 1)
+            report['aligned'] = 5800
+            self.assertEqual(entry.main(['root']), 0)
+        with self.assertRaises(SystemExit):
+            entry.main(['root', '--page-budget', 'nan'])
+
+    def test_the_all_time_high_is_never_below_the_stored_history(self):
+        record = {'close': 90.0, 'all_time_high': 95.0, 'percent_from_ath': (1 - 90 / 95) * 100}
+        stock = build.stock_record(record, {'as_of_date': '2026-11-09', 'history_high': 100.0}, '2026-11-09')
+        self.assertEqual((stock['all_time_high'], round(stock['percent_from_ath'], 6)), (100.0, 10.0))
+        self.assertNotIn('history_high', stock)
+        # Without TradingView's high (another session), nothing is made up from the 2021-onward history.
+        none = build.stock_record({'close': 90.0}, {'as_of_date': '2026-11-09', 'history_high': 100.0}, '2026-11-09')
+        self.assertEqual((none['all_time_high'], none['percent_from_ath']), (None, None))
 
     def test_engine_amounts_are_millions_of_dollars(self):
         record = {'market_cap': 4_976_937_410_000, 'dollar_volume': 342_500}
@@ -302,12 +341,22 @@ class TradingViewTests(unittest.TestCase):
             'float_shares_percent_current': 99.3, 'dividends_yield_current': 2.2, 'ex_dividend_date_recent': 1789430400})), '')
         values = tradingview.canonical(found['US1912161007'], {'close': 95.0, 'high_52w': 97.0}, '2026-11-09')
         self.assertEqual(values['all_time_high'], 97.0)
-        self.assertAlmostEqual(values['percent_from_ath'], (95 / 97 - 1) * 100)
+        # India's convention: the positive distance below the high (2.06% below), which "below 10%" screens compare.
+        self.assertAlmostEqual(values['percent_from_ath'], (1 - 95 / 97) * 100)
+        # TradingView's own high wins when it is above the 52-week high.
+        above = tradingview.snapshots(self.response(self.row('NYSE:KO', 'US1912161007', **{'High.All': 99.0})), '')
+        self.assertEqual(tradingview.canonical(above['US1912161007'], {'close': 95.0, 'high_52w': 97.0}, '2026-11-09')['all_time_high'], 99.0)
         self.assertEqual(values['latest_earnings_date'], '2026-10-27')
         self.assertNotIn('next_earnings_date', values)
         self.assertEqual((values['free_float_percent'], values['dividend_yield_percent']), (99.3, 2.2))
         # A stale TradingView row (another session) gives no all-time high.
         self.assertIsNone(tradingview.canonical(found['US1912161007'], {'close': 95.0}, '2026-11-10')['percent_from_ath'])
+
+    def test_per_share_values_in_another_currency_are_left_out(self):
+        found = tradingview.snapshots(self.response(self.row('NASDAQ:ASML', 'USN070592100', fundamental_currency_code='EUR', **{
+            'earnings_per_share_diluted_ttm': 25.0, 'dps_common_stock_prim_issue_fy': 6.4})), '')
+        values = tradingview.canonical(found['USN070592100'], {'close': 1000.0}, '2026-11-09')
+        self.assertEqual((values['eps_last_year'], values['dividend_per_share_latest']), (None, None))
 
     def test_statements_debt_and_eps_history_in_millions_of_dollars(self):
         found = tradingview.snapshots(self.response(self.row('NASDAQ:AAPL', 'US0378331005', **{
@@ -439,6 +488,20 @@ class StatementTests(unittest.TestCase):
         statements.enrich([{'symbol': 'ACME', 'total_revenue_in_lakhs': 108}, {'symbol': 'TSM', 'total_revenue_in_lakhs': 3500}], root, history)
         self.assertEqual({row['symbol'] for row in history}, {'ACME'})
 
+    def test_zero_placeholders_bad_periods_and_broken_caches_are_not_values(self):
+        # Dhan writes 0 for a line it has no figure for: TradingView's value stands instead of a published 0.
+        zeroed = {**self.PAGE, 'incomeStat_sq': {**self.PAGE['incomeStat_sq'], 'PROFIT_BEFORE_TAX': joined(0, *[28] * 9)}}
+        self.assertIsNone(self.fields(zeroed)['profit_before_tax_in_lakhs'])
+        # India's interest coverage needs profit before tax and interest only.
+        no_operating = {**self.PAGE, 'incomeStat_sq': {**self.PAGE['incomeStat_sq'], 'OPERATING_PROFIT': joined(*[0] * 10)}}
+        self.assertEqual(self.fields(no_operating)['interest_coverage'], (4 * 28 + 4 * 2) / (4 * 2))
+        # A month outside 01-12 is not a period.
+        self.assertEqual([row['period'] for row in statements.series({'YEAR': '202613|202609', 'REVENUE': '1|2'})], ['202609'])
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(root))
+        statements.write_page(root, 'A', {'slug': 'A-a'})  # no fetch time
+        self.assertIsNone(statements.read_page(root, 'A'))
+
     def test_pages_are_fetched_again_weekly_and_after_earnings(self):
         now = utc(2026, 11, 10, 0, 30)
         page = {'fetched_at': '2026-11-05T00:30:00+00:00'}
@@ -484,7 +547,13 @@ class StatementTests(unittest.TestCase):
         stock_pages = dhan.StockPages(get=lambda url: '"buildId":"b1"', fetch_json=fetch_json, pace=lambda: paced.append(1))
         with self.assertRaises(Exception):
             stock_pages.fetch('A-a')
-        self.assertEqual(len(paced), 4)  # the build id, the data, a fresh build id, the data again
+        self.assertEqual(len(paced), 3)  # the build id, the data, a fresh build id: the same deploy, so no second ask
+        builds = iter(['"buildId":"b1"', '"buildId":"b2"'])
+        redeployed = dhan.StockPages(get=lambda url: next(builds), fetch_json=fetch_json, pace=lambda: paced.append(1))
+        paced.clear()
+        with self.assertRaises(Exception):
+            redeployed.fetch('A-a')
+        self.assertEqual(len(paced), 4)  # a new deploy: the data is asked for again under its id
 
         class Pages:
             def fetch(self, slug):

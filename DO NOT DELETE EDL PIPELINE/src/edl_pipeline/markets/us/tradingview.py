@@ -157,6 +157,7 @@ def canonical(found: dict, record: dict, session: str) -> dict:
     """The engine's fields TradingView supplies for one record (India's names)."""
     snapshot = found['tradingview_snapshot']
     current = snapshot['as_of_date'] == session
+    dollars = snapshot.get('financial_currency') == UNITED_STATES.currency
     market = snapshot['market']
     close = record.get('close')
     # TradingView's all-time high, never below the 52-week high.
@@ -166,7 +167,8 @@ def canonical(found: dict, record: dict, session: str) -> dict:
     return {
         'tradingview_snapshot': snapshot,
         'all_time_high': high if current else None,
-        'percent_from_ath': (close / high - 1) * 100 if current and high and close else None,
+        # As India's (enrich_published_fields.py): the positive distance below the high, which the filter compares.
+        'percent_from_ath': (1 - close / high) * 100 if current and high and close else None,
         'latest_earnings_date': last_earnings if last_earnings and last_earnings <= session else None,
         # The listing (IPO) date; the first traded day where TradingView has none.
         'listing_date': _utc_date(found['ipo_date']) or _utc_date(found['first_trade']),
@@ -174,7 +176,8 @@ def canonical(found: dict, record: dict, session: str) -> dict:
         'free_float_percent': _number(found['free_float_percent']),
         'dividend_yield_percent': _number(found['dividend_yield_percent']),
         'dividend_ex_date': _eastern_date(found['last_ex_dividend']),
-        'dividend_per_share_latest': _number(found['dividend_per_share']),
+        # Per-share values are in the company's reporting currency (ASML's in euros): kept only when that is dollars.
+        'dividend_per_share_latest': _number(found['dividend_per_share']) if dollars else None,
         'pb_ratio': _number(found['pb_ratio']),
         'vwap': _number(found['vwap']) if current else None,
         'vwap_as_of_date': session if current and _number(found['vwap']) else None,
@@ -201,7 +204,8 @@ def canonical(found: dict, record: dict, session: str) -> dict:
         'net_cash_flow_in_lakhs': _sum(found['operating_cash_flow'], found['investing_cash_flow'], found['financing_cash_flow']),
         'sales_growth_5_years_percent': _number(found['revenue_cagr_5y']),
         # "Last year" is the trailing twelve months; the year before follows from its growth (fiscal years differ).
-        'eps_last_year': _number(found['eps_ttm']), 'eps_2_years_back': _prior(found['eps_ttm'], found['eps_growth']),
+        'eps_last_year': _number(found['eps_ttm']) if dollars else None,
+        'eps_2_years_back': _prior(found['eps_ttm'], found['eps_growth']) if dollars else None,
     }
 
 

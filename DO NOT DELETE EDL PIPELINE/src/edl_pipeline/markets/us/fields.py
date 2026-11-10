@@ -42,6 +42,7 @@ DIRECT = {
     'Year5MedianSalesGrowth': 'median_sales_growth_5y_percent', 'Year3CAGREPSGrowth': 'eps_cagr_3y_percent',
     'Year3CAGRRevenueGrowth': 'revenue_cagr_3y_percent',
 }
+TEXT_FIELDS = frozenset({'symbol', 'name', 'isin', 'exchange', 'slug', 'sector', 'industry'})
 KIND_BY_INSTRUMENT = {'ES': 'stock', 'ETF': 'etf'}
 # Dhan stamps its own times in Indian time, whatever the market.
 _DHAN_TIME = ZoneInfo('Asia/Kolkata')
@@ -69,9 +70,13 @@ def canonical_row(row: dict) -> dict | None:
               'instrument': KIND_BY_INSTRUMENT.get(row.get('OgInst'), 'stock')}
     for source, target in DIRECT.items():
         value = row.get(source)
-        record[target] = value if isinstance(value, str) or value is None else _number(value)
+        # Text stays text; every other field is a number (Dhan sometimes sends numbers as strings).
+        record[target] = value if target in TEXT_FIELDS or value is None else _number(value)
     if record['security_id'] is not None:
-        record['security_id'] = int(record['security_id'])
+        try:
+            record['security_id'] = int(record['security_id'])
+        except (TypeError, ValueError, OverflowError):
+            return None
     if not record['symbol'] or record['security_id'] is None or not record['close'] or record['close'] <= 0:
         return None
     market_cap = _number(row.get('Mcap'))

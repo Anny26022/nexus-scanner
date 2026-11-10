@@ -162,7 +162,9 @@ def main(root=None, benchmark_filename=FRONT_WEIGHTED_BENCHMARK_FILENAME, benchm
             "minimum_aligned_sessions": MINIMUM_ALIGNED_SESSIONS,
             "rating_keys": ["one_month", "three_month", "six_month", "twelve_month", "front_weighted"],
             "score_formula": "sum(weight_horizon * unrounded_horizon_percentile_rank)",
-            "horizon_score_formula": "stock_horizon_price_ratio / nifty_500_horizon_price_ratio",
+            # India's wording is kept as published; another market's names its own benchmark (the US: SPY).
+            "horizon_score_formula": "stock_horizon_price_ratio / nifty_500_horizon_price_ratio" if benchmark_name == "NIFTY 500"
+            else f"stock_horizon_price_ratio / {Path(benchmark_filename).stem.lower()}_horizon_price_ratio",
             "horizon_rank_formula": "1 + 98 * strictly_lower_scores / max(1, eligible_scores - 1)",
             "rank_formula": "floor(99 - 98 * descending_position / max(1, eligible_scores - 1) + 0.5)",
             "composite_ties": "stable symbol ascending order",

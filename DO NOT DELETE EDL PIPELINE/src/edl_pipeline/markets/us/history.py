@@ -104,7 +104,15 @@ def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
     """Bring one stock's file up to `session`; returns 'current', 'appended', 'refetched' or 'missing'."""
     path = symbol_csv_path(root, record['symbol'])
     stored = read_bars(path)
-    bars = session_bars(stored)
+    bars = cleaned = session_bars(stored)
+
+    def missing():
+        # The stock stays on its earlier session, but a file kept from before the bars were cleaned is still cleaned:
+        # the release publishes whatever is stored.
+        if cleaned and cleaned != stored:
+            write_bars(path, cleaned)
+        return 'missing'
+
     if bars and bars[-1]['date'] >= session:
         if bars != stored:
             write_bars(path, bars)  # a file kept from before the bars were cleaned
@@ -113,7 +121,7 @@ def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
     if needs_refetch(bars, record, session):
         bars, status = fetch(record['symbol'], record['security_id'], record.get('exchange')), 'refetched'
         if not bars:
-            return 'missing'
+            return missing()
     # History can lag the snapshot by the latest session; the snapshot supplies it when it joins the series.
     bar = clean(snapshot_bar(record, session) or {'open': None, 'high': None, 'low': None, 'close': None})
     # It joins only when a refetched series also agrees with the snapshot's previous close: on a split day Dhan's
@@ -121,6 +129,6 @@ def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
     if bars[-1]['date'] < session and not needs_refetch(bars, record, session) and bar:
         bars = [*bars, bar]
     elif status == 'appended':
-        return 'missing'
+        return missing()
     write_bars(path, bars)
     return status

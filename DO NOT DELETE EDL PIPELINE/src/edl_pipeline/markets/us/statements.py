@@ -46,8 +46,10 @@ def read_page(root: Path, symbol: str) -> dict | None:
     if not path.exists():
         return None
     try:
-        return json.loads(gzip.decompress(path.read_bytes()))
-    except (OSError, ValueError):
+        page = json.loads(gzip.decompress(path.read_bytes()))
+        datetime.fromisoformat(page['fetched_at'])  # a page without a readable fetch time is fetched again
+        return page
+    except (OSError, ValueError, TypeError, KeyError):
         return None
 
 
@@ -87,6 +89,10 @@ def reports(period: str, reported: str) -> bool:
     return 0 < (date.fromisoformat(reported) - _quarter_end(period)).days <= REPORT_WINDOW_DAYS
 
 
+class _Stopped(Exception):
+    """A paced request that found the run stopped (rate limited or out of time) while it waited."""
+
+
 def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, *, pages: dhan.StockPages | None = None,
                   interval: float = 0.25, workers: int = 4, budget_seconds: float = 1200) -> dict:
     """Fetch the stale pages, oldest need first, until the time budget; returns counts."""
@@ -94,7 +100,14 @@ def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, 
     deadline, pacer, stopped = time.monotonic() + budget_seconds, dhan.Pacer(interval), threading.Event()
     # Our own pages client paces every request it makes; one passed in (tests) is paced once per stock.
     own = pages is None
-    pages = pages or dhan.StockPages(pace=pacer.wait)
+
+    def pace():
+        # Every request waits its turn, then stops if the run was rate limited or ran out of time while it waited.
+        pacer.wait()
+        if stopped.is_set() or time.monotonic() > deadline:
+            raise _Stopped
+
+    pages = pages or dhan.StockPages(pace=pace)
     due = [record for record in records if record.get('slug') and stale(read_page(root, record['symbol']), record, now)]
     # Never-fetched pages first, then the ones whose company has reported.
     due.sort(key=lambda record: read_page(root, record['symbol']) is not None)
@@ -107,6 +120,8 @@ def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, 
             pacer.wait()
         try:
             props = pages.fetch(record['slug'])
+        except _Stopped:
+            return
         except dhan.Throttled:
             stopped.set()
             return
@@ -115,12 +130,16 @@ def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, 
         else:
             data = props.get('fundamentalsData') or {}
             outcome = 'fetched' if data else 'missing'
-            if data:
+        try:
+            if outcome == 'fetched':
                 write_page(root, record['symbol'], {'fetched_at': now.isoformat(), 'slug': record['slug'],
                                                     **{key: data.get(key) for key in KEPT}})
-        if outcome == 'missing':
-            # Remembered, so the next runs spend their budget on pages that exist; asked for again after a week.
-            write_page(root, record['symbol'], {'fetched_at': now.isoformat(), 'slug': record['slug'], 'missing': True})
+            elif outcome == 'missing':
+                # Remembered, so the next runs spend their budget on pages that exist; asked for again after a week.
+                write_page(root, record['symbol'], {'fetched_at': now.isoformat(), 'slug': record['slug'], 'missing': True})
+        except OSError as error:  # the cache is optional: this page counts as failed, the build goes on
+            print(f"  stock page {record['symbol']}: not saved ({error})", flush=True)
+            outcome = 'failed'
         with lock:
             counts[outcome] += 1
 
@@ -149,7 +168,7 @@ def series(block: dict | None) -> list[dict]:
     columns = {key: str(value).split('|') for key, value in block.items() if key != 'YEAR' and isinstance(value, str)}
     rows = []
     for index, period in enumerate(periods):
-        if len(period) != 6 or not period.isdigit():
+        if len(period) != 6 or not period.isdigit() or not 1 <= int(period[4:]) <= 12:
             continue
         row = {'period': period}
         for key, values in columns.items():
@@ -205,7 +224,7 @@ def statement_blocks(page: dict) -> dict:
     years = series(page.get('rNp_s'))
     cash = _latest(series(page.get('cF_sy')))
     balance = _latest(series(page.get('bs_s')))
-    latest = quarters[0] if quarters else {}
+    latest = _latest(quarters)
     trailing, earlier = consecutive(quarters, 4), consecutive(quarters, 8)
     prior = earlier[4:] if earlier else None
     revenue, net_profit = _total(trailing, 'REVENUE'), _total(trailing, 'NET_PROFIT')
@@ -233,7 +252,7 @@ def statement_blocks(page: dict) -> dict:
             'operating_margin_ttm_percent': _ratio(operating, revenue, percent=True) if operating else None,
             # India's formula (transforms/fundamentals.py), over the last four quarters.
             'interest_coverage': (before_tax + interest) / interest
-            if before_tax is not None and interest and interest > 0 and operating else None,
+            if before_tax is not None and interest and interest > 0 else None,
             # "Last year" and "two years back": the last four quarters and the four before (fiscal years differ).
             'eps_last_year': _total(trailing, 'EPS'), 'eps_2_years_back': _total(prior, 'EPS'),
         }},

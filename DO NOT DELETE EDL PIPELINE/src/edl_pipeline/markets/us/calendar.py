@@ -19,7 +19,16 @@ from .. import UNITED_STATES
 EASTERN = UNITED_STATES.timezone
 EARLY_CLOSE = time(13, 0)
 # Unscheduled full-day closures within the published history (Dhan's US history starts in March 2021).
-SPECIAL_CLOSURES = {date(2025, 1, 9): 'National Day of Mourning for President Jimmy Carter'}
+SPECIAL_CLOSURES = {
+    date(1985, 9, 27): 'Hurricane Gloria',
+    date(1994, 4, 27): 'National Day of Mourning for President Richard Nixon',
+    **{date(2001, 9, day): 'September 11 attacks' for day in (11, 12, 13, 14)},
+    date(2004, 6, 11): 'National Day of Mourning for President Ronald Reagan',
+    date(2007, 1, 2): 'National Day of Mourning for President Gerald Ford',
+    date(2012, 10, 29): 'Hurricane Sandy', date(2012, 10, 30): 'Hurricane Sandy',
+    date(2018, 12, 5): 'National Day of Mourning for President George H. W. Bush',
+    date(2025, 1, 9): 'National Day of Mourning for President Jimmy Carter',
+}
 
 
 def _easter(year: int) -> date:
@@ -59,8 +68,9 @@ def nyse_holidays(year: int) -> dict[date, str]:
     if year >= 2022:
         fixed.append((date(year, 6, 19), 'Juneteenth National Independence Day'))
     holidays = {observed: name for day, name in fixed if (observed := _observed(day))}
+    if year >= 1998:  # the NYSE first closed for it in 1998
+        holidays[_nth_weekday(year, 1, 0, 3)] = 'Martin Luther King Jr. Day'
     holidays.update({
-        _nth_weekday(year, 1, 0, 3): 'Martin Luther King Jr. Day',
         _nth_weekday(year, 2, 0, 3): "Washington's Birthday",
         _easter(year) - timedelta(days=2): 'Good Friday',
         _last_weekday(year, 5, 0): 'Memorial Day',
@@ -108,8 +118,8 @@ def _holidays_between(first_year: int, last_year: int) -> tuple:
 def sessions_after(start: date, end: date) -> int:
     """NYSE sessions after `start` up to and including `end` (the count a history from `start` would hold).
 
-    Holidays follow Rule 7.2 for every year; one-off closures before 2021 (such as 2001's and 2012's) are not listed,
-    so a pre-2021 count may be a few sessions high.
+    Holidays follow Rule 7.2 (Martin Luther King Jr. Day from 1998), with the one-off closures since 1985 in
+    SPECIAL_CLOSURES; earlier listings may be a few sessions off.
     """
     import numpy
     if end <= start:

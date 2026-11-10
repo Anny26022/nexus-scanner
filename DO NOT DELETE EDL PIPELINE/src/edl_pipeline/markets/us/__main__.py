@@ -1,6 +1,6 @@
 """Build the US root: `PYTHONPATH=src python -m edl_pipeline.markets.us <root> [--limit N]` from the pipeline folder.
 
-Exits 75 (EX_TEMPFAIL) when the snapshot is not yet for a closed session, so a scheduler can retry later.
+Exits 75 (EX_TEMPFAIL) when the snapshot is not yet for a closed session: the workflow then skips publication.
 """
 
 import argparse
@@ -10,6 +10,16 @@ from pathlib import Path
 
 from .build import SnapshotNotReady, build
 
+# The share of stocks whose history reached the session below which the release is not published.
+MIN_ALIGNED_SHARE = 0.9
+
+
+def _budget(value):
+    seconds = float(value)
+    if not 0 <= seconds < float('inf'):
+        raise argparse.ArgumentTypeError('the page budget must be a finite number of seconds, 0 or more')
+    return seconds
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(prog='python -m edl_pipeline.markets.us')
@@ -17,7 +27,7 @@ def main(argv=None):
     parser.add_argument('--limit', type=int, help='only the first N stocks by market cap (local checks)')
     parser.add_argument('--workers', type=int, default=3)
     parser.add_argument('--interval', type=float, default=0.25, help='seconds between history requests')
-    parser.add_argument('--page-budget', type=float, default=1200,
+    parser.add_argument('--page-budget', type=_budget, default=1200,
                         help='seconds to spend fetching stock pages; the rest wait for the next run')
     args = parser.parse_args(argv)
     try:
@@ -32,6 +42,11 @@ def main(argv=None):
     lagging_benchmarks = sum(benchmarks.get(status, 0) for status in ('failed', 'missing'))
     if history.get('throttled') or benchmarks.get('throttled') or lagging_benchmarks or not report['rs_ratings']:
         print('::error::The US history is incomplete (rate limited, a benchmark behind or no RS ratings); nothing to publish.',
+              flush=True)
+        return 1
+    # A wide provider failure leaves stocks on earlier sessions; a normal day has about 96% on the session.
+    if report['stocks'] and report['aligned'] / report['stocks'] < MIN_ALIGNED_SHARE:
+        print(f"::error::Only {report['aligned']} of {report['stocks']} US stocks reached {report['session']}; nothing to publish.",
               flush=True)
         return 1
     if history.get('failed'):

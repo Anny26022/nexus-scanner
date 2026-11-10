@@ -38,7 +38,7 @@ class MarketSpec:
 
 INDIA = MarketSpec(
     id='in', name='India', timezone=ZoneInfo('Asia/Kolkata'), session_open=time(9, 15), session_close=time(15, 30),
-    currency='INR', provider_amount_unit=1e7, benchmark='NIFTY 50', publish_prefix='/data',
+    currency='INR', provider_amount_unit=1e7, benchmark='NIFTY 500', publish_prefix='/data',
     features=frozenset({'delivery', 'fno', 'surveillance', 'circuit_bands', 'series', 'promoter_holding', 'bulk_deals'}),
 )
 

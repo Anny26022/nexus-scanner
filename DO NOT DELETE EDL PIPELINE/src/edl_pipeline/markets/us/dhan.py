@@ -144,10 +144,15 @@ class StockPages:
     def fetch(self, slug: str) -> dict:
         """The page props for `slug` (the screener's `Seosym`, e.g. 'AAPL-apple-inc')."""
         for refresh in (False, True):
-            url = f'{SITE}/_next/data/{self.build_id(refresh)}/us-stocks/{slug}-share-price.json'
+            previous = self._build
+            build = self.build_id(refresh)
+            if refresh and build == previous:
+                raise missed  # the same deploy: the page does not exist, so the data is not asked for twice
+            url = f'{SITE}/_next/data/{build}/us-stocks/{slug}-share-price.json'
             try:
                 return self._fetch_json(url).get('pageProps') or {}
             except requests.HTTPError as error:
                 if refresh or error.response is None or error.response.status_code != 404:
                     raise
+                missed = error
         return {}

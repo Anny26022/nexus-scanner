@@ -15,7 +15,7 @@ import json
 import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -72,6 +72,10 @@ def snapshot_session(rows: list[dict], now: datetime) -> str:
     latest = max((datetime.fromisoformat(stamp['provider_last_trade_ist']) for stamp in stamps), default=None)
     if latest is None or latest.astimezone(calendar.EASTERN).date() != session:
         raise SnapshotNotReady(f'The snapshot has not caught up with the {session} session (latest trade {latest}).')
+    # A snapshot whose newest trade is from mid-session holds intraday prices, not the close (early closes included).
+    closing = datetime.combine(session, calendar.nyse_close(session), calendar.EASTERN) - timedelta(minutes=1)
+    if latest < closing:
+        raise SnapshotNotReady(f'The snapshot stops before the {session} close (latest trade {latest}).')
     return session.isoformat()
 
 
@@ -95,6 +99,7 @@ def stock_metrics(path: Path) -> dict:
     result = {key: metrics.get(key) for key in METRIC_KEYS}
     rsi = indicator_series(frame, 'RSI', 14).iloc[-1] if len(frame) > 14 else None
     result['rsi14'] = round(float(rsi), 2) if rsi is not None and pd.notna(rsi) else None
+    result['history_high'] = float(frame['High'].max()) if len(frame) else None
     traded = frame['Close'] * frame['Volume']
     for period in (20, 50, 100):
         result[f'turnover{period}'] = round(float(traded.tail(period).mean()) / AMOUNT_UNIT, 4) if len(frame) >= period else None
@@ -104,16 +109,21 @@ def stock_metrics(path: Path) -> dict:
 def stock_record(record: dict, metrics: dict, session: str) -> dict:
     """The canonical record the shared engine and publisher read."""
     aligned = metrics.get('as_of_date') == session
+    # TradingView's all-time high, never below the stored history's own highest bar.
+    high, close, stored_high = record.get('all_time_high'), record.get('close'), metrics.get('history_high')
+    if high and stored_high and stored_high > high:
+        high = stored_high
+    percent_from_ath = (1 - close / high) * 100 if high and close and record.get('all_time_high') else record.get('percent_from_ath')
     return {
         **{key: value for key, value in record.items() if key not in BUILD_ONLY},
-        **{key: value for key, value in metrics.items() if not key.startswith('turnover')},
+        **{key: value for key, value in metrics.items() if not key.startswith('turnover') and key != 'history_high'},
         **engine_amounts(record, metrics),
         'schema_version': '3.0', 'industry': record.get('industry'), 'listing_board': 'MAINBOARD', 'is_sme': False, 'listing_series': None,
         'default_screener_eligible': True, 'index_memberships': record.get('index_memberships') or [],
         'event_markers': [], 'recent_announcements': [],
         'news_feed': [], 'as_of_date': session if aligned else metrics.get('as_of_date'),
         # Only TradingView's (markets/us/tradingview.py): Dhan's history starts in 2021, so its high is not all-time.
-        'all_time_high': record.get('all_time_high'), 'percent_from_ath': record.get('percent_from_ath'),
+        'all_time_high': high, 'percent_from_ath': percent_from_ath,
         # The engine reads both of India's names for these two returns.
         'return_1m': record.get('perf_1m'), 'return_1y': record.get('perf_12m'),
     }
@@ -150,7 +160,7 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
 def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, workers: int = 3, limit: int | None = None,
           page_budget: float = 1200) -> dict:
     """Write the US root for the last closed session; returns a run report."""
-    now = now or datetime.now(timezone.utc)
+    now = calendar.us_now(now)  # aware (a naive time means New York), as the page cache's times are
     stock_rows, etf_rows = dhan.fetch_universe('stock'), dhan.fetch_universe('etf')
     session = snapshot_session(stock_rows, now)
     rows = [row for row in stock_rows if security_type(row.get('Sym') or '', row.get('DispSym')) in SCREENABLE]
@@ -196,7 +206,9 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     report['aligned'] = sum(stock['as_of_date'] == session for stock in stocks)
     report['rs_ratings'] = build_rs_ratings.main(root, f'{BENCHMARK}.csv', BENCHMARKS[BENCHMARK])
     # India's quarterly history file, from the trusted Dhan pages; the IPO file stays empty for the US.
-    _write_json(root / 'quarterly_financial_history.json', {'records': quarterly}, compress=True)
+    _write_json(root / 'quarterly_financial_history.json', {
+        'source': 'Dhan US stock pages (trusted income statements)', 'coverage': {'records': len(quarterly)},
+        'records': quarterly}, compress=True)
     report['quarterly_rows'] = len(quarterly)
     _write_json(root / 'ipo_screener.json', {'records': []}, compress=True)
     return report

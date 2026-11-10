@@ -30,7 +30,7 @@ day after Thanksgiving and July 3 / December 24 when they fall Monday to Thursda
 stocks have no bar on a closed day and no open day without a bar over 5.6 years.
 
 `last_closed_session()` names the session a snapshot belongs to in Eastern time, so a run at 6:00 AM IST labels the
-previous New York day in both EST and EDT. A snapshot taken during the session (13:00–02:30 IST) is still trading
+previous New York day in both EST and EDT. A snapshot taken during the session (19:00–01:30 IST in daylight time, 20:00–02:30 IST in standard time) is still trading
 and must not be stored as a closed bar, as India's `is_nse_cash_session` already guards.
 
 ## Quirks Phase 1 must handle
@@ -38,7 +38,8 @@ and must not be stored as a closed bar, as India's `is_nse_cash_session` already
 - **Universe hygiene.** The stock list includes SPAC units (`…U`) and other thin instruments: they skip untraded days
   and some carry bars on weekends (CHECU on 2026-10-24/25). Filter units, rights and warrants out of the screener
   universe, drop bars on non-session days, and set a liquidity floor.
-- **`NA` exchange.** Five stocks have no listing exchange, so their history cannot be requested; leave them out.
+- **`NA` exchange.** Five stocks have no listing exchange. Their history is asked for under NYSE, then NASDAQ
+  (`universe.history_exchanges`); the request is keyed by security id, so a wrong venue returns nothing, not another stock.
 - **Fiscal years differ** (NVIDIA ends in January, Microsoft in June): key statements by fiscal period end.
 - **History depth** is 2021 onwards: 52-week, 200-day, RS and 1–5 year returns work; all-time highs and 10-year
   returns need another source.
@@ -56,7 +57,7 @@ and must not be stored as a closed bar, as India's `is_nse_cash_session` already
 
 ```
 python -m edl_pipeline.markets.us <root>      # build the US root (PYTHONPATH=src:. from this folder)
-EDL_US_BASE_DIR=<root> python frontend/publish_us.py
+EDL_US_BASE_DIR=<root> python frontend/publish_us.py   # from the repository root
 ```
 
 `.github/workflows/us_daily_refresh.yml` runs both at 00:30 UTC Tuesday to Saturday.
@@ -65,16 +66,16 @@ EDL_US_BASE_DIR=<root> python frontend/publish_us.py
 
 | Stage | How |
 | --- | --- |
-| Universe | One screener call. `markets/us/universe.py` keeps common stock and partnership units; preferred, notes, rights, warrants and SPAC units are classified and left out. |
-| Snapshot check | Refused while New York is trading, and when the latest trade is not from the last closed session (exit 75, so the job retries later rather than storing a live bar). |
-| Price history | `markets/us/history.py`: a stock without a file is seeded from Dhan's history; afterwards the snapshot's bar is appended. A gap, or a previous close more than 0.5% off the stored close (a split), refetches the stock in full. Only `ohlcv_data/` and `indices_ohlcv_data/` persist between runs (Actions cache); losing them costs one re-seed of about 30 minutes. |
+| Universe | Two screener calls (stocks and ETFs). `markets/us/universe.py` keeps common stock and partnership units; preferred, notes, rights, warrants and SPAC units are classified and left out. |
+| Snapshot check | Refused while New York is trading, when the latest trade is not from the last closed session, and when it stops before that session's close (exit 75: the workflow skips publication rather than storing a live bar). A stock whose own last trade is from an earlier session gets no bar that day. |
+| Price history | `markets/us/history.py`: a stock without a file is seeded from Dhan's history; afterwards the snapshot's bar is appended. A gap, or a previous close more than 0.5% off the stored close (a split), refetches the stock in full; the snapshot's bar is added to a refetched history only when it agrees with the snapshot's previous close (Dhan may not have re-adjusted a split yet). `ohlcv_data/`, `indices_ohlcv_data/`, `stock_pages/` and the rotation ledger persist between runs (Actions cache, saved after publication); losing them costs one re-seed of about 30 minutes. |
 | Benchmarks | SPY, QQQ, IWM and DIA histories stand in for indices; SPY is the market benchmark. |
 | Breadth, index history | India's `generate_market_breadth` and `generate_all_index_history`, with US floors ($1 price, $100M market cap). |
 | Stock metrics | India's `process_symbol_csv` on the NYSE calendar, plus RSI(14) and dollar turnover. |
 | RS ratings | `build_rs_ratings.main(root, 'SPY.csv', ...)`. |
-| TradingView | `markets/us/tradingview.py`: one request to TradingView's US scanner (types `stock` and `dr` on NYSE, Nasdaq, AMEX and Cboe; secondary share classes and ADRs are not "primary" there), matched by ISIN. It supplies what Dhan does not: India's published TradingView metrics in dollars, the all-time high (never below the 52-week high), the last earnings date, free float, dividend yield, dividend per share and ex-date, VWAP, debt, debt/equity and free cash flow, and P/B. Its statement columns are the fallback below. A failed request publishes the release without them. |
-| Statements | Dhan first (`markets/us/statements.py`): each stock's page, cached and refreshed weekly or after earnings. Dhan states foreign companies in their home currency without saying so (TSMC's assets read as $10 trillion) and keeps some parts years stale (Costco's balance sheet is from 2009), so each part is checked against TradingView's latest quarter: the income statement when its latest quarterly revenue agrees within 10%, the balance sheet when it is for that quarter, the cash flow and yearly revenue when their year ended within 12 months of it. TradingView's values stand where a part fails or has a gap (a missing quarter). The screener adds India's multi-year averages (percentages only; its amounts are home-currency too). |
-| Quarterly history | India's `quarterly_financial_history.json` rows (revenue, sales, net profit, PBT, EPS, OPM, EBITDA, consolidated) from each trusted Dhan income statement's 10 quarters; this drives earnings growth (GARP, revenue acceleration, earnings momentum). The latest quarter's filing date is TradingView's last earnings date; earlier quarters' are estimated as quarter end + 45 days (`filing_date_basis`). |
+| TradingView | `markets/us/tradingview.py`: one request to TradingView's US scanner (types `stock` and `dr` on NYSE, Nasdaq, AMEX and Cboe; secondary share classes and ADRs are not "primary" there), matched by ISIN. It supplies what Dhan does not: India's published TradingView metrics (amounts in millions of dollars, only when TradingView reports them in USD), the all-time high (never below the 52-week high), the last earnings date, free float, dividend yield, dividend per share and ex-date, VWAP, debt, debt/equity and free cash flow, and P/B. Its statement columns are the fallback below. A failed request publishes the release without them. |
+| Statements | Dhan first (`markets/us/statements.py`): each stock's page, cached and refreshed weekly or after earnings. Dhan states foreign companies in their home currency without saying so (TSMC's assets read as $10 trillion) and keeps some parts years stale (Costco's balance sheet is from 2009), so each part is checked against TradingView's latest quarter: the income statement when it is for the quarter TradingView's last report filed and its revenue agrees within 10%, the balance sheet when it is for that quarter, the cash flow and yearly revenue when their year ended within 12 months of it. TradingView's values stand where a part fails or has a gap (a missing quarter). The screener adds India's multi-year averages (percentages only; its amounts are home-currency too). |
+| Quarterly history | India's `quarterly_financial_history.json` rows (revenue, sales, net profit, PBT, EPS, OPM, EBITDA, consolidated) from each trusted Dhan income statement's 10 quarters; this drives earnings growth (GARP, revenue acceleration, earnings momentum). The latest quarter's filing date is TradingView's last earnings date when that date is after the quarter end; otherwise, and for earlier quarters, it is estimated as quarter end + 45 days (`filing_date_basis`). |
 | Index membership | TradingView's per-symbol index list: S&P 500, Nasdaq-100, Dow 30, Russell 1000 and 2000. It matches the issuers' holdings (SPY 503 of 503, DIA 30 of 30); iShares and Invesco refuse automated downloads of theirs. |
 | Listing date | TradingView's IPO date (the first traded day where it has none). Listing age is counted in NYSE sessions from it (`calendar.sessions_after`), since the stored history starts in 2021. |
 | Sector breadth | India's `generate_analytics` on the US records (sector and industry: stock count, % above SMA 20/50/200, % near the 52-week high) as `sector_analytics.json`; the publisher's market overview adds the breadth and the benchmark ETFs as index cards (the Market page). |
@@ -83,11 +84,11 @@ EDL_US_BASE_DIR=<root> python frontend/publish_us.py
 
 **Amounts.** Records carry `market_cap` and `dollar_volume` in dollars. The engine reads amounts from India-named
 fields (`market_cap_crore`, `daily_rupee_turnover_*_cr`); the builder fills those in millions of dollars and the
-release declares `currency: USD` and `amountUnit: 1000000`, so the app labels them `$M`. Preset floors are US ones:
+release declares `currency: USD` and `amountUnit: 1000000`; the app (Anny26022/new_nexys_ultimate#600) labels them `$M`. Preset floors are US ones:
 $300M market cap, a $5 close, $2M a day of turnover.
 
 **The release** (`frontend/publish_us.py`) is India's row engine, packed format and revision upload. Its files sit
 beside India's under `releases/<rev>/`; its pointer is `site/data/us/current.json` (`/data/us/current.json`).
 India's `current.json`, sessions, price bands and AI catalogue are never written.
 
-**Not yet:** ownership, F&O, delivery and Indian surveillance flags. The app hides these for the US market.
+**Not yet:** ownership, F&O, delivery and Indian surveillance flags. The app hides these for the US market (Anny26022/new_nexys_ultimate#600).

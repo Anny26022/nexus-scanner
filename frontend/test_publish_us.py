@@ -14,13 +14,18 @@ class PublishUsTests(unittest.TestCase):
         manifest = publish_us.manifest_for('a' * 64, '2026-11-09', 3)
         self.assertEqual((manifest['market'], manifest['currency'], manifest['amountUnit']), ('us', 'USD', 1_000_000))
         self.assertNotIn('marketOverviewUrl', manifest)
-        self.assertTrue(publish_us.manifest_for('a' * 64, '2026-11-09', 3, market_overview=True)['marketOverviewUrl'].endswith('/market-overview.json.gz'))
-        for key in ('datasetUrl', 'datasetPackedGzipUrl', 'iposUrl'):
-            self.assertTrue(manifest[key].startswith('/data/revisions/' + 'a' * 64 + '/'), key)
+        base = '/data/revisions/' + 'a' * 64
+        self.assertEqual(publish_us.manifest_for('a' * 64, '2026-11-09', 3, market_overview=True)['marketOverviewUrl'],
+                         base + '/market-overview.json.gz')
+        self.assertEqual({key: manifest[key] for key in ('datasetUrl', 'datasetGzipUrl', 'datasetPackedGzipUrl', 'iposUrl')},
+                         {'datasetUrl': base + '/stocks.json', 'datasetGzipUrl': base + '/stocks.json.gz',
+                          'datasetPackedGzipUrl': base + '/stocks.packed.json.gz', 'iposUrl': base + '/ipos.json.gz'})
 
     def test_us_floors_cover_every_preset_eligibility_rule(self):
         rules = json.loads((Path(__file__).parent / 'src/data/presetEligibility.json').read_text())
         self.assertEqual(set(publish_us.US_ELIGIBILITY), {rule['id'] for rule in rules})
+        # $300M market cap, a $5 close and $2M a day of turnover, not India's ₹ floors.
+        self.assertEqual(publish_us.US_ELIGIBILITY, {'minMarketCapCr': 300, 'minPrice': 5, 'minTurnoverCr': 2})
 
     def test_us_rows_carry_the_us_scan_and_only_its_dollar_values(self):
         snapshot = {'source': publish_us.TRADINGVIEW_US, 'as_of_date': '2026-11-09', 'currency': 'USD', 'financial_currency': 'USD',
@@ -55,9 +60,9 @@ class PublishUsTests(unittest.TestCase):
         rows.append({'symbol': 'TINY', 'sector': 'Technology', 'industry': 'Software', 'marketCapCrore': 50,
                      'metrics': {'turnover30': 0.5}, 'indexMemberships': []})
         index, shards, _ = rh.build(days[-1], rows, {row['symbol']: flat for row in rows},
-                                    {'SPX': flat, 'NDX': flat}, {}, market=publish_us.US_ROTATION)
-        self.assertEqual(set(index['benchmarks']), {'SPX', 'NDX', 'EW'})
-        self.assertEqual(index['universes']['SPX'], 'S&P 500')
+                                    {code: flat for code in publish_us.ROTATION_BENCHMARKS}, {}, market=publish_us.US_ROTATION)
+        self.assertEqual(set(index['benchmarks']), {'SPX', 'NDX', 'DJI', 'RUT', 'EW'})
+        self.assertEqual(index['universes'], dict(publish_us.US_ROTATION.universes))
         self.assertEqual({group['l'] for group in index['groups']}, {'sector', 'industry'})
         # A $50M company trading $0.5M a day is below the US floors for a group composite.
         self.assertEqual(next(group for group in index['groups'] if group['id'] == 'sector:Technology')['m'], ['S0', 'S1', 'S2', 'S3'])

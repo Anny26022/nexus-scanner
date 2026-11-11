@@ -106,7 +106,8 @@ def stock_metrics(path: Path) -> dict:
     return result
 
 
-def stock_record(record: dict, metrics: dict, session: str, thematic: dict | None = None) -> dict:
+def stock_record(record: dict, metrics: dict, session: str, thematic: dict | None = None,
+                 ownership: dict | None = None) -> dict:
     """The canonical record the shared engine and publisher read."""
     aligned = metrics.get('as_of_date') == session
     # TradingView's all-time high and percent from ATH; falls back to stored history only when TradingView is missing.
@@ -117,8 +118,15 @@ def stock_record(record: dict, metrics: dict, session: str, thematic: dict | Non
     else:
         percent_from_ath = record.get('percent_from_ath')
     thematic = thematic or {}
+    ownership = ownership or {}
     news_feed = thematic.get('news_feed') or record.get('news_feed') or []
     insider_activity = thematic.get('insider_activity') or record.get('insider_activity') or []
+    short_float = ownership.get('short_float_percent') or record.get('short_float_percent')
+    short_ratio = ownership.get('short_ratio') or record.get('short_ratio')
+    insider_own = ownership.get('insider_own_percent') or record.get('insider_own_percent')
+    inst_own = ownership.get('institutional_own_percent') or record.get('institutional_own_percent')
+    insider_trans = ownership.get('insider_trans_percent') or record.get('insider_trans_percent')
+    inst_trans = ownership.get('institutional_trans_percent') or record.get('institutional_trans_percent')
     return {
         **{key: value for key, value in record.items() if key not in BUILD_ONLY},
         **{key: value for key, value in metrics.items() if not key.startswith('turnover') and key != 'history_high'},
@@ -127,6 +135,9 @@ def stock_record(record: dict, metrics: dict, session: str, thematic: dict | Non
         'default_screener_eligible': True, 'index_memberships': record.get('index_memberships') or [],
         'event_markers': [], 'recent_announcements': [],
         'news_feed': news_feed, 'insider_activity': insider_activity,
+        'short_float_percent': short_float, 'short_ratio': short_ratio,
+        'insider_own_percent': insider_own, 'institutional_own_percent': inst_own,
+        'insider_trans_percent': insider_trans, 'institutional_trans_percent': inst_trans,
         'as_of_date': session if aligned else metrics.get('as_of_date'),
         'all_time_high': high, 'percent_from_ath': percent_from_ath,
         # The engine reads both of India's names for these two returns.
@@ -208,8 +219,12 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     thematic_universe = finviz.load_thematic_universe(root / 'us_thematic_universe.json')
     if not thematic_universe:
         thematic_universe = finviz.load_thematic_universe(Path(__file__).parents[4] / 'us_thematic_universe.json')
+    ownership_universe = finviz.load_ownership_universe(root / 'us_ownership_universe.json')
+    if not ownership_universe:
+        ownership_universe = finviz.load_ownership_universe(Path(__file__).parents[4] / 'us_ownership_universe.json')
     stocks = [stock_record(record, stock_metrics(symbol_csv_path(root / 'ohlcv_data', record['symbol'])), session,
-                           thematic=thematic_universe.get(record['symbol']))
+                           thematic=thematic_universe.get(record['symbol']),
+                           ownership=ownership_universe.get(record['symbol']))
               for record in records if symbol_csv_path(root / 'ohlcv_data', record['symbol']).exists()]
     _write_json(root / 'all_stocks_fundamental_analysis.json', stocks, compress=True)
     # Sector and industry breadth (the Market page), by India's own function; it reads India's display columns.

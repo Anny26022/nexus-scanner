@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
 
@@ -23,6 +24,7 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
 DEFAULT_FILE = "us_thematic_universe.json"
+DEFAULT_OWNERSHIP_FILE = "us_ownership_universe.json"
 
 
 def load_thematic_universe(path: Path) -> dict[str, dict]:
@@ -38,6 +40,26 @@ def load_thematic_universe(path: Path) -> dict[str, dict]:
 
 def save_thematic_universe(path: Path, data: dict):
     """Save thematic universe mapping atomically."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".json.tmp")
+    with temp.open("w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=2, sort_keys=True)
+    temp.replace(path)
+
+
+def load_ownership_universe(path: Path) -> dict[str, dict]:
+    """Load cached ownership & short interest mapping from JSON."""
+    if not path.is_file():
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_ownership_universe(path: Path, data: dict):
+    """Save ownership universe mapping atomically."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(".json.tmp")
     with temp.open("w", encoding="utf-8") as handle:
@@ -166,20 +188,6 @@ def crawl_thematic_universe(*, delay: float = 0.15, session: requests.Session | 
     return ticker_map
 
 
-if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description="Finviz US Thematic Crawler")
-    parser.add_argument("--output", type=Path, default=Path(__file__).parents[4] / "us_thematic_universe.json",
-                        help="Path to save us_thematic_universe.json")
-    parser.add_argument("--delay", type=float, default=0.15, help="Request pacing delay in seconds")
-    args = parser.parse_args()
-    
-    print(f"Crawling Finviz thematic universe to {args.output}...")
-    universe = crawl_thematic_universe(delay=args.delay)
-    save_thematic_universe(args.output, universe)
-    print(f"Saved {len(universe)} mapped US tickers to {args.output}.")
-
-
 def fetch_news_and_insiders(symbol: str, *, session: requests.Session | None = None) -> dict:
     """Fetch recent news headlines and SEC Form 4 insider transactions for a single ticker."""
     sess = session or requests.Session()
@@ -229,3 +237,98 @@ def fetch_news_and_insiders(symbol: str, *, session: requests.Session | None = N
         return {'news': news_items, 'insiders': insider_items}
     except (requests.RequestException, ValueError, KeyError):
         return {'news': [], 'insiders': []}
+
+
+SECTOR_SHARDS = [
+    'sec_basicmaterials', 'sec_communicationservices', 'sec_consumercyclical', 'sec_consumerdefensive',
+    'sec_energy', 'sec_industrials', 'sec_realestate', 'sec_technology', 'sec_utilities',
+    'sec_financial,exch_nasd', 'sec_financial,exch_nyse', 'sec_financial,exch_amex',
+    'sec_healthcare,exch_nasd', 'sec_healthcare,exch_nyse', 'sec_healthcare,exch_amex',
+]
+
+
+def crawl_ownership_universe(*, delay: float = 0.05, workers: int = 3, session: requests.Session | None = None,
+                             log: Callable[[str], None] = print) -> dict[str, dict]:
+    """Crawl Finviz ownership & short interest data for all listed US stocks across sector shards."""
+    sess = session or requests.Session()
+    sess.headers.update(HEADERS)
+    
+    ownership_map: dict[str, dict] = {}
+    
+    def _round(val):
+        return round(float(val), 2) if isinstance(val, (int, float)) and val == val else None
+
+    def parse_rows(rows):
+        for r in rows:
+            ticker = (r.get('text') or {}).get('ticker')
+            if not ticker or ticker in ownership_map:
+                continue
+            num = r.get('numbers') or {}
+            ownership_map[ticker] = {
+                'short_float_percent': _round(num.get('shortInterestShare')),
+                'short_ratio': _round(num.get('shortInterestRatio')),
+                'insider_own_percent': _round(num.get('insiderOwn')),
+                'insider_trans_percent': _round(num.get('insiderTrans')),
+                'institutional_own_percent': _round(num.get('instOwn')),
+                'institutional_trans_percent': _round(num.get('instTrans')),
+            }
+
+    log(f"Crawling ownership & short interest across {len(SECTOR_SHARDS)} sector shards...")
+    
+    def fetch_shard(filter_spec):
+        shard_url = f"{SCREENER_URL}?v=131&f={filter_spec}"
+        try:
+            resp = sess.get(shard_url, timeout=15)
+            if resp.status_code != 200:
+                return []
+            data = _extract_screener_json(resp.text)
+            if not data or 'data' not in data:
+                return []
+            screener_data = data['data']
+            total_count = screener_data.get('totalCount', 0)
+            rows = list(screener_data.get('rows', []))
+            
+            for offset in range(21, total_count + 1, 20):
+                time.sleep(delay)
+                p_resp = sess.get(f"{shard_url}&r={offset}", timeout=15)
+                if p_resp.status_code == 200:
+                    p_data = _extract_screener_json(p_resp.text)
+                    if p_data and 'data' in p_data:
+                        rows.extend(p_data['data'].get('rows', []))
+            return rows
+        except Exception:
+            return []
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for idx, shard_rows in enumerate(pool.map(fetch_shard, SECTOR_SHARDS)):
+            parse_rows(shard_rows)
+            log(f"[{idx + 1}/{len(SECTOR_SHARDS)}] Shard complete: {len(ownership_map)} total stocks mapped")
+                
+    log(f"Ownership crawl complete: successfully mapped {len(ownership_map)} US tickers.")
+    return ownership_map
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Finviz US Thematic & Ownership Crawler")
+    parser.add_argument("--thematic-output", type=Path, default=Path(__file__).parents[4] / "us_thematic_universe.json",
+                        help="Path to save us_thematic_universe.json")
+    parser.add_argument("--ownership-output", type=Path, default=Path(__file__).parents[4] / "us_ownership_universe.json",
+                        help="Path to save us_ownership_universe.json")
+    parser.add_argument("--crawl", choices=["all", "thematic", "ownership"], default="all",
+                        help="Which universe to crawl (default: all)")
+    parser.add_argument("--delay", type=float, default=0.05, help="Request pacing delay in seconds")
+    parser.add_argument("--workers", type=int, default=3, help="Concurrent workers for ownership pagination")
+    args = parser.parse_args()
+    
+    if args.crawl in ("all", "thematic"):
+        print(f"Crawling Finviz thematic universe to {args.thematic_output}...")
+        thematic_univ = crawl_thematic_universe(delay=max(args.delay, 0.15))
+        save_thematic_universe(args.thematic_output, thematic_univ)
+        print(f"Saved {len(thematic_univ)} mapped US tickers to {args.thematic_output}.")
+        
+    if args.crawl in ("all", "ownership"):
+        print(f"Crawling Finviz ownership & short interest universe to {args.ownership_output}...")
+        ownership_univ = crawl_ownership_universe(delay=args.delay, workers=args.workers)
+        save_ownership_universe(args.ownership_output, ownership_univ)
+        print(f"Saved {len(ownership_univ)} mapped US tickers to {args.ownership_output}.")

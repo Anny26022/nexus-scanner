@@ -794,6 +794,38 @@ class FinvizThematicTests(unittest.TestCase):
         self.assertEqual(len(res["insider_activity"]), 1)
         self.assertEqual(res["insider_activity"][0]["name"], "Jensen")
 
+    def test_load_and_save_ownership_universe(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = Path(tmpdir) / "test_ownership.json"
+            sample_data = {
+                "NVDA": {
+                    "short_float_percent": 1.25, "short_ratio": 1.8,
+                    "insider_own_percent": 3.75, "institutional_own_percent": 72.5
+                }
+            }
+            finviz.save_ownership_universe(file_path, sample_data)
+            loaded = finviz.load_ownership_universe(file_path)
+            self.assertEqual(loaded, sample_data)
+
+    def test_stock_record_enriches_ownership_and_short_interest(self):
+        record = {
+            "symbol": "TSLA", "close": 300.0, "market_cap": 900000.0, "dollar_volume": 40000.0,
+            "industry": "Auto Manufacturers", "sector": "Consumer Cyclical"
+        }
+        metrics = {"as_of_date": "2026-11-06", "history_high": 400.0}
+        ownership = {
+            "short_float_percent": 3.45, "short_ratio": 2.1,
+            "insider_own_percent": 12.8, "institutional_own_percent": 45.2,
+            "insider_trans_percent": -0.5, "institutional_trans_percent": 1.2
+        }
+        res = build.stock_record(record, metrics, "2026-11-06", ownership=ownership)
+        self.assertEqual(res["short_float_percent"], 3.45)
+        self.assertEqual(res["short_ratio"], 2.1)
+        self.assertEqual(res["insider_own_percent"], 12.8)
+        self.assertEqual(res["institutional_own_percent"], 45.2)
+        self.assertEqual(res["insider_trans_percent"], -0.5)
+        self.assertEqual(res["institutional_trans_percent"], 1.2)
+
 
 if __name__ == '__main__':
     unittest.main()

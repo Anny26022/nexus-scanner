@@ -1,11 +1,12 @@
 import { getIpoJson } from './gzipJson';
 import type { FinancialHistory } from '../chart/fundamentals';
 import { unpackSnapshot } from './packedSnapshot';
-import { scanCounts, screenSnapshot, type Snapshot } from './snapshotScreen';
+import { publishedValue, scanCounts, screenSnapshot, type Snapshot } from './snapshotScreen';
 import type { ScreenerRunRequest, ScreenerRunResponse, SymbolComparisonResponse } from '../types/screener';
 import {etfGroups} from '../data/etfFields';
 import {extendedMetrics} from '../data/extendedMetrics';
 import {pulseRow, type PulseRow} from '../utils/marketPulse';
+import {heatStocks, type HeatStock} from '../utils/heatmap';
 
 export interface SnapshotSource { revision: string; url: string; sessionDate?: string }
 import type {FilterChoices} from '../types/filterChoices';
@@ -16,14 +17,16 @@ export type SnapshotTask =
   | { type:'filterChoices'; source:SnapshotSource }
   | { type:'screen'; source:SnapshotSource; request:ScreenerRunRequest; allRows?:boolean }
   | { type:'compare'; source:SnapshotSource; symbols:string[] }
-  | { type:'marketPulse'; source:SnapshotSource };
+  | { type:'marketPulse'; source:SnapshotSource }
+  | { type:'heatmap'; source:SnapshotSource };
 export type SnapshotResult =
   | { type:'financialHistory'; result:FinancialHistory | null }
   | { type:'warm' }
   | { type:'filterChoices'; result:FilterChoices }
   | { type:'screen'; result:ScreenerRunResponse | null; revision:string; sessionDate:string }
   | { type:'compare'; result:SymbolComparisonResponse }
-  | { type:'marketPulse'; result:PulseRow[]; revision:string; sessionDate:string };
+  | { type:'marketPulse'; result:PulseRow[]; revision:string; sessionDate:string }
+  | { type:'heatmap'; result:HeatStock[]; revision:string; sessionDate:string; market?: string };
 
 async function readSnapshot(source: SnapshotSource, signal?: AbortSignal): Promise<Snapshot> {
   const response = await fetch(source.url, {cache:'force-cache', signal});
@@ -194,14 +197,15 @@ export function createSnapshotEngine(loader = readSnapshot) {
       } else result.SCAN_COUNTS = scanCounts(data);
       if (data.extendedMetricsVersion === 1) {
         result.TRADINGVIEW_METRIC = extendedMetrics.filter(metric => data.stocks.some(stock =>
-          stock.extended?.asOfDate === data.asOfDate && typeof stock.extended.values[metric.id] === 'number'
-          && Number.isFinite(stock.extended.values[metric.id]))).map(metric => metric.id);
+          publishedValue(stock, metric.id, data.asOfDate) != null)).map(metric => metric.id);
       }
       return {type:'filterChoices', result};
     }
     // Only stocks priced in this session; the page summarises them, so it receives compact rows.
     if (task.type === 'marketPulse') return {type:'marketPulse', revision:data.revision, sessionDate:data.asOfDate,
       result:data.stocks.filter(stock => stock.asOfDate === data.asOfDate && Number.isFinite(stock.close)).map(pulseRow)};
+    if (task.type === 'heatmap') return {type:'heatmap', revision:data.revision, sessionDate:data.asOfDate, market: data.market,
+      result:heatStocks(data.stocks.filter(stock => stock.asOfDate === data.asOfDate && Number.isFinite(stock.close)))};
     if (task.type === 'screen') return {type:'screen',result:screenSnapshot(data,task.request,task.allRows),revision:data.revision,sessionDate:data.asOfDate};
     const bySymbol = new Map(data.stocks.map(stock => [stock.symbol,stock]));
     const validSymbols: SymbolComparisonResponse['validSymbols'] = [], invalidSymbols:string[] = [];

@@ -24,6 +24,9 @@ export interface SnapshotStock extends StockRow {
   freeFloatPct: number | null;
 }
 export interface Snapshot {
+  market?: string;
+  currency?: string;
+  amountUnit?: number;
   assetType?: 'etf';
   etfLabels?: Record<string, Record<string, string>>;
   extendedMetricsVersion?: number;
@@ -46,6 +49,19 @@ const combine = (values: Truth[], all: boolean): Truth => all
   ? values.includes(false) ? false : values.includes(null) ? null : true
   : values.includes(true) ? true : values.includes(null) ? null : false;
 const number = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
+/** Published performance the snapshot also computes itself, as % returns over 21, 63, 126 and 252 sessions. */
+const OWN_RETURNS: Readonly<Record<string, string>> = {'market.performance_1m_pct': 'return21', 'market.performance_3m_pct': 'return63',
+  'market.performance_6m_pct': 'return126', 'market.performance_1y_pct': 'return252'};
+/**
+ * A published (TradingView) metric for the session; performance falls back to the snapshot's own return when the
+ * published block is missing, so the Top Gainers and Leaders scans keep working. Sessions differ slightly from
+ * TradingView's calendar months.
+ */
+export function publishedValue(s: SnapshotStock, metric: string, session: string): number | null {
+  const published = s.extended?.asOfDate === session ? number(s.extended.values[metric]) : null;
+  const own = OWN_RETURNS[metric];
+  return published ?? (own && s.asOfDate === session ? number(s.metrics?.[own]) : null);
+}
 const between = (value: unknown, min: number, max: number): Truth => number(value) == null ? null : (value as number) >= min && (value as number) <= max;
 const compare = (value: unknown, op: string, target: number): Truth => {
   const n = number(value);
@@ -93,8 +109,7 @@ function leaf(c: ActiveCondition, session: string, context?: Context): Predicate
     if (!metric || !['ABOVE','BELOW','GREATER','LESS','EQUAL'].includes(p.comparison)
         || String(p.value ?? '').trim() === '' || !Number.isFinite(Number(p.value))) return null;
     return s => {
-      const value = s.extended?.asOfDate === session ? s.extended.values[metric.id] : null;
-      const result = compare(value, p.comparison, Number(p.value));
+      const result = compare(publishedValue(s, metric.id, session), p.comparison, Number(p.value));
       return result == null ? null : c.isNegated ? !result : result;
     };
   }
@@ -355,7 +370,7 @@ function compileRecipe(node: RecipeGroup | RecipeGroup['children'][number], sess
     const metric = String(node.params.metric), topPct = Number(node.params.topPct);
     if (!extendedMetrics.some(item => item.id === metric) || !(topPct > 0 && topPct <= 100)) return null;
     return s => {
-      if (!context || s.extended?.asOfDate !== session || number(s.extended.values[metric]) == null) return null;
+      if (!context || publishedValue(s, metric, session) == null) return null;
       return context.leaders(metric, topPct, eligibility.test, eligibility.key).has(s.symbol);
     };
   }
@@ -409,8 +424,9 @@ function rankContext(universe: SnapshotStock[], session: string): Context {
     const key = `${metric}:${topPct}:${eligibilityKey}`;
     let kept = cache.get(key);
     if (!kept) {
-      const eligible = universe.filter(s => s.extended?.asOfDate === session && number(s.extended.values[metric]) != null && passes(s) === true);
-      eligible.sort((a, b) => b.extended!.values[metric]! - a.extended!.values[metric]! || a.symbol.localeCompare(b.symbol));
+      const value = (s: SnapshotStock) => publishedValue(s, metric, session);
+      const eligible = universe.filter(s => value(s) != null && passes(s) === true);
+      eligible.sort((a, b) => value(b)! - value(a)! || a.symbol.localeCompare(b.symbol));
       kept = new Set(eligible.slice(0, Math.ceil(eligible.length * topPct / 100)).map(s => s.symbol));
       cache.set(key, kept);
     }
@@ -471,7 +487,7 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
     const field = (request.sort?.field ?? 'symbol') as keyof SnapshotStock;
     rows.sort((a,b) => {
       const value = (s: SnapshotStock) => String(field).startsWith('etf.') ? s.etf?.[String(field).slice(4)]
-        : String(field).startsWith('tv.') ? s.extended?.values[String(field).slice(3)] : s[field];
+        : String(field).startsWith('tv.') ? publishedValue(s, String(field).slice(3), data.asOfDate) : s[field];
       const x = value(a), y = value(b);
       const order = x == null ? y == null ? 0 : -1 : y == null ? 1 : x < y ? -1 : x > y ? 1 : 0;
       return request.sort?.direction === 'desc' ? -order : order;

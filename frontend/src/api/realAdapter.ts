@@ -7,11 +7,10 @@ import { runSnapshotTask } from './snapshotClient';
 import type { SnapshotSource } from './snapshotEngine';
 import { filterAnnouncements, type Announcement, type AnnouncementCatalog, type AnnouncementIndex, type FilingTopic } from './announcements';
 import { DataUnavailableError } from './dataErrors';
-import { getManifest, refreshManifest, validateManifest, validDate, manifestSnapshotSource, type Manifest } from './manifest';
+import { manifestFor, validateManifest, validDate, manifestSnapshotSource, resolveManifestUrls, type Manifest } from './manifest';
+import { createOrigins, type ScannerOrigins } from './origins';
 import { parseMarketOverview } from '../utils/marketOverview';
 import type { RotationIndex, RotationShard, RotationShardName } from './rotation';
-export { refreshManifest } from './manifest';
-const ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
 const finiteAmount = (value: unknown): number | null => {
   if (value == null || value === '') return null;
   const parsed = Number(value);
@@ -101,14 +100,14 @@ interface DataIndex {
   /** Inline in older releases; newer ones keep it in its own object to keep this index small. */
   filingLookup?: FilingLookup; filingLookupObject?: string;
 }
-async function releaseFor(revision?: string): Promise<Manifest> {
-  const latest = await getManifest();
+async function releaseFor(origins: ScannerOrigins, revision?: string): Promise<Manifest> {
+  const latest = await manifestFor(origins).get();
   const selected = revision ?? latest.revision;
   if (!/^[a-f0-9]{64}$/.test(selected)) throw new Error('Invalid dataset revision');
   if (selected === latest.revision) return latest;
   try {
-    const release = validateManifest(await cached(
-      releaseCache, selected, () => getJson<unknown>(`/data/revisions/${selected}/release.json`), 3));
+    const url = origins.dataUrl(`/data/revisions/${selected}/release.json`);
+    const release = resolveManifestUrls(origins, validateManifest(await cached(releaseCache, url, () => getJson<unknown>(url), 3)));
     if (release.revision !== selected) throw new Error('Release revision mismatch');
     return release;
   } catch (err) {
@@ -168,13 +167,16 @@ async function companyAnnouncements(release: Manifest, symbol: string) {
 }
 
 
-async function snapshotSource(revision?: string, sessionDate?: string, etf = false): Promise<SnapshotSource> {
-  return manifestSnapshotSource(await getManifest(), revision, sessionDate, etf);
+async function snapshotSource(origins: ScannerOrigins, revision?: string, sessionDate?: string, etf = false): Promise<SnapshotSource> {
+  return manifestSnapshotSource(origins, await manifestFor(origins).get(), revision, sessionDate, etf);
 }
 
-class RealDataAdapter {
+export class RealDataAdapter {
+  private readonly ipoSnapshots = new Map<string, Promise<IpoCatalogue>>();
+  constructor(readonly origins: ScannerOrigins) {}
+
   async getChartRows(revision?: string, sessionDate?: string): Promise<ChartRow[]> {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     if (revision && release.revision !== revision) throw new Error('Chart directory revision mismatch');
     if (!release.chartDirectoryUrl || (sessionDate && sessionDate !== release.sessionDate)) {
       const result = await this.runScreen({datasetRevision:release.revision, universe:'mainboard',
@@ -193,7 +195,7 @@ class RealDataAdapter {
   }
 
   async getFinancialHistory(symbol: string, revision: string) {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     validSymbol(symbol);
     if (release.revision !== revision || (!release.financialHistoryUrl && !release.financialHistoryUrlTemplate)) throw new Error('Financial history was not published with this snapshot.');
     if (release.financialHistoryUrlTemplate) return getIpoJson<import('../chart/fundamentals').FinancialHistory | null>(release.financialHistoryUrlTemplate.replace('{symbol}', encodeURIComponent(symbol)), 'Financial history');
@@ -202,7 +204,7 @@ class RealDataAdapter {
     return result.result;
   }
   async getEarningsSchedule(symbol: string, revision: string) {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     if (release.revision !== revision || !release.earningsCalendarUrl) return null;
     const calendar = await cached(releaseCache, release.earningsCalendarUrl,
       () => getIpoJson<{fetched_at: string; events: Array<{symbol: string; scheduled_date: string; date_conflict?: boolean}>}>(release.earningsCalendarUrl!, 'Earnings calendar'), 3);
@@ -211,11 +213,11 @@ class RealDataAdapter {
 
   /** This symbol's dated bands ([date, band] pairs, first = starting band), or null when the release has none. */
   async getPriceBandHistory(symbol: string, revision: string) {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     if (release.revision !== revision) return null;
     type Ledger = {version: number; from: string; through: string; bands: Record<string, Array<[string, string]>>};
     // Releases published before the ledger existed fall back to the committed ledger file.
-    const url = release.priceBandHistoryUrl ?? '/data/price-band-history.json';
+    const url = release.priceBandHistoryUrl ?? this.origins.dataUrl('/data/price-band-history.json');
     const ledger = await cached(releaseCache, url, async () => {
       if (release.priceBandHistoryUrl) return getIpoJson<Ledger>(url, 'Price-band history');
       const response = await fetch(url);
@@ -228,7 +230,7 @@ class RealDataAdapter {
   }
 
   async getThemeClassification(revision?: string) {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     if (!release.themeClassificationUrl || !release.themeClassificationVersion) throw new Error('Theme classifications are unavailable in this release.');
     const data = await cached(releaseCache, release.themeClassificationUrl,
       () => getIpoJson<import('../utils/copyResults').ThemeClassification>(release.themeClassificationUrl!, 'Theme classification'), 6);
@@ -239,7 +241,7 @@ class RealDataAdapter {
   }
   /** The Rotation page's price-history index, or null when the release did not publish one. */
   async getRotationIndex(revision?: string): Promise<RotationIndex | null> {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     const source = await rotationSource(release);
     if (!source) return null;
     const url = source.template.replace('{hash}', source.index);
@@ -248,7 +250,7 @@ class RealDataAdapter {
     return index;
   }
   async getRotationShard(revision: string | undefined, name: RotationShardName): Promise<RotationShard> {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     const [source, index] = await Promise.all([rotationSource(release), this.getRotationIndex(revision)]);
     const hash = index?.shards[name];
     if (!source || !hash || !/^[a-f0-9]{64}$/.test(hash)) throw new Error('Rotation history is unavailable in this release.');
@@ -259,7 +261,7 @@ class RealDataAdapter {
   }
   /** Nifty 50 closes by session date, or undefined when the release has no benchmark. */
   async getBenchmark(revision?: string): Promise<ReadonlyMap<string, number> | undefined> {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     if (!release.benchmarkUrl) return undefined;
     const data = await cached(releaseCache, release.benchmarkUrl,
       () => getIpoJson<{schemaVersion?: number; asOfDate?: string; records?: unknown}>(release.benchmarkUrl!, 'Benchmark'), 6);
@@ -269,20 +271,26 @@ class RealDataAdapter {
   }
   /** Compact per-stock rows for the Market page, from the release's scanner snapshot. */
   async getMarketPulse(revision?: string) {
-    const source = await snapshotSource(revision);
+    const source = await snapshotSource(this.origins, revision);
     const result = await runSnapshotTask({type:'marketPulse', source});
     if (result.type !== 'marketPulse' || result.revision !== source.revision) throw new Error('Market pulse release mismatch');
     return {rows: result.result, sessionDate: result.sessionDate};
   }
+  async getHeatmap(revision?: string) {
+    const source = await snapshotSource(this.origins, revision);
+    const result = await runSnapshotTask({type:'heatmap', source});
+    if (result.type !== 'heatmap' || result.revision !== source.revision) throw new Error('Heatmap release mismatch');
+    return {stocks: result.result, sessionDate: result.sessionDate, market: result.market};
+  }
   async getMarketOverview(revision?: string) {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     if (!release.marketOverviewUrl) throw new DataUnavailableError('Market overview is published with the next data refresh.', 'not_published');
     const data = await cached(releaseCache, release.marketOverviewUrl,
       () => getIpoJson<unknown>(release.marketOverviewUrl!, 'Market overview'), 6);
     return parseMarketOverview(data, release.sessionDate);
   }
   async getFilterChoices(revision?: string, sessionDate?: string, etf = false) {
-    const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(revision, sessionDate, etf)});
+    const response = await runSnapshotTask({type:'filterChoices',source:await snapshotSource(this.origins, revision, sessionDate, etf)});
     if (response.type !== 'filterChoices') throw new Error('Unexpected filter choices response');
     return response.result;
   }
@@ -296,24 +304,32 @@ class RealDataAdapter {
     if (req.universe === 'etf' && (req.textQuery?.trim() || req.announcementFilter)) throw new Error('Use the ETF filters to build this screen.');
     const announcementFilter = req.announcementFilter;
     if (announcementFilter) {
-      const release = await releaseFor(req.datasetRevision);
+      const release = await releaseFor(this.origins, req.datasetRevision);
       req = {...req, datasetRevision: release.revision};
       const index = await this.getAnnouncementIndex(req.datasetRevision);
       const matches = filterAnnouncements(index, announcementFilter);
       req = {...req, announcementSymbols: [...new Set(matches.map(row => row.symbol!))]};
     }
-    const source = await snapshotSource(req.datasetRevision, req.asOfDate, req.universe === 'etf');
+    const source = await snapshotSource(this.origins, req.datasetRevision, req.asOfDate, req.universe === 'etf');
 
     const snapshot = req.textQuery?.trim()
       ? {type:'screen' as const, source, revision:source.revision, sessionDate:source.sessionDate ?? req.asOfDate, result:null}
       : await runSnapshotTask({type:'screen',source,request:req,allRows});
     if (snapshot.type !== 'screen') throw new Error('Unexpected scanner response');
     if (snapshot.result) return snapshot.result;
-    const base = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
-    const response = await fetch(`${base}/screens/run`, { method:'POST', headers:{'Content-Type':'application/json'},
+    const configuredBase = import.meta.env.VITE_API_BASE_URL?.trim();
+    const endpoint = configuredBase
+      ? `${configuredBase.replace(/\/$/, '')}/screens/run`
+      : this.origins.apiUrl('/api/screens/run');
+    const response = await fetch(endpoint, { method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({...req,asOfDate:snapshot.sessionDate,datasetRevision:snapshot.revision}) });
     const payload = await response.json().catch(() => null);
-    if (!response.ok || payload?.error) throw new Error(payload?.error || `Scanner request failed (HTTP ${response.status})`);
+    if (!response.ok || payload?.error) {
+      if (response.status === 404) {
+        throw new Error('Custom text query endpoint is unavailable. Use Filters to build your screen.');
+      }
+      throw new Error(payload?.error || `Scanner request failed (HTTP ${response.status})`);
+    }
     if (payload?.immutableRevision !== snapshot.revision || !Array.isArray(payload.rows)) throw new Error('Scanner returned a different dataset revision');
     return payload;
   }
@@ -323,8 +339,8 @@ class RealDataAdapter {
   }
 
   async getIpoCatalogue(): Promise<IpoCatalogue> {
-    const manifest = await getManifest();
-    if (!ipoSnapshots.has(manifest.revision)) {
+    const manifest = await manifestFor(this.origins).get();
+    if (!this.ipoSnapshots.has(manifest.revision)) {
       const revision = manifest.revision;
       const promise = getIpoJson<Record<string, any> | {records:Record<string, any>[]}>(manifest.iposUrl).then(payload => {
         const rows: Record<string, any>[] = Array.isArray(payload) ? payload : payload.records;
@@ -450,11 +466,11 @@ class RealDataAdapter {
             : Object.keys(provider.feeds ?? {}).length || Object.keys(provider.analytics ?? {}).length ? 'partial' as const
             : provider.available === false ? 'unavailable' as const : 'retained' as const,
         } : undefined};
-      }).catch(error => { ipoSnapshots.delete(revision); throw error; });
-      ipoSnapshots.set(revision,promise);
-      if (ipoSnapshots.size > 3) ipoSnapshots.delete(ipoSnapshots.keys().next().value!);
+      }).catch(error => { this.ipoSnapshots.delete(revision); throw error; });
+      this.ipoSnapshots.set(revision,promise);
+      if (this.ipoSnapshots.size > 3) this.ipoSnapshots.delete(this.ipoSnapshots.keys().next().value!);
     }
-    return ipoSnapshots.get(manifest.revision)!;
+    return this.ipoSnapshots.get(manifest.revision)!;
   }
 
   async getChart(symbol: string, revision?: string, sessionDate?: string): Promise<ChartSnapshot> {
@@ -477,7 +493,7 @@ class RealDataAdapter {
 
   private async publishedChart(symbol: string, revision?: string): Promise<ChartSnapshot> {
     validSymbol(symbol);
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     if (release.schemaVersion === 7) {
       const index = await dataIndex(release);
       type Chunk = {schemaVersion:number;symbol:string;candles:ChartSnapshot['candles']};
@@ -510,7 +526,7 @@ class RealDataAdapter {
   }
 
   async getAnnouncementIndex(revision?: string): Promise<AnnouncementIndex> {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     const catalog = await announcementReferences(release);
     const index = await object<AnnouncementIndex>(release, catalog.index);
     if (index.referenceSession !== release.sessionDate || index.publishedAt !== catalog.publishedAt) throw new Error('Announcement index mismatch');
@@ -518,14 +534,14 @@ class RealDataAdapter {
   }
 
   async getAnnouncementTopics(revision?: string): Promise<FilingTopic[]> {
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     const catalog = await announcementReferences(release);
     return (await object<{topics: FilingTopic[]}>(release, catalog.taxonomy)).topics;
   }
 
   async getAnnouncements(symbol: string, revision?: string): Promise<{records: Announcement[]; years: number[]; publishedAt: string}> {
     validSymbol(symbol);
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     const lookup = await filingLookup(release);
     if (lookup) {
       const entry = lookup.symbols[symbol];
@@ -544,7 +560,7 @@ class RealDataAdapter {
 
   async getAnnouncementHistory(symbol: string, year: number, page = 0, revision?: string): Promise<{records: Announcement[]; pages: number}> {
     validSymbol(symbol);
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     const entry = await companyAnnouncements(release, symbol);
     const pages = entry?.years[String(year)];
     if (!Number.isInteger(page) || page < 0 || !pages?.[page]) throw new Error('Announcement page unavailable');
@@ -555,7 +571,7 @@ class RealDataAdapter {
 
   async getAnnouncementDetail(symbol: string, row: Announcement, revision?: string): Promise<Record<string, unknown>> {
     validSymbol(symbol);
-    const release = await releaseFor(revision);
+    const release = await releaseFor(this.origins, revision);
     const entry = await companyAnnouncements(release, symbol);
     const allowed = Object.values(entry?.years ?? {}).flat().some(page => page.details === row.detailPage);
     if (!allowed) throw new Error('Filing is not part of this release');
@@ -565,13 +581,13 @@ class RealDataAdapter {
   }
 
   async compareSymbols(req: SymbolComparisonRequest): Promise<SymbolComparisonResponse> {
-    const response = await runSnapshotTask({type:'compare',source:await snapshotSource(),symbols:req.symbols});
+    const response = await runSnapshotTask({type:'compare',source:await snapshotSource(this.origins),symbols:req.symbols});
     if (response.type !== 'compare') throw new Error('Unexpected comparison response');
     return response.result;
   }
 
   async getCurrentRevision(): Promise<RevisionCurrentResponse> {
-    const manifest = await refreshManifest();
+    const manifest = await manifestFor(this.origins).refresh();
     return {
       latestSessionDate: manifest.sessionDate,
       availableSessions: [{date:manifest.sessionDate, label:'Latest', isHistorical:false, revision:manifest.revision}],
@@ -583,7 +599,7 @@ class RealDataAdapter {
 
   async getAvailableSessions(): Promise<Array<{ date: string; label: string; isHistorical: boolean; revision: string }>> {
     try {
-      const resp = await fetch('/data/sessions.json');
+      const resp = await fetch(this.origins.dataUrl('/data/sessions.json'));
       if (resp.ok) {
         const data = await resp.json();
         if (Array.isArray(data.sessions) && data.sessions.length > 0) {
@@ -598,4 +614,12 @@ class RealDataAdapter {
 }
 
 
-export const realAdapter = new RealDataAdapter();
+const adapters = new Map<string, RealDataAdapter>();
+/** The adapter for these origins; equal origins share one, and so its caches. */
+export function realAdapterFor(origins: ScannerOrigins): RealDataAdapter {
+  let adapter = adapters.get(origins.key);
+  if (!adapter) adapters.set(origins.key, adapter = new RealDataAdapter(origins));
+  return adapter;
+}
+/** Same-origin adapter, for tests and tools. */
+export const realAdapter = realAdapterFor(createOrigins());

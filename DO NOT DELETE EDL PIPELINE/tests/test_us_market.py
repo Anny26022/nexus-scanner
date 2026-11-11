@@ -406,6 +406,42 @@ class TradingViewTests(unittest.TestCase):
         found = tradingview.snapshots(self.response(self.row('NYSE:OLD', 'US0000000002', first_bar_time=946909800)), '')
         self.assertEqual(tradingview.canonical(found['US0000000002'], {'close': 1.0}, '2026-11-09')['listing_date'], '2000-01-03')
 
+    def test_phase_1_analyst_ratios_volatility_and_shares(self):
+        found = tradingview.snapshots(self.response(self.row('NASDAQ:NVDA', 'US67066G1040', **{
+            'price_target_average': 200.0,
+            'recommendation_mark': 1.15,
+            'price_sales_current': 14.5,
+            'gross_margin_ttm': 75.0,
+            'net_margin_ttm': 64.0,
+            'return_on_equity_fq': 115.0,
+            'return_on_invested_capital_fq': 100.0,
+            'quick_ratio_fq': 3.8,
+            'long_term_debt_to_equity_fq': 0.16,
+            'beta_1_year': 1.75,
+            'Volatility.W': 5.5,
+            'Volatility.M': 3.3,
+            'float_shares_outstanding': 23_000_000_000,
+            'total_shares_outstanding': 24_000_000_000,
+            'earnings_per_share_forecast_next_fq': 2.50,
+        })), '')
+        values = tradingview.canonical(found['US67066G1040'], {'close': 160.0}, '2026-11-09')
+        self.assertEqual(values['target_price'], 200.0)
+        self.assertEqual(values['target_price_upside_percent'], 25.0)  # (200 / 160 - 1) * 100
+        self.assertEqual(values['analyst_rating'], 1.15)
+        self.assertEqual(values['ps_ratio'], 14.5)
+        self.assertEqual(values['gross_margin_percent'], 75.0)
+        self.assertEqual(values['net_margin_percent'], 64.0)
+        self.assertEqual(values['roe_percent'], 115.0)
+        self.assertEqual(values['roic_percent'], 100.0)
+        self.assertEqual(values['quick_ratio'], 3.8)
+        self.assertEqual(values['lt_debt_to_equity'], 0.16)
+        self.assertEqual(values['beta'], 1.75)
+        self.assertEqual(values['volatility_week_percent'], 5.5)
+        self.assertEqual(values['volatility_month_percent'], 3.3)
+        self.assertEqual(values['float_shares'], 23_000_000_000)
+        self.assertEqual(values['shares_outstanding'], 24_000_000_000)
+        self.assertEqual(values['eps_forecast_next_quarter'], 2.50)
+
     def test_a_failed_request_publishes_without_these_values(self):
         records = [{'isin': 'US1912161007'}]
         def fail():

@@ -42,7 +42,16 @@ EXTRA = {'earnings_release_date': 'last_earnings', 'ipo_offer_date': 'ipo_date',
          'total_assets_fq': 'total_assets', 'total_current_assets_fq': 'current_assets',
          'total_current_liabilities_fq': 'current_liabilities', 'total_liabilities_fq': 'total_liabilities',
          'cash_f_operating_activities_fy': 'operating_cash_flow', 'cash_f_investing_activities_fy': 'investing_cash_flow',
-         'cash_f_financing_activities_fy': 'financing_cash_flow', 'total_revenue_cagr_5y': 'revenue_cagr_5y'}
+         'cash_f_financing_activities_fy': 'financing_cash_flow', 'total_revenue_cagr_5y': 'revenue_cagr_5y',
+         # Phase 1: Analyst Target & Rating, Multiples, Margins, Ratios, Beta, Volatility & Float
+         'price_target_average': 'target_price', 'recommendation_mark': 'analyst_rating',
+         'price_sales_current': 'ps_ratio',
+         'gross_margin_ttm': 'gross_margin_percent', 'net_margin_ttm': 'net_margin_percent',
+         'return_on_equity_fq': 'roe_percent', 'return_on_invested_capital_fq': 'roic_percent',
+         'quick_ratio_fq': 'quick_ratio', 'long_term_debt_to_equity_fq': 'lt_debt_to_equity',
+         'beta_1_year': 'beta', 'Volatility.W': 'volatility_week_percent', 'Volatility.M': 'volatility_month_percent',
+         'float_shares_outstanding': 'float_shares', 'total_shares_outstanding': 'shares_outstanding',
+         'earnings_per_share_forecast_next_fq': 'eps_forecast_next_quarter'}
 # Index memberships, by TradingView's name -> the label the release publishes. TradingView's lists match the issuers'
 # holdings (SPY: 503 of 503; DIA: 30 of 30, checked 2026-11-10); it does not carry the S&P 400 or 600.
 INDEXES = {'S&P 500': 'S&P 500', 'NASDAQ 100': 'NASDAQ 100', 'Dow Jones Industrial Average': 'DOW JONES 30',
@@ -206,6 +215,24 @@ def canonical(found: dict, record: dict, session: str) -> dict:
         # "Last year" is the trailing twelve months; the year before follows from its growth (fiscal years differ).
         'eps_last_year': _number(found['eps_ttm']) if dollars else None,
         'eps_2_years_back': _prior(found['eps_ttm'], found['eps_growth']) if dollars else None,
+        # Phase 1 additions: Analyst Consensus, Multiples, Margins, Ratios, Beta, Volatility & Float
+        'target_price': _number(found.get('target_price')),
+        'target_price_upside_percent': round((_number(found.get('target_price')) / close - 1) * 100, 2)
+        if _number(found.get('target_price')) and close and close > 0 else None,
+        'analyst_rating': _number(found.get('analyst_rating')),
+        'ps_ratio': _number(found.get('ps_ratio')),
+        'gross_margin_percent': _number(found.get('gross_margin_percent')),
+        'net_margin_percent': _number(found.get('net_margin_percent')),
+        'roe_percent': _number(found.get('roe_percent')),
+        'roic_percent': _number(found.get('roic_percent')),
+        'quick_ratio': _number(found.get('quick_ratio')),
+        'lt_debt_to_equity': _number(found.get('lt_debt_to_equity')),
+        'beta': _number(found.get('beta')),
+        'volatility_week_percent': _number(found.get('volatility_week_percent')),
+        'volatility_month_percent': _number(found.get('volatility_month_percent')),
+        'float_shares': _number(found.get('float_shares')),
+        'shares_outstanding': _number(found.get('shares_outstanding')),
+        'eps_forecast_next_quarter': _number(found.get('eps_forecast_next_quarter')) if dollars else None,
     }
 
 

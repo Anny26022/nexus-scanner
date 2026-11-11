@@ -72,6 +72,30 @@ class PublishUsTests(unittest.TestCase):
         self.assertEqual(next(group for group in index['groups'] if group['id'] == 'sector:Technology')['m'], ['S0', 'S1', 'S2', 'S3'])
         self.assertEqual(next(stock for stock in index['stocks'] if stock['s'] == 'S0')['h'], 'core')
 
+    def test_us_rotation_with_finviz_thematic_taxonomy(self):
+        import rotation_history as rh
+        from test_rotation_history import sessions
+        days = sessions(340)
+        flat = [(day, 100.) for day in days]
+        symbols = ['NVDA', 'AMD', 'MSFT', 'AAPL']
+        rows = [{'symbol': sym, 'sector': 'Technology', 'industry': 'Semiconductors', 'marketCapCrore': 3000000,
+                 'metrics': {'turnover30': 500}, 'indexMemberships': ['S&P 500', 'RUSSELL 1000']}
+                for sym in symbols]
+
+        thematic_path = Path(__file__).parents[1] / 'DO NOT DELETE EDL PIPELINE' / 'us_thematic_universe.json'
+        taxonomy = publish_us.build_us_taxonomy(rows, days[-1], thematic_path)
+        self.assertEqual(taxonomy['schemaVersion'], 1)
+        self.assertIn('NVDA', taxonomy['records'])
+        self.assertEqual(taxonomy['records']['NVDA']['theme'], 'Artificial Intelligence')
+
+        index, shards, _ = rh.build(days[-1], rows, {row['symbol']: flat for row in rows},
+                                    {code: flat for code in publish_us.ROTATION_BENCHMARKS},
+                                    taxonomy['records'], market=publish_us.US_ROTATION)
+        group_levels = {group['l'] for group in index['groups']}
+        self.assertIn('theme', group_levels)
+        ai_group = next(group for group in index['groups'] if group['id'] == 'theme:Artificial Intelligence')
+        self.assertIn('NVDA', ai_group['m'])
+
 
 if __name__ == '__main__':
     unittest.main()

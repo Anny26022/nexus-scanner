@@ -31,7 +31,7 @@ from ohlcv_utils import symbol_csv_path
 from pipeline_utils import resource_path
 
 from .. import UNITED_STATES
-from . import calendar, dhan, fields, history, statements, tradingview
+from . import calendar, dhan, fields, finviz, history, statements, tradingview
 from .universe import SCREENABLE, security_type
 
 # Benchmark ETFs stand in for indices; SPY is the market benchmark for RS and breadth.
@@ -106,7 +106,7 @@ def stock_metrics(path: Path) -> dict:
     return result
 
 
-def stock_record(record: dict, metrics: dict, session: str) -> dict:
+def stock_record(record: dict, metrics: dict, session: str, thematic: dict | None = None) -> dict:
     """The canonical record the shared engine and publisher read."""
     aligned = metrics.get('as_of_date') == session
     # TradingView's all-time high and percent from ATH; falls back to stored history only when TradingView is missing.
@@ -116,6 +116,9 @@ def stock_record(record: dict, metrics: dict, session: str) -> dict:
         percent_from_ath = (1 - close / high) * 100 if high and close else None
     else:
         percent_from_ath = record.get('percent_from_ath')
+    thematic = thematic or {}
+    news_feed = thematic.get('news_feed') or record.get('news_feed') or []
+    insider_activity = thematic.get('insider_activity') or record.get('insider_activity') or []
     return {
         **{key: value for key, value in record.items() if key not in BUILD_ONLY},
         **{key: value for key, value in metrics.items() if not key.startswith('turnover') and key != 'history_high'},
@@ -123,7 +126,8 @@ def stock_record(record: dict, metrics: dict, session: str) -> dict:
         'schema_version': '3.0', 'industry': record.get('industry'), 'listing_board': 'MAINBOARD', 'is_sme': False, 'listing_series': None,
         'default_screener_eligible': True, 'index_memberships': record.get('index_memberships') or [],
         'event_markers': [], 'recent_announcements': [],
-        'news_feed': [], 'as_of_date': session if aligned else metrics.get('as_of_date'),
+        'news_feed': news_feed, 'insider_activity': insider_activity,
+        'as_of_date': session if aligned else metrics.get('as_of_date'),
         'all_time_high': high, 'percent_from_ath': percent_from_ath,
         # The engine reads both of India's names for these two returns.
         'return_1m': record.get('perf_1m'), 'return_1y': record.get('perf_12m'),
@@ -201,7 +205,11 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     for name in ('all_indices_history_v2.json', 'market_breadth_v2.json'):
         _compress(root / name)
 
-    stocks = [stock_record(record, stock_metrics(symbol_csv_path(root / 'ohlcv_data', record['symbol'])), session)
+    thematic_universe = finviz.load_thematic_universe(root / 'us_thematic_universe.json')
+    if not thematic_universe:
+        thematic_universe = finviz.load_thematic_universe(Path(__file__).parents[4] / 'us_thematic_universe.json')
+    stocks = [stock_record(record, stock_metrics(symbol_csv_path(root / 'ohlcv_data', record['symbol'])), session,
+                           thematic=thematic_universe.get(record['symbol']))
               for record in records if symbol_csv_path(root / 'ohlcv_data', record['symbol']).exists()]
     _write_json(root / 'all_stocks_fundamental_analysis.json', stocks, compress=True)
     # Sector and industry breadth (the Market page), by India's own function; it reads India's display columns.

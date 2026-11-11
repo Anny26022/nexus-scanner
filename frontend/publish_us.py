@@ -35,6 +35,7 @@ from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.markets import UNITED_STATES
 from edl_pipeline.markets.us.tradingview import API_URL as TRADINGVIEW_US
 from edl_pipeline.markets.us.calendar import sessions_after
+from edl_pipeline.markets.us import finviz
 
 POINTER = 'us/current.json'
 # The Market page's index cards: the benchmark ETFs the US root keeps as its indices, in display order.
@@ -68,9 +69,60 @@ def chart_objects(root, session):
     return chart_root, chart_revision(chart_root, session)
 
 
-def rotation_objects(root, cache, rows, source_bytes, session, objects):
+def build_us_taxonomy(rows, session, thematic_path=None):
+    """Construct standard ThemeClassification payload from Finviz thematic data for the US market."""
+    thematic_data = finviz.load_thematic_universe(thematic_path) if thematic_path and thematic_path.is_file() else {}
+    records, unmapped = {}, []
+    for row in rows:
+        sym = row['symbol']
+        info = thematic_data.get(sym)
+        if info:
+            primary = info.get('primary_theme') or (info.get('themes') or [None])[0]
+            themes = info.get('themes', [])
+            subthemes = info.get('subthemes', [])
+            sub_industry = subthemes[0] if subthemes else None
+            memberships = {t: 'curated-rule' for t in themes if t}
+            records[sym] = {
+                'theme': primary,
+                'block': None,
+                'macro': None,
+                'industry': row.get('industry'),
+                'subIndustry': sub_industry,
+                'memberships': memberships,
+                'aliases': [],
+                'mappingConfidence': 'source' if primary else None,
+                'mappingEvidenceUrl': f'https://finviz.com/quote.ashx?t={sym}',
+                'issuerOverlay': None,
+            }
+        else:
+            records[sym] = {
+                'theme': None,
+                'block': None,
+                'macro': None,
+                'industry': row.get('industry'),
+                'subIndustry': None,
+                'memberships': {},
+                'aliases': [],
+                'mappingConfidence': None,
+                'mappingEvidenceUrl': None,
+                'issuerOverlay': None,
+            }
+            unmapped.append(sym)
+
+    version = hashlib.sha256(json.dumps(records, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    return {
+        'schemaVersion': 1,
+        'version': version,
+        'asOfDate': session,
+        'source': 'Finviz Thematic Classification',
+        'records': records,
+        'coverage': {'total': len(records), 'mapped': len(records) - len(unmapped), 'unmapped': unmapped},
+    }
+
+
+def rotation_objects(root, cache, rows, source_bytes, session, objects, taxonomy=None):
     """The Rotation page's price history for the US release, as India's: content-addressed objects in `objects`;
-    returns the index hash. Groups are sectors and industries (the US has no theme classification). The advanced
+    returns the index hash. Groups are sectors, industries, sub-industries, and themes. The advanced
     membership ledger is staged next to the carried one and replaces it once the release is published."""
     def closes(symbol):
         frame = cache.frame(root, symbol, session)
@@ -82,7 +134,8 @@ def rotation_objects(root, cache, rows, source_bytes, session, objects):
     # Dated group memberships, carried between runs with the price history (us_daily_refresh.yml).
     ledger_path = root / rotation_history.LEDGER_NAME
     ledger = json.loads(gzip.decompress(ledger_path.read_bytes())) if ledger_path.exists() else None
-    index, shards, ledger = rotation_history.build(session, rows, closes, benchmarks, {}, ledger, market=US_ROTATION)
+    taxonomy_records = taxonomy.get('records', {}) if taxonomy else {}
+    index, shards, ledger = rotation_history.build(session, rows, closes, benchmarks, taxonomy_records, ledger, market=US_ROTATION)
     digest = rotation_history.write_objects(objects, index, shards)
     ledger_path.with_name(ledger_path.name + '.tmp').write_bytes(
         gzip.compress(json.dumps(ledger, separators=(',', ':'), sort_keys=True).encode(), mtime=0))
@@ -160,9 +213,13 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     except (RuntimeError, ValueError, KeyError, OSError) as error:
         print(f'WARNING: US charts unavailable for {session}: {error}', flush=True)
         chart_root = chart_release = None
+    thematic_path = root / 'us_thematic_universe.json'
+    if not thematic_path.is_file():
+        thematic_path = Path(__file__).parents[1] / 'DO NOT DELETE EDL PIPELINE' / 'us_thematic_universe.json'
+    taxonomy = build_us_taxonomy(published, session, thematic_path if thematic_path.is_file() else None)
     rotation, rotation_hash = output / 'rotation', None
     try:
-        rotation_hash = rotation_objects(root, cache, published, source_bytes, session, rotation)
+        rotation_hash = rotation_objects(root, cache, published, source_bytes, session, rotation, taxonomy=taxonomy)
     except (ValueError, KeyError, TypeError, OSError) as error:
         print(f'WARNING: US rotation history unavailable for {session}: {error}', flush=True)
     digest = hashlib.sha256(b'market:us')
@@ -172,6 +229,7 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     for name in CODE_FILES:
         digest.update(name.encode()); digest.update((here / name).read_bytes())
     digest.update(json.dumps(rows, sort_keys=True, separators=(',', ':')).encode())
+    digest.update((taxonomy['version'] if taxonomy else 'no-taxonomy').encode())
     digest.update((rotation_hash or 'no-rotation').encode())
     digest.update((chart_release or 'no-charts').encode())
     revision = digest.hexdigest()
@@ -194,6 +252,11 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         (generation / 'market-overview.json.gz').write_bytes(gzip.compress(
             json.dumps(overview, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
     manifest = manifest_for(revision, session, len(rows), market_overview=overview is not None)
+    if taxonomy:
+        taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
+        (generation / 'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
+        manifest['themeClassificationUrl'] = f'/data/revisions/{revision}/theme-classification.json.gz'
+        manifest['themeClassificationVersion'] = taxonomy['version']
     # The Charts page's symbol search and list (India's chart directory, the same fields).
     directory = {'revision': revision, 'asOfDate': session,
                  'stocks': [{key: row[key] for key in CHART_DIRECTORY_FIELDS if key in row} for row in rows]}

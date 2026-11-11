@@ -7,6 +7,7 @@ DO NOT DELETE EDL PIPELINE/*.json
 !DO NOT DELETE EDL PIPELINE/etf_enum_labels.json
 !DO NOT DELETE EDL PIPELINE/tradingview_wire.json
 !DO NOT DELETE EDL PIPELINE/nse_trading_calendar.json
+!DO NOT DELETE EDL PIPELINE/us_thematic_universe.json
 DO NOT DELETE EDL PIPELINE/*.csv
 DO NOT DELETE EDL PIPELINE/company_filings/
 DO NOT DELETE EDL PIPELINE/market_news/

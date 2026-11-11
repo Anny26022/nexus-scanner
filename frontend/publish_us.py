@@ -198,6 +198,42 @@ def publish_us(root, output=OUTPUT, *, workers=0):
             dollar_volume = stock.get('dollar_volume')
             row['rupeeVolumeCrore'] = dollar_volume / UNITED_STATES.provider_amount_unit if dollar_volume is not None else None
             listing_age(row, stock, session)
+            # Enriched Phase 1 (TradingView) and Phase 2 (Finviz Ownership / Short Interest) metrics
+            for src, dst in (
+                ('short_float_percent', 'shortFloatPct'),
+                ('short_ratio', 'shortRatio'),
+                ('insider_own_percent', 'insiderOwnPct'),
+                ('institutional_own_percent', 'institutionalOwnPct'),
+                ('insider_trans_percent', 'insiderTransPct'),
+                ('institutional_trans_percent', 'institutionalTransPct'),
+                ('target_price', 'targetPrice'),
+                ('target_price_upside_percent', 'targetPriceUpsidePct'),
+                ('analyst_rating', 'analystRating'),
+                ('ps_ratio', 'psRatio'),
+                ('gross_margin_percent', 'grossMarginPct'),
+                ('net_margin_percent', 'netMarginPct'),
+                ('roe_percent', 'roePct'),
+                ('roic_percent', 'roicPct'),
+                ('quick_ratio', 'quickRatio'),
+                ('lt_debt_to_equity', 'ltDebtToEquity'),
+                ('beta', 'beta'),
+                ('volatility_week_percent', 'volatilityWeekPct'),
+                ('volatility_month_percent', 'volatilityMonthPct'),
+                ('float_shares', 'floatShares'),
+                ('shares_outstanding', 'sharesOutstanding'),
+                ('eps_forecast_next_quarter', 'epsForecastNextQuarter'),
+            ):
+                val = stock.get(src)
+                if val is not None:
+                    row[dst] = val
+            if stock.get('news_feed'):
+                row['newsFeed'] = stock['news_feed']
+            if stock.get('insider_activity'):
+                row['insiderActivity'] = stock['insider_activity']
+            if row.get('promoterHoldingPct') is None and row.get('insiderOwnPct') is not None:
+                row['promoterHoldingPct'] = row['insiderOwnPct']
+            if row.get('fiiHoldingPct') is None and row.get('institutionalOwnPct') is not None:
+                row['fiiHoldingPct'] = row['institutionalOwnPct']
             rows.append(row); default_count += default_match
     finally:
         prepared.close()

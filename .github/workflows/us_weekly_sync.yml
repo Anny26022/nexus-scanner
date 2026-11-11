@@ -1,0 +1,62 @@
+name: US Weekly Finviz Universe Sync
+
+# Runs every Saturday morning (06:00 UTC) after the US market closes for the week.
+# Re-crawls Finviz thematic taxonomy and ownership / short-interest data (Phase 1 & 2)
+# and commits the refreshed us_thematic_universe.json and us_ownership_universe.json.
+on:
+  schedule:
+    - cron: '0 6 * * 6'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: us-weekly-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-finviz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
+
+      - name: Crawl Finviz Thematic & Ownership Universes
+        env:
+          PYTHONUNBUFFERED: '1'
+        run: |
+          cd "DO NOT DELETE EDL PIPELINE"
+          PYTHONPATH=src:. python -m edl_pipeline.markets.us.finviz --crawl all --delay 0.1 --workers 3
+
+      - name: Verify US Pipeline Tests
+        run: |
+          cd "DO NOT DELETE EDL PIPELINE"
+          PYTHONPATH=src:. python -m unittest tests.test_us_market -v
+          python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
+
+      - name: Commit and Push Updated Universes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "DO NOT DELETE EDL PIPELINE/us_thematic_universe.json" "DO NOT DELETE EDL PIPELINE/us_ownership_universe.json"
+          if git diff --staged --quiet; then
+            echo "No changes to Finviz universes."
+          else
+            git commit -m "chore(us): weekly Finviz thematic & ownership universe sync [skip ci]"
+            git push
+          fi

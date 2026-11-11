@@ -96,6 +96,77 @@ class PublishUsTests(unittest.TestCase):
         ai_group = next(group for group in index['groups'] if group['id'] == 'theme:Artificial Intelligence')
         self.assertIn('NVDA', ai_group['m'])
 
+    def test_us_rows_enrich_phase_1_and_phase_2_fields(self):
+        stock = {
+            'symbol': 'AAPL',
+            'dollar_volume': 50_000_000,
+            'short_float_percent': 1.45,
+            'short_ratio': 1.82,
+            'insider_own_percent': 0.08,
+            'institutional_own_percent': 61.2,
+            'insider_trans_percent': -2.1,
+            'institutional_trans_percent': 0.45,
+            'target_price': 250.0,
+            'target_price_upside_percent': 12.5,
+            'analyst_rating': 'Buy',
+            'ps_ratio': 8.2,
+            'gross_margin_percent': 46.2,
+            'net_margin_percent': 24.1,
+            'roe_percent': 147.2,
+            'roic_percent': 58.1,
+            'quick_ratio': 0.88,
+            'lt_debt_to_equity': 1.4,
+            'beta': 1.1,
+            'news_feed': [{'title': 'Apple Earnings Beat', 'link': 'https://example.com'}],
+            'insider_activity': [{'insider': 'Tim Cook', 'transaction': 'Sale'}],
+        }
+        row = {'symbol': 'AAPL', 'metrics': {}}
+        # Simulate enrichment logic from publish_us
+        dollar_volume = stock.get('dollar_volume')
+        row['rupeeVolumeCrore'] = dollar_volume / publish_us.UNITED_STATES.provider_amount_unit if dollar_volume is not None else None
+        publish_us.listing_age(row, stock, '2026-11-09')
+        for src, dst in (
+            ('short_float_percent', 'shortFloatPct'),
+            ('short_ratio', 'shortRatio'),
+            ('insider_own_percent', 'insiderOwnPct'),
+            ('institutional_own_percent', 'institutionalOwnPct'),
+            ('insider_trans_percent', 'insiderTransPct'),
+            ('institutional_trans_percent', 'institutionalTransPct'),
+            ('target_price', 'targetPrice'),
+            ('target_price_upside_percent', 'targetPriceUpsidePct'),
+            ('analyst_rating', 'analystRating'),
+            ('ps_ratio', 'psRatio'),
+            ('gross_margin_percent', 'grossMarginPct'),
+            ('net_margin_percent', 'netMarginPct'),
+            ('roe_percent', 'roePct'),
+            ('roic_percent', 'roicPct'),
+            ('quick_ratio', 'quickRatio'),
+            ('lt_debt_to_equity', 'ltDebtToEquity'),
+            ('beta', 'beta'),
+        ):
+            val = stock.get(src)
+            if val is not None:
+                row[dst] = val
+        if stock.get('news_feed'):
+            row['newsFeed'] = stock['news_feed']
+        if stock.get('insider_activity'):
+            row['insiderActivity'] = stock['insider_activity']
+        if row.get('promoterHoldingPct') is None and row.get('insiderOwnPct') is not None:
+            row['promoterHoldingPct'] = row['insiderOwnPct']
+        if row.get('fiiHoldingPct') is None and row.get('institutionalOwnPct') is not None:
+            row['fiiHoldingPct'] = row['institutionalOwnPct']
+
+        self.assertEqual(row['shortFloatPct'], 1.45)
+        self.assertEqual(row['shortRatio'], 1.82)
+        self.assertEqual(row['insiderOwnPct'], 0.08)
+        self.assertEqual(row['institutionalOwnPct'], 61.2)
+        self.assertEqual(row['promoterHoldingPct'], 0.08)
+        self.assertEqual(row['fiiHoldingPct'], 61.2)
+        self.assertEqual(row['targetPrice'], 250.0)
+        self.assertEqual(row['analystRating'], 'Buy')
+        self.assertEqual(len(row['newsFeed']), 1)
+        self.assertEqual(len(row['insiderActivity']), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -205,6 +205,30 @@ export interface StockRow {
   gsmStage?: string | null;
   rsRating: number | null;
   dataCompleteness: number; // 0 to 100
+  // US and Market Enriched Metrics
+  targetPrice?: number | null;
+  targetPriceUpsidePct?: number | null;
+  analystRating?: string | number | null;
+  psRatio?: number | null;
+  grossMarginPct?: number | null;
+  netMarginPct?: number | null;
+  roicPct?: number | null;
+  quickRatio?: number | null;
+  ltDebtToEquity?: number | null;
+  beta?: number | null;
+  volatilityWeekPct?: number | null;
+  volatilityMonthPct?: number | null;
+  floatShares?: number | null;
+  sharesOutstanding?: number | null;
+  epsForecastNextQuarter?: number | null;
+  shortFloatPct?: number | null;
+  shortRatio?: number | null;
+  insiderOwnPct?: number | null;
+  institutionalOwnPct?: number | null;
+  insiderTransPct?: number | null;
+  institutionalTransPct?: number | null;
+  newsFeed?: Array<{ title?: string; link?: string; publisher?: string; date?: string }>;
+  insiderActivity?: Array<{ insider?: string; relationship?: string; date?: string; transaction?: string; cost?: number; shares?: number; value?: number; sharesTotal?: number }>;
 }
 
 export interface ScreenerRunResponse {

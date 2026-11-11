@@ -334,7 +334,7 @@ def quarterly_history(page: dict, record: dict) -> list[dict]:
             # US filers report consolidated statements.
             'report_type': 'CONSOLIDATED',
             'revenue': quarter.get('REVENUE'), 'sales': quarter.get('SALES') or quarter.get('REVENUE'),
-            'operating_profit': quarter.get('OPERATING_PROFIT') or quarter.get('EBITDA'),
+            'operating_profit': quarter.get('OPERATING_PROFIT'),
             'net_profit': quarter.get('NET_PROFIT'), 'profit_before_tax': quarter.get('PROFIT_BEFORE_TAX'),
             'eps': quarter.get('EPS'), 'opm': quarter.get('OPM'), 'ebitda': quarter.get('EBITDA'),
             'numeric_source': 'Dhan US stock page (millions of dollars)',

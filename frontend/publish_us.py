@@ -183,8 +183,53 @@ def manifest_for(revision, session, total, *, market_overview=False, etf_snapsho
             'datasetPackedGzipUrl': f'{base}/stocks.packed.json.gz', 'iposUrl': f'{base}/ipos.json.gz'}
 
 
+def build_us_ipos(stocks, session):
+    """Reconstruct US listings and 180-day lockup expiry calendar for recent IPOs (<= 730 days)."""
+    ipo_records = []
+    sess_date = date.fromisoformat(session)
+    for stock in stocks:
+        listed = stock.get('listing_date')
+        if not listed:
+            continue
+        try:
+            list_date = date.fromisoformat(listed[:10])
+            age_days = (sess_date - list_date).days
+            if 0 <= age_days <= 730:
+                lockup_date = list_date + timedelta(days=180)
+                is_passed = sess_date >= lockup_date
+                mcap = stock.get('market_cap')
+                mcap_crore = (mcap / 1e6) if mcap and mcap > 1e6 else mcap
+                dvol = stock.get('dollar_volume')
+                turnover_m = (dvol / 1e6) if dvol and dvol > 1e6 else dvol
+                ipo_records.append({
+                    'symbol': stock['symbol'],
+                    'name': stock.get('name') or stock['symbol'],
+                    'currency': 'USD',
+                    'market': 'us',
+                    'listing_date': list_date.isoformat(),
+                    'listing_age_calendar_days': age_days,
+                    'close': stock.get('close'),
+                    'market_cap_crore': mcap_crore,
+                    'sector': stock.get('sector'),
+                    'industry': stock.get('industry'),
+                    'rupee_volume': (turnover_m * 10_000_000) if turnover_m is not None else None,
+                    'turnover_crore': turnover_m,
+                    'anchor_lock_in_end': lockup_date.isoformat(),
+                    'anchor_lock_in_calendar': [{
+                        'listing_date': list_date.isoformat(),
+                        'unlock_date': lockup_date.isoformat(),
+                        'tranche': 100,
+                    }],
+                    'next_anchor_lock_in_date': None if is_passed else lockup_date.isoformat(),
+                })
+        except (ValueError, TypeError):
+            continue
+    ipo_records.sort(key=lambda r: r['listing_date'], reverse=True)
+    return {'schema_version': 1, 'as_of_date': session, 'records': ipo_records}
+
+
 def load_financial_history(root, source_bytes, session):
-    """Load and normalize quarterly financial history into the standard FinancialHistory schema."""
+    """Load and normalize quarterly financial history into standard FinancialHistory schema (oldest first)."""
     histories = {}
     quarterly_source = source_bytes.get('quarterly_financial_history.json.gz') or source_bytes.get('quarterly_financial_history.json')
     if not quarterly_source:
@@ -202,7 +247,7 @@ def load_financial_history(root, source_bytes, session):
                 by_sym.setdefault(rec['symbol'], []).append(rec)
             for sym, recs in by_sym.items():
                 periods = []
-                for r in sorted(recs, key=lambda x: x.get('quarter_end') or x.get('period_end') or '', reverse=True):
+                for r in sorted(recs, key=lambda x: x.get('quarter_end') or x.get('period_end') or ''):
                     period_end = r.get('period_end') or r.get('quarter_end')
                     if not period_end:
                         continue
@@ -211,7 +256,7 @@ def load_financial_history(root, source_bytes, session):
                         'filing_date': r.get('filing_date'),
                         'revenue': r.get('revenue'),
                         'sales': r.get('sales') or r.get('revenue'),
-                        'operating_profit': r.get('operating_profit') or r.get('ebitda'),
+                        'operating_profit': r.get('operating_profit'),
                         'net_profit': r.get('net_profit'),
                         'profit_before_tax': r.get('profit_before_tax'),
                         'eps': r.get('eps'),
@@ -339,45 +384,7 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     packed = json.dumps(pack_snapshot(payload), separators=(',', ':'), allow_nan=False).encode()
     (generation / 'stocks.packed.json.gz').write_bytes(gzip.compress(packed, compresslevel=9, mtime=0))
     # US listings & Lockup Expiration Desk
-    ipo_records = []
-    sess_date = date.fromisoformat(session)
-    for stock in context['stocks'].values():
-        listed = stock.get('listing_date')
-        if not listed:
-            continue
-        try:
-            list_date = date.fromisoformat(listed[:10])
-            age_days = (sess_date - list_date).days
-            if 0 <= age_days <= 730:
-                lockup_date = list_date + timedelta(days=180)
-                is_passed = sess_date >= lockup_date
-                mcap = stock.get('market_cap')
-                mcap_crore = (mcap / 1e6) if mcap and mcap > 1e6 else mcap
-                dvol = stock.get('dollar_volume')
-                turnover_m = (dvol / 1e6) if dvol and dvol > 1e6 else dvol
-                ipo_records.append({
-                    'symbol': stock['symbol'],
-                    'name': stock.get('name') or stock['symbol'],
-                    'listing_date': list_date.isoformat(),
-                    'listing_age_calendar_days': age_days,
-                    'close': stock.get('close'),
-                    'market_cap_crore': mcap_crore,
-                    'sector': stock.get('sector'),
-                    'industry': stock.get('industry'),
-                    'rupee_volume': (turnover_m * 10_000_000) if turnover_m is not None else None,
-                    'turnover_crore': turnover_m,
-                    'anchor_lock_in_end': lockup_date.isoformat(),
-                    'anchor_lock_in_calendar': [{
-                        'listing_date': list_date.isoformat(),
-                        'unlock_date': lockup_date.isoformat(),
-                        'tranche': 100,
-                    }],
-                    'next_anchor_lock_in_date': None if is_passed else lockup_date.isoformat(),
-                })
-        except (ValueError, TypeError):
-            continue
-    ipo_records.sort(key=lambda r: r['listing_date'], reverse=True)
-    ipo_payload = {'schema_version': 1, 'as_of_date': session, 'records': ipo_records}
+    ipo_payload = build_us_ipos(context['stocks'].values(), session)
     (generation / 'ipos.json.gz').write_bytes(
         gzip.compress(json.dumps(ipo_payload, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
 

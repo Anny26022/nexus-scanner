@@ -191,10 +191,11 @@ class PublishUsTests(unittest.TestCase):
         self.assertEqual(aapl['amount_unit'], 'USD_MILLION')
         self.assertEqual(aapl['observed_on'], '2024-11-09')
         self.assertEqual(len(aapl['quarterly']), 2)
-        self.assertEqual(aapl['quarterly'][0]['period_end'], '2024-09-30')
-        self.assertEqual(aapl['quarterly'][0]['revenue'], 94930)
-        self.assertEqual(aapl['quarterly'][0]['sales'], 94930)
-        self.assertEqual(aapl['quarterly'][1]['period_end'], '2024-06-30')
+        # Standard ascending order (oldest first, latest last)
+        self.assertEqual(aapl['quarterly'][0]['period_end'], '2024-06-30')
+        self.assertEqual(aapl['quarterly'][1]['period_end'], '2024-09-30')
+        self.assertEqual(aapl['quarterly'][1]['revenue'], 94930)
+        self.assertEqual(aapl['quarterly'][1]['sales'], 94930)
 
     def test_us_ipo_record_structure_and_lockup_calculation(self):
         from datetime import date, timedelta
@@ -204,7 +205,6 @@ class PublishUsTests(unittest.TestCase):
         lockup_100 = list_100 + timedelta(days=180)
         # Stock listed 200 days ago (lockup passed)
         list_200 = sess_date - timedelta(days=200)
-        lockup_200 = list_200 + timedelta(days=180)
 
         stocks = {
             'IPO1': {'symbol': 'IPO1', 'name': 'Recent IPO 1', 'listing_date': list_100.isoformat(),
@@ -213,37 +213,10 @@ class PublishUsTests(unittest.TestCase):
                      'close': 12.0, 'market_cap': 350_000_000, 'dollar_volume': 3_000_000, 'sector': 'Health', 'industry': 'Biotech'},
         }
 
-        ipo_records = []
-        for stock in stocks.values():
-            list_date = date.fromisoformat(stock['listing_date'][:10])
-            age_days = (sess_date - list_date).days
-            lockup_date = list_date + timedelta(days=180)
-            is_passed = sess_date >= lockup_date
-            mcap = stock.get('market_cap')
-            mcap_crore = (mcap / 1e6) if mcap and mcap > 1e6 else mcap
-            dvol = stock.get('dollar_volume')
-            turnover_m = (dvol / 1e6) if dvol and dvol > 1e6 else dvol
-            ipo_records.append({
-                'symbol': stock['symbol'],
-                'name': stock.get('name') or stock['symbol'],
-                'listing_date': list_date.isoformat(),
-                'listing_age_calendar_days': age_days,
-                'close': stock.get('close'),
-                'market_cap_crore': mcap_crore,
-                'sector': stock.get('sector'),
-                'industry': stock.get('industry'),
-                'rupee_volume': (turnover_m * 10_000_000) if turnover_m is not None else None,
-                'turnover_crore': turnover_m,
-                'anchor_lock_in_end': lockup_date.isoformat(),
-                'anchor_lock_in_calendar': [{
-                    'listing_date': list_date.isoformat(),
-                    'unlock_date': lockup_date.isoformat(),
-                    'tranche': 100,
-                }],
-                'next_anchor_lock_in_date': None if is_passed else lockup_date.isoformat(),
-            })
-
-        ipo_records.sort(key=lambda r: r['listing_date'], reverse=True)
+        # Exercise the production builder directly
+        ipo_payload = publish_us.build_us_ipos(stocks.values(), sess_date.isoformat())
+        self.assertEqual(ipo_payload['schema_version'], 1)
+        ipo_records = ipo_payload['records']
         self.assertEqual(len(ipo_records), 2)
         # Recent IPO
         rec1 = ipo_records[0]
@@ -258,6 +231,7 @@ class PublishUsTests(unittest.TestCase):
         rec2 = ipo_records[1]
         self.assertEqual(rec2['symbol'], 'IPO2')
         self.assertEqual(rec2['listing_age_calendar_days'], 200)
+        self.assertIsNone(rec2['next_anchor_lock_in_date'])
         self.assertIsNone(rec2['next_anchor_lock_in_date'])
 
 

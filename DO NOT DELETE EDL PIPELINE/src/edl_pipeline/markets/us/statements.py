@@ -329,10 +329,12 @@ def quarterly_history(page: dict, record: dict) -> list[dict]:
         filing = date.fromisoformat(reported) if latest_report else end + timedelta(days=ESTIMATED_FILING_DAYS)
         rows.append({
             'symbol': record['symbol'], 'isin': record.get('isin'), 'quarter_end': end.isoformat(),
+            'period_end': end.isoformat(),
             'filing_date': filing.isoformat(), 'filing_date_basis': 'reported' if latest_report else 'estimated',
             # US filers report consolidated statements.
             'report_type': 'CONSOLIDATED',
             'revenue': quarter.get('REVENUE'), 'sales': quarter.get('SALES') or quarter.get('REVENUE'),
+            'operating_profit': quarter.get('OPERATING_PROFIT') or quarter.get('EBITDA'),
             'net_profit': quarter.get('NET_PROFIT'), 'profit_before_tax': quarter.get('PROFIT_BEFORE_TAX'),
             'eps': quarter.get('EPS'), 'opm': quarter.get('OPM'), 'ebitda': quarter.get('EBITDA'),
             'numeric_source': 'Dhan US stock page (millions of dollars)',

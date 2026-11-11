@@ -183,11 +183,65 @@ def manifest_for(revision, session, total, *, market_overview=False, etf_snapsho
             'datasetPackedGzipUrl': f'{base}/stocks.packed.json.gz', 'iposUrl': f'{base}/ipos.json.gz'}
 
 
+def load_financial_history(root, source_bytes, session):
+    """Load and normalize quarterly financial history into the standard FinancialHistory schema."""
+    histories = {}
+    quarterly_source = source_bytes.get('quarterly_financial_history.json.gz') or source_bytes.get('quarterly_financial_history.json')
+    if not quarterly_source:
+        local_q = root / 'quarterly_financial_history.json.gz'
+        if not local_q.is_file():
+            local_q = root / 'quarterly_financial_history.json'
+        if local_q.is_file():
+            quarterly_source = local_q.read_bytes()
+    if quarterly_source:
+        try:
+            q_payload = json.loads(gzip.decompress(quarterly_source) if quarterly_source[:2] == b'\x1f\x8b' else quarterly_source)
+            raw_records = q_payload.get('records', [])
+            by_sym = {}
+            for rec in raw_records:
+                by_sym.setdefault(rec['symbol'], []).append(rec)
+            for sym, recs in by_sym.items():
+                periods = []
+                for r in sorted(recs, key=lambda x: x.get('quarter_end') or x.get('period_end') or '', reverse=True):
+                    period_end = r.get('period_end') or r.get('quarter_end')
+                    if not period_end:
+                        continue
+                    periods.append({
+                        'period_end': period_end,
+                        'filing_date': r.get('filing_date'),
+                        'revenue': r.get('revenue'),
+                        'sales': r.get('sales') or r.get('revenue'),
+                        'operating_profit': r.get('operating_profit') or r.get('ebitda'),
+                        'net_profit': r.get('net_profit'),
+                        'profit_before_tax': r.get('profit_before_tax'),
+                        'eps': r.get('eps'),
+                        'opm': r.get('opm'),
+                        'ebitda': r.get('ebitda'),
+                    })
+                if periods:
+                    histories[sym] = {
+                        'report_type': 'CONSOLIDATED',
+                        'amount_unit': 'USD_MILLION',
+                        'observed_on': session,
+                        'quarterly': periods,
+                        'annual': [],
+                    }
+        except Exception as error:
+            print(f'WARNING: US financial statement history unavailable for {session}: {error}', flush=True)
+    return histories
+
+
 def publish_us(root, output=OUTPUT, *, workers=0):
     charts_enabled()  # refuses an EDL_CHART_STORAGE other than local or r2, as India's publish does
     root, output = Path(root), Path(output)
     cache = ScannerCache(); cache.refresh(root)
     context, session = us_context(root)
+    source_bytes = {path.name: path.read_bytes() for path in sorted(root.glob('*.json.gz'))
+                    if path.name != rotation_history.LEDGER_NAME}
+    histories = load_financial_history(root, source_bytes, session)
+    for sym, hist in histories.items():
+        if sym in context['stocks']:
+            context['stocks'][sym]['financial_statement_history'] = hist
     presets = {p['id']: bridge.translate(p['id'], US_ELIGIBILITY) for p in list_presets()}
     default = bridge.group('AND', bridge.translate('mom_rvol', {'minRvol': 1.5, 'maxRvol': 20}),
                            bridge.translate('trend_price_vs_ma', {'maType': 'SMA', 'maPeriod': 50, 'operator': 'above', 'thresholdPct': 0}))
@@ -297,18 +351,27 @@ def publish_us(root, output=OUTPUT, *, workers=0):
             if 0 <= age_days <= 730:
                 lockup_date = list_date + timedelta(days=180)
                 is_passed = sess_date >= lockup_date
+                mcap = stock.get('market_cap')
+                mcap_crore = (mcap / 1e6) if mcap and mcap > 1e6 else mcap
+                dvol = stock.get('dollar_volume')
+                turnover_m = (dvol / 1e6) if dvol and dvol > 1e6 else dvol
                 ipo_records.append({
                     'symbol': stock['symbol'],
                     'name': stock.get('name') or stock['symbol'],
                     'listing_date': list_date.isoformat(),
                     'listing_age_calendar_days': age_days,
                     'close': stock.get('close'),
-                    'market_cap_crore': stock.get('market_cap'),
+                    'market_cap_crore': mcap_crore,
                     'sector': stock.get('sector'),
                     'industry': stock.get('industry'),
-                    'rupee_volume': stock.get('dollar_volume'),
+                    'rupee_volume': (turnover_m * 10_000_000) if turnover_m is not None else None,
+                    'turnover_crore': turnover_m,
                     'anchor_lock_in_end': lockup_date.isoformat(),
-                    'anchor_lock_in_calendar': [{'date': lockup_date.isoformat(), 'status': 'passed' if is_passed else 'upcoming'}],
+                    'anchor_lock_in_calendar': [{
+                        'listing_date': list_date.isoformat(),
+                        'unlock_date': lockup_date.isoformat(),
+                        'tranche': 100,
+                    }],
                     'next_anchor_lock_in_date': None if is_passed else lockup_date.isoformat(),
                 })
         except (ValueError, TypeError):
@@ -338,30 +401,15 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         (generation / 'etfs.json.gz').write_bytes(gzip.compress(etf_bytes, mtime=0))
 
     # Multi-quarter financial statement history
-    histories = {}
-    quarterly_source = source_bytes.get('quarterly_financial_history.json.gz') or source_bytes.get('quarterly_financial_history.json')
-    if not quarterly_source:
-        local_q = root / 'quarterly_financial_history.json.gz'
-        if not local_q.is_file():
-            local_q = root / 'quarterly_financial_history.json'
-        if local_q.is_file():
-            quarterly_source = local_q.read_bytes()
-    if quarterly_source:
-        try:
-            q_payload = json.loads(gzip.decompress(quarterly_source) if quarterly_source[:2] == b'\x1f\x8b' else quarterly_source)
-            for rec in q_payload.get('records', []):
-                histories.setdefault(rec['symbol'], []).append(rec)
-        except Exception as error:
-            print(f'WARNING: US financial statement history unavailable for {session}: {error}', flush=True)
     if histories:
         history_bytes = gzip.compress(json.dumps(histories, separators=(',', ':'), allow_nan=False).encode(), mtime=0)
         (generation / 'financial-history.json.gz').write_bytes(history_bytes)
         history_dir = generation / 'financial-history'
         history_dir.mkdir(parents=True, exist_ok=True)
-        for sym, recs in histories.items():
+        for sym, statement in histories.items():
             if sym and '/' not in sym and '..' not in sym:
                 (history_dir / f'{sym}.json.gz').write_bytes(
-                    gzip.compress(json.dumps(recs, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
+                    gzip.compress(json.dumps(statement, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
 
     # The Market page: breadth, sector and industry breadth, and the benchmark ETFs as index cards.
     overview = market_overview(source_bytes, session, KEY_INDICES)

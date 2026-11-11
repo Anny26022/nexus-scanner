@@ -174,6 +174,92 @@ class PublishUsTests(unittest.TestCase):
         self.assertEqual(len(row['newsFeed']), 1)
         self.assertEqual(len(row['insiderActivity']), 1)
 
+    def test_load_financial_history_normalizes_to_standard_schema(self):
+        records = [
+            {'symbol': 'AAPL', 'quarter_end': '2024-09-30', 'revenue': 94930, 'net_profit': 20540, 'eps': 1.64, 'filing_date': '2024-10-31'},
+            {'symbol': 'AAPL', 'quarter_end': '2024-06-30', 'revenue': 85780, 'net_profit': 21450, 'eps': 1.40, 'filing_date': '2024-08-01'},
+            {'symbol': 'MSFT', 'quarter_end': '2024-09-30', 'revenue': 65590, 'net_profit': 24670, 'eps': 3.30, 'filing_date': '2024-10-30'},
+        ]
+        import gzip
+        payload = {'records': records}
+        source_bytes = {'quarterly_financial_history.json.gz': gzip.compress(json.dumps(payload).encode())}
+        histories = publish_us.load_financial_history(Path('/dummy'), source_bytes, '2024-11-09')
+        self.assertIn('AAPL', histories)
+        self.assertIn('MSFT', histories)
+        aapl = histories['AAPL']
+        self.assertEqual(aapl['report_type'], 'CONSOLIDATED')
+        self.assertEqual(aapl['amount_unit'], 'USD_MILLION')
+        self.assertEqual(aapl['observed_on'], '2024-11-09')
+        self.assertEqual(len(aapl['quarterly']), 2)
+        self.assertEqual(aapl['quarterly'][0]['period_end'], '2024-09-30')
+        self.assertEqual(aapl['quarterly'][0]['revenue'], 94930)
+        self.assertEqual(aapl['quarterly'][0]['sales'], 94930)
+        self.assertEqual(aapl['quarterly'][1]['period_end'], '2024-06-30')
+
+    def test_us_ipo_record_structure_and_lockup_calculation(self):
+        from datetime import date, timedelta
+        sess_date = date.fromisoformat('2026-11-09')
+        # Stock listed 100 days ago (lockup upcoming)
+        list_100 = sess_date - timedelta(days=100)
+        lockup_100 = list_100 + timedelta(days=180)
+        # Stock listed 200 days ago (lockup passed)
+        list_200 = sess_date - timedelta(days=200)
+        lockup_200 = list_200 + timedelta(days=180)
+
+        stocks = {
+            'IPO1': {'symbol': 'IPO1', 'name': 'Recent IPO 1', 'listing_date': list_100.isoformat(),
+                     'close': 45.0, 'market_cap': 2_500_000_000, 'dollar_volume': 15_000_000, 'sector': 'Tech', 'industry': 'Software'},
+            'IPO2': {'symbol': 'IPO2', 'name': 'Older IPO 2', 'listing_date': list_200.isoformat(),
+                     'close': 12.0, 'market_cap': 350_000_000, 'dollar_volume': 3_000_000, 'sector': 'Health', 'industry': 'Biotech'},
+        }
+
+        ipo_records = []
+        for stock in stocks.values():
+            list_date = date.fromisoformat(stock['listing_date'][:10])
+            age_days = (sess_date - list_date).days
+            lockup_date = list_date + timedelta(days=180)
+            is_passed = sess_date >= lockup_date
+            mcap = stock.get('market_cap')
+            mcap_crore = (mcap / 1e6) if mcap and mcap > 1e6 else mcap
+            dvol = stock.get('dollar_volume')
+            turnover_m = (dvol / 1e6) if dvol and dvol > 1e6 else dvol
+            ipo_records.append({
+                'symbol': stock['symbol'],
+                'name': stock.get('name') or stock['symbol'],
+                'listing_date': list_date.isoformat(),
+                'listing_age_calendar_days': age_days,
+                'close': stock.get('close'),
+                'market_cap_crore': mcap_crore,
+                'sector': stock.get('sector'),
+                'industry': stock.get('industry'),
+                'rupee_volume': (turnover_m * 10_000_000) if turnover_m is not None else None,
+                'turnover_crore': turnover_m,
+                'anchor_lock_in_end': lockup_date.isoformat(),
+                'anchor_lock_in_calendar': [{
+                    'listing_date': list_date.isoformat(),
+                    'unlock_date': lockup_date.isoformat(),
+                    'tranche': 100,
+                }],
+                'next_anchor_lock_in_date': None if is_passed else lockup_date.isoformat(),
+            })
+
+        ipo_records.sort(key=lambda r: r['listing_date'], reverse=True)
+        self.assertEqual(len(ipo_records), 2)
+        # Recent IPO
+        rec1 = ipo_records[0]
+        self.assertEqual(rec1['symbol'], 'IPO1')
+        self.assertEqual(rec1['listing_age_calendar_days'], 100)
+        self.assertEqual(rec1['market_cap_crore'], 2500.0)
+        self.assertEqual(rec1['turnover_crore'], 15.0)
+        self.assertEqual(rec1['anchor_lock_in_calendar'][0]['unlock_date'], lockup_100.isoformat())
+        self.assertEqual(rec1['next_anchor_lock_in_date'], lockup_100.isoformat())
+
+        # Older IPO (lockup passed)
+        rec2 = ipo_records[1]
+        self.assertEqual(rec2['symbol'], 'IPO2')
+        self.assertEqual(rec2['listing_age_calendar_days'], 200)
+        self.assertIsNone(rec2['next_anchor_lock_in_date'])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -76,6 +76,12 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           exit "$status"
 
+      - name: Fetch US ETF snapshot
+        if: steps.build.outputs.ready == 'true'
+        continue-on-error: true
+        run: |
+          PYTHONPATH="DO NOT DELETE EDL PIPELINE/src:DO NOT DELETE EDL PIPELINE" python "DO NOT DELETE EDL PIPELINE/fetch_etf_snapshot.py" --market us --output "$US_ROOT/etf_snapshot.json"
+
       - name: Install R2 uploader
         if: steps.build.outputs.ready == 'true'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone

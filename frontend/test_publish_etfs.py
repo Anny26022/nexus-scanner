@@ -12,8 +12,8 @@ REVISION = 'a' * 64
 
 class FakeR2:
     """The rclone calls publish_etfs makes, on a dict of keys."""
-    def __init__(self, current, on_upload=None):
-        self.objects = {'site/data/current.json': json.dumps(current).encode()}
+    def __init__(self, current, on_upload=None, current_key='site/data/current.json'):
+        self.objects = {current_key: json.dumps(current).encode()}
         self.on_upload = on_upload
 
     def remote(self, key):
@@ -69,6 +69,21 @@ class PublishEtfsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             publish_etfs(store, fetch=lambda: etf_source('2026-11-06T08:50:00', '2026-11-08T20:00:00Z'))
         self.assertEqual(list(store.objects), ['site/data/current.json'])
+
+    def test_us_market_publishes_to_us_pointer_and_updates_release(self):
+        from fetch_etf_snapshot import normalize_us
+        def us_fetch():
+            vals = dict(symbol='SPY', time=datetime.fromisoformat('2026-11-06T16:00:00-05:00').timestamp(),
+                        close=595.0, exchange='AMEX', type='fund', subtype='etf', currency='USD', description='SPDR S&P 500')
+            return normalize_us([{'s': 'AMEX:SPY', 'd': [vals.get(f) for f in COLUMNS]}], '2026-11-06T21:00:00Z', expected_count=1)
+
+        live_us = {'revision': REVISION, 'sessionDate': '2026-11-06', 'market': 'us', 'currency': 'USD'}
+        store = FakeR2(live_us, current_key='site/data/us/current.json')
+        published = publish_etfs(store, fetch=us_fetch, market='us')
+        url = published['etfDatasetUrl']
+        self.assertRegex(url, rf'^/data/revisions/{REVISION}/etfs-[a-f0-9]{{16}}\.json\.gz$')
+        current = json.loads(store.objects['site/data/us/current.json'])
+        self.assertEqual(current['etfDatasetUrl'], url)
 
 
 if __name__ == '__main__':

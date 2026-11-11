@@ -13,7 +13,7 @@ The release files are content-addressed and live beside India's (`releases/<rev>
 `site/data/us/current.json`, served at /data/us/current.json. India's current.json is never written here.
 """
 import gzip
-from datetime import date
+from datetime import date, timedelta
 import hashlib
 import json
 import os
@@ -27,6 +27,7 @@ from packed_snapshot import pack_snapshot
 from publish_snapshot import OUTPUT, stock_rows, write_json
 from public_payload import public
 from market_overview import index_closes, market_overview
+from etf_snapshot import build_etf_snapshot, prune_etf_snapshots
 import rotation_history
 import build_chart_artifacts
 from site_data import enabled, upload_pointer, upload_revision
@@ -170,10 +171,13 @@ def listing_age(row, stock, session):
         row['metrics']['LISTING_AGE_DAYS'] = sessions_after(date.fromisoformat(listed[:10]), date.fromisoformat(session))
 
 
-def manifest_for(revision, session, total, *, market_overview=False):
+def manifest_for(revision, session, total, *, market_overview=False, etf_snapshot=False, financial_history=False):
     base = f'/data/revisions/{revision}'
     return {'revision': revision, 'sessionDate': session, 'publishedAt': f'{session}T00:00:00Z', 'schemaVersion': 4,
             **({'marketOverviewUrl': f'{base}/market-overview.json.gz'} if market_overview else {}),
+            **({'etfDatasetUrl': f'{base}/etfs.json.gz'} if etf_snapshot else {}),
+            **({'financialHistoryUrl': f'{base}/financial-history.json.gz',
+                'financialHistoryUrlTemplate': f'{base}/financial-history/{{symbol}}.json.gz'} if financial_history else {}),
             'market': UNITED_STATES.id, 'currency': UNITED_STATES.currency, 'amountUnit': UNITED_STATES.provider_amount_unit,
             'totalStocks': total, 'datasetUrl': f'{base}/stocks.json', 'datasetGzipUrl': f'{base}/stocks.json.gz',
             'datasetPackedGzipUrl': f'{base}/stocks.packed.json.gz', 'iposUrl': f'{base}/ipos.json.gz'}
@@ -280,14 +284,92 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     (generation / 'stocks.json.gz').write_bytes(gzip.compress(stock_bytes, compresslevel=6, mtime=0))
     packed = json.dumps(pack_snapshot(payload), separators=(',', ':'), allow_nan=False).encode()
     (generation / 'stocks.packed.json.gz').write_bytes(gzip.compress(packed, compresslevel=9, mtime=0))
-    # US listings are not tracked yet; the app still expects the file.
-    (generation / 'ipos.json.gz').write_bytes(gzip.compress(b'{"records":[]}', mtime=0))
+    # US listings & Lockup Expiration Desk
+    ipo_records = []
+    sess_date = date.fromisoformat(session)
+    for stock in context['stocks'].values():
+        listed = stock.get('listing_date')
+        if not listed:
+            continue
+        try:
+            list_date = date.fromisoformat(listed[:10])
+            age_days = (sess_date - list_date).days
+            if 0 <= age_days <= 730:
+                lockup_date = list_date + timedelta(days=180)
+                is_passed = sess_date >= lockup_date
+                ipo_records.append({
+                    'symbol': stock['symbol'],
+                    'name': stock.get('name') or stock['symbol'],
+                    'listing_date': list_date.isoformat(),
+                    'listing_age_calendar_days': age_days,
+                    'close': stock.get('close'),
+                    'market_cap_crore': stock.get('market_cap'),
+                    'sector': stock.get('sector'),
+                    'industry': stock.get('industry'),
+                    'rupee_volume': stock.get('dollar_volume'),
+                    'anchor_lock_in_end': lockup_date.isoformat(),
+                    'anchor_lock_in_calendar': [{'date': lockup_date.isoformat(), 'status': 'passed' if is_passed else 'upcoming'}],
+                    'next_anchor_lock_in_date': None if is_passed else lockup_date.isoformat(),
+                })
+        except (ValueError, TypeError):
+            continue
+    ipo_records.sort(key=lambda r: r['listing_date'], reverse=True)
+    ipo_payload = {'schema_version': 1, 'as_of_date': session, 'records': ipo_records}
+    (generation / 'ipos.json.gz').write_bytes(
+        gzip.compress(json.dumps(ipo_payload, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
+
+    # ETF snapshot for US market
+    etf_source = source_bytes.get('etf_snapshot.json.gz') or source_bytes.get('etf_snapshot.json')
+    if not etf_source:
+        local_etf = root / 'etf_snapshot.json.gz'
+        if not local_etf.is_file():
+            local_etf = root / 'etf_snapshot.json'
+        if local_etf.is_file():
+            etf_source = local_etf.read_bytes()
+    etf_bytes = None
+    if etf_source:
+        try:
+            raw = json.loads(gzip.decompress(etf_source) if etf_source[:2] == b'\x1f\x8b' else etf_source)
+            etfs = public(build_etf_snapshot(raw, session, revision, market='us'))
+            etf_bytes = json.dumps(pack_snapshot(etfs), separators=(',', ':'), allow_nan=False).encode()
+        except (ValueError, KeyError, TypeError, OSError) as error:
+            print(f'WARNING: US ETF snapshot unavailable for {session}: {error}', flush=True)
+    if etf_bytes is not None:
+        (generation / 'etfs.json.gz').write_bytes(gzip.compress(etf_bytes, mtime=0))
+
+    # Multi-quarter financial statement history
+    histories = {}
+    quarterly_source = source_bytes.get('quarterly_financial_history.json.gz') or source_bytes.get('quarterly_financial_history.json')
+    if not quarterly_source:
+        local_q = root / 'quarterly_financial_history.json.gz'
+        if not local_q.is_file():
+            local_q = root / 'quarterly_financial_history.json'
+        if local_q.is_file():
+            quarterly_source = local_q.read_bytes()
+    if quarterly_source:
+        try:
+            q_payload = json.loads(gzip.decompress(quarterly_source) if quarterly_source[:2] == b'\x1f\x8b' else quarterly_source)
+            for rec in q_payload.get('records', []):
+                histories.setdefault(rec['symbol'], []).append(rec)
+        except Exception as error:
+            print(f'WARNING: US financial statement history unavailable for {session}: {error}', flush=True)
+    if histories:
+        history_bytes = gzip.compress(json.dumps(histories, separators=(',', ':'), allow_nan=False).encode(), mtime=0)
+        (generation / 'financial-history.json.gz').write_bytes(history_bytes)
+        history_dir = generation / 'financial-history'
+        history_dir.mkdir(parents=True, exist_ok=True)
+        for sym, recs in histories.items():
+            if sym and '/' not in sym and '..' not in sym:
+                (history_dir / f'{sym}.json.gz').write_bytes(
+                    gzip.compress(json.dumps(recs, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
+
     # The Market page: breadth, sector and industry breadth, and the benchmark ETFs as index cards.
     overview = market_overview(source_bytes, session, KEY_INDICES)
     if overview is not None:
         (generation / 'market-overview.json.gz').write_bytes(gzip.compress(
             json.dumps(overview, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
-    manifest = manifest_for(revision, session, len(rows), market_overview=overview is not None)
+    manifest = manifest_for(revision, session, len(rows), market_overview=overview is not None,
+                            etf_snapshot=etf_bytes is not None, financial_history=bool(histories))
     if taxonomy:
         taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
         (generation / 'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))
@@ -359,6 +441,7 @@ def publish_us(root, output=OUTPUT, *, workers=0):
             ledger_path.with_name(ledger_path.name + '.tmp').replace(ledger_path)
         except OSError as error:
             print(f'WARNING: US rotation ledger was not saved: {error}', flush=True)
+    prune_etf_snapshots(output, revision)
     print(f'Published US scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets', flush=True)
     return manifest
 

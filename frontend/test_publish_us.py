@@ -14,9 +14,16 @@ class PublishUsTests(unittest.TestCase):
         manifest = publish_us.manifest_for('a' * 64, '2026-11-09', 3)
         self.assertEqual((manifest['market'], manifest['currency'], manifest['amountUnit']), ('us', 'USD', 1_000_000))
         self.assertNotIn('marketOverviewUrl', manifest)
+        self.assertNotIn('etfDatasetUrl', manifest)
+        self.assertNotIn('financialHistoryUrl', manifest)
         base = '/data/revisions/' + 'a' * 64
         self.assertEqual(publish_us.manifest_for('a' * 64, '2026-11-09', 3, market_overview=True)['marketOverviewUrl'],
                          base + '/market-overview.json.gz')
+        self.assertEqual(publish_us.manifest_for('a' * 64, '2026-11-09', 3, etf_snapshot=True)['etfDatasetUrl'],
+                         base + '/etfs.json.gz')
+        fin_manifest = publish_us.manifest_for('a' * 64, '2026-11-09', 3, financial_history=True)
+        self.assertEqual(fin_manifest['financialHistoryUrl'], base + '/financial-history.json.gz')
+        self.assertEqual(fin_manifest['financialHistoryUrlTemplate'], base + '/financial-history/{symbol}.json.gz')
         self.assertEqual({key: manifest[key] for key in ('datasetUrl', 'datasetGzipUrl', 'datasetPackedGzipUrl', 'iposUrl')},
                          {'datasetUrl': base + '/stocks.json', 'datasetGzipUrl': base + '/stocks.json.gz',
                           'datasetPackedGzipUrl': base + '/stocks.packed.json.gz', 'iposUrl': base + '/ipos.json.gz'})

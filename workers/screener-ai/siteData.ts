@@ -17,7 +17,7 @@ export const POINTER_PREFIX = 'site/data';
 export const POINTERS = new Set([
   'current.json', 'sessions.json', 'price-band-history.json', 'ai-filter-choices.json',
   'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json',
-  'us/current.json',
+  'us/current.json', 'us/sessions.json',
 ]);
 
 const REVISION_FILE = /^revisions\/([a-f0-9]{64})\/((?:[A-Za-z0-9&_.-]+\/)?[A-Za-z0-9&_.-]+\.json(?:\.gz)?)$/;

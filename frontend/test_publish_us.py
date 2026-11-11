@@ -42,6 +42,10 @@ class PublishUsTests(unittest.TestCase):
         row = {'metrics': {'LISTING_AGE_DAYS': None}, 'historyAligned': True}
         publish_us.listing_age(row, {'listing_date': '1980-12-12'}, '2026-11-09')
         self.assertGreater(row['metrics']['LISTING_AGE_DAYS'], 11_000)
+        # Over a holiday (Thanksgiving 2024-11-28), sessions exclude the holiday: 4 sessions, not 5 weekdays.
+        holiday_row = {'metrics': {'LISTING_AGE_DAYS': None}, 'historyAligned': True}
+        publish_us.listing_age(holiday_row, {'listing_date': '2024-11-25'}, '2024-12-02')
+        self.assertEqual(holiday_row['metrics']['LISTING_AGE_DAYS'], 4)
         # The engine's own count (a listing inside the stored history) stands.
         recent = {'metrics': {'LISTING_AGE_DAYS': 791}, 'historyAligned': True}
         publish_us.listing_age(recent, {'listing_date': '2023-09-14'}, '2026-11-09')

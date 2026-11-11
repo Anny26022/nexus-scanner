@@ -14,7 +14,7 @@ import requests  # noqa: E402
 from edl_pipeline.markets import MARKETS, market  # noqa: E402
 import tempfile  # noqa: E402
 
-from edl_pipeline.markets.us import build, calendar, dhan, fields, history, statements, tradingview  # noqa: E402
+from edl_pipeline.markets.us import build, calendar, dhan, fields, history, statements, tradingview, yahoo  # noqa: E402
 from edl_pipeline.markets.us.universe import history_exchanges, security_type  # noqa: E402
 
 
@@ -160,6 +160,10 @@ class FieldTests(unittest.TestCase):
         self.assertEqual((record['security_id'], record['close'], record['dollar_volume']), (10000025, 342.5, 342_500))
         self.assertEqual(record['symbol'], 'AAPL')
 
+    def test_non_integral_security_ids_are_dropped(self):
+        self.assertIsNone(fields.canonical_row({**self.ROW, 'Sid': 10000025.5}))
+        self.assertIsNone(fields.canonical_row({**self.ROW, 'Sid': '10000025.5'}))
+
 
 class UniverseTests(unittest.TestCase):
     def test_share_classes_are_read_from_the_name(self):
@@ -230,11 +234,20 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual([b['date'] for b in self.stored()], ['2026-11-04', '2026-11-05', '2026-11-06', '2026-11-09'])
         self.assertEqual(history.update({**self.RECORD, 'symbol': 'NONE'}, self.root, '2026-11-09', fetch=lambda *a: []), 'missing')
 
+    def test_refetched_history_after_halted_session_gets_snapshot_bar(self):
+        # ACME traded on Thursday 2026-11-05 at 10.0, was halted Friday 2026-11-06, and resumed Monday 2026-11-09.
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 10.0)])
+        fetch = mock.Mock(return_value=[bar('2026-11-05', 10.0)])
+        traded = {**self.RECORD, 'provider_last_trade_ist': '2026-11-10T02:29:00+05:30'}  # Monday's close
+        self.assertEqual(history.update(traded, self.root, '2026-11-09', fetch=fetch), 'refetched')
+        self.assertEqual([b['date'] for b in self.stored()], ['2026-11-05', '2026-11-09'])
+
     def test_bars_are_cleaned_and_stored_files_rewritten(self):
         # An open below the low (CSCO, 2026-09-09) widens the range; a bar priced 0 before a listing is dropped.
         self.assertEqual(history.clean({'date': '2026-09-09', 'open': 108.786, 'high': 110.43, 'low': 108.98, 'close': 109.437, 'volume': 1}),
                          {'date': '2026-09-09', 'open': 108.786, 'high': 110.43, 'low': 108.786, 'close': 109.437, 'volume': 1})
         self.assertIsNone(history.clean({'date': '2026-07-07', 'open': 0, 'high': 0, 'low': 0, 'close': 0, 'volume': 0}))
+        self.assertIsNone(history.clean({'date': '2026-09-09', 'open': 100, 'high': 101, 'low': 99, 'close': 100, 'volume': -1}))
         history.write_bars(self.root / 'ACME.csv', [{**bar('2026-11-06', 10.0), 'low': 10.5}, bar('2026-11-09', 10.8)])
         self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=mock.Mock()), 'current')
         self.assertEqual(self.stored()[0]['low'], 10.0)
@@ -277,13 +290,23 @@ class BuildTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             entry.main(['root', '--page-budget', 'nan'])
 
-    def test_the_all_time_high_is_never_below_the_stored_history(self):
-        record = {'close': 90.0, 'all_time_high': 95.0, 'percent_from_ath': (1 - 90 / 95) * 100}
+    def test_negative_limit_raises_value_error(self):
+        with mock.patch.object(build.dhan, 'fetch_universe', return_value=[]), \
+             mock.patch.object(build, 'snapshot_session', return_value='2026-11-09'):
+            with self.assertRaises(ValueError):
+                build.build(Path('/tmp'), limit=-1)
+
+    def test_all_time_high_prefers_tradingview_and_falls_back_to_history(self):
+        # When TradingView provides all-time high and percent_from_ath, use them directly.
+        record = {'close': 90.0, 'all_time_high': 95.0, 'percent_from_ath': 5.26}
         stock = build.stock_record(record, {'as_of_date': '2026-11-09', 'history_high': 100.0}, '2026-11-09')
-        self.assertEqual((stock['all_time_high'], round(stock['percent_from_ath'], 6)), (100.0, 10.0))
+        self.assertEqual((stock['all_time_high'], stock['percent_from_ath']), (95.0, 5.26))
         self.assertNotIn('history_high', stock)
-        # Without TradingView's high (another session), nothing is made up from the 2021-onward history.
-        none = build.stock_record({'close': 90.0}, {'as_of_date': '2026-11-09', 'history_high': 100.0}, '2026-11-09')
+        # When TradingView's high is missing, stored deep history high is used as fallback.
+        fallback = build.stock_record({'close': 90.0}, {'as_of_date': '2026-11-09', 'history_high': 100.0}, '2026-11-09')
+        self.assertEqual((fallback['all_time_high'], round(fallback['percent_from_ath'], 6)), (100.0, 10.0))
+        # When neither source has high, returns (None, None).
+        none = build.stock_record({'close': 90.0}, {'as_of_date': '2026-11-09'}, '2026-11-09')
         self.assertEqual((none['all_time_high'], none['percent_from_ath']), (None, None))
 
     def test_engine_amounts_are_millions_of_dollars(self):
@@ -562,6 +585,69 @@ class StatementTests(unittest.TestCase):
         self.assertEqual(counts['missing'], 1)
         self.assertTrue(statements.read_page(root, 'A')['missing'])
         self.assertEqual(statements.enrich([{'symbol': 'A'}], root)['with_statements'], 0)
+
+
+class YahooTests(unittest.TestCase):
+    def test_yahoo_symbol_maps_dots_to_hyphens_and_uppercases(self):
+        self.assertEqual(yahoo.yahoo_symbol('AAPL'), 'AAPL')
+        self.assertEqual(yahoo.yahoo_symbol('brk.b'), 'BRK-B')
+        self.assertEqual(yahoo.yahoo_symbol('BF.B '), 'BF-B')
+
+    def test_fetch_history_parses_split_adjusted_bars_and_drops_nulls(self):
+        # 1700000000 is 2023-11-14 22:13:20 UTC (date 2023-11-14)
+        # 1700086400 is 2023-11-15 22:13:20 UTC (date 2023-11-15)
+        # 1700172800 is 2023-11-16 22:13:20 UTC (date 2023-11-16) - null close
+        payload = {
+            'chart': {
+                'result': [{
+                    'timestamp': [1700000000, 1700086400, 1700172800],
+                    'indicators': {
+                        'quote': [{
+                            'open': [100.0, 102.5, 104.0],
+                            'high': [105.0, 106.0, 107.0],
+                            'low': [99.5, 101.0, 103.0],
+                            'close': [102.0, 105.5, None],
+                            'volume': [1000, 1500, 2000],
+                        }]
+                    }
+                }],
+                'error': None
+            }
+        }
+        mock_response = mock.Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = payload
+
+        bars = yahoo.fetch_history('AAPL', get=mock.Mock(return_value=mock_response))
+        self.assertEqual(len(bars), 2)
+        self.assertEqual(bars[0], {'date': '2023-11-14', 'open': 100.0, 'high': 105.0, 'low': 99.5, 'close': 102.0, 'volume': 1000.0})
+        self.assertEqual(bars[1], {'date': '2023-11-15', 'open': 102.5, 'high': 106.0, 'low': 101.0, 'close': 105.5, 'volume': 1500.0})
+
+    def test_fetch_history_handles_http_error_and_malformed_json(self):
+        err_response = mock.Mock(status_code=404)
+        self.assertEqual(yahoo.fetch_history('UNKNOWN', get=mock.Mock(return_value=err_response)), [])
+
+        def fail_get(*args, **kwargs):
+            raise requests.RequestException("connection failed")
+        self.assertEqual(yahoo.fetch_history('AAPL', get=fail_get), [])
+
+    def test_history_fetch_full_prefers_yahoo_and_falls_back_to_dhan(self):
+        # 2026-11-06 (Friday) is a valid session
+        yahoo_bars = [{'date': '2026-11-06', 'open': 150.0, 'high': 155.0, 'low': 149.0, 'close': 154.0, 'volume': 5000}]
+        dhan_bars = [{'date': '2026-11-06', 'open': 100.0, 'high': 105.0, 'low': 99.0, 'close': 104.0, 'volume': 1000}]
+
+        # 1. When Yahoo succeeds, Dhan is never queried
+        dhan_fetch = mock.Mock(return_value=dhan_bars)
+        with mock.patch.object(dhan, 'fetch_history', dhan_fetch):
+            bars = history.fetch_full('AAPL', 1, 'NASDAQ', yahoo_fetch=mock.Mock(return_value=yahoo_bars))
+            self.assertEqual(bars[0]['close'], 154.0)
+            dhan_fetch.assert_not_called()
+
+        # 2. When Yahoo returns empty or fails, Dhan is called
+        with mock.patch.object(dhan, 'fetch_history', dhan_fetch):
+            bars = history.fetch_full('AAPL', 1, 'NASDAQ', yahoo_fetch=mock.Mock(return_value=[]))
+            self.assertEqual(bars[0]['close'], 104.0)
+            dhan_fetch.assert_called()
 
 
 if __name__ == '__main__':

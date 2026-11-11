@@ -109,11 +109,13 @@ def stock_metrics(path: Path) -> dict:
 def stock_record(record: dict, metrics: dict, session: str) -> dict:
     """The canonical record the shared engine and publisher read."""
     aligned = metrics.get('as_of_date') == session
-    # TradingView's all-time high, never below the stored history's own highest bar.
+    # TradingView's all-time high and percent from ATH; falls back to stored history only when TradingView is missing.
     high, close, stored_high = record.get('all_time_high'), record.get('close'), metrics.get('history_high')
-    if high and stored_high and stored_high > high:
+    if high is None:
         high = stored_high
-    percent_from_ath = (1 - close / high) * 100 if high and close and record.get('all_time_high') else record.get('percent_from_ath')
+        percent_from_ath = (1 - close / high) * 100 if high and close else None
+    else:
+        percent_from_ath = record.get('percent_from_ath')
     return {
         **{key: value for key, value in record.items() if key not in BUILD_ONLY},
         **{key: value for key, value in metrics.items() if not key.startswith('turnover') and key != 'history_high'},
@@ -122,7 +124,6 @@ def stock_record(record: dict, metrics: dict, session: str) -> dict:
         'default_screener_eligible': True, 'index_memberships': record.get('index_memberships') or [],
         'event_markers': [], 'recent_announcements': [],
         'news_feed': [], 'as_of_date': session if aligned else metrics.get('as_of_date'),
-        # Only TradingView's (markets/us/tradingview.py): Dhan's history starts in 2021, so its high is not all-time.
         'all_time_high': high, 'percent_from_ath': percent_from_ath,
         # The engine reads both of India's names for these two returns.
         'return_1m': record.get('perf_1m'), 'return_1y': record.get('perf_12m'),
@@ -164,18 +165,25 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     stock_rows, etf_rows = dhan.fetch_universe('stock'), dhan.fetch_universe('etf')
     session = snapshot_session(stock_rows, now)
     rows = [row for row in stock_rows if security_type(row.get('Sym') or '', row.get('DispSym')) in SCREENABLE]
-    rows = rows[:limit] if limit else rows
+    if limit is not None:
+        if limit < 0:
+            raise ValueError(f'limit must be non-negative, got {limit}')
+        rows = rows[:limit]
     records = [record for record in map(fields.canonical_row, rows) if record]
     benchmarks = [record for record in map(fields.canonical_row, etf_rows) if record and record['symbol'] in BENCHMARKS]
 
     report = {'session': session, 'screenable': len(records), 'listed': len(stock_rows)}
     report['tradingview'] = tradingview.enrich(records, session)
+    # Stock pages (dhan.co) and price history (Dhan's ticks host) are separate servers, each with its own pace, so they
+    # are fetched side by side: neither server sees more requests than before, and a cold run takes half the time.
     # After TradingView: a company that has reported since its page was read is read again.
-    report['stock_pages'] = statements.refresh_pages(records, root, now, interval=interval, budget_seconds=page_budget)
+    with ThreadPoolExecutor(max_workers=1) as side:
+        pages = side.submit(statements.refresh_pages, records, root, now, interval=interval, budget_seconds=page_budget)
+        report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers)
+        report['benchmarks'] = update_histories(benchmarks, root / 'indices_ohlcv_data', session, interval=interval, workers=1)
+        report['stock_pages'] = pages.result()
     quarterly = []
     report['statements'] = statements.enrich(records, root, quarterly)
-    report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers)
-    report['benchmarks'] = update_histories(benchmarks, root / 'indices_ohlcv_data', session, interval=interval, workers=1)
 
     _write_json(root / 'mainboard_scanx_data.json', rows)
     methodology_path = root / 'breadth_methodology.json'

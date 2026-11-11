@@ -74,7 +74,10 @@ def canonical_row(row: dict) -> dict | None:
         record[target] = value if target in TEXT_FIELDS or value is None else _number(value)
     if record['security_id'] is not None:
         try:
-            record['security_id'] = int(record['security_id'])
+            val = float(record['security_id'])
+            if not val.is_integer():
+                return None
+            record['security_id'] = int(val)
         except (TypeError, ValueError, OverflowError):
             return None
     if not record['symbol'] or record['security_id'] is None or not record['close'] or record['close'] <= 0:

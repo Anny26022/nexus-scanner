@@ -41,8 +41,10 @@ and must not be stored as a closed bar, as India's `is_nse_cash_session` already
 - **`NA` exchange.** Five stocks have no listing exchange. Their history is asked for under NYSE, then NASDAQ
   (`universe.history_exchanges`); the request is keyed by security id, so a wrong venue returns nothing, not another stock.
 - **Fiscal years differ** (NVIDIA ends in January, Microsoft in June): key statements by fiscal period end.
-- **History depth** is 2021 onwards: 52-week, 200-day, RS and 1–5 year returns work; all-time highs and 10-year
-  returns need another source.
+- **History depth** uses Yahoo Finance for deep split-adjusted daily OHLCV back to 1980 / IPO (matching India's
+  EOD2 repository), falling back to Dhan's INX ticks (2021 onwards) if Yahoo is unreachable. Daily updates use Dhan's
+  screener snapshot to append the latest session bar with zero additional load. All-time highs, multi-year returns, and
+  long-term moving averages are supported.
 - **Snapshot timing**: run after the close and refuse in-session snapshots.
 
 ## Reusing the Indian core
@@ -68,7 +70,7 @@ EDL_US_BASE_DIR=<root> python frontend/publish_us.py   # from the repository roo
 | --- | --- |
 | Universe | Two screener calls (stocks and ETFs). `markets/us/universe.py` keeps common stock and partnership units; preferred, notes, rights, warrants and SPAC units are classified and left out. |
 | Snapshot check | Refused while New York is trading, when the latest trade is not from the last closed session, and when it stops before that session's close (exit 75: the workflow skips publication rather than storing a live bar). A stock whose own last trade is from an earlier session gets no bar that day. |
-| Price history | `markets/us/history.py`: a stock without a file is seeded from Dhan's history; afterwards the snapshot's bar is appended. A gap, or a previous close more than 0.5% off the stored close (a split), refetches the stock in full; the snapshot's bar is added to a refetched history only when it agrees with the snapshot's previous close (Dhan may not have re-adjusted a split yet). `ohlcv_data/`, `indices_ohlcv_data/`, `stock_pages/` and the rotation ledger persist between runs (Actions cache, saved after publication); losing them costs one re-seed of about 30 minutes. |
+| Price history | `markets/us/history.py`: a stock without a file is seeded from Yahoo Finance (split-adjusted back to 1980 / IPO), falling back to Dhan's INX ticks (2021 onwards); afterwards the Dhan snapshot's bar is appended. A gap, or a previous close more than 0.5% off the stored close (a split), refetches the stock in full; the snapshot's bar is added to a refetched history only when it agrees with the snapshot's previous close (the provider may not have re-adjusted a split yet). `ohlcv_data/`, `indices_ohlcv_data/`, `stock_pages/` and the rotation ledger persist between runs (Actions cache, saved after publication); losing them costs one re-seed. |
 | Benchmarks | SPY, QQQ, IWM and DIA histories stand in for indices; SPY is the market benchmark. |
 | Breadth, index history | India's `generate_market_breadth` and `generate_all_index_history`, with US floors ($1 price, $100M market cap). |
 | Stock metrics | India's `process_symbol_csv` on the NYSE calendar, plus RSI(14) and dollar turnover. |

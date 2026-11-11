@@ -14,7 +14,7 @@ from pathlib import Path
 
 from ohlcv_utils import OHLCV_FIELDS, symbol_csv_path
 
-from . import dhan
+from . import dhan, yahoo
 from .calendar import EASTERN, is_nyse_session_day, previous_session_day
 from .universe import history_exchanges
 
@@ -43,7 +43,7 @@ def write_bars(path: Path, bars: list[dict]):
 
 
 def clean(bar: dict) -> dict | None:
-    """A bar whose prices agree with each other; None for one without real prices.
+    """A bar whose prices agree with each other and volume is non-negative; None for one without real prices.
 
     Dhan's US history has bars priced 0 before a listing (dropped, as India drops invalid bars) and bars whose open
     or close lies just outside the day's high-low range (0.05% of bars, a median 0.07% outside). Those prints are
@@ -51,6 +51,9 @@ def clean(bar: dict) -> dict | None:
     """
     prices = [bar['open'], bar['high'], bar['low'], bar['close']]
     if any(price is None or price != price or price <= 0 for price in prices):
+        return None
+    volume = bar.get('volume')
+    if volume is not None and (volume != volume or volume < 0):
         return None
     return {**bar, 'high': max(prices), 'low': min(prices)}
 
@@ -62,9 +65,17 @@ def session_bars(bars: list[dict]) -> list[dict]:
 
 
 def fetch_full(symbol: str, security_id: int, listing_exchange: str | None, now: datetime | None = None, *,
-               post: dhan.Post = dhan.post) -> list[dict]:
-    """Every session bar Dhan has for the stock; tries NYSE then NASDAQ when the listing exchange is unknown."""
+               post: dhan.Post = dhan.post, yahoo_fetch=yahoo.fetch_history) -> list[dict]:
+    """Every session bar for the stock. Tries Yahoo Finance first for deep multi-decade split-adjusted history;
+    falls back to Dhan (from March 2021) if Yahoo is unreachable or missing the ticker."""
     now = now or datetime.now(timezone.utc)
+    if yahoo_fetch:
+        try:
+            bars = session_bars(yahoo_fetch(symbol, end=now))
+            if bars:
+                return bars
+        except Exception as error:
+            print(f"  yahoo history {symbol}: {error}", flush=True)
     for exchange in history_exchanges(listing_exchange):
         bars = session_bars(dhan.fetch_history(symbol, security_id, exchange, now - timedelta(days=round(365.25 * HISTORY_YEARS)), now, post=post))
         if bars:
@@ -100,6 +111,17 @@ def needs_refetch(bars: list[dict], record: dict, session: str) -> bool:
     return abs(previous_close / last['close'] - 1) > ADJUSTMENT_TOLERANCE
 
 
+def adjustment_matches(bars: list[dict], record: dict) -> bool:
+    """Whether the latest bar's close agrees with the snapshot's previous close within adjustment tolerance."""
+    if not bars:
+        return False
+    previous_close = record.get('previous_close')
+    last_close = bars[-1]['close']
+    if not previous_close or last_close <= 0:
+        return True
+    return abs(previous_close / last_close - 1) <= ADJUSTMENT_TOLERANCE
+
+
 def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
     """Bring one stock's file up to `session`; returns 'current', 'appended', 'refetched' or 'missing'."""
     path = symbol_csv_path(root, record['symbol'])
@@ -126,7 +148,8 @@ def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
     bar = clean(snapshot_bar(record, session) or {'open': None, 'high': None, 'low': None, 'close': None})
     # It joins only when a refetched series also agrees with the snapshot's previous close: on a split day Dhan's
     # history may not be re-adjusted yet, and a bar appended to it would bake the gap in.
-    if bars[-1]['date'] < session and not needs_refetch(bars, record, session) and bar:
+    joins = not needs_refetch(bars, record, session) if status == 'appended' else adjustment_matches(bars, record)
+    if bars[-1]['date'] < session and joins and bar:
         bars = [*bars, bar]
     elif status == 'appended':
         return missing()

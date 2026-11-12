@@ -1,8 +1,11 @@
 name: US Weekly Finviz Universe Sync
 
 # Runs every Saturday morning (06:00 UTC) after the US market closes for the week.
-# Re-crawls Finviz thematic taxonomy and ownership / short-interest data (Phase 1 & 2)
-# and commits the refreshed us_thematic_universe.json and us_ownership_universe.json.
+# Re-crawls Finviz's classification of US stocks and commits it:
+# - us_theme_catalog.json: Finviz's themes and the sub-themes in each;
+# - us_thematic_universe.json: each themed stock's themes and sub-themes;
+# - us_ownership_universe.json: every listed stock's Finviz sector, industry and type, with ownership and short interest.
+# The Theme Tracker's US map (new_nexys_ultimate, refresh-us-theme-map.yml) is built from these files.
 on:
   schedule:
     - cron: '0 6 * * 6'
@@ -43,17 +46,16 @@ jobs:
           cd "DO NOT DELETE EDL PIPELINE"
           PYTHONPATH=src:. python -m edl_pipeline.markets.us.finviz --crawl all --delay 0.1 --workers 3
 
-      - name: Verify US Pipeline Tests
+      - name: Verify Finviz Crawler Tests
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
-          PYTHONPATH=src:. python -m unittest tests.test_us_market -v
-          python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
+          PYTHONPATH=src:. python -m unittest tests.test_us_finviz -v
 
       - name: Commit and Push Updated Universes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "DO NOT DELETE EDL PIPELINE/us_thematic_universe.json" "DO NOT DELETE EDL PIPELINE/us_ownership_universe.json"
+          git add "DO NOT DELETE EDL PIPELINE/us_thematic_universe.json" "DO NOT DELETE EDL PIPELINE/us_ownership_universe.json" "DO NOT DELETE EDL PIPELINE/us_theme_catalog.json"
           if git diff --staged --quiet; then
             echo "No changes to Finviz universes."
           else

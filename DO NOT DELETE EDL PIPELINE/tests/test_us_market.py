@@ -12,6 +12,7 @@ for path in (ROOT / "src", ROOT):
 import requests  # noqa: E402
 
 from edl_pipeline.markets import MARKETS, market  # noqa: E402
+import json  # noqa: E402
 import tempfile  # noqa: E402
 
 from edl_pipeline.markets.us import build, calendar, dhan, fields, finviz, history, statements, tradingview, yahoo  # noqa: E402
@@ -687,97 +688,6 @@ class YahooTests(unittest.TestCase):
 
 
 class FinvizThematicTests(unittest.TestCase):
-    def test_extract_screener_json_and_theme_catalog(self):
-        sample_html = """
-        <html>
-        <script>
-        window.__DATA__ = {
-            "screenerType": "stocks",
-            "filters": {
-                "filters": [
-                    {
-                        "key": "theme",
-                        "options": [
-                            {"value": "artificialintelligence", "label": "Artificial Intelligence"},
-                            {"value": "modal", "label": "Upgrade", "isEliteOnly": true}
-                        ]
-                    },
-                    {
-                        "key": "subtheme",
-                        "options": [
-                            {"value": "aicompute", "label": "AI - Compute", "group": "artificialintelligence"}
-                        ]
-                    }
-                ]
-            }
-        };
-        </script>
-        </html>
-        """
-        mock_resp = mock.Mock(status_code=200, text=sample_html)
-        mock_session = mock.Mock()
-        mock_session.get.return_value = mock_resp
-
-        themes, subthemes = finviz.fetch_theme_catalog(session=mock_session)
-        self.assertEqual(len(themes), 1)
-        self.assertEqual(themes[0], {"value": "artificialintelligence", "label": "Artificial Intelligence"})
-        self.assertEqual(len(subthemes), 1)
-        self.assertEqual(subthemes[0], {"value": "aicompute", "label": "AI - Compute", "group": "artificialintelligence"})
-
-    def test_fetch_tickers_for_filter(self):
-        sample_html = '{"totalCount": 2, "data": [{"ticker": "NVDA"}, {"ticker": "AMD"}]}'
-        mock_resp = mock.Mock(status_code=200, text=sample_html)
-        mock_session = mock.Mock()
-        mock_session.get.return_value = mock_resp
-
-        tickers = finviz.fetch_tickers_for_filter("theme_artificialintelligence", session=mock_session, delay=0)
-        self.assertEqual(tickers, ["AMD", "NVDA"])
-
-    def test_fetch_news_and_insiders(self):
-        sample_html = """
-        <table id="news-table">
-            <tr class="news-link-container">
-                <td>Nov-11-26 10:00AM</td>
-                <a href="https://example.com/news1" class="tab-link-news">NVDA beats revenue estimates</a>
-                <span class="news-link-right">(Reuters)</span>
-            </tr>
-        </table>
-        <table class="body-table">
-            <tr class="insider-row">
-                <td><a href="#">Huang Jen Hsun</a></td>
-                <td>CEO</td>
-                <td>Nov 10</td>
-                <td>Sale</td>
-                <td>145.00</td>
-                <td>50,000</td>
-                <td>7,250,000</td>
-                <td>800,000</td>
-                <td>Nov 11 04:30 PM</td>
-            </tr>
-        </table>
-        """
-        mock_resp = mock.Mock(status_code=200, text=sample_html)
-        mock_session = mock.Mock()
-        mock_session.get.return_value = mock_resp
-
-        data = finviz.fetch_news_and_insiders("NVDA", session=mock_session)
-        self.assertEqual(len(data["news"]), 1)
-        self.assertEqual(data["news"][0]["title"], "NVDA beats revenue estimates")
-        self.assertEqual(data["news"][0]["source"], "Reuters")
-        self.assertEqual(len(data["insiders"]), 1)
-        self.assertEqual(data["insiders"][0]["name"], "Huang Jen Hsun")
-        self.assertEqual(data["insiders"][0]["transaction"], "Sale")
-
-    def test_load_and_save_thematic_universe(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            file_path = Path(tmpdir) / "test_thematic.json"
-            sample_data = {
-                "NVDA": {"primary_theme": "AI", "themes": ["AI", "Semis"], "subthemes": ["AI - Compute"]}
-            }
-            finviz.save_thematic_universe(file_path, sample_data)
-            loaded = finviz.load_thematic_universe(file_path)
-            self.assertEqual(loaded, sample_data)
-
     def test_stock_record_enriches_news_and_insiders_from_thematic(self):
         record = {
             "symbol": "NVDA", "close": 150.0, "market_cap": 3000000.0, "dollar_volume": 50000.0,
@@ -793,19 +703,6 @@ class FinvizThematicTests(unittest.TestCase):
         self.assertEqual(res["news_feed"][0]["title"], "Big Surge")
         self.assertEqual(len(res["insider_activity"]), 1)
         self.assertEqual(res["insider_activity"][0]["name"], "Jensen")
-
-    def test_load_and_save_ownership_universe(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            file_path = Path(tmpdir) / "test_ownership.json"
-            sample_data = {
-                "NVDA": {
-                    "short_float_percent": 1.25, "short_ratio": 1.8,
-                    "insider_own_percent": 3.75, "institutional_own_percent": 72.5
-                }
-            }
-            finviz.save_ownership_universe(file_path, sample_data)
-            loaded = finviz.load_ownership_universe(file_path)
-            self.assertEqual(loaded, sample_data)
 
     def test_stock_record_enriches_ownership_and_short_interest(self):
         record = {

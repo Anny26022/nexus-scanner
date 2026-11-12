@@ -110,6 +110,30 @@ def fetch_theme_catalog(session: requests.Session | None = None) -> tuple[list[d
         return [], []
 
 
+def theme_catalog_payload(themes: list[dict], subthemes: list[dict]) -> dict:
+    """Finviz's theme catalog: each theme with its sub-themes (labels as Finviz shows them, spacing tidied).
+
+    The per-ticker thematic universe can't say which theme a sub-theme belongs to; consumers that lay out themes and
+    sub-themes (the Theme Tracker's US map) read it from here.
+    """
+    tidy = lambda label: ' '.join(str(label or '').split())
+    by_value = {t['value']: {'value': t['value'], 'label': tidy(t['label']), 'subthemes': []} for t in themes}
+    for sub in subthemes:
+        parent = by_value.get(sub.get('group'))
+        if parent:
+            parent['subthemes'].append({'value': sub['value'], 'label': tidy(sub['label'])})
+    return {'themes': list(by_value.values())}
+
+
+def save_theme_catalog(path: Path, catalog: dict):
+    """Save the theme catalog atomically."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".json.tmp")
+    with temp.open("w", encoding="utf-8") as handle:
+        json.dump(catalog, handle, indent=2)
+    temp.replace(path)
+
+
 def fetch_tickers_for_filter(filter_param: str, *, session: requests.Session | None = None,
                              delay: float = 0.2) -> list[str]:
     """Fetch all tickers matching a single filter parameter (e.g. 'theme_artificialintelligence')."""
@@ -239,6 +263,23 @@ def fetch_news_and_insiders(symbol: str, *, session: requests.Session | None = N
         return {'news': [], 'insiders': []}
 
 
+# Finviz's sector for each sector filter; the ownership view's rows carry the industry but not the sector.
+SECTOR_LABELS = {
+    'basicmaterials': 'Basic Materials', 'communicationservices': 'Communication Services',
+    'consumercyclical': 'Consumer Cyclical', 'consumerdefensive': 'Consumer Defensive', 'energy': 'Energy',
+    'financial': 'Financial', 'healthcare': 'Healthcare', 'industrials': 'Industrials', 'realestate': 'Real Estate',
+    'technology': 'Technology', 'utilities': 'Utilities',
+}
+
+
+def shard_sector(filter_spec: str) -> str | None:
+    """The Finviz sector a shard filter selects ('sec_financial,exch_nasd' -> 'Financial')."""
+    for part in filter_spec.split(','):
+        if part.startswith('sec_'):
+            return SECTOR_LABELS.get(part[4:])
+    return None
+
+
 SECTOR_SHARDS = [
     'sec_basicmaterials', 'sec_communicationservices', 'sec_consumercyclical', 'sec_consumerdefensive',
     'sec_energy', 'sec_industrials', 'sec_realestate', 'sec_technology', 'sec_utilities',
@@ -258,13 +299,18 @@ def crawl_ownership_universe(*, delay: float = 0.05, workers: int = 3, session: 
     def _round(val):
         return round(float(val), 2) if isinstance(val, (int, float)) and val == val else None
 
-    def parse_rows(rows):
+    def parse_rows(rows, sector=None):
         for r in rows:
             ticker = (r.get('text') or {}).get('ticker')
             if not ticker or ticker in ownership_map:
                 continue
             num = r.get('numbers') or {}
+            text = r.get('text') or {}
             ownership_map[ticker] = {
+                # Finviz's own classification, read from the same rows (every listed stock has one).
+                'finviz_sector': text.get('sector') or sector,
+                'finviz_industry': text.get('industry') or None,
+                'security_type': text.get('securityType') or None,
                 'short_float_percent': _round(num.get('shortInterestShare')),
                 'short_ratio': _round(num.get('shortInterestRatio')),
                 'insider_own_percent': _round(num.get('insiderOwn')),
@@ -300,8 +346,8 @@ def crawl_ownership_universe(*, delay: float = 0.05, workers: int = 3, session: 
             return []
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        for idx, shard_rows in enumerate(pool.map(fetch_shard, SECTOR_SHARDS)):
-            parse_rows(shard_rows)
+        for idx, (spec, shard_rows) in enumerate(zip(SECTOR_SHARDS, pool.map(fetch_shard, SECTOR_SHARDS))):
+            parse_rows(shard_rows, shard_sector(spec))
             log(f"[{idx + 1}/{len(SECTOR_SHARDS)}] Shard complete: {len(ownership_map)} total stocks mapped")
                 
     log(f"Ownership crawl complete: successfully mapped {len(ownership_map)} US tickers.")
@@ -315,6 +361,8 @@ if __name__ == "__main__":
                         help="Path to save us_thematic_universe.json")
     parser.add_argument("--ownership-output", type=Path, default=Path(__file__).parents[4] / "us_ownership_universe.json",
                         help="Path to save us_ownership_universe.json")
+    parser.add_argument("--catalog-output", type=Path, default=Path(__file__).parents[4] / "us_theme_catalog.json",
+                        help="Path to save us_theme_catalog.json (themes and their sub-themes)")
     parser.add_argument("--crawl", choices=["all", "thematic", "ownership"], default="all",
                         help="Which universe to crawl (default: all)")
     parser.add_argument("--delay", type=float, default=0.05, help="Request pacing delay in seconds")
@@ -323,6 +371,10 @@ if __name__ == "__main__":
     
     if args.crawl in ("all", "thematic"):
         print(f"Crawling Finviz thematic universe to {args.thematic_output}...")
+        catalog = theme_catalog_payload(*fetch_theme_catalog())
+        if catalog['themes']:
+            save_theme_catalog(args.catalog_output, catalog)
+            print(f"Saved {len(catalog['themes'])} themes to {args.catalog_output}.")
         thematic_univ = crawl_thematic_universe(delay=max(args.delay, 0.15))
         save_thematic_universe(args.thematic_output, thematic_univ)
         print(f"Saved {len(thematic_univ)} mapped US tickers to {args.thematic_output}.")

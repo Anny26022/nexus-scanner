@@ -16,6 +16,10 @@ API_URL = "https://query2.finance.yahoo.com/v8/finance/chart/{symbol}"
 HEADERS = {'User-Agent': 'Mozilla/5.0'}
 
 
+class Throttled(RuntimeError):
+    """Yahoo refused with 429: callers stop asking it and fall back to Dhan for the rest of the run."""
+
+
 def yahoo_symbol(symbol: str) -> str:
     """Map US share classes with dots (e.g. BRK.B, BF.B) to Yahoo's hyphen convention (BRK-B, BF-B)."""
     return symbol.strip().upper().replace('.', '-')
@@ -23,7 +27,9 @@ def yahoo_symbol(symbol: str) -> str:
 
 def fetch_history(symbol: str, start: datetime | None = None, end: datetime | None = None, *,
                   get: Callable[..., requests.Response] = requests.get, timeout: float = 15) -> list[dict]:
-    """Daily split-adjusted bars for `symbol`, oldest first; returns empty list on 404 or network failure."""
+    """Daily split-adjusted bars for `symbol`, oldest first; returns empty list on 404 or network failure.
+
+    Raises Throttled on 429, so a rate limit is not mistaken for a ticker Yahoo does not have."""
     ysym = yahoo_symbol(symbol)
     period1 = int(start.timestamp()) if start else 0
     period2 = int(end.timestamp()) if end else 9999999999
@@ -32,6 +38,8 @@ def fetch_history(symbol: str, start: datetime | None = None, end: datetime | No
 
     try:
         response = get(url, params=params, headers=HEADERS, timeout=timeout)
+        if response.status_code == 429:
+            raise Throttled(f'Yahoo answered 429 for {ysym}')
         if response.status_code != 200:
             return []
         data = response.json()

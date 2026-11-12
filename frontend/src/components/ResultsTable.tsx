@@ -1,5 +1,4 @@
-import { Fragment, useMemo, useRef, useState } from 'react';
-import { markScrolledX } from '../utils/scrolledX';
+import { useMemo, useRef, useState } from 'react';
 import type { ScreenerRunResponse } from '../types/screener';
 import { ArrowUpDown, ArrowUp, ArrowDown, AlertTriangle, SearchX, FileText, SlidersHorizontal, Search, Table2, ChartNoAxesCombined, X } from 'lucide-react';
 import {CopyResults} from './CopyResults';
@@ -65,6 +64,26 @@ const metricColumn = (id: string, label: string, format: ResultColumn['format'] 
   getValue: row => ((row as unknown as {metrics?: Record<string, ColumnValue>}).metrics?.[id]),
 });
 
+// Published only by the US release (TradingView targets and multiples, Finviz ownership and short interest).
+const US_COLUMNS: ResultColumn[] = [
+  valueColumn('targetPrice', 'Target price', 'Fundamental', 'price'),
+  valueColumn('targetPriceUpsidePct', 'Target upside', 'Fundamental', 'percent'),
+  valueColumn('analystRating', 'Analyst rating', 'Fundamental'),
+  valueColumn('shortFloatPct', 'Short float', 'Fundamental', 'percent'),
+  valueColumn('shortRatio', 'Short ratio (Days)', 'Fundamental'),
+  valueColumn('insiderOwnPct', 'Insider holding', 'Fundamental', 'percent'),
+  valueColumn('institutionalOwnPct', 'Institutional holding', 'Fundamental', 'percent'),
+  valueColumn('insiderTransPct', 'Insider transactions', 'Fundamental', 'percent'),
+  valueColumn('institutionalTransPct', 'Institutional transactions', 'Fundamental', 'percent'),
+  valueColumn('psRatio', 'P/S', 'Fundamental'),
+  valueColumn('grossMarginPct', 'Gross margin', 'Fundamental', 'percent'),
+  valueColumn('netMarginPct', 'Net margin', 'Fundamental', 'percent'),
+  valueColumn('roicPct', 'ROIC', 'Fundamental', 'percent'),
+  valueColumn('quickRatio', 'Quick ratio', 'Fundamental'),
+  valueColumn('ltDebtToEquity', 'LT debt / equity', 'Fundamental'),
+  valueColumn('beta', 'Beta', 'Technical'),
+];
+const US_COLUMN_IDS = new Set(US_COLUMNS.map(column => column.id));
 const columns: ResultColumn[] = [
   { id: 'company', label: 'Company', group: 'Overview', width: '24%', getValue: row => row.symbol },
   { id: 'sector', label: 'Sector / industry', group: 'Overview', width: '17%', getValue: row => `${row.sector || 'Unclassified'} · ${row.industry || 'Unclassified'}` },
@@ -128,22 +147,7 @@ const columns: ResultColumn[] = [
   valueColumn('isAsm', 'ASM', 'Other', 'boolean'), valueColumn('asmStage', 'ASM stage', 'Other'),
   valueColumn('isGsm', 'GSM', 'Other', 'boolean'), valueColumn('gsmStage', 'GSM stage', 'Other'),
   valueColumn('surveillanceAvailable', 'Surveillance data available', 'Other', 'boolean'),
-  valueColumn('targetPrice', 'Target price', 'Fundamental', 'price'),
-  valueColumn('targetPriceUpsidePct', 'Target upside', 'Fundamental', 'percent'),
-  valueColumn('analystRating', 'Analyst rating', 'Fundamental'),
-  valueColumn('shortFloatPct', 'Short float', 'Fundamental', 'percent'),
-  valueColumn('shortRatio', 'Short ratio (Days)', 'Fundamental'),
-  valueColumn('insiderOwnPct', 'Insider holding', 'Fundamental', 'percent'),
-  valueColumn('institutionalOwnPct', 'Institutional holding', 'Fundamental', 'percent'),
-  valueColumn('insiderTransPct', 'Insider transactions', 'Fundamental', 'percent'),
-  valueColumn('institutionalTransPct', 'Institutional transactions', 'Fundamental', 'percent'),
-  valueColumn('psRatio', 'P/S', 'Fundamental'),
-  valueColumn('grossMarginPct', 'Gross margin', 'Fundamental', 'percent'),
-  valueColumn('netMarginPct', 'Net margin', 'Fundamental', 'percent'),
-  valueColumn('roicPct', 'ROIC', 'Fundamental', 'percent'),
-  valueColumn('quickRatio', 'Quick ratio', 'Fundamental'),
-  valueColumn('ltDebtToEquity', 'LT debt / equity', 'Fundamental'),
-  valueColumn('beta', 'Beta', 'Technical'),
+  ...US_COLUMNS,
   ...extendedMetrics.map((metric):ResultColumn => ({id:`tv.${metric.id}`, label:metric.label,
     group:metric.category === 'fundamentals' ? 'Fundamental' : 'Technical',
     format:metric.label.includes('%') ? 'percent' : 'number', sortField:`tv.${metric.id}`,
@@ -166,16 +170,17 @@ const priceFormatter = new Intl.NumberFormat('en-IN', {minimumFractionDigits: 2,
 const usNumberFormatter = new Intl.NumberFormat('en-US', {maximumFractionDigits: 2});
 const usPriceFormatter = new Intl.NumberFormat('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-const displayValue = (value: ColumnValue, format?: ResultColumn['format'], isUs = false) => {
+/** US releases price in dollars and publish amounts in millions where India publishes rupee crore. */
+const displayValue = (value: ColumnValue, format?: ResultColumn['format'], usd = false) => {
   if (value == null || value === '') return <span className="cell-muted">—</span>;
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return <span className="cell-muted">—</span>;
-    if (format === 'price') return `${isUs ? '$' : '₹'}${isUs ? usPriceFormatter.format(value) : priceFormatter.format(value)}`;
-    const formatted = isUs ? usNumberFormatter.format(value) : numberFormatter.format(value);
+    if (format === 'price') return usd ? `$${usPriceFormatter.format(value)}` : `₹${priceFormatter.format(value)}`;
+    const formatted = (usd ? usNumberFormatter : numberFormatter).format(value);
     if (format === 'percent') return `${formatted}%`;
     if (format === 'multiple') return `${formatted}×`;
-    if (format === 'crore') return `${isUs ? '$' : '₹'}${formatted}${isUs ? 'M' : ' Cr'}`;
+    if (format === 'crore') return usd ? `$${formatted}M` : `₹${formatted} Cr`;
     return formatted;
   }
   return value;
@@ -204,13 +209,14 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const [savedColumnIds, setSavedColumnIds] = useLocalStorageState<string[]>(`nexus-scanner.screener.${etf ? 'etf-' : ''}columns.v1`, defaults);
   const selectedColumnIds = Array.isArray(savedColumnIds) ? savedColumnIds : defaults;
   const phone = usePhoneLayout();
-  const isUs = Boolean(data?.rows?.[0] && ('shortFloatPct' in data.rows[0] || 'beta' in data.rows[0] || (data.rows[0] as {currency?: string}).currency === 'USD' || (etf && (data.rows[0].etf?.currency === 'USD' || (data.rows[0] as {currency?: string}).currency === 'USD'))));
   const hasExtended = Boolean(data?.rows.some(row => row.extended));
   const hasFnoBan = Boolean(data?.rows.some(row => row.fnoBan != null));
+  const usd = data?.currency === 'USD';
   const activeColumns = tableColumns.filter(column => {
     if (column.id === 'company') return true;
     if (column.id.startsWith('tv.') && !hasExtended) return false;
     if (column.id === 'fnoBan' && !hasFnoBan) return false;
+    if (US_COLUMN_IDS.has(column.id) && !usd) return false;
     return selectedColumnIds.includes(column.id) || Boolean(pinnedColumns?.includes(column.id));
   });
   const usingCustomColumns = selectedColumnIds.length !== defaults.length || defaults.some(id => !selectedColumnIds.includes(id));
@@ -218,17 +224,15 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const visibleColumns = layout.columns;
   const customizableColumns = tableColumns.filter(column => column.id !== 'company'
     && (!column.id.startsWith('tv.') || hasExtended)
-    && (column.id !== 'fnoBan' || hasFnoBan));
+    && (column.id !== 'fnoBan' || hasFnoBan)
+    && (!US_COLUMN_IDS.has(column.id) || usd));
   const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerColumns = columnSearch.trim() ? matchingColumns : customizableColumns.filter(column => column.group === columnGroup);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // The company column stays pinned on the left, so it is always rendered even when wide tables are windowed.
   const columnWindow = useColumnWindow(visibleColumns, layout.widthOf,
-    !phone && usingCustomColumns && visibleColumns.length > 20, scrollRef, visibleColumns[0]?.id === 'company' ? 1 : 0);
+    !phone && usingCustomColumns && visibleColumns.length > 20, scrollRef);
   const renderedColumns = columnWindow.columns;
   const columnSpan = renderedColumns.length + Number(columnWindow.left > 0) + Number(columnWindow.right > 0);
-  // The gap for skipped columns sits right after the pinned ones.
-  const gapBefore = (index: number) => columnWindow.left > 0 && index === columnWindow.pinned;
   const overview = useSymbolHoverCard<ScreenerRunResponse['rows'][number]>();
   const resetScroll = () => { overview.dismiss(); if (scrollRef.current) scrollRef.current.scrollTop = 0; };
   const rows = data?.rows ?? [];
@@ -306,26 +310,26 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
     </Dialog>}
     {!isError && data?.warnings?.map(warning => <p key={warning} role="status" className="notice">{warning}</p>)}
     {chartsMounted && !isError && <div style={{display: resultView === 'charts' ? 'contents' : 'none'}}>
-      <QuickChartsView rows={rows} revision={data?.immutableRevision} sessionDate={data?.resolvedSession?.date} matchCount={data?.matchCount} matchedSymbols={data?.matchedSymbols} loadRows={loadExportRows} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} active={resultView === 'charts'} />
+      <QuickChartsView rows={rows} revision={data?.immutableRevision} sessionDate={data?.resolvedSession?.date} matchCount={data?.matchCount} matchedSymbols={data?.matchedSymbols} loadRows={loadExportRows} busy={busy} firstRank={((data?.page ?? 1) - 1) * (data?.pageSize ?? rows.length) + 1} onOpenFullChart={onOpenFullChart} />
     </div>}
     <div className="table-viewport" aria-busy={busy} style={{display: resultView === 'table' || isError ? undefined : 'none'}}>
-      <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label={`${etf ? "ETF" : "Equity"} results table, scroll for more columns`} onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event); markScrolledX(event.currentTarget);}}>
+      <div ref={scrollRef} className="table-scroll" tabIndex={0} aria-label={`${etf ? "ETF" : "Equity"} results table, scroll for more columns`} onScroll={event => {rowWindow.onScroll(event); columnWindow.onScroll(event);}}>
         <table className={`data-table${rowWindow.enabled ? ' windowed-table' : ''}`} aria-rowcount={rows.length + 1} aria-colcount={visibleColumns.length} style={layout.style}>
           <caption className="sr-only">{etf ? "ETFs" : "Equities"} matching the current screen</caption>
-          <colgroup>{renderedColumns.map((column, index) => <Fragment key={column.id}>{gapBefore(index) && <col style={{width: columnWindow.left}} />}<col style={{width: layout.columnWidth(column)}} /></Fragment>)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
-          <thead><tr>{renderedColumns.map((column, index) => <Fragment key={column.id}>{gapBefore(index) && <th aria-hidden="true" className="column-spacer" />}<th title={column.label} data-column={column.id} scope="col" aria-colindex={columnWindow.indexes[index] + 1}
+          <colgroup>{columnWindow.left > 0 && <col style={{width: columnWindow.left}} />}{renderedColumns.map(column => <col key={column.id} style={{width: layout.columnWidth(column)}} />)}{columnWindow.right > 0 && <col style={{width: columnWindow.right}} />}</colgroup>
+          <thead><tr>{columnWindow.left > 0 && <th aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, index) => <th key={column.id} title={column.label} data-column={column.id} scope="col" aria-colindex={columnWindow.first + index + 1}
             aria-sort={column.sortField ? currentSort?.field === column.sortField ? currentSort.direction === 'asc' ? 'ascending' : 'descending' : 'none' : undefined}>
             {column.sortField ? <button type="button" disabled={busy} onClick={() => {resetScroll(); onSortChange(column.sortField!, currentSort?.field === column.sortField && currentSort?.direction === 'asc' ? 'desc' : 'asc');}}>
               {column.label}{currentSort?.field === column.sortField ? currentSort?.direction === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} /> : <ArrowUpDown size={13} />}
             </button> : column.label}
-          </th></Fragment>)}{columnWindow.right > 0 && <th aria-hidden="true" className="column-spacer" />}</tr></thead>
+          </th>)}{columnWindow.right > 0 && <th aria-hidden="true" className="column-spacer" />}</tr></thead>
           <tbody>
             {rowWindow.top > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={columnSpan} style={{height: rowWindow.top}} /></tr>}
             {isError ? <tr><td colSpan={columnSpan}><div className="data-state" role="alert"><AlertTriangle size={28} /><h2>Screener query failed</h2><p>{error?.message || 'The query could not be completed.'}</p>{onRetry && <Button variant="secondary" onClick={onRetry}>Retry</Button>}</div></td></tr>
-              : !data ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{renderedColumns.map((column, index) => <Fragment key={column.id}>{gapBefore(index) && <td aria-hidden="true" />}<td data-column={column.id}><span className="skeleton" /></td></Fragment>)}{columnWindow.right > 0 && <td aria-hidden="true" />}</tr>)
+              : !data ? Array.from({length: 10}, (_, i) => <tr key={i} className="skeleton-row">{columnWindow.left > 0 && <td aria-hidden="true" />}{renderedColumns.map(column => <td key={column.id}><span className="skeleton" /></td>)}{columnWindow.right > 0 && <td aria-hidden="true" />}</tr>)
               : !rows.length ? <tr><td colSpan={columnSpan}><div className="data-state"><SearchX size={28} /><h2>No {etf ? 'ETFs' : 'equities'} matched</h2><p>Adjust your filters or choose a broader universe.</p></div></td></tr>
               // Page slots have no company-local state; reuse their cells instead of remounting thousands.
-              : rowWindow.rows.map((row, index) => <tr key={rowWindow.first + index} aria-rowindex={rowWindow.first + index + 2}>{renderedColumns.map((column, columnIndex) => <Fragment key={column.id}>{gapBefore(columnIndex) && <td aria-hidden="true" className="column-spacer" />}<td data-column={column.id} aria-colindex={columnWindow.indexes[columnIndex] + 1} className={column.id === 'company' ? '' : 'numeric'}>
+              : rowWindow.rows.map((row, index) => <tr key={rowWindow.first + index} aria-rowindex={rowWindow.first + index + 2}>{columnWindow.left > 0 && <td aria-hidden="true" className="column-spacer" />}{renderedColumns.map((column, columnIndex) => <td key={column.id} aria-colindex={columnWindow.first + columnIndex + 1} className={column.id === 'company' ? '' : 'numeric'}>
                 {column.id === 'company' ? <div className="company-cell">{etf ? <SymbolWithLogo symbol={row.symbol} name={row.name} /> : <button type="button" className="ipo-company-trigger" aria-label={`View ${row.symbol} company snapshot`}
                   aria-haspopup="dialog" aria-expanded={overview.active?.row.symbol === row.symbol}
                   onMouseEnter={event => { if (!phone) overview.open(row, event.currentTarget); }}
@@ -343,10 +347,10 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
                   {!etf && <div className="company-tools"><button type="button" className="icon-button filing-button" aria-label={`View ${row.symbol} announcements`} title="View announcements" onClick={() => setFilingSymbol(row.symbol)} disabled={busy}><FileText size={14} strokeWidth={1.8} /></button></div>}</div>
                   : column.id === 'sector' ? <><div className={row.sector === 'Unclassified' ? 'cell-muted truncate' : 'cell-label truncate'} title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></>
                   : column.id === 'deliveryPct' && row.deliveryPct == null ? <span className="cell-muted">Unavailable</span>
-                  : column.id === 'changePct' && row.changePct != null ? <span className={row.changePct >= 0 ? 'positive' : 'negative'}>{row.changePct >= 0 ? '+' : ''}{displayValue(column.getValue(row), column.format, isUs)}</span>
-                  : column.id === 'rvol' && row.rvol != null ? <span className={row.rvol >= 2 ? 'volume-badge' : ''}>{displayValue(column.getValue(row), column.format, isUs)}</span>
-                  : displayValue(column.getValue(row), column.format, isUs)}
-              </td></Fragment>)}{columnWindow.right > 0 && <td aria-hidden="true" className="column-spacer" />}</tr>)}
+                  : column.id === 'changePct' && row.changePct != null ? <span className={row.changePct >= 0 ? 'positive' : 'negative'}>{row.changePct >= 0 ? '+' : ''}{displayValue(column.getValue(row), column.format, usd)}</span>
+                  : column.id === 'rvol' && row.rvol != null ? <span className={row.rvol >= 2 ? 'volume-badge' : ''}>{displayValue(column.getValue(row), column.format, usd)}</span>
+                  : displayValue(column.getValue(row), column.format, usd)}
+              </td>)}{columnWindow.right > 0 && <td aria-hidden="true" className="column-spacer" />}</tr>)}
             {rowWindow.bottom > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={columnSpan} style={{height: rowWindow.bottom}} /></tr>}
           </tbody>
         </table>

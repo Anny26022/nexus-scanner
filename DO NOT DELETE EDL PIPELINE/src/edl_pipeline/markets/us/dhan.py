@@ -123,7 +123,11 @@ def fetch_history(symbol: str, security_id: int, listing_exchange: str, start: d
 
 
 class StockPages:
-    """Each stock's page data, re-reading dhan.co's build id once when a deploy has replaced it."""
+    """Each stock's page data, re-reading dhan.co's build id once when a deploy has replaced it.
+
+    Shared by the page-fetch workers: the build id is read under a lock, and a 404 is judged against the build id
+    that request used, so another worker's refresh is never mistaken for a missing page on the same deploy.
+    """
 
     def __init__(self, get: Callable[[str], str] = get_text, fetch_json: Callable[[str], dict] | None = None,
                  pace: Callable[[], None] = lambda: None):
@@ -132,27 +136,31 @@ class StockPages:
         fetch_json = fetch_json or (lambda url: _checked(requests.get(url, headers=_headers(), timeout=30)).json())
         self._fetch_json = lambda url: (pace(), fetch_json(url))[1]
         self._build = None
+        self._lock = threading.Lock()
 
-    def build_id(self, refresh: bool = False) -> str:
-        if self._build is None or refresh:
-            match = _BUILD_ID.search(self._get(f'{SITE}/us-stocks/'))
-            if not match:
-                raise ValueError("dhan.co's page did not carry a build id")
-            self._build = match.group(1)
-        return self._build
+    def build_id(self, refresh: bool = False, stale: str | None = None) -> str:
+        """The current build id; with `refresh`, read again unless another worker already replaced `stale`."""
+        with self._lock:
+            if self._build is None or (refresh and (stale is None or self._build == stale)):
+                match = _BUILD_ID.search(self._get(f'{SITE}/us-stocks/'))
+                if not match:
+                    raise ValueError("dhan.co's page did not carry a build id")
+                self._build = match.group(1)
+            return self._build
+
+    def _page(self, build: str, slug: str) -> dict:
+        return self._fetch_json(f'{SITE}/_next/data/{build}/us-stocks/{slug}-share-price.json').get('pageProps') or {}
 
     def fetch(self, slug: str) -> dict:
         """The page props for `slug` (the screener's `Seosym`, e.g. 'AAPL-apple-inc')."""
-        for refresh in (False, True):
-            previous = self._build
-            build = self.build_id(refresh)
-            if refresh and build == previous:
-                raise missed  # the same deploy: the page does not exist, so the data is not asked for twice
-            url = f'{SITE}/_next/data/{build}/us-stocks/{slug}-share-price.json'
-            try:
-                return self._fetch_json(url).get('pageProps') or {}
-            except requests.HTTPError as error:
-                if refresh or error.response is None or error.response.status_code != 404:
-                    raise
-                missed = error
-        return {}
+        build = self.build_id()
+        try:
+            return self._page(build, slug)
+        except requests.HTTPError as error:
+            if error.response is None or error.response.status_code != 404:
+                raise
+            missed = error
+        fresh = self.build_id(refresh=True, stale=build)
+        if fresh == build:
+            raise missed  # the same deploy: the page does not exist, so the data is not asked for twice
+        return self._page(fresh, slug)

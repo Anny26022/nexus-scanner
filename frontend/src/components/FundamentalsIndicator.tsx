@@ -15,9 +15,15 @@ import { useMountEffect } from '../hooks/useMountEffect';
 type Offset = {x: number; y: number};
 const croreFormat = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 0});
 const decimalFormat = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 1});
+const millionFormat = new Intl.NumberFormat('en-US', {maximumFractionDigits: 0});
+const usDecimalFormat = new Intl.NumberFormat('en-US', {maximumFractionDigits: 1});
+/** India amounts are rupee crore; the US release publishes dollar millions (amount_unit USD_MILLION). */
+interface Units { amount: (value: number) => string; decimal: (value: number) => string; cap: (value: number) => string; eps: string }
 // Values that round to zero print "0", never "-0".
-const crore = {format: (value: number) => croreFormat.format(Math.round(value) || 0)};
-const decimal = {format: (value: number) => decimalFormat.format(Math.round(value * 10) / 10 || 0)};
+const INR: Units = {amount: value => croreFormat.format(Math.round(value) || 0), decimal: value => decimalFormat.format(Math.round(value * 10) / 10 || 0),
+  cap: value => `${croreFormat.format(Math.round(value) || 0)} CR`, eps: 'EPS in Rs'};
+const USD: Units = {amount: value => millionFormat.format(Math.round(value) || 0), decimal: value => usDecimalFormat.format(Math.round(value * 10) / 10 || 0),
+  cap: value => `$${millionFormat.format(Math.round(value) || 0)}M`, eps: 'EPS in $'};
 const periodLabel = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {month: 'short', year: '2-digit', timeZone: 'UTC'}).replace(' ', '-');
 /** Whole-number % change like the extension: +12%, -8%, 0%. */
 const change = (value: number | null) => value === null ? null : Math.round(value);
@@ -25,7 +31,7 @@ const change = (value: number | null) => value === null ? null : Math.round(valu
 const RESULT_ROWS = [
   ['sales', 'Sales'], ['expenses', 'Expenses'], ['operating_profit', 'Operating Profit'], ['opm', 'OPM %'],
   ['other_income', 'Other Income'], ['interest', 'Interest'], ['depreciation', 'Depreciation'],
-  ['profit_before_tax', 'Profit before tax'], ['tax_expenses', 'Tax'], ['net_profit', 'Net Profit'], ['eps', 'EPS in Rs'],
+  ['profit_before_tax', 'Profit before tax'], ['tax_expenses', 'Tax'], ['net_profit', 'Net Profit'], ['eps', 'EPS'],
 ] as const;
 const ESSENTIAL = new Set(['sales', 'expenses', 'operating_profit', 'opm', 'profit_before_tax', 'net_profit', 'eps']);
 const LOWER_IS_BETTER = new Set(['expenses', 'interest', 'depreciation', 'tax_expenses']);
@@ -113,6 +119,7 @@ export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, me
 
   const rows = useMemo(() => config.table ? visibleFinancials(history.data, config.period, cutoff, latest) : [], [history.data, config.table, config.period, cutoff, latest]);
   const shown = useMemo(() => rows.slice(0, config.count), [rows, config.count]);
+  const units = history.data?.amount_unit === 'USD_MILLION' ? USD : INR;
 
   return <>
     {config.band && metadata && <div className="pb-badge" role="group" tabIndex={0} aria-label={`${symbol} price band`} title={`${bandTitle}\nDrag to move`}
@@ -128,20 +135,20 @@ export function FundamentalsIndicator({symbol, revision, cutoff, sessionDate, me
       style={placed(cardDrag.live ?? config.offset, {'--pb-scale': config.tableScale} as CSSProperties)} {...cardDrag.handlers}>
       <div className="pb-drag-handle" aria-hidden="true">•••</div>
       {config.layout === 'compact'
-        ? <CompactTable rows={rows} shown={shown} config={config} metadata={metadata} />
-        : <ResultsTable shown={shown} config={config} metadata={metadata} />}
+        ? <CompactTable rows={rows} shown={shown} config={config} metadata={metadata} units={units} />
+        : <ResultsTable shown={shown} config={config} metadata={metadata} units={units} />}
     </section>}
   </>;
 }
 
-function Meta({metadata, children}: {metadata?: ChartMetrics; children?: ReactNode}) {
+function Meta({metadata, units, children}: {metadata?: ChartMetrics; units: Units; children?: ReactNode}) {
   const cap = metadata?.marketCapCrore;
   const float = metadata?.freeFloatPct;
   // Listing dates arrive as "06-OCT-2008" or ISO; only the year is shown.
   const listed = metadata?.listingDate?.match(/\b(?:19|20)\d{2}\b/)?.[0] ?? '';
   const parts = [
-    cap && cap > 0 ? `MCAP ${crore.format(cap)} CR` : '',
-    cap && cap > 0 && typeof float === 'number' && float > 0 && float <= 100 ? `FF ${crore.format(cap * float / 100)} CR` : '',
+    cap && cap > 0 ? `MCAP ${units.cap(cap)}` : '',
+    cap && cap > 0 && typeof float === 'number' && float > 0 && float <= 100 ? `FF ${units.cap(cap * float / 100)}` : '',
     listed ? `LISTED ${listed}` : '',
   ].filter(Boolean);
   if (!parts.length && !children) return null;
@@ -154,16 +161,16 @@ function ChangeCell({value}: {value: number | null}) {
   return <td className="pb-change" data-trend={rounded > 0 ? 'up' : rounded < 0 ? 'down' : 'flat'}>{rounded > 0 ? `+${rounded}` : rounded}%</td>;
 }
 
-const CompactTable = memo(function CompactTable({rows, shown, config, metadata}: {rows: FinancialPeriod[]; shown: FinancialPeriod[]; config: Required<FundamentalsConfig>; metadata?: ChartMetrics}) {
+const CompactTable = memo(function CompactTable({rows, shown, config, metadata, units}: {rows: FinancialPeriod[]; shown: FinancialPeriod[]; config: Required<FundamentalsConfig>; metadata?: ChartMetrics; units: Units}) {
   const quarterly = config.period === 'quarterly';
   const profit = config.profit;
   const summary = [metadata?.sector, metadata?.industry].filter(value => value && value !== 'Unclassified').join(' | ');
   const value = (row: FinancialPeriod, key: string, digits = false) => {
     const n = financialNumber(row[key]);
-    return n === null ? '—' : digits ? decimal.format(n) : crore.format(n);
+    return n === null ? '—' : digits ? units.decimal(n) : units.amount(n);
   };
   return <>
-    <Meta metadata={metadata} />
+    <Meta metadata={metadata} units={units} />
     {summary && <div className="pb-summary">{summary}</div>}
     <table className="pb-table">
       <thead><tr>
@@ -188,23 +195,23 @@ const CompactTable = memo(function CompactTable({rows, shown, config, metadata}:
 });
 
 /** Screener-style results grid, oldest period first; a value beyond every earlier one is highlighted. */
-const ResultsTable = memo(function ResultsTable({shown, config, metadata}: {shown: FinancialPeriod[]; config: Required<FundamentalsConfig>; metadata?: ChartMetrics}) {
+const ResultsTable = memo(function ResultsTable({shown, config, metadata, units}: {shown: FinancialPeriod[]; config: Required<FundamentalsConfig>; metadata?: ChartMetrics; units: Units}) {
   const periods = [...shown].reverse();
   const keys = RESULT_ROWS.filter(([key]) => (config.layout === 'results' || ESSENTIAL.has(key)) && periods.some(row => financialNumber(row[key]) !== null));
   return <>
-    <Meta metadata={metadata} />
+    <Meta metadata={metadata} units={units} />
     <table className="pb-results">
       <thead><tr><th scope="col" />{periods.map(row => <th scope="col" key={row.period_end}>{periodLabel(row.period_end)}</th>)}</tr></thead>
       <tbody>{keys.map(([key, label]) => {
         const values = periods.map(row => financialNumber(row[key]));
-        return <tr key={key}><th scope="row">{label}</th>{values.map((current, index) => {
+        return <tr key={key}><th scope="row">{key === 'eps' ? units.eps : label}</th>{values.map((current, index) => {
           const earlier = values.slice(0, index).filter((n): n is number => n !== null);
           let tone: 'up' | 'down' | undefined;
           if (current !== null && earlier.length) {
             const higher = current > Math.max(...earlier), lower = current < Math.min(...earlier);
             tone = LOWER_IS_BETTER.has(key) ? lower ? 'up' : higher ? 'down' : undefined : higher ? 'up' : lower ? 'down' : undefined;
           }
-          const text = current === null ? '—' : key === 'eps' || key === 'opm' ? decimal.format(current) : crore.format(current);
+          const text = current === null ? '—' : key === 'eps' || key === 'opm' ? units.decimal(current) : units.amount(current);
           return <td key={periods[index].period_end} data-breakout={tone}>{text}{key === 'opm' && current !== null ? '%' : ''}</td>;
         })}</tr>;
       })}</tbody>

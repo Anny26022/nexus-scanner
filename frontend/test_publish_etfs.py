@@ -82,8 +82,15 @@ class PublishEtfsTests(unittest.TestCase):
         published = publish_etfs(store, fetch=us_fetch, market='us')
         url = published['etfDatasetUrl']
         self.assertRegex(url, rf'^/data/revisions/{REVISION}/etfs-[a-f0-9]{{16}}\.json\.gz$')
+        key = 'releases/' + url.removeprefix('/data/revisions/')
+        snapshot = decode_packed_snapshot(json.loads(gzip.decompress(store.objects[key])))
+        self.assertEqual((snapshot['revision'], snapshot['asOfDate'], snapshot['market'], snapshot['totalStocks']),
+                         (REVISION, '2026-11-06', 'us', 1))
+        self.assertEqual(snapshot['stocks'][0]['symbol'], 'SPY')
         current = json.loads(store.objects['site/data/us/current.json'])
-        self.assertEqual(current['etfDatasetUrl'], url)
+        self.assertEqual(current, {**live_us, 'etfDatasetUrl': url})
+        # India's pointer is never touched by a US run.
+        self.assertNotIn('site/data/current.json', store.objects)
 
 
 if __name__ == '__main__':

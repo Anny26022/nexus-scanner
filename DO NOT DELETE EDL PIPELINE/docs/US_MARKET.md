@@ -30,8 +30,9 @@ day after Thanksgiving and July 3 / December 24 when they fall Monday to Thursda
 stocks have no bar on a closed day and no open day without a bar over 5.6 years.
 
 `last_closed_session()` names the session a snapshot belongs to in Eastern time, so a run at 6:00 AM IST labels the
-previous New York day in both EST and EDT. A snapshot taken during the session (19:00–01:30 IST in daylight time, 20:00–02:30 IST in standard time) is still trading
-and must not be stored as a closed bar, as India's `is_nse_cash_session` already guards.
+previous New York day in both EST and EDT. A snapshot taken during the session (19:00–01:30 IST in daylight time, 20:00–02:30 IST in standard time; on a 1 PM ET
+early close, 19:00–22:30 IST in daylight time and 20:00–23:30 IST in standard time) is still trading and must not be
+stored as a closed bar, as India's `is_nse_cash_session` already guards.
 
 ## Quirks Phase 1 must handle
 
@@ -58,7 +59,7 @@ and must not be stored as a closed bar, as India's `is_nse_cash_session` already
 ## Phase 1: the daily release
 
 ```
-python -m edl_pipeline.markets.us <root>      # build the US root (PYTHONPATH=src:. from this folder)
+PYTHONPATH=src:. python -m edl_pipeline.markets.us <root>   # build the US root, from this folder
 EDL_US_BASE_DIR=<root> python frontend/publish_us.py   # from the repository root
 ```
 
@@ -70,7 +71,7 @@ EDL_US_BASE_DIR=<root> python frontend/publish_us.py   # from the repository roo
 | --- | --- |
 | Universe | Two screener calls (stocks and ETFs). `markets/us/universe.py` keeps common stock and partnership units; preferred, notes, rights, warrants and SPAC units are classified and left out. |
 | Snapshot check | Refused while New York is trading, when the latest trade is not from the last closed session, and when it stops before that session's close (exit 75: the workflow skips publication rather than storing a live bar). A stock whose own last trade is from an earlier session gets no bar that day. |
-| Price history | `markets/us/history.py`: a stock without a file is seeded from Yahoo Finance (split-adjusted back to 1980 / IPO), falling back to Dhan's INX ticks (2021 onwards); afterwards the Dhan snapshot's bar is appended. A gap, or a previous close more than 0.5% off the stored close (a split), refetches the stock in full; the snapshot's bar is added to a refetched history only when it agrees with the snapshot's previous close (the provider may not have re-adjusted a split yet). `ohlcv_data/`, `indices_ohlcv_data/`, `stock_pages/` and the rotation ledger persist between runs (Actions cache, saved after publication); losing them costs one re-seed. |
+| Price history | `markets/us/history.py`: a stock without a file is seeded from Yahoo Finance (split-adjusted back to 1980 / IPO), falling back to Dhan's INX ticks (2021 onwards); afterwards the Dhan snapshot's bar is appended. A gap, or a previous close more than 0.5% off the stored close (a split or dividend re-adjustment), refetches the stock in full; the snapshot's bar is added to a refetched history only when it agrees with the snapshot's previous close (the provider may not have re-adjusted yet; an unknown previous close counts as a mismatch). Yahoo and Dhan are each paced at `--interval`; a Yahoo rate limit seeds the rest from Dhan and warns on the run. `ohlcv_data/`, `indices_ohlcv_data/`, `stock_pages/` and the rotation ledger persist between runs (Actions cache, saved before publication and again after it); losing them costs one re-seed. |
 | Benchmarks | SPY, QQQ, IWM and DIA histories stand in for indices; SPY is the market benchmark. |
 | Breadth, index history | India's `generate_market_breadth` and `generate_all_index_history`, with US floors ($1 price, $100M market cap). |
 | Stock metrics | India's `process_symbol_csv` on the NYSE calendar, plus RSI(14) and dollar turnover. |

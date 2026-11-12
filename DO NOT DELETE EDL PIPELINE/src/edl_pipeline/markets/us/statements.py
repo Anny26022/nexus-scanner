@@ -78,7 +78,9 @@ def stale(page: dict | None, record: dict, now: datetime) -> bool:
     return (now.date() - date.fromisoformat(reported)).days <= CATCH_UP_DAYS and bool(latest) and not reports(latest[0]['period'], reported)
 
 
-# A quarter's results are filed within this many days of its end (10-Qs within 40-45, 10-Ks within 60-90).
+# A quarter's results are filed within this many days of its end (10-Qs within 40-45, 10-Ks within 60-90, 91 on a
+# leap year's deadline, a few days more when late). Quarters are 90-92 days apart, so a report could match two only
+# when filed within about 10 days of a quarter end, which US companies do not do (the fastest, banks, take two weeks).
 REPORT_WINDOW_DAYS = 100
 # How long after a report a page that still shows the previous quarter is fetched again each run.
 CATCH_UP_DAYS = 30
@@ -108,12 +110,15 @@ def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, 
             raise _Stopped
 
     pages = pages or dhan.StockPages(pace=pace)
-    due = [record for record in records if record.get('slug') and stale(read_page(root, record['symbol']), record, now)]
-    # Never-fetched pages first, then the ones whose company has reported.
-    due.sort(key=lambda record: read_page(root, record['symbol']) is not None)
+    cached = {record['symbol']: read_page(root, record['symbol']) for record in records if record.get('slug')}
+    due = [record for record in records if record.get('slug') and stale(cached[record['symbol']], record, now)]
+    # Never-fetched pages first, then the cached ones, oldest fetch first.
+    due.sort(key=lambda record: (cached[record['symbol']] is not None,
+                                 datetime.fromisoformat(cached[record['symbol']]['fetched_at']) if cached[record['symbol']] else now))
     counts, lock = {'due': len(due), 'fetched': 0, 'missing': 0, 'failed': 0}, threading.Lock()
 
     def one(record):
+        previous = cached[record['symbol']]
         if stopped.is_set() or time.monotonic() > deadline:
             return
         if not own:
@@ -128,14 +133,16 @@ def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, 
         except Exception as error:  # one page must not stop the market
             outcome = 'missing' if '404' in str(error) else 'failed'
         else:
-            data = props.get('fundamentalsData') or {}
-            outcome = 'fetched' if data else 'missing'
+            # A malformed answer (not an object) counts as failed, like an error, instead of stopping the run.
+            data = props.get('fundamentalsData') if isinstance(props, dict) else props
+            outcome = 'missing' if not data else 'fetched' if isinstance(data, dict) and isinstance(props, dict) else 'failed'
         try:
             if outcome == 'fetched':
                 write_page(root, record['symbol'], {'fetched_at': now.isoformat(), 'slug': record['slug'],
                                                     **{key: data.get(key) for key in KEPT}})
-            elif outcome == 'missing':
+            elif outcome == 'missing' and not (previous and not previous.get('missing')):
                 # Remembered, so the next runs spend their budget on pages that exist; asked for again after a week.
+                # A page fetched before is kept (an empty answer or a 404 may be passing) and asked for again next run.
                 write_page(root, record['symbol'], {'fetched_at': now.isoformat(), 'slug': record['slug'], 'missing': True})
         except OSError as error:  # the cache is optional: this page counts as failed, the build goes on
             print(f"  stock page {record['symbol']}: not saved ({error})", flush=True)
@@ -168,11 +175,12 @@ def series(block: dict | None) -> list[dict]:
     columns = {key: str(value).split('|') for key, value in block.items() if key != 'YEAR' and isinstance(value, str)}
     rows = []
     for index, period in enumerate(periods):
-        if len(period) != 6 or not period.isdigit() or not 1 <= int(period[4:]) <= 12:
+        if len(period) != 6 or not period.isdigit() or not 1900 <= int(period[:4]) <= 2200 or not 1 <= int(period[4:]) <= 12:
             continue
         row = {'period': period}
         for key, values in columns.items():
-            row[key] = _number(values[index]) if index < len(values) and values[index] != '' else None
+            # Dhan writes 0 for lines a company does not report (a bank has no current assets or operating profit).
+            row[key] = (_number(values[index]) or None) if index < len(values) and values[index] != '' else None
         rows.append(row)
     return sorted(rows, key=lambda row: row['period'], reverse=True)
 
@@ -213,8 +221,7 @@ CURRENT_YEAR_MONTHS = 12
 
 
 def _latest(rows: list[dict]) -> dict:
-    # Dhan writes 0 for lines a company does not report (a bank has no current assets or operating profit).
-    return {key: (value or None) if key != 'period' else value for key, value in (rows[0] if rows else {}).items()}
+    return rows[0] if rows else {}
 
 
 def statement_blocks(page: dict) -> dict:

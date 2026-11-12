@@ -2,7 +2,6 @@ import { copyFormats, type CopyGroup } from '../utils/copyResults';
 import {classificationLabels, type ClassificationRecord} from '../data/classification';
 import { getIpoJson } from './gzipJson';
 import { DataUnavailableError } from './dataErrors';
-import type { ScannerOrigins } from './origins';
 
 /** Quarterly results history: a small index in the app, quarter files in object storage. */
 const EARNINGS_INDEX_URL = '/data/results/index.json';
@@ -74,35 +73,18 @@ export interface EarningsRecord {
   dropTime?: {minutes?: number | null; isEstimate?: boolean | null} | null;
 }
 
-export async function getEarningsIndex(origins: ScannerOrigins, marketId?: string): Promise<EarningsIndex> {
-  const url = marketId === 'us' ? '/data/results/us_index.json' : EARNINGS_INDEX_URL;
-  try {
-    const response = await fetch(origins.dataUrl(url), {cache: 'no-cache'});
-    if (!response.ok) {
-      if (marketId === 'us') {
-        const fallback = await fetch(origins.dataUrl(EARNINGS_INDEX_URL), {cache: 'no-cache'});
-        if (!fallback.ok) throw new DataUnavailableError('Earnings history has not been published yet.', 'not_published');
-        const fallbackIndex = await fallback.json().catch(() => null) as EarningsIndex | null;
-        if (!fallbackIndex || fallbackIndex.version !== 1 || typeof fallbackIndex.quarters !== 'object') {
-          throw new DataUnavailableError('Earnings history has not been published yet.', 'not_published');
-        }
-        return fallbackIndex;
-      }
-      throw new DataUnavailableError('Earnings history has not been published yet.', 'not_published');
-    }
-    const index = await response.json().catch(() => null) as EarningsIndex | null;
-    if (!index || index.version !== 1 || typeof index.quarters !== 'object') {
-      throw new DataUnavailableError('Earnings history has not been published yet.', 'not_published');
-    }
-    return index;
-  } catch (err) {
-    if (err instanceof DataUnavailableError) throw err;
+export async function getEarningsIndex(): Promise<EarningsIndex> {
+  const response = await fetch(EARNINGS_INDEX_URL, {cache: 'no-cache'});
+  if (!response.ok) throw new DataUnavailableError('Earnings history has not been published yet.', 'not_published');
+  const index = await response.json().catch(() => null) as EarningsIndex | null;
+  if (!index || index.version !== 1 || typeof index.quarters !== 'object') {
     throw new DataUnavailableError('Earnings history has not been published yet.', 'not_published');
   }
+  return index;
 }
 
-export async function getHeatmapIndex(origins: ScannerOrigins): Promise<HeatmapIndex> {
-  const response = await fetch(origins.dataUrl(HEATMAP_INDEX_URL), {cache: 'no-cache'});
+export async function getHeatmapIndex(): Promise<HeatmapIndex> {
+  const response = await fetch(HEATMAP_INDEX_URL, {cache: 'no-cache'});
   if (!response.ok) throw new DataUnavailableError('Earnings heatmap has not been published yet.', 'not_published');
   const index = await response.json().catch(() => null) as HeatmapIndex | null;
   if (!index || index.version !== 1 || typeof index.markets !== 'object') {

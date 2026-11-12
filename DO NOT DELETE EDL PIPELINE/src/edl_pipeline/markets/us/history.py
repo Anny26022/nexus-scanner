@@ -87,7 +87,8 @@ def snapshot_bar(record: dict, session: str) -> dict | None:
     """The session's bar from a canonical snapshot record, when every price is present and the row last traded in that
     session (a halted or untraded stock's row still holds an earlier day's prices)."""
     traded = record.get('provider_last_trade_ist')
-    if traded and datetime.fromisoformat(traded).astimezone(EASTERN).date().isoformat() != session:
+    # Without a trade time the row's prices cannot be placed in a session, so they are not stored as this one's.
+    if not traded or datetime.fromisoformat(traded).astimezone(EASTERN).date().isoformat() != session:
         return None
     values = [record.get(key) for key in ('open', 'high', 'low', 'close')]
     if any(value is None or value <= 0 for value in values):
@@ -118,7 +119,7 @@ def adjustment_matches(bars: list[dict], record: dict) -> bool:
     previous_close = record.get('previous_close')
     last_close = bars[-1]['close']
     if not previous_close or last_close <= 0:
-        return True
+        return False  # unverified, as needs_refetch treats it: the snapshot bar is not joined to the series
     return abs(previous_close / last_close - 1) <= ADJUSTMENT_TOLERANCE
 
 

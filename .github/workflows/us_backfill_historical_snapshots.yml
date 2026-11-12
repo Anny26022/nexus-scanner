@@ -18,7 +18,7 @@ on:
         default: true
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: us-daily-refresh
@@ -74,11 +74,20 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: python frontend/site_data.py pull
 
+      # The root holds only the cached price history: the generator fails on a cold cache (run the US daily
+      # refresh first), reads names and classification from Dhan's list and the committed Finviz file, and leaves
+      # statement figures, market cap and ownership unavailable (no point-in-time source).
       - name: Generate US Historical Snapshots
         env:
           START_DATE: ${{ github.event.inputs.start_date }}
           END_DATE: ${{ github.event.inputs.end_date }}
         run: |
+          if [[ ! "$START_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ || ! "$END_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "::error::start_date and end_date must be YYYY-MM-DD"; exit 1
+          fi
+          if [[ "$START_DATE" > "$END_DATE" ]]; then
+            echo "::error::start_date $START_DATE is after end_date $END_DATE"; exit 1
+          fi
           python tools/generate_historical_snapshots_us.py \
             --pipeline-dir "${{ env.US_ROOT }}" \
             --start-date "$START_DATE" \

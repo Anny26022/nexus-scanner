@@ -49,18 +49,9 @@ const combine = (values: Truth[], all: boolean): Truth => all
   ? values.includes(false) ? false : values.includes(null) ? null : true
   : values.includes(true) ? true : values.includes(null) ? null : false;
 const number = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
-/** Published performance the snapshot also computes itself, as % returns over 21, 63, 126 and 252 sessions. */
-const OWN_RETURNS: Readonly<Record<string, string>> = {'market.performance_1m_pct': 'return21', 'market.performance_3m_pct': 'return63',
-  'market.performance_6m_pct': 'return126', 'market.performance_1y_pct': 'return252'};
-/**
- * A published (TradingView) metric for the session; performance falls back to the snapshot's own return when the
- * published block is missing, so the Top Gainers and Leaders scans keep working. Sessions differ slightly from
- * TradingView's calendar months.
- */
+/** A published (TradingView) metric for the session, or null when this session did not publish it. */
 export function publishedValue(s: SnapshotStock, metric: string, session: string): number | null {
-  const published = s.extended?.asOfDate === session ? number(s.extended.values[metric]) : null;
-  const own = OWN_RETURNS[metric];
-  return published ?? (own && s.asOfDate === session ? number(s.metrics?.[own]) : null);
+  return s.extended?.asOfDate === session ? number(s.extended.values[metric]) : null;
 }
 const between = (value: unknown, min: number, max: number): Truth => number(value) == null ? null : (value as number) >= min && (value as number) <= max;
 const compare = (value: unknown, op: string, target: number): Truth => {
@@ -507,7 +498,7 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
     const s = row.sector?.trim() || 'Others';
     sectorCounts[s] = (sectorCounts[s] || 0) + 1;
   }
-  return { ...(data.etfLabels ? {etfLabels:data.etfLabels} : {}), resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
+  return { ...(data.etfLabels ? {etfLabels:data.etfLabels} : {}), ...(data.currency ? {currency:data.currency} : {}), resolvedSession:{date:data.asOfDate,sessionId:`NSE-${data.asOfDate.replaceAll('-','')}-FINAL`,status:'closed',isHistorical:false},
     immutableRevision:data.revision,
     rows:request.countsOnly ? [] : (allRows ? rows : rows.slice((page-1)*size,page*size)),
     matchedSymbols:request.countsOnly ? [] : rows.map(row=>row.symbol),

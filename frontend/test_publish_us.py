@@ -127,52 +127,31 @@ class PublishUsTests(unittest.TestCase):
             'news_feed': [{'title': 'Apple Earnings Beat', 'link': 'https://example.com'}],
             'insider_activity': [{'insider': 'Tim Cook', 'transaction': 'Sale'}],
         }
-        row = {'symbol': 'AAPL', 'metrics': {}}
-        # Simulate enrichment logic from publish_us
-        dollar_volume = stock.get('dollar_volume')
-        row['rupeeVolumeCrore'] = dollar_volume / publish_us.UNITED_STATES.provider_amount_unit if dollar_volume is not None else None
-        publish_us.listing_age(row, stock, '2026-11-09')
-        for src, dst in (
-            ('short_float_percent', 'shortFloatPct'),
-            ('short_ratio', 'shortRatio'),
-            ('insider_own_percent', 'insiderOwnPct'),
-            ('institutional_own_percent', 'institutionalOwnPct'),
-            ('insider_trans_percent', 'insiderTransPct'),
-            ('institutional_trans_percent', 'institutionalTransPct'),
-            ('target_price', 'targetPrice'),
-            ('target_price_upside_percent', 'targetPriceUpsidePct'),
-            ('analyst_rating', 'analystRating'),
-            ('ps_ratio', 'psRatio'),
-            ('gross_margin_percent', 'grossMarginPct'),
-            ('net_margin_percent', 'netMarginPct'),
-            ('roe_percent', 'roePct'),
-            ('roic_percent', 'roicPct'),
-            ('quick_ratio', 'quickRatio'),
-            ('lt_debt_to_equity', 'ltDebtToEquity'),
-            ('beta', 'beta'),
-        ):
-            val = stock.get(src)
-            if val is not None:
-                row[dst] = val
-        if stock.get('news_feed'):
-            row['newsFeed'] = stock['news_feed']
-        if stock.get('insider_activity'):
-            row['insiderActivity'] = stock['insider_activity']
-        if row.get('promoterHoldingPct') is None and row.get('insiderOwnPct') is not None:
-            row['promoterHoldingPct'] = row['insiderOwnPct']
-        if row.get('fiiHoldingPct') is None and row.get('institutionalOwnPct') is not None:
-            row['fiiHoldingPct'] = row['institutionalOwnPct']
-
+        stock.update(volatility_week_percent=2.1, volatility_month_percent=2.8, float_shares=15_100_000_000,
+                     shares_outstanding=15_200_000_000, eps_forecast_next_quarter=1.6)
+        row = publish_us.enrich_row({'symbol': 'AAPL', 'metrics': {}}, stock, '2026-11-09')
+        self.assertEqual(row['rupeeVolumeCrore'], 50.0)
         self.assertEqual(row['shortFloatPct'], 1.45)
         self.assertEqual(row['shortRatio'], 1.82)
         self.assertEqual(row['insiderOwnPct'], 0.08)
         self.assertEqual(row['institutionalOwnPct'], 61.2)
-        self.assertEqual(row['promoterHoldingPct'], 0.08)
-        self.assertEqual(row['fiiHoldingPct'], 61.2)
+        # US ownership is never relabelled as India's promoter or FII holding.
+        self.assertNotIn('promoterHoldingPct', row)
+        self.assertNotIn('fiiHoldingPct', row)
+        self.assertEqual((row['volatilityWeekPct'], row['volatilityMonthPct']), (2.1, 2.8))
+        self.assertEqual((row['floatShares'], row['sharesOutstanding']), (15_100_000_000, 15_200_000_000))
+        self.assertEqual(row['epsForecastNextQuarter'], 1.6)
         self.assertEqual(row['targetPrice'], 250.0)
         self.assertEqual(row['analystRating'], 'Buy')
         self.assertEqual(len(row['newsFeed']), 1)
         self.assertEqual(len(row['insiderActivity']), 1)
+
+    def test_an_older_session_never_replaces_the_live_us_release(self):
+        publish_us.refuse_older_session(None, '2026-11-09')
+        publish_us.refuse_older_session({'sessionDate': '2026-11-09'}, '2026-11-09')  # a same-session retry
+        publish_us.refuse_older_session({'sessionDate': '2026-11-06'}, '2026-11-09')
+        with self.assertRaisesRegex(RuntimeError, 'Refusing'):
+            publish_us.refuse_older_session({'sessionDate': '2026-11-10'}, '2026-11-09')
 
     def test_load_financial_history_normalizes_to_standard_schema(self):
         records = [
@@ -224,7 +203,10 @@ class PublishUsTests(unittest.TestCase):
         self.assertEqual(rec1['listing_age_calendar_days'], 100)
         self.assertEqual(rec1['market_cap_crore'], 2500.0)
         self.assertEqual(rec1['turnover_crore'], 15.0)
-        self.assertEqual(rec1['anchor_lock_in_calendar'][0]['unlock_date'], lockup_100.isoformat())
+        # The keys and units the IPO adapter reads: turnoverCrore = rupee_volume / 1e7, in $M here.
+        self.assertEqual(rec1['rupee_volume'] / 10_000_000, 15.0)
+        self.assertEqual(rec1['anchor_lock_in_calendar'], [{'listing_date': list_100.isoformat(),
+                                                            'unlock_date': lockup_100.isoformat(), 'tranche': 100}])
         self.assertEqual(rec1['next_anchor_lock_in_date'], lockup_100.isoformat())
 
         # Older IPO (lockup passed)
@@ -232,7 +214,10 @@ class PublishUsTests(unittest.TestCase):
         self.assertEqual(rec2['symbol'], 'IPO2')
         self.assertEqual(rec2['listing_age_calendar_days'], 200)
         self.assertIsNone(rec2['next_anchor_lock_in_date'])
-        self.assertIsNone(rec2['next_anchor_lock_in_date'])
+        # Full dollars are always restated in $M, however small the company.
+        tiny = publish_us.build_us_ipos([{'symbol': 'TINY', 'listing_date': list_100.isoformat(), 'market_cap': 800_000,
+                                          'dollar_volume': 250_000}], sess_date.isoformat())['records'][0]
+        self.assertEqual((tiny['market_cap_crore'], tiny['turnover_crore']), (0.8, 0.25))
 
 
 if __name__ == '__main__':

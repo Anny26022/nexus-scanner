@@ -34,7 +34,7 @@
       "Biometrics - Identity Verification & Security",
       "Entertainment - Music & Audio Streaming",
       "Hardware - Consumer Electronics, Gaming PCs & Consoles",
-      "Hardware - Gaming & Immersive Pheriperals",
+      "Hardware - Gaming & Immersive Peripherals",
       "Hardware - Next-Gen & Specialty",
       "Hardware - Personal Computing & Devices",
       "Healthcare - Digital Health, Telemedicine & Remote Care",
@@ -306,7 +306,7 @@
   "AEVA": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Sensors & Perception Systems"
+      "Autonomous - Sensors & Perception Systems"
     ],
     "themes": [
       "Autonomous Systems"
@@ -335,7 +335,7 @@
     "primary_theme": "Agriculture & FoodTech",
     "subthemes": [
       "Agriculture - Precision Agriculture & Farm Automation",
-      "Autonomous  - Maritime, Agriculture & Specialized Autonomy"
+      "Autonomous - Maritime, Agriculture & Specialized Autonomy"
     ],
     "themes": [
       "Agriculture & FoodTech",
@@ -490,8 +490,8 @@
       "AI - Edge & Embedded Systems",
       "AI - Robotics & Automation",
       "Automation - Industrial Sensors & Machine Vision",
-      "Autonomous  - Sensors & Perception Systems",
-      "Autonomous  - Software & Cloud Infrastructure",
+      "Autonomous - Sensors & Perception Systems",
+      "Autonomous - Software & Cloud Infrastructure",
       "EVs - Key Suppliers & Autonomy Tech",
       "Robotics - Sensors & Vision Systems"
     ],
@@ -509,7 +509,7 @@
       "AI - AGI, general intelligence",
       "AI - Compute & Acceleration",
       "AI - Edge & Embedded Systems",
-      "Autonomous  - Sensors & Perception Systems",
+      "Autonomous - Sensors & Perception Systems",
       "Big Data - AI Platforms & Predictive Analytics",
       "Cloud - Hardware, Networking & OEM",
       "Entertainment - Streaming & Gaming Infrastructure",
@@ -517,7 +517,7 @@
       "Hardware - Personal Computing & Devices",
       "IoT - Edge Computing & Hardware Infrastructure",
       "NanoTech - Nanoelectronics & Semiconductors",
-      "Quantum  - Enabling Technologies",
+      "Quantum - Enabling Technologies",
       "Semis - Logic & CPUs, GPUs, Accelerators",
       "Semis - Emerging Technologies",
       "V/A Reality - Headsets & Hardware"
@@ -638,8 +638,8 @@
       "AI - Power & Energy Solutions",
       "AI - Foundation Models & Platforms",
       "Automation - Smart Logistics & Warehouse Automation",
-      "Autonomous  - Industrial & Logistics Automation",
-      "Autonomous  - Software & Cloud Infrastructure",
+      "Autonomous - Industrial & Logistics Automation",
+      "Autonomous - Software & Cloud Infrastructure",
       "Big Data - AI Platforms & Predictive Analytics",
       "Big Data - Infrastructure & Storage",
       "Blockchain - Enterprise Blockchain Solutions",
@@ -669,9 +669,9 @@
       "IoT - Platforms, Software & Analytics",
       "Nutrition - Food Delivery & Meal Kits",
       "Nutrition - Organic & Natural Food Retailers",
-      "Quantum  - Applications",
-      "Quantum  - Cloud Ecosystems",
-      "Quantum  - Networking & Security",
+      "Quantum - Applications",
+      "Quantum - Cloud Ecosystems",
+      "Quantum - Networking & Security",
       "Robotics - Service & Consumer Robotics",
       "Robotics - Logistics & Warehouse Robotics",
       "Smart Home - Automation & Control Systems",
@@ -912,7 +912,7 @@
   "ARQQ": {
     "primary_theme": "Quantum Computing",
     "subthemes": [
-      "Quantum  - Networking & Security"
+      "Quantum - Networking & Security"
     ],
     "themes": [
       "Quantum Computing"
@@ -1021,8 +1021,8 @@
   "AUR": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Vehicles & Mobility",
-      "Autonomous  - Software & Cloud Infrastructure",
+      "Autonomous - Vehicles & Mobility",
+      "Autonomous - Software & Cloud Infrastructure",
       "EVs - Autonomous Driving",
       "Robotics - Autonomous Vehicles & Mobility",
       "Transportation - Urban Mobility & Emerging Transport Tech"
@@ -1038,7 +1038,7 @@
     "primary_theme": "Artificial Intelligence",
     "subthemes": [
       "AI - Robotics & Automation",
-      "Autonomous  - Aerospace, Defense & Drones",
+      "Autonomous - Aerospace, Defense & Drones",
       "Defense - Drones & Anti-Drone Systems",
       "Defense - Precision Weapons & Ammunition Resupply",
       "Hardware - Next-Gen & Specialty"
@@ -1226,7 +1226,7 @@
     "primary_theme": "Artificial Intelligence",
     "subthemes": [
       "AI - Apps, Domain-Specific AI",
-      "Autonomous  - Aerospace, Defense & Drones",
+      "Autonomous - Aerospace, Defense & Drones",
       "Biometrics - Recognition & Analytics"
     ],
     "themes": [
@@ -1527,7 +1527,7 @@
       "Healthy Food & Nutrition"
     ]
   },
-  "BRK-B": {
+  "BRK.B": {
     "primary_theme": "Energy - Renewable",
     "subthemes": [
       "Energy Clean - Geothermal"
@@ -1715,7 +1715,7 @@
   "CAT": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Maritime, Agriculture & Specialized Autonomy",
+      "Autonomous - Maritime, Agriculture & Specialized Autonomy",
       "IoT - Industrial & Enterprise IoT",
       "Transportation - Infrastructure & Equipment"
     ],
@@ -1885,7 +1885,7 @@
       "AI - Robotics & Automation",
       "Automation - Smart Logistics & Warehouse Automation",
       "Automation - Industrial Sensors & Machine Vision",
-      "Autonomous  - Sensors & Perception Systems",
+      "Autonomous - Sensors & Perception Systems",
       "Biometrics - Biometric Sensors & Hardware",
       "Robotics - Industrial Automation",
       "Robotics - Logistics & Warehouse Robotics",
@@ -2360,7 +2360,7 @@
   "CRSR": {
     "primary_theme": "Hardware",
     "subthemes": [
-      "Hardware - Gaming & Immersive Pheriperals"
+      "Hardware - Gaming & Immersive Peripherals"
     ],
     "themes": [
       "Hardware"
@@ -2762,8 +2762,8 @@
     "primary_theme": "Agriculture & FoodTech",
     "subthemes": [
       "Agriculture - Precision Agriculture & Farm Automation",
-      "Autonomous  - Industrial & Logistics Automation",
-      "Autonomous  - Maritime, Agriculture & Specialized Autonomy",
+      "Autonomous - Industrial & Logistics Automation",
+      "Autonomous - Maritime, Agriculture & Specialized Autonomy",
       "Transportation - Infrastructure & Equipment"
     ],
     "themes": [
@@ -3157,7 +3157,7 @@
     "subthemes": [
       "Automation - Factory & Process Automation Systems",
       "Automation - Industrial IoT, Connectivity",
-      "Autonomous  - Industrial & Logistics Automation",
+      "Autonomous - Industrial & Logistics Automation",
       "Hardware - Industrial & IoT",
       "IoT - Industrial & Enterprise IoT",
       "Robotics - Industrial Automation"
@@ -4000,7 +4000,7 @@
   "GM": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Vehicles & Mobility",
+      "Autonomous - Vehicles & Mobility",
       "EVs - Manufacturers",
       "Transportation - Urban Mobility & Emerging Transport Tech"
     ],
@@ -4050,8 +4050,8 @@
       "AI - Power & Energy Solutions",
       "AI - Enterprise Productivity & Software Integration",
       "AI - Foundation Models & Platforms",
-      "Autonomous  - Vehicles & Mobility",
-      "Autonomous  - Software & Cloud Infrastructure",
+      "Autonomous - Vehicles & Mobility",
+      "Autonomous - Software & Cloud Infrastructure",
       "Big Data - AI Platforms & Predictive Analytics",
       "Big Data - Infrastructure & Storage",
       "Biometrics - Recognition & Analytics",
@@ -4073,10 +4073,10 @@
       "Entertainment - Video Streaming",
       "EVs - Autonomous Driving",
       "IoT - Platforms, Software & Analytics",
-      "Quantum  - Applications",
-      "Quantum  - Cloud Ecosystems",
-      "Quantum  - Hardware Platforms",
-      "Quantum  - Software & Tools",
+      "Quantum - Applications",
+      "Quantum - Cloud Ecosystems",
+      "Quantum - Hardware Platforms",
+      "Quantum - Software & Tools",
       "Robotics - Autonomous Vehicles & Mobility",
       "Smart Home - Automation & Control Systems",
       "Smart Home - Connected Devices & Appliances",
@@ -4376,7 +4376,7 @@
       "Automation - Factory & Process Automation Systems",
       "Automation - Industrial IoT, Connectivity",
       "Automation - Smart Logistics & Warehouse Automation",
-      "Autonomous  - Industrial & Logistics Automation",
+      "Autonomous - Industrial & Logistics Automation",
       "Consumer - Smart Homes & Household Products",
       "E-commerce - Logistics & Delivery",
       "Environmental - Sustainable Agriculture & Resource Management",
@@ -4386,10 +4386,10 @@
       "IoT - Connected Devices & Sensors",
       "IoT - Industrial & Enterprise IoT",
       "NanoTech - Nanomaterials & Manufacturing",
-      "Quantum  - Applications",
-      "Quantum  - Enabling Technologies",
-      "Quantum  - Hardware Platforms",
-      "Quantum  - Networking & Security",
+      "Quantum - Applications",
+      "Quantum - Enabling Technologies",
+      "Quantum - Hardware Platforms",
+      "Quantum - Networking & Security",
       "Robotics - Industrial Automation",
       "Robotics - Logistics & Warehouse Robotics",
       "Smart Home - Automation & Control Systems",
@@ -4446,7 +4446,7 @@
     "primary_theme": "Hardware",
     "subthemes": [
       "Hardware - Consumer Electronics, Gaming PCs & Consoles",
-      "Hardware - Gaming & Immersive Pheriperals",
+      "Hardware - Gaming & Immersive Peripherals",
       "Hardware - Personal Computing & Devices",
       "Hardware - Printing & Imaging",
       "V/A Reality - Headsets & Hardware"
@@ -4626,11 +4626,11 @@
       "Cybersecurity - Security Information & Event Management",
       "Hardware - Servers, OEMs & Enterprise Systems",
       "IoT - Platforms, Software & Analytics",
-      "Quantum  - Applications",
-      "Quantum  - Cloud Ecosystems",
-      "Quantum  - Hardware Platforms",
-      "Quantum  - Networking & Security",
-      "Quantum  - Software & Tools",
+      "Quantum - Applications",
+      "Quantum - Cloud Ecosystems",
+      "Quantum - Hardware Platforms",
+      "Quantum - Networking & Security",
+      "Quantum - Software & Tools",
       "Software - Data & Analytics",
       "Software - Cybersecurity"
     ],
@@ -4683,7 +4683,7 @@
   "IMMR": {
     "primary_theme": "Hardware",
     "subthemes": [
-      "Hardware - Gaming & Immersive Pheriperals"
+      "Hardware - Gaming & Immersive Peripherals"
     ],
     "themes": [
       "Hardware"
@@ -4729,7 +4729,7 @@
       "IoT - Connected Devices & Sensors",
       "IoT - Edge Computing & Hardware Infrastructure",
       "NanoTech - Nanoelectronics & Semiconductors",
-      "Quantum  - Enabling Technologies",
+      "Quantum - Enabling Technologies",
       "Semis - Logic & CPUs, GPUs, Accelerators",
       "Semis - Foundries & Manufacturing",
       "Semis - Emerging Technologies",
@@ -4774,7 +4774,7 @@
   "INVZ": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Sensors & Perception Systems",
+      "Autonomous - Sensors & Perception Systems",
       "EVs - Autonomous Driving",
       "EVs - Key Suppliers & Autonomy Tech",
       "Robotics - Sensors & Vision Systems"
@@ -4789,10 +4789,10 @@
     "primary_theme": "Hardware",
     "subthemes": [
       "Hardware - Next-Gen & Specialty",
-      "Quantum  - Applications",
-      "Quantum  - Cloud Ecosystems",
-      "Quantum  - Hardware Platforms",
-      "Quantum  - Software & Tools",
+      "Quantum - Applications",
+      "Quantum - Cloud Ecosystems",
+      "Quantum - Hardware Platforms",
+      "Quantum - Software & Tools",
       "Semis - Emerging Technologies"
     ],
     "themes": [
@@ -5013,7 +5013,7 @@
     "primary_theme": "Nanotechnology",
     "subthemes": [
       "NanoTech - Research Tools & Advanced Instruments",
-      "Quantum  - Enabling Technologies",
+      "Quantum - Enabling Technologies",
       "Semis - EDA Tools & Design Software"
     ],
     "themes": [
@@ -5137,7 +5137,7 @@
   "KTOS": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Aerospace, Defense & Drones",
+      "Autonomous - Aerospace, Defense & Drones",
       "Defense - Drones & Anti-Drone Systems",
       "Hardware - Next-Gen & Specialty",
       "Space - Defense & Cybersecurity"
@@ -5152,7 +5152,7 @@
   "KVHI": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Maritime, Agriculture & Specialized Autonomy"
+      "Autonomous - Maritime, Agriculture & Specialized Autonomy"
     ],
     "themes": [
       "Autonomous Systems"
@@ -5174,7 +5174,7 @@
   "LAES": {
     "primary_theme": "Quantum Computing",
     "subthemes": [
-      "Quantum  - Networking & Security"
+      "Quantum - Networking & Security"
     ],
     "themes": [
       "Quantum Computing"
@@ -5274,7 +5274,7 @@
   "LHX": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Aerospace, Defense & Drones",
+      "Autonomous - Aerospace, Defense & Drones",
       "Biometrics - Government, Defense & Public Security",
       "Defense - Cyber Defense & Electronic Warfare",
       "Defense - Drones & Anti-Drone Systems",
@@ -5367,7 +5367,7 @@
   "LMT": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Aerospace, Defense & Drones",
+      "Autonomous - Aerospace, Defense & Drones",
       "Biometrics - Government, Defense & Public Security",
       "Defense - Next-Generation Aircraft & Maintenance",
       "Defense - Cyber Defense & Electronic Warfare",
@@ -5428,7 +5428,7 @@
     "primary_theme": "Hardware",
     "subthemes": [
       "Hardware - Consumer Electronics, Gaming PCs & Consoles",
-      "Hardware - Gaming & Immersive Pheriperals",
+      "Hardware - Gaming & Immersive Peripherals",
       "Hardware - Personal Computing & Devices"
     ],
     "themes": [
@@ -5624,7 +5624,7 @@
     "primary_theme": "Autonomous Systems",
     "subthemes": [
       "Automation - Smart Logistics & Warehouse Automation",
-      "Autonomous  - Industrial & Logistics Automation",
+      "Autonomous - Industrial & Logistics Automation",
       "E-commerce - Logistics & Delivery",
       "Transportation - Infrastructure & Equipment",
       "Transportation - Logistics, Warehousing & Supply Chain Solutions"
@@ -5668,9 +5668,9 @@
   "MBLY": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Vehicles & Mobility",
-      "Autonomous  - Sensors & Perception Systems",
-      "Autonomous  - Software & Cloud Infrastructure",
+      "Autonomous - Vehicles & Mobility",
+      "Autonomous - Sensors & Perception Systems",
+      "Autonomous - Software & Cloud Infrastructure",
       "EVs - Autonomous Driving",
       "EVs - Key Suppliers & Autonomy Tech",
       "Hardware - Next-Gen & Specialty",
@@ -5775,7 +5775,7 @@
       "AI - Foundation Models & Platforms",
       "Biometrics - Recognition & Analytics",
       "E-commerce - Social & Influencer Commerce",
-      "Hardware - Gaming & Immersive Pheriperals",
+      "Hardware - Gaming & Immersive Peripherals",
       "Social - Advertising Platforms",
       "Social - Gaming Platforms",
       "Social - Networks & Communication Platforms",
@@ -6094,7 +6094,7 @@
       "AI - Cybersecurity",
       "Automation - Industrial IoT, Connectivity",
       "Automation - Industrial Software & Digital Twin",
-      "Autonomous  - Software & Cloud Infrastructure",
+      "Autonomous - Software & Cloud Infrastructure",
       "Big Data - AI Platforms & Predictive Analytics",
       "Big Data - Analytics & Business Intelligence",
       "Big Data - Infrastructure & Storage",
@@ -6124,10 +6124,10 @@
       "Hardware - Personal Computing & Devices",
       "IoT - Security & Data Management",
       "IoT - Platforms, Software & Analytics",
-      "Quantum  - Applications",
-      "Quantum  - Cloud Ecosystems",
-      "Quantum  - Networking & Security",
-      "Quantum  - Software & Tools",
+      "Quantum - Applications",
+      "Quantum - Cloud Ecosystems",
+      "Quantum - Networking & Security",
+      "Quantum - Software & Tools",
       "Smart Home - Voice Assistants & AI Integration",
       "Social - Gaming Platforms",
       "Social - Networks & Communication Platforms",
@@ -6325,7 +6325,7 @@
       "Cybersecurity - Zero Trust",
       "Entertainment - Streaming & Gaming Infrastructure",
       "IoT - Security & Data Management",
-      "Quantum  - Networking & Security",
+      "Quantum - Networking & Security",
       "Software - Cybersecurity",
       "Telecom - Cloud & Edge Connectivity"
     ],
@@ -6452,7 +6452,7 @@
   "NOC": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Aerospace, Defense & Drones",
+      "Autonomous - Aerospace, Defense & Drones",
       "Biometrics - Government, Defense & Public Security",
       "Defense - Next-Generation Aircraft & Maintenance",
       "Defense - Cyber Defense & Electronic Warfare",
@@ -6670,9 +6670,9 @@
       "AI - Robotics & Automation",
       "Automation - Industrial Robotics & Autonomous Systems",
       "Automation - Industrial Software & Digital Twin",
-      "Autonomous  - Vehicles & Mobility",
-      "Autonomous  - Sensors & Perception Systems",
-      "Autonomous  - Software & Cloud Infrastructure",
+      "Autonomous - Vehicles & Mobility",
+      "Autonomous - Sensors & Perception Systems",
+      "Autonomous - Software & Cloud Infrastructure",
       "Big Data - AI Platforms & Predictive Analytics",
       "Big Data - Infrastructure & Storage",
       "Biometrics - Recognition & Analytics",
@@ -6686,10 +6686,10 @@
       "Hardware - Personal Computing & Devices",
       "IoT - Edge Computing & Hardware Infrastructure",
       "NanoTech - Nanoelectronics & Semiconductors",
-      "Quantum  - Applications",
-      "Quantum  - Cloud Ecosystems",
-      "Quantum  - Enabling Technologies",
-      "Quantum  - Software & Tools",
+      "Quantum - Applications",
+      "Quantum - Cloud Ecosystems",
+      "Quantum - Enabling Technologies",
+      "Quantum - Software & Tools",
       "Robotics - Industrial Automation",
       "Robotics - Autonomous Vehicles & Mobility",
       "Robotics - Sensors & Vision Systems",
@@ -6842,7 +6842,7 @@
   "OII": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Maritime, Agriculture & Specialized Autonomy",
+      "Autonomous - Maritime, Agriculture & Specialized Autonomy",
       "Energy Base - Oilfield Services & Equipment"
     ],
     "themes": [
@@ -6914,7 +6914,7 @@
     "primary_theme": "Autonomous Systems",
     "subthemes": [
       "Automation - Industrial Sensors & Machine Vision",
-      "Autonomous  - Sensors & Perception Systems",
+      "Autonomous - Sensors & Perception Systems",
       "EVs - Auto Semiconductors & Power Electronics",
       "Robotics - Sensors & Vision Systems",
       "Semis - Analog, Mixed-Signal & Power Management",
@@ -6975,7 +6975,7 @@
       "AI - Power & Energy Solutions",
       "AI - Enterprise Productivity & Software Integration",
       "Automation - Smart Logistics & Warehouse Automation",
-      "Autonomous  - Software & Cloud Infrastructure",
+      "Autonomous - Software & Cloud Infrastructure",
       "Big Data - Analytics & Business Intelligence",
       "Big Data - Infrastructure & Storage",
       "Blockchain - Enterprise Blockchain Solutions",
@@ -7048,7 +7048,7 @@
     "primary_theme": "Autonomous Systems",
     "subthemes": [
       "Automation - Industrial Sensors & Machine Vision",
-      "Autonomous  - Sensors & Perception Systems",
+      "Autonomous - Sensors & Perception Systems",
       "Robotics - Sensors & Vision Systems"
     ],
     "themes": [
@@ -7133,7 +7133,7 @@
     "subthemes": [
       "AI - Enterprise Productivity & Software Integration",
       "AI - Robotics & Automation",
-      "Autonomous  - Industrial & Logistics Automation",
+      "Autonomous - Industrial & Logistics Automation",
       "Robotics - Service & Consumer Robotics"
     ],
     "themes": [
@@ -7350,8 +7350,8 @@
       "AI - Apps, Domain-Specific AI",
       "AI - Data Infrastructure & Enablement",
       "AI - Foundation Models & Platforms",
-      "Autonomous  - Aerospace, Defense & Drones",
-      "Autonomous  - Software & Cloud Infrastructure",
+      "Autonomous - Aerospace, Defense & Drones",
+      "Autonomous - Software & Cloud Infrastructure",
       "Big Data - AI Platforms & Predictive Analytics",
       "Big Data - Analytics & Business Intelligence",
       "Biometrics - Recognition & Analytics",
@@ -7576,10 +7576,10 @@
     "primary_theme": "Hardware",
     "subthemes": [
       "Hardware - Next-Gen & Specialty",
-      "Quantum  - Applications",
-      "Quantum  - Cloud Ecosystems",
-      "Quantum  - Hardware Platforms",
-      "Quantum  - Software & Tools"
+      "Quantum - Applications",
+      "Quantum - Cloud Ecosystems",
+      "Quantum - Hardware Platforms",
+      "Quantum - Software & Tools"
     ],
     "themes": [
       "Hardware",
@@ -7590,8 +7590,8 @@
     "primary_theme": "Artificial Intelligence",
     "subthemes": [
       "AI - Edge & Embedded Systems",
-      "Autonomous  - Sensors & Perception Systems",
-      "Autonomous  - Software & Cloud Infrastructure",
+      "Autonomous - Sensors & Perception Systems",
+      "Autonomous - Software & Cloud Infrastructure",
       "Biometrics - Biometric Sensors & Hardware",
       "EVs - Auto Semiconductors & Power Electronics",
       "EVs - Autonomous Driving",
@@ -7661,8 +7661,8 @@
   "QUBT": {
     "primary_theme": "Quantum Computing",
     "subthemes": [
-      "Quantum  - Hardware Platforms",
-      "Quantum  - Software & Tools"
+      "Quantum - Hardware Platforms",
+      "Quantum - Software & Tools"
     ],
     "themes": [
       "Quantum Computing"
@@ -7704,7 +7704,7 @@
   "RCAT": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Aerospace, Defense & Drones",
+      "Autonomous - Aerospace, Defense & Drones",
       "Defense - Drones & Anti-Drone Systems"
     ],
     "themes": [
@@ -7828,9 +7828,9 @@
     "primary_theme": "Hardware",
     "subthemes": [
       "Hardware - Next-Gen & Specialty",
-      "Quantum  - Cloud Ecosystems",
-      "Quantum  - Enabling Technologies",
-      "Quantum  - Hardware Platforms"
+      "Quantum - Cloud Ecosystems",
+      "Quantum - Enabling Technologies",
+      "Quantum - Hardware Platforms"
     ],
     "themes": [
       "Hardware",
@@ -7959,7 +7959,7 @@
       "Automation - Industrial IoT, Connectivity",
       "Automation - Smart Logistics & Warehouse Automation",
       "Automation - Industrial Robotics & Autonomous Systems",
-      "Autonomous  - Industrial & Logistics Automation",
+      "Autonomous - Industrial & Logistics Automation",
       "Hardware - Industrial & IoT",
       "IoT - Industrial & Enterprise IoT",
       "Robotics - Industrial Automation",
@@ -8045,7 +8045,7 @@
   "RTX": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Aerospace, Defense & Drones",
+      "Autonomous - Aerospace, Defense & Drones",
       "Defense - Next-Generation Aircraft & Maintenance",
       "Defense - Cyber Defense & Electronic Warfare",
       "Defense - Drones & Anti-Drone Systems",
@@ -8614,7 +8614,7 @@
     "subthemes": [
       "Entertainment - Music & Audio Streaming",
       "Hardware - Consumer Electronics, Gaming PCs & Consoles",
-      "Hardware - Gaming & Immersive Pheriperals",
+      "Hardware - Gaming & Immersive Peripherals",
       "Social - Gaming Platforms",
       "Software - Gaming & Platforms",
       "V/A Reality - Software Platforms & Operating Systems"
@@ -8895,7 +8895,7 @@
       "AI - Robotics & Automation",
       "Automation - Smart Logistics & Warehouse Automation",
       "Automation - Industrial Robotics & Autonomous Systems",
-      "Autonomous  - Industrial & Logistics Automation",
+      "Autonomous - Industrial & Logistics Automation",
       "E-commerce - Logistics & Delivery",
       "Robotics - Industrial Automation",
       "Robotics - Logistics & Warehouse Robotics"
@@ -8954,7 +8954,7 @@
   "TBCH": {
     "primary_theme": "Hardware",
     "subthemes": [
-      "Hardware - Gaming & Immersive Pheriperals"
+      "Hardware - Gaming & Immersive Peripherals"
     ],
     "themes": [
       "Hardware"
@@ -9005,7 +9005,7 @@
     "primary_theme": "Autonomous Systems",
     "subthemes": [
       "Automation - Industrial Sensors & Machine Vision",
-      "Autonomous  - Maritime, Agriculture & Specialized Autonomy",
+      "Autonomous - Maritime, Agriculture & Specialized Autonomy",
       "Robotics - Sensors & Vision Systems"
     ],
     "themes": [
@@ -9082,7 +9082,7 @@
     "subthemes": [
       "AI - Robotics & Automation",
       "Automation - Industrial Robotics & Autonomous Systems",
-      "Autonomous  - Industrial & Logistics Automation",
+      "Autonomous - Industrial & Logistics Automation",
       "Robotics - Industrial Automation",
       "Robotics - Logistics & Warehouse Robotics",
       "Semis - Testing, Packaging & Assembly"
@@ -9236,7 +9236,7 @@
     "primary_theme": "Agriculture & FoodTech",
     "subthemes": [
       "Agriculture - Precision Agriculture & Farm Automation",
-      "Autonomous  - Maritime, Agriculture & Specialized Autonomy",
+      "Autonomous - Maritime, Agriculture & Specialized Autonomy",
       "E-commerce - Logistics & Delivery",
       "EVs - Fleet Management & Telematics",
       "Hardware - Industrial & IoT",
@@ -9308,7 +9308,7 @@
       "AI - Apps, Domain-Specific AI",
       "AI - Power & Energy Solutions",
       "AI - Robotics & Automation",
-      "Autonomous  - Vehicles & Mobility",
+      "Autonomous - Vehicles & Mobility",
       "Consumer - Smart Homes & Household Products",
       "Energy Clean - Batteries & Storage",
       "EVs - Charging & Infrastructure",
@@ -9461,7 +9461,7 @@
   "TXT": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Maritime, Agriculture & Specialized Autonomy",
+      "Autonomous - Maritime, Agriculture & Specialized Autonomy",
       "Defense - Next-Generation Aircraft & Maintenance",
       "Defense - Drones & Anti-Drone Systems",
       "Transportation - Infrastructure & Equipment"
@@ -9543,7 +9543,7 @@
   "UBER": {
     "primary_theme": "Autonomous Systems",
     "subthemes": [
-      "Autonomous  - Vehicles & Mobility",
+      "Autonomous - Vehicles & Mobility",
       "Consumer - Resale & Sharing Platforms",
       "E-commerce - Grocery & Local Commerce Platforms",
       "E-commerce - Logistics & Delivery",
@@ -10353,7 +10353,7 @@
       "Automation - Smart Logistics & Warehouse Automation",
       "Automation - Industrial Sensors & Machine Vision",
       "Automation - Industrial Robotics & Autonomous Systems",
-      "Autonomous  - Industrial & Logistics Automation",
+      "Autonomous - Industrial & Logistics Automation",
       "Hardware - Industrial & IoT",
       "Robotics - Industrial Automation",
       "Robotics - Service & Consumer Robotics",

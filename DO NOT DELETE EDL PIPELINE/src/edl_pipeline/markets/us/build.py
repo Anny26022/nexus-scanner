@@ -19,8 +19,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
+import requests
 
-from advanced_metrics_processor import process_symbol_csv
+from advanced_metrics_processor import drop_copied_live_snapshot, process_symbol_csv
 import build_rs_ratings
 from edl_pipeline.breadth.config import load_methodology
 from edl_pipeline.breadth.indices import generate_all_index_history
@@ -31,7 +32,7 @@ from ohlcv_utils import symbol_csv_path
 from pipeline_utils import resource_path
 
 from .. import UNITED_STATES
-from . import calendar, dhan, fields, finviz, history, statements, tradingview
+from . import calendar, dhan, fields, finviz, history, statements, tradingview, yahoo
 from .universe import SCREENABLE, security_type
 
 # Benchmark ETFs stand in for indices; SPY is the market benchmark for RS and breadth.
@@ -95,7 +96,10 @@ def stock_metrics(path: Path) -> dict:
     _symbol, metrics = process_symbol_csv(str(path), calendar.is_nyse_session_day)
     if not metrics:
         return {}
+    # The same session series the processor used, so RSI and turnover never count a copied closed-day row.
     frame = pd.read_csv(path)
+    frame = drop_copied_live_snapshot(frame.sort_values('Date') if 'Date' in frame.columns else frame,
+                                      calendar.is_nyse_session_day)
     result = {key: metrics.get(key) for key in METRIC_KEYS}
     rsi = indicator_series(frame, 'RSI', 14).iloc[-1] if len(frame) > 14 else None
     result['rsi14'] = round(float(rsi), 2) if rsi is not None and pd.notna(rsi) else None
@@ -121,12 +125,15 @@ def stock_record(record: dict, metrics: dict, session: str, thematic: dict | Non
     ownership = ownership or {}
     news_feed = thematic.get('news_feed') or record.get('news_feed') or []
     insider_activity = thematic.get('insider_activity') or record.get('insider_activity') or []
-    short_float = ownership.get('short_float_percent') or record.get('short_float_percent')
-    short_ratio = ownership.get('short_ratio') or record.get('short_ratio')
-    insider_own = ownership.get('insider_own_percent') or record.get('insider_own_percent')
-    inst_own = ownership.get('institutional_own_percent') or record.get('institutional_own_percent')
-    insider_trans = ownership.get('insider_trans_percent') or record.get('insider_trans_percent')
-    inst_trans = ownership.get('institutional_trans_percent') or record.get('institutional_trans_percent')
+
+    def owned(key):
+        # 0 is a real reading (no short interest, no insider holding), so only a missing value falls back.
+        value = ownership.get(key)
+        return value if value is not None else record.get(key)
+
+    short_float, short_ratio = owned('short_float_percent'), owned('short_ratio')
+    insider_own, inst_own = owned('insider_own_percent'), owned('institutional_own_percent')
+    insider_trans, inst_trans = owned('insider_trans_percent'), owned('institutional_trans_percent')
     return {
         **{key: value for key, value in record.items() if key not in BUILD_ONLY},
         **{key: value for key, value in metrics.items() if not key.startswith('turnover') and key != 'history_high'},
@@ -146,15 +153,39 @@ def stock_record(record: dict, metrics: dict, session: str, thematic: dict | Non
 
 
 def update_histories(records: list[dict], directory: Path, session: str, *, interval: float, workers: int) -> dict:
-    """Bring every file up to the session; full fetches are paced and stop at the first rate limit."""
+    """Bring every file up to the session; full fetches are paced and stop at the first rate limit.
+
+    Yahoo and Dhan are separate servers, each paced at `interval`. A Yahoo rate limit stops only Yahoo (the rest seed
+    from Dhan, reported as `yahoo_throttled`); a Dhan rate limit stops every full fetch.
+    """
     pacer, stopped, counts, lock = dhan.Pacer(interval), threading.Event(), {}, threading.Lock()
+    yahoo_pacer, yahoo_stopped = dhan.Pacer(interval), threading.Event()
+
+    def paced_post(url, payload):
+        pacer.wait()
+        if stopped.is_set():  # another worker hit the limit while this one waited its turn
+            raise dhan.Throttled('stopped after an earlier rate limit')
+        return dhan.post(url, payload)
+
+    def paced_get(*args, **kwargs):
+        yahoo_pacer.wait()
+        return requests.get(*args, **kwargs)
+
+    def yahoo_fetch(symbol, **kwargs):
+        if yahoo_stopped.is_set():
+            return []
+        try:
+            return yahoo.fetch_history(symbol, get=paced_get, **kwargs)
+        except yahoo.Throttled:
+            yahoo_stopped.set()
+            return []
 
     def fetch(symbol, security_id, exchange):
         if stopped.is_set():
             return []
         try:
             # Paced per request: an unknown listing exchange tries NYSE, then NASDAQ.
-            return history.fetch_full(symbol, security_id, exchange, post=lambda url, payload: (pacer.wait(), dhan.post(url, payload))[1])
+            return history.fetch_full(symbol, security_id, exchange, post=paced_post, yahoo_fetch=yahoo_fetch)
         except dhan.Throttled:
             stopped.set()
             return []
@@ -170,7 +201,7 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(one, records))
-    return {**counts, 'throttled': stopped.is_set()}
+    return {**counts, 'throttled': stopped.is_set(), 'yahoo_throttled': yahoo_stopped.is_set()}
 
 
 def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, workers: int = 3, limit: int | None = None,
@@ -197,6 +228,11 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
         report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers)
         report['benchmarks'] = update_histories(benchmarks, root / 'indices_ohlcv_data', session, interval=interval, workers=1)
         report['stock_pages'] = pages.result()
+    # Every benchmark must reach the session: one missing from the ETF list, or a refetch that ended a session early,
+    # leaves RS, breadth and rotation on a partial benchmark set even when no update reported a failure.
+    report['benchmarks_behind'] = sorted(
+        symbol for symbol in BENCHMARKS
+        if (history.read_bars(symbol_csv_path(root / 'indices_ohlcv_data', symbol)) or [{'date': ''}])[-1]['date'] < session)
     quarterly = []
     report['statements'] = statements.enrich(records, root, quarterly)
 

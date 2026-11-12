@@ -30,7 +30,7 @@ from market_overview import index_closes, market_overview
 from etf_snapshot import build_etf_snapshot, prune_etf_snapshots
 import rotation_history
 import build_chart_artifacts
-from site_data import enabled, upload_pointer, upload_revision
+from site_data import POINTER_PREFIX, enabled, stored_pointers, upload_pointer, upload_revision
 from chart_publication import ROTATION_PREFIX, R2Store, chart_revision, charts_enabled, file_digest, missing_r2_settings
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.markets import UNITED_STATES
@@ -171,6 +171,57 @@ def listing_age(row, stock, session):
         row['metrics']['LISTING_AGE_DAYS'] = sessions_after(date.fromisoformat(listed[:10]), date.fromisoformat(session))
 
 
+# US fields the row engine does not carry: TradingView (Phase 1) and Finviz ownership / short interest (Phase 2).
+# Ownership stays in insiderOwnPct / institutionalOwnPct: India's promoter and FII holdings are other measures.
+ENRICHED_FIELDS = (
+    ('short_float_percent', 'shortFloatPct'),
+    ('short_ratio', 'shortRatio'),
+    ('insider_own_percent', 'insiderOwnPct'),
+    ('institutional_own_percent', 'institutionalOwnPct'),
+    ('insider_trans_percent', 'insiderTransPct'),
+    ('institutional_trans_percent', 'institutionalTransPct'),
+    ('target_price', 'targetPrice'),
+    ('target_price_upside_percent', 'targetPriceUpsidePct'),
+    ('analyst_rating', 'analystRating'),
+    ('ps_ratio', 'psRatio'),
+    ('gross_margin_percent', 'grossMarginPct'),
+    ('net_margin_percent', 'netMarginPct'),
+    ('roe_percent', 'roePct'),
+    ('roic_percent', 'roicPct'),
+    ('quick_ratio', 'quickRatio'),
+    ('lt_debt_to_equity', 'ltDebtToEquity'),
+    ('beta', 'beta'),
+    ('volatility_week_percent', 'volatilityWeekPct'),
+    ('volatility_month_percent', 'volatilityMonthPct'),
+    ('float_shares', 'floatShares'),
+    ('shares_outstanding', 'sharesOutstanding'),
+    ('eps_forecast_next_quarter', 'epsForecastNextQuarter'),
+)
+
+
+def enrich_row(row, stock, session):
+    """Complete one engine row with the US release's own values."""
+    # The row engine states traded value in ₹ crore; restate it in millions of dollars.
+    dollar_volume = stock.get('dollar_volume')
+    row['rupeeVolumeCrore'] = dollar_volume / UNITED_STATES.provider_amount_unit if dollar_volume is not None else None
+    listing_age(row, stock, session)
+    for src, dst in ENRICHED_FIELDS:
+        val = stock.get(src)
+        if val is not None:
+            row[dst] = val
+    if stock.get('news_feed'):
+        row['newsFeed'] = stock['news_feed']
+    if stock.get('insider_activity'):
+        row['insiderActivity'] = stock['insider_activity']
+    return row
+
+
+def refuse_older_session(previous, session):
+    """As India's complete_release: never put an older session over the live US release."""
+    if previous and previous.get('sessionDate', '') > session:
+        raise RuntimeError(f'Refusing to publish US session {session} over the current {previous["sessionDate"]} release')
+
+
 def manifest_for(revision, session, total, *, market_overview=False, etf_snapshot=False, financial_history=False):
     base = f'/data/revisions/{revision}'
     return {'revision': revision, 'sessionDate': session, 'publishedAt': f'{session}T00:00:00Z', 'schemaVersion': 4,
@@ -197,10 +248,12 @@ def build_us_ipos(stocks, session):
             if 0 <= age_days <= 730:
                 lockup_date = list_date + timedelta(days=180)
                 is_passed = sess_date >= lockup_date
+                # The US root states amounts in full dollars; the IPO catalogue reads millions ($M) under India's
+                # field names, and turnover as rupee_volume / 1e7 (adapter), so rupee_volume carries $M x 1e7.
                 mcap = stock.get('market_cap')
-                mcap_crore = (mcap / 1e6) if mcap and mcap > 1e6 else mcap
+                mcap_crore = mcap / UNITED_STATES.provider_amount_unit if mcap is not None else None
                 dvol = stock.get('dollar_volume')
-                turnover_m = (dvol / 1e6) if dvol and dvol > 1e6 else dvol
+                turnover_m = dvol / UNITED_STATES.provider_amount_unit if dvol is not None else None
                 ipo_records.append({
                     'symbol': stock['symbol'],
                     'name': stock.get('name') or stock['symbol'],
@@ -296,47 +349,7 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     prepared = stock_rows(tasks, context, session, presets, default, workers)
     try:
         for row, default_match in prepared:
-            # The row engine states traded value in ₹ crore; restate it in millions of dollars.
-            stock = context['stocks'][row['symbol']]
-            dollar_volume = stock.get('dollar_volume')
-            row['rupeeVolumeCrore'] = dollar_volume / UNITED_STATES.provider_amount_unit if dollar_volume is not None else None
-            listing_age(row, stock, session)
-            # Enriched Phase 1 (TradingView) and Phase 2 (Finviz Ownership / Short Interest) metrics
-            for src, dst in (
-                ('short_float_percent', 'shortFloatPct'),
-                ('short_ratio', 'shortRatio'),
-                ('insider_own_percent', 'insiderOwnPct'),
-                ('institutional_own_percent', 'institutionalOwnPct'),
-                ('insider_trans_percent', 'insiderTransPct'),
-                ('institutional_trans_percent', 'institutionalTransPct'),
-                ('target_price', 'targetPrice'),
-                ('target_price_upside_percent', 'targetPriceUpsidePct'),
-                ('analyst_rating', 'analystRating'),
-                ('ps_ratio', 'psRatio'),
-                ('gross_margin_percent', 'grossMarginPct'),
-                ('net_margin_percent', 'netMarginPct'),
-                ('roe_percent', 'roePct'),
-                ('roic_percent', 'roicPct'),
-                ('quick_ratio', 'quickRatio'),
-                ('lt_debt_to_equity', 'ltDebtToEquity'),
-                ('beta', 'beta'),
-                ('volatility_week_percent', 'volatilityWeekPct'),
-                ('volatility_month_percent', 'volatilityMonthPct'),
-                ('float_shares', 'floatShares'),
-                ('shares_outstanding', 'sharesOutstanding'),
-                ('eps_forecast_next_quarter', 'epsForecastNextQuarter'),
-            ):
-                val = stock.get(src)
-                if val is not None:
-                    row[dst] = val
-            if stock.get('news_feed'):
-                row['newsFeed'] = stock['news_feed']
-            if stock.get('insider_activity'):
-                row['insiderActivity'] = stock['insider_activity']
-            if row.get('promoterHoldingPct') is None and row.get('insiderOwnPct') is not None:
-                row['promoterHoldingPct'] = row['insiderOwnPct']
-            if row.get('fiiHoldingPct') is None and row.get('institutionalOwnPct') is not None:
-                row['fiiHoldingPct'] = row['institutionalOwnPct']
+            enrich_row(row, context['stocks'][row['symbol']], session)
             rows.append(row); default_count += default_match
     finally:
         prepared.close()
@@ -355,15 +368,25 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     thematic_path = root / 'us_thematic_universe.json'
     if not thematic_path.is_file():
         thematic_path = Path(__file__).parents[1] / 'DO NOT DELETE EDL PIPELINE' / 'us_thematic_universe.json'
-    taxonomy = build_us_taxonomy(published, session, thematic_path if thematic_path.is_file() else None)
+    taxonomy = public(build_us_taxonomy(published, session, thematic_path if thematic_path.is_file() else None))
     rotation, rotation_hash = output / 'rotation', None
     try:
         rotation_hash = rotation_objects(root, cache, published, source_bytes, session, rotation, taxonomy=taxonomy)
     except (ValueError, KeyError, TypeError, OSError) as error:
         print(f'WARNING: US rotation history unavailable for {session}: {error}', flush=True)
+    # The ETF scan may be plain etf_snapshot.json, outside the *.json.gz sources above; it is an input of the
+    # revision all the same, so a same-session retry with other ETF data gets a new revision.
+    etf_source = source_bytes.get('etf_snapshot.json.gz')
+    if not etf_source:
+        local_etf = root / 'etf_snapshot.json'
+        if local_etf.is_file():
+            etf_source = local_etf.read_bytes()
     digest = hashlib.sha256(b'market:us')
     for name, data in source_bytes.items():
         digest.update(name.encode()); digest.update(data)
+    digest.update(b'etf_snapshot'); digest.update(etf_source or b'no-etfs')
+    # As are the published financial histories (their source can be plain JSON too).
+    digest.update(json.dumps(histories, sort_keys=True, separators=(',', ':')).encode())
     here = Path(__file__).parent
     for name in CODE_FILES:
         digest.update(name.encode()); digest.update((here / name).read_bytes())
@@ -388,14 +411,7 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     (generation / 'ipos.json.gz').write_bytes(
         gzip.compress(json.dumps(ipo_payload, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
 
-    # ETF snapshot for US market
-    etf_source = source_bytes.get('etf_snapshot.json.gz') or source_bytes.get('etf_snapshot.json')
-    if not etf_source:
-        local_etf = root / 'etf_snapshot.json.gz'
-        if not local_etf.is_file():
-            local_etf = root / 'etf_snapshot.json'
-        if local_etf.is_file():
-            etf_source = local_etf.read_bytes()
+    # ETF snapshot for US market (its source was read, and fingerprinted, before the revision)
     etf_bytes = None
     if etf_source:
         try:
@@ -458,10 +474,16 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         manifest['rotationHistoryObject'] = rotation_hash
         # Served next to the pointer when published locally; R2 replaces it with the bucket's address below.
         manifest['rotationUrlTemplate'] = '/data/rotation/{hash}.json.gz'
+    previous_path = output / POINTER
+    refuse_older_session(json.loads(previous_path.read_text()) if previous_path.is_file() else None, session)
     write_json(generation / 'release.json', manifest)
-    write_json(output / POINTER, manifest)
     if enabled():
         store = R2Store(inventory=US_INVENTORY)
+        # The live pointer is in R2, not in this checkout: check it before anything is uploaded.
+        if POINTER in stored_pointers(store):
+            refuse_older_session(json.loads(store.cache_command('cat', store.remote(f'{POINTER_PREFIX}/{POINTER}'))), session)
+    write_json(output / POINTER, manifest)
+    if enabled():
         if chart_release:
             # Objects first (each verified), then the index that names them, as India's releases do.
             files = store.upload_objects(chart_root / 'objects', store.load_inventory(None))

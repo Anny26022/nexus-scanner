@@ -39,16 +39,22 @@ def main(argv=None):
     history, benchmarks = report['history'], report['benchmarks']
     # A rate limit or missing benchmark leaves a partial market: publish nothing rather than a thin release. The
     # benchmarks (SPY and the other index ETFs) carry RS, breadth and rotation, so any one of them failing stops it too.
-    lagging_benchmarks = sum(benchmarks.get(status, 0) for status in ('failed', 'missing'))
+    # `benchmarks_behind` checks each one's file reached the session (an ETF absent from the list reports no status).
+    lagging_benchmarks = sum(benchmarks.get(status, 0) for status in ('failed', 'missing')) + len(report.get('benchmarks_behind', []))
     if history.get('throttled') or benchmarks.get('throttled') or lagging_benchmarks or not report['rs_ratings']:
         print('::error::The US history is incomplete (rate limited, a benchmark behind or no RS ratings); nothing to publish.',
               flush=True)
         return 1
     # A wide provider failure leaves stocks on earlier sessions; a normal day has about 96% on the session.
-    if report['stocks'] and report['aligned'] / report['stocks'] < MIN_ALIGNED_SHARE:
-        print(f"::error::Only {report['aligned']} of {report['stocks']} US stocks reached {report['session']}; nothing to publish.",
+    # Counted against every screenable stock: one whose first fetch failed has no file and no record in `stocks`.
+    eligible = max(report.get('screenable', 0), report['stocks'])
+    if eligible and report['aligned'] / eligible < MIN_ALIGNED_SHARE:
+        print(f"::error::Only {report['aligned']} of {eligible} US stocks reached {report['session']}; nothing to publish.",
               flush=True)
         return 1
+    if history.get('yahoo_throttled') or benchmarks.get('yahoo_throttled'):
+        print('::warning::Yahoo rate limited the history seed; the rest seeded from Dhan (2021 onwards) and lack deep history.',
+              flush=True)
     if history.get('failed'):
         # One stock's failure keeps its earlier bars (its as_of_date lags); the count is shown on the run.
         print(f"::warning::{history['failed']} US stock histories could not be refreshed and stay at an earlier session.", flush=True)

@@ -62,6 +62,7 @@ def fetch_us():
         payload = {
             'columns': COLUMNS,
             'range': [offset, offset + PAGE_SIZE_US if total_count is None else min(offset + PAGE_SIZE_US, total_count)],
+            'markets': ['america'],
             'filter': [
                 {'left': 'type', 'operation': 'equal', 'right': 'fund'},
                 {'left': 'subtype', 'operation': 'equal', 'right': 'etf'}

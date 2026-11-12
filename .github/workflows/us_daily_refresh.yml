@@ -76,6 +76,20 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           exit "$status"
 
+      # Saved before publication too, under a key of its own: a run that times out or is cancelled during the R2
+      # upload ends before any later step, and would otherwise lose every history this run fetched.
+      - name: Save US price history before publication
+        if: always() && steps.build.outcome != 'skipped'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.US_ROOT }}/ohlcv_data
+            ${{ env.US_ROOT }}/indices_ohlcv_data
+            ${{ env.US_ROOT }}/stock_pages
+            ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
+          key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}-built
+
       - name: Fetch US ETF snapshot
         if: steps.build.outputs.ready == 'true'
         continue-on-error: true
@@ -87,6 +101,7 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
 
       - name: Publish the US release
+        id: publish
         if: steps.build.outputs.ready == 'true'
         env:
           PYTHONUNBUFFERED: '1'
@@ -99,10 +114,10 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: python frontend/publish_us.py
 
-      # Saved last, so it holds the rotation ledger the publish step writes; saved even after a failed build or
-      # publish, so every history fetched so far is kept for the next run.
+      # Saved again after publication, so the next run restores the rotation ledger the publish step writes (the newest
+      # key under the restore prefix wins). Without a publish the snapshot above already holds everything.
       - name: Save US price history
-        if: always() && steps.build.outcome != 'skipped'
+        if: always() && (steps.publish.outcome == 'success' || steps.publish.outcome == 'failure')
         continue-on-error: true
         uses: actions/cache/save@v4
         with:

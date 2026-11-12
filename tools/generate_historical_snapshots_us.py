@@ -1,187 +1,335 @@
 """US Historical Snapshot Backfill Engine (Up to 5 Years).
 
-Reconstructs point-in-time daily snapshots ({session}.json.gz) for Nexus Scanner US
-from validated historical sources:
-1. Daily EOD OHLCV history (Dhan US / ticks host OHLCV archives 2021-2026)
-2. Benchmark OHLCV (SPY.csv)
-3. Multi-Quarter Historical Fundamentals Ledger (quarterly_financial_history.json.gz)
-4. Finviz Thematic & Sector Classification (us_thematic_universe.json)
-5. Cross-sectional Technical Indicator & Breadth Engine (SMAs, RSI, VCP, ADR, RS Rating vs SPY)
+Reconstructs point-in-time daily snapshots ({session}.json.gz) for Nexus Scanner US from:
+1. Daily EOD OHLCV history (the US root's ohlcv_data, NYSE sessions only)
+2. Benchmark OHLCV (indices_ohlcv_data/SPY.csv), for RS ratings against SPY
+3. Stock names and classification (Dhan's US screener list; Finviz's sector and industry where Dhan has none)
+4. Reported earnings dates from the quarterly ledger (quarterly_financial_history.json.gz), when the root has it
+
+Technicals reuse the live US implementations (edl_pipeline.scanner.indicators: SMA, EMA, Wilder RSI and ATR;
+build_rs_ratings: SPY-relative RS). A value whose window is not yet filled stays null, as in the live snapshot.
+
+Not point-in-time, so left null in every backfilled session: statement figures (the ledger holds today's restated
+quarters, not what was known on the session), market cap, ownership and short interest (current values only).
 """
 
 import argparse
-import csv
 import gzip
 import hashlib
-import io
 import json
 import math
 import os
 from pathlib import Path
 import sys
+import tempfile
 import time
-from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Set, Tuple
+from datetime import date, timedelta
+from typing import Any, Callable, Dict, List, Optional, Set
 
 import numpy as np
 import pandas as pd
 
 # Add paths for EDL pipeline and frontend modules
 ROOT_DIR = Path(__file__).resolve().parent.parent
-EDL_SRC = ROOT_DIR / "DO NOT DELETE EDL PIPELINE" / "src"
+EDL_ROOT = ROOT_DIR / "DO NOT DELETE EDL PIPELINE"
+EDL_SRC = EDL_ROOT / "src"
 FRONTEND_DIR = ROOT_DIR / "frontend"
-for p in (str(EDL_SRC), str(FRONTEND_DIR)):
+for p in (str(EDL_ROOT), str(EDL_SRC), str(FRONTEND_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from edl_pipeline.markets.us import calendar
-from edl_pipeline.markets import UNITED_STATES
+from edl_pipeline.markets.us import calendar  # noqa: E402
+from edl_pipeline.scanner.indicators import indicator_series  # noqa: E402
+from build_rs_ratings import close_history, rank_first_ratings, relative_strength_scores  # noqa: E402
+
+OHLCV_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
+SESSIONS_52W = 252
+SESSIONS_5Y = 1260
+RETURN_HORIZONS = (5, 21, 63, 126, 252)
 
 
 def parse_date(date_str: str) -> date:
     return date.fromisoformat(date_str)
 
 
+def session_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """A history's NYSE-session bars, numeric, oldest first, one bar per date; empty when columns are missing."""
+    if df.empty or "Date" not in df.columns or any(column not in df.columns for column in OHLCV_COLUMNS):
+        return pd.DataFrame(columns=["Date", *OHLCV_COLUMNS])
+    frame = df[["Date", *OHLCV_COLUMNS]].copy()
+    frame["Date"] = pd.to_datetime(frame["Date"], errors="coerce").dt.normalize()
+    for column in OHLCV_COLUMNS:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame = frame.replace([np.inf, -np.inf], np.nan).dropna()
+    # A bar on a weekend or NYSE holiday is not a session (a copied quote or a provider artefact).
+    frame = frame[frame["Date"].dt.date.map(calendar.is_nyse_session_day).astype(bool)]
+    return frame.sort_values("Date").drop_duplicates("Date", keep="last").reset_index(drop=True)
+
+
+def technical_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    """Per-session indicators for a session_frame; each row uses only that bar and earlier ones.
+
+    Warm-up rows stay NaN until the indicator's full window exists (no shortened windows).
+    """
+    close, high, low, volume, open_ = frame["Close"], frame["High"], frame["Low"], frame["Volume"], frame["Open"]
+    previous_close = close.shift(1)
+    out = pd.DataFrame(index=frame.index)
+    out["open"], out["high"], out["low"], out["close"], out["volume"] = open_, high, low, close, volume
+    out["changePct"] = (close / previous_close.where(previous_close > 0) - 1.0) * 100.0
+    out["gapPct"] = (open_ / previous_close.where(previous_close > 0) - 1.0) * 100.0
+    for period in (10, 20, 50, 200):
+        out[f"sma{period}"] = indicator_series(frame, "SMA", period)
+    for period in (20, 50, 200):
+        out[f"ema{period}"] = indicator_series(frame, "EMA", period)
+    # Wilder RSI and ATR, the live US implementations (build.stock_metrics, advanced_metrics_processor).
+    out["rsi14"] = indicator_series(frame, "RSI", 14)
+    out["atr14"] = indicator_series(frame, "ATR", 14)
+    # Relative volume against the prior 20 sessions, as the live relative_volume_20.
+    prior_volume = volume.shift(1).rolling(20, min_periods=20).mean()
+    out["rvol"] = volume / prior_volume.where(prior_volume > 0)
+    traded_m = close * volume / 1e6
+    out["turnover_m"] = traded_m
+    for period in (20, 50, 100):
+        out[f"daily_turnover_{period}_m"] = traded_m.rolling(period, min_periods=period).mean()
+    high_52w = high.rolling(SESSIONS_52W, min_periods=SESSIONS_52W).max()
+    low_52w = low.rolling(SESSIONS_52W, min_periods=SESSIONS_52W).min()
+    out["dist52wHighPct"] = (close - high_52w) / high_52w.where(high_52w > 0) * 100.0
+    out["dist52wLowPct"] = (close - low_52w) / low_52w.where(low_52w > 0) * 100.0
+    all_time_high, all_time_low = high.cummax(), low.cummin()
+    out["allTimeHigh"], out["allTimeLow"] = all_time_high, all_time_low
+    out["distAthPct"] = (close - all_time_high) / all_time_high.where(all_time_high > 0) * 100.0
+    # The live adr_percent_20: mean of (High - Low) / Low over 20 sessions.
+    out["adr20Pct"] = ((high - low) / low.where(low > 0) * 100.0).rolling(20, min_periods=20).mean()
+    out["return5yPct"] = (close / close.shift(SESSIONS_5Y).where(lambda s: s > 0) - 1.0) * 100.0
+    for horizon in RETURN_HORIZONS:
+        out[f"return{horizon}"] = (close / close.shift(horizon).where(lambda s: s > 0) - 1.0) * 100.0
+    out["historySessions"] = np.arange(1, len(frame) + 1)
+    return out
+
+
+def _number(value: Any, digits: int = 2) -> Optional[float]:
+    if value is None:
+        return None
+    value = float(value)
+    return round(value, digits) if math.isfinite(value) else None
+
+
+def _above(left: Optional[float], right: Optional[float]) -> Optional[bool]:
+    """left > right, or None when either is unavailable (never a false negative from missing history)."""
+    return None if left is None or right is None else bool(left > right)
+
+
+ROUNDED = ("open", "high", "low", "close", "changePct", "gapPct", "sma10", "sma20", "sma50", "sma200",
+           "ema20", "ema50", "ema200", "rsi14", "atr14", "rvol", "turnover_m", "daily_turnover_20_m",
+           "daily_turnover_50_m", "daily_turnover_100_m", "dist52wHighPct", "dist52wLowPct", "allTimeHigh",
+           "allTimeLow", "distAthPct", "adr20Pct", "return5yPct", *(f"return{h}" for h in RETURN_HORIZONS))
+
+
+def row_technicals(row: pd.Series) -> Dict[str, Any]:
+    tech: Dict[str, Any] = {key: _number(row[key]) for key in ROUNDED}
+    tech["volume"] = int(row["volume"])
+    tech["historySessions"] = int(row["historySessions"])
+    tech["close_above_sma20"] = _above(tech["close"], tech["sma20"])
+    tech["close_above_sma50"] = _above(tech["close"], tech["sma50"])
+    tech["close_above_sma200"] = _above(tech["close"], tech["sma200"])
+    tech["sma50_above_sma200"] = _above(tech["sma50"], tech["sma200"])
+    return tech
+
+
 def calculate_technicals_us(opens: np.ndarray, closes: np.ndarray, highs: np.ndarray, lows: np.ndarray, volumes: np.ndarray) -> Dict[str, Any]:
-    """Calculate core US screener indicators given price arrays."""
-    n = len(closes)
-    if n == 0:
+    """Core US screener indicators for the last of these consecutive session bars."""
+    if len(closes) == 0:
         return {}
+    frame = pd.DataFrame({"Open": opens, "High": highs, "Low": lows, "Close": closes, "Volume": volumes},
+                         dtype=float).reset_index(drop=True)
+    return row_technicals(technical_frame(frame).iloc[-1])
 
-    current_open = float(opens[-1]) if len(opens) else float(closes[-1])
-    current_close = float(closes[-1])
-    current_high = float(highs[-1])
-    current_low = float(lows[-1])
-    current_volume = float(volumes[-1])
 
-    change_pct = float(((current_close / closes[-2]) - 1.0) * 100.0) if n >= 2 and closes[-2] > 0 else 0.0
+def preset_matches(tech: Dict[str, Any], days_since_earnings: Optional[int]) -> Dict[str, bool]:
+    """The preset rules; a rule whose inputs are unavailable does not match."""
+    def ready(*keys):
+        return all(tech.get(key) is not None for key in keys)
 
-    # SMAs
-    sma10 = float(np.mean(closes[-10:])) if n >= 10 else current_close
-    sma20 = float(np.mean(closes[-20:])) if n >= 20 else current_close
-    sma50 = float(np.mean(closes[-50:])) if n >= 50 else current_close
-    sma200 = float(np.mean(closes[-200:])) if n >= 200 else current_close
-
-    # EMAs
-    def calc_ema(arr: np.ndarray, period: int) -> float:
-        if len(arr) < period:
-            return float(arr[-1])
-        lookback = min(len(arr), period * 4)
-        sub = arr[-lookback:]
-        k = 2.0 / (period + 1.0)
-        ema = float(sub[0])
-        for val in sub[1:]:
-            ema = (val * k) + (ema * (1.0 - k))
-        return ema
-
-    ema20 = calc_ema(closes, 20)
-    ema50 = calc_ema(closes, 50)
-    ema200 = calc_ema(closes, 200)
-
-    # Volume SMAs & Turnover ($ Millions)
-    avg_vol_20 = float(np.mean(volumes[-21:-1])) if n >= 21 else (float(np.mean(volumes)) if n > 0 else 1.0)
-    rvol = float(current_volume / avg_vol_20) if avg_vol_20 > 0 else 1.0
-    turnover_20_m = float(np.mean(closes[-20:] * volumes[-20:]) / 1e6) if n >= 20 else (current_close * current_volume / 1e6)
-    turnover_50_m = float(np.mean(closes[-50:] * volumes[-50:]) / 1e6) if n >= 50 else None
-    turnover_100_m = float(np.mean(closes[-100:] * volumes[-100:]) / 1e6) if n >= 100 else None
-    dollar_volume_m = float(current_close * current_volume / 1e6)
-
-    # 52-Week High / Low (252 NYSE sessions)
-    lookback_52w = min(n, 252)
-    high_52w = float(np.max(highs[-lookback_52w:]))
-    low_52w = float(np.min(lows[-lookback_52w:]))
-    dist_52w_high_pct = float(((current_close - high_52w) / high_52w) * 100.0) if high_52w > 0 else 0.0
-    dist_52w_low_pct = float(((current_close - low_52w) / low_52w) * 100.0) if low_52w > 0 else 0.0
-
-    # All-Time High / Low
-    all_time_high = float(np.max(highs))
-    all_time_low = float(np.min(lows))
-    dist_ath_pct = float(((current_close - all_time_high) / all_time_high) * 100.0) if all_time_high > 0 else 0.0
-
-    # ADR (20D): Mean of (High - Low) / Close * 100
-    adr20_pct = float(np.mean((highs[-20:] - lows[-20:]) / closes[-20:] * 100.0)) if n >= 20 else float(np.mean((highs - lows) / closes * 100.0))
-
-    # ATR (14): Wilder's 14-period True Range
-    if n >= 15:
-        sub_c = closes[-56:]
-        sub_h = highs[-56:]
-        sub_l = lows[-56:]
-        prev_c = sub_c[:-1]
-        tr = np.maximum(sub_h[1:] - sub_l[1:], np.maximum(np.abs(sub_h[1:] - prev_c), np.abs(sub_l[1:] - prev_c)))
-        atr = float(np.mean(tr[:14]))
-        for val in tr[14:]:
-            atr = (atr * 13.0 + float(val)) / 14.0
-        atr14 = float(atr)
-    else:
-        atr14 = float(np.mean(highs - lows))
-
-    # Gap percentage
-    gap_pct = float(((current_open / closes[-2]) - 1.0) * 100.0) if n >= 2 and closes[-2] > 0 else 0.0
-
-    # 5-Year Return (1,260 NYSE sessions)
-    return_5y_pct = float(((current_close / closes[-1261]) - 1.0) * 100.0) if n >= 1261 and closes[-1261] > 0 else None
-
-    # RSI (14)
-    if n >= 15:
-        deltas = np.diff(closes[-15:])
-        gains = np.where(deltas > 0, deltas, 0.0)
-        losses = np.where(deltas < 0, -deltas, 0.0)
-        avg_gain = np.mean(gains)
-        avg_loss = np.mean(losses)
-        if avg_loss == 0:
-            rsi14 = 100.0
-        else:
-            rs = avg_gain / avg_loss
-            rsi14 = float(100.0 - (100.0 / (1.0 + rs)))
-    else:
-        rsi14 = 50.0
-
+    trend = ready("close_above_sma50", "close_above_sma200", "sma50_above_sma200") and bool(
+        tech["close_above_sma50"] and tech["close_above_sma200"] and tech["sma50_above_sma200"])
     return {
-        "open": round(current_open, 2),
-        "high": round(current_high, 2),
-        "low": round(current_low, 2),
-        "close": round(current_close, 2),
-        "volume": int(current_volume),
-        "changePct": round(change_pct, 2),
-        "sma10": round(sma10, 2),
-        "sma20": round(sma20, 2),
-        "sma50": round(sma50, 2),
-        "sma200": round(sma200, 2),
-        "ema20": round(ema20, 2),
-        "ema50": round(ema50, 2),
-        "ema200": round(ema200, 2),
-        "rvol": round(rvol, 2),
-        "daily_turnover_20_m": round(turnover_20_m, 2),
-        "daily_turnover_50_m": round(turnover_50_m, 2) if turnover_50_m is not None else None,
-        "daily_turnover_100_m": round(turnover_100_m, 2) if turnover_100_m is not None else None,
-        "turnover_m": round(dollar_volume_m, 2),
-        "dist52wHighPct": round(dist_52w_high_pct, 2),
-        "dist52wLowPct": round(dist_52w_low_pct, 2),
-        "allTimeHigh": round(all_time_high, 2),
-        "allTimeLow": round(all_time_low, 2),
-        "distAthPct": round(dist_ath_pct, 2),
-        "adr20Pct": round(adr20_pct, 2),
-        "atr14": round(atr14, 2),
-        "gapPct": round(gap_pct, 2),
-        "return5yPct": round(return_5y_pct, 2) if return_5y_pct is not None else None,
-        "rsi14": round(rsi14, 2),
-        "close_above_sma20": current_close > sma20,
-        "close_above_sma50": current_close > sma50,
-        "close_above_sma200": current_close > sma200,
-        "sma50_above_sma200": sma50 > sma200,
+        "trend_template": trend,
+        "lib-stage-two": trend,
+        "lib-52w-high-breakout": ready("dist52wHighPct") and tech["dist52wHighPct"] >= -0.5,
+        "lib-20d-high-thrust": ready("changePct", "rvol") and tech["changePct"] >= 4.0 and tech["rvol"] >= 2.0,
+        "mom_rvol": ready("rvol") and tech["rvol"] >= 1.5,
+        "breakout_52w": ready("dist52wHighPct", "rvol") and tech["dist52wHighPct"] >= -2.0 and tech["rvol"] >= 1.5,
+        "vcp_contraction": ready("adr20Pct", "dist52wHighPct") and tech["adr20Pct"] <= 3.5 and tech["dist52wHighPct"] >= -15.0,
+        "gap_up_earnings": ready("gapPct") and tech["gapPct"] >= 3.0 and days_since_earnings is not None and days_since_earnings <= 3,
     }
 
 
+def rs_ratings_vs_spy(close_histories: Dict[str, pd.DataFrame], spy: pd.DataFrame, session_date: date) -> Dict[str, int]:
+    """Front-weighted RS ratings against SPY for one session, by the live build_rs_ratings method.
+
+    `close_histories` are each stock's Date/Close bars up to the session; the universe is that session's stocks.
+    """
+    benchmark = spy[spy["Date"].dt.date <= session_date]
+    if benchmark.empty or benchmark["Date"].iloc[-1].date() != session_date:
+        return {}
+    scores: Dict[str, Dict[str, float]] = {}
+    for symbol, history in close_histories.items():
+        relative = relative_strength_scores(history, benchmark, session_date)
+        if relative is not None:
+            for key, value in relative.items():
+                scores.setdefault(key, {})[symbol] = value
+    if not scores:
+        return {}
+    return rank_first_ratings(scores).get("front_weighted", {})
+
+
 def registered_session_dates(manifest_path: Optional[Path]) -> Set[str]:
-    """Return dates already registered in the sessions manifest."""
+    """Dates already registered in the sessions manifest; only a missing manifest means none.
+
+    A manifest that exists but cannot be read raises, so a backfill never rewrites the archive index from scratch.
+    """
     if not manifest_path or not manifest_path.exists():
         return set()
+    return set(read_sessions_manifest(manifest_path))
+
+
+def read_sessions_manifest(manifest_path: Path) -> Dict[str, Dict[str, Any]]:
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    sessions = data.get("sessions") if isinstance(data, dict) else None
+    if not isinstance(sessions, list) or not all(isinstance(item, dict) and item.get("date") for item in sessions):
+        raise ValueError(f"Invalid sessions manifest at {manifest_path}: expected a sessions list with dates")
+    return {item["date"]: item for item in sessions}
+
+
+def write_atomically(path: Path, data: bytes):
+    """Write next to the destination, then rename, so an interrupted run never leaves a partial file there."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return {item["date"] for item in data.get("sessions", []) if "date" in item}
-    except Exception:
-        return set()
+        with os.fdopen(handle, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
+def load_stock_metadata(pipeline_dir: Path, fetch_universe: Optional[Callable[[str], List[dict]]] = None) -> Dict[str, Dict[str, Any]]:
+    """Each symbol's name, sector and industry: Dhan's US screener list (the live build's source), then Finviz's.
+
+    Reads the root's mainboard_scanx_data.json when a build left one; otherwise fetches the list from Dhan.
+    """
+    listing = pipeline_dir / "mainboard_scanx_data.json"
+    if listing.is_file():
+        rows = json.loads(listing.read_text(encoding="utf-8"))
+    else:
+        if fetch_universe is None:
+            from edl_pipeline.markets.us import dhan
+            fetch_universe = dhan.fetch_universe
+        rows = fetch_universe("stock")
+    metadata: Dict[str, Dict[str, Any]] = {}
+    for row in rows or []:
+        symbol = str(row.get("Sym") or "").strip().upper()
+        if symbol:
+            metadata[symbol] = {"name": row.get("DispSym") or None, "sector": row.get("Sector") or None,
+                                "industry": row.get("SubSector") or None}
+    ownership_file = pipeline_dir / "us_ownership_universe.json"
+    if not ownership_file.is_file():
+        ownership_file = EDL_ROOT / "us_ownership_universe.json"
+    if ownership_file.is_file():
+        for symbol, entry in json.loads(ownership_file.read_text(encoding="utf-8")).items():
+            meta = metadata.setdefault(str(symbol).upper(), {"name": None, "sector": None, "industry": None})
+            meta["sector"] = meta["sector"] or entry.get("finviz_sector") or None
+            meta["industry"] = meta["industry"] or entry.get("finviz_industry") or None
+    return metadata
+
+
+def load_reported_earnings(pipeline_dir: Path) -> Dict[str, List[str]]:
+    """Each symbol's reported earnings dates (oldest first); estimated filing dates are left out."""
+    q_file = pipeline_dir / "quarterly_financial_history.json.gz"
+    if not q_file.is_file():
+        q_file = pipeline_dir / "quarterly_financial_history.json"
+    if not q_file.is_file():
+        print("Quarterly ledger not in the root; earnings dates are unavailable.")
+        return {}
+    q_bytes = q_file.read_bytes()
+    q_data = json.loads(gzip.decompress(q_bytes) if q_bytes[:2] == b"\x1f\x8b" else q_bytes)
+    reported: Dict[str, Set[str]] = {}
+    for rec in q_data.get("records", []):
+        filing = (rec.get("filing_date") or "")[:10]
+        if rec.get("symbol") and filing and rec.get("filing_date_basis", "reported") != "estimated":
+            reported.setdefault(str(rec["symbol"]).upper(), set()).add(filing)
+    return {symbol: sorted(dates) for symbol, dates in reported.items()}
+
+
+def build_stock_row(symbol: str, tech: Dict[str, Any], meta: Dict[str, Any], session_str: str, metadata_as_of: str,
+                    earnings_date: Optional[str], days_since_earnings: Optional[int]) -> Dict[str, Any]:
+    return {
+        "symbol": symbol,
+        "name": meta.get("name") or symbol,
+        "currency": "USD",
+        "market": "us",
+        "sector": meta.get("sector"),
+        "industry": meta.get("industry"),
+        "asOfDate": session_str,
+        # Names and classification are today's (they rarely change); everything below is as of the session.
+        "metadataAsOfDate": metadata_as_of,
+        "historyAligned": True,
+        "open": tech["open"],
+        "high": tech["high"],
+        "low": tech["low"],
+        "close": tech["close"],
+        "volume": tech["volume"],
+        "changePct": tech["changePct"],
+        "rvol": tech["rvol"],
+        "rupeeVolumeCrore": tech["turnover_m"],  # provider amount unit ($1M) in engine
+        "turnoverCrore": tech["turnover_m"],
+        "rsi14": tech["rsi14"],
+        "sma10": tech["sma10"],
+        "sma20": tech["sma20"],
+        "sma50": tech["sma50"],
+        "sma200": tech["sma200"],
+        "ema20": tech["ema20"],
+        "ema50": tech["ema50"],
+        "ema200": tech["ema200"],
+        "dist52wHighPct": tech["dist52wHighPct"],
+        "dist52wLowPct": tech["dist52wLowPct"],
+        "allTimeHigh": tech["allTimeHigh"],
+        "allTimeLow": tech["allTimeLow"],
+        "distAthPct": tech["distAthPct"],
+        "adr20Pct": tech["adr20Pct"],
+        "atr14": tech["atr14"],
+        "gapPct": tech["gapPct"],
+        "return5yPct": tech["return5yPct"],
+        "daysSinceEarnings": days_since_earnings,
+        "earningsDate": earnings_date,
+        # No point-in-time source: the ledger holds today's (possibly restated) quarters, and market cap,
+        # ownership and short interest are current values. Unavailable rather than misdated.
+        "quarterlySales": None,
+        "quarterlyNetProfit": None,
+        "quarterlyEps": None,
+        "quarterlyOpm": None,
+        "marketCapCrore": None,
+        "shortFloatPct": None,
+        "shortRatio": None,
+        "insiderOwnPct": None,
+        "institutionalOwnPct": None,
+        "promoterHoldingPct": None,
+        "fiiHoldingPct": None,
+        "metrics": {
+            **{f"return{h}": tech[f"return{h}"] for h in (5, 21, 63, 126, 252)},
+            "turnover20": tech["daily_turnover_20_m"],
+            "turnover50": tech["daily_turnover_50_m"],
+            "turnover100": tech["daily_turnover_100_m"],
+            "gapPct": tech["gapPct"],
+            "historySessions": tech["historySessions"],
+            **{key: tech[key] for key in ("sma10", "sma20", "sma50", "sma200", "ema20", "ema50", "ema200", "rsi14")},
+        },
+        "presetMatches": preset_matches(tech, days_since_earnings),
+    }
 
 
 def main():
@@ -193,76 +341,35 @@ def main():
     parser.add_argument("--update-sessions-manifest", type=Path, default=Path("frontend/public/data/us/sessions.json"), help="Path to us/sessions.json")
     parser.add_argument("--dry-run", action="store_true", help="Verify execution plan without generating files")
     args = parser.parse_args()
+    if args.start_date > args.end_date:
+        parser.error(f"--start-date {args.start_date} is after --end-date {args.end_date}")
 
-    pipeline_dir = args.pipeline_dir or Path(os.environ.get("EDL_US_BASE_DIR", ROOT_DIR / "DO NOT DELETE EDL PIPELINE"))
+    pipeline_dir = args.pipeline_dir or Path(os.environ.get("EDL_US_BASE_DIR", EDL_ROOT))
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"=== Nexus Scanner US Historical Snapshot Backfill ===")
+    print("=== Nexus Scanner US Historical Snapshot Backfill ===")
     print(f"Pipeline Directory: {pipeline_dir}")
     print(f"Target Window: {args.start_date} to {args.end_date}")
     print(f"Output Directory: {output_dir}")
 
-    # 1. Load Thematic & Universe Metadata
-    thematic_file = pipeline_dir / "us_thematic_universe.json"
-    if not thematic_file.is_file():
-        thematic_file = ROOT_DIR / "DO NOT DELETE EDL PIPELINE" / "us_thematic_universe.json"
-    universe_meta: Dict[str, Dict[str, Any]] = {}
-    if thematic_file.is_file():
-        try:
-            with open(thematic_file, "r", encoding="utf-8") as f:
-                raw_thematic = json.load(f)
-                universe_meta = raw_thematic.get("stocks") or raw_thematic
-            print(f"Loaded {len(universe_meta)} stocks from thematic universe metadata.")
-        except Exception as e:
-            print(f"Warning: could not load thematic universe: {e}")
-
-    # 2. Discover OHLCV CSVs
+    # 1. Discover OHLCV CSVs and the SPY benchmark (both required)
     ohlcv_dir = pipeline_dir / "ohlcv_data"
-    if not ohlcv_dir.is_dir():
-        print(f"Error: OHLCV directory not found at {ohlcv_dir}")
-        sys.exit(1)
-
+    if not ohlcv_dir.is_dir() or not any(ohlcv_dir.glob("*.csv")):
+        sys.exit(f"Error: no US price history at {ohlcv_dir}; run the US daily refresh to seed it first.")
+    spy_csv = pipeline_dir / "indices_ohlcv_data" / "SPY.csv"
+    if not spy_csv.is_file():
+        sys.exit(f"Error: SPY benchmark history missing at {spy_csv}; RS ratings need it.")
     csv_files = sorted(ohlcv_dir.glob("*.csv"))
     print(f"Found {len(csv_files)} stock OHLCV histories in {ohlcv_dir}")
 
-    # 3. Load Benchmark History (SPY)
-    spy_csv = pipeline_dir / "indices_ohlcv_data" / "SPY.csv"
-    if not spy_csv.is_file():
-        spy_csv = ohlcv_dir / "SPY.csv"
-    spy_df = pd.DataFrame()
-    if spy_csv.is_file():
-        try:
-            spy_df = pd.read_csv(spy_csv)
-            spy_df["Date"] = pd.to_datetime(spy_df["Date"]).dt.date
-            spy_df.sort_values("Date", inplace=True)
-            print(f"Loaded SPY benchmark with {len(spy_df)} sessions.")
-        except Exception as e:
-            print(f"Warning: could not load SPY benchmark: {e}")
-
-    # 4. Load Fundamentals History
-    financials_by_symbol = {}
-    q_file = pipeline_dir / "quarterly_financial_history.json.gz"
-    if not q_file.is_file():
-        q_file = pipeline_dir / "quarterly_financial_history.json"
-    if q_file.is_file():
-        try:
-            q_bytes = q_file.read_bytes()
-            q_data = json.loads(gzip.decompress(q_bytes) if q_bytes[:2] == b"\x1f\x8b" else q_bytes)
-            for rec in q_data.get("records", []):
-                financials_by_symbol.setdefault(rec["symbol"], []).append(rec)
-            print(f"Loaded historical fundamentals for {len(financials_by_symbol)} symbols.")
-        except Exception as e:
-            print(f"Warning: could not load quarterly financials: {e}")
-
-    # 5. Determine Trading Sessions in Target Window
+    # 2. Determine trading sessions in the target window (read the manifest first: an unreadable one stops here)
     sessions_in_window = []
     curr = args.start_date
     while curr <= args.end_date:
         if calendar.is_nyse_session_day(curr):
             sessions_in_window.append(curr)
         curr += timedelta(days=1)
-
     registered = registered_session_dates(args.update_sessions_manifest)
     target_sessions = [s for s in sessions_in_window if s.isoformat() not in registered]
     print(f"NYSE sessions in window: {len(sessions_in_window)}. New to process: {len(target_sessions)}")
@@ -270,25 +377,40 @@ def main():
     if args.dry_run:
         print("[DRY RUN] Plan verified successfully. Exiting without generating files.")
         return
+    if not target_sessions:
+        return
 
-    # Pre-load stock histories for speed
+    spy_df = close_history(spy_csv)
+    spy_df["Date"] = spy_df["Date"].dt.normalize()
+    print(f"Loaded SPY benchmark with {len(spy_df)} sessions.")
+    universe_meta = load_stock_metadata(pipeline_dir)
+    metadata_as_of = date.today().isoformat()
+    print(f"Loaded names and classification for {len(universe_meta)} symbols.")
+    earnings_by_symbol = load_reported_earnings(pipeline_dir)
+
+    # 3. Pre-compute each stock's per-session technicals once (each row only reads earlier bars)
     print("Loading OHLCV data into memory...")
     t_load = time.time()
-    stock_histories = {}
+    latest_target = max(target_sessions)
+    stocks = {}
     for csv_file in csv_files:
         sym = csv_file.stem.upper()
         try:
-            df = pd.read_csv(csv_file)
-            if df.empty or "Date" not in df.columns or "Close" not in df.columns:
-                continue
-            df["Date"] = pd.to_datetime(df["Date"]).dt.date
-            df.sort_values("Date", inplace=True)
-            stock_histories[sym] = df
-        except Exception:
+            frame = session_frame(pd.read_csv(csv_file))
+        except Exception as error:
+            print(f"  skipped {sym}: {error}")
             continue
-    print(f"Loaded {len(stock_histories)} stock histories in {time.time() - t_load:.1f}s.")
+        frame = frame[frame["Date"].dt.date <= latest_target].reset_index(drop=True)
+        if frame.empty:
+            continue
+        stocks[sym] = {
+            "rows": {d: i for i, d in enumerate(frame["Date"].dt.date)},
+            "technicals": technical_frame(frame),
+            "closes": frame[["Date", "Close"]],
+        }
+    print(f"Loaded {len(stocks)} stock histories in {time.time() - t_load:.1f}s.")
 
-    # 6. Generate Historical Snapshots
+    # 4. Generate historical snapshots
     generated_sessions = []
     for session_date in target_sessions:
         session_str = session_date.isoformat()
@@ -296,176 +418,49 @@ def main():
         print(f"\nProcessing US session: {session_str}...")
 
         snapshot_stocks = []
-        advances = 0
-        declines = 0
-        above_20dma = 0
-        above_50dma = 0
-        above_200dma = 0
+        close_histories = {}
+        advances = declines = above_20dma = above_50dma = above_200dma = 0
 
-        # SPY slice for RS calculations
-        spy_sub = spy_df[spy_df["Date"] <= session_date] if not spy_df.empty else pd.DataFrame()
-        spy_c = spy_sub["Close"].to_numpy() if not spy_sub.empty else np.array([])
-
-        for sym, df in stock_histories.items():
-            sub = df[df["Date"] <= session_date]
-            if sub.empty:
+        for sym, stock in stocks.items():
+            # Only a stock with a bar on this very session is in it (no stale or carried-forward bar).
+            position = stock["rows"].get(session_date)
+            if position is None:
                 continue
-            # Stock must have traded within last 7 calendar days to be considered active
-            last_date = sub["Date"].iloc[-1]
-            if (session_date - last_date).days > 7:
-                continue
+            tech = row_technicals(stock["technicals"].iloc[position])
+            close_histories[sym] = stock["closes"].iloc[:position + 1]
 
-            c_vals = sub["Close"].to_numpy(dtype=float)
-            o_vals = sub["Open"].to_numpy(dtype=float) if "Open" in sub else c_vals
-            h_vals = sub["High"].to_numpy(dtype=float) if "High" in sub else c_vals
-            l_vals = sub["Low"].to_numpy(dtype=float) if "Low" in sub else c_vals
-            v_vals = sub["Volume"].to_numpy(dtype=float) if "Volume" in sub else np.ones_like(c_vals)
-
-            tech = calculate_technicals_us(o_vals, c_vals, h_vals, l_vals, v_vals)
-            if not tech:
-                continue
-
-            # Breadth tallies
-            if len(c_vals) >= 2:
-                if c_vals[-1] > c_vals[-2]:
+            # Breadth tallies; a stock without the window's history is not counted either way.
+            if tech["changePct"] is not None:
+                if tech["changePct"] > 0:
                     advances += 1
-                elif c_vals[-1] < c_vals[-2]:
+                elif tech["changePct"] < 0:
                     declines += 1
-            if tech["close_above_sma20"]:
-                above_20dma += 1
-            if tech["close_above_sma50"]:
-                above_50dma += 1
-            if tech["close_above_sma200"]:
-                above_200dma += 1
+            above_20dma += tech["close_above_sma20"] is True
+            above_50dma += tech["close_above_sma50"] is True
+            above_200dma += tech["close_above_sma200"] is True
 
-            # Point-in-time Financials
-            fins = financials_by_symbol.get(sym, [])
-            valid_fins = [f for f in fins if f.get("filing_date") and f["filing_date"][:10] <= session_str]
-            latest_fin = sorted(valid_fins, key=lambda x: x.get("period_end") or x.get("quarter_end") or "")[-1] if valid_fins else None
+            earnings = [d for d in earnings_by_symbol.get(sym, ()) if d <= session_str]
+            earnings_date = earnings[-1] if earnings else None
+            days_since_earnings = (session_date - date.fromisoformat(earnings_date)).days if earnings_date else None
 
-            days_since_earnings = None
-            if latest_fin and latest_fin.get("filing_date"):
-                try:
-                    filing_d = date.fromisoformat(latest_fin["filing_date"][:10])
-                    days_since_earnings = max(0, (session_date - filing_d).days)
-                except Exception:
-                    pass
+            snapshot_stocks.append(build_stock_row(sym, tech, universe_meta.get(sym, {}), session_str, metadata_as_of,
+                                                   earnings_date, days_since_earnings))
 
-            meta = universe_meta.get(sym, {})
-            name = meta.get("name") or sym
-            sector = meta.get("sector") or "Unclassified"
-            industry = meta.get("industry") or "Unclassified"
-
-            # Reconstruct stock row for US snapshot
-            item = {
-                "symbol": sym,
-                "name": name,
-                "currency": "USD",
-                "market": "us",
-                "sector": sector,
-                "industry": industry,
-                "asOfDate": session_str,
-                "metadataAsOfDate": session_str,
-                "historyAligned": True,
-                "open": tech["open"],
-                "high": tech["high"],
-                "low": tech["low"],
-                "close": tech["close"],
-                "volume": tech["volume"],
-                "changePct": tech["changePct"],
-                "rvol": tech["rvol"],
-                "rupeeVolumeCrore": tech["turnover_m"],  # provider amount unit ($1M) in engine
-                "turnoverCrore": tech["turnover_m"],
-                "rsi14": tech["rsi14"],
-                "sma10": tech["sma10"],
-                "sma20": tech["sma20"],
-                "sma50": tech["sma50"],
-                "sma200": tech["sma200"],
-                "ema20": tech["ema20"],
-                "ema50": tech["ema50"],
-                "ema200": tech["ema200"],
-                "dist52wHighPct": tech["dist52wHighPct"],
-                "dist52wLowPct": tech["dist52wLowPct"],
-                "allTimeHigh": tech["allTimeHigh"],
-                "allTimeLow": tech["allTimeLow"],
-                "distAthPct": tech["distAthPct"],
-                "adr20Pct": tech["adr20Pct"],
-                "atr14": tech["atr14"],
-                "gapPct": tech["gapPct"],
-                "return5yPct": tech["return5yPct"],
-                "daysSinceEarnings": days_since_earnings,
-                "earningsDate": latest_fin.get("filing_date")[:10] if latest_fin and latest_fin.get("filing_date") else None,
-                "quarterlySales": latest_fin.get("sales") if latest_fin else None,
-                "quarterlyNetProfit": latest_fin.get("net_profit") if latest_fin else None,
-                "quarterlyEps": latest_fin.get("eps") if latest_fin else None,
-                "quarterlyOpm": latest_fin.get("opm") if latest_fin else None,
-                "marketCapCrore": (meta.get("market_cap") / 1e6) if meta.get("market_cap") and meta.get("market_cap") > 1e6 else meta.get("market_cap"),
-                "shortFloatPct": meta.get("short_float_percent"),
-                "shortRatio": meta.get("short_ratio"),
-                "insiderOwnPct": meta.get("insider_own_percent"),
-                "institutionalOwnPct": meta.get("institutional_own_percent"),
-                "promoterHoldingPct": meta.get("insider_own_percent"),
-                "fiiHoldingPct": meta.get("institutional_own_percent"),
-                "metrics": {
-                    "return5": round(((tech["close"] / c_vals[-6]) - 1) * 100, 2) if len(c_vals) >= 6 else None,
-                    "return21": round(((tech["close"] / c_vals[-22]) - 1) * 100, 2) if len(c_vals) >= 22 else None,
-                    "return63": round(((tech["close"] / c_vals[-64]) - 1) * 100, 2) if len(c_vals) >= 64 else None,
-                    "return126": round(((tech["close"] / c_vals[-127]) - 1) * 100, 2) if len(c_vals) >= 127 else None,
-                    "return252": round(((tech["close"] / c_vals[-253]) - 1) * 100, 2) if len(c_vals) >= 253 else None,
-                    "turnover20": tech["daily_turnover_20_m"],
-                    "turnover50": tech["daily_turnover_50_m"],
-                    "turnover100": tech["daily_turnover_100_m"],
-                    "gapPct": tech["gapPct"],
-                    "historySessions": len(c_vals),
-                    "sma10": tech["sma10"],
-                    "sma20": tech["sma20"],
-                    "sma50": tech["sma50"],
-                    "sma200": tech["sma200"],
-                    "ema20": tech["ema20"],
-                    "ema50": tech["ema50"],
-                    "ema200": tech["ema200"],
-                    "rsi14": tech["rsi14"],
-                },
-                "presetMatches": {
-                    "trend_template": bool(tech["close_above_sma50"] and tech["close_above_sma200"] and tech["sma50_above_sma200"]),
-                    "lib-stage-two": bool(tech["close_above_sma50"] and tech["close_above_sma200"] and tech["sma50_above_sma200"]),
-                    "lib-52w-high-breakout": bool(tech["dist52wHighPct"] >= -0.5),
-                    "lib-20d-high-thrust": bool(tech["changePct"] >= 4.0 and tech["rvol"] >= 2.0),
-                    "mom_rvol": bool(tech["rvol"] >= 1.5),
-                    "breakout_52w": bool(tech["dist52wHighPct"] >= -2.0 and tech["rvol"] >= 1.5),
-                    "vcp_contraction": bool(tech["adr20Pct"] <= 3.5 and tech["dist52wHighPct"] >= -15.0),
-                    "gap_up_earnings": bool(tech["gapPct"] >= 3.0 and days_since_earnings is not None and days_since_earnings <= 3),
-                },
-            }
-            snapshot_stocks.append(item)
-
-        # Cross-sectional RS Rating (1-99 percentile)
-        rs_candidates = []
-        for s in snapshot_stocks:
-            m = s["metrics"]
-            if m["return63"] is not None and m["return126"] is not None and m["return252"] is not None:
-                score = (0.4 * (m["return63"] or 0.0) +
-                         0.2 * (m["return126"] or 0.0) +
-                         0.2 * (m["return252"] or 0.0) +
-                         0.2 * (m.get("return21") or 0.0))
-                rs_candidates.append((s, score))
-
-        if rs_candidates:
-            rs_candidates.sort(key=lambda x: x[1])
-            tot = len(rs_candidates)
-            for rank_idx, (stk, _) in enumerate(rs_candidates):
-                rs_rating = int(round((rank_idx / max(1, tot - 1)) * 98.0)) + 1
-                stk["rsRsi"] = rs_rating
-                stk["metrics"]["rsRating"] = rs_rating
+        # RS Rating vs SPY (1-99), as build_rs_ratings ranks the live US release
+        ratings = rs_ratings_vs_spy(close_histories, spy_df, session_date)
+        for stk in snapshot_stocks:
+            rating = ratings.get(stk["symbol"])
+            stk["rsRsi"] = rating
+            stk["metrics"]["rsRating"] = rating
 
         breadth_record = {
             "sessionDate": session_str,
             "advances": advances,
             "declines": declines,
             "unchanged": max(0, len(snapshot_stocks) - (advances + declines)),
-            "above20dma": above_20dma,
-            "above50dma": above_50dma,
-            "above200dma": above_200dma,
+            "above20dma": int(above_20dma),
+            "above50dma": int(above_50dma),
+            "above200dma": int(above_200dma),
             "totalStocks": len(snapshot_stocks),
         }
 
@@ -488,8 +483,8 @@ def main():
         raw_payload["revision"] = session_hash
 
         out_file = output_dir / f"{session_str}.json.gz"
-        with gzip.open(out_file, "wt", encoding="utf-8") as f:
-            json.dump(raw_payload, f, separators=(",", ":"), ensure_ascii=False)
+        payload = json.dumps(raw_payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        write_atomically(out_file, gzip.compress(payload, mtime=0))
 
         file_size_kb = out_file.stat().st_size / 1024
         print(f"Generated {out_file.name} ({len(snapshot_stocks)} stocks, {file_size_kb:.1f} KB, rev {session_hash[:12]}) in {time.time()-t_session:.2f}s")
@@ -500,17 +495,7 @@ def main():
     # Update us/sessions.json manifest
     if args.update_sessions_manifest and generated_sessions:
         manifest_file = args.update_sessions_manifest.resolve()
-        existing = {}
-        if manifest_file.exists():
-            try:
-                with open(manifest_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    for item in data.get("sessions", []):
-                        dt = item.get("date")
-                        if dt:
-                            existing[dt] = item
-            except Exception as e:
-                print(f"Warning: could not read existing sessions manifest: {e}")
+        existing = read_sessions_manifest(manifest_file) if manifest_file.exists() else {}
 
         for s_date, s_hash in generated_sessions:
             s_str = s_date.strftime("%Y-%m-%d")
@@ -529,10 +514,7 @@ def main():
             "currency": "USD",
             "sessions": sorted_sessions,
         }
-        manifest_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(manifest_file, "w", encoding="utf-8") as f:
-            json.dump(manifest_payload, f, indent=2)
-            f.write("\n")
+        write_atomically(manifest_file, (json.dumps(manifest_payload, indent=2) + "\n").encode("utf-8"))
         print(f"Updated US sessions manifest at {manifest_file} ({len(sorted_sessions)} total sessions)")
 
 

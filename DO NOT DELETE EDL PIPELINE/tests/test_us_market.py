@@ -127,6 +127,13 @@ class DhanTests(unittest.TestCase):
         self.assertEqual(stock_pages.fetch('AAPL-apple-inc'), {'fundamentalsData': {}})
         self.assertTrue(fetched[-1].endswith('/new/us-stocks/AAPL-apple-inc-share-price.json'))
 
+    def test_a_404_under_a_build_another_worker_replaced_retries_under_the_new_one(self):
+        reads = []
+        stock_pages = dhan.StockPages(get=lambda url: (reads.append(url), '"buildId":"new"')[1])
+        stock_pages._build = 'new'  # another worker refreshed after this one's request went out under 'old'
+        self.assertEqual(stock_pages.build_id(refresh=True, stale='old'), 'new')
+        self.assertEqual(reads, [])  # not read again, and 'new' != 'old', so the page is asked for under 'new'
+
 
 class FieldTests(unittest.TestCase):
     ROW = {'Sym': 'AAPL', 'DispSym': 'Apple', 'Seosym': 'AAPL-apple-inc', 'Isin': 'US0378331005', 'Sid': 10000025,
@@ -189,7 +196,7 @@ def bar(day, close, volume=100):
 class HistoryTests(unittest.TestCase):
     # Friday 2026-11-06 is the previous session of Monday 2026-11-09.
     RECORD = {'symbol': 'ACME', 'security_id': 1, 'exchange': 'NYSE', 'open': 10.5, 'high': 11.0, 'low': 10.0,
-              'close': 10.8, 'volume': 500, 'previous_close': 10.0}
+              'close': 10.8, 'volume': 500, 'previous_close': 10.0, 'provider_last_trade_ist': '2026-11-10T02:29:00+05:30'}
 
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
@@ -227,6 +234,17 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(self.stored()[-1]['date'], '2026-11-06')
         traded = {**self.RECORD, 'provider_last_trade_ist': '2026-11-10T02:29:00+05:30'}  # Monday's close
         self.assertEqual(history.update(traded, self.root, '2026-11-09', fetch=mock.Mock()), 'appended')
+
+    def test_a_row_without_a_trade_time_or_previous_close_adds_no_bar(self):
+        undated = {key: value for key, value in self.RECORD.items() if key != 'provider_last_trade_ist'}
+        self.assertIsNone(history.snapshot_bar(undated, '2026-11-09'))
+        self.assertIsNotNone(history.snapshot_bar(self.RECORD, '2026-11-09'))
+        # A refetched series cannot be checked against an unknown previous close, so the bar is not joined to it.
+        self.assertFalse(history.adjustment_matches([bar('2026-11-06', 10.0)], {**self.RECORD, 'previous_close': None}))
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-04', 10.0)])
+        fetch = mock.Mock(return_value=[bar('2026-11-05', 9.9), bar('2026-11-06', 10.0)])
+        self.assertEqual(history.update({**self.RECORD, 'previous_close': 0}, self.root, '2026-11-09', fetch=fetch), 'refetched')
+        self.assertEqual(self.stored()[-1]['date'], '2026-11-06')
 
     def test_a_gap_is_fetched_again_and_a_stock_without_history_is_missing(self):
         history.write_bars(self.root / 'ACME.csv', [bar('2026-11-04', 10.0)])
@@ -287,6 +305,15 @@ class BuildTests(unittest.TestCase):
         with mock.patch.object(entry, 'build', return_value=report):
             self.assertEqual(entry.main(['root']), 1)
             report['aligned'] = 5800
+            self.assertEqual(entry.main(['root']), 0)
+            # Stocks whose first fetch failed have no record, so the share is of every screenable stock.
+            report['screenable'] = 6500
+            self.assertEqual(entry.main(['root']), 1)
+            report['screenable'] = 6000
+            # A benchmark absent from the ETF list, or a refetch that stopped a session early, reports no status.
+            report['benchmarks_behind'] = ['IWM']
+            self.assertEqual(entry.main(['root']), 1)
+            report['benchmarks_behind'] = []
             self.assertEqual(entry.main(['root']), 0)
         with self.assertRaises(SystemExit):
             entry.main(['root', '--page-budget', 'nan'])
@@ -605,13 +632,13 @@ class StatementTests(unittest.TestCase):
         def fetch_json(url):
             raise __import__('requests').HTTPError('404', response=response)
         stock_pages = dhan.StockPages(get=lambda url: '"buildId":"b1"', fetch_json=fetch_json, pace=lambda: paced.append(1))
-        with self.assertRaises(Exception):
+        with self.assertRaises(requests.HTTPError):
             stock_pages.fetch('A-a')
         self.assertEqual(len(paced), 3)  # the build id, the data, a fresh build id: the same deploy, so no second ask
         builds = iter(['"buildId":"b1"', '"buildId":"b2"'])
         redeployed = dhan.StockPages(get=lambda url: next(builds), fetch_json=fetch_json, pace=lambda: paced.append(1))
         paced.clear()
-        with self.assertRaises(Exception):
+        with self.assertRaises(requests.HTTPError):
             redeployed.fetch('A-a')
         self.assertEqual(len(paced), 4)  # a new deploy: the data is asked for again under its id
 
@@ -668,6 +695,40 @@ class YahooTests(unittest.TestCase):
             raise requests.RequestException("connection failed")
         self.assertEqual(yahoo.fetch_history('AAPL', get=fail_get), [])
 
+        malformed = mock.Mock(status_code=200)
+        malformed.json.side_effect = ValueError('not JSON')
+        self.assertEqual(yahoo.fetch_history('AAPL', get=mock.Mock(return_value=malformed)), [])
+
+    def test_a_yahoo_rate_limit_is_not_a_missing_ticker(self):
+        with self.assertRaises(yahoo.Throttled):
+            yahoo.fetch_history('AAPL', get=mock.Mock(return_value=mock.Mock(status_code=429)))
+
+    def test_a_yahoo_rate_limit_stops_yahoo_and_seeds_the_rest_from_dhan(self):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(root))
+        records = [{**HistoryTests.RECORD, 'symbol': symbol} for symbol in ('AAA', 'BBB')]
+        dhan_bars = {'data': {'t': [datetime(2026, 11, 5, 18, 30, tzinfo=timezone.utc).timestamp()],
+                              'o': [9.8], 'h': [10.2], 'l': [9.7], 'c': [10.0], 'v': [100]}}
+        yahoo_get = mock.Mock(return_value=mock.Mock(status_code=429))
+        with mock.patch.object(build.requests, 'get', yahoo_get), \
+             mock.patch.object(dhan, 'post', mock.Mock(return_value=dhan_bars)) as dhan_post:
+            counts = build.update_histories(records, root, '2026-11-09', interval=0, workers=1)
+        self.assertTrue(counts['yahoo_throttled'])
+        self.assertFalse(counts['throttled'])
+        self.assertEqual(counts['refetched'], 2)
+        self.assertEqual(yahoo_get.call_count, 1)  # Yahoo is not asked again after its rate limit
+        self.assertEqual(dhan_post.call_count, 2)
+
+    def test_dhan_is_not_asked_after_another_worker_hit_its_rate_limit(self):
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(root))
+        records = [{**HistoryTests.RECORD, 'symbol': symbol} for symbol in ('AAA', 'BBB')]
+        with mock.patch.object(build.requests, 'get', mock.Mock(return_value=mock.Mock(status_code=404))), \
+             mock.patch.object(dhan, 'post', mock.Mock(side_effect=dhan.Throttled('429'))) as dhan_post:
+            counts = build.update_histories(records, root, '2026-11-09', interval=0, workers=1)
+        self.assertTrue(counts['throttled'])
+        self.assertEqual(dhan_post.call_count, 1)
+
     def test_history_fetch_full_prefers_yahoo_and_falls_back_to_dhan(self):
         # 2026-11-06 (Friday) is a valid session
         yahoo_bars = [{'date': '2026-11-06', 'open': 150.0, 'high': 155.0, 'low': 149.0, 'close': 154.0, 'volume': 5000}]
@@ -681,10 +742,12 @@ class YahooTests(unittest.TestCase):
             dhan_fetch.assert_not_called()
 
         # 2. When Yahoo returns empty or fails, Dhan is called
-        with mock.patch.object(dhan, 'fetch_history', dhan_fetch):
-            bars = history.fetch_full('AAPL', 1, 'NASDAQ', yahoo_fetch=mock.Mock(return_value=[]))
-            self.assertEqual(bars[0]['close'], 104.0)
-            dhan_fetch.assert_called()
+        for yahoo_fetch in (mock.Mock(return_value=[]), mock.Mock(side_effect=RuntimeError('yahoo down'))):
+            dhan_fetch.reset_mock()
+            with mock.patch.object(dhan, 'fetch_history', dhan_fetch):
+                bars = history.fetch_full('AAPL', 1, 'NASDAQ', yahoo_fetch=yahoo_fetch)
+                self.assertEqual(bars[0]['close'], 104.0)
+                dhan_fetch.assert_called()
 
 
 class FinvizThematicTests(unittest.TestCase):
@@ -722,6 +785,16 @@ class FinvizThematicTests(unittest.TestCase):
         self.assertEqual(res["institutional_own_percent"], 45.2)
         self.assertEqual(res["insider_trans_percent"], -0.5)
         self.assertEqual(res["institutional_trans_percent"], 1.2)
+
+    def test_zero_ownership_readings_are_kept(self):
+        record = {"symbol": "ZERO", "close": 10.0, "short_float_percent": 4.0, "insider_own_percent": 2.0}
+        ownership = {"short_float_percent": 0.0, "short_ratio": 0.0, "insider_own_percent": 0.0,
+                     "institutional_own_percent": 0.0, "insider_trans_percent": 0.0, "institutional_trans_percent": 0.0}
+        res = build.stock_record(record, {"as_of_date": "2026-11-06"}, "2026-11-06", ownership=ownership)
+        for key in ownership:
+            self.assertEqual(res[key], 0.0, key)
+        # A field the ownership file lacks still falls back to the record.
+        self.assertEqual(build.stock_record(record, {}, "2026-11-06", ownership={})["short_float_percent"], 4.0)
 
 
 if __name__ == '__main__':

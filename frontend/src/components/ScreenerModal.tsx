@@ -22,6 +22,9 @@ import type { FilterChoices } from '../api/snapshotEngine';
 import { SNAPSHOT_MA_PERIODS } from '../api/snapshotScreen';
 import {etfConditionCatalog, etfCategoryTabs, etfGroup, etfFieldLabel, isEtfCondition} from '../data/etfFields';
 import { Button } from './Button';
+import { snapshotFundamentals } from '../data/snapshotFundamentals';
+
+const US_ONLY_FUNDAMENTALS = new Set(snapshotFundamentals.filter(metric => metric.usOnly).map(metric => metric.value));
 
 interface ScreenerModalProps {
   isOpen: boolean;
@@ -382,6 +385,9 @@ export const ScreenerModal: React.FC<ScreenerModalProps> = ({
       const options = parameter.options?.filter(option => choices?.TRADINGVIEW_METRIC?.includes(option.value)) ?? [];
       return {...parameter, options, defaultValue:options[0]?.value ?? parameter.defaultValue};
     })};
+    if (def.id === 'FUNDAMENTAL_METRIC') return {...def, parameters:def.parameters.map(parameter => parameter.id !== 'metric' ? parameter
+      : {...parameter, options:parameter.options?.filter(option => !US_ONLY_FUNDAMENTALS.has(option.value)
+        || choices?.FUNDAMENTAL_METRIC?.includes(option.value))})};
     const raw = choices?.[def.id as keyof FilterChoices];
     const values = def.id === 'MA_STACK' ? SNAPSHOT_MA_PERIODS.map(String) : Array.isArray(raw) ? raw : [];
     if (def.id !== 'MA_STACK' && !['SECTOR','INDUSTRY','SERIES','PRICE_BAND','INDEX_MEMBERSHIP'].includes(def.id)) return def;

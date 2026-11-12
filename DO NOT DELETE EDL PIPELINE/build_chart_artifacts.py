@@ -301,6 +301,11 @@ def main(root=None, extra_histories=None) -> int:
             continue
         tasks.append((root, objects, symbol, as_of, actions[symbol], earnings[symbol], news[symbol]))
     for symbol, path in (extra_histories or {}).items():
+        # A file with no candles (missing, header-only or unreadable rows) would publish a blank chart; leaving the
+        # symbol out lets the app fall back.
+        if not _load_candles(Path(path), as_of):
+            print(f"Skipping the {symbol} chart: no candles through {as_of} in {path}.", flush=True)
+            continue
         symbols.add(symbol)
         tasks.append((root, objects, symbol, as_of, [], [], [], Path(path)))
     # Share the available CPU budget between bounded candle/announcement pools.

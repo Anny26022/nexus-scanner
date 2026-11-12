@@ -67,7 +67,9 @@ const QUADRANT_LABEL: Record<Quadrant, string> = {
 
 const CHIP_ORDER: Quadrant[] = ['leading', 'weakening', 'lagging', 'improving'];
 const SPEEDS = [0.5, 1, 2];
-const BENCHMARK_ORDER: BenchmarkCode[] = ['EW', 'N50', 'N100', 'N500', 'MID150', 'SML250', 'MS400', 'TOTAL'];
+const BENCHMARK_ORDER: BenchmarkCode[] = ['EW', 'N50', 'N100', 'N500', 'MID150', 'SML250', 'MS400', 'TOTAL', 'SPX', 'NDX', 'DJI', 'RUT'];
+/** The broad-market baseline when a universe has no index of its own: Nifty 500 for India, the S&P 500 for the US. */
+const FALLBACK_BENCHMARKS: BenchmarkCode[] = ['N500', 'SPX', ...BENCHMARK_ORDER];
 const STEP_MS = 620;
 const LIST_LIMIT = 150;
 const LABELLED = 10;
@@ -172,9 +174,11 @@ export default function RotationTab({
   if (universe.kind === 'members' && (benchmarkChoice ?? 'GROUP') === 'GROUP') {
     benchmark = { group: universe.group };
   } else {
-    const own = universe.kind === 'stocks' ? (universe.code as BenchmarkCode) : 'N500';
+    const own = universe.kind === 'stocks' ? (universe.code as BenchmarkCode) : undefined;
     const code = benchmarkChoice && benchmarkChoice !== 'GROUP' ? benchmarkChoice : isGroups ? 'EW' : own;
-    benchmark = data?.benchmarks[code] ? code : 'N500';
+    // A universe without its own index (All stocks, or the US Russell 1000) is measured against the market's broad benchmark.
+    benchmark = code && data?.benchmarks[code] ? code
+      : FALLBACK_BENCHMARKS.find((candidate) => data?.benchmarks[candidate]) ?? 'N500';
   }
   const benchmarkName = typeof benchmark === 'string' ? data?.benchmarks[benchmark]?.name : group && displayLabel(group.n);
 

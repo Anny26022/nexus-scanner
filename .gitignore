@@ -1,5 +1,8 @@
 # EDL Pipeline generated intermediates
 DO NOT DELETE EDL PIPELINE/*.json
+!DO NOT DELETE EDL PIPELINE/us_thematic_universe.json
+!DO NOT DELETE EDL PIPELINE/us_ownership_universe.json
+!DO NOT DELETE EDL PIPELINE/us_theme_catalog.json
 !DO NOT DELETE EDL PIPELINE/filing_source_labels.json
 !DO NOT DELETE EDL PIPELINE/taxonomy_overrides.json
 !DO NOT DELETE EDL PIPELINE/stockscans_classification.json

@@ -1,0 +1,1316 @@
+{
+  "themes": [
+    {
+      "value": "agingpopulationlongevity",
+      "label": "Aging Population & Longevity",
+      "subthemes": [
+        {
+          "value": "longevityagingpharma",
+          "label": "Longevity - Age-Related Pharmaceuticals & Biotech"
+        },
+        {
+          "value": "longevityhealthcare",
+          "label": "Longevity - Healthcare & Medical Devices"
+        },
+        {
+          "value": "longevityhealthyaging",
+          "label": "Longevity - Healthy Aging & Nutrition"
+        },
+        {
+          "value": "longevityseniorliving",
+          "label": "Longevity - Senior Living & Assisted Care"
+        }
+      ]
+    },
+    {
+      "value": "agriculturefoodtech",
+      "label": "Agriculture & FoodTech",
+      "subthemes": [
+        {
+          "value": "agriculturealtprotein",
+          "label": "Agriculture - Alternative Proteins"
+        },
+        {
+          "value": "agriculturecropinputs",
+          "label": "Agriculture - Agricultural Inputs & Crop Science"
+        },
+        {
+          "value": "agricultureindoorfarming",
+          "label": "Agriculture - Controlled Environment Agriculture"
+        },
+        {
+          "value": "agricultureprocessing",
+          "label": "Agriculture - Agri-Food Processing & Distribution"
+        },
+        {
+          "value": "agriculturesmartfarming",
+          "label": "Agriculture - Precision Agriculture & Farm Automation"
+        }
+      ]
+    },
+    {
+      "value": "artificialintelligence",
+      "label": "Artificial Intelligence",
+      "subthemes": [
+        {
+          "value": "aiadssearch",
+          "label": "AI - Ads, Search & Recommendations"
+        },
+        {
+          "value": "aiagi",
+          "label": "AI - AGI, general intelligence"
+        },
+        {
+          "value": "aiapplications",
+          "label": "AI - Apps, Domain-Specific AI"
+        },
+        {
+          "value": "aicloud",
+          "label": "AI - Cloud & Infrastructure"
+        },
+        {
+          "value": "aicompute",
+          "label": "AI - Compute & Acceleration"
+        },
+        {
+          "value": "aidata",
+          "label": "AI - Data Infrastructure & Enablement"
+        },
+        {
+          "value": "aiedge",
+          "label": "AI - Edge & Embedded Systems"
+        },
+        {
+          "value": "aienergy",
+          "label": "AI - Power & Energy Solutions"
+        },
+        {
+          "value": "aienterprise",
+          "label": "AI - Enterprise Productivity & Software Integration"
+        },
+        {
+          "value": "aimodels",
+          "label": "AI - Foundation Models & Platforms"
+        },
+        {
+          "value": "ainetworking",
+          "label": "AI - Networking & Systems Optimization"
+        },
+        {
+          "value": "airobotics",
+          "label": "AI - Robotics & Automation"
+        },
+        {
+          "value": "aisecurity",
+          "label": "AI - Cybersecurity"
+        }
+      ]
+    },
+    {
+      "value": "autonomoussystems",
+      "label": "Autonomous Systems",
+      "subthemes": [
+        {
+          "value": "autonomousavmobility",
+          "label": "Autonomous - Vehicles & Mobility"
+        },
+        {
+          "value": "autonomousdefense",
+          "label": "Autonomous - Aerospace, Defense & Drones"
+        },
+        {
+          "value": "autonomousindustrial",
+          "label": "Autonomous - Industrial & Logistics Automation"
+        },
+        {
+          "value": "autonomousmachinevision",
+          "label": "Autonomous - Sensors & Perception Systems"
+        },
+        {
+          "value": "autonomoussoftware",
+          "label": "Autonomous - Software & Cloud Infrastructure"
+        },
+        {
+          "value": "autonomousspecialized",
+          "label": "Autonomous - Maritime, Agriculture & Specialized Autonomy"
+        }
+      ]
+    },
+    {
+      "value": "bigdata",
+      "label": "Big Data",
+      "subthemes": [
+        {
+          "value": "bigdataaiplatforms",
+          "label": "Big Data - AI Platforms & Predictive Analytics"
+        },
+        {
+          "value": "bigdataanalyticsbi",
+          "label": "Big Data - Analytics & Business Intelligence"
+        },
+        {
+          "value": "bigdatainfrastructure",
+          "label": "Big Data - Infrastructure & Storage"
+        },
+        {
+          "value": "bigdataproviders",
+          "label": "Big Data - Data Generation, Sourcing & Providers"
+        }
+      ]
+    },
+    {
+      "value": "biometrics",
+      "label": "Biometrics",
+      "subthemes": [
+        {
+          "value": "biometricsgovdefense",
+          "label": "Biometrics - Government, Defense & Public Security"
+        },
+        {
+          "value": "biometricshardware",
+          "label": "Biometrics - Biometric Sensors & Hardware"
+        },
+        {
+          "value": "biometricsidentity",
+          "label": "Biometrics - Identity Verification & Security"
+        },
+        {
+          "value": "biometricssoftware",
+          "label": "Biometrics - Recognition & Analytics"
+        }
+      ]
+    },
+    {
+      "value": "cloudcomputing",
+      "label": "Cloud Computing",
+      "subthemes": [
+        {
+          "value": "clouddatabases",
+          "label": "Cloud - Data Platforms & Databases"
+        },
+        {
+          "value": "clouddatacenters",
+          "label": "Cloud - Data Centers"
+        },
+        {
+          "value": "clouddevops",
+          "label": "Cloud - DevOps, Observability"
+        },
+        {
+          "value": "cloudedge",
+          "label": "Cloud - Edge, CDN, Zero-Trust Networking"
+        },
+        {
+          "value": "cloudhardware",
+          "label": "Cloud - Hardware, Networking & OEM"
+        },
+        {
+          "value": "cloudhsaas",
+          "label": "Cloud - Horizontal SaaS & Cloud Applications"
+        },
+        {
+          "value": "cloudhybridcloud",
+          "label": "Cloud - Hybrid Cloud"
+        },
+        {
+          "value": "cloudhyperscalers",
+          "label": "Cloud - Hyperscalers"
+        },
+        {
+          "value": "cloudmulticloud",
+          "label": "Cloud - Multi-Cloud Management"
+        },
+        {
+          "value": "cloudpaas",
+          "label": "Cloud - Platforms & Services, PaaS"
+        },
+        {
+          "value": "cloudsecurity",
+          "label": "Cloud - Security"
+        },
+        {
+          "value": "cloudserverless",
+          "label": "Cloud - Serverless Computing"
+        }
+      ]
+    },
+    {
+      "value": "commoditiesagriculture",
+      "label": "Commodities - Agriculture",
+      "subthemes": [
+        {
+          "value": "commagribiofuels",
+          "label": "Comm Agri - Renewable Fuels & Biofuels"
+        },
+        {
+          "value": "commagrifertilizers",
+          "label": "Comm Agri - Fertilizers, Crop Inputs & Seeds"
+        },
+        {
+          "value": "commagrigrains",
+          "label": "Comm Agri - Grains & Oilseeds"
+        },
+        {
+          "value": "commagrilivestock",
+          "label": "Comm Agri - Livestock & Animal Protein"
+        },
+        {
+          "value": "commagrisofts",
+          "label": "Comm Agri - Softs & Plantation Crops"
+        }
+      ]
+    },
+    {
+      "value": "commoditiesenergy",
+      "label": "Commodities - Energy",
+      "subthemes": [
+        {
+          "value": "commenergybiofuels",
+          "label": "Comm Energy - Biofuels & Renewable Fuels"
+        },
+        {
+          "value": "commenergygaslng",
+          "label": "Comm Energy - Natural Gas & LNG"
+        },
+        {
+          "value": "commenergyoil",
+          "label": "Comm Energy - Crude Oil"
+        },
+        {
+          "value": "commenergyuranium",
+          "label": "Comm Energy - Uranium & Nuclear Fuels"
+        }
+      ]
+    },
+    {
+      "value": "commoditiesmetals",
+      "label": "Commodities - Metals",
+      "subthemes": [
+        {
+          "value": "commmetalsbattery",
+          "label": "Comm Metals - Battery & Energy Transition Metals"
+        },
+        {
+          "value": "commmetalsgold",
+          "label": "Comm Metals - Gold"
+        },
+        {
+          "value": "commmetalsindustrial",
+          "label": "Comm Metals - Industrial & Base Metals"
+        },
+        {
+          "value": "commmetalsprecious",
+          "label": "Comm Metals - Precious Metals"
+        },
+        {
+          "value": "commmetalsrareearth",
+          "label": "Comm Metals - Rare Earth & Strategic Materials"
+        },
+        {
+          "value": "commmetalsrecycling",
+          "label": "Comm Metals - Recycling & Circular Materials"
+        },
+        {
+          "value": "commmetalssilver",
+          "label": "Comm Metals - Silver"
+        }
+      ]
+    },
+    {
+      "value": "consumergoods",
+      "label": "Consumer Goods",
+      "subthemes": [
+        {
+          "value": "consumerapparel",
+          "label": "Consumer - Apparel & E-Commerce Retail"
+        },
+        {
+          "value": "consumerfarmdirect",
+          "label": "Consumer - Farming & Direct Marketplaces"
+        },
+        {
+          "value": "consumerfood",
+          "label": "Consumer - Health, Food & Beverages"
+        },
+        {
+          "value": "consumerhousehold",
+          "label": "Consumer - Smart Homes & Household Products"
+        },
+        {
+          "value": "consumerluxury",
+          "label": "Consumer - Modern Luxury & Lifestyle"
+        },
+        {
+          "value": "consumersecondhand",
+          "label": "Consumer - Resale & Sharing Platforms"
+        }
+      ]
+    },
+    {
+      "value": "cryptoblockchain",
+      "label": "Crypto & Blockchain",
+      "subthemes": [
+        {
+          "value": "blockchainenterprise",
+          "label": "Blockchain - Enterprise Blockchain Solutions"
+        },
+        {
+          "value": "blockchaininfrastructure",
+          "label": "Blockchain - Blockchain Infrastructure"
+        },
+        {
+          "value": "blockchainmining",
+          "label": "Blockchain - Cryptocurrency Mining & Staking"
+        },
+        {
+          "value": "blockchainpayments",
+          "label": "Blockchain - Financial Services & Payments"
+        },
+        {
+          "value": "blockchainplatforms",
+          "label": "Blockchain - Cryptocurrency Platforms"
+        },
+        {
+          "value": "blockchaintokenization",
+          "label": "Blockchain - Tokenization & Digital Assets"
+        }
+      ]
+    },
+    {
+      "value": "cybersecurity",
+      "label": "Cybersecurity",
+      "subthemes": [
+        {
+          "value": "cybersecurityappsecurity",
+          "label": "Cybersecurity - Application Security"
+        },
+        {
+          "value": "cybersecuritycloud",
+          "label": "Cybersecurity - Cloud Security"
+        },
+        {
+          "value": "cybersecurityendpoint",
+          "label": "Cybersecurity - Endpoint Security"
+        },
+        {
+          "value": "cybersecurityidentityiam",
+          "label": "Cybersecurity - Identity & Access Management"
+        },
+        {
+          "value": "cybersecuritynetwork",
+          "label": "Cybersecurity - Network Security"
+        },
+        {
+          "value": "cybersecuritysiem",
+          "label": "Cybersecurity - Security Information & Event Management"
+        },
+        {
+          "value": "cybersecuritythreatops",
+          "label": "Cybersecurity - Threat Intelligence"
+        },
+        {
+          "value": "cybersecurityzerotrust",
+          "label": "Cybersecurity - Zero Trust"
+        }
+      ]
+    },
+    {
+      "value": "defenseaerospace",
+      "label": "Defense & Aerospace",
+      "subthemes": [
+        {
+          "value": "defenseaviation",
+          "label": "Defense - Next-Generation Aircraft & Maintenance"
+        },
+        {
+          "value": "defensecyberdefense",
+          "label": "Defense - Cyber Defense & Electronic Warfare"
+        },
+        {
+          "value": "defensedrones",
+          "label": "Defense - Drones & Anti-Drone Systems"
+        },
+        {
+          "value": "defensemanufacturing",
+          "label": "Defense - Secure Defense Supply Chains"
+        },
+        {
+          "value": "defensemissiles",
+          "label": "Defense - Missile Defense & Long-Range Weapons"
+        },
+        {
+          "value": "defensespacetech",
+          "label": "Defense - Space Technology & Satellite Services"
+        },
+        {
+          "value": "defenseweapons",
+          "label": "Defense - Precision Weapons & Ammunition Resupply"
+        }
+      ]
+    },
+    {
+      "value": "digitalentertainment",
+      "label": "Digital Entertainment",
+      "subthemes": [
+        {
+          "value": "entertainmentbetting",
+          "label": "Entertainment - Sports Betting, Wagering & Prediction Markets"
+        },
+        {
+          "value": "entertainmentgambling",
+          "label": "Entertainment - iGaming & Online Gambling"
+        },
+        {
+          "value": "entertainmentgaming",
+          "label": "Entertainment - Game Publishers & Developers"
+        },
+        {
+          "value": "entertainmentinfrastructure",
+          "label": "Entertainment - Streaming & Gaming Infrastructure"
+        },
+        {
+          "value": "entertainmentmusic",
+          "label": "Entertainment - Music & Audio Streaming"
+        },
+        {
+          "value": "entertainmentvideo",
+          "label": "Entertainment - Video Streaming"
+        }
+      ]
+    },
+    {
+      "value": "ecommerce",
+      "label": "E-commerce",
+      "subthemes": [
+        {
+          "value": "ecommerceadsmedia",
+          "label": "E-commerce - Retail Media & Advertising"
+        },
+        {
+          "value": "ecommercedtc",
+          "label": "E-commerce - Direct-to-Consumer"
+        },
+        {
+          "value": "ecommercegrocery",
+          "label": "E-commerce - Grocery & Local Commerce Platforms"
+        },
+        {
+          "value": "ecommercelogistics",
+          "label": "E-commerce - Logistics & Delivery"
+        },
+        {
+          "value": "ecommercemarketplaces",
+          "label": "E-commerce - Online Marketplaces"
+        },
+        {
+          "value": "ecommerceomnichannel",
+          "label": "E-commerce - Omnichannel Retailers, Online & Physical Stores"
+        },
+        {
+          "value": "ecommerceplatforms",
+          "label": "E-commerce - Platforms"
+        },
+        {
+          "value": "ecommercesecondhand",
+          "label": "E-commerce - Recommerce, Secondhand Marketplaces"
+        },
+        {
+          "value": "ecommercesocial",
+          "label": "E-commerce - Social & Influencer Commerce"
+        }
+      ]
+    },
+    {
+      "value": "educationtechnology",
+      "label": "Education Technology",
+      "subthemes": [
+        {
+          "value": "educationcurriculum",
+          "label": "Education - Digital Curriculum"
+        },
+        {
+          "value": "educationinfrastructure",
+          "label": "Education - Infrastructure"
+        },
+        {
+          "value": "educationplatforms",
+          "label": "Education - Online Learning Platforms"
+        },
+        {
+          "value": "educationworkforce",
+          "label": "Education - Workforce Training"
+        }
+      ]
+    },
+    {
+      "value": "electricvehicles",
+      "label": "Electric Vehicles",
+      "subthemes": [
+        {
+          "value": "evsbatteries",
+          "label": "EVs - Batteries & Materials"
+        },
+        {
+          "value": "evscharging",
+          "label": "EVs - Charging & Infrastructure"
+        },
+        {
+          "value": "evschips",
+          "label": "EVs - Auto Semiconductors & Power Electronics"
+        },
+        {
+          "value": "evsfleets",
+          "label": "EVs - Fleet Management & Telematics"
+        },
+        {
+          "value": "evsmanufacturers",
+          "label": "EVs - Manufacturers"
+        },
+        {
+          "value": "evsselfdriving",
+          "label": "EVs - Autonomous Driving"
+        },
+        {
+          "value": "evssuppliers",
+          "label": "EVs - Key Suppliers & Autonomy Tech"
+        }
+      ]
+    },
+    {
+      "value": "energyrenewable",
+      "label": "Energy - Renewable",
+      "subthemes": [
+        {
+          "value": "energycleanbatteries",
+          "label": "Energy Clean - Batteries & Storage"
+        },
+        {
+          "value": "energycleanbiofuels",
+          "label": "Energy Clean - Fuels & Bioenergy"
+        },
+        {
+          "value": "energycleangeothermal",
+          "label": "Energy Clean - Geothermal"
+        },
+        {
+          "value": "energycleanhydrogen",
+          "label": "Energy Clean - Hydrogen & Fuel Cells"
+        },
+        {
+          "value": "energycleanmaterials",
+          "label": "Energy Clean - Materials & Critical Metals"
+        },
+        {
+          "value": "energycleansmartgrid",
+          "label": "Energy Clean - Smart Grid & Electrification"
+        },
+        {
+          "value": "energycleansolar",
+          "label": "Energy Clean - Solar"
+        },
+        {
+          "value": "energycleanutilities",
+          "label": "Energy Clean - Utilities & Clean Power Operators"
+        },
+        {
+          "value": "energycleanwind",
+          "label": "Energy Clean - Wind"
+        }
+      ]
+    },
+    {
+      "value": "energytraditional",
+      "label": "Energy - Traditional",
+      "subthemes": [
+        {
+          "value": "energybasemajors",
+          "label": "Energy Base - Integrated Energy Majors"
+        },
+        {
+          "value": "energybasenuclear",
+          "label": "Energy Base - Nuclear Power & Advanced Reactors"
+        },
+        {
+          "value": "energybaseoilproduction",
+          "label": "Energy Base - Oil & Gas Exploration & Production"
+        },
+        {
+          "value": "energybaseoilrefining",
+          "label": "Energy Base - Refining & Midstream Infrastructure"
+        },
+        {
+          "value": "energybaseoilservices",
+          "label": "Energy Base - Oilfield Services & Equipment"
+        },
+        {
+          "value": "energybasethermal",
+          "label": "Energy Base - Coal & Thermal Power Generation"
+        },
+        {
+          "value": "energybaseutilities",
+          "label": "Energy Base - Utilities & Conventional Power Operators"
+        }
+      ]
+    },
+    {
+      "value": "environmentalsustainability",
+      "label": "Environmental Sustainability",
+      "subthemes": [
+        {
+          "value": "environmentalagriculture",
+          "label": "Environmental - Sustainable Agriculture & Resource Management"
+        },
+        {
+          "value": "environmentalairquality",
+          "label": "Environmental - Clean Technologies & Pollution Control"
+        },
+        {
+          "value": "environmentalclimate",
+          "label": "Environmental - Climate Technologies & Carbon Solutions"
+        },
+        {
+          "value": "environmentalwaste",
+          "label": "Environmental - Waste Management & Recycling"
+        },
+        {
+          "value": "environmentalwater",
+          "label": "Environmental - Water Infrastructure & Treatment"
+        }
+      ]
+    },
+    {
+      "value": "fintech",
+      "label": "FinTech",
+      "subthemes": [
+        {
+          "value": "fintechblockchain",
+          "label": "FinTech - Crypto, Blockchain & Tokenization"
+        },
+        {
+          "value": "fintechexchanges",
+          "label": "FinTech - Exchanges & Market Infrastructure"
+        },
+        {
+          "value": "fintechinsurance",
+          "label": "FinTech - InsurTech & Embedded Insurance"
+        },
+        {
+          "value": "fintechlending",
+          "label": "FinTech - Lending, Credit & BNPL"
+        },
+        {
+          "value": "fintechneobanks",
+          "label": "FinTech - Digital Banking & Neobanks"
+        },
+        {
+          "value": "fintechpayments",
+          "label": "FinTech - Digital Payments & Merchant Infrastructure"
+        },
+        {
+          "value": "fintechtrading",
+          "label": "FinTech - Trading Platforms & WealthTech"
+        }
+      ]
+    },
+    {
+      "value": "hardware",
+      "label": "Hardware",
+      "subthemes": [
+        {
+          "value": "hardwaredatacenters",
+          "label": "Hardware - Data Center Infrastructure"
+        },
+        {
+          "value": "hardwareelectronics",
+          "label": "Hardware - Consumer Electronics, Gaming PCs & Consoles"
+        },
+        {
+          "value": "hardwaregaming",
+          "label": "Hardware - Gaming & Immersive Pheriperals"
+        },
+        {
+          "value": "hardwareindustrialiot",
+          "label": "Hardware - Industrial & IoT"
+        },
+        {
+          "value": "hardwarenetworking",
+          "label": "Hardware - Networking Equipment"
+        },
+        {
+          "value": "hardwarenextgen",
+          "label": "Hardware - Next-Gen & Specialty"
+        },
+        {
+          "value": "hardwarepcsdevices",
+          "label": "Hardware - Personal Computing & Devices"
+        },
+        {
+          "value": "hardwareprinting",
+          "label": "Hardware - Printing & Imaging"
+        },
+        {
+          "value": "hardwareservers",
+          "label": "Hardware - Servers, OEMs & Enterprise Systems"
+        },
+        {
+          "value": "hardwarestorage",
+          "label": "Hardware - Storage"
+        },
+        {
+          "value": "hardwaretelecom",
+          "label": "Hardware - Communications & Telecom"
+        }
+      ]
+    },
+    {
+      "value": "healthcarebiotech",
+      "label": "Healthcare & Biotech",
+      "subthemes": [
+        {
+          "value": "healthcaredevices",
+          "label": "Healthcare - Medical Devices & HealthTech Hardware"
+        },
+        {
+          "value": "healthcarediagnostics",
+          "label": "Healthcare - Diagnostics, Biomarkers & Liquid Biopsy"
+        },
+        {
+          "value": "healthcaregenomics",
+          "label": "Healthcare - Genomics & Personalized Medicine"
+        },
+        {
+          "value": "healthcareitdata",
+          "label": "Healthcare - IT, Services & Data Infrastructure"
+        },
+        {
+          "value": "healthcaremetabolic",
+          "label": "Healthcare - Metabolic & Cardiometabolic"
+        },
+        {
+          "value": "healthcarenextgen",
+          "label": "Healthcare - Next-Gen Biotech Platforms"
+        },
+        {
+          "value": "healthcareoncology",
+          "label": "Healthcare - Oncology & Precision Cancer Therapeutics"
+        },
+        {
+          "value": "healthcaretelemedicine",
+          "label": "Healthcare - Digital Health, Telemedicine & Remote Care"
+        },
+        {
+          "value": "healthcaretherapeutics",
+          "label": "Healthcare - Regenerative Medicine, Psychedelics, Cannabis"
+        }
+      ]
+    },
+    {
+      "value": "healthyfoodnutrition",
+      "label": "Healthy Food & Nutrition",
+      "subthemes": [
+        {
+          "value": "nutritionaltprotein",
+          "label": "Nutrition - Plant-Based Foods & Meat Alternatives"
+        },
+        {
+          "value": "nutritionmealdelivery",
+          "label": "Nutrition - Food Delivery & Meal Kits"
+        },
+        {
+          "value": "nutritionretailers",
+          "label": "Nutrition - Organic & Natural Food Retailers"
+        },
+        {
+          "value": "nutritionsupplements",
+          "label": "Nutrition - Functional & Nutritional Supplements"
+        }
+      ]
+    },
+    {
+      "value": "industrialautomation",
+      "label": "Industrial Automation",
+      "subthemes": [
+        {
+          "value": "automationautomation",
+          "label": "Automation - Factory & Process Automation Systems"
+        },
+        {
+          "value": "automationdprinting",
+          "label": "Automation - Additive Manufacturing, 3D Printing"
+        },
+        {
+          "value": "automationiot",
+          "label": "Automation - Industrial IoT, Connectivity"
+        },
+        {
+          "value": "automationlogistics",
+          "label": "Automation - Smart Logistics & Warehouse Automation"
+        },
+        {
+          "value": "automationmachinevision",
+          "label": "Automation - Industrial Sensors & Machine Vision"
+        },
+        {
+          "value": "automationrobotics",
+          "label": "Automation - Industrial Robotics & Autonomous Systems"
+        },
+        {
+          "value": "automationsoftware",
+          "label": "Automation - Industrial Software & Digital Twin"
+        }
+      ]
+    },
+    {
+      "value": "internetofthings",
+      "label": "Internet of Things",
+      "subthemes": [
+        {
+          "value": "iotedgedevices",
+          "label": "IoT - Connected Devices & Sensors"
+        },
+        {
+          "value": "iotenterprise",
+          "label": "IoT - Industrial & Enterprise IoT"
+        },
+        {
+          "value": "iothardware",
+          "label": "IoT - Edge Computing & Hardware Infrastructure"
+        },
+        {
+          "value": "iotnetworking",
+          "label": "IoT - Connectivity & Networks"
+        },
+        {
+          "value": "iotsecurity",
+          "label": "IoT - Security & Data Management"
+        },
+        {
+          "value": "iotsoftware",
+          "label": "IoT - Platforms, Software & Analytics"
+        }
+      ]
+    },
+    {
+      "value": "nanotechnology",
+      "label": "Nanotechnology",
+      "subthemes": [
+        {
+          "value": "nanotechelectronics",
+          "label": "NanoTech - Nanoelectronics & Semiconductors"
+        },
+        {
+          "value": "nanotechenergy",
+          "label": "NanoTech - Energy & Environment"
+        },
+        {
+          "value": "nanotechmaterials",
+          "label": "NanoTech - Nanomaterials & Manufacturing"
+        },
+        {
+          "value": "nanotechmedicine",
+          "label": "NanoTech - Nanomedicine & Drug Delivery"
+        },
+        {
+          "value": "nanotechproducts",
+          "label": "NanoTech - Consumer & Industrial Products"
+        },
+        {
+          "value": "nanotechresearchtools",
+          "label": "NanoTech - Research Tools & Advanced Instruments"
+        }
+      ]
+    },
+    {
+      "value": "quantumcomputing",
+      "label": "Quantum Computing",
+      "subthemes": [
+        {
+          "value": "quantumapplications",
+          "label": "Quantum - Applications"
+        },
+        {
+          "value": "quantumcloud",
+          "label": "Quantum - Cloud Ecosystems"
+        },
+        {
+          "value": "quantumenablingtech",
+          "label": "Quantum - Enabling Technologies"
+        },
+        {
+          "value": "quantumhardware",
+          "label": "Quantum - Hardware Platforms"
+        },
+        {
+          "value": "quantumnetworking",
+          "label": "Quantum - Networking & Security"
+        },
+        {
+          "value": "quantumsoftware",
+          "label": "Quantum - Software & Tools"
+        }
+      ]
+    },
+    {
+      "value": "realestatereits",
+      "label": "Real Estate & REITs",
+      "subthemes": [
+        {
+          "value": "realestatehealthcare",
+          "label": "Real Estate - Healthcare & Senior Living"
+        },
+        {
+          "value": "realestatehousing",
+          "label": "Real Estate - Housing, Urban Living & Demographics"
+        },
+        {
+          "value": "realestateittelecom",
+          "label": "Real Estate - Digital Infrastructure"
+        },
+        {
+          "value": "realestateoffice",
+          "label": "Real Estate - Office & Commercial Workspaces"
+        },
+        {
+          "value": "realestateretail",
+          "label": "Real Estate - Retail & Consumer Real Estate"
+        },
+        {
+          "value": "realestatetourism",
+          "label": "Real Estate - Travel, Leisure & Entertainment Properties"
+        },
+        {
+          "value": "realestatewarehousing",
+          "label": "Real Estate - E-Commerce, Warehousing & Logistics"
+        }
+      ]
+    },
+    {
+      "value": "robotics",
+      "label": "Robotics",
+      "subthemes": [
+        {
+          "value": "roboticsautomation",
+          "label": "Robotics - Industrial Automation"
+        },
+        {
+          "value": "roboticsavmobility",
+          "label": "Robotics - Autonomous Vehicles & Mobility"
+        },
+        {
+          "value": "roboticsconsumer",
+          "label": "Robotics - Service & Consumer Robotics"
+        },
+        {
+          "value": "roboticslogistics",
+          "label": "Robotics - Logistics & Warehouse Robotics"
+        },
+        {
+          "value": "roboticsmachinevision",
+          "label": "Robotics - Sensors & Vision Systems"
+        },
+        {
+          "value": "roboticsmedical",
+          "label": "Robotics - Medical & Surgical Robotics"
+        }
+      ]
+    },
+    {
+      "value": "semiconductors",
+      "label": "Semiconductors",
+      "subthemes": [
+        {
+          "value": "semisanalog",
+          "label": "Semis - Analog, Mixed-Signal & Power Management"
+        },
+        {
+          "value": "semiscompute",
+          "label": "Semis - Logic & CPUs, GPUs, Accelerators"
+        },
+        {
+          "value": "semisdesigntools",
+          "label": "Semis - EDA Tools & Design Software"
+        },
+        {
+          "value": "semisfoundries",
+          "label": "Semis - Foundries & Manufacturing"
+        },
+        {
+          "value": "semislithography",
+          "label": "Semis - Equipment, Lithography & Deposition"
+        },
+        {
+          "value": "semismemory",
+          "label": "Semis - Memory & Storage"
+        },
+        {
+          "value": "semisnextgen",
+          "label": "Semis - Emerging Technologies"
+        },
+        {
+          "value": "semispackaging",
+          "label": "Semis - Testing, Packaging & Assembly"
+        },
+        {
+          "value": "semiswireless",
+          "label": "Semis - Wireless & Connectivity"
+        }
+      ]
+    },
+    {
+      "value": "smarthome",
+      "label": "Smart Home",
+      "subthemes": [
+        {
+          "value": "smarthomeautomation",
+          "label": "Smart Home - Automation & Control Systems"
+        },
+        {
+          "value": "smarthomedevices",
+          "label": "Smart Home - Connected Devices & Appliances"
+        },
+        {
+          "value": "smarthomeenergy",
+          "label": "Smart Home - Energy & Utilities"
+        },
+        {
+          "value": "smarthomenetworking",
+          "label": "Smart Home - Connectivity & Networking"
+        },
+        {
+          "value": "smarthomesecurity",
+          "label": "Smart Home - Security & Monitoring"
+        },
+        {
+          "value": "smarthomevoiceai",
+          "label": "Smart Home - Voice Assistants & AI Integration"
+        }
+      ]
+    },
+    {
+      "value": "socialmedia",
+      "label": "Social Media",
+      "subthemes": [
+        {
+          "value": "socialadvertising",
+          "label": "Social - Advertising Platforms"
+        },
+        {
+          "value": "socialgaming",
+          "label": "Social - Gaming Platforms"
+        },
+        {
+          "value": "socialnetworks",
+          "label": "Social - Networks & Communication Platforms"
+        },
+        {
+          "value": "socialniche",
+          "label": "Social - Niche Platforms"
+        },
+        {
+          "value": "socialvisualcontent",
+          "label": "Social - Image & Video Content Platforms"
+        }
+      ]
+    },
+    {
+      "value": "software",
+      "label": "Software",
+      "subthemes": [
+        {
+          "value": "softwarecollaboration",
+          "label": "Software - Collaboration & Communications"
+        },
+        {
+          "value": "softwarecrm",
+          "label": "Software - Customer Relationship Management & Marketing"
+        },
+        {
+          "value": "softwaredataanalytics",
+          "label": "Software - Data & Analytics"
+        },
+        {
+          "value": "softwaredesign",
+          "label": "Software - Design, Creativity & Engineering"
+        },
+        {
+          "value": "softwaredevops",
+          "label": "Software - DevOps, Management & Observability"
+        },
+        {
+          "value": "softwareecommerce",
+          "label": "Software - E-Commerce & Digital Platforms"
+        },
+        {
+          "value": "softwareenterprise",
+          "label": "Software - Enterprise Resource Planning & Management"
+        },
+        {
+          "value": "softwaregaming",
+          "label": "Software - Gaming & Platforms"
+        },
+        {
+          "value": "softwarehsaas",
+          "label": "Software - Horizontal SaaS Platforms"
+        },
+        {
+          "value": "softwareos",
+          "label": "Software - Operating Systems"
+        },
+        {
+          "value": "softwaresecurity",
+          "label": "Software - Cybersecurity"
+        },
+        {
+          "value": "softwarevsaas",
+          "label": "Software - Vertical SaaS Platforms"
+        }
+      ]
+    },
+    {
+      "value": "spacetech",
+      "label": "Space Tech",
+      "subthemes": [
+        {
+          "value": "spacedataanalytics",
+          "label": "Space - Data Analytics & Earth Observation"
+        },
+        {
+          "value": "spacedefense",
+          "label": "Space - Defense & Cybersecurity"
+        },
+        {
+          "value": "spaceinfrastructure",
+          "label": "Space - Infrastructure & Exploration"
+        },
+        {
+          "value": "spacelaunch",
+          "label": "Space - Logistics & Launch Services"
+        },
+        {
+          "value": "spacesatellites",
+          "label": "Space - Satellite Networks & Connectivity"
+        }
+      ]
+    },
+    {
+      "value": "telecommunications",
+      "label": "Telecommunications",
+      "subthemes": [
+        {
+          "value": "telecomcloudedge",
+          "label": "Telecom - Cloud & Edge Connectivity"
+        },
+        {
+          "value": "telecomenterprise",
+          "label": "Telecom - Enterprise & Unified Communications"
+        },
+        {
+          "value": "telecomg",
+          "label": "Telecom - 5G Technology & Semiconductors"
+        },
+        {
+          "value": "telecominfrastructure",
+          "label": "Telecom - Infrastructure & Equipment"
+        },
+        {
+          "value": "telecomsatcom",
+          "label": "Telecom - Satellite & Space Communication"
+        },
+        {
+          "value": "telecomwireless",
+          "label": "Telecom - Wireless Networks & Carriers"
+        }
+      ]
+    },
+    {
+      "value": "transportationlogistics",
+      "label": "Transportation & Logistics",
+      "subthemes": [
+        {
+          "value": "transportationaircargo",
+          "label": "Transportation - Air Freight & Express Delivery"
+        },
+        {
+          "value": "transportationairtravel",
+          "label": "Transportation - Air Travel & Passenger Transportation"
+        },
+        {
+          "value": "transportationinfrastructure",
+          "label": "Transportation - Infrastructure & Equipment"
+        },
+        {
+          "value": "transportationmaritime",
+          "label": "Transportation - Marine Shipping & Ports"
+        },
+        {
+          "value": "transportationnextgen",
+          "label": "Transportation - Urban Mobility & Emerging Transport Tech"
+        },
+        {
+          "value": "transportationrail",
+          "label": "Transportation - Freight Rail & Infrastructure"
+        },
+        {
+          "value": "transportationtrucking",
+          "label": "Transportation - Trucking, LTL & Ground Freight"
+        },
+        {
+          "value": "transportationwarehousing",
+          "label": "Transportation - Logistics, Warehousing & Supply Chain Solutions"
+        }
+      ]
+    },
+    {
+      "value": "virtualaugmentedreality",
+      "label": "Virtual & Augmented Reality",
+      "subthemes": [
+        {
+          "value": "varealityapplications",
+          "label": "V/A Reality - Content & Applications"
+        },
+        {
+          "value": "varealityenterprise",
+          "label": "V/A Reality - Enterprise & Industrial Solutions"
+        },
+        {
+          "value": "varealityhardware",
+          "label": "V/A Reality - Headsets & Hardware"
+        },
+        {
+          "value": "varealityinfrastructure",
+          "label": "V/A Reality - Infrastructure & Cloud Rendering"
+        },
+        {
+          "value": "varealitysoftware",
+          "label": "V/A Reality - Software Platforms & Operating Systems"
+        }
+      ]
+    },
+    {
+      "value": "wearables",
+      "label": "Wearables",
+      "subthemes": [
+        {
+          "value": "wearablesimmersive",
+          "label": "Wearables - Audio-Visual Immersive Devices"
+        },
+        {
+          "value": "wearablesmedical",
+          "label": "Wearables - Health Monitoring & Medical Devices"
+        },
+        {
+          "value": "wearablessmartwatches",
+          "label": "Wearables - Smartwatches & Fitness Devices"
+        },
+        {
+          "value": "wearablessoftware",
+          "label": "Wearables - Software & Ecosystems"
+        },
+        {
+          "value": "wearablessport",
+          "label": "Wearables - Sports, Fitness & Lifestyle Applications"
+        }
+      ]
+    }
+  ]
+}

@@ -39,6 +39,16 @@ class CacheRetentionTests(unittest.TestCase):
         caches.append(cache(5, 'us-history-v1-5-1', days=0))
         self.assertEqual(selected(caches), {1, 2, 3})
 
+    def test_us_history_counts_pre_publication_snapshots(self):
+        caches = [cache(1, 'us-history-v1-1-1', days=5), cache(2, 'us-history-v1-2-1-built', days=4),
+                  cache(3, 'us-history-v1-2-1', days=3), cache(4, 'us-history-v1-3-1-built', days=2)]
+        self.assertEqual(selected(caches), {1, 2})
+
+    def test_us_ledger_keeps_two_snapshots_of_its_own(self):
+        caches = [cache(i, f'us-ledger-v1-{i}-1', days=6-i) for i in range(1, 5)]
+        caches.append(cache(5, 'us-history-v1-5-1', days=2))
+        self.assertEqual(selected(caches), {1, 2})
+
     def test_enrichment_keeps_two_builds_and_latest_newer_fetch(self):
         caches = [cache(1, 'scanner-enrichment-v1-Linux-1-1-build', days=7),
                   cache(2, 'scanner-enrichment-v1-Linux-2-1-build', days=6),

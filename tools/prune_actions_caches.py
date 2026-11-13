@@ -9,8 +9,10 @@ REFRESH_WORKFLOWS = {"Daily Data Refresh", "Weekly Adjusted OHLCV Refresh"}
 SNAPSHOT = re.compile(r"^scanner-(prices|enrichment)-v1-(.+)-(\d+)-(\d+)-(fetch|build)$")
 EOD2 = re.compile(r"^eod2-data-v1-(.+)-(\d{4}-\d{2})$")
 LEGACY = re.compile(r"^scanner-history-v1-(.+)-(\d+)$")
-# The US refresh (us_daily_refresh.yml) saves one snapshot of its price history per run.
-US_HISTORY = re.compile(r"^us-history-v1-(\d+)-(\d+)$")
+# The US refresh (us_daily_refresh.yml) saves its price history per run (before publication with `-built`, then
+# after) and its quarterly ledger under a key of its own; each family keeps its two newest snapshots.
+US_HISTORY = re.compile(r"^us-history-v1-(\d+)-(\d+)(-built)?$")
+US_LEDGER = re.compile(r"^us-ledger-v1-(\d+)-(\d+)$")
 PR_REF = re.compile(r"^refs/pull/(\d+)/merge$")
 
 
@@ -44,6 +46,8 @@ def deletion_candidates(caches, default_ref, closed_prs, now):
             groups.setdefault(("eod2", match[1], cache["version"]), []).append(cache)
         elif US_HISTORY.fullmatch(key):
             groups.setdefault(("us-history", "", cache["version"]), []).append(cache)
+        elif US_LEDGER.fullmatch(key):
+            groups.setdefault(("us-ledger", "", cache["version"]), []).append(cache)
         elif (match := LEGACY.fullmatch(key)):
             legacy.append((match[1], cache))
 

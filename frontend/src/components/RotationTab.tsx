@@ -35,6 +35,7 @@ import {
   type RotationShardName,
   type Track,
   type Universe,
+  watchlistSymbol,
 } from '../api/rotation';
 import { screenerApi } from '../api/screenerApi';
 import { activeList, loadWatchlistStore } from '../chart/watchlists';
@@ -420,7 +421,7 @@ export default function RotationTab({
         ]
       : matching.map((track) => track.item.id);
     try {
-      await navigator.clipboard.writeText(symbols.map((symbol) => `NSE:${symbol}`).join(', '));
+      await navigator.clipboard.writeText(symbols.map((symbol) => watchlistSymbol(symbol, data?.market)).join(', '));
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
     } catch {

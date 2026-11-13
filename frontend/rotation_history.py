@@ -52,6 +52,7 @@ class RotationMarket(NamedTuple):
     core: str
     min_market_cap: float
     min_turnover30: float
+    market: str = 'in'  # published on the index for any market but India, whose index output stays as it was
 
 
 INDIA = RotationMarket(BENCHMARKS, 'N50', UNIVERSES, CORE_UNIVERSE, MIN_GROUP_MARKET_CAP_CR, MIN_GROUP_TURNOVER30_CR)
@@ -312,6 +313,7 @@ def build(session, rows, closes, benchmarks, taxonomy, ledger=None, *, price_dat
                        if len(points) >= 2},
         'universes': dict(market.universes),
         'stocks': stocks, 'groups': groups,
+        **({'market': market.market} if market.market != 'in' else {}),
     }
     return index, shards, ledger
 

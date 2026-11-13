@@ -119,6 +119,7 @@ class PublishUsTests(unittest.TestCase):
         index, shards, _ = rh.build(days[-1], rows, {row['symbol']: flat for row in rows},
                                     {code: flat for code in publish_us.ROTATION_BENCHMARKS},
                                     taxonomy['records'], market=publish_us.US_ROTATION)
+        self.assertEqual(index['market'], 'us')  # copied watchlist lines use bare US tickers
         group_levels = {group['l'] for group in index['groups']}
         self.assertIn('theme', group_levels)
         ai_group = next(group for group in index['groups'] if group['id'] == 'theme:Artificial Intelligence')

@@ -56,7 +56,7 @@ US_ROTATION = rotation_history.RotationMarket(
                 'EW': 'Equal-weight market'},
     primary='SPX',
     universes={'SPX': 'S&P 500', 'NDX': 'NASDAQ 100', 'DJI': 'DOW JONES 30', 'R1K': 'RUSSELL 1000', 'RUT': 'RUSSELL 2000'},
-    core='R1K', min_market_cap=300.0, min_turnover30=2.0)
+    core='R1K', min_market_cap=300.0, min_turnover30=2.0, market=UNITED_STATES.id)
 
 
 def chart_objects(root, session):

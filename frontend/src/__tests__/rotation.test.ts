@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { bounds, fitSelection, heading, quadrantOf, rotation } from '../utils/rrg';
-import { decode, displayLabel, itemsFor, rangeLength, type RotationIndex } from '../api/rotation';
+import { decode, displayLabel, itemsFor, rangeLength, watchlistSymbol, type RotationIndex } from '../api/rotation';
 
 const index = {
   schemaVersion: 1, asOfDate: '2026-10-23', scale: 10_000,
@@ -105,4 +105,11 @@ it('softens shouting labels but keeps acronyms', () => {
   expect(displayLabel('Lifestyle & Retail')).toBe('Lifestyle & Retail');
   expect(displayLabel('DATA CENTER ECOSYSTEM')).toBe('Data Center Ecosystem');
   expect(displayLabel('IT PSU')).toBe('IT PSU');
+});
+
+describe('copied rotation symbols', () => {
+  it('prefixes India tickers with NSE and leaves US tickers bare', () => {
+    expect(watchlistSymbol('RELIANCE')).toBe('NSE:RELIANCE');
+    expect(watchlistSymbol('BRK.B', 'us')).toBe('BRK.B');
+  });
 });

@@ -189,6 +189,20 @@ class FinvizTests(unittest.TestCase):
         with self.assertRaises(finviz.FinvizFetchError):
             finviz.fetch_tickers_for_filter("theme_x", session=session, delay=0)
 
+    def test_block_page_or_short_thematic_filter_raises(self):
+        session = mock.Mock()
+        # A 200 page without totalCount (block page, layout change) is not an empty filter.
+        session.get.return_value = mock.Mock(status_code=200, text="<html>Too many requests</html>")
+        with self.assertRaises(finviz.FinvizFetchError):
+            finviz.fetch_tickers_for_filter("theme_x", session=session, delay=0)
+        # Fewer tickers than Finviz reports (a page cut short) raises instead of truncating the theme.
+        session.get.return_value = mock.Mock(status_code=200, text='{"totalCount": 3, "data": [{"ticker": "NVDA"}]}')
+        with self.assertRaises(finviz.FinvizFetchError):
+            finviz.fetch_tickers_for_filter("theme_x", session=session, delay=0)
+        # A genuinely empty filter still reports totalCount 0 and is accepted.
+        session.get.return_value = mock.Mock(status_code=200, text='{"totalCount": 0, "data": []}')
+        self.assertEqual(finviz.fetch_tickers_for_filter("theme_x", session=session, delay=0), [])
+
     def test_failed_or_short_ownership_shard_aborts_crawl(self):
         html = '<script>window.__DATA__ = {"screenerType": "stocks", "filters": {"filters": []}, "data": {"rows": [], "totalCount": 25}};</script>'
         session = mock.Mock()

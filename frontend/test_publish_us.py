@@ -1,4 +1,5 @@
 import json
+import tempfile
 from pathlib import Path
 import unittest
 
@@ -8,6 +9,26 @@ import site_data
 
 
 class PublishUsTests(unittest.TestCase):
+
+    def test_sub_industry_is_a_sub_theme_of_the_primary_theme(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'us_thematic_universe.json').write_text(json.dumps({'ACME': {
+                'primary_theme': 'Robotics', 'themes': ['Space', 'Robotics'],
+                'subthemes': ['Space - Launch', 'Robotics - Industrial', 'Robotics - Surgical']}}))
+            (root / 'us_theme_catalog.json').write_text(json.dumps({'themes': [
+                {'value': 'space', 'label': 'Space', 'subthemes': [{'value': 'l', 'label': 'Space - Launch'}]},
+                {'value': 'robotics', 'label': 'Robotics', 'subthemes': [
+                    {'value': 'i', 'label': 'Robotics - Industrial'}, {'value': 's', 'label': 'Robotics - Surgical'}]}]}))
+            record = publish_us.build_us_taxonomy([{'symbol': 'ACME', 'industry': 'Machinery'}], '2026-11-12',
+                                                  root / 'us_thematic_universe.json')['records']['ACME']
+        self.assertEqual(record['theme'], 'Robotics')
+        self.assertEqual(record['subIndustry'], 'Robotics - Industrial')
+
+    def test_older_session_guard_tolerates_a_pointer_without_a_session(self):
+        publish_us.refuse_older_session({'sessionDate': None}, '2026-11-12')
+        with self.assertRaises(RuntimeError):
+            publish_us.refuse_older_session({'sessionDate': '2026-11-13'}, '2026-11-12')
     def test_the_release_has_its_own_pointer_and_declares_its_units(self):
         self.assertEqual(publish_us.POINTER, 'us/current.json')
         self.assertIn(publish_us.POINTER, site_data.POINTERS)

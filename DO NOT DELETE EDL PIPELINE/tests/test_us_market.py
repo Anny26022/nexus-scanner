@@ -276,6 +276,11 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=lambda *a: []), 'missing')
         self.assertEqual([b['date'] for b in self.stored()], ['2026-11-05'])
 
+    def test_a_stock_left_behind_with_only_invalid_rows_loses_its_file(self):
+        history.write_bars(self.root / 'ACME.csv', [{**bar('2026-11-06', 0.0), 'open': 0, 'high': 0, 'low': 0}])
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=lambda *a: []), 'missing')
+        self.assertFalse((self.root / 'ACME.csv').exists())
+
     def test_bars_on_closed_days_are_dropped(self):
         bars = history.session_bars([bar('2026-10-25', 1), bar('2026-10-23', 1), bar('2026-10-23', 2), bar('2026-11-26', 1)])
         self.assertEqual(bars, [bar('2026-10-23', 2)])  # a Sunday and Thanksgiving go; the later duplicate wins
@@ -727,6 +732,44 @@ class YahooTests(unittest.TestCase):
              mock.patch.object(dhan, 'post', mock.Mock(side_effect=dhan.Throttled('429'))) as dhan_post:
             counts = build.update_histories(records, root, '2026-11-09', interval=0, workers=1)
         self.assertTrue(counts['throttled'])
+        self.assertEqual(dhan_post.call_count, 1)
+
+    def test_a_worker_waiting_its_turn_does_not_post_after_the_limit(self):
+        # Two workers: the second is already inside the Dhan pacer's wait (past fetch()'s early check) when the first
+        # hits the rate limit, so only the recheck after the wait keeps it from posting.
+        import threading, time
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__('shutil').rmtree(root))
+        records = [{**HistoryTests.RECORD, 'symbol': symbol} for symbol in ('AAA', 'BBB')]
+        dhan_post = mock.Mock(side_effect=dhan.Throttled('429'))
+        pacers, waits, gate = [], [], threading.Lock()
+
+        class Pacer:
+            def __init__(self, interval):
+                self.dhan = not pacers  # update_histories builds Dhan's pacer first, then Yahoo's
+                pacers.append(self)
+
+            def wait(self):
+                if not self.dhan:
+                    return
+                with gate:
+                    waits.append(1)
+                    second = len(waits) == 2
+                if second:  # hold the second worker until the first has posted and recorded the limit
+                    deadline = time.time() + 5
+                    while dhan_post.call_count < 1 and time.time() < deadline:
+                        time.sleep(0.01)
+                    time.sleep(0.2)
+                else:  # the first worker posts only once the second is waiting its turn
+                    deadline = time.time() + 5
+                    while len(waits) < 2 and time.time() < deadline:
+                        time.sleep(0.01)
+
+        with mock.patch.object(build.requests, 'get', mock.Mock(return_value=mock.Mock(status_code=404))), \
+             mock.patch.object(dhan, 'Pacer', Pacer), mock.patch.object(dhan, 'post', dhan_post):
+            counts = build.update_histories(records, root, '2026-11-09', interval=0, workers=2)
+        self.assertTrue(counts['throttled'])
+        self.assertEqual(len(waits), 2, 'both workers reached the Dhan pacer')
         self.assertEqual(dhan_post.call_count, 1)
 
     def test_history_fetch_full_prefers_yahoo_and_falls_back_to_dhan(self):

@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -91,10 +92,40 @@ class GenerateHistoricalSnapshotsUsTests(unittest.TestCase):
             'SLOW': pd.DataFrame({'Date': dates, 'Close': np.linspace(100.0, 110.0, 300)}),
             'SHORT': pd.DataFrame({'Date': dates[-100:], 'Close': np.linspace(100.0, 300.0, 100)}),
         }
-        ratings = gen.rs_ratings_vs_spy(histories, spy, dates[-1].date())
+        aligned = {symbol: gen.align_with_spy(history, spy) for symbol, history in histories.items()}
+        ratings = gen.rs_ratings_vs_spy(aligned, dates[-1].date())
         self.assertEqual(ratings, {'FAST': 99, 'SLOW': 1})
         # No SPY bar on the session: no ratings rather than ratings against a stale benchmark.
-        self.assertEqual(gen.rs_ratings_vs_spy(histories, spy.iloc[:-1], dates[-1].date()), {})
+        stale = {symbol: gen.align_with_spy(history, spy.iloc[:-1]) for symbol, history in histories.items()}
+        self.assertEqual(gen.rs_ratings_vs_spy(stale, dates[-1].date()), {})
+
+    def test_precomputed_join_matches_live_relative_strength_on_every_session(self):
+        from build_rs_ratings import relative_strength_scores
+        dates = pd.bdate_range('2023-01-02', periods=320)
+        rng = np.random.default_rng(7)
+        spy = pd.DataFrame({'Date': dates, 'Close': 100 * np.cumprod(1 + rng.normal(0, 0.01, 320))})
+        # A stock with a missing day, so the join and the session positions differ.
+        stock = pd.DataFrame({'Date': dates, 'Close': 50 * np.cumprod(1 + rng.normal(0, 0.02, 320))}).drop(index=290)
+        aligned = gen.align_with_spy(stock, spy)
+        for day in dates[250:]:
+            session = day.date()
+            expected = relative_strength_scores(stock[stock['Date'] <= day], spy[spy['Date'] <= day], session)
+            if session not in set(stock['Date'].dt.date):
+                expected = None
+            actual = gen.relative_scores_at(aligned, session)
+            if expected is None:
+                self.assertIsNone(actual, session)
+            else:
+                self.assertEqual(set(actual), set(expected))
+                for key in expected:
+                    self.assertAlmostEqual(actual[key], expected[key], places=12)
+
+    def test_earnings_age_counts_nyse_sessions(self):
+        # Friday 2024-11-22 filing: Monday is 1 session later; Thanksgiving 2024-11-28 is not a session.
+        self.assertEqual(gen.earnings_age(['2024-11-22'], date(2024, 11, 25)), ('2024-11-22', 1))
+        self.assertEqual(gen.earnings_age(['2024-11-22'], date(2024, 11, 29)), ('2024-11-22', 4))
+        self.assertEqual(gen.earnings_age(['2024-11-22'], date(2024, 11, 22)), ('2024-11-22', 0))
+        self.assertEqual(gen.earnings_age(['2024-12-05'], date(2024, 11, 29)), (None, None))
 
     def test_registered_session_dates(self):
         with tempfile.TemporaryDirectory() as tmpdir:

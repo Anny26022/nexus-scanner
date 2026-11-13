@@ -187,13 +187,18 @@ def fetch_tickers_for_filter(filter_param: str, *, session: requests.Session | N
     text = page(url)
     tickers = re.findall(r'"ticker"\s*:\s*"([A-Z0-9_\.\-]+)"', text)
     tc_match = re.search(r'"totalCount"\s*:\s*([0-9]+)', text)
-    total_count = int(tc_match.group(1)) if tc_match else len(tickers)
+    if not tc_match:
+        # A block page or a layout change, not a filter with no stocks: those still report "totalCount": 0.
+        raise FinvizFetchError(f"{url}: no totalCount in the screener page")
+    total_count = int(tc_match.group(1))
 
     all_tickers = list(tickers)
     # Paginate if more than 20 results
-    for offset in range(21, min(total_count + 1, 500), 20):
+    for offset in range(21, total_count + 1, 20):
         time.sleep(delay)
         all_tickers.extend(re.findall(r'"ticker"\s*:\s*"([A-Z0-9_\.\-]+)"', page(f"{url}&r={offset}")))
+    if len(set(all_tickers)) < total_count:
+        raise FinvizFetchError(f"{url}: fetched {len(set(all_tickers))} of {total_count} tickers")
     return sorted({canonical_symbol(t) for t in all_tickers})
 
 

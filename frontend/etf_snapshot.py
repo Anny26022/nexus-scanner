@@ -70,7 +70,7 @@ def build_etf_snapshot(source, session, revision, market=None):
         raise ValueError(f'ETF data not advanced to expected stock session {session}')
     return dict(revision=revision, asOfDate=session, totalStocks=len(rows), stocks=rows,
                 assetType='etf', etfLabels=observed_labels, fetchedAt=source['fetchedAt'],
-                **({'market': market} if market != 'in' else {}))
+                **({'market': market, 'currency': 'USD'} if market == 'us' else {'market': market} if market != 'in' else {}))
 
 
 def prune_etf_snapshots(output, revision):

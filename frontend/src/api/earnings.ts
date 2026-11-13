@@ -4,7 +4,8 @@ import { getIpoJson } from './gzipJson';
 import { DataUnavailableError } from './dataErrors';
 
 /** Quarterly results history: a small index in the app, quarter files in object storage. */
-const EARNINGS_INDEX_URL = '/data/results/index.json';
+const EARNINGS_INDEX_URLS = {in: '/data/results/index.json', us: '/data/results/us_index.json'} as const;
+export type EarningsMarket = keyof typeof EARNINGS_INDEX_URLS;
 const HEATMAP_INDEX_URL = '/data/heatmap/index.json';
 
 export const QUALITY_ORDER = ['Excellent', 'Great', 'Good', 'Ok', 'Weak'] as const;
@@ -73,8 +74,9 @@ export interface EarningsRecord {
   dropTime?: {minutes?: number | null; isEstimate?: boolean | null} | null;
 }
 
-export async function getEarningsIndex(): Promise<EarningsIndex> {
-  const response = await fetch(EARNINGS_INDEX_URL, {cache: 'no-cache'});
+/** The market's own earnings index; a missing US index stays unavailable rather than falling back to India's. */
+export async function getEarningsIndex(market: EarningsMarket = 'in'): Promise<EarningsIndex> {
+  const response = await fetch(EARNINGS_INDEX_URLS[market], {cache: 'no-cache'});
   if (!response.ok) throw new DataUnavailableError('Earnings history has not been published yet.', 'not_published');
   const index = await response.json().catch(() => null) as EarningsIndex | null;
   if (!index || index.version !== 1 || typeof index.quarters !== 'object') {

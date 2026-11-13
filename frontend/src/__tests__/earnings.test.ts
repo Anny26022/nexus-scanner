@@ -1,10 +1,22 @@
-import {describe, expect, it} from 'vitest';
-import {groupRecords, repairText, seasonRecords, summarize, upcomingByDate, UNCLASSIFIED, type EarningsRecord} from '../api/earnings';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+import {getEarningsIndex, groupRecords, repairText, seasonRecords, summarize, upcomingByDate, UNCLASSIFIED, type EarningsRecord} from '../api/earnings';
 
 const rec = (symbol: string, extra: Partial<EarningsRecord> = {}): EarningsRecord =>
   ({symbol, filing_day: '2026-10-20', period_end: '2026-09-30', isUpcoming: false, ...extra});
 
 describe('earnings', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('loads each market\'s own earnings index and never falls back across markets', async () => {
+    const fetchMock = vi.fn(async (url: string) => url.endsWith('/us_index.json')
+      ? new Response('missing', {status: 404})
+      : Response.json({version: 1, quarters: {}}));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(getEarningsIndex()).resolves.toEqual({version: 1, quarters: {}});
+    await expect(getEarningsIndex('us')).rejects.toMatchObject({reason: 'not_published'});
+    expect(fetchMock.mock.calls.map(call => call[0])).toEqual(['/data/results/index.json', '/data/results/us_index.json']);
+  });
+
   it('repairs mojibake and leaves clean text alone', () => {
     const garbled = String.fromCharCode(...new TextEncoder().encode('₹ growth'));
     expect(repairText(garbled)).toBe('₹ growth');

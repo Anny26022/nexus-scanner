@@ -41,6 +41,7 @@ class EtfSnapshotTests(unittest.TestCase):
         snapshot = build_etf_snapshot(source, '2026-10-23', 'b'*64, market='us')
         self.assertEqual(snapshot['totalStocks'], 1)
         self.assertEqual(snapshot['market'], 'us')
+        self.assertEqual(snapshot['currency'], 'USD')
         self.assertEqual(snapshot['stocks'][0]['symbol'], 'SPY')
         self.assertEqual(snapshot['stocks'][0]['rupeeVolumeCrore'], 25.0)
         self.assertEqual(decode_packed_snapshot(pack_snapshot(snapshot)), snapshot)

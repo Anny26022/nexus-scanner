@@ -11,6 +11,13 @@ const request: ScreenerRunRequest = {asOfDate:snapshot.asOfDate,universe:'mainbo
 
 afterEach(() => vi.unstubAllGlobals());
 describe('published snapshots', () => {
+  it('labels the resolved session with the snapshot market', () => {
+    const empty = {...request, expressionTree:{type:'group' as const, operator:'all' as const, children:[]}};
+    const day = snapshot.asOfDate.replaceAll('-','');
+    expect(screenSnapshot(snapshot, empty)!.resolvedSession.sessionId).toBe(`NSE-${day}-FINAL`);
+    expect(screenSnapshot({...snapshot, market:'us'}, empty)!.resolvedSession.sessionId).toBe(`US-${day}-FINAL`);
+  });
+
   it('runs gainer scans on published TradingView performance and leaves other filters on price history', () => {
     const make = (symbol: string, perf1m: number | null, turnover50: number) => ({...snapshot.stocks[0], symbol, name:symbol, historyAligned:true,
       asOfDate:snapshot.asOfDate, metadataAsOfDate:snapshot.asOfDate, marketCapCrore:5000, close:500, metrics:{...snapshot.stocks[0].metrics, turnover50},

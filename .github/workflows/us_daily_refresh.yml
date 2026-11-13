@@ -90,6 +90,16 @@ jobs:
             ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
           key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}-built
 
+      # The quarterly ledger carries reported earnings dates for the historical backfill
+      # (us_backfill_historical_snapshots.yml). Its own key, so the price-history cache's paths stay unchanged.
+      - name: Save US quarterly ledger
+        if: steps.build.outputs.ready == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.US_ROOT }}/quarterly_financial_history.json.gz
+          key: us-ledger-v1-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Fetch US ETF snapshot
         if: steps.build.outputs.ready == 'true'
         continue-on-error: true

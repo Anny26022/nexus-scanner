@@ -134,6 +134,8 @@ def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
         # the release publishes whatever is stored.
         if cleaned and cleaned != stored:
             write_bars(path, cleaned)
+        elif stored and not cleaned:
+            path.unlink(missing_ok=True)  # every stored row was invalid: publish no file rather than an unusable one
         return 'missing'
 
     if bars and bars[-1]['date'] >= session:

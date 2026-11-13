@@ -40,7 +40,8 @@ for p in (str(EDL_ROOT), str(EDL_SRC), str(FRONTEND_DIR)):
 
 from edl_pipeline.markets.us import calendar  # noqa: E402
 from edl_pipeline.scanner.indicators import indicator_series  # noqa: E402
-from build_rs_ratings import close_history, rank_first_ratings, relative_strength_scores  # noqa: E402
+from build_rs_ratings import (  # noqa: E402
+    FRONT_WEIGHTED_HORIZONS, MINIMUM_ALIGNED_SESSIONS, close_history, rank_first_ratings)
 
 OHLCV_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 SESSIONS_52W = 252
@@ -164,23 +165,68 @@ def preset_matches(tech: Dict[str, Any], days_since_earnings: Optional[int]) -> 
     }
 
 
-def rs_ratings_vs_spy(close_histories: Dict[str, pd.DataFrame], spy: pd.DataFrame, session_date: date) -> Dict[str, int]:
+# The live US breadth floor (build.BREADTH_FLOORS minimum_price), which also bounds the RS universe.
+RS_MINIMUM_PRICE = 1.0
+
+
+def align_with_spy(closes: pd.DataFrame, spy: pd.DataFrame) -> Dict[str, Any]:
+    """A stock's Date/Close bars joined with SPY's once, so each session's RS is a lookup rather than a new merge.
+
+    The join is the one `relative_strength_scores` makes; position i holds the i-th session both have a bar on.
+    """
+    merged = closes[["Date", "Close"]].merge(spy[["Date", "Close"]], on="Date", suffixes=("_stock", "_benchmark"))
+    return {"positions": {day: i for i, day in enumerate(merged["Date"].dt.date)},
+            "stock": merged["Close_stock"].to_numpy(dtype=float),
+            "benchmark": merged["Close_benchmark"].to_numpy(dtype=float)}
+
+
+def relative_scores_at(aligned: Dict[str, Any], session_date: date) -> Optional[Dict[str, float]]:
+    """`build_rs_ratings.relative_strength_scores` for the history cut at this session, from the precomputed join.
+
+    None unless both the stock and SPY have a bar on the session and at least MINIMUM_ALIGNED_SESSIONS aligned bars
+    lead up to it, matching the live rule.
+    """
+    end = aligned["positions"].get(session_date)
+    if end is None or end + 1 < MINIMUM_ALIGNED_SESSIONS:
+        return None
+    stock, benchmark = aligned["stock"], aligned["benchmark"]
+    ratios = {}
+    for name, horizon in FRONT_WEIGHTED_HORIZONS.items():
+        start = end - horizon
+        values = (stock[start], stock[end], benchmark[start], benchmark[end])
+        if start < 0 or any(not math.isfinite(value) or value <= 0 for value in values):
+            return None
+        ratios[name] = (stock[end] / stock[start]) / (benchmark[end] / benchmark[start])
+    return ratios if all(math.isfinite(value) for value in ratios.values()) else None
+
+
+def rs_ratings_vs_spy(aligned_by_symbol: Dict[str, Dict[str, Any]], session_date: date) -> Dict[str, int]:
     """Front-weighted RS ratings against SPY for one session, by the live build_rs_ratings method.
 
-    `close_histories` are each stock's Date/Close bars up to the session; the universe is that session's stocks.
+    `aligned_by_symbol` holds `align_with_spy` joins for that session's stocks; the universe is those stocks.
     """
-    benchmark = spy[spy["Date"].dt.date <= session_date]
-    if benchmark.empty or benchmark["Date"].iloc[-1].date() != session_date:
-        return {}
     scores: Dict[str, Dict[str, float]] = {}
-    for symbol, history in close_histories.items():
-        relative = relative_strength_scores(history, benchmark, session_date)
+    for symbol, aligned in aligned_by_symbol.items():
+        relative = relative_scores_at(aligned, session_date)
         if relative is not None:
             for key, value in relative.items():
                 scores.setdefault(key, {})[symbol] = value
     if not scores:
         return {}
     return rank_first_ratings(scores).get("front_weighted", {})
+
+
+def earnings_age(reported: Any, session_date: date):
+    """The latest reported earnings date on or before the session, and its age in NYSE trading sessions.
+
+    Sessions, as the scanner contract counts them: a Friday filing is 1 session old on Monday, not 3 days.
+    """
+    session_str = session_date.isoformat()
+    earlier = [day for day in reported if day <= session_str]
+    if not earlier:
+        return None, None
+    latest = max(earlier)
+    return latest, calendar.sessions_after(date.fromisoformat(latest), session_date)
 
 
 def registered_session_dates(manifest_path: Optional[Path]) -> Set[str]:
@@ -406,7 +452,7 @@ def main():
         stocks[sym] = {
             "rows": {d: i for i, d in enumerate(frame["Date"].dt.date)},
             "technicals": technical_frame(frame),
-            "closes": frame[["Date", "Close"]],
+            "spy_aligned": align_with_spy(frame[["Date", "Close"]], spy_df),
         }
     print(f"Loaded {len(stocks)} stock histories in {time.time() - t_load:.1f}s.")
 
@@ -418,8 +464,8 @@ def main():
         print(f"\nProcessing US session: {session_str}...")
 
         snapshot_stocks = []
-        close_histories = {}
-        advances = declines = above_20dma = above_50dma = above_200dma = 0
+        aligned_today = {}
+        advances = declines = unchanged = above_20dma = above_50dma = above_200dma = 0
 
         for sym, stock in stocks.items():
             # Only a stock with a bar on this very session is in it (no stale or carried-forward bar).
@@ -427,7 +473,10 @@ def main():
             if position is None:
                 continue
             tech = row_technicals(stock["technicals"].iloc[position])
-            close_histories[sym] = stock["closes"].iloc[:position + 1]
+            # RS ranks the breadth-eligible universe, as live build_rs_ratings does. Only the price floor can be
+            # applied to a past session: there is no point-in-time market cap for the cap floor.
+            if tech["close"] is not None and tech["close"] >= RS_MINIMUM_PRICE:
+                aligned_today[sym] = stock["spy_aligned"]
 
             # Breadth tallies; a stock without the window's history is not counted either way.
             if tech["changePct"] is not None:
@@ -435,19 +484,19 @@ def main():
                     advances += 1
                 elif tech["changePct"] < 0:
                     declines += 1
+                else:
+                    unchanged += 1
             above_20dma += tech["close_above_sma20"] is True
             above_50dma += tech["close_above_sma50"] is True
             above_200dma += tech["close_above_sma200"] is True
 
-            earnings = [d for d in earnings_by_symbol.get(sym, ()) if d <= session_str]
-            earnings_date = earnings[-1] if earnings else None
-            days_since_earnings = (session_date - date.fromisoformat(earnings_date)).days if earnings_date else None
+            earnings_date, days_since_earnings = earnings_age(earnings_by_symbol.get(sym, ()), session_date)
 
             snapshot_stocks.append(build_stock_row(sym, tech, universe_meta.get(sym, {}), session_str, metadata_as_of,
                                                    earnings_date, days_since_earnings))
 
         # RS Rating vs SPY (1-99), as build_rs_ratings ranks the live US release
-        ratings = rs_ratings_vs_spy(close_histories, spy_df, session_date)
+        ratings = rs_ratings_vs_spy(aligned_today, session_date)
         for stk in snapshot_stocks:
             rating = ratings.get(stk["symbol"])
             stk["rsRsi"] = rating
@@ -457,7 +506,7 @@ def main():
             "sessionDate": session_str,
             "advances": advances,
             "declines": declines,
-            "unchanged": max(0, len(snapshot_stocks) - (advances + declines)),
+            "unchanged": unchanged,  # a stock without a previous close is not counted
             "above20dma": int(above_20dma),
             "above50dma": int(above_50dma),
             "above200dma": int(above_200dma),

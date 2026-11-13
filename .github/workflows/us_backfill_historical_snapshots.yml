@@ -61,6 +61,19 @@ jobs:
           key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: us-history-v1-
 
+      # Reported earnings dates (earningsDate, daysSinceEarnings, gap_up_earnings) come from the daily run's ledger.
+      - name: Restore US quarterly ledger
+        id: ledger
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.US_ROOT }}/quarterly_financial_history.json.gz
+          key: us-ledger-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: us-ledger-v1-
+
+      - name: Warn when earnings dates are unavailable
+        if: steps.ledger.outputs.cache-matched-key == ''
+        run: echo "::warning::No US quarterly ledger cached yet (run the US daily refresh); backfilled sessions will have no earnings dates."
+
       - name: Install R2 client
         run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
 
@@ -76,7 +89,8 @@ jobs:
 
       # The root holds only the cached price history: the generator fails on a cold cache (run the US daily
       # refresh first), reads names and classification from Dhan's list and the committed Finviz file, and leaves
-      # statement figures, market cap and ownership unavailable (no point-in-time source).
+      # statement figures, market cap and ownership unavailable (no point-in-time source); earnings dates come from
+      # the restored quarterly ledger.
       - name: Generate US Historical Snapshots
         env:
           START_DATE: ${{ github.event.inputs.start_date }}

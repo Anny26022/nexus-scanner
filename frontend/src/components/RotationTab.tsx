@@ -47,13 +47,14 @@ import { RotationPlot } from './rotation/RotationPlot';
 import { RotationTimeline } from './rotation/RotationTimeline';
 import { RotationTracker, type TrackerRow, type TrackerSort } from './rotation/RotationTracker';
 
-const STOCK_UNIVERSES: [string, string][] = [
-  ['N50', 'Nifty 50'],
-  ['N100', 'Nifty 100'],
-  ['N500', 'Nifty 500'],
-  ['MID150', 'Midcap 150'],
-  ['SML250', 'Smallcap 250'],
-  ['MS400', 'MidSmall 400'],
+/** Short labels for India's index universes; any other published universe (the US indices) uses its published name. */
+const UNIVERSE_LABELS: Record<string, string> = {
+  N50: 'Nifty 50', N100: 'Nifty 100', N500: 'Nifty 500', MID150: 'Midcap 150', SML250: 'Smallcap 250', MS400: 'MidSmall 400',
+  SPX: 'S&P 500', NDX: 'Nasdaq 100', DJI: 'Dow 30', R1K: 'Russell 1000', RUT: 'Russell 2000',
+};
+/** The index universes this market's rotation index publishes, then All stocks and the watchlist. */
+const stockUniverses = (published: Record<string, string> | undefined): [string, string][] => [
+  ...Object.entries(published ?? {}).map(([code, name]): [string, string] => [code, UNIVERSE_LABELS[code] ?? name]),
   ['ALL', 'All stocks'],
   ['WATCH', 'Watchlist'],
 ];
@@ -432,7 +433,7 @@ export default function RotationTab({
     : universe.kind === 'level'
     ? LEVEL_LABEL[universe.level]
     : universe.kind === 'stocks'
-    ? STOCK_UNIVERSES.find(([code]) => code === universe.code)?.[1] ?? ''
+    ? stockUniverses(data?.universes).find(([code]) => code === universe.code)?.[1] ?? ''
     : '';
 
   const unit = frame === 'D' ? 'd' : frame === 'W' ? 'w' : 'm';
@@ -541,7 +542,7 @@ export default function RotationTab({
                 ))}
               </optgroup>
               <optgroup label="Stocks">
-                {STOCK_UNIVERSES.map(([code, label]) => (
+                {stockUniverses(data.universes).map(([code, label]) => (
                   <option key={code} value={`stocks:${code}`} disabled={code === 'WATCH' && !watchlist.size}>
                     {label}
                   </option>

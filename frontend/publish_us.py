@@ -70,9 +70,18 @@ def chart_objects(root, session):
     return chart_root, chart_revision(chart_root, session)
 
 
+def theme_subthemes(catalog_path):
+    """Theme label -> its sub-theme labels, from the Finviz theme catalog; empty when the catalog is absent."""
+    if not catalog_path or not catalog_path.is_file():
+        return {}
+    catalog = json.loads(catalog_path.read_text(encoding='utf-8'))
+    return {theme['label']: {sub['label'] for sub in theme.get('subthemes', [])} for theme in catalog.get('themes', [])}
+
+
 def build_us_taxonomy(rows, session, thematic_path=None):
     """Construct standard ThemeClassification payload from Finviz thematic data for the US market."""
     thematic_data = finviz.load_thematic_universe(thematic_path) if thematic_path and thematic_path.is_file() else {}
+    subthemes_of = theme_subthemes(thematic_path.parent / 'us_theme_catalog.json' if thematic_path else None)
     records, unmapped = {}, []
     for row in rows:
         sym = row['symbol']
@@ -81,7 +90,10 @@ def build_us_taxonomy(rows, session, thematic_path=None):
             primary = info.get('primary_theme') or (info.get('themes') or [None])[0]
             themes = info.get('themes', [])
             subthemes = info.get('subthemes', [])
-            sub_industry = subthemes[0] if subthemes else None
+            # One sub-industry per stock (the shared classification contract): the first sub-theme of the stock's
+            # primary theme, so the pair is consistent; other sub-themes stay in the thematic universe.
+            own = [sub for sub in subthemes if sub in subthemes_of.get(primary, ())]
+            sub_industry = (own or subthemes or [None])[0]
             memberships = {t: 'curated-rule' for t in themes if t}
             records[sym] = {
                 'theme': primary,
@@ -218,7 +230,7 @@ def enrich_row(row, stock, session):
 
 def refuse_older_session(previous, session):
     """As India's complete_release: never put an older session over the live US release."""
-    if previous and previous.get('sessionDate', '') > session:
+    if previous and str(previous.get('sessionDate') or '') > session:
         raise RuntimeError(f'Refusing to publish US session {session} over the current {previous["sessionDate"]} release')
 
 

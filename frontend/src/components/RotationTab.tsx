@@ -35,6 +35,7 @@ import {
   type RotationShardName,
   type Track,
   type Universe,
+  watchlistSymbol,
 } from '../api/rotation';
 import { screenerApi } from '../api/screenerApi';
 import { activeList, loadWatchlistStore } from '../chart/watchlists';
@@ -47,13 +48,14 @@ import { RotationPlot } from './rotation/RotationPlot';
 import { RotationTimeline } from './rotation/RotationTimeline';
 import { RotationTracker, type TrackerRow, type TrackerSort } from './rotation/RotationTracker';
 
-const STOCK_UNIVERSES: [string, string][] = [
-  ['N50', 'Nifty 50'],
-  ['N100', 'Nifty 100'],
-  ['N500', 'Nifty 500'],
-  ['MID150', 'Midcap 150'],
-  ['SML250', 'Smallcap 250'],
-  ['MS400', 'MidSmall 400'],
+/** Short labels for India's index universes; any other published universe (the US indices) uses its published name. */
+const UNIVERSE_LABELS: Record<string, string> = {
+  N50: 'Nifty 50', N100: 'Nifty 100', N500: 'Nifty 500', MID150: 'Midcap 150', SML250: 'Smallcap 250', MS400: 'MidSmall 400',
+  SPX: 'S&P 500', NDX: 'Nasdaq 100', DJI: 'Dow 30', R1K: 'Russell 1000', RUT: 'Russell 2000',
+};
+/** The index universes this market's rotation index publishes, then All stocks and the watchlist. */
+const stockUniverses = (published: Record<string, string> | undefined): [string, string][] => [
+  ...Object.entries(published ?? {}).map(([code, name]): [string, string] => [code, UNIVERSE_LABELS[code] ?? name]),
   ['ALL', 'All stocks'],
   ['WATCH', 'Watchlist'],
 ];
@@ -67,7 +69,9 @@ const QUADRANT_LABEL: Record<Quadrant, string> = {
 
 const CHIP_ORDER: Quadrant[] = ['leading', 'weakening', 'lagging', 'improving'];
 const SPEEDS = [0.5, 1, 2];
-const BENCHMARK_ORDER: BenchmarkCode[] = ['EW', 'N50', 'N100', 'N500', 'MID150', 'SML250', 'MS400', 'TOTAL'];
+const BENCHMARK_ORDER: BenchmarkCode[] = ['EW', 'N50', 'N100', 'N500', 'MID150', 'SML250', 'MS400', 'TOTAL', 'SPX', 'NDX', 'DJI', 'RUT'];
+/** The broad-market baseline when a universe has no index of its own: Nifty 500 for India, the S&P 500 for the US. */
+const FALLBACK_BENCHMARKS: BenchmarkCode[] = ['N500', 'SPX', ...BENCHMARK_ORDER];
 const STEP_MS = 620;
 const LIST_LIMIT = 150;
 const LABELLED = 10;
@@ -172,9 +176,11 @@ export default function RotationTab({
   if (universe.kind === 'members' && (benchmarkChoice ?? 'GROUP') === 'GROUP') {
     benchmark = { group: universe.group };
   } else {
-    const own = universe.kind === 'stocks' ? (universe.code as BenchmarkCode) : 'N500';
+    const own = universe.kind === 'stocks' ? (universe.code as BenchmarkCode) : undefined;
     const code = benchmarkChoice && benchmarkChoice !== 'GROUP' ? benchmarkChoice : isGroups ? 'EW' : own;
-    benchmark = data?.benchmarks[code] ? code : 'N500';
+    // A universe without its own index (All stocks, or the US Russell 1000) is measured against the market's broad benchmark.
+    benchmark = code && data?.benchmarks[code] ? code
+      : FALLBACK_BENCHMARKS.find((candidate) => data?.benchmarks[candidate]) ?? 'N500';
   }
   const benchmarkName = typeof benchmark === 'string' ? data?.benchmarks[benchmark]?.name : group && displayLabel(group.n);
 
@@ -415,7 +421,7 @@ export default function RotationTab({
         ]
       : matching.map((track) => track.item.id);
     try {
-      await navigator.clipboard.writeText(symbols.map((symbol) => `NSE:${symbol}`).join(', '));
+      await navigator.clipboard.writeText(symbols.map((symbol) => watchlistSymbol(symbol, data?.market)).join(', '));
       setCopied(true);
       setTimeout(() => setCopied(false), 1400);
     } catch {
@@ -428,7 +434,7 @@ export default function RotationTab({
     : universe.kind === 'level'
     ? LEVEL_LABEL[universe.level]
     : universe.kind === 'stocks'
-    ? STOCK_UNIVERSES.find(([code]) => code === universe.code)?.[1] ?? ''
+    ? stockUniverses(data?.universes).find(([code]) => code === universe.code)?.[1] ?? ''
     : '';
 
   const unit = frame === 'D' ? 'd' : frame === 'W' ? 'w' : 'm';
@@ -537,7 +543,7 @@ export default function RotationTab({
                 ))}
               </optgroup>
               <optgroup label="Stocks">
-                {STOCK_UNIVERSES.map(([code, label]) => (
+                {stockUniverses(data.universes).map(([code, label]) => (
                   <option key={code} value={`stocks:${code}`} disabled={code === 'WATCH' && !watchlist.size}>
                     {label}
                   </option>

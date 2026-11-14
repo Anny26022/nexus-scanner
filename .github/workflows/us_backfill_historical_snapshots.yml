@@ -1,0 +1,183 @@
+name: US Backfill Historical Snapshots
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'Start Date for backfill (YYYY-MM-DD)'
+        required: true
+        default: '2021-10-01'
+      end_date:
+        description: 'End Date for backfill (YYYY-MM-DD)'
+        required: true
+        default: '2021-10-15'
+      upload_r2:
+        description: 'Upload generated snapshots to Cloudflare R2'
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: us-daily-refresh
+  cancel-in-progress: false
+
+jobs:
+  backfill-us:
+    name: Generate US Historical Snapshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Locate the US root
+        run: echo "US_ROOT=${{ runner.temp }}/us-root" >> "$GITHUB_ENV"
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
+          pip install boto3
+
+      - name: Restore US price history
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.US_ROOT }}/ohlcv_data
+            ${{ env.US_ROOT }}/indices_ohlcv_data
+            ${{ env.US_ROOT }}/stock_pages
+            ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
+          key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: us-history-v1-
+
+      # Reported earnings dates (earningsDate, daysSinceEarnings, gap_up_earnings) come from the daily run's ledger.
+      - name: Restore US quarterly ledger
+        id: ledger
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.US_ROOT }}/quarterly_financial_history.json.gz
+          key: us-ledger-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: us-ledger-v1-
+
+      - name: Warn when earnings dates are unavailable
+        if: steps.ledger.outputs.cache-matched-key == ''
+        run: echo "::warning::No US quarterly ledger cached yet (run the US daily refresh); backfilled sessions will have no earnings dates."
+
+      - name: Install R2 client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
+      # The backfill extends the live sessions list, which lives in R2 (frontend/site_data.py).
+      - name: Pull published site data from R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/site_data.py pull
+
+      # The root holds only the cached price history: the generator fails on a cold cache (run the US daily
+      # refresh first), reads names and classification from Dhan's list and the committed Finviz file, and leaves
+      # statement figures, market cap and ownership unavailable (no point-in-time source); earnings dates come from
+      # the restored quarterly ledger.
+      - name: Generate US Historical Snapshots
+        env:
+          START_DATE: ${{ github.event.inputs.start_date }}
+          END_DATE: ${{ github.event.inputs.end_date }}
+        run: |
+          if [[ ! "$START_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ || ! "$END_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "::error::start_date and end_date must be YYYY-MM-DD"; exit 1
+          fi
+          if [[ "$START_DATE" > "$END_DATE" ]]; then
+            echo "::error::start_date $START_DATE is after end_date $END_DATE"; exit 1
+          fi
+          python tools/generate_historical_snapshots_us.py \
+            --pipeline-dir "${{ env.US_ROOT }}" \
+            --start-date "$START_DATE" \
+            --end-date "$END_DATE" \
+            --output-dir "outputs/historical_snapshots/us" \
+            --update-sessions-manifest "frontend/public/data/us/sessions.json"
+
+      - name: Upload to Cloudflare R2
+        if: ${{ github.event.inputs.upload_r2 == 'true' }}
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: |
+          python - << 'EOF'
+          import os, glob, sys, boto3
+          account_id = os.environ.get('R2_ACCOUNT_ID')
+          access_key = os.environ.get('R2_ACCESS_KEY_ID')
+          secret_key = os.environ.get('R2_SECRET_ACCESS_KEY')
+          bucket_name = os.environ.get('R2_BUCKET', 'nexus-screener-chart-data')
+
+          if not (account_id and access_key and secret_key):
+              sys.exit("Error: R2 credentials are required when upload_r2 is true.")
+
+          endpoint = f"https://{account_id}.r2.cloudflarestorage.com"
+          s3 = boto3.client(
+              's3',
+              endpoint_url=endpoint,
+              aws_access_key_id=access_key,
+              aws_secret_access_key=secret_key,
+              region_name='auto'
+          )
+
+          snapshots = glob.glob("outputs/historical_snapshots/us/*.json.gz")
+          if not snapshots:
+              print("No new US snapshots to upload; all requested sessions are already archived.")
+              sys.exit(0)
+
+          print(f"Uploading and verifying {len(snapshots)} US snapshots to R2 bucket '{bucket_name}'...")
+          for filepath in snapshots:
+              filename = os.path.basename(filepath)
+              key = f"snapshots/us/{filename}"
+              file_size = os.path.getsize(filepath)
+              with open(filepath, 'rb') as f:
+                  s3.upload_fileobj(
+                      f,
+                      bucket_name,
+                      key,
+                      ExtraArgs={'ContentType': 'application/gzip'}
+                  )
+              # Verify R2 persistence with head_object readback
+              head = s3.head_object(Bucket=bucket_name, Key=key)
+              if head.get('ContentLength') != file_size:
+                  sys.exit(f"R2 readback verification failed for {key}: expected {file_size} bytes, got {head.get('ContentLength')}")
+              print(f"Uploaded and verified {key} ({file_size} bytes)")
+
+          with open(".upload_verified_us", "w") as f:
+              f.write(f"Verified upload and readback of {len(snapshots)} US snapshots\n")
+          print("R2 US snapshot upload and readback complete and verified.")
+          EOF
+
+      # Only once every snapshot it lists was uploaded and verified; the site reads it without a rebuild.
+      - name: Publish Updated US Sessions Manifest
+        if: ${{ hashFiles('.upload_verified_us') != '' }}
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/site_data.py push-us-sessions
+
+      - name: Upload Artifacts Archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: us-historical-snapshots-${{ github.event.inputs.start_date }}-to-${{ github.event.inputs.end_date }}
+          path: outputs/historical_snapshots/us/*.json.gz
+          if-no-files-found: ignore

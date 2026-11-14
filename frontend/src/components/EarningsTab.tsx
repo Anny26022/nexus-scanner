@@ -315,7 +315,7 @@ function ReactionMix({counts, active, onPick}: {counts: Map<Bucket, number>; act
 }
 
 export default function EarningsTab({datasetRevision, onOpenChart}: {datasetRevision?: string; onOpenChart: (symbol: string) => void}) {
-  const index = useQuery({queryKey: ['earnings-index'], queryFn: getEarningsIndex, staleTime: 5 * 60_000, retry: false});
+  const index = useQuery({queryKey: ['earnings-index'], queryFn: () => getEarningsIndex(), staleTime: 5 * 60_000, retry: false});
   const allSeasons = useMemo(() => index.data ? seasons(index.data) : [], [index.data]);
   const [periodChoice, setPeriodChoice] = useState<string | null>(null);
   const season = allSeasons.find(item => item.periodEnd === periodChoice) ?? allSeasons[0];

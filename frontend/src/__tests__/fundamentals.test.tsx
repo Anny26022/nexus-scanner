@@ -20,6 +20,8 @@ it('never backdates restated financials or displays future filings', () => {
   expect(visibleFinancials(history, 'quarterly', '2026-10-22').map(row => row.period_end)).toEqual(['2026-06-30','2026-03-31','2025-06-30']);
   expect(visibleFinancials({...history, observed_on: ''}, 'quarterly', '2026-10-22')).toEqual([]);
   expect(visibleFinancials({...history, amount_unit: 'INR_LAKH'}, 'quarterly', '2026-10-22')).toEqual([]);
+  // The US release publishes dollar millions.
+  expect(visibleFinancials({...history, amount_unit: 'USD_MILLION'}, 'quarterly', '2026-10-22')).toHaveLength(3);
 });
 it('matches prior periods with gaps and handles losses and zero bases', () => {
   const rows = visibleFinancials(history, 'quarterly', '2026-10-22');

@@ -64,6 +64,26 @@ const metricColumn = (id: string, label: string, format: ResultColumn['format'] 
   getValue: row => ((row as unknown as {metrics?: Record<string, ColumnValue>}).metrics?.[id]),
 });
 
+// Published only by the US release (TradingView targets and multiples, Finviz ownership and short interest).
+const US_COLUMNS: ResultColumn[] = [
+  valueColumn('targetPrice', 'Target price', 'Fundamental', 'price'),
+  valueColumn('targetPriceUpsidePct', 'Target upside', 'Fundamental', 'percent'),
+  valueColumn('analystRating', 'Analyst rating', 'Fundamental'),
+  valueColumn('shortFloatPct', 'Short float', 'Fundamental', 'percent'),
+  valueColumn('shortRatio', 'Short ratio (Days)', 'Fundamental'),
+  valueColumn('insiderOwnPct', 'Insider holding', 'Fundamental', 'percent'),
+  valueColumn('institutionalOwnPct', 'Institutional holding', 'Fundamental', 'percent'),
+  valueColumn('insiderTransPct', 'Insider transactions', 'Fundamental', 'percent'),
+  valueColumn('institutionalTransPct', 'Institutional transactions', 'Fundamental', 'percent'),
+  valueColumn('psRatio', 'P/S', 'Fundamental'),
+  valueColumn('grossMarginPct', 'Gross margin', 'Fundamental', 'percent'),
+  valueColumn('netMarginPct', 'Net margin', 'Fundamental', 'percent'),
+  valueColumn('roicPct', 'ROIC', 'Fundamental', 'percent'),
+  valueColumn('quickRatio', 'Quick ratio', 'Fundamental'),
+  valueColumn('ltDebtToEquity', 'LT debt / equity', 'Fundamental'),
+  valueColumn('beta', 'Beta', 'Technical'),
+];
+const US_COLUMN_IDS = new Set(US_COLUMNS.map(column => column.id));
 const columns: ResultColumn[] = [
   { id: 'company', label: 'Company', group: 'Overview', width: '24%', getValue: row => row.symbol },
   { id: 'sector', label: 'Sector / industry', group: 'Overview', width: '17%', getValue: row => `${row.sector || 'Unclassified'} · ${row.industry || 'Unclassified'}` },
@@ -127,6 +147,7 @@ const columns: ResultColumn[] = [
   valueColumn('isAsm', 'ASM', 'Other', 'boolean'), valueColumn('asmStage', 'ASM stage', 'Other'),
   valueColumn('isGsm', 'GSM', 'Other', 'boolean'), valueColumn('gsmStage', 'GSM stage', 'Other'),
   valueColumn('surveillanceAvailable', 'Surveillance data available', 'Other', 'boolean'),
+  ...US_COLUMNS,
   ...extendedMetrics.map((metric):ResultColumn => ({id:`tv.${metric.id}`, label:metric.label,
     group:metric.category === 'fundamentals' ? 'Fundamental' : 'Technical',
     format:metric.label.includes('%') ? 'percent' : 'number', sortField:`tv.${metric.id}`,
@@ -146,17 +167,20 @@ const DEFAULT_COLUMNS = ['company','sector','close','changePct','rvol','marketCa
 const COLUMN_GROUPS: ColumnGroup[] = ['Overview','Technical','Fundamental','Other'];
 const numberFormatter = new Intl.NumberFormat('en-IN', {maximumFractionDigits: 2});
 const priceFormatter = new Intl.NumberFormat('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const usNumberFormatter = new Intl.NumberFormat('en-US', {maximumFractionDigits: 2});
+const usPriceFormatter = new Intl.NumberFormat('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-const displayValue = (value: ColumnValue, format?: ResultColumn['format']) => {
+/** US releases price in dollars and publish amounts in millions where India publishes rupee crore. */
+const displayValue = (value: ColumnValue, format?: ResultColumn['format'], usd = false) => {
   if (value == null || value === '') return <span className="cell-muted">—</span>;
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return <span className="cell-muted">—</span>;
-    if (format === 'price') return `₹${priceFormatter.format(value)}`;
-    const formatted = numberFormatter.format(value);
+    if (format === 'price') return usd ? `$${usPriceFormatter.format(value)}` : `₹${priceFormatter.format(value)}`;
+    const formatted = (usd ? usNumberFormatter : numberFormatter).format(value);
     if (format === 'percent') return `${formatted}%`;
     if (format === 'multiple') return `${formatted}×`;
-    if (format === 'crore') return `₹${formatted} Cr`;
+    if (format === 'crore') return usd ? `$${formatted}M` : `₹${formatted} Cr`;
     return formatted;
   }
   return value;
@@ -187,10 +211,12 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const phone = usePhoneLayout();
   const hasExtended = Boolean(data?.rows.some(row => row.extended));
   const hasFnoBan = Boolean(data?.rows.some(row => row.fnoBan != null));
+  const usd = data?.currency === 'USD';
   const activeColumns = tableColumns.filter(column => {
     if (column.id === 'company') return true;
     if (column.id.startsWith('tv.') && !hasExtended) return false;
     if (column.id === 'fnoBan' && !hasFnoBan) return false;
+    if (US_COLUMN_IDS.has(column.id) && !usd) return false;
     return selectedColumnIds.includes(column.id) || Boolean(pinnedColumns?.includes(column.id));
   });
   const usingCustomColumns = selectedColumnIds.length !== defaults.length || defaults.some(id => !selectedColumnIds.includes(id));
@@ -198,7 +224,8 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
   const visibleColumns = layout.columns;
   const customizableColumns = tableColumns.filter(column => column.id !== 'company'
     && (!column.id.startsWith('tv.') || hasExtended)
-    && (column.id !== 'fnoBan' || hasFnoBan));
+    && (column.id !== 'fnoBan' || hasFnoBan)
+    && (!US_COLUMN_IDS.has(column.id) || usd));
   const matchingColumns = customizableColumns.filter(column => `${column.label} ${column.group}`.toLowerCase().includes(columnSearch.trim().toLowerCase()));
   const pickerColumns = columnSearch.trim() ? matchingColumns : customizableColumns.filter(column => column.group === columnGroup);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -320,9 +347,9 @@ export function ResultsTable({ data, isLoading, isError, isFetching = false, err
                   {!etf && <div className="company-tools"><button type="button" className="icon-button filing-button" aria-label={`View ${row.symbol} announcements`} title="View announcements" onClick={() => setFilingSymbol(row.symbol)} disabled={busy}><FileText size={14} strokeWidth={1.8} /></button></div>}</div>
                   : column.id === 'sector' ? <><div className={row.sector === 'Unclassified' ? 'cell-muted truncate' : 'cell-label truncate'} title={row.sector}>{row.sector}</div><div className="cell-secondary truncate" title={row.industry}>{row.industry}</div></>
                   : column.id === 'deliveryPct' && row.deliveryPct == null ? <span className="cell-muted">Unavailable</span>
-                  : column.id === 'changePct' && row.changePct != null ? <span className={row.changePct >= 0 ? 'positive' : 'negative'}>{row.changePct >= 0 ? '+' : ''}{displayValue(column.getValue(row), column.format)}</span>
-                  : column.id === 'rvol' && row.rvol != null ? <span className={row.rvol >= 2 ? 'volume-badge' : ''}>{displayValue(column.getValue(row), column.format)}</span>
-                  : displayValue(column.getValue(row), column.format)}
+                  : column.id === 'changePct' && row.changePct != null ? <span className={row.changePct >= 0 ? 'positive' : 'negative'}>{row.changePct >= 0 ? '+' : ''}{displayValue(column.getValue(row), column.format, usd)}</span>
+                  : column.id === 'rvol' && row.rvol != null ? <span className={row.rvol >= 2 ? 'volume-badge' : ''}>{displayValue(column.getValue(row), column.format, usd)}</span>
+                  : displayValue(column.getValue(row), column.format, usd)}
               </td>)}{columnWindow.right > 0 && <td aria-hidden="true" className="column-spacer" />}</tr>)}
             {rowWindow.bottom > 0 && <tr aria-hidden="true" className="table-spacer"><td colSpan={columnSpan} style={{height: rowWindow.bottom}} /></tr>}
           </tbody>

@@ -1,4 +1,4 @@
-/** Statement amounts are INR crore; EPS is INR/share, margins are percent. */
+/** Statement amounts are INR crore (India) or USD million (US), per `amount_unit`; EPS is per share, margins are percent. */
 export interface FinancialPeriod {
   period_end: string;
   filing_date?: string;
@@ -71,11 +71,13 @@ export function fundamentalsConfig(raw?: FundamentalsConfig): Required<Fundament
     fontSize: 11, position: 'top-right',
   } as Required<FundamentalsConfig>;
 }
+/** Statement units the app can show: India's rupee crore and the US release's dollar millions. */
+export const FINANCIAL_AMOUNT_UNITS = ['INR_CRORE', 'USD_MILLION'] as const;
 const date = (value: unknown): value is string => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
   && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 export function visibleFinancials(history: FinancialHistory | null | undefined, period: 'quarterly' | 'annual', cutoff: string, latest = false): FinancialPeriod[] {
   // An observation can contain revisions of older reports. Do not backdate those values.
-  if (!history || history.amount_unit !== 'INR_CRORE' || !date(history.observed_on) || (!latest && history.observed_on > cutoff)) return [];
+  if (!history || !(FINANCIAL_AMOUNT_UNITS as readonly string[]).includes(history.amount_unit) || !date(history.observed_on) || (!latest && history.observed_on > cutoff)) return [];
   const through = latest && history.observed_on > cutoff ? history.observed_on : cutoff;
   if (!Array.isArray(history[period])) return [];
   return history[period].filter(row => row && date(row.period_end) && row.period_end <= through

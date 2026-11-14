@@ -2232,7 +2232,7 @@
     "short_float_percent": 10.07,
     "short_ratio": 3.34
   },
-  "AKO-A": {
+  "AKO.A": {
     "finviz_industry": "Beverages - Non-Alcoholic",
     "finviz_sector": "Consumer Defensive",
     "insider_own_percent": null,
@@ -2243,7 +2243,7 @@
     "short_float_percent": 0.0,
     "short_ratio": 0.33
   },
-  "AKO-B": {
+  "AKO.B": {
     "finviz_industry": "Beverages - Non-Alcoholic",
     "finviz_sector": "Consumer Defensive",
     "insider_own_percent": null,
@@ -7094,7 +7094,7 @@
     "short_float_percent": 39.71,
     "short_ratio": 3.99
   },
-  "BF-A": {
+  "BF.A": {
     "finviz_industry": "Beverages - Wineries & Distilleries",
     "finviz_sector": "Consumer Defensive",
     "insider_own_percent": 91.57,
@@ -7105,7 +7105,7 @@
     "short_float_percent": 1.55,
     "short_ratio": 4.24
   },
-  "BF-B": {
+  "BF.B": {
     "finviz_industry": "Beverages - Wineries & Distilleries",
     "finviz_sector": "Consumer Defensive",
     "insider_own_percent": 39.06,
@@ -8788,7 +8788,7 @@
     "short_float_percent": 0.4,
     "short_ratio": 1.68
   },
-  "BRK-A": {
+  "BRK.A": {
     "finviz_industry": "Insurance - Diversified",
     "finviz_sector": "Financial",
     "insider_own_percent": 65.78,
@@ -8799,7 +8799,7 @@
     "short_float_percent": 0.04,
     "short_ratio": 1.02
   },
-  "BRK-B": {
+  "BRK.B": {
     "finviz_industry": "Insurance - Diversified",
     "finviz_sector": "Financial",
     "insider_own_percent": 34.4,
@@ -13848,7 +13848,7 @@
     "short_float_percent": 10.56,
     "short_ratio": 5.36
   },
-  "CRD-A": {
+  "CRD.A": {
     "finviz_industry": "Insurance Brokers",
     "finviz_sector": "Financial",
     "insider_own_percent": 66.75,
@@ -13859,7 +13859,7 @@
     "short_float_percent": 2.08,
     "short_ratio": 5.37
   },
-  "CRD-B": {
+  "CRD.B": {
     "finviz_industry": "Insurance Brokers",
     "finviz_sector": "Financial",
     "insider_own_percent": 87.64,
@@ -25332,7 +25332,7 @@
     "short_float_percent": 8.19,
     "short_ratio": 7.23
   },
-  "HEI-A": {
+  "HEI.A": {
     "finviz_industry": "Aerospace & Defense",
     "finviz_sector": "Industrials",
     "insider_own_percent": 45.13,
@@ -26828,7 +26828,7 @@
     "short_float_percent": null,
     "short_ratio": null
   },
-  "HYAC-U": {
+  "HYAC.U": {
     "finviz_industry": "Shell Companies",
     "finviz_sector": "Financial",
     "insider_own_percent": 20.0,
@@ -30216,7 +30216,7 @@
     "short_float_percent": 2.61,
     "short_ratio": 6.1
   },
-  "KCA-U": {
+  "KCA.U": {
     "finviz_industry": "Shell Companies",
     "finviz_sector": "Financial",
     "insider_own_percent": null,
@@ -35782,7 +35782,7 @@
     "short_float_percent": 3.71,
     "short_ratio": 1.23
   },
-  "MOG-A": {
+  "MOG.A": {
     "finviz_industry": "Aerospace & Defense",
     "finviz_sector": "Industrials",
     "insider_own_percent": 12.02,
@@ -42261,7 +42261,7 @@
     "short_float_percent": 1.25,
     "short_ratio": 1.91
   },
-  "PBR-A": {
+  "PBR.A": {
     "finviz_industry": "Oil & Gas Integrated",
     "finviz_sector": "Energy",
     "insider_own_percent": 0.0,
@@ -43757,7 +43757,7 @@
     "short_float_percent": 0.0,
     "short_ratio": 0.01
   },
-  "PNAQ-U": {
+  "PNAQ.U": {
     "finviz_industry": "Shell Companies",
     "finviz_sector": "Financial",
     "insider_own_percent": 23.87,
@@ -43988,7 +43988,7 @@
     "short_float_percent": 4.32,
     "short_ratio": 2.71
   },
-  "PORT-U": {
+  "PORT.U": {
     "finviz_industry": "Shell Companies",
     "finviz_sector": "Financial",
     "insider_own_percent": 26.16,
@@ -56330,7 +56330,7 @@
     "short_float_percent": 23.44,
     "short_ratio": 11.79
   },
-  "UHAL-B": {
+  "UHAL.B": {
     "finviz_industry": "Rental & Leasing Services",
     "finviz_sector": "Industrials",
     "insider_own_percent": 49.21,

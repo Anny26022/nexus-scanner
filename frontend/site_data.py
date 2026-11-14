@@ -35,9 +35,12 @@ from chart_publication import R2Store, charts_enabled, missing_r2_settings, writ
 OUTPUT = Path(__file__).resolve().parent / 'public/data'
 POINTER_PREFIX = 'site/data'
 AI_FILTER_CHOICES = 'ai-filter-choices.json'
+US_POINTER = 'us/current.json'
+US_SESSIONS = 'us/sessions.json'
 # Kept in step with POINTERS in workers/screener-ai/siteData.ts; anything else is not served.
 POINTERS = ('current.json', 'sessions.json', 'price-band-history.json', AI_FILTER_CHOICES,
-            'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json')
+            'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json',
+            US_POINTER, US_SESSIONS)
 # Written after the scanner release, by the Earnings Pulse and Tijori steps.
 INDEXES = ('results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json')
 REVISION = re.compile(r'[a-f0-9]{64}')
@@ -177,14 +180,15 @@ def pull(store, output=OUTPUT):
             print('Checkout data is newer than R2; keeping the checkout copies', flush=True)
             return
     for name in POINTERS:
-        if name != AI_FILTER_CHOICES and name in present:
+        # The US pointer belongs to the US refresh (publish_us.py); India's pull leaves it in R2, as before.
+        if name not in (AI_FILTER_CHOICES, US_POINTER) and name in present:
             (output / name).parent.mkdir(parents=True, exist_ok=True)
             store.cache_command('copyto', store.remote(f'{POINTER_PREFIX}/{name}'), str(output / name))
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('action', choices=('pull', 'push-indexes', 'push-sessions', 'ai-choices'))
+    parser.add_argument('action', choices=('pull', 'push-indexes', 'push-sessions', 'push-us-sessions', 'ai-choices'))
     args = parser.parse_args(argv)
     if args.action == 'ai-choices':
         build_ai_filter_choices(OUTPUT, json.loads((OUTPUT / 'current.json').read_text()))
@@ -196,6 +200,8 @@ def main(argv=None):
     store = R2Store()
     if args.action == 'push-sessions':
         upload_pointer(store, OUTPUT, 'sessions.json')
+    elif args.action == 'push-us-sessions':
+        upload_pointer(store, OUTPUT, US_SESSIONS)
     else:
         (pull if args.action == 'pull' else push_indexes)(store, OUTPUT)
     return 0

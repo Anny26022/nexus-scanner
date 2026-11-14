@@ -13,9 +13,11 @@
  * frontend/site_data.py publishes the same layout; keep the two in step.
  */
 export const POINTER_PREFIX = 'site/data';
+// us/current.json is the US market's release pointer (frontend/publish_us.py).
 export const POINTERS = new Set([
   'current.json', 'sessions.json', 'price-band-history.json', 'ai-filter-choices.json',
   'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json',
+  'us/current.json', 'us/sessions.json',
 ]);
 
 const REVISION_FILE = /^revisions\/([a-f0-9]{64})\/((?:[A-Za-z0-9&_.-]+\/)?[A-Za-z0-9&_.-]+\.json(?:\.gz)?)$/;

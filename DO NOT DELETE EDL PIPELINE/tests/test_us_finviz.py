@@ -102,12 +102,17 @@ class FinvizTests(unittest.TestCase):
         mock_session.get.return_value = mock_resp
 
         data = finviz.fetch_news_and_insiders("NVDA", session=mock_session)
-        self.assertEqual(len(data["news"]), 1)
-        self.assertEqual(data["news"][0]["title"], "NVDA beats revenue estimates")
-        self.assertEqual(data["news"][0]["source"], "Reuters")
-        self.assertEqual(len(data["insiders"]), 1)
-        self.assertEqual(data["insiders"][0]["name"], "Huang Jen Hsun")
-        self.assertEqual(data["insiders"][0]["transaction"], "Sale")
+        # Keyed as stock_record reads a stock's thematic entry.
+        self.assertEqual(len(data["news_feed"]), 1)
+        self.assertEqual(data["news_feed"][0]["title"], "NVDA beats revenue estimates")
+        self.assertEqual(data["news_feed"][0]["source"], "Reuters")
+        self.assertEqual(len(data["insider_activity"]), 1)
+        self.assertEqual(data["insider_activity"][0]["name"], "Huang Jen Hsun")
+        self.assertEqual(data["insider_activity"][0]["transaction"], "Sale")
+        mock_session.get.return_value = mock.Mock(status_code=503, text="")
+        self.assertEqual(finviz.fetch_news_and_insiders("BRK.B", session=mock_session),
+                         {"news_feed": [], "insider_activity": []})
+        self.assertTrue(mock_session.get.call_args[0][0].endswith("?t=BRK-B"))
 
     def test_load_and_save_thematic_universe(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -145,6 +150,84 @@ class FinvizTests(unittest.TestCase):
         self.assertEqual(universe["A"]["finviz_industry"], "Diagnostics & Research")
         self.assertEqual(universe["A"]["security_type"], "Stock")
         self.assertEqual(universe["A"]["short_float_percent"], 1.74)
+
+
+    def test_labels_are_normalized_in_catalog_and_universe(self):
+        self.assertEqual(finviz.normalize_label("Autonomous  - Vehicles "), "Autonomous - Vehicles")
+        self.assertEqual(finviz.normalize_label("Hardware - Gaming & Immersive Pheriperals"),
+                         "Hardware - Gaming & Immersive Peripherals")
+        html = ('<script>window.__DATA__ = {"screenerType": "stocks", "filters": {"filters": ['
+                '{"key": "theme", "options": [{"value": "q", "label": "Quantum  Computing"}]},'
+                '{"key": "subtheme", "options": [{"value": "qa", "label": "Quantum  - Applications", "group": "q"}]}'
+                ']}};</script>')
+        session = mock.Mock()
+        session.get.side_effect = lambda url, **_: mock.Mock(
+            status_code=200, text=html if "f=" not in url else '{"totalCount": 1, "x": [{"ticker": "BRK-B"}]}')
+        universe = finviz.crawl_thematic_universe(session=session, delay=0, log=lambda *_: None)
+        self.assertEqual(universe, {"BRK.B": {"themes": ["Quantum Computing"], "subthemes": ["Quantum - Applications"],
+                                              "primary_theme": "Quantum Computing"}})
+
+    def test_finviz_class_share_tickers_use_pipeline_symbols(self):
+        self.assertEqual(finviz.canonical_symbol("BRK-B"), "BRK.B")
+        self.assertEqual(finviz.canonical_symbol("NVDA"), "NVDA")
+        row = {"text": {"ticker": "BRK-B", "industry": "Insurance - Diversified"}, "numbers": {}}
+        html = '<script>window.__DATA__ = {"screenerType": "stocks", "filters": {"filters": []}, "data": {"rows": %s, "totalCount": 1}};</script>' % json.dumps([row])
+        session = mock.Mock()
+        session.get.return_value = mock.Mock(status_code=200, text=html)
+        with mock.patch.object(finviz, 'SECTOR_SHARDS', ['sec_financial,exch_nyse']):
+            universe = finviz.crawl_ownership_universe(session=session, workers=1, log=lambda *_: None)
+        self.assertEqual(list(universe), ["BRK.B"])
+
+    def test_failed_thematic_fetch_raises_instead_of_returning_empty(self):
+        session = mock.Mock()
+        session.get.return_value = mock.Mock(status_code=503, text="")
+        with self.assertRaises(finviz.FinvizFetchError):
+            finviz.fetch_tickers_for_filter("theme_x", session=session, delay=0)
+        with self.assertRaises(finviz.FinvizFetchError):  # empty catalog
+            finviz.crawl_thematic_universe(session=session, delay=0, log=lambda *_: None)
+        session.get.side_effect = requests.ConnectionError("down")
+        with self.assertRaises(finviz.FinvizFetchError):
+            finviz.fetch_tickers_for_filter("theme_x", session=session, delay=0)
+
+    def test_block_page_or_short_thematic_filter_raises(self):
+        session = mock.Mock()
+        # A 200 page without totalCount (block page, layout change) is not an empty filter.
+        session.get.return_value = mock.Mock(status_code=200, text="<html>Too many requests</html>")
+        with self.assertRaises(finviz.FinvizFetchError):
+            finviz.fetch_tickers_for_filter("theme_x", session=session, delay=0)
+        # Fewer tickers than Finviz reports (a page cut short) raises instead of truncating the theme.
+        session.get.return_value = mock.Mock(status_code=200, text='{"totalCount": 3, "data": [{"ticker": "NVDA"}]}')
+        with self.assertRaises(finviz.FinvizFetchError):
+            finviz.fetch_tickers_for_filter("theme_x", session=session, delay=0)
+        # A genuinely empty filter still reports totalCount 0 and is accepted.
+        session.get.return_value = mock.Mock(status_code=200, text='{"totalCount": 0, "data": []}')
+        self.assertEqual(finviz.fetch_tickers_for_filter("theme_x", session=session, delay=0), [])
+
+    def test_failed_or_short_ownership_shard_aborts_crawl(self):
+        html = '<script>window.__DATA__ = {"screenerType": "stocks", "filters": {"filters": []}, "data": {"rows": [], "totalCount": 25}};</script>'
+        session = mock.Mock()
+        session.get.return_value = mock.Mock(status_code=200, text=html)
+        with mock.patch.object(finviz, 'SECTOR_SHARDS', ['sec_energy']):
+            with self.assertRaises(finviz.FinvizFetchError):  # 0 of 25 rows
+                finviz.crawl_ownership_universe(session=session, workers=1, delay=0, log=lambda *_: None)
+            session.get.return_value = mock.Mock(status_code=500, text="")
+            with self.assertRaises(finviz.FinvizFetchError):
+                finviz.crawl_ownership_universe(session=session, workers=1, delay=0, log=lambda *_: None)
+
+    def test_check_coverage_keeps_committed_file_on_partial_crawl(self):
+        previous = {str(i): {} for i in range(100)}
+        with self.assertRaises(finviz.FinvizFetchError):
+            finviz.check_coverage({}, previous, "x")
+        with self.assertRaises(finviz.FinvizFetchError):
+            finviz.check_coverage({str(i): {} for i in range(50)}, previous, "x")
+        finviz.check_coverage({str(i): {} for i in range(95)}, previous, "x")
+        finviz.check_coverage({"A": {}}, {}, "x")
+
+    def test_workers_must_be_positive(self):
+        self.assertEqual(finviz._positive_int("3"), 3)
+        for bad in ("0", "-2"):
+            with self.assertRaises(finviz.argparse.ArgumentTypeError):
+                finviz._positive_int(bad)
 
 
 if __name__ == "__main__":

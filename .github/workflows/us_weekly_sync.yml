@@ -26,6 +26,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so the push step can rebase onto commits that land during the crawl
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -46,10 +48,11 @@ jobs:
           cd "DO NOT DELETE EDL PIPELINE"
           PYTHONPATH=src:. python -m edl_pipeline.markets.us.finviz --crawl all --delay 0.1 --workers 3
 
-      - name: Verify Finviz Crawler Tests
+      - name: Verify Finviz Crawler, US Pipeline and Publisher Tests
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
-          PYTHONPATH=src:. python -m unittest tests.test_us_finviz -v
+          PYTHONPATH=src:. python -m unittest tests.test_us_finviz tests.test_us_market -v
+          python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
 
       - name: Commit and Push Updated Universes
         run: |
@@ -60,5 +63,16 @@ jobs:
             echo "No changes to Finviz universes."
           else
             git commit -m "chore(us): weekly Finviz thematic & ownership universe sync [skip ci]"
-            git push
+            # Other jobs push this branch too: rebase onto whatever landed during the crawl and retry.
+            branch="${GITHUB_REF_NAME}"
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin "$branch" && git push origin "HEAD:$branch"; then
+                exit 0
+              fi
+              git rebase --abort 2>/dev/null || true
+              echo "Push attempt $attempt failed; retrying..."
+              sleep $((attempt * 10))
+            done
+            echo "Could not push the Finviz universe sync after 5 attempts." >&2
+            exit 1
           fi

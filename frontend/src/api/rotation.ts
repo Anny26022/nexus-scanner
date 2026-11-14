@@ -2,8 +2,12 @@ import { WARM_UP, rotation } from '../utils/rrg';
 
 /** Calendars the history is published on: one close per session, ISO week and month. */
 export type Frame = 'D' | 'W' | 'M';
-/** A published index (codes match the stock universes) or EW, the equal-weight market built like the groups. */
-export type BenchmarkCode = 'N50' | 'N100' | 'N500' | 'MID150' | 'SML250' | 'MS400' | 'TOTAL' | 'EW';
+/**
+ * A published index (codes match the stock universes) or EW, the equal-weight market built like the groups.
+ * India publishes the Nifty indexes; the US release publishes SPX/NDX/DJI/RUT (from SPY/QQQ/DIA/IWM).
+ */
+export type BenchmarkCode = 'N50' | 'N100' | 'N500' | 'MID150' | 'SML250' | 'MS400' | 'TOTAL' | 'EW'
+  | 'SPX' | 'NDX' | 'DJI' | 'RUT';
 export type RotationShardName = 'core' | 'rest' | 'groups';
 export const LEVELS = ['sector', 'industry', 'subIndustry', 'theme', 'block', 'macro'] as const;
 export type Level = typeof LEVELS[number];
@@ -18,6 +22,8 @@ export interface RotationIndex {
   /** EW (equal-weight market) is present when groups were built; older objects may lack it. */
   benchmarks: Partial<Record<BenchmarkCode, {name: string; series: Record<Frame, Coded | null>}>>;
   universes: Record<string, string>;
+  /** Absent on India's index; 'us' on the US release. */
+  market?: string;
   stocks: {s: string; n: string; u: string[]; h: 'core' | 'rest'; c?: number; t?: number; b?: string}[];
   groups: {id: string; l: Level; n: string; m: string[]}[];
   shards: Record<RotationShardName, string>;
@@ -135,3 +141,7 @@ export function travel(track: Track, cursor: number, tail: number, half: {x: num
   if (from === cursor || !Number.isFinite(now.x) || !Number.isFinite(now.y)) return 0;
   return Math.hypot((now.x - track.ratio[from]) / half.x, (now.y - track.momentum[from]) / half.y);
 }
+
+/** A ticker as a watchlist line: NSE-prefixed for India; US tickers stay bare, since the index does not carry each
+ *  stock's exchange (NYSE, Nasdaq, ...) and charting tools resolve a bare US ticker. */
+export const watchlistSymbol = (symbol: string, market?: string) => (market === 'us' ? symbol : `NSE:${symbol}`);

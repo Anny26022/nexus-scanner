@@ -1,0 +1,139 @@
+name: US Daily Refresh
+
+# The US scanner release (/data/us/current.json): one Dhan snapshot appended to each stock's history, India's
+# engine on the result (DO NOT DELETE EDL PIPELINE/docs/US_MARKET.md). 00:30 UTC Tue-Sat is after the New York
+# close in both EST and EDT; a run before the snapshot has caught up exits 75 and publishes nothing.
+on:
+  schedule:
+    - cron: '30 0 * * 2-6'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Its own queue: the US release never touches India's pointer, so it may run beside the India refresh.
+concurrency:
+  group: us-daily-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh-us:
+    runs-on: ubuntu-latest
+    # A cold cache seeds every history (about 6,000 paced requests) and spends up to 20 minutes on stock pages
+    # (the rest follow over the next runs); a warm run is a few minutes.
+    timeout-minutes: 90
+
+    steps:
+      # The runner context is not available to a job's env, so the root under the runner's temp folder is set here.
+      - name: Locate the US root
+        run: echo "US_ROOT=${{ runner.temp }}/us-root" >> "$GITHUB_ENV"
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
+
+      - name: Verify US pipeline code
+        run: |
+          cd "DO NOT DELETE EDL PIPELINE"
+          PYTHONPATH=src:. python -m unittest tests.test_us_market -v
+          python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
+
+      # Price history, stock pages and the rotation membership ledger are the state carried between runs; losing them
+      # costs a slow re-seed (and the ledger's dated memberships), not the release.
+      - name: Restore US price history
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.US_ROOT }}/ohlcv_data
+            ${{ env.US_ROOT }}/indices_ohlcv_data
+            ${{ env.US_ROOT }}/stock_pages
+            ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
+          key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: us-history-v1-
+
+      - name: Build the US root
+        id: build
+        env:
+          PYTHONUNBUFFERED: '1'
+        run: |
+          cd "DO NOT DELETE EDL PIPELINE"
+          set +e
+          PYTHONPATH=src:. python -m edl_pipeline.markets.us "$US_ROOT"
+          status=$?
+          set -e
+          if [ "$status" -eq 75 ]; then echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      # Saved before publication too, under a key of its own: a run that times out or is cancelled during the R2
+      # upload ends before any later step, and would otherwise lose every history this run fetched.
+      - name: Save US price history before publication
+        if: always() && steps.build.outcome != 'skipped'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.US_ROOT }}/ohlcv_data
+            ${{ env.US_ROOT }}/indices_ohlcv_data
+            ${{ env.US_ROOT }}/stock_pages
+            ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
+          key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}-built
+
+      # The quarterly ledger carries reported earnings dates for the historical backfill
+      # (us_backfill_historical_snapshots.yml). Its own key, so the price-history cache's paths stay unchanged.
+      - name: Save US quarterly ledger
+        if: steps.build.outputs.ready == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.US_ROOT }}/quarterly_financial_history.json.gz
+          key: us-ledger-v1-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Fetch US ETF snapshot
+        if: steps.build.outputs.ready == 'true'
+        continue-on-error: true
+        run: |
+          PYTHONPATH="DO NOT DELETE EDL PIPELINE/src:DO NOT DELETE EDL PIPELINE" python "DO NOT DELETE EDL PIPELINE/fetch_etf_snapshot.py" --market us --output "$US_ROOT/etf_snapshot.json"
+
+      - name: Install R2 uploader
+        if: steps.build.outputs.ready == 'true'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
+      - name: Publish the US release
+        id: publish
+        if: steps.build.outputs.ready == 'true'
+        env:
+          PYTHONUNBUFFERED: '1'
+          EDL_US_BASE_DIR: ${{ env.US_ROOT }}
+          EDL_CHART_STORAGE: r2
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/publish_us.py
+
+      # Saved again after publication, so the next run restores the rotation ledger the publish step writes (the newest
+      # key under the restore prefix wins). Without a publish the snapshot above already holds everything.
+      - name: Save US price history
+        if: always() && (steps.publish.outcome == 'success' || steps.publish.outcome == 'failure')
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.US_ROOT }}/ohlcv_data
+            ${{ env.US_ROOT }}/indices_ohlcv_data
+            ${{ env.US_ROOT }}/stock_pages
+            ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
+          key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}

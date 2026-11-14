@@ -205,10 +205,38 @@ export interface StockRow {
   gsmStage?: string | null;
   rsRating: number | null;
   dataCompleteness: number; // 0 to 100
+  // US and Market Enriched Metrics
+  targetPrice?: number | null;
+  targetPriceUpsidePct?: number | null;
+  analystRating?: string | number | null;
+  psRatio?: number | null;
+  grossMarginPct?: number | null;
+  netMarginPct?: number | null;
+  roicPct?: number | null;
+  quickRatio?: number | null;
+  ltDebtToEquity?: number | null;
+  beta?: number | null;
+  volatilityWeekPct?: number | null;
+  volatilityMonthPct?: number | null;
+  floatShares?: number | null;
+  sharesOutstanding?: number | null;
+  epsForecastNextQuarter?: number | null;
+  shortFloatPct?: number | null;
+  shortRatio?: number | null;
+  insiderOwnPct?: number | null;
+  institutionalOwnPct?: number | null;
+  insiderTransPct?: number | null;
+  institutionalTransPct?: number | null;
+  /** US only: Finviz's latest headlines, published as scraped (dates and figures are Finviz's display text). */
+  newsFeed?: Array<{ date?: string; url?: string; title?: string; source?: string }>;
+  insiderActivity?: Array<{ name?: string; relationship?: string; date?: string; transaction?: string; cost?: string; shares?: string;
+    value?: string; shares_total?: string; filing_date?: string }>;
 }
 
 export interface ScreenerRunResponse {
   etfLabels?: Record<string, Record<string, string>>;
+  /** The snapshot's price currency; absent on India releases (rupees). */
+  currency?: string;
   resolvedSession: {
     date: string;
     sessionId: string;

@@ -313,7 +313,10 @@ class RealDataAdapter {
     const response = await fetch(`${base}/screens/run`, { method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({...req,asOfDate:snapshot.sessionDate,datasetRevision:snapshot.revision}) });
     const payload = await response.json().catch(() => null);
-    if (!response.ok || payload?.error) throw new Error(payload?.error || `Scanner request failed (HTTP ${response.status})`);
+    if (!response.ok || payload?.error) {
+      if (response.status === 404 && !payload?.error) throw new Error('Custom text query endpoint is unavailable. Use Filters to build your screen.');
+      throw new Error(payload?.error || `Scanner request failed (HTTP ${response.status})`);
+    }
     if (payload?.immutableRevision !== snapshot.revision || !Array.isArray(payload.rows)) throw new Error('Scanner returned a different dataset revision');
     return payload;
   }

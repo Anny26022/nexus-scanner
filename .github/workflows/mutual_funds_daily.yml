@@ -1,0 +1,52 @@
+name: Mutual Fund Refresh
+
+# Daily mutual fund snapshot: Dhan's fund screener checked against AMFI's NAV file, published as
+# /data/mf/current.json. Two requests, a couple of minutes; separate from the stock refresh.
+on:
+  schedule:
+    # 06:30 IST Tuesday–Saturday: fund NAVs land late in the evening, so the morning after has the previous
+    # trading day's NAV (Saturday picks up Friday's).
+    - cron: '0 1 * * 2-6'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Writes only mf/ objects, never the stock release, so it does not queue behind the daily stock refresh.
+concurrency:
+  group: mutual-funds
+  cancel-in-progress: false
+
+jobs:
+  refresh-mutual-funds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
+
+      - name: Install R2 uploader
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
+      - name: Publish mutual fund snapshot
+        env:
+          PYTHONUNBUFFERED: '1'
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/publish_mutual_funds.py

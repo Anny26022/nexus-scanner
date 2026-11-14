@@ -215,6 +215,10 @@ class SiteDataTests(unittest.TestCase):
         company.mkdir(parents=True)
         (company / 'overviews.json.gz').write_bytes(b'gz')
         (self.output / 'company/current.json').write_text(json.dumps({'revision': COMPANY}))
+        funds = self.output / 'mf/revisions' / ('f' * 64)
+        funds.mkdir(parents=True)
+        (funds / 'funds.json.gz').write_bytes(b'gz')
+        (self.output / 'mf/current.json').write_text(json.dumps({'revision': 'f' * 64}))
         store = FakeStore()
         seed_site_data.seed(store, self.output)
         copied = [target for command, target in store.calls if command == 'check']

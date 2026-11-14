@@ -23,6 +23,10 @@ sys.path.insert(0, str(ROOT / 'frontend'))
 import site_data  # noqa: E402
 
 
+# Published only by its own job, with its checks (frontend/publish_mutual_funds.py); a local copy may be stale.
+NOT_SEEDED = ('mf/current.json',)
+
+
 def plan(output):
     """(local folder, R2 key) for each content-addressed folder, and the pointers in publication order."""
     current = json.loads((output / 'current.json').read_text())
@@ -37,7 +41,7 @@ def plan(output):
                     if path.is_dir() and site_data.REVISION.fullmatch(path.name)]
     # Like a release: the catalogue, then the other pointers, current.json last.
     pointers = [site_data.AI_FILTER_CHOICES] + [name for name in site_data.POINTERS
-                                                if name not in (site_data.AI_FILTER_CHOICES, 'current.json')
+                                                if name not in (site_data.AI_FILTER_CHOICES, 'current.json', *NOT_SEEDED)
                                                 and (output / name).is_file()] + ['current.json']
     return current, folders, pointers
 

@@ -26,12 +26,13 @@ Every result is tied to one published trading session and one immutable revision
 
 | Location | Responsibility |
 | --- | --- |
-| [`frontend/`](frontend/) | React 19 UI, TypeScript types, Vite server/build, browser screening worker, chart client, and frontend tests. |
+| [`frontend/`](frontend/) | Browser data publication (Python) and the shared filter catalogue the AI Worker and the pipeline read. The screener UI lives in Nexus Journal (`packages/nexus-scanner`). |
+| [`workers/screener-ai/`](workers/screener-ai/) | The `nexus-scanner` Worker: published data (`/data/*`) from R2 and the AI screen compiler. |
 | [`DO NOT DELETE EDL PIPELINE/`](DO%20NOT%20DELETE%20EDL%20PIPELINE/) | Python acquisition, history maintenance, calculations, condition engine, artifact validation, and publication. The directory name is preserved because existing workflows use it. |
 | [`.github/workflows/daily_refresh.yml`](.github/workflows/daily_refresh.yml) | Weekday refresh, tests, scanner publication, R2 upload when configured, and generated-data commit. |
 | [`.github/workflows/weekly_eod2_refresh.yml`](.github/workflows/weekly_eod2_refresh.yml) | Weekly adjusted-history overlay followed by the same validated publication flow. |
 | `docs/r2-chart-publication.md` (private notes) | R2 object layout, retry behavior, retention, and chart fields. |
-| [`frontend/README.md`](frontend/README.md) | Frontend API details and local UI development. |
+| [`frontend/README.md`](frontend/README.md) | What remains in `frontend/` and how to test it. |
 
 ## Technical architecture
 
@@ -48,23 +49,15 @@ Nexus is deliberately split into a data plane and an interaction plane.
 | Chart store | Cloudflare R2 | Supplies per-symbol compressed payloads through the chart client; an integrated chart viewer is not yet wired into the UI. |
 | Automation | GitHub Actions | Runs daily and weekly refreshes, tests, publication, and generated-data commits. |
 
-### Frontend modules
+### Shared filter catalogue
 
 | Module | What it does |
 | --- | --- |
-| `frontend/src/App.tsx` | Owns top-level navigation and the active screener workspace. |
-| `frontend/src/components/ExploreTab.tsx` | Mainboard screen controls, active filters, and result workflow. |
-| `frontend/src/components/NewListingsTab.tsx` | IPO catalogue controls and table workflow. |
-| `frontend/src/components/SymbolListTab.tsx` | Pasted symbol validation and custom-universe workflow. |
-| `frontend/src/components/ScreenerModal.tsx` | Visual condition builder and preset editor. |
-| `frontend/src/components/ConditionCatalogModal.tsx` | Searchable condition selection. |
-| `frontend/src/components/ResultsTable.tsx` | Shared sortable and paginated equity table. |
-| `frontend/src/api/realAdapter.ts` | Chooses snapshot-worker or Python API evaluation and validates release identity. |
-| `frontend/src/api/snapshotEngine.ts` | Loads, validates, caches, filters, sorts, and pages a snapshot. |
-| `frontend/src/api/snapshot.worker.ts` | Keeps snapshot computation off the UI thread. |
-| `frontend/src/api/snapshotScreen.ts` | Compiles browser-supported conditions and caches result sets across pages. |
-| `frontend/src/api/screenerApi.ts` | Typed facade selecting the real or mock adapter; methods do not all correspond to HTTP endpoints. |
-| `frontend/src/data/` | Condition and preset catalogues compiled into the frontend build. |
+| `frontend/src/data/` | Condition, preset and scan catalogues. The pipeline reads its JSON files (`presetEligibility.json`, `snapshotTechnicals.json`, `nativeConditions.json`, `scanRecipes.json`); the AI Worker compiles screens against the TypeScript catalogues. |
+| `frontend/src/api/aiFilterCatalog.ts`, `aiScreenerContract.ts` | The AI compiler's filter list and the result it must return. |
+| `frontend/src/api/snapshotScreen.ts`, `frontend/src/utils/` | Condition rules the catalogue and compiler share. |
+
+Nexus Journal keeps its own copy of these files in `packages/nexus-scanner/src`; change both together.
 
 ### Pipeline modules
 
@@ -85,7 +78,7 @@ Nexus is deliberately split into a data plane and an interaction plane.
 
 ### 1. Researcher: find an actionable candidate list
 
-Use the running frontend at `localhost:8080` or a deployed build.
+Use the screener in Nexus Journal (`/scanner`).
 
 1. Select Mainboard or another available indexed universe such as Nifty 500.
 2. Start from a preset such as Persistent Momentum, then tune its parameters; or build a rule from scratch.
@@ -99,17 +92,9 @@ This workflow is for idea generation and repeatable research. It does not execut
 
 Use the revision/session visible in the screen result. The immutable release lets an analyst explain what data was used for the result and rerun the same expression against the matching backend inputs where history is available. Same-session data corrections create a new revision, preserving the older release rather than overwriting it.
 
-### 3. Product team: embed or deploy the screener
+### 3. Product team: embed the screener
 
-Build the frontend as a static application:
-
-```bash
-cd frontend
-npm install
-npm run build
-```
-
-Host the resulting static files with immutable-cache rules for `data/revisions/*` and revalidation for `data/current.json`. Provide the Python `/screens/run` endpoint for expressions the browser worker cannot evaluate. Configure `VITE_API_BASE_URL` for the deployed API.
+The screener UI is Nexus Journal's `packages/nexus-scanner`. It reads published data and the AI endpoint from the `nexus-scanner` Worker (`npm run deploy`); opening the Worker's own pages redirects to the journal.
 
 ### 4. Data engineer: refresh public market artifacts
 
@@ -526,24 +511,14 @@ From the repository root, after a validated pipeline run:
 python3 frontend/publish_snapshot.py
 ```
 
-### Start the frontend
+### Run the AI Worker locally
 
 ```bash
-cd frontend
 npm install
-npm run dev -- --host localhost --port 8080 --strictPort
+npm run dev:ai
 ```
 
-Open [http://localhost:8080](http://localhost:8080).
-
-For local custom history conditions, Vite uses the Python bridge. A static production deployment must supply a backend for `POST /screens/run` or proxy `/api/screens/run` to that backend.
-
-```env
-VITE_USE_MOCK=false
-VITE_API_BASE_URL=/api
-```
-
-`VITE_USE_MOCK=true` is only for UI development. It is not live market data.
+It serves `/api/screener/ai-compile` on port 8787 and reads `frontend/public/data/` (run `python3 frontend/site_data.py ai-choices` after a local publication).
 
 ## Configuration and production deployment
 
@@ -561,22 +536,15 @@ VITE_API_BASE_URL=/api
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Required server-side S3-compatible credentials. Never place them in frontend variables or public artifacts. |
 | `R2_PUBLIC_BASE_URL` | Required public chart origin; browser access and CORS must work from the frontend origin. |
 | `R2_BUCKET` | `nexus-screener-chart-data` unless overridden. |
-| `VITE_USE_MOCK` | False unless exactly `true`; selects fabricated UI-development data when enabled. |
-| `VITE_API_BASE_URL` | `/api` when absent; adapter appends `/screens/run`. Build-time frontend setting. |
 
 Pipeline Boolean settings accept familiar true/false forms (`1/0`, `yes/no`, `on/off`); invalid values warn and use the default. Consult the workflow and source for additional source-specific settings rather than assuming this table enumerates every fetcher's tuning option.
 
 ### What a production installation needs
 
-1. **Static application:** serve `frontend/dist` from a host supporting the app's assets and public data files. Deploy the application/catalogue version compatible with the published snapshot.
+1. **Worker:** deploy the `nexus-scanner` Worker (`npm run deploy`), which serves `/data/*` from R2 and the AI compiler. The UI is Nexus Journal's.
 2. **Release authority:** deploy immutable revision directories before updating `data/current.json`. Revalidate the pointer; cache immutable revision URLs for reuse. Keep the JSON fallback available alongside gzip.
-3. **Historical screen service:** provide `POST <VITE_API_BASE_URL>/screens/run` for unsupported worker expressions. The response must use the requested immutable revision. Preserve the corresponding frozen evaluation inputs and history on the server.
-4. **Chart origin:** when charts are enabled, expose the R2 URL template with suitable browser CORS and gzip delivery. A scanner-only release legitimately has no chart URLs.
-5. **Operator monitoring:** watch failed workflows, stale session pointers, missing history, archive failures, and object expiry. Scheduled time is not a completion guarantee.
-
-Vite's local middleware handles `POST /api/screens/run` by managing a persistent Python worker. `npm run build` produces static files and does **not** package that middleware as a production Python service. A production process manager, reverse proxy, request limits, and server deployment must be supplied separately. Static hosting alone supports worker-evaluable scans, not every historical custom condition.
-
-The adapter's catalogue comes from compiled frontend data; IPO rows come from the immutable static release. The explain method is currently a placeholder. Do not create an assumed server route for every method in `screenerApi`.
+3. **Chart origin:** when charts are enabled, expose the R2 URL template with suitable browser CORS and gzip delivery. A scanner-only release legitimately has no chart URLs.
+4. **Operator monitoring:** watch failed workflows, stale session pointers, missing history, archive failures, and object expiry. Scheduled time is not a completion guarantee.
 
 ### Release identity and retry boundaries
 
@@ -655,10 +623,10 @@ python3 -m unittest discover -s tests -v
 cd ..
 python3 -m unittest discover -s frontend -p 'test_*.py' -v
 
-# Frontend tests and production build
+# Shared catalogue and Worker tests
 cd frontend
 npm test
-npm run build
+npm run typecheck
 ```
 
 ### Match states

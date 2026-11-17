@@ -47,12 +47,15 @@ jobs:
         run: npm ci
       - name: Audit frontend dependencies
         run: npm audit --audit-level=high
-      - name: Run frontend tests
+      - name: Run catalogue and Worker tests
         run: npm test
       - name: Test data Worker
         run: node --test ../workers/r2-delivery/test.mjs
-      - name: Build frontend
-        run: npm run build
+      - name: Type-check shared catalogue
+        run: npm run typecheck
+      - name: Type-check Worker
+        working-directory: .
+        run: npm ci --ignore-scripts && npm run check:worker
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

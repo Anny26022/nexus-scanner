@@ -1,3 +1,0 @@
-# /data/* is served by the Worker from R2 (workers/screener-ai/siteData.ts), with its own cache and CORS headers.
-/assets/*
-  Cache-Control: public, max-age=31536000, immutable

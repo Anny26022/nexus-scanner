@@ -8,7 +8,6 @@ Every result is tied to one published trading session and one immutable revision
 
 ## Contents
 
-- [What users can do](#what-users-can-do)
 - [Technical architecture](#technical-architecture)
 - [How people use this repository](#how-people-use-this-repository)
 - [Every scanner form and filter family](#every-scanner-form-and-filter-family)
@@ -26,45 +25,38 @@ Every result is tied to one published trading session and one immutable revision
 
 | Location | Responsibility |
 | --- | --- |
-| [`frontend/`](frontend/) | React 19 UI, TypeScript types, Vite server/build, browser screening worker, chart client, and frontend tests. |
+| [`frontend/`](frontend/) | Browser data publication (Python) and the shared filter catalogue the AI Worker and the pipeline read. The screener UI lives in Nexus Journal (`packages/nexus-scanner`). |
+| [`workers/screener-ai/`](workers/screener-ai/) | The `nexus-scanner` Worker: published data (`/data/*`) from R2 and the AI screen compiler. |
 | [`DO NOT DELETE EDL PIPELINE/`](DO%20NOT%20DELETE%20EDL%20PIPELINE/) | Python acquisition, history maintenance, calculations, condition engine, artifact validation, and publication. The directory name is preserved because existing workflows use it. |
 | [`.github/workflows/daily_refresh.yml`](.github/workflows/daily_refresh.yml) | Weekday refresh, tests, scanner publication, R2 upload when configured, and generated-data commit. |
 | [`.github/workflows/weekly_eod2_refresh.yml`](.github/workflows/weekly_eod2_refresh.yml) | Weekly adjusted-history overlay followed by the same validated publication flow. |
 | `docs/r2-chart-publication.md` (private notes) | R2 object layout, retry behavior, retention, and chart fields. |
-| [`frontend/README.md`](frontend/README.md) | Frontend API details and local UI development. |
+| [`frontend/README.md`](frontend/README.md) | What remains in `frontend/` and how to test it. |
 
 ## Technical architecture
 
-Nexus is deliberately split into a data plane and an interaction plane.
+Nexus is deliberately split into a data plane (this repository) and an interaction plane (Nexus Journal).
 
 | Layer | Technology | Responsibility |
 | --- | --- | --- |
-| Browser UI | React 19, TypeScript, Vite, Tailwind, TanStack Query | Renders the screener, IPO catalogue, tables, and forms; restores workspace preferences. |
-| Browser screen engine | Module Web Worker, TypeScript | Decompresses immutable snapshots, evaluates supported rules, sorts, and paginates without blocking the UI. |
-| Condition contract | Typed TypeScript catalogue and Python registries | Keeps field names, inputs, presets, labels, and availability rules aligned across the UI and evaluator. |
+| Screener UI and browser screen engine | Nexus Journal's `packages/nexus-scanner` | Renders the screener, charts and tables; evaluates supported rules on published snapshots in a Web Worker. Not in this repository. |
+| Data and AI Worker | Cloudflare Worker (`workers/screener-ai`) | Serves published data from R2 and compiles plain-English screens against the shared filter catalogue. |
+| Condition contract | Typed TypeScript catalogue and Python registries | Keeps field names, inputs, presets, labels, and availability rules aligned across the pipeline, the AI Worker and the journal's copy. |
 | Python evaluator | Python, pandas, NumPy | Evaluates historical OHLCV, multi-session, delivery, pattern, earnings, and cross-series rules. |
 | Data pipeline | Python, requests, BeautifulSoup, CSV/JSON/Gzip | Fetches, standardizes, validates, and promotes market artifacts. |
 | Release store | Git-hosted immutable JSON and gzip files | Publishes compact scanner releases and a small active-release pointer. |
-| Chart store | Cloudflare R2 | Supplies per-symbol compressed payloads through the chart client; an integrated chart viewer is not yet wired into the UI. |
+| Chart store | Cloudflare R2 | Supplies per-symbol compressed payloads the journal's charts load. |
 | Automation | GitHub Actions | Runs daily and weekly refreshes, tests, publication, and generated-data commits. |
 
-### Frontend modules
+### Shared filter catalogue
 
 | Module | What it does |
 | --- | --- |
-| `frontend/src/App.tsx` | Owns top-level navigation and the active screener workspace. |
-| `frontend/src/components/ExploreTab.tsx` | Mainboard screen controls, active filters, and result workflow. |
-| `frontend/src/components/NewListingsTab.tsx` | IPO catalogue controls and table workflow. |
-| `frontend/src/components/SymbolListTab.tsx` | Pasted symbol validation and custom-universe workflow. |
-| `frontend/src/components/ScreenerModal.tsx` | Visual condition builder and preset editor. |
-| `frontend/src/components/ConditionCatalogModal.tsx` | Searchable condition selection. |
-| `frontend/src/components/ResultsTable.tsx` | Shared sortable and paginated equity table. |
-| `frontend/src/api/realAdapter.ts` | Chooses snapshot-worker or Python API evaluation and validates release identity. |
-| `frontend/src/api/snapshotEngine.ts` | Loads, validates, caches, filters, sorts, and pages a snapshot. |
-| `frontend/src/api/snapshot.worker.ts` | Keeps snapshot computation off the UI thread. |
-| `frontend/src/api/snapshotScreen.ts` | Compiles browser-supported conditions and caches result sets across pages. |
-| `frontend/src/api/screenerApi.ts` | Typed facade selecting the real or mock adapter; methods do not all correspond to HTTP endpoints. |
-| `frontend/src/data/` | Condition and preset catalogues compiled into the frontend build. |
+| `frontend/src/data/` | Condition, preset and scan catalogues. The pipeline reads `presetEligibility.json`, `snapshotTechnicals.json` and `scanRecipes.json`; the AI Worker compiles screens against the TypeScript catalogues and `nativeConditions.json` (also read by `test_scanner_bridge.py`). |
+| `frontend/src/api/aiFilterCatalog.ts`, `aiScreenerContract.ts` | The AI compiler's filter list and the result it must return. |
+| `frontend/src/api/snapshotScreen.ts`, `frontend/src/utils/` | Condition rules the catalogue and compiler share. |
+
+Nexus Journal keeps its own copy of these files in `packages/nexus-scanner/src`; change both together.
 
 ### Pipeline modules
 
@@ -85,7 +77,7 @@ Nexus is deliberately split into a data plane and an interaction plane.
 
 ### 1. Researcher: find an actionable candidate list
 
-Use the running frontend at `localhost:8080` or a deployed build.
+Use the screener in Nexus Journal (`/scanner`).
 
 1. Select Mainboard or another available indexed universe such as Nifty 500.
 2. Start from a preset such as Persistent Momentum, then tune its parameters; or build a rule from scratch.
@@ -99,17 +91,9 @@ This workflow is for idea generation and repeatable research. It does not execut
 
 Use the revision/session visible in the screen result. The immutable release lets an analyst explain what data was used for the result and rerun the same expression against the matching backend inputs where history is available. Same-session data corrections create a new revision, preserving the older release rather than overwriting it.
 
-### 3. Product team: embed or deploy the screener
+### 3. Product team: embed the screener
 
-Build the frontend as a static application:
-
-```bash
-cd frontend
-npm install
-npm run build
-```
-
-Host the resulting static files with immutable-cache rules for `data/revisions/*` and revalidation for `data/current.json`. Provide the Python `/screens/run` endpoint for expressions the browser worker cannot evaluate. Configure `VITE_API_BASE_URL` for the deployed API.
+The screener UI is Nexus Journal's `packages/nexus-scanner`. It reads published data and the AI endpoint from the `nexus-scanner` Worker (`npm run deploy`); opening the Worker's own pages redirects to the journal.
 
 ### 4. Data engineer: refresh public market artifacts
 
@@ -124,7 +108,7 @@ After the run, inspect `data_quality.json`, `pipeline_report.json`, and the gene
 
 ### 5. Quant or developer: add a new condition or preset
 
-1. Add a typed input definition to the frontend condition catalogue.
+1. Add a typed input definition to the condition catalogue (`frontend/src/data/`, and the journal's copy).
 2. Add the condition's evaluation contract in the Python registry and implementation.
 3. Define missing-data and session-alignment behavior explicitly.
 4. Add unit tests for match, no-match, and unavailable outcomes.
@@ -133,44 +117,7 @@ After the run, inspect `data_quality.json`, `pipeline_report.json`, and the gene
 
 ### 6. Data platform operator: run charts at scale
 
-Set the R2 environment variables, enable `EDL_CHART_STORAGE=r2`, and run the normal pipeline. The publisher uploads immutable per-symbol files, verifies them, and updates the release only after all required publication work completes. An application consuming `screenerApi.getChart` can fetch a single chart at a time from the release URL template. The current table UI does not call this method.
-
-## What users can do
-
-### Mainboard screener
-
-The mainboard workspace exposes a visual condition builder, built-in scans, and a compact query input. Query text is compiled by the Python scanner and never interpreted by a browser keyword heuristic.
-
-1. Choose a built-in scan.
-2. Add custom conditions through the visual filter builder.
-3. Query text is compiled into the same expression tree by the Python query module. Unsupported clauses reject the whole request; repeated clauses and nested `AND`/`OR` groups are preserved.
-4. Developers can use the symbol-list component and adapter to apply conditions to a custom symbol list.
-
-Users choose a universe, combine conditions with `AND` or `OR`, run the screen, sort the common results table, paginate, and copy symbols. The evaluator supports nested expression trees. Universe definitions include Mainboard, Nifty 50, Nifty 500, MidSmall 400, and custom symbols; availability depends on the released membership data.
-
-### IPO catalogue
-
-The IPO view uses compact search, filters, sorting, page controls, and a listing window. Filters use the released IPO dataset and current snapshot fields. Its table displays symbol/company, listing date, current price, daily turnover, market cap, delivery percentage, sector, and industry. Issue price, listing price, and return since listing are not currently mapped into this table.
-
-### Symbol screener
-
-The symbol form accepts pasted tickers, normalizes them, reports invalid symbols, and produces a private custom universe for the same screen engine. It does not invent matches for unknown symbols.
-
-### Saved preferences
-
-The active tab, screener universe, conditions, match mode, and sort order are stored in browser `localStorage`. The IPO period, search, conditions, match mode, and sort order have separate keys under `nexus-scanner.*.v1`. This restores the current workspace; it is not a library of named saved screens. Clearing site storage removes these preferences. There is no account sync.
-
-### Implemented features and integration boundaries
-
-| Capability | Current implementation |
-| --- | --- |
-| Screening and IPO tables | Implemented in the two app tabs. |
-| Copy TradingView symbols | Copies `NSE:<symbol>` values from the displayed page, not the entire matching universe. |
-| Watchlist button | Displays a confirmation toast; no watchlist persistence or external integration exists. |
-| Chart data | Generated payloads and a revision-validated `getChart` client exist; no integrated chart viewer exists. |
-| Named saved screens | Not implemented; current workspace preferences persist automatically. |
-| Explain API | The real adapter currently returns a placeholder valid response; it is not authoritative server validation. |
-| Symbol-list component | Exists in source; top-level app navigation currently contains only screener and IPO. |
+Set the R2 environment variables, enable `EDL_CHART_STORAGE=r2`, and run the normal pipeline. The publisher uploads immutable per-symbol files, verifies them, and updates the release only after all required publication work completes. Clients fetch one chart at a time from the release URL template.
 
 ## Every scanner form and filter family
 
@@ -300,10 +247,12 @@ Exact condition inputs, pattern definitions, and availability rules are document
 
 ## What happens at runtime
 
+The client side below is Nexus Journal's screener (`packages/nexus-scanner`); this repository publishes what it reads.
+
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant UI as Nexus UI
+  participant UI as Nexus Journal
   participant M as current.json
   participant W as Snapshot Worker
   participant API as Python Screen API
@@ -317,12 +266,12 @@ sequenceDiagram
   W-->>UI: Result page and diagnostics
   UI->>API: Use only if history-dependent expression is unsupported in worker
   API-->>UI: Authoritative evaluated result
-  Note over UI,R2: Chart client exists, viewer integration is pending
+  UI->>R2: Load one chart payload on demand
 ```
 
 ### Browser release loading
 
-1. The app loads `frontend/public/data/current.json` and validates its revision and session metadata.
+1. The app loads `/data/current.json` from the Worker and validates its revision and session metadata.
 2. It resolves the immutable `stocks.json.gz` URL when browser decompression is available, otherwise the JSON URL.
 3. A persistent module worker fetches the snapshot with cache reuse, decompresses it, validates its revision/session/row count, and retains at most a small number of revisions.
 4. The worker evaluates supported conditions against precomputed values, then returns only the requested result page rather than all matching rows.
@@ -333,7 +282,7 @@ The main UI never claims a browser-only approximation is a result for a rule tha
 
 ### Browser charts
 
-The chart client requests one immutable compressed payload using the chart URL template in the release. It verifies the symbol and session before returning it to the caller. A future chart viewer can consume this method without loading every stock's chart. It must provide its own loading, error, drawing, and event-marker UI.
+The journal's charts request one immutable compressed payload at a time using the chart URL template in the release, and verify the symbol and session before drawing it.
 
 ### Precomputed work versus runtime work
 
@@ -526,24 +475,14 @@ From the repository root, after a validated pipeline run:
 python3 frontend/publish_snapshot.py
 ```
 
-### Start the frontend
+### Run the AI Worker locally
 
 ```bash
-cd frontend
 npm install
-npm run dev -- --host localhost --port 8080 --strictPort
+npm run dev:ai
 ```
 
-Open [http://localhost:8080](http://localhost:8080).
-
-For local custom history conditions, Vite uses the Python bridge. A static production deployment must supply a backend for `POST /screens/run` or proxy `/api/screens/run` to that backend.
-
-```env
-VITE_USE_MOCK=false
-VITE_API_BASE_URL=/api
-```
-
-`VITE_USE_MOCK=true` is only for UI development. It is not live market data.
+It serves `/api/screener/ai-compile` on port 8787 and reads `frontend/public/data/` (run `python3 frontend/site_data.py ai-choices` after a local publication).
 
 ## Configuration and production deployment
 
@@ -561,22 +500,15 @@ VITE_API_BASE_URL=/api
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Required server-side S3-compatible credentials. Never place them in frontend variables or public artifacts. |
 | `R2_PUBLIC_BASE_URL` | Required public chart origin; browser access and CORS must work from the frontend origin. |
 | `R2_BUCKET` | `nexus-screener-chart-data` unless overridden. |
-| `VITE_USE_MOCK` | False unless exactly `true`; selects fabricated UI-development data when enabled. |
-| `VITE_API_BASE_URL` | `/api` when absent; adapter appends `/screens/run`. Build-time frontend setting. |
 
 Pipeline Boolean settings accept familiar true/false forms (`1/0`, `yes/no`, `on/off`); invalid values warn and use the default. Consult the workflow and source for additional source-specific settings rather than assuming this table enumerates every fetcher's tuning option.
 
 ### What a production installation needs
 
-1. **Static application:** serve `frontend/dist` from a host supporting the app's assets and public data files. Deploy the application/catalogue version compatible with the published snapshot.
+1. **Worker:** deploy the `nexus-scanner` Worker (`npm run deploy`), which serves `/data/*` from R2 and the AI compiler. The UI is Nexus Journal's.
 2. **Release authority:** deploy immutable revision directories before updating `data/current.json`. Revalidate the pointer; cache immutable revision URLs for reuse. Keep the JSON fallback available alongside gzip.
-3. **Historical screen service:** provide `POST <VITE_API_BASE_URL>/screens/run` for unsupported worker expressions. The response must use the requested immutable revision. Preserve the corresponding frozen evaluation inputs and history on the server.
-4. **Chart origin:** when charts are enabled, expose the R2 URL template with suitable browser CORS and gzip delivery. A scanner-only release legitimately has no chart URLs.
-5. **Operator monitoring:** watch failed workflows, stale session pointers, missing history, archive failures, and object expiry. Scheduled time is not a completion guarantee.
-
-Vite's local middleware handles `POST /api/screens/run` by managing a persistent Python worker. `npm run build` produces static files and does **not** package that middleware as a production Python service. A production process manager, reverse proxy, request limits, and server deployment must be supplied separately. Static hosting alone supports worker-evaluable scans, not every historical custom condition.
-
-The adapter's catalogue comes from compiled frontend data; IPO rows come from the immutable static release. The explain method is currently a placeholder. Do not create an assumed server route for every method in `screenerApi`.
+3. **Chart origin:** when charts are enabled, expose the R2 URL template with suitable browser CORS and gzip delivery. A scanner-only release legitimately has no chart URLs.
+4. **Operator monitoring:** watch failed workflows, stale session pointers, missing history, archive failures, and object expiry. Scheduled time is not a completion guarantee.
 
 ### Release identity and retry boundaries
 
@@ -655,10 +587,10 @@ python3 -m unittest discover -s tests -v
 cd ..
 python3 -m unittest discover -s frontend -p 'test_*.py' -v
 
-# Frontend tests and production build
+# Shared catalogue and Worker tests
 cd frontend
 npm test
-npm run build
+npm run typecheck
 ```
 
 ### Match states

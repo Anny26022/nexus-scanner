@@ -14,7 +14,7 @@ export const isServedPath = (pathname: string) => SERVED_PREFIXES.some((prefix) 
 
 /**
  * A temporary redirect for a page request, or null when the request should be handled here. The query string
- * travels along: shared screens are `?screen=…` links (frontend/src/utils/savedScreens.ts), and the journal's
+ * travels along: shared screens are `?screen=…` links (Nexus Journal's savedScreens.ts), and the journal's
  * scanner page applies that parameter.
  */
 export function pageRedirect(pathname: string, target: string | undefined, search = ''): Response | null {

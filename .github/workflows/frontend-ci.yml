@@ -5,6 +5,12 @@ on:
     paths:
       - 'frontend/**'
       - 'workers/r2-delivery/**'
+      - 'workers/screener-ai/**'
+      - 'wrangler.jsonc'
+      - 'wrangler.dev.jsonc'
+      - 'tsconfig.worker.json'
+      - 'package.json'
+      - 'package-lock.json'
       - 'DO NOT DELETE EDL PIPELINE/requirements.txt'
       - '.nvmrc'
       - '.github/workflows/frontend-ci.yml'
@@ -16,6 +22,12 @@ on:
     paths:
       - 'frontend/**'
       - 'workers/r2-delivery/**'
+      - 'workers/screener-ai/**'
+      - 'wrangler.jsonc'
+      - 'wrangler.dev.jsonc'
+      - 'tsconfig.worker.json'
+      - 'package.json'
+      - 'package-lock.json'
       - 'DO NOT DELETE EDL PIPELINE/requirements.txt'
       - '.nvmrc'
       - '.github/workflows/frontend-ci.yml'
@@ -45,8 +57,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci
-      - name: Audit frontend dependencies
-        run: npm audit --audit-level=high
       - name: Run catalogue and Worker tests
         run: npm test
       - name: Test data Worker
@@ -72,3 +82,6 @@ jobs:
           sudo apt-get update -qq && sudo apt-get install -y -qq rclone
           python -m unittest discover -s . -p 'test_*.py' -v
           python ../tools/benchmark_r2_publication.py --list-delay 0 --object-delay 0
+      # Last, so a new advisory in the test tooling never hides the test results above.
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high

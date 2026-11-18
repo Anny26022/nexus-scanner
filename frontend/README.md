@@ -1,7 +1,8 @@
 # frontend/
 
 Despite the name, this folder no longer holds a UI. The screener UI lives in Nexus Journal
-(`packages/nexus-scanner` in that repository); opening the `nexus-scanner` Worker's pages redirects there.
+(`packages/nexus-scanner` in that repository). In production the `nexus-scanner` Worker redirects its pages there
+(`UI_REDIRECT`); the local Worker (`wrangler.dev.jsonc`) has no redirect and serves only data and the AI endpoint.
 
 What remains:
 
@@ -13,7 +14,10 @@ What remains:
 | `src/__tests__` | Tests of the shared catalogue and the Worker. `fixtures/packedSnapshot.json` is also read by `test_packed_snapshot.py`. |
 | `public/data/` | Local publications (`EDL_CHART_STORAGE=local`) and the local Worker's data. Production data is in R2. |
 
+Run these from `frontend/`:
+
 ```bash
+cd frontend
 npm install
 npm test          # catalogue and Worker tests
 npm run typecheck

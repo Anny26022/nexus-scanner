@@ -8,7 +8,6 @@ Every result is tied to one published trading session and one immutable revision
 
 ## Contents
 
-- [What users can do](#what-users-can-do)
 - [Technical architecture](#technical-architecture)
 - [How people use this repository](#how-people-use-this-repository)
 - [Every scanner form and filter family](#every-scanner-form-and-filter-family)
@@ -36,24 +35,24 @@ Every result is tied to one published trading session and one immutable revision
 
 ## Technical architecture
 
-Nexus is deliberately split into a data plane and an interaction plane.
+Nexus is deliberately split into a data plane (this repository) and an interaction plane (Nexus Journal).
 
 | Layer | Technology | Responsibility |
 | --- | --- | --- |
-| Browser UI | React 19, TypeScript, Vite, Tailwind, TanStack Query | Renders the screener, IPO catalogue, tables, and forms; restores workspace preferences. |
-| Browser screen engine | Module Web Worker, TypeScript | Decompresses immutable snapshots, evaluates supported rules, sorts, and paginates without blocking the UI. |
-| Condition contract | Typed TypeScript catalogue and Python registries | Keeps field names, inputs, presets, labels, and availability rules aligned across the UI and evaluator. |
+| Screener UI and browser screen engine | Nexus Journal's `packages/nexus-scanner` | Renders the screener, charts and tables; evaluates supported rules on published snapshots in a Web Worker. Not in this repository. |
+| Data and AI Worker | Cloudflare Worker (`workers/screener-ai`) | Serves published data from R2 and compiles plain-English screens against the shared filter catalogue. |
+| Condition contract | Typed TypeScript catalogue and Python registries | Keeps field names, inputs, presets, labels, and availability rules aligned across the pipeline, the AI Worker and the journal's copy. |
 | Python evaluator | Python, pandas, NumPy | Evaluates historical OHLCV, multi-session, delivery, pattern, earnings, and cross-series rules. |
 | Data pipeline | Python, requests, BeautifulSoup, CSV/JSON/Gzip | Fetches, standardizes, validates, and promotes market artifacts. |
 | Release store | Git-hosted immutable JSON and gzip files | Publishes compact scanner releases and a small active-release pointer. |
-| Chart store | Cloudflare R2 | Supplies per-symbol compressed payloads through the chart client; an integrated chart viewer is not yet wired into the UI. |
+| Chart store | Cloudflare R2 | Supplies per-symbol compressed payloads the journal's charts load. |
 | Automation | GitHub Actions | Runs daily and weekly refreshes, tests, publication, and generated-data commits. |
 
 ### Shared filter catalogue
 
 | Module | What it does |
 | --- | --- |
-| `frontend/src/data/` | Condition, preset and scan catalogues. The pipeline reads its JSON files (`presetEligibility.json`, `snapshotTechnicals.json`, `nativeConditions.json`, `scanRecipes.json`); the AI Worker compiles screens against the TypeScript catalogues. |
+| `frontend/src/data/` | Condition, preset and scan catalogues. The pipeline reads `presetEligibility.json`, `snapshotTechnicals.json` and `scanRecipes.json`; the AI Worker compiles screens against the TypeScript catalogues and `nativeConditions.json` (also read by `test_scanner_bridge.py`). |
 | `frontend/src/api/aiFilterCatalog.ts`, `aiScreenerContract.ts` | The AI compiler's filter list and the result it must return. |
 | `frontend/src/api/snapshotScreen.ts`, `frontend/src/utils/` | Condition rules the catalogue and compiler share. |
 
@@ -109,7 +108,7 @@ After the run, inspect `data_quality.json`, `pipeline_report.json`, and the gene
 
 ### 5. Quant or developer: add a new condition or preset
 
-1. Add a typed input definition to the frontend condition catalogue.
+1. Add a typed input definition to the condition catalogue (`frontend/src/data/`, and the journal's copy).
 2. Add the condition's evaluation contract in the Python registry and implementation.
 3. Define missing-data and session-alignment behavior explicitly.
 4. Add unit tests for match, no-match, and unavailable outcomes.
@@ -118,44 +117,7 @@ After the run, inspect `data_quality.json`, `pipeline_report.json`, and the gene
 
 ### 6. Data platform operator: run charts at scale
 
-Set the R2 environment variables, enable `EDL_CHART_STORAGE=r2`, and run the normal pipeline. The publisher uploads immutable per-symbol files, verifies them, and updates the release only after all required publication work completes. An application consuming `screenerApi.getChart` can fetch a single chart at a time from the release URL template. The current table UI does not call this method.
-
-## What users can do
-
-### Mainboard screener
-
-The mainboard workspace exposes a visual condition builder, built-in scans, and a compact query input. Query text is compiled by the Python scanner and never interpreted by a browser keyword heuristic.
-
-1. Choose a built-in scan.
-2. Add custom conditions through the visual filter builder.
-3. Query text is compiled into the same expression tree by the Python query module. Unsupported clauses reject the whole request; repeated clauses and nested `AND`/`OR` groups are preserved.
-4. Developers can use the symbol-list component and adapter to apply conditions to a custom symbol list.
-
-Users choose a universe, combine conditions with `AND` or `OR`, run the screen, sort the common results table, paginate, and copy symbols. The evaluator supports nested expression trees. Universe definitions include Mainboard, Nifty 50, Nifty 500, MidSmall 400, and custom symbols; availability depends on the released membership data.
-
-### IPO catalogue
-
-The IPO view uses compact search, filters, sorting, page controls, and a listing window. Filters use the released IPO dataset and current snapshot fields. Its table displays symbol/company, listing date, current price, daily turnover, market cap, delivery percentage, sector, and industry. Issue price, listing price, and return since listing are not currently mapped into this table.
-
-### Symbol screener
-
-The symbol form accepts pasted tickers, normalizes them, reports invalid symbols, and produces a private custom universe for the same screen engine. It does not invent matches for unknown symbols.
-
-### Saved preferences
-
-The active tab, screener universe, conditions, match mode, and sort order are stored in browser `localStorage`. The IPO period, search, conditions, match mode, and sort order have separate keys under `nexus-scanner.*.v1`. This restores the current workspace; it is not a library of named saved screens. Clearing site storage removes these preferences. There is no account sync.
-
-### Implemented features and integration boundaries
-
-| Capability | Current implementation |
-| --- | --- |
-| Screening and IPO tables | Implemented in the two app tabs. |
-| Copy TradingView symbols | Copies `NSE:<symbol>` values from the displayed page, not the entire matching universe. |
-| Watchlist button | Displays a confirmation toast; no watchlist persistence or external integration exists. |
-| Chart data | Generated payloads and a revision-validated `getChart` client exist; no integrated chart viewer exists. |
-| Named saved screens | Not implemented; current workspace preferences persist automatically. |
-| Explain API | The real adapter currently returns a placeholder valid response; it is not authoritative server validation. |
-| Symbol-list component | Exists in source; top-level app navigation currently contains only screener and IPO. |
+Set the R2 environment variables, enable `EDL_CHART_STORAGE=r2`, and run the normal pipeline. The publisher uploads immutable per-symbol files, verifies them, and updates the release only after all required publication work completes. Clients fetch one chart at a time from the release URL template.
 
 ## Every scanner form and filter family
 
@@ -285,10 +247,12 @@ Exact condition inputs, pattern definitions, and availability rules are document
 
 ## What happens at runtime
 
+The client side below is Nexus Journal's screener (`packages/nexus-scanner`); this repository publishes what it reads.
+
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant UI as Nexus UI
+  participant UI as Nexus Journal
   participant M as current.json
   participant W as Snapshot Worker
   participant API as Python Screen API
@@ -302,12 +266,12 @@ sequenceDiagram
   W-->>UI: Result page and diagnostics
   UI->>API: Use only if history-dependent expression is unsupported in worker
   API-->>UI: Authoritative evaluated result
-  Note over UI,R2: Chart client exists, viewer integration is pending
+  UI->>R2: Load one chart payload on demand
 ```
 
 ### Browser release loading
 
-1. The app loads `frontend/public/data/current.json` and validates its revision and session metadata.
+1. The app loads `/data/current.json` from the Worker and validates its revision and session metadata.
 2. It resolves the immutable `stocks.json.gz` URL when browser decompression is available, otherwise the JSON URL.
 3. A persistent module worker fetches the snapshot with cache reuse, decompresses it, validates its revision/session/row count, and retains at most a small number of revisions.
 4. The worker evaluates supported conditions against precomputed values, then returns only the requested result page rather than all matching rows.
@@ -318,7 +282,7 @@ The main UI never claims a browser-only approximation is a result for a rule tha
 
 ### Browser charts
 
-The chart client requests one immutable compressed payload using the chart URL template in the release. It verifies the symbol and session before returning it to the caller. A future chart viewer can consume this method without loading every stock's chart. It must provide its own loading, error, drawing, and event-marker UI.
+The journal's charts request one immutable compressed payload at a time using the chart URL template in the release, and verify the symbol and session before drawing it.
 
 ### Precomputed work versus runtime work
 

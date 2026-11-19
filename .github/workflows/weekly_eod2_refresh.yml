@@ -1,10 +1,7 @@
 name: Weekly Adjusted OHLCV Refresh
 
 on:
-  schedule:
-    # Sunday 09:00 IST. EOD2 publishes weekly, so this supplements—not
-    # replaces—the weekday official-NSE refresh.
-    - cron: '30 3 * * 0'
+  # Started on time by the nexus-gh-cron Worker in new_nexys_ultimate (workers/gh-cron/schedule.ts), not a GitHub schedule.
   workflow_dispatch:
 
 permissions:

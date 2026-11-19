@@ -1,8 +1,7 @@
 name: Daily Data Refresh
 
 on:
-  schedule:
-    - cron: '30 10 * * 1-5' # Runs at 4:00 PM IST (10:30 UTC) Mon-Fri
+  # Started on time by the nexus-gh-cron Worker in new_nexys_ultimate (workers/gh-cron/schedule.ts), not a GitHub schedule.
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 permissions:

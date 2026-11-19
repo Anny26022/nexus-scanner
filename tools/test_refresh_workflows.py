@@ -47,11 +47,9 @@ class RefreshWorkflowTests(unittest.TestCase):
         for name, expected in BASELINES.items():
             with self.subTest(workflow=name):
                 workflow = document('.github/workflows/' + name)
-                cron = '30 10 * * 1-5' if name == 'daily_refresh.yml' else '30 3 * * 0'
-                # PyYAML YAML 1.1 treats the unquoted GitHub "on" key as True.
-                self.assertEqual(workflow.get('on', workflow.get(True)), {
-                    'schedule': [{'cron': cron}], 'workflow_dispatch': None,
-                })
+                # PyYAML YAML 1.1 treats the unquoted GitHub "on" key as True. No `schedule:`: the nexus-gh-cron
+                # Worker in new_nexys_ultimate starts both on time, through workflow_dispatch.
+                self.assertEqual(workflow.get('on', workflow.get(True)), {'workflow_dispatch': None})
                 self.assertEqual(workflow['concurrency'], {'group': 'daily-data-refresh', 'cancel-in-progress': False})
                 self.assertEqual(workflow['permissions'], {'contents': 'write'})
                 job, = workflow['jobs'].values()

@@ -145,11 +145,13 @@ class SiteDataTests(unittest.TestCase):
         release(self.output, session='2026-10-27')
         store = FakeStore({'site/data/current.json': b'{"sessionDate":"2026-10-28"}',
                            'site/data/sessions.json': b'live sessions', 'site/data/results/index.json': b'live index',
-                           'site/data/ai-filter-choices.json': b'not pulled'})
+                           'site/data/ai-filter-choices.json': b'not pulled', 'site/data/us/current.json': b'not pulled'})
         site_data.pull(store, self.output)
         self.assertEqual((self.output / 'sessions.json').read_bytes(), b'live sessions')
         self.assertEqual((self.output / 'results/index.json').read_bytes(), b'live index')
         self.assertFalse((self.output / 'ai-filter-choices.json').exists())
+        # The US pointer is the US refresh's: India's pull leaves it in R2.
+        self.assertFalse((self.output / 'us/current.json').exists())
 
     def test_pull_keeps_a_newer_checkout_and_bootstraps_an_empty_bucket(self):
         release(self.output, session='2026-10-29')

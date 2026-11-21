@@ -8,14 +8,21 @@ from ohlcv_utils import is_nse_session_day
 from pipeline_utils import load_json, resource_path
 
 
-def next_session(session):
+def next_session(session, market='in'):
+    if market == 'us':
+        from edl_pipeline.markets.us.calendar import is_nyse_session_day
+        day = date.fromisoformat(session) + timedelta(days=1)
+        while not is_nyse_session_day(day):
+            day += timedelta(days=1)
+        return day.isoformat()
     day = date.fromisoformat(session) + timedelta(days=1)
     while not is_nse_session_day(day):
         day += timedelta(days=1)
     return day.isoformat()
 
 
-def build_etf_snapshot(source, session, revision):
+def build_etf_snapshot(source, session, revision, market=None):
+    market = market or source.get('market') or ('us' if 'america' in str(source.get('source', '')) else 'in')
     labels = load_json(resource_path('etf_enum_labels.json'))
     registry = load_json(resource_path('etf_fields.json'))
     fields = registry['columns']
@@ -24,10 +31,11 @@ def build_etf_snapshot(source, session, revision):
         value = record.get(key)
         return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
     fetched = datetime.fromisoformat(source['fetchedAt'].replace('Z', '+00:00')).timestamp()
-    upcoming = next_session(session)
+    upcoming = next_session(session, market=market)
+    tz = ZoneInfo('America/New_York') if market == 'us' else ZoneInfo('Asia/Kolkata')
     for record in source['records']:
         stamp = number(record, 'time')
-        quote_date = datetime.fromtimestamp(stamp, ZoneInfo('Asia/Kolkata')).date().isoformat() if stamp else None
+        quote_date = datetime.fromtimestamp(stamp, tz).date().isoformat() if stamp else None
         # TradingView can stamp a closed session's quote with the next session's opening time before that session
         # starts (75 ETFs after the 2026-11-08 Muhurat session read 2026-11-09 09:15, with Muhurat's prices and
         # volumes). A quote time still in the future when fetched cannot be that session's trading, so it is the
@@ -55,12 +63,14 @@ def build_etf_snapshot(source, session, revision):
                    asOfDate=quote_date, metadataAsOfDate=session, historyAligned=False,
                    indexMemberships=[], metrics={}, presetMatches={}, etf=values)
         turnover = number(record, 'Value.Traded')
-        row['rupeeVolumeCrore'] = turnover / 1e7 if turnover is not None else None
+        row['rupeeVolumeCrore'] = (turnover / 1e6 if market == 'us' else turnover / 1e7) if turnover is not None else None
         rows.append(row)
-    if not rows or sum(row['asOfDate'] == session for row in rows) / len(rows) < .9:
+    min_coverage = 0.70 if market == 'us' else 0.90
+    if not rows or sum(row['asOfDate'] == session for row in rows) / len(rows) < min_coverage:
         raise ValueError(f'ETF data not advanced to expected stock session {session}')
     return dict(revision=revision, asOfDate=session, totalStocks=len(rows), stocks=rows,
-                assetType='etf', etfLabels=observed_labels, fetchedAt=source['fetchedAt'])
+                assetType='etf', etfLabels=observed_labels, fetchedAt=source['fetchedAt'],
+                **({'market': market, 'currency': 'USD'} if market == 'us' else {'market': market} if market != 'in' else {}))
 
 
 def prune_etf_snapshots(output, revision):

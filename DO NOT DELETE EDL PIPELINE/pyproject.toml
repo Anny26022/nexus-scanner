@@ -38,6 +38,8 @@ package-dir = { "edl_pipeline" = "src/edl_pipeline" }
 packages = [
     "edl_pipeline",
     "edl_pipeline.breadth",
+    "edl_pipeline.markets",
+    "edl_pipeline.markets.us",
     "edl_pipeline.scanner",
     "edl_pipeline.sources",
     "edl_pipeline.transforms",

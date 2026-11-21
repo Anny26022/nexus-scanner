@@ -1,7 +1,8 @@
 import type { StockRow } from '../types/screener';
 
 // One registry keeps the picker and evaluator on the same published fields/units.
-export const snapshotFundamentals: Array<{value: string; label: string; field: keyof StockRow}> = [
+// `usOnly` metrics are published by the US release alone; the picker offers them only when the snapshot carries them.
+export const snapshotFundamentals: Array<{value: string; label: string; field: keyof StockRow; usOnly?: true}> = [
   {value:'PB_RATIO', label:'P/B ratio', field:'pbRatio'},
   {value:'EV_EBITDA', label:'EV / EBITDA', field:'evEbitda'},
   {value:'CURRENT_RATIO', label:'Current ratio', field:'currentRatio'},
@@ -29,4 +30,18 @@ export const snapshotFundamentals: Array<{value: string; label: string; field: k
   {value:'BORROWINGS', label:'Borrowings (₹ Cr)', field:'borrowingsCrore'},
   {value:'FIXED_ASSETS', label:'Fixed assets (₹ Cr)', field:'fixedAssetsCrore'},
   {value:'CWIP', label:'Capital work in progress (₹ Cr)', field:'cwipCrore'},
+  {value:'SHORT_FLOAT', label:'Short float (%)', field:'shortFloatPct', usOnly:true},
+  {value:'SHORT_RATIO', label:'Short ratio (Days to cover)', field:'shortRatio', usOnly:true},
+  {value:'INSIDER_HOLDING', label:'Insider holding (%)', field:'insiderOwnPct', usOnly:true},
+  {value:'INSTITUTIONAL_HOLDING', label:'Institutional holding (%)', field:'institutionalOwnPct', usOnly:true},
+  {value:'INSIDER_TRANS', label:'Insider transactions (%)', field:'insiderTransPct', usOnly:true},
+  {value:'INSTITUTIONAL_TRANS', label:'Institutional transactions (%)', field:'institutionalTransPct', usOnly:true},
+  {value:'PS_RATIO', label:'P/S ratio', field:'psRatio', usOnly:true},
+  {value:'GROSS_MARGIN', label:'Gross margin (%)', field:'grossMarginPct', usOnly:true},
+  {value:'NET_MARGIN', label:'Net margin (%)', field:'netMarginPct', usOnly:true},
+  {value:'ROIC', label:'ROIC (%)', field:'roicPct', usOnly:true},
+  {value:'QUICK_RATIO', label:'Quick ratio', field:'quickRatio', usOnly:true},
+  {value:'LT_DEBT_TO_EQUITY', label:'Long-term debt / equity', field:'ltDebtToEquity', usOnly:true},
+  {value:'BETA', label:'Beta', field:'beta', usOnly:true},
+  {value:'TARGET_PRICE_UPSIDE', label:'Analyst target upside (%)', field:'targetPriceUpsidePct', usOnly:true},
 ];

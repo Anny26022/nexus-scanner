@@ -9,7 +9,7 @@ from unittest.mock import patch
 from etf_snapshot import build_etf_snapshot
 from packed_snapshot import pack_snapshot
 from test_packed_snapshot import decode_packed_snapshot
-from fetch_etf_snapshot import COLUMNS, normalize
+from fetch_etf_snapshot import COLUMNS, normalize, normalize_us
 
 
 class EtfSnapshotTests(unittest.TestCase):
@@ -20,12 +20,30 @@ class EtfSnapshotTests(unittest.TestCase):
         response = {'totalCount':1, 'data':[{'s':'NSE:NIFTYBEES', 'd':[values.get(field) for field in COLUMNS]}]}
         return normalize(response, fetched_at)
 
+    def us_source(self, day='2026-10-23T16:00:00-04:00', fetched_at='2026-10-23T20:30:00Z'):
+        values = dict(symbol='SPY', time=datetime.fromisoformat(day).timestamp(),
+                      close=580, exchange='AMEX', type='fund', subtype='etf', currency='USD',
+                      description='SPDR S&P 500 ETF Trust', asset_class='c05f85d35d1cd0be6ebb2af4be16e06a',
+                      expense_ratio=0.09, **{'Value.Traded': 25_000_000})
+        rows = [{'s':'AMEX:SPY', 'd':[values.get(field) for field in COLUMNS]}]
+        return normalize_us(rows, fetched_at, expected_count=1)
+
     def test_bulk_alignment_identity_and_missing_data(self):
         source = self.source()
         snapshot = build_etf_snapshot(source, '2026-10-23', 'a'*64)
         self.assertEqual(snapshot['totalStocks'], 1)
         self.assertIsNone(snapshot['stocks'][0]['etf']['expense_ratio'])
         self.assertEqual(snapshot['etfLabels']['asset_class'][source['records'][0]['asset_class']], 'Equity')
+        self.assertEqual(decode_packed_snapshot(pack_snapshot(snapshot)), snapshot)
+
+    def test_us_etf_bulk_alignment_and_dollar_turnover(self):
+        source = self.us_source()
+        snapshot = build_etf_snapshot(source, '2026-10-23', 'b'*64, market='us')
+        self.assertEqual(snapshot['totalStocks'], 1)
+        self.assertEqual(snapshot['market'], 'us')
+        self.assertEqual(snapshot['currency'], 'USD')
+        self.assertEqual(snapshot['stocks'][0]['symbol'], 'SPY')
+        self.assertEqual(snapshot['stocks'][0]['rupeeVolumeCrore'], 25.0)
         self.assertEqual(decode_packed_snapshot(pack_snapshot(snapshot)), snapshot)
 
     def test_rejects_old_or_future_quotes_instead_of_relabelling(self):

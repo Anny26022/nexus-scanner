@@ -45,6 +45,7 @@ class RotationHistoryTests(unittest.TestCase):
             return values
 
         index, _, _ = rh.build(days[-1], rows, load, {'N50': benchmark}, {})
+        self.assertNotIn('market', index)  # India's index output is unchanged
         self.assertEqual(len(index['stocks']), len(rows))
         self.assertFalse(any(ref() is not None for ref in references))
 

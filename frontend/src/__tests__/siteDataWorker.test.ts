@@ -40,6 +40,8 @@ it('maps /data paths onto the release layout Nexus Journal reads', () => {
   expect(siteDataKey('/data/current.json')).toEqual({key: 'site/data/current.json', immutable: false});
   expect(siteDataKey('/data/results/us_index.json')).toEqual({key: 'site/data/results/us_index.json', immutable: false});
   expect(siteDataKey('/data/company/current.json')).toEqual({key: 'site/data/company/current.json', immutable: false});
+  expect(siteDataKey('/data/concalls/index.json')).toEqual({key: 'site/data/concalls/index.json', immutable: false});
+  expect(siteDataKey('/data/concalls/upcoming.json')).toEqual({key: 'site/data/concalls/upcoming.json', immutable: false});
   expect(siteDataKey(`/data/revisions/${revision}/stocks.packed.json.gz`))
     .toEqual({key: `releases/${revision}/stocks.packed.json.gz`, immutable: true});
   expect(siteDataKey(`/data/revisions/${revision}/financial-history/M%26M.json.gz`))

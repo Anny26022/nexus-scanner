@@ -8,6 +8,8 @@ adds out of order.
 The provider has no "updated" field but does revise summaries, sometimes weeks later in batches. So stored calls are
 fetched again on a schedule and compared by content hash: daily for the last two days' calls, weekly for the last 7
 days plus a rotating eighth of older ones (every call about every two months). An unchanged call uploads nothing.
+Each call keeps exactly one object: a revised call's previous object is deleted on the next run, once the index
+naming its replacement is live (a run pulls the live index before it starts).
 
 Upcoming calls and today's (with their live status) are rewritten to concalls/upcoming.json on every run.
 
@@ -143,10 +145,12 @@ def write_index(output, calls, checked_at):
                         'stored': sum(bool(entry.get('object')) for entry in ordered.values()), 'calls': ordered})
 
 
-def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers=WORKERS, progress=None):
+def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers=WORKERS, progress=None,
+            delete=None):
     """Add the calls the provider lists that are not stored yet; returns a report.
 
     progress(report) is called after each batch, so a run that is stopped part-way still leaves its report.
+    delete(name) removes one object from R2; superseded objects are kept until it succeeds.
     """
     previous = json.loads(output.read_text()) if output.exists() else {'version': 1, 'calls': {}}
     if previous.get('version') != 1 or not isinstance(previous.get('calls'), dict):
@@ -154,8 +158,27 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
     calls = {slug: dict(entry) for slug, entry in previous['calls'].items()}
     # Detailed errors stay in this report (a run artifact); the published index carries only a status.
     report = {'checkedAt': checked_at, 'full': full, 'pages': 0, 'listed': 0, 'added': 0, 'pending': 0,
-              'rechecked': 0, 'updated': 0, 'failures': {}, 'errors': {}}
+              'rechecked': 0, 'updated': 0, 'deleted': 0, 'failures': {}, 'errors': {}}
     today = checked_at[:10]
+
+    # The index this run starts from is the live one, so it already names the replacements of these objects.
+    for slug, entry in calls.items():
+        kept = []
+        for digest in entry.get('superseded', ()):
+            if digest == (entry.get('object') or {}).get('sha256'):
+                continue
+            try:
+                if delete is None:
+                    raise RuntimeError('no delete configured')
+                delete(f'{digest}.json.gz')
+                report['deleted'] += 1
+            except Exception as error:  # noqa: BLE001 - kept for the next run
+                kept.append(digest)
+                report['failures'][slug] = f'delete superseded: {error}'
+        if kept:
+            entry['superseded'] = kept
+        else:
+            entry.pop('superseded', None)
 
     page = 1
     while True:
@@ -233,6 +256,8 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
                         entry['checked'] = today
                         revised = pack(folder, store, slug, detail, current)
                         if revised is not current:
+                            # The previous object goes on the next run, after this index is live.
+                            entry['superseded'] = [*entry.get('superseded', ()), current['sha256']]
                             entry['object'], entry['updated'] = revised, today
                             report['updated'] += 1
                             added += 1
@@ -353,7 +378,8 @@ def main(argv=None):
     started = time.perf_counter()
     report = refresh(OUTPUT, store, lambda page: list_page(session(), page),
                      lambda slug: fetch_detail(session(), slug), full=args.full, checked_at=now, workers=args.workers,
-                     progress=lambda partial: write_json(REPORT, partial))
+                     progress=lambda partial: write_json(REPORT, partial),
+                     delete=lambda name: store.cache_command('deletefile', store.remote(f'objects/{name}')))
     report['upcoming'] = refresh_upcoming(UPCOMING, lambda: fetch_upcoming(session()), lambda: fetch_today(session()),
                                           checked_at=now)
     if 'error' in report['upcoming']:

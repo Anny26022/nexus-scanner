@@ -245,6 +245,36 @@ class ConcallHistoryTests(unittest.TestCase):
         self.assertEqual(entry['updated'], '2026-11-22')
         self.assertEqual(self.store.load(entry['object'])['call']['markdown_summary'], '## Key Takeaways (revised)')
 
+    def test_a_revised_call_keeps_one_object_and_the_old_one_is_deleted_on_the_next_run(self):
+        self.refresh_on(Provider([[row('a', date='20 November 2026')]]), '2026-11-21T16:30:00+05:30')
+        first = self.index()['calls']['a']['object']['sha256']
+        revised = {'a': detail('a', summary='## Key Takeaways (revised)')}
+        deleted = []
+        refresh(self.output, self.store, Provider([[row('a', date='20 November 2026')]], revised).list_page,
+                Provider([], revised).fetch_detail, full=False, checked_at='2026-11-22T16:30:00+05:30', workers=2,
+                delete=deleted.append)
+        # The live index still names the old object until this run's index is published.
+        self.assertEqual(deleted, [])
+        self.assertEqual(self.index()['calls']['a']['superseded'], [first])
+        report = refresh(self.output, self.store, Provider([[row('a', date='20 November 2026')]], revised).list_page,
+                         Provider([], revised).fetch_detail, full=False, checked_at='2026-11-23T16:30:00+05:30',
+                         workers=2, delete=deleted.append)
+        self.assertEqual(deleted, [f'{first}.json.gz'])
+        self.assertEqual(report['deleted'], 1)
+        self.assertNotIn('superseded', self.index()['calls']['a'])
+
+    def test_a_failed_delete_is_retried_on_the_next_run(self):
+        self.refresh_on(Provider([[row('a', date='20 November 2026')]]), '2026-11-21T16:30:00+05:30')
+        revised = {'a': detail('a', summary='## revised')}
+        self.refresh_on(Provider([[row('a', date='20 November 2026')]], revised), '2026-11-22T16:30:00+05:30')
+
+        def down(name):
+            raise RuntimeError('r2 down')
+        refresh(self.output, self.store, Provider([[row('a', date='20 November 2026')]], revised).list_page,
+                Provider([], revised).fetch_detail, full=False, checked_at='2026-11-23T16:30:00+05:30', workers=2,
+                delete=down)
+        self.assertEqual(len(self.index()['calls']['a']['superseded']), 1)
+
     def test_a_failed_or_emptied_recheck_keeps_the_stored_version(self):
         self.refresh_on(Provider([[row('a', date='20 November 2026')]]), '2026-11-21T16:30:00+05:30')
         first = self.index()['calls']['a']['object']

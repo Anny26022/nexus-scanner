@@ -20,6 +20,10 @@ on:
 permissions:
   contents: read
 
+# Shared with the US daily refresh on purpose: both pull us/sessions.json from R2, add sessions and push the whole
+# file back (frontend/publish_us.py archive_us_session), so running side by side would drop one run's sessions.
+# A group holds one pending run and cancels an older pending one: dispatch one backfill at a time, and not while a
+# daily run is already queued behind a running one.
 concurrency:
   group: us-daily-refresh
   cancel-in-progress: false

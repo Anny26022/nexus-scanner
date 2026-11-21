@@ -28,6 +28,17 @@ def frame_of(closes, highs=None, lows=None, opens=None, volumes=None):
     })
 
 
+def nyse_sessions(start, count):
+    days = [day for day in pd.bdate_range(start, periods=count * 2) if gen.calendar.is_nyse_session_day(day.date())]
+    return pd.DatetimeIndex(days[:count])
+
+
+def write_history(directory, symbol, dates, closes):
+    frame = frame_of(np.asarray(closes, dtype=float))
+    frame.insert(0, "Date", [day.strftime("%Y-%m-%d") for day in dates])
+    frame.to_csv(Path(directory) / f"{symbol}.csv", index=False)
+
+
 class GenerateHistoricalSnapshotsUsTests(unittest.TestCase):
     def test_calculate_technicals_us_computes_core_metrics(self):
         # 260 synthetic sessions with rising price and volume
@@ -119,6 +130,56 @@ class GenerateHistoricalSnapshotsUsTests(unittest.TestCase):
                 self.assertEqual(set(actual), set(expected))
                 for key in expected:
                     self.assertAlmostEqual(actual[key], expected[key], places=12)
+
+    def test_window_load_keeps_only_window_sessions_with_full_history_values(self):
+        dates = nyse_sessions('2022-01-03', 420)
+        rng = np.random.default_rng(11)
+        spy = pd.DataFrame({'Date': dates, 'Close': 100 * np.cumprod(1 + rng.normal(0, 0.01, 420))})
+        window = [day.date() for day in dates[-10:]]
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for symbol in ('AAA', 'BBB'):
+                write_history(tmpdir, symbol, dates, 50 * np.cumprod(1 + rng.normal(0, 0.02, 420)))
+            stocks = gen.load_stock_sessions(Path(tmpdir), ['AAA', 'BBB'], spy, window)
+            for symbol in ('AAA', 'BBB'):
+                # The unsliced computation the backfill used to keep in memory for every stock.
+                full = gen.session_frame(pd.read_csv(Path(tmpdir) / f'{symbol}.csv'))
+                technicals, aligned = gen.technical_frame(full), gen.align_with_spy(full, spy)
+                positions = {day: i for i, day in enumerate(full['Date'].dt.date)}
+                loaded = stocks[symbol]
+                self.assertEqual(len(loaded['technicals']), len(window))
+                for day in window:
+                    self.assertEqual(gen.row_technicals(loaded['technicals'].iloc[loaded['rows'][day]]),
+                                     gen.row_technicals(technicals.iloc[positions[day]]))
+                    self.assertEqual(loaded['relative'][day], gen.relative_scores_at(aligned, day))
+                self.assertEqual(gen.row_technicals(loaded['technicals'].iloc[-1])['historySessions'], 420)
+
+    def test_session_writes_rs_rating_field_india_writes(self):
+        dates = nyse_sessions('2022-01-03', 300)
+        spy = pd.DataFrame({'Date': dates, 'Close': np.linspace(100.0, 130.0, 300)})
+        with tempfile.TemporaryDirectory() as tmpdir:
+            write_history(tmpdir, 'FAST', dates, np.linspace(100.0, 200.0, 300))
+            write_history(tmpdir, 'SLOW', dates, np.linspace(100.0, 110.0, 300))
+            stocks = gen.load_stock_sessions(Path(tmpdir), ['FAST', 'SLOW'], spy, [dates[-1].date()])
+        payload = gen.build_session_payload(dates[-1].date(), stocks, {}, '2026-11-21', {})
+        ratings = {row['symbol']: row['rsRating'] for row in payload['stocks']}
+        self.assertEqual(ratings, {'FAST': 99, 'SLOW': 1})
+        self.assertFalse(any('rsRsi' in row for row in payload['stocks']))
+
+    def test_universe_is_todays_screenable_list_once_per_symbol(self):
+        rows = [{'Sym': 'AAPL', 'DispSym': 'Apple Inc'}, {'Sym': 'aapl ', 'DispSym': 'Apple Inc'},
+                {'Sym': 'XYZ.P', 'DispSym': 'XYZ Corp - Preferred Stock'}, {'Sym': 'MSFT', 'DispSym': 'Microsoft'}]
+        symbols = gen.screenable_symbols(rows)
+        self.assertEqual(symbols, ['AAPL', 'MSFT'])
+        dates = nyse_sessions('2024-01-02', 30)
+        spy = pd.DataFrame({'Date': dates, 'Close': np.linspace(100.0, 110.0, 30)})
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for symbol in ('AAPL', 'MSFT', 'OLDCO'):  # OLDCO: an orphan CSV of a renamed or delisted company
+                write_history(tmpdir, symbol, dates, np.linspace(10.0, 20.0, 30))
+            stocks = gen.load_stock_sessions(Path(tmpdir), symbols + ['AAPL'], spy, [dates[-1].date()])
+        payload = gen.build_session_payload(dates[-1].date(), stocks, {}, '2026-11-21', {})
+        self.assertEqual(sorted(row['symbol'] for row in payload['stocks']), ['AAPL', 'MSFT'])
+        self.assertEqual(payload['totalStocks'], 2)
+        self.assertIn('survivorshipBias', payload['pointInTimeCoverage'])
 
     def test_earnings_age_counts_nyse_sessions(self):
         # Friday 2024-11-22 filing: Monday is 1 session later; Thanksgiving 2024-11-28 is not a session.

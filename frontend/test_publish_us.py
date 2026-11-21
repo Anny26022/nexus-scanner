@@ -135,6 +135,7 @@ class PublishUsTests(unittest.TestCase):
             'institutional_own_percent': 61.2,
             'insider_trans_percent': -2.1,
             'institutional_trans_percent': 0.45,
+            # Present in the source, never published: no analyst ratings in US data.
             'target_price': 250.0,
             'target_price_upside_percent': 12.5,
             'analyst_rating': 'Buy',
@@ -163,8 +164,8 @@ class PublishUsTests(unittest.TestCase):
         self.assertEqual((row['volatilityWeekPct'], row['volatilityMonthPct']), (2.1, 2.8))
         self.assertEqual((row['floatShares'], row['sharesOutstanding']), (15_100_000_000, 15_200_000_000))
         self.assertEqual(row['epsForecastNextQuarter'], 1.6)
-        self.assertEqual(row['targetPrice'], 250.0)
-        self.assertEqual(row['analystRating'], 'Buy')
+        for field in ('targetPrice', 'targetPriceUpsidePct', 'analystRating'):
+            self.assertNotIn(field, row)
         self.assertEqual(len(row['newsFeed']), 1)
         self.assertEqual(len(row['insiderActivity']), 1)
 
@@ -178,7 +179,8 @@ class PublishUsTests(unittest.TestCase):
     def test_load_financial_history_normalizes_to_standard_schema(self):
         records = [
             {'symbol': 'AAPL', 'quarter_end': '2024-09-30', 'revenue': 94930, 'net_profit': 20540, 'eps': 1.64, 'filing_date': '2024-10-31'},
-            {'symbol': 'AAPL', 'quarter_end': '2024-06-30', 'revenue': 85780, 'net_profit': 21450, 'eps': 1.40, 'filing_date': '2024-08-01'},
+            {'symbol': 'AAPL', 'quarter_end': '2024-06-30', 'revenue': 85780, 'net_profit': 21450, 'eps': 1.40, 'filing_date': '2024-08-14',
+             'filing_date_basis': 'estimated'},
             {'symbol': 'MSFT', 'quarter_end': '2024-09-30', 'revenue': 65590, 'net_profit': 24670, 'eps': 3.30, 'filing_date': '2024-10-30'},
         ]
         import gzip
@@ -197,6 +199,63 @@ class PublishUsTests(unittest.TestCase):
         self.assertEqual(aapl['quarterly'][1]['period_end'], '2024-09-30')
         self.assertEqual(aapl['quarterly'][1]['revenue'], 94930)
         self.assertEqual(aapl['quarterly'][1]['sales'], 94930)
+        self.assertEqual(aapl['quarterly'][0]['filing_date_basis'], 'estimated')
+
+    def test_a_stock_without_statement_history_gets_a_null_file_as_in_india(self):
+        import gzip
+        with tempfile.TemporaryDirectory() as tmp:
+            generation = Path(tmp)
+            history = {'quarterly': [{'period_end': '2024-09-30'}], 'annual': []}
+            publish_us.write_financial_history(generation, ['AAPL', 'NEWCO', '../X'], {'AAPL': history})
+            read = lambda name: json.loads(gzip.decompress((generation / 'financial-history' / name).read_bytes()))
+            self.assertEqual(read('AAPL.json.gz'), history)
+            self.assertIsNone(read('NEWCO.json.gz'))
+            self.assertEqual(sorted(p.name for p in (generation / 'financial-history').iterdir()), ['AAPL.json.gz', 'NEWCO.json.gz'])
+
+    def test_each_session_is_archived_in_the_us_layout_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            for revision, data in (('a' * 64, b'first'), ('b' * 64, b'retry')):
+                (output / 'revisions' / revision).mkdir(parents=True)
+                (output / 'revisions' / revision / 'stocks.packed.json.gz').write_bytes(data)
+            (output / 'sessions.json').write_text('{"version": 1, "sessions": []}')
+            entry = publish_us.archive_us_session(output, {'sessionDate': '2026-11-12', 'revision': 'a' * 64})
+            self.assertEqual(entry, {'date': '2026-11-12', 'revision': 'a' * 64, 'label': '2026-11-12',
+                                     'isHistorical': True, 'market': 'us'})
+            self.assertEqual((output / 'snapshots/us/2026-11-12.json.gz').read_bytes(), b'first')
+            history = json.loads((output / 'us/sessions.json').read_text())
+            self.assertEqual((history['market'], history['currency'], history['sessions']), ('us', 'USD', [entry]))
+            # A same-session retry keeps the archived revision; India's list and snapshots are never touched.
+            self.assertIsNone(publish_us.archive_us_session(output, {'sessionDate': '2026-11-12', 'revision': 'b' * 64}))
+            self.assertEqual((output / 'snapshots/us/2026-11-12.json.gz').read_bytes(), b'first')
+            self.assertEqual(json.loads((output / 'us/sessions.json').read_text())['sessions'], [entry])
+            self.assertEqual((output / 'sessions.json').read_text(), '{"version": 1, "sessions": []}')
+            self.assertEqual(sorted(p.name for p in (output / 'snapshots').iterdir()), ['us'])
+            # A later session joins the backfilled ones, newest first.
+            publish_us.archive_us_session(output, {'sessionDate': '2026-11-13', 'revision': 'b' * 64})
+            self.assertEqual([s['date'] for s in json.loads((output / 'us/sessions.json').read_text())['sessions']],
+                             ['2026-11-13', '2026-11-12'])
+
+    def test_the_us_archive_is_uploaded_and_read_back_in_r2(self):
+        class Store:
+            def __init__(self):
+                self.calls = []
+            def remote(self, key):
+                return 'r2:' + key
+            def run(self, *args):
+                self.calls.append(args)
+            def cache_command(self, *args):
+                return b'rows'
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            (output / 'revisions' / ('a' * 64)).mkdir(parents=True)
+            (output / 'revisions' / ('a' * 64) / 'stocks.packed.json.gz').write_bytes(b'rows')
+            store = Store()
+            publish_us.archive_us_session(output, {'sessionDate': '2026-11-12', 'revision': 'a' * 64}, store)
+            self.assertEqual(store.calls[0][2], 'r2:snapshots/us/2026-11-12.json.gz')
+            self.assertIn('--immutable', store.calls[0])
+            self.assertFalse((output / 'snapshots').exists())
+            self.assertEqual(len(json.loads((output / 'us/sessions.json').read_text())['sessions']), 1)
 
     def test_us_ipo_record_structure_and_lockup_calculation(self):
         from datetime import date, timedelta

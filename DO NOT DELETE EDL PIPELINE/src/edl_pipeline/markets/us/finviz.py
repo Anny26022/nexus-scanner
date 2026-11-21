@@ -164,6 +164,25 @@ def save_theme_catalog(path: Path, catalog: dict):
     temp.replace(path)
 
 
+PAGE_ATTEMPTS = 3
+
+
+def _get(sess: requests.Session, page_url: str, *, attempts: int = PAGE_ATTEMPTS, backoff: float = 2.0):
+    """One screener page, tried a few times: a single dropped request must not abort a crawl of hundreds of pages.
+    Raises FinvizFetchError after the last attempt, so a crawl never mistakes a failure for an empty filter."""
+    for attempt in range(attempts):
+        try:
+            resp = sess.get(page_url, timeout=15)
+            if resp.status_code == 200:
+                return resp
+            error = f"HTTP {resp.status_code}"
+        except requests.RequestException as failure:
+            error = str(failure)
+        if attempt + 1 < attempts:
+            time.sleep(backoff * (attempt + 1))
+    raise FinvizFetchError(f"{page_url}: {error} (after {attempts} attempts)")
+
+
 def fetch_tickers_for_filter(filter_param: str, *, session: requests.Session | None = None,
                              delay: float = 0.2) -> list[str]:
     """Fetch all tickers matching a single filter parameter (e.g. 'theme_artificialintelligence').
@@ -176,13 +195,7 @@ def fetch_tickers_for_filter(filter_param: str, *, session: requests.Session | N
     url = f"{SCREENER_URL}?f={filter_param}"
 
     def page(page_url):
-        try:
-            resp = sess.get(page_url, timeout=15)
-        except requests.RequestException as error:
-            raise FinvizFetchError(f"{page_url}: {error}") from error
-        if resp.status_code != 200:
-            raise FinvizFetchError(f"{page_url}: HTTP {resp.status_code}")
-        return resp.text
+        return _get(sess, page_url).text
 
     text = page(url)
     tickers = re.findall(r'"ticker"\s*:\s*"([A-Z0-9_\.\-]+)"', text)
@@ -378,13 +391,7 @@ def crawl_ownership_universe(*, delay: float = 0.05, workers: int = 3, session: 
     log(f"Crawling ownership & short interest across {len(SECTOR_SHARDS)} sector shards...")
     
     def fetch_page(page_url):
-        try:
-            resp = sess.get(page_url, timeout=15)
-        except requests.RequestException as error:
-            raise FinvizFetchError(f"{page_url}: {error}") from error
-        if resp.status_code != 200:
-            raise FinvizFetchError(f"{page_url}: HTTP {resp.status_code}")
-        data = _extract_screener_json(resp.text)
+        data = _extract_screener_json(_get(sess, page_url).text)
         if not data or not isinstance(data.get('data'), dict):
             raise FinvizFetchError(f"{page_url}: no screener data in the page")
         return data['data']

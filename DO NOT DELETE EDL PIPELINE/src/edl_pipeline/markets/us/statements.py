@@ -136,6 +136,9 @@ def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, 
             # A malformed answer (not an object) counts as failed, like an error, instead of stopping the run.
             data = props.get('fundamentalsData') if isinstance(props, dict) else props
             outcome = 'missing' if not data else 'fetched' if isinstance(data, dict) and isinstance(props, dict) else 'failed'
+            # A page without quarters (a partial or broken answer) never replaces one that had them.
+            if outcome == 'fetched' and not series(data.get('incomeStat_sq')) and previous and series(previous.get('incomeStat_sq')):
+                outcome = 'failed'
         try:
             if outcome == 'fetched':
                 write_page(root, record['symbol'], {'fetched_at': now.isoformat(), 'slug': record['slug'],
@@ -316,8 +319,10 @@ def trusted_blocks(blocks: dict, record: dict) -> set[str]:
 
 
 # Dhan's page has no filing dates. The latest quarter's is TradingView's last earnings date; an earlier quarter's is
-# estimated as its end plus this (US companies file within 40-45 days of a quarter end).
+# estimated as its end plus the filing deadline, so a backtest never sees a quarter before it could have been filed:
+# a 10-Q within 40-45 days, the fiscal year's last quarter (filed in the 10-K) within 60-90.
 ESTIMATED_FILING_DAYS = 45
+ESTIMATED_ANNUAL_FILING_DAYS = 90
 
 
 def _quarter_end(period: str) -> date:
@@ -330,10 +335,14 @@ def quarterly_history(page: dict, record: dict) -> list[dict]:
     rows = []
     quarters = series(page.get('incomeStat_sq'))
     reported = record.get('latest_earnings_date')
+    # The fiscal year's end month, from the yearly blocks; December (most US companies) when the page has none.
+    years = series(page.get('rNp_s')) or series(page.get('cF_sy'))
+    year_end = years[0]['period'][4:] if years else '12'
     for index, quarter in enumerate(quarters):
         end = _quarter_end(quarter['period'])
         latest_report = index == 0 and reported and date.fromisoformat(reported) > end
-        filing = date.fromisoformat(reported) if latest_report else end + timedelta(days=ESTIMATED_FILING_DAYS)
+        days = ESTIMATED_ANNUAL_FILING_DAYS if quarter['period'][4:] == year_end else ESTIMATED_FILING_DAYS
+        filing = date.fromisoformat(reported) if latest_report else end + timedelta(days=days)
         rows.append({
             'symbol': record['symbol'], 'isin': record.get('isin'), 'quarter_end': end.isoformat(),
             'period_end': end.isoformat(),

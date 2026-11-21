@@ -6,8 +6,10 @@ release with the code it reads India's with. What differs is declared in the poi
 - amounts are in millions of dollars (`amountUnit`), filled into the engine's India-named fields by
   edl_pipeline.markets.us.build, and preset floors are US ones (US_ELIGIBILITY);
 - SPY is the market benchmark, so it answers the engine's market-benchmark key;
-- no F&O, delivery, theme classification, price-band or session archive: those are Indian sources. Rotation groups
-  are sectors and industries; the Market page's index cards are the benchmark ETFs.
+- no F&O, delivery or price-band history: those are Indian sources. Rotation groups are sectors, industries and
+  Finviz themes; the Market page's index cards are the benchmark ETFs;
+- each session is archived as India's is, in the US layout: `snapshots/us/<date>.json.gz`, listed in
+  `us/sessions.json` (the file the historical backfill extends), so the date picker can go back.
 
 The release files are content-addressed and live beside India's (`releases/<rev>/`); only the pointer differs:
 `site/data/us/current.json`, served at /data/us/current.json. India's current.json is never written here.
@@ -25,12 +27,13 @@ import scanner_bridge as bridge
 from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from publish_snapshot import OUTPUT, stock_rows, write_json
+from session_history import register_session
 from public_payload import public
 from market_overview import index_closes, market_overview
 from etf_snapshot import build_etf_snapshot, prune_etf_snapshots
 import rotation_history
 import build_chart_artifacts
-from site_data import POINTER_PREFIX, enabled, stored_pointers, upload_pointer, upload_revision
+from site_data import POINTER_PREFIX, US_SESSIONS, enabled, stored_pointers, upload_pointer, upload_revision
 from chart_publication import ROTATION_PREFIX, R2Store, chart_revision, charts_enabled, file_digest, missing_r2_settings
 from edl_pipeline.scanner.presets import list_presets
 from edl_pipeline.markets import UNITED_STATES
@@ -192,9 +195,6 @@ ENRICHED_FIELDS = (
     ('institutional_own_percent', 'institutionalOwnPct'),
     ('insider_trans_percent', 'insiderTransPct'),
     ('institutional_trans_percent', 'institutionalTransPct'),
-    ('target_price', 'targetPrice'),
-    ('target_price_upside_percent', 'targetPriceUpsidePct'),
-    ('analyst_rating', 'analystRating'),
     ('ps_ratio', 'psRatio'),
     ('gross_margin_percent', 'grossMarginPct'),
     ('net_margin_percent', 'netMarginPct'),
@@ -319,6 +319,7 @@ def load_financial_history(root, source_bytes, session):
                     periods.append({
                         'period_end': period_end,
                         'filing_date': r.get('filing_date'),
+                        'filing_date_basis': r.get('filing_date_basis'),  # reported, or estimated (quarter end + 45 days)
                         'revenue': r.get('revenue'),
                         'sales': r.get('sales') or r.get('revenue'),
                         'operating_profit': r.get('operating_profit'),
@@ -339,6 +340,53 @@ def load_financial_history(root, source_bytes, session):
         except Exception as error:
             print(f'WARNING: US financial statement history unavailable for {session}: {error}', flush=True)
     return histories
+
+
+def write_financial_history(generation, symbols, histories):
+    """Every stock's statement history, as India's: a stock without one gets a null file, not a 404."""
+    (generation / 'financial-history.json.gz').write_bytes(
+        gzip.compress(json.dumps(histories, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
+    history_dir = generation / 'financial-history'
+    history_dir.mkdir(parents=True, exist_ok=True)
+    for sym in symbols:
+        if sym and '/' not in sym and '..' not in sym:
+            (history_dir / f'{sym}.json.gz').write_bytes(
+                gzip.compress(json.dumps(histories.get(sym), separators=(',', ':'), allow_nan=False).encode(), mtime=0))
+
+
+def archive_us_session(output, manifest, store=None):
+    """India's archive_daily_snapshot and register_session in the US layout: the release's packed rows at
+    snapshots/us/<date>.json.gz, listed in us/sessions.json. A date already listed keeps its archived revision
+    (a same-session retry, or a backfilled date). Returns the new entry, or None."""
+    session, revision = manifest['sessionDate'], manifest['revision']
+    history = output / US_SESSIONS
+    if history.is_file() and any(s['date'] == session for s in json.loads(history.read_text())['sessions']):
+        return None
+    source = output / 'revisions' / revision / 'stocks.packed.json.gz'
+    compressed = source.read_bytes()
+    key = f'snapshots/us/{session}.json.gz'
+    if store:
+        store.run('copyto', str(source), store.remote(key), '--immutable', '--checksum',
+                  '--metadata', '--metadata-set', 'content-type=application/gzip')
+        if store.cache_command('cat', store.remote(key)) != compressed:
+            raise RuntimeError(f'US daily snapshot read-back mismatch: {key}')
+    else:
+        target = output / key
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            if target.read_bytes() != compressed:
+                raise RuntimeError(f'Conflicting US daily snapshot: {key}')
+        else:
+            with target.open('xb') as handle:
+                handle.write(compressed)
+    if not history.is_file():
+        # The backfill's shape (tools/generate_historical_snapshots_us.py), which register_session keeps.
+        history.parent.mkdir(parents=True, exist_ok=True)
+        history.write_text(json.dumps({'version': 1, 'market': UNITED_STATES.id, 'currency': UNITED_STATES.currency,
+                                       'sessions': []}, indent=2) + '\n')
+    entry = {'date': session, 'revision': revision, 'label': session, 'isHistorical': True, 'market': UNITED_STATES.id}
+    register_session(history, entry)
+    return entry
 
 
 def publish_us(root, output=OUTPUT, *, workers=0):
@@ -366,9 +414,6 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     finally:
         prepared.close()
 
-    # The rotation ledger is carried state, not an input of the release (as for India).
-    source_bytes = {path.name: path.read_bytes() for path in sorted(root.glob('*.json.gz'))
-                    if path.name != rotation_history.LEDGER_NAME}
     published = public(rows)
     # Charts and rotation are built before the revision, which covers them as India's does: an immutable revision
     # always names the same chart objects and rotation history.
@@ -437,14 +482,7 @@ def publish_us(root, output=OUTPUT, *, workers=0):
 
     # Multi-quarter financial statement history
     if histories:
-        history_bytes = gzip.compress(json.dumps(histories, separators=(',', ':'), allow_nan=False).encode(), mtime=0)
-        (generation / 'financial-history.json.gz').write_bytes(history_bytes)
-        history_dir = generation / 'financial-history'
-        history_dir.mkdir(parents=True, exist_ok=True)
-        for sym, statement in histories.items():
-            if sym and '/' not in sym and '..' not in sym:
-                (history_dir / f'{sym}.json.gz').write_bytes(
-                    gzip.compress(json.dumps(statement, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
+        write_financial_history(generation, context['stocks'], histories)
 
     # The Market page: breadth, sector and industry breadth, and the benchmark ETFs as index cards.
     overview = market_overview(source_bytes, session, KEY_INDICES)
@@ -489,11 +527,18 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     previous_path = output / POINTER
     refuse_older_session(json.loads(previous_path.read_text()) if previous_path.is_file() else None, session)
     write_json(generation / 'release.json', manifest)
+    store = None
     if enabled():
         store = R2Store(inventory=US_INVENTORY)
+        present = stored_pointers(store)
         # The live pointer is in R2, not in this checkout: check it before anything is uploaded.
-        if POINTER in stored_pointers(store):
+        if POINTER in present:
             refuse_older_session(json.loads(store.cache_command('cat', store.remote(f'{POINTER_PREFIX}/{POINTER}'))), session)
+        # The US refresh runs no site_data pull: extend the live session list, which the backfill also extends.
+        if US_SESSIONS in present:
+            (output / US_SESSIONS).parent.mkdir(parents=True, exist_ok=True)
+            store.cache_command('copyto', store.remote(f'{POINTER_PREFIX}/{US_SESSIONS}'), str(output / US_SESSIONS))
+    session_record = archive_us_session(output, manifest, store)
     write_json(output / POINTER, manifest)
     if enabled():
         if chart_release:
@@ -520,6 +565,9 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         write_json(generation / 'release.json', manifest)
         write_json(output / POINTER, manifest)
         upload_revision(store, generation, f'releases/{revision}')
+        # As India's: the session list before the pointer.
+        if session_record:
+            upload_pointer(store, output, US_SESSIONS)
         upload_pointer(store, output, POINTER)
     elif os.environ.get('EDL_CHART_STORAGE', 'local') == 'r2':
         raise RuntimeError('R2 configuration missing (' + ', '.join(missing_r2_settings()) + '); the US release is local only.')

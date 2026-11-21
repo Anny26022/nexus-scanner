@@ -41,6 +41,11 @@ def main(argv=None):
     # benchmarks (SPY and the other index ETFs) carry RS, breadth and rotation, so any one of them failing stops it too.
     # `benchmarks_behind` checks each one's file reached the session (an ETF absent from the list reports no status).
     lagging_benchmarks = sum(benchmarks.get(status, 0) for status in ('failed', 'missing')) + len(report.get('benchmarks_behind', []))
+    # Without TradingView a release has no listing dates, index memberships, earnings dates or all-time highs.
+    if report['tradingview'].get('error'):
+        print(f"::error::TradingView US values are unavailable ({report['tradingview']['error']}); nothing to publish.",
+              flush=True)
+        return 1
     if history.get('throttled') or benchmarks.get('throttled') or lagging_benchmarks or not report['rs_ratings']:
         print('::error::The US history is incomplete (rate limited, a benchmark behind or no RS ratings); nothing to publish.',
               flush=True)
@@ -53,7 +58,7 @@ def main(argv=None):
               flush=True)
         return 1
     if history.get('yahoo_throttled') or benchmarks.get('yahoo_throttled'):
-        print('::warning::Yahoo rate limited the history seed; the rest seeded from Dhan (2021 onwards) and lack deep history.',
+        print('::warning::Yahoo rate limited the history; the rest came from Dhan (new stocks seeded from 2021 onwards).',
               flush=True)
     if history.get('failed'):
         # One stock's failure keeps its earlier bars (its as_of_date lags); the count is shown on the run.

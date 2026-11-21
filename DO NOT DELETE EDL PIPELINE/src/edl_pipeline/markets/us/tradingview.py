@@ -1,4 +1,4 @@
-"""US values from TradingView's scanner: one request for the whole market, as India's fetch_advanced_indicators.
+"""US values from TradingView's scanner: the whole market in a few paged requests (fetch_advanced_indicators is India's).
 
 It carries what Dhan cannot: all-time highs (Dhan's history starts in 2021), the last earnings date, listing date,
 index memberships (S&P 500, Nasdaq-100, Dow 30, Russell 1000 and 2000), free float,
@@ -43,8 +43,7 @@ EXTRA = {'earnings_release_date': 'last_earnings', 'ipo_offer_date': 'ipo_date',
          'total_current_liabilities_fq': 'current_liabilities', 'total_liabilities_fq': 'total_liabilities',
          'cash_f_operating_activities_fy': 'operating_cash_flow', 'cash_f_investing_activities_fy': 'investing_cash_flow',
          'cash_f_financing_activities_fy': 'financing_cash_flow', 'total_revenue_cagr_5y': 'revenue_cagr_5y',
-         # Phase 1: Analyst Target & Rating, Multiples, Margins, Ratios, Beta, Volatility & Float
-         'price_target_average': 'target_price', 'recommendation_mark': 'analyst_rating',
+         # Multiples, margins, ratios, beta, volatility and float (no analyst targets or ratings: not wanted in US data).
          'price_sales_current': 'ps_ratio',
          'gross_margin_ttm': 'gross_margin_percent', 'net_margin_ttm': 'net_margin_percent',
          'return_on_equity_fq': 'roe_percent', 'return_on_invested_capital_fq': 'roic_percent',
@@ -62,7 +61,13 @@ EXTRA_AMOUNTS = frozenset({'free_cash_flow', 'total_debt', 'total_equity', 'ttm_
                            'total_liabilities', 'operating_cash_flow', 'investing_cash_flow', 'financing_cash_flow'})
 COLUMNS = ['isin', 'time', 'close', 'update_mode', 'currency', 'fundamental_currency_code', 'exchange', 'is_primary', 'type',
            *[field['wire'] for field in FIELD_DEFINITIONS], *EXTRA]
-LIMIT = 12_000
+# Rows per request. The market is about 7,000 listings; one 12,000-row request was slow enough to time out, and a
+# timed-out request lost every row. Pages are sorted by name so a row does not move between pages.
+PAGE_SIZE = 5_000
+PAGE_RETRIES = 2
+MAX_PAGES = 10
+# Fewer records matched than this share means TradingView's answer is not this market (enrich reports an error).
+MIN_MATCHED_SHARE = 0.5
 
 
 def _number(value):
@@ -89,11 +94,27 @@ def _section(values: dict, section: str, currency: str | None) -> dict:
     return result
 
 
-def fetch(*, post=post_json) -> dict:
-    payload = {'columns': COLUMNS, 'markets': ['america'], 'options': {'lang': 'en'}, 'range': [0, LIMIT],
-               'filter': [{'left': 'type', 'operation': 'in_range', 'right': ['stock', 'dr']},
-                          {'left': 'exchange', 'operation': 'in_range', 'right': list(EXCHANGES)}]}
-    return post(API_URL, payload, timeout=60, retries=1)
+def fetch(*, post=post_json, page_size: int = PAGE_SIZE) -> dict:
+    """Every row, page by page (each page retried), as one response: {'totalCount', 'data'}. `snapshots` refuses it
+    unless the rows add up to the count."""
+    rows, total = [], None
+    for _ in range(MAX_PAGES):
+        payload = {'columns': COLUMNS, 'markets': ['america'], 'options': {'lang': 'en'},
+                   'range': [len(rows), len(rows) + page_size], 'sort': {'sortBy': 'name', 'sortOrder': 'asc'},
+                   'filter': [{'left': 'type', 'operation': 'in_range', 'right': ['stock', 'dr']},
+                              {'left': 'exchange', 'operation': 'in_range', 'right': list(EXCHANGES)}]}
+        response = post(API_URL, payload, timeout=60, retries=PAGE_RETRIES)
+        page = response.get('data') if isinstance(response, dict) else None
+        if not isinstance(page, list):
+            raise ValueError('Unexpected TradingView scanner page')
+        count = response.get('totalCount')
+        if total is not None and count != total:
+            raise ValueError(f'TradingView row count changed while paging ({total} -> {count})')
+        total = count
+        rows.extend(page)
+        if not page or not isinstance(total, int) or len(rows) >= total:
+            break
+    return {'totalCount': total, 'data': rows}
 
 
 def snapshots(response: dict, fetched_at: str) -> dict[str, dict]:
@@ -215,11 +236,7 @@ def canonical(found: dict, record: dict, session: str) -> dict:
         # "Last year" is the trailing twelve months; the year before follows from its growth (fiscal years differ).
         'eps_last_year': _number(found['eps_ttm']) if dollars else None,
         'eps_2_years_back': _prior(found['eps_ttm'], found['eps_growth']) if dollars else None,
-        # Phase 1 additions: Analyst Consensus, Multiples, Margins, Ratios, Beta, Volatility & Float
-        'target_price': _number(found.get('target_price')),
-        'target_price_upside_percent': round((_number(found.get('target_price')) / close - 1) * 100, 2)
-        if _number(found.get('target_price')) and close and close > 0 else None,
-        'analyst_rating': _number(found.get('analyst_rating')),
+        # Multiples, margins, ratios, beta, volatility and float.
         'ps_ratio': _number(found.get('ps_ratio')),
         'gross_margin_percent': _number(found.get('gross_margin_percent')),
         'net_margin_percent': _number(found.get('net_margin_percent')),
@@ -237,13 +254,16 @@ def canonical(found: dict, record: dict, session: str) -> dict:
 
 
 def enrich(records: list[dict], session: str, *, fetch_response=fetch, now: datetime | None = None) -> dict:
-    """Attach TradingView values to `records` in place; a failed request leaves them without (reported, not fatal)."""
+    """Attach TradingView values to `records` in place. Any failure is in the report's `error`, which the release
+    refuses to publish with (listing dates, index memberships, earnings dates and all-time highs would be missing):
+    a failed or incomplete request, or fewer than MIN_MATCHED_SHARE of the records matched (an answer that is not
+    this market's listings). Records matched before the share check keep their values; the build goes on."""
     fetched_at = (now or datetime.now(timezone.utc)).isoformat()
     try:
         found = snapshots(fetch_response(), fetched_at)
-    except Exception as error:  # the release still publishes; these filters report unavailable for the session
+    except Exception as error:  # reported to the caller, which refuses to publish
         print(f'::warning::TradingView US values unavailable: {error}', flush=True)
-        return {'matched': 0, 'current': 0, 'error': str(error)}
+        return {'matched': 0, 'current': 0, 'error': str(error) or type(error).__name__}
     matched = current = 0
     for record in records:
         values = found.get(record.get('isin'))
@@ -252,5 +272,9 @@ def enrich(records: list[dict], session: str, *, fetch_response=fetch, now: date
         record.update(canonical(values, record, session))
         matched += 1
         current += values['tradingview_snapshot']['as_of_date'] == session
-    return {'matched': matched, 'current': current, 'listed': len(found)}
+    report = {'matched': matched, 'current': current, 'listed': len(found)}
+    if records and matched < len(records) * MIN_MATCHED_SHARE:
+        report['error'] = f'TradingView matched {matched} of {len(records)} records'
+        print(f"::warning::{report['error']}", flush=True)
+    return report
 

@@ -63,6 +63,8 @@ def fetch_us():
             'columns': COLUMNS,
             'range': [offset, offset + PAGE_SIZE_US if total_count is None else min(offset + PAGE_SIZE_US, total_count)],
             'markets': ['america'],
+            # A fixed order, so rows do not move between pages while they are read (an unsorted read could skip one).
+            'sort': {'sortBy': 'name', 'sortOrder': 'asc'},
             'filter': [
                 {'left': 'type', 'operation': 'equal', 'right': 'fund'},
                 {'left': 'subtype', 'operation': 'equal', 'right': 'etf'}

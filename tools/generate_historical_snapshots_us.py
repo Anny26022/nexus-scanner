@@ -11,6 +11,14 @@ build_rs_ratings: SPY-relative RS). A value whose window is not yet filled stays
 
 Not point-in-time, so left null in every backfilled session: statement figures (the ledger holds today's restated
 quarters, not what was known on the session), market cap, ownership and short interest (current values only).
+
+Survivorship: every session's universe is today's screenable Dhan list, once per symbol, and its prices are today's
+split-adjusted history; companies delisted or renamed since are missing, and a past session's prices are not the ones
+quoted that day. Each snapshot says so in `pointInTimeCoverage`, as India's backfill does.
+
+Memory: stocks are read one at a time and only the window's sessions are kept, so a short window stays small.
+Indicators are still computed over each stock's full history (EMA and Wilder averages run from the first bar;
+all-time highs and history counts need every bar), so a backfilled row equals the live one for that history.
 """
 
 import argparse
@@ -40,8 +48,10 @@ for p in (str(EDL_ROOT), str(EDL_SRC), str(FRONTEND_DIR)):
 
 from edl_pipeline.markets.us import calendar  # noqa: E402
 from edl_pipeline.scanner.indicators import indicator_series  # noqa: E402
+from edl_pipeline.markets.us.universe import SCREENABLE, security_type  # noqa: E402
 from build_rs_ratings import (  # noqa: E402
     FRONT_WEIGHTED_HORIZONS, MINIMUM_ALIGNED_SESSIONS, close_history, rank_first_ratings)
+from ohlcv_utils import symbol_csv_path  # noqa: E402
 
 OHLCV_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 SESSIONS_52W = 252
@@ -205,9 +215,14 @@ def rs_ratings_vs_spy(aligned_by_symbol: Dict[str, Dict[str, Any]], session_date
 
     `aligned_by_symbol` holds `align_with_spy` joins for that session's stocks; the universe is those stocks.
     """
+    return rank_relative_scores({symbol: relative_scores_at(aligned, session_date)
+                                 for symbol, aligned in aligned_by_symbol.items()})
+
+
+def rank_relative_scores(relative_by_symbol: Dict[str, Optional[Dict[str, float]]]) -> Dict[str, int]:
+    """Front-weighted 1-99 ratings from each stock's `relative_scores_at` (None: not rated)."""
     scores: Dict[str, Dict[str, float]] = {}
-    for symbol, aligned in aligned_by_symbol.items():
-        relative = relative_scores_at(aligned, session_date)
+    for symbol, relative in relative_by_symbol.items():
         if relative is not None:
             for key, value in relative.items():
                 scores.setdefault(key, {})[symbol] = value
@@ -263,19 +278,32 @@ def write_atomically(path: Path, data: bytes):
         raise
 
 
-def load_stock_metadata(pipeline_dir: Path, fetch_universe: Optional[Callable[[str], List[dict]]] = None) -> Dict[str, Dict[str, Any]]:
-    """Each symbol's name, sector and industry: Dhan's US screener list (the live build's source), then Finviz's.
-
-    Reads the root's mainboard_scanx_data.json when a build left one; otherwise fetches the list from Dhan.
-    """
+def load_universe_rows(pipeline_dir: Path, fetch_universe: Optional[Callable[[str], List[dict]]] = None) -> List[dict]:
+    """Dhan's US screener list (the live build's source): the root's mainboard_scanx_data.json, else fetched."""
     listing = pipeline_dir / "mainboard_scanx_data.json"
     if listing.is_file():
-        rows = json.loads(listing.read_text(encoding="utf-8"))
-    else:
-        if fetch_universe is None:
-            from edl_pipeline.markets.us import dhan
-            fetch_universe = dhan.fetch_universe
-        rows = fetch_universe("stock")
+        return json.loads(listing.read_text(encoding="utf-8")) or []
+    if fetch_universe is None:
+        from edl_pipeline.markets.us import dhan
+        fetch_universe = dhan.fetch_universe
+    return fetch_universe("stock") or []
+
+
+def screenable_symbols(rows: List[dict]) -> List[str]:
+    """Today's screenable symbols, as the live build selects them, each once (first row wins)."""
+    symbols: Dict[str, None] = {}
+    for row in rows:
+        symbol = str(row.get("Sym") or "").strip().upper()
+        if symbol and security_type(symbol, row.get("DispSym")) in SCREENABLE:
+            symbols.setdefault(symbol)
+    return list(symbols)
+
+
+def load_stock_metadata(pipeline_dir: Path, fetch_universe: Optional[Callable[[str], List[dict]]] = None,
+                        rows: Optional[List[dict]] = None) -> Dict[str, Dict[str, Any]]:
+    """Each symbol's name, sector and industry: Dhan's US screener list (`rows`, else loaded), then Finviz's."""
+    if rows is None:
+        rows = load_universe_rows(pipeline_dir, fetch_universe)
     metadata: Dict[str, Dict[str, Any]] = {}
     for row in rows or []:
         symbol = str(row.get("Sym") or "").strip().upper()
@@ -309,6 +337,122 @@ def load_reported_earnings(pipeline_dir: Path) -> Dict[str, List[str]]:
         if rec.get("symbol") and filing and rec.get("filing_date_basis", "reported") != "estimated":
             reported.setdefault(str(rec["symbol"]).upper(), set()).add(filing)
     return {symbol: sorted(dates) for symbol, dates in reported.items()}
+
+
+def load_stock_sessions(ohlcv_dir: Path, symbols: List[str], spy_df: pd.DataFrame,
+                        sessions: List[date]) -> Dict[str, Dict[str, Any]]:
+    """Each symbol's technicals and SPY-relative scores on the given sessions it has a bar on.
+
+    One CSV at a time, read once: indicators run over its whole history (exact EMA/Wilder/all-time values), then only
+    the requested sessions' rows are kept, so memory follows the window rather than every stock's full history.
+    """
+    wanted = set(sessions)
+    latest = max(sessions)
+    stocks: Dict[str, Dict[str, Any]] = {}
+    for sym in symbols:
+        try:
+            csv_file = symbol_csv_path(ohlcv_dir, sym)
+            if not csv_file.is_file():
+                continue
+            frame = session_frame(pd.read_csv(csv_file))
+        except Exception as error:
+            print(f"  skipped {sym}: {error}")
+            continue
+        frame = frame[frame["Date"].dt.date <= latest].reset_index(drop=True)
+        days = frame["Date"].dt.date
+        keep = days.isin(wanted).to_numpy()
+        if not keep.any():
+            continue
+        aligned = align_with_spy(frame[["Date", "Close"]], spy_df)
+        technicals = technical_frame(frame)[keep].reset_index(drop=True)
+        kept_days = list(days[keep])
+        stocks[sym] = {
+            "rows": {day: i for i, day in enumerate(kept_days)},
+            "technicals": technicals,
+            "relative": {day: relative_scores_at(aligned, day) for day in kept_days},
+        }
+    return stocks
+
+
+def build_session_payload(session_date: date, stocks: Dict[str, Dict[str, Any]],
+                          universe_meta: Dict[str, Dict[str, Any]], metadata_as_of: str,
+                          earnings_by_symbol: Dict[str, List[str]]) -> Dict[str, Any]:
+    """One session's snapshot payload (without its revision) from `load_stock_sessions` output."""
+    session_str = session_date.isoformat()
+    snapshot_stocks = []
+    relative_today = {}
+    advances = declines = unchanged = above_20dma = above_50dma = above_200dma = 0
+
+    for sym, stock in stocks.items():
+        # Only a stock with a bar on this very session is in it (no stale or carried-forward bar).
+        position = stock["rows"].get(session_date)
+        if position is None:
+            continue
+        tech = row_technicals(stock["technicals"].iloc[position])
+        # RS ranks the breadth-eligible universe, as live build_rs_ratings does. Only the price floor can be
+        # applied to a past session: there is no point-in-time market cap for the cap floor.
+        if tech["close"] is not None and tech["close"] >= RS_MINIMUM_PRICE:
+            relative_today[sym] = stock["relative"][session_date]
+
+        # Breadth tallies; a stock without the window's history is not counted either way.
+        if tech["changePct"] is not None:
+            if tech["changePct"] > 0:
+                advances += 1
+            elif tech["changePct"] < 0:
+                declines += 1
+            else:
+                unchanged += 1
+        above_20dma += tech["close_above_sma20"] is True
+        above_50dma += tech["close_above_sma50"] is True
+        above_200dma += tech["close_above_sma200"] is True
+
+        earnings_date, days_since_earnings = earnings_age(earnings_by_symbol.get(sym, ()), session_date)
+
+        snapshot_stocks.append(build_stock_row(sym, tech, universe_meta.get(sym, {}), session_str, metadata_as_of,
+                                               earnings_date, days_since_earnings))
+
+    # RS Rating vs SPY (1-99), as build_rs_ratings ranks the live US release; the field India's backfill writes.
+    ratings = rank_relative_scores(relative_today)
+    for stk in snapshot_stocks:
+        rating = ratings.get(stk["symbol"])
+        stk["rsRating"] = rating
+        stk["metrics"]["rsRating"] = rating
+
+    return {
+        "schemaVersion": 4,
+        "asOfDate": session_str,
+        "market": "us",
+        "currency": "USD",
+        "amountUnit": 1_000_000,
+        "totalStocks": len(snapshot_stocks),
+        "stocks": snapshot_stocks,
+        "breadth": {
+            "sessionDate": session_str,
+            "advances": advances,
+            "declines": declines,
+            "unchanged": unchanged,  # a stock without a previous close is not counted
+            "above20dma": int(above_20dma),
+            "above50dma": int(above_50dma),
+            "above200dma": int(above_200dma),
+            "totalStocks": len(snapshot_stocks),
+        },
+        "technicalMetricsVersion": 1,
+        "extendedMetricsVersion": 1,
+        "presetRuleMatchesVersion": 1,
+        # Disclosed as India's backfill does (tools/generate_historical_snapshots.py).
+        "pointInTimeCoverage": {
+            "survivorshipBias": "Stock universe restricted to today's screenable Dhan list; securities delisted, "
+                                "merged or renamed since are omitted",
+            "prices": "Today's split-adjusted daily history, not the prices quoted on the session",
+            "metadata": "Names, sectors and industries as of metadataAsOfDate",
+            "financials": "unavailable (no point-in-time statement source)",
+            "marketCap": "unavailable",
+            "ownership": "unavailable",
+            "shortInterest": "unavailable",
+            "earningsDates": "Reported filing dates from the quarterly ledger",
+        },
+        "dataCompleteness": "historical_reconstructed_with_survivorship_qualification",
+    }
 
 
 def build_stock_row(symbol: str, tech: Dict[str, Any], meta: Dict[str, Any], session_str: str, metadata_as_of: str,
@@ -399,15 +543,13 @@ def main():
     print(f"Target Window: {args.start_date} to {args.end_date}")
     print(f"Output Directory: {output_dir}")
 
-    # 1. Discover OHLCV CSVs and the SPY benchmark (both required)
+    # 1. Check the OHLCV histories and the SPY benchmark are there (both required)
     ohlcv_dir = pipeline_dir / "ohlcv_data"
     if not ohlcv_dir.is_dir() or not any(ohlcv_dir.glob("*.csv")):
         sys.exit(f"Error: no US price history at {ohlcv_dir}; run the US daily refresh to seed it first.")
     spy_csv = pipeline_dir / "indices_ohlcv_data" / "SPY.csv"
     if not spy_csv.is_file():
         sys.exit(f"Error: SPY benchmark history missing at {spy_csv}; RS ratings need it.")
-    csv_files = sorted(ohlcv_dir.glob("*.csv"))
-    print(f"Found {len(csv_files)} stock OHLCV histories in {ohlcv_dir}")
 
     # 2. Determine trading sessions in the target window (read the manifest first: an unreadable one stops here)
     sessions_in_window = []
@@ -429,31 +571,17 @@ def main():
     spy_df = close_history(spy_csv)
     spy_df["Date"] = spy_df["Date"].dt.normalize()
     print(f"Loaded SPY benchmark with {len(spy_df)} sessions.")
-    universe_meta = load_stock_metadata(pipeline_dir)
+    universe_rows = load_universe_rows(pipeline_dir)
+    universe_meta = load_stock_metadata(pipeline_dir, rows=universe_rows)
+    symbols = screenable_symbols(universe_rows)
     metadata_as_of = date.today().isoformat()
-    print(f"Loaded names and classification for {len(universe_meta)} symbols.")
+    print(f"Loaded names and classification for {len(universe_meta)} symbols; {len(symbols)} screenable.")
     earnings_by_symbol = load_reported_earnings(pipeline_dir)
 
-    # 3. Pre-compute each stock's per-session technicals once (each row only reads earlier bars)
-    print("Loading OHLCV data into memory...")
+    # 3. Each screenable stock's technicals on the target sessions (each row only reads earlier bars)
+    print("Loading OHLCV histories...")
     t_load = time.time()
-    latest_target = max(target_sessions)
-    stocks = {}
-    for csv_file in csv_files:
-        sym = csv_file.stem.upper()
-        try:
-            frame = session_frame(pd.read_csv(csv_file))
-        except Exception as error:
-            print(f"  skipped {sym}: {error}")
-            continue
-        frame = frame[frame["Date"].dt.date <= latest_target].reset_index(drop=True)
-        if frame.empty:
-            continue
-        stocks[sym] = {
-            "rows": {d: i for i, d in enumerate(frame["Date"].dt.date)},
-            "technicals": technical_frame(frame),
-            "spy_aligned": align_with_spy(frame[["Date", "Close"]], spy_df),
-        }
+    stocks = load_stock_sessions(ohlcv_dir, symbols, spy_df, target_sessions)
     print(f"Loaded {len(stocks)} stock histories in {time.time() - t_load:.1f}s.")
 
     # 4. Generate historical snapshots
@@ -462,71 +590,8 @@ def main():
         session_str = session_date.isoformat()
         t_session = time.time()
         print(f"\nProcessing US session: {session_str}...")
-
-        snapshot_stocks = []
-        aligned_today = {}
-        advances = declines = unchanged = above_20dma = above_50dma = above_200dma = 0
-
-        for sym, stock in stocks.items():
-            # Only a stock with a bar on this very session is in it (no stale or carried-forward bar).
-            position = stock["rows"].get(session_date)
-            if position is None:
-                continue
-            tech = row_technicals(stock["technicals"].iloc[position])
-            # RS ranks the breadth-eligible universe, as live build_rs_ratings does. Only the price floor can be
-            # applied to a past session: there is no point-in-time market cap for the cap floor.
-            if tech["close"] is not None and tech["close"] >= RS_MINIMUM_PRICE:
-                aligned_today[sym] = stock["spy_aligned"]
-
-            # Breadth tallies; a stock without the window's history is not counted either way.
-            if tech["changePct"] is not None:
-                if tech["changePct"] > 0:
-                    advances += 1
-                elif tech["changePct"] < 0:
-                    declines += 1
-                else:
-                    unchanged += 1
-            above_20dma += tech["close_above_sma20"] is True
-            above_50dma += tech["close_above_sma50"] is True
-            above_200dma += tech["close_above_sma200"] is True
-
-            earnings_date, days_since_earnings = earnings_age(earnings_by_symbol.get(sym, ()), session_date)
-
-            snapshot_stocks.append(build_stock_row(sym, tech, universe_meta.get(sym, {}), session_str, metadata_as_of,
-                                                   earnings_date, days_since_earnings))
-
-        # RS Rating vs SPY (1-99), as build_rs_ratings ranks the live US release
-        ratings = rs_ratings_vs_spy(aligned_today, session_date)
-        for stk in snapshot_stocks:
-            rating = ratings.get(stk["symbol"])
-            stk["rsRsi"] = rating
-            stk["metrics"]["rsRating"] = rating
-
-        breadth_record = {
-            "sessionDate": session_str,
-            "advances": advances,
-            "declines": declines,
-            "unchanged": unchanged,  # a stock without a previous close is not counted
-            "above20dma": int(above_20dma),
-            "above50dma": int(above_50dma),
-            "above200dma": int(above_200dma),
-            "totalStocks": len(snapshot_stocks),
-        }
-
-        # Build raw payload and hash
-        raw_payload = {
-            "schemaVersion": 4,
-            "asOfDate": session_str,
-            "market": "us",
-            "currency": "USD",
-            "amountUnit": 1_000_000,
-            "totalStocks": len(snapshot_stocks),
-            "stocks": snapshot_stocks,
-            "breadth": breadth_record,
-            "technicalMetricsVersion": 1,
-            "extendedMetricsVersion": 1,
-            "presetRuleMatchesVersion": 1,
-        }
+        raw_payload = build_session_payload(session_date, stocks, universe_meta, metadata_as_of, earnings_by_symbol)
+        snapshot_stocks = raw_payload["stocks"]
         json_bytes = json.dumps(raw_payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         session_hash = hashlib.sha256(json_bytes).hexdigest()
         raw_payload["revision"] = session_hash

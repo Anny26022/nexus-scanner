@@ -85,6 +85,11 @@ def canonical_row(row: dict) -> dict | None:
     market_cap = _number(row.get('Mcap'))
     record['market_cap'] = market_cap * UNITED_STATES.provider_amount_unit if market_cap is not None else None
     record['dollar_volume'] = record['close'] * record['volume'] if record['volume'] is not None else None
+    # BcClose is not always the previous session's close (a weekend probe had NVDA's at 221.3 against a 145.98 close); the day's change
+    # is measured from it, so the close it was measured from is the one the history must end on.
+    change = record['change_percent']
+    if change is not None and change > -100:
+        record['previous_close'] = record['close'] / (1 + change / 100)
     # Read while building (the snapshot's session); not published.
     record['provider_last_trade_ist'] = _last_trade(row.get('LastTradeTime'))
     return record

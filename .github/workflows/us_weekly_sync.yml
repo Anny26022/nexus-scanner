@@ -1,14 +1,13 @@
 name: US Weekly Finviz Universe Sync
 
-# Runs every Saturday morning (06:00 UTC) after the US market closes for the week.
+# Runs every Saturday at 11:30 India time (06:00 UTC), after the US market closes for the week, started by the
+# nexus-gh-cron Worker in new_nexys_ultimate (workers/gh-cron/schedule.ts) rather than a GitHub schedule.
 # Re-crawls Finviz's classification of US stocks and commits it:
 # - us_theme_catalog.json: Finviz's themes and the sub-themes in each;
 # - us_thematic_universe.json: each themed stock's themes and sub-themes;
 # - us_ownership_universe.json: every listed stock's Finviz sector, industry and type, with ownership and short interest.
 # The Theme Tracker's US map (new_nexys_ultimate, refresh-us-theme-map.yml) is built from these files.
 on:
-  schedule:
-    - cron: '0 6 * * 6'
   workflow_dispatch:
 
 permissions:

@@ -1,15 +1,18 @@
 """US daily price history: one CSV a stock, in the same form India's history uses (Date,Open,High,Low,Close,Volume).
 
-A stock without a file is seeded from Dhan's history (split-adjusted, from March 2021). After that each run appends
-the closed session's bar from the screener snapshot, one call for the whole market. If the snapshot's previous close
-does not match the stored last close, the stored series is on another adjustment (a split or a dividend
-re-adjustment) and the stock is fetched again in full. Bars on days the NYSE was closed are always dropped.
+A stock without a file is seeded in full: Yahoo Finance first (split-adjusted, back to 1980 or the listing), Dhan
+(from March 2021) when Yahoo does not have it. After that each run re-reads the last few weeks from the same
+providers and lays them over the file's tail, so a missed run leaves no gap, the latest bars carry the provider's
+final volume and official close (not the screener snapshot's after-hours last trade), and a split shows up as a
+disagreement on the earliest shared day, which fetches the stock again in full. Only when neither provider answers
+does the screener snapshot supply the closed session's bar, and only when it directly follows the stored series.
+A full fetch never replaces a deeper stored history with a shorter one. Bars on days the NYSE was closed are dropped.
 """
 
 from __future__ import annotations
 
 import csv
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from ohlcv_utils import OHLCV_FIELDS, symbol_csv_path
@@ -21,6 +24,10 @@ from .universe import history_exchanges
 # A stored close may differ from the provider's previous close by rounding; beyond this the series was re-adjusted.
 ADJUSTMENT_TOLERANCE = 0.005
 HISTORY_YEARS = 10  # asks for more than Dhan holds (2021 onwards), so a deeper source later needs no change here
+# Each run re-reads this many calendar days before the stored last bar (two weeks hold ten sessions).
+REFRESH_DAYS = 14
+# A full fetch that starts this much later than the stored history would lose depth, and is not stored.
+DEPTH_SLACK = timedelta(days=31)
 
 
 def read_bars(path: Path) -> list[dict]:
@@ -83,6 +90,43 @@ def fetch_full(symbol: str, security_id: int, listing_exchange: str | None, now:
     return []
 
 
+def fetch_recent(symbol: str, security_id: int, listing_exchange: str | None, start: date, now: datetime | None = None, *,
+                 post: dhan.Post = dhan.post, yahoo_fetch=yahoo.fetch_history) -> list[dict]:
+    """Session bars from `start`, from the provider order fetch_full uses; empty when neither answers."""
+    now = now or datetime.now(timezone.utc)
+    begin = datetime.combine(start, time(), timezone.utc)
+    if yahoo_fetch:
+        try:
+            bars = session_bars(yahoo_fetch(symbol, start=begin, end=now))
+            if bars:
+                return bars
+        except Exception as error:
+            print(f"  yahoo recent {symbol}: {error}", flush=True)
+    for exchange in history_exchanges(listing_exchange):
+        bars = session_bars(dhan.fetch_history(symbol, security_id, exchange, begin, now, post=post))
+        if bars:
+            return bars
+    return []
+
+
+def overlay(bars: list[dict], recent: list[dict]) -> tuple[list[dict] | None, bool]:
+    """(`bars` with `recent` laid over their tail, whether the two are on different adjustments).
+
+    They are joined at the earliest day both hold, when its closes agree; stored bars after `recent` ends (a provider
+    a day behind) are kept. Without a shared day the two cannot be checked against each other: (None, False).
+    """
+    stored = {bar['date']: bar for bar in bars}
+    shared = next((bar for bar in recent if bar['date'] in stored), None)
+    if shared is None:
+        return None, False
+    close = stored[shared['date']]['close']
+    if close <= 0 or abs(shared['close'] / close - 1) > ADJUSTMENT_TOLERANCE:
+        return None, True
+    tail = [bar for bar in recent if bar['date'] >= shared['date']]
+    return [*(bar for bar in bars if bar['date'] < shared['date']), *tail,
+            *(bar for bar in bars if bar['date'] > tail[-1]['date'])], False
+
+
 def snapshot_bar(record: dict, session: str) -> dict | None:
     """The session's bar from a canonical snapshot record, when every price is present and the row last traded in that
     session (a halted or untraded stock's row still holds an earlier day's prices)."""
@@ -123,18 +167,23 @@ def adjustment_matches(bars: list[dict], record: dict) -> bool:
     return abs(previous_close / last_close - 1) <= ADJUSTMENT_TOLERANCE
 
 
-def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
-    """Bring one stock's file up to `session`; returns 'current', 'appended', 'refetched' or 'missing'."""
+def update(record: dict, root: Path, session: str, *, fetch=fetch_full, recent=None) -> str:
+    """Bring one stock's file up to `session`; returns 'current', 'appended', 'refetched' or 'missing'.
+
+    `recent(symbol, security_id, exchange, start)` returns session bars from `start` (fetch_recent); without it only
+    the snapshot can extend a stored series.
+    """
     path = symbol_csv_path(root, record['symbol'])
     stored = read_bars(path)
     bars = cleaned = session_bars(stored)
 
-    def missing():
-        # The stock stays on its earlier session, but a file kept from before the bars were cleaned is still cleaned:
-        # the release publishes whatever is stored.
-        if cleaned and cleaned != stored:
-            write_bars(path, cleaned)
-        elif stored and not cleaned:
+    def missing(kept=None):
+        # The stock stays on its earlier session, but a file kept from before the bars were cleaned is still cleaned
+        # (and bars a partial re-read brought in are kept): the release publishes whatever is stored.
+        kept = kept or cleaned
+        if kept and kept != stored:
+            write_bars(path, kept)
+        elif stored and not kept:
             path.unlink(missing_ok=True)  # every stored row was invalid: publish no file rather than an unusable one
         return 'missing'
 
@@ -142,19 +191,43 @@ def update(record: dict, root: Path, session: str, *, fetch=fetch_full) -> str:
         if bars != stored:
             write_bars(path, bars)  # a file kept from before the bars were cleaned
         return 'current'
-    status = 'appended'
-    if needs_refetch(bars, record, session):
-        bars, status = fetch(record['symbol'], record['security_id'], record.get('exchange')), 'refetched'
-        if not bars:
-            return missing()
-    # History can lag the snapshot by the latest session; the snapshot supplies it when it joins the series.
-    bar = clean(snapshot_bar(record, session) or {'open': None, 'high': None, 'low': None, 'close': None})
-    # It joins only when a refetched series also agrees with the snapshot's previous close: on a split day Dhan's
-    # history may not be re-adjusted yet, and a bar appended to it would bake the gap in.
-    joins = not needs_refetch(bars, record, session) if status == 'appended' else adjustment_matches(bars, record)
-    if bars[-1]['date'] < session and joins and bar:
-        bars = [*bars, bar]
-    elif status == 'appended':
+    snapshot = clean(snapshot_bar(record, session) or {'open': None, 'high': None, 'low': None, 'close': None})
+    readjusted = False
+    if bars and recent:
+        start = date.fromisoformat(bars[-1]['date']) - timedelta(days=REFRESH_DAYS)
+        joined, readjusted = overlay(bars, recent(record['symbol'], record['security_id'], record.get('exchange'), start))
+        if joined is not None:
+            # The providers can lag the snapshot by the closed session; the snapshot supplies it when its previous
+            # close is the series' last (after a halt that is an earlier session's).
+            if joined[-1]['date'] < session and snapshot and adjustment_matches(joined, record):
+                joined = [*joined, snapshot]
+            if joined[-1]['date'] < session:
+                return missing(joined)
+            write_bars(path, joined)
+            return 'appended'
+    if bars and not readjusted:
+        last = bars[-1]['date']
+        if last != previous_session_day(date.fromisoformat(session)).isoformat():
+            return missing()  # behind by more than a session: the re-read above fills the gap when a provider answers
+        if not record.get('previous_close'):
+            return missing()  # nothing to check the series against: wait for a provider rather than fetch it all
+        if not needs_refetch(bars, record, session):
+            if not snapshot:
+                return missing()
+            write_bars(path, [*bars, snapshot])
+            return 'appended'
+    # No history, or a stored series on another adjustment (a split, a dividend re-adjustment).
+    fetched = fetch(record['symbol'], record['security_id'], record.get('exchange'))
+    if not fetched:
         return missing()
-    write_bars(path, bars)
-    return status
+    if bars and date.fromisoformat(fetched[0]['date']) > date.fromisoformat(bars[0]['date']) + DEPTH_SLACK:
+        # Yahoo did not answer and Dhan's history starts in 2021: keep the deeper series for the next run's fetch.
+        print(f"  history {record['symbol']}: a full fetch from {fetched[0]['date']} would drop history from "
+              f"{bars[0]['date']}; kept", flush=True)
+        return missing()
+    # It joins only when the fetched series also agrees with the snapshot's previous close: on a split day a
+    # provider's history may not be re-adjusted yet, and a bar appended to it would bake the gap in.
+    if fetched[-1]['date'] < session and snapshot and adjustment_matches(fetched, record):
+        fetched = [*fetched, snapshot]
+    write_bars(path, fetched)
+    return 'refetched'

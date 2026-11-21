@@ -84,5 +84,26 @@ class StatementReviewTests(unittest.TestCase):
         self.assertTrue(statements.reports('202712', '2028-03-31'))
 
 
+    def test_an_answer_without_quarters_keeps_a_page_that_had_them(self):
+        statements.write_page(self.root, 'A', {'fetched_at': '2026-10-01T00:00:00+00:00', 'slug': 'A-x', **PAGE})
+        counts, _ = self.refresh(['A', 'B'], {'A': {'fundamentalsData': {'incomeStat_sq': None, 'bs_s': None}},
+                                             'B': {'fundamentalsData': {'incomeStat_sq': None}}})
+        self.assertEqual((counts['failed'], counts['fetched']), (1, 1))
+        self.assertEqual(statements.read_page(self.root, 'A')['incomeStat_sq'], PAGE['incomeStat_sq'])
+        self.assertIsNotNone(statements.read_page(self.root, 'B'))  # nothing to keep: saved as fetched
+
+    def test_the_fiscal_years_last_quarter_is_estimated_as_filed_with_the_10k(self):
+        quarters = {'YEAR': '202609|202606|202603|202512', 'REVENUE': '1|1|1|1'}
+        # A September fiscal year: the September quarter is in the 10-K (90 days), the rest in 10-Qs (45 days).
+        page = {'incomeStat_sq': quarters, 'rNp_s': {'YEAR': '202609|202509', 'REVENUE': '4|4'}}
+        rows = {row['quarter_end']: row for row in statements.quarterly_history(page, {'symbol': 'A'})}
+        self.assertEqual(rows['2026-09-30']['filing_date'], '2026-12-29')
+        self.assertEqual(rows['2026-06-30']['filing_date'], '2026-08-14')
+        self.assertEqual(rows['2025-12-31']['filing_date'], '2026-02-14')
+        self.assertTrue(all(row['filing_date_basis'] == 'estimated' for row in rows.values()))
+        # Without yearly blocks, December is taken as the fiscal year end.
+        rows = {row['quarter_end']: row for row in statements.quarterly_history({'incomeStat_sq': quarters}, {'symbol': 'A'})}
+        self.assertEqual((rows['2025-12-31']['filing_date'], rows['2026-09-30']['filing_date']), ('2026-03-31', '2026-11-14'))
+
 if __name__ == '__main__':
     unittest.main()

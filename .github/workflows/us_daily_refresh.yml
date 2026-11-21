@@ -1,11 +1,12 @@
 name: US Daily Refresh
 
-# The US scanner release (/data/us/current.json): one Dhan snapshot appended to each stock's history, India's
-# engine on the result (DO NOT DELETE EDL PIPELINE/docs/US_MARKET.md). 00:30 UTC Tue-Sat is after the New York
-# close in both EST and EDT; a run before the snapshot has caught up exits 75 and publishes nothing.
+# The US scanner release (/data/us/current.json): each stock's history brought up to the closed session, India's
+# engine on the result (DO NOT DELETE EDL PIPELINE/docs/US_MARKET.md). A run before the snapshot has caught up
+# (a US holiday, or still trading) exits 75 inside the build and publishes nothing.
 on:
-  schedule:
-    - cron: '30 0 * * 2-6'
+  # Started on time by the nexus-gh-cron Worker in new_nexys_ultimate (workers/gh-cron/schedule.ts) at 07:00 India
+  # time Tuesday-Saturday, after New York's after-hours session in both EST and EDT. GitHub's own schedule starts runs
+  # hours late, and one that starts after the next New York open finds that session still trading.
   workflow_dispatch:
 
 permissions:
@@ -20,7 +21,7 @@ jobs:
   refresh-us:
     runs-on: ubuntu-latest
     # A cold cache seeds every history (about 6,000 paced requests) and spends up to 20 minutes on stock pages
-    # (the rest follow over the next runs); a warm run is a few minutes.
+    # (the rest follow over the next runs); a warm run re-reads two weeks of each stock's bars, about 30 minutes.
     timeout-minutes: 90
 
     steps:
@@ -46,7 +47,7 @@ jobs:
       - name: Verify US pipeline code
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
-          PYTHONPATH=src:. python -m unittest tests.test_us_market -v
+          PYTHONPATH=src:. python -m unittest tests.test_us_market tests.test_us_history tests.test_us_tradingview -v
           python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
 
       # Price history, stock pages and the rotation membership ledger are the state carried between runs; losing them

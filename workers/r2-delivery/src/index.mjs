@@ -30,8 +30,9 @@ export default {
     }
     headers.set('ETag', object.httpEtag);
     // Only content-addressed objects, frozen releases and rotation history (named by hash) are immutable.
-    // A session snapshot is immutable once archived, so its URL is too when it names the revision it expects.
-    const versioned = /^snapshots\/[^/]+\.json\.gz$/.test(key) && /^[a-f0-9]{16}$/.test(url.searchParams.get('v') ?? '');
+    // A session snapshot (India's, or the US one under snapshots/us/) is immutable once archived, so its URL is too
+    // when it names the revision it expects.
+    const versioned = /^snapshots\/(?:us\/)?[^/]+\.json\.gz$/.test(key) && /^[a-f0-9]{16}$/.test(url.searchParams.get('v') ?? '');
     headers.set('Cache-Control', versioned || /^(objects|releases|daily\/rotation)\//.test(key)
       ? 'public, max-age=31536000, immutable' : 'no-cache');
     headers.set('Access-Control-Allow-Origin', '*');

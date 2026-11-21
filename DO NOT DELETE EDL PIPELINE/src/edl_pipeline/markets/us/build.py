@@ -14,6 +14,7 @@ import gzip
 import json
 import shutil
 import threading
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -69,10 +70,15 @@ def snapshot_session(rows: list[dict], now: datetime) -> str:
     if calendar.is_us_cash_session(now):
         raise SnapshotNotReady('The US session is still trading; run after the close.')
     session = calendar.last_closed_session(now)
-    stamps = [stamp for stamp in (fields.canonical_row(row) or {} for row in rows) if stamp.get('provider_last_trade_ist')]
-    latest = max((datetime.fromisoformat(stamp['provider_last_trade_ist']) for stamp in stamps), default=None)
-    if latest is None or latest.astimezone(calendar.EASTERN).date() != session:
-        raise SnapshotNotReady(f'The snapshot has not caught up with the {session} session (latest trade {latest}).')
+    traded = [datetime.fromisoformat(stamp['provider_last_trade_ist'])
+              for stamp in (fields.canonical_row(row) or {} for row in rows) if stamp.get('provider_last_trade_ist')]
+    # Most of the market trades every session, so the snapshot's session is the one most rows last traded in; one row
+    # stamped later (a bad print, a late correction) must not hold the release back.
+    days = Counter(stamp.astimezone(calendar.EASTERN).date() for stamp in traded)
+    if not days or days.most_common(1)[0][0] != session:
+        held = days.most_common(1)[0][0] if days else None
+        raise SnapshotNotReady(f'The snapshot has not caught up with the {session} session (most rows last traded {held}).')
+    latest = max(stamp for stamp in traded if stamp.astimezone(calendar.EASTERN).date() == session)
     # A snapshot whose newest trade is from mid-session holds intraday prices, not the close (early closes included).
     closing = datetime.combine(session, calendar.nyse_close(session), calendar.EASTERN) - timedelta(minutes=1)
     if latest < closing:
@@ -153,10 +159,11 @@ def stock_record(record: dict, metrics: dict, session: str, thematic: dict | Non
 
 
 def update_histories(records: list[dict], directory: Path, session: str, *, interval: float, workers: int) -> dict:
-    """Bring every file up to the session; full fetches are paced and stop at the first rate limit.
+    """Bring every file up to the session; requests are paced and each provider stops at its first rate limit.
 
-    Yahoo and Dhan are separate servers, each paced at `interval`. A Yahoo rate limit stops only Yahoo (the rest seed
-    from Dhan, reported as `yahoo_throttled`); a Dhan rate limit stops every full fetch.
+    Yahoo and Dhan are separate servers, each paced at `interval`. A Yahoo rate limit stops only Yahoo (the rest come
+    from Dhan, reported as `yahoo_throttled`); a Dhan rate limit stops Dhan (`dhan_throttled`), and `throttled` reports
+    that a full fetch it was needed for was refused, which leaves a stock without usable history.
     """
     pacer, stopped, counts, lock = dhan.Pacer(interval), threading.Event(), {}, threading.Lock()
     yahoo_pacer, yahoo_stopped = dhan.Pacer(interval), threading.Event()
@@ -180,19 +187,31 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
             yahoo_stopped.set()
             return []
 
+    refused = threading.Event()  # a full fetch the Dhan rate limit cut short: that stock has no usable history
+
     def fetch(symbol, security_id, exchange):
         if stopped.is_set():
+            refused.set()
             return []
         try:
             # Paced per request: an unknown listing exchange tries NYSE, then NASDAQ.
             return history.fetch_full(symbol, security_id, exchange, post=paced_post, yahoo_fetch=yahoo_fetch)
         except dhan.Throttled:
             stopped.set()
+            refused.set()
+            return []
+
+    def recent(symbol, security_id, exchange, start):
+        # A rate limit here stops Dhan for the run, but the stock still has its stored series and the snapshot.
+        try:
+            return history.fetch_recent(symbol, security_id, exchange, start, post=paced_post, yahoo_fetch=yahoo_fetch)
+        except dhan.Throttled:
+            stopped.set()
             return []
 
     def one(record):
         try:
-            status = history.update(record, directory, session, fetch=fetch)
+            status = history.update(record, directory, session, fetch=fetch, recent=recent)
         except Exception as error:  # one stock's history must not stop the market
             print(f"  history {record['symbol']}: {error}", flush=True)
             status = 'failed'
@@ -201,7 +220,7 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(one, records))
-    return {**counts, 'throttled': stopped.is_set(), 'yahoo_throttled': yahoo_stopped.is_set()}
+    return {**counts, 'throttled': refused.is_set(), 'dhan_throttled': stopped.is_set(), 'yahoo_throttled': yahoo_stopped.is_set()}
 
 
 def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, workers: int = 3, limit: int | None = None,
@@ -272,10 +291,12 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     report['stocks'] = len(stocks)
     report['aligned'] = sum(stock['as_of_date'] == session for stock in stocks)
     report['rs_ratings'] = build_rs_ratings.main(root, f'{BENCHMARK}.csv', BENCHMARKS[BENCHMARK])
-    # India's quarterly history file, from the trusted Dhan pages; the IPO file stays empty for the US.
-    _write_json(root / 'quarterly_financial_history.json', {
-        'source': 'Dhan US stock pages (trusted income statements)', 'coverage': {'records': len(quarterly)},
-        'records': quarterly}, compress=True)
+    # India's quarterly history file, from the trusted Dhan pages; the IPO file stays empty for the US. Pages are
+    # trusted against TradingView's figures, so without them a ledger would come out empty: the last one is kept.
+    if not report['tradingview'].get('error'):
+        _write_json(root / 'quarterly_financial_history.json', {
+            'source': 'Dhan US stock pages (trusted income statements)', 'coverage': {'records': len(quarterly)},
+            'records': quarterly}, compress=True)
     report['quarterly_rows'] = len(quarterly)
     _write_json(root / 'ipo_screener.json', {'records': []}, compress=True)
     return report

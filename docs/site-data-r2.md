@@ -11,7 +11,7 @@ goes live as soon as its pointer is uploaded. Every `/data/...` URL stays the sa
 | --- | --- | --- |
 | `/data/revisions/<rev>/<file>` (one subfolder allowed, e.g. `financial-history/<symbol>.json.gz`) | `releases/<rev>/<file>` | `public, max-age=31536000, immutable` |
 | `/data/company/revisions/<rev>/<file>` | `releases/company/<rev>/<file>` | `public, max-age=31536000, immutable` |
-| `/data/current.json`, `sessions.json`, `price-band-history.json`, `ai-filter-choices.json`, `results/index.json`, `results/us_index.json`, `heatmap/index.json`, `company/current.json`, `concalls/index.json` | `site/data/<same path>` | `no-cache` |
+| `/data/current.json`, `sessions.json`, `price-band-history.json`, `ai-filter-choices.json`, `results/index.json`, `results/us_index.json`, `heatmap/index.json`, `company/current.json`, `concalls/index.json`, `concalls/upcoming.json` | `site/data/<same path>` | `no-cache` |
 
 Any other `/data/...` path answers 404, including the development-only `objects/`, `rotation/`, `snapshots/` and
 `charts/` folders and the unreferenced top-level `stocks.json`, `ipos.json` and `universe-classification.json`.

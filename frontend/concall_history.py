@@ -1,12 +1,18 @@
-"""Concall summaries: one immutable R2 object per concluded call, and a small index of what is stored.
+"""Concall summaries: one immutable R2 object per concluded call, a small index of what is stored, and the schedule.
 
 The provider lists concluded calls newest first. A run walks that list only until it reaches a page whose calls are
-all stored, fetches the new ones in parallel, and never fetches a stored call again. Calls whose summary was not
-ready are kept in the index without an object and retried on later runs. The weekly refresh walks the whole list
-(--full) to pick up calls the provider adds out of order.
+all stored and fetches the new ones in parallel. Calls whose summary was not ready are kept in the index without an
+object and retried on later runs. The weekly refresh walks the whole list (--full) to pick up calls the provider
+adds out of order.
 
-    python frontend/concall_history.py           # daily: new calls only
-    python frontend/concall_history.py --full    # weekly: whole list, still only fetching what is missing
+The provider has no "updated" field but does revise summaries, sometimes weeks later in batches. So stored calls are
+fetched again on a schedule and compared by content hash: daily for the last two days' calls, weekly for the last 7
+days plus a rotating eighth of older ones (every call about every two months). An unchanged call uploads nothing.
+
+Upcoming calls and today's (with their live status) are rewritten to concalls/upcoming.json on every run.
+
+    python frontend/concall_history.py           # daily
+    python frontend/concall_history.py --full    # weekly
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -30,6 +36,7 @@ API = 'https://askfuzz.ai/api/v1/concall'
 HEADERS = {'Content-Type': 'application/json', 'Origin': 'https://askfuzz.ai',
            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'}
 OUTPUT = Path(__file__).parent / 'public/data/concalls/index.json'
+UPCOMING = Path(__file__).parent / 'public/data/concalls/upcoming.json'
 REPORT = Path(__file__).parent / 'concall-refresh-report.json'
 PAGE_SIZE = 100
 # The provider tops out near 7 calls/s: past ~16 at once, each call just takes longer.
@@ -37,6 +44,11 @@ WORKERS = 16
 # The provider has calls that never get a summary (about 270 of 2,500, mostly older ones); retrying them daily
 # would add about a minute to every run.
 DAILY_RETRY_DAYS = 14
+RECHECK_DAILY_DAYS = 2
+RECHECK_WEEKLY_DAYS = 7
+# A call still without a summary after this long is retried only in the weekly rotation.
+PENDING_WEEKLY_DAYS = 90
+RECHECK_ROTATION = 8
 # Fetched calls are uploaded and the index rewritten after each batch, so a run cut short keeps its progress.
 BATCH = 250
 # Far beyond the ~26 pages the provider has; stops a runaway walk if it keeps answering has_next.
@@ -112,12 +124,15 @@ def entry_for(row, previous=None):
     return entry
 
 
-def pack(folder, store, slug, detail):
+def pack(folder, store, slug, detail, current=None):
+    """The object for a call, written to folder unless it is the one already stored (current)."""
     record = {key: value for key, value in detail.items() if key not in PRIVATE_FIELDS}
     payload = {'schemaVersion': 1, 'slug': slug, 'call': record}
     raw = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode()
     compressed = gzip.compress(raw, mtime=0)
     digest = hashlib.sha256(compressed).hexdigest()
+    if current and current.get('sha256') == digest:
+        return current
     (folder / f'{digest}.json.gz').write_bytes(compressed)
     return {'sha256': digest, 'url': f'{store.base_url}/objects/{digest}.json.gz', 'bytes': len(compressed)}
 
@@ -139,7 +154,7 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
     calls = {slug: dict(entry) for slug, entry in previous['calls'].items()}
     # Detailed errors stay in this report (a run artifact); the published index carries only a status.
     report = {'checkedAt': checked_at, 'full': full, 'pages': 0, 'listed': 0, 'added': 0, 'pending': 0,
-              'failures': {}, 'errors': {}}
+              'rechecked': 0, 'updated': 0, 'failures': {}, 'errors': {}}
     today = checked_at[:10]
 
     page = 1
@@ -167,16 +182,31 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
 
     # Every call is tried once. A call still without a summary is retried daily while it is under two weeks old,
     # then only by the weekly full walk.
-    recent = (date.fromisoformat(today) - timedelta(days=DAILY_RETRY_DAYS)).isoformat()
+    day = date.fromisoformat(today)
+    since = lambda days: (day - timedelta(days=days)).isoformat()
+    # A continuous week count: ISO week numbers restart at New Year and would skip part of the rotation.
+    week = day.toordinal() // 7
 
-    def due(entry):
+    def rotating(slug):
+        return int(hashlib.sha256(slug.encode()).hexdigest()[:8], 16) % RECHECK_ROTATION == week % RECHECK_ROTATION
+
+    def due(slug, entry):
         if entry.get('object'):
-            return False
-        if full or not entry.get('attempts'):
+            # A stored call is fetched again to catch revisions; never twice on the same day.
+            if entry.get('checked') == today:
+                return False
+            when = entry.get('date') or ''
+            if when >= since(RECHECK_DAILY_DAYS):
+                return True
+            return full and (when >= since(RECHECK_WEEKLY_DAYS) or rotating(slug))
+        if not entry.get('attempts'):
             return True
-        return (entry.get('date') or entry.get('firstSeen') or today) >= recent
+        when = entry.get('date') or entry.get('firstSeen') or today
+        if full:
+            return when >= since(PENDING_WEEKLY_DAYS) or rotating(slug)
+        return when >= since(DAILY_RETRY_DAYS)
 
-    wanted = sorted((slug for slug, entry in calls.items() if due(entry)),
+    wanted = sorted((slug for slug, entry in calls.items() if due(slug, entry)),
                     key=lambda slug: calls[slug].get('date') or '', reverse=True)
     def one(slug):
         try:
@@ -193,6 +223,20 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
                 folder, added = Path(name), 0
                 for slug, detail, status, error in pool.map(one, wanted[start:start + BATCH]):
                     entry = calls[slug]
+                    current = entry.get('object')
+                    if current:
+                        report['rechecked'] += 1
+                        if detail is None:
+                            # A failed or emptied re-check keeps the stored version.
+                            report['failures'][slug] = f'recheck: {error}'
+                            continue
+                        entry['checked'] = today
+                        revised = pack(folder, store, slug, detail, current)
+                        if revised is not current:
+                            entry['object'], entry['updated'] = revised, today
+                            report['updated'] += 1
+                            added += 1
+                        continue
                     if detail is None:
                         entry['attempts'] = entry.get('attempts', 0) + 1
                         entry['status'] = status
@@ -204,11 +248,12 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
                     entry['date'] = iso_date(detail.get('concall_date')) or entry.get('date')
                     entry['time'] = detail.get('concall_time') or entry.get('time')
                     entry['object'] = pack(folder, store, slug, detail)
+                    entry['checked'] = today
+                    report['added'] += 1
                     added += 1
                 if added:
                     # Objects go up before the index names them.
                     store.upload_objects(folder)
-                report['added'] += added
             write_index(output, calls, checked_at)
             if progress:
                 progress(report)
@@ -216,6 +261,79 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
     if calls != previous['calls']:
         write_index(output, calls, checked_at)
     return report
+
+
+def call_state(status):
+    """The schedule's state for a provider call_status."""
+    if status in (None, '', 'not_started'):
+        return 'scheduled'
+    return 'concluded' if status == 'generating_summary_end' else 'live'
+
+
+def fetch_upcoming(session):
+    rows = []
+    for page in range(1, 21):
+        data = post(session, 'upcoming', dict(page=page, page_size=PAGE_SIZE))
+        batch = data.get('concalls')
+        if not isinstance(batch, list):
+            raise ValueError('Invalid upcoming list')
+        rows.extend(batch)
+        if not (data.get('pagination') or {}).get('has_next'):
+            return rows
+    return rows
+
+
+def fetch_today(session):
+    for attempt in range(3):
+        try:
+            response = session.get(f'{API}/todays-calls', headers=HEADERS, timeout=(10, 60))
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict) or payload.get('status') != 'success' \
+                    or not isinstance(payload.get('data') or [], list):
+                raise ValueError('Invalid today\'s calls response')
+            return payload.get('data') or []
+        except (requests.RequestException, ValueError):
+            if attempt == 2:
+                raise
+            time.sleep(2 ** attempt)
+
+
+def refresh_upcoming(output, fetch_upcoming, fetch_today, *, checked_at):
+    """Rewrite the schedule: upcoming calls, and today's with their live state. A failed fetch keeps the last one."""
+    try:
+        upcoming, today = fetch_upcoming(), fetch_today()
+    except (requests.RequestException, ValueError, KeyError, TypeError) as error:
+        return {'error': str(error)}
+    calls = {}
+    for row in upcoming:
+        slug = str((row or {}).get('slug_id') or '')
+        if not SLUG.fullmatch(slug) or not str(row.get('company_symbol') or '').strip():
+            continue
+        registration = row.get('diamond_link')
+        calls[slug] = {key: value for key, value in {
+            'slug': slug, 'symbol': row['company_symbol'].strip(), 'isin': row.get('isin') or None,
+            'name': row.get('company_name'), 'quarter': row.get('concall_quarter'),
+            'date': iso_date(row.get('concall_date')), 'time': row.get('concall_time'), 'sector': row.get('sector'),
+            'subSector': row.get('sub_sector'), 'marketCapType': row.get('market_cap_type'),
+            'agenda': row.get('concall_agenda'), 'online': row.get('online_flag') == 'true',
+            # The organiser's public sign-up page for joining the call.
+            'registration': registration if str(registration or '').startswith('https://') else None,
+            'filing': row.get('pdf_link') or None, 'state': call_state(row.get('call_status')),
+        }.items() if value not in (None, '')}
+    for row in today:
+        slug = str((row or {}).get('slug') or '')
+        state = call_state(row.get('call_status'))
+        if not SLUG.fullmatch(slug) or not str(row.get('symbol') or '').strip() or state == 'concluded':
+            continue
+        entry = calls.setdefault(slug, {'slug': slug, 'symbol': row['symbol'].strip(), 'name': row.get('company_name')})
+        entry.update({key: value for key, value in {'date': iso_date(row.get('concall_date')),
+                                                    'time': row.get('concall_time')}.items() if value})
+        entry['state'] = state
+    ordered = sorted(calls.values(), key=lambda entry: (entry.get('date') or '', entry.get('time') or '', entry['slug']))
+    write_json(output, {'version': 1, 'checkedAt': checked_at, 'count': len(ordered), 'calls': ordered})
+    return {'scheduled': sum(entry['state'] == 'scheduled' for entry in ordered),
+            'live': sum(entry['state'] == 'live' for entry in ordered)}
 
 
 def main(argv=None):
@@ -236,6 +354,10 @@ def main(argv=None):
     report = refresh(OUTPUT, store, lambda page: list_page(session(), page),
                      lambda slug: fetch_detail(session(), slug), full=args.full, checked_at=now, workers=args.workers,
                      progress=lambda partial: write_json(REPORT, partial))
+    report['upcoming'] = refresh_upcoming(UPCOMING, lambda: fetch_upcoming(session()), lambda: fetch_today(session()),
+                                          checked_at=now)
+    if 'error' in report['upcoming']:
+        report['errors']['upcoming'] = report['upcoming']['error']
     report['seconds'] = round(time.perf_counter() - started, 1)
     write_json(REPORT, report)
     print(json.dumps(report), flush=True)

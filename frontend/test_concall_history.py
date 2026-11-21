@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 import gzip
 import hashlib
 import json
@@ -11,7 +12,7 @@ import requests
 from unittest.mock import Mock
 
 import concall_history
-from concall_history import PRIVATE_FIELDS, iso_date, list_page, post, refresh
+from concall_history import PRIVATE_FIELDS, call_state, iso_date, list_page, post, refresh, refresh_upcoming
 
 
 class Store:
@@ -37,7 +38,7 @@ def row(slug, symbol='TEST', date='05 November 2026'):
 
 
 def detail(slug, summary='## Key Takeaways'):
-    return dict({field: 'private' for field in PRIVATE_FIELDS}, slug_id=slug, concall_date='2026-11-05',
+    return dict({field: 'private' for field in PRIVATE_FIELDS}, slug_id=slug, concall_date=None,
                 concall_time='16:00', markdown_summary=summary,
                 transcript_with_names=[{'speakername': 'CEO', 'text': 'hi'}], forensic_flags={'flags': []})
 
@@ -131,6 +132,14 @@ class ConcallHistoryTests(unittest.TestCase):
         self.run_refresh(weekly, full=True)
         self.assertEqual(weekly.fetched, ['a'])
 
+    def test_a_long_pending_call_joins_the_weekly_rotation(self):
+        slugs = [f'old{n}' for n in range(40)]
+        pending = {s: {**detail(s, summary='')} for s in slugs}
+        self.refresh_on(Provider([[row(s, date='01 July 2026') for s in slugs]], pending), '2026-11-21T16:30:00+05:30')
+        weekly = Provider([[row(s, date='01 July 2026') for s in slugs]], pending)
+        self.refresh_on(weekly, '2026-11-23T16:30:00+05:30', full=True)
+        self.assertLess(len(weekly.fetched), 15)
+
     def test_a_list_failure_keeps_stored_calls_and_still_fetches_what_was_listed(self):
         self.run_refresh(Provider([[row('a')]]))
         provider = Provider([[row('new')], [row('a')]], fail_pages={2})
@@ -210,6 +219,90 @@ class ConcallHistoryTests(unittest.TestCase):
             session.post.return_value = response
             with unittest.mock.patch('concall_history.time.sleep'), self.assertRaises(ValueError):
                 post(session, 'concluded', {})
+
+    def refresh_on(self, provider, checked_at, full=False):
+        return refresh(self.output, self.store, provider.list_page, provider.fetch_detail, full=full,
+                       checked_at=checked_at, workers=2)
+
+    def test_a_recent_call_is_rechecked_daily_and_an_unchanged_one_uploads_nothing(self):
+        self.refresh_on(Provider([[row('a', date='20 November 2026')]]), '2026-11-21T16:30:00+05:30')
+        uploads = len(self.store.objects)
+        provider = Provider([[row('a', date='20 November 2026')]])
+        report = self.refresh_on(provider, '2026-11-22T16:30:00+05:30')
+        self.assertEqual(provider.fetched, ['a'])
+        self.assertEqual((report['rechecked'], report['updated']), (1, 0))
+        self.assertEqual(len(self.store.objects), uploads)
+        self.assertEqual(self.index()['calls']['a']['checked'], '2026-11-22')
+
+    def test_a_revised_summary_replaces_the_stored_object(self):
+        self.refresh_on(Provider([[row('a', date='20 November 2026')]]), '2026-11-21T16:30:00+05:30')
+        first = self.index()['calls']['a']['object']
+        revised = {'a': detail('a', summary='## Key Takeaways (revised)')}
+        report = self.refresh_on(Provider([[row('a', date='20 November 2026')]], revised), '2026-11-22T16:30:00+05:30')
+        entry = self.index()['calls']['a']
+        self.assertEqual(report['updated'], 1)
+        self.assertNotEqual(entry['object'], first)
+        self.assertEqual(entry['updated'], '2026-11-22')
+        self.assertEqual(self.store.load(entry['object'])['call']['markdown_summary'], '## Key Takeaways (revised)')
+
+    def test_a_failed_or_emptied_recheck_keeps_the_stored_version(self):
+        self.refresh_on(Provider([[row('a', date='20 November 2026')]]), '2026-11-21T16:30:00+05:30')
+        first = self.index()['calls']['a']['object']
+        emptied = {'a': detail('a', summary='')}
+        report = self.refresh_on(Provider([[row('a', date='20 November 2026')]], emptied), '2026-11-22T16:30:00+05:30')
+        self.assertEqual(self.index()['calls']['a']['object'], first)
+        self.assertEqual(report['pending'], 0)
+        self.assertIn('recheck', report['failures']['a'])
+
+    def test_older_calls_are_rechecked_only_weekly(self):
+        self.refresh_on(Provider([[row('a', date='01 November 2026')]]), '2026-11-21T16:30:00+05:30')
+        daily = Provider([[row('a', date='01 November 2026')]])
+        self.refresh_on(daily, '2026-11-23T16:30:00+05:30')
+        self.assertEqual(daily.fetched, [])
+        weekly = Provider([[row('a', date='01 November 2026')]])
+        self.refresh_on(weekly, '2026-11-23T16:30:00+05:30', full=True)
+        self.assertEqual(weekly.fetched, ['a'])
+
+    def test_the_weekly_run_rechecks_a_rotating_eighth_of_old_calls(self):
+        slugs = [f'old{n}' for n in range(80)]
+        self.refresh_on(Provider([[row(s, date='01 July 2026') for s in slugs]]), '2026-11-21T16:30:00+05:30')
+        seen = set()
+        for offset in range(8):
+            provider = Provider([[row(s, date='01 July 2026') for s in slugs]])
+            day = date(2026, 11, 23) + timedelta(weeks=offset)
+            self.refresh_on(provider, f'{day.isoformat()}T16:30:00+05:30', full=True)
+            self.assertLess(len(provider.fetched), 30)
+            seen.update(provider.fetched)
+        self.assertEqual(seen, set(slugs))
+
+    def test_the_schedule_lists_upcoming_and_live_calls_but_not_concluded_ones(self):
+        upcoming = [dict(row('zf-q2-fy27', 'ZFCVINDIA', date='23 November 2026'), concall_time='10:30',
+                         call_status='not_started', online_flag='true', diamond_link='https://services.example/reg')]
+        today = [dict(slug='sahasra-q2-fy27', symbol='SAHASRA', company_name='Sahasra', concall_date='2026-11-21',
+                      concall_time='14:00', call_status='in_progress'),
+                 dict(slug='done-q2-fy27', symbol='DONE', call_status='generating_summary_end')]
+        path = self.output.with_name('upcoming.json')
+        report = refresh_upcoming(path, lambda: upcoming, lambda: today, checked_at='2026-11-21T16:30:00+05:30')
+        self.assertEqual(report, {'scheduled': 1, 'live': 1})
+        calls = json.loads(path.read_text())['calls']
+        self.assertEqual([(c['slug'], c['state']) for c in calls], [('sahasra-q2-fy27', 'live'), ('zf-q2-fy27', 'scheduled')])
+        self.assertEqual((calls[1]['date'], calls[1]['registration'], calls[1]['online']), ('2026-11-23', 'https://services.example/reg', True))
+        self.assertEqual(PRIVATE_FIELDS & {key for call in calls for key in call}, set())
+
+    def test_a_failed_schedule_fetch_keeps_the_last_schedule(self):
+        path = self.output.with_name('upcoming.json')
+        path.parent.mkdir(parents=True)
+        path.write_text('{"version": 1, "calls": []}')
+
+        def down():
+            raise requests.ConnectionError('down')
+        report = refresh_upcoming(path, down, lambda: [], checked_at='2026-11-21T16:30:00+05:30')
+        self.assertEqual(report, {'error': 'down'})
+        self.assertEqual(path.read_text(), '{"version": 1, "calls": []}')
+
+    def test_call_states(self):
+        self.assertEqual([call_state(s) for s in ('not_started', None, 'in_progress', 'generating_summary_end')],
+                         ['scheduled', 'scheduled', 'live', 'concluded'])
 
     def test_dates(self):
         self.assertEqual(iso_date('05 November 2026'), '2026-11-05')

@@ -10,7 +10,7 @@ ready are kept in the index without an object and retried on later runs. The wee
 """
 import argparse
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import date, datetime, timedelta
 import gzip
 import hashlib
 import json
@@ -32,9 +32,13 @@ HEADERS = {'Content-Type': 'application/json', 'Origin': 'https://askfuzz.ai',
 OUTPUT = Path(__file__).parent / 'public/data/concalls/index.json'
 REPORT = Path(__file__).parent / 'concall-refresh-report.json'
 PAGE_SIZE = 100
-WORKERS = 6
-MAX_DAILY_ATTEMPTS = 22
-SLUG = re.compile(r'[a-z0-9][a-z0-9-]{0,127}')
+# The provider tops out near 7 calls/s: past ~16 at once, each call just takes longer.
+WORKERS = 16
+# The provider has calls that never get a summary (about 270 of 2,500, mostly older ones); retrying them daily
+# would add about a minute to every run.
+DAILY_RETRY_DAYS = 14
+# Symbols such as M&M and J&KBANK keep their '&' in the slug.
+SLUG = re.compile(r'[a-z0-9&][a-z0-9&-]{0,127}')
 # Provider identifiers and per-viewer flags; the recording link is pre-signed and expires within days.
 PRIVATE_FIELDS = frozenset({'call_recording_url', 'stream_sid', 'news_id', 'reminder_set', 'calendar_set',
                             'diamond_link', 'live_data', 'seo_symbol'})
@@ -61,11 +65,12 @@ def list_page(session, page):
     rows, pagination = data.get('concalls'), data.get('pagination') or {}
     if not isinstance(rows, list):
         raise ValueError('Invalid concall list')
-    for row in rows:
-        if not isinstance(row, dict) or not SLUG.fullmatch(str(row.get('slug_id', ''))) \
-                or not str(row.get('company_symbol') or '').strip():
-            raise ValueError('Invalid concall identity')
-    return rows, bool(pagination.get('has_next'))
+    # A malformed row (the provider has listed '-q1-fy27') is skipped; it must not hide the rest of the page.
+    valid = [row for row in rows if isinstance(row, dict) and SLUG.fullmatch(str(row.get('slug_id', '')))
+             and str(row.get('company_symbol') or '').strip()]
+    if len(valid) < len(rows):
+        print(f'WARNING: skipped {len(rows) - len(valid)} malformed concall rows on page {page}', flush=True)
+    return valid, bool(pagination.get('has_next'))
 
 
 def fetch_detail(session, slug):
@@ -132,9 +137,18 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
             break
         page += 1
 
-    # A call whose summary never appears is retried daily for a month, then only by the weekly full walk.
-    wanted = sorted((slug for slug, entry in calls.items()
-                     if not entry.get('object') and (full or entry.get('attempts', 0) < MAX_DAILY_ATTEMPTS)),
+    # Every call is tried once. A call still without a summary is retried daily while it is under two weeks old,
+    # then only by the weekly full walk.
+    recent = (date.fromisoformat(checked_at[:10]) - timedelta(days=DAILY_RETRY_DAYS)).isoformat()
+
+    def due(entry):
+        if entry.get('object'):
+            return False
+        if full or not entry.get('attempts'):
+            return True
+        return entry['date'] >= recent if entry.get('date') else entry['attempts'] < 3
+
+    wanted = sorted((slug for slug, entry in calls.items() if due(entry)),
                     key=lambda slug: calls[slug].get('date') or '', reverse=True)
     with tempfile.TemporaryDirectory(prefix='concalls-') as name:
         folder = Path(name)

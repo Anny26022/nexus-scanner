@@ -7,7 +7,9 @@ import unittest
 
 import requests
 
-from concall_history import iso_date, refresh
+from unittest.mock import Mock
+
+from concall_history import iso_date, list_page, refresh
 
 
 class Store:
@@ -105,23 +107,22 @@ class ConcallHistoryTests(unittest.TestCase):
         self.assertEqual(provider.listed, [1, 2, 3])
         self.assertEqual(provider.fetched, ['late'])
 
-    def test_a_call_without_a_summary_is_kept_pending_and_retried(self):
-        provider = Provider([[row('a')]], {'a': detail('a', summary='')})
+    def test_a_recent_call_without_a_summary_is_kept_pending_and_retried(self):
+        provider = Provider([[row('a', date='18 November 2026')]], {'a': detail('a', summary='')})
         report = self.run_refresh(provider)
         self.assertEqual(report['pending'], 1)
         entry = self.index()['calls']['a']
         self.assertEqual((entry['object'], entry['attempts']), (None, 1))
-        provider = Provider([[row('a')]])
+        provider = Provider([[row('a', date='18 November 2026')]])
         self.run_refresh(provider)
         entry = self.index()['calls']['a']
         self.assertTrue(entry['object'])
         self.assertNotIn('attempts', entry)
 
-    def test_daily_runs_stop_retrying_a_long_pending_call_but_the_weekly_one_does_not(self):
-        self.run_refresh(Provider([[row('a')]], {'a': detail('a', summary='')}))
-        index = self.index()
-        index['calls']['a']['attempts'] = 22
-        self.output.write_text(json.dumps(index))
+    def test_daily_runs_retry_only_recent_pending_calls_but_the_weekly_one_retries_all(self):
+        # Pending summaries come back without a date, so the list date (16 days before the run) is what counts.
+        self.run_refresh(Provider([[row('a')]], {'a': {**detail('a', summary=''), 'concall_date': None}}))
+        self.assertEqual(self.index()['calls']['a']['date'], '2026-11-05')
         daily = Provider([[row('a')]])
         self.run_refresh(daily)
         self.assertEqual(daily.fetched, [])
@@ -152,6 +153,22 @@ class ConcallHistoryTests(unittest.TestCase):
         self.output.write_text('{"version": 2}')
         with self.assertRaises(ValueError):
             self.run_refresh(Provider([[row('a')]]))
+
+    def test_list_keeps_ampersand_slugs_and_skips_malformed_rows(self):
+        response = Mock(status_code=200)
+        response.json.return_value = {'status': 'success', 'data': {
+            'concalls': [row('m&m-q2-fy27', 'M&M'), row('-q1-fy27', 'SIMPLEXCAS'), row('ok-q2-fy27', ''),
+                         row('tcs-q2-fy27', 'TCS')], 'pagination': {'has_next': True}}}
+        session = Mock()
+        session.post.return_value = response
+        rows, has_next = list_page(session, 6)
+        self.assertEqual([r['slug_id'] for r in rows], ['m&m-q2-fy27', 'tcs-q2-fy27'])
+        self.assertTrue(has_next)
+
+    def test_an_old_call_is_still_fetched_once(self):
+        provider = Provider([[row('old', date='09 July 2026')]])
+        self.run_refresh(provider)
+        self.assertEqual(provider.fetched, ['old'])
 
     def test_dates(self):
         self.assertEqual(iso_date('05 November 2026'), '2026-11-05')

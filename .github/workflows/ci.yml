@@ -53,6 +53,10 @@ jobs:
         working-directory: .
         run: python -m unittest discover -s tools -p test_prune_actions_caches.py -v
 
+      - name: Test revision watch publication
+        working-directory: .
+        run: python -m unittest discover -s tools -p test_publish_revision_watch.py -v
+
       - name: Test pipeline state storage
         working-directory: .
         run: python -m unittest discover -s tools -p test_pipeline_state.py -v

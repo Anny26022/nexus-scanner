@@ -1,0 +1,31 @@
+name: Publish Revision Watch
+
+# Deploys the static current.json copy on demand: the first deploy, and a re-sync after a refresh whose copy failed.
+# The daily and weekly refreshes publish it themselves after each release.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-data-refresh
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Publish revision watch copy
+        uses: ./.github/actions/publish-revision-watch
+        with:
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

@@ -1,12 +1,12 @@
 """US daily price history: one CSV a stock, in the same form India's history uses (Date,Open,High,Low,Close,Volume).
 
-A stock without a file is seeded in full: Yahoo Finance first (split-adjusted, back to 1980 or the listing), Dhan
-(from March 2021) when Yahoo does not have it. After that each run re-reads the last few weeks from the same
-providers and lays them over the file's tail, so a missed run leaves no gap, the latest bars carry the provider's
-final volume and official close (not the screener snapshot's after-hours last trade), and a split shows up as a
-disagreement on the earliest shared day, which fetches the stock again in full. Only when neither provider answers
-does the screener snapshot supply the closed session's bar, and only when it directly follows the stored series.
-A full fetch never replaces a deeper stored history with a shorter one. Bars on days the NYSE was closed are dropped.
+A stock without a file is seeded in full: Yahoo Finance first (split-adjusted, back to 1980 or the listing; its closes
+are the official ones), Dhan (from March 2021) only when Yahoo does not have it. After that each run appends the
+session's bar from TradingView's market scan, read with the rest of its values (tradingview.py): its volume and range
+are final, and its previous close, which corrects the bar appended the run before, is the official one. A previous
+close that disagrees by more than a late print could (a split) fetches the stock in full. A gap, or a stock without a
+TradingView bar, is filled from Yahoo's last few weeks, joined where the two share a day. A full fetch never replaces a
+deeper stored history with a shorter one. Bars on days the NYSE was closed are always dropped.
 """
 
 from __future__ import annotations
@@ -18,14 +18,17 @@ from pathlib import Path
 from ohlcv_utils import OHLCV_FIELDS, symbol_csv_path
 
 from . import dhan, yahoo
-from .calendar import EASTERN, is_nyse_session_day, previous_session_day
+from .calendar import is_nyse_session_day, previous_session_day
 from .universe import history_exchanges
 
 # A stored close may differ from the provider's previous close by rounding; beyond this the series was re-adjusted.
 ADJUSTMENT_TOLERANCE = 0.005
 HISTORY_YEARS = 10  # asks for more than Dhan holds (2021 onwards), so a deeper source later needs no change here
-# Each run re-reads this many calendar days before the stored last bar (two weeks hold ten sessions).
+# A gap is filled from this many calendar days before the stored last bar (two weeks hold ten sessions).
 REFRESH_DAYS = 14
+# A stored last close this far from TradingView's (official) previous close was a late print, and is corrected; any
+# further is a split or re-adjustment, which fetches the stock in full. Late prints seen: up to 4% on thin stocks.
+CORRECTION_LIMIT = 0.05
 # A full fetch that starts this much later than the stored history would lose depth, and is not stored.
 DEPTH_SLACK = timedelta(days=31)
 
@@ -90,23 +93,15 @@ def fetch_full(symbol: str, security_id: int, listing_exchange: str | None, now:
     return []
 
 
-def fetch_recent(symbol: str, security_id: int, listing_exchange: str | None, start: date, now: datetime | None = None, *,
-                 post: dhan.Post = dhan.post, yahoo_fetch=yahoo.fetch_history) -> list[dict]:
-    """Session bars from `start`, from the provider order fetch_full uses; empty when neither answers."""
+def fetch_recent(symbol: str, start: date, now: datetime | None = None, *, yahoo_fetch=yahoo.fetch_history) -> list[dict]:
+    """Yahoo's session bars from `start`; empty when it does not answer. Dhan is not asked: since 2026-07-24 its daily
+    history carries the screener's partial volume (55-95% of the consolidated figure) and last-trade closes."""
     now = now or datetime.now(timezone.utc)
-    begin = datetime.combine(start, time(), timezone.utc)
-    if yahoo_fetch:
-        try:
-            bars = session_bars(yahoo_fetch(symbol, start=begin, end=now))
-            if bars:
-                return bars
-        except Exception as error:
-            print(f"  yahoo recent {symbol}: {error}", flush=True)
-    for exchange in history_exchanges(listing_exchange):
-        bars = session_bars(dhan.fetch_history(symbol, security_id, exchange, begin, now, post=post))
-        if bars:
-            return bars
-    return []
+    try:
+        return session_bars(yahoo_fetch(symbol, start=datetime.combine(start, time(), timezone.utc), end=now))
+    except Exception as error:
+        print(f"  yahoo recent {symbol}: {error}", flush=True)
+        return []
 
 
 def overlay(bars: list[dict], recent: list[dict]) -> tuple[list[dict] | None, bool]:
@@ -127,51 +122,33 @@ def overlay(bars: list[dict], recent: list[dict]) -> tuple[list[dict] | None, bo
             *(bar for bar in bars if bar['date'] > tail[-1]['date'])], False
 
 
-def snapshot_bar(record: dict, session: str) -> dict | None:
-    """The session's bar from a canonical snapshot record, when every price is present and the row last traded in that
-    session (a halted or untraded stock's row still holds an earlier day's prices)."""
-    traded = record.get('provider_last_trade_ist')
-    # Without a trade time the row's prices cannot be placed in a session, so they are not stored as this one's.
-    if not traded or datetime.fromisoformat(traded).astimezone(EASTERN).date().isoformat() != session:
-        return None
-    values = [record.get(key) for key in ('open', 'high', 'low', 'close')]
-    if any(value is None or value <= 0 for value in values):
-        return None
-    return {'date': session, 'open': values[0], 'high': values[1], 'low': values[2], 'close': values[3],
-            'volume': record.get('volume') or 0}
+def extend(bars: list[dict], record: dict, session: str, *, confirmed: bool = False) -> tuple[list[dict] | None, bool]:
+    """(`bars` with the session's TradingView bar appended, whether the series is on another adjustment).
 
-
-def needs_refetch(bars: list[dict], record: dict, session: str) -> bool:
-    """Whether the stored series no longer joins the snapshot: missing, behind by more than a session, or re-adjusted."""
-    if not bars:
-        return True
-    last = bars[-1]
-    if last['date'] >= session:
-        return False
-    if last['date'] != previous_session_day(date.fromisoformat(session)).isoformat():
-        return True
-    previous_close = record.get('previous_close')
-    if not previous_close or last['close'] <= 0:
-        return True
-    return abs(previous_close / last['close'] - 1) > ADJUSTMENT_TOLERANCE
-
-
-def adjustment_matches(bars: list[dict], record: dict) -> bool:
-    """Whether the latest bar's close agrees with the snapshot's previous close within adjustment tolerance."""
-    if not bars:
-        return False
-    previous_close = record.get('previous_close')
-    last_close = bars[-1]['close']
-    if not previous_close or last_close <= 0:
-        return False  # unverified, as needs_refetch treats it: the snapshot bar is not joined to the series
-    return abs(previous_close / last_close - 1) <= ADJUSTMENT_TOLERANCE
+    TradingView's previous close is the official one, so the stored last close (yesterday's TradingView close, which
+    can still be a late print) is corrected to it. A difference beyond CORRECTION_LIMIT is no late print: the stored
+    series is on another adjustment (a split). A series ending before the previous session joins only when a provider
+    re-read `confirmed` that nothing is missing (a halt), and then only on a matching close.
+    """
+    bar = clean(record['tradingview_bar']) if record.get('tradingview_bar') else None
+    previous = record.get('tradingview_previous_close')
+    if not bar or not previous or not bars or bars[-1]['close'] <= 0 or bars[-1]['date'] >= session:
+        return None, False
+    adjacent = bars[-1]['date'] == previous_session_day(date.fromisoformat(session)).isoformat()
+    if not adjacent and not confirmed:
+        return None, False
+    off = abs(previous / bars[-1]['close'] - 1)
+    if off > (CORRECTION_LIMIT if adjacent else ADJUSTMENT_TOLERANCE):
+        return None, adjacent
+    last = clean({**bars[-1], 'close': previous}) if adjacent else bars[-1]
+    return [*bars[:-1], last, bar], False
 
 
 def update(record: dict, root: Path, session: str, *, fetch=fetch_full, recent=None) -> str:
-    """Bring one stock's file up to `session`; returns 'current', 'appended', 'refetched' or 'missing'.
+    """Bring one stock's file up to `session`; returns 'current', 'appended' (TradingView's bar), 'gap_filled' or
+    'filled' (Yahoo's recent bars, for a gap or for a stock without a TradingView bar), 'refetched' or 'missing'.
 
-    `recent(symbol, security_id, exchange, start)` returns session bars from `start` (fetch_recent); without it only
-    the snapshot can extend a stored series.
+    `recent(symbol, start)` returns Yahoo's session bars from `start` (fetch_recent).
     """
     path = symbol_csv_path(root, record['symbol'])
     stored = read_bars(path)
@@ -191,31 +168,28 @@ def update(record: dict, root: Path, session: str, *, fetch=fetch_full, recent=N
         if bars != stored:
             write_bars(path, bars)  # a file kept from before the bars were cleaned
         return 'current'
-    snapshot = clean(snapshot_bar(record, session) or {'open': None, 'high': None, 'low': None, 'close': None})
     readjusted = False
-    if bars and recent:
-        start = date.fromisoformat(bars[-1]['date']) - timedelta(days=REFRESH_DAYS)
-        joined, readjusted = overlay(bars, recent(record['symbol'], record['security_id'], record.get('exchange'), start))
-        if joined is not None:
-            # The providers can lag the snapshot by the closed session; the snapshot supplies it when its previous
-            # close is the series' last (after a halt that is an earlier session's).
-            if joined[-1]['date'] < session and snapshot and adjustment_matches(joined, record):
-                joined = [*joined, snapshot]
-            if joined[-1]['date'] < session:
-                return missing(joined)
-            write_bars(path, joined)
+    if bars:
+        extended, readjusted = extend(bars, record, session)
+        if extended:
+            write_bars(path, extended)
             return 'appended'
-    if bars and not readjusted:
-        last = bars[-1]['date']
-        if last != previous_session_day(date.fromisoformat(session)).isoformat():
-            return missing()  # behind by more than a session: the re-read above fills the gap when a provider answers
-        if not record.get('previous_close'):
-            return missing()  # nothing to check the series against: wait for a provider rather than fetch it all
-        if not needs_refetch(bars, record, session):
-            if not snapshot:
-                return missing()
-            write_bars(path, [*bars, snapshot])
-            return 'appended'
+        if not readjusted and recent:
+            start = date.fromisoformat(bars[-1]['date']) - timedelta(days=REFRESH_DAYS)
+            joined, readjusted = overlay(bars, recent(record['symbol'], start))
+            if joined is not None:
+                if joined[-1]['date'] < session:
+                    # Yahoo can lag by the closed session; TradingView's bar supplies it when it joins.
+                    extended, readjusted = extend(joined, record, session, confirmed=True)
+                    joined = extended or joined
+                if not readjusted:
+                    if joined[-1]['date'] < session:
+                        return missing(joined)
+                    write_bars(path, joined)
+                    # Counted apart: a gap (a missed run) is filled for every stock, which is no sign of trouble.
+                    return 'gap_filled' if record.get('tradingview_bar') else 'filled'
+        if not readjusted:
+            return missing()
     # No history, or a stored series on another adjustment (a split, a dividend re-adjustment).
     fetched = fetch(record['symbol'], record['security_id'], record.get('exchange'))
     if not fetched:
@@ -225,9 +199,7 @@ def update(record: dict, root: Path, session: str, *, fetch=fetch_full, recent=N
         print(f"  history {record['symbol']}: a full fetch from {fetched[0]['date']} would drop history from "
               f"{bars[0]['date']}; kept", flush=True)
         return missing()
-    # It joins only when the fetched series also agrees with the snapshot's previous close: on a split day a
-    # provider's history may not be re-adjusted yet, and a bar appended to it would bake the gap in.
-    if fetched[-1]['date'] < session and snapshot and adjustment_matches(fetched, record):
-        fetched = [*fetched, snapshot]
+    # On a split day a provider's history may not be re-adjusted yet: TradingView's bar joins only on a matching close.
+    fetched = extend(fetched, record, session, confirmed=True)[0] or fetched
     write_bars(path, fetched)
     return 'refetched'

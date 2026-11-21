@@ -47,7 +47,11 @@ METRIC_KEYS = ('as_of_date', 'gap_percent', 'relative_volume_20', 'atr14', 'atr_
                'distance_from_52w_high_percent', 'distance_from_52w_low_percent', 'breakout_above_20d_high',
                'breakout_above_50d_high', 'breakout_above_52w_high', 'is_inside_day', 'sma20', 'sma50', 'sma200')
 # Read while building, not by the release.
-BUILD_ONLY = frozenset({'slug', 'provider_last_trade_ist'})
+BUILD_ONLY = frozenset({'slug', 'provider_last_trade_ist', 'tradingview_bar', 'tradingview_previous_close'})
+# TradingView must cover this share of the largest stocks (by market cap) for the release to publish; on 2026-11-22 it
+# covered 99% of the top 3,000 (ISIN or ticker). The rest of the market fills from Yahoo, up to MAX_FALLBACKS stocks.
+COVERAGE_TOP = 3000
+MIN_COVERAGE = 0.98
 
 
 class SnapshotNotReady(RuntimeError):
@@ -159,11 +163,10 @@ def stock_record(record: dict, metrics: dict, session: str, thematic: dict | Non
 
 
 def update_histories(records: list[dict], directory: Path, session: str, *, interval: float, workers: int) -> dict:
-    """Bring every file up to the session; requests are paced and each provider stops at its first rate limit.
+    """Bring every file up to the session: TradingView's bar where it joins, else Yahoo's recent bars or a full fetch.
 
-    Yahoo and Dhan are separate servers, each paced at `interval`. A Yahoo rate limit stops only Yahoo (the rest come
-    from Dhan, reported as `yahoo_throttled`); a Dhan rate limit stops Dhan (`dhan_throttled`), and `throttled` reports
-    that a full fetch it was needed for was refused, which leaves a stock without usable history.
+    Yahoo and Dhan are separate servers, each paced at `interval`. A Yahoo rate limit stops only Yahoo (full fetches
+    then seed from Dhan, reported as `yahoo_throttled`); a Dhan rate limit stops every full fetch (`throttled`).
     """
     pacer, stopped, counts, lock = dhan.Pacer(interval), threading.Event(), {}, threading.Lock()
     yahoo_pacer, yahoo_stopped = dhan.Pacer(interval), threading.Event()
@@ -187,27 +190,18 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
             yahoo_stopped.set()
             return []
 
-    refused = threading.Event()  # a full fetch the Dhan rate limit cut short: that stock has no usable history
-
     def fetch(symbol, security_id, exchange):
         if stopped.is_set():
-            refused.set()
             return []
         try:
             # Paced per request: an unknown listing exchange tries NYSE, then NASDAQ.
             return history.fetch_full(symbol, security_id, exchange, post=paced_post, yahoo_fetch=yahoo_fetch)
         except dhan.Throttled:
             stopped.set()
-            refused.set()
             return []
 
-    def recent(symbol, security_id, exchange, start):
-        # A rate limit here stops Dhan for the run, but the stock still has its stored series and the snapshot.
-        try:
-            return history.fetch_recent(symbol, security_id, exchange, start, post=paced_post, yahoo_fetch=yahoo_fetch)
-        except dhan.Throttled:
-            stopped.set()
-            return []
+    def recent(symbol, start):
+        return history.fetch_recent(symbol, start, yahoo_fetch=yahoo_fetch)
 
     def one(record):
         try:
@@ -220,7 +214,7 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(one, records))
-    return {**counts, 'throttled': refused.is_set(), 'dhan_throttled': stopped.is_set(), 'yahoo_throttled': yahoo_stopped.is_set()}
+    return {**counts, 'throttled': stopped.is_set(), 'yahoo_throttled': yahoo_stopped.is_set()}
 
 
 def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, workers: int = 3, limit: int | None = None,
@@ -239,6 +233,11 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
 
     report = {'session': session, 'screenable': len(records), 'listed': len(stock_rows)}
     report['tradingview'] = tradingview.enrich(records, session)
+    largest = sorted((record for record in records if record.get('market_cap')), key=lambda record: -record['market_cap'])[:COVERAGE_TOP]
+    covered = sum('tradingview_snapshot' in record for record in largest)
+    report['tradingview']['top_coverage'] = round(covered / len(largest), 4) if largest else None
+    if largest and covered < len(largest) * MIN_COVERAGE and not report['tradingview'].get('error'):
+        report['tradingview']['error'] = f'TradingView covered {covered} of the {len(largest)} largest stocks'
     # Stock pages (dhan.co) and price history (Dhan's ticks host) are separate servers, each with its own pace, so they
     # are fetched side by side: neither server sees more requests than before, and a cold run takes half the time.
     # After TradingView: a company that has reported since its page was read is read again.

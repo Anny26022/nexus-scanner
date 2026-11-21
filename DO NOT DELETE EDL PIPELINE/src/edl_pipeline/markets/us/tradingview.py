@@ -24,6 +24,9 @@ from .calendar import EASTERN
 
 API_URL = 'https://scanner.tradingview.com/america/scan'
 EXCHANGES = ('NYSE', 'NASDAQ', 'AMEX', 'CBOE')
+# Dhan's stock list also holds closed-end funds, units (SPACs) and some ETFs, which TradingView files as funds: without
+# them about 600 listings would have no daily bar (2026-11-20).
+TYPES = ('stock', 'dr', 'fund')
 # Columns US screening reads beyond the shared metric list. The statement columns are a fallback: Dhan's stock page
 # comes first when it can be trusted (statements.py), as Dhan does for India.
 EXTRA = {'earnings_release_date': 'last_earnings', 'ipo_offer_date': 'ipo_date', 'first_bar_time': 'first_trade',
@@ -59,8 +62,10 @@ INDEXES = {'S&P 500': 'S&P 500', 'NASDAQ 100': 'NASDAQ 100', 'Dow Jones Industri
 EXTRA_AMOUNTS = frozenset({'free_cash_flow', 'total_debt', 'total_equity', 'ttm_revenue', 'ttm_net_profit',
                            'quarter_revenue', 'quarter_net_profit', 'total_assets', 'current_assets', 'current_liabilities',
                            'total_liabilities', 'operating_cash_flow', 'investing_cash_flow', 'financing_cash_flow'})
+# The session's daily bar (history.py appends it): `time` dates it, `close - change_abs` is the previous session's close.
+BAR = ('name', 'open', 'high', 'low', 'volume', 'change_abs')
 COLUMNS = ['isin', 'time', 'close', 'update_mode', 'currency', 'fundamental_currency_code', 'exchange', 'is_primary', 'type',
-           *[field['wire'] for field in FIELD_DEFINITIONS], *EXTRA]
+           *[field['wire'] for field in FIELD_DEFINITIONS], *EXTRA, *BAR]
 # Rows per request. The market is about 7,000 listings; one 12,000-row request was slow enough to time out, and a
 # timed-out request lost every row. Pages are sorted by name so a row does not move between pages.
 PAGE_SIZE = 5_000
@@ -101,7 +106,7 @@ def fetch(*, post=post_json, page_size: int = PAGE_SIZE) -> dict:
     for _ in range(MAX_PAGES):
         payload = {'columns': COLUMNS, 'markets': ['america'], 'options': {'lang': 'en'},
                    'range': [len(rows), len(rows) + page_size], 'sort': {'sortBy': 'name', 'sortOrder': 'asc'},
-                   'filter': [{'left': 'type', 'operation': 'in_range', 'right': ['stock', 'dr']},
+                   'filter': [{'left': 'type', 'operation': 'in_range', 'right': list(TYPES)},
                               {'left': 'exchange', 'operation': 'in_range', 'right': list(EXCHANGES)}]}
         response = post(API_URL, payload, timeout=60, retries=PAGE_RETRIES)
         page = response.get('data') if isinstance(response, dict) else None
@@ -153,7 +158,7 @@ def snapshots(response: dict, fetched_at: str) -> dict[str, dict]:
         extra = {name: (_number(values[column]) / UNITED_STATES.provider_amount_unit
                         if dollars and _number(values[column]) is not None else None) if name in EXTRA_AMOUNTS
                  else values[column] for column, name in EXTRA.items()}
-        result[isin] = {'tradingview_snapshot': snapshot, **extra}
+        result[isin] = {'tradingview_snapshot': snapshot, **extra, 'bar': {key: values[key] for key in ('time', 'close', *BAR)}}
     if not result:
         raise ValueError('TradingView returned no US listings')
     return result
@@ -181,6 +186,25 @@ def _utc_date(stamp) -> str | None:
 def memberships(indexes) -> list[str]:
     names = {item.get('name') for item in indexes or [] if isinstance(item, dict)}
     return [label for name, label in INDEXES.items() if name in names]
+
+
+def daily_bar(found: dict, session: str) -> dict:
+    """The session's bar and the previous session's close, for history.py.
+
+    Checked against Yahoo and Nasdaq on 2026-11-20 (300 stocks): volume, open, high and low are the session's final
+    values, but the close is not yet the official close for about 7% of stocks (late prints; V 402.425 against
+    401.87), until the next session starts. The previous close (`close - change_abs`) is the official one, so each
+    run corrects the bar the run before it appended. Only a bar dated to the session is returned.
+    """
+    bar = found.get('bar') or {}
+    close, change = _number(bar.get('close')), _number(bar.get('change_abs'))
+    previous = close - change if close is not None and change is not None and close - change > 0 else None
+    prices = [_number(bar.get(key)) for key in ('open', 'high', 'low')] + [close]
+    if _eastern_date(bar.get('time')) != session or any(price is None or price <= 0 for price in prices):
+        return {'tradingview_bar': None, 'tradingview_previous_close': previous}
+    return {'tradingview_bar': {'date': session, 'open': prices[0], 'high': prices[1], 'low': prices[2], 'close': close,
+                                'volume': _number(bar.get('volume')) or 0},
+            'tradingview_previous_close': previous}
 
 
 def canonical(found: dict, record: dict, session: str) -> dict:
@@ -265,11 +289,17 @@ def enrich(records: list[dict], session: str, *, fetch_response=fetch, now: date
         print(f'::warning::TradingView US values unavailable: {error}', flush=True)
         return {'matched': 0, 'current': 0, 'error': str(error) or type(error).__name__}
     matched = current = 0
+    # A listing whose ISIN differs between the two providers is matched by its ticker instead (BRK.B on both).
+    by_ticker = {}
+    for values in found.values():
+        by_ticker.setdefault((values.get('bar') or {}).get('name'), values)
+    by_ticker.pop(None, None)
     for record in records:
-        values = found.get(record.get('isin'))
+        values = found.get(record.get('isin')) or by_ticker.get(record.get('symbol'))
         if values is None:
             continue
         record.update(canonical(values, record, session))
+        record.update(daily_bar(values, session))
         matched += 1
         current += values['tradingview_snapshot']['as_of_date'] == session
     report = {'matched': matched, 'current': current, 'listed': len(found)}

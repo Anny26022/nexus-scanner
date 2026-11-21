@@ -196,7 +196,9 @@ def bar(day, close, volume=100):
 class HistoryTests(unittest.TestCase):
     # Friday 2026-11-06 is the previous session of Monday 2026-11-09.
     RECORD = {'symbol': 'ACME', 'security_id': 1, 'exchange': 'NYSE', 'open': 10.5, 'high': 11.0, 'low': 10.0,
-              'close': 10.8, 'volume': 500, 'previous_close': 10.0, 'provider_last_trade_ist': '2026-11-10T02:29:00+05:30'}
+              'close': 10.8, 'volume': 500, 'previous_close': 10.0, 'provider_last_trade_ist': '2026-11-10T02:29:00+05:30',
+              'tradingview_bar': {'date': '2026-11-09', 'open': 10.5, 'high': 11.0, 'low': 10.0, 'close': 10.8, 'volume': 500},
+              'tradingview_previous_close': 10.0}
 
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
@@ -205,79 +207,63 @@ class HistoryTests(unittest.TestCase):
     def stored(self):
         return history.read_bars(self.root / 'ACME.csv')
 
-    def test_a_joined_series_gets_the_snapshot_bar(self):
-        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 9.5), bar('2026-11-06', 10.0)])
-        fetch = mock.Mock()
-        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'appended')
-        fetch.assert_not_called()
+    def test_the_tradingview_bar_is_appended_and_the_last_close_corrected(self):
+        # Friday's stored close was a late print (10.03); TradingView's previous close is the official 10.0.
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 9.5), bar('2026-11-06', 10.03)])
+        fetch, recent = mock.Mock(side_effect=AssertionError), mock.Mock(side_effect=AssertionError)
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch, recent=recent), 'appended')
+        self.assertEqual(self.stored()[1]['close'], 10.0)
+        self.assertEqual(self.stored()[1]['high'], 10.03)  # the range still holds the print
         self.assertEqual(self.stored()[-1], {'date': '2026-11-09', 'open': 10.5, 'high': 11.0, 'low': 10.0, 'close': 10.8, 'volume': 500.0})
         self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'current')
 
-    def test_a_readjusted_series_is_fetched_again(self):
-        # A 2:1 split: the stored close is twice the snapshot's previous close.
-        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-06', 20.0)])
+    def test_a_split_fetches_the_stock_in_full(self):
+        # A 2:1 split: the stored close is twice TradingView's previous close, beyond any late print.
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 19.0), bar('2026-11-06', 20.0)])
         fetch = mock.Mock(return_value=[bar('2026-11-05', 9.5), bar('2026-11-06', 10.0)])
         self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'refetched')
         self.assertEqual([b['close'] for b in self.stored()], [9.5, 10.0, 10.8])
-
-    def test_a_refetch_dhan_has_not_readjusted_yet_gets_no_snapshot_bar(self):
-        # Split day: Dhan's history still ends on the unadjusted close, so today's bar would bake a 50% gap in.
+        # A provider not yet re-adjusted gets no bar: appended to it, the bar would bake the split in.
         history.write_bars(self.root / 'ACME.csv', [bar('2026-11-06', 20.0)])
         fetch = mock.Mock(return_value=[bar('2026-11-05', 19.0), bar('2026-11-06', 20.0)])
         self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=fetch), 'refetched')
         self.assertEqual([b['close'] for b in self.stored()], [19.0, 20.0])
 
-    def test_a_row_that_did_not_trade_in_the_session_adds_no_bar(self):
-        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-06', 10.0)])
-        halted = {**self.RECORD, 'provider_last_trade_ist': '2026-11-07T02:29:00+05:30'}  # Friday's close in New York
-        self.assertEqual(history.update(halted, self.root, '2026-11-09', fetch=mock.Mock()), 'missing')
-        self.assertEqual(self.stored()[-1]['date'], '2026-11-06')
-        traded = {**self.RECORD, 'provider_last_trade_ist': '2026-11-10T02:29:00+05:30'}  # Monday's close
-        self.assertEqual(history.update(traded, self.root, '2026-11-09', fetch=mock.Mock()), 'appended')
+    def test_without_a_tradingview_bar_yahoo_fills_the_session(self):
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 9.9), bar('2026-11-06', 10.0)])
+        uncovered = {**self.RECORD, 'tradingview_bar': None, 'tradingview_previous_close': None}
+        recent = mock.Mock(return_value=[bar('2026-11-05', 9.9), bar('2026-11-06', 10.0), bar('2026-11-09', 10.7)])
+        self.assertEqual(history.update(uncovered, self.root, '2026-11-09', recent=recent), 'filled')
+        self.assertEqual(self.stored()[-1]['close'], 10.7)
+        self.assertEqual(recent.call_args[0], ('ACME', date(2026, 10, 23)))  # two weeks before the stored last bar
+        # Neither provider has the session: the stock waits, and is not fetched in full.
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 9.9), bar('2026-11-06', 10.0)])
+        self.assertEqual(history.update(uncovered, self.root, '2026-11-09', fetch=mock.Mock(side_effect=AssertionError),
+                                        recent=lambda *a: []), 'missing')
 
-    def test_a_row_without_a_trade_time_or_previous_close_adds_no_bar(self):
-        undated = {key: value for key, value in self.RECORD.items() if key != 'provider_last_trade_ist'}
-        self.assertIsNone(history.snapshot_bar(undated, '2026-11-09'))
-        self.assertIsNotNone(history.snapshot_bar(self.RECORD, '2026-11-09'))
-        # A refetched series cannot be checked against an unknown previous close, so the bar is not joined to it.
-        self.assertFalse(history.adjustment_matches([bar('2026-11-06', 10.0)], {**self.RECORD, 'previous_close': None}))
-        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-04', 9.8)])
-        fetch = mock.Mock(return_value=[bar('2026-11-04', 9.8), bar('2026-11-05', 9.9), bar('2026-11-06', 10.0)])
-        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=mock.Mock(side_effect=AssertionError),
-                                        recent=fetch), 'appended')
-        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-06', 10.0)])
-        # Nothing to check a stored series against: no full fetch, the stock waits for a provider.
-        self.assertEqual(history.update({**self.RECORD, 'previous_close': None}, self.root, '2026-11-09',
-                                        fetch=mock.Mock(side_effect=AssertionError)), 'missing')
-
-    def test_a_gap_is_filled_from_recent_bars_not_a_full_fetch(self):
+    def test_a_gap_is_filled_from_yahoo_then_gets_the_tradingview_bar(self):
         history.write_bars(self.root / 'ACME.csv', [bar('2026-10-01', 8.0), bar('2026-11-04', 10.0)])
-        recent = mock.Mock(return_value=[bar('2026-11-04', 10.0), bar('2026-11-05', 9.9), bar('2026-11-06', 10.0), bar('2026-11-09', 10.8)])
+        recent = mock.Mock(return_value=[bar('2026-11-04', 10.0), bar('2026-11-05', 9.9), bar('2026-11-06', 10.0)])
         full = mock.Mock(side_effect=AssertionError('a gap needs no full fetch'))
-        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=full, recent=recent), 'appended')
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=full, recent=recent), 'gap_filled')
         self.assertEqual([b['date'] for b in self.stored()], ['2026-10-01', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-09'])
-        self.assertEqual(recent.call_args[0][3], date(2026, 10, 21))  # two weeks before the stored last bar
-        # Without a provider the gap stays for the next run: the stock is not fetched in full.
+        # Yahoo's closes disagree with the stored ones on the shared day: re-adjusted, so fetched in full.
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-04', 20.0)])
+        full = mock.Mock(return_value=[bar('2026-11-04', 10.0), bar('2026-11-05', 9.9), bar('2026-11-06', 10.0)])
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=full, recent=recent), 'refetched')
+        self.assertEqual(self.stored()[-1]['date'], '2026-11-09')
+        # No provider answers: the gap stays for the next run.
         history.write_bars(self.root / 'ACME.csv', [bar('2026-11-04', 10.0)])
-        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=full, recent=lambda *a: []), 'missing')
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', recent=lambda *a: []), 'missing')
         self.assertEqual(history.update({**self.RECORD, 'symbol': 'NONE'}, self.root, '2026-11-09', fetch=lambda *a: []), 'missing')
 
-    def test_recent_bars_replace_the_tail_and_a_split_fetches_in_full(self):
-        # The snapshot's bar for Friday (after-hours close, partial volume) is replaced by the provider's.
-        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 9.9), {**bar('2026-11-06', 10.05), 'volume': 60}])
-        recent = mock.Mock(return_value=[bar('2026-11-05', 9.9), bar('2026-11-06', 10.0), bar('2026-11-09', 10.8)])
-        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', recent=recent), 'appended')
-        self.assertEqual(self.stored()[1], bar('2026-11-06', 10.0))
-        # A provider a session behind still gets the snapshot bar, and keeps stored bars it does not have yet.
-        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 9.9), bar('2026-11-06', 10.0)])
-        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', recent=lambda *a: [bar('2026-11-05', 9.9)]), 'appended')
-        self.assertEqual([b['close'] for b in self.stored()], [9.9, 10.0, 10.8])
-        # A 2:1 split: the provider's closes are half the stored ones, so the stock is fetched again.
-        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 19.8), bar('2026-11-06', 20.0)])
-        full = mock.Mock(return_value=[bar('2026-11-05', 9.9), bar('2026-11-06', 10.0), bar('2026-11-09', 10.8)])
-        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=full,
-                                        recent=lambda *a: [bar('2026-11-05', 9.9), bar('2026-11-06', 10.0)]), 'refetched')
-        self.assertEqual([b['close'] for b in self.stored()], [9.9, 10.0, 10.8])
+    def test_after_a_halt_the_bar_joins_once_yahoo_confirms_nothing_is_missing(self):
+        # Traded Thursday at 10.0, halted Friday, resumed Monday: TradingView's previous close is Thursday's.
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 10.0)])
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', recent=lambda *a: [bar('2026-11-05', 10.0)]), 'gap_filled')
+        self.assertEqual([b['date'] for b in self.stored()], ['2026-11-05', '2026-11-09'])
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 10.0)])
+        self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09'), 'missing')  # unconfirmed: no bar
 
     def test_a_full_fetch_never_shortens_the_stored_history(self):
         # Yahoo's history from 1990, re-adjusted; Dhan (from 2021) answers the full fetch: the deeper file stays.
@@ -285,15 +271,6 @@ class HistoryTests(unittest.TestCase):
         full = mock.Mock(return_value=[bar('2021-03-01', 5.0), bar('2026-11-06', 10.0)])
         self.assertEqual(history.update(self.RECORD, self.root, '2026-11-09', fetch=full), 'missing')
         self.assertEqual(self.stored()[0]['date'], '1990-01-02')
-
-    def test_refetched_history_after_halted_session_gets_snapshot_bar(self):
-        # ACME traded on Thursday 2026-11-05 at 10.0, was halted Friday 2026-11-06, and resumed Monday 2026-11-09.
-        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 10.0)])
-        recent = mock.Mock(return_value=[bar('2026-11-05', 10.0)])
-        traded = {**self.RECORD, 'provider_last_trade_ist': '2026-11-10T02:29:00+05:30'}  # Monday's close
-        # The provider has nothing after Thursday; Friday's halt leaves Thursday's close as the previous close.
-        self.assertEqual(history.update(traded, self.root, '2026-11-09', recent=recent), 'appended')
-        self.assertEqual([b['date'] for b in self.stored()], ['2026-11-05', '2026-11-09'])
 
     def test_bars_are_cleaned_and_stored_files_rewritten(self):
         # An open below the low (CSCO, 2026-09-09) widens the range; a bar priced 0 before a listing is dropped.

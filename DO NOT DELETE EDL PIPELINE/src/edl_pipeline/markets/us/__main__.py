@@ -12,6 +12,8 @@ from .build import SnapshotNotReady, build
 
 # The share of stocks whose history reached the session below which the release is not published.
 MIN_ALIGNED_SHARE = 0.9
+# More stocks than this filled from Yahoo means TradingView's bars stopped arriving for part of the market.
+MAX_FALLBACKS = 800
 
 
 def _budget(value):
@@ -45,6 +47,10 @@ def main(argv=None):
     if report['tradingview'].get('error'):
         print(f"::error::TradingView US values are unavailable ({report['tradingview']['error']}); nothing to publish.",
               flush=True)
+        return 1
+    if history.get('filled', 0) > MAX_FALLBACKS:
+        print(f"::error::{history['filled']} US stocks had no TradingView bar and were filled from Yahoo (over "
+              f"{MAX_FALLBACKS}); something upstream changed, so nothing is published.", flush=True)
         return 1
     if history.get('throttled') or benchmarks.get('throttled') or lagging_benchmarks or not report['rs_ratings']:
         print('::error::The US history is incomplete (rate limited, a benchmark behind or no RS ratings); nothing to publish.',

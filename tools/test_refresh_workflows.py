@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "73ca7a0c66c72c91ec47ddb0a6478fc8f17ddf84c75cbd4c4b93695235a473e2",
-    "weekly_eod2_refresh.yml": "26ba5a878f6bd5bf69706706828f8887b50728048f99f55922238e5bcc61631e",
+    "daily_refresh.yml": "50dcebc4e602fc79459072d614c1e6dd6c5078eae785db2d38521978899b0a0b",
+    "weekly_eod2_refresh.yml": "0ac2167db814f1dc46a036bd94c81aa7b7ac01afabdbfd024e85a18065c66fda",
 }
 
 
@@ -101,6 +101,17 @@ class RefreshWorkflowTests(unittest.TestCase):
                         expanded.append(step)
                 actual = hashlib.sha256(json.dumps(normalized(expanded), sort_keys=True).encode()).hexdigest()
                 self.assertEqual(actual, expected, json.dumps(normalized(expanded), indent=2))
+
+    def test_concall_refresh_is_optional_and_published_with_the_site_indexes(self):
+        for name, command in [('daily_refresh.yml', 'python frontend/concall_history.py'),
+                              ('weekly_eod2_refresh.yml', 'python frontend/concall_history.py --full')]:
+            with self.subTest(workflow=name):
+                job, = document('.github/workflows/' + name)['jobs'].values()
+                names = [step.get('name') for step in job['steps']]
+                step = job['steps'][names.index('Refresh concall summaries')]
+                self.assertTrue(step['continue-on-error'])
+                self.assertEqual(step['run'].strip(), command)
+                self.assertLess(names.index('Refresh concall summaries'), names.index('Publish site indexes to R2'))
 
     def test_dhan_refresh_is_bounded_and_preserves_the_main_refresh_on_failure(self):
         job, = document('.github/workflows/weekly_eod2_refresh.yml')['jobs'].values()

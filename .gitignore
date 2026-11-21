@@ -107,6 +107,8 @@ frontend/public/data/ai-filter-choices.json
 frontend/public/data/revisions/
 frontend/public/data/results/
 frontend/public/data/heatmap/
+frontend/public/data/concalls/
+frontend/concall-refresh-report.json
 frontend/public/data/company/
 # Unreferenced local exports (export_data.py, older releases).
 frontend/public/data/stocks.json

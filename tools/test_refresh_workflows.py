@@ -114,6 +114,17 @@ class RefreshWorkflowTests(unittest.TestCase):
                 self.assertLess(names.index('Pull published site data from R2'), names.index('Refresh concall summaries'))
                 self.assertLess(names.index('Refresh concall summaries'), names.index('Publish site indexes to R2'))
 
+    def test_the_standalone_concall_refresh_touches_only_the_concall_pointers(self):
+        workflow = document('.github/workflows/concall_refresh.yml')
+        self.assertEqual(workflow['concurrency']['group'], 'daily-data-refresh')
+        job, = workflow['jobs'].values()
+        runs = [step['run'].strip() for step in job['steps'] if 'run' in step]
+        self.assertEqual([run for run in runs if run.startswith('python frontend/')], [
+            'python frontend/site_data.py pull --only concalls/',
+            'python frontend/concall_history.py',
+            'python frontend/site_data.py push-indexes --only concalls/',
+        ])
+
     def test_dhan_refresh_is_bounded_and_preserves_the_main_refresh_on_failure(self):
         job, = document('.github/workflows/weekly_eod2_refresh.yml')['jobs'].values()
         step, = [s for s in job['steps'] if s.get('id') == 'dhan_group_sync']

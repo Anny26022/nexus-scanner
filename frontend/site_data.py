@@ -145,10 +145,12 @@ def publish_site(output, manifest):
         build_ai_filter_choices(output, manifest)
 
 
-def push_indexes(store, output=OUTPUT):
-    """Publish the Earnings Pulse, heatmap and company pointers that changed in this run."""
+def push_indexes(store, output=OUTPUT, only=''):
+    """Publish the Earnings Pulse, heatmap and company pointers that changed in this run; `only` limits the prefix."""
     present = stored_pointers(store)
     for name in INDEXES:
+        if not name.startswith(only):
+            continue
         local = output / name
         if not local.is_file():
             continue
@@ -162,13 +164,20 @@ def push_indexes(store, output=OUTPUT):
         upload_pointer(store, output, name)
 
 
-def pull(store, output=OUTPUT):
+def pull(store, output=OUTPUT, only=''):
     """Download the live pointers the pipeline reads and extends (sessions, price-band ledger, indexes).
 
     Until the cut-over removes them, the checkout still holds committed copies. If those are from a newer session
     than R2 (a Git refresh landed after seeding), they are kept and this run publishes them.
     """
     present = stored_pointers(store)
+    if only:
+        # A standalone refresh of one feed: its files are never committed, so the live copies always win.
+        for name in POINTERS:
+            if name.startswith(only) and name in present:
+                (output / name).parent.mkdir(parents=True, exist_ok=True)
+                store.cache_command('copyto', store.remote(f'{POINTER_PREFIX}/{name}'), str(output / name))
+        return
     if 'current.json' not in present:
         print('No site data in R2 yet; using the checkout copies', flush=True)
         return
@@ -187,6 +196,7 @@ def pull(store, output=OUTPUT):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('action', choices=('pull', 'push-indexes', 'push-sessions', 'ai-choices'))
+    parser.add_argument('--only', default='', help='pull or push-indexes only the pointers under this prefix')
     args = parser.parse_args(argv)
     if args.action == 'ai-choices':
         build_ai_filter_choices(OUTPUT, json.loads((OUTPUT / 'current.json').read_text()))
@@ -199,7 +209,7 @@ def main(argv=None):
     if args.action == 'push-sessions':
         upload_pointer(store, OUTPUT, 'sessions.json')
     else:
-        (pull if args.action == 'pull' else push_indexes)(store, OUTPUT)
+        (pull if args.action == 'pull' else push_indexes)(store, OUTPUT, only=args.only)
     return 0
 
 

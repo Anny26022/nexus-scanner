@@ -158,6 +158,19 @@ class SiteDataTests(unittest.TestCase):
         site_data.pull(FakeStore(), self.output)
         self.assertEqual(json.loads((self.output / 'sessions.json').read_text()), {'version': 1, 'sessions': []})
 
+    def test_only_pulls_and_publishes_the_pointers_under_a_prefix(self):
+        release(self.output, session='2026-10-29')
+        store = FakeStore({'site/data/current.json': b'{"sessionDate":"2026-10-28"}',
+                           'site/data/sessions.json': b'live sessions', 'site/data/concalls/index.json': b'live calls'})
+        site_data.pull(store, self.output, only='concalls/')
+        self.assertEqual((self.output / 'concalls/index.json').read_bytes(), b'live calls')
+        self.assertNotEqual((self.output / 'sessions.json').read_bytes(), b'live sessions')
+        (self.output / 'heatmap').mkdir()
+        (self.output / 'heatmap/index.json').write_text('new')
+        (self.output / 'concalls/index.json').write_text('newer calls')
+        site_data.push_indexes(store, self.output, only='concalls/')
+        self.assertEqual(store.pointer_order(), ['concalls/index.json'])
+
     def test_push_indexes_publishes_changes_and_the_company_revision_first(self):
         (self.output / 'results').mkdir()
         (self.output / 'results/index.json').write_text('same')

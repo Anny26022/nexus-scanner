@@ -108,6 +108,7 @@ frontend/public/data/revisions/
 frontend/public/data/results/
 frontend/public/data/heatmap/
 frontend/public/data/company/
+frontend/public/data/mf/
 # Unreferenced local exports (export_data.py, older releases).
 frontend/public/data/stocks.json
 frontend/public/data/ipos.json

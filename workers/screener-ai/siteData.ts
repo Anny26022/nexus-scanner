@@ -6,6 +6,7 @@
  *
  *   /data/revisions/<rev>/<file>          -> releases/<rev>/<file>          immutable
  *   /data/company/revisions/<rev>/<file>  -> releases/company/<rev>/<file>  immutable
+ *   /data/mf/revisions/<rev>/<file>       -> releases/mf/<rev>/<file>       immutable
  *   /data/<pointer>                       -> site/data/<pointer>            revalidated
  *
  * Pointers live outside `daily/`, whose bucket lifecycle rule expires objects after 90 days, and outside the
@@ -16,10 +17,12 @@ export const POINTER_PREFIX = 'site/data';
 export const POINTERS = new Set([
   'current.json', 'sessions.json', 'price-band-history.json', 'ai-filter-choices.json',
   'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json',
+  'mf/current.json',
 ]);
 
 const REVISION_FILE = /^revisions\/([a-f0-9]{64})\/((?:[A-Za-z0-9&_.-]+\/)?[A-Za-z0-9&_.-]+\.json(?:\.gz)?)$/;
 const COMPANY_FILE = /^company\/revisions\/([a-f0-9]{64})\/([A-Za-z0-9_.-]+\.json(?:\.gz)?)$/;
+const MF_FILE = /^mf\/revisions\/([a-f0-9]{64})\/([A-Za-z0-9_.-]+\.json(?:\.gz)?)$/;
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 
 /** The R2 key and cache policy for a `/data/...` path, or null when the path is not published. */
@@ -33,6 +36,8 @@ export function siteDataKey(pathname: string): {key: string; immutable: boolean}
   if (release) return {key: `releases/${release[1]}/${release[2]}`, immutable: true};
   const company = COMPANY_FILE.exec(path);
   if (company) return {key: `releases/company/${company[1]}/${company[2]}`, immutable: true};
+  const funds = MF_FILE.exec(path);
+  if (funds) return {key: `releases/mf/${funds[1]}/${funds[2]}`, immutable: true};
   return null;
 }
 

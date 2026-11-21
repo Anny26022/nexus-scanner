@@ -568,6 +568,11 @@ class TransformTests(unittest.TestCase):
         self.assertFalse(is_nse_cash_session(datetime(2026, 11, 10, 10, 0, tzinfo=kolkata)))
         self.assertTrue(is_nse_cash_session(datetime(2026, 11, 11, 10, 0, tzinfo=kolkata)))
 
+    def test_ohlcv_repair_drops_2027_nse_holidays(self):
+        # Republic Day, and Diwali, whose Muhurat timings are not announced yet.
+        rows = [{"Date": day, "Close": 100} for day in ("2027-01-25", "2027-01-26", "2027-10-28", "2027-10-29")]
+        self.assertEqual([row["Date"] for row in discard_weekend_rows(rows)], ["2027-01-25", "2027-10-28"])
+
     def test_ohlcv_repair_discards_malformed_provider_bars(self):
         rows = [
             {"Date": "2026-09-25", "Open": 100, "High": 105, "Low": 99, "Close": 103, "Volume": 10},

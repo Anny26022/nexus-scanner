@@ -40,9 +40,10 @@ US_SESSIONS = 'us/sessions.json'
 # Kept in step with POINTERS in workers/screener-ai/siteData.ts; anything else is not served.
 POINTERS = ('current.json', 'sessions.json', 'price-band-history.json', AI_FILTER_CHOICES,
             'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json',
-            US_POINTER, US_SESSIONS)
-# Written after the scanner release, by the Earnings Pulse and Tijori steps.
-INDEXES = ('results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json')
+            'concalls/index.json', 'concalls/upcoming.json', US_POINTER, US_SESSIONS)
+# Written after the scanner release, by the Earnings Pulse, Tijori and concall steps.
+INDEXES = ('results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json',
+           'concalls/index.json', 'concalls/upcoming.json')
 REVISION = re.compile(r'[a-f0-9]{64}')
 IMMUTABLE = 'cache-control=public,max-age=31536000,immutable'
 # Filter id -> stock field. The AI endpoint offers these values, so they must come from the release it checks.

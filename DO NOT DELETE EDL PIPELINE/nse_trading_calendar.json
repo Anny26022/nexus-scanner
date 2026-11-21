@@ -1,5 +1,5 @@
 {
-  "source": "NSE rows copied from new_nexys_ultimate src/services/holidayService.ts (TRADING_HOLIDAYS_2026). Update both when NSE publishes a new circular.",
+  "source": "NSE rows copied from new_nexys_ultimate src/services/holidayService.ts (TRADING_HOLIDAYS_2026 and TRADING_HOLIDAYS_2027). Update both when NSE publishes a new circular; a Muhurat or other weekend session goes under special_sessions once its timings are announced.",
   "holidays": {
     "2026-01-15": "Municipal Corporation Elections in Maharashtra",
     "2026-01-26": "Republic Day",
@@ -16,7 +16,17 @@
     "2026-10-20": "Dussehra",
     "2026-11-10": "Diwali-Balipratipada",
     "2026-11-24": "Prakash Gurpurb Sri Guru Nanak Dev",
-    "2026-12-25": "Christmas"
+    "2026-12-25": "Christmas",
+    "2027-01-26": "Republic Day",
+    "2027-03-10": "Id-ul-Fitr (Ramzan Id)",
+    "2027-03-22": "Holi",
+    "2027-03-26": "Good Friday",
+    "2027-04-14": "Dr. Baba Saheb Ambedkar Jayanti",
+    "2027-04-15": "Ram Navami",
+    "2027-04-19": "Mahavir Jayanti",
+    "2027-05-17": "Bakri Id (Eid ul-Adha)",
+    "2027-06-15": "Muharram",
+    "2027-10-29": "Diwali-Laxmi Pujan (Muhurat trading session) and Diwali-Balipratipada"
   },
   "special_sessions": {
     "2024-01-20": "Saturday live session",

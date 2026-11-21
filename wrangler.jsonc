@@ -1,5 +1,7 @@
 {
   "name": "nexus-scanner",
+  // aniketmahato26. Pinned so a deploy from a Wrangler logged into another account is refused.
+  "account_id": "9f28b6f095bdfb43905e8b76de2a000c",
   "main": "workers/screener-ai/index.ts",
   "compatibility_date": "2026-10-07",
   "workers_dev": true,

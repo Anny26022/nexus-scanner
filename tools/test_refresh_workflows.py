@@ -111,6 +111,7 @@ class RefreshWorkflowTests(unittest.TestCase):
                 step = job['steps'][names.index('Refresh concall summaries')]
                 self.assertTrue(step['continue-on-error'])
                 self.assertEqual(step['run'].strip(), command)
+                self.assertLess(names.index('Pull published site data from R2'), names.index('Refresh concall summaries'))
                 self.assertLess(names.index('Refresh concall summaries'), names.index('Publish site indexes to R2'))
 
     def test_dhan_refresh_is_bounded_and_preserves_the_main_refresh_on_failure(self):

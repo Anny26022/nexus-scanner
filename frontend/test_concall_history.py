@@ -4,12 +4,14 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import unittest.mock
 
 import requests
 
 from unittest.mock import Mock
 
-from concall_history import iso_date, list_page, refresh
+import concall_history
+from concall_history import PRIVATE_FIELDS, iso_date, list_page, post, refresh
 
 
 class Store:
@@ -35,9 +37,9 @@ def row(slug, symbol='TEST', date='05 November 2026'):
 
 
 def detail(slug, summary='## Key Takeaways'):
-    return dict(slug_id=slug, concall_date='2026-11-05', concall_time='16:00', markdown_summary=summary,
-                transcript_with_names=[{'speakername': 'CEO', 'text': 'hi'}], call_recording_url='https://s3/x?sig',
-                stream_sid='s', forensic_flags={'flags': []})
+    return dict({field: 'private' for field in PRIVATE_FIELDS}, slug_id=slug, concall_date='2026-11-05',
+                concall_time='16:00', markdown_summary=summary,
+                transcript_with_names=[{'speakername': 'CEO', 'text': 'hi'}], forensic_flags={'flags': []})
 
 
 class Provider:
@@ -80,9 +82,8 @@ class ConcallHistoryTests(unittest.TestCase):
         self.assertEqual((entry['symbol'], entry['date'], entry['time']), ('A', '2026-11-05', '16:00'))
         stored = self.store.load(entry['object'])['call']
         self.assertEqual(stored['markdown_summary'], '## Key Takeaways')
-        self.assertNotIn('call_recording_url', stored)
-        self.assertNotIn('stream_sid', stored)
-        self.assertNotIn('news_id', entry)
+        self.assertEqual(PRIVATE_FIELDS & set(stored), set())
+        self.assertEqual(PRIVATE_FIELDS & set(entry), set())
 
     def test_daily_run_stops_at_the_first_fully_stored_page_and_fetches_only_new_calls(self):
         self.run_refresh(Provider([[row('a'), row('b')], [row('c')]]))
@@ -146,7 +147,9 @@ class ConcallHistoryTests(unittest.TestCase):
                 return super().fetch_detail(slug)
         report = self.run_refresh(Failing([[row('ok'), row('bad')]]))
         self.assertEqual((report['added'], report['pending']), (1, 1))
-        self.assertEqual(self.index()['calls']['bad']['lastError'], 'slow')
+        # The published index says only that the request failed; the detail is in the run report.
+        self.assertEqual(self.index()['calls']['bad']['status'], 'provider request failed')
+        self.assertEqual(report['failures'], {'bad': 'slow'})
 
     def test_an_invalid_index_is_not_discarded(self):
         self.output.parent.mkdir(parents=True)
@@ -169,6 +172,44 @@ class ConcallHistoryTests(unittest.TestCase):
         provider = Provider([[row('old', date='09 July 2026')]])
         self.run_refresh(provider)
         self.assertEqual(provider.fetched, ['old'])
+
+    def test_a_page_of_only_malformed_rows_does_not_end_the_walk(self):
+        provider = Provider([[row('a')], [], [row('b')]])
+        self.run_refresh(provider)
+        self.assertEqual(provider.listed, [1, 2, 3])
+        self.assertEqual(sorted(provider.fetched), ['a', 'b'])
+
+    def test_an_undated_pending_call_is_retried_daily_for_two_weeks_from_when_it_was_first_seen(self):
+        pending = {'a': {**detail('a', summary=''), 'concall_date': None}}
+        self.run_refresh(Provider([[row('a', date='Yesterday')]], pending))
+        self.assertEqual(self.index()['calls']['a']['firstSeen'], '2026-11-21')
+        for checked_at, expected in (('2026-12-04T16:30:00+05:30', ['a']), ('2026-12-06T16:30:00+05:30', [])):
+            provider = Provider([[row('a', date='Yesterday')]], pending)
+            refresh(self.output, self.store, provider.list_page, provider.fetch_detail, full=False,
+                    checked_at=checked_at, workers=2)
+            self.assertEqual(provider.fetched, expected, checked_at)
+
+    def test_each_batch_is_uploaded_and_indexed_before_the_next(self):
+        reports = []
+        original = concall_history.BATCH
+        concall_history.BATCH = 2
+        try:
+            refresh(self.output, self.store, Provider([[row(s) for s in 'abcde']]).list_page,
+                    Provider([]).fetch_detail, full=False, checked_at='2026-11-21T16:30:00+05:30', workers=2,
+                    progress=lambda report: reports.append((report['added'], self.index()['stored'],
+                                                            len(self.store.objects))))
+        finally:
+            concall_history.BATCH = original
+        self.assertEqual(reports, [(2, 2, 2), (4, 4, 4), (5, 5, 5)])
+
+    def test_an_unexpected_response_shape_is_a_reported_failure(self):
+        for payload in (['not', 'an', 'object'], {'status': 'success', 'data': ['x']}):
+            response = Mock(status_code=200)
+            response.json.return_value = payload
+            session = Mock()
+            session.post.return_value = response
+            with unittest.mock.patch('concall_history.time.sleep'), self.assertRaises(ValueError):
+                post(session, 'concluded', {})
 
     def test_dates(self):
         self.assertEqual(iso_date('05 November 2026'), '2026-11-05')

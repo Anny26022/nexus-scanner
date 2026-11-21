@@ -37,6 +37,10 @@ WORKERS = 16
 # The provider has calls that never get a summary (about 270 of 2,500, mostly older ones); retrying them daily
 # would add about a minute to every run.
 DAILY_RETRY_DAYS = 14
+# Fetched calls are uploaded and the index rewritten after each batch, so a run cut short keeps its progress.
+BATCH = 250
+# Far beyond the ~26 pages the provider has; stops a runaway walk if it keeps answering has_next.
+MAX_PAGES = 200
 # Symbols such as M&M and J&KBANK keep their '&' in the slug.
 SLUG = re.compile(r'[a-z0-9&][a-z0-9&-]{0,127}')
 # Provider identifiers and per-viewer flags; the recording link is pre-signed and expires within days.
@@ -50,9 +54,14 @@ def post(session, path, body):
             response = session.post(f'{API}/{path}', json=body, headers=HEADERS, timeout=(10, 60))
             response.raise_for_status()
             payload = response.json()
+            if not isinstance(payload, dict):
+                raise ValueError('Invalid provider response')
             if payload.get('status') != 'success':
                 raise ValueError(f"Provider answered {payload.get('status')!r}: {payload.get('message')}")
-            return payload.get('data') or {}
+            data = payload.get('data')
+            if data is not None and not isinstance(data, dict):
+                raise ValueError('Invalid provider response data')
+            return data or {}
         except (requests.RequestException, ValueError):
             if attempt == 2:
                 raise
@@ -113,13 +122,25 @@ def pack(folder, store, slug, detail):
     return {'sha256': digest, 'url': f'{store.base_url}/objects/{digest}.json.gz', 'bytes': len(compressed)}
 
 
-def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers=WORKERS):
-    """Add the calls the provider lists that are not stored yet; returns a report."""
+def write_index(output, calls, checked_at):
+    ordered = dict(sorted(calls.items(), key=lambda item: (item[1].get('date') or '', item[0]), reverse=True))
+    write_json(output, {'version': 1, 'checkedAt': checked_at, 'count': len(ordered),
+                        'stored': sum(bool(entry.get('object')) for entry in ordered.values()), 'calls': ordered})
+
+
+def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers=WORKERS, progress=None):
+    """Add the calls the provider lists that are not stored yet; returns a report.
+
+    progress(report) is called after each batch, so a run that is stopped part-way still leaves its report.
+    """
     previous = json.loads(output.read_text()) if output.exists() else {'version': 1, 'calls': {}}
     if previous.get('version') != 1 or not isinstance(previous.get('calls'), dict):
         raise ValueError('Invalid concall index; refusing to discard it')
     calls = {slug: dict(entry) for slug, entry in previous['calls'].items()}
-    report = {'checkedAt': checked_at, 'full': full, 'pages': 0, 'listed': 0, 'added': 0, 'pending': 0, 'errors': {}}
+    # Detailed errors stay in this report (a run artifact); the published index carries only a status.
+    report = {'checkedAt': checked_at, 'full': full, 'pages': 0, 'listed': 0, 'added': 0, 'pending': 0,
+              'failures': {}, 'errors': {}}
+    today = checked_at[:10]
 
     page = 1
     while True:
@@ -130,59 +151,70 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
             report['errors'][f'list-page-{page}'] = str(error)
             break
         report['pages'], report['listed'] = page, report['listed'] + len(rows)
+        # A page whose rows were all malformed comes back empty; has_next still decides whether to go on.
         all_stored = bool(rows) and all((calls.get(row['slug_id']) or {}).get('object') for row in rows)
         for row in rows:
-            calls[row['slug_id']] = entry_for(row, calls.get(row['slug_id']))
-        if not has_next or not rows or (all_stored and not full):
+            entry = calls[row['slug_id']] = entry_for(row, calls.get(row['slug_id']))
+            if not entry.get('date'):
+                # The provider lists recent calls as 'Today' or 'Yesterday'; their age is counted from here.
+                entry.setdefault('firstSeen', today)
+        if not has_next or (all_stored and not full):
+            break
+        if page >= MAX_PAGES:
+            report['errors']['list'] = f'stopped after {MAX_PAGES} pages'
             break
         page += 1
 
     # Every call is tried once. A call still without a summary is retried daily while it is under two weeks old,
     # then only by the weekly full walk.
-    recent = (date.fromisoformat(checked_at[:10]) - timedelta(days=DAILY_RETRY_DAYS)).isoformat()
+    recent = (date.fromisoformat(today) - timedelta(days=DAILY_RETRY_DAYS)).isoformat()
 
     def due(entry):
         if entry.get('object'):
             return False
         if full or not entry.get('attempts'):
             return True
-        return entry['date'] >= recent if entry.get('date') else entry['attempts'] < 3
+        return (entry.get('date') or entry.get('firstSeen') or today) >= recent
 
     wanted = sorted((slug for slug, entry in calls.items() if due(entry)),
                     key=lambda slug: calls[slug].get('date') or '', reverse=True)
-    with tempfile.TemporaryDirectory(prefix='concalls-') as name:
-        folder = Path(name)
+    def one(slug):
+        try:
+            detail = fetch_detail(slug)
+        except (requests.RequestException, ValueError, KeyError, TypeError) as error:
+            return slug, None, 'provider request failed', str(error)
+        if not str(detail.get('markdown_summary') or '').strip():
+            return slug, None, 'summary not ready', 'summary not ready'
+        return slug, detail, None, None
 
-        def one(slug):
-            try:
-                detail = fetch_detail(slug)
-            except (requests.RequestException, ValueError, KeyError, TypeError) as error:
-                return slug, None, str(error)
-            if not str(detail.get('markdown_summary') or '').strip():
-                return slug, None, 'summary not ready'
-            return slug, detail, None
-
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            for slug, detail, error in pool.map(one, wanted):
-                entry = calls[slug]
-                if detail is None:
-                    entry['attempts'] = entry.get('attempts', 0) + 1
-                    entry['lastError'] = error
-                    report['pending'] += 1
-                    continue
-                entry.pop('attempts', None)
-                entry.pop('lastError', None)
-                entry['date'] = iso_date(detail.get('concall_date')) or entry.get('date')
-                entry['time'] = detail.get('concall_time') or entry.get('time')
-                entry['object'] = pack(folder, store, slug, detail)
-                report['added'] += 1
-        if report['added']:
-            store.upload_objects(folder)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for start in range(0, len(wanted), BATCH):
+            with tempfile.TemporaryDirectory(prefix='concalls-') as name:
+                folder, added = Path(name), 0
+                for slug, detail, status, error in pool.map(one, wanted[start:start + BATCH]):
+                    entry = calls[slug]
+                    if detail is None:
+                        entry['attempts'] = entry.get('attempts', 0) + 1
+                        entry['status'] = status
+                        report['pending'] += 1
+                        report['failures'][slug] = error
+                        continue
+                    for key in ('attempts', 'status', 'lastError', 'firstSeen'):
+                        entry.pop(key, None)
+                    entry['date'] = iso_date(detail.get('concall_date')) or entry.get('date')
+                    entry['time'] = detail.get('concall_time') or entry.get('time')
+                    entry['object'] = pack(folder, store, slug, detail)
+                    added += 1
+                if added:
+                    # Objects go up before the index names them.
+                    store.upload_objects(folder)
+                report['added'] += added
+            write_index(output, calls, checked_at)
+            if progress:
+                progress(report)
 
     if calls != previous['calls']:
-        ordered = dict(sorted(calls.items(), key=lambda item: (item[1].get('date') or '', item[0]), reverse=True))
-        write_json(output, {'version': 1, 'checkedAt': checked_at, 'count': len(ordered),
-                            'stored': sum(bool(entry.get('object')) for entry in ordered.values()), 'calls': ordered})
+        write_index(output, calls, checked_at)
     return report
 
 
@@ -202,7 +234,8 @@ def main(argv=None):
 
     started = time.perf_counter()
     report = refresh(OUTPUT, store, lambda page: list_page(session(), page),
-                     lambda slug: fetch_detail(session(), slug), full=args.full, checked_at=now, workers=args.workers)
+                     lambda slug: fetch_detail(session(), slug), full=args.full, checked_at=now, workers=args.workers,
+                     progress=lambda partial: write_json(REPORT, partial))
     report['seconds'] = round(time.perf_counter() - started, 1)
     write_json(REPORT, report)
     print(json.dumps(report), flush=True)

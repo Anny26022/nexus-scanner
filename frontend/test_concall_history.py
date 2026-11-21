@@ -3,6 +3,7 @@ import gzip
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 import unittest.mock
@@ -12,7 +13,7 @@ import requests
 from unittest.mock import Mock
 
 import concall_history
-from concall_history import PRIVATE_FIELDS, call_state, iso_date, list_page, post, refresh, refresh_upcoming
+from concall_history import PRIVATE_FIELDS, call_state, delete_object, iso_date, list_page, post, refresh, refresh_upcoming
 
 
 class Store:
@@ -273,7 +274,30 @@ class ConcallHistoryTests(unittest.TestCase):
         refresh(self.output, self.store, Provider([[row('a', date='20 November 2026')]], revised).list_page,
                 Provider([], revised).fetch_detail, full=False, checked_at='2026-11-23T16:30:00+05:30', workers=2,
                 delete=down)
-        self.assertEqual(len(self.index()['calls']['a']['superseded']), 1)
+        kept = list(self.index()['calls']['a']['superseded'])
+        self.assertEqual(len(kept), 1)
+        deleted = []
+        refresh(self.output, self.store, Provider([[row('a', date='20 November 2026')]], revised).list_page,
+                Provider([], revised).fetch_detail, full=False, checked_at='2026-11-24T16:30:00+05:30', workers=2,
+                delete=deleted.append)
+        self.assertEqual(deleted, [f'{digest}.json.gz' for digest in kept])
+        self.assertNotIn('superseded', self.index()['calls']['a'])
+
+    def test_deleting_an_object_that_is_already_gone_counts_as_deleted(self):
+        class Store:
+            def __init__(self, code):
+                self.code = code
+
+            def remote(self, key):
+                return f'r2:bucket/{key}'
+
+            def cache_command(self, *args):
+                if self.code:
+                    raise subprocess.CalledProcessError(self.code, ['rclone', *args])
+        delete_object(Store(0), 'x.json.gz')
+        delete_object(Store(4), 'x.json.gz')
+        with self.assertRaises(subprocess.CalledProcessError):
+            delete_object(Store(1), 'x.json.gz')
 
     def test_a_failed_or_emptied_recheck_keeps_the_stored_version(self):
         self.refresh_on(Provider([[row('a', date='20 November 2026')]]), '2026-11-21T16:30:00+05:30')
@@ -318,6 +342,13 @@ class ConcallHistoryTests(unittest.TestCase):
         self.assertEqual([(c['slug'], c['state']) for c in calls], [('sahasra-q2-fy27', 'live'), ('zf-q2-fy27', 'scheduled')])
         self.assertEqual((calls[1]['date'], calls[1]['registration'], calls[1]['online']), ('2026-11-23', 'https://services.example/reg', True))
         self.assertEqual(PRIVATE_FIELDS & {key for call in calls for key in call}, set())
+
+    def test_the_schedule_skips_rows_that_are_not_objects(self):
+        upcoming = ['oops', None, dict(row('zf-q2-fy27', 'ZFCVINDIA', date='23 November 2026'))]
+        today = [42, dict(slug='sahasra-q2-fy27', symbol='SAHASRA', call_status='in_progress')]
+        path = self.output.with_name('upcoming.json')
+        report = refresh_upcoming(path, lambda: upcoming, lambda: today, checked_at='2026-11-21T16:30:00+05:30')
+        self.assertEqual(report, {'scheduled': 1, 'live': 1})
 
     def test_a_failed_schedule_fetch_keeps_the_last_schedule(self):
         path = self.output.with_name('upcoming.json')

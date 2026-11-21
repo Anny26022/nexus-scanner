@@ -24,6 +24,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 import sys
 import tempfile
 import threading
@@ -58,6 +59,8 @@ MAX_PAGES = 200
 # Symbols such as M&M and J&KBANK keep their '&' in the slug.
 SLUG = re.compile(r'[a-z0-9&][a-z0-9&-]{0,127}')
 # Provider identifiers and per-viewer flags; the recording link is pre-signed and expires within days.
+# The sign-up link (diamond_link) is dropped too: it is useless once a call is over. The schedule publishes it,
+# since the list is fetched without an account and so carries the organiser's one public link for every viewer.
 PRIVATE_FIELDS = frozenset({'call_recording_url', 'stream_sid', 'news_id', 'reminder_set', 'calendar_set',
                             'diamond_link', 'live_data', 'seo_symbol'})
 
@@ -332,7 +335,9 @@ def refresh_upcoming(output, fetch_upcoming, fetch_today, *, checked_at):
         return {'error': str(error)}
     calls = {}
     for row in upcoming:
-        slug = str((row or {}).get('slug_id') or '')
+        if not isinstance(row, dict):
+            continue
+        slug = str(row.get('slug_id') or '')
         if not SLUG.fullmatch(slug) or not str(row.get('company_symbol') or '').strip():
             continue
         registration = row.get('diamond_link')
@@ -347,7 +352,9 @@ def refresh_upcoming(output, fetch_upcoming, fetch_today, *, checked_at):
             'filing': row.get('pdf_link') or None, 'state': call_state(row.get('call_status')),
         }.items() if value not in (None, '')}
     for row in today:
-        slug = str((row or {}).get('slug') or '')
+        if not isinstance(row, dict):
+            continue
+        slug = str(row.get('slug') or '')
         state = call_state(row.get('call_status'))
         if not SLUG.fullmatch(slug) or not str(row.get('symbol') or '').strip() or state == 'concluded':
             continue
@@ -359,6 +366,19 @@ def refresh_upcoming(output, fetch_upcoming, fetch_today, *, checked_at):
     write_json(output, {'version': 1, 'checkedAt': checked_at, 'count': len(ordered), 'calls': ordered})
     return {'scheduled': sum(entry['state'] == 'scheduled' for entry in ordered),
             'live': sum(entry['state'] == 'live' for entry in ordered)}
+
+
+# rclone's exit status when the file is not there.
+RCLONE_FILE_NOT_FOUND = 4
+
+
+def delete_object(store, name):
+    """Delete objects/<name> from R2; an object that is already gone counts as deleted, so retries settle."""
+    try:
+        store.cache_command('deletefile', store.remote(f'objects/{name}'))
+    except subprocess.CalledProcessError as error:
+        if error.returncode != RCLONE_FILE_NOT_FOUND:
+            raise
 
 
 def main(argv=None):
@@ -379,7 +399,7 @@ def main(argv=None):
     report = refresh(OUTPUT, store, lambda page: list_page(session(), page),
                      lambda slug: fetch_detail(session(), slug), full=args.full, checked_at=now, workers=args.workers,
                      progress=lambda partial: write_json(REPORT, partial),
-                     delete=lambda name: store.cache_command('deletefile', store.remote(f'objects/{name}')))
+                     delete=lambda name: delete_object(store, name))
     report['upcoming'] = refresh_upcoming(UPCOMING, lambda: fetch_upcoming(session()), lambda: fetch_today(session()),
                                           checked_at=now)
     if 'error' in report['upcoming']:

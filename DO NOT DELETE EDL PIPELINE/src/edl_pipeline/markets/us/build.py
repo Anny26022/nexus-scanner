@@ -14,6 +14,7 @@ import gzip
 import json
 import shutil
 import threading
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
@@ -171,7 +172,18 @@ YAHOO_EMPTY_DAYS = 7
 YAHOO_EMPTY = '.yahoo_empty.json'
 
 
-def update_histories(records: list[dict], directory: Path, session: str, *, interval: float, workers: int) -> dict:
+# A line every PROGRESS_EVERY stocks while histories update: a cold run spends most of its time there.
+PROGRESS_EVERY = 500
+
+
+def _progress(started: float, text: str):
+    """One progress line, with the minutes and seconds since the build started (the step prints nothing else)."""
+    minutes, seconds = divmod(int(time.monotonic() - started), 60)
+    print(f'[{minutes:02d}:{seconds:02d}] {text}', flush=True)
+
+
+def update_histories(records: list[dict], directory: Path, session: str, *, interval: float, workers: int,
+                     started: float | None = None) -> dict:
     """Bring every file up to the session: TradingView's bar where it joins, else Yahoo's recent bars or a full fetch.
 
     Yahoo and Dhan are separate servers: Dhan paced at `interval`, Yahoo at YAHOO_INTERVAL (or `interval`, if lower).
@@ -243,6 +255,9 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
             status = 'failed'
         with lock:
             counts[status] = counts.get(status, 0) + 1
+            done = sum(counts.values())
+            if started is not None and (done % PROGRESS_EVERY == 0 or done == len(records)):
+                _progress(started, f'history {done}/{len(records)}: ' + ', '.join(f'{name} {count}' for name, count in sorted(counts.items())))
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(one, records))
@@ -255,6 +270,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
           page_budget: float = 1200) -> dict:
     """Write the US root for the last closed session; returns a run report."""
     now = calendar.us_now(now)  # aware (a naive time means New York), as the page cache's times are
+    started = time.monotonic()
     stock_rows, etf_rows = dhan.fetch_universe('stock'), dhan.fetch_universe('etf')
     session = snapshot_session(stock_rows, now)
     rows = [row for row in stock_rows if security_type(row.get('Sym') or '', row.get('DispSym')) in SCREENABLE]
@@ -266,10 +282,14 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     benchmarks = [record for record in map(fields.canonical_row, etf_rows) if record and record['symbol'] in BENCHMARKS]
 
     report = {'session': session, 'screenable': len(records), 'listed': len(stock_rows)}
+    _progress(started, f'stock list: {len(stock_rows)} listed, {len(records)} screenable, session {session}')
     report['tradingview'] = tradingview.enrich(records, session)
+    _progress(started, f"TradingView: {report['tradingview'].get('matched')} matched" +
+              (f", error {report['tradingview']['error']}" if report['tradingview'].get('error') else ''))
     # Past report dates and the upcoming calendar (earnings.py); without Earnings Pulse, TradingView's alone.
     pulse = earnings.load_pulse(root)
     report['earnings'] = {**earnings.report_dates(records, pulse), **({'error': pulse['error']} if pulse.get('error') else {})}
+    _progress(started, f"earnings dates: {report['earnings']}")
     largest = sorted((record for record in records if record.get('market_cap')), key=lambda record: -record['market_cap'])[:COVERAGE_TOP]
     covered = sum('tradingview_snapshot' in record for record in largest)
     report['tradingview']['top_coverage'] = round(covered / len(largest), 4) if largest else None
@@ -281,12 +301,19 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     # are fetched side by side: neither server sees more requests than before, and a cold run takes half the time.
     # After TradingView: a company that has reported since its page was read is read again.
     # News comes from a third Dhan server (news-live) and filings from SEC EDGAR, so they are fetched beside them too.
+    _progress(started, 'fetching price history, stock pages, news and SEC filings side by side')
     with ThreadPoolExecutor(max_workers=3) as side:
         pages = side.submit(statements.refresh_pages, records, root, now, budget_seconds=page_budget)
         articles = side.submit(news.refresh, records, root)
         sec = side.submit(filings.refresh, records, root, now)
-        report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers)
+        # Each fetch reports when it finishes, not when the build reads its result.
+        for name, future in (('stock pages', pages), ('news', articles), ('SEC filings', sec)):
+            future.add_done_callback(lambda done, name=name: _progress(
+                started, f'{name} done: {done.exception() or done.result()}'))
+        report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers,
+                                             started=started)
         report['benchmarks'] = update_histories(benchmarks, root / 'indices_ohlcv_data', session, interval=interval, workers=1)
+        _progress(started, f"benchmarks done: {report['benchmarks']}")
         report['stock_pages'] = pages.result()
         report['news'] = articles.result()
         report['filings'] = sec.result()
@@ -300,6 +327,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
         if (history.read_bars(symbol_csv_path(root / 'indices_ohlcv_data', symbol)) or [{'date': ''}])[-1]['date'] < session)
     quarterly, histories = [], {}
     report['statements'] = statements.enrich(records, root, quarterly, histories)
+    _progress(started, 'statements done; building breadth')
 
     _write_json(root / 'mainboard_scanx_data.json', rows)
     methodology_path = root / 'breadth_methodology.json'
@@ -316,6 +344,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
         generated_at=generated_at, preparation_workers=0)
     for name in ('all_indices_history_v2.json', 'market_breadth_v2.json'):
         _compress(root / name)
+    _progress(started, 'breadth done; computing each stock\'s metrics')
 
     thematic_universe = finviz.load_thematic_universe(root / 'us_thematic_universe.json')
     if not thematic_universe:
@@ -336,6 +365,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     report['sectors'] = len(analytics['sectors'])
     report['stocks'] = len(stocks)
     report['aligned'] = sum(stock['as_of_date'] == session for stock in stocks)
+    _progress(started, f"metrics done: {len(stocks)} stocks, {report['aligned']} at the session; RS ratings next")
     report['rs_ratings'] = build_rs_ratings.main(root, f'{BENCHMARK}.csv', BENCHMARKS[BENCHMARK])
     # India's quarterly history file, from the trusted Dhan pages; the IPO file stays empty for the US. Pages are
     # trusted against TradingView's figures, so without them a ledger would come out empty: the last one is kept.
@@ -350,6 +380,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     _write_json(root / filings.HISTORY, filings.history(records, root, now.isoformat()), compress=True)
     report['quarterly_rows'] = len(quarterly)
     _write_json(root / 'ipo_screener.json', {'records': []}, compress=True)
+    _progress(started, 'build done')
     return report
 
 

@@ -47,6 +47,7 @@ METRIC_KEYS = ('as_of_date', 'gap_percent', 'relative_volume_20', 'atr14', 'atr_
                'distance_from_52w_high_percent', 'distance_from_52w_low_percent', 'breakout_above_20d_high',
                'breakout_above_50d_high', 'breakout_above_52w_high', 'is_inside_day', 'sma20', 'sma50', 'sma200')
 # Read while building, not by the release.
+STATEMENT_HISTORY = 'statement_history.json'
 BUILD_ONLY = frozenset({'slug', 'provider_last_trade_ist', 'tradingview_bar', 'tradingview_previous_close', 'tradingview_quarters'})
 # TradingView must cover this share of the largest stocks (by market cap) for the release to publish; on 2026-11-22 it
 # covered 99% of the top 3,000 (ISIN or ticker). The rest of the market fills from Yahoo, up to MAX_FALLBACKS stocks.
@@ -254,8 +255,8 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     report['benchmarks_behind'] = sorted(
         symbol for symbol in BENCHMARKS
         if (history.read_bars(symbol_csv_path(root / 'indices_ohlcv_data', symbol)) or [{'date': ''}])[-1]['date'] < session)
-    quarterly = []
-    report['statements'] = statements.enrich(records, root, quarterly)
+    quarterly, histories = [], {}
+    report['statements'] = statements.enrich(records, root, quarterly, histories)
 
     _write_json(root / 'mainboard_scanx_data.json', rows)
     methodology_path = root / 'breadth_methodology.json'
@@ -297,8 +298,10 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     # trusted against TradingView's figures, so without them a ledger would come out empty: the last one is kept.
     if not report['tradingview'].get('error'):
         _write_json(root / 'quarterly_financial_history.json', {
-            'source': 'Dhan US stock pages (trusted income statements)', 'coverage': {'records': len(quarterly)},
-            'records': quarterly}, compress=True)
+            'source': 'TradingView US scanner (verified quarters) and Dhan US stock pages (trusted income statements)',
+            'coverage': {'records': len(quarterly)}, 'records': quarterly}, compress=True)
+        # Each stock's annual income, balance-sheet and cash-flow history (statements.statement_history), by symbol.
+        _write_json(root / STATEMENT_HISTORY, {'amount_unit': 'USD_MILLION', 'stocks': histories}, compress=True)
     report['quarterly_rows'] = len(quarterly)
     _write_json(root / 'ipo_screener.json', {'records': []}, compress=True)
     return report

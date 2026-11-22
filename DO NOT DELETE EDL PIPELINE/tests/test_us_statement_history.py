@@ -25,6 +25,8 @@ def found(revenue, years, latest=(2026, 9), year_end=(2026, 9)):
                         'net_income_fq_h': [value * 1e5 for value in revenue],
                         'earnings_per_share_diluted_fq_h': [1.0] * len(revenue), 'ebitda_fq_h': [None] * len(revenue),
                         'total_revenue_fy_h': [value * 1e6 for value in years],
+                        'net_income_fy_h': [value * 1e5 for value in years], 'earnings_per_share_diluted_fy_h': [4.0] * len(years),
+                        'ebitda_fy_h': [None] * len(years),
                         'fiscal_period_end_fq': stamp(*latest), 'fiscal_period_end_fy': stamp(*year_end)}}
 
 
@@ -81,6 +83,70 @@ class LedgerTests(unittest.TestCase):
         history = []
         report = statements.enrich([{'symbol': 'NOPAGE', 'tradingview_quarters': short}], self.root, history)
         self.assertEqual((len(history), report['history_tradingview']), (4, 1))
+
+
+class StatementHistoryTests(unittest.TestCase):
+    def page(self):
+        joined = market.joined
+        return {**market.StatementTests.PAGE,
+                'incomeStat_sy': {'YEAR': joined(202609, 202509, 202409), 'REVENUE': joined(440, 400, 380),
+                                  'OPERATING_PROFIT': joined(120, 100, 90), 'NET_PROFIT': joined(88, 80, 70), 'OPM': joined(27, 25, 24)},
+                'cF_sq': {'YEAR': joined(202609, 202606), 'OPERATING_ACTIVITIES': joined(35, 30), 'CAPITAL_EXPENDITURE': joined(-5, 0)}}
+
+    def test_tradingview_years_with_the_pages_lines_balance_sheets_and_cash_flow_from_the_page(self):
+        record = {'symbol': 'ACME', 'tradingview_quarters': tradingview.quarters(found([110] * 4 + [100] * 4 + [95] * 4, [440, 400, 380]))}
+        history = statements.statement_history(record, self.page(), {'income'})
+        self.assertEqual([row['period_end'] for row in history['annual']], ['2024-09-30', '2025-09-30', '2026-09-30'])
+        latest = history['annual'][-1]
+        self.assertEqual((latest['revenue'], latest['net_profit'], latest['operating_profit'], latest['opm']), (440, 44, 120, 27))
+        self.assertEqual(history['balance_sheet'][-1], {'period_end': '2026-09-30', 'total_assets': 500, 'current_assets': 200,
+                                                        'current_liabilities': 100, 'non_current_liabilities': 150, 'total_equity': 250})
+        self.assertEqual(history['cash_flow'][-1]['operating_activities'], 120)
+        # Dhan's 0 is "not reported", not a value.
+        self.assertEqual(history['cash_flow_quarterly'], [{'period_end': '2026-06-30', 'operating_activities': 30, 'capital_expenditure': None},
+                                                          {'period_end': '2026-09-30', 'operating_activities': 35, 'capital_expenditure': -5}])
+
+    def test_the_pages_years_when_tradingview_verifies_fewer_and_nothing_from_an_untrusted_page(self):
+        record = {'symbol': 'ACME', 'tradingview_quarters': tradingview.quarters(found([110] * 4, [440]))}
+        history = statements.statement_history(record, self.page(), {'income'})
+        self.assertEqual(len(history['annual']), 3)
+        # A page in another currency (TradingView's dollars are a tenth of it) gives nothing; TradingView's year stands.
+        foreign = {'symbol': 'ACME', 'tradingview_quarters': tradingview.quarters(found([11] * 4, [44]))}
+        history = statements.statement_history(foreign, self.page(), set())
+        self.assertEqual((list(history), len(history['annual'])), (['annual'], 1))
+
+    def test_a_page_a_quarter_behind_still_gives_its_dated_history(self):
+        # TradingView already has the October quarter; the page ends in September but agrees on it.
+        record = {'symbol': 'ACME', 'tradingview_quarters': tradingview.quarters(
+            found([120, 110, 110, 110, 110, 100, 100, 100, 100], [440, 400], latest=(2026, 12), year_end=(2026, 9)))}
+        history = statements.statement_history(record, self.page(), set())
+        self.assertEqual(len(history['balance_sheet']), 2)
+
+    def test_blocks_that_are_not_what_their_names_say_are_left_out(self):
+        joined = market.joined
+        page = {**self.page(),
+                # Costco's: the "yearly" block holds quarters, and the balance sheets are from 2009.
+                'incomeStat_sy': {'YEAR': joined(202605, 202602, 202511), 'REVENUE': joined(70, 69, 67)},
+                'bs_s': {'YEAR': joined(200905, 200902), 'TOTAL_ASSETS': joined(21, 20)}}
+        history = statements.statement_history({'symbol': 'COST'}, page, {'income'})
+        self.assertNotIn('annual', history)
+        self.assertNotIn('balance_sheet', history)
+        self.assertEqual(statements.spaced(statements.series(page['incomeStat_sy']), 12), [])
+
+    def test_the_publisher_adds_the_series_to_each_stocks_history(self):
+        import gzip, json
+        sys.path.insert(0, str(ROOT.parent / 'frontend'))
+        import publish_us
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root)
+        ledger = {'records': [{'symbol': 'ACME', 'quarter_end': '2026-09-30', 'revenue': 110}]}
+        extra = {'stocks': {'ACME': {'annual': [{'period_end': '2026-09-30', 'revenue': 440}]},
+                            'ONLY': {'balance_sheet': [{'period_end': '2026-09-30', 'total_assets': 5}]}}}
+        source = {'quarterly_financial_history.json.gz': gzip.compress(json.dumps(ledger).encode()),
+                  'statement_history.json.gz': gzip.compress(json.dumps(extra).encode())}
+        histories = publish_us.load_financial_history(root, source, '2026-11-20')
+        self.assertEqual((len(histories['ACME']['quarterly']), histories['ACME']['annual'][0]['revenue']), (1, 440))
+        self.assertEqual((histories['ONLY']['quarterly'], histories['ONLY']['balance_sheet'][0]['total_assets']), ([], 5))
 
 
 if __name__ == '__main__':

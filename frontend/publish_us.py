@@ -294,8 +294,17 @@ def build_us_ipos(stocks, session):
 
 
 def load_financial_history(root, source_bytes, session):
-    """Load and normalize quarterly financial history into standard FinancialHistory schema (oldest first)."""
+    """Each stock's statement history in India's FinancialHistory shape (oldest first): quarters from the quarterly
+    ledger, and the annual income, balance-sheet and cash-flow series from statement_history.json (the build's)."""
     histories = {}
+    extra_source = source_bytes.get('statement_history.json.gz')
+    if extra_source is None and (root / 'statement_history.json.gz').is_file():
+        extra_source = (root / 'statement_history.json.gz').read_bytes()
+    try:
+        extra = json.loads(gzip.decompress(extra_source)).get('stocks', {}) if extra_source else {}
+    except (OSError, ValueError) as error:
+        print(f'WARNING: US annual, balance-sheet and cash-flow history unavailable for {session}: {error}', flush=True)
+        extra = {}
     quarterly_source = source_bytes.get('quarterly_financial_history.json.gz') or source_bytes.get('quarterly_financial_history.json')
     if not quarterly_source:
         local_q = root / 'quarterly_financial_history.json.gz'
@@ -339,6 +348,10 @@ def load_financial_history(root, source_bytes, session):
                     }
         except Exception as error:
             print(f'WARNING: US financial statement history unavailable for {session}: {error}', flush=True)
+    for sym, series in extra.items():
+        # A stock with yearly or balance-sheet history but no quarters still gets its history.
+        histories.setdefault(sym, {'report_type': 'CONSOLIDATED', 'amount_unit': 'USD_MILLION', 'observed_on': session,
+                                   'quarterly': [], 'annual': []}).update(series)
     return histories
 
 

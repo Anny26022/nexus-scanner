@@ -27,9 +27,13 @@ from pathlib import Path
 
 from ohlcv_utils import symbol_csv_path
 
+from edl_pipeline.scanner.financials import STATEMENT_METRICS
+
 from . import dhan
 
-KEPT = ('incomeStat_sq', 'bs_s', 'cF_sy', 'rNp_s', 'CV')
+# Kept from each page: quarterly and annual income, balance sheets, annual and quarterly cash flow, yearly revenue and
+# profit, ratios. A page cached before a part was kept gains it at its next weekly fetch.
+KEPT = ('incomeStat_sq', 'incomeStat_sy', 'bs_s', 'cF_sy', 'cF_sq', 'rNp_s', 'CV')
 REFRESH_AFTER = timedelta(days=7)
 # Statement amounts are already millions of dollars, this market's amount unit; India's field names say lakh or
 # crore, and the release declares the unit (see build.engine_amounts).
@@ -330,11 +334,20 @@ def _quarter_end(period: str) -> date:
     return date(year + month // 12, month % 12 + 1, 1) - timedelta(days=1)
 
 
+def spaced(rows: list[dict], months: int) -> list[dict]:
+    """`rows` (newest first) when each period is `months` after the next, give or take one (52/53-week years); else
+    none. A page's blocks are not always what their names say: Costco's "yearly" income block holds quarters and its
+    "quarterly" block one quarter a year (2026-11-22)."""
+    if any(abs(_months(a['period']) - _months(b['period']) - months) > 1 for a, b in zip(rows, rows[1:])):
+        return []
+    return rows
+
+
 def quarterly_history(page: dict, record: dict) -> list[dict]:
     """India's quarterly statement rows (quarterly_financial_history.json) from a page's quarters, oldest first."""
     # The fiscal year's end month, from the yearly blocks; December (most US companies) when the page has none.
-    years = series(page.get('rNp_s')) or series(page.get('cF_sy'))
-    return _ledger_rows(record, series(page.get('incomeStat_sq')), years[0]['period'][4:] if years else '12',
+    years = spaced(series(page.get('rNp_s')), 12) or spaced(series(page.get('cF_sy')), 12)
+    return _ledger_rows(record, spaced(series(page.get('incomeStat_sq')), 3), years[0]['period'][4:] if years else '12',
                         'Dhan US stock page (millions of dollars)')
 
 
@@ -343,21 +356,75 @@ def quarterly_history(page: dict, record: dict) -> list[dict]:
 JOIN_TOLERANCE = 0.02
 
 
+def _joined(periods: list[dict], page_rows: list[dict]) -> list[dict]:
+    """TradingView's periods (tradingview.quarters rows) under Dhan's names, each with the page's other income lines
+    (and any line TradingView left empty) for the same period where the two agree on its revenue. Newest first."""
+    page = {row['period']: row for row in page_rows}
+    rows = []
+    for period in periods:
+        row = {'period': period['period'], 'REVENUE': period['revenue'], 'NET_PROFIT': period['net_profit'],
+               'EPS': period['eps'], 'EBITDA': period['ebitda']}
+        same = page.get(period['period'])
+        if same and same.get('REVENUE') and period['revenue'] and abs(same['REVENUE'] / period['revenue'] - 1) <= JOIN_TOLERANCE:
+            row.update({key: value for key, value in same.items() if row.get(key) is None})
+        rows.append(row)
+    return rows
+
+
 def tradingview_history(record: dict, page: dict | None) -> list[dict]:
     """India's quarterly rows from TradingView's verified quarters (tradingview.quarters), with Dhan's operating
     profit, profit before tax and margin where the page has the same quarter. Oldest first."""
     found = record.get('tradingview_quarters') or {}
-    dhan = {quarter['period']: quarter for quarter in series((page or {}).get('incomeStat_sq'))}
-    quarters = []
-    for quarter in found.get('quarters') or []:
-        row = {'period': quarter['period'], 'REVENUE': quarter['revenue'], 'NET_PROFIT': quarter['net_profit'],
-               'EPS': quarter['eps'], 'EBITDA': quarter['ebitda']}
-        same = dhan.get(quarter['period'])
-        if same and same.get('REVENUE') and quarter['revenue'] and abs(same['REVENUE'] / quarter['revenue'] - 1) <= JOIN_TOLERANCE:
-            row.update({key: same.get(key) for key in ('OPERATING_PROFIT', 'PROFIT_BEFORE_TAX', 'OPM', 'SALES')})
-        quarters.append(row)
+    quarters = _joined(found.get('quarters') or [], series((page or {}).get('incomeStat_sq')))
     return _ledger_rows(record, quarters, found.get('year_end_month') or '12',
                         'TradingView US scanner (millions of dollars); operating profit, PBT and OPM from the Dhan page')
+
+
+def _history_rows(rows: list[dict], names: dict | None = None) -> list[dict]:
+    """India's statement history rows (scanner/financials.py), oldest first: `period_end` and the values, under
+    India's names for income lines (`names`) and lowercased for balance-sheet and cash-flow lines."""
+    result = []
+    for row in rows:
+        values = {(names[key] if names else key.lower()): value for key, value in row.items()
+                  if key != 'period' and (names is None or key in names)}
+        result.append({'period_end': _quarter_end(row['period']).isoformat(), **values})
+    return sorted(result, key=lambda row: row['period_end'])
+
+
+def statement_history(record: dict, page: dict | None, trusted: set[str]) -> dict:
+    """India's annual, balance-sheet and cash-flow history for one stock (`financial_statement_history`).
+
+    Annual income: TradingView's verified years (tradingview.quarters), with the page's other lines for the same year,
+    when they reach at least as far back as the page's years; else the page's (10 years). Balance sheets and cash flow
+    (annual, and quarterly as `cash_flow_quarterly`) come from the page only, which TradingView has no history of, and
+    only when the page is this company's current dollars (its income statement is trusted)."""
+    found = record.get('tradingview_quarters') or {}
+    current = page if page and ('income' in trusted or agrees_with_tradingview(page, found)) else None
+    page_years = spaced(series((current or {}).get('incomeStat_sy')), 12)
+    years = _joined(found.get('years') or [], page_years)
+    history = {'annual': _history_rows(years if years and len(years) >= len(page_years) else page_years, STATEMENT_METRICS)}
+    if current:
+        # Balance sheets are dated snapshots (some quarters may be missing), but one years older than the latest
+        # quarter is a stale page (Costco's are from 2009), not this company's balance-sheet history.
+        balance = series(current.get('bs_s'))
+        latest = (found.get('quarters') or spaced(series(current.get('incomeStat_sq')), 3) or [{}])[0].get('period')
+        if not balance or not latest or _months(latest) - _months(balance[0]['period']) > CURRENT_YEAR_MONTHS:
+            balance = []
+        history.update({'balance_sheet': _history_rows(balance),
+                        'cash_flow': _history_rows(spaced(series(current.get('cF_sy')), 12)),
+                        'cash_flow_quarterly': _history_rows(spaced(series(current.get('cF_sq')), 3))})
+    return {name: rows for name, rows in history.items() if rows}
+
+
+def agrees_with_tradingview(page: dict, found: dict) -> bool:
+    """Whether a page is this company's dollars although not for TradingView's latest quarter (a page a quarter
+    behind after a report, as NVDA's and Walmart's were on 2026-11-22): its latest quarter's revenue agrees with
+    TradingView's verified quarter of the same period."""
+    quarters = spaced(series(page.get('incomeStat_sq')), 3)
+    if not quarters or not quarters[0].get('REVENUE'):
+        return False
+    same = next((quarter for quarter in found.get('quarters') or [] if quarter['period'] == quarters[0]['period']), None)
+    return bool(same and same['revenue'] and abs(quarters[0]['REVENUE'] / same['revenue'] - 1) <= AGREEMENT)
 
 
 def _ledger_rows(record: dict, quarters: list[dict], year_end: str, source: str) -> list[dict]:
@@ -384,13 +451,14 @@ def _ledger_rows(record: dict, quarters: list[dict], year_end: str, source: str)
     return sorted(rows, key=lambda row: row['quarter_end'])
 
 
-def enrich(records: list[dict], root: Path, history: list[dict] | None = None) -> dict:
+def enrich(records: list[dict], root: Path, history: list[dict] | None = None, histories: dict | None = None) -> dict:
     """Dhan's statement values, from each trusted part of a record's page, replace TradingView's (Dhan first, as for
     India); TradingView's stay where the page is missing, untrusted or empty.
 
     With `history`, each stock's quarters are appended to it as India's quarterly rows: TradingView's verified
     quarters (up to 8 years, in dollars, from the scan) when they reach at least as far back as the page's trusted
-    income statement (10 quarters), else the page's."""
+    income statement (10 quarters), else the page's. With `histories`, each stock's annual, balance-sheet and
+    cash-flow history (statement_history) is put in it by symbol."""
     counts = {'with_statements': 0, 'refused': 0, **{name: 0 for name in ('balance', 'cash_flow', 'annual')},
               'history_tradingview': 0, 'history_dhan': 0}
     oldest = None
@@ -407,6 +475,11 @@ def enrich(records: list[dict], root: Path, history: list[dict] | None = None) -
             history.extend(chosen)
             if chosen:
                 counts['history_tradingview' if chosen is from_tradingview else 'history_dhan'] += 1
+        if histories is not None:
+            found = statement_history(record, page, trusted)
+            if found:
+                histories[record['symbol']] = found
+                counts['statement_history'] = counts.get('statement_history', 0) + 1
         if not page:
             continue
         if not trusted:

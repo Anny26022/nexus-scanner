@@ -47,7 +47,7 @@ jobs:
       - name: Verify US pipeline code
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
-          PYTHONPATH=src:. python -m unittest tests.test_us_market tests.test_us_history tests.test_us_tradingview tests.test_us_statement_history tests.test_us_news tests.test_us_earnings -v
+          PYTHONPATH=src:. python -m unittest tests.test_us_market tests.test_us_history tests.test_us_tradingview tests.test_us_statement_history tests.test_us_news tests.test_us_earnings tests.test_us_filings -v
           python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
 
       # Price history, stock pages and the rotation membership ledger are the state carried between runs; losing them
@@ -59,6 +59,7 @@ jobs:
             ${{ env.US_ROOT }}/ohlcv_data
             ${{ env.US_ROOT }}/indices_ohlcv_data
             ${{ env.US_ROOT }}/stock_pages
+            ${{ env.US_ROOT }}/sec_filings
             ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
           key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: us-history-v1-
@@ -67,6 +68,9 @@ jobs:
         id: build
         env:
           PYTHONUNBUFFERED: '1'
+          # SEC asks automated clients for a contact address in the User-Agent (markets/us/filings.py). A secret, so the
+          # address is not in this public repository; without it the run skips EDGAR.
+          SEC_CONTACT: ${{ secrets.SEC_CONTACT }}
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
           set +e
@@ -88,6 +92,7 @@ jobs:
             ${{ env.US_ROOT }}/ohlcv_data
             ${{ env.US_ROOT }}/indices_ohlcv_data
             ${{ env.US_ROOT }}/stock_pages
+            ${{ env.US_ROOT }}/sec_filings
             ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
           key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}-built
 
@@ -136,5 +141,6 @@ jobs:
             ${{ env.US_ROOT }}/ohlcv_data
             ${{ env.US_ROOT }}/indices_ohlcv_data
             ${{ env.US_ROOT }}/stock_pages
+            ${{ env.US_ROOT }}/sec_filings
             ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
           key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}

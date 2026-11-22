@@ -53,6 +53,30 @@ class QuarterTests(unittest.TestCase):
         self.assertEqual(tradingview.quarters({'history': {}})['quarters'], [])
 
 
+class VerificationTests(unittest.TestCase):
+    def test_a_nan_year_is_not_verified(self):
+        broken = found([110, 110, 110, 110, 100, 100, 100, 100], [440, 400])
+        broken['history']['total_revenue_fy_h'][1] = float('nan')
+        self.assertEqual(len(tradingview.quarters(broken)['quarters']), 4)  # the NaN year stops the history
+        broken['history']['total_revenue_fq_h'][0] = float('inf')
+        self.assertEqual(tradingview.quarters(broken)['quarters'], [])
+
+    def test_a_small_company_is_held_to_its_own_rounding_not_a_million(self):
+        # $0.2M quarters: a grouping $0.3M off a $1.0M year passed the old $1M floor; 1% (or $1,000) does not.
+        small = {'history': {**found([0.25] * 4, [1.0])['history'], 'total_revenue_fq_h': [250_000, 250_000, 250_000, 550_000]}}
+        self.assertEqual(tradingview.quarters(small)['quarters'], [])
+        exact = {'history': {**found([0.25] * 4, [1.0])['history'], 'total_revenue_fq_h': [250_000, 250_000, 250_000, 250_400]}}
+        self.assertEqual(len(tradingview.quarters(exact)['quarters']), 4)
+
+    def test_the_source_that_reaches_further_back_wins(self):
+        newer = [{'period': '202609'}, {'period': '202509'}]
+        older = [{'period': '202509'}, {'period': '202409'}]
+        self.assertFalse(statements.reaches_as_far(newer, older))
+        self.assertTrue(statements.reaches_as_far(older, newer))
+        self.assertTrue(statements.reaches_as_far(older, list(older)))  # a tie goes to TradingView's
+        self.assertFalse(statements.reaches_as_far([], older))
+
+
 class LedgerTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())
@@ -121,6 +145,14 @@ class StatementHistoryTests(unittest.TestCase):
             found([120, 110, 110, 110, 110, 100, 100, 100, 100], [440, 400], latest=(2026, 12), year_end=(2026, 9)))}
         history = statements.statement_history(record, self.page(), set())
         self.assertEqual(len(history['balance_sheet']), 2)
+
+    def test_a_stale_cash_flow_series_is_left_out(self):
+        joined = market.joined
+        page = {**self.page(), 'cF_sy': {'YEAR': joined(202309, 202209), 'OPERATING_ACTIVITIES': joined(100, 90)}}
+        record = {'symbol': 'ACME', 'tradingview_quarters': tradingview.quarters(found([110] * 4 + [100] * 4, [440, 400]))}
+        history = statements.statement_history(record, page, {'income'})
+        self.assertNotIn('cash_flow', history)  # ends three years before the latest quarter
+        self.assertIn('cash_flow_quarterly', history)
 
     def test_blocks_that_are_not_what_their_names_say_are_left_out(self):
         joined = market.joined

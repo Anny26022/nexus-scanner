@@ -402,18 +402,29 @@ def statement_history(record: dict, page: dict | None, trusted: set[str]) -> dic
     current = page if page and ('income' in trusted or agrees_with_tradingview(page, found)) else None
     page_years = spaced(series((current or {}).get('incomeStat_sy')), 12)
     years = _joined(found.get('years') or [], page_years)
-    history = {'annual': _history_rows(years if years and len(years) >= len(page_years) else page_years, STATEMENT_METRICS)}
+    history = {'annual': _history_rows(years if reaches_as_far(years, page_years) else page_years, STATEMENT_METRICS)}
     if current:
-        # Balance sheets are dated snapshots (some quarters may be missing), but one years older than the latest
-        # quarter is a stale page (Costco's are from 2009), not this company's balance-sheet history.
-        balance = series(current.get('bs_s'))
         latest = (found.get('quarters') or spaced(series(current.get('incomeStat_sq')), 3) or [{}])[0].get('period')
-        if not balance or not latest or _months(latest) - _months(balance[0]['period']) > CURRENT_YEAR_MONTHS:
-            balance = []
-        history.update({'balance_sheet': _history_rows(balance),
-                        'cash_flow': _history_rows(spaced(series(current.get('cF_sy')), 12)),
-                        'cash_flow_quarterly': _history_rows(spaced(series(current.get('cF_sq')), 3))})
+
+        def recent(rows):
+            # A series ending a year or more before the latest quarter is a stale page (Costco's balance sheets are
+            # from 2009), not this company's history: the freshness trusted_blocks asks of the page's latest values.
+            return rows if rows and latest and 0 <= _months(latest) - _months(rows[0]['period']) < CURRENT_YEAR_MONTHS else []
+        # Balance sheets are dated snapshots and some quarters may be missing (Apple's), so only freshness is checked.
+        history.update({'balance_sheet': _history_rows(recent(series(current.get('bs_s')))),
+                        'cash_flow': _history_rows(recent(spaced(series(current.get('cF_sy')), 12))),
+                        'cash_flow_quarterly': _history_rows(recent(spaced(series(current.get('cF_sq')), 3)))})
     return {name: rows for name, rows in history.items() if rows}
+
+
+def reaches_as_far(chosen: list[dict], other: list[dict]) -> bool:
+    """Whether `chosen` (TradingView's, newest first) goes back at least as far as `other`, and has any rows."""
+    if not chosen:
+        return False
+    if not other:
+        return True
+    oldest = lambda rows: min(row.get('period') or row.get('quarter_end', '').replace('-', '')[:6] for row in rows)
+    return oldest(chosen) <= oldest(other)
 
 
 def agrees_with_tradingview(page: dict, found: dict) -> bool:
@@ -472,7 +483,7 @@ def enrich(records: list[dict], root: Path, history: list[dict] | None = None, h
         if history is not None:
             from_tradingview = tradingview_history(record, page)
             from_page = quarterly_history(page, record) if 'income' in trusted else []
-            chosen = from_tradingview if from_tradingview and len(from_tradingview) >= len(from_page) else from_page
+            chosen = from_tradingview if reaches_as_far(from_tradingview, from_page) else from_page
             history.extend(chosen)
             if chosen:
                 counts['history_tradingview' if chosen is from_tradingview else 'history_dhan'] += 1

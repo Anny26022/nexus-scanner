@@ -226,8 +226,10 @@ def _month(stamp) -> int | None:
     return day.year * 12 + day.month - 1
 
 
-# Four quarters are one fiscal year when they add up to its revenue within this (rounding, small restatements).
+# Four quarters are one fiscal year when they add up to its revenue within this (rounding, small restatements), or
+# within YEAR_ROUNDING dollars for a company so small that 1% is less than its figures' rounding.
 YEAR_TOLERANCE = 0.01
+YEAR_ROUNDING = 1_000
 
 
 def _rows(columns: dict, history: dict, count: int, latest: int, step: int) -> list[dict]:
@@ -265,9 +267,10 @@ def quarters(found: dict) -> dict:
     agreeing = 0
     for index, total in enumerate(years):
         part = revenue[start + 4 * index: start + 4 * index + 4]
-        if not isinstance(total, (int, float)) or len(part) < 4 or any(not isinstance(value, (int, float)) for value in part):
+        # Finite numbers only: a NaN would compare as agreeing and extend the dated history.
+        if _number(total) is None or len(part) < 4 or any(_number(value) is None for value in part):
             break
-        if abs(sum(part) - total) > max(abs(total) * YEAR_TOLERANCE, UNITED_STATES.provider_amount_unit):
+        if abs(sum(part) - total) > max(abs(total) * YEAR_TOLERANCE, YEAR_ROUNDING):
             break
         agreeing += 1
     count = start + 4 * agreeing if agreeing else 0

@@ -264,6 +264,11 @@ class PublishUsTests(unittest.TestCase):
         self.assertEqual(with_calendar['earningsCalendarUrl'], f"/data/revisions/{'a' * 64}/earnings-calendar.json.gz")
         self.assertNotIn('earningsCalendarUrl', publish_us.manifest_for('a' * 64, '2026-11-20', 10))
 
+    def test_the_manifest_names_the_spy_benchmark_only_when_published(self):
+        with_benchmark = publish_us.manifest_for('a' * 64, '2026-11-20', 10, benchmark=True)
+        self.assertEqual(with_benchmark['benchmarkUrl'], f"/data/revisions/{'a' * 64}/benchmark.json.gz")
+        self.assertNotIn('benchmarkUrl', publish_us.manifest_for('a' * 64, '2026-11-20', 10))
+
     def test_us_ipo_record_structure_and_lockup_calculation(self):
         from datetime import date, timedelta
         sess_date = date.fromisoformat('2026-11-09')

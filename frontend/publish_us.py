@@ -29,7 +29,7 @@ from packed_snapshot import pack_snapshot
 from publish_snapshot import OUTPUT, stock_rows, write_json
 from session_history import register_session
 from public_payload import public
-from market_overview import index_closes, market_overview
+from market_overview import benchmark_series, index_closes, market_overview
 from etf_snapshot import build_etf_snapshot, prune_etf_snapshots
 import rotation_history
 import build_chart_artifacts
@@ -161,7 +161,7 @@ MARKET_BENCHMARK_KEY = 'NIFTY_50'
 # Preset floors in this market's units: $300M market cap, a $5 close, $2M a day of 50-session turnover.
 US_ELIGIBILITY = {'minMarketCapCr': 300, 'minPrice': 5, 'minTurnoverCr': 2}
 CODE_FILES = ('publish_us.py', 'publish_snapshot.py', 'market_overview.py', 'rotation_history.py', 'scanner_bridge.py', 'packed_snapshot.py', 'snapshot_technicals.py',
-              'public_payload.py', 'src/data/snapshotTechnicals.json', 'src/data/presetEligibility.json')
+              'public_payload.py', 'etf_snapshot.py', 'src/data/snapshotTechnicals.json', 'src/data/presetEligibility.json')
 
 
 def us_context(root):
@@ -235,10 +235,11 @@ def refuse_older_session(previous, session):
 
 
 def manifest_for(revision, session, total, *, market_overview=False, etf_snapshot=False, financial_history=False,
-                 earnings_calendar=False):
+                 earnings_calendar=False, benchmark=False):
     base = f'/data/revisions/{revision}'
     return {'revision': revision, 'sessionDate': session, 'publishedAt': f'{session}T00:00:00Z', 'schemaVersion': 4,
             **({'earningsCalendarUrl': f'{base}/earnings-calendar.json.gz'} if earnings_calendar else {}),
+            **({'benchmarkUrl': f'{base}/benchmark.json.gz'} if benchmark else {}),
             **({'marketOverviewUrl': f'{base}/market-overview.json.gz'} if market_overview else {}),
             **({'etfDatasetUrl': f'{base}/etfs.json.gz'} if etf_snapshot else {}),
             **({'financialHistoryUrl': f'{base}/financial-history.json.gz',
@@ -455,6 +456,8 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         local_etf = root / 'etf_snapshot.json'
         if local_etf.is_file():
             etf_source = local_etf.read_bytes()
+    # SPY's closes in India's benchmark.json shape (the market benchmark the app compares against), named by benchmarkUrl.
+    benchmark = benchmark_series(root, source_bytes, session, UNITED_STATES.benchmark, 'S&P 500 (SPY)')
     digest = hashlib.sha256(b'market:us')
     for name, data in source_bytes.items():
         digest.update(name.encode()); digest.update(data)
@@ -468,6 +471,7 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     digest.update((taxonomy['version'] if taxonomy else 'no-taxonomy').encode())
     digest.update((rotation_hash or 'no-rotation').encode())
     digest.update((chart_release or 'no-charts').encode())
+    digest.update(json.dumps(benchmark, separators=(',', ':')).encode())
     revision = digest.hexdigest()
 
     rows = published
@@ -512,9 +516,12 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         calendar = public(json.loads(gzip.decompress(calendar_bytes)))
         (generation / 'earnings-calendar.json.gz').write_bytes(gzip.compress(
             json.dumps(calendar, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
+    if benchmark is not None:
+        (generation / 'benchmark.json.gz').write_bytes(gzip.compress(
+            json.dumps(benchmark, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
     manifest = manifest_for(revision, session, len(rows), market_overview=overview is not None,
                             etf_snapshot=etf_bytes is not None, financial_history=bool(histories),
-                            earnings_calendar=calendar_bytes is not None)
+                            earnings_calendar=calendar_bytes is not None, benchmark=benchmark is not None)
     if taxonomy:
         taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
         (generation / 'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))

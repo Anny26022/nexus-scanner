@@ -46,6 +46,19 @@ class EtfSnapshotTests(unittest.TestCase):
         self.assertEqual(snapshot['stocks'][0]['rupeeVolumeCrore'], 25.0)
         self.assertEqual(decode_packed_snapshot(pack_snapshot(snapshot)), snapshot)
 
+    def test_us_etfs_keep_daily_fields_at_six_significant_digits(self):
+        source = self.us_source()
+        source['records'][0].update({'RSI': 61.23456789, 'RSI|60': 55.0, 'RSI|1W': 58.0})
+        etf = build_etf_snapshot(source, '2026-10-23', 'b'*64, market='us')['stocks'][0]['etf']
+        self.assertEqual(etf['RSI'], 61.2346)
+        self.assertFalse(any('|' in field for field in etf))
+        self.assertEqual(etf['expense_ratio'], 0.09)
+        # India keeps every timeframe at full precision.
+        india = self.source()
+        india['records'][0].update({'RSI': 61.23456789, 'RSI|60': 55.0})
+        etf = build_etf_snapshot(india, '2026-10-23', 'a'*64)['stocks'][0]['etf']
+        self.assertEqual((etf['RSI'], etf['RSI|60']), (61.23456789, 55.0))
+
     def test_rejects_old_or_future_quotes_instead_of_relabelling(self):
         # Quotes already traded when fetched: an older day, the next session, and a later one.
         for day, fetched in (('2026-10-22', '2026-10-23T16:00:00Z'), ('2026-10-26T04:00:00', '2026-10-26T12:00:00Z'),

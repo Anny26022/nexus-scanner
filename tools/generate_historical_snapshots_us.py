@@ -294,7 +294,7 @@ def screenable_symbols(rows: List[dict]) -> List[str]:
     symbols: Dict[str, None] = {}
     for row in rows:
         symbol = str(row.get("Sym") or "").strip().upper()
-        if symbol and security_type(symbol, row.get("DispSym")) in SCREENABLE:
+        if symbol and security_type(symbol, row.get("DispSym"), row.get("Sector")) in SCREENABLE:
             symbols.setdefault(symbol)
     return list(symbols)
 

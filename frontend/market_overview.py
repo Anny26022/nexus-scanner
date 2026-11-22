@@ -123,10 +123,10 @@ def index_closes(root, source_bytes, symbol, session, csv_name=None):
     return [[date, closes[date]] for date in sorted(closes) if date <= session], index
 
 
-def benchmark_series(root, source_bytes, session):
-    """Nifty 50 daily closes up to the session."""
-    records, index = index_closes(root, source_bytes, BENCHMARK_SYMBOL, session)
+def benchmark_series(root, source_bytes, session, symbol=BENCHMARK_SYMBOL, name='Nifty 50'):
+    """The market benchmark's daily closes up to the session (Nifty 50; SPY for the US)."""
+    records, index = index_closes(root, source_bytes, symbol, session)
     if len(records) < 2:
         return None
-    return {'schemaVersion': BENCHMARK_VERSION, 'symbol': BENCHMARK_SYMBOL, 'name': (index or {}).get('name') or 'Nifty 50',
+    return {'schemaVersion': BENCHMARK_VERSION, 'symbol': symbol, 'name': (index or {}).get('name') or name,
             'asOfDate': session, 'records': records}

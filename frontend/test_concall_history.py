@@ -320,6 +320,7 @@ class ConcallHistoryTests(unittest.TestCase):
         report = self.run_refresh(provider, full=True)
         entry = self.index()['calls']['honasa-q1-fy27']
         self.assertEqual((report['dropped'], entry['object'], entry['date']), (1, None, '2026-08-13'))
+        self.assertNotIn('time', entry)
         self.assertEqual(entry['superseded'], [first])
         self.assertEqual(provider.fetched, ['honasa-q1-fy27'])
 

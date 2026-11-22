@@ -228,7 +228,8 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
                 # older slug with the company's newest call. It is dropped and fetched again.
                 entry['superseded'] = [*entry.get('superseded', ()), entry['object']['sha256']]
                 entry['object'], entry['date'] = None, listed
-                for key in ('checked', 'updated', 'summary'):
+                # Its summary digest stays, so a company that shares it is still caught below.
+                for key in ('checked', 'updated', 'time'):
                     entry.pop(key, None)
                 report['dropped'] += 1
             if not entry.get('date'):

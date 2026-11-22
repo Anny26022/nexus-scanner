@@ -5,10 +5,11 @@ import type {FilterChoices} from '../../frontend/src/types/filterChoices';
 import {GROQ_MODEL, PRIMARY_MODEL, FALLBACK_MODEL, compileWithFallback, compilerPrompt, type CompileModel, type InferenceInput} from './compiler';
 import {compilationCacheKey, readCompilation, storeCompilation} from './compilationCache';
 import {checkOrigin, corsHeaders, parseAllowedOrigins, withCors} from './cors';
-import {pointerKey, serveSiteData} from './siteData';
+import {pointerKey} from './siteData';
 import {pageRedirect} from './uiRedirect';
+import {gateAskAi, serveGatedData, type Limiter} from './scannerGate';
 
-type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA'> & {
+type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA' | 'AUTH_MODE' | 'SCANNER_GATEWAY_SECRET' | 'DATA_RATE_LIMITER'> & {
   /** Published data (wrangler.jsonc). Local development (wrangler.dev.jsonc) has none and reads frontend/public. */
   DATA?: R2Bucket;
   GROQ_API_KEY?: string;
@@ -17,6 +18,12 @@ type WorkerEnv = Omit<Env, 'GROQ_API_KEY' | 'DATA'> & {
   ALLOWED_ORIGINS?: string;
   /** Where a browser opening this Worker's own pages is sent (see uiRedirect.ts); unset in local development. */
   UI_REDIRECT?: string;
+  /** The Journal gateway (../auth/scannerGateway.mjs): off, report (check and log) or enforce (refuse without it). */
+  AUTH_MODE?: string;
+  /** The secret nexus-journal-api forwards requests with (a Worker secret, shared with it). */
+  SCANNER_GATEWAY_SECRET?: string;
+  /** Per-account limit on /data requests (the Journal's account id). */
+  DATA_RATE_LIMITER?: Limiter;
 };
 
 const isObject = (v:unknown): v is Record<string,unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -44,7 +51,7 @@ async function readBody(request: Request | Response, maxBytes = 12000): Promise<
 export default {
   async fetch(request, env, ctx): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname.startsWith('/data/') && env.DATA) return serveSiteData(request, env.DATA);
+    if (url.pathname.startsWith('/data/') && env.DATA) return serveGatedData(request, env, env.DATA);
     if (url.pathname !== '/api/screener/ai-compile') {
       if (url.pathname.startsWith('/api/')) return json({error:'API route not found'},404);
       return pageRedirect(url.pathname, env.UI_REDIRECT, url.search) ?? env.ASSETS.fetch(request);
@@ -54,11 +61,13 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, {status:204, headers:decision.corsOrigin ? corsHeaders(decision.corsOrigin) : {}});
     }
-    return withCors(await compile(request, env, ctx, url), decision);
+    const gate = await gateAskAi(request, env, decision.corsOrigin ? corsHeaders(decision.corsOrigin) : {});
+    if ('denied' in gate) return gate.denied;
+    return withCors(await compile(request, env, ctx, url, gate.rateKey), decision);
   },
 } satisfies ExportedHandler<WorkerEnv>;
 
-async function compile(request: Request, env: WorkerEnv, ctx: ExecutionContext, url: URL): Promise<Response> {
+async function compile(request: Request, env: WorkerEnv, ctx: ExecutionContext, url: URL, rateKey: string): Promise<Response> {
     if (request.method !== 'POST') return json({error:'Use POST to build a screen.'},405);
     if (!request.headers.get('Content-Type')?.includes('application/json')) return json({error:'Send a JSON request.'},415);
     let body: unknown;
@@ -67,7 +76,7 @@ async function compile(request: Request, env: WorkerEnv, ctx: ExecutionContext, 
     if (typeof text !== 'string' || !text.trim() || text.length > MAX_PROMPT_LENGTH) {
       return json({error:`Describe your screen in 1–${MAX_PROMPT_LENGTH} characters.`},400);
     }
-    const {success} = await env.AI_RATE_LIMITER.limit({key:request.headers.get('CF-Connecting-IP') || 'local'});
+    const {success} = await env.AI_RATE_LIMITER.limit({key:rateKey});
     if (!success) return json({error:'Too many requests. Please wait a minute before building another screen.'},429);
     const requestId = crypto.randomUUID();
     try {

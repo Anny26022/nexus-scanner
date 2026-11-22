@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import worker from './src/index.mjs';
+import { gateway, serveObject } from './src/delivery.mjs';
+
+const worker = { fetch: serveObject };
 
 const calls = [];
 const object = {
@@ -82,4 +84,81 @@ test('objects stored with gzip Content-Encoding are served as the gzip file they
   assert.equal(response.headers.get('Content-Encoding'), null);
   assert.equal(response.headers.get('Content-Type'), 'application/gzip');
   assert.equal(await response.text(), 'published bytes');
+});
+
+// Scanner token gate. Test-only key and tokens shared with nexus-journal-api's signer; never deploy this key.
+const SECRET = 'test-gateway-secret';
+const USER = 'c0ffee00c0ffee00c0ffee00c0ffee00';
+// The headers nexus-journal-api forwards with (workers/auth/scannerGateway.mjs).
+const fromJournal = (secret = SECRET, user = USER) => ({ 'X-Nexus-Gateway': secret, 'X-Nexus-User': user });
+
+function gate(path, { mode, headers = {}, method = 'GET', limits = {}, secrets = SECRET } = {}) {
+  const forwarded = [];
+  const limiterCalls = [];
+  const limiter = (name) => ({ async limit({ key }) { limiterCalls.push([name, key]); return { success: limits[name] !== false }; } });
+  const gateEnv = { ...env, AUTH_MODE: mode, SCANNER_GATEWAY_SECRET: secrets,
+    DELIVERY_RATE_LIMITER: limiter('delivery'), SNAPSHOT_RATE_LIMITER: limiter('snapshot') };
+  const result = gateway(new Request(`https://data.example.com/${path}`, { method, headers }), gateEnv, async (request) => {
+    forwarded.push(request);
+    return new Response('cached bytes', { headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'public, max-age=31536000, immutable' } });
+  });
+  return { result, forwarded, limiterCalls };
+}
+
+test('off and report modes serve everyone, report checks the gateway', async () => {
+  for (const mode of ['off', 'report', undefined]) {
+    for (const headers of [{}, fromJournal('wrong')]) {
+      const { result, forwarded } = gate('releases/abc/index.json', { mode, headers });
+      assert.equal((await result).status, 200, `${mode}`);
+      assert.equal(forwarded.length, 1);
+    }
+  }
+});
+
+test('enforce refuses a request that did not come through the Journal, with a readable 401', async () => {
+  for (const [headers, reason] of [[{}, 'missing'], [fromJournal('wrong'), 'secret'], [{ Authorization: 'Bearer x' }, 'missing']]) {
+    const { result, forwarded } = gate('objects/abc.json.gz', { mode: 'enforce', headers });
+    const response = await result;
+    assert.equal(response.status, 401, reason);
+    assert.equal((await response.json()).reason, reason);
+    assert.equal(forwarded.length, 0);
+  }
+});
+
+test('enforce serves a request the Journal forwarded, without its headers or any credentials', async () => {
+  const { result, forwarded } = gate('objects/abc.json.gz', { mode: 'enforce', headers: { ...fromJournal(), Cookie: 'nexus_gsession=x' } });
+  assert.equal(await (await result).text(), 'cached bytes');
+  for (const name of ['X-Nexus-Gateway', 'X-Nexus-User', 'Cookie', 'Authorization']) assert.equal(forwarded[0].headers.get(name), null, name);
+  assert.equal(forwarded[0].url, 'https://data.example.com/objects/abc.json.gz');
+});
+
+test('accepts any of several secrets, so the secret can be changed without downtime', async () => {
+  const { result } = gate('objects/abc.json.gz', { mode: 'enforce', headers: fromJournal('next-secret'), secrets: `${SECRET}, next-secret` });
+  assert.equal((await result).status, 200);
+});
+
+test('limits each account, with a separate limit for session history', async () => {
+  const objects = gate('objects/abc.json.gz', { mode: 'enforce', headers: fromJournal() });
+  await objects.result;
+  const snapshots = gate('snapshots/2026-10-23.json.gz', { mode: 'enforce', headers: fromJournal(), limits: { snapshot: false } });
+  const response = await snapshots.result;
+  assert.deepEqual(objects.limiterCalls, [['delivery', USER]]);
+  assert.deepEqual(snapshots.limiterCalls, [['snapshot', USER]]);
+  assert.equal(response.status, 429);
+  assert.equal(snapshots.forwarded.length, 0);
+});
+
+test('an unconfigured secret fails closed in enforce mode', async () => {
+  const response = await gate('objects/abc.json.gz', { mode: 'enforce', headers: fromJournal(), secrets: '' }).result;
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).reason, 'not_configured');
+});
+
+test('gated responses are private to shared caches, unchanged while off', async () => {
+  for (const mode of ['report', 'enforce']) {
+    const { result } = gate('objects/abc.json.gz', { mode, headers: fromJournal() });
+    assert.equal((await result).headers.get('Cache-Control'), 'private, max-age=31536000, immutable', mode);
+  }
+  const { result } = gate('objects/abc.json.gz', { mode: 'off' });
+  assert.equal((await result).headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
 });

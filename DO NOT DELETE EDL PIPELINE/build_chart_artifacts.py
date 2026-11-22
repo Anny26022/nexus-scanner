@@ -178,7 +178,11 @@ def _market_news(root, as_of):
         for row in payload.get("News", []) if isinstance(payload, dict) else []:
             date = _event_date(row.get("PublishDate"))
             if date and date <= as_of:
-                events[symbol].append({"date": date, "category": "Market news", "headline": row.get("Title"), "summary": row.get("Summary"), "source": row.get("Source")})
+                event = {"date": date, "category": "Market news", "headline": row.get("Title"), "summary": row.get("Summary"), "source": row.get("Source")}
+                # The article's link when the file has one (the US news files do; India's do not, so its charts are unchanged).
+                if row.get("Url"):
+                    event["url"] = row["Url"]
+                events[symbol].append(event)
     return events
 
 

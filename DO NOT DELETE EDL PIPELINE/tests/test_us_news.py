@@ -56,6 +56,11 @@ class NewsTests(unittest.TestCase):
         events = build_chart_artifacts._market_news(self.root, '2026-11-20')
         self.assertEqual(events['GME'][0]['date'], '2026-11-20')
         self.assertEqual(events['GME'][0]['headline'], ARTICLE['articletitle'])
+        self.assertTrue(events['GME'][0]['url'].startswith('https://scanx.trade/stock-market-news/companies/'))
+        # India's files carry no link, so its news events (and chart objects) stay as they were.
+        (self.root / 'market_news' / 'RELIANCE_news.json').write_text(json.dumps(
+            {'Symbol': 'RELIANCE', 'News': [{'Title': 'T', 'Summary': 'S', 'PublishDate': 1795191854272, 'Source': 'companies'}]}))
+        self.assertNotIn('url', build_chart_artifacts._market_news(self.root, '2026-11-20')['RELIANCE'][0])
         self.assertEqual(build_chart_artifacts._market_news(self.root, '2026-11-19'), {})  # never before it was published
 
 

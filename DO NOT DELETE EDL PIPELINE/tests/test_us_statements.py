@@ -56,7 +56,7 @@ class StatementReviewTests(unittest.TestCase):
         self.assertIsNotNone(statements.read_page(self.root, 'C'))
 
     def test_never_fetched_pages_come_first_then_the_oldest(self):
-        for symbol, fetched in (('NEW', None), ('OLD', '2026-09-01'), ('MID', '2026-10-01'), ('RECENT', '2026-10-20')):
+        for symbol, fetched in (('NEW', None), ('OLD', '2026-08-01'), ('MID', '2026-09-01'), ('RECENT', '2026-10-01')):
             if fetched:
                 statements.write_page(self.root, symbol, {'fetched_at': f'{fetched}T00:00:00+00:00', 'slug': f'{symbol}-x', **PAGE})
         symbols = ['RECENT', 'MID', 'NEW', 'OLD']

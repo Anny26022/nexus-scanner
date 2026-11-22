@@ -58,7 +58,12 @@ def rows(articles: list[dict]) -> list[dict]:
     return result
 
 
-def refresh(records: list[dict], root: Path, *, interval: float = 0.1, workers: int = 4, budget_seconds: float = 900,
+# Measured 2026-11-22: 60-270 requests a second at up to 64 in parallel, no errors or throttling; paced well below.
+INTERVAL = 1 / 40
+WORKERS = 16
+
+
+def refresh(records: list[dict], root: Path, *, interval: float = INTERVAL, workers: int = WORKERS, budget_seconds: float = 900,
             post=requests.post) -> dict:
     """Write each stock's news file; paced, stopping at the first rate limit or the time budget. Returns counts.
 

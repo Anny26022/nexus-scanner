@@ -611,20 +611,22 @@ class StatementTests(unittest.TestCase):
         statements.write_page(root, 'A', {'slug': 'A-a'})  # no fetch time
         self.assertIsNone(statements.read_page(root, 'A'))
 
-    def test_pages_are_fetched_again_weekly_and_after_earnings(self):
+    def test_pages_are_fetched_again_monthly_and_after_earnings(self):
         now = utc(2026, 11, 10, 0, 30)
         page = {'fetched_at': '2026-11-05T00:30:00+00:00'}
         self.assertTrue(statements.stale(None, {}, now))
         self.assertFalse(statements.stale(page, {'latest_earnings_date': '2026-10-29'}, now))
         self.assertTrue(statements.stale(page, {'latest_earnings_date': '2026-11-06'}, now))
-        self.assertTrue(statements.stale({'fetched_at': '2026-11-02T00:30:00+00:00'}, {}, now))
+        # TradingView carries the statement history, so the blanket refresh is monthly (a week old is not due).
+        self.assertFalse(statements.stale({'fetched_at': '2026-11-02T00:30:00+00:00'}, {}, now))
+        self.assertTrue(statements.stale({'fetched_at': '2026-10-10T00:30:00+00:00'}, {}, now))
         # Fetched after the report but still a quarter behind it: asked for again in the month after the report.
         behind = {'fetched_at': '2027-02-01T00:30:00+00:00', 'incomeStat_sq': {'YEAR': '202609', 'REVENUE': '1'}}
         self.assertTrue(statements.stale(behind, {'latest_earnings_date': '2027-01-28'}, utc(2027, 2, 2)))
-        # After that month it waits for the weekly refresh (a page dhan.co never updates must not use every run).
+        # After that month it waits for the monthly refresh (a page dhan.co never updates must not use every run).
         self.assertFalse(statements.stale({**behind, 'fetched_at': '2027-03-01T00:30:00+00:00'},
                                           {'latest_earnings_date': '2027-01-28'}, utc(2027, 3, 2)))
-        # A page dhan.co does not have is asked for weekly, not every run.
+        # A page dhan.co does not have is asked for monthly, not every run.
         gone = {'fetched_at': '2026-11-09T00:30:00+00:00', 'missing': True}
         self.assertFalse(statements.stale(gone, {'latest_earnings_date': '2026-11-09'}, now))
 

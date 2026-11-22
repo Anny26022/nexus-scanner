@@ -12,7 +12,8 @@ filings are 90% of all rows and are left out). It gives:
 
 SEC's fair-access policy asks automated clients to name themselves with a contact address in the User-Agent and to stay
 under 10 requests a second; the contact comes from the SEC_CONTACT environment variable (a repository secret), and
-without it nothing is fetched. A company is fetched again weekly, or sooner after TradingView reports a new earnings date.
+without it nothing is fetched. A company is fetched again when EDGAR's daily index shows a new material filing (about
+300 listed companies a day), and monthly as a safety sweep.
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -36,7 +37,12 @@ SUBMISSIONS_URL = 'https://data.sec.gov/submissions/{name}'
 ARCHIVE_URL = 'https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/{document}'
 DIRECTORY = 'sec_filings'
 HISTORY = 'filing_history.json'
+# Without a readable daily index, a company is due a week after its fetch; with one, a month after (a safety sweep).
 REFRESH_AFTER = timedelta(days=7)
+SWEEP_AFTER = timedelta(days=30)
+INDEX_URL = 'https://www.sec.gov/Archives/edgar/daily-index/{year}/QTR{quarter}/master.{day}.idx'
+INDEX_STATE = '_daily_index.json'  # in DIRECTORY, so it travels with the cached filings
+MAX_CATCH_UP = 30  # days of indexes read in one run; a longer gap falls back to the weekly rule
 INTERVAL = 0.12  # under SEC's 10 requests a second, across workers
 # Material forms (and their amendments): results and reports, events, registration, proxies, major holders.
 MATERIAL = frozenset({'10-K', '10-Q', '8-K', '20-F', '40-F', '6-K', '10-KT', '10-QT', 'S-1', 'S-3', 'S-4', 'F-1',
@@ -113,18 +119,53 @@ def read(root: Path, symbol: str) -> dict | None:
         return None
 
 
-def _due(cached: dict | None, record: dict, now: datetime) -> bool:
-    if not cached:
-        return True
-    fetched = datetime.fromisoformat(cached['fetched_at'])
-    # A last earnings date other than the one the cache was fetched for means a new results 8-K to read.
-    reported = record.get('latest_earnings_date')
-    return now - fetched > REFRESH_AFTER or bool(reported and reported != cached.get('earnings_date'))
+def _index_url(day: date) -> str:
+    return INDEX_URL.format(year=day.year, quarter=(day.month - 1) // 3 + 1, day=day.strftime('%Y%m%d'))
+
+
+def filed_since(last: date, today: date, get, agent: str, pace) -> tuple[set, date]:
+    """The CIKs with a material filing in EDGAR's daily indexes after `last`, through `today`, and the last day read.
+
+    One small file a business day lists every filing made (366 KB on 2026-11-20: 4,136 filings, 300 by listed
+    companies in material forms). A day with no index is a holiday when it is past, and not yet published when it is
+    today; reading stops there so the next run picks it up.
+    """
+    filed, day = set(), last
+    while day < today:
+        day += timedelta(days=1)
+        if day.weekday() >= 5:
+            continue
+        pace()
+        response = get(_index_url(day), headers={'User-Agent': agent, 'Accept-Encoding': 'gzip, deflate'}, timeout=30)
+        if response.status_code in (403, 429):
+            raise dhan.Throttled(f'SEC answered {response.status_code}')
+        if response.status_code == 404:
+            if day >= today:
+                return filed, day - timedelta(days=1)
+            continue
+        response.raise_for_status()
+        for line in response.text.splitlines():
+            parts = line.split('|')
+            if len(parts) == 5 and parts[0].isdigit() and parts[2].removesuffix('/A') in MATERIAL:
+                filed.add(int(parts[0]))
+    return filed, day
+
+
+def _state(root: Path) -> dict:
+    try:
+        return json.loads((root / DIRECTORY / INDEX_STATE).read_text())
+    except (OSError, ValueError):
+        return {}
 
 
 def refresh(records: list[dict], root: Path, now: datetime | None = None, *, get=requests.get, interval: float = INTERVAL,
             workers: int = 4, budget_seconds: float = 900) -> dict:
-    """Fetch the companies that are due, never-fetched first, until the time budget; returns counts."""
+    """Fetch the companies that are due, never-fetched first, until the time budget; returns counts.
+
+    Due: never fetched; named in a daily index since the last run (a new material filing), or left over from a run
+    that ran out of time; or a month old (a safety sweep). Without a readable index (the first run, a gap over
+    MAX_CATCH_UP days, an error) the weekly rule stands in: due when a week old.
+    """
     agent = user_agent()
     if not agent:
         return {'skipped': 'no SEC_CONTACT'}
@@ -141,11 +182,34 @@ def refresh(records: list[dict], root: Path, now: datetime | None = None, *, get
         known = ciks(get, agent)
     except (requests.RequestException, ValueError, KeyError, TimeoutError, dhan.Throttled) as error:
         return {'error': f'SEC ticker list unavailable: {error}'}
+    today = now.astimezone(EASTERN).date()
+    state = _state(root)
+    pending = set(state.get('pending') or [])
+    last = date.fromisoformat(state['last_index_day']) if state.get('last_index_day') else None
+    filed, read_through, index_error = None, last, None
+    if last and (today - last).days <= MAX_CATCH_UP:
+        try:
+            filed, read_through = filed_since(last, today, get, agent, pace)
+        except (requests.RequestException, ValueError, TimeoutError, dhan.Throttled) as error:
+            index_error = str(error)
+    wanted = (filed | pending) if filed is not None else None
     cached = {record['symbol']: read(root, record['symbol']) for record in records}
-    due = [record for record in records if sec_ticker(record['symbol']) in known and _due(cached[record['symbol']], record, now)]
-    due.sort(key=lambda record: (cached[record['symbol']] is not None, (cached[record['symbol']] or {}).get('fetched_at', '')))
-    counts = {'companies': sum(sec_ticker(record['symbol']) in known for record in records), 'due': len(due),
-              'fetched': 0, 'failed': 0}
+
+    def due(record):
+        entry = cached[record['symbol']]
+        if not entry:
+            return True
+        age = now - datetime.fromisoformat(entry['fetched_at'])
+        if wanted is None:
+            return age > REFRESH_AFTER
+        return known[sec_ticker(record['symbol'])] in wanted or age > SWEEP_AFTER
+
+    listed = [record for record in records if sec_ticker(record['symbol']) in known]
+    queue = [record for record in listed if due(record)]
+    queue.sort(key=lambda record: (cached[record['symbol']] is not None, (cached[record['symbol']] or {}).get('fetched_at', '')))
+    counts = {'companies': len(listed), 'due': len(queue), 'fetched': 0, 'failed': 0,
+              'index': 'unavailable: ' + index_error if index_error else ('read' if filed is not None else 'not used')}
+    fetched = set()
 
     def one(record):
         if stopped.is_set() or time.monotonic() > deadline:
@@ -164,17 +228,25 @@ def refresh(records: list[dict], root: Path, now: datetime | None = None, *, get
             path = _path(root, record['symbol'])
             path.parent.mkdir(parents=True, exist_ok=True)
             temporary = path.with_suffix('.tmp')
-            temporary.write_bytes(gzip.compress(json.dumps({'cik': cik, 'fetched_at': now.isoformat(),
-                                                            'earnings_date': record.get('latest_earnings_date'), 'filings': filings},
+            temporary.write_bytes(gzip.compress(json.dumps({'cik': cik, 'fetched_at': now.isoformat(), 'filings': filings},
                                                            separators=(',', ':')).encode(), compresslevel=9, mtime=0))
             temporary.replace(path)
             outcome = 'fetched'
+            with lock:
+                fetched.add(cik)
         with lock:
             counts[outcome] += 1
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        list(pool.map(one, due))
-    return {**counts, 'throttled': stopped.is_set()}
+        list(pool.map(one, queue))
+    # Companies the index named but this run did not reach stay pending; the index is read from where it stopped.
+    listed_ciks = {known[sec_ticker(record['symbol'])] for record in listed}
+    left = sorted(((wanted or set()) & listed_ciks) - fetched)
+    state_path = root / DIRECTORY / INDEX_STATE
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({'last_index_day': (read_through or today - timedelta(days=1)).isoformat(),
+                                      'pending': left}))
+    return {**counts, 'pending': len(left), 'throttled': stopped.is_set()}
 
 
 def result_dates(root: Path, symbol: str) -> list[str]:

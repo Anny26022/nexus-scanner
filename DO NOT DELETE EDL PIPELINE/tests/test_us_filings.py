@@ -41,8 +41,15 @@ PAYLOADS = {
 }
 
 
+# EDGAR's daily indexes the tests serve, by date: CIK|Company|Form|Date|File.
+INDEXES = {}
+
+
 def get(url, headers=None, timeout=None):
     assert headers['User-Agent'] == 'NexusScanner ops@example.org'
+    if '/daily-index/' in url:
+        day = url.rsplit('.', 2)[-2]
+        return mock.Mock(status_code=200 if day in INDEXES else 404, text=INDEXES.get(day, ''), raise_for_status=mock.Mock())
     response = mock.Mock(status_code=200)
     response.json.return_value = PAYLOADS[url]
     return response
@@ -64,12 +71,33 @@ class FilingsTests(unittest.TestCase):
         cached = json.loads(gzip.decompress(path.read_bytes()))
         self.assertEqual([row['form'] for row in cached['filings']], ['8-K', '10-K', '8-K'])  # the Form 4 left out
         self.assertEqual(cached['filings'][0]['url'], 'https://www.sec.gov/Archives/edgar/data/320193/000032019326000101/aapl-8k.htm')
-        # Not due again within a week, unless a new earnings date has been reported since.
-        self.assertEqual(filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)['due'], 0)
-        reported = [{'symbol': 'AAPL', 'latest_earnings_date': '2026-11-20'}]
-        self.assertEqual(filings.refresh(reported, self.root, self.now, get=get, interval=0)['due'], 1)
-        # Once fetched for that earnings date, it is not fetched again for it (even the same day).
-        self.assertEqual(filings.refresh(reported, self.root, self.now, get=get, interval=0)['due'], 0)
+    def test_the_daily_index_picks_the_companies_to_read_again(self):
+        filings.refresh([{'symbol': 'AAPL'}, {'symbol': 'BRK.B'}], self.root, self.now, get=get, interval=0)
+        # 19 November (New York) has no index yet: nothing filed, nothing due.
+        self.assertEqual(filings.refresh([{'symbol': 'AAPL'}, {'symbol': 'BRK.B'}], self.root, self.now, get=get, interval=0)['due'], 0)
+        later = datetime(2026, 11, 21, 3, 0, tzinfo=timezone.utc)  # 20 November in New York
+        INDEXES.update({'20261119': '320193|Apple Inc.|8-K|2026-11-19|edgar/data/320193/x.txt\n1067983|Berkshire|4|2026-11-19|y\n',
+                        '20261120': '1067983|Berkshire|424B2|2026-11-20|z\n'})
+        self.addCleanup(INDEXES.clear)
+        counts = filings.refresh([{'symbol': 'AAPL'}, {'symbol': 'BRK.B'}], self.root, later, get=get, interval=0)
+        self.assertEqual((counts['index'], counts['due'], counts['fetched']), ('read', 1, 1))  # Apple's 8-K; Berkshire's Form 4 is not material
+        self.assertEqual(json.loads((self.root / 'sec_filings' / filings.INDEX_STATE).read_text())['last_index_day'], '2026-11-20')
+
+    def test_a_company_the_run_did_not_reach_stays_pending(self):
+        filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)
+        INDEXES['20261119'] = '320193|Apple Inc.|10-Q|2026-11-19|x\n'
+        self.addCleanup(INDEXES.clear)
+        later = datetime(2026, 11, 21, 3, 0, tzinfo=timezone.utc)
+        import requests
+
+        def failing(url, headers=None, timeout=None):
+            if 'submissions' in url:  # the company's own list fails this run
+                raise requests.ConnectionError('down')
+            return get(url, headers, timeout)
+        counts = filings.refresh([{'symbol': 'AAPL'}], self.root, later, get=failing, interval=0)
+        self.assertEqual((counts['failed'], counts['pending']), (1, 1))
+        INDEXES.clear()  # the next run reads no new index, but the pending company is still due
+        self.assertEqual(filings.refresh([{'symbol': 'AAPL'}], self.root, later, get=get, interval=0)['fetched'], 1)
 
     def test_results_releases_are_dated_in_new_york(self):
         filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)

@@ -12,6 +12,7 @@ deeper stored history with a shorter one. Bars on days the NYSE was closed are a
 from __future__ import annotations
 
 import csv
+import io
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 
@@ -143,12 +144,74 @@ def extend(bars: list[dict], record: dict, session: str, *, confirmed: bool = Fa
     return [*bars[:-1], clean({**bars[-1], 'close': previous}), bar], False
 
 
+def _last_line(path: Path) -> tuple[int, str] | None:
+    """(offset where the file's last row starts, that row), reading only the file's end."""
+    with path.open('rb') as handle:
+        size = handle.seek(0, 2)
+        if not size:
+            return None
+        handle.seek(max(0, size - 4096))
+        chunk = handle.read()
+    body = chunk.rstrip(b'\r\n')
+    cut = body.rfind(b'\n')
+    if cut < 0:
+        return None  # a single row (the header) or a row longer than the chunk: the full path handles it
+    return size - len(chunk) + cut + 1, body[cut + 1:].decode()
+
+
+def _rows(bars: list[dict]) -> bytes:
+    """Bars as write_bars writes them, byte for byte."""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    for bar in bars:
+        writer.writerow([bar['date'], bar['open'], bar['high'], bar['low'], bar['close'], bar['volume'] or 0])
+    return buffer.getvalue().encode()
+
+
+def append_tail(record: dict, root: Path, session: str) -> str | None:
+    """The everyday case without reading the whole file: TradingView's bar joins the last stored one. Rewrites only the
+    file's last row (its close corrected to the official previous close) and appends the session's. None for anything
+    else (no file, a gap, a split, a row that is not clean): the full path in update() handles it.
+
+    Measured 2026-11-22: reading, cleaning and rewriting a 5,000-row file costs about 26 ms, 170 s for the market; this
+    costs about 0.05 ms a stock.
+    """
+    path = symbol_csv_path(root, record['symbol'])
+    if not record.get('tradingview_bar') or not path.exists():
+        return None
+    tail = _last_line(path)
+    if not tail:
+        return None
+    start, line = tail
+    try:
+        day, *values = next(csv.reader([line]))
+        stored = {'date': day, **dict(zip(('open', 'high', 'low', 'close', 'volume'), map(float, values)))}
+        if len(values) != 5 or not is_nyse_session_day(date.fromisoformat(day)):
+            return None
+    except (ValueError, StopIteration):
+        return None
+    # A same-day rerun (already current) goes through the full path, which also cleans a file kept from older code.
+    if clean(stored) != stored or day >= session:
+        return None
+    extended, _ = extend([stored], record, session)
+    if not extended:
+        return None
+    with path.open('r+b') as handle:
+        handle.seek(start)
+        handle.truncate()
+        handle.write(_rows(extended))
+    return 'appended'
+
+
 def update(record: dict, root: Path, session: str, *, fetch=fetch_full, recent=None) -> str:
     """Bring one stock's file up to `session`; returns 'current', 'appended' (TradingView's bar), 'gap_filled' or
     'filled' (Yahoo's recent bars, for a gap or for a stock without a TradingView bar), 'refetched' or 'missing'.
 
     `recent(symbol, start)` returns Yahoo's session bars from `start` (fetch_recent).
     """
+    fast = append_tail(record, root, session)
+    if fast:
+        return fast
     path = symbol_csv_path(root, record['symbol'])
     stored = read_bars(path)
     bars = cleaned = session_bars(stored)

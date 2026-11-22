@@ -16,7 +16,7 @@ import shutil
 import threading
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -164,14 +164,30 @@ def stock_record(record: dict, metrics: dict, session: str, thematic: dict | Non
     }
 
 
+# Yahoo served 11 full histories a second at 8 in parallel without refusing any (2026-11-22): paced at about 8.
+YAHOO_INTERVAL = 0.12
+# A stock Yahoo had no bars for (mostly listings Dhan still carries that stopped trading) is not asked again for this long.
+YAHOO_EMPTY_DAYS = 7
+YAHOO_EMPTY = '.yahoo_empty.json'
+
+
 def update_histories(records: list[dict], directory: Path, session: str, *, interval: float, workers: int) -> dict:
     """Bring every file up to the session: TradingView's bar where it joins, else Yahoo's recent bars or a full fetch.
 
-    Yahoo and Dhan are separate servers, each paced at `interval`. A Yahoo rate limit stops only Yahoo (full fetches
-    then seed from Dhan, reported as `yahoo_throttled`); a Dhan rate limit stops every full fetch (`throttled`).
+    Yahoo and Dhan are separate servers: Dhan paced at `interval`, Yahoo at YAHOO_INTERVAL (or `interval`, if lower).
+    A Yahoo rate limit stops only Yahoo (full fetches then seed from Dhan, reported as `yahoo_throttled`); a Dhan rate
+    limit stops every full fetch (`throttled`). A stock whose recent bars Yahoo did not have is remembered in the
+    folder's YAHOO_EMPTY file and not asked again for YAHOO_EMPTY_DAYS (it travels with the folder in R2).
     """
     pacer, stopped, counts, lock = dhan.Pacer(interval), threading.Event(), {}, threading.Lock()
-    yahoo_pacer, yahoo_stopped = dhan.Pacer(interval), threading.Event()
+    yahoo_pacer, yahoo_stopped = dhan.Pacer(min(interval, YAHOO_INTERVAL)), threading.Event()
+    empty_path = directory / YAHOO_EMPTY
+    try:
+        empty = json.loads(empty_path.read_text())
+    except (OSError, ValueError):
+        empty = {}
+    cutoff = (date.fromisoformat(session) - timedelta(days=YAHOO_EMPTY_DAYS)).isoformat()
+    empty = {symbol: day for symbol, day in empty.items() if day > cutoff}
 
     def paced_post(url, payload):
         if stopped.is_set():  # no wait for a request that will not be sent
@@ -203,12 +219,21 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
             stopped.set()
             return []
 
-    def recent(symbol, start):
-        return history.fetch_recent(symbol, start, yahoo_fetch=yahoo_fetch)
+    def recent(symbol, start, *, remember):
+        if symbol in empty:
+            return []
+        bars = history.fetch_recent(symbol, start, yahoo_fetch=yahoo_fetch)
+        # Only a stock without TradingView's bar is remembered: one that is merely behind still needs its gap filled.
+        if remember and not bars and not yahoo_stopped.is_set():  # Yahoo answered, with nothing: not a rate limit
+            with lock:
+                empty[symbol] = session
+        return bars
 
     def one(record):
         try:
-            status = history.update(record, directory, session, fetch=fetch, recent=recent)
+            remember = not record.get('tradingview_bar')
+            status = history.update(record, directory, session, fetch=fetch,
+                                    recent=lambda symbol, start: recent(symbol, start, remember=remember))
         except Exception as error:  # one stock's history must not stop the market
             print(f"  history {record['symbol']}: {error}", flush=True)
             status = 'failed'
@@ -217,10 +242,12 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(one, records))
-    return {**counts, 'throttled': stopped.is_set(), 'yahoo_throttled': yahoo_stopped.is_set()}
+    directory.mkdir(parents=True, exist_ok=True)
+    empty_path.write_text(json.dumps(empty, sort_keys=True))
+    return {**counts, 'throttled': stopped.is_set(), 'yahoo_throttled': yahoo_stopped.is_set(), 'yahoo_empty': len(empty)}
 
 
-def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, workers: int = 3, limit: int | None = None,
+def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, workers: int = 8, limit: int | None = None,
           page_budget: float = 1200) -> dict:
     """Write the US root for the last closed session; returns a run report."""
     now = calendar.us_now(now)  # aware (a naive time means New York), as the page cache's times are
@@ -251,7 +278,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     # After TradingView: a company that has reported since its page was read is read again.
     # News comes from a third Dhan server (news-live) and filings from SEC EDGAR, so they are fetched beside them too.
     with ThreadPoolExecutor(max_workers=3) as side:
-        pages = side.submit(statements.refresh_pages, records, root, now, interval=interval, budget_seconds=page_budget)
+        pages = side.submit(statements.refresh_pages, records, root, now, budget_seconds=page_budget)
         articles = side.submit(news.refresh, records, root)
         sec = side.submit(filings.refresh, records, root, now)
         report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers)

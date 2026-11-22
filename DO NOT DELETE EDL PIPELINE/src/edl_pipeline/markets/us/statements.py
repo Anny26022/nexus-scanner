@@ -34,7 +34,12 @@ from . import dhan, earnings
 # Kept from each page: quarterly and annual income, balance sheets, annual and quarterly cash flow, yearly revenue and
 # profit, ratios. A page cached before a part was kept gains it at its next weekly fetch.
 KEPT = ('incomeStat_sq', 'incomeStat_sy', 'bs_s', 'cF_sy', 'cF_sq', 'rNp_s', 'CV')
-REFRESH_AFTER = timedelta(days=7)
+# TradingView carries the statement history (tradingview.quarters), so a page is needed again only after the company
+# reports (or catches up with a report); a monthly sweep catches anything else that changed.
+REFRESH_AFTER = timedelta(days=30)
+# dhan.co served 4-9 pages a second; more in parallel mostly waits longer (measured 2026-11-22).
+PAGE_INTERVAL = 0.12
+PAGE_WORKERS = 8
 # Statement amounts are already millions of dollars, this market's amount unit; India's field names say lakh or
 # crore, and the release declares the unit (see build.engine_amounts).
 
@@ -66,8 +71,8 @@ def write_page(root: Path, symbol: str, page: dict):
 
 
 def stale(page: dict | None, record: dict, now: datetime) -> bool:
-    """Whether to fetch again: never fetched, a week old, the company has reported since, or (in the month after a
-    report) the page still shows a quarter older than the one reported. A page dhan.co does not have is asked for weekly."""
+    """Whether to fetch again: never fetched, a month old, the company has reported since, or (in the month after a
+    report) the page still shows a quarter older than the one reported. A page dhan.co does not have is asked monthly."""
     if not page:
         return True
     fetched = datetime.fromisoformat(page['fetched_at'])
@@ -100,7 +105,7 @@ class _Stopped(Exception):
 
 
 def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, *, pages: dhan.StockPages | None = None,
-                  interval: float = 0.25, workers: int = 4, budget_seconds: float = 1200) -> dict:
+                  interval: float = PAGE_INTERVAL, workers: int = PAGE_WORKERS, budget_seconds: float = 1200) -> dict:
     """Fetch the stale pages, oldest need first, until the time budget; returns counts."""
     now = now or datetime.now(timezone.utc)
     deadline, pacer, stopped = time.monotonic() + budget_seconds, dhan.Pacer(interval), threading.Event()

@@ -49,6 +49,36 @@ class RecentTests(unittest.TestCase):
         self.assertEqual(counts['appended'], 1)
 
 
+class TailTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.root)
+
+    def test_the_tail_path_stores_the_same_bars_the_full_path_would(self):
+        stored = [bar('2026-11-04', 9.8), bar('2026-11-05', 9.9), {**bar('2026-11-06', 10.03), 'high': 10.1}]
+        history.write_bars(self.root / 'ACME.csv', stored)
+        record = market.HistoryTests.RECORD
+        before = history.session_bars(history.read_bars(self.root / 'ACME.csv'))  # what the full path would read
+        self.assertEqual(history.append_tail(record, self.root, '2026-11-09'), 'appended')
+        expected = self.root / 'expected.csv'
+        full, _ = history.extend(before, record, '2026-11-09')
+        history.write_bars(expected, full)
+        # Same bars (older rows keep their bytes, so a number may print as 100 rather than 100.0).
+        self.assertEqual(history.read_bars(self.root / 'ACME.csv'), history.read_bars(expected))
+        self.assertEqual(history.read_bars(self.root / 'ACME.csv')[-2]['close'], 10.0)  # yesterday's late print corrected
+
+    def test_anything_unusual_goes_to_the_full_path(self):
+        record = market.HistoryTests.RECORD
+        self.assertIsNone(history.append_tail(record, self.root, '2026-11-09'))  # no file
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-04', 10.0)])
+        self.assertIsNone(history.append_tail(record, self.root, '2026-11-09'))  # a gap
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-06', 20.0)])
+        self.assertIsNone(history.append_tail(record, self.root, '2026-11-09'))  # a split
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-06', 10.0), bar('2026-11-09', 10.8)])
+        self.assertIsNone(history.append_tail(record, self.root, '2026-11-09'))  # already current
+        self.assertIsNone(history.append_tail({**record, 'tradingview_bar': None}, self.root, '2026-11-09'))
+
+
 class TradingViewBarTests(unittest.TestCase):
     def found(self, **bar):
         stamp = utc(2026, 11, 9, 14, 30).timestamp()  # 09:30 in New York

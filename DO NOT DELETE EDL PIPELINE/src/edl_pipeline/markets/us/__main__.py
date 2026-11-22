@@ -28,8 +28,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog='python -m edl_pipeline.markets.us')
     parser.add_argument('root', type=Path, help='the US root (price history is kept between runs)')
     parser.add_argument('--limit', type=int, help='only the first N stocks by market cap (local checks)')
-    parser.add_argument('--workers', type=int, default=3)
-    parser.add_argument('--interval', type=float, default=0.25, help='seconds between history requests')
+    parser.add_argument('--workers', type=int, default=8, help='history workers (Yahoo is paced at YAHOO_INTERVAL)')
+    parser.add_argument('--interval', type=float, default=0.25, help='seconds between Dhan history requests')
     parser.add_argument('--page-budget', type=_budget, default=1200,
                         help='seconds to spend fetching stock pages; the rest wait for the next run')
     args = parser.parse_args(argv)

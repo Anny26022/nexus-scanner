@@ -24,7 +24,8 @@ def columns(*rows):
 
 
 RECENT = columns(
-    {'accessionNumber': '0000320193-26-000101', 'filingDate': '2026-11-02', 'acceptanceDateTime': '2026-11-02T21:30:23.000Z',
+    # Accepted at 20:30 in New York on 2 November, already 3 November in UTC.
+    {'accessionNumber': '0000320193-26-000101', 'filingDate': '2026-11-02', 'acceptanceDateTime': '2026-11-03T01:30:23.000Z',
      'form': '8-K', 'items': '2.02,9.01', 'primaryDocument': 'aapl-8k.htm'},
     {'accessionNumber': '0000320193-26-000100', 'filingDate': '2026-11-01', 'acceptanceDateTime': '2026-11-01T12:00:00.000Z',
      'form': '4', 'primaryDocument': 'form4.xml'},
@@ -65,17 +66,22 @@ class FilingsTests(unittest.TestCase):
         self.assertEqual(cached['filings'][0]['url'], 'https://www.sec.gov/Archives/edgar/data/320193/000032019326000101/aapl-8k.htm')
         # Not due again within a week, unless a new earnings date has been reported since.
         self.assertEqual(filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)['due'], 0)
-        self.assertEqual(filings.refresh([{'symbol': 'AAPL', 'latest_earnings_date': '2026-11-20'}], self.root, self.now, get=get, interval=0)['due'], 1)
+        reported = [{'symbol': 'AAPL', 'latest_earnings_date': '2026-11-20'}]
+        self.assertEqual(filings.refresh(reported, self.root, self.now, get=get, interval=0)['due'], 1)
+        # Once fetched for that earnings date, it is not fetched again for it (even the same day).
+        self.assertEqual(filings.refresh(reported, self.root, self.now, get=get, interval=0)['due'], 0)
 
     def test_results_releases_are_dated_in_new_york(self):
         filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)
-        self.assertEqual(filings.result_dates(self.root, 'AAPL'), ['2015-10-27', '2026-11-02'])  # 21:30 UTC is 16:30 in New York
+        self.assertEqual(filings.result_dates(self.root, 'AAPL'), ['2015-10-27', '2026-11-02'])  # New York's date, not UTC's
 
     def test_the_history_is_indias_shape_for_the_chart_announcements(self):
         import build_chart_artifacts
         filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)
         payload = filings.history([{'symbol': 'AAPL'}, {'symbol': 'NONE'}], self.root, self.now.isoformat())
         self.assertEqual([entry['symbol'] for entry in payload['records']], ['AAPL'])
+        # The shared filing-history spec's fields (artifacts.py: source, coverage, records).
+        self.assertEqual(payload['coverage'], {'companies': 1, 'filings': 3})
         self.assertEqual(payload['records'][0]['filings'][0]['caption'], '8-K: Results of operations and financial condition')
         events = build_chart_artifacts._filing_events(payload, '2026-11-20')['AAPL']
         self.assertEqual(len(events), 3)

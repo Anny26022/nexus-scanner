@@ -62,7 +62,7 @@ def refresh(records: list[dict], root: Path, *, interval: float = 0.1, workers: 
             post=requests.post) -> dict:
     """Write each stock's news file; paced, stopping at the first rate limit or the time budget. Returns counts.
 
-    A stock whose request fails gets no new file this run."""
+    A stock whose request fails keeps the file it had (carried between runs by tools/us_state.py)."""
     directory = root / DIRECTORY
     directory.mkdir(parents=True, exist_ok=True)
     pacer, stopped, lock = dhan.Pacer(interval), threading.Event(), threading.Lock()

@@ -50,11 +50,17 @@ class EarningsTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, root)
         directory = root / 'earnings_pulse'
         directory.mkdir()
+        import hashlib
+        body = gzip.compress(json.dumps(OBJECTS['https://data/q4']).encode())
+        digest = hashlib.sha256(body).hexdigest()
         (directory / 'us_index.json').write_text(json.dumps({'quarters': {'2026-Q4': {
-            'published': {'sha256': 'a' * 64, 'count': 1}, 'upcoming': {'sha256': 'b' * 64, 'count': 0}}}}))
-        (directory / f"{'a' * 64}.json.gz").write_bytes(gzip.compress(json.dumps(OBJECTS['https://data/q4']).encode()))
+            'published': {'sha256': digest, 'count': 1}, 'upcoming': {'sha256': 'b' * 64, 'count': 0}}}}))
+        (directory / f'{digest}.json.gz').write_bytes(body)
         pulse = earnings.load_pulse(root, get=mock.Mock(side_effect=AssertionError('no network')))
         self.assertEqual(len(pulse['reported']), 1)
+        # A corrupted or mis-copied object is refused, not read.
+        (directory / f'{digest}.json.gz').write_bytes(gzip.compress(b'{"records": []}'))
+        self.assertIn('sha256', earnings.load_pulse(root)['error'])
         # Not copied and no URL given: no host is assumed.
         with mock.patch.dict('os.environ', {'US_RESULTS_INDEX_URL': ''}):
             self.assertIn('error', earnings.load_pulse(root / 'missing'))
@@ -77,6 +83,7 @@ class EarningsTests(unittest.TestCase):
         self.assertEqual([(e['symbol'], e['scheduled_date'], e['timing'], e['source']) for e in events], [
             ('OTHER', '2026-11-25', 'After', 'EarningsPulse'), ('ACME', '2027-01-27', 'Pre', 'TradingView')])
         self.assertEqual(events[0]['event_type'], 'RESULTS_SCHEDULED')
+        self.assertTrue(earnings.calendar(records, pulse, '2026-11-20', 'now')['available'])  # India's calendar field
 
 
 if __name__ == '__main__':

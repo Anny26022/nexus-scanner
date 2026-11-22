@@ -2,10 +2,12 @@
 
 Each company's filing list (data.sec.gov/submissions/CIK##########.json, every filing since the 1990s with its form,
 exact acceptance time, 8-K item codes and document) is cached per stock, gzip-compressed, keeping material forms
-only: about 4 KB a stock, 25-50 MB for the market (Form 4s and banks' structured-note filings are 90% of all rows and
-are left out). It gives:
+only: about 12 KB a stock, ~75 MB for the market (measured on 59 stocks, 2026-11-22; Form 4s and banks' structured-note
+filings are 90% of all rows and are left out). It gives:
 
-- past earnings dates: 8-Ks with item 2.02 (Results of Operations) carry the exact release time (AAPL: 46 since 2015);
+- past earnings dates: 8-Ks with item 2.02 (Results of Operations) carry the exact release time (AAPL: 46 since 2015).
+  Foreign issuers report results on 6-K, which carries no item codes: telling a results 6-K from any other would need
+  its document, so their past dates stay Earnings Pulse's and TradingView's;
 - `filing_history.json.gz` in India's shape, which build_chart_artifacts publishes as each chart's announcements.
 
 SEC's fair-access policy asks automated clients to name themselves with a contact address in the User-Agent and to stay
@@ -115,9 +117,9 @@ def _due(cached: dict | None, record: dict, now: datetime) -> bool:
     if not cached:
         return True
     fetched = datetime.fromisoformat(cached['fetched_at'])
-    # A new earnings date since the fetch means a new results 8-K to read.
+    # A last earnings date other than the one the cache was fetched for means a new results 8-K to read.
     reported = record.get('latest_earnings_date')
-    return now - fetched > REFRESH_AFTER or bool(reported and reported >= fetched.astimezone(EASTERN).date().isoformat())
+    return now - fetched > REFRESH_AFTER or bool(reported and reported != cached.get('earnings_date'))
 
 
 def refresh(records: list[dict], root: Path, now: datetime | None = None, *, get=requests.get, interval: float = INTERVAL,
@@ -162,7 +164,8 @@ def refresh(records: list[dict], root: Path, now: datetime | None = None, *, get
             path = _path(root, record['symbol'])
             path.parent.mkdir(parents=True, exist_ok=True)
             temporary = path.with_suffix('.tmp')
-            temporary.write_bytes(gzip.compress(json.dumps({'cik': cik, 'fetched_at': now.isoformat(), 'filings': filings},
+            temporary.write_bytes(gzip.compress(json.dumps({'cik': cik, 'fetched_at': now.isoformat(),
+                                                            'earnings_date': record.get('latest_earnings_date'), 'filings': filings},
                                                            separators=(',', ':')).encode(), compresslevel=9, mtime=0))
             temporary.replace(path)
             outcome = 'fetched'
@@ -199,4 +202,6 @@ def history(records: list[dict], root: Path, updated_at: str) -> dict:
         entries.append({'symbol': record['symbol'], 'filings': [
             {'news_date': filing['accepted'], 'caption': caption(filing), 'descriptor': filing['form'], 'cat': filing['form'],
              'file_url': filing['url'], 'source_endpoint': 'sec_edgar'} for filing in cached['filings']]})
-    return {'source': 'SEC EDGAR submissions (material forms)', 'updated_at': updated_at, 'records': entries}
+    return {'source': 'SEC EDGAR submissions (material forms)', 'updated_at': updated_at,
+            'coverage': {'companies': len(entries), 'filings': sum(len(entry['filings']) for entry in entries)},
+            'records': entries}

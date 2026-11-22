@@ -22,8 +22,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'frontend'))
 
 PREFIX = 'pipeline-state/us'
-# Folders packed one archive each. CSVs compress well; the page and filing caches are compressed already.
-FOLDERS = {'ohlcv_data': 'w:gz', 'indices_ohlcv_data': 'w:gz', 'stock_pages': 'w', 'sec_filings': 'w'}
+# Folders packed one archive each. CSVs and news JSON compress well; the page and filing caches are compressed already.
+# News is carried so a stock whose news request fails keeps its last articles (news.refresh writes only on success).
+FOLDERS = {'ohlcv_data': 'w:gz', 'indices_ohlcv_data': 'w:gz', 'stock_pages': 'w', 'sec_filings': 'w', 'market_news': 'w:gz'}
 FILES = ('rotation_membership_ledger.json.gz', 'quarterly_financial_history.json.gz')
 PULLED = '.us-state-pulled'
 # Earnings Pulse's US archive, as the India refresh publishes it (frontend/earningspulse_history.py).

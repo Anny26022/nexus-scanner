@@ -49,21 +49,31 @@ class StateTests(unittest.TestCase):
     def root(self, name):
         return self.tmp / name
 
-    def test_a_round_trip_restores_every_folder_and_keeps_the_previous_copy(self):
+    def seed(self, root):
+        """One file in every configured folder and every carried file."""
+        contents = {}
+        for folder in us_state.FOLDERS:
+            (root / folder).mkdir(parents=True, exist_ok=True)
+            name = {'ohlcv_data': 'AAPL.csv', 'indices_ohlcv_data': 'SPY.csv', 'market_news': 'AAPL_news.json'}.get(folder, 'AAPL.json.gz')
+            contents[f'{folder}/{name}'] = f'{folder} data'.encode()
+            (root / folder / name).write_bytes(contents[f'{folder}/{name}'])
+        for name in us_state.FILES:
+            contents[name] = f'{name} data'.encode()
+            (root / name).write_bytes(contents[name])
+        return contents
+
+    def test_a_round_trip_restores_every_folder_and_file_and_keeps_the_previous_copy(self):
         first = self.root('first')
         us_state.pull(self.store, first)  # cold start: nothing in R2
-        (first / 'ohlcv_data').mkdir()
-        (first / 'ohlcv_data' / 'AAPL.csv').write_text('Date,Open\n2026-11-20,1\n')
-        (first / 'sec_filings').mkdir()
-        (first / 'sec_filings' / 'AAPL.json.gz').write_bytes(b'\x1f\x8bdata')
-        (first / 'quarterly_financial_history.json.gz').write_bytes(b'ledger')
+        contents = self.seed(first)
         us_state.push(self.store, first)
-        self.assertTrue((self.tmp / 'bucket' / us_state.PREFIX / 'ohlcv_data.tar.gz').exists())
+        stored = {p.name for p in (self.tmp / 'bucket' / us_state.PREFIX).iterdir() if p.is_file()}
+        self.assertEqual(stored, {us_state.archive_name(folder) for folder in us_state.FOLDERS} | set(us_state.FILES))
+        self.assertIn('stock_pages.tar', stored)  # the uncompressed archive for already-compressed pages
         second = self.root('second')
         us_state.pull(self.store, second)
-        self.assertEqual((second / 'ohlcv_data' / 'AAPL.csv').read_text(), 'Date,Open\n2026-11-20,1\n')
-        self.assertEqual((second / 'sec_filings' / 'AAPL.json.gz').read_bytes(), b'\x1f\x8bdata')
-        self.assertEqual((second / 'quarterly_financial_history.json.gz').read_bytes(), b'ledger')
+        for name, data in contents.items():
+            self.assertEqual((second / name).read_bytes(), data, name)
         (second / 'ohlcv_data' / 'MSFT.csv').write_text('x')
         us_state.push(self.store, second, ['ohlcv_data'])
         self.assertTrue((self.tmp / 'bucket' / us_state.PREFIX / 'previous' / 'ohlcv_data.tar.gz').exists())
@@ -74,11 +84,19 @@ class StateTests(unittest.TestCase):
         (root / 'ohlcv_data' / 'A.csv').write_text('x')
         with self.assertRaises(RuntimeError):
             us_state.push(self.store, root)
-        # An empty folder in a pulled root leaves the stored archive alone.
-        us_state.pull(self.store, root)
-        shutil.rmtree(root / 'ohlcv_data')
-        us_state.push(self.store, root)
-        self.assertFalse((self.tmp / 'bucket' / us_state.PREFIX / 'ohlcv_data.tar.gz').exists())
+
+    def test_an_empty_folder_leaves_the_stored_archive_alone(self):
+        first = self.root('first')
+        us_state.pull(self.store, first)
+        self.seed(first)
+        us_state.push(self.store, first)
+        archive = self.tmp / 'bucket' / us_state.PREFIX / 'ohlcv_data.tar.gz'
+        before = archive.read_bytes()
+        second = self.root('second')
+        us_state.pull(self.store, second)
+        shutil.rmtree(second / 'ohlcv_data')
+        us_state.push(self.store, second)
+        self.assertEqual(archive.read_bytes(), before)
 
     def test_an_archive_entry_outside_its_folder_is_refused(self):
         bad = self.tmp / 'bad.tar'
@@ -89,6 +107,7 @@ class StateTests(unittest.TestCase):
             archive.addfile(info, io.BytesIO(data))
         with self.assertRaises(RuntimeError):
             us_state.unpack(bad, self.tmp / 'target')
+        self.assertFalse((self.tmp / 'escape.txt').exists())  # nothing written outside the folder
 
     def test_the_earnings_pulse_archive_is_copied_by_hash(self):
         bucket = self.tmp / 'bucket'

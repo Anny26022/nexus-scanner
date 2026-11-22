@@ -11,6 +11,7 @@ the next morning), 2026-11-22. Older reports are in neither: SEC EDGAR's 8-K res
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import os
 from datetime import date, timedelta
@@ -22,9 +23,9 @@ import requests
 # and the objects its quarters name, by sha256. No host is assumed; a local run can set US_RESULTS_INDEX_URL instead.
 PULSE_DIRECTORY = 'earnings_pulse'
 CALENDAR = 'earnings_calendar.json'
-# A quarter's report is filed within this many days of its end (10-Q 40-45, 10-K 60-90); a later date belongs to the
-# next quarter.
-REPORT_WINDOW = timedelta(days=95)
+# A quarter's report is filed within this many days of its end: the same window as the statements' trust check
+# (statements.REPORT_WINDOW_DAYS; 10-Q 40-45, 10-K 60-90, a few days more when late).
+REPORT_WINDOW = timedelta(days=100)
 TIMING = {-1: 'Pre', 1: 'After'}  # TradingView's earnings_release_time; 0 is not yet known
 
 
@@ -37,10 +38,13 @@ def _json(url: str, get=requests.get):
 
 def _local(directory: Path):
     """Read the copied archive: the index, then each object by its sha256."""
-    def read(name):
+    def read(name, digest=None):
         raw = (directory / name).read_bytes()
+        # Objects are named by the sha256 of their compressed bytes (earningspulse_history.py checks it the same way).
+        if digest and hashlib.sha256(raw).hexdigest() != digest:
+            raise ValueError(f'Earnings Pulse object {name} does not match its sha256')
         return json.loads(gzip.decompress(raw) if raw[:2] == b'\x1f\x8b' else raw)
-    return read('us_index.json'), lambda item: read(f"{item['sha256']}.json.gz")
+    return read('us_index.json'), lambda item: read(f"{item['sha256']}.json.gz", item['sha256'])
 
 
 def load_pulse(root: Path | None = None, *, index_url: str | None = None, get=requests.get) -> dict:
@@ -117,7 +121,7 @@ def calendar(records: list[dict], pulse: dict, session: str, fetched_at: str) ->
         if symbol not in events and day and day >= session:
             events[symbol] = {'scheduled_date': day, 'timing': TIMING.get(record.get('next_earnings_time')),
                               'source': 'TradingView'}
-    return {'source': 'Earnings Pulse US results, TradingView next earnings dates', 'fetched_at': fetched_at,
+    return {'source': 'Earnings Pulse US results, TradingView next earnings dates', 'fetched_at': fetched_at, 'available': True,
             'events': sorted(({'symbol': symbol, 'company_name': symbols[symbol].get('name'), 'event_type': 'RESULTS_SCHEDULED',
                                **event} for symbol, event in events.items()),
                              key=lambda event: (event['scheduled_date'], event['symbol']))}

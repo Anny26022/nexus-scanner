@@ -227,8 +227,11 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
         try:
             # Paced per request: an unknown listing exchange tries NYSE, then NASDAQ.
             return history.fetch_full(symbol, security_id, exchange, post=paced_post, yahoo_fetch=yahoo_fetch)
-        except dhan.Throttled:
-            stopped.set()
+        except dhan.Throttled as error:
+            with lock:  # the first refusal says why (403 or 429, and the host); the rest are not sent
+                if not stopped.is_set():
+                    print(f'  Dhan history refused at {symbol}: {error}', flush=True)
+                stopped.set()
             return []
 
     def recent(symbol, start, *, remember):

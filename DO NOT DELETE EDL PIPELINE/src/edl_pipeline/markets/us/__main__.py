@@ -69,8 +69,9 @@ def main(argv=None):
     # Dhan is the stocks' last resort, for the few Yahoo lacks (SPAC rights and CVRs, 31 on 2026-11-22), and it refuses
     # GitHub's runners. Those stocks stay out until a source has them; a wide failure fails the share check above.
     if history.get('throttled'):
-        print(f"::warning::Dhan refused the stock-history fallback; {history.get('missing', 0)} stocks have no history.",
-              flush=True)
+        # `missing` also counts stocks that kept an earlier file (behind the session), so it is not "no history".
+        print(f"::warning::Dhan refused the stock-history fallback; {history.get('missing', 0)} stock histories are missing "
+              "or behind the session.", flush=True)
     if history.get('yahoo_throttled') or benchmarks.get('yahoo_throttled'):
         print('::warning::Yahoo rate limited the history; the rest came from Dhan (new stocks seeded from 2021 onwards).',
               flush=True)

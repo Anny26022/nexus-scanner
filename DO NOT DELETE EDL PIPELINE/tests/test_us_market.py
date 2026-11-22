@@ -754,14 +754,14 @@ class YahooTests(unittest.TestCase):
         self.addCleanup(lambda: __import__('shutil').rmtree(root))
         records = [{**HistoryTests.RECORD, 'symbol': symbol} for symbol in ('AAA', 'BBB')]
         with mock.patch.object(build.requests, 'get', mock.Mock(return_value=mock.Mock(status_code=404))), \
-             mock.patch.object(dhan, 'post', mock.Mock(side_effect=dhan.Throttled('429'))) as dhan_post, \
+             mock.patch.object(dhan, 'post', mock.Mock(side_effect=dhan.Throttled(f'Dhan answered 429 for {dhan.HISTORY_URL}'))) as dhan_post, \
              mock.patch('builtins.print') as printed:
             counts = build.update_histories(records, root, '2026-11-09', interval=0, workers=1)
         self.assertTrue(counts['throttled'])
         self.assertEqual(dhan_post.call_count, 1)
         # The refusal is printed once, with Dhan's answer, so a run's log says why.
         self.assertEqual([call.args[0] for call in printed.call_args_list if 'refused' in call.args[0]],
-                         ['  Dhan history refused at AAA: 429'])
+                         [f'  Dhan history refused at AAA: Dhan answered 429 for {dhan.HISTORY_URL}'])
 
     def test_a_worker_waiting_its_turn_does_not_post_after_the_limit(self):
         # Two workers: the second is already inside the Dhan pacer's wait (past fetch()'s early check) when the first

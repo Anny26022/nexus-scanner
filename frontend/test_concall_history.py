@@ -38,9 +38,10 @@ def row(slug, symbol='TEST', date='05 November 2026'):
                 live_data={'ltp': 1})
 
 
-def detail(slug, summary='## Key Takeaways'):
+def detail(slug, summary=None):
+    # Each call has its own summary; one shared by two companies is dropped.
     return dict({field: 'private' for field in PRIVATE_FIELDS}, slug_id=slug, concall_date=None,
-                concall_time='16:00', markdown_summary=summary,
+                concall_time='16:00', markdown_summary=f'## Key Takeaways ({slug})' if summary is None else summary,
                 transcript_with_names=[{'speakername': 'CEO', 'text': 'hi'}], forensic_flags={'flags': []})
 
 
@@ -83,7 +84,7 @@ class ConcallHistoryTests(unittest.TestCase):
         entry = self.index()['calls']['a-q2-fy27']
         self.assertEqual((entry['symbol'], entry['date'], entry['time']), ('A', '2026-11-05', '16:00'))
         stored = self.store.load(entry['object'])['call']
-        self.assertEqual(stored['markdown_summary'], '## Key Takeaways')
+        self.assertEqual(stored['markdown_summary'], '## Key Takeaways (a-q2-fy27)')
         self.assertEqual(PRIVATE_FIELDS & set(stored), set())
         self.assertEqual(PRIVATE_FIELDS & set(entry), set())
 
@@ -322,12 +323,32 @@ class ConcallHistoryTests(unittest.TestCase):
         self.assertEqual(entry['superseded'], [first])
         self.assertEqual(provider.fetched, ['honasa-q1-fy27'])
 
-    def test_a_summary_stored_for_two_calls_is_reported(self):
-        shared = {'bhartiartl-q2-fy27': detail('bhartiartl-q2-fy27', summary='## Hexacom'),
-                  'bhartihexa-q2-fy27': detail('bhartihexa-q2-fy27', summary='## Hexacom')}
-        report = self.run_refresh(Provider([[row('bhartiartl-q2-fy27', 'BHARTIARTL'), row('bhartihexa-q2-fy27', 'BHARTIHEXA'),
-                                             row('tcs-q2-fy27', 'TCS')]], shared))
-        self.assertEqual(list(report['duplicates'].values()), [['bhartiartl-q2-fy27', 'bhartihexa-q2-fy27']])
+    def test_a_summary_filed_under_two_companies_is_dropped_from_both(self):
+        hexacom = {'bhartiartl-q2-fy27': detail('bhartiartl-q2-fy27', summary='## Hexacom'),
+                   'bhartihexa-q2-fy27': detail('bhartihexa-q2-fy27', summary='## Hexacom')}
+        listed = [[row('bhartiartl-q2-fy27', 'BHARTIARTL', date='20 November 2026'),
+                   row('bhartihexa-q2-fy27', 'BHARTIHEXA', date='20 November 2026'), row('tcs-q2-fy27', 'TCS')]]
+        report = self.run_refresh(Provider(listed, hexacom))
+        calls = self.index()['calls']
+        self.assertEqual([(calls[s]['object'], calls[s]['status']) for s in ('bhartiartl-q2-fy27', 'bhartihexa-q2-fy27')],
+                         [(None, 'summary of another company')] * 2)
+        self.assertTrue(calls['tcs-q2-fy27']['object'])
+        self.assertEqual(report['duplicates'], {})
+        self.assertEqual(report['failures']['bhartihexa-q2-fy27'], 'summary also stored for bhartiartl-q2-fy27')
+        # A retry that still gets the shared summary stores nothing; once the provider fixes one, both come back.
+        uploads = len(self.store.objects)
+        self.refresh_on(Provider(listed, hexacom), '2026-11-22T16:30:00+05:30')
+        self.assertEqual(len(self.store.objects), uploads)
+        fixed = dict(hexacom, **{'bhartiartl-q2-fy27': detail('bhartiartl-q2-fy27', summary='## Airtel')})
+        self.refresh_on(Provider(listed, fixed), '2026-11-23T16:30:00+05:30')
+        self.refresh_on(Provider(listed, fixed), '2026-11-24T16:30:00+05:30')
+        calls = self.index()['calls']
+        self.assertTrue(calls['bhartiartl-q2-fy27']['object'] and calls['bhartihexa-q2-fy27']['object'])
+
+    def test_one_companys_summary_under_two_of_its_slugs_is_only_reported(self):
+        same = {'a-q2-fy27': detail('a-q2-fy27', summary='## A'), 'a-q2-fy27-2': detail('a-q2-fy27-2', summary='## A')}
+        report = self.run_refresh(Provider([[row('a-q2-fy27', 'A'), row('a-q2-fy27-2', 'A')]], same))
+        self.assertEqual(list(report['duplicates'].values()), [['a-q2-fy27', 'a-q2-fy27-2']])
 
     def test_a_failed_or_emptied_recheck_keeps_the_stored_version(self):
         self.refresh_on(Provider([[row('a', date='20 November 2026')]]), '2026-11-21T16:30:00+05:30')

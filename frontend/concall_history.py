@@ -13,7 +13,8 @@ naming its replacement is live (a run pulls the live index before it starts).
 
 The provider also answers an older slug (honasa-q1-fy27) with the company's newest call, so a detail whose quarter is
 not the listed one is not stored, and a stored call whose date is not the listed date is dropped and fetched again.
-Summaries stored for more than one call are reported.
+A summary held by more than one company's call is dropped from all of them (the provider has filed one company's
+summary under another's); other summaries stored for more than one call are reported.
 
 Upcoming calls and today's (with their live status) are rewritten to concalls/upcoming.json on every run.
 
@@ -56,6 +57,7 @@ RECHECK_WEEKLY_DAYS = 7
 # A call still without a summary after this long is retried only in the weekly rotation.
 PENDING_WEEKLY_DAYS = 90
 RECHECK_ROTATION = 8
+SHARED = 'summary of another company'
 # Fetched calls are uploaded and the index rewritten after each batch, so a run cut short keeps its progress.
 BATCH = 250
 # Far beyond the ~26 pages the provider has; stops a runaway walk if it keeps answering has_next.
@@ -148,6 +150,13 @@ def pack(folder, store, slug, detail, current=None):
 
 def summary_digest(detail):
     return hashlib.sha256(str(detail.get('markdown_summary') or '').strip().encode()).hexdigest()[:16]
+
+
+def shared_with(calls, slug, digest):
+    """Other companies' calls that hold this summary (stored, or kept pending for sharing it)."""
+    symbol = calls[slug].get('symbol')
+    return sorted(other for other, entry in calls.items()
+                  if digest and entry.get('summary') == digest and entry.get('symbol') != symbol)
 
 
 def duplicate_summaries(calls):
@@ -280,6 +289,11 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
                 for slug, detail, status, error in pool.map(one, wanted[start:start + BATCH]):
                     entry = calls[slug]
                     current = entry.get('object')
+                    if detail is not None and not current and shared_with(calls, slug, summary_digest(detail)):
+                        # Kept with its digest, so the other company's call is dropped below and both stay out.
+                        entry['summary'] = summary_digest(detail)
+                        detail, status = None, SHARED
+                        error = f"summary also stored for {', '.join(shared_with(calls, slug, entry['summary']))}"
                     if current:
                         report['rechecked'] += 1
                         if detail is None:
@@ -316,6 +330,17 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
             if progress:
                 progress(report)
 
+    # The provider sometimes files one company's summary under another's call; which one it belongs to is
+    # unknown, so every call holding it is dropped. They are retried as pending calls and come back once it is fixed.
+    for slug in [slug for slug, entry in calls.items() if entry.get('object')
+                 and shared_with(calls, slug, entry.get('summary'))]:
+        entry = calls[slug]
+        entry['superseded'] = [*entry.get('superseded', ()), entry['object']['sha256']]
+        entry['object'], entry['status'], entry['attempts'] = None, SHARED, entry.get('attempts') or 1
+        for key in ('checked', 'updated'):
+            entry.pop(key, None)
+        report['dropped'] += 1
+        report['failures'][slug] = f"summary also stored for {', '.join(shared_with(calls, slug, entry['summary']))}"
     report['duplicates'] = duplicate_summaries(calls)
     if calls != previous['calls']:
         write_index(output, calls, checked_at)

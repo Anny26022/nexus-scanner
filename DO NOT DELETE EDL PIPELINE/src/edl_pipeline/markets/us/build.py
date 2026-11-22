@@ -237,7 +237,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     report = {'session': session, 'screenable': len(records), 'listed': len(stock_rows)}
     report['tradingview'] = tradingview.enrich(records, session)
     # Past report dates and the upcoming calendar (earnings.py); without Earnings Pulse, TradingView's alone.
-    pulse = earnings.load_pulse()
+    pulse = earnings.load_pulse(root)
     report['earnings'] = {**earnings.report_dates(records, pulse), **({'error': pulse['error']} if pulse.get('error') else {})}
     largest = sorted((record for record in records if record.get('market_cap')), key=lambda record: -record['market_cap'])[:COVERAGE_TOP]
     covered = sum('tradingview_snapshot' in record for record in largest)

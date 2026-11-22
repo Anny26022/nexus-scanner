@@ -31,7 +31,7 @@ def get(url, **kwargs):
 
 class EarningsTests(unittest.TestCase):
     def test_reports_come_from_the_archive_and_tradingviews_last_date(self):
-        pulse = earnings.load_pulse('https://index', get=get)
+        pulse = earnings.load_pulse(index_url='https://index', get=get)
         self.assertEqual((len(pulse['reported']), len(pulse['upcoming'])), (3, 1))
         records = [{'symbol': 'ACME', 'latest_earnings_date': '2026-10-27'}, {'symbol': 'NEW', 'latest_earnings_date': '2026-11-05'}]
         self.assertEqual(earnings.report_dates(records, pulse)['records_with_dates'], 2)
@@ -41,8 +41,23 @@ class EarningsTests(unittest.TestCase):
         self.assertEqual(earnings.reported_on(records[0], date(2026, 9, 30)), '2026-10-27')
         self.assertIsNone(earnings.reported_on(records[0], date(2026, 3, 31)))
         # An unreachable archive leaves TradingView's dates only.
-        failed = earnings.load_pulse('https://index', get=mock.Mock(side_effect=OSError('down')))
+        failed = earnings.load_pulse(index_url='https://index', get=mock.Mock(side_effect=OSError('down')))
         self.assertIn('error', failed)
+
+    def test_the_archive_is_read_from_the_root_where_the_workflow_copied_it(self):
+        import tempfile, shutil
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root)
+        directory = root / 'earnings_pulse'
+        directory.mkdir()
+        (directory / 'us_index.json').write_text(json.dumps({'quarters': {'2026-Q4': {
+            'published': {'sha256': 'a' * 64, 'count': 1}, 'upcoming': {'sha256': 'b' * 64, 'count': 0}}}}))
+        (directory / f"{'a' * 64}.json.gz").write_bytes(gzip.compress(json.dumps(OBJECTS['https://data/q4']).encode()))
+        pulse = earnings.load_pulse(root, get=mock.Mock(side_effect=AssertionError('no network')))
+        self.assertEqual(len(pulse['reported']), 1)
+        # Not copied and no URL given: no host is assumed.
+        with mock.patch.dict('os.environ', {'US_RESULTS_INDEX_URL': ''}):
+            self.assertIn('error', earnings.load_pulse(root / 'missing'))
 
     def test_ledger_rows_carry_reported_dates_for_every_quarter_the_archive_knows(self):
         record = {'symbol': 'ACME', 'earnings_dates': ['2026-04-29', '2026-07-28', '2026-10-27']}
@@ -54,7 +69,7 @@ class EarningsTests(unittest.TestCase):
             ('2026-09-30', '2026-10-27', 'reported')])
 
     def test_the_calendar_prefers_earnings_pulse_and_fills_from_tradingview(self):
-        pulse = earnings.load_pulse('https://index', get=get)
+        pulse = earnings.load_pulse(index_url='https://index', get=get)
         records = [{'symbol': 'OTHER', 'name': 'Other', 'next_earnings_date': '2026-11-26', 'next_earnings_time': 1},
                    {'symbol': 'ACME', 'name': 'Acme', 'next_earnings_date': '2027-01-27', 'next_earnings_time': -1},
                    {'symbol': 'PAST', 'next_earnings_date': '2026-11-01'}]

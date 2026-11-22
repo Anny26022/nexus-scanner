@@ -50,19 +50,29 @@ jobs:
           PYTHONPATH=src:. python -m unittest tests.test_us_market tests.test_us_history tests.test_us_tradingview tests.test_us_statement_history tests.test_us_news tests.test_us_earnings tests.test_us_filings -v
           python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
 
-      # Price history, stock pages and the rotation membership ledger are the state carried between runs; losing them
-      # costs a slow re-seed (and the ledger's dated memberships), not the release.
-      - name: Restore US price history
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ${{ env.US_ROOT }}/ohlcv_data
-            ${{ env.US_ROOT }}/indices_ohlcv_data
-            ${{ env.US_ROOT }}/stock_pages
-            ${{ env.US_ROOT }}/sec_filings
-            ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
-          key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: us-history-v1-
+      - name: Install R2 uploader
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
+      # Price history, stock pages, SEC filings and the ledgers are the state carried between runs, kept in private R2
+      # as India's is (tools/us_state.py), not in the Actions cache India's caches share. A failed restore stops the run.
+      - name: Pull US state from R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python tools/us_state.py pull
+
+      # Earnings Pulse's US archive, which the India refresh publishes, copied from R2 for the build's earnings dates.
+      - name: Copy the Earnings Pulse US archive from R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python tools/us_state.py pulse
 
       - name: Build the US root
         id: build
@@ -81,40 +91,23 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
           exit "$status"
 
-      # Saved before publication too, under a key of its own: a run that times out or is cancelled during the R2
-      # upload ends before any later step, and would otherwise lose every history this run fetched.
-      - name: Save US price history before publication
+      # Pushed before publication too: a run that times out or is cancelled during the R2 upload ends before any later
+      # step, and would otherwise lose every history this run fetched. The current R2 copy moves to previous/ first.
+      - name: Push US state to R2
         if: always() && steps.build.outcome != 'skipped'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ env.US_ROOT }}/ohlcv_data
-            ${{ env.US_ROOT }}/indices_ohlcv_data
-            ${{ env.US_ROOT }}/stock_pages
-            ${{ env.US_ROOT }}/sec_filings
-            ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
-          key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}-built
-
-      # The quarterly ledger carries reported earnings dates for the historical backfill
-      # (us_backfill_historical_snapshots.yml). Its own key, so the price-history cache's paths stay unchanged.
-      - name: Save US quarterly ledger
-        if: steps.build.outputs.ready == 'true'
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.US_ROOT }}/quarterly_financial_history.json.gz
-          key: us-ledger-v1-${{ github.run_id }}-${{ github.run_attempt }}
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python tools/us_state.py push
 
       - name: Fetch US ETF snapshot
         if: steps.build.outputs.ready == 'true'
         continue-on-error: true
         run: |
           PYTHONPATH="DO NOT DELETE EDL PIPELINE/src:DO NOT DELETE EDL PIPELINE" python "DO NOT DELETE EDL PIPELINE/fetch_etf_snapshot.py" --market us --output "$US_ROOT/etf_snapshot.json"
-
-      - name: Install R2 uploader
-        if: steps.build.outputs.ready == 'true'
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
 
       - name: Publish the US release
         id: publish
@@ -130,17 +123,13 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: python frontend/publish_us.py
 
-      # Saved again after publication, so the next run restores the rotation ledger the publish step writes (the newest
-      # key under the restore prefix wins). Without a publish the snapshot above already holds everything.
-      - name: Save US price history
+      # The publish step advances the rotation ledger; only that file is pushed again.
+      - name: Push the rotation ledger to R2
         if: always() && (steps.publish.outcome == 'success' || steps.publish.outcome == 'failure')
-        continue-on-error: true
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ env.US_ROOT }}/ohlcv_data
-            ${{ env.US_ROOT }}/indices_ohlcv_data
-            ${{ env.US_ROOT }}/stock_pages
-            ${{ env.US_ROOT }}/sec_filings
-            ${{ env.US_ROOT }}/rotation_membership_ledger.json.gz
-          key: us-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python tools/us_state.py push rotation_membership_ledger.json.gz

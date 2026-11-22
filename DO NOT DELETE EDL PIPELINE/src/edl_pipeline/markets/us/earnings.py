@@ -14,12 +14,13 @@ import gzip
 import json
 import os
 from datetime import date, timedelta
+from pathlib import Path
 
 import requests
 
-# The published Earnings Pulse US index; its quarters name content-addressed objects on the public data host.
-PULSE_INDEX = os.environ.get('US_RESULTS_INDEX_URL',
-                             'https://nexus-scanner.aniketmahato26.workers.dev/data/results/us_index.json')
+# Where the US workflow puts the Earnings Pulse US archive, copied from R2 (tools/us_state.py pulse): us_index.json
+# and the objects its quarters name, by sha256. No host is assumed; a local run can set US_RESULTS_INDEX_URL instead.
+PULSE_DIRECTORY = 'earnings_pulse'
 CALENDAR = 'earnings_calendar.json'
 # A quarter's report is filed within this many days of its end (10-Q 40-45, 10-K 60-90); a later date belongs to the
 # next quarter.
@@ -34,18 +35,35 @@ def _json(url: str, get=requests.get):
     return json.loads(gzip.decompress(raw) if raw[:2] == b'\x1f\x8b' else raw)
 
 
-def load_pulse(index_url: str = PULSE_INDEX, *, get=requests.get) -> dict:
-    """Earnings Pulse's archived US reports: {'reported': [...], 'upcoming': [...]} (raw rows), or an `error`."""
+def _local(directory: Path):
+    """Read the copied archive: the index, then each object by its sha256."""
+    def read(name):
+        raw = (directory / name).read_bytes()
+        return json.loads(gzip.decompress(raw) if raw[:2] == b'\x1f\x8b' else raw)
+    return read('us_index.json'), lambda item: read(f"{item['sha256']}.json.gz")
+
+
+def load_pulse(root: Path | None = None, *, index_url: str | None = None, get=requests.get) -> dict:
+    """Earnings Pulse's archived US reports: {'reported': [...], 'upcoming': [...]} (raw rows), or an `error`.
+
+    From root/earnings_pulse when the workflow copied it there, else from `index_url` (US_RESULTS_INDEX_URL)."""
+    index_url = index_url or os.environ.get('US_RESULTS_INDEX_URL')
     try:
-        quarters = (_json(index_url, get) or {}).get('quarters') or {}
+        directory = root / PULSE_DIRECTORY if root else None
+        if directory and (directory / 'us_index.json').exists():
+            index, load = _local(directory)
+        elif index_url:
+            index, load = _json(index_url, get), lambda item: _json(item['url'], get)
+        else:
+            return {'reported': [], 'upcoming': [], 'error': 'no Earnings Pulse archive (not copied from R2)'}
         result = {'reported': [], 'upcoming': []}
-        for quarter in quarters.values():
+        for quarter in ((index or {}).get('quarters') or {}).values():
             for part, name in (('published', 'reported'), ('upcoming', 'upcoming')):
                 item = quarter.get(part) or {}
-                if item.get('url') and item.get('count'):
-                    result[name].extend((_json(item['url'], get) or {}).get('records') or [])
+                if item.get('count'):
+                    result[name].extend((load(item) or {}).get('records') or [])
         return result
-    except (requests.RequestException, ValueError, OSError, AttributeError) as error:
+    except (requests.RequestException, ValueError, OSError, AttributeError, KeyError) as error:
         return {'reported': [], 'upcoming': [], 'error': str(error) or type(error).__name__}
 
 

@@ -1,17 +1,17 @@
 {
   "source": "Tijori Finance public company pages",
-  "exportedAt": "2026-11-15T11:54:33.340884+00:00",
-  "universeSessionDate": "2026-11-13",
-  "universeRevision": "9e4f6c9323bb7a1288c1be6f7cbe93e539d476482db98d3096c9ac7b7119f2d9",
-  "totalSymbols": 2633,
+  "exportedAt": "2026-11-22T04:02:49.247672+00:00",
+  "universeSessionDate": "2026-11-20",
+  "universeRevision": "6b40d689503190c8b59b120d9f390bed17ad89e8480f22714029b9bafe1e42e6",
+  "totalSymbols": 2631,
   "counts": {
-    "available": 2449,
+    "available": 2446,
     "no_overview": 181,
-    "unmapped": 3
+    "unmapped": 4
   },
-  "attemptedSymbols": 2633,
-  "withBothSections": 2442,
-  "refreshErrors": 2,
+  "attemptedSymbols": 2631,
+  "withBothSections": 2440,
+  "refreshErrors": 0,
   "discoveryError": null,
   "complete": false,
   "note": "Source symbols are verified against the NSE list; as_of dates belong to Tijori. Narrative claims have not been independently verified."

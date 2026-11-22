@@ -29,7 +29,8 @@ EXCHANGES = ('NYSE', 'NASDAQ', 'AMEX', 'CBOE')
 TYPES = ('stock', 'dr', 'fund')
 # Columns US screening reads beyond the shared metric list. The statement columns are a fallback: Dhan's stock page
 # comes first when it can be trusted (statements.py), as Dhan does for India.
-EXTRA = {'earnings_release_date': 'last_earnings', 'ipo_offer_date': 'ipo_date', 'first_bar_time': 'first_trade',
+EXTRA = {'earnings_release_date': 'last_earnings', 'earnings_release_next_date': 'next_earnings',
+         'earnings_release_next_time': 'next_earnings_time', 'ipo_offer_date': 'ipo_date', 'first_bar_time': 'first_trade',
          'indexes': 'indexes',
          'float_shares_percent_current': 'free_float_percent', 'dividends_yield_current': 'dividend_yield_percent',
          'ex_dividend_date_recent': 'last_ex_dividend',
@@ -291,6 +292,9 @@ def canonical(found: dict, record: dict, session: str) -> dict:
         # As India's (enrich_published_fields.py): the positive distance below the high, which the filter compares.
         'percent_from_ath': (1 - close / high) * 100 if current and high and close else None,
         'latest_earnings_date': last_earnings if last_earnings and last_earnings <= session else None,
+        # The next report's date (its time of day: -1 before the open, 1 after the close, 0 not yet known).
+        'next_earnings_date': _eastern_date(found.get('next_earnings')),
+        'next_earnings_time': _number(found.get('next_earnings_time')),
         # The listing (IPO) date; the first traded day where TradingView has none.
         'listing_date': _utc_date(found['ipo_date']) or _utc_date(found['first_trade']),
         'index_memberships': memberships(found['indexes']),

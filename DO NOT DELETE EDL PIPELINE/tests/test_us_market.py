@@ -418,7 +418,7 @@ class TradingViewTests(unittest.TestCase):
         above = tradingview.snapshots(self.response(self.row('NYSE:KO', 'US1912161007', **{'High.All': 99.0})), '')
         self.assertEqual(tradingview.canonical(above['US1912161007'], {'close': 95.0, 'high_52w': 97.0}, '2026-11-09')['all_time_high'], 99.0)
         self.assertEqual(values['latest_earnings_date'], '2026-10-27')
-        self.assertNotIn('next_earnings_date', values)
+        self.assertIsNone(values['next_earnings_date'])  # TradingView has none in this row
         self.assertEqual((values['free_float_percent'], values['dividend_yield_percent']), (99.3, 2.2))
         # A stale TradingView row (another session) gives no all-time high.
         self.assertIsNone(tradingview.canonical(found['US1912161007'], {'close': 95.0}, '2026-11-10')['percent_from_ath'])

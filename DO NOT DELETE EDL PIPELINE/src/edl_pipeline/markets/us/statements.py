@@ -29,7 +29,7 @@ from ohlcv_utils import symbol_csv_path
 
 from edl_pipeline.scanner.financials import STATEMENT_METRICS
 
-from . import dhan
+from . import dhan, earnings
 
 # Kept from each page: quarterly and annual income, balance sheets, annual and quarterly cash flow, yearly revenue and
 # profit, ratios. A page cached before a part was kept gains it at its next weekly fetch.
@@ -430,12 +430,13 @@ def agrees_with_tradingview(page: dict, found: dict) -> bool:
 def _ledger_rows(record: dict, quarters: list[dict], year_end: str, source: str) -> list[dict]:
     """India's quarterly rows from quarters newest first ({'period': 'yyyymm', 'REVENUE': ..., ...}), oldest first."""
     rows = []
-    reported = record.get('latest_earnings_date')
-    for index, quarter in enumerate(quarters):
+    for quarter in quarters:
         end = _quarter_end(quarter['period'])
-        latest_report = index == 0 and reported and date.fromisoformat(reported) > end
+        # The quarter's known report date (Earnings Pulse, TradingView's last; earnings.report_dates), else an estimate.
+        known = earnings.reported_on(record, end)
+        latest_report = bool(known)
         days = ESTIMATED_ANNUAL_FILING_DAYS if quarter['period'][4:] == year_end else ESTIMATED_FILING_DAYS
-        filing = date.fromisoformat(reported) if latest_report else end + timedelta(days=days)
+        filing = date.fromisoformat(known) if known else end + timedelta(days=days)
         rows.append({
             'symbol': record['symbol'], 'isin': record.get('isin'), 'quarter_end': end.isoformat(),
             'period_end': end.isoformat(),

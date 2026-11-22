@@ -234,9 +234,11 @@ def refuse_older_session(previous, session):
         raise RuntimeError(f'Refusing to publish US session {session} over the current {previous["sessionDate"]} release')
 
 
-def manifest_for(revision, session, total, *, market_overview=False, etf_snapshot=False, financial_history=False):
+def manifest_for(revision, session, total, *, market_overview=False, etf_snapshot=False, financial_history=False,
+                 earnings_calendar=False):
     base = f'/data/revisions/{revision}'
     return {'revision': revision, 'sessionDate': session, 'publishedAt': f'{session}T00:00:00Z', 'schemaVersion': 4,
+            **({'earningsCalendarUrl': f'{base}/earnings-calendar.json.gz'} if earnings_calendar else {}),
             **({'marketOverviewUrl': f'{base}/market-overview.json.gz'} if market_overview else {}),
             **({'etfDatasetUrl': f'{base}/etfs.json.gz'} if etf_snapshot else {}),
             **({'financialHistoryUrl': f'{base}/financial-history.json.gz',
@@ -504,8 +506,15 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     if overview is not None:
         (generation / 'market-overview.json.gz').write_bytes(gzip.compress(
             json.dumps(overview, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
+    # The upcoming results, as India's earnings-calendar.json (edl_pipeline.markets.us.earnings builds it).
+    calendar_bytes = source_bytes.get('earnings_calendar.json.gz')
+    if calendar_bytes is not None:
+        calendar = public(json.loads(gzip.decompress(calendar_bytes)))
+        (generation / 'earnings-calendar.json.gz').write_bytes(gzip.compress(
+            json.dumps(calendar, separators=(',', ':'), allow_nan=False).encode(), compresslevel=9, mtime=0))
     manifest = manifest_for(revision, session, len(rows), market_overview=overview is not None,
-                            etf_snapshot=etf_bytes is not None, financial_history=bool(histories))
+                            etf_snapshot=etf_bytes is not None, financial_history=bool(histories),
+                            earnings_calendar=calendar_bytes is not None)
     if taxonomy:
         taxonomy_bytes = json.dumps(taxonomy, separators=(',', ':'), allow_nan=False).encode()
         (generation / 'theme-classification.json.gz').write_bytes(gzip.compress(taxonomy_bytes, mtime=0))

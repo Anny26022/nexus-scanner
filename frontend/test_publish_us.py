@@ -259,6 +259,11 @@ class PublishUsTests(unittest.TestCase):
             self.assertFalse((output / 'snapshots').exists())
             self.assertEqual(len(json.loads((output / 'us/sessions.json').read_text())['sessions']), 1)
 
+    def test_the_manifest_names_the_earnings_calendar_only_when_published(self):
+        with_calendar = publish_us.manifest_for('a' * 64, '2026-11-20', 10, earnings_calendar=True)
+        self.assertEqual(with_calendar['earningsCalendarUrl'], f"/data/revisions/{'a' * 64}/earnings-calendar.json.gz")
+        self.assertNotIn('earningsCalendarUrl', publish_us.manifest_for('a' * 64, '2026-11-20', 10))
+
     def test_us_ipo_record_structure_and_lockup_calculation(self):
         from datetime import date, timedelta
         sess_date = date.fromisoformat('2026-11-09')

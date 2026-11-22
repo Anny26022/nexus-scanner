@@ -33,7 +33,7 @@ from ohlcv_utils import symbol_csv_path
 from pipeline_utils import resource_path
 
 from .. import UNITED_STATES
-from . import calendar, dhan, fields, finviz, history, news, statements, tradingview, yahoo
+from . import calendar, dhan, earnings, fields, finviz, history, news, statements, tradingview, yahoo
 from .universe import SCREENABLE, security_type
 
 # Benchmark ETFs stand in for indices; SPY is the market benchmark for RS and breadth.
@@ -48,7 +48,8 @@ METRIC_KEYS = ('as_of_date', 'gap_percent', 'relative_volume_20', 'atr14', 'atr_
                'breakout_above_50d_high', 'breakout_above_52w_high', 'is_inside_day', 'sma20', 'sma50', 'sma200')
 # Read while building, not by the release.
 STATEMENT_HISTORY = 'statement_history.json'
-BUILD_ONLY = frozenset({'slug', 'provider_last_trade_ist', 'tradingview_bar', 'tradingview_previous_close', 'tradingview_quarters'})
+BUILD_ONLY = frozenset({'slug', 'provider_last_trade_ist', 'tradingview_bar', 'tradingview_previous_close', 'tradingview_quarters',
+                        'earnings_dates', 'next_earnings_time'})
 # TradingView must cover this share of the largest stocks (by market cap) for the release to publish; on 2026-11-22 it
 # covered 99% of the top 3,000 (ISIN or ticker). The rest of the market fills from Yahoo, up to MAX_FALLBACKS stocks.
 COVERAGE_TOP = 3000
@@ -235,6 +236,9 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
 
     report = {'session': session, 'screenable': len(records), 'listed': len(stock_rows)}
     report['tradingview'] = tradingview.enrich(records, session)
+    # Past report dates and the upcoming calendar (earnings.py); without Earnings Pulse, TradingView's alone.
+    pulse = earnings.load_pulse()
+    report['earnings'] = {**earnings.report_dates(records, pulse), **({'error': pulse['error']} if pulse.get('error') else {})}
     largest = sorted((record for record in records if record.get('market_cap')), key=lambda record: -record['market_cap'])[:COVERAGE_TOP]
     covered = sum('tradingview_snapshot' in record for record in largest)
     report['tradingview']['top_coverage'] = round(covered / len(largest), 4) if largest else None
@@ -303,6 +307,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
         _write_json(root / 'quarterly_financial_history.json', {
             'source': 'TradingView US scanner (verified quarters) and Dhan US stock pages (trusted income statements)',
             'coverage': {'records': len(quarterly)}, 'records': quarterly}, compress=True)
+        _write_json(root / earnings.CALENDAR, earnings.calendar(records, pulse, session, now.isoformat()), compress=True)
         # Each stock's annual income, balance-sheet and cash-flow history (statements.statement_history), by symbol.
         _write_json(root / STATEMENT_HISTORY, {'amount_unit': 'USD_MILLION', 'stocks': histories}, compress=True)
     report['quarterly_rows'] = len(quarterly)

@@ -27,7 +27,7 @@ from pathlib import Path
 
 from ohlcv_utils import symbol_csv_path
 
-from edl_pipeline.scanner.financials import STATEMENT_METRICS
+from edl_pipeline.scanner.financials import STATEMENT_METRICS, statement_reference
 
 from . import dhan, earnings
 
@@ -277,6 +277,9 @@ def statement_blocks(page: dict) -> dict:
         }},
         'balance': {'period': balance.get('period'), 'fields': {
             'total_assets_in_lakhs': assets, 'total_equity_in_lakhs': balance.get('TOTAL_EQUITY'),
+            # India's fixedAssetsCrore. The page's CWIP is left out: it repeats FIXED_ASSETS on every page checked
+            # (AAPL, MSFT, XOM on 2026-11-22), and US balance sheets rarely show construction in progress apart.
+            'fixed_assets_crore': balance.get('FIXED_ASSETS'),
             'current_assets_in_lakhs': current_assets, 'current_liabilities_in_lakhs': current_liabilities,
             'non_current_liabilities_in_lakhs': non_current_liabilities,
             'non_current_assets_in_lakhs': assets - current_assets
@@ -496,6 +499,13 @@ def enrich(records: list[dict], root: Path, history: list[dict] | None = None, h
             found = statement_history(record, page, trusted)
             if found:
                 histories[record['symbol']] = found
+                # India's opm5YearsAgoPct, from the annual history as India's transform computes it.
+                record['opm_5_years_ago_percent'] = statement_reference({'annual': found.get('annual') or []}, 'annual', 'opm', 5)
+                # Fixed assets from the latest recent balance sheet (under a year old), when the page's current block is
+                # not for the latest quarter (Apple's balance sheet trails its income statement by one); a trusted
+                # current block replaces it below.
+                if found.get('balance_sheet'):
+                    record['fixed_assets_crore'] = found['balance_sheet'][-1].get('fixed_assets')
                 counts['statement_history'] = counts.get('statement_history', 0) + 1
         if not page:
             continue

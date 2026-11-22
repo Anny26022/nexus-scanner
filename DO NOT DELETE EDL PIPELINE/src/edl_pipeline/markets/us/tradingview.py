@@ -70,7 +70,7 @@ BAR = ('name', 'open', 'high', 'low', 'volume', 'change_abs')
 HISTORY = {'total_revenue_fq_h': 'revenue', 'net_income_fq_h': 'net_profit', 'earnings_per_share_diluted_fq_h': 'eps',
            'ebitda_fq_h': 'ebitda'}
 ANNUAL = {'total_revenue_fy_h': 'revenue', 'net_income_fy_h': 'net_profit', 'earnings_per_share_diluted_fy_h': 'eps',
-          'ebitda_fy_h': 'ebitda'}
+          'ebitda_fy_h': 'ebitda', 'total_assets_fy_h': 'total_assets'}
 HISTORY_DATES = ('fiscal_period_end_fq', 'fiscal_period_end_fy')
 COLUMNS = ['isin', 'time', 'close', 'update_mode', 'currency', 'fundamental_currency_code', 'exchange', 'is_primary', 'type',
            *[field['wire'] for field in FIELD_DEFINITIONS], *EXTRA, *BAR, *HISTORY, *ANNUAL, *HISTORY_DATES]
@@ -278,6 +278,22 @@ def quarters(found: dict) -> dict:
             'year_end_month': f'{year_end % 12 + 1:02d}'}
 
 
+def average_roa(found: dict, years: int = 3) -> float | None:
+    """The average return on assets over the last `years` fiscal years, in percent: each year's net income over the
+    average of its opening and closing total assets, TradingView's own ROA (AAPL FY2026: 34.61%). India's ScanX field
+    (Year3ROA) has no US counterpart in Dhan's screener."""
+    history = found.get('history') or {}
+    income, assets = history.get('net_income_fy_h') or [], history.get('total_assets_fy_h') or []
+    values = []
+    for index in range(years):
+        net, closing, opening = (_number(column[i]) if i < len(column) else None
+                                 for column, i in ((income, index), (assets, index), (assets, index + 1)))
+        if net is None or not closing or not opening or closing + opening <= 0:
+            return None
+        values.append(net / ((closing + opening) / 2) * 100)
+    return sum(values) / years
+
+
 def canonical(found: dict, record: dict, session: str) -> dict:
     """The engine's fields TradingView supplies for one record (India's names)."""
     snapshot = found['tradingview_snapshot']
@@ -348,6 +364,8 @@ def canonical(found: dict, record: dict, session: str) -> dict:
         'float_shares': _number(found.get('float_shares')),
         'shares_outstanding': _number(found.get('shares_outstanding')),
         'eps_forecast_next_quarter': _number(found.get('eps_forecast_next_quarter')) if dollars else None,
+        # India's averageRoa3yPct; a ratio, so it holds in any reporting currency.
+        'average_roa_3y_percent': average_roa(found),
     }
 
 

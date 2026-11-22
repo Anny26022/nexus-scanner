@@ -77,6 +77,30 @@ class VerificationTests(unittest.TestCase):
         self.assertFalse(statements.reaches_as_far([], older))
 
 
+class FundamentalFieldTests(unittest.TestCase):
+    def test_average_roa_uses_each_years_average_assets(self):
+        # Apple's FY2024-FY2026 (TradingView, 2026-11-22): FY2026 alone is 34.61%, TradingView's own figure.
+        history = {'net_income_fy_h': [132175e6, 112010e6, 93736e6], 'total_assets_fy_h': [404548e6, 359241e6, 364980e6, 352583e6]}
+        self.assertAlmostEqual(tradingview.average_roa({'history': history}, years=1), 34.6103, places=3)
+        self.assertAlmostEqual(tradingview.average_roa({'history': history}), (34.6103 + 30.9325 + 26.1262) / 3, places=3)
+        self.assertIsNone(tradingview.average_roa({'history': {**history, 'total_assets_fy_h': history['total_assets_fy_h'][:3]}}))
+
+    def test_opm_five_years_ago_and_fixed_assets_come_from_the_page(self):
+        joined = market.joined
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, root)
+        page = {**market.StatementTests.PAGE,
+                'incomeStat_sy': {'YEAR': joined(*(year * 100 + 9 for year in range(2026, 2016, -1))),
+                                  'REVENUE': joined(*[400] * 10), 'OPM': joined(33, 32, 31, 30, 29, 24, 23, 22, 21, 20)},
+                'bs_s': {**market.StatementTests.PAGE['bs_s'], 'FIXED_ASSETS': joined(51, 50), 'CWIP': joined(51, 50)}}
+        statements.write_page(root, 'ACME', {'fetched_at': '2026-11-09T00:30:00+00:00', 'slug': 'ACME-acme', **page})
+        record = {'symbol': 'ACME', 'total_revenue_in_lakhs': 108, 'latest_earnings_date': '2026-10-30'}
+        statements.enrich([record], root, [], {})
+        self.assertEqual(record['opm_5_years_ago_percent'], 24)  # FY2021, five fiscal years before FY2026
+        self.assertEqual(record['fixed_assets_crore'], 51)
+        self.assertNotIn('cwip_crore', record)  # the page repeats fixed assets there: not a real CWIP
+
+
 class LedgerTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp())

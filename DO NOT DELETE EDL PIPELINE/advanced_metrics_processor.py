@@ -54,17 +54,17 @@ def merge_historical_metrics(stock, metrics):
             stock[field] = value
 
 
-def drop_copied_live_snapshot(df):
-    """Drop a non-trading-day snapshot copied verbatim from the prior session."""
+def drop_copied_live_snapshot(df, is_session_day=is_nse_session_day):
+    """Drop a non-trading-day snapshot copied verbatim from the prior session (by the market's calendar)."""
     columns = ['Open', 'High', 'Low', 'Close', 'Volume']
     latest = pd.to_datetime(df['Date'].iloc[-1], errors='coerce') if 'Date' in df.columns and len(df) else pd.NaT
-    latest_is_weekend = not pd.isna(latest) and not is_nse_session_day(latest)
+    latest_is_weekend = not pd.isna(latest) and not is_session_day(latest)
     if latest_is_weekend and len(df) > 1 and df[columns].iloc[-1].equals(df[columns].iloc[-2]):
         return df.iloc[:-1].copy()
     return df
 
 
-def process_symbol_csv(csv_path):
+def process_symbol_csv(csv_path, is_session_day=is_nse_session_day):
     sym = os.path.basename(csv_path).replace(".csv", "")
     try:
         df = pd.read_csv(csv_path)
@@ -79,7 +79,7 @@ def process_symbol_csv(csv_path):
         if df.empty: return sym, None
 
         df = df.sort_values('Date') if 'Date' in df.columns else df
-        df = drop_copied_live_snapshot(df)
+        df = drop_copied_live_snapshot(df, is_session_day)
         if df.empty:
             return sym, None
 

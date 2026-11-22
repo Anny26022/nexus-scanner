@@ -260,7 +260,12 @@ def prepare_archives(chart_root):
 
 
 class R2Store:
-    def __init__(self):
+    # India's verified-object inventory; the US release keeps its own (publish_us.US_INVENTORY).
+    inventory = 'verified-objects/current.txt'
+
+    def __init__(self, inventory=inventory):
+        # Each market keeps its own record of verified objects; India's is the default.
+        self.inventory = inventory
         missing = missing_r2_settings()
         if missing:
             raise RuntimeError('R2 publication requires: ' + ', '.join(missing))
@@ -310,7 +315,7 @@ class R2Store:
     def load_inventory(self, previous):
         # This is an acceleration cache, not a prerequisite for publication.
         try:
-            return inventory_names(self.cache_command('cat', self.remote('verified-objects/current.txt')))
+            return inventory_names(self.cache_command('cat', self.remote(self.inventory)))
         except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError, UnicodeError) as error:
             print(f'R2 verification cache unavailable; checking current objects: {error}', flush=True)
         # A release published by the previous implementation may carry a receipt.
@@ -328,8 +333,8 @@ class R2Store:
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'current.txt'
             path.write_bytes(record)
-            self.cache_command('copyto', str(path), self.remote('verified-objects/current.txt'), '--ignore-times')
-        if self.cache_command('cat', self.remote('verified-objects/current.txt')) != record:
+            self.cache_command('copyto', str(path), self.remote(self.inventory), '--ignore-times')
+        if self.cache_command('cat', self.remote(self.inventory)) != record:
             raise RuntimeError('R2 verification inventory read-back mismatch')
 
     def upload_objects(self, source, known_verified=()):

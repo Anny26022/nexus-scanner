@@ -49,10 +49,10 @@ def _sectors(payload):
     return sorted(sectors, key=lambda s: (-(s['above_sma50_percent'] or 0), s['name']))
 
 
-def _indices(payload, session):
+def _indices(payload, session, key_indices=KEY_INDICES):
     by_symbol = {i.get('symbol'): i for i in (payload or {}).get('indices', []) if isinstance(i, dict)}
     cards = []
-    for symbol in KEY_INDICES:
+    for symbol in key_indices:
         index = by_symbol.get(symbol)
         if not index:
             continue
@@ -72,8 +72,9 @@ def _indices(payload, session):
     return cards
 
 
-def market_overview(source_bytes, session):
-    """Return the overview payload, or None when the pipeline produced no breadth data."""
+def market_overview(source_bytes, session, key_indices=KEY_INDICES):
+    """Return the overview payload, or None when the pipeline produced no breadth data. `key_indices` are the index
+    cards, in display order (India's by default)."""
     breadth = _breadth(_load(source_bytes, 'market_breadth_v2.json.gz'), session)
     if not breadth:
         return None
@@ -82,7 +83,7 @@ def market_overview(source_bytes, session):
         'asOfDate': session,
         'breadth': breadth,
         'sectors': _sectors(_load(source_bytes, 'sector_analytics.json.gz')),
-        'indices': _indices(_load(source_bytes, 'all_indices_history_v2.json.gz'), session),
+        'indices': _indices(_load(source_bytes, 'all_indices_history_v2.json.gz'), session, key_indices),
     }
 
 

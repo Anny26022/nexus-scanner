@@ -66,6 +66,8 @@ test('only immutable paths receive a long cache lifetime', async () => {
 test('snapshots that name their revision are immutable; unversioned or malformed ones revalidate', async () => {
   const versioned = await worker.fetch(new Request('https://data.example.com/snapshots/2026-10-23.json.gz?v=0123456789abcdef'), env);
   assert.equal(versioned.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
+  const us = await worker.fetch(new Request('https://data.example.com/snapshots/us/2026-10-23.json.gz?v=0123456789abcdef'), env);
+  assert.equal(us.headers.get('Cache-Control'), 'public, max-age=31536000, immutable');
   for (const query of ['', '?v=', '?v=0123456789ABCDEF', '?v=0123456789abcde', '?v=0123456789abcdef0', '?w=0123456789abcdef']) {
     const response = await worker.fetch(new Request(`https://data.example.com/snapshots/2026-10-23.json.gz${query}`), env);
     assert.equal(response.headers.get('Cache-Control'), 'no-cache', query);

@@ -1,0 +1,135 @@
+name: US Daily Refresh
+
+# The US scanner release (/data/us/current.json): each stock's history brought up to the closed session, India's
+# engine on the result (DO NOT DELETE EDL PIPELINE/docs/US_MARKET.md). A run before the snapshot has caught up
+# (a US holiday, or still trading) exits 75 inside the build and publishes nothing.
+on:
+  # Started on time by the nexus-gh-cron Worker in new_nexys_ultimate (workers/gh-cron/schedule.ts) at 07:00 India
+  # time Tuesday-Saturday, after New York's after-hours session in both EST and EDT. GitHub's own schedule starts runs
+  # hours late, and one that starts after the next New York open finds that session still trading.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Its own queue: the US release never touches India's pointer, so it may run beside the India refresh.
+concurrency:
+  group: us-daily-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh-us:
+    runs-on: ubuntu-latest
+    # A cold cache seeds every history (about 6,000 paced requests) and spends up to 20 minutes on stock pages
+    # (the rest follow over the next runs); a warm run takes its bars from TradingView's scan in seconds (a missed run fills its gap from Yahoo).
+    timeout-minutes: 90
+
+    steps:
+      # The runner context is not available to a job's env, so the root under the runner's temp folder is set here.
+      - name: Locate the US root
+        run: echo "US_ROOT=${{ runner.temp }}/us-root" >> "$GITHUB_ENV"
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
+
+      - name: Verify US pipeline code
+        run: |
+          cd "DO NOT DELETE EDL PIPELINE"
+          PYTHONPATH=src:. python -m unittest tests.test_us_market tests.test_us_history tests.test_us_tradingview tests.test_us_statement_history tests.test_us_news tests.test_us_earnings tests.test_us_filings -v
+          python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
+
+      - name: Install R2 uploader
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
+      # Price history, stock pages, SEC filings and the ledgers are the state carried between runs, kept in private R2
+      # as India's is (tools/us_state.py), not in the Actions cache India's caches share. A failed restore stops the run.
+      - name: Pull US state from R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python tools/us_state.py pull
+
+      # Earnings Pulse's US archive, which the India refresh publishes, copied from R2 for the build's earnings dates.
+      - name: Copy the Earnings Pulse US archive from R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python tools/us_state.py pulse
+
+      - name: Build the US root
+        id: build
+        env:
+          PYTHONUNBUFFERED: '1'
+          # SEC asks automated clients for a contact address in the User-Agent (markets/us/filings.py). A secret, so the
+          # address is not in this public repository; without it the run skips EDGAR.
+          SEC_CONTACT: ${{ secrets.SEC_CONTACT }}
+        run: |
+          cd "DO NOT DELETE EDL PIPELINE"
+          set +e
+          PYTHONPATH=src:. python -m edl_pipeline.markets.us "$US_ROOT"
+          status=$?
+          set -e
+          if [ "$status" -eq 75 ]; then echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      # Pushed before publication too: a run that times out or is cancelled during the R2 upload ends before any later
+      # step, and would otherwise lose every history this run fetched. The current R2 copy moves to previous/ first.
+      - name: Push US state to R2
+        if: always() && steps.build.outcome != 'skipped'
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python tools/us_state.py push
+
+      - name: Fetch US ETF snapshot
+        if: steps.build.outputs.ready == 'true'
+        continue-on-error: true
+        run: |
+          PYTHONPATH="DO NOT DELETE EDL PIPELINE/src:DO NOT DELETE EDL PIPELINE" python "DO NOT DELETE EDL PIPELINE/fetch_etf_snapshot.py" --market us --output "$US_ROOT/etf_snapshot.json"
+
+      - name: Publish the US release
+        id: publish
+        if: steps.build.outputs.ready == 'true'
+        env:
+          PYTHONUNBUFFERED: '1'
+          EDL_US_BASE_DIR: ${{ env.US_ROOT }}
+          EDL_CHART_STORAGE: r2
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python frontend/publish_us.py
+
+      # The publish step advances the rotation ledger; only that file is pushed again.
+      - name: Push the rotation ledger to R2
+        if: always() && (steps.publish.outcome == 'success' || steps.publish.outcome == 'failure')
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python tools/us_state.py push rotation_membership_ledger.json.gz

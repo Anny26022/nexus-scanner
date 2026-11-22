@@ -1,14 +1,13 @@
 name: US Weekly Finviz Universe Sync
 
-# Runs every Saturday morning (06:00 UTC) after the US market closes for the week.
+# Runs every Saturday at 11:30 India time (06:00 UTC), after the US market closes for the week, started by the
+# nexus-gh-cron Worker in new_nexys_ultimate (workers/gh-cron/schedule.ts) rather than a GitHub schedule.
 # Re-crawls Finviz's classification of US stocks and commits it:
 # - us_theme_catalog.json: Finviz's themes and the sub-themes in each;
 # - us_thematic_universe.json: each themed stock's themes and sub-themes;
 # - us_ownership_universe.json: every listed stock's Finviz sector, industry and type, with ownership and short interest.
 # The Theme Tracker's US map (new_nexys_ultimate, refresh-us-theme-map.yml) is built from these files.
 on:
-  schedule:
-    - cron: '0 6 * * 6'
   workflow_dispatch:
 
 permissions:
@@ -26,6 +25,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so the push step can rebase onto commits that land during the crawl
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -46,10 +47,11 @@ jobs:
           cd "DO NOT DELETE EDL PIPELINE"
           PYTHONPATH=src:. python -m edl_pipeline.markets.us.finviz --crawl all --delay 0.1 --workers 3
 
-      - name: Verify Finviz Crawler Tests
+      - name: Verify Finviz Crawler, US Pipeline and Publisher Tests
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
-          PYTHONPATH=src:. python -m unittest tests.test_us_finviz -v
+          PYTHONPATH=src:. python -m unittest tests.test_us_finviz tests.test_us_market -v
+          python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
 
       - name: Commit and Push Updated Universes
         run: |
@@ -60,5 +62,16 @@ jobs:
             echo "No changes to Finviz universes."
           else
             git commit -m "chore(us): weekly Finviz thematic & ownership universe sync [skip ci]"
-            git push
+            # Other jobs push this branch too: rebase onto whatever landed during the crawl and retry.
+            branch="${GITHUB_REF_NAME}"
+            for attempt in 1 2 3 4 5; do
+              if git pull --rebase origin "$branch" && git push origin "HEAD:$branch"; then
+                exit 0
+              fi
+              git rebase --abort 2>/dev/null || true
+              echo "Push attempt $attempt failed; retrying..."
+              sleep $((attempt * 10))
+            done
+            echo "Could not push the Finviz universe sync after 5 attempts." >&2
+            exit 1
           fi

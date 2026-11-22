@@ -55,7 +55,9 @@ jobs:
 
       - name: Test pipeline state storage
         working-directory: .
-        run: python -m unittest discover -s tools -p test_pipeline_state.py -v
+        run: |
+          python -m unittest discover -s tools -p test_pipeline_state.py -v
+          python -m unittest discover -s tools -p test_us_state.py -v
 
       - name: Test Earnings Pulse history
         working-directory: frontend

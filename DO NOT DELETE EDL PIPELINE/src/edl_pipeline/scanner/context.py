@@ -414,7 +414,8 @@ def evaluate_context_condition(frame, spec, context, result: Callable[..., Any],
             return unavailable(condition, "intraday_turnover_history_unavailable")
         window = int(spec.get("lookback_days", 20))
         if len(frame) < window: return unavailable(condition, "insufficient_history")
-        value = float((frame["Close"] * frame["Volume"]).tail(window).mean() / 10_000_000)
+        # value_crore is in the market's amount unit: ₹ crore for India, millions of dollars for the US.
+        value = float((frame["Close"] * frame["Volume"]).tail(window).mean() / (context or {}).get("amount_unit", 10_000_000))
         target = float(spec["value_crore"])
         return result(condition, comparison(value, spec["comparison"], target), round(value, 6), lookback_days=window, comparison=spec["comparison"], target=target)
 

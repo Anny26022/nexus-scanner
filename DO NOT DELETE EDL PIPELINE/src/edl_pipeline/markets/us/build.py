@@ -47,7 +47,7 @@ METRIC_KEYS = ('as_of_date', 'gap_percent', 'relative_volume_20', 'atr14', 'atr_
                'distance_from_52w_high_percent', 'distance_from_52w_low_percent', 'breakout_above_20d_high',
                'breakout_above_50d_high', 'breakout_above_52w_high', 'is_inside_day', 'sma20', 'sma50', 'sma200')
 # Read while building, not by the release.
-BUILD_ONLY = frozenset({'slug', 'provider_last_trade_ist', 'tradingview_bar', 'tradingview_previous_close'})
+BUILD_ONLY = frozenset({'slug', 'provider_last_trade_ist', 'tradingview_bar', 'tradingview_previous_close', 'tradingview_quarters'})
 # TradingView must cover this share of the largest stocks (by market cap) for the release to publish; on 2026-11-22 it
 # covered 99% of the top 3,000 (ISIN or ticker). The rest of the market fills from Yahoo, up to MAX_FALLBACKS stocks.
 COVERAGE_TOP = 3000

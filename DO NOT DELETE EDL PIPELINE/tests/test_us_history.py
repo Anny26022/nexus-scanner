@@ -13,20 +13,21 @@ for path in (ROOT / "src", ROOT, ROOT / "tests"):
         sys.path.insert(0, str(path))
 
 from edl_pipeline.markets.us import build, dhan, fields, history  # noqa: E402
-from test_us_market import FieldTests, HistoryTests, bar, utc  # noqa: E402
+import test_us_market as market  # noqa: E402 (the module, so its tests are not collected twice)
+from test_us_market import bar, utc  # noqa: E402
 
 
 class SnapshotTests(unittest.TestCase):
     def test_one_row_stamped_later_does_not_hold_the_release(self):
-        closed = [{**FieldTests.ROW, 'Sym': f'S{n}', 'LastTradeTime': '10/11/2026 02:29:59'} for n in range(5)]
-        outlier = {**FieldTests.ROW, 'Sym': 'ODD', 'LastTradeTime': '11/11/2026 01:00:00'}
+        closed = [{**market.FieldTests.ROW, 'Sym': f'S{n}', 'LastTradeTime': '10/11/2026 02:29:59'} for n in range(5)]
+        outlier = {**market.FieldTests.ROW, 'Sym': 'ODD', 'LastTradeTime': '11/11/2026 01:00:00'}
         self.assertEqual(build.snapshot_session([*closed, outlier], utc(2026, 11, 10, 0, 30)), '2026-11-09')
 
     def test_previous_close_is_the_one_the_days_change_is_measured_from(self):
-        record = fields.canonical_row({**FieldTests.ROW, 'Ltp': 110.0, 'PPerchange': 10.0, 'BcClose': 221.3})
+        record = fields.canonical_row({**market.FieldTests.ROW, 'Ltp': 110.0, 'PPerchange': 10.0, 'BcClose': 221.3})
         self.assertAlmostEqual(record['previous_close'], 100.0)
         # Without a change the screener's own previous close is used.
-        self.assertEqual(fields.canonical_row({**FieldTests.ROW, 'BcClose': 340.0})['previous_close'], 340.0)
+        self.assertEqual(fields.canonical_row({**market.FieldTests.ROW, 'BcClose': 340.0})['previous_close'], 340.0)
 
 
 class RecentTests(unittest.TestCase):
@@ -44,7 +45,7 @@ class RecentTests(unittest.TestCase):
         history.write_bars(self.root / 'ACME.csv', [bar('2026-11-05', 9.9), bar('2026-11-06', 10.0)])
         with mock.patch.object(build.requests, 'get', mock.Mock(side_effect=AssertionError('Yahoo is not asked'))), \
              mock.patch.object(dhan, 'post', mock.Mock(side_effect=AssertionError('Dhan is not asked'))):
-            counts = build.update_histories([HistoryTests.RECORD], self.root, '2026-11-09', interval=0, workers=1)
+            counts = build.update_histories([market.HistoryTests.RECORD], self.root, '2026-11-09', interval=0, workers=1)
         self.assertEqual(counts['appended'], 1)
 
 
@@ -65,8 +66,7 @@ class TradingViewBarTests(unittest.TestCase):
 
     def test_a_listing_with_another_isin_is_matched_by_ticker_and_carries_its_bar(self):
         from edl_pipeline.markets.us import tradingview
-        from test_us_market import TradingViewTests
-        rows = TradingViewTests()
+        rows = market.TradingViewTests()
         response = rows.response(rows.row('NYSE:ROKU', 'US0000000009', name='ROKU', open=99.0, high=101.0, low=98.0,
                                           volume=1e6, change_abs=1.0))
         records = [{'symbol': 'ROKU', 'isin': 'US77543R1023', 'close': 100.0}]

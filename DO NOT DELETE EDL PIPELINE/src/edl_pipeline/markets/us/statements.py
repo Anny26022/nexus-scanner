@@ -332,12 +332,38 @@ def _quarter_end(period: str) -> date:
 
 def quarterly_history(page: dict, record: dict) -> list[dict]:
     """India's quarterly statement rows (quarterly_financial_history.json) from a page's quarters, oldest first."""
-    rows = []
-    quarters = series(page.get('incomeStat_sq'))
-    reported = record.get('latest_earnings_date')
     # The fiscal year's end month, from the yearly blocks; December (most US companies) when the page has none.
     years = series(page.get('rNp_s')) or series(page.get('cF_sy'))
-    year_end = years[0]['period'][4:] if years else '12'
+    return _ledger_rows(record, series(page.get('incomeStat_sq')), years[0]['period'][4:] if years else '12',
+                        'Dhan US stock page (millions of dollars)')
+
+
+# Dhan's operating profit, profit before tax and margin join TradingView's quarter only when the two agree on its
+# revenue: otherwise the page is in another currency or for another period.
+JOIN_TOLERANCE = 0.02
+
+
+def tradingview_history(record: dict, page: dict | None) -> list[dict]:
+    """India's quarterly rows from TradingView's verified quarters (tradingview.quarters), with Dhan's operating
+    profit, profit before tax and margin where the page has the same quarter. Oldest first."""
+    found = record.get('tradingview_quarters') or {}
+    dhan = {quarter['period']: quarter for quarter in series((page or {}).get('incomeStat_sq'))}
+    quarters = []
+    for quarter in found.get('quarters') or []:
+        row = {'period': quarter['period'], 'REVENUE': quarter['revenue'], 'NET_PROFIT': quarter['net_profit'],
+               'EPS': quarter['eps'], 'EBITDA': quarter['ebitda']}
+        same = dhan.get(quarter['period'])
+        if same and same.get('REVENUE') and quarter['revenue'] and abs(same['REVENUE'] / quarter['revenue'] - 1) <= JOIN_TOLERANCE:
+            row.update({key: same.get(key) for key in ('OPERATING_PROFIT', 'PROFIT_BEFORE_TAX', 'OPM', 'SALES')})
+        quarters.append(row)
+    return _ledger_rows(record, quarters, found.get('year_end_month') or '12',
+                        'TradingView US scanner (millions of dollars); operating profit, PBT and OPM from the Dhan page')
+
+
+def _ledger_rows(record: dict, quarters: list[dict], year_end: str, source: str) -> list[dict]:
+    """India's quarterly rows from quarters newest first ({'period': 'yyyymm', 'REVENUE': ..., ...}), oldest first."""
+    rows = []
+    reported = record.get('latest_earnings_date')
     for index, quarter in enumerate(quarters):
         end = _quarter_end(quarter['period'])
         latest_report = index == 0 and reported and date.fromisoformat(reported) > end
@@ -353,31 +379,42 @@ def quarterly_history(page: dict, record: dict) -> list[dict]:
             'operating_profit': quarter.get('OPERATING_PROFIT'),
             'net_profit': quarter.get('NET_PROFIT'), 'profit_before_tax': quarter.get('PROFIT_BEFORE_TAX'),
             'eps': quarter.get('EPS'), 'opm': quarter.get('OPM'), 'ebitda': quarter.get('EBITDA'),
-            'numeric_source': 'Dhan US stock page (millions of dollars)',
+            'numeric_source': source,
         })
     return sorted(rows, key=lambda row: row['quarter_end'])
 
 
 def enrich(records: list[dict], root: Path, history: list[dict] | None = None) -> dict:
     """Dhan's statement values, from each trusted part of a record's page, replace TradingView's (Dhan first, as for
-    India); TradingView's stay where the page is missing, untrusted or empty. With `history`, each trusted income
-    statement's quarters are appended to it as India's quarterly rows."""
-    counts = {'with_statements': 0, 'refused': 0, **{name: 0 for name in ('balance', 'cash_flow', 'annual')}}
+    India); TradingView's stay where the page is missing, untrusted or empty.
+
+    With `history`, each stock's quarters are appended to it as India's quarterly rows: TradingView's verified
+    quarters (up to 8 years, in dollars, from the scan) when they reach at least as far back as the page's trusted
+    income statement (10 quarters), else the page's."""
+    counts = {'with_statements': 0, 'refused': 0, **{name: 0 for name in ('balance', 'cash_flow', 'annual')},
+              'history_tradingview': 0, 'history_dhan': 0}
     oldest = None
     for record in records:
         page = read_page(root, record['symbol'])
         if not page or page.get('missing'):
+            page = None
+        blocks = statement_blocks(page) if page else None
+        trusted = trusted_blocks(blocks, record) if page else set()
+        if history is not None:
+            from_tradingview = tradingview_history(record, page)
+            from_page = quarterly_history(page, record) if 'income' in trusted else []
+            chosen = from_tradingview if from_tradingview and len(from_tradingview) >= len(from_page) else from_page
+            history.extend(chosen)
+            if chosen:
+                counts['history_tradingview' if chosen is from_tradingview else 'history_dhan'] += 1
+        if not page:
             continue
-        blocks = statement_blocks(page)
-        trusted = trusted_blocks(blocks, record)
         if not trusted:
             counts['refused'] += 1
             continue
         for name in trusted:
             record.update({key: value for key, value in blocks[name]['fields'].items() if value is not None})
             counts[name] = counts.get(name, 0) + 1
-        if history is not None:
-            history.extend(quarterly_history(page, record))
         record['financial_metadata'] = {
             'source': 'Dhan US stock page, TradingView US scanner where Dhan is missing or out of date',
             'amount_unit': 'USD_MILLION', 'fetched_at': page['fetched_at'],

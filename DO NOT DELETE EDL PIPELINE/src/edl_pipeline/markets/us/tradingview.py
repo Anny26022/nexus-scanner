@@ -64,8 +64,13 @@ EXTRA_AMOUNTS = frozenset({'free_cash_flow', 'total_debt', 'total_equity', 'ttm_
                            'total_liabilities', 'operating_cash_flow', 'investing_cash_flow', 'financing_cash_flow'})
 # The session's daily bar (history.py appends it): `time` dates it, `close - change_abs` is the previous session's close.
 BAR = ('name', 'open', 'high', 'low', 'volume', 'change_abs')
+# Statement history, newest first: 32 quarters and up to 20 fiscal years, in dollars (foreign reporters converted).
+# The arrays carry no period dates; `quarters` dates them from the latest period end and checks them (see there).
+HISTORY = {'total_revenue_fq_h': 'revenue', 'net_income_fq_h': 'net_profit', 'earnings_per_share_diluted_fq_h': 'eps',
+           'ebitda_fq_h': 'ebitda'}
+HISTORY_DATES = ('total_revenue_fy_h', 'fiscal_period_end_fq', 'fiscal_period_end_fy')
 COLUMNS = ['isin', 'time', 'close', 'update_mode', 'currency', 'fundamental_currency_code', 'exchange', 'is_primary', 'type',
-           *[field['wire'] for field in FIELD_DEFINITIONS], *EXTRA, *BAR]
+           *[field['wire'] for field in FIELD_DEFINITIONS], *EXTRA, *BAR, *HISTORY, *HISTORY_DATES]
 # Rows per request. The market is about 7,000 listings; one 12,000-row request was slow enough to time out, and a
 # timed-out request lost every row. Pages are sorted by name so a row does not move between pages.
 PAGE_SIZE = 5_000
@@ -158,7 +163,8 @@ def snapshots(response: dict, fetched_at: str) -> dict[str, dict]:
         extra = {name: (_number(values[column]) / UNITED_STATES.provider_amount_unit
                         if dollars and _number(values[column]) is not None else None) if name in EXTRA_AMOUNTS
                  else values[column] for column, name in EXTRA.items()}
-        result[isin] = {'tradingview_snapshot': snapshot, **extra, 'bar': {key: values[key] for key in ('time', 'close', *BAR)}}
+        result[isin] = {'tradingview_snapshot': snapshot, **extra, 'bar': {key: values[key] for key in ('time', 'close', *BAR)},
+                        'history': {key: values[key] for key in (*HISTORY, *HISTORY_DATES)}}
     if not result:
         raise ValueError('TradingView returned no US listings')
     return result
@@ -207,6 +213,56 @@ def daily_bar(found: dict, session: str) -> dict:
     return {'tradingview_bar': {'date': session, 'open': prices[0], 'high': prices[1], 'low': prices[2], 'close': close,
                                 'volume': volume},
             'tradingview_previous_close': previous}
+
+
+def _month(stamp) -> int | None:
+    stamp = _number(stamp)
+    if not stamp:
+        return None
+    day = datetime.fromtimestamp(stamp, timezone.utc)
+    return day.year * 12 + day.month - 1
+
+
+# Four quarters are one fiscal year when they add up to its revenue within this (rounding, small restatements).
+YEAR_TOLERANCE = 0.01
+
+
+def quarters(found: dict) -> dict:
+    """The quarterly history TradingView's arrays hold, dated, newest first, as far back as it is verified.
+
+    The arrays carry no dates, so quarter i is dated i quarters before the latest quarter end. That holds until a
+    quarter is missing: TradingView does not leave a gap but moves the older quarters up (seen for new listings,
+    spin-offs and restatements: SPCX, LBTYA, CIRC, NEGG; 2026-11-22), which would date every older quarter wrong. So
+    each fiscal year is checked: its four quarters must add up to TradingView's annual revenue. Quarters are kept up to
+    the first year that disagrees, and none when the first does (most banks, whose quarterly and annual revenue are
+    defined differently, and semi-annual reporters). Amounts in millions of dollars.
+    """
+    history = found.get('history') or {}
+    revenue, years = history.get('total_revenue_fq_h') or [], history.get('total_revenue_fy_h') or []
+    latest, year_end = _month(history.get('fiscal_period_end_fq')), _month(history.get('fiscal_period_end_fy'))
+    if not revenue or not years or latest is None or year_end is None or latest < year_end:
+        return {'quarters': [], 'year_end_month': None}
+    # Quarters after the latest fiscal year end (the current fiscal year so far) come first.
+    start = round((latest - year_end) / 3)
+    agreeing = 0
+    for index, total in enumerate(years):
+        part = revenue[start + 4 * index: start + 4 * index + 4]
+        if not isinstance(total, (int, float)) or len(part) < 4 or any(not isinstance(value, (int, float)) for value in part):
+            break
+        if abs(sum(part) - total) > max(abs(total) * YEAR_TOLERANCE, UNITED_STATES.provider_amount_unit):
+            break
+        agreeing += 1
+    count = start + 4 * agreeing if agreeing else 0
+    columns = {name: history.get(key) or [] for key, name in HISTORY.items()}
+    rows = []
+    for index in range(count):
+        month = latest - 3 * index
+        row = {'period': f'{month // 12}{month % 12 + 1:02d}'}
+        for name, values in columns.items():
+            value = _number(values[index]) if index < len(values) else None
+            row[name] = value if value is None or name == 'eps' else value / UNITED_STATES.provider_amount_unit
+        rows.append(row)
+    return {'quarters': rows, 'year_end_month': f'{year_end % 12 + 1:02d}'}
 
 
 def canonical(found: dict, record: dict, session: str) -> dict:
@@ -305,6 +361,7 @@ def enrich(records: list[dict], session: str, *, fetch_response=fetch, now: date
             continue
         record.update(canonical(values, record, session))
         record.update(daily_bar(values, session))
+        record['tradingview_quarters'] = quarters(values)
         matched += 1
         current += values['tradingview_snapshot']['as_of_date'] == session
     report = {'matched': matched, 'current': current, 'listed': len(found)}

@@ -47,7 +47,7 @@ jobs:
       - name: Verify US pipeline code
         run: |
           cd "DO NOT DELETE EDL PIPELINE"
-          PYTHONPATH=src:. python -m unittest tests.test_us_market tests.test_us_history tests.test_us_tradingview tests.test_us_statement_history -v
+          PYTHONPATH=src:. python -m unittest tests.test_us_market tests.test_us_history tests.test_us_tradingview tests.test_us_statement_history tests.test_us_news -v
           python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v
 
       # Price history, stock pages and the rotation membership ledger are the state carried between runs; losing them

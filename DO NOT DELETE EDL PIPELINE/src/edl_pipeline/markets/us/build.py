@@ -33,7 +33,7 @@ from ohlcv_utils import symbol_csv_path
 from pipeline_utils import resource_path
 
 from .. import UNITED_STATES
-from . import calendar, dhan, fields, finviz, history, statements, tradingview, yahoo
+from . import calendar, dhan, fields, finviz, history, news, statements, tradingview, yahoo
 from .universe import SCREENABLE, security_type
 
 # Benchmark ETFs stand in for indices; SPY is the market benchmark for RS and breadth.
@@ -245,11 +245,14 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     # Stock pages (dhan.co) and price history (Dhan's ticks host) are separate servers, each with its own pace, so they
     # are fetched side by side: neither server sees more requests than before, and a cold run takes half the time.
     # After TradingView: a company that has reported since its page was read is read again.
-    with ThreadPoolExecutor(max_workers=1) as side:
+    # News comes from a third Dhan server (news-live), so it is fetched beside them too.
+    with ThreadPoolExecutor(max_workers=2) as side:
         pages = side.submit(statements.refresh_pages, records, root, now, interval=interval, budget_seconds=page_budget)
+        articles = side.submit(news.refresh, records, root)
         report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers)
         report['benchmarks'] = update_histories(benchmarks, root / 'indices_ohlcv_data', session, interval=interval, workers=1)
         report['stock_pages'] = pages.result()
+        report['news'] = articles.result()
     # Every benchmark must reach the session: one missing from the ETF list, or a refetch that ended a session early,
     # leaves RS, breadth and rotation on a partial benchmark set even when no update reported a failure.
     report['benchmarks_behind'] = sorted(

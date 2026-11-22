@@ -140,8 +140,7 @@ def extend(bars: list[dict], record: dict, session: str, *, confirmed: bool = Fa
     off = abs(previous / bars[-1]['close'] - 1)
     if off > (CORRECTION_LIMIT if adjacent else ADJUSTMENT_TOLERANCE):
         return None, adjacent
-    last = clean({**bars[-1], 'close': previous}) if adjacent else bars[-1]
-    return [*bars[:-1], last, bar], False
+    return [*bars[:-1], clean({**bars[-1], 'close': previous}), bar], False
 
 
 def update(record: dict, root: Path, session: str, *, fetch=fetch_full, recent=None) -> str:

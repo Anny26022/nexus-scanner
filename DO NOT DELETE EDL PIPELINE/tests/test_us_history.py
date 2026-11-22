@@ -7,7 +7,8 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-for path in (ROOT / "src", ROOT):
+# The tests folder too: the workflow runs this as tests.test_us_history from the pipeline folder.
+for path in (ROOT / "src", ROOT, ROOT / "tests"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -76,10 +77,14 @@ class TradingViewBarTests(unittest.TestCase):
 
     def test_too_many_yahoo_fills_or_thin_coverage_stop_the_release(self):
         from edl_pipeline.markets.us import __main__ as entry
-        report = {'session': '2026-11-09', 'history': {'appended': 5800, 'filled': 900}, 'benchmarks': {}, 'rs_ratings': 6000,
-                  'stocks': 6000, 'aligned': 5900, 'tradingview': {'matched': 6000}}
+        report = {'session': '2026-11-09', 'history': {'appended': 5100, 'filled': 900}, 'benchmarks': {}, 'rs_ratings': 6000,
+                  'stocks': 6000, 'aligned': 5900, 'tradingview': {'matched': 6000, 'without_bar': 900}}
         with mock.patch.object(entry, 'build', return_value=report):
             self.assertEqual(entry.main(['root']), 1)
+            # A cold cache fetches every stock in full: the count is still of stocks without TradingView's bar.
+            report['history'] = {'refetched': 6000}
+            self.assertEqual(entry.main(['root']), 1)
+            report['tradingview']['without_bar'] = 360
             report['history'] = {'appended': 100, 'gap_filled': 5900}  # a missed run fills every stock: no alarm
             self.assertEqual(entry.main(['root']), 0)
 

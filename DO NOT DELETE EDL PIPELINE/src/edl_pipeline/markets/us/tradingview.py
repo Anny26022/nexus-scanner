@@ -200,10 +200,12 @@ def daily_bar(found: dict, session: str) -> dict:
     close, change = _number(bar.get('close')), _number(bar.get('change_abs'))
     previous = close - change if close is not None and change is not None and close - change > 0 else None
     prices = [_number(bar.get(key)) for key in ('open', 'high', 'low')] + [close]
-    if _eastern_date(bar.get('time')) != session or any(price is None or price <= 0 for price in prices):
+    volume = _number(bar.get('volume'))  # 0 is a real (untraded) reading; a missing one is no bar
+    if (_eastern_date(bar.get('time')) != session or any(price is None or price <= 0 for price in prices)
+            or volume is None or volume < 0):
         return {'tradingview_bar': None, 'tradingview_previous_close': previous}
     return {'tradingview_bar': {'date': session, 'open': prices[0], 'high': prices[1], 'low': prices[2], 'close': close,
-                                'volume': _number(bar.get('volume')) or 0},
+                                'volume': volume},
             'tradingview_previous_close': previous}
 
 
@@ -289,13 +291,16 @@ def enrich(records: list[dict], session: str, *, fetch_response=fetch, now: date
         print(f'::warning::TradingView US values unavailable: {error}', flush=True)
         return {'matched': 0, 'current': 0, 'error': str(error) or type(error).__name__}
     matched = current = 0
-    # A listing whose ISIN differs between the two providers is matched by its ticker instead (BRK.B on both).
-    by_ticker = {}
+    # A listing whose ISIN differs between the two providers is matched by its ticker instead, but only when one
+    # listing has that ticker: the scan spans four exchanges and funds, and another security's values must not apply.
+    by_ticker: dict[str, list] = {}
     for values in found.values():
-        by_ticker.setdefault((values.get('bar') or {}).get('name'), values)
-    by_ticker.pop(None, None)
+        ticker = (values.get('bar') or {}).get('name')
+        if ticker:
+            by_ticker.setdefault(ticker, []).append(values)
     for record in records:
-        values = found.get(record.get('isin')) or by_ticker.get(record.get('symbol'))
+        candidates = by_ticker.get(record.get('symbol')) or []
+        values = found.get(record.get('isin')) or (candidates[0] if len(candidates) == 1 else None)
         if values is None:
             continue
         record.update(canonical(values, record, session))

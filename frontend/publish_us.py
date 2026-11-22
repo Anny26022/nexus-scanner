@@ -319,7 +319,7 @@ def load_financial_history(root, source_bytes, session):
                     periods.append({
                         'period_end': period_end,
                         'filing_date': r.get('filing_date'),
-                        'filing_date_basis': r.get('filing_date_basis'),  # reported, or estimated (quarter end + 45 days)
+                        'filing_date_basis': r.get('filing_date_basis'),  # reported, or estimated (+45 days; +90 for a fiscal year's last quarter)
                         'revenue': r.get('revenue'),
                         'sales': r.get('sales') or r.get('revenue'),
                         'operating_profit': r.get('operating_profit'),
@@ -377,8 +377,10 @@ def archive_us_session(output, manifest, store=None):
             if target.read_bytes() != compressed:
                 raise RuntimeError(f'Conflicting US daily snapshot: {key}')
         else:
-            with target.open('xb') as handle:
-                handle.write(compressed)
+            # Atomic, so an interrupted write never leaves a truncated archive that a retry reads as a conflict.
+            temporary = target.with_name(target.name + '.tmp')
+            temporary.write_bytes(compressed)
+            temporary.replace(target)
     if not history.is_file():
         # The backfill's shape (tools/generate_historical_snapshots_us.py), which register_session keeps.
         history.parent.mkdir(parents=True, exist_ok=True)
@@ -538,7 +540,9 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         if US_SESSIONS in present:
             (output / US_SESSIONS).parent.mkdir(parents=True, exist_ok=True)
             store.cache_command('copyto', store.remote(f'{POINTER_PREFIX}/{US_SESSIONS}'), str(output / US_SESSIONS))
-    session_record = archive_us_session(output, manifest, store)
+    # Archived once the revision is in place (in R2 after its upload, below): a failed upload must not leave an
+    # immutable snapshot that a corrected same-session release could not replace.
+    session_record = None if store else archive_us_session(output, manifest)
     write_json(output / POINTER, manifest)
     if enabled():
         if chart_release:
@@ -565,6 +569,7 @@ def publish_us(root, output=OUTPUT, *, workers=0):
         write_json(generation / 'release.json', manifest)
         write_json(output / POINTER, manifest)
         upload_revision(store, generation, f'releases/{revision}')
+        session_record = archive_us_session(output, manifest, store)
         # As India's: the session list before the pointer.
         if session_record:
             upload_pointer(store, output, US_SESSIONS)

@@ -172,6 +172,8 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
     yahoo_pacer, yahoo_stopped = dhan.Pacer(interval), threading.Event()
 
     def paced_post(url, payload):
+        if stopped.is_set():  # no wait for a request that will not be sent
+            raise dhan.Throttled('stopped after an earlier rate limit')
         pacer.wait()
         if stopped.is_set():  # another worker hit the limit while this one waited its turn
             raise dhan.Throttled('stopped after an earlier rate limit')
@@ -191,8 +193,7 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
             return []
 
     def fetch(symbol, security_id, exchange):
-        if stopped.is_set():
-            return []
+        # After a Dhan rate limit Yahoo is still tried; only the Dhan leg is refused (paced_post).
         try:
             # Paced per request: an unknown listing exchange tries NYSE, then NASDAQ.
             return history.fetch_full(symbol, security_id, exchange, post=paced_post, yahoo_fetch=yahoo_fetch)
@@ -236,6 +237,8 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     largest = sorted((record for record in records if record.get('market_cap')), key=lambda record: -record['market_cap'])[:COVERAGE_TOP]
     covered = sum('tradingview_snapshot' in record for record in largest)
     report['tradingview']['top_coverage'] = round(covered / len(largest), 4) if largest else None
+    # Stocks whose history comes from elsewhere today (Yahoo's fill, or a full fetch on a cold cache).
+    report['tradingview']['without_bar'] = sum(not record.get('tradingview_bar') for record in records)
     if largest and covered < len(largest) * MIN_COVERAGE and not report['tradingview'].get('error'):
         report['tradingview']['error'] = f'TradingView covered {covered} of the {len(largest)} largest stocks'
     # Stock pages (dhan.co) and price history (Dhan's ticks host) are separate servers, each with its own pace, so they

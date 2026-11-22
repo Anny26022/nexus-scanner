@@ -245,6 +245,7 @@ class PublishUsTests(unittest.TestCase):
             def run(self, *args):
                 self.calls.append(args)
             def cache_command(self, *args):
+                self.calls.append(('cache',) + args)
                 return b'rows'
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp)
@@ -254,6 +255,7 @@ class PublishUsTests(unittest.TestCase):
             publish_us.archive_us_session(output, {'sessionDate': '2026-11-12', 'revision': 'a' * 64}, store)
             self.assertEqual(store.calls[0][2], 'r2:snapshots/us/2026-11-12.json.gz')
             self.assertIn('--immutable', store.calls[0])
+            self.assertEqual(store.calls[1], ('cache', 'cat', 'r2:snapshots/us/2026-11-12.json.gz'))  # read back
             self.assertFalse((output / 'snapshots').exists())
             self.assertEqual(len(json.loads((output / 'us/sessions.json').read_text())['sessions']), 1)
 

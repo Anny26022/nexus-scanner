@@ -11,8 +11,9 @@ days plus a rotating eighth of older ones (every call about every two months). A
 Each call keeps exactly one object: a revised call's previous object is deleted on the next run, once the index
 naming its replacement is live (a run pulls the live index before it starts).
 
-The provider also answers an older slug (honasa-q1-fy27) with the company's newest call, so a detail whose quarter is
-not the listed one is not stored, and a stored call whose date is not the listed date is dropped and fetched again.
+The provider's get-by-slug answers an older slug (honasa-q1-fy27) with the company's newest call, so calls are fetched
+from its quarter endpoint, which answers with the slug's own call. A detail whose quarter is still not the listed one is
+not stored, and a stored call whose date is not the listed date is dropped and fetched again.
 A summary held by more than one company's call is dropped from all of them (the provider has filed one company's
 summary under another's); other summaries stored for more than one call are reported.
 
@@ -58,6 +59,7 @@ RECHECK_WEEKLY_DAYS = 7
 PENDING_WEEKLY_DAYS = 90
 RECHECK_ROTATION = 8
 SHARED = 'summary of another company'
+WRONG_CALL = 'provider returned another call'
 # Fetched calls are uploaded and the index rewritten after each batch, so a run cut short keeps its progress.
 BATCH = 250
 # Far beyond the ~26 pages the provider has; stops a runaway walk if it keeps answering has_next.
@@ -105,8 +107,17 @@ def list_page(session, page):
     return valid, bool(pagination.get('has_next'))
 
 
-def fetch_detail(session, slug):
-    detail = post(session, 'live-call/get-by-slug', {'slug': slug})
+def fetch_detail(session, slug, seo_symbol=None):
+    """The call a slug names. get-by-slug answers an older slug with the company's newest call; the quarter endpoint
+    answers with the slug's own call, so it is used whenever the list gave the call's seo_symbol."""
+    if not seo_symbol:
+        detail = post(session, 'live-call/get-by-slug', {'slug': slug})
+    else:
+        detail = post(session, 'live-call/fetch-company-quarter-summary', {'slug': slug, 'seo_symbol': seo_symbol})
+        # It names get-by-slug's forensic_flags.flags insights.windows; stored calls keep the one shape the site reads.
+        insights = detail.pop('insights', None)
+        if 'forensic_flags' not in detail and isinstance(insights, dict):
+            detail['forensic_flags'] = {'flags': insights.get('windows') or []}
     if detail.get('slug_id') not in (None, slug):
         raise ValueError(f'Provider returned {detail.get("slug_id")} for {slug}')
     return detail
@@ -129,6 +140,7 @@ def entry_for(row, previous=None):
         'symbol': row['company_symbol'].strip(), 'isin': row.get('isin') or None, 'name': row.get('company_name'),
         'quarter': row.get('concall_quarter'), 'sector': row.get('sector'), 'subSector': row.get('sub_sector'),
         'marketCapType': row.get('market_cap_type'), 'filing': row.get('pdf_link') or None,
+        'seoSymbol': row.get('seo_symbol') or None,
     }.items() if value is not None})
     entry['date'] = entry.get('date') or iso_date(row.get('concall_date'))
     entry.setdefault('object', None)
@@ -262,7 +274,8 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
                 return True
             # A call stored before summaries had digests is rechecked once, so a shared summary is caught.
             return full and (when >= since(RECHECK_WEEKLY_DAYS) or rotating(slug) or not entry.get('summary'))
-        if not entry.get('attempts'):
+        # A call the provider answered with another call is retried every run; the quarter endpoint fixes most.
+        if not entry.get('attempts') or entry.get('status') == WRONG_CALL:
             return True
         when = entry.get('date') or entry.get('firstSeen') or today
         if full:
@@ -273,15 +286,16 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
                     key=lambda slug: calls[slug].get('date') or '', reverse=True)
     def one(slug):
         try:
-            detail = fetch_detail(slug)
+            detail = fetch_detail(slug, calls[slug].get('seoSymbol'))
         except (requests.RequestException, ValueError, KeyError, TypeError) as error:
             return slug, None, 'provider request failed', str(error)
         if not str(detail.get('markdown_summary') or '').strip():
             return slug, None, 'summary not ready', 'summary not ready'
         # The provider answers an older slug (honasa-q1-fy27) with the company's newest call (Q2FY27).
         quarter, listed = detail.get('concall_quarter'), calls[slug].get('quarter')
-        if quarter and listed and quarter != listed:
-            return slug, None, 'provider returned another call', f'provider returned the {quarter} call'
+        # The quarter endpoint has answered 'Q1 FY27' for Q1FY27.
+        if quarter and listed and quarter.replace(' ', '') != listed.replace(' ', ''):
+            return slug, None, WRONG_CALL, f'provider returned the {quarter} call'
         return slug, detail, None, None
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -455,7 +469,7 @@ def main(argv=None):
 
     started = time.perf_counter()
     report = refresh(OUTPUT, store, lambda page: list_page(session(), page),
-                     lambda slug: fetch_detail(session(), slug), full=args.full, checked_at=now, workers=args.workers,
+                     lambda slug, seo_symbol: fetch_detail(session(), slug, seo_symbol), full=args.full, checked_at=now, workers=args.workers,
                      progress=lambda partial: write_json(REPORT, partial),
                      delete=lambda name: delete_object(store, name))
     report['upcoming'] = refresh_upcoming(UPCOMING, lambda: fetch_upcoming(session()), lambda: fetch_today(session()),

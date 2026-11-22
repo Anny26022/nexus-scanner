@@ -13,7 +13,8 @@ import requests
 from unittest.mock import Mock
 
 import concall_history
-from concall_history import PRIVATE_FIELDS, call_state, delete_object, iso_date, list_page, post, refresh, refresh_upcoming
+from concall_history import (PRIVATE_FIELDS, call_state, delete_object, fetch_detail, iso_date, list_page, post, refresh,
+                             refresh_upcoming)
 
 
 class Store:
@@ -48,7 +49,7 @@ def detail(slug, summary=None):
 class Provider:
     def __init__(self, pages, details=None, fail_pages=()):
         self.pages, self.details, self.fail_pages = pages, details or {}, set(fail_pages)
-        self.listed, self.fetched = [], []
+        self.listed, self.fetched, self.seo_symbols = [], [], {}
 
     def list_page(self, page):
         self.listed.append(page)
@@ -56,8 +57,9 @@ class Provider:
             raise requests.ConnectionError('down')
         return self.pages[page - 1], page < len(self.pages)
 
-    def fetch_detail(self, slug):
+    def fetch_detail(self, slug, seo_symbol=None):
         self.fetched.append(slug)
+        self.seo_symbols[slug] = seo_symbol
         return self.details.get(slug) or detail(slug)
 
 
@@ -152,10 +154,10 @@ class ConcallHistoryTests(unittest.TestCase):
 
     def test_a_detail_failure_is_pending_not_fatal(self):
         class Failing(Provider):
-            def fetch_detail(self, slug):
+            def fetch_detail(self, slug, seo_symbol=None):
                 if slug == 'bad':
                     raise requests.Timeout('slow')
-                return super().fetch_detail(slug)
+                return super().fetch_detail(slug, seo_symbol)
         report = self.run_refresh(Failing([[row('ok'), row('bad')]]))
         self.assertEqual((report['added'], report['pending']), (1, 1))
         # The published index says only that the request failed; the detail is in the run report.
@@ -364,6 +366,41 @@ class ConcallHistoryTests(unittest.TestCase):
         same = {'a-q2-fy27': detail('a-q2-fy27', summary='## A'), 'a-q2-fy27-2': detail('a-q2-fy27-2', summary='## A')}
         report = self.run_refresh(Provider([[row('a-q2-fy27', 'A'), row('a-q2-fy27-2', 'A')]], same))
         self.assertEqual(list(report['duplicates'].values()), [['a-q2-fy27', 'a-q2-fy27-2']])
+
+    def test_a_call_is_fetched_from_the_quarter_endpoint_with_its_seo_symbol(self):
+        response = Mock(status_code=200)
+        response.json.return_value = {'status': 'success', 'data': {
+            'slug_id': 'honasa-q1-fy27', 'concall_quarter': 'Q1FY27', 'markdown_summary': '## Q1',
+            'insights': {'windows': [{'flags': [{'type': 'red', 'title': 'A'}]}, {'flags': [{'type': 'green', 'title': 'B'}]}]}}}
+        session = Mock()
+        session.post.return_value = response
+        detail = fetch_detail(session, 'honasa-q1-fy27', 'mama-earth-ltd')
+        url, = session.post.call_args.args
+        self.assertTrue(url.endswith('/live-call/fetch-company-quarter-summary'))
+        self.assertEqual(session.post.call_args.kwargs['json'], {'slug': 'honasa-q1-fy27', 'seo_symbol': 'mama-earth-ltd'})
+        # Stored in get-by-slug's shape, which the site reads.
+        self.assertEqual([w['flags'][0]['title'] for w in detail['forensic_flags']['flags']], ['A', 'B'])
+        self.assertNotIn('insights', detail)
+        fetch_detail(session, 'honasa-q1-fy27')
+        self.assertTrue(session.post.call_args.args[0].endswith('/live-call/get-by-slug'))
+
+    def test_the_listed_seo_symbol_is_passed_to_the_fetch(self):
+        provider = Provider([[dict(row('honasa-q1-fy27', 'HONASA'), seo_symbol='mama-earth-ltd')]])
+        self.run_refresh(provider)
+        self.assertEqual(provider.seo_symbols, {'honasa-q1-fy27': 'mama-earth-ltd'})
+        self.assertEqual(self.index()['calls']['honasa-q1-fy27']['seoSymbol'], 'mama-earth-ltd')
+
+    def test_a_call_answered_with_another_call_is_retried_daily_and_a_spaced_quarter_matches(self):
+        listed = [[dict(row('honasa-q1-fy27', 'HONASA', date='13 August 2026'), concall_quarter='Q1FY27')]]
+        newest = dict(detail('honasa-q1-fy27'), concall_quarter='Q2FY27')
+        self.run_refresh(Provider(listed, {'honasa-q1-fy27': newest}))
+        own = dict(detail('honasa-q1-fy27', summary='## Q1'), concall_quarter='Q1 FY27', concall_date='2026-08-13')
+        daily = Provider(listed, {'honasa-q1-fy27': own})
+        self.refresh_on(daily, '2026-11-23T16:30:00+05:30')
+        entry = self.index()['calls']['honasa-q1-fy27']
+        self.assertEqual(daily.fetched, ['honasa-q1-fy27'])
+        self.assertEqual(self.store.load(entry['object'])['call']['markdown_summary'], '## Q1')
+        self.assertNotIn('status', entry)
 
     def test_a_failed_or_emptied_recheck_keeps_the_stored_version(self):
         self.refresh_on(Provider([[row('a', date='20 November 2026')]]), '2026-11-21T16:30:00+05:30')

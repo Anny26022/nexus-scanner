@@ -10,7 +10,7 @@ currency, read as dollars: TSMC's assets come out as $10 trillion) and keeps som
 balance sheet is from 2009), so each part of a page is checked against TradingView's latest quarter
 (`trusted_blocks`). TradingView's values (tradingview.py) stay where a page is missing, untrusted, or has a gap.
 
-Pages are cached under `<root>/stock_pages/` and fetched again when a week old or when the company has reported since
+Pages are cached under `<root>/stock_pages/` and fetched again when a month old or when the company has reported since
 (TradingView's last earnings date is after the fetch). Fetches are paced and stop at a time budget; the rest wait for
 the next run, so a first run spreads over several days instead of overrunning the job.
 """
@@ -32,7 +32,7 @@ from edl_pipeline.scanner.financials import STATEMENT_METRICS, statement_referen
 from . import dhan, earnings
 
 # Kept from each page: quarterly and annual income, balance sheets, annual and quarterly cash flow, yearly revenue and
-# profit, ratios. A page cached before a part was kept gains it at its next weekly fetch.
+# profit, ratios. A page cached before a part was kept gains it at its next fetch (after a report, or monthly).
 KEPT = ('incomeStat_sq', 'incomeStat_sy', 'bs_s', 'cF_sy', 'cF_sq', 'rNp_s', 'CV')
 # TradingView carries the statement history (tradingview.quarters), so a page is needed again only after the company
 # reports (or catches up with a report); a monthly sweep catches anything else that changed.
@@ -153,7 +153,7 @@ def refresh_pages(records: list[dict], root: Path, now: datetime | None = None, 
                 write_page(root, record['symbol'], {'fetched_at': now.isoformat(), 'slug': record['slug'],
                                                     **{key: data.get(key) for key in KEPT}})
             elif outcome == 'missing' and not (previous and not previous.get('missing')):
-                # Remembered, so the next runs spend their budget on pages that exist; asked for again after a week.
+                # Remembered, so the next runs spend their budget on pages that exist; asked for again after a month.
                 # A page fetched before is kept (an empty answer or a 404 may be passing) and asked for again next run.
                 write_page(root, record['symbol'], {'fetched_at': now.isoformat(), 'slug': record['slug'], 'missing': True})
         except OSError as error:  # the cache is optional: this page counts as failed, the build goes on

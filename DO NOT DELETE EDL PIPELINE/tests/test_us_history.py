@@ -1,4 +1,5 @@
 """US history and snapshot checks added with the daily re-read of recent bars."""
+import json
 import shutil
 import sys
 import tempfile
@@ -58,6 +59,7 @@ class TailTests(unittest.TestCase):
         stored = [bar('2026-11-04', 9.8), bar('2026-11-05', 9.9), {**bar('2026-11-06', 10.03), 'high': 10.1}]
         history.write_bars(self.root / 'ACME.csv', stored)
         record = market.HistoryTests.RECORD
+        original = (self.root / 'ACME.csv').read_bytes()
         before = history.session_bars(history.read_bars(self.root / 'ACME.csv'))  # what the full path would read
         self.assertEqual(history.append_tail(record, self.root, '2026-11-09'), 'appended')
         expected = self.root / 'expected.csv'
@@ -66,6 +68,10 @@ class TailTests(unittest.TestCase):
         # Same bars (older rows keep their bytes, so a number may print as 100 rather than 100.0).
         self.assertEqual(history.read_bars(self.root / 'ACME.csv'), history.read_bars(expected))
         self.assertEqual(history.read_bars(self.root / 'ACME.csv')[-2]['close'], 10.0)  # yesterday's late print corrected
+        # Every row before the replaced last one keeps its bytes, and no temporary file is left behind.
+        prefix = original[:original.rstrip(b'\r\n').rfind(b'\n') + 1]
+        self.assertTrue((self.root / 'ACME.csv').read_bytes().startswith(prefix))
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ['ACME.csv', 'expected.csv'])
 
     def test_anything_unusual_goes_to_the_full_path(self):
         record = market.HistoryTests.RECORD
@@ -77,6 +83,34 @@ class TailTests(unittest.TestCase):
         history.write_bars(self.root / 'ACME.csv', [bar('2026-11-06', 10.0), bar('2026-11-09', 10.8)])
         self.assertIsNone(history.append_tail(record, self.root, '2026-11-09'))  # already current
         self.assertIsNone(history.append_tail({**record, 'tradingview_bar': None}, self.root, '2026-11-09'))
+
+
+class YahooEmptyTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.root)
+
+    def run_with(self, response, records):
+        get = mock.Mock(**({'side_effect': response} if isinstance(response, Exception) else {'return_value': response}))
+        with mock.patch.object(build.requests, 'get', get):
+            build.update_histories(records, self.root, '2026-11-09', interval=0, workers=1)
+        return json.loads((self.root / build.YAHOO_EMPTY).read_text()), get
+
+    def test_only_a_real_empty_answer_for_an_uncovered_stock_is_remembered(self):
+        uncovered = {**market.HistoryTests.RECORD, 'symbol': 'GONE', 'tradingview_bar': None, 'tradingview_previous_close': None}
+        history.write_bars(self.root / 'GONE.csv', [bar('2026-11-04', 10.0)])
+        empty, _ = self.run_with(__import__('requests').ConnectionError('down'), [uncovered])
+        self.assertEqual(empty, {})  # a failed request is not "Yahoo has nothing"
+        empty, _ = self.run_with(mock.Mock(status_code=404), [uncovered])
+        self.assertEqual(empty, {'GONE': '2026-11-09'})
+        _, get = self.run_with(mock.Mock(status_code=404), [uncovered])
+        get.assert_not_called()  # skipped for a week
+
+    def test_a_stock_with_a_tradingview_bar_is_never_skipped(self):
+        (self.root / build.YAHOO_EMPTY).write_text(json.dumps({'ACME': '2026-11-08'}))
+        history.write_bars(self.root / 'ACME.csv', [bar('2026-11-04', 10.0)])  # a gap Yahoo must fill
+        _, get = self.run_with(mock.Mock(status_code=404), [market.HistoryTests.RECORD])
+        get.assert_called()
 
 
 class TradingViewBarTests(unittest.TestCase):

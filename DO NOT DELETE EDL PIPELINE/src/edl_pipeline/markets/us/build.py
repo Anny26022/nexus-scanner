@@ -220,11 +220,15 @@ def update_histories(records: list[dict], directory: Path, session: str, *, inte
             return []
 
     def recent(symbol, start, *, remember):
-        if symbol in empty:
+        # Only a stock without TradingView's bar is skipped or remembered: one that is merely behind (or covered again)
+        # still needs Yahoo to fill its gap.
+        if remember and symbol in empty:
             return []
-        bars = history.fetch_recent(symbol, start, yahoo_fetch=yahoo_fetch)
-        # Only a stock without TradingView's bar is remembered: one that is merely behind still needs its gap filled.
-        if remember and not bars and not yahoo_stopped.is_set():  # Yahoo answered, with nothing: not a rate limit
+        outcome = {}
+        bars = history.fetch_recent(symbol, start, yahoo_fetch=lambda name, **kwargs: yahoo_fetch(name, outcome=outcome, **kwargs))
+        # Remembered only when Yahoo really answered with nothing (no bars, or no such ticker), never after a network
+        # error, an HTTP failure or a rate limit, which also come back as no bars.
+        if remember and not bars and outcome.get('answered'):
             with lock:
                 empty[symbol] = session
         return bars

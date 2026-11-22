@@ -83,6 +83,50 @@ class FilingsTests(unittest.TestCase):
         self.assertEqual((counts['index'], counts['due'], counts['fetched']), ('read', 1, 1))  # Apple's 8-K; Berkshire's Form 4 is not material
         self.assertEqual(json.loads((self.root / 'sec_filings' / filings.INDEX_STATE).read_text())['last_index_day'], '2026-11-20')
 
+    def state(self):
+        return json.loads((self.root / 'sec_filings' / filings.INDEX_STATE).read_text())
+
+    def write_state(self, value):
+        (self.root / 'sec_filings').mkdir(parents=True, exist_ok=True)
+        (self.root / 'sec_filings' / filings.INDEX_STATE).write_text(value if isinstance(value, str) else json.dumps(value))
+
+    def test_a_missing_day_is_a_holiday_only_once_a_later_day_has_an_index(self):
+        filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)
+        self.addCleanup(INDEXES.clear)
+        later = datetime(2026, 11, 24, 3, 0, tzinfo=timezone.utc)  # Monday 23 November in New York
+        self.write_state({'last_index_day': '2026-11-18', 'pending': []})
+        INDEXES['20261120'] = '1067983|Berkshire|424B2|2026-11-20|z\n'  # 19 Nov missing, 20 Nov there: a holiday
+        filings.refresh([{'symbol': 'AAPL'}], self.root, later, get=get, interval=0)
+        # Read through the weekend (no filings), stopping before Monday 23 Nov, whose index is not out yet.
+        self.assertEqual(self.state()['last_index_day'], '2026-11-22')
+        INDEXES.clear()
+        self.write_state({'last_index_day': '2026-11-18', 'pending': []})
+        filings.refresh([{'symbol': 'AAPL'}], self.root, later, get=get, interval=0)
+        self.assertEqual(self.state()['last_index_day'], '2026-11-18')  # nothing after the missing days: read again
+
+    def test_a_long_gap_resumes_from_yesterday_and_bad_state_counts_as_none(self):
+        filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)
+        self.write_state({'last_index_day': '2026-08-01', 'pending': []})
+        self.assertEqual(filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)['index'], 'not used')
+        self.assertEqual(self.state()['last_index_day'], '2026-11-18')
+        for bad in ('[1, 2]', '{"last_index_day": "not a date"}', '{"pending": "x"}'):
+            self.write_state(bad)
+            self.assertIn('fetched', filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0))
+
+    def test_an_index_error_keeps_pending_companies(self):
+        filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)
+        self.write_state({'last_index_day': '2026-11-17', 'pending': [320193]})
+
+        def broken(url, headers=None, timeout=None):
+            if '/daily-index/' in url:
+                return mock.Mock(status_code=500, raise_for_status=mock.Mock(side_effect=__import__('requests').HTTPError('500')))
+            if 'submissions' in url:
+                raise __import__('requests').ConnectionError('down')
+            return get(url, headers, timeout)
+        counts = filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=broken, interval=0)
+        self.assertTrue(counts['index'].startswith('unavailable'))
+        self.assertEqual((counts['due'], self.state()['pending']), (1, [320193]))  # still due, still pending
+
     def test_a_company_the_run_did_not_reach_stays_pending(self):
         filings.refresh([{'symbol': 'AAPL'}], self.root, self.now, get=get, interval=0)
         INDEXES['20261119'] = '320193|Apple Inc.|10-Q|2026-11-19|x\n'

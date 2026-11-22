@@ -26,10 +26,13 @@ def yahoo_symbol(symbol: str) -> str:
 
 
 def fetch_history(symbol: str, start: datetime | None = None, end: datetime | None = None, *,
-                  get: Callable[..., requests.Response] = requests.get, timeout: float = 15) -> list[dict]:
+                  get: Callable[..., requests.Response] = requests.get, timeout: float = 15,
+                  outcome: dict | None = None) -> list[dict]:
     """Daily split-adjusted bars for `symbol`, oldest first; returns empty list on 404 or network failure.
 
-    Raises Throttled on 429, so a rate limit is not mistaken for a ticker Yahoo does not have."""
+    Raises Throttled on 429, so a rate limit is not mistaken for a ticker Yahoo does not have. With `outcome`, sets
+    outcome['answered'] when Yahoo really answered (a chart, or 404 for an unknown ticker), so a caller can tell "Yahoo
+    has nothing" from a failed request; both return an empty list."""
     ysym = yahoo_symbol(symbol)
     period1 = int(start.timestamp()) if start else 0
     period2 = int(end.timestamp()) if end else 9999999999
@@ -40,9 +43,15 @@ def fetch_history(symbol: str, start: datetime | None = None, end: datetime | No
         response = get(url, params=params, headers=HEADERS, timeout=timeout)
         if response.status_code == 429:
             raise Throttled(f'Yahoo answered 429 for {ysym}')
+        if response.status_code == 404:
+            if outcome is not None:
+                outcome['answered'] = True  # Yahoo does not have the ticker: a real answer, not a failure
+            return []
         if response.status_code != 200:
             return []
         data = response.json()
+        if outcome is not None:
+            outcome['answered'] = True
     except (requests.RequestException, ValueError, TypeError, KeyError):
         return []
 

@@ -127,10 +127,11 @@ def filed_since(last: date, today: date, get, agent: str, pace) -> tuple[set, da
     """The CIKs with a material filing in EDGAR's daily indexes after `last`, through `today`, and the last day read.
 
     One small file a business day lists every filing made (366 KB on 2026-11-20: 4,136 filings, 300 by listed
-    companies in material forms). A day with no index is a holiday when it is past, and not yet published when it is
-    today; reading stops there so the next run picks it up.
+    companies in material forms). SEC publishes the days in order, so a day without an index is a holiday only once a
+    later day has one; until then (today's not published yet, or a past day not there yet) reading stops before it, and
+    the next run reads it again.
     """
-    filed, day = set(), last
+    filed, day, unresolved = set(), last, None
     while day < today:
         day += timedelta(days=1)
         if day.weekday() >= 5:
@@ -140,22 +141,26 @@ def filed_since(last: date, today: date, get, agent: str, pace) -> tuple[set, da
         if response.status_code in (403, 429):
             raise dhan.Throttled(f'SEC answered {response.status_code}')
         if response.status_code == 404:
-            if day >= today:
-                return filed, day - timedelta(days=1)
+            unresolved = unresolved or day
             continue
         response.raise_for_status()
+        unresolved = None  # a later index exists: the missing days before it were holidays
         for line in response.text.splitlines():
             parts = line.split('|')
             if len(parts) == 5 and parts[0].isdigit() and parts[2].removesuffix('/A') in MATERIAL:
                 filed.add(int(parts[0]))
-    return filed, day
+    return filed, (unresolved - timedelta(days=1)) if unresolved else day
 
 
 def _state(root: Path) -> dict:
+    """The daily-index cursor and pending companies; a missing or malformed file counts as none (the first run)."""
     try:
-        return json.loads((root / DIRECTORY / INDEX_STATE).read_text())
-    except (OSError, ValueError):
-        return {}
+        state = json.loads((root / DIRECTORY / INDEX_STATE).read_text())
+        last = date.fromisoformat(state['last_index_day']) if state.get('last_index_day') else None
+        pending = {int(cik) for cik in state.get('pending') or []}
+        return {'last_index_day': last, 'pending': pending}
+    except (OSError, ValueError, TypeError, AttributeError, KeyError):
+        return {'last_index_day': None, 'pending': set()}
 
 
 def refresh(records: list[dict], root: Path, now: datetime | None = None, *, get=requests.get, interval: float = INTERVAL,
@@ -184,14 +189,16 @@ def refresh(records: list[dict], root: Path, now: datetime | None = None, *, get
         return {'error': f'SEC ticker list unavailable: {error}'}
     today = now.astimezone(EASTERN).date()
     state = _state(root)
-    pending = set(state.get('pending') or [])
-    last = date.fromisoformat(state['last_index_day']) if state.get('last_index_day') else None
+    pending, last = state['pending'], state['last_index_day']
     filed, read_through, index_error = None, last, None
     if last and (today - last).days <= MAX_CATCH_UP:
         try:
             filed, read_through = filed_since(last, today, get, agent, pace)
         except (requests.RequestException, ValueError, TimeoutError, dhan.Throttled) as error:
             index_error = str(error)
+    elif last:
+        # Too long a gap to read day by day: this run uses the weekly rule, and the next resumes from yesterday.
+        read_through = today - timedelta(days=1)
     wanted = (filed | pending) if filed is not None else None
     cached = {record['symbol']: read(root, record['symbol']) for record in records}
 
@@ -200,9 +207,10 @@ def refresh(records: list[dict], root: Path, now: datetime | None = None, *, get
         if not entry:
             return True
         age = now - datetime.fromisoformat(entry['fetched_at'])
-        if wanted is None:
-            return age > REFRESH_AFTER
-        return known[sec_ticker(record['symbol'])] in wanted or age > SWEEP_AFTER
+        cik = known[sec_ticker(record['symbol'])]
+        if wanted is None:  # no index this run: pending companies stay due alongside the weekly rule
+            return cik in pending or age > REFRESH_AFTER
+        return cik in wanted or age > SWEEP_AFTER
 
     listed = [record for record in records if sec_ticker(record['symbol']) in known]
     queue = [record for record in listed if due(record)]
@@ -241,7 +249,7 @@ def refresh(records: list[dict], root: Path, now: datetime | None = None, *, get
         list(pool.map(one, queue))
     # Companies the index named but this run did not reach stay pending; the index is read from where it stopped.
     listed_ciks = {known[sec_ticker(record['symbol'])] for record in listed}
-    left = sorted(((wanted or set()) & listed_ciks) - fetched)
+    left = sorted(((wanted if wanted is not None else pending) & listed_ciks) - fetched)
     state_path = root / DIRECTORY / INDEX_STATE
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(json.dumps({'last_index_day': (read_through or today - timedelta(days=1)).isoformat(),

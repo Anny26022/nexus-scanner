@@ -174,7 +174,7 @@ def append_tail(record: dict, root: Path, session: str) -> str | None:
     else (no file, a gap, a split, a row that is not clean): the full path in update() handles it.
 
     Measured 2026-11-22: reading, cleaning and rewriting a 5,000-row file costs about 26 ms, 170 s for the market; this
-    costs about 0.05 ms a stock.
+    copies the file's bytes without parsing them, about 1 ms a stock.
     """
     path = symbol_csv_path(root, record['symbol'])
     if not record.get('tradingview_bar') or not path.exists():
@@ -196,10 +196,13 @@ def append_tail(record: dict, root: Path, session: str) -> str | None:
     extended, _ = extend([stored], record, session)
     if not extended:
         return None
-    with path.open('r+b') as handle:
-        handle.seek(start)
-        handle.truncate()
-        handle.write(_rows(extended))
+    # Written to a temporary file and swapped in, so an interruption never leaves the history cut short. Copying the
+    # earlier rows' bytes costs about a millisecond; reading and parsing them is what this path avoids.
+    with path.open('rb') as handle:
+        kept = handle.read(start)
+    temporary = path.with_suffix('.csv.tmp')
+    temporary.write_bytes(kept + _rows(extended))
+    temporary.replace(path)
     return 'appended'
 
 

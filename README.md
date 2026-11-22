@@ -80,9 +80,10 @@ read back, then the AI filter catalogue, the price-band ledger and `sessions.jso
 that fails part-way leaves the previous release live, and the publisher refuses to publish an older session over
 the current one. Details: [docs/site-data-r2.md](docs/site-data-r2.md).
 
-Git does not carry published data or pipeline state. Refreshes commit only `reference/`, and the weekly US sync
-commits the Finviz universe files. `frontend/public/data/` is a frozen copy from before the move to R2; local
-publications overwrite it.
+Live releases and pipeline state are in R2. India refreshes commit only `reference/`, and the weekly US sync
+commits the Finviz universe files. The checkout still tracks frozen copies from before the move to R2: the
+published data in `frontend/public/data/` (local publications overwrite it) and the pipeline-state files in the
+pipeline directory (used when nothing has been pulled from R2).
 
 ### Published files
 

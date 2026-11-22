@@ -55,8 +55,8 @@ def main(argv=None):
         print(f"::error::{without_bar} US stocks had no TradingView bar for the session (over {MAX_FALLBACKS}); "
               "something upstream changed, so nothing is published.", flush=True)
         return 1
-    if history.get('throttled') or benchmarks.get('throttled') or lagging_benchmarks or not report['rs_ratings']:
-        print('::error::The US history is incomplete (rate limited, a benchmark behind or no RS ratings); nothing to publish.',
+    if benchmarks.get('throttled') or lagging_benchmarks or not report['rs_ratings']:
+        print('::error::The US history is incomplete (a benchmark rate limited or behind, or no RS ratings); nothing to publish.',
               flush=True)
         return 1
     # A wide provider failure leaves stocks on earlier sessions; a normal day has about 96% on the session.
@@ -66,6 +66,12 @@ def main(argv=None):
         print(f"::error::Only {report['aligned']} of {eligible} US stocks reached {report['session']}; nothing to publish.",
               flush=True)
         return 1
+    # Dhan is the stocks' last resort, for the few Yahoo lacks (SPAC rights and CVRs, 31 on 2026-11-22), and it refuses
+    # GitHub's runners. Those stocks stay out until a source has them; a wide failure fails the share check above.
+    if history.get('throttled'):
+        # `missing` also counts stocks that kept an earlier file (behind the session), so it is not "no history".
+        print(f"::warning::Dhan refused the stock-history fallback; {history.get('missing', 0)} stock histories are missing "
+              "or behind the session.", flush=True)
     if history.get('yahoo_throttled') or benchmarks.get('yahoo_throttled'):
         print('::warning::Yahoo rate limited the history; the rest came from Dhan (new stocks seeded from 2021 onwards).',
               flush=True)

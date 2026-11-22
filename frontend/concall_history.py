@@ -260,7 +260,8 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
             when = entry.get('date') or ''
             if when >= since(RECHECK_DAILY_DAYS):
                 return True
-            return full and (when >= since(RECHECK_WEEKLY_DAYS) or rotating(slug))
+            # A call stored before summaries had digests is rechecked once, so a shared summary is caught.
+            return full and (when >= since(RECHECK_WEEKLY_DAYS) or rotating(slug) or not entry.get('summary'))
         if not entry.get('attempts'):
             return True
         when = entry.get('date') or entry.get('firstSeen') or today

@@ -346,6 +346,20 @@ class ConcallHistoryTests(unittest.TestCase):
         calls = self.index()['calls']
         self.assertTrue(calls['bhartiartl-q2-fy27']['object'] and calls['bhartihexa-q2-fy27']['object'])
 
+    def test_the_weekly_run_rechecks_old_calls_stored_without_a_digest_once(self):
+        listed = [[row('bhartiartl-q2-fy27', 'BHARTIARTL', date='01 October 2026'),
+                   row('bhartihexa-q2-fy27', 'BHARTIHEXA', date='01 October 2026')]]
+        hexacom = {s: detail(s, summary='## Hexacom') for s in ('bhartiartl-q2-fy27', 'bhartihexa-q2-fy27')}
+        self.run_refresh(Provider(listed))
+        index = self.index()
+        for entry in index['calls'].values():
+            entry.pop('summary', None)
+        self.output.write_text(json.dumps(index))
+        weekly = Provider(listed, hexacom)
+        self.refresh_on(weekly, '2026-11-23T16:30:00+05:30', full=True)
+        self.assertEqual(sorted(weekly.fetched), ['bhartiartl-q2-fy27', 'bhartihexa-q2-fy27'])
+        self.assertEqual([entry['object'] for entry in self.index()['calls'].values()], [None, None])
+
     def test_one_companys_summary_under_two_of_its_slugs_is_only_reported(self):
         same = {'a-q2-fy27': detail('a-q2-fy27', summary='## A'), 'a-q2-fy27-2': detail('a-q2-fy27-2', summary='## A')}
         report = self.run_refresh(Provider([[row('a-q2-fy27', 'A'), row('a-q2-fy27-2', 'A')]], same))

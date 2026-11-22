@@ -1,0 +1,83 @@
+name: Concall Summary Refresh
+
+# Started by hand: refreshes only the concall summaries (frontend/concall_history.py) and publishes their two
+# pointers, without the rest of the daily refresh.
+on:
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Walk the whole provider list and recheck as the weekly run does (--full)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+# Shares the daily refresh's group, so the two never write the concall index at the same time.
+concurrency:
+  group: daily-data-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh-concalls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+      R2_BUCKET: nexus-screener-chart-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+          cache-dependency-path: 'DO NOT DELETE EDL PIPELINE/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          pip install -r "DO NOT DELETE EDL PIPELINE/requirements.txt"
+          sudo apt-get update -qq && sudo apt-get install -y -qq rclone
+
+      - name: Test concall refresh
+        working-directory: frontend
+        run: python -m unittest test_concall_history
+
+      # Only the live concall index; a missing one fails the run rather than starting from empty.
+      - name: Pull the live concall index
+        working-directory: frontend
+        run: |
+          python - <<'EOF'
+          from chart_publication import R2Store
+          from site_data import OUTPUT, POINTER_PREFIX
+          store = R2Store()
+          (OUTPUT / 'concalls').mkdir(parents=True, exist_ok=True)
+          store.cache_command('copyto', store.remote(f'{POINTER_PREFIX}/concalls/index.json'), str(OUTPUT / 'concalls/index.json'))
+          EOF
+
+      - name: Refresh concall summaries
+        run: python frontend/concall_history.py ${{ inputs.full && '--full' || '' }}
+
+      - name: Publish the concall pointers
+        if: always()
+        working-directory: frontend
+        run: |
+          python - <<'EOF'
+          from chart_publication import R2Store
+          from site_data import OUTPUT, upload_pointer
+          store = R2Store()
+          for name in ('concalls/index.json', 'concalls/upcoming.json'):
+              if (OUTPUT / name).is_file():
+                  upload_pointer(store, OUTPUT, name)
+          EOF
+
+      - name: Upload refresh report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: concall-refresh-report
+          if-no-files-found: ignore
+          path: frontend/concall-refresh-report.json

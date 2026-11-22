@@ -49,6 +49,23 @@ class RecentTests(unittest.TestCase):
             counts = build.update_histories([market.HistoryTests.RECORD], self.root, '2026-11-09', interval=0, workers=1)
         self.assertEqual(counts['appended'], 1)
 
+    def test_history_progress_is_printed_every_so_many_stocks_and_at_the_end(self):
+        import io
+        from contextlib import redirect_stdout
+        records = [{**market.HistoryTests.RECORD, 'symbol': symbol} for symbol in ('ACME', 'BETA', 'GAMA')]
+        for record in records:
+            history.write_bars(self.root / f"{record['symbol']}.csv", [bar('2026-11-05', 9.9), bar('2026-11-06', 10.0)])
+        out = io.StringIO()
+        with mock.patch.object(build, 'PROGRESS_EVERY', 2), redirect_stdout(out):
+            build.update_histories(records, self.root, '2026-11-09', interval=0, workers=1, started=0.0)
+        lines = out.getvalue().splitlines()
+        self.assertEqual([line.split('] ', 1)[1] for line in lines], ['history 2/3: appended 2', 'history 3/3: appended 3'])
+        # Without a start time (the benchmarks, and callers outside the build) nothing is printed.
+        out = io.StringIO()
+        with redirect_stdout(out):
+            build.update_histories(records, self.root, '2026-11-09', interval=0, workers=1)
+        self.assertEqual(out.getvalue(), '')
+
 
 class TailTests(unittest.TestCase):
     def setUp(self):

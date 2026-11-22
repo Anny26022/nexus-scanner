@@ -24,7 +24,7 @@ There is no UI here. The screener UI is the `@anny26022/nexus-scanner` package i
 
 | Location | What it is |
 | --- | --- |
-| [`DO NOT DELETE EDL PIPELINE/`](DO%20NOT%20DELETE%20EDL%20PIPELINE/) | The Python pipeline (`edl-pipeline` package in `src/edl_pipeline/`) and its fetch/build scripts. India runs from `run_full_pipeline.py`, the US from `python -m edl_pipeline.markets.us`. The directory name is kept because workflows depend on it. |
+| [`DO NOT DELETE EDL PIPELINE/`](DO%20NOT%20DELETE%20EDL%20PIPELINE/) | The Python pipeline (`edl-pipeline` package in `src/edl_pipeline/`) and its fetch/build scripts. India runs from `run_full_pipeline.py`, the US from `PYTHONPATH=src:. python -m edl_pipeline.markets.us <root>`. The directory name is kept because workflows depend on it. |
 | [`frontend/`](frontend/) | Despite the name, no UI: the Python publishers (`publish_snapshot.py`, `publish_us.py`, `publish_etfs.py`, `site_data.py`, `chart_publication.py`, the Earnings Pulse and concall steps) and the shared filter catalogue (`src/`) the AI Worker compiles against. See [`frontend/README.md`](frontend/README.md). |
 | [`workers/screener-ai/`](workers/screener-ai/) | The `nexus-scanner` Worker ([`wrangler.jsonc`](wrangler.jsonc)): serves `/data/*` from R2, answers `POST /api/screener/ai-compile`, and redirects every other page to the journal's `/scanner`. |
 | [`workers/r2-delivery/`](workers/r2-delivery/) | The `nexus-scanner-data` Worker: read-only GET/HEAD for the public R2 prefixes `objects/`, `releases/`, `daily/`, `monthly/` and `snapshots/`. |
@@ -166,8 +166,8 @@ their last published data in place.
 
 ## Local development
 
-Prerequisites: Python 3.10 (what CI uses; the package declares 3.9+), Node 24 (`.nvmrc`), and `rclone` only to
-reach R2.
+Prerequisites: Python 3.10 for the pipeline (the refresh workflows and `ci.yml` use it; the package declares 3.9+;
+`frontend-ci.yml` runs the `frontend/` Python tests on 3.12), Node 24 (`.nvmrc`), and `rclone` only to reach R2.
 
 ```bash
 cd "DO NOT DELETE EDL PIPELINE"
@@ -184,10 +184,18 @@ python3 run_full_pipeline.py --phase fetch --stage /tmp/edl-stage
 python3 run_full_pipeline.py --phase build --stage /tmp/edl-stage
 ```
 
-With `EDL_CHART_STORAGE=local` (the default), publication writes to `frontend/public/data` and uploads nothing. To
-start from the live state instead of the frozen Git copies, pull it with the R2 settings set:
+Build a US root, also from the pipeline directory (`--limit N` keeps only the N largest stocks for a quick check):
 
 ```bash
+PYTHONPATH=src:. python3 -m edl_pipeline.markets.us /tmp/us-root --limit 50
+```
+
+With `EDL_CHART_STORAGE=local` (the default), publication writes to `frontend/public/data` and uploads nothing. To
+start from the live state instead of the frozen Git copies, pull it with the R2 settings set. This and every command
+below runs from the repository root:
+
+```bash
+cd ..
 python3 tools/pipeline_state.py pull
 python3 frontend/site_data.py pull
 ```
@@ -329,7 +337,7 @@ The previous release stays live until a run succeeds. Promotion copies files bac
 exceptions, including publisher errors; it is not a transaction across a process crash, and history caches may
 already have been updated.
 
-**A diagnostic run.** `EDL_FETCH_OHLCV=0 python3 run_full_pipeline.py` skips the OHLCV refresh and never changes
+**A diagnostic run.** `EDL_FETCH_OHLCV=0 python3 run_full_pipeline.py`, from the pipeline directory, skips the OHLCV refresh and never changes
 published files.
 
 **Undo one bad run's state.** `pipeline-state/previous/<file>` (US: `pipeline-state/us/previous/`) holds the version

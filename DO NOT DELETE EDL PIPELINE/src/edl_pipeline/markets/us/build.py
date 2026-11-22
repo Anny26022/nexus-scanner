@@ -309,7 +309,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
         # Each fetch reports when it finishes, not when the build reads its result.
         for name, future in (('stock pages', pages), ('news', articles), ('SEC filings', sec)):
             future.add_done_callback(lambda done, name=name: _progress(
-                started, f'{name} done: {done.exception() or done.result()}'))
+                started, f'{name} failed: {done.exception()!r}' if done.exception() else f'{name} done: {done.result()}'))
         report['history'] = update_histories(records, root / 'ohlcv_data', session, interval=interval, workers=workers,
                                              started=started)
         report['benchmarks'] = update_histories(benchmarks, root / 'indices_ohlcv_data', session, interval=interval, workers=1)

@@ -1,627 +1,388 @@
 # Nexus Scanner
 
-Nexus Scanner is an NSE equity research and screening system. It contains a React browser application, a Python market-data pipeline, immutable scanner releases, and optional Cloudflare R2 chart delivery.
+The data pipeline behind the Nexus screener, for Indian (NSE) and US equities. It fetches market data, computes
+technicals, fundamentals, breadth, RS ratings and preset results, validates them, and publishes immutable releases
+to Cloudflare R2. It also holds the two Workers that serve that data and the AI screen compiler.
 
-Every result is tied to one published trading session and one immutable revision. The system does not silently combine a new stock snapshot with an old IPO catalogue, chart file, or filter result.
+There is no UI here. The screener UI is the `@anny26022/nexus-scanner` package in Nexus Journal
+(`packages/nexus-scanner` in `new_nexys_ultimate`), which reads what this repository publishes.
 
-> Nexus Scanner is for research and data-engineering workflows. It is not investment advice. Upstream market data can be delayed, incomplete, corrected, rate-limited, or unavailable.
+> For research and data engineering, not investment advice. Upstream data can be delayed, incomplete, corrected,
+> rate-limited or unavailable.
 
 ## Contents
 
-- [Technical architecture](#technical-architecture)
-- [How people use this repository](#how-people-use-this-repository)
-- [Every scanner form and filter family](#every-scanner-form-and-filter-family)
-- [Calculation conventions and formulas](#calculation-conventions-and-formulas)
-- [What happens at runtime](#what-happens-at-runtime)
-- [How every published file is generated](#how-every-published-file-is-generated)
-- [Storage, caching, and R2](#storage-caching-and-r2)
-- [Local development](#local-development)
-- [Configuration and production deployment](#configuration-and-production-deployment)
-- [Recovery and troubleshooting](#recovery-and-troubleshooting)
-- [Automated refreshes](#automated-refreshes)
-- [Testing, data quality, and limits](#testing-data-quality-and-limits)
+- [Repository map](#repository-map) and [pipeline modules](#pipeline-modules)
+- [Data flow](#data-flow): R2 layout, publication order, [published files](#published-files)
+- [Automated runs](#automated-runs)
+- [Data sources](#data-sources)
+- [Screening model](#screening-model): conditions, built-in scans, formulas, match states
+- [Local development](#local-development) and [deploying the Workers](#deploying-the-workers)
+- [Recovery and troubleshooting](#recovery-and-troubleshooting) and [limits](#limits)
 
 ## Repository map
 
-| Location | Responsibility |
+| Location | What it is |
 | --- | --- |
-| [`frontend/`](frontend/) | Browser data publication (Python) and the shared filter catalogue the AI Worker and the pipeline read. The screener UI lives in Nexus Journal (`packages/nexus-scanner`). |
-| [`workers/screener-ai/`](workers/screener-ai/) | The `nexus-scanner` Worker: published data (`/data/*`) from R2 and the AI screen compiler. |
-| [`DO NOT DELETE EDL PIPELINE/`](DO%20NOT%20DELETE%20EDL%20PIPELINE/) | Python acquisition, history maintenance, calculations, condition engine, artifact validation, and publication. The directory name is preserved because existing workflows use it. |
-| [`.github/workflows/daily_refresh.yml`](.github/workflows/daily_refresh.yml) | Weekday refresh, tests, scanner publication, R2 upload when configured, and generated-data commit. |
-| [`.github/workflows/weekly_eod2_refresh.yml`](.github/workflows/weekly_eod2_refresh.yml) | Weekly adjusted-history overlay followed by the same validated publication flow. |
-| `docs/r2-chart-publication.md` (private notes) | R2 object layout, retry behavior, retention, and chart fields. |
-| [`frontend/README.md`](frontend/README.md) | What remains in `frontend/` and how to test it. |
-
-## Technical architecture
-
-Nexus is deliberately split into a data plane (this repository) and an interaction plane (Nexus Journal).
-
-| Layer | Technology | Responsibility |
-| --- | --- | --- |
-| Screener UI and browser screen engine | Nexus Journal's `packages/nexus-scanner` | Renders the screener, charts and tables; evaluates supported rules on published snapshots in a Web Worker. Not in this repository. |
-| Data and AI Worker | Cloudflare Worker (`workers/screener-ai`) | Serves published data from R2 and compiles plain-English screens against the shared filter catalogue. |
-| Condition contract | Typed TypeScript catalogue and Python registries | Keeps field names, inputs, presets, labels, and availability rules aligned across the pipeline, the AI Worker and the journal's copy. |
-| Python evaluator | Python, pandas, NumPy | Evaluates historical OHLCV, multi-session, delivery, pattern, earnings, and cross-series rules. |
-| Data pipeline | Python, requests, BeautifulSoup, CSV/JSON/Gzip | Fetches, standardizes, validates, and promotes market artifacts. |
-| Release store | Git-hosted immutable JSON and gzip files | Publishes compact scanner releases and a small active-release pointer. |
-| Chart store | Cloudflare R2 | Supplies per-symbol compressed payloads the journal's charts load. |
-| Automation | GitHub Actions | Runs daily and weekly refreshes, tests, publication, and generated-data commits. |
-
-### Shared filter catalogue
-
-| Module | What it does |
-| --- | --- |
-| `frontend/src/data/` | Condition, preset and scan catalogues. The pipeline reads `presetEligibility.json`, `snapshotTechnicals.json` and `scanRecipes.json`; the AI Worker compiles screens against the TypeScript catalogues and `nativeConditions.json` (also read by `test_scanner_bridge.py`). |
-| `frontend/src/api/aiFilterCatalog.ts`, `aiScreenerContract.ts` | The AI compiler's filter list and the result it must return. |
-| `frontend/src/api/snapshotScreen.ts`, `frontend/src/utils/` | Condition rules the catalogue and compiler share. |
-
-Nexus Journal keeps its own copy of these files in `packages/nexus-scanner/src`; change both together.
+| [`DO NOT DELETE EDL PIPELINE/`](DO%20NOT%20DELETE%20EDL%20PIPELINE/) | The Python pipeline (`edl-pipeline` package in `src/edl_pipeline/`) and its fetch/build scripts. India runs from `run_full_pipeline.py`, the US from `PYTHONPATH=src:. python -m edl_pipeline.markets.us <root>`. The directory name is kept because workflows depend on it. |
+| [`frontend/`](frontend/) | Despite the name, no UI: the Python publishers (`publish_snapshot.py`, `publish_us.py`, `publish_etfs.py`, `site_data.py`, `chart_publication.py`, the Earnings Pulse and concall steps) and the shared filter catalogue (`src/`) the AI Worker compiles against. See [`frontend/README.md`](frontend/README.md). |
+| [`workers/screener-ai/`](workers/screener-ai/) | The `nexus-scanner` Worker ([`wrangler.jsonc`](wrangler.jsonc)): serves `/data/*` from R2, answers `POST /api/screener/ai-compile`, and redirects every other page to the journal's `/scanner`. |
+| [`workers/r2-delivery/`](workers/r2-delivery/) | The `nexus-scanner-data` Worker: read-only GET/HEAD for the public R2 prefixes `objects/`, `releases/`, `daily/`, `monthly/` and `snapshots/`. |
+| [`tools/`](tools/) | R2 state sync (`pipeline_state.py`, `us_state.py`), historical snapshot backfills, the Tijori export, the Actions cache pruner, offline benchmarks, and their tests. |
+| [`reference/`](reference/) | Inputs the next run reads and whose history Git keeps: index constituents (daily), Tijori overviews and Dhan groups (weekly). |
+| [`docs/`](docs/) | Design notes, e.g. [site data in R2](docs/site-data-r2.md), [pipeline state in R2](docs/pipeline-state-r2.md), [ETF snapshots](docs/etf-snapshots.md), [rotation](docs/rotation.md). |
+| [`.github/workflows/`](.github/workflows/) | Refresh, backfill, CI and cache-retention workflows (below). |
 
 ### Pipeline modules
 
-| Module area | What it does |
+Under `DO NOT DELETE EDL PIPELINE/src/edl_pipeline/`:
+
+| Module | What it does |
 | --- | --- |
-| `edl_pipeline.runner` | Orchestrates stages, script lanes, compression, validation, cleanup, and reports. |
-| `edl_pipeline.publication` | Promotes only validated staged artifacts and triggers the frontend publisher. |
-| `edl_pipeline.validators` | Checks schema, required fields, counts, and artifact readability. |
-| `edl_pipeline.scanner.trend` | Normalizes OHLCV and evaluates the condition-expression tree with match/no-match/unavailable results. |
-| `edl_pipeline.scanner.context` | Evaluates fundamentals, RS, earnings, surveillance, and snapshot-aligned conditions. |
-| `edl_pipeline.scanner.patterns` | Implements gaps, inside bars, range contraction, VCP, resistance, and related chart patterns. |
-| `edl_pipeline.scanner.presets` | Stores and validates the versioned 45-preset library. |
-| `edl_pipeline.breadth` | Builds eligible universes, benchmark alignment, breadth measures, and ratings inputs. |
-| `edl_pipeline.sources` | Encapsulates exchange archive, market-data and news retrieval. |
-| `edl_pipeline.transforms` | Produces fundamental, event, and market-breadth derived artifacts. |
+| `runner` | Orchestrates the stages and script lanes, compression, validation, cleanup and reports. |
+| `publication` | Builds in an isolated stage and promotes only a complete, validated output set, then runs `frontend/publish_snapshot.py`. |
+| `validators`, `quality` | Schema, required-field, count and readability checks; whole-publication integrity and coverage checks. |
+| `scanner.trend` | The condition registry and expression-tree evaluator over OHLCV, with match / no-match / unavailable results. |
+| `scanner.patterns` | New highs/lows, 52-week distance, ATR, consolidation, range contraction, inside bars, unfilled gaps, VCP legs, horizontal resistance. |
+| `scanner.context` | Relative strength and RS ratings, fundamentals, earnings, classification, liquidity, price bands, surveillance, index membership, breadth. |
+| `scanner.indicators`, `scanner.financials`, `scanner.query` | Indicator series (SMA, EMA, RSI, MACD, Supertrend, …), quarterly growth and P/E, the text-query compiler. |
+| `scanner.presets` | The versioned 45-scan preset library and its validation against the registry. |
+| `breadth`, `transforms` | Eligible universes, benchmark alignment, breadth and MBI; fundamental, event and breadth artifacts. |
+| `sources` | NSE archive, Dhan and news retrieval. |
+| `markets.us` | The US market: NYSE calendar, Dhan, Yahoo, TradingView, SEC EDGAR, Finviz, and the US build. |
 
-## How people use this repository
-
-### 1. Researcher: find an actionable candidate list
-
-Use the screener in Nexus Journal (`/scanner`).
-
-1. Select Mainboard or another available indexed universe such as Nifty 500.
-2. Start from a preset such as Persistent Momentum, then tune its parameters; or build a rule from scratch.
-3. Choose `Match all` when every rule must pass, or `Match any` for an OR screen.
-4. Run the screen, sort the table, and copy symbols from the displayed result page.
-5. Reopen the browser to restore the current workspace preferences.
-
-This workflow is for idea generation and repeatable research. It does not execute trades or provide a portfolio recommendation.
-
-### 2. Analyst: reproduce a screen for a published session
-
-Use the revision/session visible in the screen result. The immutable release lets an analyst explain what data was used for the result and rerun the same expression against the matching backend inputs where history is available. Same-session data corrections create a new revision, preserving the older release rather than overwriting it.
-
-### 3. Product team: embed the screener
-
-The screener UI is Nexus Journal's `packages/nexus-scanner`. It reads published data and the AI endpoint from the `nexus-scanner` Worker (`npm run deploy`); opening the Worker's own pages redirects to the journal.
-
-### 4. Data engineer: refresh public market artifacts
-
-Run the EDL pipeline locally or let GitHub Actions run it on schedule. The pipeline stages files away from the current public release, validates them, then promotes the release only when the required checks pass.
-
-```bash
-cd "DO NOT DELETE EDL PIPELINE"
-python3 run_full_pipeline.py
-```
-
-After the run, inspect `data_quality.json`, `pipeline_report.json`, and the generated browser release before publishing external changes.
-
-### 5. Quant or developer: add a new condition or preset
-
-1. Add a typed input definition to the condition catalogue (`frontend/src/data/`, and the journal's copy).
-2. Add the condition's evaluation contract in the Python registry and implementation.
-3. Define missing-data and session-alignment behavior explicitly.
-4. Add unit tests for match, no-match, and unavailable outcomes.
-5. If the rule belongs in a built-in scan, add or update its declarative preset definition.
-6. Regenerate a snapshot and verify browser-worker support. Keep a Python fallback for rules that require unbundled historical data.
-
-### 6. Data platform operator: run charts at scale
-
-Set the R2 environment variables, enable `EDL_CHART_STORAGE=r2`, and run the normal pipeline. The publisher uploads immutable per-symbol files, verifies them, and updates the release only after all required publication work completes. Clients fetch one chart at a time from the release URL template.
-
-## Every scanner form and filter family
-
-The filter catalog is a typed contract. A condition has a name, documented inputs, evaluation rules, and availability requirement. The client renders its form from this contract, and the Python evaluator uses the same condition identifiers.
-
-### Trend and moving-average filters
-
-| Condition | What it evaluates |
-| --- | --- |
-| Indicator Compare / Crossover | Numeric comparison or recent crossover between price transforms, indicators, or a fixed value, with independent periods and offsets. |
-| MA Convergence | Spread among selected SMA/EMA values divided by close, with an explicit tolerance. |
-| Price / Oscillator Divergence | Confirmed regular or hidden bullish/bearish divergence without future-bar leakage. |
-| Supertrend Direction | Wilder-ATR Supertrend line and bullish/bearish state, or a recent direction turn. |
-| Persistent Momentum | Price persistence above or below selected EMAs with the configured reset rule. |
-| Price vs EMA / Price vs SMA | Latest close relative to the selected EMA or SMA. |
-| EMA Shakeout & Reclaim | A recent dip through an EMA followed by a current reclaim. |
-| MA Stack / Moving Average Stack Order | Ordered moving averages such as 20 above 50 above 200. |
-| % Days Above MA | Share of a selected lookback spent above a selected moving average. |
-| MA Slope / MA Slope & Trajectory | Direction and percentage movement of a moving average across its lookback. |
-| EMA Key Level Reclaim | Recent EMA violation followed by a reclaim. |
-| Consecutive Up Days | A run of positive-close sessions. |
-
-### Price, volatility, range, and chart-pattern filters
-
-| Condition | What it evaluates |
-| --- | --- |
-| Price Change % | Return across a trading-session window. A legacy `Below` request is interpreted as a decline of at least the threshold. |
-| New High / New Low | Highest high or lowest low over a complete rolling lookback, optionally fired recently. |
-| % From 52-Week High / Low | Latest close distance from the high or low over up to 252 sessions. |
-| All-Time-High distance | Split- and bonus-adjusted distance from all available EOD history. |
-| ATR % / ADR % | Wilder ATR or average daily high-low range as a percentage of price. |
-| Consolidation Range | High-low range of a completed base. |
-| Range Contraction / VCP | Relative contraction of recent and prior ranges or swing legs. |
-| Inside Bar | Daily or weekly bars contained by preceding bars. |
-| Unfilled Gap | Up or down gaps that have remained open or have filled. |
-| Horizontal Resistance | Unbroken clustered swing-high resistance near the current base. |
-| Gap Up / Gap Down | Session gaps relative to the prior close. |
-
-### Volume, liquidity, delivery, and trading controls
-
-| Condition | What it evaluates |
-| --- | --- |
-| RVOL / Volume vs Average | A session's volume relative to its preceding average-volume window. |
-| Volume Trend | Recent volume compared with a prior base window. |
-| Highest Volume in N Days | A high-volume event in its completed lookback. |
-| Average Turnover | Average traded value in crore across a daily lookback. Intraday windows require intraday history. |
-| Delivery % Spike | Delivery percentage against aligned delivery history. |
-| Market Cap / Free-Float Market Cap | Current capitalisation and free-float-adjusted capitalisation. |
-| Price Range / Circuit Band | Current close range and NSE price-band constraints. |
-| F&O Ban / Series | Current official ban state and NSE listing series. |
-| Exclude ASM / GSM | Latest available surveillance lists, including stage and fetch date. |
-
-### Relative strength, breadth, and universe filters
-
-| Condition | What it evaluates |
-| --- | --- |
-| Relative Strength | Stock return minus benchmark return over aligned sessions. |
-| RS Line at New High | Relative-strength line at its lookback high while price remains below its own high. |
-| RS Rating | Cross-sectional 1–99 percentile across the published eligible universe. |
-| Index Membership | Published current index membership. |
-| Market Breadth | Published breadth metrics for the supported universe and session. |
-| Sector / Industry | Current published NSE classifications. |
-| Listing Age | Trading sessions since listing. |
-
-### Fundamental and earnings filters
-
-| Condition | What it evaluates |
-| --- | --- |
-| P/E | Positive trailing P/E from the released fundamental snapshot. |
-| Quarterly growth | QoQ or YoY revenue, net profit, PBT, EPS, or operating-margin growth. |
-| Fundamental metric | ROE, ROCE, operating margin, verified debt/equity, PEG, five-year sales growth, latest-quarter revenue, non-current assets, total liabilities and annual interest coverage. Published price/history choices also include session VWAP, latest declared DPS, listing-covered ATH/ATL and five-year return. |
-| EPS Last Year Higher | Latest annual EPS compared with the preceding annual EPS. |
-| Days Since Earnings | Trading sessions since the latest reported earnings event. |
-
-Financial amounts labelled in lakhs are converted from crore values. Statement periods and derived formulas are retained in metadata. D/E remains unavailable without actual borrowings; latest declared DPS is not annual DPS. See published financial and price fields (private notes) for source contracts, query examples and history coverage rules.
-
-### Built-in scans
-
-The versioned local preset library contains 45 scans, including Persistent Momentum, Easy Money, Relative Strength Leaders, RS Line at New High, Stage 2 Uptrend, Momentum Burst, Quiet Strength, 52-Week High Breakout, 20-Day High on Record Volume, Breakout from Tight Base, Pocket Pivot, ADX Trend Breakout, Circuit-Safe Breakout, VCP Contraction, Inside Bar Coil, Weekly Inside Bar, Volume Dry-Up Base, Flat Base, Horizontal Resistance, Flags & Pennants, Low-ATR Coil, 21 EMA Pullback, 50 EMA Shakeout, Higher-Low Pullback, Gap Support Retest, Volume Surge, Highest Volume in 3 Months, Delivery-Backed Accumulation, Sustained Accumulation, Unfilled Gap Up, Gap & Go, Gap Down Washout, 52-Week Low Bounce, RS Divergence Turn, Relative Weakness, Earnings Growth Momentum, Post-Earnings Drift, Growth at a Fair Price, Revenue & Profit Acceleration, Pre-Earnings Coil, Breadth-Gated Leaders, Liquid Trading Universe, Fresh IPO Base, Nifty 500 Momentum, and Midcap Breakout.
-
-Preset defaults deliberately include market cap above ₹1,000 Cr, price above ₹10, and 50-day average turnover above ₹5 Cr. They have no upper market-cap or price ceiling and no blanket 2% or 5% circuit exclusion.
-
-## Calculation conventions and formulas
-
-All technical windows below use trading sessions, not calendar days. Data is cut off at the published session. A 20-session return requires 21 closes. Missing required history produces `unavailable`; a shortened window is not silently substituted unless that condition explicitly allows it.
-
-| Calculation | Rule |
-| --- | --- |
-| SMA(N) | Mean of the latest N closes; a full N-session window is required. |
-| EMA(N) | Recursive exponential average with `adjust=False`; required warmup still applies. |
-| Return(N) | `100 × (latest close / close N sessions earlier − 1)`. |
-| Daily return | Same formula with N=1. |
-| Gap % | `100 × (current open / prior close − 1)`. |
-| RVOL(N) | Current volume divided by the mean of the preceding N volumes, excluding the current session. |
-| Average turnover(N) | Mean of `close × volume` over N sessions, divided by 10,000,000 for ₹Cr. |
-| ADR(N) % | Mean of `100 × (high − low) / close` over N sessions. |
-| True range | Maximum of `high − low`, `abs(high − prior close)`, and `abs(low − prior close)`. |
-| ATR % | Wilder-smoothed true range divided by current close, multiplied by 100. |
-| Consolidation range % | `100 × (window maximum high − window minimum low) / final close`. |
-| RS over N sessions | Stock percentage return minus the aligned benchmark percentage return. |
-| Quarterly growth % | `100 × (latest value − comparison value) / abs(comparison value)`; QoQ uses the prior quarter, YoY the same quarter a year earlier. Zero/missing base is unavailable. |
-| Historical P/E | Selected report type's four consecutive announced quarters of net profit; market cap divided by positive total profit. Missing quarters or nonpositive profit are unavailable. |
-
-The browser release precomputes selected SMA, return, RVOL, gap, and turnover values plus preset outcomes. The Python registry supports wider parameter choices. A different lookback, metric, or report type may need backend evaluation.
-
-### Persistent Momentum and persistence defaults
-
-Persistent Momentum combines the configured EMA persistence branches with OR: the default periods/durations are 10 EMA for 20 sessions, 20 EMA for 30 sessions, and 50 EMA for 50 sessions. Its preset then combines the selected turnover condition and shared eligibility restrictions with AND. Refer to the declarative preset for all actual defaults; editing a custom condition does not remove a preset's other restrictions.
-
-The default EMA persistence mode is `extreme_reset`. A contrary close arms its low for an above run, or high for a below run. A later trade beyond that extreme resets the run; equality does not. The armed extreme can survive beyond the requested trailing window. This differs from requiring every close to stay above the EMA. SMA persistence uses `strict_close`; explicit alternate EMA modes remain supported by the engine.
-
-### Daily and weekly inside bars
-
-A daily inside bar has `high ≤ preceding high` and `low ≥ preceding low`. For a consecutive run, each bar is compared with the immediately preceding bar; N inside bars require N+1 bars.
-
-Weekly bars group daily sessions by ISO year/week: first open, maximum high, minimum low, last close, summed volume, and last session date. The same containment comparison runs on those aggregates. The default `completed` mode excludes the current ISO week. The explicit `current` mode includes it and marks the result provisional because it can change before that week finishes. Weekly means aggregated daily input, not a separately fetched weekly candle feed.
-
-### Signal timing, rankings, and unavailable inputs
-
-- `fired_within=1` means the latest session; 2 also allows the preceding session.
-- RS ratings use aligned stock/benchmark history and a cross-sectional eligible universe. The composite weights 21/63/126/252-session relative returns by 40/20/20/20; sufficient aligned history is required. A rating is not simply a stock's raw one-year return.
-- Official delivery observations override overlapping fallback history. A current delivery percentage alone does not establish a historical spike.
-- `match OR unavailable` is a match; `no_match OR unavailable` remains unavailable. `no_match AND unavailable` is no match; `match AND unavailable` remains unavailable.
-- Historical classification, capitalisation, financial availability, and membership must satisfy their own date contracts. A future snapshot is not a valid substitute for an absent dated record.
-
-Exact condition inputs, pattern definitions, and availability rules are documented in the trend engine guide (private notes) and implemented under `src/edl_pipeline/scanner/`. These definitions establish local behavior; they do not guarantee identical results to another provider using different data or universe membership.
-
-## What happens at runtime
-
-The client side below is Nexus Journal's screener (`packages/nexus-scanner`); this repository publishes what it reads.
+## Data flow
 
 ```mermaid
-sequenceDiagram
-  participant U as User
-  participant UI as Nexus Journal
-  participant M as current.json
-  participant W as Snapshot Worker
-  participant API as Python Screen API
-  participant R2 as Chart Storage
-
-  U->>UI: Open or run a screen
-  UI->>M: Check active release
-  M-->>UI: Session date and immutable revision URLs
-  UI->>W: Run supported expression
-  W->>W: Fetch, decompress, parse, filter, sort, paginate
-  W-->>UI: Result page and diagnostics
-  UI->>API: Use only if history-dependent expression is unsupported in worker
-  API-->>UI: Authoritative evaluated result
-  UI->>R2: Load one chart payload on demand
+flowchart LR
+  S[NSE, BSE, Dhan, TradingView, EOD2,<br/>Yahoo, SEC EDGAR, Finviz, ...] --> P[Pipeline<br/>fetch, build, validate]
+  P --> R2[(R2 bucket<br/>nexus-screener-chart-data)]
+  R2 --> W1[nexus-scanner Worker<br/>/data/*]
+  R2 --> W2[nexus-scanner-data Worker]
+  W1 --> J[Nexus Journal screener]
+  W2 --> J
 ```
 
-### Browser release loading
+### What goes where in R2
 
-1. The app loads `/data/current.json` from the Worker and validates its revision and session metadata.
-2. It resolves the immutable `stocks.json.gz` URL when browser decompression is available, otherwise the JSON URL.
-3. A persistent module worker fetches the snapshot with cache reuse, decompresses it, validates its revision/session/row count, and retains at most a small number of revisions.
-4. The worker evaluates supported conditions against precomputed values, then returns only the requested result page rather than all matching rows.
-5. Changing pagination reuses the matching and sorted set. Changing filters, universe, symbols, or sort recalculates the set.
-6. An unsupported custom expression falls back to the Python `/screens/run` service, pinned to the same revision and session.
-
-The main UI never claims a browser-only approximation is a result for a rule that needs the Python history engine.
-
-### Browser charts
-
-The journal's charts request one immutable compressed payload at a time using the chart URL template in the release, and verify the symbol and session before drawing it.
-
-### Precomputed work versus runtime work
-
-| Operation | When it happens |
-| --- | --- |
-| Source retrieval, history overlays, fundamental normalization | Pipeline refresh. |
-| RS ratings, breadth, events, and canonical market fields | Pipeline refresh. |
-| Supported numeric snapshot metrics and 45 preset results | Snapshot publication, once per immutable release. |
-| Chart candles and volume/event groups | Chart generation before cleanup. |
-| Snapshot decompression, parsing, and validation | First use of a revision in the worker. |
-| Supported custom comparisons, Boolean groups, universe selection | Browser screen execution against published metrics. |
-| Historical/pattern expressions absent from the browser contract | Python fallback at request time. |
-| Sorting and pagination | Worker; later pages reuse the cached matching set. |
-
-Not every possible custom calculation is precomputed. Preset membership and selected metrics are; arbitrary historical conditions can still require the Python engine. The worker retains at most two loaded revisions and up to four compiled result sets per snapshot. The app checks the current release every 60 seconds and when focus returns. No WebAssembly runtime is required. If workers are unavailable, the same snapshot engine runs on the main thread.
-
-### Runtime files
-
-In production these are served from R2 by the `nexus-scanner` Worker at the same `/data/...` URLs, so a refresh
-needs no commit or rebuild; the local paths below are what development and the pipeline write. See
-[docs/site-data-r2.md](docs/site-data-r2.md).
-
-| File or path | Runtime use |
-| --- | --- |
-| `frontend/public/data/current.json` | Small active-release pointer. Revalidate frequently. |
-| `frontend/public/data/revisions/<revision>/stocks.json.gz` | Compressed stock snapshot used by the worker. |
-| `frontend/public/data/revisions/<revision>/stocks.json` | Compatibility snapshot for clients without compressed loading. |
-| `frontend/public/data/revisions/<revision>/ipos.json` | Immutable IPO catalogue for that release. |
-| `frontend/public/data/revisions/<revision>/release.json` | Revision metadata retained for an open historical release. |
-| `daily/<session>/<chart-revision>/charts/<symbol>.json.gz` in R2 | One on-demand chart payload per symbol. |
-
-## How every published file is generated
-
-```mermaid
-flowchart TD
-  A[Source fetches] --> B[Isolated pipeline stage]
-  B --> C[Normalize and validate]
-  C --> D[Derived analytics and screen inputs]
-  D --> E[Compressed public EDL artifacts]
-  D --> F[Scanner snapshot publisher]
-  F --> G[Immutable frontend revision]
-  D --> H[Per-symbol chart builder]
-  H --> I[Optional R2 publication]
-  G --> J[current.json written last]
-  I --> J
-```
-
-### 1. Source collection
-
-The EDL pipeline collects public NSE archive data, market and company data, official delivery files, corporate actions, filings, announcements, index data, F&O information, surveillance lists, and market data needed for the selected refresh. Source availability is not assumed: failed required stages stop publication.
-
-### 2. History maintenance
-
-The pipeline maintains local OHLCV, index OHLCV, delivery, scanner-history, and filing-history caches. Weekday refreshes add official recent data. The weekly workflow overlays available adjusted history so longer lookbacks can be retained without downloading full history on every weekday run.
-
-### 3. Normalization and calculations
-
-The pipeline standardizes securities and calculates:
-
-- Mainboard eligibility, listing metadata, market cap, classifications, and current tradability fields.
-- OHLCV-derived moving averages, returns, RVOL, turnover, highs/lows, ATR/ADR, gaps, and pattern inputs.
-- Relative-strength and breadth datasets with aligned benchmark sessions.
-- Fundamental, earnings, shareholding, delivery, corporate-action, surveillance, F&O, and IPO artifacts.
-- Data-quality and universe-reconciliation reports.
-
-### 4. Artifact validation and promotion
-
-The full refresh runs in an isolated temporary stage. It validates schema, required fields, counts, freshness, and cross-artifact dates before promotion. A failed stage or quality check leaves the previously published public files unchanged. Promotion rolls back files on ordinary exceptions, including frontend-publication errors; this is not a filesystem transaction across every file or protection against every process crash. Shared history caches may have been updated even when public promotion fails.
-
-### 5. Browser snapshot publication
-
-`frontend/publish_snapshot.py` reads validated EDL artifacts, calculates the browser-safe metrics and preset results, freezes local Python inputs for custom evaluations, and creates a content-hash revision.
-
-It writes immutable revision files first, verifies the release, and writes `current.json` last. A same-session correction therefore gets a new immutable revision rather than overwriting an earlier result.
-
-Each browser revision contains `stocks.json`, `stocks.json.gz`, `ipos.json`, and `release.json`. Condition and preset catalogues live in `frontend/src/data/` and ship with the application build. Frozen Python evaluation inputs live under `DO NOT DELETE EDL PIPELINE/.scanner_cache/revisions/<revision>/`; serving a frontend revision does not automatically make those private backend files available on another server.
-
-### 6. Chart generation and R2 upload
-
-The chart builder runs before temporary news and filings directories are removed. It creates one compressed JSON payload per symbol, validates the chart index, payload symbol, session, and content revision, then uploads immutable objects to R2 when configuration is complete.
-
-### Chart payload and event retention
-
-| Field/group | Content and window |
-| --- | --- |
-| Identity | Schema version, symbol, session (`asOfDate`), and first available candle (`historyStartDate`). |
-| `candles` | Date, open, high, low, close, volume; all available cached sessions through the published session. |
-| `volumeEvents.highestEver` / `lowestEver` | Highest/lowest daily volume across available history, not an independently guaranteed inception archive. |
-| Monthly volume records | Highest-volume day in each of the latest 60 represented months. |
-| Quarterly volume records | Highest- and lowest-volume day in each of the latest 20 represented quarters. |
-| Yearly volume records | Highest-volume day in each of the latest 10 represented years. |
-| `corporateActions` | Available actions whose ex-date is no later than the published session. |
-| `earnings` | Available earnings records filed by the published session. |
-| `regulatoryAnnouncements` | Available official announcements; no fixed item-count cap in the builder. |
-| `marketNews` | Latest 50 available items. Optional source failure can leave this empty. |
-
-The builder does not truncate candles to four years. A four-year chart means its input cache supplied roughly four years. Weekly execution alone is not proof that every symbol has inception history. Missing candles or event arrays must not be described as complete history. Zero-volume sessions remain valid inputs to low-volume records.
-
-### Generated public artifacts
-
-| Artifact | Contents |
-| --- | --- |
-| `all_stocks_fundamental_analysis.json.gz` | Canonical stock snapshot and published fundamental fields. |
-| `sector_analytics.json.gz` | Sector and industry analytics. |
-| `market_breadth.json.gz` / `market_breadth_v2.json.gz` | Current and historical breadth outputs. |
-| `breadth_universe_snapshot.json.gz` | Fixed eligible universe used for breadth and RS calculations. |
-| `all_indices_history_v2.json.gz` / `all_indices_list.json` | Published index metadata and history. |
-| `corporate_action_ledger.json.gz`, `nse_corporate_actions.json.gz` | Corporate-action data used by published features and charts. |
-| `nse_fno_ban.json.gz`, `rs_rating_daily.json.gz` | F&O ban and daily RS-rating artifacts. |
-| `ipo_screener.json.gz` | IPO catalogue source. |
-| `shareholding_history.json.gz`, `quarterly_financial_history.json.gz` | Published historical shareholding and financial records. |
-| `data_quality.json`, `mainboard_universe_report.json`, `nse_universe_reconciliation.json` | Quality, universe, and reconciliation diagnostics. |
-| `pipeline_report.json` | Release execution and final-validation report, generated on each successful pipeline run. |
-
-## Storage, caching, and R2
-
-| Data | Where it lives | Why |
+| Prefix | Contents | Served |
 | --- | --- | --- |
-| Source code and compact public scanner releases | Git | Reviewable application and immutable browser release history. |
-| Current browser pointer | Git/static host | Small release authority for the frontend. |
-| Per-symbol chart payloads | Cloudflare R2 | On-demand delivery without growing Git history by every chart revision. |
-| Raw OHLCV, delivery, and filing caches | Local workspace and GitHub Actions cache | Fast incremental pipeline runs. |
-| Long-term raw-history backup | Private R2 backup, planned | Recovery when an Actions cache is evicted. |
-| Current workspace preferences | Browser local storage | User-local state without a server account or named-screen library. |
+| `releases/<rev>/` | Immutable release files (packed stocks, IPOs, ETFs, financial history, market overview, chart directory, data index, `release.json`). India and US releases share this prefix. | Both Workers |
+| `site/data/` | Pointers: `current.json`, `sessions.json`, `price-band-history.json`, `ai-filter-choices.json`, and the Earnings Pulse, heatmap, company and concall indexes. US pointers are under `site/data/us/`. | `nexus-scanner` at `/data/...` |
+| `objects/<hash>.json.gz` | Content-addressed data objects (per-symbol chart payloads and others the data index names). | `nexus-scanner-data` |
+| `monthly/<month>/` | The last chart set and release of each month; not covered by the lifecycle rule. | `nexus-scanner-data` |
+| `snapshots/`, `snapshots/us/` | One archived snapshot per session, for the date picker. | `nexus-scanner-data` |
+| `daily/` | Legacy chart layout and daily rotation history; a lifecycle rule expires it after 90 days. | `nexus-scanner-data` |
+| `pipeline-state/` (US under `pipeline-state/us/`) | Files carried from one run to the next; the version before the latest run is under `previous/` for rollback. | Not served |
 
-GitHub Actions cache is an accelerator, not durable data storage. It may be evicted. Raw-history recovery should come from the planned private backup, not from an assumed cache hit.
+A release goes live in a fixed order: the revision files are uploaded with `rclone copy --immutable --checksum` and
+read back, then the AI filter catalogue, the price-band ledger and `sessions.json`, and `current.json` last. A run
+that fails part-way leaves the previous release live, and the publisher refuses to publish an older session over
+the current one. Details: [docs/site-data-r2.md](docs/site-data-r2.md).
 
-### R2 behavior
+Live releases and pipeline state are in R2. India refreshes commit only `reference/`, and the weekly US sync
+commits the Finviz universe files. The checkout still tracks frozen copies from before the move to R2: the
+published data in `frontend/public/data/` (local publications overwrite it) and the pipeline-state files in the
+pipeline directory (used when nothing has been pulled from R2).
 
-R2 configuration is controlled by:
+### Published files
 
-```text
-EDL_CHART_STORAGE=r2
-R2_ACCOUNT_ID
-R2_ACCESS_KEY_ID
-R2_SECRET_ACCESS_KEY
-R2_PUBLIC_BASE_URL
-R2_BUCKET=nexus-screener-chart-data
-```
+Each release under `releases/<rev>/` (named by a content hash, so a same-session correction gets a new revision
+instead of overwriting the old one) holds:
 
-When one of the required R2 settings is absent, the scanner release still publishes without chart URLs and logs the missing settings. When all settings are present, an upload, verification, retention, or archive failure stops publication and preserves the previous active release.
+| File | Contents |
+| --- | --- |
+| `release.json`, `index.json` | Release metadata (session, revision, URL templates) and the chart/data index naming its objects (`data-index.json` in a local publication). |
+| `stocks.packed.json.gz`, `stocks.json.gz` | The stock snapshot: browser-safe metrics and precomputed preset results; packed and plain. |
+| `ipos.json.gz`, `etfs.json.gz` | IPO catalogue; ETF snapshot (advertised only when its quotes match the stock session, see [ETF snapshots](docs/etf-snapshots.md)). |
+| `financial-history.json.gz`, `financial-history/` | Quarterly financial history, also per symbol. |
+| `market-overview.json.gz`, `benchmark.json.gz`, `theme-classification.json.gz`, `universe-classification.json` | Market page, benchmark series and classifications. |
+| `earnings-calendar.json.gz`, `price-band-history.json.gz` | Earnings dates; NSE price-band ledger. |
+| `chart-directory.json.gz` | The per-symbol chart object names. |
 
-R2 retention is:
+**Chart payloads** (`build_chart_artifacts.py`, schema 3) are content-addressed objects, one per symbol:
 
-- Daily chart revisions: 90 calendar days.
-- Month-end chart revisions: retained indefinitely.
-- The first successful release of a new month archives the prior month’s latest successful session.
+| Field | Content |
+| --- | --- |
+| `symbol`, `historyStartDate` | Identity and first available candle. |
+| `candleChunks` | Two object hashes: candles before the session's year and candles in it, so an unchanged past stays cached. Each candle has date, OHLC and volume through the published session; candles are not truncated, so depth equals what the history cache holds. |
+| `volumeEvents` | Highest and lowest volume across available history; highest-volume day of each of the last 60 months, 20 quarters and 10 years; lowest-volume day of each of the last 20 quarters. |
+| `corporateActions` | Actions with an ex-date on or before the session, with a classification. |
+| `earnings` | Earnings filed on or before the session. |
+| `marketNews` | The latest 50 items; can be empty when the optional news source failed. |
 
-The 90-day lifecycle age is based on object upload time and deletion is asynchronous. If publication remains down for more than 90 days, an active daily revision can expire before rollover archival. Month-end retention therefore requires successful publication and monitoring; it is not a guarantee during an indefinite outage. Private raw-history backup and automatic restoration are planned, not implemented by chart publication.
+Regulatory announcements are a separate content-addressed catalogue (`announcement_artifacts.py`) that the chart
+index references by hash.
 
-See `docs/r2-chart-publication.md` (private notes) for the object layout and lifecycle details.
+**Pipeline artifacts** in the pipeline directory, carried between runs through R2 state:
+`all_stocks_fundamental_analysis.json.gz` (the canonical stock snapshot), `sector_analytics.json.gz`,
+`market_breadth.json.gz`, `market_breadth_v2.json.gz`, `sector_breadth_v2.json.gz`,
+`breadth_universe_snapshot.json.gz`, `all_indices_history_v2.json.gz`, `all_indices_list.json`,
+`corporate_action_ledger.json.gz`, `nse_corporate_actions.json.gz`, `nse_fno_ban.json.gz`,
+`rs_rating_daily.json.gz`, `ipo_screener.json.gz`, `shareholding_history.json.gz`,
+`quarterly_financial_history.json.gz` and `earnings_calendar.json.gz`, plus the IPO archives. Each run also writes
+`data_quality.json`, `mainboard_universe_report.json`, `nse_universe_reconciliation.json` and `pipeline_report.json`,
+or `pipeline_failure_report.json` / `data_quality_failure.json` when it stops; the workflows upload the reports as
+diagnostics.
+
+## Automated runs
+
+The scheduled refreshes have no GitHub `schedule:` trigger. The `nexus-gh-cron` Worker
+(`workers/gh-cron/schedule.ts` in `new_nexys_ultimate`) starts them through `workflow_dispatch`, because GitHub's
+own schedule ran hours late. Times are India time.
+
+| Workflow | Started | What it does |
+| --- | --- | --- |
+| [`daily_refresh.yml`](.github/workflows/daily_refresh.yml) | 17:30 on NSE trading days | Updates the EOD2 checkout, runs the pipeline and publisher tests, pulls state and pointers from R2, runs the pipeline (`--phase fetch`, then `--phase build` with charts to R2), refreshes Earnings Pulse history and heatmap and concall summaries, publishes changed indexes, pushes state, and commits `reference/`. |
+| [`weekly_eod2_refresh.yml`](.github/workflows/weekly_eod2_refresh.yml) | Sunday 09:00 | The same build with the EOD2 adjusted-history overlay, plus the Tijori overview export, the Dhan group sync and a full concall walk (`--full`). |
+| [`us_daily_refresh.yml`](.github/workflows/us_daily_refresh.yml) | Tuesday to Saturday 07:00 | Builds the US root (exits 75 and skips publication if New York's session has not closed), pushes US state, fetches the US ETF snapshot and publishes the US release (`frontend/publish_us.py`, pointer `/data/us/current.json`). |
+| [`us_weekly_sync.yml`](.github/workflows/us_weekly_sync.yml) | Saturday 11:30 | Crawls the Finviz thematic and ownership universes and commits the three `us_*.json` files in the pipeline directory. |
+| [`cache-retention.yml`](.github/workflows/cache-retention.yml) | After each daily or weekly refresh, and daily at 01:15 UTC | Prunes obsolete Actions cache snapshots (`tools/prune_actions_caches.py`). Manual runs default to a dry run. |
+| [`etf_snapshot_only.yml`](.github/workflows/etf_snapshot_only.yml), [`us_etf_snapshot_only.yml`](.github/workflows/us_etf_snapshot_only.yml) | Manual | Publish only the ETF snapshot into the live release, for a day the ETF source failed. |
+| [`backfill_historical_snapshots.yml`](.github/workflows/backfill_historical_snapshots.yml), [`us_backfill_historical_snapshots.yml`](.github/workflows/us_backfill_historical_snapshots.yml) | Manual, with a date range | Generate archived session snapshots for past dates, upload them and extend `sessions.json`. |
+| [`ci.yml`](.github/workflows/ci.yml) | Pull requests, pushes to `main` | Pipeline unit tests, the critical-path byte-equivalence check (PRs only), the wheel check, `tools/` and workflow-contract tests, `compileall`. |
+| [`frontend-ci.yml`](.github/workflows/frontend-ci.yml) | Pull requests and pushes that touch `frontend/`, `workers/` or the Worker config | Catalogue and Worker tests (Vitest), the data Worker test, type checks, the `frontend/` Python tests with a real `rclone`, `npm audit`. |
+
+The India refresh, backfill and ETF-only workflows and the cache pruner share the `daily-data-refresh` concurrency
+group, so they never run at once; the US daily, backfill and ETF-only workflows share `us-daily-refresh`. Price, enrichment and history caches live in GitHub Actions caches
+(`.github/actions/restore-refresh-history`). They speed runs up and can be evicted.
+
+The workflows read `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` as secrets and
+`R2_PUBLIC_BASE_URL` as a repository variable. The US refresh also reads the `SEC_CONTACT` secret, the contact SEC
+asks automated clients to send; without it, EDGAR filings are skipped.
+
+## Data sources
+
+India: NSE and its archives (OHLCV, delivery, F&O, bans, surveillance, corporate actions, announcements, index
+constituents), BSE filings, Dhan (screener fields, statements, history, IPOs, news, groups), TradingView's scanner
+(ETFs and extra indicators), the [EOD2](https://github.com/BennyThadikaran/eod2_data) adjusted-history repository,
+Tijori, Earnings Pulse and concall summaries.
+
+US: Dhan (universe, snapshot, daily history, statements), Yahoo Finance (deep history), TradingView (fields Dhan
+lacks), SEC EDGAR (filings and results dates) and Finviz (themes and ownership). See
+[`docs/US_MARKET.md`](DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/US_MARKET.md).
+
+A failed required stage stops publication. Optional steps (Earnings Pulse, concalls, Tijori, ETFs) warn and leave
+their last published data in place.
 
 ## Local development
 
-### Prerequisites
-
-- Python 3.9 or later.
-- Node.js and npm compatible with `frontend/package-lock.json`.
-- `rclone` only if directly testing an R2 upload.
-
-### Pipeline setup
+Prerequisites: Python 3.10 for the pipeline (the refresh workflows and `ci.yml` use it; the package declares 3.9+;
+`frontend-ci.yml` runs the `frontend/` Python tests on 3.12), Node 24 (`.nvmrc`), and `rclone` only to reach R2.
 
 ```bash
 cd "DO NOT DELETE EDL PIPELINE"
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
 python3 -m unittest discover -s tests -v
-python3 -m compileall -q .
 ```
 
-Run the complete pipeline when you intend to refresh local market files:
+Run the India pipeline. It fetches live data and writes into the pipeline directory:
 
 ```bash
-python3 run_full_pipeline.py
+python3 run_full_pipeline.py                                  # all phases
+python3 run_full_pipeline.py --phase fetch --stage /tmp/edl-stage
+python3 run_full_pipeline.py --phase build --stage /tmp/edl-stage
 ```
 
-Diagnostic mode skips the OHLCV refresh and never promotes a new public release:
+Build a US root, also from the pipeline directory (`--limit N` keeps only the N largest stocks for a quick check):
 
 ```bash
-EDL_FETCH_OHLCV=0 python3 run_full_pipeline.py
+PYTHONPATH=src:. python3 -m edl_pipeline.markets.us /tmp/us-root --limit 50
 ```
 
-### Publish local browser data
-
-From the repository root, after a validated pipeline run:
+With `EDL_CHART_STORAGE=local` (the default), publication writes to `frontend/public/data` and uploads nothing. To
+start from the live state instead of the frozen Git copies, pull it with the R2 settings set. This and every command
+below runs from the repository root:
 
 ```bash
-python3 frontend/publish_snapshot.py
+cd ..
+python3 tools/pipeline_state.py pull
+python3 frontend/site_data.py pull
 ```
 
-### Run the AI Worker locally
+Run the AI Worker locally. It listens on port 8787 and reads `frontend/public/data`. Copy `.dev.vars.example` to
+`.dev.vars` to use Groq; without a key it uses Workers AI.
 
 ```bash
-npm install
+npm install                      # also installs frontend/
+python3 frontend/site_data.py ai-choices
 npm run dev:ai
 ```
 
-It serves `/api/screener/ai-compile` on port 8787 and reads `frontend/public/data/` (run `python3 frontend/site_data.py ai-choices` after a local publication).
-
-## Configuration and production deployment
-
-### Configuration reference
-
-| Setting | Default / purpose |
-| --- | --- |
-| `EDL_BASE_DIR` | Override pipeline data root; otherwise the pipeline's configured local directory. |
-| `EDL_FETCH_OHLCV` | True; false selects diagnostic behavior rather than normal public promotion. |
-| `EDL_FETCH_OPTIONAL` | False; enables optional acquisition stages when selected. |
-| `EDL_CLEANUP_INTERMEDIATE` | True; temporary fetch directories are removed after their consumers run. |
-| `EDL_EOD2_DATA_DIR` | Existing long-history checkout used for the adjusted-history overlay. |
-| `EDL_CHART_STORAGE` | `local` by default; `r2` selects remote chart publication. Other values are rejected. |
-| `R2_ACCOUNT_ID` | Required for configured R2 publication; account containing the bucket. |
-| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Required server-side S3-compatible credentials. Never place them in frontend variables or public artifacts. |
-| `R2_PUBLIC_BASE_URL` | Required public chart origin; browser access and CORS must work from the frontend origin. |
-| `R2_BUCKET` | `nexus-screener-chart-data` unless overridden. |
-
-Pipeline Boolean settings accept familiar true/false forms (`1/0`, `yes/no`, `on/off`); invalid values warn and use the default. Consult the workflow and source for additional source-specific settings rather than assuming this table enumerates every fetcher's tuning option.
-
-### What a production installation needs
-
-1. **Worker:** deploy the `nexus-scanner` Worker (`npm run deploy`), which serves `/data/*` from R2 and the AI compiler. The UI is Nexus Journal's.
-2. **Release authority:** deploy immutable revision directories before updating `data/current.json`. Revalidate the pointer; cache immutable revision URLs for reuse. Keep the JSON fallback available alongside gzip.
-3. **Chart origin:** when charts are enabled, expose the R2 URL template with suitable browser CORS and gzip delivery. A scanner-only release legitimately has no chart URLs.
-4. **Operator monitoring:** watch failed workflows, stale session pointers, missing history, archive failures, and object expiry. Scheduled time is not a completion guarantee.
-
-### Release identity and retry boundaries
-
-Scanner revisions are content-addressed from their inputs and generated content. Chart revisions validate compressed symbol payloads and their content digest. R2 uploads use immutable revision paths and publish the scanner pointer only after required upload/verification succeeds. An existing immutable object must agree with the intended release; it must not be overwritten with different data.
-
-Missing R2 configuration skips charts and permits fresh scanner publication. Once configuration is complete, upload failures stop publication. Recover and rerun the normal publisher; do not patch `current.json` to point at a partly uploaded chart set.
-
-## Recovery and troubleshooting
-
-### Refresh fails before publication
-
-Inspect the workflow's failed stage and local `pipeline_failure_report.json` or `data_quality_failure.json` where generated. Fix the failed source, schema, freshness, or quality gate, then rerun the normal pipeline. Public promotion is gated; do not bypass validation just to advance the session date. Retain the prior valid release until recovery succeeds.
-
-### History is missing or shorter than expected
-
-First inspect a symbol's actual earliest/latest cache dates and its chart `historyStartDate`. A successful Actions cache restore or weekly run does not prove complete inception coverage. Check symbol identity/ISIN mappings before merging another cache.
-
-To synchronize a bounded date range from an existing compatible EDL history directory, run from the pipeline directory:
+Tests outside the pipeline directory:
 
 ```bash
-python3 sync_local_scanner_history.py \
-  --source-root /path/to/existing/EDL \
-  --from-date 2026-09-29 \
-  --as-of-date 2026-10-01
-```
-
-The dates above are examples; choose the missing range. The source directory needs its identity map and history files. The synchronizer validates identities and merges history with official overlays. Without `--source-root`, it can fetch the requested missing daily data. A bounded daily recovery is not an inception backfill.
-
-After successful history recovery, regenerate the charts and scanner release from matching artifacts:
-
-```bash
-# From the pipeline directory, after data/session validation
-python3 build_chart_artifacts.py
-cd ..
-python3 frontend/publish_snapshot.py
-```
-
-The complete pipeline normally handles this ordering. Do not regenerate a newer pointer from mismatched financial, OHLCV, delivery, and chart sessions. Private R2 raw-history backups and automatic restore are still planned; the existing R2 chart files are derived outputs, not a replacement for all source caches.
-
-### Browser requests fail or results are unavailable
-
-| Symptom | Check |
-| --- | --- |
-| Snapshot cannot load | Pointer and immutable URLs exist; JSON/gzip content, revision, session, and row count agree. |
-| Presets work but custom history rules fail | Python fallback is running and has the requested frozen revision/history. |
-| Insufficient history | Required full lookback and warmup exist for that symbol. Newly listed securities may legitimately lack them. |
-| History not aligned | Latest cached trading session agrees with the released screen date. |
-| Chart unavailable | Release includes chart URLs; object exists; browser CORS/decompression works; symbol/session validation passes. |
-| Missing earnings/news markers | Source data was acquired before cleanup and the records satisfy the release cutoff. Empty optional event arrays can be valid. |
-| Old preferences reappear | Current workspace state is restored from this browser origin's local storage. |
-
-For a rollback, redeploy a known valid immutable release and its compatible application/backend inputs through the normal deployment process. Ensure retained R2 objects still exist before restoring a pointer. Reverting a Git commit alone does not recreate expired R2 objects or evicted private history.
-
-## Automated refreshes
-
-### Daily weekday workflow
-
-At 16:00 IST, Monday through Friday, the daily workflow restores available caches, runs the Python and scanner-publication tests, refreshes market inputs, calculates artifacts, publishes the browser snapshot, optionally uploads charts, and commits validated generated files.
-
-### Weekly adjusted-history workflow
-
-At 09:00 IST each Sunday, the weekly workflow restores its history caches, updates the adjusted-history checkout, overlays the long-history inputs, runs the same validation and publication sequence, and commits the result.
-
-Both workflows use the same concurrency group. A daily release cannot race a weekly release.
-
-## Testing, data quality, and limits
-
-### Commands
-
-```bash
-# EDL pipeline tests
-cd "DO NOT DELETE EDL PIPELINE"
-python3 -m unittest discover -s tests -v
-
-# Browser snapshot and R2 publication tests
-cd ..
 python3 -m unittest discover -s frontend -p 'test_*.py' -v
-
-# Shared catalogue and Worker tests
-cd frontend
-npm test
-npm run typecheck
+(cd frontend && npm test && npm run typecheck)
+node --test workers/r2-delivery/test.mjs
+npm run check:worker
 ```
+
+### Settings
+
+| Variable | Purpose |
+| --- | --- |
+| `EDL_CHART_STORAGE` | `local` (default) or `r2`; any other value is rejected. |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PUBLIC_BASE_URL`, `R2_BUCKET` | R2 publication and state sync. Server-side only. |
+| `EDL_EOD2_DATA_DIR` | An EOD2 data checkout for the adjusted-history overlay; the overlay is skipped when unset. |
+| `EDL_FETCH_OHLCV`, `EDL_FETCH_OPTIONAL`, `EDL_CLEANUP_INTERMEDIATE` | Pipeline switches, see `src/edl_pipeline/config.py`. |
+| `EDL_US_BASE_DIR` | The US root that `publish_us.py` publishes. |
+| `SEC_CONTACT` | Contact sent with SEC EDGAR requests. |
+| `GROQ_API_KEY` | Optional Worker secret for the AI compiler. |
+
+## Deploying the Workers
+
+`nexus-scanner` is Git-connected (Workers Builds) and deploys from `main`. `nexus-scanner-data` is deployed by hand
+with `npm run deploy:data`; `npm run deploy` deploys both. Both configs pin their Cloudflare account, so a Wrangler
+logged into another account is refused. Data refreshes need no deploy.
+
+## Screening model
+
+Conditions are a typed contract shared by three places: the Python registry (`CONDITION_REGISTRY` in
+`scanner/trend.py`, which merges `scanner/patterns.py` and `scanner/context.py`), the TypeScript catalogue in
+`frontend/src/data/` that the AI compiler uses, and Nexus Journal's copy of that catalogue. Change them together.
+The browser evaluates precomputed snapshot metrics; the Python registry accepts wider parameter choices.
+
+### Conditions
+
+| Family | Conditions (registry id) |
+| --- | --- |
+| Trend and moving averages | `indicator_compare` (comparison or crossover between indicators or a value, with offsets), `ma_convergence`, `divergence` (confirmed regular/hidden, no future-bar leakage), `supertrend`, `adx`, `persistent_momentum`, `price_vs_ema`, `price_vs_sma`, `ema_shakeout_reclaim`, `ma_stack`, `ma_slope`, `percent_days_above_ma`, `consecutive_up_days` |
+| Price, range and patterns | `price_change_percent`, `gap_up`, `gap_down`, `new_high`, `new_low`, `percent_from_52w_high`, `percent_from_52w_low`, `percent_from_ath` (split- and bonus-adjusted, from EOD2 history), `atr_percent`, `adr_percent`, `consolidation_range`, `range_contraction`, `vcp_contraction_legs`, `inside_bar` (daily or weekly), `unfilled_gap`, `horizontal_resistance_line` |
+| Volume, liquidity and delivery | `relative_volume`, `volume_trend`, `highest_volume`, `absolute_volume`, `average_turnover`, `delivery_percent`, `delivery_percent_spike` |
+| Trading controls | `market_cap`, `free_float_market_cap`, `price_range`, `price_band`, `circuit_band_minimum`, `series`, `fno_ban`, `exclude_surveillance` (ASM and GSM; both lists must be available) |
+| Relative strength and universe | `relative_strength`, `rs_new_high`, `rs_rating`, `index_membership`, `market_breadth`, `sector`, `industry`, `listing_age_days` |
+| Fundamentals and earnings | `pe_ratio`, `earnings_growth` (QoQ or YoY for revenue, net profit, PBT, EPS or OPM, subject to filing age), `fundamental_metric`, `absolute_eps`, `dividend_yield`, `eps_last_year_higher`, `days_since_earnings` |
+
+Indicators for `indicator_compare` include SMA, EMA, WMA, RSI, MACD, Stochastic, CCI, MFI, Williams %R, ROC, OBV,
+Bollinger and Donchian bands (`scanner/indicators.py`).
+
+### Built-in scans
+
+The preset library (`frontend/src/data/presetDefinitions.json`, validated by `scanner/presets.py`) has exactly 45
+scans: Persistent Momentum, Easy Money, Relative Strength Leaders, RS Line at New High, Stage 2 Uptrend, Momentum
+Burst, Quiet Strength, 52-Week High Breakout, 20-Day High on Record Volume, Breakout from Tight Base, Pocket Pivot,
+ADX Trend Breakout, Circuit-Safe Breakout, VCP Contraction, Inside Bar Coil, Weekly Inside Bar, Volume Dry-Up Base,
+Flat Base, Horizontal Resistance, Flags & Pennants, Low-ATR Coil, 21 EMA Pullback, 50 EMA Shakeout, Higher-Low
+Pullback, Gap Support Retest, Volume Surge, Highest Volume in 3 Months, Delivery-Backed Accumulation, Sustained
+Accumulation, Unfilled Gap Up, Gap & Go, Gap Down Washout, 52-Week Low Bounce, RS Divergence Turn, Relative Weakness,
+Earnings Growth Momentum, Post-Earnings Drift, Growth at a Fair Price, Revenue & Profit Acceleration, Pre-Earnings
+Coil, Breadth-Gated Leaders, Liquid Trading Universe, Fresh IPO Base, Nifty 500 Momentum and Midcap Breakout.
+
+India presets share eligibility floors (`presetEligibility.json`): market cap at least ₹1,000 Cr, close at least
+₹10 and 50-session average turnover at least ₹5 Cr. There is no upper market-cap or price limit and no blanket
+circuit exclusion. The US release uses its own floors.
+
+### Calculation conventions
+
+Windows count trading sessions and stop at the published session. Missing required history gives `unavailable`;
+a shorter window is not substituted.
+
+| Calculation | Rule |
+| --- | --- |
+| SMA(N) | Mean of the latest N closes; needs all N. |
+| EMA(N) | Exponential average, `span=N`, `adjust=False`, with N sessions of warm-up. |
+| Return(N) | `100 × (close / close N sessions earlier − 1)`; needs N+1 closes. |
+| Gap % | `100 × (open / prior close − 1)`. |
+| RVOL(N) | Volume divided by the mean of the preceding N volumes (today excluded). |
+| Average turnover(N) | Mean of `close × volume` over N sessions, in ₹ Cr (÷ 10,000,000). |
+| ADR(N) % | Mean of `100 × (high − low) / close`. |
+| ATR % | Wilder-smoothed true range (`max(high − low, abs(high − prior close), abs(low − prior close))`) ÷ close × 100. |
+| Consolidation range % | `100 × (highest high − lowest low) / final close` over the base. |
+| Relative strength(N) | Stock return minus benchmark return over the same sessions, in percentage points. |
+| RS rating | 1–99 percentile across the Nifty 500 for a 21, 63, 126 or 252-session horizon, or the 40/20/20/20 front-weighted composite of the four. |
+| Quarterly growth % | `100 × (latest − base) / abs(base)`; QoQ uses the prior quarter, YoY the same quarter a year earlier. A zero or missing base is unavailable. |
+| Historical P/E | Market cap ÷ net profit of four consecutive announced quarters; missing quarters or non-positive profit are unavailable. |
+
+**Persistence.** `persistent_momentum` passes when any requested EMA has stayed below the close for its run; the
+Persistent Momentum scan uses 10 EMA for 20 sessions, 20 EMA for 30 or 50 EMA for 50, AND 20-session turnover of at
+least ₹5 Cr. It defaults to `reclaim_by_extreme`: one contrary close does not reset the run when a later bar trades
+through that bar's extreme and closes back on the right side. `price_vs_ema` defaults to `extreme_reset`: a contrary
+close arms its low (above-runs) or high (below-runs), and only a later trade through that level resets the run.
+`price_vs_sma` defaults to `strict_close`, where every close must be on the right side.
+
+**Inside bars.** A bar is inside when its high is at or below, and its low at or above, the preceding bar's; N
+consecutive inside bars need N+1 bars. Weekly bars are built from daily sessions by ISO week. The default
+`completed` mode leaves out the current week; `current` includes it and marks the result provisional.
+
+**Signal timing.** `fired_within=1` means the latest session; 2 also allows the one before.
 
 ### Match states
 
-| State | Meaning |
+Each condition returns `match`, `no_match` or `unavailable`. Unavailable means a required input was missing, too
+short, stale or not aligned to the screen's session (OHLCV gaps, moving-average warm-up, delivery gaps, absent index
+membership, stale financials, intraday history that is not collected). It never becomes a match. Groups combine
+them like this (`_combine_group` in `scanner/trend.py`):
+
+| Group | Result |
 | --- | --- |
-| Match | All required inputs were available and the rule passed. |
-| No match | All required inputs were available and the rule failed. |
-| Unavailable | A required input was missing, insufficient, stale, or misaligned to the screen session. |
+| AND | `no_match` if any child is `no_match`; otherwise `unavailable` if any is; otherwise `match`. |
+| OR | `match` if any child is `match`; otherwise `unavailable` if any is; otherwise `no_match`. |
 
-Unavailable is a deliberate result. It is used for missing OHLCV history, insufficient moving-average warmup, delivery gaps, unavailable historical snapshots, absent index membership, stale financial data, and unsupported intraday history. It never becomes a positive match.
+### Adding a condition or preset
 
-### Important limits
+1. Add the condition to the Python registry and implement it, with explicit missing-data and session-alignment
+   behaviour.
+2. Add its typed inputs to the catalogue in `frontend/src/data/` and to Nexus Journal's copy.
+3. Test match, no-match and unavailable outcomes.
+4. For a built-in scan, add its declarative definition to `presetDefinitions.json`; `scanner/presets.py` checks the
+   library against the registry.
 
-- Historical technical screening needs local OHLCV history aligned to the requested session.
-- Intraday turnover modes remain unavailable until intraday history is collected.
-- Historical values for current-only fields, such as classification or P/E, cannot be reconstructed from a future snapshot.
-- Data sources can change format or fail; a successful code test does not prove a particular upstream source returned complete live data.
-- R2 charts are absent from scanner-only releases when R2 is not configured.
+## Recovery and troubleshooting
 
-Read `DO NOT DELETE EDL PIPELINE/docs/DATA_LIMITATIONS.md` (private notes) and `DO NOT DELETE EDL PIPELINE/docs/PIPELINE_INTEGRITY.md` (private notes) before operating a live refresh.
+**A refresh fails before publication.** Look at the failed step and the uploaded diagnostics
+(`pipeline_failure_report.json`, `data_quality_failure.json`, `price_validation_report.json`). Fix the source,
+schema, freshness or quality problem and rerun the workflow. Do not bypass validation to advance the session date.
+The previous release stays live until a run succeeds. Promotion copies files back from a backup on ordinary
+exceptions, including publisher errors; it is not a transaction across a process crash, and history caches may
+already have been updated.
+
+**A diagnostic run.** `EDL_FETCH_OHLCV=0 python3 run_full_pipeline.py`, from the pipeline directory, skips the OHLCV refresh and never changes
+published files.
+
+**Undo one bad run's state.** `pipeline-state/previous/<file>` (US: `pipeline-state/us/previous/`) holds the version
+before the latest push; copy it back over the current object. See [docs/pipeline-state-r2.md](docs/pipeline-state-r2.md).
+
+**Roll back a release.** Point `site/data/current.json` back at a known good revision only if every object that
+revision names still exists. Reverting a Git commit does not change what is live, and does not recreate expired
+`daily/` objects or evicted Actions caches.
+
+**History is missing or shorter than expected.** Check the symbol's earliest and latest cached dates and its chart
+`historyStartDate`. A restored cache or a weekly run does not prove inception coverage. To fill a bounded range
+from another compatible EDL directory (or, without `--source-root`, by fetching the missing days), run from the
+pipeline directory:
+
+```bash
+python3 sync_local_scanner_history.py --source-root /path/to/EDL --from-date 2026-09-29 --as-of-date 2026-10-01
+```
+
+Then rebuild charts and the release from matching artifacts (`python3 build_chart_artifacts.py`, then
+`python3 frontend/publish_snapshot.py` from the repository root). The full pipeline normally does this in order;
+never publish a pointer from mismatched financial, OHLCV, delivery and chart sessions.
+
+**Ask AI answers 409.** The browser's dataset revision differs from `ai-filter-choices.json`. The publisher uploads
+the catalogue just before `current.json`; check that the last publication finished.
+
+## Limits
+
+- Historical technical screens need local OHLCV history aligned to the requested session.
+- Intraday turnover modes stay unavailable until intraday history is collected.
+- Current-only fields (classification, P/E, index membership) cannot be reconstructed for past sessions from a
+  later snapshot.
+- Upstream sources change format or refuse requests; passing tests do not prove a live source returned complete data.
+- The US release has no F&O, delivery or price-band data (Indian sources), and amounts are in millions of dollars.
+- Results match this pipeline's data and universe; another provider can differ.
 
 ## Further reading
 
-- [Pipeline guide](DO%20NOT%20DELETE%20EDL%20PIPELINE/README.md)
-- Trend condition engine (private notes)
-- Market breadth methodology (private notes)
-- NSE delivery data (private notes)
-- R2 chart publication (private notes)
-- [Frontend guide](frontend/README.md)
-- [Contribution guide](CONTRIBUTING.md)
+- [Pipeline guide](DO%20NOT%20DELETE%20EDL%20PIPELINE/README.md),
+  [market breadth](DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/MARKET_BREADTH.md),
+  [release checklist](DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/RELEASE_CHECKLIST.md),
+  [US market](DO%20NOT%20DELETE%20EDL%20PIPELINE/docs/US_MARKET.md)
+- [AI compiler](workers/screener-ai/README.md)
+- [Index universe reference](INDEX_UNIVERSE_REFERENCE.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## License
 

@@ -11,6 +11,10 @@ days plus a rotating eighth of older ones (every call about every two months). A
 Each call keeps exactly one object: a revised call's previous object is deleted on the next run, once the index
 naming its replacement is live (a run pulls the live index before it starts).
 
+The provider also answers an older slug (honasa-q1-fy27) with the company's newest call, so a detail whose quarter is
+not the listed one is not stored, and a stored call whose date is not the listed date is dropped and fetched again.
+Summaries stored for more than one call are reported.
+
 Upcoming calls and today's (with their live status) are rewritten to concalls/upcoming.json on every run.
 
     python frontend/concall_history.py           # daily
@@ -142,6 +146,19 @@ def pack(folder, store, slug, detail, current=None):
     return {'sha256': digest, 'url': f'{store.base_url}/objects/{digest}.json.gz', 'bytes': len(compressed)}
 
 
+def summary_digest(detail):
+    return hashlib.sha256(str(detail.get('markdown_summary') or '').strip().encode()).hexdigest()[:16]
+
+
+def duplicate_summaries(calls):
+    """Stored calls that share one summary, by digest: each call has its own, so these are provider mix-ups."""
+    groups = {}
+    for slug, entry in calls.items():
+        if entry.get('object') and entry.get('summary'):
+            groups.setdefault(entry['summary'], []).append(slug)
+    return {digest: sorted(slugs) for digest, slugs in sorted(groups.items()) if len(slugs) > 1}
+
+
 def write_index(output, calls, checked_at):
     ordered = dict(sorted(calls.items(), key=lambda item: (item[1].get('date') or '', item[0]), reverse=True))
     write_json(output, {'version': 1, 'checkedAt': checked_at, 'count': len(ordered),
@@ -161,7 +178,7 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
     calls = {slug: dict(entry) for slug, entry in previous['calls'].items()}
     # Detailed errors stay in this report (a run artifact); the published index carries only a status.
     report = {'checkedAt': checked_at, 'full': full, 'pages': 0, 'listed': 0, 'added': 0, 'pending': 0,
-              'rechecked': 0, 'updated': 0, 'deleted': 0, 'failures': {}, 'errors': {}}
+              'rechecked': 0, 'updated': 0, 'deleted': 0, 'dropped': 0, 'failures': {}, 'errors': {}}
     today = checked_at[:10]
 
     # The index this run starts from is the live one, so it already names the replacements of these objects.
@@ -196,6 +213,15 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
         all_stored = bool(rows) and all((calls.get(row['slug_id']) or {}).get('object') for row in rows)
         for row in rows:
             entry = calls[row['slug_id']] = entry_for(row, calls.get(row['slug_id']))
+            listed = iso_date(row.get('concall_date'))
+            if entry.get('object') and listed and entry.get('date') != listed:
+                # The stored object is another call (its date is the stored call's): the provider has answered an
+                # older slug with the company's newest call. It is dropped and fetched again.
+                entry['superseded'] = [*entry.get('superseded', ()), entry['object']['sha256']]
+                entry['object'], entry['date'] = None, listed
+                for key in ('checked', 'updated', 'summary'):
+                    entry.pop(key, None)
+                report['dropped'] += 1
             if not entry.get('date'):
                 # The provider lists recent calls as 'Today' or 'Yesterday'; their age is counted from here.
                 entry.setdefault('firstSeen', today)
@@ -241,6 +267,10 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
             return slug, None, 'provider request failed', str(error)
         if not str(detail.get('markdown_summary') or '').strip():
             return slug, None, 'summary not ready', 'summary not ready'
+        # The provider answers an older slug (honasa-q1-fy27) with the company's newest call (Q2FY27).
+        quarter, listed = detail.get('concall_quarter'), calls[slug].get('quarter')
+        if quarter and listed and quarter != listed:
+            return slug, None, 'provider returned another call', f'provider returned the {quarter} call'
         return slug, detail, None, None
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -256,7 +286,7 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
                             # A failed or emptied re-check keeps the stored version.
                             report['failures'][slug] = f'recheck: {error}'
                             continue
-                        entry['checked'] = today
+                        entry['checked'], entry['summary'] = today, summary_digest(detail)
                         revised = pack(folder, store, slug, detail, current)
                         if revised is not current:
                             # The previous object goes on the next run, after this index is live.
@@ -276,7 +306,7 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
                     entry['date'] = iso_date(detail.get('concall_date')) or entry.get('date')
                     entry['time'] = detail.get('concall_time') or entry.get('time')
                     entry['object'] = pack(folder, store, slug, detail)
-                    entry['checked'] = today
+                    entry['checked'], entry['summary'] = today, summary_digest(detail)
                     report['added'] += 1
                     added += 1
                 if added:
@@ -286,6 +316,7 @@ def refresh(output, store, list_page, fetch_detail, *, full, checked_at, workers
             if progress:
                 progress(report)
 
+    report['duplicates'] = duplicate_summaries(calls)
     if calls != previous['calls']:
         write_index(output, calls, checked_at)
     return report
@@ -407,6 +438,9 @@ def main(argv=None):
     report['seconds'] = round(time.perf_counter() - started, 1)
     write_json(REPORT, report)
     print(json.dumps(report), flush=True)
+    if report['duplicates']:
+        print(f"::warning::{len(report['duplicates'])} concall summaries are stored for more than one call: "
+              f"{list(report['duplicates'].values())}", flush=True)
     if report['errors']:
         print('::warning::Concall refresh incomplete; see concall-refresh-report.json', flush=True)
     return int(bool(report['errors']))

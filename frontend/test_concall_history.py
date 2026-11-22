@@ -299,6 +299,36 @@ class ConcallHistoryTests(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             delete_object(Store(1), 'x.json.gz')
 
+    def test_another_quarters_call_under_a_slug_is_not_stored(self):
+        # The provider answers honasa-q1-fy27 with the Q2FY27 call, which honasa-q2-fy27 also lists.
+        newest = dict(detail('honasa-q1-fy27', summary='## Q2'), concall_quarter='Q2FY27', concall_date='2026-11-06')
+        provider = Provider([[dict(row('honasa-q1-fy27', 'HONASA', date='13 August 2026'), concall_quarter='Q1FY27')]],
+                            {'honasa-q1-fy27': newest})
+        report = self.run_refresh(provider)
+        entry = self.index()['calls']['honasa-q1-fy27']
+        self.assertEqual((entry['object'], entry['date'], entry['status']), (None, '2026-08-13', 'provider returned another call'))
+        self.assertEqual(report['failures'], {'honasa-q1-fy27': 'provider returned the Q2FY27 call'})
+
+    def test_a_stored_call_whose_date_is_not_the_listed_one_is_dropped(self):
+        # Stored before the quarter check: the object is the newest call, dated 6 November, not the listed 13 August.
+        stale = dict(detail('honasa-q1-fy27', summary='## Q2'), concall_date='2026-11-06')
+        listed = dict(row('honasa-q1-fy27', 'HONASA', date='13 August 2026'), concall_quarter='Q1FY27')
+        self.run_refresh(Provider([[listed]], {'honasa-q1-fy27': stale}))
+        first = self.index()['calls']['honasa-q1-fy27']['object']['sha256']
+        provider = Provider([[listed]], {'honasa-q1-fy27': dict(stale, concall_quarter='Q2FY27')})
+        report = self.run_refresh(provider, full=True)
+        entry = self.index()['calls']['honasa-q1-fy27']
+        self.assertEqual((report['dropped'], entry['object'], entry['date']), (1, None, '2026-08-13'))
+        self.assertEqual(entry['superseded'], [first])
+        self.assertEqual(provider.fetched, ['honasa-q1-fy27'])
+
+    def test_a_summary_stored_for_two_calls_is_reported(self):
+        shared = {'bhartiartl-q2-fy27': detail('bhartiartl-q2-fy27', summary='## Hexacom'),
+                  'bhartihexa-q2-fy27': detail('bhartihexa-q2-fy27', summary='## Hexacom')}
+        report = self.run_refresh(Provider([[row('bhartiartl-q2-fy27', 'BHARTIARTL'), row('bhartihexa-q2-fy27', 'BHARTIHEXA'),
+                                             row('tcs-q2-fy27', 'TCS')]], shared))
+        self.assertEqual(list(report['duplicates'].values()), [['bhartiartl-q2-fy27', 'bhartihexa-q2-fy27']])
+
     def test_a_failed_or_emptied_recheck_keeps_the_stored_version(self):
         self.refresh_on(Provider([[row('a', date='20 November 2026')]]), '2026-11-21T16:30:00+05:30')
         first = self.index()['calls']['a']['object']

@@ -3,7 +3,7 @@ import type {AiFilterDefinition} from '../../frontend/src/api/aiFilterCatalog';
 import {compactCatalog} from './compactCatalog';
 import {materializeCompilerResult} from './compilerResult';
 
-export const GROQ_MODEL = 'openai/gpt-oss-20b';
+export const GROQ_MODEL = 'qwen/qwen3.8-27b';
 export const PRIMARY_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
 export const FALLBACK_MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 export type CompileModel = typeof GROQ_MODEL | typeof PRIMARY_MODEL | typeof FALLBACK_MODEL | string;
@@ -95,7 +95,8 @@ export async function compileWithFallback(query:string,catalog:AiFilterDefinitio
     try {
       const signal = options.signal ? AbortSignal.any([options.signal,AbortSignal.timeout(index===0?30000:45000)]) : AbortSignal.timeout(index===0?30000:45000);
       const requestMessages = model === FALLBACK_MODEL ? [{...messages[0],content:messages[0].content+'\n/no_think'},messages[1]] : messages;
-      const parsed = parseOutput(await run(model,{messages:requestMessages,response_format:{type:'json_object'},temperature:0,max_tokens:1200},signal));
+      const maxTokens = model.startsWith('@cf/') ? 2200 : 700;
+      const parsed = parseOutput(await run(model,{messages:requestMessages,response_format:{type:'json_object'},temperature:0,max_tokens:maxTokens},signal));
       inputTokens+=parsed.inputTokens;outputTokens+=parsed.outputTokens;cachedTokens+=parsed.cachedTokens;
       if (!object(parsed.raw) || !Array.isArray(parsed.raw.clauses)) throw new Error('invalid_result');
       const result = materializeCompilerResult(parsed.raw,catalog);

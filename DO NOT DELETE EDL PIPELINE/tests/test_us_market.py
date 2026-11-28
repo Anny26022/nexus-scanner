@@ -189,6 +189,7 @@ class UniverseTests(unittest.TestCase):
         self.assertEqual(security_type('AAPL', 'Apple', 'Technology'), 'common')
         self.assertEqual(security_type('XYZ', 'New listing', 'Unclassified'), 'common')
         self.assertEqual(security_type('XYZ', 'New listing', None), 'common')
+        self.assertEqual(security_type('XYZ', 'New listing', '   '), 'common')
 
     def test_unlabelled_listings_try_both_main_exchanges(self):
         self.assertEqual(history_exchanges('NASDAQ'), ('NASDAQ',))

@@ -28,7 +28,8 @@ STOCK_SECTORS = frozenset({'Basic Material', 'Basic Materials', 'Communication S
 
 
 def security_type(symbol: str, name: str | None, sector: str | None = None) -> str:
-    if sector and sector.strip() not in STOCK_SECTORS:
+    label = (sector or '').strip()  # a blank sector, however it is spelled, says nothing about the row
+    if label and label not in STOCK_SECTORS:
         return 'fund'
     match = _DESCRIPTOR.search(name or '')
     if not match:

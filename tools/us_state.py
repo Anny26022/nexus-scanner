@@ -97,7 +97,8 @@ def push(store, root: Path, names=(), keep_previous=False, unverified=False):
     wanted = set(names) or set(FOLDERS) | set(FILES)
     for folder in sorted(set(FOLDERS) & wanted):
         directory, name = root / folder, archive_name(folder)
-        if not directory.is_dir() or not any(directory.iterdir()):
+        # A folder holding only half-done *.tmp writes would pack an empty archive over the stored one.
+        if not directory.is_dir() or not any(path.is_file() and path.suffix != '.tmp' for path in directory.rglob('*')):
             print(f'{name}: nothing in this run; R2 copy kept', flush=True)
             continue
         local = root / name

@@ -145,6 +145,20 @@ class StateTests(unittest.TestCase):
         self.assertTrue(mark.exists())
         self.assertEqual(self.previous(), before)
 
+    def test_a_folder_holding_only_temp_files_keeps_the_stored_copy(self):
+        first = self.root('first')
+        us_state.pull(self.store, first)
+        self.seed(first)
+        us_state.push(self.store, first)
+        stored = (self.tmp / 'bucket' / us_state.PREFIX / 'ohlcv_data.tar.gz').read_bytes()
+        second = self.root('second')
+        us_state.pull(self.store, second)
+        shutil.rmtree(second / 'ohlcv_data')
+        (second / 'ohlcv_data' / 'nested').mkdir(parents=True)
+        (second / 'ohlcv_data' / 'nested' / 'AAPL.csv.tmp').write_text('cut short')
+        us_state.push(self.store, second, ['ohlcv_data'])
+        self.assertEqual((self.tmp / 'bucket' / us_state.PREFIX / 'ohlcv_data.tar.gz').read_bytes(), stored)
+
     def test_a_half_written_temp_file_is_not_carried(self):
         first = self.root('first')
         us_state.pull(self.store, first)

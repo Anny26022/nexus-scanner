@@ -114,53 +114,8 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET: nexus-screener-chart-data
-        run: |
-          python - << 'EOF'
-          import os, glob, sys, boto3
-          account_id = os.environ.get('R2_ACCOUNT_ID')
-          access_key = os.environ.get('R2_ACCESS_KEY_ID')
-          secret_key = os.environ.get('R2_SECRET_ACCESS_KEY')
-          bucket_name = os.environ.get('R2_BUCKET', 'nexus-screener-chart-data')
-
-          if not (account_id and access_key and secret_key):
-              sys.exit("Error: R2 credentials are required when upload_r2 is true.")
-
-          endpoint = f"https://{account_id}.r2.cloudflarestorage.com"
-          s3 = boto3.client(
-              's3',
-              endpoint_url=endpoint,
-              aws_access_key_id=access_key,
-              aws_secret_access_key=secret_key,
-              region_name='auto'
-          )
-
-          snapshots = glob.glob("outputs/historical_snapshots/us/*.json.gz")
-          if not snapshots:
-              print("No new US snapshots to upload; all requested sessions are already archived.")
-              sys.exit(0)
-
-          print(f"Uploading and verifying {len(snapshots)} US snapshots to R2 bucket '{bucket_name}'...")
-          for filepath in snapshots:
-              filename = os.path.basename(filepath)
-              key = f"snapshots/us/{filename}"
-              file_size = os.path.getsize(filepath)
-              with open(filepath, 'rb') as f:
-                  s3.upload_fileobj(
-                      f,
-                      bucket_name,
-                      key,
-                      ExtraArgs={'ContentType': 'application/gzip'}
-                  )
-              # Verify R2 persistence with head_object readback
-              head = s3.head_object(Bucket=bucket_name, Key=key)
-              if head.get('ContentLength') != file_size:
-                  sys.exit(f"R2 readback verification failed for {key}: expected {file_size} bytes, got {head.get('ContentLength')}")
-              print(f"Uploaded and verified {key} ({file_size} bytes)")
-
-          with open(".upload_verified_us", "w") as f:
-              f.write(f"Verified upload and readback of {len(snapshots)} US snapshots\n")
-          print("R2 US snapshot upload and readback complete and verified.")
-          EOF
+        # Shared with the other market's backfill (tools/upload_snapshots.py).
+        run: python tools/upload_snapshots.py outputs/historical_snapshots/us snapshots/us .upload_verified_us
 
       # Only once every snapshot it lists was uploaded and verified; the site reads it without a rebuild.
       - name: Publish Updated US Sessions Manifest

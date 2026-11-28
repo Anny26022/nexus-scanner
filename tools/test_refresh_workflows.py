@@ -291,29 +291,111 @@ class RefreshWorkflowTests(unittest.TestCase):
         self.assertLess(names.index('Pull pipeline state from R2'), names.index('Generate Historical Snapshots'))
         self.assertNotIn('Push pipeline state to R2', names)
         upload = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
+        self.assertEqual(upload.strip(), 'python tools/upload_snapshots.py outputs/historical_snapshots snapshots .upload_verified')
         # Same object metadata as the daily archive (frontend/session_history.py).
-        self.assertIn("ExtraArgs={'ContentType': 'application/gzip'}", upload)
-        self.assertNotIn('ContentEncoding', upload)
+        source = (ROOT / 'tools/upload_snapshots.py').read_text()
+        self.assertIn("ContentType='application/gzip'", source)
+        self.assertNotIn('ContentEncoding', source)
 
     def test_backfill_upload_is_a_successful_no_op_when_every_date_is_archived(self):
         import sys, tempfile, types
-        job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
-        run = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
-        script = run.split("<< 'EOF'\n", 1)[1].rsplit('\nEOF', 1)[0]
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import upload_snapshots
         env = {'R2_ACCOUNT_ID': 'a', 'R2_ACCESS_KEY_ID': 'b', 'R2_SECRET_ACCESS_KEY': 'c'}
         with tempfile.TemporaryDirectory() as folder:
-            previous = Path.cwd()
-            os.chdir(folder)
-            try:
-                with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: None)}), \
-                        unittest.mock.patch.dict(os.environ, env), self.assertRaises(SystemExit) as exit:
-                    exec(compile(script, 'upload', 'exec'), {'__name__': '__main__'})
-            finally:
-                os.chdir(previous)
-            self.assertEqual(exit.exception.code, 0)
-            # No sentinel, so 'Commit Updated Sessions Manifest' is skipped.
-            self.assertFalse((Path(folder)/'.upload_verified').exists())
+            sentinel = Path(folder) / '.upload_verified'
+            with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: None)}), \
+                    unittest.mock.patch.dict(os.environ, env):
+                self.assertEqual(upload_snapshots.main([folder, 'snapshots', str(sentinel)]), 0)
+            # No sentinel, so 'Publish Updated Sessions Manifest' is skipped.
+            self.assertFalse(sentinel.exists())
 
+    def test_backfill_upload_checks_each_snapshot_then_writes_the_sentinel(self):
+        import base64, gzip, hashlib, io, sys, tempfile, types
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import upload_snapshots
+        key = 'snapshots/us/2026-11-20.json.gz'
+        stored, etags, heads, puts = {}, {}, [], []
+        corrupt = []  # set to store different bytes of the same length, as a bad transfer would
+
+        class Missing(Exception):
+            response = {'ResponseMetadata': {'HTTPStatusCode': 404}, 'Error': {'Code': '404'}}
+
+        class S3:
+            def put_object(self, Bucket, Key, Body, ContentType, ContentMD5):
+                # As R2 does: a body that does not match its Content-MD5 is refused.
+                assert base64.b64encode(hashlib.md5(Body).digest()).decode() == ContentMD5
+                puts.append((Key, ContentType))
+                stored[Key] = bytes(reversed(Body)) if corrupt else Body
+                etags[Key] = '"%s"' % hashlib.md5(stored[Key]).hexdigest()
+
+            def head_object(self, Bucket, Key):
+                heads.append(Key)
+                if Key not in stored:
+                    raise Missing()
+                return {'ContentLength': len(stored[Key]), 'ETag': etags[Key]}
+
+            def get_object(self, Bucket, Key):
+                return {'Body': io.BytesIO(stored[Key])}
+
+        def run(folder, sentinel):
+            with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: S3())}), \
+                    unittest.mock.patch.dict(os.environ, {'R2_ACCOUNT_ID': 'a', 'R2_ACCESS_KEY_ID': 'b', 'R2_SECRET_ACCESS_KEY': 'c'}):
+                return upload_snapshots.main([folder, 'snapshots/us', str(sentinel)])
+
+        def archive(data, tag=None):
+            stored[key] = data
+            etags[key] = tag or '"%s"' % hashlib.md5(data).hexdigest()
+
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / '2026-11-20.json.gz').write_bytes(b'snapshot')
+            sentinel = Path(folder) / '.upload_verified_us'
+            self.assertEqual(run(folder, sentinel), 0)
+            self.assertEqual(stored, {key: b'snapshot'})
+            self.assertEqual(puts, [(key, 'application/gzip')])
+            self.assertTrue(sentinel.exists())
+            # One check that the key is free, then one readback after the upload.
+            self.assertEqual(heads, [key] * 2)
+
+            # Archived snapshots are immutable. The same bytes again are left alone.
+            sentinel.unlink(); puts.clear()
+            self.assertEqual(run(folder, sentinel), 0)
+            self.assertEqual(puts, [])
+            # Different bytes of the same length stop the upload: the ETag, not the size, decides.
+            archive(b'snapshoT')
+            with self.assertRaises(SystemExit):
+                run(folder, sentinel)
+            self.assertEqual(stored[key], b'snapshoT')
+            # A multipart object's ETag is not an MD5, so it is compared by size.
+            archive(b'snapshot', '"0123abcd-2"')
+            self.assertEqual(run(folder, sentinel), 0)
+            self.assertEqual(puts, [])
+
+            # A re-run after a part-way failure: the same snapshot under another gzip timestamp is left alone, and the
+            # backfill goes on; different content under the same name still stops it.
+            (Path(folder) / '2026-11-20.json.gz').write_bytes(gzip.compress(b'{"day":1}', mtime=2))
+            archive(gzip.compress(b'{"day":1}', mtime=1))
+            self.assertEqual(run(folder, sentinel), 0)
+            self.assertEqual(puts, [])
+            archive(gzip.compress(b'{"day":2}', mtime=1))
+            with self.assertRaises(SystemExit):
+                run(folder, sentinel)
+            (Path(folder) / '2026-11-20.json.gz').write_bytes(b'snapshot')
+
+            # A stored copy whose bytes differ from what was sent fails the readback, and no sentinel is written.
+            del stored[key]
+            sentinel.unlink()
+            corrupt.append(True)
+            with self.assertRaises(SystemExit):
+                run(folder, sentinel)
+            self.assertFalse(sentinel.exists())
+        # The US backfill runs the same tool into its own prefix and sentinel.
+        job, = document('.github/workflows/us_backfill_historical_snapshots.yml')['jobs'].values()
+        upload = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
+        self.assertEqual(upload.strip(), 'python tools/upload_snapshots.py outputs/historical_snapshots/us snapshots/us .upload_verified_us')
+        # The manifest is published on the same sentinel the uploader writes.
+        publish = next(step for step in job['steps'] if step['name'] == 'Publish Updated US Sessions Manifest')
+        self.assertEqual(publish['if'], "${{ hashFiles('.upload_verified_us') != '' }}")
 
 if __name__ == '__main__':
     unittest.main()

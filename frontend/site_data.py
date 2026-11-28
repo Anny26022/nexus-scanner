@@ -209,6 +209,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.action in ('pull-pointer', 'push-pointer') and not args.name:
         parser.error(f'{args.action} needs the pointer name')
+    if args.action in ('pull-pointer', 'push-pointer') and args.name not in POINTERS:
+        parser.error(f'Not a published pointer: {args.name}')
     if args.action == 'ai-choices':
         build_ai_filter_choices(OUTPUT, json.loads((OUTPUT / 'current.json').read_text()))
         return 0

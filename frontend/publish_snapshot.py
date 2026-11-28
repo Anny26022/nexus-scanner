@@ -377,7 +377,8 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
             etfs = public(build_etf_snapshot(json.loads(gzip.decompress(etf_source)), session, revision))
             etf_bytes = json.dumps(pack_snapshot(etfs), separators=(',', ':'), allow_nan=False).encode()
         except (ValueError, KeyError, TypeError, OverflowError, OSError) as error:
-            print(f'WARNING: ETF snapshot unavailable for {session}: {error}', flush=True)
+            # An annotation, so the run says so: the release goes live without ETFs until "ETF Snapshot Only" runs.
+            print(f'::warning::ETF snapshot unavailable for {session}: {error}. Run "ETF Snapshot Only" to add the ETFs.', flush=True)
     generation=output/'revisions'/revision
     backend=root/'.scanner_cache/revisions'/revision
     generation.mkdir(parents=True,exist_ok=True); backend.mkdir(parents=True,exist_ok=True)

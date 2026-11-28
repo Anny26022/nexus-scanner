@@ -42,7 +42,8 @@ runs:
         # are this job's own, so a rebase conflicts only if another run committed the same reference files.
         for attempt in 1 2 3 4 5; do
           if git push; then exit 0; fi
-          git pull --rebase origin main || { git rebase --abort 2>/dev/null || true; }
+          # --autostash: the run leaves tracked files it does not commit modified, and a plain rebase refuses to start.
+          git pull --rebase --autostash origin main || { git rebase --abort 2>/dev/null || true; }
           sleep $((attempt * 10))
         done
         echo "::error::Could not push the refresh commit after 5 attempts."

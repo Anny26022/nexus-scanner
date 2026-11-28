@@ -43,8 +43,9 @@ US_RESULTS = 'results/us_index.json'
 POINTERS = ('current.json', 'sessions.json', 'price-band-history.json', AI_FILTER_CHOICES,
             'results/index.json', US_RESULTS, 'heatmap/index.json', 'company/current.json',
             'concalls/index.json', 'concalls/upcoming.json', US_POINTER, US_SESSIONS)
-# Written after the scanner release, by the Earnings Pulse, Tijori and concall steps.
-INDEXES = ('results/index.json', US_RESULTS, 'heatmap/index.json', 'company/current.json',
+# Written after the scanner release, by the Earnings Pulse, Tijori and concall steps. Not the US calendar: the US
+# refresh owns it (push-pointer), and the checkout's frozen copy must never go over the live one.
+INDEXES = ('results/index.json', 'heatmap/index.json', 'company/current.json',
            'concalls/index.json', 'concalls/upcoming.json')
 REVISION = re.compile(r'[a-f0-9]{64}')
 IMMUTABLE = 'cache-control=public,max-age=31536000,immutable'

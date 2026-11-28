@@ -6,8 +6,9 @@ first) and dropped after 7 idle days. Here each folder travels as one compressed
 
     pull                  restore every archive and file R2 holds into the US root (nothing there yet: a cold start)
     push [NAME ...]       upload them (all, or the ones named), the current R2 copy first moved to previous/
-    push --keep-previous  upload without touching previous/: a build that failed its release checks or found no new
-                          session, and the ledger's second push, so previous/ stays the state of the last good run
+    push --keep-previous  upload without touching previous/: for a build that failed or exited 75, and the ledger's
+                          second push. previous/ then only moves when a build passes its release checks: it holds
+                          the copy that was current just before that push (whatever the runs before it left)
     pulse                 copy the Earnings Pulse US archive (results/us_index.json and its objects) into the root
 
 `push` refuses to run unless `pull` completed in this root, so a run whose restore failed never overwrites the

@@ -10,8 +10,8 @@ permissions:
 # Same queue as the US full refresh, so the two never publish us/current.json at once.
 concurrency:
   group: us-daily-refresh
-  # queue: max keeps every waiting run: the default keeps one and cancels the older, and the nexus-gh-cron Worker
-  # never retries a scheduled run it finds cancelled.
+  # queue: max keeps up to 100 waiting runs, not one: the default cancels an older waiting run when a newer one arrives,
+  # and the nexus-gh-cron Worker never retries a scheduled run it finds cancelled.
   queue: max
   cancel-in-progress: false
 

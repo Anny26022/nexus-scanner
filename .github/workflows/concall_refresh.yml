@@ -16,8 +16,8 @@ permissions:
 # Shares the daily refresh's group, so the two never write the concall index at the same time.
 concurrency:
   group: daily-data-refresh
-  # queue: max keeps every waiting run: the default keeps one and cancels the older, and the nexus-gh-cron Worker
-  # never retries a scheduled run it finds cancelled.
+  # queue: max keeps up to 100 waiting runs, not one: the default cancels an older waiting run when a newer one arrives,
+  # and the nexus-gh-cron Worker never retries a scheduled run it finds cancelled.
   queue: max
   cancel-in-progress: false
 

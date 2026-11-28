@@ -284,6 +284,17 @@ class SnapshotPublicationTests(unittest.TestCase):
             self.assertEqual(original.read_bytes(),original_bytes)
             self.assertFalse((output/'revisions'/first['revision']/'stocks.json').exists())
 
+    def test_a_failed_cleanup_after_go_live_does_not_fail_the_publication(self):
+        # current.json is already live by then: a cleanup error warns, and one cleanup's failure skips not the other.
+        with tempfile.TemporaryDirectory() as folder, patch('publish_snapshot.list_presets', return_value=[{'id': 'lib-easy-money'}]), \
+                patch('publish_snapshot.retain_revisions', side_effect=OSError('disk')) as retain, \
+                patch('publish_snapshot.prune_etf_snapshots') as prune:
+            root = Path(folder) / 'edl'; root.mkdir(); output = Path(folder) / 'public'; self.fixture(root)
+            manifest = publish(root, output)
+            retain.assert_called_once()
+            prune.assert_called_once()
+            self.assertEqual(json.loads((output / 'current.json').read_text())['revision'], manifest['revision'])
+
     def fixture(self, root, cap=5000):
         stocks=[{'symbol':'TEST','name':'Test','close':100,'open':99,'high':101,'low':98,'volume':200,'as_of_date':'2026-09-30',
                  'market_cap_crore':cap,'daily_rupee_turnover_50_cr':10,'circuit_limit':'20','listing_series':'EQ','index_memberships':[]}]

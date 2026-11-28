@@ -15,8 +15,8 @@ permissions:
 # Its own queue: the US release never touches India's pointer, so it may run beside the India refresh.
 concurrency:
   group: us-daily-refresh
-  # queue: max keeps every waiting run: the default keeps one and cancels the older, and the nexus-gh-cron Worker
-  # never retries a scheduled run it finds cancelled.
+  # queue: max keeps up to 100 waiting runs, not one: the default cancels an older waiting run when a newer one arrives,
+  # and the nexus-gh-cron Worker never retries a scheduled run it finds cancelled.
   queue: max
   cancel-in-progress: false
 
@@ -117,8 +117,8 @@ jobs:
 
       # Pushed before publication too: a run that times out or is cancelled during the R2 upload ends before any later
       # step, and would otherwise lose every history this run fetched. The current R2 copy moves to previous/ first, but
-      # only after a build that passed its release checks with a new session: a failed or no-op run keeps previous/ as
-      # the last good state, so two bad runs in a row cannot replace it.
+      # only after a build that passed its release checks (a rerun of the same session included): a failed run or one
+      # that exits 75 leaves previous/ where it is, so failed runs in a row cannot push it out.
       - name: Push US state to R2
         if: always() && steps.build.outcome != 'skipped'
         env:

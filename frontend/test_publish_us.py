@@ -115,11 +115,8 @@ class PublishUsTests(unittest.TestCase):
         folder = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, folder)
         thematic_path = folder / 'us_thematic_universe.json'
-        thematic_path.write_text(json.dumps({
-            'NVDA': {'primary_theme': 'Artificial Intelligence', 'themes': ['Artificial Intelligence'],
-                     'subthemes': ['AI - Compute & Acceleration']},
-            'AMD': {'primary_theme': 'Artificial Intelligence', 'themes': ['Artificial Intelligence'],
-                    'subthemes': ['AI - Compute & Acceleration']}}))
+        thematic_path.write_text(json.dumps({sym: {'primary_theme': 'Artificial Intelligence', 'themes': ['Artificial Intelligence'],
+                                                   'subthemes': ['AI - Compute & Acceleration']} for sym in symbols}))
         (folder / 'us_theme_catalog.json').write_text(json.dumps({'themes': [{
             'value': 'ai', 'label': 'Artificial Intelligence',
             'subthemes': [{'value': 'aicompute', 'label': 'AI - Compute & Acceleration'}]}]}))

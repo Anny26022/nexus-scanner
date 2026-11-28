@@ -14,8 +14,8 @@ permissions:
 
 concurrency:
   group: daily-data-refresh
-  # queue: max keeps every waiting run: the default keeps one and cancels the older, and the nexus-gh-cron Worker
-  # never retries a scheduled run it finds cancelled.
+  # queue: max keeps up to 100 waiting runs, not one: the default cancels an older waiting run when a newer one arrives,
+  # and the nexus-gh-cron Worker never retries a scheduled run it finds cancelled.
   queue: max
   cancel-in-progress: false
 
@@ -120,7 +120,7 @@ jobs:
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
         run: |
           # The EOD2 overlay is optional here (the weekly run requires it): without a usable checkout the import skips.
-          if [ ! -f "$EDL_EOD2_DATA_DIR/isin_symbol_map.json" ]; then
+          if ! (cd "DO NOT DELETE EDL PIPELINE" && python -c 'import os, import_eod2_ohlcv as e; e.resolve_eod2_data_dir(os.environ["EDL_EOD2_DATA_DIR"])') 2>/dev/null; then
             echo "::warning::No usable EOD2 checkout; the EOD2 overlay is skipped this run."
             unset EDL_EOD2_DATA_DIR
           fi

@@ -363,10 +363,16 @@ class RefreshWorkflowTests(unittest.TestCase):
             self.assertEqual(puts, [])
             # Different bytes of the same length stop the upload: the ETag, not the size, decides.
             archive(b'snapshoT')
+            sentinel.unlink()
             with self.assertRaises(SystemExit):
                 run(folder, sentinel)
             self.assertEqual(stored[key], b'snapshoT')
-            # A multipart object's ETag is not an MD5, so it is compared by size.
+            self.assertFalse(sentinel.exists())
+            # A multipart object's ETag is not an MD5, so it is compared by size: a different size still stops it.
+            archive(b'snapshot-longer', '"0123abcd-2"')
+            with self.assertRaises(SystemExit):
+                run(folder, sentinel)
+            self.assertFalse(sentinel.exists())
             archive(b'snapshot', '"0123abcd-2"')
             self.assertEqual(run(folder, sentinel), 0)
             self.assertEqual(puts, [])

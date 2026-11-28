@@ -30,6 +30,8 @@ from theme_classification import (classify, consolidated_classification, SOURCE_
                                   WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
 from pipeline_utils import resource_path
 from public_payload import public, public_ipos
+from earnings_signals import earnings_signals, next_results, pulse_dates
+from edl_pipeline.markets.us.earnings import load_pulse
 from market_overview import benchmark_series, index_closes, market_overview
 import rotation_history
 
@@ -214,6 +216,9 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         for field in ('sma20', 'sma50', 'sma200', 'ema20', 'ema50', 'ema200'):
             row[field] = metrics.get(field, row.get(field))
         row['daysSinceEarnings'] = metrics.get('DAYS_SINCE_EARNINGS')
+        # The Earnings scans' inputs: quarterly growth streaks, the results-day reaction and the next results date.
+        row['earnings'] = earnings_signals(stock, frame if aligned else None, session, (context.get('next_results') or {}).get(symbol),
+                                           (context.get('pulse_dates') or {}).get(symbol))
         row['presetRuleMatches']={key:evaluate(node['expression']) for key,node in presets.items()}
         row['presetMatches']={key:evaluate(node) for key,node in presets.items()}
         default_match = evaluate(default) is True
@@ -277,6 +282,9 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     source_bytes={p.name:p.read_bytes() for p in source_files}
     context=bridge._load_context(root)
     session=context['financial_history_as_of']
+    context['next_results']=next_results(source_bytes.get('earnings_calendar.json.gz'), session)
+    # Earnings Pulse's India archive (site_data.py pull fetched its index): results dates the filings feed missed.
+    context['pulse_dates']=pulse_dates(load_pulse(index_path=output/'results/index.json', latest=2), session)
     presets={p['id']:bridge.translate(p['id'],{}) for p in list_presets()}
     default=bridge.group('AND',bridge.translate('mom_rvol',{'minRvol':1.5,'maxRvol':20}),bridge.translate('trend_price_vs_ma',{'maType':'SMA','maPeriod':50,'operator':'above','thresholdPct':0}))
     lookback=delivery_lookback([*presets.values(),default])

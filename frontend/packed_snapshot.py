@@ -1,5 +1,7 @@
 """Lossless wire representation; scanner records and calculations stay unchanged."""
 NESTED_FIELDS = ('presetMatches', 'metrics', 'financialMetadata', 'historyMetadata')
+# Packed only when some row carries them, so snapshots without them are byte-for-byte as before.
+OPTIONAL_NESTED_FIELDS = ('etf', 'earnings')
 
 
 def pack_records(records):
@@ -14,7 +16,7 @@ def pack_records(records):
 def pack_snapshot(payload):
     rows = [dict(row) for row in payload['stocks']]
     nested = {}
-    for field in (*NESTED_FIELDS, *(('etf',) if any('etf' in row for row in rows) else ())):
+    for field in (*NESTED_FIELDS, *(field for field in OPTIONAL_NESTED_FIELDS if any(field in row for row in rows))):
         indexes = [i for i, row in enumerate(rows) if isinstance(row.get(field), dict)]
         nested[field] = {'indexes': indexes, 'table': pack_records([rows[i].pop(field) for i in indexes])}
     return {

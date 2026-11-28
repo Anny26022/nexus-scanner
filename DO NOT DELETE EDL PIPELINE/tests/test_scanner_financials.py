@@ -34,6 +34,21 @@ class FinancialScannerTests(unittest.TestCase):
         self.assertIsNone(statement_reference(history, "annual", "roce", 1))
         self.assertIsNone(statement_reference(history, "annual", "borrowings", 1))
 
+    def test_standalone_quarters_are_kept_only_beside_missing_or_stale_consolidated_ones(self):
+        standalone = {"YEAR": "202609|202606", "SALES": "50|40", "NET_PROFIT": "5|4", "EPS": "1|0.8"}
+        current = normalize_statement_history({**self.raw_history(), "incomeStat_sq": standalone}, "2026-11-27")
+        self.assertNotIn("standalone_quarterly", current)
+        only = normalize_statement_history({"incomeStat_sq": standalone}, "2026-11-27")
+        self.assertEqual(([row["period_end"] for row in only["standalone_quarterly"]], only["quarterly"], only["report_type"]),
+                         (["2026-06-30", "2026-09-30"], [], "CONSOLIDATED"))
+        # One quarter behind is a consolidated series that is simply later to report; it is kept alone.
+        behind = dict(self.raw_history(), incomeStat_cq={"YEAR": "202606|202603", "SALES": "9|9"}, incomeStat_sq=standalone)
+        self.assertNotIn("standalone_quarterly", normalize_statement_history(behind, "2026-11-27"))
+        older = dict(self.raw_history(), incomeStat_cq={"YEAR": "202503|202412", "SALES": "9|9"}, incomeStat_sq=standalone)
+        self.assertIn("standalone_quarterly", normalize_statement_history(older, "2026-11-27"))
+        # Every published figure stays consolidated.
+        self.assertEqual(statement_summary(only), statement_summary(normalize_statement_history({}, "2026-11-27")))
+
     def test_ttm_growth_requires_eight_consecutive_valid_quarters(self):
         raw = self.raw_history()
         summary = statement_summary(normalize_statement_history(raw, "2026-10-07"))

@@ -17,37 +17,51 @@ HISTORY_SOURCES = {
 }
 
 
+# Standalone quarters, kept beside a consolidated series that is missing or this far behind. Only the scanner's
+# Earnings scans read them ("consolidated, else standalone"); every published figure stays consolidated.
+STANDALONE_QUARTERLY = "incomeStat_sq"
+STALE_CONSOLIDATED_DAYS = 180
+
+
+def _statement_rows(statement, frequency):
+    periods = str(statement.get("YEAR") or "").split("|")
+    columns = {key: str(value if value is not None else "").split("|") for key, value in statement.items() if key != "YEAR"}
+    rows = {}
+    for index, period in enumerate(periods):
+        try:
+            if len(period) != 6 or not period.isdigit():
+                continue
+            year, month = int(period[:4]), int(period[4:])
+            if year < 1900 or (frequency == "quarterly" and month not in (3, 6, 9, 12)):
+                continue
+            end = date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+        except ValueError:
+            continue
+        # A duplicate period or a shorter column cannot be aligned safely.
+        if periods.count(period) != 1:
+            continue
+        row = {"period_end": end}
+        for key, values in columns.items():
+            if frequency in {"quarterly", "annual"} and key not in STATEMENT_METRICS:
+                continue
+            name = STATEMENT_METRICS.get(key, key.lower())
+            row[name] = finite_number(values[index]) if len(values) == len(periods) else None
+        rows[end] = row
+    return sorted(rows.values(), key=lambda row: row["period_end"])
+
+
 def normalize_statement_history(raw, observed_on):
     """Retain consolidated period-aligned series; observation is not filing date."""
     history = {"source": "ScanX", "report_type": "CONSOLIDATED",
                "amount_unit": "INR_CRORE", "metric_units": {"eps": "INR_PER_SHARE", "opm": "PERCENT"},
                "observed_on": observed_on}
     for frequency, source in HISTORY_SOURCES.items():
-        statement = raw.get(source) or {}
-        periods = str(statement.get("YEAR") or "").split("|")
-        columns = {key: str(value if value is not None else "").split("|") for key, value in statement.items() if key != "YEAR"}
-        rows = {}
-        for index, period in enumerate(periods):
-            try:
-                if len(period) != 6 or not period.isdigit():
-                    continue
-                year, month = int(period[:4]), int(period[4:])
-                if year < 1900 or (frequency == "quarterly" and month not in (3, 6, 9, 12)):
-                    continue
-                end = date(year, month, calendar.monthrange(year, month)[1]).isoformat()
-            except ValueError:
-                continue
-            # A duplicate period or a shorter column cannot be aligned safely.
-            if periods.count(period) != 1:
-                continue
-            row = {"period_end": end}
-            for key, values in columns.items():
-                if frequency in {"quarterly", "annual"} and key not in STATEMENT_METRICS:
-                    continue
-                name = STATEMENT_METRICS.get(key, key.lower())
-                row[name] = finite_number(values[index]) if len(values) == len(periods) else None
-            rows[end] = row
-        history[frequency] = sorted(rows.values(), key=lambda row: row["period_end"])
+        history[frequency] = _statement_rows(raw.get(source) or {}, frequency)
+    standalone = _statement_rows(raw.get(STANDALONE_QUARTERLY) or {}, "quarterly")
+    consolidated = history["quarterly"]
+    if standalone and (not consolidated or (date.fromisoformat(standalone[-1]["period_end"])
+                                            - date.fromisoformat(consolidated[-1]["period_end"])).days >= STALE_CONSOLIDATED_DAYS):
+        history["standalone_quarterly"] = standalone
     return history
 
 

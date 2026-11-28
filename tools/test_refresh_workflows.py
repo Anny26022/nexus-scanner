@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "048bbf4de86aa82c332488f77e26396205c2fa74392e6a9a5941f77333010153",
-    "weekly_eod2_refresh.yml": "7540545347b0f7d40e877dd265c7d38cdeae725a9284b94fc94a8a4ddd5a0b6f",
+    "daily_refresh.yml": "ace991ec280f97e11f0fef36c16354e6c199961b6f95abf8ee1f289ec3d76853",
+    "weekly_eod2_refresh.yml": "1f6d8cca48dd53f92bcbebee2a6fd09c976513e6f6fe6783c2c5473995efc04d",
 }
 
 
@@ -188,6 +188,18 @@ class RefreshWorkflowTests(unittest.TestCase):
                 if result.returncode:
                     self.assertIn('::error::Cache phase must be fetch or build', result.stdout)
 
+    def test_a_refused_push_commits_again_on_the_latest_main(self):
+        step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
+        # git push is refused once (main moved on), then accepted; sleep is a no-op.
+        fake = ("pushes=0; sleep() { :; }; git() { printf '%s\\0' \"$@\"; printf '\\n';"
+                " if [ \"$1\" = push ]; then pushes=$((pushes+1)); [ $pushes -gt 1 ]; fi; };\n")
+        env = dict(os.environ, WEEKLY_REFRESH='false', REFRESH_COMMIT_MESSAGE='m')
+        result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', fake + step['run']],
+                                env=env, capture_output=True, text=True, check=True)
+        calls = [line.rstrip('\0').split('\0') for line in result.stdout.splitlines()]
+        self.assertEqual([call[0] for call in calls if call[0] in ('fetch', 'reset', 'commit', 'push')],
+                         ['fetch', 'reset', 'commit', 'push'] * 2)
+
     def test_commit_shell_preserves_allowlist_without_running_git(self):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
@@ -204,6 +216,8 @@ class RefreshWorkflowTests(unittest.TestCase):
                 self.assertIn(['reset', '--mixed', 'origin/main'], calls)
                 self.assertIn(['commit', '-m', message], calls)
                 self.assertEqual(calls[-1], ['push'])
+                # Retries commit again on the new tip; nothing rebases or stashes the working tree.
+                self.assertFalse(any(call[0] in ('pull', 'rebase', 'stash') for call in calls))
                 # Carried-over pipeline files go to R2 (tools/pipeline_state.py), never into Git history.
                 staged = {path for call in calls if call[0] == 'add' for path in call[1:]}
                 self.assertFalse(any(path.startswith('DO NOT DELETE EDL PIPELINE/') for path in staged))
@@ -252,9 +266,18 @@ class RefreshWorkflowTests(unittest.TestCase):
                 # step that fails must not leave R2 state a session behind.
                 self.assertEqual(push, names.index('Save history after build') + 1)
                 step = job['steps'][push]
-                # Default success(): a failed build never pushes, and a failed push stops the commit.
+                # Default success(): a failed build never pushes.
                 self.assertNotIn('if', step)
-                self.assertNotIn('continue-on-error', step)
+                # A failed push skips no later step (the run's indexes still go live), but stops the commit and fails
+                # the run.
+                self.assertIs(step['continue-on-error'], True)
+                self.assertEqual(step['id'], 'state_push')
+                commit = names.index('Commit and Push Results')
+                self.assertEqual(job['steps'][commit]['if'], "steps.state_push.outcome == 'success'")
+                fail = job['steps'][names.index('Fail the run when the pipeline state push failed')]
+                self.assertEqual(fail['if'], "steps.state_push.outcome == 'failure'")
+                self.assertIn('exit 1', fail['run'])
+                self.assertNotIn('if', job['steps'][names.index('Publish site indexes to R2')])
         job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
         names = [step['name'] for step in job['steps']]
         self.assertLess(names.index('Pull pipeline state from R2'), names.index('Generate Historical Snapshots'))
@@ -283,13 +306,19 @@ class RefreshWorkflowTests(unittest.TestCase):
         import sys, tempfile, types
         sys.path.insert(0, str(ROOT / 'tools'))
         import upload_snapshots
-        stored = {}
+        stored, heads = {}, []
+
+        class Missing(Exception):
+            response = {'ResponseMetadata': {'HTTPStatusCode': 404}, 'Error': {'Code': '404'}}
 
         class S3:
             def upload_fileobj(self, handle, bucket, key, ExtraArgs):
                 stored[key] = (handle.read(), ExtraArgs)
 
             def head_object(self, Bucket, Key):
+                heads.append(Key)
+                if Key not in stored:
+                    raise Missing()
                 return {'ContentLength': len(stored[Key][0])}
 
         env = {'R2_ACCOUNT_ID': 'a', 'R2_ACCESS_KEY_ID': 'b', 'R2_SECRET_ACCESS_KEY': 'c'}
@@ -301,10 +330,26 @@ class RefreshWorkflowTests(unittest.TestCase):
                 self.assertEqual(upload_snapshots.main([folder, 'snapshots/us', str(sentinel)]), 0)
             self.assertEqual(stored, {'snapshots/us/2026-11-20.json.gz': (b'snapshot', {'ContentType': 'application/gzip'})})
             self.assertTrue(sentinel.exists())
+            # One check that the key is free, then one readback after the upload.
+            self.assertEqual(heads, ['snapshots/us/2026-11-20.json.gz'] * 2)
+            # Archived snapshots are immutable: the same size again is left alone, another size stops the upload.
+            sentinel.unlink()
+            stored['snapshots/us/2026-11-20.json.gz'] = (b'archived', {})
+            with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: S3())}), \
+                    unittest.mock.patch.dict(os.environ, env):
+                self.assertEqual(upload_snapshots.main([folder, 'snapshots/us', str(sentinel)]), 0)
+                self.assertEqual(stored['snapshots/us/2026-11-20.json.gz'][0], b'archived')
+                stored['snapshots/us/2026-11-20.json.gz'] = (b'other content', {})
+                with self.assertRaises(SystemExit):
+                    upload_snapshots.main([folder, 'snapshots/us', str(sentinel)])
+            self.assertEqual(stored['snapshots/us/2026-11-20.json.gz'][0], b'other content')
         # The US backfill runs the same tool into its own prefix and sentinel.
         job, = document('.github/workflows/us_backfill_historical_snapshots.yml')['jobs'].values()
         upload = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
         self.assertEqual(upload.strip(), 'python tools/upload_snapshots.py outputs/historical_snapshots/us snapshots/us .upload_verified_us')
+        # The manifest is published on the same sentinel the uploader writes.
+        publish = next(step for step in job['steps'] if step['name'] == 'Publish Updated US Sessions Manifest')
+        self.assertEqual(publish['if'], "${{ hashFiles('.upload_verified_us') != '' }}")
 
 if __name__ == '__main__':
     unittest.main()

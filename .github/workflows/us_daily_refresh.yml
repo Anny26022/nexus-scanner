@@ -117,9 +117,9 @@ jobs:
           exit "$status"
 
       # Pushed before publication too: a run that times out or is cancelled during the R2 upload ends before any later
-      # step, and would otherwise lose every history this run fetched. The current R2 copy moves to previous/ first, but
-      # only after a build that passed its release checks (a rerun of the same session included): a failed run or one
-      # that exits 75 leaves previous/ where it is, so failed runs in a row cannot push it out.
+      # step, and would otherwise lose every history this run fetched. A run whose build did not pass its release checks
+      # (a rerun of the same session that passes them counts as good) pushes --unverified, so previous/ keeps the last
+      # good state however many bad runs follow (tools/us_state.py).
       - name: Push US state to R2
         if: always() && steps.build.outcome != 'skipped'
         env:
@@ -130,7 +130,7 @@ jobs:
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
           R2_BUCKET: nexus-screener-chart-data
         run: |
-          if [ "$BUILD_GOOD" = "true" ]; then python tools/us_state.py push; else python tools/us_state.py push --keep-previous; fi
+          if [ "$BUILD_GOOD" = "true" ]; then python tools/us_state.py push; else python tools/us_state.py push --unverified; fi
 
       - name: Fetch US ETF snapshot
         if: steps.build.outputs.ready == 'true'

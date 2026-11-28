@@ -1752,7 +1752,7 @@
   {
     "id": "lib-earnings-momentum",
     "name": "Earnings Growth Momentum",
-    "category": "Earnings & Value",
+    "category": "Earnings",
     "horizon": "Investing",
     "description": "25% profit growth with the chart already agreeing.",
     "aka": [
@@ -1802,57 +1802,9 @@
     }
   },
   {
-    "id": "lib-post-earnings-drift",
-    "name": "Post-Earnings Drift",
-    "category": "Earnings & Value",
-    "horizon": "Swing",
-    "description": "Results landed this week and the market is still repricing.",
-    "aka": [
-      "PEAD",
-      "earnings surprise",
-      "Earnings Screeners"
-    ],
-    "rules": [
-      "Results announced within the last 5 sessions",
-      "Up more than 5% over 3 days",
-      "Volume at twice the 20-day average"
-    ],
-    "expression": {
-      "type": "group",
-      "op": "AND",
-      "children": [
-        {
-          "type": "condition",
-          "kind": "DAYS_SINCE_EARNINGS",
-          "params": {
-            "comparison": "BELOW",
-            "days": 5
-          }
-        },
-        {
-          "type": "condition",
-          "kind": "PRICE_CHANGE_PCT",
-          "params": {
-            "overDays": 3,
-            "comparison": "ABOVE",
-            "pct": 5
-          }
-        },
-        {
-          "type": "condition",
-          "kind": "VOLUME_VS_AVG",
-          "params": {
-            "avgDays": 20,
-            "multiple": 2
-          }
-        }
-      ]
-    }
-  },
-  {
     "id": "lib-garp",
     "name": "Growth at a Fair Price",
-    "category": "Earnings & Value",
+    "category": "Earnings",
     "horizon": "Investing",
     "description": "20% growth still on a sub-30 trailing multiple.",
     "aka": [
@@ -1901,60 +1853,9 @@
     }
   },
   {
-    "id": "lib-revenue-acceleration",
-    "name": "Revenue & Profit Acceleration",
-    "category": "Earnings & Value",
-    "horizon": "Investing",
-    "description": "Both lines growing 20%+, in a name already trending.",
-    "rules": [
-      "Revenue up more than 20% year on year",
-      "Net profit up more than 20% year on year",
-      "Above the 50 EMA for 20 days"
-    ],
-    "expression": {
-      "type": "group",
-      "op": "AND",
-      "children": [
-        {
-          "type": "condition",
-          "kind": "EARNINGS_GROWTH",
-          "params": {
-            "metric": "REVENUE",
-            "basis": "YOY",
-            "comparison": "ABOVE",
-            "pct": 20,
-            "reportType": "PREFER_CONSOLIDATED",
-            "maxAgeDays": 200
-          }
-        },
-        {
-          "type": "condition",
-          "kind": "EARNINGS_GROWTH",
-          "params": {
-            "metric": "NET_PROFIT",
-            "basis": "YOY",
-            "comparison": "ABOVE",
-            "pct": 20,
-            "reportType": "PREFER_CONSOLIDATED",
-            "maxAgeDays": 200
-          }
-        },
-        {
-          "type": "condition",
-          "kind": "PRICE_VS_EMA",
-          "params": {
-            "period": 50,
-            "comparison": "ABOVE",
-            "persistDays": 20
-          }
-        }
-      ]
-    }
-  },
-  {
     "id": "lib-pre-earnings-coil",
     "name": "Pre-Earnings Coil",
-    "category": "Earnings & Value",
+    "category": "Earnings",
     "horizon": "Swing",
     "description": "Tight and quiet with no result for two months \u2014 a catalyst is due.",
     "rules": [

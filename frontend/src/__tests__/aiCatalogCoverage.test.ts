@@ -7,6 +7,7 @@ import {FILTER_CONDITION_CATALOG} from '../data/conditionCatalog';
 import {PRESET_CATALOG} from '../data/presetCatalog';
 import {availableFilterParameters} from '../utils/filterAvailability';
 import {extendedMetrics} from '../data/extendedMetrics';
+import {EARNINGS_KINDS} from '../api/earningsConditions';
 
 const choices={SECTOR:['BANKS','INFORMATION TECHNOLOGY'],INDUSTRY:['PRIVATE BANKS','SOFTWARE'],SERIES:['EQ','BE'],
   PRICE_BAND:['2','5','10','20','NO BAND'],INDEX_MEMBERSHIP:['NIFTY 50','NIFTY 500'],TRADINGVIEW_METRIC:extendedMetrics.map(m=>m.id)};
@@ -15,10 +16,16 @@ const compile=(id:string,parameters:Record<string,unknown>,negated=false)=>valid
   clauses:[{sourceText:'audit',status:'EXACT',conditionId:id,parameters,isNegated:negated}]},catalog);
 const defaults=(def:typeof catalog[number])=>Object.fromEntries(def.parameters.map(p=>[p.id,p.defaultValue]));
 
-it('exposes every currently available custom definition and all 45 presets',()=>{
+it('exposes every currently available custom definition and all 43 presets',()=>{
   const expected=[...FILTER_CONDITION_CATALOG,...PRESET_CATALOG].filter(d=>availableFilterParameters(d)!==null).map(d=>d.id).sort();
   expect(catalog.map(d=>d.id).sort()).toEqual(expected);
-  expect(catalog.filter(d=>d.id.startsWith('lib-'))).toHaveLength(45);
+  expect(catalog.filter(d=>d.id.startsWith('lib-'))).toHaveLength(43);
+});
+it('offers the Earnings filters and scans, not the two presets they replaced',()=>{
+  const ids=new Set(catalog.map(d=>d.id));
+  for(const id of [...EARNINGS_KINDS,'scan-earnings-results-today','scan-earnings-gap','scan-earnings-episodic-pivot','scan-earnings-eps-doublers',
+    'scan-earnings-code-33','scan-earnings-eps-accelerators','scan-earnings-turnarounds']) expect(ids.has(id),id).toBe(true);
+  expect(ids.has('lib-post-earnings-drift')||ids.has('lib-revenue-acceleration')).toBe(false);
 });
 it.each(catalog.map(d=>[d.id,d] as const))('%s: defaults survive validation with every parameter preserved',(id,def)=>{
   expect(compile(id,defaults(def)).conditionsMap.ai_0.parameters).toEqual(defaults(def));

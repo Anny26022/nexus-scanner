@@ -1,12 +1,13 @@
 import type { ActiveCondition, ExpressionNode, ScreenerRunRequest, ScreenerRunResponse, StockRow } from '../types/screener';
 import {etfGroup, isEtfCondition} from '../data/etfFields';
-import { PRESET_CATALOG, RANK_KIND, RECIPES, recipeUsesExtended, type RecipeGroup } from '../data/presetCatalog';
+import { PRESET_CATALOG, RANK_KIND, RECIPES, RECIPE_ELIGIBILITY, recipeUsesEarnings, recipeUsesExtended, type RecipeGroup } from '../data/presetCatalog';
 import nativeConditions from '../data/nativeConditions.json';
 import { PRESET_ELIGIBILITY, presetEligibilityTargets, hasCustomPresetEligibility } from '../data/presetEligibility';
 import { snapshotFundamentals } from '../data/snapshotFundamentals';
 import technicalConfigurations from '../data/snapshotTechnicals.json';
 import { MOVING_AVERAGE_RULES } from '../data/movingAverageRules';
 import { isExtendedCondition, extendedFilterGroups, extendedMetrics } from '../data/extendedMetrics';
+import { earningsPredicate, isEarningsCondition } from './earningsConditions';
 
 const presetIds = new Set(PRESET_CATALOG.map(preset => preset.id));
 
@@ -40,7 +41,7 @@ export interface Snapshot {
 }
 type Predicate = (s: SnapshotStock) => Truth;
 /** Cross-sectional answers one stock cannot give alone; absent when only checking support. */
-interface Context { leaders: (metric: string, topPct: number, eligible: Predicate, key: string) => ReadonlySet<string> }
+interface Context { leaders: (metric: string, topPct: number, eligible: Predicate, key: string) => ReadonlySet<string>; market?: string }
 /** Library eligibility floors as one test; skipped floors (null) always pass. */
 interface Eligibility { test: Predicate; key: string }
 const nativeDefaults = new Map(nativeConditions.map(def => [def.id,
@@ -106,6 +107,13 @@ function leaf(c: ActiveCondition, session: string, context?: Context): Predicate
   }
   let fn: Predicate;
   let metadata = false;
+  if (isEarningsCondition(c.conditionId)) {
+    const earnings = earningsPredicate(c.conditionId, p, session, Date.now(), context?.market);
+    if (!earnings) return null;
+    // Published facts, read on the session's row (a live row keeps them and counts one session on).
+    const checked: Predicate = s => s.asOfDate === session ? earnings(s) : null;
+    return c.isNegated ? s => { const v = checked(s); return v == null ? null : !v; } : checked;
+  }
   const config = technicalConfigurations.find(config => config.id === c.conditionId);
   if (config) {
     if (Object.entries(config.fixed).some(([key, value]) => typeof value === 'boolean' ? p[key] !== value : String(p[key]) !== String(value))) return null;
@@ -320,8 +328,8 @@ function leaf(c: ActiveCondition, session: string, context?: Context): Predicate
     default: {
       const recipe = RECIPES.get(c.conditionId);
       if (recipe) {
-        // Library recipes share the pipeline scans' eligibility floors, editable the same way.
-        const targets = presetEligibilityTargets(p);
+        // Library recipes share the pipeline scans' eligibility floors, editable the same way; a recipe may set its own.
+        const targets = presetEligibilityTargets({...RECIPE_ELIGIBILITY.get(c.conditionId), ...p});
         if (!targets) return null;
         const eligibility = eligibilityOf(targets, session);
         const predicate = compileRecipe(recipe, session, context, eligibility);
@@ -409,9 +417,9 @@ export function supportsSnapshotCondition(condition: ActiveCondition): boolean {
 }
 
 /** The top slice of a universe by a published metric, among current stocks that pass the scan's eligibility. */
-function rankContext(universe: SnapshotStock[], session: string): Context {
+function rankContext(universe: SnapshotStock[], session: string, market?: string): Context {
   const cache = new Map<string, Set<string>>();
-  return {leaders(metric, topPct, passes, eligibilityKey) {
+  return {market, leaders(metric, topPct, passes, eligibilityKey) {
     const key = `${metric}:${topPct}:${eligibilityKey}`;
     let kept = cache.get(key);
     if (!kept) {
@@ -466,7 +474,7 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
     const announcementSymbols = request.announcementSymbols ? new Set(request.announcementSymbols) : null;
     const candidates = universe.filter(s => !announcementSymbols || announcementSymbols.has(s.symbol));
     const coverage: Coverage = {};
-    const predicate = compile(request.expressionTree, data.asOfDate, coverage, rankContext(universe, data.asOfDate));
+    const predicate = compile(request.expressionTree, data.asOfDate, coverage, rankContext(universe, data.asOfDate, data.market));
     if (!predicate) return null;
     const rows = candidates.filter(s => predicate(s) === true && number(s.close) != null);
     const diagnostics: ScreenerRunResponse['unavailableDiagnostics'] = [];
@@ -510,9 +518,12 @@ export function screenSnapshot(data: Snapshot, request: ScreenerRunRequest, allR
 /** Today's mainboard matches for every library scan, so the library can show which ones are live. */
 export function scanCounts(data: Snapshot): Record<string, number> {
   const current = data.stocks.filter(s => number(s.close) != null);
-  const context = rankContext(current, data.asOfDate);
+  const context = rankContext(current, data.asOfDate, data.market);
+  // A snapshot from before the earnings facts shipped has no answer for the Earnings scans, not a count of zero.
+  const hasEarnings = current.some(s => s.earnings);
   return Object.fromEntries(PRESET_CATALOG.flatMap(scan => {
     if (recipeUsesExtended(scan.id) && data.extendedMetricsVersion !== 1) return [];
+    if (!hasEarnings && recipeUsesEarnings(scan.id)) return [];
     const predicate = leaf({instanceId: scan.id, conditionId: scan.id, parameters: {}}, data.asOfDate, context);
     return predicate ? [[scan.id, current.reduce((total, s) => total + Number(predicate(s) === true), 0)]] : [];
   }));

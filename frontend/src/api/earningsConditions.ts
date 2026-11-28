@@ -15,7 +15,8 @@ const KINDS: ReadonlySet<string> = new Set(EARNINGS_KINDS);
 export const isEarningsCondition = (id: string) => KINDS.has(id);
 
 const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
-const num = (value: unknown) => Number(value);
+// A missing or blank threshold is not zero: it leaves the condition unusable.
+const num = (value: unknown) => value == null || (typeof value === 'string' && !value.trim()) ? NaN : Number(value);
 const rising = (values: number[]) => values.every((value, index) => index === 0 || value > values[index - 1]);
 
 /** Today in India, the day a results calendar is read against. */

@@ -88,7 +88,8 @@ def quarter_facts(history, session):
         now, then = rows[index], _year_ago(rows, index)
         if then is None:
             continue
-        sales, sales0 = (_number(now.get('sales')) or _number(now.get('revenue'))), (_number(then.get('sales')) or _number(then.get('revenue')))
+        # Revenue only where no sales figure is published (a reported zero stays zero).
+        sales, sales0 = (_number(row.get('sales') if row.get('sales') is not None else row.get('revenue')) for row in (now, then))
         pat, pat0 = _number(now.get('net_profit')), _number(then.get('net_profit'))
         eps, eps0 = _number(now.get('eps')), _number(then.get('eps'))
         tax = _number(now.get('tax_expenses'))

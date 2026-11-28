@@ -48,6 +48,9 @@ class FinancialScannerTests(unittest.TestCase):
         self.assertIn("standalone_quarterly", normalize_statement_history(older, "2026-11-27"))
         # Every published figure stays consolidated.
         self.assertEqual(statement_summary(only), statement_summary(normalize_statement_history({}, "2026-11-27")))
+        consolidated_only = {key: value for key, value in older.items() if key != "incomeStat_sq"}
+        self.assertEqual(statement_summary(normalize_statement_history(older, "2026-11-27")),
+                         statement_summary(normalize_statement_history(consolidated_only, "2026-11-27")))
 
     def test_ttm_growth_requires_eight_consecutive_valid_quarters(self):
         raw = self.raw_history()

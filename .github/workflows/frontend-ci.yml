@@ -79,6 +79,7 @@ jobs:
         # Exercise the real rclone transport test, including corruption checks.
         # This is the same uploader package used by daily/weekly publication.
         run: |
+          source "$GITHUB_WORKSPACE/tools/quiet_test_annotations.sh"
           sudo apt-get update -qq && sudo apt-get install -y -qq rclone
           python -m unittest discover -s . -p 'test_*.py' -v
           python ../tools/benchmark_r2_publication.py --list-delay 0 --object-delay 0

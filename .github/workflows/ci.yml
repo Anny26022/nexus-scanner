@@ -30,7 +30,9 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run unit tests
-        run: python -m unittest discover -s tests -v
+        run: |
+          source "$GITHUB_WORKSPACE/tools/quiet_test_annotations.sh"
+          python -m unittest discover -s tests -v
 
       - name: Check critical-path byte equivalence and timings
         if: github.event_name == 'pull_request'
@@ -39,6 +41,7 @@ jobs:
         env:
           BENCHMARK_BASE_REF: ${{ github.event.pull_request.base.sha }}
         run: |
+          source "$GITHUB_WORKSPACE/tools/quiet_test_annotations.sh"
           python -m unittest discover -s tools -p test_benchmark_critical_path.py -v
           git fetch --no-tags --depth=1 origin "$BENCHMARK_BASE_REF"
           python tools/benchmark_critical_path.py --baseline-ref "$BENCHMARK_BASE_REF"
@@ -51,21 +54,27 @@ jobs:
 
       - name: Test cache retention policy
         working-directory: .
-        run: python -m unittest discover -s tools -p test_prune_actions_caches.py -v
+        run: |
+          source "$GITHUB_WORKSPACE/tools/quiet_test_annotations.sh"
+          python -m unittest discover -s tools -p test_prune_actions_caches.py -v
 
       - name: Test pipeline state storage
         working-directory: .
         run: |
+          source "$GITHUB_WORKSPACE/tools/quiet_test_annotations.sh"
           python -m unittest discover -s tools -p test_pipeline_state.py -v
           python -m unittest discover -s tools -p test_us_state.py -v
 
       - name: Test Earnings Pulse history
         working-directory: frontend
-        run: python -m unittest test_earningspulse_history -v
+        run: |
+          source "$GITHUB_WORKSPACE/tools/quiet_test_annotations.sh"
+          python -m unittest test_earningspulse_history -v
 
       - name: Test refresh workflow contracts
         working-directory: .
         run: |
+          source "$GITHUB_WORKSPACE/tools/quiet_test_annotations.sh"
           python -m pip install -r tools/requirements-workflows.txt
           python -m unittest discover -s tools -p test_refresh_workflows.py -v
 

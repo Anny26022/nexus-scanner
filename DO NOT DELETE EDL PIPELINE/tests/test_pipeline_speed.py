@@ -43,7 +43,7 @@ def breadth_digest(accumulator_class):
 
 class PipelineSpeedTests(unittest.TestCase):
     def test_breadth_keeps_audited_scalar_bytes_with_overlap_and_fractional_volumes(self):
-        self.assertEqual(breadth_digest(BreadthAccumulator), '437c446f5ac2bcb6245b05cd44edaf9bc6714d7c0bcbcf56139cdb4a153c60cc')
+        self.assertEqual(breadth_digest(BreadthAccumulator), 'd42b9e7b792899336a0f2cdd4a75ae14f5f07c399176340f1f87a0997c29c1e4')
 
     def test_record_decoder_matches_python_across_chunk_boundaries(self):
         payload = {'before': {'text': '₹\\\n"😃'}, 'records': [

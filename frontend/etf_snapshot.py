@@ -26,6 +26,13 @@ def build_etf_snapshot(source, session, revision, market=None):
     labels = load_json(resource_path('etf_enum_labels.json'))
     registry = load_json(resource_path('etf_fields.json'))
     fields = registry['columns']
+    # The US lists ~6,000 ETFs to India's ~360, so India's full TradingView scan made an 89 MB file. The US keeps the
+    # daily fields (not the intraday, weekly and monthly copies such as `RSI|60` and `RSI|1W`) at six significant
+    # digits, about 7 MB; the app offers only the ETF fields that carry values.
+    if market == 'us':
+        fields = [field for field in fields if '|' not in field]
+    rounded = (lambda value: float(f'{value:.6g}') if isinstance(value, float) and math.isfinite(value) else value) \
+        if market == 'us' else (lambda value: value)
     rows, observed_labels = [], {}
     def number(record, key):
         value = record.get(key)
@@ -44,7 +51,7 @@ def build_etf_snapshot(source, session, revision, market=None):
             quote_date = session
         if quote_date and quote_date > session:
             raise ValueError('ETF quote is newer than the stock session')
-        values = {field: record.get(field) for field in fields}
+        values = {field: rounded(record.get(field)) for field in fields}
         for field, dictionary in labels.items():
             value = str(values.get(field))
             if value in dictionary:

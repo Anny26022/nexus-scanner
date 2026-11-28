@@ -75,6 +75,15 @@ class BenchmarkSeriesTest(unittest.TestCase):
         self.assertEqual(result['records'], [['2026-10-19', 100.0], ['2026-10-20', 102.0], ['2026-10-21', 103.0]])
         self.assertEqual((result['symbol'], result['name'], result['asOfDate']), ('NIFTY', 'Nifty 50', '2026-10-21'))
 
+    def test_the_us_benchmark_is_spy_in_the_same_shape(self):
+        with tempfile.TemporaryDirectory() as root:
+            folder = Path(root) / 'indices_ohlcv_data'
+            folder.mkdir()
+            (folder / 'SPY.csv').write_text('Date,Open,High,Low,Close,Volume\n2026-11-19,1,1,1,650,1\n2026-11-20,1,1,1,655.5,1\n')
+            result = benchmark_series(root, {}, '2026-11-20', 'SPY', 'S&P 500 (SPY)')
+        self.assertEqual(result, {'schemaVersion': 1, 'symbol': 'SPY', 'name': 'S&P 500 (SPY)', 'asOfDate': '2026-11-20',
+                                  'records': [['2026-11-19', 650.0], ['2026-11-20', 655.5]]})
+
     def test_returns_none_without_enough_history(self):
         with tempfile.TemporaryDirectory() as root:
             self.assertIsNone(benchmark_series(root, {}, '2026-10-21'))

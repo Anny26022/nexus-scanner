@@ -69,10 +69,10 @@ EDL_US_BASE_DIR=<root> python frontend/publish_us.py   # from the repository roo
 
 | Stage | How |
 | --- | --- |
-| Universe | Two screener calls (stocks and ETFs). `markets/us/universe.py` keeps common stock and partnership units; preferred, notes, rights, warrants and SPAC units are classified and left out. |
+| Universe | Two screener calls (stocks and ETFs). `markets/us/universe.py` keeps common stock and partnership units; preferred, notes, rights, warrants and SPAC units are classified and left out, as are funds in the stock list (a Sector that is a fund category, such as 'Trading--Leveraged Equity' or 'Large Blend', not a stock sector). |
 | Snapshot check | Refused while New York is trading, when the latest trade is not from the last closed session, and when it stops before that session's close (exit 75: the workflow skips publication rather than storing a live bar). A stock whose own last trade is from an earlier session gets no bar that day. |
 | Price history | `markets/us/history.py`: a stock without a file is seeded from Yahoo Finance (split-adjusted back to 1980 / IPO, official closes), falling back to Dhan's INX ticks (2021 onwards) when Yahoo has no bars for it: the ticker is missing, Yahoo errs or is unreachable, or a Yahoo rate limit stopped Yahoo for the run. Each run then appends the session's bar from the TradingView scan `tradingview.py` already reads (dated by its `time`; checked on 300 stocks against Yahoo and Nasdaq: final volume and range). Its close can still be a late print for about 7% of stocks until the next session, so each run corrects the previous bar's close to TradingView's previous close (`close - change_abs`, the official one). A previous close more than 5% off the stored one is a split and fetches the stock in full. A gap, or a stock TradingView does not cover, is filled from Yahoo's last two weeks, joined where they share a day, and TradingView's bar then supplies the session when Yahoo has not got it yet; Dhan's history is not used for this, as its bars since 2026-07-24 carry partial volume. A full fetch never replaces a deeper stored history with a shorter one. The release stops when TradingView covers under 98% of the 3,000 largest stocks or more than 800 stocks have no TradingView bar for the session. `ohlcv_data/`, `indices_ohlcv_data/`, `stock_pages/`, `sec_filings/`, `market_news/`, the rotation ledger and the quarterly ledger persist between runs in private R2 (`tools/us_state.py`: one archive a folder under `pipeline-state/us/`, the previous copy kept under `previous/`), pushed after the build and the ledger again after publication, as India keeps its pipeline state; a run whose restore failed never pushes. On the everyday path (TradingView's bar following the stored last bar) only the file's last row is rewritten and the new one appended, instead of reading and rewriting the whole file (about 170 s for the market). Yahoo is paced at about 8 a second with 8 workers, and a stock without a TradingView bar that Yahoo really answered with no bars for (not a failed request) is not asked again for a week (`.yahoo_empty.json` in the folder); a stock with a TradingView bar is always asked when it needs a gap filled. |
-| Benchmarks | SPY, QQQ, IWM and DIA histories stand in for indices; SPY is the market benchmark. |
+| Benchmarks | SPY, QQQ, IWM and DIA histories stand in for indices; SPY is the market benchmark, published as India's Nifty series is (`benchmark.json.gz`, named by `benchmarkUrl`). |
 | Breadth, index history | India's `generate_market_breadth` and `generate_all_index_history`, with US floors ($1 price, $100M market cap). |
 | Stock metrics | India's `process_symbol_csv` on the NYSE calendar, plus RSI(14) and dollar turnover. |
 | RS ratings | `build_rs_ratings.main(root, 'SPY.csv', ...)`. |
@@ -97,6 +97,10 @@ $300M market cap, a $5 close, $2M a day of turnover.
 
 **The release** (`frontend/publish_us.py`) is India's row engine, packed format and revision upload. Its files sit
 beside India's under `releases/<rev>/`; its pointer is `site/data/us/current.json` (`/data/us/current.json`).
-India's `current.json`, sessions, price bands and AI catalogue are never written.
+India's `current.json`, sessions, price bands and AI catalogue are never written. Each run archives its session's packed
+rows at `snapshots/us/<date>.json.gz` in R2 (served from the R2 public host, as India's `snapshots/<date>.json.gz`) and
+appends the session to `us/sessions.json`; `us_backfill_historical_snapshots.yml` adds earlier sessions. The ETF
+dataset keeps TradingView's daily fields only (no `|60`, `|1W` timeframe copies) at six significant digits: the US
+lists about 6,000 ETFs to India's 360.
 
 **Not yet:** ownership, F&O, delivery and Indian surveillance flags. The app hides these for the US market (Anny26022/new_nexys_ultimate#600).

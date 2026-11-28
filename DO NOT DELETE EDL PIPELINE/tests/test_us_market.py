@@ -183,6 +183,14 @@ class UniverseTests(unittest.TestCase):
         self.assertEqual(security_type('ABCR', 'Acme - Rights'), 'right')
         self.assertEqual(security_type('ABCN', 'Acme - Notes due 2030'), 'note')
 
+    def test_funds_in_the_stock_list_are_classified_by_their_fund_category(self):
+        self.assertEqual(security_type('SPCF', 'ProShares Ultra SpaceX ETF', 'Trading--Leveraged Equity'), 'fund')
+        self.assertEqual(security_type('LGDX', 'Intech S&P Large Cap Diversified Alp ETF', 'Large Blend'), 'fund')
+        self.assertEqual(security_type('AAPL', 'Apple', 'Technology'), 'common')
+        self.assertEqual(security_type('XYZ', 'New listing', 'Unclassified'), 'common')
+        self.assertEqual(security_type('XYZ', 'New listing', None), 'common')
+        self.assertEqual(security_type('XYZ', 'New listing', '   '), 'common')
+
     def test_unlabelled_listings_try_both_main_exchanges(self):
         self.assertEqual(history_exchanges('NASDAQ'), ('NASDAQ',))
         self.assertEqual(history_exchanges('NA'), ('NYSE', 'NASDAQ'))

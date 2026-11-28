@@ -276,7 +276,7 @@ def build(root: Path, now: datetime | None = None, *, interval: float = 0.25, wo
     started = time.monotonic()
     stock_rows, etf_rows = dhan.fetch_universe('stock'), dhan.fetch_universe('etf')
     session = snapshot_session(stock_rows, now)
-    rows = [row for row in stock_rows if security_type(row.get('Sym') or '', row.get('DispSym')) in SCREENABLE]
+    rows = [row for row in stock_rows if security_type(row.get('Sym') or '', row.get('DispSym'), row.get('Sector')) in SCREENABLE]
     if limit is not None:
         if limit < 0:
             raise ValueError(f'limit must be non-negative, got {limit}')

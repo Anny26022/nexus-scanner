@@ -7,6 +7,8 @@ from ..scanner.indicators import prior_extremes, rsi
 
 
 REQUIRED_COLUMNS = ("Date", "Open", "High", "Low", "Close", "Volume")
+# Sessions after a 20-day breakout at which it is judged held or failed.
+BREAKOUT_CHECK_SESSIONS = 5
 
 
 def _rsi(series, period=14):
@@ -63,6 +65,16 @@ def prepare_history(frame, methodology):
     # Breadth breakouts use the same closing-price rule as the scanner.
     df["Breakout_20d"] = df["Close"] > df["Prior_20_High"]
     df["Breakdown_20d"] = df["Close"] < df["Prior_20_Low"]
+    # A breakout resolves BREAKOUT_CHECK_SESSIONS later: it held when the close is still above the level it cleared.
+    broke_out = df["Breakout_20d"].shift(BREAKOUT_CHECK_SESSIONS, fill_value=False).astype(bool)
+    df["Breakout_Resolved"] = broke_out
+    df["Breakout_Held"] = broke_out & (df["Close"] > df["Prior_20_High"].shift(BREAKOUT_CHECK_SESSIONS))
+    # Weinstein-style stage, as the scanner's market page: price against the 150-day average, and the 50-day's side of it.
+    sma_150 = df["Close"].rolling(150, min_periods=150).mean()
+    staged = sma_150.notna() & df["SMA_50"].notna()
+    above, rising = df["Close"] > sma_150, df["SMA_50"] > sma_150
+    for stage, mask in ((1, above & ~rising), (2, above & rising), (3, ~above & rising), (4, ~above & ~rising)):
+        df[f"Stage_{stage}"] = staged & mask
     df["Yearly_Range_High"] = df["High"].rolling(methodology.yearly_sessions, min_periods=methodology.yearly_sessions).max()
     df["Yearly_Range_Low"] = df["Low"].rolling(methodology.yearly_sessions, min_periods=methodology.yearly_sessions).min()
     df["Return_21"] = (df["Close"] / df["Close"].shift(methodology.monthly_sessions) - 1) * 100

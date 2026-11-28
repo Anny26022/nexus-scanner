@@ -311,7 +311,7 @@ class RefreshWorkflowTests(unittest.TestCase):
             self.assertFalse(sentinel.exists())
 
     def test_backfill_upload_checks_each_snapshot_then_writes_the_sentinel(self):
-        import base64, hashlib, sys, tempfile, types
+        import base64, gzip, hashlib, io, sys, tempfile, types
         sys.path.insert(0, str(ROOT / 'tools'))
         import upload_snapshots
         key = 'snapshots/us/2026-11-20.json.gz'
@@ -334,6 +334,9 @@ class RefreshWorkflowTests(unittest.TestCase):
                 if Key not in stored:
                     raise Missing()
                 return {'ContentLength': len(stored[Key]), 'ETag': etags[Key]}
+
+            def get_object(self, Bucket, Key):
+                return {'Body': io.BytesIO(stored[Key])}
 
         def run(folder, sentinel):
             with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: S3())}), \
@@ -367,6 +370,17 @@ class RefreshWorkflowTests(unittest.TestCase):
             archive(b'snapshot', '"0123abcd-2"')
             self.assertEqual(run(folder, sentinel), 0)
             self.assertEqual(puts, [])
+
+            # A re-run after a part-way failure: the same snapshot under another gzip timestamp is left alone, and the
+            # backfill goes on; different content under the same name still stops it.
+            (Path(folder) / '2026-11-20.json.gz').write_bytes(gzip.compress(b'{"day":1}', mtime=2))
+            archive(gzip.compress(b'{"day":1}', mtime=1))
+            self.assertEqual(run(folder, sentinel), 0)
+            self.assertEqual(puts, [])
+            archive(gzip.compress(b'{"day":2}', mtime=1))
+            with self.assertRaises(SystemExit):
+                run(folder, sentinel)
+            (Path(folder) / '2026-11-20.json.gz').write_bytes(b'snapshot')
 
             # A stored copy whose bytes differ from what was sent fails the readback, and no sentinel is written.
             del stored[key]

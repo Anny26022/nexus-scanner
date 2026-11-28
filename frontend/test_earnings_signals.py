@@ -5,7 +5,7 @@ from datetime import date
 
 import pandas as pd
 
-from earnings_signals import earnings_signals, next_results, pulse_dates, quarter_facts, reaction
+from earnings_signals import earnings_signals, merge_results_dates, next_results, pulse_dates, quarter_facts, reaction
 
 ENDS = ['2025-03-31', '2025-06-30', '2025-09-30', '2025-12-31', '2026-03-31', '2026-06-30', '2026-09-30']
 
@@ -67,6 +67,11 @@ class ReactionTests(unittest.TestCase):
                          ('2026-11-03', 2, 6.0, 11.0, 0.857, 4.72, 4.0))
         self.assertEqual(second['date'], '2026-11-04')
         self.assertIsNone(reaction(frame, '2026-12-01'))
+        # A known timing leaves one session, as on the Earnings page: the filing day's before or during market
+        # hours, the next one after hours.
+        self.assertEqual([event['date'] for event in reaction(frame, '2026-11-03', 'Pre')], ['2026-11-03'])
+        self.assertEqual([event['date'] for event in reaction(frame, '2026-11-03', 'During')], ['2026-11-03'])
+        self.assertEqual([event['date'] for event in reaction(frame, '2026-11-03', 'After')], ['2026-11-04'])
 
 
 class DatesTests(unittest.TestCase):
@@ -77,14 +82,23 @@ class DatesTests(unittest.TestCase):
         self.assertEqual(next_results(calendar, '2026-11-28'), {'ABC': '2026-11-29'})
         dates = pulse_dates({'reported': [{'symbol': 'ABC', 'filing_day': '2026-08-10'}, {'symbol': 'ABC', 'filing_day': '2026-11-10'}],
                              'upcoming': [{'symbol': 'XYZ', 'filing_day': '2026-11-28', 'timing': 'After'}]}, '2026-11-28')
-        self.assertEqual(dates, {'ABC': {'declared': '2026-11-10'}, 'XYZ': {'next': '2026-11-28', 'nextTiming': 'After'}})
+        self.assertEqual(dates, {'ABC': {'declared': '2026-11-10', 'declaredTiming': None},
+                                 'XYZ': {'next': '2026-11-28', 'nextTiming': 'After'}})
 
     def test_the_row_object_takes_the_later_results_date(self):
         frame = bars([(f'2026-11-{day:02d}', 100, 101, 99, 100, 1000) for day in range(2, 28)])
-        signals = earnings_signals({'latest_earnings_date': '2026-08-10'}, frame, '2026-11-27', '2026-12-02',
-                                   {'declared': '2026-11-20', 'next': '2026-12-02', 'nextTiming': 'Pre'})
+        pulse = {'ABC': {'declared': '2026-11-20', 'declaredTiming': 'After', 'next': '2026-12-02', 'nextTiming': 'Pre'},
+                 'OLD': {'declared': '2026-05-01'}}
+        stocks = {'ABC': {'latest_earnings_date': '2026-08-10'}, 'OLD': {'latest_earnings_date': '2026-11-12'}}
+        merge_results_dates(stocks, pulse)
+        # One date for every reader; the growth figures keep the date they were announced on.
+        self.assertEqual(stocks, {'ABC': {'latest_earnings_date': '2026-11-20', 'statement_earnings_date': '2026-08-10'},
+                                  'OLD': {'latest_earnings_date': '2026-11-12'}})
+        signals = earnings_signals(stocks['ABC'], frame, '2026-11-27', '2026-12-02', pulse['ABC'])
         self.assertEqual((signals['declared'], signals['declaredAge'], signals['next'], signals['nextTiming']),
                          ('2026-11-20', 7, '2026-12-02', 'Pre'))
+        # Filed after hours on the 20th: only the next session reacts.
+        self.assertEqual([event[0] for event in signals['reaction']], [signals['declaredAge'] - 1])
         self.assertIsNone(earnings_signals({}, frame, '2026-11-27'))
 
     def test_the_row_carries_quarters_and_reactions_as_positional_arrays(self):

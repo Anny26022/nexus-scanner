@@ -30,7 +30,7 @@ from theme_classification import (classify, consolidated_classification, SOURCE_
                                   WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
 from pipeline_utils import resource_path
 from public_payload import public, public_ipos
-from earnings_signals import earnings_signals, next_results, pulse_dates
+from earnings_signals import earnings_signals, merge_results_dates, next_results, pulse_dates
 from edl_pipeline.markets.us.earnings import load_pulse
 from market_overview import benchmark_series, index_closes, market_overview
 import rotation_history
@@ -285,6 +285,7 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     context['next_results']=next_results(source_bytes.get('earnings_calendar.json.gz'), session)
     # Earnings Pulse's India archive (site_data.py pull fetched its index): results dates the filings feed missed.
     context['pulse_dates']=pulse_dates(load_pulse(index_path=output/'results/index.json', latest=2), session)
+    merge_results_dates(context['stocks'], context['pulse_dates'])
     presets={p['id']:bridge.translate(p['id'],{}) for p in list_presets()}
     default=bridge.group('AND',bridge.translate('mom_rvol',{'minRvol':1.5,'maxRvol':20}),bridge.translate('trend_price_vs_ma',{'maType':'SMA','maPeriod':50,'operator':'above','thresholdPct':0}))
     lookback=delivery_lookback([*presets.values(),default])

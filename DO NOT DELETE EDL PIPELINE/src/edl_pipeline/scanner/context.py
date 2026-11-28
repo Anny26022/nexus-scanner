@@ -328,7 +328,10 @@ def evaluate_context_condition(frame, spec, context, result: Callable[..., Any],
         if prefix is None:
             return unavailable(condition, "metric_history_unavailable")
         value = _float(stock, f"{basis}_percent_{prefix}_latest")
-        announcement = pd.to_datetime(_value(stock, "latest_earnings_date"), errors="coerce")
+        # The growth figures' own announcement date, where the publisher moved the results date on to a later filing
+        # these figures do not cover yet (frontend/earnings_signals.py merge_results_dates).
+        announced = stock["statement_earnings_date"] if "statement_earnings_date" in (stock or {}) else _value(stock, "latest_earnings_date")
+        announcement = pd.to_datetime(announced, errors="coerce")
         max_age = int(spec.get("maximum_filing_age_days", 200))
         if value is None or pd.isna(announcement) or announcement.date() > as_of_date: return unavailable(condition, "earnings_history_unavailable")
         age = int((as_of_date - announcement.date()).days) if as_of_date else None

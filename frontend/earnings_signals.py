@@ -11,10 +11,10 @@ results date and its daily bars:
 - `basis`: CONSOLIDATED, or STANDALONE where the consolidated quarters are missing or stale (one basis per stock).
 - `taxCredit`: a quarter among the last three booked a tax credit worth at least TAX_CREDIT_SHARE of its profit, a
   one-off the streak scans skip.
-- `reaction`: the session on or after the results date and the one after it, each with its gap, day move, close in
+- `reaction`: the session that could react to the results (two when the filing's timing is unknown), each with its gap, day move, close in
   the day's range, close against open and how far the gap is still unfilled.
-- `declared`: the latest results date, from the stock's own record or else Earnings Pulse's filing day for its
-  latest quarter, with `declaredAge` in sessions.
+- `declared`: the latest results date (the later of the stock's own record and Earnings Pulse's filing day, see
+  merge_results_dates), with `declaredAge` in sessions.
 - `next` and `nextTiming`: the next scheduled results date (the earnings calendar, else Earnings Pulse's upcoming
   list) and when in the day it falls (Pre, During, After) where Earnings Pulse says.
 
@@ -38,6 +38,8 @@ TAX_CREDIT_SHARE = 0.1
 # The row's positional orders (see the module docstring); `epsBasis` is 1 for EPS, 0 where growth is from profit.
 QUARTER_FIELDS = ('end', 'sales', 'eps', 'pat', 'npm', 'np', 'np0', 'eps0', 'epsBasis')
 REACTION_FIELDS = ('age', 'gap', 'move', 'pos', 'vsOpen', 'unfilled')
+# Earnings Pulse's `timing` of a filing against market hours.
+TIMINGS = ('Pre', 'During', 'After')
 
 
 def _number(value):
@@ -108,34 +110,48 @@ def quarter_facts(history, session):
 
 
 def pulse_dates(pulse, session):
-    """Per symbol from Earnings Pulse rows: the latest filing day and the next scheduled one with its timing."""
+    """Per symbol from Earnings Pulse rows: the latest filing day and the next scheduled one, each with its timing."""
     dates = {}
     for row in (pulse or {}).get('reported') or []:
         symbol, day = row.get('symbol'), str(row.get('filing_day') or '')[:10]
         if symbol and len(day) == 10 and day <= session and day > dates.get(symbol, {}).get('declared', ''):
-            dates.setdefault(symbol, {})['declared'] = day
+            dates.setdefault(symbol, {}).update(declared=day, declaredTiming=row.get('timing') if row.get('timing') in TIMINGS else None)
     for row in (pulse or {}).get('upcoming') or []:
         symbol, day = row.get('symbol'), str(row.get('filing_day') or '')[:10]
         entry = dates.setdefault(symbol, {}) if symbol and len(day) == 10 and day >= session else None
         if entry is not None and day < entry.get('next', '9999'):
-            entry.update(next=day, nextTiming=row.get('timing') if row.get('timing') in ('Pre', 'During', 'After') else None)
+            entry.update(next=day, nextTiming=row.get('timing') if row.get('timing') in TIMINGS else None)
     return dates
 
 
-def reaction(frame, declared):
-    """The session on or after `declared` and the next: each one's gap, move and range position, and how far
-    its gap is still unfilled by every low since."""
+def merge_results_dates(stocks, pulse):
+    """Each stock's `latest_earnings_date` becomes the later of its own and Earnings Pulse's filing day, so Days Since
+    Earnings, the presets on it and the Earnings scans all count from one date. The date its published growth figures
+    were announced on stays in `statement_earnings_date`: the Earnings Growth rule ages those figures by it."""
+    for symbol, stock in stocks.items():
+        declared = (pulse.get(symbol) or {}).get('declared')
+        if declared and declared > str(stock.get('latest_earnings_date') or '')[:10]:
+            stock['statement_earnings_date'] = stock.get('latest_earnings_date')
+            stock['latest_earnings_date'] = declared
+
+
+def reaction(frame, declared, timing=None):
+    """The sessions that could react to results declared on `declared`: each one's gap, move and range position, and
+    how far its gap is still unfilled by every low since.
+
+    With a known `timing` that is one session, as on the Earnings page: the filing day's own (or the next one, off a
+    non-trading day) before or during market hours, the next session after hours. Unknown, both are kept."""
     day = _day(declared)
     if day is None or frame is None or frame.empty:
         return None
     dates = frame['Date'].dt.date.tolist()
-    first = next((i for i, value in enumerate(dates) if value >= day), None)
+    first = next((i for i, value in enumerate(dates) if (value > day if timing == 'After' else value >= day)), None)
     if first is None or first == 0:
         return None
     opens, highs, lows = frame['Open'].tolist(), frame['High'].tolist(), frame['Low'].tolist()
     closes = frame['Close'].tolist()
     events = []
-    for index in (first, first + 1):
+    for index in (first,) if timing in TIMINGS else (first, first + 1):
         if index >= len(dates):
             break
         before = closes[index - 1]
@@ -157,8 +173,9 @@ def earnings_signals(stock, frame, session, next_results=None, pulse=None):
     """The row's `earnings` object, or None when the stock has no quarterly results and no results date."""
     pulse = pulse or {}
     facts = quarter_facts(stock.get('financial_statement_history'), _day(session))
-    declared = max(filter(None, (str(stock.get('latest_earnings_date') or '')[:10] or None, pulse.get('declared'))), default=None)
-    events = reaction(frame, declared)
+    # merge_results_dates has already folded Earnings Pulse's filing day into the stock's own.
+    declared = str(stock.get('latest_earnings_date') or '')[:10] or None
+    events = reaction(frame, declared, pulse.get('declaredTiming') if declared == pulse.get('declared') else None)
     upcoming = next_results or pulse.get('next')
     if facts is None and declared is None and upcoming is None:
         return None

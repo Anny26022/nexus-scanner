@@ -260,29 +260,51 @@ class RefreshWorkflowTests(unittest.TestCase):
         self.assertLess(names.index('Pull pipeline state from R2'), names.index('Generate Historical Snapshots'))
         self.assertNotIn('Push pipeline state to R2', names)
         upload = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
+        self.assertEqual(upload.strip(), 'python tools/upload_snapshots.py outputs/historical_snapshots snapshots .upload_verified')
         # Same object metadata as the daily archive (frontend/session_history.py).
-        self.assertIn("ExtraArgs={'ContentType': 'application/gzip'}", upload)
-        self.assertNotIn('ContentEncoding', upload)
+        source = (ROOT / 'tools/upload_snapshots.py').read_text()
+        self.assertIn("ExtraArgs={'ContentType': 'application/gzip'}", source)
+        self.assertNotIn('ContentEncoding', source)
 
     def test_backfill_upload_is_a_successful_no_op_when_every_date_is_archived(self):
         import sys, tempfile, types
-        job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
-        run = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
-        script = run.split("<< 'EOF'\n", 1)[1].rsplit('\nEOF', 1)[0]
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import upload_snapshots
         env = {'R2_ACCOUNT_ID': 'a', 'R2_ACCESS_KEY_ID': 'b', 'R2_SECRET_ACCESS_KEY': 'c'}
         with tempfile.TemporaryDirectory() as folder:
-            previous = Path.cwd()
-            os.chdir(folder)
-            try:
-                with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: None)}), \
-                        unittest.mock.patch.dict(os.environ, env), self.assertRaises(SystemExit) as exit:
-                    exec(compile(script, 'upload', 'exec'), {'__name__': '__main__'})
-            finally:
-                os.chdir(previous)
-            self.assertEqual(exit.exception.code, 0)
-            # No sentinel, so 'Commit Updated Sessions Manifest' is skipped.
-            self.assertFalse((Path(folder)/'.upload_verified').exists())
+            sentinel = Path(folder) / '.upload_verified'
+            with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: None)}), \
+                    unittest.mock.patch.dict(os.environ, env):
+                self.assertEqual(upload_snapshots.main([folder, 'snapshots', str(sentinel)]), 0)
+            # No sentinel, so 'Publish Updated Sessions Manifest' is skipped.
+            self.assertFalse(sentinel.exists())
 
+    def test_backfill_upload_checks_each_snapshot_then_writes_the_sentinel(self):
+        import sys, tempfile, types
+        sys.path.insert(0, str(ROOT / 'tools'))
+        import upload_snapshots
+        stored = {}
+
+        class S3:
+            def upload_fileobj(self, handle, bucket, key, ExtraArgs):
+                stored[key] = (handle.read(), ExtraArgs)
+
+            def head_object(self, Bucket, Key):
+                return {'ContentLength': len(stored[Key][0])}
+
+        env = {'R2_ACCOUNT_ID': 'a', 'R2_ACCESS_KEY_ID': 'b', 'R2_SECRET_ACCESS_KEY': 'c'}
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / '2026-11-20.json.gz').write_bytes(b'snapshot')
+            sentinel = Path(folder) / '.upload_verified_us'
+            with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: S3())}), \
+                    unittest.mock.patch.dict(os.environ, env):
+                self.assertEqual(upload_snapshots.main([folder, 'snapshots/us', str(sentinel)]), 0)
+            self.assertEqual(stored, {'snapshots/us/2026-11-20.json.gz': (b'snapshot', {'ContentType': 'application/gzip'})})
+            self.assertTrue(sentinel.exists())
+        # The US backfill runs the same tool into its own prefix and sentinel.
+        job, = document('.github/workflows/us_backfill_historical_snapshots.yml')['jobs'].values()
+        upload = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
+        self.assertEqual(upload.strip(), 'python tools/upload_snapshots.py outputs/historical_snapshots/us snapshots/us .upload_verified_us')
 
 if __name__ == '__main__':
     unittest.main()

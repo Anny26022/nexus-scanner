@@ -146,7 +146,11 @@ own schedule ran hours late. Times are India time.
 The India refresh, backfill, concall-only and ETF-only workflows and the cache pruner share the `daily-data-refresh`
 concurrency group, so they never run at once; the US daily, backfill and ETF-only workflows share `us-daily-refresh`.
 Each sets `queue: max`, so a waiting run is never cancelled by a newer one (the gh-cron Worker does not retry a
-cancelled run). Price, enrichment and history caches live in GitHub Actions caches
+cancelled run).
+
+`new_nexys_ultimate` also holds a copy of this pipeline (`scanner/`, `scanner_daily_refresh.yml` and
+`scanner_weekly_refresh.yml`, manual only). It writes only its own keys in the same bucket (`journal/pipeline-state/`
+and `daily/journal/`) and reads this pipeline's, so the two never overwrite each other. Price, enrichment and history caches live in GitHub Actions caches
 (`.github/actions/restore-refresh-history`). They speed runs up and can be evicted.
 
 The workflows read `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` as secrets and

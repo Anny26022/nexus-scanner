@@ -493,7 +493,7 @@ def publish_us(root, output=OUTPUT, *, workers=0):
             etfs = public(build_etf_snapshot(raw, session, revision, market='us'))
             etf_bytes = json.dumps(pack_snapshot(etfs), separators=(',', ':'), allow_nan=False).encode()
         except (ValueError, KeyError, TypeError, OSError) as error:
-            print(f'WARNING: US ETF snapshot unavailable for {session}: {error}', flush=True)
+            print(f'::warning::US ETF snapshot unavailable for {session}: {error}. Run "US ETF Snapshot Only" to add the ETFs.', flush=True)
     if etf_bytes is not None:
         (generation / 'etfs.json.gz').write_bytes(gzip.compress(etf_bytes, mtime=0))
 

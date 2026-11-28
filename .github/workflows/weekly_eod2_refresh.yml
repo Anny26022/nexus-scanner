@@ -163,6 +163,8 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: python tools/pipeline_state.py push
 
+      # Tijori and the Dhan groups only refresh reference/ files the commit below records; the build never reads
+      # them, so running them after it delays nothing.
       - name: Refresh Tijori company overviews
         id: tijori_refresh
         continue-on-error: true

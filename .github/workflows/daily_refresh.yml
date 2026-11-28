@@ -2,13 +2,21 @@ name: Daily Data Refresh
 
 on:
   # Started on time by the nexus-gh-cron Worker in new_nexys_ultimate (workers/gh-cron/schedule.ts), not a GitHub schedule.
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  workflow_dispatch:
+    inputs:
+      filing_backups:
+        description: Rebuild the filing archives (the weekly run always does)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 concurrency:
   group: daily-data-refresh
+  # queue: max keeps every waiting run: the default keeps one and cancels the older, and the nexus-gh-cron Worker
+  # never retries a scheduled run it finds cancelled.
+  queue: max
   cancel-in-progress: false
 
 jobs:
@@ -111,6 +119,11 @@ jobs:
           PYTHONUNBUFFERED: '1'
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
         run: |
+          # The EOD2 overlay is optional here (the weekly run requires it): without a usable checkout the import skips.
+          if [ ! -f "$EDL_EOD2_DATA_DIR/isin_symbol_map.json" ]; then
+            echo "::warning::No usable EOD2 checkout; the EOD2 overlay is skipped this run."
+            unset EDL_EOD2_DATA_DIR
+          fi
           cd "DO NOT DELETE EDL PIPELINE"
           python run_full_pipeline.py --phase fetch --stage "${{ runner.temp }}/edl-refresh-${{ github.run_id }}-${{ github.run_attempt }}"
 
@@ -122,11 +135,13 @@ jobs:
           phase: fetch
 
       - name: Build and publish validated data
+        id: build
         env:
           PYTHONUNBUFFERED: '1'
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
           EDL_CHART_STORAGE: r2
-          EDL_FILING_BACKUPS: ${{ github.event_name == 'schedule' && '0' || '1' }}
+          # Scheduled runs (gh-cron sends no inputs) skip them; the weekly run and an opted-in manual run build them.
+          EDL_FILING_BACKUPS: ${{ inputs.filing_backups && '1' || '0' }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -136,8 +151,10 @@ jobs:
           cd "DO NOT DELETE EDL PIPELINE"
           python run_full_pipeline.py --phase build --stage "${{ runner.temp }}/edl-refresh-${{ github.run_id }}-${{ github.run_attempt }}"
 
+      # Only after a build that passed: a rejected run's build caches would carry into the next run. The fetch phase's
+      # save above still keeps what this run downloaded.
       - name: Save history after build
-        if: always() && steps.fetch.outcome == 'success'
+        if: always() && steps.fetch.outcome == 'success' && steps.build.outcome == 'success'
         continue-on-error: true
         uses: ./.github/actions/save-refresh-history
         with:
@@ -163,7 +180,8 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
           R2_BUCKET: nexus-screener-chart-data
-        run: python frontend/earningspulse_history.py
+        # India's calendar only; the US refresh keeps the US one (us_daily_refresh.yml).
+        run: python frontend/earningspulse_history.py --markets IN
 
       - name: Fetch and publish Earnings Pulse Heatmap
         continue-on-error: true

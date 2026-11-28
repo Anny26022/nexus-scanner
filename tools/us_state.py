@@ -29,7 +29,7 @@ PREFIX = 'pipeline-state/us'
 FOLDERS = {'ohlcv_data': 'w:gz', 'indices_ohlcv_data': 'w:gz', 'stock_pages': 'w', 'sec_filings': 'w', 'market_news': 'w:gz'}
 FILES = ('rotation_membership_ledger.json.gz', 'quarterly_financial_history.json.gz')
 PULLED = '.us-state-pulled'
-# Earnings Pulse's US archive, as the India refresh publishes it (frontend/earningspulse_history.py).
+# Earnings Pulse's US archive, as the US refresh's calendar step publishes it (frontend/earningspulse_history.py).
 PULSE_INDEX = 'site/data/results/us_index.json'
 PULSE_DIRECTORY = 'earnings_pulse'
 

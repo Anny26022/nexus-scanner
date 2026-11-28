@@ -26,6 +26,9 @@ permissions:
 # daily run is already queued behind a running one.
 concurrency:
   group: us-daily-refresh
+  # queue: max keeps every waiting run: the default keeps one and cancels the older, and the nexus-gh-cron Worker
+  # never retries a scheduled run it finds cancelled.
+  queue: max
   cancel-in-progress: false
 
 jobs:

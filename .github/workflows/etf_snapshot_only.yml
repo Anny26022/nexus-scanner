@@ -11,6 +11,9 @@ permissions:
 # Same queue as the full refresh, so the two never publish current.json at once.
 concurrency:
   group: daily-data-refresh
+  # queue: max keeps every waiting run: the default keeps one and cancels the older, and the nexus-gh-cron Worker
+  # never retries a scheduled run it finds cancelled.
+  queue: max
   cancel-in-progress: false
 
 jobs:

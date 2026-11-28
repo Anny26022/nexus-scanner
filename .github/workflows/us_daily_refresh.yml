@@ -15,6 +15,9 @@ permissions:
 # Its own queue: the US release never touches India's pointer, so it may run beside the India refresh.
 concurrency:
   group: us-daily-refresh
+  # queue: max keeps every waiting run: the default keeps one and cancels the older, and the nexus-gh-cron Worker
+  # never retries a scheduled run it finds cancelled.
+  queue: max
   cancel-in-progress: false
 
 jobs:
@@ -65,7 +68,27 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: python tools/us_state.py pull
 
-      # Earnings Pulse's US archive, which the India refresh publishes, copied from R2 for the build's earnings dates.
+      # The US earnings calendar is refreshed here, with the US build, rather than by India's refresh: it then runs on
+      # every US session (not NSE days) and after New York's results. Merged into the live index, which is pulled first
+      # (a missing one stops this step rather than starting from empty); optional, as the build falls back to the
+      # stored calendar and TradingView's dates.
+      - name: Refresh the Earnings Pulse US calendar
+        continue-on-error: true
+        timeout-minutes: 15
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: |
+          python frontend/site_data.py pull-pointer results/us_index.json
+          status=0
+          python frontend/earningspulse_history.py --markets US || status=$?
+          python frontend/site_data.py push-pointer results/us_index.json
+          exit "$status"
+
+      # Earnings Pulse's US archive, as the step above left it in R2, copied for the build's earnings dates.
       - name: Copy the Earnings Pulse US archive from R2
         env:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}

@@ -38,4 +38,12 @@ runs:
         fi
         # Nothing staged here is served by the site. Workers Builds' watch paths should exclude reference/*.
         git commit -m "$REFRESH_COMMIT_MESSAGE" || echo "No changes to commit"
-        git push
+        # Other jobs push main too (the US Finviz sync, merges): rebase onto what landed and retry. The staged files
+        # are this job's own, so a rebase conflicts only if another run committed the same reference files.
+        for attempt in 1 2 3 4 5; do
+          if git push; then exit 0; fi
+          git pull --rebase origin main || { git rebase --abort 2>/dev/null || true; }
+          sleep $((attempt * 10))
+        done
+        echo "::error::Could not push the refresh commit after 5 attempts."
+        exit 1

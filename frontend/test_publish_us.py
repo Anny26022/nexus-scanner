@@ -1,4 +1,5 @@
 import json
+import shutil
 import tempfile
 from pathlib import Path
 import unittest
@@ -110,7 +111,18 @@ class PublishUsTests(unittest.TestCase):
                  'metrics': {'turnover30': 500}, 'indexMemberships': ['S&P 500', 'RUSSELL 1000']}
                 for sym in symbols]
 
-        thematic_path = Path(__file__).parents[1] / 'DO NOT DELETE EDL PIPELINE' / 'us_thematic_universe.json'
+        # A fixture, not the committed crawl: Finviz can reclassify a stock, and the weekly sync must still commit.
+        folder = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, folder)
+        thematic_path = folder / 'us_thematic_universe.json'
+        thematic_path.write_text(json.dumps({
+            'NVDA': {'primary_theme': 'Artificial Intelligence', 'themes': ['Artificial Intelligence'],
+                     'subthemes': ['AI - Compute & Acceleration']},
+            'AMD': {'primary_theme': 'Artificial Intelligence', 'themes': ['Artificial Intelligence'],
+                    'subthemes': ['AI - Compute & Acceleration']}}))
+        (folder / 'us_theme_catalog.json').write_text(json.dumps({'themes': [{
+            'value': 'ai', 'label': 'Artificial Intelligence',
+            'subthemes': [{'value': 'aicompute', 'label': 'AI - Compute & Acceleration'}]}]}))
         taxonomy = publish_us.build_us_taxonomy(rows, days[-1], thematic_path)
         self.assertEqual(taxonomy['schemaVersion'], 1)
         self.assertIn('NVDA', taxonomy['records'])

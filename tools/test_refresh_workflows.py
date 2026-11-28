@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "5230a20e0e862a14493a714becd2fdabc304f310925a6462385fb58d050d9743",
-    "weekly_eod2_refresh.yml": "e7e42cf28ce9343b3da04d232ff1390986b63f170ef8a8412cb8f89b6907a7bc",
+    "daily_refresh.yml": "e5f1b950fa93f8da4f1dff54e0d88d67c7ef23f40c3a823bec60c9b74ffad92c",
+    "weekly_eod2_refresh.yml": "d241d8f560a1d7fa9fab71a3ae06a3db65ae9de0dc0afa8a4ecac552ff4ce06e",
 }
 
 
@@ -36,8 +36,12 @@ def normalized(steps):
 
 
 class RefreshWorkflowTests(unittest.TestCase):
-    def test_backup_policy_preserves_manual_runs_and_weekly_archives(self):
-        for name, expected in [('daily_refresh.yml', "${{ github.event_name == 'schedule' && '0' || '1' }}"),
+    def test_backup_policy_skips_scheduled_daily_runs_and_keeps_weekly_archives(self):
+        # gh-cron starts the daily run through workflow_dispatch with no inputs, so only an opted-in manual run builds them.
+        daily = document('.github/workflows/daily_refresh.yml')
+        option = daily.get('on', daily.get(True))['workflow_dispatch']['inputs']['filing_backups']
+        self.assertEqual((option['type'], option['default']), ('boolean', False))
+        for name, expected in [('daily_refresh.yml', "${{ inputs.filing_backups && '1' || '0' }}"),
                                ('weekly_eod2_refresh.yml', '1')]:
             job, = document('.github/workflows/' + name)['jobs'].values()
             build, = [step for step in job['steps'] if step['name'] == 'Build and publish validated data']
@@ -49,8 +53,10 @@ class RefreshWorkflowTests(unittest.TestCase):
                 workflow = document('.github/workflows/' + name)
                 # PyYAML YAML 1.1 treats the unquoted GitHub "on" key as True. No `schedule:`: the nexus-gh-cron
                 # Worker in new_nexys_ultimate starts both on time, through workflow_dispatch.
-                self.assertEqual(workflow.get('on', workflow.get(True)), {'workflow_dispatch': None})
-                self.assertEqual(workflow['concurrency'], {'group': 'daily-data-refresh', 'cancel-in-progress': False})
+                self.assertEqual(set(workflow.get('on', workflow.get(True))), {'workflow_dispatch'})
+                # queue: max: a waiting gh-cron run is never cancelled by a newer one in the shared group.
+                self.assertEqual(workflow['concurrency'], {'group': 'daily-data-refresh', 'queue': 'max',
+                                                           'cancel-in-progress': False})
                 self.assertEqual(workflow['permissions'], {'contents': 'write'})
                 job, = workflow['jobs'].values()
                 expanded = []

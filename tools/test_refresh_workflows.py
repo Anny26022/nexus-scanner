@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "ace991ec280f97e11f0fef36c16354e6c199961b6f95abf8ee1f289ec3d76853",
-    "weekly_eod2_refresh.yml": "1f6d8cca48dd53f92bcbebee2a6fd09c976513e6f6fe6783c2c5473995efc04d",
+    "daily_refresh.yml": "c20fc910c722794920973eb2f903c3f51df72e5df26dbd4b3ffed05083f0b736",
+    "weekly_eod2_refresh.yml": "3fc8c79fe569bb029d994fd7913578649a17565e150b5c77b9240d216e306fee",
 }
 
 
@@ -199,6 +199,14 @@ class RefreshWorkflowTests(unittest.TestCase):
         calls = [line.rstrip('\0').split('\0') for line in result.stdout.splitlines()]
         self.assertEqual([call[0] for call in calls if call[0] in ('fetch', 'reset', 'commit', 'push')],
                          ['fetch', 'reset', 'commit', 'push'] * 2)
+        # Every push refused: five attempts, a wait only between them, then the error.
+        refused = "sleep() { echo slept; }; git() { printf '%s\\0' \"$@\"; printf '\\n'; [ \"$1\" != push ]; };\n"
+        result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', refused + step['run']],
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout.count('slept'), 4)
+        self.assertEqual(sum(line.startswith('push') for line in result.stdout.splitlines()), 5)
+        self.assertIn('Could not push the refresh commit after 5 attempts', result.stdout)
 
     def test_commit_shell_preserves_allowlist_without_running_git(self):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']

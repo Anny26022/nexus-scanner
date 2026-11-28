@@ -120,8 +120,9 @@ jobs:
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
         run: |
           # The EOD2 overlay is optional here (the weekly run requires it): without a usable checkout the import skips.
-          if ! (cd "DO NOT DELETE EDL PIPELINE" && python -c 'import os, import_eod2_ohlcv as e; e.resolve_eod2_data_dir(os.environ["EDL_EOD2_DATA_DIR"])') 2>/dev/null; then
-            echo "::warning::No usable EOD2 checkout; the EOD2 overlay is skipped this run."
+          if ! reason=$(cd "DO NOT DELETE EDL PIPELINE" && python -c 'import os, import_eod2_ohlcv as e; e.resolve_eod2_data_dir(os.environ["EDL_EOD2_DATA_DIR"])' 2>&1); then
+            # The error's last line (resolve_eod2_data_dir's ValueError) says why.
+            echo "::warning::No usable EOD2 checkout (${reason##*$'\n'}); the EOD2 overlay is skipped this run."
             unset EDL_EOD2_DATA_DIR
           fi
           cd "DO NOT DELETE EDL PIPELINE"

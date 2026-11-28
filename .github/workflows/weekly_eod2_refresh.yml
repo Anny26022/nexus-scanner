@@ -153,8 +153,12 @@ jobs:
         with:
           phase: build
 
-      # Only after a successful build; a failed push stops the run before anything is committed.
+      # Straight after the build, which has already made the release live, so a later step that fails cannot leave R2
+      # state a session behind. A failed push does not skip the steps below (this run's indexes still go live); it
+      # stops the commit, and the last step fails the run.
       - name: Push pipeline state to R2
+        id: state_push
+        continue-on-error: true
         env:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -258,10 +262,17 @@ jobs:
         run: python frontend/site_data.py push-indexes
 
       - name: Commit and Push Results
+        if: steps.state_push.outcome == 'success'
         uses: ./.github/actions/commit-refresh-outputs
         with:
           weekly: 'true'
           commit-message: 'Automated weekly adjusted OHLCV refresh'
+
+      - name: Fail the run when the pipeline state push failed
+        if: steps.state_push.outcome == 'failure'
+        run: |
+          echo "::error::Pipeline state was not pushed to R2, so nothing was committed; the next run starts from the last pushed state."
+          exit 1
 
       - name: Upload Refresh Diagnostics
         if: always()

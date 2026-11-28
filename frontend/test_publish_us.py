@@ -106,7 +106,7 @@ class PublishUsTests(unittest.TestCase):
         from test_rotation_history import sessions
         days = sessions(340)
         flat = [(day, 100.) for day in days]
-        symbols = ['NVDA', 'AMD', 'MSFT', 'AAPL']
+        symbols = ['NVDA', 'AMD', 'MSFT', 'AAPL', 'KO']
         rows = [{'symbol': sym, 'sector': 'Technology', 'industry': 'Semiconductors', 'marketCapCrore': 3000000,
                  'metrics': {'turnover30': 500}, 'indexMemberships': ['S&P 500', 'RUSSELL 1000']}
                 for sym in symbols]
@@ -116,7 +116,7 @@ class PublishUsTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, folder)
         thematic_path = folder / 'us_thematic_universe.json'
         thematic_path.write_text(json.dumps({sym: {'primary_theme': 'Artificial Intelligence', 'themes': ['Artificial Intelligence'],
-                                                   'subthemes': ['AI - Compute & Acceleration']} for sym in symbols}))
+                                                   'subthemes': ['AI - Compute & Acceleration']} for sym in symbols[:3]}))
         (folder / 'us_theme_catalog.json').write_text(json.dumps({'themes': [{
             'value': 'ai', 'label': 'Artificial Intelligence',
             'subthemes': [{'value': 'aicompute', 'label': 'AI - Compute & Acceleration'}]}]}))
@@ -124,6 +124,8 @@ class PublishUsTests(unittest.TestCase):
         self.assertEqual(taxonomy['schemaVersion'], 1)
         self.assertIn('NVDA', taxonomy['records'])
         self.assertEqual(taxonomy['records']['NVDA']['theme'], 'Artificial Intelligence')
+        # A stock with no thematic record keeps its sector and industry, and no theme (a theme group needs three).
+        self.assertFalse(taxonomy['records'].get('KO', {}).get('theme'))
 
         index, shards, _ = rh.build(days[-1], rows, {row['symbol']: flat for row in rows},
                                     {code: flat for code in publish_us.ROTATION_BENCHMARKS},
@@ -133,6 +135,7 @@ class PublishUsTests(unittest.TestCase):
         self.assertIn('theme', group_levels)
         ai_group = next(group for group in index['groups'] if group['id'] == 'theme:Artificial Intelligence')
         self.assertIn('NVDA', ai_group['m'])
+        self.assertNotIn('KO', ai_group['m'])
 
     def test_us_rows_enrich_phase_1_and_phase_2_fields(self):
         stock = {

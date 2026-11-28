@@ -49,6 +49,7 @@ jobs:
 
       - name: Verify Finviz Crawler, US Pipeline and Publisher Tests
         run: |
+          source "$GITHUB_WORKSPACE/tools/quiet_test_annotations.sh"
           cd "DO NOT DELETE EDL PIPELINE"
           PYTHONPATH=src:. python -m unittest tests.test_us_finviz tests.test_us_market -v
           python -m unittest discover -s ../frontend -p 'test_publish_us.py' -v

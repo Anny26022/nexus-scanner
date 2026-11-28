@@ -44,7 +44,9 @@ jobs:
 
       - name: Test concall refresh
         working-directory: frontend
-        run: python -m unittest test_concall_history
+        run: |
+          source "$GITHUB_WORKSPACE/tools/quiet_test_annotations.sh"
+          python -m unittest test_concall_history
 
       # Only the live concall index; a missing one fails the run rather than starting from empty.
       - name: Pull the live concall index

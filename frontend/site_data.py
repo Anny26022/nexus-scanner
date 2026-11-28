@@ -19,6 +19,7 @@ release live, as an uncommitted Git refresh used to.
     python frontend/site_data.py pull          # before a refresh: the pointers the pipeline reads and extends
     python frontend/site_data.py push-indexes  # after the Earnings Pulse and Tijori steps
     python frontend/site_data.py push-sessions # after a backfill registers archived sessions
+    python frontend/site_data.py pull-pointer NAME / push-pointer NAME  # one pointer, for a job that owns only it
     python frontend/site_data.py ai-choices    # rebuild public/data/ai-filter-choices.json locally
 """
 import argparse
@@ -37,12 +38,14 @@ POINTER_PREFIX = 'site/data'
 AI_FILTER_CHOICES = 'ai-filter-choices.json'
 US_POINTER = 'us/current.json'
 US_SESSIONS = 'us/sessions.json'
+US_RESULTS = 'results/us_index.json'
 # Kept in step with POINTERS in workers/screener-ai/siteData.ts; anything else is not served.
 POINTERS = ('current.json', 'sessions.json', 'price-band-history.json', AI_FILTER_CHOICES,
-            'results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json',
+            'results/index.json', US_RESULTS, 'heatmap/index.json', 'company/current.json',
             'concalls/index.json', 'concalls/upcoming.json', US_POINTER, US_SESSIONS)
-# Written after the scanner release, by the Earnings Pulse, Tijori and concall steps.
-INDEXES = ('results/index.json', 'results/us_index.json', 'heatmap/index.json', 'company/current.json',
+# Written after the scanner release, by the Earnings Pulse, Tijori and concall steps. Not the US calendar: the US
+# refresh owns it (push-pointer), and the checkout's frozen copy must never go over the live one.
+INDEXES = ('results/index.json', 'heatmap/index.json', 'company/current.json',
            'concalls/index.json', 'concalls/upcoming.json')
 REVISION = re.compile(r'[a-f0-9]{64}')
 IMMUTABLE = 'cache-control=public,max-age=31536000,immutable'
@@ -181,16 +184,31 @@ def pull(store, output=OUTPUT):
             print('Checkout data is newer than R2; keeping the checkout copies', flush=True)
             return
     for name in POINTERS:
-        # The US pointer belongs to the US refresh (publish_us.py); India's pull leaves it in R2, as before.
-        if name not in (AI_FILTER_CHOICES, US_POINTER) and name in present:
+        # The US pointer and US earnings calendar belong to the US refresh (publish_us.py, us_daily_refresh.yml);
+        # India's pull leaves them in R2, so its push-indexes can never put back an older copy.
+        if name not in (AI_FILTER_CHOICES, US_POINTER, US_RESULTS) and name in present:
             (output / name).parent.mkdir(parents=True, exist_ok=True)
             store.cache_command('copyto', store.remote(f'{POINTER_PREFIX}/{name}'), str(output / name))
 
 
+def pull_pointer(store, output, name):
+    """Download one live pointer; a missing one raises, so a job never starts it again from empty."""
+    if name not in POINTERS:
+        raise RuntimeError(f'Not a published pointer: {name}')
+    (output / name).parent.mkdir(parents=True, exist_ok=True)
+    store.cache_command('copyto', store.remote(f'{POINTER_PREFIX}/{name}'), str(output / name))
+    if not (output / name).is_file():
+        raise RuntimeError(f'Live pointer missing: {POINTER_PREFIX}/{name}')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('action', choices=('pull', 'push-indexes', 'push-sessions', 'push-us-sessions', 'ai-choices'))
+    parser.add_argument('action', choices=('pull', 'push-indexes', 'push-sessions', 'push-us-sessions', 'ai-choices',
+                                           'pull-pointer', 'push-pointer'))
+    parser.add_argument('name', nargs='?', help='the pointer, for pull-pointer and push-pointer')
     args = parser.parse_args(argv)
+    if args.action in ('pull-pointer', 'push-pointer') and not args.name:
+        parser.error(f'{args.action} needs the pointer name')
     if args.action == 'ai-choices':
         build_ai_filter_choices(OUTPUT, json.loads((OUTPUT / 'current.json').read_text()))
         return 0
@@ -203,6 +221,11 @@ def main(argv=None):
         upload_pointer(store, OUTPUT, 'sessions.json')
     elif args.action == 'push-us-sessions':
         upload_pointer(store, OUTPUT, US_SESSIONS)
+    elif args.action == 'pull-pointer':
+        pull_pointer(store, OUTPUT, args.name)
+    elif args.action == 'push-pointer':
+        if store.cache_command('cat', store.remote(f'{POINTER_PREFIX}/{args.name}')) != (OUTPUT / args.name).read_bytes():
+            upload_pointer(store, OUTPUT, args.name)
     else:
         (pull if args.action == 'pull' else push_indexes)(store, OUTPUT)
     return 0

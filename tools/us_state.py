@@ -35,7 +35,7 @@ FILES = ('rotation_membership_ledger.json.gz', 'quarterly_financial_history.json
 PULLED = '.us-state-pulled'
 # Marks an R2 copy pushed by a run that did not pass its release checks (see push --unverified).
 UNVERIFIED = '.unverified'
-# Earnings Pulse's US archive, as the India refresh publishes it (frontend/earningspulse_history.py).
+# Earnings Pulse's US archive, as the US refresh's calendar step publishes it (frontend/earningspulse_history.py).
 PULSE_INDEX = 'site/data/results/us_index.json'
 PULSE_DIRECTORY = 'earnings_pulse'
 

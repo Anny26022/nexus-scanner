@@ -2,8 +2,9 @@
 
 The provider shows anonymous visitors only the current week (Monday to Sunday); older weeks and quarter views need
 a sign-in. Each run reads that week and merges it into the stored calendar quarters: events on the week's days are
-replaced, the rest of each quarter is kept as published before. The daily refresh runs Monday to Friday and the
-weekly one on Sunday, so each week is read after its weekday and Saturday results are out.
+replaced, the rest of each quarter is kept as published before. India's calendar (--markets IN) is read by the daily
+refresh on NSE days and the weekly one on Sunday; the US one (--markets US) by the US refresh, Tuesday to Saturday
+morning India time, so each week is read after its weekday results are out.
 """
 import argparse
 from datetime import date, datetime, timedelta

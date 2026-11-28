@@ -10,6 +10,9 @@ permissions:
 concurrency:
   # Do not let the long-history overlay race the normal daily publication.
   group: daily-data-refresh
+  # queue: max keeps up to 100 waiting runs, not one: the default cancels an older waiting run when a newer one arrives,
+  # and the nexus-gh-cron Worker never retries a scheduled run it finds cancelled.
+  queue: max
   cancel-in-progress: false
 
 jobs:
@@ -126,6 +129,7 @@ jobs:
           phase: fetch
 
       - name: Build and publish validated data
+        id: build
         env:
           PYTHONUNBUFFERED: '1'
           EDL_EOD2_DATA_DIR: ${{ runner.temp }}/eod2_data
@@ -140,8 +144,10 @@ jobs:
           cd "DO NOT DELETE EDL PIPELINE"
           python run_full_pipeline.py --phase build --stage "${{ runner.temp }}/edl-refresh-${{ github.run_id }}-${{ github.run_attempt }}"
 
+      # Only after a build that passed: a rejected run's build caches would carry into the next run. The fetch phase's
+      # save above still keeps what this run downloaded.
       - name: Save history after build
-        if: always() && steps.fetch.outcome == 'success'
+        if: always() && steps.fetch.outcome == 'success' && steps.build.outcome == 'success'
         continue-on-error: true
         uses: ./.github/actions/save-refresh-history
         with:
@@ -220,7 +226,8 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
           R2_BUCKET: nexus-screener-chart-data
-        run: python frontend/earningspulse_history.py
+        # India's calendar only; the US refresh keeps the US one (us_daily_refresh.yml).
+        run: python frontend/earningspulse_history.py --markets IN
 
       - name: Fetch and publish Earnings Pulse Heatmap
         continue-on-error: true

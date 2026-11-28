@@ -18,24 +18,32 @@ runs:
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
-        # A refresh can run long enough for main to receive a merge.  Start
-        # the generated-data commit from that latest tip rather than
-        # rebasing binary artifacts after they have been committed.
-        git fetch origin main
-        # Mixed reset retains the generated working files while refreshing
-        # the index too, so unrelated code merged during this run is kept.
-        git reset --mixed origin/main
-        # Carried-over pipeline files are stored in R2 (tools/pipeline_state.py), not committed:
-        # every committed version stayed in Git history (~41 MiB per refresh).
-        git add reference/index-constituent-mappings.json.gz
-        git add reference/index-constituent-mappings.manifest.json
-        # Published site data goes to R2 (frontend/site_data.py) and is served without a rebuild, so it is
-        # not committed. The reference files stay in Git: the next run reads them (the Dhan sync refuses to
-        # clear known members, the Tijori export resumes from its cache) and their history records changes.
-        if [ "$WEEKLY_REFRESH" = "true" ]; then
-          git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
-          git add reference/dhan/group-stocks.json
-        fi
-        # Nothing staged here is served by the site. Workers Builds' watch paths should exclude reference/*.
-        git commit -m "$REFRESH_COMMIT_MESSAGE" || echo "No changes to commit"
-        git push
+        # A refresh can run long enough for main to receive a merge. Each attempt builds the generated-data commit
+        # on the latest tip instead of rebasing it: a mixed reset refreshes the index and leaves the working files as
+        # they are, so unrelated code merged during this run is kept and nothing can conflict.
+        commit_on_latest_main() {
+          git fetch origin main
+          git reset --mixed origin/main
+          # Carried-over pipeline files are stored in R2 (tools/pipeline_state.py), not committed:
+          # every committed version stayed in Git history (~41 MiB per refresh).
+          git add reference/index-constituent-mappings.json.gz
+          git add reference/index-constituent-mappings.manifest.json
+          # Published site data goes to R2 (frontend/site_data.py) and is served without a rebuild, so it is
+          # not committed. The reference files stay in Git: the next run reads them (the Dhan sync refuses to
+          # clear known members, the Tijori export resumes from its cache) and their history records changes.
+          if [ "$WEEKLY_REFRESH" = "true" ]; then
+            git add reference/tijori/tijori-overviews.json.gz reference/tijori/summary.json
+            git add reference/dhan/group-stocks.json
+          fi
+          # Nothing staged here is served by the site. Workers Builds' watch paths should exclude reference/*.
+          git commit -m "$REFRESH_COMMIT_MESSAGE" || echo "No changes to commit"
+        }
+        # Other jobs push main too (the US Finviz sync, merges): when the push is refused, commit again on what
+        # landed. Another run's commit of the same reference files is replaced by this run's newer ones.
+        for attempt in 1 2 3 4 5; do
+          commit_on_latest_main
+          if git push; then exit 0; fi
+          if [ "$attempt" -lt 5 ]; then sleep $((attempt * 10)); fi
+        done
+        echo "::error::Could not push the refresh commit after 5 attempts."
+        exit 1

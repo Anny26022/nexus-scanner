@@ -136,11 +136,14 @@ class CacheRetentionTests(unittest.TestCase):
 
     def test_cleanup_and_refresh_workflows_share_concurrency_group(self):
         root = Path(__file__).resolve().parents[1] / '.github/workflows'
-        for name in ('cache-retention.yml', 'daily_refresh.yml', 'weekly_eod2_refresh.yml'):
+        # Every workflow in the group, found rather than listed, so a new member cannot skip these settings.
+        members = sorted(path.name for path in root.glob('*.yml') if '  group: daily-data-refresh\n' in path.read_text())
+        self.assertTrue({'cache-retention.yml', 'daily_refresh.yml', 'weekly_eod2_refresh.yml'} <= set(members))
+        for name in members:
             with self.subTest(workflow=name):
                 self.assertIn('  group: daily-data-refresh\n', (root / name).read_text())
-                if name == 'cache-retention.yml':
-                    self.assertIn('  queue: max\n', (root / name).read_text())
-                else:
-                    self.assertNotIn('  queue:', (root / name).read_text())
+                # queue: max everywhere: with the default, a newer waiting run cancels an older one, and the gh-cron
+                # Worker never retries a scheduled refresh it finds cancelled. gh-cron itself never queues a second
+                # run while one is waiting or running.
+                self.assertIn('  queue: max\n', (root / name).read_text())
                 self.assertIn('  cancel-in-progress: false\n', (root / name).read_text())

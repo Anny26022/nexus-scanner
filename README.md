@@ -133,18 +133,21 @@ own schedule ran hours late. Times are India time.
 
 | Workflow | Started | What it does |
 | --- | --- | --- |
-| [`daily_refresh.yml`](.github/workflows/daily_refresh.yml) | 17:30 on NSE trading days | Updates the EOD2 checkout, runs the pipeline and publisher tests, pulls state and pointers from R2, runs the pipeline (`--phase fetch`, then `--phase build` with charts to R2), refreshes Earnings Pulse history and heatmap and concall summaries, publishes changed indexes, pushes state, and commits `reference/`. |
+| [`daily_refresh.yml`](.github/workflows/daily_refresh.yml) | 17:30 on NSE trading days | Updates the EOD2 checkout, runs the pipeline and publisher tests, pulls state and pointers from R2, runs the pipeline (`--phase fetch`, then `--phase build` with charts to R2), refreshes India's Earnings Pulse history and the heatmap and concall summaries, publishes changed indexes, pushes state, and commits `reference/`. |
 | [`weekly_eod2_refresh.yml`](.github/workflows/weekly_eod2_refresh.yml) | Sunday 09:00 | The same build with the EOD2 adjusted-history overlay, plus the Tijori overview export, the Dhan group sync and a full concall walk (`--full`). |
-| [`us_daily_refresh.yml`](.github/workflows/us_daily_refresh.yml) | Tuesday to Saturday 07:00 | Builds the US root (exits 75 and skips publication if New York's session has not closed), pushes US state, fetches the US ETF snapshot and publishes the US release (`frontend/publish_us.py`, pointer `/data/us/current.json`). |
+| [`us_daily_refresh.yml`](.github/workflows/us_daily_refresh.yml) | Tuesday to Saturday 07:00 | Refreshes the US Earnings Pulse calendar, builds the US root (exits 75 and skips publication if New York's session has not closed), pushes US state, fetches the US ETF snapshot and publishes the US release (`frontend/publish_us.py`, pointer `/data/us/current.json`). |
 | [`us_weekly_sync.yml`](.github/workflows/us_weekly_sync.yml) | Saturday 11:30 | Crawls the Finviz thematic and ownership universes and commits the three `us_*.json` files in the pipeline directory. |
 | [`cache-retention.yml`](.github/workflows/cache-retention.yml) | After each daily or weekly refresh, and daily at 01:15 UTC | Prunes obsolete Actions cache snapshots (`tools/prune_actions_caches.py`). Manual runs default to a dry run. |
+| [`concall_refresh.yml`](.github/workflows/concall_refresh.yml) | Manual | Refreshes only the concall summaries (`frontend/concall_history.py`, `--full` by default) and publishes their two pointers, without the rest of the daily refresh. |
 | [`etf_snapshot_only.yml`](.github/workflows/etf_snapshot_only.yml), [`us_etf_snapshot_only.yml`](.github/workflows/us_etf_snapshot_only.yml) | Manual | Publish only the ETF snapshot into the live release, for a day the ETF source failed. |
 | [`backfill_historical_snapshots.yml`](.github/workflows/backfill_historical_snapshots.yml), [`us_backfill_historical_snapshots.yml`](.github/workflows/us_backfill_historical_snapshots.yml) | Manual, with a date range | Generate archived session snapshots for past dates, upload them and extend `sessions.json`. |
 | [`ci.yml`](.github/workflows/ci.yml) | Pull requests, pushes to `main` | Pipeline unit tests, the critical-path byte-equivalence check (PRs only), the wheel check, `tools/` and workflow-contract tests, `compileall`. |
 | [`frontend-ci.yml`](.github/workflows/frontend-ci.yml) | Pull requests and pushes that touch `frontend/`, `workers/` or the Worker config | Catalogue and Worker tests (Vitest), the data Worker test, type checks, the `frontend/` Python tests with a real `rclone`, `npm audit`. |
 
-The India refresh, backfill and ETF-only workflows and the cache pruner share the `daily-data-refresh` concurrency
-group, so they never run at once; the US daily, backfill and ETF-only workflows share `us-daily-refresh`. Price, enrichment and history caches live in GitHub Actions caches
+The India refresh, backfill, concall-only and ETF-only workflows and the cache pruner share the `daily-data-refresh`
+concurrency group, so they never run at once; the US daily, backfill and ETF-only workflows share `us-daily-refresh`.
+Each sets `queue: max`, so a waiting run is never cancelled by a newer one (the gh-cron Worker does not retry a
+cancelled run). Price, enrichment and history caches live in GitHub Actions caches
 (`.github/actions/restore-refresh-history`). They speed runs up and can be evicted.
 
 The workflows read `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` as secrets and

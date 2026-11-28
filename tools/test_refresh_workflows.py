@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "910bcb7e5c39fda4b6c1a64c955a019669810f4076fd1de491db956f73df2275",
-    "weekly_eod2_refresh.yml": "5c082402082508dde535f5ff1bc0497021e6af31ccf3b12472ae3d0d13eec111",
+    "daily_refresh.yml": "c20fc910c722794920973eb2f903c3f51df72e5df26dbd4b3ffed05083f0b736",
+    "weekly_eod2_refresh.yml": "3fc8c79fe569bb029d994fd7913578649a17565e150b5c77b9240d216e306fee",
 }
 
 
@@ -36,8 +36,12 @@ def normalized(steps):
 
 
 class RefreshWorkflowTests(unittest.TestCase):
-    def test_backup_policy_preserves_manual_runs_and_weekly_archives(self):
-        for name, expected in [('daily_refresh.yml', "${{ github.event_name == 'schedule' && '0' || '1' }}"),
+    def test_backup_policy_skips_scheduled_daily_runs_and_keeps_weekly_archives(self):
+        # gh-cron starts the daily run through workflow_dispatch with no inputs, so only an opted-in manual run builds them.
+        daily = document('.github/workflows/daily_refresh.yml')
+        option = daily.get('on', daily.get(True))['workflow_dispatch']['inputs']['filing_backups']
+        self.assertEqual((option['type'], option['default']), ('boolean', False))
+        for name, expected in [('daily_refresh.yml', "${{ inputs.filing_backups && '1' || '0' }}"),
                                ('weekly_eod2_refresh.yml', '1')]:
             job, = document('.github/workflows/' + name)['jobs'].values()
             build, = [step for step in job['steps'] if step['name'] == 'Build and publish validated data']
@@ -49,8 +53,13 @@ class RefreshWorkflowTests(unittest.TestCase):
                 workflow = document('.github/workflows/' + name)
                 # PyYAML YAML 1.1 treats the unquoted GitHub "on" key as True. No `schedule:`: the nexus-gh-cron
                 # Worker in new_nexys_ultimate starts both on time, through workflow_dispatch.
-                self.assertEqual(workflow.get('on', workflow.get(True)), {'workflow_dispatch': None})
-                self.assertEqual(workflow['concurrency'], {'group': 'daily-data-refresh', 'cancel-in-progress': False})
+                on = workflow.get('on', workflow.get(True))
+                self.assertEqual(set(on), {'workflow_dispatch'})
+                if name == 'weekly_eod2_refresh.yml':
+                    self.assertIsNone(on['workflow_dispatch'])
+                # queue: max: a waiting gh-cron run is never cancelled by a newer one in the shared group.
+                self.assertEqual(workflow['concurrency'], {'group': 'daily-data-refresh', 'queue': 'max',
+                                                           'cancel-in-progress': False})
                 self.assertEqual(workflow['permissions'], {'contents': 'write'})
                 job, = workflow['jobs'].values()
                 expanded = []
@@ -179,6 +188,26 @@ class RefreshWorkflowTests(unittest.TestCase):
                 if result.returncode:
                     self.assertIn('::error::Cache phase must be fetch or build', result.stdout)
 
+    def test_a_refused_push_commits_again_on_the_latest_main(self):
+        step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
+        # git push is refused once (main moved on), then accepted; sleep is a no-op.
+        fake = ("pushes=0; sleep() { :; }; git() { printf '%s\\0' \"$@\"; printf '\\n';"
+                " if [ \"$1\" = push ]; then pushes=$((pushes+1)); [ $pushes -gt 1 ]; fi; };\n")
+        env = dict(os.environ, WEEKLY_REFRESH='false', REFRESH_COMMIT_MESSAGE='m')
+        result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', fake + step['run']],
+                                env=env, capture_output=True, text=True, check=True)
+        calls = [line.rstrip('\0').split('\0') for line in result.stdout.splitlines()]
+        self.assertEqual([call[0] for call in calls if call[0] in ('fetch', 'reset', 'commit', 'push')],
+                         ['fetch', 'reset', 'commit', 'push'] * 2)
+        # Every push refused: five attempts, a wait only between them, then the error.
+        refused = "sleep() { echo slept; }; git() { printf '%s\\0' \"$@\"; printf '\\n'; [ \"$1\" != push ]; };\n"
+        result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', refused + step['run']],
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout.count('slept'), 4)
+        self.assertEqual(sum(line.startswith('push') for line in result.stdout.splitlines()), 5)
+        self.assertIn('Could not push the refresh commit after 5 attempts', result.stdout)
+
     def test_commit_shell_preserves_allowlist_without_running_git(self):
         step, = document('.github/actions/commit-refresh-outputs/action.yml')['runs']['steps']
         subprocess.run(['bash', '-n'], input=step['run'], text=True, check=True)
@@ -195,6 +224,8 @@ class RefreshWorkflowTests(unittest.TestCase):
                 self.assertIn(['reset', '--mixed', 'origin/main'], calls)
                 self.assertIn(['commit', '-m', message], calls)
                 self.assertEqual(calls[-1], ['push'])
+                # Retries commit again on the new tip; nothing rebases or stashes the working tree.
+                self.assertFalse(any(call[0] in ('pull', 'rebase', 'stash') for call in calls))
                 # Carried-over pipeline files go to R2 (tools/pipeline_state.py), never into Git history.
                 staged = {path for call in calls if call[0] == 'add' for path in call[1:]}
                 self.assertFalse(any(path.startswith('DO NOT DELETE EDL PIPELINE/') for path in staged))

@@ -506,18 +506,16 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     publish_site(output, manifest)
     # Only after publish_site: keep the new release and the one tabs may still be on. Local tidying only, so a failure
     # warns: raising here would roll back the local promotion and stop the state push of a release already live.
-    # Each cleanup on its own, so one failing never leaves the other undone.
-    try:
-        if previous_revision != manifest['revision']:
-            removed = retain_revisions(output, manifest['revision'], previous_revision)
-            if removed:
-                print(f'Removed {len(removed)} superseded scanner revisions from the served release', flush=True)
-    except Exception as error:
-        print(f'::warning::Revision cleanup failed: {error!r}', flush=True)
-    try:
-        prune_etf_snapshots(output, revision)
-    except Exception as error:
-        print(f'::warning::ETF snapshot cleanup failed: {error!r}', flush=True)
+    def cleanup(label, step, *args):
+        try:
+            return step(*args)
+        except Exception as error:
+            print(f'::warning::Post-publication {label} failed: {error!r}', flush=True)
+    if previous_revision != manifest['revision']:
+        removed = cleanup('revision retention', retain_revisions, output, manifest['revision'], previous_revision)
+        if removed:
+            print(f'Removed {len(removed)} superseded scanner revisions from the served release', flush=True)
+    cleanup('ETF snapshot pruning', prune_etf_snapshots, output, revision)
     elapsed('release completion', started)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest

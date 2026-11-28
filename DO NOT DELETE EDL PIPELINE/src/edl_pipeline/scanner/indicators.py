@@ -43,6 +43,43 @@ def wilder_average(values: pd.Series, period: int) -> pd.Series:
     return values.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
 
 
+def sma(values: pd.Series, period: int) -> pd.Series:
+    period = _positive_period(period)
+    return values.rolling(period, min_periods=period).mean()
+
+
+def ema(values: pd.Series, period: int) -> pd.Series:
+    period = _positive_period(period)
+    return values.ewm(span=period, adjust=False, min_periods=period).mean()
+
+
+def rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    """Wilder RSI: 100 when there are no losses, 50 when the price has not moved at all."""
+    delta = close.diff()
+    average_gain = wilder_average(delta.clip(lower=0), period)
+    average_loss = wilder_average(-delta.clip(upper=0), period)
+    result = 100 - 100 / (1 + average_gain / average_loss.replace(0, np.nan))
+    result = result.where(average_loss != 0, 100.0)
+    return result.where(~((average_gain == 0) & (average_loss == 0)), 50.0)
+
+
+def atr(frame: pd.DataFrame, period: int = 14) -> pd.Series:
+    return wilder_average(true_range(frame), period)
+
+
+def prior_extremes(frame: pd.DataFrame, sessions: int) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
+    """The one rule for a new N-session (e.g. 52-week) high or low.
+
+    Each bar is compared with the ``sessions`` bars before it, never with itself: a new high is a high strictly
+    above the prior window's highest high, a new low a low strictly below its lowest low. Returns
+    ``(prior_high, prior_low, new_high, new_low)``; the flags are False until a full prior window exists.
+    """
+    sessions = _positive_period(sessions)
+    prior_high = frame["High"].shift(1).rolling(sessions, min_periods=sessions).max()
+    prior_low = frame["Low"].shift(1).rolling(sessions, min_periods=sessions).min()
+    return prior_high, prior_low, frame["High"] > prior_high, frame["Low"] < prior_low
+
+
 def directional_series(frame: pd.DataFrame, period: int) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
     period = _positive_period(period)
     upward, downward = frame["High"].diff(), -frame["Low"].diff()
@@ -110,21 +147,13 @@ def indicator_series(frame: pd.DataFrame, name: str, period: int = 14, multiplie
     if name == "HL2": return (high + low) / 2
     if name == "HLC3": return (high + low + close) / 3
     if name == "OHLC4": return (frame["Open"] + high + low + close) / 4
-    if name == "SMA": return close.rolling(period, min_periods=period).mean()
-    if name == "EMA": return close.ewm(span=period, adjust=False, min_periods=period).mean()
+    if name == "SMA": return sma(close, period)
+    if name == "EMA": return ema(close, period)
     if name == "WMA":
         weights = np.arange(1, period + 1, dtype=float)
         return close.rolling(period, min_periods=period).apply(lambda values: float(np.dot(values, weights) / weights.sum()), raw=True)
     if name == "VOLUME_SMA": return volume.rolling(period, min_periods=period).mean()
-    if name == "RSI":
-        delta = close.diff()
-        gains, losses = delta.clip(lower=0), -delta.clip(upper=0)
-        average_gain = wilder_average(gains, period)
-        average_loss = wilder_average(losses, period)
-        relative = average_gain / average_loss.replace(0, np.nan)
-        result = 100 - 100 / (1 + relative)
-        result = result.where(average_loss != 0, 100.0)
-        return result.where(~((average_gain == 0) & (average_loss == 0)), 50.0)
+    if name == "RSI": return rsi(close, period)
     if name in {"MACD", "MACD_SIGNAL", "MACD_HIST"}:
         # ``period`` is the slow span.  Scale the conventional 12/26/9
         # relationship so the generic indicator builder's period control is

@@ -3,21 +3,14 @@
 import numpy as np
 import pandas as pd
 
+from ..scanner.indicators import prior_extremes, rsi
+
 
 REQUIRED_COLUMNS = ("Date", "Open", "High", "Low", "Close", "Volume")
 
 
 def _rsi(series, period=14):
-    delta = series.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    average_gain = gain.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
-    average_loss = loss.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
-    relative_strength = average_gain / average_loss.replace(0, np.nan)
-    result = 100 - (100 / (1 + relative_strength))
-    result = result.mask((average_loss == 0) & (average_gain > 0), 100.0)
-    result = result.mask((average_loss == 0) & (average_gain == 0), 50.0)
-    return result
+    return rsi(series, period)
 
 
 def prepare_history(frame, methodology):
@@ -60,12 +53,8 @@ def prepare_history(frame, methodology):
         ("Quarterly", methodology.quarterly_sessions),
         ("Yearly", methodology.yearly_sessions),
     ):
-        prior_high = df["High"].shift(1).rolling(sessions, min_periods=sessions).max()
-        prior_low = df["Low"].shift(1).rolling(sessions, min_periods=sessions).min()
-        df[f"{label}_Reference_High"] = prior_high
-        df[f"{label}_Reference_Low"] = prior_low
-        df[f"New_{label}_High"] = df["High"] > prior_high
-        df[f"New_{label}_Low"] = df["Low"] < prior_low
+        (df[f"{label}_Reference_High"], df[f"{label}_Reference_Low"],
+         df[f"New_{label}_High"], df[f"New_{label}_Low"]) = prior_extremes(df, sessions)
 
     df["Volume_SMA_20"] = df["Volume"].rolling(20, min_periods=20).mean()
     valid_20d_candle = df["High"].notna() & df["Low"].notna()

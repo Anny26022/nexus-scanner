@@ -170,3 +170,17 @@ class PublicationTests(unittest.TestCase):
             (charts/'index.json').write_text(json.dumps({'symbols':2,'asOfDate':manifest['sessionDate']}))
             with self.assertRaisesRegex(RuntimeError,'count/session'):
                 chart_preflight(charts,manifest['sessionDate'])
+
+    def test_json_writers_replace_atomically_and_keep_bytes(self):
+        import publish_snapshot
+        import chart_publication
+        for write_json in (chart_publication.write_json, publish_snapshot.write_json):
+            with self.subTest(writer=write_json.__module__), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp)/'nested'/'data.json'
+                write_json(path, {'a': [1, 2], 'b': 'x'})
+                self.assertEqual(path.read_bytes(), b'{"a":[1,2],"b":"x"}')
+                # A write that fails at the rename leaves the previous file and no temporary behind.
+                with patch('pathlib.Path.replace', side_effect=OSError('disk full')), self.assertRaises(OSError):
+                    write_json(path, {'a': 3})
+                self.assertEqual(path.read_bytes(), b'{"a":[1,2],"b":"x"}')
+                self.assertEqual(sorted(p.name for p in path.parent.iterdir()), ['data.json'])

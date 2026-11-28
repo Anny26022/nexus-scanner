@@ -17,8 +17,10 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'DO NOT DELETE EDL PIPELINE' / 'src'))
+PIPELINE_ROOT = Path(__file__).resolve().parents[1] / 'DO NOT DELETE EDL PIPELINE'
+sys.path[:0] = [str(PIPELINE_ROOT), str(PIPELINE_ROOT / 'src')]
 from edl_pipeline.config import env_bool
+from pipeline_utils import atomic_replace_bytes
 
 
 # Rotation history is replaced every day, so it lives where the bucket's 90-day lifecycle rule cleans up.
@@ -26,10 +28,7 @@ ROTATION_PREFIX = 'daily/rotation'
 
 
 def write_json(path, payload):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + '.tmp')
-    temporary.write_text(json.dumps(payload, separators=(',', ':'), allow_nan=False))
-    temporary.replace(path)
+    atomic_replace_bytes(Path(path).absolute(), json.dumps(payload, separators=(',', ':'), allow_nan=False).encode())
 
 
 R2_SETTINGS = ('R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_PUBLIC_BASE_URL')

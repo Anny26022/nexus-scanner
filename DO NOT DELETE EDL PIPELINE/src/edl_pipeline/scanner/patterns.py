@@ -12,6 +12,8 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
+from .indicators import atr
+
 
 PATTERN_CONDITION_REGISTRY = {
     "new_high": {
@@ -74,13 +76,7 @@ def _atr(frame: pd.DataFrame, period: int) -> pd.Series:
     period = int(period)
     if period <= 0:
         raise ValueError("ATR period must be positive.")
-    previous_close = frame["Close"].shift(1)
-    true_range = pd.concat((
-        frame["High"] - frame["Low"],
-        (frame["High"] - previous_close).abs(),
-        (frame["Low"] - previous_close).abs(),
-    ), axis=1).max(axis=1)
-    return true_range.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    return atr(frame, period)
 
 
 def _range_percent(frame: pd.DataFrame) -> float | None:

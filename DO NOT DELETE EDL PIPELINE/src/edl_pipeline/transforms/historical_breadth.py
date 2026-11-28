@@ -9,6 +9,8 @@ import pandas as pd
 
 from pipeline_utils import BASE_DIR, load_json
 
+from edl_pipeline.scanner.indicators import prior_extremes
+
 
 SYMBOL_OHLCV_DIR = os.path.join(BASE_DIR, "ohlcv_data")
 INDEX_OHLCV_DIR = os.path.join(BASE_DIR, "indices_ohlcv_data")
@@ -75,8 +77,8 @@ def prepare_stock_history(csv_path, timeline):
     full_df["SMA_50"] = full_df["Close"].rolling(50).mean()
     full_df["SMA_200"] = full_df["Close"].rolling(200).mean()
     full_df["Vol_SMA_20"] = full_df["Volume"].rolling(20).mean()
-    full_df["H_52W"] = full_df["High"].rolling(252).max()
-    full_df["L_52W"] = full_df["Low"].rolling(252).min()
+    # Same strict prior-window rule as market_breadth_v2.
+    _, _, full_df["New_52W_High"], full_df["New_52W_Low"] = prior_extremes(full_df, 252)
     full_df["Prev_Close"] = full_df["Close"].shift(1)
     full_df["Daily_Ret"] = ((full_df["Close"] - full_df["Prev_Close"]) / full_df["Prev_Close"]) * 100
     return full_df[full_df["Date"].isin(timeline)]
@@ -107,9 +109,9 @@ def update_breadth_arrays(analysis_df, date_to_idx, arrays):
         if row.Daily_Ret <= -4:
             arrays["down_4pc"][idx] += 1
 
-        if row.High >= row.H_52W:
+        if row.New_52W_High:
             arrays["high_52w"][idx] += 1
-        if row.Low <= row.L_52W:
+        if row.New_52W_Low:
             arrays["low_52w"][idx] += 1
 
         if row.Volume > row.Vol_SMA_20:

@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "12b2fd22605c116b95edec57d92a97ada47d02c7d0acf7b5a405891b78d8044f",
-    "weekly_eod2_refresh.yml": "e7e42cf28ce9343b3da04d232ff1390986b63f170ef8a8412cb8f89b6907a7bc",
+    "daily_refresh.yml": "910bcb7e5c39fda4b6c1a64c955a019669810f4076fd1de491db956f73df2275",
+    "weekly_eod2_refresh.yml": "5c082402082508dde535f5ff1bc0497021e6af31ccf3b12472ae3d0d13eec111",
 }
 
 
@@ -239,10 +239,22 @@ class RefreshWorkflowTests(unittest.TestCase):
                 self.assertLess(pull, names.index('Fetch refresh inputs'))
                 self.assertLess(names.index('Build and publish validated data'), push)
                 self.assertLess(push, names.index('Commit and Push Results'))
+                # Straight after the build, which has already made the release live: a later optional or index
+                # step that fails must not leave R2 state a session behind.
+                self.assertEqual(push, names.index('Save history after build') + 1)
                 step = job['steps'][push]
-                # Default success(): a failed build never pushes, and a failed push stops the commit.
+                # Default success(): a failed build never pushes.
                 self.assertNotIn('if', step)
-                self.assertNotIn('continue-on-error', step)
+                # A failed push skips no later step (the run's indexes still go live), but stops the commit and fails
+                # the run.
+                self.assertIs(step['continue-on-error'], True)
+                self.assertEqual(step['id'], 'state_push')
+                commit = names.index('Commit and Push Results')
+                self.assertEqual(job['steps'][commit]['if'], "steps.state_push.outcome == 'success'")
+                fail = job['steps'][names.index('Fail the run when the pipeline state push failed')]
+                self.assertEqual(fail['if'], "steps.state_push.outcome == 'failure'")
+                self.assertIn('exit 1', fail['run'])
+                self.assertNotIn('if', job['steps'][names.index('Publish site indexes to R2')])
         job, = document('.github/workflows/backfill_historical_snapshots.yml')['jobs'].values()
         names = [step['name'] for step in job['steps']]
         self.assertLess(names.index('Pull pipeline state from R2'), names.index('Generate Historical Snapshots'))

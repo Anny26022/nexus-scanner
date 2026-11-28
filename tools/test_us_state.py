@@ -23,14 +23,21 @@ class Store:
     def _path(self, value):
         return self.bucket / value[3:] if value.startswith('r2:') else Path(value)
 
-    def run(self, command, source, target, *args):
+    def run(self, command, source, target=None, *args):
+        if command == 'deletefile':
+            self._path(source).unlink()
+            return
         assert command == 'copyto'
         destination = self._path(target)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(self._path(source), destination)
 
-    def cache_command(self, command, target, *args):
+    def cache_command(self, command, target, *args, data=None):
         path = self._path(target)
+        if command == 'rcat':
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            return b''
         if command == 'cat':
             return path.read_bytes()
         if command == 'lsf':
@@ -77,6 +84,77 @@ class StateTests(unittest.TestCase):
         (second / 'ohlcv_data' / 'MSFT.csv').write_text('x')
         us_state.push(self.store, second, ['ohlcv_data'])
         self.assertTrue((self.tmp / 'bucket' / us_state.PREFIX / 'previous' / 'ohlcv_data.tar.gz').exists())
+
+    def write(self, root, text):
+        (root / 'ohlcv_data' / 'AAPL.csv').write_text(text)
+
+    def previous(self):
+        path = self.tmp / 'bucket' / us_state.PREFIX / 'previous' / 'ohlcv_data.tar.gz'
+        with tarfile.open(path) as archive:
+            return archive.extractfile('AAPL.csv').read().decode()
+
+    def test_previous_keeps_the_last_good_state_through_unverified_runs(self):
+        root = self.root('first')
+        us_state.pull(self.store, root)
+        self.seed(root)
+        self.write(root, 'good A')
+        us_state.push(self.store, root)
+        self.write(root, 'good B')
+        us_state.push(self.store, root, ['ohlcv_data'])  # B is current, A is previous
+        self.assertEqual(self.previous(), 'good A')
+        for text in ('bad run', 'no-op run'):
+            self.write(root, text)
+            us_state.push(self.store, root, ['ohlcv_data'], unverified=True)
+            # B, the last good copy, moved to previous/ before the first unverified push replaced it
+            self.assertEqual(self.previous(), 'good B')
+        mark = self.tmp / 'bucket' / us_state.PREFIX / ('ohlcv_data.tar.gz' + us_state.UNVERIFIED)
+        self.assertTrue(mark.exists())
+        second = self.root('second')
+        us_state.pull(self.store, second)
+        self.assertEqual((second / 'ohlcv_data' / 'AAPL.csv').read_text(), 'no-op run')  # the current copy moves on
+        self.assertFalse((second / 'ohlcv_data.tar.gz.unverified').exists())
+        # The next good run does not rotate the unverified copy into previous/, and clears the mark.
+        self.write(second, 'good C')
+        us_state.push(self.store, second, ['ohlcv_data'])
+        self.assertEqual(self.previous(), 'good B')
+        self.assertFalse(mark.exists())
+        self.write(second, 'good D')
+        us_state.push(self.store, second, ['ohlcv_data'])
+        self.assertEqual(self.previous(), 'good C')
+
+    def test_keep_previous_touches_neither_previous_nor_the_mark(self):
+        root = self.root('first')
+        us_state.pull(self.store, root)
+        self.seed(root)
+        us_state.push(self.store, root)
+        self.write(root, 'good')
+        us_state.push(self.store, root, ['ohlcv_data'])
+        before = self.previous()
+        mark = self.tmp / 'bucket' / us_state.PREFIX / ('ohlcv_data.tar.gz' + us_state.UNVERIFIED)
+        self.write(root, 'ledger pass')
+        us_state.push(self.store, root, ['ohlcv_data'], keep_previous=True)
+        self.assertEqual(self.previous(), before)
+        self.assertFalse(mark.exists())  # a good run's copy is not marked by it
+        # After an unverified push, the mark survives a keep_previous push, and previous/ still holds the good copy.
+        self.write(root, 'bad run')
+        us_state.push(self.store, root, ['ohlcv_data'], unverified=True)
+        self.assertTrue(mark.exists())
+        before = self.previous()
+        self.write(root, 'ledger pass after a bad run')
+        us_state.push(self.store, root, ['ohlcv_data'], keep_previous=True)
+        self.assertTrue(mark.exists())
+        self.assertEqual(self.previous(), before)
+
+    def test_a_half_written_temp_file_is_not_carried(self):
+        first = self.root('first')
+        us_state.pull(self.store, first)
+        self.seed(first)
+        (first / 'ohlcv_data' / 'AAPL.csv.tmp').write_text('cut short')
+        us_state.push(self.store, first)
+        second = self.root('second')
+        us_state.pull(self.store, second)
+        self.assertTrue((second / 'ohlcv_data' / 'AAPL.csv').exists())
+        self.assertFalse((second / 'ohlcv_data' / 'AAPL.csv.tmp').exists())
 
     def test_a_root_that_was_not_pulled_never_overwrites_r2(self):
         root = self.root('fresh')

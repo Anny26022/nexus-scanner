@@ -5,8 +5,14 @@ were kept in GitHub's Actions cache, which is shared with India's caches (10 GB 
 first) and dropped after 7 idle days. Here each folder travels as one compressed archive, a few objects a run:
 
     pull                  restore every archive and file R2 holds into the US root (nothing there yet: a cold start)
-    push [NAME ...]       upload them (all, or the ones named), the current R2 copy first moved to previous/
+    push [NAME ...]       upload them (all, or the ones named) after a build that passed its release checks
+    push --unverified     upload after a build that failed them or found no new session; the upload is marked
+                          <name>.unverified in R2
+    push --keep-previous  upload without touching previous/ or the mark (the ledger's second push)
     pulse                 copy the Earnings Pulse US archive (results/us_index.json and its objects) into the root
+
+previous/ always holds a good run's state: a push moves the current R2 copy there first, unless that copy is marked
+unverified, in which case previous/ already holds the last good state and stays as it is.
 
 `push` refuses to run unless `pull` completed in this root, so a run whose restore failed never overwrites the
 stored state with an empty one. The prefix is not served by the public data Worker.
@@ -27,6 +33,8 @@ PREFIX = 'pipeline-state/us'
 FOLDERS = {'ohlcv_data': 'w:gz', 'indices_ohlcv_data': 'w:gz', 'stock_pages': 'w', 'sec_filings': 'w', 'market_news': 'w:gz'}
 FILES = ('rotation_membership_ledger.json.gz', 'quarterly_financial_history.json.gz')
 PULLED = '.us-state-pulled'
+# Marks an R2 copy pushed by a run that did not pass its release checks (see push --unverified).
+UNVERIFIED = '.unverified'
 # Earnings Pulse's US archive, as the India refresh publishes it (frontend/earningspulse_history.py).
 PULSE_INDEX = 'site/data/results/us_index.json'
 PULSE_DIRECTORY = 'earnings_pulse'
@@ -40,7 +48,8 @@ def pack(directory: Path, mode: str, target: Path):
     """The folder's files as one archive at `target`, written straight to disk."""
     with tarfile.open(target, mode=mode) as archive:
         for path in sorted(directory.rglob('*')):
-            if path.is_file():
+            # A *.tmp is a write a killed run left half-done (history.py writes a temp file, then renames it).
+            if path.is_file() and path.suffix != '.tmp':
                 archive.add(path, arcname=str(path.relative_to(directory)))
 
 
@@ -81,7 +90,7 @@ def pull(store, root: Path):
     (root / PULLED).write_text(json.dumps(sorted(present)))
 
 
-def push(store, root: Path, names=()):
+def push(store, root: Path, names=(), keep_previous=False, unverified=False):
     if not (root / PULLED).exists():
         raise RuntimeError('US state was not pulled into this root; refusing to overwrite R2')
     present = stored_names(store)
@@ -93,16 +102,17 @@ def push(store, root: Path, names=()):
             continue
         local = root / name
         pack(directory, FOLDERS[folder], local)
-        _upload(store, present, local, name)
+        _upload(store, present, local, name, keep_previous, unverified)
         local.unlink()
     for name in sorted(set(FILES) & wanted):
         if (root / name).exists():
-            _upload(store, present, root / name, name)
+            _upload(store, present, root / name, name, keep_previous, unverified)
 
 
-def _upload(store, present, local: Path, name: str):
-    key = f'{PREFIX}/{name}'
-    if name in present:
+def _upload(store, present, local: Path, name: str, keep_previous=False, unverified=False):
+    key, mark = f'{PREFIX}/{name}', f'{PREFIX}/{name}{UNVERIFIED}'
+    # Only a good run's copy moves to previous/: an unverified one would replace the last good state there.
+    if name in present and not keep_previous and name + UNVERIFIED not in present:
         store.run('copyto', store.remote(key), store.remote(f'{PREFIX}/previous/{name}'))
     store.run('copyto', str(local), store.remote(key))
     # Compare sizes: the archives are hundreds of megabytes, too large to read back whole through a pipe.
@@ -110,7 +120,11 @@ def _upload(store, present, local: Path, name: str):
     size = json.loads(listed)[0]['Size'] if listed else None
     if size != local.stat().st_size:
         raise RuntimeError(f'US state upload mismatch: {key} ({size} != {local.stat().st_size} bytes)')
-    print(f'{name}: pushed ({local.stat().st_size / 1e6:.1f} MB)', flush=True)
+    if unverified:
+        store.cache_command('rcat', store.remote(mark), data=b'')
+    elif not keep_previous and name + UNVERIFIED in present:
+        store.run('deletefile', store.remote(mark))
+    print(f'{name}: pushed ({local.stat().st_size / 1e6:.1f} MB){" unverified" if unverified else ""}', flush=True)
 
 
 def pulse(store, root: Path):
@@ -130,6 +144,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('action', choices=('pull', 'push', 'pulse'))
     parser.add_argument('names', nargs='*', help='push only these folders or files')
+    parser.add_argument('--keep-previous', action='store_true', help='push without moving the R2 copy to previous/')
+    parser.add_argument('--unverified', action='store_true', help='push from a run that did not pass its release checks')
     args = parser.parse_args(argv)
     from chart_publication import R2Store, missing_r2_settings
     missing = missing_r2_settings()
@@ -144,7 +160,10 @@ def main(argv=None):
         except Exception as error:  # the build falls back to TradingView's earnings dates
             print(f'::warning::Earnings Pulse US archive unavailable from R2: {error}', flush=True)
         return 0
-    (pull if args.action == 'pull' else push)(store, root, *([args.names] if args.action == 'push' else []))
+    if args.action == 'pull':
+        pull(store, root)
+    else:
+        push(store, root, args.names, keep_previous=args.keep_previous, unverified=args.unverified)
     return 0
 
 

@@ -29,6 +29,17 @@ class MarketOverviewTest(unittest.TestCase):
         self.assertNotIn('extra_field', result['breadth'][-1])
         self.assertIsNone(result['breadth'][-1]['new_52w_high'])
 
+    def test_carries_stage_breakout_and_monthly_counts_and_small_cap_history(self):
+        record = {'date': '2026-10-22', 'new_monthly_high': 120, 'new_monthly_low': 40, 'breakout_20d': 60,
+                  'breakout_resolved_5d': 50, 'breakout_held_5d': 30, 'stage_1': 100, 'stage_2': 500, 'stage_3': 200, 'stage_4': 700}
+        closes = [{'date': f'2026-10-{day:02d}', 'close': 100 + day} for day in range(1, 24)]
+        result = market_overview({'market_breadth_v2.json.gz': gz({'records': [record]}),
+                                  'all_indices_history_v2.json.gz': gz({'indices': [{'symbol': 'NIFTY SMALLCAP 100', 'records': closes}]})}, '2026-10-22')
+        self.assertEqual({key: result['breadth'][0][key] for key in record if key != 'date'}, {key: value for key, value in record.items() if key != 'date'})
+        # Closes up to the session only, and no index card for it.
+        self.assertEqual(result['indexHistory'], {'NIFTY SMALLCAP 100': [100 + day for day in range(1, 23)]})
+        self.assertEqual(result['indices'], [])
+
     def test_drops_non_finite_and_boolean_numbers(self):
         record = {'date': '2026-10-22', 'advances': True, 'declines': float('inf'), 'above_50_pct': 12.5}
         result = market_overview({'market_breadth_v2.json.gz': gzip.compress(json.dumps({'records': [record]}).encode())}, '2026-10-22')

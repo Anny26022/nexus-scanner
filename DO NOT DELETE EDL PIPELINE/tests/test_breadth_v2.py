@@ -594,6 +594,32 @@ class BreadthV2Tests(unittest.TestCase):
         prepared = prepare_history(incomplete, self.methodology)
         self.assertTrue(pd.isna(prepared.loc[24, "Prior_20_High"]))
 
+    def test_breakouts_resolve_five_sessions_later_as_held_or_failed(self):
+        def breakout(later_close):
+            # Flat at 100 (highs 101), a close of 110 clears the 20-day high, then five sessions on it closes at later_close.
+            return prepare_history(make_ohlcv([100.0] * 25 + [110.0, 108.0, 107.0, 106.0, 105.0, later_close]), self.methodology)
+        held, failed = breakout(105.0), breakout(100.0)
+        self.assertTrue(held.loc[25, "Breakout_20d"])
+        self.assertFalse(held.loc[29, "Breakout_Resolved"])
+        self.assertTrue(held.loc[30, "Breakout_Resolved"] and held.loc[30, "Breakout_Held"])
+        self.assertTrue(failed.loc[30, "Breakout_Resolved"])
+        self.assertFalse(failed.loc[30, "Breakout_Held"])
+        accumulator = BreadthAccumulator(self.methodology)
+        accumulator.update(held)
+        accumulator.update(failed)
+        last = accumulator.records()[-1]
+        self.assertEqual((last["breakout_resolved_5d"], last["breakout_held_5d"]), (2, 1))
+
+    def test_stages_count_price_against_the_150_day_average(self):
+        rising = prepare_history(make_ohlcv([100.0 + index for index in range(160)]), self.methodology)
+        falling = prepare_history(make_ohlcv([300.0 - index for index in range(160)]), self.methodology)
+        self.assertFalse(rising.loc[148, ["Stage_1", "Stage_2", "Stage_3", "Stage_4"]].any())
+        accumulator = BreadthAccumulator(self.methodology)
+        accumulator.update(rising)
+        accumulator.update(falling)
+        last = accumulator.records()[-1]
+        self.assertEqual([last[f"stage_{stage}"] for stage in (1, 2, 3, 4)], [0, 1, 0, 1])
+
     def test_volume_contributions_and_gate_namespace_are_auditable(self):
         accumulator = BreadthAccumulator(self.methodology, include_contributions=True)
         accumulator.update(prepare_history(make_ohlcv([100, 101]), self.methodology), "TEST")

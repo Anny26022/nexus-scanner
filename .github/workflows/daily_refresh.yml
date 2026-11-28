@@ -113,6 +113,21 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: python frontend/site_data.py pull
 
+      - name: Refresh optional Earnings Pulse history
+        continue-on-error: true
+        # Usually ~10 s; capped so a slow provider cannot hold up the release (the index is replaced atomically,
+        # so a stopped run leaves the previous one for the build).
+        timeout-minutes: 3
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        # Before the build, so a filing Pulse first lists today reaches the Earnings scans in this run's release.
+        # India's calendar only; the US refresh keeps the US one (us_daily_refresh.yml).
+        run: python frontend/earningspulse_history.py --markets IN
+
       - name: Fetch refresh inputs
         id: fetch
         env:
@@ -174,18 +189,6 @@ jobs:
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
           R2_BUCKET: nexus-screener-chart-data
         run: python tools/pipeline_state.py push
-
-      - name: Refresh optional Earnings Pulse history
-        continue-on-error: true
-        timeout-minutes: 25
-        env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
-          R2_BUCKET: nexus-screener-chart-data
-        # India's calendar only; the US refresh keeps the US one (us_daily_refresh.yml).
-        run: python frontend/earningspulse_history.py --markets IN
 
       - name: Fetch and publish Earnings Pulse Heatmap
         continue-on-error: true

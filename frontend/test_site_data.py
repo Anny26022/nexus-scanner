@@ -1,4 +1,6 @@
 import gzip
+import io
+from contextlib import redirect_stderr
 import json
 import os
 import shutil
@@ -206,6 +208,13 @@ class SiteDataTests(unittest.TestCase):
         (self.output / 'stocks.json').write_text('{}')
         with self.assertRaisesRegex(RuntimeError, 'Not a published pointer'):
             site_data.upload_pointer(FakeStore(), self.output, 'stocks.json')
+
+    def test_pointer_commands_refuse_an_unserved_name_before_reading_anything(self):
+        with patch('site_data.missing_r2_settings', return_value=[]), \
+                patch('site_data.R2Store', side_effect=AssertionError('R2 opened')):
+            for action in ('pull-pointer', 'push-pointer'):
+                with self.subTest(action=action), redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                    site_data.main([action, 'stocks.json'])
 
     def test_pointer_list_matches_the_worker_allowlist(self):
         worker = (Path(__file__).resolve().parents[1] / 'workers/screener-ai/siteData.ts').read_text()

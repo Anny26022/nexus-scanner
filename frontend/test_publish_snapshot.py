@@ -1,5 +1,6 @@
 import gzip
-from contextlib import ExitStack, nullcontext
+from contextlib import ExitStack, nullcontext, redirect_stdout
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -286,14 +287,21 @@ class SnapshotPublicationTests(unittest.TestCase):
 
     def test_a_failed_cleanup_after_go_live_does_not_fail_the_publication(self):
         # current.json is already live by then: a cleanup error warns, and one cleanup's failure skips not the other.
+        seen = {}
+        def retain(output, revision, previous):
+            # Cleanup runs only once publish_site has written the new current.json.
+            seen['current'] = json.loads((output / 'current.json').read_text())['revision']
+            raise OSError('disk')
         with tempfile.TemporaryDirectory() as folder, patch('publish_snapshot.list_presets', return_value=[{'id': 'lib-easy-money'}]), \
-                patch('publish_snapshot.retain_revisions', side_effect=OSError('disk')) as retain, \
-                patch('publish_snapshot.prune_etf_snapshots') as prune:
+                patch('publish_snapshot.retain_revisions', side_effect=retain), \
+                patch('publish_snapshot.prune_etf_snapshots') as prune, \
+                redirect_stdout(io.StringIO()) as printed:
             root = Path(folder) / 'edl'; root.mkdir(); output = Path(folder) / 'public'; self.fixture(root)
             manifest = publish(root, output)
-            retain.assert_called_once()
             prune.assert_called_once()
+            self.assertEqual(seen['current'], manifest['revision'])
             self.assertEqual(json.loads((output / 'current.json').read_text())['revision'], manifest['revision'])
+        self.assertIn("::warning::Post-publication revision retention failed: OSError('disk')", printed.getvalue())
 
     def fixture(self, root, cap=5000):
         stocks=[{'symbol':'TEST','name':'Test','close':100,'open':99,'high':101,'low':98,'volume':200,'as_of_date':'2026-09-30',

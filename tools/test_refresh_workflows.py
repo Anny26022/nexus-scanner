@@ -306,13 +306,19 @@ class RefreshWorkflowTests(unittest.TestCase):
         import sys, tempfile, types
         sys.path.insert(0, str(ROOT / 'tools'))
         import upload_snapshots
-        stored = {}
+        stored, heads = {}, []
+
+        class Missing(Exception):
+            response = {'ResponseMetadata': {'HTTPStatusCode': 404}, 'Error': {'Code': '404'}}
 
         class S3:
             def upload_fileobj(self, handle, bucket, key, ExtraArgs):
                 stored[key] = (handle.read(), ExtraArgs)
 
             def head_object(self, Bucket, Key):
+                heads.append(Key)
+                if Key not in stored:
+                    raise Missing()
                 return {'ContentLength': len(stored[Key][0])}
 
         env = {'R2_ACCOUNT_ID': 'a', 'R2_ACCESS_KEY_ID': 'b', 'R2_SECRET_ACCESS_KEY': 'c'}
@@ -324,10 +330,26 @@ class RefreshWorkflowTests(unittest.TestCase):
                 self.assertEqual(upload_snapshots.main([folder, 'snapshots/us', str(sentinel)]), 0)
             self.assertEqual(stored, {'snapshots/us/2026-11-20.json.gz': (b'snapshot', {'ContentType': 'application/gzip'})})
             self.assertTrue(sentinel.exists())
+            # One check that the key is free, then one readback after the upload.
+            self.assertEqual(heads, ['snapshots/us/2026-11-20.json.gz'] * 2)
+            # Archived snapshots are immutable: the same size again is left alone, another size stops the upload.
+            sentinel.unlink()
+            stored['snapshots/us/2026-11-20.json.gz'] = (b'archived', {})
+            with unittest.mock.patch.dict(sys.modules, {'boto3': types.SimpleNamespace(client=lambda *a, **k: S3())}), \
+                    unittest.mock.patch.dict(os.environ, env):
+                self.assertEqual(upload_snapshots.main([folder, 'snapshots/us', str(sentinel)]), 0)
+                self.assertEqual(stored['snapshots/us/2026-11-20.json.gz'][0], b'archived')
+                stored['snapshots/us/2026-11-20.json.gz'] = (b'other content', {})
+                with self.assertRaises(SystemExit):
+                    upload_snapshots.main([folder, 'snapshots/us', str(sentinel)])
+            self.assertEqual(stored['snapshots/us/2026-11-20.json.gz'][0], b'other content')
         # The US backfill runs the same tool into its own prefix and sentinel.
         job, = document('.github/workflows/us_backfill_historical_snapshots.yml')['jobs'].values()
         upload = next(step for step in job['steps'] if step['name'] == 'Upload to Cloudflare R2')['run']
         self.assertEqual(upload.strip(), 'python tools/upload_snapshots.py outputs/historical_snapshots/us snapshots/us .upload_verified_us')
+        # The manifest is published on the same sentinel the uploader writes.
+        publish = next(step for step in job['steps'] if step['name'] == 'Publish Updated US Sessions Manifest')
+        self.assertEqual(publish['if'], "${{ hashFiles('.upload_verified_us') != '' }}")
 
 if __name__ == '__main__':
     unittest.main()

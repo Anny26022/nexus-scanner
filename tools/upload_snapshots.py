@@ -4,12 +4,25 @@
     python tools/upload_snapshots.py outputs/historical_snapshots/us snapshots/us .upload_verified_us
 
 Each `<source>/*.json.gz` goes to `<prefix>/<name>` with the daily archive's metadata (frontend/session_history.py)
-and is checked by size. The sentinel is written only once every file is up, so the workflow publishes the sessions
+and is checked by size. Archived snapshots are immutable, as the daily archive's `--immutable` upload keeps them: a
+key that already holds a snapshot of the same size is left as it is, and one of another size stops the upload. The sentinel is written only once every file is up, so the workflow publishes the sessions
 manifest only then. No snapshots (every date already archived, or none traded) is a successful no-op without one.
 """
 import glob
 import os
 import sys
+
+
+def stored_size(s3, bucket, key):
+    """The size of the object at `key`, or None when there is none."""
+    try:
+        return s3.head_object(Bucket=bucket, Key=key).get('ContentLength')
+    except Exception as error:
+        status = getattr(error, 'response', {}).get('ResponseMetadata', {}).get('HTTPStatusCode')
+        code = getattr(error, 'response', {}).get('Error', {}).get('Code')
+        if status == 404 or code in ('404', 'NoSuchKey', 'NotFound'):
+            return None
+        raise
 
 
 def main(argv=None):
@@ -33,6 +46,13 @@ def main(argv=None):
     for filepath in snapshots:
         key = f'{prefix}/{os.path.basename(filepath)}'
         file_size = os.path.getsize(filepath)
+        existing = stored_size(s3, bucket_name, key)
+        if existing == file_size:
+            print(f'{key} is already archived; left as it is')
+            continue
+        if existing is not None:
+            sys.exit(f'{key} is already archived with different content ({existing} bytes, this run has {file_size}); '
+                     'archived snapshots are never replaced')
         with open(filepath, 'rb') as handle:
             s3.upload_fileobj(handle, bucket_name, key, ExtraArgs={'ContentType': 'application/gzip'})
         head = s3.head_object(Bucket=bucket_name, Key=key)

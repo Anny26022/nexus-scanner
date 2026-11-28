@@ -30,6 +30,8 @@ from theme_classification import (classify, consolidated_classification, SOURCE_
                                   WEB_OVERRIDES_PATH as THEME_WEB_OVERRIDES_PATH)
 from pipeline_utils import resource_path
 from public_payload import public, public_ipos
+from earnings_signals import earnings_signals, merge_results_dates, next_results, pulse_dates
+from edl_pipeline.markets.us.earnings import load_pulse
 from market_overview import benchmark_series, index_closes, market_overview
 import rotation_history
 
@@ -214,6 +216,9 @@ def _stock_row(task, context, session, presets, default, memo_keys):
         for field in ('sma20', 'sma50', 'sma200', 'ema20', 'ema50', 'ema200'):
             row[field] = metrics.get(field, row.get(field))
         row['daysSinceEarnings'] = metrics.get('DAYS_SINCE_EARNINGS')
+        # The Earnings scans' inputs: quarterly growth streaks, the results-day reaction and the next results date.
+        row['earnings'] = earnings_signals(stock, frame if aligned else None, session, (context.get('next_results') or {}).get(symbol),
+                                           (context.get('pulse_dates') or {}).get(symbol))
         row['presetRuleMatches']={key:evaluate(node['expression']) for key,node in presets.items()}
         row['presetMatches']={key:evaluate(node) for key,node in presets.items()}
         default_match = evaluate(default) is True
@@ -277,6 +282,10 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     source_bytes={p.name:p.read_bytes() for p in source_files}
     context=bridge._load_context(root)
     session=context['financial_history_as_of']
+    context['next_results']=next_results(source_bytes.get('earnings_calendar.json.gz'), session)
+    # Earnings Pulse's India archive (site_data.py pull fetched its index): results dates the filings feed missed.
+    context['pulse_dates']=pulse_dates(load_pulse(index_path=output/'results/index.json', latest=2), session)
+    merge_results_dates(context['stocks'], context['pulse_dates'])
     presets={p['id']:bridge.translate(p['id'],{}) for p in list_presets()}
     default=bridge.group('AND',bridge.translate('mom_rvol',{'minRvol':1.5,'maxRvol':20}),bridge.translate('trend_price_vs_ma',{'maType':'SMA','maPeriod':50,'operator':'above','thresholdPct':0}))
     lookback=delivery_lookback([*presets.values(),default])
@@ -349,11 +358,14 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     code_files.append(resource_path('stockscans_classification.json'))
     code_files.extend([Path(__file__).with_name('etf_snapshot.py'), resource_path('etf_fields.json'), resource_path('etf_enum_labels.json')])
     code_files.extend([TRADINGVIEW_FIELDS_PATH, Path(__file__).with_name('public_payload.py'), Path(__file__).with_name('rotation_history.py')])
+    code_files.extend([Path(__file__).with_name('earnings_signals.py'), Path(load_pulse.__code__.co_filename)])
     digest=hashlib.sha256()
     for name, data in {**source_bytes,**delivery_bytes}.items():
         digest.update(name.encode()); digest.update(data)
     for file in code_files:
         digest.update(file.name.encode()); digest.update(file.read_bytes())
+    # Earnings Pulse's results dates are downloaded during the publish, not read from source_bytes.
+    digest.update(json.dumps(context.get('pulse_dates') or {}, sort_keys=True).encode())
     digest.update(b'charts-enabled' if include_charts else b'scanner-only')
     # The output hash covers dated eligibility, membership and benchmark inputs as well as prices.
     digest.update((rotation_hash or 'no-rotation').encode())
@@ -416,8 +428,9 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     (generation/'chart-directory.json.gz').write_bytes(gzip.compress(
         json.dumps(directory, separators=(',', ':'), allow_nan=False).encode(), mtime=0))
     # Keep the full financial series out of every lightweight scanner row.
-    histories = {symbol: public(stock["financial_statement_history"]) for symbol, stock in context['stocks'].items()
-                 if stock.get("financial_statement_history")}
+    # Standalone quarters are only the Earnings scans' fallback (earnings_signals.py); published history stays consolidated.
+    histories = {symbol: public({key: value for key, value in stock["financial_statement_history"].items() if key != "standalone_quarterly"})
+                 for symbol, stock in context['stocks'].items() if stock.get("financial_statement_history")}
     history_path = generation/'financial-history.json.gz'
     history_temporary = history_path.with_name(history_path.name+'.tmp')
     history_temporary.write_bytes(gzip.compress(json.dumps(histories, separators=(',', ':'), allow_nan=False).encode(), mtime=0))

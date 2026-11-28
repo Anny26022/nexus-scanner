@@ -27,6 +27,7 @@ import scanner_bridge as bridge
 from scanner_cache import ScannerCache
 from packed_snapshot import pack_snapshot
 from publish_snapshot import OUTPUT, stock_rows, write_json
+from earnings_signals import merge_results_dates, next_results, pulse_dates
 from session_history import register_session
 from public_payload import public
 from market_overview import index_closes, market_overview
@@ -40,6 +41,7 @@ from edl_pipeline.markets import UNITED_STATES
 from edl_pipeline.markets.us.tradingview import API_URL as TRADINGVIEW_US
 from edl_pipeline.markets.us.calendar import sessions_after
 from edl_pipeline.markets.us import finviz
+from edl_pipeline.markets.us.earnings import load_pulse
 
 POINTER = 'us/current.json'
 # The Market page's index cards: the benchmark ETFs the US root keeps as its indices, in display order.
@@ -414,6 +416,10 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     source_bytes = {path.name: path.read_bytes() for path in sorted(root.glob('*.json.gz'))
                     if path.name != rotation_history.LEDGER_NAME}
     histories = load_financial_history(root, source_bytes, session)
+    context['next_results'] = next_results(source_bytes.get('earnings_calendar.json.gz'), session)
+    # The Earnings Pulse US archive the workflow copied into the root (tools/us_state.py pulse).
+    context['pulse_dates'] = pulse_dates(load_pulse(root), session)
+    merge_results_dates(context['stocks'], context['pulse_dates'])
     for sym, hist in histories.items():
         if sym in context['stocks']:
             context['stocks'][sym]['financial_statement_history'] = hist

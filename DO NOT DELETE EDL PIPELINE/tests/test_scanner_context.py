@@ -119,6 +119,16 @@ class ScannerContextTests(unittest.TestCase):
         self.assertEqual(strict["status"], "unavailable")
         self.assertEqual(strict["conditions"][0]["details"]["reason"], "consolidated_earnings_unavailable")
 
+    def test_growth_figures_age_by_their_own_announcement_not_a_later_merged_results_date(self):
+        # The publisher moved the results date on to a filing the growth figures do not cover yet.
+        stock = {"symbol": "TEST", "as_of_date": "2026-02-24", "latest_earnings_date": "2026-02-20",
+                 "statement_earnings_date": "2025-05-01", "earnings_report_type": "CONSOLIDATED", "yoy_percent_net_profit_latest": 25}
+        rule = [{"kind": "EARNINGS_GROWTH", "params": {"metric": "NET_PROFIT", "basis": "YOY", "comparison": "ABOVE", "pct": 10}}]
+        stale = evaluate_history(history(), rule, context={"stock": stock})
+        self.assertEqual(stale["conditions"][0]["details"]["reason"], "earnings_filing_too_old")
+        del stock["statement_earnings_date"]
+        self.assertEqual(evaluate_history(history(), rule, context={"stock": stock})["status"], "match")
+
     def test_fno_ban_parser_accepts_an_empty_report_and_symbols(self):
         self.assertEqual(parse_report("Securities in Ban For Trade Date 28-SEP-2026:\n"), ("2026-09-28", []))
         self.assertEqual(parse_symbols("Securities in Ban For Trade Date 28-SEP-2026:\n1,KAYNES\n2,LICHSGFIN\n"), ["KAYNES", "LICHSGFIN"])

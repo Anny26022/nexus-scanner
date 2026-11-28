@@ -8,13 +8,16 @@ checked by content as the daily archive's read-back is. Snapshots are a few MB, 
 MD5 (R2 refuses a body that does not match it), and the stored object's ETag, the MD5 of its bytes, must equal it.
 
 Archived snapshots are immutable, as the daily archive's `--immutable` upload keeps them: a key that already holds
-these bytes is left as it is, and one holding anything else stops the upload. (An object whose ETag is not a plain
-MD5, from a multipart upload, is compared by size.) The sentinel is written only once every file is up, so the
+this snapshot is left as it is, and one holding anything else stops the upload. "This snapshot" is the same bytes, or
+the same content under a different gzip header: India's generator stamps the time into each file, so a backfill
+re-run after a part-way failure produces new bytes for sessions it already uploaded. (An object whose ETag is not a
+plain MD5, from a multipart upload, is compared by size.) The sentinel is written only once every file is up, so the
 workflow publishes the sessions manifest only then. No snapshots (every date already archived, or none traded) is a
 successful no-op without one.
 """
 import base64
 import glob
+import gzip
 import hashlib
 import os
 import re
@@ -45,6 +48,14 @@ def holds(head, data, md5):
     return tag == md5 if PLAIN_MD5.fullmatch(tag) else head.get('ContentLength') == len(data)
 
 
+def same_snapshot(s3, bucket, key, data):
+    """Whether the stored object decompresses to what `data` does."""
+    try:
+        return gzip.decompress(s3.get_object(Bucket=bucket, Key=key)['Body'].read()) == gzip.decompress(data)
+    except (OSError, EOFError):  # one of them is not gzip: only identical bytes would have matched
+        return False
+
+
 def main(argv=None):
     source, prefix, sentinel = (argv if argv is not None else sys.argv[1:])
     account_id = os.environ.get('R2_ACCOUNT_ID')
@@ -71,7 +82,7 @@ def main(argv=None):
         md5 = digest.hexdigest()
         existing = stored(s3, bucket_name, key)
         if existing is not None:
-            if holds(existing, data, md5):
+            if holds(existing, data, md5) or same_snapshot(s3, bucket_name, key, data):
                 print(f'{key} is already archived; left as it is')
                 continue
             sys.exit(f'{key} is already archived with different content (ETag {etag(existing)}, '

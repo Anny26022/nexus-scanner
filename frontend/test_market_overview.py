@@ -37,7 +37,7 @@ class MarketOverviewTest(unittest.TestCase):
                                   'all_indices_history_v2.json.gz': gz({'indices': [{'symbol': 'NIFTY SMALLCAP 100', 'records': closes}]})}, '2026-10-22')
         self.assertEqual({key: result['breadth'][0][key] for key in record if key != 'date'}, {key: value for key, value in record.items() if key != 'date'})
         # Closes up to the session only, and no index card for it.
-        self.assertEqual(result['indexHistory'], {'NIFTY SMALLCAP 100': [100 + day for day in range(1, 23)]})
+        self.assertEqual(result['indexHistory'], {'NIFTY SMALLCAP 100': [100 + day for day in range(1, 23)]})  # only indices present
         self.assertEqual(result['indices'], [])
 
     def test_drops_non_finite_and_boolean_numbers(self):

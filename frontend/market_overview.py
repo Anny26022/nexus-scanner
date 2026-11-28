@@ -22,8 +22,9 @@ BREADTH_FIELDS = (
 SECTOR_FIELDS = (
     'stock_count', 'above_sma20_percent', 'above_sma50_percent', 'above_sma200_percent', 'near_52w_high_5_percent',
 )
-# Longer close histories the market page reads but does not show as cards: small caps' stretch from their 50-day average.
-HISTORY_INDICES = ('NIFTY SMALLCAP 100',)
+# A year of closes the market page charts against (Nifty 500 behind each breadth chart; large, mid and small caps
+# side by side) and reads for small caps' stretch from their 50-day average.
+HISTORY_INDICES = ('NIFTY', 'NIFTY 500', 'NIFTY MIDCAP 150', 'NIFTY SMALLCAP 250', 'NIFTY SMALLCAP 100')
 # Benchmarks shown as index cards, in display order.
 KEY_INDICES = (
     'NIFTY', 'SENSEX', 'BANKNIFTY', 'NIFTY 500', 'NIFTY MIDCAP 150', 'NIFTY SMALLCAP 250', 'NIFTY MIDSMALLCAP 400', 'FINNIFTY',

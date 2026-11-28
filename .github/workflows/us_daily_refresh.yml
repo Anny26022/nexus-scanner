@@ -93,16 +93,20 @@ jobs:
           exit "$status"
 
       # Pushed before publication too: a run that times out or is cancelled during the R2 upload ends before any later
-      # step, and would otherwise lose every history this run fetched. The current R2 copy moves to previous/ first.
+      # step, and would otherwise lose every history this run fetched. The current R2 copy moves to previous/ first, but
+      # only after a build that passed its release checks with a new session: a failed or no-op run keeps previous/ as
+      # the last good state, so two bad runs in a row cannot replace it.
       - name: Push US state to R2
         if: always() && steps.build.outcome != 'skipped'
         env:
+          BUILD_GOOD: ${{ steps.build.outcome == 'success' && steps.build.outputs.ready == 'true' }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
           R2_BUCKET: nexus-screener-chart-data
-        run: python tools/us_state.py push
+        run: |
+          if [ "$BUILD_GOOD" = "true" ]; then python tools/us_state.py push; else python tools/us_state.py push --keep-previous; fi
 
       - name: Fetch US ETF snapshot
         if: steps.build.outputs.ready == 'true'
@@ -124,7 +128,8 @@ jobs:
           R2_BUCKET: nexus-screener-chart-data
         run: python frontend/publish_us.py
 
-      # The publish step advances the rotation ledger; only that file is pushed again.
+      # The publish step advances the rotation ledger; only that file is pushed again, leaving previous/ as the first
+      # push of this run set it.
       - name: Push the rotation ledger to R2
         if: always() && (steps.publish.outcome == 'success' || steps.publish.outcome == 'failure')
         env:
@@ -133,4 +138,4 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
           R2_BUCKET: nexus-screener-chart-data
-        run: python tools/us_state.py push rotation_membership_ledger.json.gz
+        run: python tools/us_state.py push --keep-previous rotation_membership_ledger.json.gz

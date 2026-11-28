@@ -143,6 +143,17 @@ jobs:
         with:
           phase: build
 
+      # Only after a successful build, and straight after it: the release is already live, so a later optional or index
+      # step that fails must not leave R2 state a session behind it. A failed push stops the run before the commit.
+      - name: Push pipeline state to R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          R2_BUCKET: nexus-screener-chart-data
+        run: python tools/pipeline_state.py push
+
       - name: Refresh optional Earnings Pulse history
         continue-on-error: true
         timeout-minutes: 25
@@ -185,16 +196,6 @@ jobs:
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
           R2_BUCKET: nexus-screener-chart-data
         run: python frontend/site_data.py push-indexes
-
-      # Only after a successful build; a failed push stops the run before anything is committed.
-      - name: Push pipeline state to R2
-        env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
-          R2_BUCKET: nexus-screener-chart-data
-        run: python tools/pipeline_state.py push
 
       - name: Commit and Push Results
         uses: ./.github/actions/commit-refresh-outputs

@@ -504,12 +504,16 @@ def publish(root=bridge.ROOT, output=OUTPUT, *, workers=0):
     register_session(output / 'sessions.json', session_record)
     # The site reads /data from R2: revision files, the AI catalogue, sessions, and current.json last.
     publish_site(output, manifest)
-    # Only once the new release is live: keep it and the one tabs may still be on.
-    if previous_revision != manifest['revision']:
-        removed = retain_revisions(output, manifest['revision'], previous_revision)
-        if removed:
-            print(f'Removed {len(removed)} superseded scanner revisions from the served release', flush=True)
-    prune_etf_snapshots(output, revision)
+    # Only once the new release is live: keep it and the one tabs may still be on. Local tidying only, so a failure
+    # warns: raising here would roll back the local promotion and stop the state push of a release already live.
+    try:
+        if previous_revision != manifest['revision']:
+            removed = retain_revisions(output, manifest['revision'], previous_revision)
+            if removed:
+                print(f'Removed {len(removed)} superseded scanner revisions from the served release', flush=True)
+        prune_etf_snapshots(output, revision)
+    except Exception as error:
+        print(f'::warning::Post-publication cleanup failed; the release is live: {error!r}', flush=True)
     elapsed('release completion', started)
     print(f'Published scanner revision {revision[:12]}: {len(rows)} stocks, {len(presets)} presets',flush=True)
     return manifest

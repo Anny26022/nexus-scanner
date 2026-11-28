@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # This checks more than the artifact allowlist: environments, conditions, timeouts,
 # cache keys, EOD2 policies, Tijori work and diagnostic uploads must stay identical.
 BASELINES = {
-    "daily_refresh.yml": "50dcebc4e602fc79459072d614c1e6dd6c5078eae785db2d38521978899b0a0b",
-    "weekly_eod2_refresh.yml": "0ac2167db814f1dc46a036bd94c81aa7b7ac01afabdbfd024e85a18065c66fda",
+    "daily_refresh.yml": "5230a20e0e862a14493a714becd2fdabc304f310925a6462385fb58d050d9743",
+    "weekly_eod2_refresh.yml": "e7e42cf28ce9343b3da04d232ff1390986b63f170ef8a8412cb8f89b6907a7bc",
 }
 
 
@@ -239,6 +239,9 @@ class RefreshWorkflowTests(unittest.TestCase):
                 self.assertLess(pull, names.index('Fetch refresh inputs'))
                 self.assertLess(names.index('Build and publish validated data'), push)
                 self.assertLess(push, names.index('Commit and Push Results'))
+                # Straight after the build, which has already made the release live: a later optional or index
+                # step that fails must not leave R2 state a session behind.
+                self.assertEqual(push, names.index('Save history after build') + 1)
                 step = job['steps'][push]
                 # Default success(): a failed build never pushes, and a failed push stops the commit.
                 self.assertNotIn('if', step)

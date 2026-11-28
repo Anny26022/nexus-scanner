@@ -78,6 +78,34 @@ class StateTests(unittest.TestCase):
         us_state.push(self.store, second, ['ohlcv_data'])
         self.assertTrue((self.tmp / 'bucket' / us_state.PREFIX / 'previous' / 'ohlcv_data.tar.gz').exists())
 
+    def test_keep_previous_leaves_the_last_good_copy_in_previous(self):
+        first = self.root('first')
+        us_state.pull(self.store, first)
+        self.seed(first)
+        us_state.push(self.store, first)
+        (first / 'ohlcv_data' / 'AAPL.csv').write_text('good run')
+        us_state.push(self.store, first, ['ohlcv_data'])  # a good run: the first copy moves to previous/
+        previous = self.tmp / 'bucket' / us_state.PREFIX / 'previous' / 'ohlcv_data.tar.gz'
+        good = previous.read_bytes()
+        for text in ('bad run', 'no-op run'):
+            (first / 'ohlcv_data' / 'AAPL.csv').write_text(text)
+            us_state.push(self.store, first, ['ohlcv_data'], keep_previous=True)
+        self.assertEqual(previous.read_bytes(), good)
+        second = self.root('second')
+        us_state.pull(self.store, second)
+        self.assertEqual((second / 'ohlcv_data' / 'AAPL.csv').read_text(), 'no-op run')  # the current copy still moves on
+
+    def test_a_half_written_temp_file_is_not_carried(self):
+        first = self.root('first')
+        us_state.pull(self.store, first)
+        self.seed(first)
+        (first / 'ohlcv_data' / 'AAPL.csv.tmp').write_text('cut short')
+        us_state.push(self.store, first)
+        second = self.root('second')
+        us_state.pull(self.store, second)
+        self.assertTrue((second / 'ohlcv_data' / 'AAPL.csv').exists())
+        self.assertFalse((second / 'ohlcv_data' / 'AAPL.csv.tmp').exists())
+
     def test_a_root_that_was_not_pulled_never_overwrites_r2(self):
         root = self.root('fresh')
         (root / 'ohlcv_data').mkdir(parents=True)

@@ -43,7 +43,7 @@ runs:
         for attempt in 1 2 3 4 5; do
           commit_on_latest_main
           if git push; then exit 0; fi
-          sleep $((attempt * 10))
+          if [ "$attempt" -lt 5 ]; then sleep $((attempt * 10)); fi
         done
         echo "::error::Could not push the refresh commit after 5 attempts."
         exit 1

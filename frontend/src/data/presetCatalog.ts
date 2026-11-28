@@ -1,12 +1,13 @@
 import { ConditionDef, ConditionCategory } from '../types/screener';
 import definitions from './presetDefinitions.json';
 import recipes from './scanRecipes.json';
+import { isEarningsCondition } from '../api/earningsConditions';
 
 const categories: Record<string, ConditionCategory> = {
   'Top Gainers': 'momentum', 'Momentum & Leadership': 'momentum', Breakouts: 'trend',
   'Bases & Contraction': 'range', 'Pullbacks & Reclaims': 'trend',
   'Volume & Delivery': 'momentum', Gaps: 'momentum', Reversals: 'relative_strength',
-  'Earnings & Value': 'fundamentals', 'Regime & Universe': 'liquidity',
+  Earnings: 'fundamentals', 'Regime & Universe': 'liquidity',
 };
 
 export interface RecipeCondition { type: 'condition'; kind: string; params: Record<string, unknown> }
@@ -18,9 +19,13 @@ export interface LibraryScan {
   description: string; rules: string[]; aka: string[];
   /** Recipes run in the browser from native filters; the rest are matched by the daily pipeline. */
   recipe?: RecipeGroup;
+  /** A recipe's own eligibility floors in place of the library's defaults (null drops one). */
+  eligibility?: Record<string, number | null>;
 }
 
-export const SCAN_CATEGORIES = ['Top Gainers', ...new Set(definitions.map(p => p.category))];
+/** Everything on results: the scans on quarterly growth and the results-day reaction (India and US), then the earnings presets. */
+export const EARNINGS_CATEGORY = 'Earnings';
+export const SCAN_CATEGORIES = [...new Set(['Top Gainers', EARNINGS_CATEGORY, ...definitions.map(p => p.category)])];
 
 export const SCAN_LIBRARY: LibraryScan[] = [
   ...(recipes as unknown as (LibraryScan & {expression: RecipeGroup})[]).map(({expression, ...scan}) => ({...scan, recipe: expression})),
@@ -36,6 +41,8 @@ export const POPULAR_SCANS = ['scan-top-gainers-1m', 'scan-top-gainers-3m', 'sca
 export const RANK_KIND = 'PERFORMANCE_RANK';
 
 export const RECIPES: ReadonlyMap<string, RecipeGroup> = new Map(SCAN_LIBRARY.flatMap(scan => scan.recipe ? [[scan.id, scan.recipe]] : []));
+/** Recipes that set their own eligibility floors. */
+export const RECIPE_ELIGIBILITY: ReadonlyMap<string, Record<string, number | null>> = new Map(SCAN_LIBRARY.flatMap(scan => scan.eligibility ? [[scan.id, scan.eligibility]] : []));
 
 /** Published daily metrics a recipe reads (the extended-metric `metric` ids), so the library knows what a snapshot lacks. */
 export function recipeMetrics(id: string): string[] {
@@ -45,6 +52,12 @@ export function recipeMetrics(id: string): string[] {
   return recipe ? walk(recipe) : [];
 }
 export const recipeUsesExtended = (id: string) => recipeMetrics(id).length > 0;
+/** A recipe built on the rows' published `earnings` facts, which older snapshots do not carry. */
+export function recipeUsesEarnings(id: string): boolean {
+  const walk = (node: RecipeGroup | RecipeCondition): boolean => node.type === 'group' ? node.children.some(walk) : isEarningsCondition(node.kind);
+  const recipe = RECIPES.get(id);
+  return !!recipe && walk(recipe);
+}
 /** Ranked scans order their results by the metric they rank on. */
 export function rankedMetric(id: string): string | null {
   const walk = (node: RecipeGroup | RecipeCondition): string | null => node.type === 'group'

@@ -300,5 +300,267 @@
         }
       ]
     }
+  },
+  {
+    "id": "scan-earnings-results-today",
+    "category": "Earnings",
+    "horizon": "Swing",
+    "name": "Results Today",
+    "description": "Stocks declaring quarterly results today: a results date on the calendar for today, or results already filed today.",
+    "rules": [
+      "Results scheduled for today, or filed today"
+    ],
+    "aka": [
+      "results today",
+      "earnings today",
+      "results calendar"
+    ],
+    "eligibility": {
+      "minMarketCapCr": null,
+      "minPrice": null,
+      "minTurnoverCr": null
+    },
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "RESULTS_DUE",
+          "params": {
+            "daysAhead": 0
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-earnings-gap",
+    "category": "Earnings",
+    "horizon": "Swing",
+    "name": "Earnings Gap",
+    "description": "Gapped up on results, held the gap through the day and has not filled it since. Buyers stepped in on the news.",
+    "rules": [
+      "Gapped up at least 5% on results, within the last 30 sessions",
+      "Closed at least 5% up, at or above its open",
+      "No low since has filled the gap"
+    ],
+    "aka": [
+      "earnings gap",
+      "results gap",
+      "gap up on results"
+    ],
+    "eligibility": {
+      "minMarketCapCr": null,
+      "minPrice": null,
+      "minTurnoverCr": null
+    },
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "EARNINGS_GAP",
+          "params": {
+            "window": 30,
+            "minGapPct": 5,
+            "minClosePct": 5,
+            "gapHold": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-earnings-episodic-pivot",
+    "category": "Earnings",
+    "horizon": "Swing",
+    "name": "Episodic Pivot",
+    "description": "A big up day on results that closed near the day's high: real buying on the news, not a spike that got sold.",
+    "rules": [
+      "Up at least 10% on results, within the last 30 sessions",
+      "Closed in the top quarter of the day's range"
+    ],
+    "aka": [
+      "episodic pivot",
+      "EP",
+      "earnings move",
+      "results breakout"
+    ],
+    "eligibility": {
+      "minMarketCapCr": null,
+      "minPrice": null,
+      "minTurnoverCr": null
+    },
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "EARNINGS_MOVE",
+          "params": {
+            "window": 30,
+            "minMovePct": 10,
+            "minClosePos": 0.75
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-earnings-eps-doublers",
+    "category": "Earnings",
+    "horizon": "Positional",
+    "name": "EPS Doublers",
+    "description": "The latest quarter shows EPS, sales and net profit all up sharply from a year ago. Listed for 30 sessions after the results.",
+    "rules": [
+      "EPS up at least 100% year on year",
+      "Sales and net profit each up at least 50% year on year",
+      "Declared within the last 30 sessions; year-ago EPS at least 0.1"
+    ],
+    "aka": [
+      "eps doublers",
+      "earnings explosion",
+      "blowout quarter"
+    ],
+    "eligibility": {
+      "minMarketCapCr": null,
+      "minPrice": null,
+      "minTurnoverCr": null
+    },
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "EPS_BLOWOUT",
+          "params": {
+            "window": 30,
+            "minEpsPct": 100,
+            "minSalesPct": 50,
+            "minPatPct": 50,
+            "minBaseEps": 0.1,
+            "maxBehind": 1
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-earnings-code-33",
+    "category": "Earnings",
+    "horizon": "Positional",
+    "name": "Code 33",
+    "description": "Sales growth, EPS growth and net margin all rising for three quarters in a row, each against the same quarter a year ago. Tiny and loss-making bases are left out.",
+    "rules": [
+      "Sales growth, EPS growth and net margin each rising three quarters running (year on year)",
+      "Latest EPS growth at least 20%; year-ago EPS at least 0.5",
+      "No one-off tax-credit quarter"
+    ],
+    "aka": [
+      "code 33",
+      "code33",
+      "earnings acceleration"
+    ],
+    "eligibility": {
+      "minMarketCapCr": null,
+      "minPrice": null,
+      "minTurnoverCr": null
+    },
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "EPS_ACCELERATION",
+          "params": {
+            "margin": "RISING",
+            "minLatestEpsPct": 20,
+            "minYearAgoEps": 0.5,
+            "minSalesPct": 0,
+            "maxBehind": 1
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-earnings-eps-accelerators",
+    "category": "Earnings",
+    "horizon": "Positional",
+    "name": "EPS Accelerators",
+    "description": "EPS growth rising for three quarters in a row on growing sales, each against the same quarter a year ago. The wider net of Code 33.",
+    "rules": [
+      "EPS growth rising three quarters running (year on year), on sales up every quarter",
+      "Latest EPS growth at least 20%; year-ago EPS at least 0.5",
+      "No one-off tax-credit quarter"
+    ],
+    "aka": [
+      "eps accelerators",
+      "accelerating earnings",
+      "earnings acceleration"
+    ],
+    "eligibility": {
+      "minMarketCapCr": null,
+      "minPrice": null,
+      "minTurnoverCr": null
+    },
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "EPS_ACCELERATION",
+          "params": {
+            "margin": "ANY",
+            "minLatestEpsPct": 20,
+            "minYearAgoEps": 0.5,
+            "minSalesPct": 0,
+            "maxBehind": 1
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "scan-earnings-turnarounds",
+    "category": "Earnings",
+    "horizon": "Positional",
+    "name": "Turnarounds",
+    "description": "A loss a year ago, a profit now, with sales growing and profit improving each quarter. Kept apart because growth % from a loss means nothing.",
+    "rules": [
+      "A loss in the same quarter a year ago, a profit now",
+      "Sales up at least 10% year on year",
+      "Net profit improving in each of the last three quarters"
+    ],
+    "aka": [
+      "turnaround",
+      "turnarounds",
+      "loss to profit"
+    ],
+    "eligibility": {
+      "minMarketCapCr": null,
+      "minPrice": null,
+      "minTurnoverCr": null
+    },
+    "expression": {
+      "type": "group",
+      "op": "AND",
+      "children": [
+        {
+          "type": "condition",
+          "kind": "TURNAROUND",
+          "params": {
+            "minSalesPct": 10,
+            "maxBehind": 1
+          }
+        }
+      ]
+    }
   }
 ]

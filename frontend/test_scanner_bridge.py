@@ -216,7 +216,7 @@ class BridgeTests(unittest.TestCase):
 
     def test_all_native_condition_defaults_execute(self):
         catalog=json.loads((Path(__file__).parent/"src/data/nativeConditions.json").read_text())
-        self.assertEqual(len(catalog),54)
+        self.assertEqual(len(catalog),61)
         for item in catalog:
             with self.subTest(condition=item["id"]):
                 params={p["id"]:p["defaultValue"] for p in item["parameters"]}

@@ -72,6 +72,45 @@ export interface ScreenerRunRequest {
   pageSize: number;
 }
 
+/** One quarter's year-on-year figures: growth in %, margin in %, profit and year-ago EPS in the release's units. */
+export interface EarningsQuarter {
+  end: string;
+  sales: number | null;
+  eps: number | null;
+  /** Profit growth and the year-ago base, sent for the latest quarter only. */
+  pat: number | null;
+  npm: number | null;
+  np: number | null;
+  np0: number | null;
+  eps0: number | null;
+  /** EPS growth from EPS, or from net profit where the share count moved. */
+  epsBasis: 'EPS' | 'PAT';
+}
+
+/** A results-day session: its age in sessions, gap, move, close in range (0–1), close against open and gap still unfilled, in %. */
+export interface EarningsReaction {
+  age: number;
+  gap: number;
+  move: number;
+  pos: number | null;
+  vsOpen: number | null;
+  unfilled: number;
+}
+
+/** As published: `q` and `reaction` are positional arrays (nexus-scanner's QUARTER_FIELDS and REACTION_FIELDS). */
+export interface EarningsFacts {
+  asOf: string;
+  q?: Array<[string, ...(number | null)[]]>;
+  behind?: number;
+  taxCredit?: boolean;
+  basis?: string;
+  declared?: string | null;
+  declaredAge?: number | null;
+  reaction?: Array<(number | null)[]> | null;
+  next?: string | null;
+  nextTiming?: 'Pre' | 'During' | 'After' | null;
+}
+
 export interface StockRow {
   etf?: Record<string, string | number | boolean | null>;
   extended?: {
@@ -121,6 +160,8 @@ export interface StockRow {
   distAthPct: number | null;
   earningsDate: string | null;
   daysSinceEarnings: number | null;
+  /** The Earnings scans' inputs, from nexus-scanner's earnings_signals.py (newer releases). */
+  earnings?: EarningsFacts | null;
   fnoBan: boolean | null;
   isFno: boolean;
   circuitLimit: string;

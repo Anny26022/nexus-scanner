@@ -1945,5 +1945,237 @@
         ]
       }
     ]
+  },
+  {
+    "id": "RESULTS_DUE",
+    "label": "Results Due",
+    "category": "fundamentals",
+    "description": "Results today, or within the next few days: a results date on the earnings calendar (or Earnings Pulse's upcoming list), or results already filed today.",
+    "parameters": [
+      {
+        "id": "daysAhead",
+        "label": "Days ahead (0 = today only)",
+        "type": "number",
+        "defaultValue": 0,
+        "unit": "d"
+      }
+    ]
+  },
+  {
+    "id": "EARNINGS_GAP",
+    "label": "Earnings Gap",
+    "category": "fundamentals",
+    "description": "Gapped up on results (the session on or after the results date, or the next), closed up and at or above its open, and no low since has filled the gap.",
+    "parameters": [
+      {
+        "id": "window",
+        "label": "Reaction within",
+        "type": "number",
+        "defaultValue": 30,
+        "unit": "sessions"
+      },
+      {
+        "id": "minGapPct",
+        "label": "Min gap",
+        "type": "number",
+        "defaultValue": 5,
+        "unit": "%"
+      },
+      {
+        "id": "minClosePct",
+        "label": "Min close up",
+        "type": "number",
+        "defaultValue": 5,
+        "unit": "%"
+      },
+      {
+        "id": "gapHold",
+        "label": "Closed at or above the open",
+        "type": "boolean",
+        "defaultValue": true
+      }
+    ]
+  },
+  {
+    "id": "EARNINGS_MOVE",
+    "label": "Earnings Move",
+    "category": "fundamentals",
+    "description": "A big up close on results (the session on or after the results date, or the next) that finished near the top of the day's range.",
+    "parameters": [
+      {
+        "id": "window",
+        "label": "Reaction within",
+        "type": "number",
+        "defaultValue": 30,
+        "unit": "sessions"
+      },
+      {
+        "id": "minMovePct",
+        "label": "Min move",
+        "type": "number",
+        "defaultValue": 10,
+        "unit": "%"
+      },
+      {
+        "id": "minClosePos",
+        "label": "Min close in range (0–1)",
+        "type": "number",
+        "defaultValue": 0.75
+      }
+    ]
+  },
+  {
+    "id": "EPS_BLOWOUT",
+    "label": "EPS, Sales & Profit Surge",
+    "category": "fundamentals",
+    "description": "The latest quarter's EPS, sales and net profit all up sharply against the same quarter a year earlier, all three at once, declared within the window. EPS is compared only where the share count did not move.",
+    "parameters": [
+      {
+        "id": "window",
+        "label": "Declared within",
+        "type": "number",
+        "defaultValue": 30,
+        "unit": "sessions"
+      },
+      {
+        "id": "minEpsPct",
+        "label": "Min EPS YoY",
+        "type": "number",
+        "defaultValue": 100,
+        "unit": "%"
+      },
+      {
+        "id": "minSalesPct",
+        "label": "Min sales YoY",
+        "type": "number",
+        "defaultValue": 50,
+        "unit": "%"
+      },
+      {
+        "id": "minPatPct",
+        "label": "Min net profit YoY",
+        "type": "number",
+        "defaultValue": 50,
+        "unit": "%"
+      },
+      {
+        "id": "minBaseEps",
+        "label": "Min year-ago EPS",
+        "type": "number",
+        "defaultValue": 0.1
+      },
+      {
+        "id": "maxBehind",
+        "label": "Max quarters behind",
+        "type": "number",
+        "defaultValue": 1
+      }
+    ]
+  },
+  {
+    "id": "EPS_ACCELERATION",
+    "label": "EPS Acceleration",
+    "category": "fundamentals",
+    "description": "EPS growth rising three quarters running on growing sales, each against the same quarter a year earlier; with Net margin set to rising, sales growth and net margin must rise too (Code 33). One-off tax-credit quarters and tiny or loss-making bases are left out.",
+    "parameters": [
+      {
+        "id": "margin",
+        "label": "Net margin",
+        "type": "select",
+        "defaultValue": "ANY",
+        "options": [
+          {
+            "value": "ANY",
+            "label": "Any"
+          },
+          {
+            "value": "RISING",
+            "label": "Rising too (Code 33)"
+          }
+        ]
+      },
+      {
+        "id": "minLatestEpsPct",
+        "label": "Min latest EPS YoY",
+        "type": "number",
+        "defaultValue": 20,
+        "unit": "%"
+      },
+      {
+        "id": "minYearAgoEps",
+        "label": "Min year-ago EPS",
+        "type": "number",
+        "defaultValue": 0.5
+      },
+      {
+        "id": "minSalesPct",
+        "label": "Min sales YoY, every quarter",
+        "type": "number",
+        "defaultValue": 0,
+        "unit": "%"
+      },
+      {
+        "id": "maxBehind",
+        "label": "Max quarters behind",
+        "type": "number",
+        "defaultValue": 1
+      }
+    ]
+  },
+  {
+    "id": "TURNAROUND",
+    "label": "Turnaround",
+    "category": "fundamentals",
+    "description": "A loss in the same quarter a year ago and a profit now, on growing sales, with net profit improving in each of the last three quarters. One-off tax-credit profits are left out.",
+    "parameters": [
+      {
+        "id": "minSalesPct",
+        "label": "Min latest sales YoY",
+        "type": "number",
+        "defaultValue": 10,
+        "unit": "%"
+      },
+      {
+        "id": "maxBehind",
+        "label": "Max quarters behind",
+        "type": "number",
+        "defaultValue": 1
+      }
+    ]
+  },
+  {
+    "id": "QUARTER_STREAK",
+    "label": "Quarterly Streak",
+    "category": "fundamentals",
+    "description": "Sales or EPS up against the same quarter a year earlier, or net profit positive, in each of the last few reported quarters.",
+    "parameters": [
+      {
+        "id": "measure",
+        "label": "Measure",
+        "type": "select",
+        "defaultValue": "SALES_UP",
+        "options": [
+          {
+            "value": "SALES_UP",
+            "label": "Sales up YoY"
+          },
+          {
+            "value": "EPS_UP",
+            "label": "EPS up YoY"
+          },
+          {
+            "value": "PROFIT_POSITIVE",
+            "label": "Net profit positive"
+          }
+        ]
+      },
+      {
+        "id": "quarters",
+        "label": "For the last",
+        "type": "number",
+        "defaultValue": 3,
+        "unit": "quarters"
+      }
+    ]
   }
 ]

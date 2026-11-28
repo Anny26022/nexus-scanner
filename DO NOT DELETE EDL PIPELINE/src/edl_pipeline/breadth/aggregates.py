@@ -17,6 +17,7 @@ COUNT_FIELDS = (
     "valid_yearly_range", "upper_half_52w", "lower_half_52w",
     "valid_return_21", "up_25_month", "down_25_month", "up_50_month", "down_50_month",
     "valid_return_34", "up_13_34d", "down_13_34d", "valid_return_63", "up_25_quarter", "down_25_quarter",
+    "breakout_resolved_5d", "breakout_held_5d", "stage_1", "stage_2", "stage_3", "stage_4",
 )
 VOLUME_FIELDS = frozenset(('total_volume', 'advance_volume', 'decline_volume'))
 VOLUME_COLUMNS = {field: index for index, field in enumerate(field for field in COUNT_FIELDS if field in VOLUME_FIELDS)}
@@ -151,7 +152,7 @@ class BreadthAccumulator:
 def _increment_flags(history, methodology):
     names, masks = [], []
     source = history
-    boolean_columns = ('Breakout_20d', 'Breakdown_20d', *(f'New_{label}_{side}'
+    boolean_columns = ('Breakout_20d', 'Breakdown_20d', 'Breakout_Resolved', 'Breakout_Held', *(f'Stage_{stage}' for stage in (1, 2, 3, 4)), *(f'New_{label}_{side}'
                        for label in ('Monthly', 'Quarterly', 'Yearly') for side in ('High', 'Low')))
     # Prepared histories contain native numeric/bool columns. Keep pandas'
     # nullable/object semantics for direct callers with other dtypes.
@@ -203,6 +204,10 @@ def _increment_flags(history, methodology):
     add('valid_breakout_20', valid)
     add('breakout_20d', valid & source['Breakout_20d'])
     add('breakdown_20d', valid & source['Breakdown_20d'])
+    add('breakout_resolved_5d', source['Breakout_Resolved'])
+    add('breakout_held_5d', source['Breakout_Held'])
+    for stage in (1, 2, 3, 4):
+        add(f'stage_{stage}', source[f'Stage_{stage}'])
     valid = present('Yearly_Range_High') & present('Yearly_Range_Low') & (source['Yearly_Range_High'] > source['Yearly_Range_Low'])
     midpoint = (source['Yearly_Range_High'] + source['Yearly_Range_Low']) / 2
     add('valid_yearly_range', valid)

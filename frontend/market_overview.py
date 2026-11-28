@@ -6,7 +6,8 @@ import math
 from pathlib import Path
 
 MARKET_OVERVIEW_VERSION = 1
-BREADTH_SESSIONS = 60
+# A year of sessions, so the market page can chart 1Y and judge each remark against its own history.
+BREADTH_SESSIONS = 250
 INDEX_SESSIONS = 60
 MIN_SECTOR_STOCKS = 3
 
@@ -14,10 +15,16 @@ BREADTH_FIELDS = (
     'advances', 'declines', 'unchanged', 'up_4', 'down_4',
     'above_10_pct', 'above_20_pct', 'above_50_pct', 'above_200_pct',
     'new_52w_high', 'new_52w_low', 'nnh_52w', 'net_breadth', 'index_change_pct',
+    # 21-session highs and lows, 20-day breakouts and how they resolved five sessions later, and each trend stage's count.
+    'new_monthly_high', 'new_monthly_low', 'breakout_20d', 'breakout_resolved_5d', 'breakout_held_5d',
+    'stage_1', 'stage_2', 'stage_3', 'stage_4',
 )
 SECTOR_FIELDS = (
     'stock_count', 'above_sma20_percent', 'above_sma50_percent', 'above_sma200_percent', 'near_52w_high_5_percent',
 )
+# A year of closes the market page charts against (Nifty 500 behind each breadth chart; large, mid and small caps
+# side by side) and reads for small caps' stretch from their 50-day average.
+HISTORY_INDICES = ('NIFTY', 'NIFTY 500', 'NIFTY MIDCAP 150', 'NIFTY SMALLCAP 250', 'NIFTY SMALLCAP 100')
 # Benchmarks shown as index cards, in display order.
 KEY_INDICES = (
     'NIFTY', 'SENSEX', 'BANKNIFTY', 'NIFTY 500', 'NIFTY MIDCAP 150', 'NIFTY SMALLCAP 250', 'NIFTY MIDSMALLCAP 400', 'FINNIFTY',
@@ -72,18 +79,31 @@ def _indices(payload, session, key_indices=KEY_INDICES):
     return cards
 
 
+def _index_history(payload, session, symbols=HISTORY_INDICES):
+    by_symbol = {i.get('symbol'): i for i in (payload or {}).get('indices', []) if isinstance(i, dict)}
+    history = {}
+    for symbol in symbols:
+        closes = [r['close'] for r in (by_symbol.get(symbol) or {}).get('records', [])
+                  if isinstance(r, dict) and str(r.get('date', '')) <= session and _number(r.get('close')) is not None]
+        if closes:
+            history[symbol] = closes[-BREADTH_SESSIONS:]
+    return history
+
+
 def market_overview(source_bytes, session, key_indices=KEY_INDICES):
     """Return the overview payload, or None when the pipeline produced no breadth data. `key_indices` are the index
     cards, in display order (India's by default)."""
     breadth = _breadth(_load(source_bytes, 'market_breadth_v2.json.gz'), session)
     if not breadth:
         return None
+    indices = _load(source_bytes, 'all_indices_history_v2.json.gz')
     return {
         'schemaVersion': MARKET_OVERVIEW_VERSION,
         'asOfDate': session,
         'breadth': breadth,
         'sectors': _sectors(_load(source_bytes, 'sector_analytics.json.gz')),
-        'indices': _indices(_load(source_bytes, 'all_indices_history_v2.json.gz'), session, key_indices),
+        'indices': _indices(indices, session, key_indices),
+        'indexHistory': _index_history(indices, session),
     }
 
 

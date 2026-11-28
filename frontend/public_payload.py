@@ -12,7 +12,7 @@ PRIVATE_KEYS = frozenset({
     'debtToEquitySource', 'debt_to_equity_formula', 'completeness_basis',
 })
 # Provider-named containers keep their content under a neutral name.
-RENAMED_KEYS = {'scanx': 'profile'}
+RENAMED_KEYS = {'scanx': 'profile', 'tradingview': 'extended', 'tradingViewMetricsVersion': 'extendedMetricsVersion'}
 # Provider-named labels, such as how a theme membership was mapped.
 RENAMED_VALUES = {'stockscans_manual': 'manual', 'stockscans_inferred': 'inferred'}
 

@@ -59,6 +59,10 @@ jobs:
           python -m unittest discover -s tools -p test_pipeline_state.py -v
           python -m unittest discover -s tools -p test_us_state.py -v
 
+      - name: Test published history scrub
+        working-directory: .
+        run: python -m unittest discover -s tools -p test_scrub_published_history.py -v
+
       - name: Test Earnings Pulse history
         working-directory: frontend
         run: python -m unittest test_earningspulse_history -v

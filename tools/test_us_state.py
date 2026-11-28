@@ -130,10 +130,20 @@ class StateTests(unittest.TestCase):
         self.write(root, 'good')
         us_state.push(self.store, root, ['ohlcv_data'])
         before = self.previous()
+        mark = self.tmp / 'bucket' / us_state.PREFIX / ('ohlcv_data.tar.gz' + us_state.UNVERIFIED)
         self.write(root, 'ledger pass')
         us_state.push(self.store, root, ['ohlcv_data'], keep_previous=True)
         self.assertEqual(self.previous(), before)
-        self.assertFalse((self.tmp / 'bucket' / us_state.PREFIX / ('ohlcv_data.tar.gz' + us_state.UNVERIFIED)).exists())
+        self.assertFalse(mark.exists())  # a good run's copy is not marked by it
+        # After an unverified push, the mark survives a keep_previous push, and previous/ still holds the good copy.
+        self.write(root, 'bad run')
+        us_state.push(self.store, root, ['ohlcv_data'], unverified=True)
+        self.assertTrue(mark.exists())
+        before = self.previous()
+        self.write(root, 'ledger pass after a bad run')
+        us_state.push(self.store, root, ['ohlcv_data'], keep_previous=True)
+        self.assertTrue(mark.exists())
+        self.assertEqual(self.previous(), before)
 
     def test_a_folder_holding_only_temp_files_keeps_the_stored_copy(self):
         first = self.root('first')

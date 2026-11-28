@@ -28,7 +28,7 @@ class QuarterFactsTests(unittest.TestCase):
                                                      [1, 1, 1, 1, 1.2, 1.34, 1.58])}, date(2026, 11, 27))
         latest = facts['q'][-1]
         self.assertEqual((latest['end'], latest['sales'], latest['eps'], latest['pat'], latest['npm'], latest['eps0']),
-                         ('2026-09-30', 27.0, 58.0, 58.0, 12.44, 1.0))
+                         ('2026-09-30', 27.0, 58.0, 58.0, 12.4, 1.0))
         self.assertEqual([q['sales'] for q in facts['q']], [12.0, 18.0, 27.0])
         self.assertEqual((facts['behind'], facts['taxCredit'], facts['basis']), (0, False, 'CONSOLIDATED'))
 
@@ -63,8 +63,8 @@ class ReactionTests(unittest.TestCase):
                                                                          ('2026-11-04', 111, 113, 109, 112, 2000),
                                                                          ('2026-11-05', 110, 111, 104, 107, 1500)])
         first, second = reaction(frame, '2026-11-03')
-        self.assertEqual((first['date'], first['age'], first['gap'], first['move'], first['pos'], first['vsOpen'], first['rvol'], first['unfilled']),
-                         ('2026-11-03', 2, 6.0, 11.0, 0.857, 4.72, 5.0, 4.0))
+        self.assertEqual((first['date'], first['age'], first['gap'], first['move'], first['pos'], first['vsOpen'], first['unfilled']),
+                         ('2026-11-03', 2, 6.0, 11.0, 0.857, 4.72, 4.0))
         self.assertEqual(second['date'], '2026-11-04')
         self.assertIsNone(reaction(frame, '2026-12-01'))
 
@@ -86,6 +86,14 @@ class DatesTests(unittest.TestCase):
         self.assertEqual((signals['declared'], signals['declaredAge'], signals['next'], signals['nextTiming']),
                          ('2026-11-20', 7, '2026-12-02', 'Pre'))
         self.assertIsNone(earnings_signals({}, frame, '2026-11-27'))
+
+    def test_the_row_carries_quarters_and_reactions_as_positional_arrays(self):
+        frame = bars([(f'2026-10-{day:02d}', 100, 101, 99, 100, 1000) for day in range(1, 31)] + [('2026-11-02', 106, 112, 105, 111, 5000)])
+        history = {'quarterly': quarters([100, 100, 100, 100, 112, 118, 127], [10, 10, 10, 10, 12, 13.4, 15.8], [1, 1, 1, 1, 1.2, 1.34, 1.58])}
+        signals = earnings_signals({'financial_statement_history': history, 'latest_earnings_date': '2026-11-02'}, frame, '2026-11-02')
+        self.assertEqual(signals['q'][-1], ['2026-09-30', 27.0, 58.0, 58.0, 12.4, 15.8, 10.0, 1.0, 1])
+        self.assertEqual(signals['q'][0], ['2026-03-31', 12.0, 20.0, None, 10.7, 12.0, None, None, 1])
+        self.assertEqual(signals['reaction'], [[0, 6.0, 11.0, 0.857, 4.72, 5.0]])
 
 
 if __name__ == '__main__':

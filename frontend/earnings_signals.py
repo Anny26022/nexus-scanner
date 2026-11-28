@@ -12,13 +12,16 @@ results date and its daily bars:
 - `taxCredit`: a quarter among the last three booked a tax credit worth at least TAX_CREDIT_SHARE of its profit, a
   one-off the streak scans skip.
 - `reaction`: the session on or after the results date and the one after it, each with its gap, day move, close in
-  the day's range, close against open, volume against the 20-session average and how far the gap is still unfilled.
+  the day's range, close against open and how far the gap is still unfilled.
 - `declared`: the latest results date, from the stock's own record or else Earnings Pulse's filing day for its
   latest quarter, with `declaredAge` in sessions.
 - `next` and `nextTiming`: the next scheduled results date (the earnings calendar, else Earnings Pulse's upcoming
   list) and when in the day it falls (Pre, During, After) where Earnings Pulse says.
 
 The thresholds live in the app's scan recipes, so a reader can tune them as on any other scan.
+
+On the row, `q` and `reaction` are lists of positional arrays in QUARTER_FIELDS and REACTION_FIELDS order (every
+row carries them, so the field names are not repeated); the app's earningsConditions.ts reads the same orders.
 """
 import gzip
 import json
@@ -32,6 +35,9 @@ RESULTS_LAG_DAYS = 60
 SHARE_DRIFT = 0.2
 # A negative tax line at least this share of the quarter's profit is a one-off credit, not earnings.
 TAX_CREDIT_SHARE = 0.1
+# The row's positional orders (see the module docstring); `epsBasis` is 1 for EPS, 0 where growth is from profit.
+QUARTER_FIELDS = ('end', 'sales', 'eps', 'pat', 'npm', 'np', 'np0', 'eps0', 'epsBasis')
+REACTION_FIELDS = ('age', 'gap', 'move', 'pos', 'vsOpen', 'unfilled')
 
 
 def _number(value):
@@ -47,7 +53,7 @@ def _day(value):
 
 def _growth(now, then):
     """Percent change from a positive base; None from a loss or zero, where a percentage means nothing."""
-    return round((now / then - 1) * 100, 2) if now is not None and then is not None and then > 0 else None
+    return round((now / then - 1) * 100, 1) if now is not None and then is not None and then > 0 else None
 
 
 def _year_ago(quarters, index):
@@ -90,8 +96,8 @@ def quarter_facts(history, session):
         facts.append({
             'end': now['period_end'][:10],
             'sales': _growth(sales, sales0), 'eps': _growth(eps, eps0) if comparable else _growth(pat, pat0),
-            'pat': _growth(pat, pat0), 'npm': round(pat / sales * 100, 2) if pat is not None and sales else None,
-            'np': pat, 'np0': pat0, 'eps0': eps0 if comparable else None, 'epsBasis': 'EPS' if comparable else 'PAT',
+            'pat': _growth(pat, pat0), 'npm': round(pat / sales * 100, 1) if pat is not None and sales else None,
+            'np': round(pat, 1) if pat is not None else None, 'np0': round(pat0, 1) if pat0 is not None else None, 'eps0': eps0 if comparable else None, 'epsBasis': 'EPS' if comparable else 'PAT',
         })
         if index >= len(rows) - 3 and pat and pat > 0 and tax is not None and -tax >= TAX_CREDIT_SHARE * pat:
             tax_credit = True
@@ -117,7 +123,7 @@ def pulse_dates(pulse, session):
 
 
 def reaction(frame, declared):
-    """The session on or after `declared` and the next: each one's gap, move, range position and volume, and how far
+    """The session on or after `declared` and the next: each one's gap, move and range position, and how far
     its gap is still unfilled by every low since."""
     day = _day(declared)
     if day is None or frame is None or frame.empty:
@@ -127,7 +133,7 @@ def reaction(frame, declared):
     if first is None or first == 0:
         return None
     opens, highs, lows = frame['Open'].tolist(), frame['High'].tolist(), frame['Low'].tolist()
-    closes, volumes = frame['Close'].tolist(), frame['Volume'].tolist()
+    closes = frame['Close'].tolist()
     events = []
     for index in (first, first + 1):
         if index >= len(dates):
@@ -135,14 +141,12 @@ def reaction(frame, declared):
         before = closes[index - 1]
         if not before or before <= 0:
             continue
-        span, prior = highs[index] - lows[index], volumes[max(0, index - 20):index]
-        average = sum(prior) / len(prior) if len(prior) == 20 else None
+        span = highs[index] - lows[index]
         events.append({
             'date': dates[index].isoformat(), 'age': len(dates) - 1 - index,
             'gap': round((opens[index] / before - 1) * 100, 2), 'move': round((closes[index] / before - 1) * 100, 2),
             'pos': round((closes[index] - lows[index]) / span, 3) if span > 0 else None,
             'vsOpen': round((closes[index] / opens[index] - 1) * 100, 2) if opens[index] else None,
-            'rvol': round(volumes[index] / average, 2) if average else None,
             # Above zero: no low since the gap session has traded back to the close before it.
             'unfilled': round((min(lows[index:]) / before - 1) * 100, 2),
         })
@@ -161,7 +165,15 @@ def earnings_signals(stock, frame, session, next_results=None, pulse=None):
     age = None
     if declared and frame is not None and not frame.empty:
         age = int((frame['Date'].dt.date >= _day(declared)).sum()) - 1 if _day(declared) <= frame['Date'].iloc[-1].date() else None
-    return {'asOf': session, **(facts or {}), 'declared': declared, 'declaredAge': age, 'reaction': events,
+    facts = dict(facts or {})
+    if facts.get('q'):
+        # Profit growth and the year-ago base are read for the latest quarter only; earlier ones send null.
+        latest_only, last = ('pat', 'np0', 'eps0'), len(facts['q']) - 1
+        facts['q'] = [[(1 if quarter['epsBasis'] == 'EPS' else 0) if field == 'epsBasis'
+                       else None if field in latest_only and index < last else quarter[field]
+                       for field in QUARTER_FIELDS] for index, quarter in enumerate(facts['q'])]
+    return {'asOf': session, **facts, 'declared': declared, 'declaredAge': age,
+            'reaction': [[event[field] for field in REACTION_FIELDS] for event in events] if events else None,
             'next': upcoming, 'nextTiming': pulse.get('nextTiming') if upcoming and upcoming == pulse.get('next') else None}
 
 

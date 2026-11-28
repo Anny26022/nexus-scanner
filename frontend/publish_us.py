@@ -418,7 +418,7 @@ def publish_us(root, output=OUTPUT, *, workers=0):
     histories = load_financial_history(root, source_bytes, session)
     context['next_results'] = next_results(source_bytes.get('earnings_calendar.json.gz'), session)
     # The Earnings Pulse US archive the workflow copied into the root (tools/us_state.py pulse).
-    context['pulse_dates'] = pulse_dates(load_pulse(root), session)
+    context['pulse_dates'] = pulse_dates(load_pulse(root, latest=2), session)
     merge_results_dates(context['stocks'], context['pulse_dates'])
     for sym, hist in histories.items():
         if sym in context['stocks']:

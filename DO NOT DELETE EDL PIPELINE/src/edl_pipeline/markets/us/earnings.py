@@ -29,10 +29,13 @@ REPORT_WINDOW = timedelta(days=100)
 TIMING = {-1: 'Pre', 1: 'After'}  # TradingView's earnings_release_time; 0 is not yet known
 
 
-def _json(url: str, get=requests.get):
+def _json(url: str, get=requests.get, digest: str | None = None):
     response = get(url, timeout=60, headers={'User-Agent': 'Mozilla/5.0'})
     response.raise_for_status()
     raw = response.content
+    # An indexed object is named by the sha256 of its compressed bytes, as the local copy is checked in _local.
+    if digest and hashlib.sha256(raw).hexdigest() != digest:
+        raise ValueError(f'Earnings Pulse object {url} does not match its sha256')
     return json.loads(gzip.decompress(raw) if raw[:2] == b'\x1f\x8b' else raw)
 
 
@@ -59,9 +62,9 @@ def load_pulse(root: Path | None = None, *, index_url: str | None = None, index_
         if directory and (directory / 'us_index.json').exists():
             index, load = _local(directory)
         elif index_path and Path(index_path).exists():
-            index, load = json.loads(Path(index_path).read_text()), lambda item: _json(item['url'], get)
+            index, load = json.loads(Path(index_path).read_text()), lambda item: _json(item['url'], get, item.get('sha256'))
         elif index_url:
-            index, load = _json(index_url, get), lambda item: _json(item['url'], get)
+            index, load = _json(index_url, get), lambda item: _json(item['url'], get, item.get('sha256'))
         else:
             return {'reported': [], 'upcoming': [], 'error': 'no Earnings Pulse archive (not copied from R2)'}
         result = {'reported': [], 'upcoming': []}
